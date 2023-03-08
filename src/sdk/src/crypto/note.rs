@@ -18,9 +18,11 @@
 
 use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
+use halo2_proofs::arithmetic::Field;
+use pasta_curves::{group::Group, pallas};
 use rand_core::{CryptoRng, RngCore};
 
-use super::{diffie_hellman, PublicKey, SecretKey};
+use super::{diffie_hellman, poseidon_hash, util::mod_r_p, PublicKey, SecretKey};
 use crate::error::ContractError;
 
 /// AEAD tag length in bytes
@@ -77,6 +79,42 @@ impl AeadEncryptedNote {
     }
 }
 
+/// An encrypted note using an ElGamal scheme verifiable in ZK
+pub struct ElGamalEncryptedNote<const N: usize> {
+    pub encrypted_values: [pallas::Base; N],
+}
+
+impl<const N: usize> ElGamalEncryptedNote<N> {
+    pub fn encrypt(
+        values: [pallas::Base; N],
+        public: &PublicKey,
+        rng: &mut (impl CryptoRng + RngCore),
+    ) -> Result<Self, ContractError> {
+        // Derive shared secret using DH
+        let ephem_secret = mod_r_p(pallas::Base::random(rng));
+        let (ephem_pub_x, ephem_pub_y) = PublicKey::from(public.inner() * ephem_secret).xy();
+        let shared_secret = poseidon_hash([ephem_pub_x, ephem_pub_y]);
+
+        let mut blinds = [pallas::Base::zero(); N];
+        for i in 0..N {
+            blinds[i] = poseidon_hash([shared_secret, pallas::Base::from(i as u64 + 1)]);
+        }
+
+        let mut encrypted_values = [pallas::Base::zero(); N];
+        for i in 0..N {
+            encrypted_values[i] = values[i] + blinds[i];
+        }
+
+        Ok(Self { encrypted_values })
+    }
+
+    pub fn decrypt(&self) -> Result<[pallas::Base; N], ContractError> {
+        let mut decrypted_values = [pallas::Base::zero(); N];
+
+        Ok(decrypted_values)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,5 +133,16 @@ mod tests {
         let plaintext2: String = encrypted_note.decrypt(&keypair.secret).unwrap();
 
         assert_eq!(plaintext, plaintext2);
+    }
+
+    #[test]
+    fn test_elgamal_note() {
+        const N_MSGS: usize = 10;
+
+        let plain_values = [pallas::Base::random(&mut OsRng); N_MSGS];
+        let keypair = Keypair::random(&mut OsRng);
+
+        let encrypted_note =
+            ElGamalEncryptedNote::encrypt(plain_values, &keypair.public, &mut OsRng).unwrap();
     }
 }
