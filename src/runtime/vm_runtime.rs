@@ -377,16 +377,17 @@ impl Runtime {
         let _ = self.call(ContractSection::Deploy, payload)?;
 
         // If the above didn't fail, we write the batches.
-        let env_mut = self.write_batches()?;
+        self.write_batches()?;
 
         // Update the wasm bincode in the WasmStore
+        let env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.blockchain.wasm_bincode.insert(env_mut.contract_id, &env_mut.contract_bincode)?;
 
         Ok(())
     }
 
     /// Execute an atomic sled transaction to write all batches
-    fn write_batches(&mut self) -> Result<&mut Env> {
+    fn write_batches(&mut self) -> Result<()> {
         let mut dbs = vec![];
         let mut batches = vec![];
         let env_mut = self.ctx.as_mut(&mut self.store);
@@ -406,7 +407,7 @@ impl Runtime {
 
         env_mut.blockchain.sled_db.flush()?;
 
-        Ok(env_mut)
+        Ok(())
     }
 
     /// This funcion runs when someone wants to execute a smart contract.
