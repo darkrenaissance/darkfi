@@ -285,3 +285,9 @@ assert D.is_equiv({
 })
 assert X1.eval(D) == (-1)^D.effective_degree() * D.eval(X1)
 
+f_numer = D.func.numerator().mod(eqn)
+f_denom = D.func.denominator().mod(eqn)
+f = f_numer / f_denom
+assert f.denominator() == 1
+print(f.numerator())
+
