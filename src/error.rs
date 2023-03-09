@@ -283,6 +283,10 @@ pub enum Error {
     #[error(transparent)]
     SledError(#[from] sled::Error),
 
+    #[cfg(feature = "sled")]
+    #[error(transparent)]
+    SledTransactionError(#[from] sled::transaction::TransactionError),
+
     #[error("Transaction {0} not found in database")]
     TransactionNotFound(String),
 

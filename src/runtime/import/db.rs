@@ -47,6 +47,10 @@ impl DbHandle {
         Self { contract_id, tree }
     }
 
+    pub fn tree(&self) -> sled::Tree {
+        self.tree.clone()
+    }
+
     pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
         if let Some(v) = self.tree.get(key)? {
             return Ok(Some(v.to_vec()))

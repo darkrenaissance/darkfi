@@ -24,6 +24,7 @@ use std::{
 use darkfi_sdk::{crypto::ContractId, entrypoint};
 use darkfi_serial::serialize;
 use log::{debug, error, info};
+use sled::{transaction::ConflictableTransactionError, Transactional};
 use wasmer::{
     imports, wasmparser::Operator, AsStoreRef, CompilerConfig, Function, FunctionEnv, Instance,
     Memory, MemoryView, Module, Pages, Store, Value, WASM_PAGE_SIZE,
@@ -376,18 +377,36 @@ impl Runtime {
         let _ = self.call(ContractSection::Deploy, payload)?;
 
         // If the above didn't fail, we write the batches.
-        // TODO: Make all the writes atomic in a transaction over all trees.
-        let env_mut = self.ctx.as_mut(&mut self.store);
-        for (idx, db) in env_mut.db_handles.get_mut().iter().enumerate() {
-            let batch = env_mut.db_batches.borrow()[idx].clone();
-            db.apply_batch(batch)?;
-            db.flush()?;
-        }
+        let env_mut = self.write_batches()?;
 
         // Update the wasm bincode in the WasmStore
         env_mut.blockchain.wasm_bincode.insert(env_mut.contract_id, &env_mut.contract_bincode)?;
 
         Ok(())
+    }
+
+    /// Execute an atomic sled transaction to write all batches
+    fn write_batches(&mut self) -> Result<&mut Env> {
+        let mut dbs = vec![];
+        let mut batches = vec![];
+        let env_mut = self.ctx.as_mut(&mut self.store);
+        for (idx, db) in env_mut.db_handles.get_mut().iter().enumerate() {
+            let batch = env_mut.db_batches.borrow()[idx].clone();
+            dbs.push(db.tree());
+            batches.push(batch);
+        }
+
+        dbs.transaction(|dbs| {
+            for (idx, db) in dbs.iter().enumerate() {
+                db.apply_batch(&batches[idx])?;
+            }
+
+            Ok::<(), ConflictableTransactionError<sled::Error>>(())
+        })?;
+
+        env_mut.blockchain.sled_db.flush()?;
+
+        Ok(env_mut)
     }
 
     /// This funcion runs when someone wants to execute a smart contract.
@@ -409,13 +428,7 @@ impl Runtime {
         let _ = self.call(ContractSection::Update, update)?;
 
         // If the above didn't fail, we write the batches.
-        // TODO: Make all the writes atomic in a transaction over all trees.
-        let env_mut = self.ctx.as_mut(&mut self.store);
-        for (idx, db) in env_mut.db_handles.get_mut().iter().enumerate() {
-            let batch = env_mut.db_batches.borrow()[idx].clone();
-            db.apply_batch(batch)?;
-            db.flush()?;
-        }
+        self.write_batches()?;
 
         Ok(())
     }
