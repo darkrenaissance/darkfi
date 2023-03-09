@@ -30,7 +30,7 @@ use log::{debug, error, info};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::{
-    runtime::vm_runtime::{ContractSection, Env},
+    runtime::vm_runtime::{ContractSection, Env, SMART_CONTRACT_ZKAS_DB_NAME},
     zk::{empty_witnesses, VerifyingKey, ZkCircuit},
     zkas::ZkBinary,
     Result,
@@ -120,6 +120,11 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
         return DB_DEL_FAILED
     }*/
 
+    if db_name == SMART_CONTRACT_ZKAS_DB_NAME {
+        error!(target: "runtime::db::db_init()", "Attempted to lookup zkas db");
+        return CALLER_ACCESS_DENIED
+    }
+
     if &cid != contract_id {
         error!(target: "runtime::db::db_init()", "Unauthorized ContractId for db_init");
         return CALLER_ACCESS_DENIED
@@ -196,6 +201,11 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
             return DB_LOOKUP_FAILED
         }
     };
+
+    if db_name == SMART_CONTRACT_ZKAS_DB_NAME {
+        error!(target: "runtime::db::db_lookup()", "Attempted to lookup zkas db");
+        return CALLER_ACCESS_DENIED
+    }
 
     // Disabled until cursor_remaining feature is available on master.
     // Then enable #![feature(cursor_remaining)] in src/lib.rs
