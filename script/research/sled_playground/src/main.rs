@@ -67,14 +67,16 @@ fn main() -> Result<(), sled::Error> {
     batches.push(overlay_2.aggregate());
 
     // Now we write them to sled (this should be wrapped in a macro maybe)
-    (&tree_1, &tree_2)
-        .transaction(|(tree_1, tree_2)| {
-            tree_1.apply_batch(&batches[0])?;
-            tree_2.apply_batch(&batches[1])?;
+    vec![&tree_1, &tree_2]
+        .transaction(|trees| {
+            for (i, tree) in trees.iter().enumerate() {
+                tree.apply_batch(&batches[i])?;
+            }
 
             Ok::<(), ConflictableTransactionError<sled::Error>>(())
         })
         .unwrap();
+    db.flush()?;
 
     // Verify sled contains keys
     assert_eq!(tree_1.get(b"key_a")?, Some(b"val_a".into()));
