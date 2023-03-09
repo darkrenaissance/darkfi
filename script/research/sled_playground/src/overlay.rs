@@ -27,6 +27,10 @@ impl SledCache {
         Self(BTreeMap::new())
     }
 
+    fn contains_key(&self, key: &IVec) -> bool {
+        self.0.contains_key(key)
+    }
+
     fn get(&self, key: &IVec) -> Option<IVec> {
         self.0.get(key).cloned()
     }
@@ -44,16 +48,28 @@ impl SledCache {
 pub struct SledOverlay {
     tree: sled::Tree,
     cache: SledCache,
-    removed: Vec<IVec>,
+    removed: BTreeMap<IVec, IVec>,
 }
 
 impl SledOverlay {
     pub fn new(db: &sled::Tree) -> Self {
-        Self { tree: db.clone(), cache: SledCache::new(), removed: vec![] }
+        Self { tree: db.clone(), cache: SledCache::new(), removed: BTreeMap::new() }
+    }
+
+    pub fn contains_key(&self, key: &[u8]) -> Result<bool, sled::Error> {
+        if self.removed.contains_key::<IVec>(&key.into()) {
+            return Ok(false)
+        }
+
+        if self.cache.contains_key(&key.into()) || self.tree.contains_key(key)? {
+            return Ok(true)
+        }
+
+        Ok(false)
     }
 
     pub fn get(&self, key: &[u8]) -> Result<Option<IVec>, sled::Error> {
-        if self.removed.contains(&key.into()) {
+        if self.removed.contains_key::<IVec>(&key.into()) {
             return Ok(None)
         }
 
@@ -67,24 +83,24 @@ impl SledOverlay {
     pub fn insert(&mut self, key: &[u8], value: &[u8]) -> Result<Option<IVec>, sled::Error> {
         let mut prev: Option<IVec> = self.cache.insert(key.into(), value.into());
 
-        if prev.is_none() {
-            prev = self.tree.get::<IVec>(key.into())?;
+        if self.removed.contains_key::<IVec>(&key.into()) {
+            self.removed.remove(key);
+            return Ok(None)
         }
 
-        if self.removed.contains(&key.into()) {
-            self.removed.retain(|x| x != &key);
-            return Ok(None)
+        if prev.is_none() {
+            prev = self.tree.get::<IVec>(key.into())?;
         }
 
         Ok(prev)
     }
 
     pub fn remove(&mut self, key: &[u8]) -> Result<Option<IVec>, sled::Error> {
-        if self.removed.contains(&key.into()) {
+        if self.removed.contains_key::<IVec>(&key.into()) {
             return Ok(None)
         }
 
-        self.removed.push(key.into());
+        self.removed.insert(key.into(), vec![].into());
 
         Ok(self.cache.remove(&key.into()))
     }
