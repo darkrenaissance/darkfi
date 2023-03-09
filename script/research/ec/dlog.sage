@@ -10,6 +10,7 @@ assert(E.cardinality() == r)
 
 K.<x> = PolynomialRing(Fp, implementation="generic")
 L.<y> = PolynomialRing(K, implementation="generic")
+M.<z> = L[]
 eqn = y^2 - x^3 - A * x - B
 
 # Returns line passing through points, works for all points and returns 1 for O + O = O
@@ -45,7 +46,50 @@ def dlog_alt(D):
     # Change denominator to the norm
     D_denom = (V * V(y=-y)).mod(eqn)
 
+    # This calculation is quite slow...
+    print("Calculating Dlog = Dz/D")
     return Dz_numer / D_denom
+
+# Accepts arbitrary list of points, including duplicates and inverses, and constructs function
+# intersecting exactly those points if they form a principal divisor (i.e. sum to zero).
+def construct_function(Ps):
+    # List of intermediate sums/principal divisors, removes 0
+    xs = [(P, line(P, -P)) for P in Ps if P != 0]
+
+    while len(xs) != 1:
+        assert(sum(P for (P, _) in xs) == 0)
+        xs2 = []
+
+        # Carry extra point forward
+        if mod(len(xs), 2) == 1:
+            x0 = xs[0]
+            xs = xs[1:]
+        else:
+            x0 = None
+
+        # Combine the functions for all pairs
+        for n in range(0, floor(len(xs)/2)):
+            (A, aNum) = xs[2*n]
+            (B, bNum) = xs[2*n+1]
+
+            # Divide out intermediate (P, -P) factors
+            num = L((aNum * bNum * line(A, B)).mod(eqn))
+            den = line(A, -A) * line(B, -B)
+            D = num / K(den)
+            
+            # Add new element
+            xs2.append((A+B, D))
+        
+        if x0 != None:
+            xs2.append(x0)
+
+        xs = xs2
+    
+    assert(xs[0][0] == 0)
+    
+    # Normalize, might fail but negl probability for random points. Must be done for zkps
+    # although free to use any coefficient
+    return D / D(x=0, y=0)
 
 P0 = E.random_element()
 P1 = E.random_element()
@@ -265,16 +309,51 @@ assert f(x=P2[0], y=P2[1]) == 0
 # Need to modify f because this is 0/0
 #assert f(x=Q[0], y=Q[1]) == 0
 
-Ps = [P0] + 2*[P1] + 3*[P2] + 5*[Q]
-D = construct_function(Ps)
+f_denom *= f_denom(y=-y)
+f_denom = K(f_denom.mod(eqn))
+f_numer *= f_denom(y=-y)
+f_numer = f_numer.mod(eqn)
+f = f_numer / f_denom
+print("Created f such that div(f) = D")
 
-assert D(x=P0[0], y=P0[1]) == 0
-assert D(x=P1[0], y=P1[1]) == 0
-assert D(x=P2[0], y=P2[1]) == 0
-assert D(x=Q[0], y=Q[1]) == 0
+#Ps = [P0] + 2*[P1] + 3*[P2] + 5*[Q]
+#D = construct_function(Ps)
+#
+#assert D(x=P0[0], y=P0[1]) == 0
+#assert D(x=P1[0], y=P1[1]) == 0
+#assert D(x=P2[0], y=P2[1]) == 0
+#assert D(x=Q[0], y=Q[1]) == 0
 
 # This will fail due to a bug in sage:
 #DLog = dlog(D)
 # ZeroDivisionError
-DLog = dlog_alt(D)
+#DLog = dlog_alt(f)
+
+print("Random A₀, A₁")
+[A0, A1] = [E.random_element() for _ in range(2)]
+A2 = -(A0 + A1)
+A0x, A0y = A0.xy()
+A1x, A1y = A1.xy()
+A2x, A2y = A2.xy()
+λ = (A1y - A0y) / (A1x - A0x)
+μ = A1y - λ*A1x
+assert A2y - λ*A2x - μ == 0
+
+f_a = K(f(y=0))
+f_b = K((f - f_a)(y=1))
+assert f_a + y*f_b == f
+#deg_f = f_b.degree() + 1
+
+f_A = 1
+for Ai in [A0, A1, A2]:
+    Aix, Aiy = Ai.xy()
+    f_A *= f(x=Aix, y=Aiy)
+print(f_A)
+
+g = y - λ*x - μ
+g_P = 1
+for Pi, v in [(P0, 1), (P1, 2), (P2, 3), (Q, 5)]:
+    Pix, Piy = Pi.xy()
+    g_P *= -g(x=Pix, y=Piy)^v
+print(g_P)
 
