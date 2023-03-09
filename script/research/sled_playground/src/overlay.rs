@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::BTreeMap;
+use std::collections::{btree_map::Iter, BTreeMap};
 
-use sled::IVec;
+use sled::{Batch, IVec};
 
 struct SledCache(BTreeMap<IVec, IVec>);
 
@@ -42,11 +42,15 @@ impl SledCache {
     fn remove(&mut self, key: &IVec) -> Option<IVec> {
         self.0.remove(key)
     }
+
+    fn iter(&self) -> Iter<'_, IVec, IVec> {
+        self.0.iter()
+    }
 }
 
 /// We instantiate an overlay on top of a `sled::Tree` directly.
 pub struct SledOverlay {
-    tree: sled::Tree,
+    pub tree: sled::Tree,
     cache: SledCache,
     removed: BTreeMap<IVec, IVec>,
 }
@@ -103,5 +107,19 @@ impl SledOverlay {
         self.removed.insert(key.into(), vec![].into());
 
         Ok(self.cache.remove(&key.into()))
+    }
+
+    pub fn aggregate(&self) -> sled::Batch {
+        let mut batch = Batch::default();
+
+        for (k, v) in self.cache.iter() {
+            batch.insert(k, v);
+        }
+
+        for k in self.removed.keys() {
+            batch.remove(k);
+        }
+
+        batch
     }
 }
