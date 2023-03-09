@@ -224,101 +224,58 @@ A0 = LabelPoint(E.random_element(), {"A₀": 1})
 A1 = LabelPoint(E.random_element(), {"A₁": 1})
 X1 = div_line(A0, A1)
 
-D1 = div_line(P2, P2)
-assert X1.eval(D1) == (-1)^D1.effective_degree() * D1.eval(X1)
-D2 = div_line(P1, P1)
-assert X1.eval(D2) == (-1)^D2.effective_degree() * D2.eval(X1)
-D3 = div_line(P2, -P2)
-assert X1.eval(D3) == (-1)^D3.effective_degree() * D3.eval(X1)
-D4 = div_line(P0, -P0)
-assert X1.eval(D4) == (-1)^D4.effective_degree() * D4.eval(X1)
-D5 = D1 + D2 + D3 + D4
-assert D5.is_equiv({
-    "P₀":   1,
-    "P₁":   2,
-    "P₂":   3,
-    "-P₀":  1,
-    "-2P₁": 1,
-    "-2P₂": 1,
-    "-P₂":  1,
-    "∞":  -10
-})
-assert X1.eval(D5) == (-1)^D5.effective_degree() * D5.eval(X1)
+# i = 0
 
-D6 = div_line(P2*-2, P1*-2)
-assert X1.eval(D6) == (-1)^D6.effective_degree() * D6.eval(X1)
-D7 = div_line(-P2, -P0)
-assert X1.eval(D7) == (-1)^D7.effective_degree() * D7.eval(X1)
-D8 = D5 - (D6 + D7)
-assert D8.is_equiv({
-    "P₀":         1,
-    "P₁":         2,
-    "P₂":         3,
-    "2P₂ + 2P₁": -1,
-    "P₂ + P₀":   -1,
-    "∞":         -4
-})
-assert X1.eval(D8) == (-1)^D8.effective_degree() * D8.eval(X1)
+L0 = div_line(P0, -P0)
+L1 = div_line(P1, -P1)
+L2 = div_line(P2, -P2)
+L3 = div_line(Q, -Q)
 
-D9 = div_line(P0 + P2, (P1 + P2)*2)
-D10 = D8 + D9
-assert D10.is_equiv({
-    "P₀": 1,
-    "P₁": 2,
-    "P₂": 3,
-    "-P₀ - 3P₂ - 2P₁": 1,
-    "∞": -7
-})
-D10.rename("-P₀ - 3P₂ - 2P₁", Q*5)
-assert X1.eval(D10) == (-1)^D10.effective_degree() * D10.eval(X1)
+# P₀ + 2P₁ + 3P₂ + 5Q
 
-D11 = div_line(Q, Q)
-D12 = div_line(-Q*2, Q*2)
-D13 = D11 - D12
-assert D13.is_equiv({
-    "Q": 2,
-    "2Q": -1,
-    "∞": -1
-})
-assert X1.eval(D13) == (-1)^D13.effective_degree() * D13.eval(X1)
+# i = 1
+D1 = div_line(P1, P1)
+R1 = P1 + P1
 
-D14 = D13 + D13 + D13
-assert D14.is_equiv({
-    "Q": 6,
-    "2Q": -3,
-    "∞": -3
-})
-D15 = div_line(Q*2, Q*2)
-D16 = D14 + D15
-assert D16.is_equiv({
-    "Q": 6,
-    "2Q": -1,
-    "-4Q": 1,
-    "∞": -6
-})
+D2 = div_line(P2, P2)
+R2 = P2 + P2
 
-D17 = div_line(Q*2, -Q*2)
-D18 = D16 + D17
-assert D18.is_equiv({
-    "Q": 6,
-    "-2Q": 1,
-    "-4Q": 1,
-    "∞": -8
-})
+D3 = div_line(P2, Q)
+R3 = P2 + Q
 
-D19 = div_line(-Q*2, -Q*4)
-D20 = D18 - D19
-assert D20.is_equiv({
-    "Q": 6,
-    "6Q": -1,
-    "∞": -5
-})
+D4 = div_line(Q, Q)
+R4 = Q + Q
 
-D21 = div_line(Q*6, -Q*6)
-D22 = D20 + D21
-D23 = div_line(Q, -Q*6)
-D24 = D22 - D23
-D = D10 + D24
+D5 = D4
+R5 = R4
+
+D6 = L0
+R6 = P0
+
+# i = 2
+
+D1 = D1 + D2 + div_line(R1, R2) - (div_line(R1, -R1) + div_line(R2, -R2))
+R1 = R1 + R2
+
+D2 = D3 + D4 + div_line(R3, R4) - (div_line(R3, -R3) + div_line(R4, -R4))
+R2 = R3 + R4
+
+D3 = D5 + D6 + div_line(R5, R6) - (div_line(R5, -R5) + div_line(R6, -R6))
+R3 = R5 + R6
+
+# i = 3
+
+Dx = D1
+Rx = R1
+
+D1 = D2 + D3 + div_line(R2, R3) - (div_line(R2, -R2) + div_line(R3, -R3))
+R1 = R2 + R3
+
+D2, R2 = Dx, Rx
+
+# i = 4
+
+D = D1 + D2 + div_line(R1, R2) - (div_line(R1, -R1) + div_line(R2, -R2))
 assert D.is_equiv({
     "P₀": 1,
     "P₁": 2,
