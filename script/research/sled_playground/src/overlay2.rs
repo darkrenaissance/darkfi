@@ -133,8 +133,7 @@ impl TreeOverlay {
     }
 }
 
-/// We instantiate overlays on top of requested
-/// sled tree keys.
+/// We instantiate an overlay on top of a `sled::Db` directly.
 pub struct SledOverlay2 {
     db: sled::Db,
     trees: BTreeMap<IVec, sled::Tree>,
@@ -142,16 +141,21 @@ pub struct SledOverlay2 {
 }
 
 impl SledOverlay2 {
-    pub fn new(db: &sled::Db, trees_keys: &[&str]) -> Result<Self, sled::Error> {
-        let mut trees = BTreeMap::new();
-        let mut caches = BTreeMap::new();
-        for tree_key in trees_keys {
-            let tree = db.open_tree(tree_key)?;
-            let cache = TreeOverlay::new(&tree);
-            trees.insert(tree_key.clone().into(), tree.clone());
-            caches.insert(tree_key.clone().into(), cache);
+    pub fn new(db: &sled::Db) -> Self {
+        Self { db: db.clone(), trees: BTreeMap::new(), caches: BTreeMap::new() }
+    }
+
+    pub fn open_tree(&mut self, tree_key: &str) -> Result<(), sled::Error> {
+        let tree_key: IVec = tree_key.clone().into();
+        if self.trees.contains_key(&tree_key) {
+            return Ok(())
         }
-        Ok(Self { db: db.clone(), trees, caches })
+        let tree = self.db.open_tree(&tree_key)?;
+        let cache = TreeOverlay::new(&tree);
+        self.trees.insert(tree_key.clone(), tree.clone());
+        self.caches.insert(tree_key, cache);
+
+        Ok(())
     }
 
     fn get_cache(&self, tree_key: IVec) -> Result<&TreeOverlay, sled::Error> {

@@ -94,7 +94,10 @@ fn main() -> Result<(), sled::Error> {
     // Initialize database overlay
     let config = Config::new().temporary(true);
     let db = config.open()?;
-    let mut overlay = SledOverlay2::new(&db, &[&TREE_1, &TREE_2])?;
+    let mut overlay = SledOverlay2::new(&db);
+    // Open trees in the overlay
+    overlay.open_tree(TREE_1)?;
+    overlay.open_tree(TREE_2)?;
     // We keep seperate trees for validation
     let tree_1 = db.open_tree(TREE_1)?;
     let tree_2 = db.open_tree(TREE_2)?;
