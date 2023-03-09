@@ -1,70 +1,98 @@
 # Agorism Hackers Study Guide
 
-During the 90s, the crypto-anarchists sought to apply the emerging technology of cryptography to create online zones
-which contain the seed of resistance in their code. Cryptocurrency descends from that lineage, and lies at the intersection
-of economics, politics and technology.
+During the 90s, the crypto-anarchists sought to apply the emerging
+technology of cryptography to create online zones which contain
+the seed of resistance in their code. Cryptocurrency descends from
+that lineage, and lies at the intersection of economics, politics
+and technology.
 
-The agorists were a community who believed in leveraging economic power to create free and democratic parallel societies.
-We define revolution as a transformation in the moral and political fabric of society. By leveraging crypto technology, we
-can create free online zones.
+The agorists were a community who believed in leveraging economic power
+to create free and democratic parallel societies.  We define revolution
+as a transformation in the moral and political fabric of society. By
+leveraging crypto technology, we can create free online zones.
 
-Money takes money forms, whether cash, credit, loans or debt, and changes properties depending on location. Measures like
-interest rates and inflation obscure local differences. In fact the source of power lies in economic networks, and money
-is a unit of account between these networks. By understanding economics, we can use technological techniques to greatly
-influence the material and political worlds, encoding them with our values and philosophy.
+Money takes money forms, whether cash, credit, loans or debt, and
+changes properties depending on location. Measures like interest rates
+and inflation obscure local differences. In fact the source of power
+lies in economic networks, and money is a unit of account between
+these networks. By understanding economics, we can use technological
+techniques to greatly influence the material and political worlds,
+encoding them with our values and philosophy.
 
 ## Methodology
 
-We critique the student-teacher relation, where a teacher dictates a course schedule to a student who has to learn the material.
+We critique the student-teacher relation, where a teacher dictates
+a course schedule to a student who has to learn the material.
 
-1. Students are not self led, and instead become reliant on an instructor, instead of developing independently.
-2. Creativity is supressed since students do not explore and engage with knowledge in a dialectic way.
+1. Students are not self led, and instead become reliant on an
+   instructor, instead of developing independently.
+2. Creativity is supressed since students do not explore and engage
+   with knowledge in a dialectic way.
 
-In our system, we have a system of mentorship. Everybody engages in study and research inside the organization.
-Subjects are not separated from one another and we encourage people to read multiple subjects, but in a directed way.
-Our aim is to train leaders, and bring people up. Therefore they must possess:
+In our system, we have a system of mentorship. Everybody engages in
+study and research inside the organization.  Subjects are not separated
+from one another and we encourage people to read multiple subjects,
+but in a directed way.  Our aim is to train leaders, and bring people
+up. Therefore they must possess:
 
-1. Strategic knowledge to be able to make strong macro analysis and direct activity.
+1. Strategic knowledge to be able to make strong macro analysis and
+   direct activity.
 2. Strong skills to directly affect change themselves.
 
-We emphasize a combination of both. As Marx said: ideas should not gather dust in books. We must put our ideas into action
-through practice. However blind undirected action is wasted effort. Therefore we seek to foster both aspects in participants.
+We emphasize a combination of both. As Marx said: ideas should
+not gather dust in books. We must put our ideas into action through
+practice. However blind undirected action is wasted effort. Therefore
+we seek to foster both aspects in participants.
 
-With the mentorship system, whenever members are studying, they are self directed but under the influence of more senior mentors.
-If they get stuck, they can ask mentors for assistance to get past difficult concepts or discuss ideas to gain a better understanding.
-Learning through dialogue is encouraged since it creates stronger bonds and relations between people in the community.
+With the mentorship system, whenever members are studying, they
+are self directed but under the influence of more senior mentors.
+If they get stuck, they can ask mentors for assistance to get past
+difficult concepts or discuss ideas to gain a better understanding.
+Learning through dialogue is encouraged since it creates stronger
+bonds and relations between people in the community.
 
 ## Progression
 
 ### Mandatory Initial Stage
 
-Everybody in the organization must study philosophy and programming as essential skills. To start there are two objects of study:
+Everybody in the organization must study philosophy and programming
+as essential skills. To start there are two objects of study:
 
-1. ["Manifesto for a Democratic Civilization"](http://139.162.132.101/books/philosophy/1.civilization.pdf) by Ocalan, is 3 separate books. You should complete at least 1 book for the initial stage,
-   and then study the other two as you continue further into later stages.
-2. ["Project Based Python Programming"](http://139.162.132.101/books/python/Eric%20Matthes%20-%20Python%20Crash%20Course%20A%20Hands-On%2C%20Project-Based%20Introduction%20to%20Programming%20%282016%2C%20No%20Starch%20Press%29.pdf), this will teach you Python programming which will be an essential skill for any branch you
-   decide to continue onto.
+1. ["Manifesto for a Democratic Civilization"](http://139.162.132.101/books/philosophy/1.civilization.pdf)
+   by Ocalan, is 3 separate books. You should complete at least 1 book
+   for the initial stage, and then study the other two as you continue
+   further into later stages.
+2. ["Project Based Python Programming"](http://139.162.132.101/books/python/Eric%20Matthes%20-%20Python%20Crash%20Course%20A%20Hands-On%2C%20Project-Based%20Introduction%20to%20Programming%20%282016%2C%20No%20Starch%20Press%29.pdf)
+   this will teach you Python programming which will be an essential
+   skill for any branch you decide to continue onto.
 
-Programming takes time and dedicated to become proficient at. Many people give up during the initial phase which can take more than a year.
-You have to push through it. Once you master programming, it becomes enjoyable and fun. Code is the medium of our organization, and
-we are hacker-artists.
+Programming takes time and dedicated to become proficient at. Many
+people give up during the initial phase which can take more than a
+year. You have to push through it. Once you master programming, it
+becomes enjoyable and fun. Code is the medium of our organization,
+and we are hacker-artists.
 
 ### Branches
 
-All branches take roughly the same time to become highly proficient in, around 1-2 years, but even after 6 months, adherents can begin
-using their acquired knowledge in a practical way with small limited tasks. We actively encourage the combination of theory and practice
+All branches take roughly the same time to become highly proficient
+in, around 1-2 years, but even after 6 months, adherents can begin
+using their acquired knowledge in a practical way with small limited
+tasks. We actively encourage the combination of theory and practice
 to strengthen one another.
 
 #### Token Scientist
 
-Token engineering is a new emerging science. Tokens are a breakthrough in building online networks, since we have a means to engineer incentive mechanisms
-and encourage certain user behaviours.
+Token engineering is a new emerging science. Tokens are a breakthrough
+in building online networks, since we have a means to engineer
+incentive mechanisms and encourage certain user behaviours.
 
-DeFi protocols in crypto make extensive use of token engineering to design how liquidity flows in and out of networks, and is an important key part of leveraging
-crypto economic power.
+DeFi protocols in crypto make extensive use of token engineering to
+design how liquidity flows in and out of networks, and is an important
+key part of leveraging crypto economic power.
 
-To become proficient in this area requires study of economics, mathematics, and finance. It also makes heavy use of Python programming to build simulations
-and economic models.
+To become proficient in this area requires study of economics,
+mathematics, and finance. It also makes heavy use of Python programming
+to build simulations and economic models.
 
 1. ["New Paradigm for Macroeconomics"](http://139.162.132.101/books/economy/werner-macroeconomics.pdf) by Werner. This book will take several months to study but is a strong basis for understanding economics.
     1. Notes from the [introduction](https://wiki.polytech.barcelona/index.php?title=Notes/New_Paradigm_in_Macroeconomics/Introduction) to Werner's book.
@@ -75,12 +103,17 @@ and economic models.
 
 #### Software Developer
 
-Software developers create the end result software that others use. They take research and create a product from that research by applying the ideas.
-Developers can further be focused more on creating prototypes from research, or developing prototypes into polished final products.
+Software developers create the end result software that others
+use. They take research and create a product from that research
+by applying the ideas.  Developers can further be focused more on
+creating prototypes from research, or developing prototypes into
+polished final products.
 
-To become a senior developer means learning about how the computer works on a deep level, and learning advanced programming skills.
-It takes time to fully master with a lot of early frustration but is eventually highly rewarding and creative.
-Developers are highly sought after and rare.
+To become a senior developer means learning about how the computer
+works on a deep level, and learning advanced programming skills.
+It takes time to fully master with a lot of early frustration but
+is eventually highly rewarding and creative.  Developers are highly
+sought after and rare.
 
 1. Learn from various materials about computer architecture, operating systems, and software architecture.
     1. Books such as the history of UNIX or the mythical man month.
@@ -90,35 +123,55 @@ Developers are highly sought after and rare.
 
 #### Cryptography Researcher
 
-Cryptography researchers create the mathematics or repurpose existing algorithms to craft the weapons or implements of change that the developers use.
-They make use of advanced algebra to exploit the boundaries or hard limits set by the universe on reality to create cryptographic schemes that obey
-certain properties. They are in a sense reality hackers. They hack reality to create systems that obey objective properties due to the underlying
-mathematics. Needless to say, the advanced cryptographer is a good mathematician.
+Cryptography researchers create the mathematics or repurpose existing
+algorithms to craft the weapons or implements of change that the
+developers use.  They make use of advanced algebra to exploit the
+boundaries or hard limits set by the universe on reality to create
+cryptographic schemes that obey certain properties. They are in a
+sense reality hackers. They hack reality to create systems that obey
+objective properties due to the underlying mathematics. Needless to
+say, the advanced cryptographer is a good mathematician.
 
-For cryptography, you will study ["Abstract Algebra"](http://139.162.132.101/books/maths/algebra/%28Dover%20Books%20on%20Mathematics%29%20Charles%20C%20Pinter%20-%20A%20Book%20of%20Abstract%20Algebra-Dover%20Publications%20%282010%29.pdf) by Pinter, and starting with simple cryptographic schemes gradually move towards learning more complex
-ones. You will prototype these schemes using a computer algebra system called [SAGE](https://doc.sagemath.org/pdf/en/a_tour_of_sage/a_tour_of_sage.pdf).
+For cryptography, you will study ["Abstract Algebra"](http://139.162.132.101/books/maths/algebra/%28Dover%20Books%20on%20Mathematics%29%20Charles%20C%20Pinter%20-%20A%20Book%20of%20Abstract%20Algebra-Dover%20Publications%20%282010%29.pdf) by Pinter, and starting with simple cryptographic schemes
+gradually move towards learning more complex ones. You will prototype
+these schemes using a computer algebra system called
+[SAGE](https://doc.sagemath.org/pdf/en/a_tour_of_sage/a_tour_of_sage.pdf).
 
 #### Protocol Engineer
 
-Good knowledge of computer science fundamentals as well as the ability to write code. There is also study of algebra but not to the same degree as for cryptography.
+Good knowledge of computer science fundamentals as well as the ability
+to write code. There is also study of algebra but not to the same
+degree as for cryptography.
 
-The protocol engineer is responsible for blockchain consensus algorithms, developing p2p networks, and other forms of distributed synchronization such as CRDTs. They establish the fundamentals for creating distributed applications and hardening the anti-censorship properties of crypto. They also harden networks against de-anonymization attempts through the use of encrypted mixnetworking and other techniques.
+The protocol engineer is responsible for blockchain consensus
+algorithms, developing p2p networks, and other forms of
+distributed synchronization such as CRDTs. They establish the
+fundamentals for creating distributed applications and hardening the
+anti-censorship properties of crypto. They also harden networks against
+de-anonymization attempts through the use of encrypted mixnetworking
+and other techniques.
 
-Protocol engineers have to possess a good knowledge about the theory behind distributed networks, as well as experience in how they work in practice. This topic is part theory, and part practical. They have a good grasp of algorithms and computer science theory.
+Protocol engineers have to possess a good knowledge about the theory
+behind distributed networks, as well as experience in how they work
+in practice. This topic is part theory, and part practical. They have
+a good grasp of algorithms and computer science theory.
 
 #### Other
 
-Alongside this study, continuing to study Ocalan is required. After finishing the Ocalan texts, you can then read Werner's book on economics, as well as Mumford or other philosophers.
+Alongside this study, continuing to study Ocalan is required. After
+finishing the Ocalan texts, you can then read Werner's book on
+economics, as well as Mumford or other philosophers.
 
-Also engagement and familiarization with crypto is a must. Begin following [this list](https://twitter.com/i/lists/1345778435390640129) and participating in crypto communities.
+Also engagement and familiarization with crypto is a must. Begin
+following [this list](https://twitter.com/i/lists/1345778435390640129)
+and participating in crypto communities.
 
 ## Starting
 
 1. Download and install a simple Linux operating system to get started. Options can be Ubuntu or Manjaro Linux.
-2. Setup a [sollet.io](https://www.sollet.io/) wallet, and learn how to use an AMM like Raydium to exchange money on Solana between USDC and Bitcoin. Learn to work with multiple SPL accounts.
-3. Watch [Finematics videos](https://www.youtube.com/c/Finematics/videos).
-4. Begin the initial stage listed above.
-5. Follow the instructions on the Darkfi Book and run [ircd](Book https://darkrenaissance.github.io/darkfi/misc/ircd/ircd.html) to connect with the team.
+2. Watch [Finematics videos](https://www.youtube.com/c/Finematics/videos).
+3. Begin the initial stage listed above.
+4. Follow the instructions on the Darkfi Book and run [ircd](Book https://darkrenaissance.github.io/darkfi/misc/ircd/ircd.html) to connect with the team.
 
 ## Further Reading
 
