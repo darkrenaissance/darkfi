@@ -143,11 +143,6 @@ mod dao_contract {
             // we might want to enforce that it appears at a certain index exactly.
             // So we know the tx is well formed.
 
-            // we can elide this with macro magic
-            // dao_contract::mint::validate::CallData
-            assert_eq((&**call_data).type_id(), TypeId::of::<CallData>());
-            let func_call = func_call.call_data.downcast_ref::<CallData>();
-
             ...
         }
     }
