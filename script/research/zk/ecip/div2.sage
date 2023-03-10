@@ -289,5 +289,8 @@ f_numer = D.func.numerator().mod(eqn)
 f_denom = D.func.denominator().mod(eqn)
 f = f_numer / f_denom
 assert f.denominator() == 1
-print(f.numerator())
+f = f.numerator()
+print(f)
+save([P0.P, P1.P, P2.P, Q.P, f], "div.sobj")
+print("Saved (P₀, P₁, P₂, Q, f)")
 
