@@ -6,6 +6,8 @@ def is_reduced(f):
     a, b, c = f
     return is_normal(f) and (a < c or (a == c and b >= 0))
 
+# Action of SL₂(ℤ) on a form (x y)ᵗ
+# This also will always terminate on the final reduced form in a class
 def reduce(f):
     a, b, c = f
     while not is_reduced((a, b, c)):
