@@ -1025,6 +1025,51 @@ impl ValidatorState {
         Ok(())
     }
 
+    pub async fn verify_transactions2(&self, txs: &[Transaction], write: bool) -> Result<()> {
+        /*
+        let mut sled_overlay = SledDbOverlay::new();
+
+        for tx in txs {
+            for call in tx {
+                let wasm = sled_overlay.wasm_bincode.get(call.contract_id)?;
+
+                let mut runtime = Runtime::new(&wasm, &mut sled_overlay, call.contract_id)?;
+                let metadata = runtime.metadata(&payload)?;
+            }
+
+            // verify sigs
+            // verify zk proofs
+        }
+
+        for tx in txs {
+            let mut updates = vec![];
+
+            for call in tx {
+                let wasm = sled_overlay.wasm_bincode.get(call.contract_id)?;
+
+                let mut runtime = Runtime::new(&wasm, &mut sled_overlay, call.contract_id)?;
+                let state_update = runtime.exec(&payload)?;
+                updates.push((call.contract_id, state_update));
+            }
+
+            for (cid, update) in updates {
+                let wasm = sled_overlay.wasm_bincode.get(cid)?;
+
+                let mut runtime = Runtime::new(&wasm, &mut sled_overlay, cid)?;
+                runtime.apply(update)?;
+            }
+        }
+
+        if write && failed.is_empty() {
+            sled_overlay.apply();
+            db.flush_async().await;
+        }
+
+        */
+
+        Ok(())
+    }
+
     /// Append to canonical state received finalized slot checkpoints from block sync task.
     pub async fn receive_slot_checkpoints(
         &mut self,
