@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
+
 pub mod events_queue;
 pub mod model;
 pub mod protocol_event;
@@ -23,6 +25,10 @@ pub mod view;
 
 pub trait EventMsg {
     fn new() -> Self;
+}
+
+pub fn gen_id(len: usize) -> String {
+    thread_rng().sample_iter(&Alphanumeric).take(len).map(char::from).collect()
 }
 
 pub fn get_current_time() -> u64 {
