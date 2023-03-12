@@ -23,7 +23,7 @@ use log::debug;
 use serde::{Deserialize, Serialize};
 
 use darkfi::{
-    raft::gen_id,
+    event_graph::gen_id,
     util::{
         file::{load_json_file, save_json_file},
         time::Timestamp,

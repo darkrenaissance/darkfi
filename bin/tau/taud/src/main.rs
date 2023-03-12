@@ -35,8 +35,16 @@ use log::{debug, error, info, warn};
 use structopt_toml::StructOptToml;
 
 use darkfi::{
-    async_daemonize, net,
-    raft::{NetMsg, ProtocolRaft, Raft, RaftSettings},
+    async_daemonize,
+    event_graph::{
+        events_queue::EventsQueue,
+        get_current_time,
+        model::{Event, EventId, Model, ModelPtr},
+        protocol_event::{ProtocolEvent, Seen, SeenPtr, UnreadEvents},
+        view::{View, ViewPtr},
+        EventMsg,
+    },
+    net::{self, P2pPtr},
     rpc::server::listen_and_serve,
     util::path::expand_path,
     Error, Result,
@@ -83,6 +91,25 @@ pub struct EncryptedTask {
     payload: Vec<u8>,
 }
 
+impl EventMsg for EncryptedTask {
+    fn new() -> Self {
+        Self {
+            nonce: [
+                19, 40, 199, 87, 248, 23, 187, 11, 119, 237, 214, 65, 5, 206, 187, 33, 222, 107,
+                140, 84, 114, 61, 205, 40,
+            ]
+            .to_vec(),
+            payload: [
+                30, 66, 74, 74, 65, 78, 80, 120, 85, 66, 106, 119, 119, 81, 66, 55, 112, 80, 88,
+                85, 82, 97, 79, 108, 115, 83, 113, 78, 71, 116, 113, 4, 114, 111, 111, 116, 1, 0,
+                0, 0, 5, 116, 105, 116, 108, 101, 0, 4, 100, 101, 115, 99, 6, 100, 97, 114, 107,
+                102, 105, 0, 0, 0, 0, 42, 47, 14, 100, 0, 0, 0, 0, 4, 111, 112, 101, 110, 0, 0,
+            ]
+            .to_vec(),
+        }
+    }
+}
+
 fn encrypt_task(
     task: &TaskInfo,
     salsa_box: &SalsaBox,
@@ -109,33 +136,81 @@ fn decrypt_task(encrypt_task: &EncryptedTask, salsa_box: &SalsaBox) -> TaudResul
     Ok(task)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn start_sync_loop(
     broadcast_rcv: smol::channel::Receiver<TaskInfo>,
-    raft_msgs_sender: smol::channel::Sender<EncryptedTask>,
-    commits_recv: smol::channel::Receiver<EncryptedTask>,
-    datastore_path: std::path::PathBuf,
+    view: ViewPtr<EncryptedTask>,
+    model: ModelPtr<EncryptedTask>,
+    seen: SeenPtr<EventId>,
     workspaces: HashMap<String, SalsaBox>,
-    mut rng: crypto_box::rand_core::OsRng,
+    datastore_path: std::path::PathBuf,
+    missed_events: Arc<Mutex<Vec<Event<EncryptedTask>>>>,
+    p2p: P2pPtr,
 ) -> TaudResult<()> {
     loop {
+        let mut v = view.lock().await;
         select! {
-            task = broadcast_rcv.recv().fuse() => {
-                let tk = task.map_err(Error::from)?;
+            task_event = broadcast_rcv.recv().fuse() => {
+                let tk = task_event.map_err(Error::from)?;
                 if workspaces.contains_key(&tk.workspace) {
                     let salsa_box = workspaces.get(&tk.workspace).unwrap();
-                    let encrypted_task = encrypt_task(&tk, salsa_box, &mut rng)?;
+                    let encrypted_task = encrypt_task(&tk, salsa_box, &mut crypto_box::rand_core::OsRng)?;
                     info!(target: "tau", "Send the task: ref: {}", tk.ref_id);
-                    raft_msgs_sender.send(encrypted_task).await.map_err(Error::from)?;
+                    // raft_msgs_sender.send(encrypted_task).await.map_err(Error::from)?;
+                    let event = Event {
+                        previous_event_hash: model.lock().await.get_head_hash(),
+                        action: encrypted_task,
+                        timestamp: get_current_time(),
+                        read_confirms: 0,
+                    };
+
+                    p2p.broadcast(event).await?;
+
                 }
             }
-            task = commits_recv.recv().fuse() => {
-                let task = task.map_err(Error::from)?;
-                on_receive_task(&task,&datastore_path, &workspaces)
+            task_event = v.process().fuse() => {
+                let event = task_event.map_err(Error::from)?;
+                if !seen.push(&event.hash()).await {
+                    continue
+                }
+
+                info!("new event: {:?}", event);
+                missed_events.lock().await.push(event.clone());
+
+                on_receive_task(&event.action, &datastore_path, &workspaces)
                     .await?;
             }
         }
     }
 }
+
+// async fn start_sync_loop(
+//     broadcast_rcv: smol::channel::Receiver<TaskInfo>,
+//     raft_msgs_sender: smol::channel::Sender<EncryptedTask>,
+//     commits_recv: smol::channel::Receiver<EncryptedTask>,
+//     datastore_path: std::path::PathBuf,
+//     workspaces: HashMap<String, SalsaBox>,
+//     mut rng: crypto_box::rand_core::OsRng,
+// ) -> TaudResult<()> {
+//     loop {
+//         select! {
+//             task = broadcast_rcv.recv().fuse() => {
+//                 let tk = task.map_err(Error::from)?;
+//                 if workspaces.contains_key(&tk.workspace) {
+//                     let salsa_box = workspaces.get(&tk.workspace).unwrap();
+//                     let encrypted_task = encrypt_task(&tk, salsa_box, &mut rng)?;
+//                     info!(target: "tau", "Send the task: ref: {}", tk.ref_id);
+//                     raft_msgs_sender.send(encrypted_task).await.map_err(Error::from)?;
+//                 }
+//             }
+//             task = commits_recv.recv().fuse() => {
+//                 let task = task.map_err(Error::from)?;
+//                 on_receive_task(&task,&datastore_path, &workspaces)
+//                     .await?;
+//             }
+//         }
+//     }
+// }
 
 async fn on_receive_task(
     task: &EncryptedTask,
@@ -192,8 +267,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     create_dir_all(datastore_path.join("month"))?;
     create_dir_all(datastore_path.join("task"))?;
 
-    let rng = crypto_box::rand_core::OsRng;
-
     if settings.generate {
         println!("Generating a new workspace");
 
@@ -227,16 +300,22 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         return Ok(())
     }
 
-    //
-    // Raft
-    //
-    let seen_net_msgs = Arc::new(Mutex::new(HashMap::new()));
+    ////////////////////
+    // Initialize the base structures
+    ////////////////////
+    let events_queue = EventsQueue::<EncryptedTask>::new();
+    let model = Arc::new(Mutex::new(Model::new(events_queue.clone())));
+    let view = Arc::new(Mutex::new(View::new(events_queue)));
+    let model_clone = model.clone();
 
-    let datastore_raft = datastore_path.join("tau.db");
-    let raft_settings = RaftSettings { datastore_path: datastore_raft, ..RaftSettings::default() };
+    ////////////////////
+    // Buffers
+    ////////////////////
+    let seen_event = Seen::new();
+    let seen_inv = Seen::new();
+    let unread_events = UnreadEvents::new();
 
-    let mut raft = Raft::<EncryptedTask>::new(raft_settings, seen_net_msgs.clone())?;
-    let raft_id = raft.id();
+    // let datastore_raft = datastore_path.join("tau.db");
 
     let (broadcast_snd, broadcast_rcv) = smol::channel::unbounded::<TaskInfo>();
 
@@ -245,26 +324,45 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     //
     let mut net_settings = settings.net.clone();
     net_settings.app_version = Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string());
-    let (p2p_send_channel, p2p_recv_channel) = smol::channel::unbounded::<NetMsg>();
 
     let p2p = net::P2p::new(net_settings.into()).await;
-    let p2p = p2p.clone();
+    // let p2p = p2p.clone();
     let registry = p2p.protocol_registry();
 
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
-            let raft_id = raft_id.clone();
-            let sender = p2p_send_channel.clone();
-            let seen_net_msgs_cloned = seen_net_msgs.clone();
+            let seen_event = seen_event.clone();
+            let seen_inv = seen_inv.clone();
+            let model = model.clone();
+            let unread_events = unread_events.clone();
             async move {
-                ProtocolRaft::init(raft_id, channel, sender, p2p, seen_net_msgs_cloned).await
+                ProtocolEvent::init(channel, p2p, model, seen_event, seen_inv, unread_events).await
             }
         })
-    .await;
+        .await;
 
     p2p.clone().start(executor.clone()).await?;
 
     executor.spawn(p2p.clone().run(executor.clone())).detach();
+
+    ////////////////////
+    // Listner
+    ////////////////////
+    let seen_ids = Seen::new();
+    let missed_events = Arc::new(Mutex::new(vec![]));
+
+    executor
+        .spawn(start_sync_loop(
+            broadcast_rcv,
+            view,
+            model_clone,
+            seen_ids,
+            workspaces.clone(),
+            datastore_path.clone(),
+            missed_events,
+            p2p.clone(),
+        ))
+        .detach();
 
     //
     // RPC interface
@@ -292,18 +390,9 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     })
     .unwrap();
 
-    executor
-        .spawn(start_sync_loop(
-            broadcast_rcv,
-            raft.sender(),
-            raft.receiver(),
-            datastore_path,
-            workspaces,
-            rng,
-        ))
-        .detach();
-
-    raft.run(p2p.clone(), p2p_recv_channel.clone(), executor.clone(), shutdown.clone()).await?;
+    shutdown.recv().await?;
+    print!("\r");
+    info!("Caught termination signal, cleaning up and exiting...");
 
     Ok(())
 }
