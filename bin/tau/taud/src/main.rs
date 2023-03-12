@@ -27,6 +27,7 @@ use std::{
 use async_std::sync::{Arc, Mutex};
 use crypto_box::{
     aead::{Aead, AeadCore},
+    rand_core::OsRng,
     SalsaBox, SecretKey,
 };
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
@@ -113,7 +114,7 @@ impl EventMsg for EncryptedTask {
 fn encrypt_task(
     task: &TaskInfo,
     salsa_box: &SalsaBox,
-    rng: &mut crypto_box::rand_core::OsRng,
+    rng: &mut OsRng,
 ) -> TaudResult<EncryptedTask> {
     debug!("start encrypting task");
 
@@ -154,9 +155,8 @@ async fn start_sync_loop(
                 let tk = task_event.map_err(Error::from)?;
                 if workspaces.contains_key(&tk.workspace) {
                     let salsa_box = workspaces.get(&tk.workspace).unwrap();
-                    let encrypted_task = encrypt_task(&tk, salsa_box, &mut crypto_box::rand_core::OsRng)?;
+                    let encrypted_task = encrypt_task(&tk, salsa_box, &mut OsRng)?;
                     info!(target: "tau", "Send the task: ref: {}", tk.ref_id);
-                    // raft_msgs_sender.send(encrypted_task).await.map_err(Error::from)?;
                     let event = Event {
                         previous_event_hash: model.lock().await.get_head_hash(),
                         action: encrypted_task,
@@ -174,7 +174,6 @@ async fn start_sync_loop(
                     continue
                 }
 
-                info!("new event: {:?}", event);
                 missed_events.lock().await.push(event.clone());
 
                 on_receive_task(&event.action, &datastore_path, &workspaces)
@@ -183,34 +182,6 @@ async fn start_sync_loop(
         }
     }
 }
-
-// async fn start_sync_loop(
-//     broadcast_rcv: smol::channel::Receiver<TaskInfo>,
-//     raft_msgs_sender: smol::channel::Sender<EncryptedTask>,
-//     commits_recv: smol::channel::Receiver<EncryptedTask>,
-//     datastore_path: std::path::PathBuf,
-//     workspaces: HashMap<String, SalsaBox>,
-//     mut rng: crypto_box::rand_core::OsRng,
-// ) -> TaudResult<()> {
-//     loop {
-//         select! {
-//             task = broadcast_rcv.recv().fuse() => {
-//                 let tk = task.map_err(Error::from)?;
-//                 if workspaces.contains_key(&tk.workspace) {
-//                     let salsa_box = workspaces.get(&tk.workspace).unwrap();
-//                     let encrypted_task = encrypt_task(&tk, salsa_box, &mut rng)?;
-//                     info!(target: "tau", "Send the task: ref: {}", tk.ref_id);
-//                     raft_msgs_sender.send(encrypted_task).await.map_err(Error::from)?;
-//                 }
-//             }
-//             task = commits_recv.recv().fuse() => {
-//                 let task = task.map_err(Error::from)?;
-//                 on_receive_task(&task,&datastore_path, &workspaces)
-//                     .await?;
-//             }
-//         }
-//     }
-// }
 
 async fn on_receive_task(
     task: &EncryptedTask,
@@ -280,8 +251,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
                 error!("Wrong workspace try again");
                 continue
             }
-            let mut rng = crypto_box::rand_core::OsRng;
-            let secret_key = SecretKey::generate(&mut rng);
+            let secret_key = SecretKey::generate(&mut OsRng);
             let encoded = bs58::encode(secret_key.as_bytes());
 
             println!("workspace: {}:{}", workspace, encoded.into_string());
