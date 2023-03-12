@@ -425,12 +425,7 @@ mod tests {
         }
     }
 
-    fn create_message(
-        previous_event_hash: EventId,
-        nick: &str,
-        msg: &str,
-        timestamp: u64,
-    ) -> Event<PrivMsgEvent> {
+    fn create_message(previous_event_hash: EventId, timestamp: u64) -> Event<PrivMsgEvent> {
         Event { previous_event_hash, action: PrivMsgEvent::new(), timestamp, read_confirms: 4 }
     }
 
@@ -621,7 +616,7 @@ mod tests {
         let root_id = model.current_root;
 
         let timestamp = get_current_time() + 1;
-        let event = create_message(root_id, "msg", "message", timestamp);
+        let event = create_message(root_id, timestamp);
         let mut event2 = event.clone();
 
         let event_hash = event.hash();
