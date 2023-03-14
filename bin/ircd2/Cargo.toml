@@ -25,6 +25,9 @@ easy-parallel = "3.2.0"
 crypto_box = "0.8.2"
 rand = "0.8.5"
 
+# db
+sled = "0.34.7"
+
 # Misc
 clap = {version = "4.0.32", features = ["derive"]}
 log = "0.4.17"

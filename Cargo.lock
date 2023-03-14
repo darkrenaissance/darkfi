@@ -2497,6 +2497,7 @@ dependencies = [
  "serde",
  "serde_json",
  "simplelog",
+ "sled",
  "smol",
  "structopt",
  "structopt-toml",
