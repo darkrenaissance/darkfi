@@ -28,6 +28,7 @@ use super::{
     Channel, ChannelPtr, SessionWeakPtr,
 };
 use crate::{
+    net::transport::NymTransport,
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
     Error, Result,
 };
@@ -125,6 +126,13 @@ impl Acceptor {
                 let hurl = transport.create_ehs(accept_url.clone())?;
 
                 info!(target: "net::acceptor", "EHS TOR: {}", hurl.to_string());
+
+                let listener = transport.clone().listen_on(accept_url.clone());
+
+                accept!(listener, transport, upgrade);
+            }
+            TransportName::Nym(upgrade) => {
+                let transport = NymTransport::new()?;
 
                 let listener = transport.clone().listen_on(accept_url.clone());
 

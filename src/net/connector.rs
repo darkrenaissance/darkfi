@@ -23,7 +23,7 @@ use log::error;
 use url::Url;
 
 use super::{
-    transport::{TcpTransport, TorTransport, Transport, TransportName},
+    transport::{NymTransport, TcpTransport, TorTransport, Transport, TransportName},
     Channel, ChannelPtr, SessionWeakPtr, SettingsPtr,
 };
 use crate::{Error, Result};
@@ -101,6 +101,13 @@ impl Connector {
                 )?;
 
                 let transport = TorTransport::new(socks5_url, None)?;
+
+                let stream = transport.clone().dial(connect_url.clone(), None);
+
+                connect!(stream, transport, upgrade)
+            }
+            TransportName::Nym(upgrade) => {
+                let transport = NymTransport::new()?;
 
                 let stream = transport.clone().dial(connect_url.clone(), None);
 
