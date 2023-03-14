@@ -118,7 +118,7 @@ impl Transport for NymTransport {
             "nym" | "nym+tls" => {}
             x => return Err(Error::UnsupportedTransport(x.to_string())),
         }
-        println!("using nym transport=======================================================");
+
         Ok(Box::pin(self.do_dial(url)))
     }
 
