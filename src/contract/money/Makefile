@@ -38,6 +38,11 @@ test-mint-pay-swap: all
 		--package darkfi-money-contract \
 		--test mint_pay_swap
 
+test-txs-verification: all
+	$(CARGO) test --release --features=no-entrypoint,client \
+		--package darkfi-money-contract \
+		--test txs_verification
+
 bench:
 	$(CARGO) test --release --features=no-entrypoint,client \
 		--package darkfi-money-contract \
