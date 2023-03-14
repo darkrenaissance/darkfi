@@ -48,9 +48,9 @@ bench:
 		--package darkfi-money-contract \
 		--test verification_bench $(FILTER)
 
-test: test-integration test-mint-pay-swap
+test: test-integration test-mint-pay-swap test-txs-verification
 
 clean:
 	rm -f $(PROOFS_BIN) $(WASM_BIN)
 
-.PHONY: all test-integration test-mint-pay-swap bench test clean
+.PHONY: all test-integration test-mint-pay-swap test-txs-verification bench test clean
