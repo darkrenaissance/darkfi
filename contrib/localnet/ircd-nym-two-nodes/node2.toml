@@ -1,0 +1,24 @@
+## JSON-RPC listen URL
+rpc_listen="tcp://127.0.0.1:8891"
+
+## IRC listen URL
+irc_listen="tcp://127.0.0.1:22023"
+
+## List of channels to autojoin for new client connections
+autojoin = ["#dev"]
+
+## P2P net settings
+[net]
+## Connection slots
+outbound_connections=0
+
+inbound = ["nym://127.0.0.1:25553"]
+
+external_addr = ["nym://127.0.0.1:25553"]
+
+peers = ["nym://127.0.0.1:25552"]
+
+## Seed nodes to connect to 
+# seeds = ["nym://127.0.0.1:25551"]
+
+outbound_transports = ["nym"]
