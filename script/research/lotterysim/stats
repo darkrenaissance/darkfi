@@ -1,0 +1,50 @@
+# unoptimized
+running time:1000
+network airdrop: 0 on 1000 nodes
+total time: 0:00:20.378480, slot time: 0:00:00.020378
+--------
+running time:1000
+network airdrop: 0 on 1000 nodes
+slots time per slot: 0:00:00.020421
+total time: 0:00:20.442380
+slot time: 0:00:00.020442
+
+
+# parallelized nodes spin off
+running time (slots):1000
+network airdrop: 0 on 1000 nodes
+random running time: 1000
+total time: 0:02:30.056337, slot time: 0:00:00.150056
+single leader frequency: 0.000998003992015968
+
+# optimized centralized pid
+
+running time (slots):1000
+network airdrop: 0 on 1000 nodes
+random running time: 1000
+total time: 0:02:22.690714, slot time: 0:00:00.142691
+single leader frequency: 0.000998003992015968
+
+# optimized Darkie
+
+running time (slots):1000
+network airdrop: 0 on 1000 nodes
+random running time: 1000
+pid per slot: 0:00:00.000018.
+spin off per slot: 0:00:00.124847.
+thread work per slot: 0:00:00.002923.
+finalization per slot: 0:00:00.000003.
+restart per slot: 0:00:00.008700.
+total time: 0:02:16.505048, slot time: 0:00:00.136505
+single leader frequency: 0.001996007984031936
+
+# sequential darktable
+
+running time:1000
+network airdrop: 0 on 1000 nodes
+random running time: 1000
+running time: 1000
+total time: 0:00:15.305617, slot time: 0:00:00.015306
+
+# conclusion
+the only optimization gained is 0.005 seconds gain per node.
