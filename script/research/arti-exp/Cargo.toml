@@ -1,0 +1,14 @@
+[package]
+name = "arti-exp"
+version = "0.4.1"
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+anyhow = "1.0.69"
+async-std = {version = "1.12.0", features = ["attributes"]}
+arti-client = {version = "0.8.2", default-features = false, features = ["async-std", "pt-client", "rustls", "compression"]}
+simplelog = "0.12.1"
