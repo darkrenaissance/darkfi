@@ -9,6 +9,11 @@ CARGO = cargo
 # Flags passed to cargo/rustc
 #RUSTFLAGS = -C target-cpu=native
 
+# Optional compile target
+#RUST_TARGET = x86_64-unknown-linux-musl
+# Uncomment this if the above is uncommented
+#TARGET_PRFX = --target=
+
 # Binaries to be built
 BINS = drk darkfid ircd dnetview faucetd vanityaddr
 
@@ -35,8 +40,9 @@ BINDEPS = \
 all: $(BINS)
 
 zkas: $(ZKASDEPS)
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
-	cp -f target/release/$@ $@
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) \
+		--all-features --release --package $@
+	cp -f target/$(RUST_TARGET)/release/$@ $@
 
 $(PROOFS_BIN): zkas $(PROOFS_SRC)
 	./zkas $(basename $@) -o $@
@@ -49,8 +55,9 @@ token_lists:
 	$(MAKE) -C contrib/token all
 
 $(BINS): token_lists contracts $(PROOFS_BIN) $(BINDEPS)
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --all-features --release --package $@
-	cp -f target/release/$@ $@
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) \
+		--all-features --release --package $@
+	cp -f target/$(RUST_TARGET)/release/$@ $@
 
 check: token_lists contracts $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) hack check --release --feature-powerset --all
