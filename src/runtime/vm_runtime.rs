@@ -76,10 +76,8 @@ impl ContractSection {
 pub struct Env {
     /// Blockchain overlay access
     pub blockchain: BlockchainOverlayPtr,
-    /// sled tree handles used with `db_*`
+    /// Overlay tree handles used with `db_*`
     pub db_handles: RefCell<Vec<DbHandle>>,
-    /// sled tree batches, indexed the same as `db_handles`.
-    pub db_batches: RefCell<Vec<import::util::Batch>>,
     /// The contract ID being executed
     pub contract_id: ContractId,
     /// The compiled wasm bincode being executed,
@@ -157,7 +155,6 @@ impl Runtime {
 
         // Initialize data
         let db_handles = RefCell::new(vec![]);
-        let db_batches = RefCell::new(vec![]);
         let logs = RefCell::new(vec![]);
 
         debug!(target: "runtime::vm_runtime", "Importing functions");
@@ -167,7 +164,6 @@ impl Runtime {
             Env {
                 blockchain,
                 db_handles,
-                db_batches,
                 contract_id,
                 contract_bincode: wasm_bytes.to_vec(),
                 contract_section: ContractSection::Null,
@@ -336,10 +332,10 @@ impl Runtime {
     /// The runtime will look for an `INITIALIZE` symbol in the wasm code, and execute
     /// it if found. Optionally, it is possible to pass in a payload for any kind of special
     /// instructions the developer wants to manage in the initialize function.
-    /// This process is supposed to set up the sled db trees for storing the smart contract
+    /// This process is supposed to set up the overlay trees for storing the smart contract
     /// state, and it can create, delete, modify, read, and write to databases it's allowed to.
-    /// The permissions for this are handled by the `ContractId` in the sled db API so we
-    /// assume that the contract is only able to do write operations on its own sled trees.
+    /// The permissions for this are handled by the `ContractId` in the overlay db API so we
+    /// assume that the contract is only able to do write operations on its own overlay trees.
     pub fn deploy(&mut self, payload: &[u8]) -> Result<()> {
         info!(target: "runtime::vm_runtime", "[wasm-runtime] Running deploy");
 
@@ -364,16 +360,11 @@ impl Runtime {
                 };
 
             let mut db_handles = env_mut.db_handles.borrow_mut();
-            let mut db_batches = env_mut.db_batches.borrow_mut();
             db_handles.push(DbHandle::new(env_mut.contract_id, zkas_tree_handle));
-            db_batches.push(import::util::Batch::default());
         }
 
         debug!(target: "runtime::vm_runtime", "[wasm-runtime] payload: {:?}", payload);
         let _ = self.call(ContractSection::Deploy, payload)?;
-
-        // If the above didn't fail, we write the batches.
-        self.write_batches()?;
 
         // Update the wasm bincode in the WasmStore
         let env_mut = self.ctx.as_mut(&mut self.store);
@@ -383,25 +374,6 @@ impl Runtime {
             .unwrap()
             .wasm_bincode
             .insert(env_mut.contract_id, &env_mut.contract_bincode)?;
-
-        Ok(())
-    }
-
-    /// Apply all batches to the overlay
-    fn write_batches(&mut self) -> Result<()> {
-        let env_mut = self.ctx.as_mut(&mut self.store);
-        let batches = env_mut.db_batches.borrow();
-        let blockchain = env_mut.blockchain.lock().unwrap();
-        let mut overlay = blockchain.overlay.lock().unwrap();
-        for (idx, db) in env_mut.db_handles.get_mut().iter().enumerate() {
-            let tree_handle = &db.tree;
-            for (k, v) in &batches[idx].writes {
-                match v {
-                    Some(u) => overlay.insert(tree_handle, &k, &u)?,
-                    None => overlay.remove(tree_handle, &k)?,
-                };
-            }
-        }
 
         Ok(())
     }
@@ -416,16 +388,13 @@ impl Runtime {
     }
 
     /// This function runs after successful execution of `exec` and tries to
-    /// apply the state change to the sled databases.
+    /// apply the state change to the overlay databases.
     /// The runtime will lok for an `UPDATE` symbol in the wasm code, and execute
     /// it if found. The function does not take an arbitrary payload, but just takes
     /// a state update from `env` and passes it into the wasm runtime.
     pub fn apply(&mut self, update: &[u8]) -> Result<()> {
         debug!(target: "runtime::vm_runtime", "apply: {:?}", update);
         let _ = self.call(ContractSection::Update, update)?;
-
-        // If the above didn't fail, we write the batches.
-        self.write_batches()?;
 
         Ok(())
     }

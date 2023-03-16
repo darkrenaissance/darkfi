@@ -30,10 +30,7 @@ use log::{debug, error, info};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::{
-    runtime::{
-        import,
-        vm_runtime::{ContractSection, Env, SMART_CONTRACT_ZKAS_DB_NAME},
-    },
+    runtime::vm_runtime::{ContractSection, Env, SMART_CONTRACT_ZKAS_DB_NAME},
     zk::{empty_witnesses, VerifyingKey, ZkCircuit},
     zkas::ZkBinary,
 };
@@ -120,14 +117,8 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
 
     // TODO: Make sure we don't duplicate the DbHandle in the vec.
     //       It should behave like an ordered set.
-    // In `lookup()` we also create a `sled::Batch`. This is done for
-    // some simplicity reasons, and also for possible future changes.
-    // However, we make sure that unauthorized writes are not available
-    // from other functions that interface with the databases.
     let mut db_handles = env.db_handles.borrow_mut();
-    let mut db_batches = env.db_batches.borrow_mut();
     db_handles.push(DbHandle::new(cid, tree_handle));
-    db_batches.push(import::util::Batch::default());
     (db_handles.len() - 1) as i32
 }
 
@@ -203,14 +194,8 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
 
     // TODO: Make sure we don't duplicate the DbHandle in the vec.
     //       It should behave like an ordered set.
-    // In `lookup()` we also create a `sled::Batch`. This is done for
-    // some simplicity reasons, and also for possible future changes.
-    // However, we make sure that unauthorized writes are not available
-    // from other functions that interface with the databases.
     let mut db_handles = env.db_handles.borrow_mut();
-    let mut db_batches = env.db_batches.borrow_mut();
     db_handles.push(DbHandle::new(cid, tree_handle));
-    db_batches.push(import::util::Batch::default());
     (db_handles.len() - 1) as i32
 }
 
@@ -274,23 +259,33 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
     }*/
 
     let db_handles = env.db_handles.borrow();
-    let mut db_batches = env.db_batches.borrow_mut();
 
-    if db_handles.len() <= db_handle || db_batches.len() <= db_handle {
+    if db_handles.len() <= db_handle {
         error!(target: "runtime::db::db_set()", "Requested DbHandle that is out of bounds");
         return DB_SET_FAILED
     }
 
     let handle_idx = db_handle;
     let db_handle = &db_handles[handle_idx];
-    let db_batch = &mut db_batches[handle_idx];
 
     if db_handle.contract_id != env.contract_id {
         error!(target: "runtime::db::db_set()", "Unauthorized to write to DbHandle");
         return CALLER_ACCESS_DENIED
     }
 
-    db_batch.insert(key, value);
+    if env
+        .blockchain
+        .lock()
+        .unwrap()
+        .overlay
+        .lock()
+        .unwrap()
+        .insert(&db_handle.tree, &key, &value)
+        .is_err()
+    {
+        error!(target: "runtime::db::db_set()", "Couldn't insert to db_handle tree");
+        return DB_SET_FAILED
+    }
 
     DB_SUCCESS
 }
@@ -347,23 +342,25 @@ pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
     }*/
 
     let db_handles = env.db_handles.borrow();
-    let mut db_batches = env.db_batches.borrow_mut();
 
-    if db_handles.len() <= db_handle || db_batches.len() <= db_handle {
+    if db_handles.len() <= db_handle {
         error!(target: "runtime::db::db_del()", "Requested DbHandle that is out of bounds");
         return DB_DEL_FAILED
     }
 
     let handle_idx = db_handle;
     let db_handle = &db_handles[handle_idx];
-    let db_batch = &mut db_batches[handle_idx];
 
     if db_handle.contract_id != env.contract_id {
         error!(target: "runtime::db::db_del()", "Unauthorized to write to DbHandle");
         return CALLER_ACCESS_DENIED
     }
 
-    db_batch.remove(key);
+    if env.blockchain.lock().unwrap().overlay.lock().unwrap().remove(&db_handle.tree, &key).is_err()
+    {
+        error!(target: "runtime::db::db_del()", "Couldn't remove key from db_handle tree");
+        return DB_DEL_FAILED
+    }
 
     DB_SUCCESS
 }
@@ -565,9 +562,7 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
 
     // Because of `Runtime::Deploy`, we should be sure that the zkas db is index zero.
     let db_handles = env.db_handles.borrow();
-    let mut db_batches = env.db_batches.borrow_mut();
     let db_handle = &db_handles[0];
-    let db_batch = &mut db_batches[0];
     // Redundant check
     if &db_handle.contract_id != contract_id {
         error!(target: "runtime::db::zkas_db_set()", "Internal error, zkas db at index 0 incorrect");
@@ -617,7 +612,19 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
 
     let key = serialize(&zkbin.namespace);
     let value = serialize(&(zkas_bincode, vk_buf));
-    db_batch.insert(key, value);
+    if env
+        .blockchain
+        .lock()
+        .unwrap()
+        .overlay
+        .lock()
+        .unwrap()
+        .insert(&db_handle.tree, &key, &value)
+        .is_err()
+    {
+        error!(target: "runtime::db::zkas_db_set()", "Couldn't insert to db_handle tree");
+        return DB_SET_FAILED
+    }
 
     DB_SUCCESS
 }

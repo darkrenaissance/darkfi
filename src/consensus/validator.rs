@@ -1034,7 +1034,7 @@ impl ValidatorState {
         Ok(())
     }
 
-    pub async fn verify_transactions2(&self, txs: &[Transaction], write: bool) -> Result<()> {
+    pub async fn verify_transactions2(&self, _txs: &[Transaction], _write: bool) -> Result<()> {
         /*
         let mut sled_overlay = SledDbOverlay::new();
 
