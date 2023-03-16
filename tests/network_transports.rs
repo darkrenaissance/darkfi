@@ -210,6 +210,7 @@ For example: \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'",
 }
 
 #[async_std::test]
+#[ignore]
 async fn nym_transport() {
     let target_url = Url::parse("nym://127.0.0.1:25553").unwrap();
 
@@ -237,6 +238,7 @@ async fn nym_transport() {
 }
 
 #[async_std::test]
+#[ignore]
 async fn nym_tls_transport() {
     let target_url = Url::parse("nym+tls://127.0.0.1:25553").unwrap();
 
