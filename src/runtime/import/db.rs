@@ -30,46 +30,23 @@ use log::{debug, error, info};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::{
-    runtime::vm_runtime::{ContractSection, Env, SMART_CONTRACT_ZKAS_DB_NAME},
+    runtime::{
+        import,
+        vm_runtime::{ContractSection, Env, SMART_CONTRACT_ZKAS_DB_NAME},
+    },
     zk::{empty_witnesses, VerifyingKey, ZkCircuit},
     zkas::ZkBinary,
-    Result,
 };
 
 /// Internal wasm runtime API for sled trees
 pub struct DbHandle {
     pub contract_id: ContractId,
-    tree: sled::Tree,
+    pub tree: [u8; 32],
 }
 
 impl DbHandle {
-    pub fn new(contract_id: ContractId, tree: sled::Tree) -> Self {
+    pub fn new(contract_id: ContractId, tree: [u8; 32]) -> Self {
         Self { contract_id, tree }
-    }
-
-    pub fn tree(&self) -> sled::Tree {
-        self.tree.clone()
-    }
-
-    pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-        if let Some(v) = self.tree.get(key)? {
-            return Ok(Some(v.to_vec()))
-        };
-
-        Ok(None)
-    }
-
-    pub fn contains_key(&self, key: &[u8]) -> Result<bool> {
-        Ok(self.tree.contains_key(key)?)
-    }
-
-    pub fn apply_batch(&self, batch: sled::Batch) -> Result<()> {
-        Ok(self.tree.apply_batch(batch)?)
-    }
-
-    pub fn flush(&self) -> Result<()> {
-        let _ = self.tree.flush()?;
-        Ok(())
     }
 }
 
@@ -84,8 +61,7 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
     }
 
     let memory_view = env.memory_view(&ctx);
-    let db = &env.blockchain.sled_db;
-    let contracts = &env.blockchain.contracts;
+    let contracts = &env.blockchain.lock().unwrap().contracts;
     let contract_id = &env.contract_id;
 
     let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
@@ -134,7 +110,7 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
         return CALLER_ACCESS_DENIED
     }
 
-    let tree_handle = match contracts.init(db, &cid, &db_name) {
+    let tree_handle = match contracts.init(&cid, &db_name) {
         Ok(v) => v,
         Err(e) => {
             error!(target: "runtime::db::db_init()", "Failed to init db: {}", e);
@@ -151,7 +127,7 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
     let mut db_handles = env.db_handles.borrow_mut();
     let mut db_batches = env.db_batches.borrow_mut();
     db_handles.push(DbHandle::new(cid, tree_handle));
-    db_batches.push(sled::Batch::default());
+    db_batches.push(import::util::Batch::default());
     (db_handles.len() - 1) as i32
 }
 
@@ -174,8 +150,7 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
     }
 
     let memory_view = env.memory_view(&ctx);
-    let db = &env.blockchain.sled_db;
-    let contracts = &env.blockchain.contracts;
+    let contracts = &env.blockchain.lock().unwrap().contracts;
 
     let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
         error!(target: "runtime::db::db_lookup()", "Failed to make slice from ptr");
@@ -218,7 +193,7 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
         return DB_LOOKUP_FAILED
     }*/
 
-    let tree_handle = match contracts.lookup(db, &cid, &db_name) {
+    let tree_handle = match contracts.lookup(&cid, &db_name) {
         Ok(v) => v,
         Err(e) => {
             error!(target: "runtime::db::db_lookup()", "Failed to lookup db: {}", e);
@@ -235,7 +210,7 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
     let mut db_handles = env.db_handles.borrow_mut();
     let mut db_batches = env.db_batches.borrow_mut();
     db_handles.push(DbHandle::new(cid, tree_handle));
-    db_batches.push(sled::Batch::default());
+    db_batches.push(import::util::Batch::default());
     (db_handles.len() - 1) as i32
 }
 
@@ -455,13 +430,14 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
     let handle_idx = db_handle;
     let db_handle = &db_handles[handle_idx];
 
-    let ret = match db_handle.get(&key) {
-        Ok(v) => v,
-        Err(e) => {
-            error!(target: "runtime::db::db_get()", "Internal error getting from tree: {}", e);
-            return DB_GET_FAILED.into()
-        }
-    };
+    let ret =
+        match env.blockchain.lock().unwrap().overlay.lock().unwrap().get(&db_handle.tree, &key) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "runtime::db::db_get()", "Internal error getting from tree: {}", e);
+                return DB_GET_FAILED.into()
+            }
+        };
 
     let Some(return_data) = ret else {
         debug!(target: "runtime::db::db_get()", "returned empty vec");
@@ -470,7 +446,7 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
 
     // Copy Vec<u8> to the VM
     let mut objects = env.objects.borrow_mut();
-    objects.push(return_data);
+    objects.push(return_data.to_vec());
     (objects.len() - 1) as i64
 }
 
@@ -537,7 +513,8 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
     let handle_idx = db_handle;
     let db_handle = &db_handles[handle_idx];
 
-    match db_handle.contains_key(&key) {
+    match env.blockchain.lock().unwrap().overlay.lock().unwrap().contains_key(&db_handle.tree, &key)
+    {
         Ok(v) => i32::from(v), // <- 0=false, 1=true
         Err(e) => {
             error!(target: "runtime::db::db_contains_key()", "sled.tree.contains_key failed: {}", e);
@@ -600,7 +577,15 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
     // Check if there is existing bincode and compare it. Return DB_SUCCESS if
     // they're the same. The assumption should be that VerifyingKey was generated
     // already so we can skip things after this guard.
-    match db_handle.get(&serialize(&zkbin.namespace)) {
+    match env
+        .blockchain
+        .lock()
+        .unwrap()
+        .overlay
+        .lock()
+        .unwrap()
+        .get(&db_handle.tree, &serialize(&zkbin.namespace))
+    {
         Ok(v) => {
             if let Some(bytes) = v {
                 // We allow a panic here because this db should never be corrupted in this way.

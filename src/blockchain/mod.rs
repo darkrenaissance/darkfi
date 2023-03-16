@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::sync::{Arc, Mutex};
+
 use log::debug;
 
 use crate::{
@@ -34,7 +36,9 @@ pub mod tx_store;
 pub use tx_store::{PendingTxStore, TxStore};
 
 pub mod contract_store;
-pub use contract_store::{ContractStateStore, WasmStore};
+pub use contract_store::{
+    ContractStateStore, ContractStateStoreOverlay, WasmStore, WasmStoreOverlay,
+};
 
 /// Structure holding all sled trees that define the concept of Blockchain.
 #[derive(Clone)]
@@ -219,5 +223,32 @@ impl Blockchain {
             Err(_) => return Ok(false),
         };
         Ok(!vec.is_empty())
+    }
+}
+
+/// Atomic pointer to sled db overlay.
+pub type SledDbOverlayPtr = Arc<Mutex<sled_overlay::SledDbOverlay>>;
+
+/// Atomic pointer to blockchain overlay.
+pub type BlockchainOverlayPtr = Arc<Mutex<BlockchainOverlay>>;
+
+/// Overlay structure over a [`Blockchain`] instance.
+pub struct BlockchainOverlay {
+    /// Main [`sled_overlay::SledDbOverlay`] to the sled db connection
+    pub overlay: SledDbOverlayPtr,
+    /// Contract states overlay
+    pub contracts: ContractStateStoreOverlay,
+    /// Wasm bincodes overlay
+    pub wasm_bincode: WasmStoreOverlay,
+}
+
+impl BlockchainOverlay {
+    /// Instantiate a new `BlockchainOverlay` over the given [`Blockchain`] instance.
+    pub fn new(blockchain: &Blockchain) -> Result<BlockchainOverlayPtr> {
+        let overlay = Arc::new(Mutex::new(sled_overlay::SledDbOverlay::new(&blockchain.sled_db)));
+        let contracts = ContractStateStoreOverlay::new(overlay.clone())?;
+        let wasm_bincode = WasmStoreOverlay::new(overlay.clone())?;
+
+        Ok(Arc::new(Mutex::new(Self { overlay, contracts, wasm_bincode })))
     }
 }

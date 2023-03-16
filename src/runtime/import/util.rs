@@ -16,6 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// NOTE: temporary imports
+use sled::IVec;
+use std::collections::BTreeMap as Map;
+
 use log::error;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
@@ -147,4 +151,41 @@ pub(crate) fn get_object_size(ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
 
     let obj = &objects[idx as usize];
     obj.len() as i64
+}
+
+// TODO: This is a direct copy of [`sled::Batch`](late night adventures).
+// Options:
+//  1. Upstream a get_writes() function
+//  2. Make writes public to external crates in upstream
+//  3. Drop Batches usage since we can write directly to the overlay
+//  4. Upstream batches support to sled_overlay
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct Batch {
+    pub(crate) writes: Map<IVec, Option<IVec>>,
+}
+
+impl Batch {
+    /// Set a key to a new value
+    pub fn insert<K, V>(&mut self, key: K, value: V)
+    where
+        K: Into<IVec>,
+        V: Into<IVec>,
+    {
+        self.writes.insert(key.into(), Some(value.into()));
+    }
+
+    /// Remove a key
+    pub fn remove<K>(&mut self, key: K)
+    where
+        K: Into<IVec>,
+    {
+        self.writes.insert(key.into(), None);
+    }
+
+    /// Get a value if it is present in the `Batch`.
+    /// `Some(None)` means it's present as a deletion.
+    pub fn get<K: AsRef<[u8]>>(&self, k: K) -> Option<Option<&IVec>> {
+        let inner = self.writes.get(k.as_ref())?;
+        Some(inner.as_ref())
+    }
 }

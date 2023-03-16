@@ -43,7 +43,7 @@ use super::{
 };
 
 use crate::{
-    blockchain::Blockchain,
+    blockchain::{Blockchain, BlockchainOverlay},
     rpc::jsonrpc::JsonNotification,
     runtime::vm_runtime::Runtime,
     system::{Subscriber, SubscriberPtr},
@@ -167,12 +167,14 @@ impl ValidatorState {
         ];
 
         info!(target: "consensus::validator", "Deploying native wasm contracts");
+        let blockchain_overlay = BlockchainOverlay::new(&blockchain)?;
         for nc in native_contracts {
             info!(target: "consensus::validator", "Deploying {} with ContractID {}", nc.0, nc.1);
-            let mut runtime = Runtime::new(&nc.2[..], blockchain.clone(), nc.1)?;
+            let mut runtime = Runtime::new(&nc.2[..], blockchain_overlay.clone(), nc.1)?;
             runtime.deploy(&nc.3)?;
             info!(target: "consensus::validator", "Successfully deployed {}", nc.0);
         }
+        blockchain_overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
         info!(target: "consensus::validator", "Finished deployment of native wasm contracts");
         // -----END NATIVE WASM CONTRACTS-----
@@ -884,6 +886,7 @@ impl ValidatorState {
     //       5. (optionally) write
     pub async fn verify_transactions(&self, txs: &[Transaction], write: bool) -> Result<()> {
         info!(target: "consensus::validator", "Verifying {} transaction(s)", txs.len());
+        let blockchain_overlay = BlockchainOverlay::new(&self.blockchain)?;
 
         for tx in txs {
             let tx_hash = blake3::hash(&serialize(tx));
@@ -916,7 +919,8 @@ impl ValidatorState {
                 tx.calls.encode(&mut payload)?; // Actual call data
 
                 // Instantiate the wasm runtime
-                let mut runtime = Runtime::new(&wasm, self.blockchain.clone(), call.contract_id)?;
+                let mut runtime =
+                    Runtime::new(&wasm, blockchain_overlay.clone(), call.contract_id)?;
 
                 info!(target: "consensus::validator", "Executing \"metadata\" call");
                 let metadata = runtime.metadata(&payload)?;
@@ -1008,7 +1012,7 @@ impl ValidatorState {
                     let wasm = self.blockchain.wasm_bincode.get(call.contract_id)?;
 
                     let mut runtime =
-                        Runtime::new(&wasm, self.blockchain.clone(), call.contract_id)?;
+                        Runtime::new(&wasm, blockchain_overlay.clone(), call.contract_id)?;
 
                     info!(target: "consensus::validator", "Executing \"apply\" call");
                     // TODO: FIXME: This should be done in an atomic tx/batch
@@ -1020,6 +1024,11 @@ impl ValidatorState {
             }
 
             info!(target: "consensus::validator", "Transaction {} verified successfully", tx_hash);
+        }
+
+        if write {
+            // The beauty of using Arc<Mutex<Struct{Arc<Mutex<>>}>>
+            blockchain_overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
         }
 
         Ok(())

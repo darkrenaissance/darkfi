@@ -24,7 +24,6 @@ use std::{
 use darkfi_sdk::{crypto::ContractId, entrypoint};
 use darkfi_serial::serialize;
 use log::{debug, error, info};
-use sled::{transaction::ConflictableTransactionError, Transactional};
 use wasmer::{
     imports, wasmparser::Operator, AsStoreRef, CompilerConfig, Function, FunctionEnv, Instance,
     Memory, MemoryView, Module, Pages, Store, Value, WASM_PAGE_SIZE,
@@ -36,7 +35,7 @@ use wasmer_middlewares::{
 };
 
 use super::{import, import::db::DbHandle, memory::MemoryManipulation};
-use crate::{blockchain::Blockchain, Error, Result};
+use crate::{blockchain::BlockchainOverlayPtr, Error, Result};
 
 /// Name of the wasm linear memory in our guest module
 const MEMORY: &str = "memory";
@@ -75,12 +74,12 @@ impl ContractSection {
 
 /// The wasm vm runtime instantiated for every smart contract that runs.
 pub struct Env {
-    /// Blockchain access
-    pub blockchain: Blockchain,
+    /// Blockchain overlay access
+    pub blockchain: BlockchainOverlayPtr,
     /// sled tree handles used with `db_*`
     pub db_handles: RefCell<Vec<DbHandle>>,
     /// sled tree batches, indexed the same as `db_handles`.
-    pub db_batches: RefCell<Vec<sled::Batch>>,
+    pub db_batches: RefCell<Vec<import::util::Batch>>,
     /// The contract ID being executed
     pub contract_id: ContractId,
     /// The compiled wasm bincode being executed,
@@ -123,7 +122,11 @@ pub struct Runtime {
 
 impl Runtime {
     /// Create a new wasm runtime instance that contains the given wasm module.
-    pub fn new(wasm_bytes: &[u8], blockchain: Blockchain, contract_id: ContractId) -> Result<Self> {
+    pub fn new(
+        wasm_bytes: &[u8],
+        blockchain: BlockchainOverlayPtr,
+        contract_id: ContractId,
+    ) -> Result<Self> {
         info!(target: "runtime::vm_runtime", "Instantiating a new runtime");
         // TODO: Add necessary operators
         // This function will be called for each `Operator` encountered during
@@ -346,31 +349,24 @@ impl Runtime {
 
             // We always want to have the zkas db as index 0 in db handles and batches when
             // deploying.
-            let db = &env_mut.blockchain.sled_db;
+            let contracts = &env_mut.blockchain.lock().unwrap().contracts;
 
-            let zkas_tree_handle = match env_mut.blockchain.contracts.lookup(
-                db,
-                &env_mut.contract_id,
-                SMART_CONTRACT_ZKAS_DB_NAME,
-            ) {
-                Ok(v) => v,
-                Err(_) => {
-                    // FIXME: All this is deploy code is "vulnerable" and able to init a
-                    // tree regardless of execution success. We can easily delete the db
-                    // if execution fails though, and we should charge gas for db_init.
-                    // and perhaps also for the zkas database in this specific case.
-                    env_mut.blockchain.contracts.init(
-                        db,
-                        &env_mut.contract_id,
-                        SMART_CONTRACT_ZKAS_DB_NAME,
-                    )?
-                }
-            };
+            let zkas_tree_handle =
+                match contracts.lookup(&env_mut.contract_id, SMART_CONTRACT_ZKAS_DB_NAME) {
+                    Ok(v) => v,
+                    Err(_) => {
+                        // FIXME: All this is deploy code is "vulnerable" and able to init a
+                        // tree regardless of execution success. We can easily delete the db
+                        // if execution fails though, and we should charge gas for db_init.
+                        // and perhaps also for the zkas database in this specific case.
+                        contracts.init(&env_mut.contract_id, SMART_CONTRACT_ZKAS_DB_NAME)?
+                    }
+                };
 
             let mut db_handles = env_mut.db_handles.borrow_mut();
             let mut db_batches = env_mut.db_batches.borrow_mut();
             db_handles.push(DbHandle::new(env_mut.contract_id, zkas_tree_handle));
-            db_batches.push(sled::Batch::default());
+            db_batches.push(import::util::Batch::default());
         }
 
         debug!(target: "runtime::vm_runtime", "[wasm-runtime] payload: {:?}", payload);
@@ -381,31 +377,31 @@ impl Runtime {
 
         // Update the wasm bincode in the WasmStore
         let env_mut = self.ctx.as_mut(&mut self.store);
-        env_mut.blockchain.wasm_bincode.insert(env_mut.contract_id, &env_mut.contract_bincode)?;
+        env_mut
+            .blockchain
+            .lock()
+            .unwrap()
+            .wasm_bincode
+            .insert(env_mut.contract_id, &env_mut.contract_bincode)?;
 
         Ok(())
     }
 
-    /// Execute an atomic sled transaction to write all batches
+    /// Apply all batches to the overlay
     fn write_batches(&mut self) -> Result<()> {
-        let mut dbs = vec![];
-        let mut batches = vec![];
         let env_mut = self.ctx.as_mut(&mut self.store);
+        let batches = env_mut.db_batches.borrow();
+        let blockchain = env_mut.blockchain.lock().unwrap();
+        let mut overlay = blockchain.overlay.lock().unwrap();
         for (idx, db) in env_mut.db_handles.get_mut().iter().enumerate() {
-            let batch = env_mut.db_batches.borrow()[idx].clone();
-            dbs.push(db.tree());
-            batches.push(batch);
-        }
-
-        dbs.transaction(|dbs| {
-            for (idx, db) in dbs.iter().enumerate() {
-                db.apply_batch(&batches[idx])?;
+            let tree_handle = &db.tree;
+            for (k, v) in &batches[idx].writes {
+                match v {
+                    Some(u) => overlay.insert(tree_handle, &k, &u)?,
+                    None => overlay.remove(tree_handle, &k)?,
+                };
             }
-
-            Ok::<(), ConflictableTransactionError<sled::Error>>(())
-        })?;
-
-        env_mut.blockchain.sled_db.flush()?;
+        }
 
         Ok(())
     }

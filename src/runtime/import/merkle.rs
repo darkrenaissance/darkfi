@@ -114,7 +114,15 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             // TODO: Ensure we've read the entire buffer above.
 
             // Read the current tree
-            let ret = match db_info.get(&key) {
+            let ret = match env
+                .blockchain
+                .lock()
+                .unwrap()
+                .overlay
+                .lock()
+                .unwrap()
+                .get(&db_info.tree, &key)
+            {
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "runtime::merkle", "Internal error getting from tree: {}", e);

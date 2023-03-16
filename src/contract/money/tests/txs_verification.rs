@@ -116,10 +116,10 @@ async fn txs_verification() -> Result<()> {
 
     // Now Alice can send a little bit of funds to Bob.
     // We can duplicate this transaction to simulate double spending.
-    let DUPLICATES = 1; // Change this number to 2 to double spend
+    let duplicates = 1; // Change this number to 2 to double spend
     let mut transactions = vec![];
     let mut txs_params = vec![];
-    for i in 0..DUPLICATES {
+    for i in 0..duplicates {
         info!(target: "money", "[Alice] ======================================================");
         info!(target: "money", "[Alice] Building Money::Transfer params for payment {i} to Bob");
         info!(target: "money", "[Alice] ======================================================");
@@ -186,8 +186,8 @@ async fn txs_verification() -> Result<()> {
         txs_params.push(alice2bob_params);
     }
     alice_owncoins = vec![];
-    assert_eq!(transactions.len(), DUPLICATES);
-    assert_eq!(txs_params.len(), DUPLICATES);
+    assert_eq!(transactions.len(), duplicates);
+    assert_eq!(txs_params.len(), duplicates);
 
     // Now we can try to execute the transactions sequentialy.
     // The first transaction will get applied, while the second one(duplicate) will fail.
