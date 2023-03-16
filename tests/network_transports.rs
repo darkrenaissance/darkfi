@@ -26,7 +26,7 @@ use async_std::{
 };
 use url::Url;
 
-use darkfi::net::transport::{TcpTransport, TorTransport, Transport, UnixTransport};
+use darkfi::net::transport::{NymTransport, TcpTransport, TorTransport, Transport, UnixTransport};
 
 #[async_std::test]
 async fn unix_transport() {
@@ -207,4 +207,61 @@ For example: \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'",
     let tor_client = TorTransport::new(socks_url, None).unwrap();
     // Try to reach the host
     let _client = tor_client.dial(hurl, None).unwrap().await.unwrap();
+}
+
+#[async_std::test]
+async fn nym_transport() {
+    let target_url = Url::parse("nym://127.0.0.1:25553").unwrap();
+
+    let nym = NymTransport::new().unwrap();
+
+    let listener = nym.clone().listen_on(target_url.clone()).unwrap().await.unwrap();
+
+    task::spawn(async move {
+        let mut incoming = listener.incoming();
+        while let Some(stream) = incoming.next().await {
+            let stream = stream.unwrap();
+            let (reader, writer) = &mut (&stream, &stream);
+            io::copy(reader, writer).await.unwrap();
+        }
+    });
+
+    let payload = b"ohai nym";
+
+    let mut client = nym.dial(target_url, None).unwrap().await.unwrap();
+    client.write_all(payload).await.unwrap();
+    let mut buf = vec![0_u8; 8];
+    client.read_exact(&mut buf).await.unwrap();
+
+    assert_eq!(buf, payload);
+}
+
+#[async_std::test]
+async fn nym_tls_transport() {
+    let target_url = Url::parse("nym+tls://127.0.0.1:25553").unwrap();
+
+    let nym = NymTransport::new().unwrap();
+
+    let listener = nym.clone().listen_on(target_url.clone()).unwrap().await.unwrap();
+    let (acceptor, listener) = nym.clone().upgrade_listener(listener).unwrap().await.unwrap();
+
+    task::spawn(async move {
+        let mut incoming = listener.incoming();
+        while let Some(stream) = incoming.next().await {
+            let stream = stream.unwrap();
+            let stream = acceptor.accept(stream).await.unwrap();
+            let (mut reader, mut writer) = smol::io::split(stream);
+            io::copy(&mut reader, &mut writer).await.unwrap();
+        }
+    });
+
+    let payload = b"ohai nymtls";
+
+    let client = nym.clone().dial(target_url, None).unwrap().await.unwrap();
+    let mut client = nym.upgrade_dialer(client).unwrap().await.unwrap();
+    client.write_all(payload).await.unwrap();
+    let mut buf = vec![0_u8; 11];
+    client.read_exact(&mut buf).await.unwrap();
+
+    assert_eq!(buf, payload);
 }
