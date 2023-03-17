@@ -272,6 +272,9 @@ pub enum Error {
     #[error("Proposer is not eligible to produce proposals")]
     ProposalProposerNotEligible,
 
+    #[error("Erroneous transactions detected")]
+    ErroneousTxsDetected,
+
     // ===============
     // Database errors
     // ===============
