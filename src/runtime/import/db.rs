@@ -186,10 +186,7 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
 
     let tree_handle = match contracts.lookup(&cid, &db_name) {
         Ok(v) => v,
-        Err(e) => {
-            error!(target: "runtime::db::db_lookup()", "Failed to lookup db: {}", e);
-            return DB_LOOKUP_FAILED
-        }
+        Err(e) => return DB_LOOKUP_FAILED,
     };
 
     // TODO: Make sure we don't duplicate the DbHandle in the vec.
