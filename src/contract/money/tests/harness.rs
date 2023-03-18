@@ -15,6 +15,7 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 use std::collections::HashMap;
 
 use darkfi::{
@@ -29,19 +30,21 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
     crypto::{Keypair, MerkleTree, PublicKey, DARK_TOKEN_ID, MONEY_CONTRACT_ID},
     pasta::pallas,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable};
-use log::warn;
+use log::info;
 use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
-    client::{mint_v1::MintCallBuilder, transfer_v1::TransferCallBuilder},
-    model::{MoneyMintParamsV1, MoneyTransferParamsV1},
+    client::{
+        freeze_v1::FreezeCallBuilder, mint_v1::MintCallBuilder, transfer_v1::TransferCallBuilder,
+        OwnCoin,
+    },
+    model::{MoneyFreezeParamsV1, MoneyMintParamsV1, MoneyTransferParamsV1},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
     MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
@@ -50,17 +53,18 @@ pub fn init_logger() {
     let mut cfg = simplelog::ConfigBuilder::new();
     cfg.add_filter_ignore("sled".to_string());
     cfg.add_filter_ignore("blockchain::contractstore".to_string());
+
     // We check this error so we can execute same file tests in parallel,
     // otherwise second one fails to init logger here.
     if let Err(_) = simplelog::TermLogger::init(
-        //simplelog::LevelFilter::Info,
-        simplelog::LevelFilter::Debug,
+        simplelog::LevelFilter::Info,
+        //simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
     ) {
-        warn!(target: "money_harness", "Logger already initialized");
+        info!(target: "money_harness", "Logger already initialized");
     }
 }
 
@@ -215,6 +219,27 @@ impl MoneyTestHarness {
         let debris = builder.build()?;
 
         let mut data = vec![MoneyFunction::MintV1 as u8];
+        debris.params.encode(&mut data)?;
+        let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
+        let proofs = vec![debris.proofs];
+        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let sigs = tx.create_sigs(&mut OsRng, &[mint_authority.secret])?;
+        tx.signatures = vec![sigs];
+
+        Ok((tx, debris.params))
+    }
+
+    pub fn freeze_token(
+        &self,
+        mint_authority: Keypair,
+    ) -> Result<(Transaction, MoneyFreezeParamsV1)> {
+        let (token_freeze_pk, token_freeze_zkbin) =
+            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1).unwrap();
+
+        let builder = FreezeCallBuilder { mint_authority, token_freeze_zkbin, token_freeze_pk };
+        let debris = builder.build()?;
+
+        let mut data = vec![MoneyFunction::FreezeV1 as u8];
         debris.params.encode(&mut data)?;
         let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
         let proofs = vec![debris.proofs];
