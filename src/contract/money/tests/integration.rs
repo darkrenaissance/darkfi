@@ -29,20 +29,15 @@
 //!
 //! TODO: Malicious cases
 
-use darkfi::{tx::Transaction, Result};
+use darkfi::Result;
 use darkfi_sdk::{
-    crypto::{poseidon_hash, Keypair, MerkleNode, Nullifier, MONEY_CONTRACT_ID},
+    crypto::{poseidon_hash, Keypair, MerkleNode, Nullifier},
     incrementalmerkletree::Tree,
-    ContractCall,
 };
-use darkfi_serial::Encodable;
 use log::info;
 use rand::rngs::OsRng;
 
-use darkfi_money_contract::{
-    client::{freeze_v1::FreezeCallBuilder, MoneyNote, OwnCoin},
-    MoneyFunction, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1,
-};
+use darkfi_money_contract::client::{MoneyNote, OwnCoin};
 
 mod harness;
 use harness::{init_logger, MoneyTestHarness};
@@ -132,23 +127,7 @@ async fn money_integration() -> Result<()> {
 
     // Let's attempt to freeze the BOBTOKEN mint,
     // and after that we shouldn't be able to mint anymore.
-    let (token_freeze_pk, token_freeze_zkbin) =
-        th.proving_keys.get(&MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1).unwrap();
-
-    let bob_frz_builder = FreezeCallBuilder {
-        mint_authority: bob_token_authority,
-        token_freeze_zkbin: token_freeze_zkbin.clone(),
-        token_freeze_pk: token_freeze_pk.clone(),
-    };
-
-    let debris = bob_frz_builder.build()?;
-    let mut data = vec![MoneyFunction::FreezeV1 as u8];
-    debris.params.encode(&mut data)?;
-    let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
-    let proofs = vec![debris.proofs];
-    let mut bob_frz_tx = Transaction { calls, proofs, signatures: vec![] };
-    let sigs = bob_frz_tx.create_sigs(&mut OsRng, &[bob_token_authority.secret])?;
-    bob_frz_tx.signatures = vec![sigs];
+    let (bob_frz_tx, _) = th.freeze_token(bob_token_authority)?;
 
     info!("[Faucet] Executing BOBTOKEN freeze");
     th.faucet.state.read().await.verify_transactions(&[bob_frz_tx.clone()], true).await?;

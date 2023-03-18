@@ -236,7 +236,11 @@ impl MoneyTestHarness {
         let (token_freeze_pk, token_freeze_zkbin) =
             self.proving_keys.get(&MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1).unwrap();
 
-        let builder = FreezeCallBuilder { mint_authority, token_freeze_zkbin, token_freeze_pk };
+        let builder = FreezeCallBuilder {
+            mint_authority,
+            token_freeze_zkbin: token_freeze_zkbin.clone(),
+            token_freeze_pk: token_freeze_pk.clone(),
+        };
         let debris = builder.build()?;
 
         let mut data = vec![MoneyFunction::FreezeV1 as u8];
