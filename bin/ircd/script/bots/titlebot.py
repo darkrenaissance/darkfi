@@ -29,7 +29,11 @@ while True:
             parsed_url = urlparse(i)
             if parsed_url.netloc.lower() in ['twitter.com','t.co'] or parsed_url.scheme != 'https':
                 continue
-            reqs = requests.get(i)
+            try:
+                reqs = requests.get(i)
+            except requests.exceptions.SSLError:
+                print("SSLERROR: wrong signature type")
+                continue
             soup = BeautifulSoup(reqs.text, 'html.parser')
 
             try:
@@ -39,7 +43,7 @@ while True:
                 continue
             title_text = title_text.split('\n')
             title_msg = []
-            # remove empty lines from tweet body
+            # remove empty lines from title body
             for line in title_text:
                 if not line.strip():
                     continue
