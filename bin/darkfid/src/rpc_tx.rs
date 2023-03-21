@@ -64,9 +64,17 @@ impl Darkfid {
         };
 
         // Simulate state transition
-        if let Err(e) = self.validator_state.read().await.verify_transactions(&[tx], false).await {
-            error!("[RPC] tx.broadcast: Failed to validate state transition: {}", e);
-            return server_error(RpcError::TxSimulationFail, id, None)
+        match self.validator_state.read().await.verify_transactions(&[tx], false).await {
+            Ok(erroneous_txs) => {
+                if !erroneous_txs.is_empty() {
+                    error!("[RPC] tx.simulate: invalid transaction provided");
+                    return server_error(RpcError::TxSimulationFail, id, None)
+                }
+            }
+            Err(e) => {
+                error!("[RPC] tx.simulate: Failed to validate state transition: {}", e);
+                return server_error(RpcError::TxSimulationFail, id, None)
+            }
         };
 
         JsonResponse::new(json!(true), id).into()
@@ -116,11 +124,18 @@ impl Darkfid {
             }
         } else {
             // We'll perform the state transition check here.
-            if let Err(e) =
-                self.validator_state.read().await.verify_transactions(&[tx.clone()], false).await
+            match self.validator_state.read().await.verify_transactions(&[tx.clone()], false).await
             {
-                error!("[RPC] tx.broadcast: Failed to validate state transition: {}", e);
-                return server_error(RpcError::TxSimulationFail, id, None)
+                Ok(erroneous_txs) => {
+                    if !erroneous_txs.is_empty() {
+                        error!("[RPC] tx.broadcast: invalid transaction provided");
+                        return server_error(RpcError::TxSimulationFail, id, None)
+                    }
+                }
+                Err(e) => {
+                    error!("[RPC] tx.broadcast: Failed to validate state transition: {}", e);
+                    return server_error(RpcError::TxSimulationFail, id, None)
+                }
             };
         }
 
