@@ -94,6 +94,7 @@ impl Drk {
                     eprintln!("Deserialized successfully. Scanning block...");
                     self.scan_block_money(&block_data).await?;
                     self.scan_block_dao(&block_data).await?;
+                    self.update_tx_history_records_status(&block_data.txs, "Finalized").await?;
                 }
 
                 JsonResult::Error(e) => {
@@ -169,13 +170,8 @@ impl Drk {
 
         let txid = serde_json::from_value(rep)?;
 
-        // At this point the tx is successfully broadcasted. We can add the
-        // temp data into the wallet. Once scanned, it should mean that the
-        // transaction was finalized, so at that point we actually add the
-        // missing data. For now it'll be in an "unconfirmed" state.
-        // TODO: Do the same for Money::*
-        //self.wallet_apply_unconfirmed_dao_data(tx).await?;
-        //self.wallet_apply_unconfirmed_money_data(tx).await?;
+        // Store transactions history record
+        self.insert_tx_history_record(tx).await?;
 
         Ok(txid)
     }
@@ -235,6 +231,7 @@ impl Drk {
             self.reset_daos().await?;
             self.reset_dao_proposals().await?;
             self.reset_dao_votes().await?;
+            self.update_all_tx_history_records_status("Rejected").await?;
             0
         } else {
             self.last_scanned_slot().await?
@@ -280,6 +277,7 @@ impl Drk {
                 eprintln!("Found");
                 self.scan_block_money(&block).await?;
                 self.scan_block_dao(&block).await?;
+                self.update_tx_history_records_status(&block.txs, "Finalized").await?;
             } else {
                 eprintln!("Not found");
                 // Write down the slot number into back to the wallet
@@ -333,10 +331,11 @@ impl Drk {
                     let params = n.params.as_array().unwrap()[0].as_str().unwrap();
                     let bytes = bs58::decode(params).into_vec()?;
 
-                    let txs_hash: String = deserialize(&bytes)?;
+                    let tx_hash: String = deserialize(&bytes)?;
                     eprintln!("===================================");
-                    eprintln!("Erroneous transaction: {}", txs_hash);
+                    eprintln!("Erroneous transaction: {}", tx_hash);
                     eprintln!("===================================");
+                    self.update_tx_history_record_status(&tx_hash, "Rejected").await?;
                 }
 
                 JsonResult::Error(e) => {

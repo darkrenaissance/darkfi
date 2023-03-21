@@ -166,6 +166,24 @@ impl Darkfid {
                     continue
                 }
 
+                QueryType::Text => {
+                    let Some(ref row) = row else {
+                        error!("[RPC] wallet.query_row_single: Got None for QueryType::Text");
+                        return server_error(RpcError::NoRowsFoundInWallet, id, None)
+                    };
+
+                    let value: String = match row.try_get(col) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("[RPC] wallet.query_row_single: {}", e);
+                            return JsonError::new(ParseError, None, id).into()
+                        }
+                    };
+
+                    ret.push(json!(value));
+                    continue
+                }
+
                 _ => unreachable!(),
             }
         }
@@ -275,6 +293,18 @@ impl Darkfid {
                         row_ret.push(json!(value));
                     }
 
+                    QueryType::Text => {
+                        let value: String = match row.try_get(col) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                error!("[RPC] wallet.query_row_multi: {}", e);
+                                return JsonError::new(ParseError, None, id).into()
+                            }
+                        };
+
+                        row_ret.push(json!(value));
+                    }
+
                     _ => unreachable!(),
                 }
             }
@@ -322,6 +352,7 @@ impl Darkfid {
 
                     query = query.bind(val);
                 }
+
                 QueryType::Blob => {
                     let val: Vec<u8> = match serde_json::from_value(pair[1].clone()) {
                         Ok(v) => v,
@@ -354,6 +385,18 @@ impl Darkfid {
                         Ok(v) => v,
                         Err(e) => {
                             error!("[RPC] wallet.exec_sql: Failed casting value to Option<Vec<u8>>: {}", e);
+                            return JsonError::new(ParseError, None, id).into()
+                        }
+                    };
+
+                    query = query.bind(val);
+                }
+
+                QueryType::Text => {
+                    let val: String = match serde_json::from_value(pair[1].clone()) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("[RPC] wallet.exec_sql: Failed casting value to String: {}", e);
                             return JsonError::new(ParseError, None, id).into()
                         }
                     };
