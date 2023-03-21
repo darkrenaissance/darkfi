@@ -350,6 +350,14 @@ enum ExplorerSubcmd {
     FetchTx {
         /// Transaction hash
         tx_hash: String,
+
+        #[arg(long)]
+        /// Print the full transaction information
+        full: bool,
+
+        #[arg(long)]
+        /// Encode transaction to base58
+        encode: bool,
     },
 
     /// Read a transaction from stdin and simulate it
@@ -1058,7 +1066,7 @@ async fn main() -> Result<()> {
         },
 
         Subcmd::Explorer(cmd) => match cmd {
-            ExplorerSubcmd::FetchTx { tx_hash } => {
+            ExplorerSubcmd::FetchTx { tx_hash, full, encode } => {
                 let tx_hash = blake3::Hash::from_hex(&tx_hash)?;
 
                 let drk = Drk::new(args.endpoint).await?;
@@ -1068,14 +1076,22 @@ async fn main() -> Result<()> {
                 {
                     tx
                 } else {
-                    eprintln!("tx not found");
+                    eprintln!("Transaction was not found!");
                     exit(1);
                 };
 
                 // Make sure the tx is correct
                 assert_eq!(tx.hash(), tx_hash);
 
+                if encode {
+                    println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                    exit(1)
+                }
+
                 println!("Transaction ID: {}", tx_hash);
+                if full {
+                    println!("{:?}", tx);
+                }
 
                 Ok(())
             }
