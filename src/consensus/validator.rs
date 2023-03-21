@@ -182,7 +182,9 @@ impl ValidatorState {
         // Here we initialize various subscribers that can export live consensus/blockchain data.
         let mut subscribers = HashMap::new();
         let block_subscriber = Subscriber::new();
+        let err_txs_subscriber = Subscriber::new();
         subscribers.insert("blocks", block_subscriber);
+        subscribers.insert("err_txs", err_txs_subscriber);
 
         let state = Arc::new(RwLock::new(ValidatorState {
             lead_proving_key,
@@ -311,6 +313,17 @@ impl ValidatorState {
         }
         info!(target: "consensus::validator", "purge_pending_txs(): Removing {} erroneous transactions...", erroneous_txs.len());
         self.blockchain.pending_txs.remove(&erroneous_txs)?;
+
+        // TODO: Don't hardcode this:
+        let err_txs_subscriber = self.subscribers.get("err_txs").unwrap();
+        for err_tx in erroneous_txs {
+            let tx_hash = blake3::hash(&serialize(&err_tx)).to_hex().as_str().to_string();
+            let params = json!([bs58::encode(&serialize(&tx_hash)).into_string()]);
+            let notif = JsonNotification::new("blockchain.subscribe_err_txs", params);
+            info!(target: "consensus::validator", "purge_pending_txs(): Sending notification about erroneous transaction");
+            err_txs_subscriber.notify(notif).await;
+        }
+
         Ok(())
     }
 
@@ -831,7 +844,7 @@ impl ValidatorState {
     // ==========================
 
     /// Validate and append to canonical state received blocks.
-    pub async fn receive_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
+    async fn receive_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
         // Verify state transitions for all blocks and their respective transactions.
         info!(target: "consensus::validator", "receive_blocks(): Starting state transition validations");
 

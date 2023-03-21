@@ -189,13 +189,9 @@ enum Subcmd {
     /// Read a transaction from stdin and broadcast it
     Broadcast,
 
-    /// Subscribe to incoming blocks from darkfid
-    ///
-    /// This subscription will listen for incoming blocks from darkfid and look
-    /// through their transactions to see if there's any that interest us.
-    /// With `drk` we look at transactions calling the money contract so we can
-    /// find coins sent to us and fill our wallet with the necessary metadata.
-    Subscribe,
+    /// Subscribe to incoming notifications from darkfid
+    #[command(subcommand)]
+    Subscribe(SubscribeSubcmd),
 
     /// DAO functionalities
     #[command(subcommand)]
@@ -418,6 +414,19 @@ enum TokenSubcmd {
         /// Token ID mint to freeze
         token: String,
     },
+}
+
+#[derive(Subcommand)]
+enum SubscribeSubcmd {
+    /// This subscription will listen for incoming blocks from darkfid and look
+    /// through their transactions to see if there's any that interest us.
+    /// With `drk` we look at transactions calling the money contract so we can
+    /// find coins sent to us and fill our wallet with the necessary metadata.
+    Blocks,
+
+    /// This subscription will listen for erroneous transactions that got
+    /// removed from darkfid mempool.
+    Transactions,
 }
 
 pub struct Drk {
@@ -799,15 +808,27 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
-        Subcmd::Subscribe => {
-            let drk = Drk::new(args.endpoint.clone()).await?;
+        Subcmd::Subscribe(cmd) => match cmd {
+            SubscribeSubcmd::Blocks => {
+                let drk = Drk::new(args.endpoint.clone()).await?;
 
-            drk.subscribe_blocks(args.endpoint)
-                .await
-                .with_context(|| "Block subscription failed")?;
+                drk.subscribe_blocks(args.endpoint.clone())
+                    .await
+                    .with_context(|| "Block subscription failed")?;
 
-            Ok(())
-        }
+                Ok(())
+            }
+
+            SubscribeSubcmd::Transactions => {
+                let drk = Drk::new(args.endpoint.clone()).await?;
+
+                drk.subscribe_err_txs(args.endpoint)
+                    .await
+                    .with_context(|| "Erroneous transactions subscription failed")?;
+
+                Ok(())
+            }
+        },
 
         Subcmd::Scan { reset, list, checkpoint } => {
             let drk = Drk::new(args.endpoint).await?;

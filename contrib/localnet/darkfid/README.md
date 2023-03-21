@@ -35,8 +35,8 @@ work, we also need to subscribe to their RPC endpoints so we can scan
 incoming blocks and add them to our wallet.
 
 ```
-$ ./drk -e tcp://127.0.0.1:8440 subscribe
-$ ./drk -e tcp://127.0.0.1:8540 subscribe
+$ ./drk -e tcp://127.0.0.1:8440 subscribe blocks
+$ ./drk -e tcp://127.0.0.1:8540 subscribe blocks
 ```
 
 And now we can execute our airdrop calls:

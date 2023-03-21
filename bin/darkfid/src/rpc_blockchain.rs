@@ -145,6 +145,24 @@ impl Darkfid {
     }
 
     // RPCAPI:
+    // Initializes a subscription to erroneous transactions notifications.
+    // Once a subscription is established, `darkfid` will send JSON-RPC notifications of
+    // erroneous transactions to the subscriber.
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_err_txs", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_err_txs", "params": [`tx_hash`]}
+    pub async fn blockchain_subscribe_err_txs(&self, id: Value, params: &[Value]) -> JsonResult {
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let err_txs_subscriber =
+            self.validator_state.read().await.subscribers.get("err_txs").unwrap().clone();
+
+        JsonSubscriber::new(err_txs_subscriber).into()
+    }
+
+    // RPCAPI:
     // Performs a lookup of zkas bincodes for a given contract ID and returns all of
     // them, including their namespace.
     //
