@@ -20,8 +20,11 @@ use std::sync::{Arc, Mutex};
 
 use log::debug;
 
+use darkfi_serial::serialize;
+
 use crate::{
     consensus::{Block, BlockInfo, SlotCheckpoint},
+    tx::Transaction,
     util::time::Timestamp,
     Result,
 };
@@ -33,7 +36,7 @@ pub mod slot_checkpoint_store;
 pub use slot_checkpoint_store::SlotCheckpointStore;
 
 pub mod tx_store;
-pub use tx_store::{PendingTxStore, TxStore};
+pub use tx_store::{PendingTxOrderStore, PendingTxStore, TxStore};
 
 pub mod contract_store;
 pub use contract_store::{
@@ -57,6 +60,8 @@ pub struct Blockchain {
     pub transactions: TxStore,
     /// Pending transactions sled tree
     pub pending_txs: PendingTxStore,
+    /// Pending transactions order sled tree
+    pub pending_txs_order: PendingTxOrderStore,
     /// Contract states
     pub contracts: ContractStateStore,
     /// Wasm bincodes
@@ -72,6 +77,7 @@ impl Blockchain {
         let slot_checkpoints = SlotCheckpointStore::new(db)?;
         let transactions = TxStore::new(db)?;
         let pending_txs = PendingTxStore::new(db)?;
+        let pending_txs_order = PendingTxOrderStore::new(db)?;
         let contracts = ContractStateStore::new(db)?;
         let wasm_bincode = WasmStore::new(db)?;
 
@@ -83,6 +89,7 @@ impl Blockchain {
             slot_checkpoints,
             transactions,
             pending_txs,
+            pending_txs_order,
             contracts,
             wasm_bincode,
         })
@@ -223,6 +230,55 @@ impl Blockchain {
             Err(_) => return Ok(false),
         };
         Ok(!vec.is_empty())
+    }
+
+    /// Insert a given slice of pending transactions into the blockchain database.
+    /// On success, the function returns the transaction hashes in the same order
+    /// as the input transactions.
+    pub fn add_pending_txs(&self, txs: &[Transaction]) -> Result<Vec<blake3::Hash>> {
+        // TODO: Make db writes here completely atomic
+        let txs_hashes = self.pending_txs.insert(&txs)?;
+        self.pending_txs_order.insert(&txs_hashes)?;
+
+        Ok(txs_hashes)
+    }
+
+    /// Retrieve all transactions from the pending tx store.
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_pending_txs(&self) -> Result<Vec<Transaction>> {
+        let txs = self.pending_txs.get_all()?;
+        let indexes = self.pending_txs_order.get_all()?;
+        assert_eq!(txs.len(), indexes.len());
+
+        let mut ret = Vec::with_capacity(txs.len());
+        for index in indexes {
+            ret.push(txs.get(&index.1).unwrap().clone());
+        }
+
+        Ok(ret)
+    }
+
+    /// Remove a given slice of pending transactions from the blockchain database.
+    pub fn remove_pending_txs(&self, txs: &[Transaction]) -> Result<()> {
+        let mut txs_hashes = Vec::with_capacity(txs.len());
+        for tx in txs {
+            let tx_hash = blake3::hash(&serialize(tx));
+            txs_hashes.push(tx_hash);
+        }
+
+        let indexes = self.pending_txs_order.get_all()?;
+        let mut removed_indexes = vec![];
+        for index in indexes {
+            if txs_hashes.contains(&index.1) {
+                removed_indexes.push(index.0);
+            }
+        }
+
+        // TODO: Make db writes here completely atomic
+        self.pending_txs.remove(&txs_hashes)?;
+        self.pending_txs_order.remove(&removed_indexes)?;
+
+        Ok(())
     }
 }
 

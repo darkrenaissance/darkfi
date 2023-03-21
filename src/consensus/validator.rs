@@ -239,7 +239,7 @@ impl ValidatorState {
             }
         }
 
-        if let Err(e) = self.blockchain.pending_txs.insert(&[tx]) {
+        if let Err(e) = self.blockchain.add_pending_txs(&[tx]) {
             error!(target: "consensus::validator", "append_tx(): Failed to insert transaction to pending txs store: {}", e);
             return false
         }
@@ -291,7 +291,7 @@ impl ValidatorState {
             filtered_txs.retain(|x| !erroneous_txs.contains(&x));
         }
 
-        if let Err(e) = self.blockchain.pending_txs.insert(&filtered_txs) {
+        if let Err(e) = self.blockchain.add_pending_txs(&filtered_txs) {
             error!(target: "consensus::validator", "append_pending_txs(): Failed to insert transactions to pending txs store: {}", e);
             return
         }
@@ -301,7 +301,7 @@ impl ValidatorState {
     /// The node removes erroneous transactions from the pending txs store.
     async fn purge_pending_txs(&self) -> Result<()> {
         info!(target: "consensus::validator", "purge_pending_txs(): Removing erroneous transactions from pending transactions store...");
-        let pending_txs = self.blockchain.pending_txs.get_all_txs()?;
+        let pending_txs = self.blockchain.get_pending_txs()?;
         if pending_txs.is_empty() {
             info!(target: "consensus::validator", "purge_pending_txs(): No pending transactions found");
             return Ok(())
@@ -312,7 +312,7 @@ impl ValidatorState {
             return Ok(())
         }
         info!(target: "consensus::validator", "purge_pending_txs(): Removing {} erroneous transactions...", erroneous_txs.len());
-        self.blockchain.pending_txs.remove(&erroneous_txs)?;
+        self.blockchain.remove_pending_txs(&erroneous_txs)?;
 
         // TODO: Don't hardcode this:
         let err_txs_subscriber = self.subscribers.get("err_txs").unwrap();
@@ -413,11 +413,11 @@ impl ValidatorState {
         let unproposed_txs = if index == -1 {
             // If index is -1 (canonical blockchain) a new fork will be generated,
             // therefore all unproposed transactions can be included in the proposal.
-            self.blockchain.pending_txs.get_all_txs()?
+            self.blockchain.get_pending_txs()?
         } else {
             // We iterate over the fork chain proposals to find already proposed
             // transactions and remove them from the local unproposed_txs vector.
-            let mut filtered_txs = self.blockchain.pending_txs.get_all_txs()?;
+            let mut filtered_txs = self.blockchain.get_pending_txs()?;
             let chain = &self.consensus.forks[index as usize];
             for state_checkpoint in &chain.sequence {
                 for tx in &state_checkpoint.proposal.block.txs {
@@ -778,7 +778,7 @@ impl ValidatorState {
             }
 
             // Remove proposal transactions from pending txs store
-            if let Err(e) = self.blockchain.pending_txs.remove(&proposal.txs) {
+            if let Err(e) = self.blockchain.remove_pending_txs(&proposal.txs) {
                 error!(target: "consensus::validator", "Removing finalized block transactions failed: {}", e);
                 return Err(e)
             }
@@ -900,7 +900,7 @@ impl ValidatorState {
         blocks_subscriber.notify(notif).await;
 
         info!(target: "consensus::validator", "receive_finalized_block(): Removing block transactions from pending txs store");
-        self.blockchain.pending_txs.remove(&block.txs)?;
+        self.blockchain.remove_pending_txs(&block.txs)?;
 
         // Purge pending erroneous txs since canonical state has been changed
         if let Err(e) = self.purge_pending_txs().await {

@@ -99,7 +99,7 @@ impl ProtocolSyncConsensus {
             for fork in &lock.consensus.forks {
                 forks.push(fork.clone().into());
             }
-            let pending_txs = match lock.blockchain.pending_txs.get_all_txs() {
+            let pending_txs = match lock.blockchain.get_pending_txs() {
                 Ok(v) => v,
                 Err(e) => {
                     debug!(
