@@ -48,8 +48,10 @@ pub enum QueryType {
     OptionInteger = 0x02,
     /// OptionBlob gets decoded into `Option<Vec<u8>>`
     OptionBlob = 0x03,
+    /// Text gets decoded into `String`
+    Text = 0x04,
     /// Last type, increment this when you add new types.
-    Last = 0x04,
+    Last = 0x05,
 }
 
 impl From<u8> for QueryType {
@@ -59,6 +61,7 @@ impl From<u8> for QueryType {
             0x01 => Self::Blob,
             0x02 => Self::OptionInteger,
             0x03 => Self::OptionBlob,
+            0x04 => Self::Text,
             _ => unimplemented!(),
         }
     }

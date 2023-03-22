@@ -43,7 +43,7 @@ use super::{
 };
 
 use crate::{
-    blockchain::Blockchain,
+    blockchain::{Blockchain, BlockchainOverlay, BlockchainOverlayPtr},
     rpc::jsonrpc::JsonNotification,
     runtime::vm_runtime::Runtime,
     system::{Subscriber, SubscriberPtr},
@@ -167,12 +167,14 @@ impl ValidatorState {
         ];
 
         info!(target: "consensus::validator", "Deploying native wasm contracts");
+        let blockchain_overlay = BlockchainOverlay::new(&blockchain)?;
         for nc in native_contracts {
             info!(target: "consensus::validator", "Deploying {} with ContractID {}", nc.0, nc.1);
-            let mut runtime = Runtime::new(&nc.2[..], blockchain.clone(), nc.1)?;
+            let mut runtime = Runtime::new(&nc.2[..], blockchain_overlay.clone(), nc.1)?;
             runtime.deploy(&nc.3)?;
             info!(target: "consensus::validator", "Successfully deployed {}", nc.0);
         }
+        blockchain_overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
         info!(target: "consensus::validator", "Finished deployment of native wasm contracts");
         // -----END NATIVE WASM CONTRACTS-----
@@ -180,7 +182,9 @@ impl ValidatorState {
         // Here we initialize various subscribers that can export live consensus/blockchain data.
         let mut subscribers = HashMap::new();
         let block_subscriber = Subscriber::new();
+        let err_txs_subscriber = Subscriber::new();
         subscribers.insert("blocks", block_subscriber);
+        subscribers.insert("err_txs", err_txs_subscriber);
 
         let state = Arc::new(RwLock::new(ValidatorState {
             lead_proving_key,
@@ -222,12 +226,20 @@ impl ValidatorState {
         }
 
         info!(target: "consensus::validator", "append_tx(): Starting state transition validation");
-        if let Err(e) = self.verify_transactions(&[tx.clone()], false).await {
-            error!(target: "consensus::validator", "append_tx(): Failed to verify transaction: {}", e);
-            return false
-        };
+        match self.verify_transactions(&[tx.clone()], false).await {
+            Ok(erroneous_txs) => {
+                if !erroneous_txs.is_empty() {
+                    error!(target: "consensus::validator", "append_tx(): Erroneous transaction detected");
+                    return false
+                }
+            }
+            Err(e) => {
+                error!(target: "consensus::validator", "append_tx(): Failed to verify transaction: {}", e);
+                return false
+            }
+        }
 
-        if let Err(e) = self.blockchain.pending_txs.insert(&[tx]) {
+        if let Err(e) = self.blockchain.add_pending_txs(&[tx]) {
             error!(target: "consensus::validator", "append_tx(): Failed to insert transaction to pending txs store: {}", e);
             return false
         }
@@ -239,6 +251,7 @@ impl ValidatorState {
     /// and appends successfull ones to the pending txs store.
     pub async fn append_pending_txs(&mut self, txs: &[Transaction]) {
         let mut filtered_txs = vec![];
+        // Filter already seen transactions
         for tx in txs {
             let tx_hash = blake3::hash(&serialize(tx));
             let tx_in_txstore = match self.blockchain.transactions.contains(&tx_hash) {
@@ -265,24 +278,59 @@ impl ValidatorState {
             filtered_txs.push(tx.clone());
         }
 
+        // Verify transactions and filter erroneous ones
         info!(target: "consensus::validator", "append_pending_txs(): Starting state transition validation");
-        // TODO: verify_transactions should return erroneous txs of the set to ignore them
-        if let Err(e) = self.verify_transactions(&filtered_txs[..], false).await {
-            error!(target: "consensus::validator", "append_pending_txs(): Failed to verify transaction: {}", e);
-            return
+        let erroneous_txs = match self.verify_transactions(&filtered_txs[..], false).await {
+            Ok(erroneous_txs) => erroneous_txs,
+            Err(e) => {
+                error!(target: "consensus::validator", "append_pending_txs(): Failed to verify transactions: {}", e);
+                return
+            }
         };
+        if !erroneous_txs.is_empty() {
+            filtered_txs.retain(|x| !erroneous_txs.contains(&x));
+        }
 
-        if let Err(e) = self.blockchain.pending_txs.insert(&filtered_txs) {
+        if let Err(e) = self.blockchain.add_pending_txs(&filtered_txs) {
             error!(target: "consensus::validator", "append_pending_txs(): Failed to insert transactions to pending txs store: {}", e);
             return
         }
         info!(target: "consensus::validator", "append_pending_txs(): Appended tx to pending txs store");
     }
 
+    /// The node removes erroneous transactions from the pending txs store.
+    async fn purge_pending_txs(&self) -> Result<()> {
+        info!(target: "consensus::validator", "purge_pending_txs(): Removing erroneous transactions from pending transactions store...");
+        let pending_txs = self.blockchain.get_pending_txs()?;
+        if pending_txs.is_empty() {
+            info!(target: "consensus::validator", "purge_pending_txs(): No pending transactions found");
+            return Ok(())
+        }
+        let erroneous_txs = self.verify_transactions(&pending_txs[..], false).await?;
+        if erroneous_txs.is_empty() {
+            info!(target: "consensus::validator", "purge_pending_txs(): No erroneous transactions found");
+            return Ok(())
+        }
+        info!(target: "consensus::validator", "purge_pending_txs(): Removing {} erroneous transactions...", erroneous_txs.len());
+        self.blockchain.remove_pending_txs(&erroneous_txs)?;
+
+        // TODO: Don't hardcode this:
+        let err_txs_subscriber = self.subscribers.get("err_txs").unwrap();
+        for err_tx in erroneous_txs {
+            let tx_hash = blake3::hash(&serialize(&err_tx)).to_hex().as_str().to_string();
+            let params = json!([bs58::encode(&serialize(&tx_hash)).into_string()]);
+            let notif = JsonNotification::new("blockchain.subscribe_err_txs", params);
+            info!(target: "consensus::validator", "purge_pending_txs(): Sending notification about erroneous transaction");
+            err_txs_subscriber.notify(notif).await;
+        }
+
+        Ok(())
+    }
+
     /// Generate a block proposal for the current slot, containing all
     /// pending transactions. Proposal extends the longest fork
     /// chain the node is holding.
-    pub fn propose(
+    pub async fn propose(
         &mut self,
         slot: u64,
         fork_index: i64,
@@ -297,7 +345,12 @@ impl ValidatorState {
         }
 
         // Generate proposal
-        let unproposed_txs = self.unproposed_txs(fork_index)?;
+        let mut unproposed_txs = self.unproposed_txs(fork_index)?;
+        // Verify transactions and filter erroneous ones
+        let erroneous_txs = self.verify_transactions(&unproposed_txs[..], false).await?;
+        if !erroneous_txs.is_empty() {
+            unproposed_txs.retain(|x| !erroneous_txs.contains(&x));
+        }
         let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
         // The following is pretty weird, so something better should be done.
         for tx in &unproposed_txs {
@@ -360,11 +413,11 @@ impl ValidatorState {
         let unproposed_txs = if index == -1 {
             // If index is -1 (canonical blockchain) a new fork will be generated,
             // therefore all unproposed transactions can be included in the proposal.
-            self.blockchain.pending_txs.get_all_txs()?
+            self.blockchain.get_pending_txs()?
         } else {
             // We iterate over the fork chain proposals to find already proposed
             // transactions and remove them from the local unproposed_txs vector.
-            let mut filtered_txs = self.blockchain.pending_txs.get_all_txs()?;
+            let mut filtered_txs = self.blockchain.get_pending_txs()?;
             let chain = &self.consensus.forks[index as usize];
             for state_checkpoint in &chain.sequence {
                 for tx in &state_checkpoint.proposal.block.txs {
@@ -577,10 +630,18 @@ impl ValidatorState {
         // Validate state transition against canonical state
         // TODO: This should be validated against fork state
         info!(target: "consensus::validator", "receive_proposal(): Starting state transition validation");
-        if let Err(e) = self.verify_transactions(&proposal.block.txs, false).await {
-            error!(target: "consensus::validator", "receive_proposal(): Transaction verifications failed: {}", e);
-            return Err(e)
-        };
+        match self.verify_transactions(&proposal.block.txs, false).await {
+            Ok(erroneous_txs) => {
+                if !erroneous_txs.is_empty() {
+                    error!(target: "consensus::validator", "Proposal contains erroneous transactions");
+                    return Err(Error::ErroneousTxsDetected)
+                }
+            }
+            Err(e) => {
+                error!(target: "consensus::validator", "receive_proposal(): Transaction verifications failed: {}", e);
+                return Err(e)
+            }
+        }
 
         // TODO: [PLACEHOLDER] Add rewards validation
 
@@ -703,13 +764,21 @@ impl ValidatorState {
             // TODO: FIXME: The state transitions have already been written, they have to be in memory
             //              until this point.
             info!(target: "consensus::validator", "Applying state transition for finalized block");
-            if let Err(e) = self.verify_transactions(&proposal.txs, true).await {
-                error!(target: "consensus::validator", "Finalized block transaction verifications failed: {}", e);
-                return Err(e)
+            match self.verify_transactions(&proposal.txs, true).await {
+                Ok(erroneous_txs) => {
+                    if !erroneous_txs.is_empty() {
+                        error!(target: "consensus::validator", "Finalized block contains erroneous transactions");
+                        return Err(Error::ErroneousTxsDetected)
+                    }
+                }
+                Err(e) => {
+                    error!(target: "consensus::validator", "Finalized block transaction verifications failed: {}", e);
+                    return Err(e)
+                }
             }
 
             // Remove proposal transactions from pending txs store
-            if let Err(e) = self.blockchain.pending_txs.remove(&proposal.txs) {
+            if let Err(e) = self.blockchain.remove_pending_txs(&proposal.txs) {
                 error!(target: "consensus::validator", "Removing finalized block transactions failed: {}", e);
                 return Err(e)
             }
@@ -754,6 +823,11 @@ impl ValidatorState {
         self.consensus.forks = vec![];
         self.consensus.slot_checkpoints = vec![];
 
+        // Purge pending erroneous txs since canonical state has been changed
+        if let Err(e) = self.purge_pending_txs().await {
+            error!(target: "consensus::validator", "consensus: Purging pending transactions failed: {}", e);
+        }
+
         Ok((finalized, finalized_slot_checkpoints))
     }
 
@@ -770,15 +844,23 @@ impl ValidatorState {
     // ==========================
 
     /// Validate and append to canonical state received blocks.
-    pub async fn receive_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
+    async fn receive_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
         // Verify state transitions for all blocks and their respective transactions.
         info!(target: "consensus::validator", "receive_blocks(): Starting state transition validations");
 
         for block in blocks {
-            if let Err(e) = self.verify_transactions(&block.txs, true).await {
-                error!(target: "consensus::validator", "receive_blocks(): Transaction verifications failed: {}", e);
-                return Err(e)
-            };
+            match self.verify_transactions(&block.txs, true).await {
+                Ok(erroneous_txs) => {
+                    if !erroneous_txs.is_empty() {
+                        error!(target: "consensus::validator", "receive_blocks(): Block contains erroneous transactions");
+                        return Err(Error::ErroneousTxsDetected)
+                    }
+                }
+                Err(e) => {
+                    error!(target: "consensus::validator", "receive_blocks(): Transaction verifications failed: {}", e);
+                    return Err(e)
+                }
+            }
         }
 
         info!(target: "consensus::validator", "receive_blocks(): All state transitions passed. Appending blocks to ledger.");
@@ -818,7 +900,12 @@ impl ValidatorState {
         blocks_subscriber.notify(notif).await;
 
         info!(target: "consensus::validator", "receive_finalized_block(): Removing block transactions from pending txs store");
-        self.blockchain.pending_txs.remove(&block.txs)?;
+        self.blockchain.remove_pending_txs(&block.txs)?;
+
+        // Purge pending erroneous txs since canonical state has been changed
+        if let Err(e) = self.purge_pending_txs().await {
+            error!(target: "consensus::validator", "receive_finalized_block(): Purging pending transactions failed: {}", e);
+        }
 
         Ok(true)
     }
@@ -867,162 +954,182 @@ impl ValidatorState {
         Ok(())
     }
 
-    /// Validate signatures, wasm execution, and zk proofs for given transactions.
-    /// If all of those succeed, try to execute a state update for the contract calls.
-    /// Currently the verifications are sequential, and the function will skip a
-    /// transaction if any of the verifications fail.
-    /// The function takes a boolean called `write` which tells it to actually write
-    /// the state transitions to the database.
-    // TODO: This should be paralellized as if even one tx in the batch fails to verify,
-    //       we can skip it. When things are parallel, make sure to write in a deterministic
-    //       order.
-    // TODO: This function should be refactored to be more readable and efficient.
-    //       1. Get metadata
-    //       2. Verify signatures
-    //       3. Verify execution
-    //       4. Verify ZK proofs
-    //       5. (optionally) write
-    pub async fn verify_transactions(&self, txs: &[Transaction], write: bool) -> Result<()> {
-        info!(target: "consensus::validator", "Verifying {} transaction(s)", txs.len());
+    /// Validate signatures, wasm execution, and zk proofs for given transaction in
+    /// provided runtimes. If all of those succeed, try to execute a state update
+    /// for the contract calls.
+    async fn verify_transaction(
+        &self,
+        blockchain_overlay: BlockchainOverlayPtr,
+        tx: &Transaction,
+    ) -> Result<()> {
+        let mut runtimes = HashMap::new();
+        let tx_hash = blake3::hash(&serialize(tx));
+        info!(target: "consensus::validator", "Verifying transaction {}", tx_hash);
 
-        for tx in txs {
-            let tx_hash = blake3::hash(&serialize(tx));
-            info!(target: "consensus::validator", "Verifying transaction {}", tx_hash);
+        // Table of public inputs used for ZK proof verification
+        let mut zkp_table = vec![];
+        // Table of public keys used for signature verification
+        let mut sig_table = vec![];
+        // State updates produced by contract execution
+        let mut updates = vec![];
+        // Map of zk proof verifying keys for the current transaction
+        let mut verifying_keys: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
 
-            // Table of public inputs used for ZK proof verification
-            let mut zkp_table = vec![];
-            // Table of public keys used for signature verification
-            let mut sig_table = vec![];
-            // State updates produced by contract execution
-            let mut updates = vec![];
-            // Map of zk proof verifying keys for the current transaction
-            //let mut verifying_keys: HashMap<[u8; 32], Vec<(String, VerifyingKey)>> = HashMap::new();
-            let mut verifying_keys: HashMap<[u8; 32], HashMap<String, VerifyingKey>> =
-                HashMap::new();
-
-            // Initialize the map
-            for call in tx.calls.iter() {
-                verifying_keys.insert(call.contract_id.to_bytes(), HashMap::new());
-            }
-
-            // Iterate over all calls to get the metadata
-            for (idx, call) in tx.calls.iter().enumerate() {
-                info!(target: "consensus::validator", "Executing contract call {}", idx);
-                let wasm = self.blockchain.wasm_bincode.get(call.contract_id)?;
-
-                // Write the actual payload data
-                let mut payload = vec![];
-                payload.write_u32(idx as u32)?; // Call index
-                tx.calls.encode(&mut payload)?; // Actual call data
-
-                // Instantiate the wasm runtime
-                let mut runtime = Runtime::new(&wasm, self.blockchain.clone(), call.contract_id)?;
-
-                info!(target: "consensus::validator", "Executing \"metadata\" call");
-                let metadata = runtime.metadata(&payload)?;
-
-                // Decode the metadata retrieved from the execution
-                let mut decoder = Cursor::new(&metadata);
-
-                // The tuple is (zkas_ns, public_inputs)
-                let zkp_pub: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
-
-                let sig_pub: Vec<PublicKey> = Decodable::decode(&mut decoder)?;
-                // TODO: Make sure we've read all the bytes above.
-                info!(target: "consensus::validator", "Successfully executed \"metadata\" call");
-
-                // Here we'll look up verifying keys and insert them into the per-contract map.
-                info!(target: "consensus::validator", "Performing VerifyingKey lookups from the sled db");
-                for (zkas_ns, _) in &zkp_pub {
-                    let inner_vk_map =
-                        verifying_keys.get_mut(&call.contract_id.to_bytes()).unwrap();
-
-                    if inner_vk_map.contains_key(zkas_ns.as_str()) {
-                        continue
-                    }
-
-                    let (_, vk) = self.blockchain.contracts.get_zkas(
-                        &self.blockchain.sled_db,
-                        &call.contract_id,
-                        zkas_ns,
-                    )?;
-
-                    inner_vk_map.insert(zkas_ns.to_string(), vk);
-                }
-
-                zkp_table.push(zkp_pub);
-                sig_table.push(sig_pub);
-
-                // After getting the metadata, we run the "exec" function with the same
-                // runtime and the same payload.
-                info!(target: "consensus::validator", "Executing \"exec\" call");
-                let state_update = runtime.exec(&payload)?;
-
-                info!(target: "consensus::validator", "Successfully executed \"exec\" call");
-                updates.push(state_update);
-
-                // At this point we're done with the call and move on to the next one.
-            }
-
-            // When we're done looping and executing over the tx's contract calls, we
-            // move on with verification. First we verify the signatures as that's
-            // cheaper, and then finally we verify the ZK proofs.
-            info!(target: "consensus::validator", "Verifying signatures for transaction {}", tx_hash);
-            if sig_table.len() != tx.signatures.len() {
-                error!(target: "consensus::validator", "Incorrect number of signatures in tx {}", tx_hash);
-                return Err(Error::InvalidSignature)
-            }
-
-            match tx.verify_sigs(sig_table) {
-                Ok(()) => {
-                    info!(target: "consensus::validator", "Signatures verification for tx {} successful", tx_hash)
-                }
-                Err(e) => {
-                    error!(target: "consensus::validator", "Signature verification for tx {} failed: {}", tx_hash, e);
-                    return Err(e)
-                }
-            };
-
-            info!(target: "consensus::validator", "Verifying ZK proofs for transaction {}", tx_hash);
-            match tx.verify_zkps(verifying_keys.clone(), zkp_table).await {
-                Ok(()) => {
-                    info!(target: "consensus::validator", "ZK proof verification for tx {} successful", tx_hash)
-                }
-                Err(e) => {
-                    error!(target: "consensus::validator", "ZK proof verification for tx {} failed: {}", tx_hash, e);
-                    return Err(e)
-                }
-            };
-
-            // After the verifications stage passes, if we're told to write, we
-            // apply the state updates.
-            assert!(tx.calls.len() == updates.len());
-
-            if write {
-                info!(target: "consensus::validator", "Performing state updates");
-                for (call, update) in tx.calls.iter().zip(updates.iter()) {
-                    // For this we instantiate the runtimes again.
-                    // TODO: Optimize this
-                    // TODO: Sum up the gas costs of previous calls during execution
-                    //       and verification and these.
-                    let wasm = self.blockchain.wasm_bincode.get(call.contract_id)?;
-
-                    let mut runtime =
-                        Runtime::new(&wasm, self.blockchain.clone(), call.contract_id)?;
-
-                    info!(target: "consensus::validator", "Executing \"apply\" call");
-                    // TODO: FIXME: This should be done in an atomic tx/batch
-                    runtime.apply(update)?;
-                    info!(target: "consensus::validator", "State update applied successfully")
-                }
-            } else {
-                info!(target: "consensus::validator", "Skipping apply of state updates because write=false");
-            }
-
-            info!(target: "consensus::validator", "Transaction {} verified successfully", tx_hash);
+        // Initialize the map
+        for call in tx.calls.iter() {
+            verifying_keys.insert(call.contract_id.to_bytes(), HashMap::new());
         }
 
+        // Iterate over all calls to get the metadata
+        for (idx, call) in tx.calls.iter().enumerate() {
+            info!(target: "consensus::validator", "Executing contract call {}", idx);
+
+            // Write the actual payload data
+            let mut payload = vec![];
+            payload.write_u32(idx as u32)?; // Call index
+            tx.calls.encode(&mut payload)?; // Actual call data
+
+            // Instantiate the wasm runtime
+            let runtime_key = call.contract_id.to_string();
+            if !runtimes.contains_key(&runtime_key) {
+                let wasm = self.blockchain.wasm_bincode.get(call.contract_id)?;
+                let r = Runtime::new(&wasm, blockchain_overlay.clone(), call.contract_id)?;
+                runtimes.insert(runtime_key.clone(), r);
+            }
+            let runtime = runtimes.get_mut(&runtime_key).unwrap();
+
+            info!(target: "consensus::validator", "Executing \"metadata\" call");
+            let metadata = runtime.metadata(&payload)?;
+
+            // Decode the metadata retrieved from the execution
+            let mut decoder = Cursor::new(&metadata);
+
+            // The tuple is (zkas_ns, public_inputs)
+            let zkp_pub: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
+
+            let sig_pub: Vec<PublicKey> = Decodable::decode(&mut decoder)?;
+            // TODO: Make sure we've read all the bytes above.
+            info!(target: "consensus::validator", "Successfully executed \"metadata\" call");
+
+            // Here we'll look up verifying keys and insert them into the per-contract map.
+            info!(target: "consensus::validator", "Performing VerifyingKey lookups from the sled db");
+            for (zkas_ns, _) in &zkp_pub {
+                let inner_vk_map = verifying_keys.get_mut(&call.contract_id.to_bytes()).unwrap();
+
+                if inner_vk_map.contains_key(zkas_ns.as_str()) {
+                    continue
+                }
+
+                let (_, vk) = self.blockchain.contracts.get_zkas(
+                    &self.blockchain.sled_db,
+                    &call.contract_id,
+                    zkas_ns,
+                )?;
+
+                inner_vk_map.insert(zkas_ns.to_string(), vk);
+            }
+
+            zkp_table.push(zkp_pub);
+            sig_table.push(sig_pub);
+
+            // After getting the metadata, we run the "exec" function with the same
+            // runtime and the same payload.
+            info!(target: "consensus::validator", "Executing \"exec\" call");
+            let state_update = runtime.exec(&payload)?;
+
+            info!(target: "consensus::validator", "Successfully executed \"exec\" call");
+            updates.push(state_update);
+
+            // At this point we're done with the call and move on to the next one.
+        }
+
+        // When we're done looping and executing over the tx's contract calls, we
+        // move on with verification. First we verify the signatures as that's
+        // cheaper, and then finally we verify the ZK proofs.
+        info!(target: "consensus::validator", "Verifying signatures for transaction {}", tx_hash);
+        if sig_table.len() != tx.signatures.len() {
+            error!(target: "consensus::validator", "Incorrect number of signatures in tx {}", tx_hash);
+            return Err(Error::InvalidSignature)
+        }
+
+        match tx.verify_sigs(sig_table) {
+            Ok(()) => {
+                info!(target: "consensus::validator", "Signatures verification for tx {} successful", tx_hash)
+            }
+            Err(e) => {
+                error!(target: "consensus::validator", "Signature verification for tx {} failed: {}", tx_hash, e);
+                return Err(e)
+            }
+        };
+
+        info!(target: "consensus::validator", "Verifying ZK proofs for transaction {}", tx_hash);
+        match tx.verify_zkps(verifying_keys.clone(), zkp_table).await {
+            Ok(()) => {
+                info!(target: "consensus::validator", "ZK proof verification for tx {} successful", tx_hash)
+            }
+            Err(e) => {
+                error!(target: "consensus::validator", "ZK proof verification for tx {} failed: {}", tx_hash, e);
+                return Err(e)
+            }
+        };
+
+        // After the verifications stage passes we can apply the state updates.
+        assert!(tx.calls.len() == updates.len());
+
+        info!(target: "consensus::validator", "Performing state updates");
+        for (call, update) in tx.calls.iter().zip(updates.iter()) {
+            // Retrieve already initiated runtime and apply update
+            // TODO: Sum up the gas costs of previous calls during execution
+            //       and verification and these.
+            let runtime = runtimes.get_mut(&call.contract_id.to_string()).unwrap();
+            info!(target: "consensus::validator", "Executing \"apply\" call");
+            runtime.apply(update)?;
+            info!(target: "consensus::validator", "State update applied successfully")
+        }
+
+        info!(target: "consensus::validator", "Transaction {} verified successfully", tx_hash);
+
         Ok(())
+    }
+
+    /// Validate a set of [`Transaction`] in sequence and apply them if all are valid.
+    /// Erroneous transactions are filtered out of the set and returned to caller.
+    /// The function takes a boolean called `write` which tells it to actually write
+    /// the state transitions to the database.
+    pub async fn verify_transactions(
+        &self,
+        txs: &[Transaction],
+        write: bool,
+    ) -> Result<Vec<Transaction>> {
+        info!(target: "consensus::validator", "Verifying {} transaction(s)", txs.len());
+
+        let mut erroneous_txs = vec![];
+        let blockchain_overlay = BlockchainOverlay::new(&self.blockchain)?;
+
+        for tx in txs {
+            if let Err(e) = self.verify_transaction(blockchain_overlay.clone(), tx).await {
+                warn!(target: "consensus::validator", "Transaction verification failed: {}", e);
+                erroneous_txs.push(tx.clone());
+            }
+        }
+
+        let lock = blockchain_overlay.lock().unwrap();
+        let overlay = lock.overlay.lock().unwrap();
+        if !erroneous_txs.is_empty() {
+            warn!(target: "consensus::validator", "Erroneous transactions found in set");
+            overlay.purge_new_trees()?;
+            return Ok(erroneous_txs)
+        }
+
+        if !write {
+            info!(target: "consensus::validator", "Skipping apply of state updates because write=false");
+            overlay.purge_new_trees()?;
+            return Ok(erroneous_txs)
+        }
+
+        overlay.apply()?;
+
+        Ok(erroneous_txs)
     }
 
     /// Append to canonical state received finalized slot checkpoints from block sync task.

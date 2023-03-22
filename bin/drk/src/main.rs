@@ -70,6 +70,9 @@ mod rpc_blockchain;
 mod cli_util;
 use cli_util::{parse_token_pair, parse_value_pair};
 
+/// Wallet functionality related to drk operations
+mod wallet;
+
 /// Wallet functionality related to DAO
 mod wallet_dao;
 use wallet_dao::DaoParams;
@@ -79,6 +82,9 @@ mod wallet_money;
 
 /// Wallet functionality related to arbitrary tokens
 mod wallet_token;
+
+/// Wallet functionality related to transactions history
+mod wallet_txs_history;
 
 #[derive(Parser)]
 #[command(about = cli_desc!())]
@@ -189,13 +195,9 @@ enum Subcmd {
     /// Read a transaction from stdin and broadcast it
     Broadcast,
 
-    /// Subscribe to incoming blocks from darkfid
-    ///
-    /// This subscription will listen for incoming blocks from darkfid and look
-    /// through their transactions to see if there's any that interest us.
-    /// With `drk` we look at transactions calling the money contract so we can
-    /// find coins sent to us and fill our wallet with the necessary metadata.
-    Subscribe,
+    /// Subscribe to incoming notifications from darkfid
+    #[command(subcommand)]
+    Subscribe(SubscribeSubcmd),
 
     /// DAO functionalities
     #[command(subcommand)]
@@ -354,10 +356,29 @@ enum ExplorerSubcmd {
     FetchTx {
         /// Transaction hash
         tx_hash: String,
+
+        #[arg(long)]
+        /// Print the full transaction information
+        full: bool,
+
+        #[arg(long)]
+        /// Encode transaction to base58
+        encode: bool,
     },
 
     /// Read a transaction from stdin and simulate it
     SimulateTx,
+
+    /// Fetch broadcasted transactions history
+    TxsHistory {
+        /// Fetch specific history record (optional)
+        tx_hash: Option<String>,
+
+        #[arg(long)]
+        /// Encode specific history record transaction
+        /// to base58.
+        encode: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -418,6 +439,19 @@ enum TokenSubcmd {
         /// Token ID mint to freeze
         token: String,
     },
+}
+
+#[derive(Subcommand)]
+enum SubscribeSubcmd {
+    /// This subscription will listen for incoming blocks from darkfid and look
+    /// through their transactions to see if there's any that interest us.
+    /// With `drk` we look at transactions calling the money contract so we can
+    /// find coins sent to us and fill our wallet with the necessary metadata.
+    Blocks,
+
+    /// This subscription will listen for erroneous transactions that got
+    /// removed from darkfid mempool.
+    Transactions,
 }
 
 pub struct Drk {
@@ -492,6 +526,7 @@ async fn main() -> Result<()> {
             let drk = Drk::new(args.endpoint).await?;
 
             if initialize {
+                drk.initialize_wallet().await?;
                 drk.initialize_money().await?;
                 drk.initialize_dao().await?;
                 return Ok(())
@@ -799,15 +834,27 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
-        Subcmd::Subscribe => {
-            let drk = Drk::new(args.endpoint.clone()).await?;
+        Subcmd::Subscribe(cmd) => match cmd {
+            SubscribeSubcmd::Blocks => {
+                let drk = Drk::new(args.endpoint.clone()).await?;
 
-            drk.subscribe_blocks(args.endpoint)
-                .await
-                .with_context(|| "Block subscription failed")?;
+                drk.subscribe_blocks(args.endpoint.clone())
+                    .await
+                    .with_context(|| "Block subscription failed")?;
 
-            Ok(())
-        }
+                Ok(())
+            }
+
+            SubscribeSubcmd::Transactions => {
+                let drk = Drk::new(args.endpoint.clone()).await?;
+
+                drk.subscribe_err_txs(args.endpoint)
+                    .await
+                    .with_context(|| "Erroneous transactions subscription failed")?;
+
+                Ok(())
+            }
+        },
 
         Subcmd::Scan { reset, list, checkpoint } => {
             let drk = Drk::new(args.endpoint).await?;
@@ -1037,7 +1084,7 @@ async fn main() -> Result<()> {
         },
 
         Subcmd::Explorer(cmd) => match cmd {
-            ExplorerSubcmd::FetchTx { tx_hash } => {
+            ExplorerSubcmd::FetchTx { tx_hash, full, encode } => {
                 let tx_hash = blake3::Hash::from_hex(&tx_hash)?;
 
                 let drk = Drk::new(args.endpoint).await?;
@@ -1047,14 +1094,22 @@ async fn main() -> Result<()> {
                 {
                     tx
                 } else {
-                    eprintln!("tx not found");
+                    eprintln!("Transaction was not found");
                     exit(1);
                 };
 
                 // Make sure the tx is correct
                 assert_eq!(tx.hash(), tx_hash);
 
+                if encode {
+                    println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                    exit(1)
+                }
+
                 println!("Transaction ID: {}", tx_hash);
+                if full {
+                    println!("{:?}", tx);
+                }
 
                 Ok(())
             }
@@ -1073,6 +1128,43 @@ async fn main() -> Result<()> {
 
                 println!("Transaction ID: {}", tx.hash());
                 println!("State: {}", if is_valid { "valid" } else { "invalid" });
+
+                Ok(())
+            }
+
+            ExplorerSubcmd::TxsHistory { tx_hash, encode } => {
+                let drk = Drk::new(args.endpoint).await?;
+
+                if let Some(c) = tx_hash {
+                    let (tx_hash, status, tx) = drk.get_tx_history_record(&c).await?;
+
+                    if encode {
+                        println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                        exit(1)
+                    }
+
+                    println!("Transaction ID: {}", tx_hash);
+                    println!("Status: {}", status);
+                    println!("{:?}", tx);
+
+                    return Ok(())
+                }
+
+                let map = drk.get_txs_history().await?;
+
+                // Create a prettytable with the new data:
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Transaction Hash", "Status"]);
+                for (txs_hash, status) in map.iter() {
+                    table.add_row(row![txs_hash, status]);
+                }
+
+                if table.is_empty() {
+                    println!("No transactions found");
+                } else {
+                    println!("{}", table);
+                }
 
                 Ok(())
             }

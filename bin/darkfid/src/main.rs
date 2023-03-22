@@ -222,6 +222,9 @@ impl RequestHandler for Darkfid {
             Some("blockchain.subscribe_blocks") => {
                 return self.blockchain_subscribe_blocks(req.id, params).await
             }
+            Some("blockchain.subscribe_err_txs") => {
+                return self.blockchain_subscribe_err_txs(req.id, params).await
+            }
             Some("blockchain.lookup_zkas") => {
                 return self.blockchain_lookup_zkas(req.id, params).await
             }

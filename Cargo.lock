@@ -1157,6 +1157,7 @@ dependencies = [
  "serde_json",
  "simplelog",
  "sled",
+ "sled-overlay",
  "smol",
  "socket2",
  "sqlx",
@@ -3835,6 +3836,15 @@ dependencies = [
  "libc",
  "log",
  "parking_lot 0.11.2",
+]
+
+[[package]]
+name = "sled-overlay"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "562d0d1dc5940eae7db86d162f4682db65cdcd8b838d8e05163a70774d52ea7c"
+dependencies = [
+ "sled",
 ]
 
 [[package]]

@@ -71,7 +71,7 @@ and then to subscribe to new blocks:
 
 ```
 $ ./drk scan
-$ ./drk subscribe
+$ ./drk subscribe blocks
 ```
 
 Now you can leave the subscriber running. In case you stop it, just

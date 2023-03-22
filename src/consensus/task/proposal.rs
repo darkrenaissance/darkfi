@@ -209,7 +209,7 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
     let (won, fork_index, coin_index) =
         state.write().await.consensus.is_slot_leader(sigma1, sigma2);
     let result = if won {
-        state.write().await.propose(processing_slot, fork_index, coin_index, sigma1, sigma2)
+        state.write().await.propose(processing_slot, fork_index, coin_index, sigma1, sigma2).await
     } else {
         Ok(None)
     };

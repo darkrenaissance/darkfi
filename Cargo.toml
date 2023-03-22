@@ -129,6 +129,7 @@ sqlx = {version = "0.6.2", features = ["runtime-async-std-rustls", "sqlite"], op
 
 # Blockchain store
 sled = {version = "0.34.7", optional = true}
+sled-overlay = {version = "0.0.3", optional = true}
 
 [dev-dependencies]
 clap = {version = "4.1.4", features = ["derive"]}
@@ -156,6 +157,7 @@ blockchain = [
     "lazy_static",
     "rand",
     "sled",
+    "sled-overlay",
     "sqlx",
     "url",
 

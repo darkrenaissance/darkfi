@@ -16,10 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::sync::{Arc, Mutex};
+
 use log::debug;
+
+use darkfi_serial::serialize;
 
 use crate::{
     consensus::{Block, BlockInfo, SlotCheckpoint},
+    tx::Transaction,
     util::time::Timestamp,
     Result,
 };
@@ -31,10 +36,12 @@ pub mod slot_checkpoint_store;
 pub use slot_checkpoint_store::SlotCheckpointStore;
 
 pub mod tx_store;
-pub use tx_store::{PendingTxStore, TxStore};
+pub use tx_store::{PendingTxOrderStore, PendingTxStore, TxStore};
 
 pub mod contract_store;
-pub use contract_store::{ContractStateStore, WasmStore};
+pub use contract_store::{
+    ContractStateStore, ContractStateStoreOverlay, WasmStore, WasmStoreOverlay,
+};
 
 /// Structure holding all sled trees that define the concept of Blockchain.
 #[derive(Clone)]
@@ -53,6 +60,8 @@ pub struct Blockchain {
     pub transactions: TxStore,
     /// Pending transactions sled tree
     pub pending_txs: PendingTxStore,
+    /// Pending transactions order sled tree
+    pub pending_txs_order: PendingTxOrderStore,
     /// Contract states
     pub contracts: ContractStateStore,
     /// Wasm bincodes
@@ -68,6 +77,7 @@ impl Blockchain {
         let slot_checkpoints = SlotCheckpointStore::new(db)?;
         let transactions = TxStore::new(db)?;
         let pending_txs = PendingTxStore::new(db)?;
+        let pending_txs_order = PendingTxOrderStore::new(db)?;
         let contracts = ContractStateStore::new(db)?;
         let wasm_bincode = WasmStore::new(db)?;
 
@@ -79,6 +89,7 @@ impl Blockchain {
             slot_checkpoints,
             transactions,
             pending_txs,
+            pending_txs_order,
             contracts,
             wasm_bincode,
         })
@@ -219,5 +230,81 @@ impl Blockchain {
             Err(_) => return Ok(false),
         };
         Ok(!vec.is_empty())
+    }
+
+    /// Insert a given slice of pending transactions into the blockchain database.
+    /// On success, the function returns the transaction hashes in the same order
+    /// as the input transactions.
+    pub fn add_pending_txs(&self, txs: &[Transaction]) -> Result<Vec<blake3::Hash>> {
+        // TODO: Make db writes here completely atomic
+        let txs_hashes = self.pending_txs.insert(&txs)?;
+        self.pending_txs_order.insert(&txs_hashes)?;
+
+        Ok(txs_hashes)
+    }
+
+    /// Retrieve all transactions from the pending tx store.
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_pending_txs(&self) -> Result<Vec<Transaction>> {
+        let txs = self.pending_txs.get_all()?;
+        let indexes = self.pending_txs_order.get_all()?;
+        assert_eq!(txs.len(), indexes.len());
+
+        let mut ret = Vec::with_capacity(txs.len());
+        for index in indexes {
+            ret.push(txs.get(&index.1).unwrap().clone());
+        }
+
+        Ok(ret)
+    }
+
+    /// Remove a given slice of pending transactions from the blockchain database.
+    pub fn remove_pending_txs(&self, txs: &[Transaction]) -> Result<()> {
+        let mut txs_hashes = Vec::with_capacity(txs.len());
+        for tx in txs {
+            let tx_hash = blake3::hash(&serialize(tx));
+            txs_hashes.push(tx_hash);
+        }
+
+        let indexes = self.pending_txs_order.get_all()?;
+        let mut removed_indexes = vec![];
+        for index in indexes {
+            if txs_hashes.contains(&index.1) {
+                removed_indexes.push(index.0);
+            }
+        }
+
+        // TODO: Make db writes here completely atomic
+        self.pending_txs.remove(&txs_hashes)?;
+        self.pending_txs_order.remove(&removed_indexes)?;
+
+        Ok(())
+    }
+}
+
+/// Atomic pointer to sled db overlay.
+pub type SledDbOverlayPtr = Arc<Mutex<sled_overlay::SledDbOverlay>>;
+
+/// Atomic pointer to blockchain overlay.
+pub type BlockchainOverlayPtr = Arc<Mutex<BlockchainOverlay>>;
+
+/// Overlay structure over a [`Blockchain`] instance.
+pub struct BlockchainOverlay {
+    /// Main [`sled_overlay::SledDbOverlay`] to the sled db connection
+    pub overlay: SledDbOverlayPtr,
+    /// Contract states overlay
+    pub contracts: ContractStateStoreOverlay,
+    /// Wasm bincodes overlay
+    pub wasm_bincode: WasmStoreOverlay,
+}
+
+impl BlockchainOverlay {
+    /// Instantiate a new `BlockchainOverlay` over the given [`Blockchain`] instance.
+    pub fn new(blockchain: &Blockchain) -> Result<BlockchainOverlayPtr> {
+        let overlay = Arc::new(Mutex::new(sled_overlay::SledDbOverlay::new(&blockchain.sled_db)));
+        let contracts = ContractStateStoreOverlay::new(overlay.clone())?;
+        let wasm_bincode = WasmStoreOverlay::new(overlay.clone())?;
+
+        Ok(Arc::new(Mutex::new(Self { overlay, contracts, wasm_bincode })))
     }
 }

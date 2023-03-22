@@ -94,6 +94,7 @@ impl Drk {
                     eprintln!("Deserialized successfully. Scanning block...");
                     self.scan_block_money(&block_data).await?;
                     self.scan_block_dao(&block_data).await?;
+                    self.update_tx_history_records_status(&block_data.txs, "Finalized").await?;
                 }
 
                 JsonResult::Error(e) => {
@@ -169,13 +170,8 @@ impl Drk {
 
         let txid = serde_json::from_value(rep)?;
 
-        // At this point the tx is successfully broadcasted. We can add the
-        // temp data into the wallet. Once scanned, it should mean that the
-        // transaction was finalized, so at that point we actually add the
-        // missing data. For now it'll be in an "unconfirmed" state.
-        // TODO: Do the same for Money::*
-        //self.wallet_apply_unconfirmed_dao_data(tx).await?;
-        //self.wallet_apply_unconfirmed_money_data(tx).await?;
+        // Store transactions history record
+        self.insert_tx_history_record(tx).await?;
 
         Ok(txid)
     }
@@ -235,6 +231,7 @@ impl Drk {
             self.reset_daos().await?;
             self.reset_dao_proposals().await?;
             self.reset_dao_votes().await?;
+            self.update_all_tx_history_records_status("Rejected").await?;
             0
         } else {
             self.last_scanned_slot().await?
@@ -280,6 +277,7 @@ impl Drk {
                 eprintln!("Found");
                 self.scan_block_money(&block).await?;
                 self.scan_block_dao(&block).await?;
+                self.update_tx_history_records_status(&block.txs, "Finalized").await?;
             } else {
                 eprintln!("Not found");
                 // Write down the slot number into back to the wallet
@@ -298,5 +296,60 @@ impl Drk {
         signals_task.await;
 
         Ok(())
+    }
+
+    /// Subscribes to darkfid's JSON-RPC notification endpoint that serves
+    /// erroneous transactions rejections.
+    pub async fn subscribe_err_txs(&self, endpoint: Url) -> Result<()> {
+        eprintln!("Subscribing to receive notifications of erroneous transactions");
+        let subscriber = Subscriber::new();
+        let subscription = subscriber.clone().subscribe().await;
+
+        let rpc_client = RpcClient::new(endpoint).await?;
+
+        let req = JsonRequest::new("blockchain.subscribe_err_txs", json!([]));
+        task::spawn(async move { rpc_client.subscribe(req, subscriber).await.unwrap() });
+        eprintln!("Detached subscription to background");
+        eprintln!("All is good. Waiting for erroneous transactions notifications...");
+
+        let e = loop {
+            match subscription.receive().await {
+                JsonResult::Notification(n) => {
+                    eprintln!("Got erroneous transaction notification from darkfid subscription");
+                    if n.method != "blockchain.subscribe_err_txs" {
+                        break anyhow!("Got foreign notification from darkfid: {}", n.method)
+                    }
+
+                    let Some(params) = n.params.as_array() else {
+                        break anyhow!("Received notification params are not an array")
+                    };
+
+                    if params.len() != 1 {
+                        break anyhow!("Notification parameters are not len 1")
+                    }
+
+                    let params = n.params.as_array().unwrap()[0].as_str().unwrap();
+                    let bytes = bs58::decode(params).into_vec()?;
+
+                    let tx_hash: String = deserialize(&bytes)?;
+                    eprintln!("===================================");
+                    eprintln!("Erroneous transaction: {}", tx_hash);
+                    eprintln!("===================================");
+                    self.update_tx_history_record_status(&tx_hash, "Rejected").await?;
+                }
+
+                JsonResult::Error(e) => {
+                    // Some error happened in the transmission
+                    break anyhow!("Got error from JSON-RPC: {:?}", e)
+                }
+
+                x => {
+                    // And this is weird
+                    break anyhow!("Got unexpected data from JSON-RPC: {:?}", x)
+                }
+            }
+        };
+
+        Err(e)
     }
 }

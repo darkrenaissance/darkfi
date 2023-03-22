@@ -73,11 +73,9 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             let db_info = db_info as usize;
             let db_roots = db_roots as usize;
             let db_handles = env.db_handles.borrow();
-            let mut db_batches = env.db_batches.borrow_mut();
             let n_dbs = db_handles.len();
-            let n_bat = db_batches.len();
 
-            if n_dbs <= db_info || n_bat <= db_info || n_dbs <= db_roots || n_bat <= db_roots {
+            if n_dbs <= db_info || n_dbs <= db_roots {
                 error!(target: "runtime::merkle", "Requested DbHandle that is out of bounds");
                 return -2
             }
@@ -114,7 +112,15 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             // TODO: Ensure we've read the entire buffer above.
 
             // Read the current tree
-            let ret = match db_info.get(&key) {
+            let ret = match env
+                .blockchain
+                .lock()
+                .unwrap()
+                .overlay
+                .lock()
+                .unwrap()
+                .get(&db_info.tree, &key)
+            {
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "runtime::merkle", "Internal error getting from tree: {}", e);
@@ -176,12 +182,17 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
                 error!(target: "runtime::merkle", "Couldn't reserialize modified tree");
                 return -2
             }
-            let db_info_batch = &mut db_batches[info_handle_idx];
-            db_info_batch.insert(key, tree_data);
+
+            // Apply changes to overlay
+            let lock = env.blockchain.lock().unwrap();
+            let mut overlay = lock.overlay.lock().unwrap();
+            if overlay.insert(&db_info.tree, &key, &tree_data).is_err() {
+                error!(target: "runtime::merkle", "Couldn't insert to db_info tree");
+                return -2
+            }
 
             // Here we add the Merkle root to our set of roots
             // TODO: We should probably make sure that this root isn't in the set
-            let db_roots_batch = &mut db_batches[roots_handle_idx];
             for root in new_roots.iter() {
                 // FIXME: Why were we writing the set size here?
                 //let root_index: Vec<u8> = serialize(&(set_size as u32));
@@ -190,8 +201,10 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
                 let root_value: Vec<u8> = serialize(root);
                 // FIXME: This assert can be used to DoS nodes from contracts
                 assert_eq!(root_value.len(), 32);
-                //db_roots_batch.insert(root_index, root_value);
-                db_roots_batch.insert(root_value, &[]);
+                if overlay.insert(&db_roots.tree, &root_value, &[]).is_err() {
+                    error!(target: "runtime::merkle", "Couldn't insert to db_roots tree");
+                    return -2
+                }
             }
 
             0

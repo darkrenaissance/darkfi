@@ -24,7 +24,6 @@ use std::{
 use darkfi_sdk::{crypto::ContractId, entrypoint};
 use darkfi_serial::serialize;
 use log::{debug, error, info};
-use sled::{transaction::ConflictableTransactionError, Transactional};
 use wasmer::{
     imports, wasmparser::Operator, AsStoreRef, CompilerConfig, Function, FunctionEnv, Instance,
     Memory, MemoryView, Module, Pages, Store, Value, WASM_PAGE_SIZE,
@@ -36,7 +35,7 @@ use wasmer_middlewares::{
 };
 
 use super::{import, import::db::DbHandle, memory::MemoryManipulation};
-use crate::{blockchain::Blockchain, Error, Result};
+use crate::{blockchain::BlockchainOverlayPtr, Error, Result};
 
 /// Name of the wasm linear memory in our guest module
 const MEMORY: &str = "memory";
@@ -75,12 +74,10 @@ impl ContractSection {
 
 /// The wasm vm runtime instantiated for every smart contract that runs.
 pub struct Env {
-    /// Blockchain access
-    pub blockchain: Blockchain,
-    /// sled tree handles used with `db_*`
+    /// Blockchain overlay access
+    pub blockchain: BlockchainOverlayPtr,
+    /// Overlay tree handles used with `db_*`
     pub db_handles: RefCell<Vec<DbHandle>>,
-    /// sled tree batches, indexed the same as `db_handles`.
-    pub db_batches: RefCell<Vec<sled::Batch>>,
     /// The contract ID being executed
     pub contract_id: ContractId,
     /// The compiled wasm bincode being executed,
@@ -123,7 +120,11 @@ pub struct Runtime {
 
 impl Runtime {
     /// Create a new wasm runtime instance that contains the given wasm module.
-    pub fn new(wasm_bytes: &[u8], blockchain: Blockchain, contract_id: ContractId) -> Result<Self> {
+    pub fn new(
+        wasm_bytes: &[u8],
+        blockchain: BlockchainOverlayPtr,
+        contract_id: ContractId,
+    ) -> Result<Self> {
         info!(target: "runtime::vm_runtime", "Instantiating a new runtime");
         // TODO: Add necessary operators
         // This function will be called for each `Operator` encountered during
@@ -154,7 +155,6 @@ impl Runtime {
 
         // Initialize data
         let db_handles = RefCell::new(vec![]);
-        let db_batches = RefCell::new(vec![]);
         let logs = RefCell::new(vec![]);
 
         debug!(target: "runtime::vm_runtime", "Importing functions");
@@ -164,7 +164,6 @@ impl Runtime {
             Env {
                 blockchain,
                 db_handles,
-                db_batches,
                 contract_id,
                 contract_bincode: wasm_bytes.to_vec(),
                 contract_section: ContractSection::Null,
@@ -333,10 +332,10 @@ impl Runtime {
     /// The runtime will look for an `INITIALIZE` symbol in the wasm code, and execute
     /// it if found. Optionally, it is possible to pass in a payload for any kind of special
     /// instructions the developer wants to manage in the initialize function.
-    /// This process is supposed to set up the sled db trees for storing the smart contract
+    /// This process is supposed to set up the overlay trees for storing the smart contract
     /// state, and it can create, delete, modify, read, and write to databases it's allowed to.
-    /// The permissions for this are handled by the `ContractId` in the sled db API so we
-    /// assume that the contract is only able to do write operations on its own sled trees.
+    /// The permissions for this are handled by the `ContractId` in the overlay db API so we
+    /// assume that the contract is only able to do write operations on its own overlay trees.
     pub fn deploy(&mut self, payload: &[u8]) -> Result<()> {
         info!(target: "runtime::vm_runtime", "[wasm-runtime] Running deploy");
 
@@ -346,66 +345,35 @@ impl Runtime {
 
             // We always want to have the zkas db as index 0 in db handles and batches when
             // deploying.
-            let db = &env_mut.blockchain.sled_db;
+            let contracts = &env_mut.blockchain.lock().unwrap().contracts;
 
-            let zkas_tree_handle = match env_mut.blockchain.contracts.lookup(
-                db,
-                &env_mut.contract_id,
-                SMART_CONTRACT_ZKAS_DB_NAME,
-            ) {
-                Ok(v) => v,
-                Err(_) => {
-                    // FIXME: All this is deploy code is "vulnerable" and able to init a
-                    // tree regardless of execution success. We can easily delete the db
-                    // if execution fails though, and we should charge gas for db_init.
-                    // and perhaps also for the zkas database in this specific case.
-                    env_mut.blockchain.contracts.init(
-                        db,
-                        &env_mut.contract_id,
-                        SMART_CONTRACT_ZKAS_DB_NAME,
-                    )?
-                }
-            };
+            let zkas_tree_handle =
+                match contracts.lookup(&env_mut.contract_id, SMART_CONTRACT_ZKAS_DB_NAME) {
+                    Ok(v) => v,
+                    Err(_) => {
+                        // FIXME: All this is deploy code is "vulnerable" and able to init a
+                        // tree regardless of execution success. We can easily delete the db
+                        // if execution fails though, and we should charge gas for db_init.
+                        // and perhaps also for the zkas database in this specific case.
+                        contracts.init(&env_mut.contract_id, SMART_CONTRACT_ZKAS_DB_NAME)?
+                    }
+                };
 
             let mut db_handles = env_mut.db_handles.borrow_mut();
-            let mut db_batches = env_mut.db_batches.borrow_mut();
             db_handles.push(DbHandle::new(env_mut.contract_id, zkas_tree_handle));
-            db_batches.push(sled::Batch::default());
         }
 
         debug!(target: "runtime::vm_runtime", "[wasm-runtime] payload: {:?}", payload);
         let _ = self.call(ContractSection::Deploy, payload)?;
 
-        // If the above didn't fail, we write the batches.
-        self.write_batches()?;
-
         // Update the wasm bincode in the WasmStore
         let env_mut = self.ctx.as_mut(&mut self.store);
-        env_mut.blockchain.wasm_bincode.insert(env_mut.contract_id, &env_mut.contract_bincode)?;
-
-        Ok(())
-    }
-
-    /// Execute an atomic sled transaction to write all batches
-    fn write_batches(&mut self) -> Result<()> {
-        let mut dbs = vec![];
-        let mut batches = vec![];
-        let env_mut = self.ctx.as_mut(&mut self.store);
-        for (idx, db) in env_mut.db_handles.get_mut().iter().enumerate() {
-            let batch = env_mut.db_batches.borrow()[idx].clone();
-            dbs.push(db.tree());
-            batches.push(batch);
-        }
-
-        dbs.transaction(|dbs| {
-            for (idx, db) in dbs.iter().enumerate() {
-                db.apply_batch(&batches[idx])?;
-            }
-
-            Ok::<(), ConflictableTransactionError<sled::Error>>(())
-        })?;
-
-        env_mut.blockchain.sled_db.flush()?;
+        env_mut
+            .blockchain
+            .lock()
+            .unwrap()
+            .wasm_bincode
+            .insert(env_mut.contract_id, &env_mut.contract_bincode)?;
 
         Ok(())
     }
@@ -420,16 +388,13 @@ impl Runtime {
     }
 
     /// This function runs after successful execution of `exec` and tries to
-    /// apply the state change to the sled databases.
+    /// apply the state change to the overlay databases.
     /// The runtime will lok for an `UPDATE` symbol in the wasm code, and execute
     /// it if found. The function does not take an arbitrary payload, but just takes
     /// a state update from `env` and passes it into the wasm runtime.
     pub fn apply(&mut self, update: &[u8]) -> Result<()> {
         debug!(target: "runtime::vm_runtime", "apply: {:?}", update);
         let _ = self.call(ContractSection::Update, update)?;
-
-        // If the above didn't fail, we write the batches.
-        self.write_batches()?;
 
         Ok(())
     }
