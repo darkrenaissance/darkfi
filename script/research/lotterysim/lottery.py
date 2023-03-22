@@ -37,9 +37,9 @@ class DarkfiTable:
             f = self.pid.pid_clipped(feedback, self.controller_type, debug)
             #note! thread overhead is 10X slower than sequential node execution!
             for i in range(len(self.darkies)):
-                self.darkies[i].set_sigma_feedback(self.Sigma, feedback, f, hp)
+                self.darkies[i].set_sigma_feedback(self.Sigma, feedback, f, count, hp)
                 self.darkies[i].run(hp)
-                total_vesting_stake+=self.darkies[i].update_vesting(count)
+                total_vesting_stake+=self.darkies[i].update_vesting()
             self.Sigma+=total_vesting_stake
             for i in range(len(self.darkies)):
                 winners += self.darkies[i].won
