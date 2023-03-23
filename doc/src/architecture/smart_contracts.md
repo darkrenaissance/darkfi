@@ -214,11 +214,7 @@ both automatically verified by the VM.
 
 However for verification to work, the ZK proofs also need corresponding
 public values, and the signatures need the public keys. We do this
-in the `CallDataBase` trait by exporting these methods:
-
-```
-TODO
-```
+by exporting these values. (TODO: link the code where this happens)
 
 These methods export the required values needed for the ZK proofs
 and signature verification from the actual call data itself.
