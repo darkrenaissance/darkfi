@@ -24,6 +24,7 @@ rand = { version = "0.8.5", optional = true }
 # These are used just for the integration tests
 [dev-dependencies]
 async-std = {version = "1.12.0", features = ["attributes"]}
+bs58 = "0.4.0"
 darkfi = {path = "../../../", features = ["tx", "blockchain"]}
 simplelog = "0.12.0"
 sled = "0.34.7"

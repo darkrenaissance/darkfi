@@ -37,7 +37,7 @@ use darkfi_sdk::{
     },
     ContractCall,
 };
-use darkfi_serial::Encodable;
+use darkfi_serial::{serialize, Encodable};
 use log::info;
 use rand::rngs::OsRng;
 
@@ -56,8 +56,17 @@ async fn money_contract_transfer() -> Result<()> {
     init_logger();
 
     // Some benchmark averages
+    let mut swap_sizes = vec![];
+    let mut swap_broadcasted_sizes = vec![];
+    let mut swap_creation_times = vec![];
     let mut swap_verify_times = vec![];
+    let mut transfer_sizes = vec![];
+    let mut transfer_broadcasted_sizes = vec![];
+    let mut transfer_creation_times = vec![];
     let mut transfer_verify_times = vec![];
+    let mut mint_sizes = vec![];
+    let mut mint_broadcasted_sizes = vec![];
+    let mut mint_creation_times = vec![];
     let mut mint_verify_times = vec![];
 
     // Some numbers we want to assert
@@ -93,14 +102,29 @@ async fn money_contract_transfer() -> Result<()> {
     info!(target: "money", "[Alice] ================================");
     info!(target: "money", "[Alice] Building token mint tx for Alice");
     info!(target: "money", "[Alice] ================================");
+    let timer = Instant::now();
     let (alice_mint_tx, alice_params) =
         th.mint_token(th.alice.keypair, ALICE_INITIAL, th.alice.keypair.public)?;
+    mint_creation_times.push(timer.elapsed());
+    let encoded: Vec<u8> = serialize(&alice_mint_tx);
+    let size = ::std::mem::size_of_val(&*encoded);
+    mint_sizes.push(size);
 
     info!(target: "money", "[Bob] ==============================");
     info!(target: "money", "[Bob] Building token mint tx for Bob");
     info!(target: "money", "[Bob] ==============================");
+    let timer = Instant::now();
     let (bob_mint_tx, bob_params) =
         th.mint_token(th.bob.keypair, BOB_INITIAL, th.bob.keypair.public)?;
+    mint_creation_times.push(timer.elapsed());
+
+    // Calculate transaction sizes
+    let encoded: Vec<u8> = serialize(&bob_mint_tx);
+    let size = ::std::mem::size_of_val(&*encoded);
+    mint_sizes.push(size);
+    let base58 = bs58::encode(&encoded).into_string();
+    let size = ::std::mem::size_of_val(&*base58);
+    mint_broadcasted_sizes.push(size);
 
     info!(target: "money", "[Faucet] =============================");
     info!(target: "money", "[Faucet] Executing Alice token mint tx");
@@ -184,6 +208,7 @@ async fn money_contract_transfer() -> Result<()> {
     info!(target: "money", "[Alice] ====================================================");
     info!(target: "money", "[Alice] Building Money::Transfer params for a payment to Bob");
     info!(target: "money", "[Alice] ====================================================");
+    let timer = Instant::now();
     let alice2bob_call_debris = TransferCallBuilder {
         keypair: th.alice.keypair,
         recipient: th.bob.keypair.public,
@@ -227,6 +252,15 @@ async fn money_contract_transfer() -> Result<()> {
     let mut alice2bob_tx = Transaction { calls, proofs, signatures: vec![] };
     let sigs = alice2bob_tx.create_sigs(&mut OsRng, &alice2bob_secret_keys)?;
     alice2bob_tx.signatures = vec![sigs];
+    transfer_creation_times.push(timer.elapsed());
+
+    // Calculate transaction sizes
+    let encoded: Vec<u8> = serialize(&alice2bob_tx);
+    let size = ::std::mem::size_of_val(&*encoded);
+    transfer_sizes.push(size);
+    let base58 = bs58::encode(&encoded).into_string();
+    let size = ::std::mem::size_of_val(&*base58);
+    transfer_broadcasted_sizes.push(size);
 
     info!(target: "money", "[Faucet] ==============================");
     info!(target: "money", "[Faucet] Executing Alice2Bob payment tx");
@@ -289,6 +323,7 @@ async fn money_contract_transfer() -> Result<()> {
     info!(target: "money", "[Bob] ======================================================");
     info!(target: "money", "[Bob] Building Money::Transfer params for a payment to Alice");
     info!(target: "money", "[Bob] ======================================================");
+    let timer = Instant::now();
     let mut bob_owncoins_tmp = bob_owncoins.clone();
     bob_owncoins_tmp.retain(|x| x.note.token_id == bob_token_id);
     let bob2alice_call_debris = TransferCallBuilder {
@@ -334,6 +369,15 @@ async fn money_contract_transfer() -> Result<()> {
     let mut bob2alice_tx = Transaction { calls, proofs, signatures: vec![] };
     let sigs = bob2alice_tx.create_sigs(&mut OsRng, &bob2alice_secret_keys)?;
     bob2alice_tx.signatures = vec![sigs];
+    transfer_creation_times.push(timer.elapsed());
+
+    // Calculate transaction sizes
+    let encoded: Vec<u8> = serialize(&bob2alice_tx);
+    let size = ::std::mem::size_of_val(&*encoded);
+    transfer_sizes.push(size);
+    let base58 = bs58::encode(&encoded).into_string();
+    let size = ::std::mem::size_of_val(&*base58);
+    transfer_broadcasted_sizes.push(size);
 
     info!(target: "money", "[Faucet] ==============================");
     info!(target: "money", "[Faucet] Executing Bob2Alice payment tx");
@@ -404,6 +448,7 @@ async fn money_contract_transfer() -> Result<()> {
     // Alice and Bob decide to swap back their tokens so Alice gets back her initial
     // tokens and Bob gets his.
     info!(target: "money", "[Alice] Building OtcSwap half");
+    let timer = Instant::now();
     // Generating  swap blinds
     let value_send_blind = ValueBlind::random(&mut OsRng);
     let value_recv_blind = ValueBlind::random(&mut OsRng);
@@ -500,6 +545,15 @@ async fn money_contract_transfer() -> Result<()> {
     // Alice gets the partially signed transaction and adds her signature
     let sigs = alicebob_swap_tx.create_sigs(&mut OsRng, &[alice_signature_secret])?;
     alicebob_swap_tx.signatures[0].insert(0, sigs[0]);
+    swap_creation_times.push(timer.elapsed());
+
+    // Calculate transaction sizes
+    let encoded: Vec<u8> = serialize(&alicebob_swap_tx);
+    let size = ::std::mem::size_of_val(&*encoded);
+    swap_sizes.push(size);
+    let base58 = bs58::encode(&encoded).into_string();
+    let size = ::std::mem::size_of_val(&*base58);
+    swap_broadcasted_sizes.push(size);
 
     info!(target: "money", "[Faucet] ==========================");
     info!(target: "money", "[Faucet] Executing AliceBob swap tx");
@@ -566,7 +620,8 @@ async fn money_contract_transfer() -> Result<()> {
     // Now Alice will create a new coin for herself to combine the two owncoins.
     info!(target: "money", "[Alice] ======================================================");
     info!(target: "money", "[Alice] Building Money::Transfer params for a payment to Alice");
-    info!(target: "money", "[Alice] =======================================================");
+    info!(target: "money", "[Alice] ======================================================");
+    let timer = Instant::now();
     let alice2alice_call_debris = TransferCallBuilder {
         keypair: th.alice.keypair,
         recipient: th.alice.keypair.public,
@@ -611,6 +666,15 @@ async fn money_contract_transfer() -> Result<()> {
     let mut alice2alice_tx = Transaction { calls, proofs, signatures: vec![] };
     let sigs = alice2alice_tx.create_sigs(&mut OsRng, &alice2alice_secret_keys)?;
     alice2alice_tx.signatures = vec![sigs];
+    transfer_creation_times.push(timer.elapsed());
+
+    // Calculate transaction sizes
+    let encoded: Vec<u8> = serialize(&alice2alice_tx);
+    let size = ::std::mem::size_of_val(&*encoded);
+    transfer_sizes.push(size);
+    let base58 = bs58::encode(&encoded).into_string();
+    let size = ::std::mem::size_of_val(&*base58);
+    transfer_broadcasted_sizes.push(size);
 
     info!(target: "money", "[Faucet] ================================");
     info!(target: "money", "[Faucet] Executing Alice2Alice payment tx");
@@ -659,6 +723,7 @@ async fn money_contract_transfer() -> Result<()> {
     info!(target: "money", "[Bob] ====================================================");
     info!(target: "money", "[Bob] Building Money::Transfer params for a payment to Bob");
     info!(target: "money", "[Bob] ====================================================");
+    let timer = Instant::now();
     let bob2bob_call_debris = TransferCallBuilder {
         keypair: th.bob.keypair,
         recipient: th.bob.keypair.public,
@@ -703,6 +768,15 @@ async fn money_contract_transfer() -> Result<()> {
     let mut bob2bob_tx = Transaction { calls, proofs, signatures: vec![] };
     let sigs = bob2bob_tx.create_sigs(&mut OsRng, &bob2bob_secret_keys)?;
     bob2bob_tx.signatures = vec![sigs];
+    transfer_creation_times.push(timer.elapsed());
+
+    // Calculate transaction sizes
+    let encoded: Vec<u8> = serialize(&bob2bob_tx);
+    let size = ::std::mem::size_of_val(&*encoded);
+    transfer_sizes.push(size);
+    let base58 = bs58::encode(&encoded).into_string();
+    let size = ::std::mem::size_of_val(&*base58);
+    transfer_broadcasted_sizes.push(size);
 
     info!(target: "money", "[Faucet] ============================");
     info!(target: "money", "[Faucet] Executing Bob2Bob payment tx");
@@ -749,6 +823,7 @@ async fn money_contract_transfer() -> Result<()> {
 
     // Now they decide to swap all of their tokens
     info!(target: "money", "[Alice] Building OtcSwap half");
+    let timer = Instant::now();
     // Generating  swap blinds
     let value_send_blind = ValueBlind::random(&mut OsRng);
     let value_recv_blind = ValueBlind::random(&mut OsRng);
@@ -843,6 +918,15 @@ async fn money_contract_transfer() -> Result<()> {
     // Alice gets the partially signed transaction and adds her signature
     let sigs = alicebob_swap_tx.create_sigs(&mut OsRng, &[alice_signature_secret])?;
     alicebob_swap_tx.signatures[0].insert(0, sigs[0]);
+    swap_creation_times.push(timer.elapsed());
+
+    // Calculate transaction sizes
+    let encoded: Vec<u8> = serialize(&alicebob_swap_tx);
+    let size = ::std::mem::size_of_val(&*encoded);
+    swap_sizes.push(size);
+    let base58 = bs58::encode(&encoded).into_string();
+    let size = ::std::mem::size_of_val(&*base58);
+    swap_broadcasted_sizes.push(size);
 
     info!(target: "money", "[Faucet] ==========================");
     info!(target: "money", "[Faucet] Executing AliceBob swap tx");
@@ -907,17 +991,44 @@ async fn money_contract_transfer() -> Result<()> {
     assert!(bob_owncoins[0].note.token_id == alice_token_id);
 
     // Statistics
+    let swap_avg = swap_sizes.iter().sum::<usize>();
+    let swap_avg = swap_avg / swap_sizes.len();
+    info!("Average Swap size: {:?} Bytes", swap_avg);
+    let swap_avg = swap_broadcasted_sizes.iter().sum::<usize>();
+    let swap_avg = swap_avg / swap_broadcasted_sizes.len();
+    info!("Average Swap broadcasted size: {:?} Bytes", swap_avg);
+    let swap_avg = swap_creation_times.iter().sum::<Duration>();
+    let swap_avg = swap_avg / swap_creation_times.len() as u32;
+    info!("Average Swap creation time: {:?}", swap_avg);
     let swap_avg = swap_verify_times.iter().sum::<Duration>();
     let swap_avg = swap_avg / swap_verify_times.len() as u32;
-    println!("Average Swap verification time: {:?}", swap_avg);
+    info!("Average Swap verification time: {:?}", swap_avg);
 
+    let transfer_avg = transfer_sizes.iter().sum::<usize>();
+    let transfer_avg = transfer_avg / transfer_sizes.len();
+    info!("Average Transfer size: {:?} Bytes", transfer_avg);
+    let transfer_avg = transfer_broadcasted_sizes.iter().sum::<usize>();
+    let transfer_avg = transfer_avg / transfer_broadcasted_sizes.len();
+    info!("Average Transfer broadcasted size: {:?} Bytes", transfer_avg);
+    let transfer_avg = transfer_creation_times.iter().sum::<Duration>();
+    let transfer_avg = transfer_avg / transfer_creation_times.len() as u32;
+    info!("Average Transfer creation time: {:?}", transfer_avg);
     let transfer_avg = transfer_verify_times.iter().sum::<Duration>();
     let transfer_avg = transfer_avg / transfer_verify_times.len() as u32;
-    println!("Average Transfer verification time: {:?}", transfer_avg);
+    info!("Average Transfer verification time: {:?}", transfer_avg);
 
+    let mint_avg = mint_sizes.iter().sum::<usize>();
+    let mint_avg = mint_avg / mint_sizes.len();
+    info!("Average Mint size: {:?} Bytes", mint_avg);
+    let mint_avg = mint_broadcasted_sizes.iter().sum::<usize>();
+    let mint_avg = mint_avg / mint_broadcasted_sizes.len();
+    info!("Average Mint broadcasted size: {:?} Bytes", mint_avg);
+    let mint_avg = mint_creation_times.iter().sum::<Duration>();
+    let mint_avg = mint_avg / mint_creation_times.len() as u32;
+    info!("Average Mint creation time: {:?}", mint_avg);
     let mint_avg = mint_verify_times.iter().sum::<Duration>();
     let mint_avg = mint_avg / mint_verify_times.len() as u32;
-    println!("Average Mint verification time: {:?}", mint_avg);
+    info!("Average Mint verification time: {:?}", mint_avg);
 
     // Thanks for reading
     Ok(())
