@@ -9,7 +9,7 @@ RUNNING_TIME = int(input("running time:"))
 if __name__ == "__main__":
     darkies = []
     #darkies += [ Darkie(abs(random.gauss(20,20))*50, commit=False) for id in range(1000) ]
-    darkies += [ Darkie(1, commit=False) for id in range(1000) ]
+    darkies += [ Darkie(ERC20DRK*random.random(), commit=False) for id in range(1000) ]
     airdrop = 0
     for darkie in darkies:
         airdrop+=darkie.stake

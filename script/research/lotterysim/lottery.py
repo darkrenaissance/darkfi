@@ -20,7 +20,7 @@ class DarkfiTable:
     def add_darkie(self, darkie):
         self.darkies+=[darkie]
 
-    def background(self, rand_running_time=True, debug=False, hp=False):
+    def background(self, rand_running_time=True, debug=False, hp=True):
         self.debug=debug
         self.start_time=time.time()
         feedback=0 # number leads in previous slot
@@ -40,10 +40,15 @@ class DarkfiTable:
                 self.darkies[i].set_sigma_feedback(self.Sigma, feedback, f, count, hp)
                 self.darkies[i].run(hp)
                 total_vesting_stake+=self.darkies[i].update_vesting()
-            self.Sigma+=total_vesting_stake
             for i in range(len(self.darkies)):
                 winners += self.darkies[i].won
+                self.darkies[i].update_stake()
             feedback = winners
+            if winners==1:
+            #if count >= ERC20DRK and winners==1:
+                self.Sigma += 1
+                for i in range(len(self.darkies)):
+                    self.darkies[i].finalize_stake()
             count+=1
         self.end_time=time.time()
         return self.pid.acc()

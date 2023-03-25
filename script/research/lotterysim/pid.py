@@ -37,7 +37,6 @@ class PID:
             #print("pid::k2: {}".format(k2))
             #print("pid::k3: {}".format(k3))
         ret = self.f_hist[-1] + k1 * err + k2 * self.error_hist[-1] + k3 * self.error_hist[-2]
-
         self.error_hist+=[err]
         self.feedback_hist+=[feedback]
         return ret

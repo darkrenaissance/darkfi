@@ -36,10 +36,10 @@ debug = True if debug_str.lower()=="y" else False
 
 
 def experiment(accs=[], controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, airdrop=0, hp=False):
-    dt = DarkfiTable(0, RUNNING_TIME, controller_type, kp=kp, ki=ki, kd=kd)
+    dt = DarkfiTable(ERC20DRK, RUNNING_TIME, controller_type, kp=kp, ki=ki, kd=kd)
     RND_NODES = random.randint(5, NODES) if randomize_nodes else NODES
     for idx in range(0,RND_NODES):
-        darkie = Darkie(airdrop+idx)
+        darkie = Darkie(random.random()*ERC20DRK/(RND_NODES))
         dt.add_darkie(darkie)
     acc = dt.background(rand_running_time, hp)
     accs+=[acc]
@@ -48,6 +48,7 @@ def experiment(accs=[], controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd
 highest_acc = 0
 
 def multi_trial_exp(gains, kp, ki, kd, hp=False):
+    global highest_acc
     experiment_accs = []
     exp_threads = []
     for i in range(0, AVG_LEN):
@@ -68,6 +69,7 @@ def multi_trial_exp(gains, kp, ki, kd, hp=False):
                 f.write(buff)
 
 def single_trial_exp(gains, kp, ki, kd, hp=False):
+    global highest_acc
     acc = experiment(kp=kp, ki=ki, kd=kd, hp=hp)
     buff = 'accuracy:{}, kp: {}, ki:{}, kd:{}'.format(acc, kp, ki, kd)
     print(buff)

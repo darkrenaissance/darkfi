@@ -24,7 +24,7 @@ def approx_target_in_zk(sigmas, stake):
     # this dictates that tuning need to be hardcoded,
     # secondly the reward, or at least the total stake in the network,
     # can't be anonymous, should be public.
-    T = [sigma*(stake+1)**(i+1) for i, sigma in enumerate(sigmas)]
+    T = [sigma*(stake)**(i+1) for i, sigma in enumerate(sigmas)]
     return -1*sum(T)
 
 def rnd(hp=False):

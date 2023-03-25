@@ -40,8 +40,8 @@ randomize_nodes = args.randomize_nodes
 rand_running_time = args.rand_running_time
 debug = args.debug
 
-def experiment(accs=[], controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, distribution=[], hp=False):
-    dt = DarkfiTable(sum(distribution), RUNNING_TIME, controller_type, kp=kp, ki=ki, kd=kd)
+def experiment(accs=[], controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, distribution=[], hp=True):
+    dt = DarkfiTable(ERC20DRK, RUNNING_TIME, controller_type, kp=kp, ki=ki, kd=kd)
     RND_NODES = random.randint(5, NODES) if randomize_nodes else NODES
     for idx in range(0,RND_NODES):
         darkie = Darkie(distribution[idx])
@@ -50,7 +50,7 @@ def experiment(accs=[], controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd
     accs+=[acc]
     return acc
 
-def multi_trial_exp(kp, ki, kd, distribution = [], hp=False):
+def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
     global highest_acc
     global highest_gain
     new_record=False
@@ -94,7 +94,7 @@ def crawler(crawl, range_multiplier, step=0.1):
     crawl_range = np.arange(range_start, range_end, step)
     np.random.shuffle(crawl_range)
     crawl_range = tqdm(crawl_range)
-    distribution = [random.random()*NODES for i in range(NODES)]
+    distribution = [random.gauss(ERC20DRK/NODES, ERC20DRK/NODES*0.1) for i in range(NODES)]
     for i in crawl_range:
         kp = i if crawl==KP else highest_gain[0]
         ki = i if crawl==KI else highest_gain[1]

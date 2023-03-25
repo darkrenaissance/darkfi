@@ -46,7 +46,7 @@ debug = args.debug
 
 
 def experiment(accs=[], controller_type=CONTROLLER_TYPE_TAKAHASHI, kp=0, ki=0, kd=0, kc=0, ti=0, td=0, ts=0, distribution=[], hp=False):
-    dt = DarkfiTable(sum(distribution), RUNNING_TIME, controller_type, kp=kp, ki=ki, kd=kd, kc=kc, td=td, ti=ti, ts=ts)
+    dt = DarkfiTable(ERC20DRK, RUNNING_TIME, controller_type, kp=kp, ki=ki, kd=kd, kc=kc, td=td, ti=ti, ts=ts)
     RND_NODES = random.randint(5, NODES) if randomize_nodes else NODES
     for idx in range(0,RND_NODES):
         darkie = Darkie(distribution[idx])
@@ -101,7 +101,7 @@ def crawler(crawl, range_multiplier, step=0.1):
     crawl_range = np.arange(range_start, range_end, step)
     np.random.shuffle(crawl_range)
     crawl_range = tqdm(crawl_range)
-    distribution = [random.random()*NODES for i in range(NODES)]
+    distribution = [random.random()*ERC20DRK*0.0001 for i in range(NODES)]
     for i in crawl_range:
         kc = i if crawl==KC else highest_gain[0]
         ti = i if crawl==TI else highest_gain[1]
