@@ -74,6 +74,12 @@ pub enum ContractError {
 
     #[error("Invalid function call")]
     InvalidFunction,
+
+    #[error("SMT: Invalid Leaf")]
+    SmtInvalidLeaf,
+
+    #[error("SMT: Path nodes are not consistent")]
+    SmtInvalidPathNodes,
 }
 
 /// Builtin return values occupy the upper 32 bits
@@ -99,6 +105,8 @@ pub const DB_GET_FAILED: i64 = to_builtin!(13);
 pub const DB_CONTAINS_KEY_FAILED: i64 = to_builtin!(14);
 pub const INVALID_FUNCTION: i64 = to_builtin!(15);
 pub const DB_DEL_FAILED: i64 = to_builtin!(16);
+pub const SMT_INVALID_LEAF: i64 = to_builtin!(17);
+pub const SMT_INVALID_PATH_NODES: i64 = to_builtin!(18);
 
 impl From<ContractError> for i64 {
     fn from(err: ContractError) -> Self {
@@ -118,6 +126,8 @@ impl From<ContractError> for i64 {
             ContractError::DbContainsKeyFailed => DB_CONTAINS_KEY_FAILED,
             ContractError::InvalidFunction => INVALID_FUNCTION,
             ContractError::DbDelFailed => DB_DEL_FAILED,
+            ContractError::SmtInvalidLeaf => SMT_INVALID_LEAF,
+            ContractError::SmtInvalidPathNodes => SMT_INVALID_PATH_NODES,
             ContractError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -148,6 +158,8 @@ impl From<i64> for ContractError {
             DB_CONTAINS_KEY_FAILED => Self::DbContainsKeyFailed,
             INVALID_FUNCTION => Self::InvalidFunction,
             DB_DEL_FAILED => Self::DbDelFailed,
+            SMT_INVALID_LEAF => Self::SmtInvalidLeaf,
+            SMT_INVALID_PATH_NODES => Self::SmtInvalidPathNodes,
             _ => Self::Custom(error as u32),
         }
     }

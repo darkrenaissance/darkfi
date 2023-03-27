@@ -68,6 +68,9 @@ pub mod schnorr;
 /// MiMC VDF
 pub mod mimc_vdf;
 
+/// Sparse Merkle Tree implementation
+pub mod smt;
+
 pub use incrementalmerkletree;
 pub use pasta_curves::{pallas, vesta};
 
