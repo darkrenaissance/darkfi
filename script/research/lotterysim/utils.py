@@ -14,7 +14,6 @@ def fact(n, hp=False):
     else:
         return (Num(n) if hp else n)* fact(n-1, hp)
 
-
 # all inputs to this function are integers
 # sigmas are public
 # stake is private
@@ -25,7 +24,7 @@ def approx_target_in_zk(sigmas, stake):
     # secondly the reward, or at least the total stake in the network,
     # can't be anonymous, should be public.
     T = [sigma*(stake)**(i+1) for i, sigma in enumerate(sigmas)]
-    return -1*sum(T)
+    return -1*sum(T) #+ F_MIN_HP*L_HP
 
 def rnd(hp=False):
     return Num(random.random()) if hp else random.random()

@@ -2,12 +2,12 @@ from utils import *
 from threading import Thread
 
 class Darkie(Thread):
-    def __init__(self, airdrop, vesting=[], hp=False, commit=True, epoch_len=100):
+    def __init__(self, airdrop, initial_stake=None, vesting=[], hp=False, commit=True, epoch_len=100):
         Thread.__init__(self)
         self.vesting = [0] + vesting
         self.stake = (Num(airdrop) if hp else airdrop)
         self.initial_stake = self.stake # for debugging purpose
-        self.finalized_stake = (Num(airdrop) if hp else airdrop) # after fork finalization
+        self.finalized_stake = (Num(airdrop) if hp else airdrop) if initial_stake==None else (Num(initial_stake) if hp else initial_stake) # after fork finalization
         self.Sigma = None
         self.feedback = None
         self.f = None
@@ -16,8 +16,17 @@ class Darkie(Thread):
         self.epoch_len=epoch_len # epoch length during which the stake is static
         self.staked_tokens_ratio = 1 # ratio of staked tokens, if commit is true then it's 100%
         self.slot = 0
+
     def clone(self):
         return Darkie(self.finalized_stake)
+
+    def apy(self):
+        # approximation to APY assuming linear relation
+        # note! relation is logarithmic depending on PID output.
+        return Num(self.stake - self.initial_stake) / Num(self.initial_stake)
+
+    def apy_percentage(self):
+        return self.apy()*100
 
     def set_sigma_feedback(self, sigma, feedback, f, count, hp=True):
         self.Sigma = (Num(sigma) if hp else sigma)
