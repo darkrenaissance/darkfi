@@ -1,19 +1,21 @@
 from utils import *
 from threading import Thread
+from strategy import *
 
 class Darkie(Thread):
-    def __init__(self, airdrop, initial_stake=None, vesting=[], hp=False, commit=True, epoch_len=100):
+    def __init__(self, airdrop, initial_stake=None, vesting=[], hp=False, commit=True, epoch_len=100, strategy=None, apy_window=0):
         Thread.__init__(self)
         self.vesting = [0] + vesting
         self.stake = (Num(airdrop) if hp else airdrop)
-        self.initial_stake = self.stake # for debugging purpose
-        self.finalized_stake = (Num(airdrop) if hp else airdrop) if initial_stake==None else (Num(initial_stake) if hp else initial_stake) # after fork finalization
+        self.initial_stake = [self.stake] # for debugging purpose
+        self.finalized_stake = (Num(airdrop) if hp else airdrop)
         self.Sigma = None
         self.feedback = None
         self.f = None
         self.won=False
-        self.commit = commit # commit to staked tokens
         self.epoch_len=epoch_len # epoch length during which the stake is static
+        self.strategy = strategy if strategy is not None else Strategy(self.epoch_len)
+        self.apy_window = apy_window
         self.staked_tokens_ratio = 1 # ratio of staked tokens, if commit is true then it's 100%
         self.slot = 0
 
@@ -21,9 +23,14 @@ class Darkie(Thread):
         return Darkie(self.finalized_stake)
 
     def apy(self):
+        if self.apy_window == 0:
+            window=len(self.initial_stake)
         # approximation to APY assuming linear relation
         # note! relation is logarithmic depending on PID output.
-        return Num(self.stake - self.initial_stake) / Num(self.initial_stake)
+        if window<len(self.initial_stake):
+            windowed_initial_stake = self.initial_stake[-window]
+            return Num(self.stake - windowed_initial_stake) / Num(windowed_initial_stake)
+        return Num(self.stake - self.initial_stake[0]) / Num(self.initial_stake[0])
 
     def apy_percentage(self):
         return self.apy()*100
@@ -32,14 +39,8 @@ class Darkie(Thread):
         self.Sigma = (Num(sigma) if hp else sigma)
         self.feedback = (Num(feedback) if hp else feedback)
         self.f = (Num(f) if hp else f)
+        self.initial_stake += [self.finalized_stake]
         self.slot = count
-
-    def randomized_finalized_stake(self):
-        if self.commit:
-            return self.finalized_stake
-        if self.slot%self.epoch_len==0:
-            self.staked_tokens_ratio = random.random()
-        return self.staked_tokens_ratio*self.finalized_stake
 
     def run(self, hp=True):
         k=N_TERM
@@ -49,7 +50,9 @@ class Darkie(Thread):
             sigmas = [   c/((self.Sigma+EPSILON)**i) * ( ((L_HP if hp else L)/fact(i)) ) for i in range(1, k+1) ]
             scaled_target = approx_target_in_zk(sigmas, Num(stake)) #+ (BASE_L_HP if hp else BASE_L)
             return scaled_target
-        T = target(self.f, self.randomized_finalized_stake())
+        if self.slot>0:
+            self.strategy.set_ratio(self.slot, self.apy())
+        T = target(self.f, self.strategy.staked_value(self.finalized_stake))
         self.won = lottery(T, hp)
 
     def update_vesting(self):

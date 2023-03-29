@@ -1,6 +1,6 @@
 # running time ONE_YEAR
-#network airdrop: 2100000000.0, staked token: 2099223067.1631408/99.9630031982448% on 1000 nodes
-#acc: 37.5249500998004, reward: 0.0005964171059733166794378382704% with instant finality: 0.001589388138790594006649208260%
+#network airdrop: 2100000000.0, staked token: 2099815635.398858/99.99122073327895% on 1000 nodes
+#acc: 35.66458096862327, reward: 0.005966962921188361850310030975% with instant finality: 0.01673078095726943897690808440%
 
 from lottery import *
 import os
@@ -8,7 +8,7 @@ import numpy
 
 os.system("rm f.hist; rm leads.hist")
 
-RUNNING_TIME = ONE_YEAR
+RUNNING_TIME = 1000
 NODES=1000
 
 rewards = []
