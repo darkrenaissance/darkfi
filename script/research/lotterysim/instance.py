@@ -1,6 +1,8 @@
 from lottery import *
 import os
 import numpy
+from strategy import LinearStrategy
+
 os.system("rm f.hist; rm leads.hist")
 
 RUNNING_TIME = int(input("running time:"))
@@ -10,8 +12,8 @@ NODES=1000
 if __name__ == "__main__":
     darkies = []
     egalitarian = ERC20DRK/NODES
-    darkies += [ Darkie(random.gauss(egalitarian, egalitarian*0.1)) for id in range(int(NODES)) ]
-    #darkies += [Darkie(0) for _ in range(NODES)]
+    darkies += [ Darkie(random.gauss(egalitarian, egalitarian*0.1), strategy=LinearStrategy(EPOCH_LENGTH)) for id in range(int(NODES)) ]
+    darkies += [Darkie(0, strategy=LinearStrategy(EPOCH_LENGTH)) for _ in range(NODES)]
     airdrop = ERC20DRK
     effective_airdrop  = 0
     for darkie in darkies:

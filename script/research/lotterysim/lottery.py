@@ -4,9 +4,10 @@ from darkie import *
 import time
 from datetime import timedelta
 from pid import PID
+from RPID import RPID
 
 class DarkfiTable:
-    def __init__(self, airdrop, running_time, controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, dt=1, target=1, kc=0, ti=0, td=0, ts=0, debug=False):
+    def __init__(self, airdrop, running_time, controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, dt=1, target=1, reward_target=15, kc=0, ti=0, td=0, ts=0, debug=False):
         self.Sigma=airdrop
         self.darkies = []
         self.running_time=running_time
@@ -14,6 +15,7 @@ class DarkfiTable:
         self.end_time=None
         self.pid = None
         self.pid = PID(kp=kp, ki=ki, kd=kd, dt=dt, target=target, Kc=kc, Ti=ti, Td=td, Ts=ts)
+        self.rpid = RPID(kp=3, ki=2, kd=-1, target=reward_target)
         self.controller_type=controller_type
         self.debug=debug
 
@@ -42,7 +44,9 @@ class DarkfiTable:
                 total_vesting_stake+=self.darkies[i].update_vesting()
             for i in range(len(self.darkies)):
                 winners += self.darkies[i].won
-                self.darkies[i].update_stake()
+                apy = self.darkies[i].apy()
+                reward = self.rpid.pid_clipped(apy, self.controller_type, debug)
+                self.darkies[i].update_stake(reward)
             feedback = winners
             if winners==1:
                 if count >= ERC20DRK:

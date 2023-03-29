@@ -1,13 +1,15 @@
+from utils import *
+
 class Strategy(object):
     def __init__(self, epoch_len=0):
         self.epoch_len = epoch_len
-        self.staked_tokens_ratio = 1
+        self.staked_tokens_ratio = Num(1)
 
     def set_ratio(self, slot=0, apy=0):
         pass
 
     def staked_value(self, stake):
-        return self.staked_tokens_ratio*stake
+        return self.staked_tokens_ratio*Num(stake)
 
 class RandomStrategy(Strategy):
     def __init__(self, epoch_len):
@@ -29,4 +31,4 @@ class LinearStrategy(Strategy):
 
     def set_ratio(self, slot, apy):
         if slot%self.epoch_len==0:
-            self.staked_tokens_ratio = apy/self.TARGET_APY
+            self.staked_tokens_ratio = apy/Num(self.TARGET_APY)

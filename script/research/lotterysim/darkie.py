@@ -29,8 +29,8 @@ class Darkie(Thread):
         # note! relation is logarithmic depending on PID output.
         if window<len(self.initial_stake):
             windowed_initial_stake = self.initial_stake[-window]
-            return Num(self.stake - windowed_initial_stake) / Num(windowed_initial_stake)
-        return Num(self.stake - self.initial_stake[0]) / Num(self.initial_stake[0])
+            return Num(self.stake - windowed_initial_stake) / Num(windowed_initial_stake) if self.stake>0 else Num(0)
+        return Num(self.stake - self.initial_stake[0]) / Num(self.initial_stake[0]) if self.stake>0 else Num(0)
 
     def apy_percentage(self):
         return self.apy()*100
@@ -50,8 +50,8 @@ class Darkie(Thread):
             sigmas = [   c/((self.Sigma+EPSILON)**i) * ( ((L_HP if hp else L)/fact(i)) ) for i in range(1, k+1) ]
             scaled_target = approx_target_in_zk(sigmas, Num(stake)) #+ (BASE_L_HP if hp else BASE_L)
             return scaled_target
-        if self.slot>0:
-            self.strategy.set_ratio(self.slot, self.apy())
+
+        self.strategy.set_ratio(self.slot, self.apy())
         T = target(self.f, self.strategy.staked_value(self.finalized_stake))
         self.won = lottery(T, hp)
 
@@ -66,9 +66,9 @@ class Darkie(Thread):
         self.stake+= vesting_value
         return vesting_value
 
-    def update_stake(self):
+    def update_stake(self, reward):
         if self.won:
-            self.stake+=REWARD
+            self.stake+=reward
 
     def finalize_stake(self):
         if self.won:
