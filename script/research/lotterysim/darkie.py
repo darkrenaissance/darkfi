@@ -3,7 +3,7 @@ from threading import Thread
 from strategy import *
 
 class Darkie(Thread):
-    def __init__(self, airdrop, initial_stake=None, vesting=[], hp=False, commit=True, epoch_len=100, strategy=None, apy_window=0):
+    def __init__(self, airdrop, initial_stake=None, vesting=[], hp=False, commit=True, epoch_len=100, strategy=None, apy_window=EPOCH_LENGTH):
         Thread.__init__(self)
         self.vesting = [0] + vesting
         self.stake = (Num(airdrop) if hp else airdrop)
@@ -23,14 +23,19 @@ class Darkie(Thread):
         return Darkie(self.finalized_stake)
 
     def apy(self):
+        window = 0
         if self.apy_window == 0:
             window=len(self.initial_stake)
         # approximation to APY assuming linear relation
         # note! relation is logarithmic depending on PID output.
         if window<len(self.initial_stake):
             windowed_initial_stake = self.initial_stake[-window]
-            return Num(self.stake - windowed_initial_stake) / Num(windowed_initial_stake) if self.stake>0 else Num(0)
-        return Num(self.stake - self.initial_stake[0]) / Num(self.initial_stake[0]) if self.stake>0 else Num(0)
+            apy =  Num(self.stake - windowed_initial_stake) / Num(windowed_initial_stake) if self.stake>0 else Num(0)
+            #print('slot: {}, windowed apy: {}, gain: {}'.format(self.slot, apy, self.stake-windowed_initial_stake))
+            return apy
+        apy = Num(self.stake - self.initial_stake[0]) / Num(self.initial_stake[0]) if self.stake>0 else Num(0)
+        print('slot: {}, apy: {}, gain: {}'.format(self.slot, apy, self.stake-self.initial_stake[0]))
+        return apy
 
     def apy_percentage(self):
         return self.apy()*100
@@ -51,7 +56,7 @@ class Darkie(Thread):
             scaled_target = approx_target_in_zk(sigmas, Num(stake)) #+ (BASE_L_HP if hp else BASE_L)
             return scaled_target
 
-        self.strategy.set_ratio(self.slot, self.apy())
+        self.strategy.set_ratio(self.slot, self.apy_percentage())
         T = target(self.f, self.strategy.staked_value(self.finalized_stake))
         self.won = lottery(T, hp)
 

@@ -52,7 +52,6 @@ def experiment(accs=[], controller_type=CONTROLLER_TYPE_TAKAHASHI, kp=0, ki=0, k
         darkie = Darkie(distribution[idx])
         dt.add_darkie(darkie)
     acc = dt.background(rand_running_time, hp)
-    accs+=[acc]
     return acc
 
 

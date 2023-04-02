@@ -1,10 +1,10 @@
 from utils import *
 
 REWARD_MIN = 0
-REWARD_MAX = 1000
+REWARD_MAX = 10000
 
 class RPID:
-    def __init__(self, kp=0, ki=0, kd=0, dt=1, target=15, Kc=0, Ti=0, Td=0, Ts=0, debug=False):
+    def __init__(self, kp=0, ki=0, kd=0, dt=1, target_apy=10, Kc=0, Ti=0, Td=0, Ts=0, debug=False):
         self.Kp = kp # discrete pid kp
         self.Ki = ki # discrete pid ki
         self.Kd = kd # discrete pid kd
@@ -13,7 +13,7 @@ class RPID:
         self.Td = Td # takahashi td
         self.Ts = Ts # takahashi ts
         self.Kc = Kc # takahashi kc
-        self.target = target # pid set point
+        self.target = target_apy # pid set point, target APY
         self.prev_feedback = 0
         self.feedback_hist = [0, 0]
         self.f_hist = [0]
@@ -46,16 +46,16 @@ class RPID:
         else:
             pid_value = self.pid(feedback)
 
-        if pid_value <= 0.0:
-            pid_value = REWARD_MIN
-        elif pid_value >= 1:
-            pid_value =  REWARD_MAX
+        if pid_value <= REWARD_MIN:
+            pid_value = REWARD_MIN # should be corresponding to lowest APY
+        if pid_value >= REWARD_MAX:
+            pid_value =  REWARD_MAX # should be corresponding to target APY
 
         self.f_hist+=[pid_value]
         return pid_value
 
     def error(self, feedback):
-        return feedback - self.target
+        return self.target - feedback
 
     def proportional(self,  feedback):
         return self.error(feedback)

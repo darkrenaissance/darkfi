@@ -4,19 +4,21 @@ from argparse import ArgumentParser
 
 AVG_LEN = 5
 
-KP_STEP=0.5
-KP_SEARCH=1
+KP_STEP=0.3
+KP_SEARCH=4.935 #-0.91
 
-KI_STEP=0.5
-KI_SEARCH=1
+KI_STEP=0.3
+KI_SEARCH=0.429 #157.5
 
-KD_STEP=0.5
-KD_SEARCH=-1
+KD_STEP=0.3
+KD_SEARCH=-0.05 #5.6
 
 EPSILON=0.0001
-RUNNING_TIME=1000
-NODES = 1000
 
+RUNNING_TIME=1000
+NODES = 100
+
+highest_apy = 0
 highest_acc = 0
 
 KP='kp'
@@ -40,32 +42,42 @@ randomize_nodes = args.randomize_nodes
 rand_running_time = args.rand_running_time
 debug = args.debug
 
-def experiment(accs=[], controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, distribution=[], hp=True):
-    dt = DarkfiTable(ERC20DRK, RUNNING_TIME, controller_type, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0.03840000000000491, r_kp=kp, r_ki=ki, r_kd=kd)
+def experiment(apys=[], controller_type=CONTROLLER_TYPE_DISCRETE, rkp=0, rki=0, rkd=0, distribution=[], hp=True):
+    dt = DarkfiTable(ERC20DRK, RUNNING_TIME, controller_type, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0.03840000000000491, r_kp=rkp, r_ki=rki, r_kd=rkd)
     RND_NODES = random.randint(5, NODES) if randomize_nodes else NODES
     for idx in range(0,RND_NODES):
-        darkie = Darkie(distribution[idx])
+        darkie = Darkie(distribution[idx], strategy=SigmoidStrategy(EPOCH_LENGTH), apy_window=EPOCH_LENGTH)
         dt.add_darkie(darkie)
-    acc = dt.background(rand_running_time, hp)
-    accs+=[acc]
-    return acc
+    acc, apy, reward, stake_ratio = dt.background_with_apy(rand_running_time, hp)
+    return acc, apy, reward, stake_ratio
 
 def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
+    global highest_apy
     global highest_acc
     global highest_gain
     new_record=False
     exp_threads = []
     accs = []
+    apys = []
+    rewards = []
+    stakes_ratios = []
     for i in range(0, AVG_LEN):
-        acc = experiment(accs, CONTROLLER_TYPE_DISCRETE, kp=kp, ki=ki, kd=kd, distribution=distribution, hp=hp)
+        acc, apy, reward, stake_ratio = experiment(apys, CONTROLLER_TYPE_DISCRETE, rkp=kp, rki=ki, rkd=kd, distribution=distribution, hp=hp)
         accs += [acc]
-    avg_acc = sum(accs)/float(AVG_LEN)
-    buff = 'accuracy:{}, kp: {}, ki:{}, kd:{}'.format(avg_acc, kp, ki, kd)
-    if avg_acc > 0:
+        apys += [apy]
+        rewards += [reward]
+        stakes_ratios += [stake_ratio]
+    avg_acc = float(sum(accs))/len(accs)
+    avg_apy = float(sum(apys))/float(AVG_LEN)
+    avg_reward = float(sum(rewards))/len(rewards)
+    avg_staked = float(sum(stakes_ratios))/len(stakes_ratios)
+    buff = 'avg(acc): {}, avg(apy): {}, avg(reward): {}, avg(stake ratio): {}, kp: {}, ki:{}, kd:{}'.format(avg_acc, avg_apy, avg_reward, avg_staked, kp, ki, kd)
+    if avg_apy > 0:
         gain = (kp, ki, kd)
-        acc_gain = (avg_acc, gain)
-        if avg_acc > highest_acc:
+        acc_gain = (avg_apy, gain)
+        if avg_apy > highest_apy and avg_acc > highest_acc:
             new_record = True
+            highest_apy = avg_apy
             highest_acc = avg_acc
             highest_gain = (kp, ki, kd)
             with open("highest_gain.txt", 'w') as f:
@@ -100,7 +112,7 @@ def crawler(crawl, range_multiplier, step=0.1):
         ki = i if crawl==KI else highest_gain[1]
         kd = i if crawl==KD else highest_gain[2]
         buff, new_record = multi_trial_exp(kp, ki, kd, distribution, hp=high_precision)
-        crawl_range.set_description('highest:{} / {}'.format(highest_acc, buff))
+        crawl_range.set_description('highest:{} / {}'.format(highest_apy, buff))
         if new_record:
             break
 
@@ -116,8 +128,8 @@ while True:
         range_start = (start*KP_RANGE_MULTIPLIER if start <=0 else -1*start) - SHIFTING
         range_end = (-1*start if start<=0 else KP_RANGE_MULTIPLIER*start) + SHIFTING
         while (range_end - range_start)/KP_STEP >500:
-            if KP_STEP < 0.1:
-                KP_STEP*=10
+            #if KP_STEP < 0.1:
+            KP_STEP*=2
             KP_RANGE_MULTIPLIER-=1
             #TODO (res) shouldn't the range also shrink?
             # not always true.
@@ -136,8 +148,9 @@ while True:
         range_start = (start*KI_RANGE_MULTIPLIER if start <=0 else -1*start) - SHIFTING
         range_end = (-1*start if start<=0 else KI_RANGE_MULTIPLIER*start) + SHIFTING
         while (range_end - range_start)/KI_STEP >500:
-            if KP_STEP < 0.1:
-                KI_STEP*=10
+            #print('range_end: {}, range_start: {}, ki_step: {}'.format(range_end, range_start, KI_STEP))
+            #if KP_STEP < 1:
+            KI_STEP*=2
             KI_RANGE_MULTIPLIER-=1
     # kd crawl
     crawler(KD, KD_RANGE_MULTIPLIER, KD_STEP)
@@ -149,6 +162,6 @@ while True:
         range_start = (start*KD_RANGE_MULTIPLIER if start <=0 else -1*start) - SHIFTING
         range_end = (-1*start if start<=0 else KD_RANGE_MULTIPLIER*start) + SHIFTING
         while (range_end - range_start)/KD_STEP >500:
-            if KD_STEP < 0.1:
-                KD_STEP*=10
+            #if KD_STEP < 0.1:
+            KD_STEP*=2
             KD_RANGE_MULTIPLIER-=1

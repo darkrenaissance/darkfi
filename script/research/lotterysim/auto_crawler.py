@@ -2,9 +2,9 @@ from lottery import *
 from threading import Thread
 from argparse import ArgumentParser
 
-AVG_LEN = 5
+avg_len = 5
 
-KP_STEP=0.01
+kp_STEP=0.01
 KP_SEARCH= -0.04019999999996926
 
 KI_STEP=0.01
@@ -47,7 +47,6 @@ def experiment(accs=[], controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd
         darkie = Darkie(distribution[idx])
         dt.add_darkie(darkie)
     acc = dt.background(rand_running_time, hp)
-    accs+=[acc]
     return acc
 
 def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
