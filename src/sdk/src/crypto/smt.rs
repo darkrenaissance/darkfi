@@ -365,6 +365,7 @@ fn is_root(index: u64) -> bool {
 mod tests {
     use super::*;
     use halo2_proofs::arithmetic::Field;
+    use pasta_curves::Fp;
     use rand::rngs::OsRng;
 
     /// Helper to change leaves array to BTreeMap and then create SMT.
@@ -383,13 +384,16 @@ mod tests {
         let leaves = [Fp::random(&mut OsRng), Fp::random(&mut OsRng), Fp::random(&mut OsRng)];
         const HEIGHT: usize = 3;
 
-        let smt =
-            create_merkle_tree::<Poseidon<Fp, 2>, HEIGHT>(poseidon.clone(), &leaves, &default_leaf);
+        let smt = create_merkle_tree::<Fp, Poseidon<Fp, 2>, HEIGHT>(
+            poseidon.clone(),
+            &leaves,
+            &default_leaf,
+        );
 
         let root = smt.root();
 
         let empty_hashes =
-            gen_empty_hashes::<Poseidon<Fp, 2>, HEIGHT>(&poseidon, &default_leaf).unwrap();
+            gen_empty_hashes::<Fp, Poseidon<Fp, 2>, HEIGHT>(&poseidon, &default_leaf).unwrap();
 
         let hash1 = leaves[0];
         let hash2 = leaves[1];
@@ -411,8 +415,11 @@ mod tests {
         let leaves = [Fp::random(&mut OsRng), Fp::random(&mut OsRng), Fp::random(&mut OsRng)];
         const HEIGHT: usize = 3;
 
-        let smt =
-            create_merkle_tree::<Poseidon<Fp, 2>, HEIGHT>(poseidon.clone(), &leaves, &default_leaf);
+        let smt = create_merkle_tree::<Fp, Poseidon<Fp, 2>, HEIGHT>(
+            poseidon.clone(),
+            &leaves,
+            &default_leaf,
+        );
 
         let proof = smt.generate_membership_proof(0);
         let res = proof.check_membership(&smt.root(), &leaves[0], &poseidon).unwrap();
