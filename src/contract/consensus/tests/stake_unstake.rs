@@ -26,6 +26,8 @@
 //!
 //! TODO: Malicious cases
 
+use std::time::{Duration, Instant};
+
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
     crypto::{
@@ -34,7 +36,7 @@ use darkfi_sdk::{
     },
     ContractCall,
 };
-use darkfi_serial::Encodable;
+use darkfi_serial::{serialize, Encodable};
 use log::info;
 use rand::rngs::OsRng;
 
@@ -58,6 +60,17 @@ use harness::{init_logger, ConsensusTestHarness};
 async fn consensus_contract_stake_unstake() -> Result<()> {
     init_logger();
 
+    // Some benchmark averages
+    let mut stake_sizes = vec![];
+    let mut stake_broadcasted_sizes = vec![];
+    let mut stake_creation_times = vec![];
+    let mut stake_verify_times = vec![];
+    let mut unstake_sizes = vec![];
+    let mut unstake_broadcasted_sizes = vec![];
+    let mut unstake_creation_times = vec![];
+    let mut unstake_verify_times = vec![];
+
+    // Some numbers we want to assert
     const ALICE_AIRDROP: u64 = 1000;
 
     // Initialize harness
@@ -101,6 +114,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] ============================");
     info!(target: "consensus", "[Alice] Building Money::Stake params");
     info!(target: "consensus", "[Alice] ============================");
+    let timer = Instant::now();
     let alice_money_stake_call_debris = MoneyStakeCallBuilder {
         coin: alice_oc.clone(),
         tree: th.alice.merkle_tree.clone(),
@@ -155,21 +169,35 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     let money_sigs = alice_stake_tx.create_sigs(&mut OsRng, &[alice_money_stake_secret_key])?;
     let consensus_sigs = alice_stake_tx.create_sigs(&mut OsRng, &[alice_money_stake_secret_key])?;
     alice_stake_tx.signatures = vec![money_sigs, consensus_sigs];
+    stake_creation_times.push(timer.elapsed());
+
+    // Calculate transaction sizes
+    let encoded: Vec<u8> = serialize(&alice_stake_tx);
+    let size = ::std::mem::size_of_val(&*encoded);
+    stake_sizes.push(size);
+    let base58 = bs58::encode(&encoded).into_string();
+    let size = ::std::mem::size_of_val(&*base58);
+    stake_broadcasted_sizes.push(size);
 
     info!(target: "consensus", "[Faucet] ========================");
     info!(target: "consensus", "[Faucet] Executing Alice stake tx");
     info!(target: "consensus", "[Faucet] ========================");
+    let timer = Instant::now();
     th.faucet.state.read().await.verify_transactions(&[alice_stake_tx.clone()], true).await?;
     th.faucet
         .consensus_merkle_tree
         .append(&MerkleNode::from(alice_consensus_stake_params.output.coin.inner()));
+    stake_verify_times.push(timer.elapsed());
+
     info!(target: "consensus", "[Alice] ========================");
     info!(target: "consensus", "[Alice] Executing Alice stake tx");
     info!(target: "consensus", "[Alice] ========================");
+    let timer = Instant::now();
     th.alice.state.read().await.verify_transactions(&[alice_stake_tx.clone()], true).await?;
     th.alice
         .consensus_merkle_tree
         .append(&MerkleNode::from(alice_consensus_stake_params.output.coin.inner()));
+    stake_verify_times.push(timer.elapsed());
 
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
     assert!(
@@ -189,10 +217,14 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
         leaf_position,
     };
 
+    // Verify values match
+    assert!(alice_oc.note.value == alice_staked_oc.note.value);
+
     // Now Alice can unstake her owncoin
     info!(target: "consensus", "[Alice] ==================================");
     info!(target: "consensus", "[Alice] Building Consensus::Unstake params");
     info!(target: "consensus", "[Alice] ==================================");
+    let timer = Instant::now();
     let alice_consensus_unstake_call_debris = ConsensusUnstakeCallBuilder {
         coin: alice_staked_oc.clone(),
         tree: th.alice.consensus_merkle_tree.clone(),
@@ -249,23 +281,79 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     let money_sigs =
         alice_unstake_tx.create_sigs(&mut OsRng, &[alice_consensus_unstake_secret_key])?;
     alice_unstake_tx.signatures = vec![consensus_sigs, money_sigs];
+    unstake_creation_times.push(timer.elapsed());
+
+    // Calculate transaction sizes
+    let encoded: Vec<u8> = serialize(&alice_unstake_tx);
+    let size = ::std::mem::size_of_val(&*encoded);
+    unstake_sizes.push(size);
+    let base58 = bs58::encode(&encoded).into_string();
+    let size = ::std::mem::size_of_val(&*base58);
+    unstake_broadcasted_sizes.push(size);
 
     info!(target: "consensus", "[Faucet] ==========================");
     info!(target: "consensus", "[Faucet] Executing Alice unstake tx");
     info!(target: "consensus", "[Faucet] ==========================");
+    let timer = Instant::now();
     th.faucet.state.read().await.verify_transactions(&[alice_unstake_tx.clone()], true).await?;
     th.faucet.merkle_tree.append(&MerkleNode::from(alice_money_unstake_params.output.coin.inner()));
+    unstake_verify_times.push(timer.elapsed());
+
     info!(target: "consensus", "[Alice] ==========================");
     info!(target: "consensus", "[Alice] Executing Alice unstake tx");
     info!(target: "consensus", "[Alice] ==========================");
+    let timer = Instant::now();
     th.alice.state.read().await.verify_transactions(&[alice_unstake_tx.clone()], true).await?;
     th.alice.merkle_tree.append(&MerkleNode::from(alice_money_unstake_params.output.coin.inner()));
+    unstake_verify_times.push(timer.elapsed());
 
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
     assert!(
         th.faucet.consensus_merkle_tree.root(0).unwrap() ==
             th.alice.consensus_merkle_tree.root(0).unwrap()
     );
+
+    // Gather new unstaked owncoin
+    let leaf_position = th.alice.merkle_tree.witness().unwrap();
+    let note: MoneyNote =
+        alice_money_unstake_params.output.note.decrypt(&th.alice.keypair.secret)?;
+    let alice_unstaked_oc = OwnCoin {
+        coin: Coin::from(alice_money_unstake_params.output.coin),
+        note: note.clone(),
+        secret: th.alice.keypair.secret,
+        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
+        leaf_position,
+    };
+
+    // Verify values match
+    assert!(alice_staked_oc.note.value == alice_unstaked_oc.note.value);
+
+    // Statistics
+    let stake_avg = stake_sizes.iter().sum::<usize>();
+    let stake_avg = stake_avg / stake_sizes.len();
+    info!("Average Stake size: {:?} Bytes", stake_avg);
+    let stake_avg = stake_broadcasted_sizes.iter().sum::<usize>();
+    let stake_avg = stake_avg / stake_broadcasted_sizes.len();
+    info!("Average Stake broadcasted size: {:?} Bytes", stake_avg);
+    let stake_avg = stake_creation_times.iter().sum::<Duration>();
+    let stake_avg = stake_avg / stake_creation_times.len() as u32;
+    info!("Average Stake creation time: {:?}", stake_avg);
+    let stake_avg = stake_verify_times.iter().sum::<Duration>();
+    let stake_avg = stake_avg / stake_verify_times.len() as u32;
+    info!("Average Stake verification time: {:?}", stake_avg);
+
+    let unstake_avg = unstake_sizes.iter().sum::<usize>();
+    let unstake_avg = unstake_avg / unstake_sizes.len();
+    info!("Average Unstake size: {:?} Bytes", unstake_avg);
+    let unstake_avg = unstake_broadcasted_sizes.iter().sum::<usize>();
+    let unstake_avg = unstake_avg / unstake_broadcasted_sizes.len();
+    info!("Average Unstake broadcasted size: {:?} Bytes", unstake_avg);
+    let unstake_avg = unstake_creation_times.iter().sum::<Duration>();
+    let unstake_avg = unstake_avg / unstake_creation_times.len() as u32;
+    info!("Average Unstake creation time: {:?}", unstake_avg);
+    let unstake_avg = unstake_verify_times.iter().sum::<Duration>();
+    let unstake_avg = unstake_avg / unstake_verify_times.len() as u32;
+    info!("Average Unstake verification time: {:?}", unstake_avg);
 
     // Thanks for reading
     Ok(())
