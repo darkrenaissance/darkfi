@@ -53,28 +53,31 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use halo2_gadgets::poseidon::{
     primitives as poseidon,
-    primitives::{ConstantLength, P128Pow5T3},
+    primitives::{ConstantLength, P128Pow5T3, Spec},
 };
-use pasta_curves::{arithmetic::FieldExt, Fp};
+use pasta_curves::arithmetic::FieldExt;
 
 use crate::error::{ContractError, GenericResult};
 
-pub trait FieldHasher<const L: usize> {
-    fn hash(&self, inputs: [Fp; L]) -> GenericResult<Fp>;
+pub trait FieldHasher<F: FieldExt, const L: usize> {
+    fn hash(&self, inputs: [F; L]) -> GenericResult<F>;
     fn hasher() -> Self;
 }
 
 #[derive(Debug, Clone)]
-pub struct Poseidon<const L: usize>(PhantomData<Fp>);
+pub struct Poseidon<F: FieldExt, const L: usize>(PhantomData<F>);
 
-impl<const L: usize> Poseidon<L> {
+impl<F: FieldExt, const L: usize> Poseidon<F, L> {
     pub fn new() -> Self {
         Poseidon(PhantomData::default())
     }
 }
 
-impl<const L: usize> FieldHasher<L> for Poseidon<L> {
-    fn hash(&self, inputs: [Fp; L]) -> GenericResult<Fp> {
+impl<F: FieldExt, const L: usize> FieldHasher<F, L> for Poseidon<F, L>
+where
+    P128Pow5T3: Spec<F, 3, 2>,
+{
+    fn hash(&self, inputs: [F; L]) -> GenericResult<F> {
         Ok(poseidon::Hash::<_, P128Pow5T3, ConstantLength<L>, 3, 2>::init().hash(inputs))
     }
 
@@ -89,17 +92,17 @@ impl<const L: usize> FieldHasher<L> for Poseidon<L> {
 /// Each pair is used to identify whether an incremental Merkle root construction
 /// is valid at each intermediate step.
 #[derive(Debug, Copy, Clone)]
-pub struct Path<H: FieldHasher<2>, const N: usize> {
+pub struct Path<F: FieldExt, H: FieldHasher<F, 2>, const N: usize> {
     /// The path represented as a sequence of sibling pairs.
-    pub path: [(Fp, Fp); N],
+    pub path: [(F, F); N],
     /// The phantom hasher type used to reconstruct the Merkle root.
     pub marker: PhantomData<H>,
 }
 
-impl<H: FieldHasher<2>, const N: usize> Path<H, N> {
+impl<F: FieldExt, H: FieldHasher<F, 2>, const N: usize> Path<F, H, N> {
     /// Assumes leaf contains leaf-level data, i.e. hashes of secrets stored on
     /// leaf-level.
-    pub fn calculate_root(&self, leaf: &Fp, hasher: &H) -> GenericResult<Fp> {
+    pub fn calculate_root(&self, leaf: &F, hasher: &H) -> GenericResult<F> {
         if *leaf != self.path[0].0 && *leaf != self.path[0].1 {
             return Err(ContractError::SmtInvalidLeaf)
         }
@@ -118,7 +121,7 @@ impl<H: FieldHasher<2>, const N: usize> Path<H, N> {
 
     /// Takes in an expected `root_hash` and leaf-level data (i.e. hashes of secrets)
     /// for a leaf and checks that the leaf belongs to a tree having the expected hash.
-    pub fn check_membership(&self, root_hash: &Fp, leaf: &Fp, hasher: &H) -> GenericResult<bool> {
+    pub fn check_membership(&self, root_hash: &F, leaf: &F, hasher: &H) -> GenericResult<bool> {
         let root = self.calculate_root(leaf, hasher)?;
         Ok(root == *root_hash)
     }
@@ -126,14 +129,14 @@ impl<H: FieldHasher<2>, const N: usize> Path<H, N> {
     /// Given leaf data, determine what the index of this leaf must be in the
     /// Merkle tree it belongs to. Before doing so, check that the leaf does
     /// indeed belong to a tree with the given `root_hash`.
-    pub fn get_index(&self, root_hash: &Fp, leaf: &Fp, hasher: &H) -> GenericResult<Fp> {
+    pub fn get_index(&self, root_hash: &F, leaf: &F, hasher: &H) -> GenericResult<F> {
         if !self.check_membership(root_hash, leaf, hasher)? {
             return Err(ContractError::SmtInvalidLeaf)
         }
 
         let mut prev = *leaf;
-        let mut index = Fp::zero();
-        let mut twopower = Fp::one();
+        let mut index = F::zero();
+        let mut twopower = F::one();
         // Check levels between leaf level and root
         for &(ref left_hash, ref right_hash) in &self.path {
             // Check if the previous hash is for a left or right ndoe
@@ -153,19 +156,19 @@ impl<H: FieldHasher<2>, const N: usize> Path<H, N> {
 ///
 /// SMT stores a set of leaves represented in a map and a set of empty
 /// hashes that it uses to represent the sparse areas of the tree.
-pub struct SparseMerkleTree<H: FieldHasher<2>, const N: usize> {
+pub struct SparseMerkleTree<F: FieldExt, H: FieldHasher<F, 2>, const N: usize> {
     /// A map from leaf indices to leaf data stored as field elements.
-    pub tree: BTreeMap<u64, Fp>,
+    pub tree: BTreeMap<u64, F>,
     /// An array of default hashes hashed with themselves `N` times.
-    empty_hashes: [Fp; N],
+    empty_hashes: [F; N],
     /// The phantom hasher type used to build the Merkle tree.
     marker: PhantomData<H>,
 }
 
-impl<H: FieldHasher<2>, const N: usize> SparseMerkleTree<H, N> {
+impl<F: FieldExt, H: FieldHasher<F, 2>, const N: usize> SparseMerkleTree<F, H, N> {
     /// Creates a new SMT from a map of indices to field elements.
     pub fn new(
-        leaves: &BTreeMap<u32, Fp>,
+        leaves: &BTreeMap<u32, F>,
         hasher: &H,
         empty_leaf: &[u8; 64],
     ) -> GenericResult<Self> {
@@ -179,7 +182,7 @@ impl<H: FieldHasher<2>, const N: usize> SparseMerkleTree<H, N> {
         let tree = BTreeMap::new();
         let empty_hashes = gen_empty_hashes(hasher, empty_leaf)?;
 
-        let mut smt = SparseMerkleTree::<H, N> { tree, empty_hashes, marker: PhantomData };
+        let mut smt = SparseMerkleTree::<F, H, N> { tree, empty_hashes, marker: PhantomData };
 
         smt.insert_batch(leaves, hasher)?;
 
@@ -187,8 +190,8 @@ impl<H: FieldHasher<2>, const N: usize> SparseMerkleTree<H, N> {
     }
 
     /// Creates a new SMT from an array of field elements.
-    pub fn new_sequential(leaves: &[Fp], hasher: &H, empty_leaf: &[u8; 64]) -> GenericResult<Self> {
-        let pairs: BTreeMap<u32, Fp> =
+    pub fn new_sequential(leaves: &[F], hasher: &H, empty_leaf: &[u8; 64]) -> GenericResult<Self> {
+        let pairs: BTreeMap<u32, F> =
             leaves.iter().enumerate().map(|(i, l)| (i as u32, *l)).collect();
 
         let smt = Self::new(&pairs, hasher, empty_leaf)?;
@@ -198,7 +201,7 @@ impl<H: FieldHasher<2>, const N: usize> SparseMerkleTree<H, N> {
 
     /// Takes a batch of field elements, inserts these hashes into the tree,
     /// and updates the Merkle root.
-    pub fn insert_batch(&mut self, leaves: &BTreeMap<u32, Fp>, hasher: &H) -> GenericResult<()> {
+    pub fn insert_batch(&mut self, leaves: &BTreeMap<u32, F>, hasher: &H) -> GenericResult<()> {
         let last_level_index: u64 = (1u64 << N) - 1;
 
         let mut level_idxs: BTreeSet<u64> = BTreeSet::new();
@@ -233,14 +236,14 @@ impl<H: FieldHasher<2>, const N: usize> SparseMerkleTree<H, N> {
     }
 
     /// Returns the Merkle tree root.
-    pub fn root(&self) -> Fp {
+    pub fn root(&self) -> F {
         self.tree.get(&0).cloned().unwrap_or(*self.empty_hashes.last().unwrap())
     }
 
     /// Give the path leading from the leaf at `index` up to the root. This is
     /// a "proof" in the sense of "valid path in a Merkle tree", not a ZK argument.
-    pub fn generate_membership_proof(&self, index: u64) -> Path<H, N> {
-        let mut path = [(Fp::zero(), Fp::zero()); N];
+    pub fn generate_membership_proof(&self, index: u64) -> Path<F, H, N> {
+        let mut path = [(F::zero(), F::zero()); N];
 
         let tree_index = convert_index_to_last_level(index, N);
 
@@ -275,13 +278,13 @@ impl<H: FieldHasher<2>, const N: usize> SparseMerkleTree<H, N> {
 /// `default_leaf` hashed with itself and repeated `N` times with the
 /// intermediate results. These are used to initialize the sparse portion
 /// of the SMT.
-pub fn gen_empty_hashes<H: FieldHasher<2>, const N: usize>(
+pub fn gen_empty_hashes<F: FieldExt, H: FieldHasher<F, 2>, const N: usize>(
     hasher: &H,
     default_leaf: &[u8; 64],
-) -> GenericResult<[Fp; N]> {
-    let mut empty_hashes = [Fp::zero(); N];
+) -> GenericResult<[F; N]> {
+    let mut empty_hashes = [F::zero(); N];
 
-    let mut empty_hash = Fp::from_bytes_wide(default_leaf);
+    let mut empty_hash = F::from_bytes_wide(default_leaf);
     for item in empty_hashes.iter_mut().take(N) {
         *item = empty_hash;
         empty_hash = hasher.hash([empty_hash, empty_hash])?;
@@ -365,28 +368,28 @@ mod tests {
     use rand::rngs::OsRng;
 
     /// Helper to change leaves array to BTreeMap and then create SMT.
-    fn create_merkle_tree<H: FieldHasher<2>, const N: usize>(
+    fn create_merkle_tree<F: FieldExt, H: FieldHasher<F, 2>, const N: usize>(
         hasher: H,
-        leaves: &[Fp],
+        leaves: &[F],
         default_leaf: &[u8; 64],
-    ) -> SparseMerkleTree<H, N> {
-        SparseMerkleTree::<H, N>::new_sequential(leaves, &hasher, default_leaf).unwrap()
+    ) -> SparseMerkleTree<F, H, N> {
+        SparseMerkleTree::<F, H, N>::new_sequential(leaves, &hasher, default_leaf).unwrap()
     }
 
     #[test]
     fn poseidon_smt() {
-        let poseidon = Poseidon::<2>::new();
+        let poseidon = Poseidon::<Fp, 2>::new();
         let default_leaf = [0u8; 64];
         let leaves = [Fp::random(&mut OsRng), Fp::random(&mut OsRng), Fp::random(&mut OsRng)];
         const HEIGHT: usize = 3;
 
         let smt =
-            create_merkle_tree::<Poseidon<2>, HEIGHT>(poseidon.clone(), &leaves, &default_leaf);
+            create_merkle_tree::<Poseidon<Fp, 2>, HEIGHT>(poseidon.clone(), &leaves, &default_leaf);
 
         let root = smt.root();
 
         let empty_hashes =
-            gen_empty_hashes::<Poseidon<2>, HEIGHT>(&poseidon, &default_leaf).unwrap();
+            gen_empty_hashes::<Poseidon<Fp, 2>, HEIGHT>(&poseidon, &default_leaf).unwrap();
 
         let hash1 = leaves[0];
         let hash2 = leaves[1];
@@ -403,13 +406,13 @@ mod tests {
 
     #[test]
     fn poseidon_smt_incl_proof() {
-        let poseidon = Poseidon::<2>::new();
+        let poseidon = Poseidon::<Fp, 2>::new();
         let default_leaf = [0u8; 64];
         let leaves = [Fp::random(&mut OsRng), Fp::random(&mut OsRng), Fp::random(&mut OsRng)];
         const HEIGHT: usize = 3;
 
         let smt =
-            create_merkle_tree::<Poseidon<2>, HEIGHT>(poseidon.clone(), &leaves, &default_leaf);
+            create_merkle_tree::<Poseidon<Fp, 2>, HEIGHT>(poseidon.clone(), &leaves, &default_leaf);
 
         let proof = smt.generate_membership_proof(0);
         let res = proof.check_membership(&smt.root(), &leaves[0], &poseidon).unwrap();
