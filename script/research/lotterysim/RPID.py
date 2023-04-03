@@ -1,10 +1,10 @@
 from utils import *
 
 REWARD_MIN = 0
-REWARD_MAX = 10000
+REWARD_MAX = 1000
 
 class RPID:
-    def __init__(self, kp=0, ki=0, kd=0, dt=1, target_apy=10, Kc=0, Ti=0, Td=0, Ts=0, debug=False):
+    def __init__(self, kp=0, ki=0, kd=0, dt=1, target=80, Kc=0, Ti=0, Td=0, Ts=0, debug=False):
         self.Kp = kp # discrete pid kp
         self.Ki = ki # discrete pid ki
         self.Kd = kd # discrete pid kd
@@ -13,7 +13,7 @@ class RPID:
         self.Td = Td # takahashi td
         self.Ts = Ts # takahashi ts
         self.Kc = Kc # takahashi kc
-        self.target = target_apy # pid set point, target APY
+        self.target = target # pid set point, target
         self.prev_feedback = 0
         self.feedback_hist = [0, 0]
         self.f_hist = [0]

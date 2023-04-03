@@ -16,26 +16,39 @@ class Darkie(Thread):
         self.epoch_len=epoch_len # epoch length during which the stake is static
         self.strategy = strategy if strategy is not None else Strategy(self.epoch_len)
         self.apy_window = apy_window
-        self.staked_tokens_ratio = 1 # ratio of staked tokens, if commit is true then it's 100%
         self.slot = 0
 
     def clone(self):
         return Darkie(self.finalized_stake)
 
     def apy(self):
+        '''
         window = 0
         if self.apy_window == 0:
             window=len(self.initial_stake)
         # approximation to APY assuming linear relation
         # note! relation is logarithmic depending on PID output.
+        initial_stake_idx = 0
         if window<len(self.initial_stake):
-            windowed_initial_stake = self.initial_stake[-window]
-            apy =  Num(self.stake - windowed_initial_stake) / Num(windowed_initial_stake) if self.stake>0 else Num(0)
-            #print('slot: {}, windowed apy: {}, gain: {}'.format(self.slot, apy, self.stake-windowed_initial_stake))
-            return apy
-        apy = Num(self.stake - self.initial_stake[0]) / Num(self.initial_stake[0]) if self.stake>0 else Num(0)
-        print('slot: {}, apy: {}, gain: {}'.format(self.slot, apy, self.stake-self.initial_stake[0]))
-        return apy
+            initial_stake_idx = -window
+        '''
+
+        staked_tokens = self.staked_tokens()
+        apy = (Num(self.stake) - staked_tokens) / staked_tokens if self.stake>0 else 0
+        #print('stake: {}, staked_tokens: {}'.format(self.stake, staked_tokens))
+        return Num(apy)
+
+    def staked_tokens(self):
+        '''
+        the ratio of the staked tokens during the epochs
+        of the total running time
+        '''
+        return Num(self.initial_stake[0])*self.staked_tokens_ratio()
+
+    def staked_tokens_ratio(self):
+        staked_ratio = Num(sum(self.strategy.staked_tokens_ratio)/len(self.strategy.staked_tokens_ratio))
+        assert(staked_ratio <= 100 and staked_ratio >=0)
+        return staked_ratio
 
     def apy_percentage(self):
         return self.apy()*100

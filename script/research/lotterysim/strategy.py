@@ -4,13 +4,15 @@ import math
 class Strategy(object):
     def __init__(self, epoch_len=0):
         self.epoch_len = epoch_len
-        self.staked_tokens_ratio = Num(1)
+        self.staked_tokens_ratio = [Num(1)]
+        self.target_apy = TARGET_APY
 
     def set_ratio(self, slot=0, apy=0):
         pass
 
     def staked_value(self, stake):
-        return self.staked_tokens_ratio*Num(stake)
+        assert(self.staked_tokens_ratio[-1]>=0 and self.staked_tokens_ratio[-1]<=1)
+        return self.staked_tokens_ratio[-1]*Num(stake)
 
 class RandomStrategy(Strategy):
     def __init__(self, epoch_len):
@@ -19,8 +21,7 @@ class RandomStrategy(Strategy):
 
     def set_ratio(self, slot, apy=0):
         if slot%self.epoch_len==0 and slot>EPOCH_LENGTH:
-            self.staked_tokens_ratio = random.random()
-            #print('staked ratio: {}'.format(self.staked_tokens_ratio))
+            self.staked_tokens_ratio += [random.random()]
 
 class LinearStrategy(Strategy):
     '''
@@ -29,12 +30,10 @@ class LinearStrategy(Strategy):
     '''
     def __init__(self, epoch_len=0):
         Strategy.__init__(self, epoch_len)
-        self.TARGET_APY = 15
 
     def set_ratio(self, slot, apy):
         if slot%self.epoch_len==0 and slot>EPOCH_LENGTH:
-            self.staked_tokens_ratio = apy/Num(self.TARGET_APY)
-            #print('staked ratio: {}'.format(self.staked_tokens_ratio))
+            self.staked_tokens_ratio += [apy/Num(self.target_apy) * Num(0.9) + Num(0.1)]
 
 class LogarithmicStrategy(Strategy):
     '''
@@ -43,13 +42,12 @@ class LogarithmicStrategy(Strategy):
     '''
     def __init__(self, epoch_len=0):
         Strategy.__init__(self, epoch_len)
-        self.TARGET_APY = 15
 
     def set_ratio(self, slot, apy):
         if slot%self.epoch_len==0 and slot>EPOCH_LENGTH:
-            apy_ratio = math.fabs(apy/self.TARGET_APY)
-            self.staked_tokens_ratio = Num((math.log(apy_ratio, 10)+1)/2 if apy_ratio != 0 else 0)
-            #print('staked ratio: {}'.format(self.staked_tokens_ratio))
+            apy_ratio = math.fabs(apy/self.target_apy)
+            self.staked_tokens_ratio += [Num((math.log(apy_ratio, 10)+1)/2 if apy_ratio != 0 else 0)]
+
 
 class SigmoidStrategy(Strategy):
     '''
@@ -58,13 +56,8 @@ class SigmoidStrategy(Strategy):
     '''
     def __init__(self, epoch_len=0):
         Strategy.__init__(self, epoch_len)
-        self.TARGET_APY = 10
 
     def set_ratio(self, slot, apy):
         if slot%self.epoch_len==0 and slot>self.epoch_len:
-            apy_ratio = math.fabs(apy/self.TARGET_APY)
-            #print("apy ratio: {}".format(apy_ratio))
-            self.staked_tokens_ratio = Num(2/(1+math.pow(math.e, -4*apy_ratio))-1)
-            #print('ratio: {}, staked: {}'.format(apy_ratio, self.staked_tokens_ratio))
-            assert(self.staked_tokens_ratio>=0 and self.staked_tokens_ratio<=1)
-            #print('staked ratio: {}'.format(self.staked_tokens_ratio))
+            apy_ratio = math.fabs(apy/self.target_apy)
+            self.staked_tokens_ratio += [Num(2/(1+math.pow(math.e, -4*apy_ratio))-1)]

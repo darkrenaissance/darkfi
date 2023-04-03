@@ -4,23 +4,24 @@ from argparse import ArgumentParser
 
 AVG_LEN = 5
 
-KP_STEP=0.3
-KP_SEARCH=4.935 #-0.91
+KP_STEP=1
+KP_SEARCH=0.01
 
-KI_STEP=0.3
-KI_SEARCH=0.429 #157.5
+KI_STEP=1
+KI_SEARCH=-154.52
 
-KD_STEP=0.3
-KD_SEARCH=-0.05 #5.6
-
-EPSILON=0.0001
+KD_STEP=1
+KD_SEARCH=-0.5
 
 RUNNING_TIME=1000
 NODES = 100
 
+SHIFTING = 0.05
+
+
 highest_apy = 0
 highest_acc = 0
-
+highest_staked = 0
 KP='kp'
 KI='ki'
 KD='kd'
@@ -33,8 +34,8 @@ highest_gain = (KP_SEARCH, KI_SEARCH, KD_SEARCH)
 
 parser = ArgumentParser()
 parser.add_argument('-p', '--high-precision', action='store_true')
-parser.add_argument('-r', '--randomize-nodes', action='store_false')
-parser.add_argument('-t', '--rand-running-time', action='store_false')
+parser.add_argument('-r', '--randomize-nodes', action='store_true')
+parser.add_argument('-t', '--rand-running-time', action='store_true')
 parser.add_argument('-d', '--debug', action='store_false')
 args = parser.parse_args()
 high_precision = args.high_precision
@@ -54,6 +55,7 @@ def experiment(apys=[], controller_type=CONTROLLER_TYPE_DISCRETE, rkp=0, rki=0, 
 def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
     global highest_apy
     global highest_acc
+    global highest_staked
     global highest_gain
     new_record=False
     exp_threads = []
@@ -75,16 +77,17 @@ def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
     if avg_apy > 0:
         gain = (kp, ki, kd)
         acc_gain = (avg_apy, gain)
-        if avg_apy > highest_apy and avg_acc > highest_acc:
+        if avg_staked > highest_staked:
+        #if avg_apy > highest_apy and avg_acc > highest_acc and avg_staked > highest_staked:
             new_record = True
             highest_apy = avg_apy
             highest_acc = avg_acc
+            highest_staked = avg_staked
             highest_gain = (kp, ki, kd)
             with open("highest_gain.txt", 'w') as f:
                 f.write(buff)
     return buff, new_record
 
-SHIFTING = 0.05
 
 def crawler(crawl, range_multiplier, step=0.1):
     start = None
@@ -103,7 +106,14 @@ def crawler(crawl, range_multiplier, step=0.1):
         range_end += SHIFTING
         step /= 10
 
-    crawl_range = np.arange(range_start, range_end, step)
+
+    while True:
+        try:
+            crawl_range = np.arange(range_start, range_end, step)
+            break
+        except Exception as e:
+            print('start: {}, end: {}, step: {}, exp: {}'.format(range_start, rang_end, step, e))
+            step*=10
     np.random.shuffle(crawl_range)
     crawl_range = tqdm(crawl_range)
     distribution = [random.gauss(ERC20DRK/NODES, ERC20DRK/NODES*0.1) for i in range(NODES)]

@@ -116,3 +116,6 @@ class PID:
 
     def acc(self):
         return sum(np.array(self.feedback_hist)==1)/float(len(self.feedback_hist))
+
+    def acc_percentage(self):
+        return 100*self.acc()

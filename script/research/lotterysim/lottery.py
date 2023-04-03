@@ -7,7 +7,7 @@ from pid import PID
 from RPID import RPID
 
 class DarkfiTable:
-    def __init__(self, airdrop, running_time, controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, dt=1, target=1, reward_target=10, kc=0, ti=0, td=0, ts=0, debug=False, r_kp=0, r_ki=0, r_kd=0):
+    def __init__(self, airdrop, running_time, controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, dt=1, target=1, reward_target=80, kc=0, ti=0, td=0, ts=0, debug=False, r_kp=0, r_ki=0, r_kd=0):
         self.Sigma=airdrop
         self.darkies = []
         self.running_time=running_time
@@ -15,7 +15,7 @@ class DarkfiTable:
         self.end_time=None
         self.pid = None
         self.pid = PID(kp=kp, ki=ki, kd=kd, dt=dt, target=target, Kc=kc, Ti=ti, Td=td, Ts=ts)
-        self.rpid = RPID(kp=r_kp, ki=r_ki, kd=r_kd, target_apy=reward_target)
+        self.rpid = RPID(kp=r_kp, ki=r_ki, kd=r_kd, target=reward_target)
         self.controller_type=controller_type
         self.debug=debug
 
@@ -91,9 +91,10 @@ class DarkfiTable:
                 self.darkies[i].update_stake(rewards[-1])
                 ###
 
-            if count%EPOCH_LENGTH == 0 :
-                acc = self.pid.acc()
-                reward = self.rpid.pid_clipped(float(self.avg_apy()), self.controller_type, debug)
+            if count%EPOCH_LENGTH == 0:
+                acc = self.pid.acc_percentage()
+                reward = self.rpid.pid_clipped(float(self.avg_stake_ratio()), self.controller_type, debug)
+                #print('reward: {}'.format(reward))
                 rewards += [reward]
 
             feedback = winners
@@ -105,11 +106,16 @@ class DarkfiTable:
             count+=1
         self.end_time=time.time()
         avg_reward = sum(rewards)/len(rewards)
-        avg_stake_ratio = sum([darkie.strategy.staked_tokens_ratio for darkie in self.darkies])/len(self.darkies)
-        return self.pid.acc(), self.avg_apy()*Num(ONE_YEAR/self.running_time), avg_reward, avg_stake_ratio
+        stake_ratio = self.avg_stake_ratio()
+        avg_apy = self.avg_apy()
+        #print('apy: {}, staked_ratio: {}'.format(avg_apy, stake_ratio))
+        return self.pid.acc(), avg_apy, avg_reward, stake_ratio
 
     def avg_apy(self):
         return sum([darkie.apy_percentage() for darkie in self.darkies])/len(self.darkies)
+
+    def avg_stake_ratio(self):
+        return sum([darkie.staked_tokens_ratio() for darkie in self.darkies])/len(self.darkies)*100
 
     def write(self):
         elapsed=self.end_time-self.start_time
