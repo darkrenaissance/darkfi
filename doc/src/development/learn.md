@@ -58,11 +58,11 @@ bonds and relations between people in the community.
 Everybody in the organization must study philosophy and programming
 as essential skills. To start there are two objects of study:
 
-1. ["Manifesto for a Democratic Civilization"](http://139.162.132.101/books/philosophy/1.civilization.pdf)
+1. ["Manifesto for a Democratic Civilization"](https://agorism.dev/book/philosophy/1.civilization.pdf)
    by Ocalan, is 3 separate books. You should complete at least 1 book
    for the initial stage, and then study the other two as you continue
    further into later stages.
-2. ["Project Based Python Programming"](http://139.162.132.101/books/python/Eric%20Matthes%20-%20Python%20Crash%20Course%20A%20Hands-On%2C%20Project-Based%20Introduction%20to%20Programming%20%282016%2C%20No%20Starch%20Press%29.pdf)
+2. ["Project Based Python Programming"](https://agorism.dev/book/python/Eric%20Matthes%20-%20Python%20Crash%20Course%20A%20Hands-On%2C%20Project-Based%20Introduction%20to%20Programming%20%282016%2C%20No%20Starch%20Press%29.pdf)
    this will teach you Python programming which will be an essential
    skill for any branch you decide to continue onto.
 
@@ -94,12 +94,12 @@ To become proficient in this area requires study of economics,
 mathematics, and finance. It also makes heavy use of Python programming
 to build simulations and economic models.
 
-1. ["New Paradigm for Macroeconomics"](http://139.162.132.101/books/economy/werner-macroeconomics.pdf) by Werner. This book will take several months to study but is a strong basis for understanding economics.
+1. ["New Paradigm for Macroeconomics"](https://agorism.dev/book/economy/Richard%20A.%20Werner%20%28auth.%29%20-%20New%20Paradigm%20in%20Macroeconomics_%20Solving%20the%20Riddle%20of%20Japanese%20Macroeconomic%20Performance-Palgrave%20Macmillan%20UK%20%282005%29.pdf) by Werner. This book will take several months to study but is a strong basis for understanding economics.
     1. Notes from the [introduction](https://wiki.polytech.barcelona/index.php?title=Notes/New_Paradigm_in_Macroeconomics/Introduction) to Werner's book.
     2. [Notes](https://wiki.polytech.barcelona/index.php?title=Notes/Werner) on 'Shifting from Central Planning to a Decentralized Economy
-2. ["Understanding Pure Mathematics"](http://139.162.132.101/books/maths/A.%20J.%20Sadler%2C%20D.W.S.Thorning%20-%20Understanding%20Pure%20Mathematics%20%281987%2C%20Oxford%20Up%20Education%29.pdf). We have a full high school mathematics course. This can also be skipped if you already know maths well.
+2. ["Understanding Pure Mathematics"](https://agorism.dev/book/math/intro/A.%20J.%20Sadler%2C%20D.W.S.Thorning%20-%20Understanding%20Pure%20Mathematics%20%281987%2C%20Oxford%20Up%20Education%29.pdf). We have a full high school mathematics course. This can also be skipped if you already know maths well.
     1. Continuing on with mathematics, you can learn more about stochastics, statistics, probability and analysis.
-3. [The DeFi and Token Engineering book](http://139.162.132.101/books/economy/Economics%20and%20Math%20of%20Token%20Engineering%20and%20DeFiV1.1.pdf).
+3. [The DeFi and Token Engineering book](https://agorism.dev/book/economy/Economics%20and%20Math%20of%20Token%20Engineering%20and%20DeFiV1.1.pdf).
 
 #### Software Developer
 
@@ -132,7 +132,7 @@ sense reality hackers. They hack reality to create systems that obey
 objective properties due to the underlying mathematics. Needless to
 say, the advanced cryptographer is a good mathematician.
 
-For cryptography, you will study ["Abstract Algebra"](http://139.162.132.101/books/maths/algebra/%28Dover%20Books%20on%20Mathematics%29%20Charles%20C%20Pinter%20-%20A%20Book%20of%20Abstract%20Algebra-Dover%20Publications%20%282010%29.pdf) by Pinter, and starting with simple cryptographic schemes
+For cryptography, you will study ["Abstract Algebra"](https://agorism.dev/book/math/algebra/%28Dover%20Books%20on%20Mathematics%29%20Charles%20C%20Pinter%20-%20A%20Book%20of%20Abstract%20Algebra-Dover%20Publications%20%282010%29.pdf) by Pinter, and starting with simple cryptographic schemes
 gradually move towards learning more complex ones. You will prototype
 these schemes using a computer algebra system called
 [SAGE](https://doc.sagemath.org/pdf/en/a_tour_of_sage/a_tour_of_sage.pdf).
