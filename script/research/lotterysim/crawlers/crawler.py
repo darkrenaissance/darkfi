@@ -1,5 +1,4 @@
 from lottery import *
-from threading import Thread
 
 AVG_LEN = 3
 
@@ -63,15 +62,11 @@ def experiment(accs=[], controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd
 
 def multi_trial_exp(gains, kp, ki, kd, distribution = [], hp=False):
     global highest_acc
-    exp_threads = []
     accs = []
     for i in range(0, AVG_LEN):
         acc = experiment(accs, CONTROLLER_TYPE_DISCRETE, kp=kp, ki=ki, kd=kd, distribution=distribution, hp=hp)
         accs += [acc]
-        #exp_thread = Thread(target=experiment, args=[accs, CONTROLLER_TYPE_DISCRETE, kp, ki, kd])
-        #exp_thread.start()
-    #for thread in exp_threads:
-        #thread.join()
+
     avg_acc = sum(accs)/float(AVG_LEN)
     buff = 'accuracy:{}, kp: {}, ki:{}, kd:{}'.format(avg_acc, kp, ki, kd)
     print(buff)
@@ -100,7 +95,6 @@ def single_trial_exp(gains, kp, ki, kd, distribution=[], hp=False):
 
 gains = []
 if __name__ == "__main__":
-    gains_threads = []
     crawl_range = None
     start = None
     if crawl==KP:

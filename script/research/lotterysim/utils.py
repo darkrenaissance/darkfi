@@ -23,8 +23,14 @@ def approx_target_in_zk(sigmas, stake):
     # this dictates that tuning need to be hardcoded,
     # secondly the reward, or at least the total stake in the network,
     # can't be anonymous, should be public.
-    T = [sigma*(stake)**(i+1) for i, sigma in enumerate(sigmas)]
-    return -1*sum(T) #+ F_MIN_HP*L_HP
+    T = 0
+    for i, sigma in  enumerate(sigmas):
+        try:
+            T += Num(sigma)*Num(stake)**(i+1)
+        except Exception as e:
+            T +=0
+
+    return-1*T
 
 def rnd(hp=False):
     return Num(random.random()) if hp else random.random()

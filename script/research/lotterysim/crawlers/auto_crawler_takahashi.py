@@ -1,6 +1,6 @@
 from lottery import *
-from threading import Thread
 from argparse import ArgumentParser
+
 AVG_LEN = 5
 
 KC_STEP=0.1
@@ -59,7 +59,6 @@ def multi_trial_exp(kc, td, ti, ts, distribution = [], hp=False):
     global highest_acc
     global highest_gain
     new_record = False
-    exp_threads = []
     accs = []
     for i in range(0, AVG_LEN):
         acc = experiment(accs, CONTROLLER_TYPE_DISCRETE, kc=kc, ti=ti, td=td, ts=ts, distribution=distribution, hp=hp)

@@ -3,20 +3,17 @@ from tqdm import tqdm
 from darkie import *
 import time
 from datetime import timedelta
-from pid import PID
-from RPID import RPID
+from pid.cascade import *
 
 class DarkfiTable:
-    def __init__(self, airdrop, running_time, controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, dt=1, target=1, reward_target=80, kc=0, ti=0, td=0, ts=0, debug=False, r_kp=0, r_ki=0, r_kd=0):
+    def __init__(self, airdrop, running_time, controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, dt=1, kc=0, ti=0, td=0, ts=0, debug=False, r_kp=0, r_ki=0, r_kd=0):
         self.Sigma=airdrop
         self.darkies = []
         self.running_time=running_time
         self.start_time=None
         self.end_time=None
-        self.pid = None
-        self.pid = PID(kp=kp, ki=ki, kd=kd, dt=dt, target=target, Kc=kc, Ti=ti, Td=td, Ts=ts)
-        self.rpid = RPID(kp=r_kp, ki=r_ki, kd=r_kd, target=reward_target)
-        self.controller_type=controller_type
+        self.secondary_pid = SecondaryDiscretePID(kp=kp, ki=ki, kd=kd) if controller_type==CONTROLLER_TYPE_DISCRETE else SecondaryTakahashiPID(kc=kc, ti=ti, td=td, ts=ts)
+        self.primary_pid = PrimaryDiscretePID(kp=r_kp, ki=r_ki, kd=r_kd) if controller_type==CONTROLLER_TYPE_DISCRETE else PrimaryTakahashiPID(kc=kc, ti=ti, td=td, ts=ts)
         self.debug=debug
         self.rewards = [0]
 
@@ -37,7 +34,7 @@ class DarkfiTable:
         while count < self.running_time:
             winners=0
             total_vesting_stake = 0
-            f = self.pid.pid_clipped(float(feedback), self.controller_type, debug)
+            f = self.secondary_pid.pid_clipped(float(feedback),  debug)
             #note! thread overhead is 10X slower than sequential node execution!
             for i in range(len(self.darkies)):
                 self.darkies[i].set_sigma_feedback(self.Sigma, feedback, f, count, hp)
@@ -49,8 +46,8 @@ class DarkfiTable:
                 self.darkies[i].update_stake(self.rewards[-1])
 
             if count%EPOCH_LENGTH == 0:
-                acc = self.pid.acc()
-                reward = self.rpid.pid_clipped(float(self.avg_apy()), self.controller_type, debug)
+                acc = self.secondary_pid.acc()
+                reward = self.primary_pid.pid_clipped(float(self.avg_apy()), debug)
                 self.rewards += [reward]
             feedback = winners
             if winners==1:
@@ -60,7 +57,7 @@ class DarkfiTable:
                     self.darkies[i].finalize_stake()
             count+=1
         self.end_time=time.time()
-        return self.pid.acc()
+        return self.secondary_pid.acc()
 
     def background_with_apy(self, rand_running_time=True, debug=False, hp=True):
         self.debug=debug
@@ -77,7 +74,7 @@ class DarkfiTable:
         while count < self.running_time:
             winners=0
             total_vesting_stake = 0
-            f = self.pid.pid_clipped(float(feedback), self.controller_type, debug)
+            f = self.secondary_pid.pid_clipped(float(feedback), debug)
 
             #note! thread overhead is 10X slower than sequential node execution!
             for i in range(len(self.darkies)):
@@ -92,8 +89,8 @@ class DarkfiTable:
                 ###
 
             if count%EPOCH_LENGTH == 0 and count > EPOCH_LENGTH:
-                acc = self.pid.acc_percentage()
-                reward = self.rpid.pid_clipped(float(self.avg_stake_ratio()), self.controller_type, debug)
+                acc = self.secondary_pid.acc_percentage()
+                reward = self.primary_pid.pid_clipped(float(self.avg_stake_ratio()), debug)
                 self.rewards += [reward]
 
             feedback = winners
@@ -108,7 +105,7 @@ class DarkfiTable:
         stake_ratio = self.avg_stake_ratio()
         avg_apy = self.avg_apy()
         #print('apy: {}, staked_ratio: {}'.format(avg_apy, stake_ratio))
-        return self.pid.acc(), avg_apy, avg_reward, stake_ratio
+        return self.secondary_pid.acc(), avg_apy, avg_reward, stake_ratio
 
     def avg_apy(self):
         return sum([darkie.apy_percentage(self.rewards) for darkie in self.darkies])/len(self.darkies)
@@ -120,4 +117,4 @@ class DarkfiTable:
         elapsed=self.end_time-self.start_time
         if self.debug:
             print("total time: {}, slot time: {}".format(str(timedelta(seconds=elapsed)), str(timedelta(seconds=elapsed/self.running_time))))
-        self.pid.write()
+        self.secondary_pid.write()

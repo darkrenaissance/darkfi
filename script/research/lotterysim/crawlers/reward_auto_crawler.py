@@ -1,5 +1,4 @@
 from lottery import *
-from threading import Thread
 from argparse import ArgumentParser
 
 AVG_LEN = 5
@@ -57,7 +56,6 @@ def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
     global highest_staked
     global highest_gain
     new_record=False
-    exp_threads = []
     accs = []
     apys = []
     rewards = []
