@@ -18,6 +18,7 @@ class DarkfiTable:
         self.rpid = RPID(kp=r_kp, ki=r_ki, kd=r_kd, target=reward_target)
         self.controller_type=controller_type
         self.debug=debug
+        self.rewards = [0]
 
     def add_darkie(self, darkie):
         self.darkies+=[darkie]
@@ -33,7 +34,6 @@ class DarkfiTable:
         #if rand_running_time and debug:
             #print("random running time: {}".format(self.running_time))
             #print('running time: {}'.format(self.running_time))
-        rewards = [0]
         while count < self.running_time:
             winners=0
             total_vesting_stake = 0
@@ -41,17 +41,17 @@ class DarkfiTable:
             #note! thread overhead is 10X slower than sequential node execution!
             for i in range(len(self.darkies)):
                 self.darkies[i].set_sigma_feedback(self.Sigma, feedback, f, count, hp)
-                self.darkies[i].run(hp)
+                self.darkies[i].run(self.rewards, hp)
                 total_vesting_stake+=self.darkies[i].update_vesting()
             for i in range(len(self.darkies)):
                 winners += self.darkies[i].won
-                print('reward: {}'.format(rewards[-1]))
-                self.darkies[i].update_stake(rewards[-1])
+                print('reward: {}'.format(self.rewards[-1]))
+                self.darkies[i].update_stake(self.rewards[-1])
 
             if count%EPOCH_LENGTH == 0:
                 acc = self.pid.acc()
                 reward = self.rpid.pid_clipped(float(self.avg_apy()), self.controller_type, debug)
-                rewards += [reward]
+                self.rewards += [reward]
             feedback = winners
             if winners==1:
                 if count >= ERC20DRK:
@@ -73,7 +73,7 @@ class DarkfiTable:
         #if rand_running_time and debug:
             #print("random running time: {}".format(self.running_time))
             #print('running time: {}'.format(self.running_time))
-        rewards = [0]
+
         while count < self.running_time:
             winners=0
             total_vesting_stake = 0
@@ -82,20 +82,19 @@ class DarkfiTable:
             #note! thread overhead is 10X slower than sequential node execution!
             for i in range(len(self.darkies)):
                 self.darkies[i].set_sigma_feedback(self.Sigma, feedback, f, count, hp)
-                self.darkies[i].run(hp)
+                self.darkies[i].run(self.rewards, hp)
                 total_vesting_stake+=self.darkies[i].update_vesting()
 
             #print('reward: {}'.format(rewards[-1]))
             for i in range(len(self.darkies)):
                 winners += self.darkies[i].won
-                self.darkies[i].update_stake(rewards[-1])
+                self.darkies[i].update_stake(self.rewards[-1])
                 ###
 
-            if count%EPOCH_LENGTH == 0:
+            if count%EPOCH_LENGTH == 0 and count > EPOCH_LENGTH:
                 acc = self.pid.acc_percentage()
                 reward = self.rpid.pid_clipped(float(self.avg_stake_ratio()), self.controller_type, debug)
-                #print('reward: {}'.format(reward))
-                rewards += [reward]
+                self.rewards += [reward]
 
             feedback = winners
             if winners==1:
@@ -105,14 +104,14 @@ class DarkfiTable:
                     self.darkies[i].finalize_stake()
             count+=1
         self.end_time=time.time()
-        avg_reward = sum(rewards)/len(rewards)
+        avg_reward = sum(self.rewards)/len(self.rewards)
         stake_ratio = self.avg_stake_ratio()
         avg_apy = self.avg_apy()
         #print('apy: {}, staked_ratio: {}'.format(avg_apy, stake_ratio))
         return self.pid.acc(), avg_apy, avg_reward, stake_ratio
 
     def avg_apy(self):
-        return sum([darkie.apy_percentage() for darkie in self.darkies])/len(self.darkies)
+        return sum([darkie.apy_percentage(self.rewards) for darkie in self.darkies])/len(self.darkies)
 
     def avg_stake_ratio(self):
         return sum([darkie.staked_tokens_ratio() for darkie in self.darkies])/len(self.darkies)*100

@@ -1,7 +1,7 @@
 from utils import *
 
 REWARD_MIN = 0
-REWARD_MAX = 1000
+REWARD_MAX = 100
 
 class RPID:
     def __init__(self, kp=0, ki=0, kd=0, dt=1, target=80, Kc=0, Ti=0, Td=0, Ts=0, debug=False):

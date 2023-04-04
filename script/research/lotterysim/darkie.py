@@ -21,22 +21,24 @@ class Darkie(Thread):
     def clone(self):
         return Darkie(self.finalized_stake)
 
+    '''
     def apy(self):
-        '''
-        window = 0
-        if self.apy_window == 0:
-            window=len(self.initial_stake)
-        # approximation to APY assuming linear relation
-        # note! relation is logarithmic depending on PID output.
-        initial_stake_idx = 0
-        if window<len(self.initial_stake):
-            initial_stake_idx = -window
-        '''
-
         staked_tokens = self.staked_tokens()
         apy = (Num(self.stake) - staked_tokens) / staked_tokens if self.stake>0 else 0
         #print('stake: {}, staked_tokens: {}'.format(self.stake, staked_tokens))
         return Num(apy)
+    '''
+
+    '''
+    @rewards: array of reward per epoch
+    '''
+    def apy(self, rewards):
+        avg_apy = 0
+        for idx, reward in enumerate(rewards):
+            #print('idx: {} of {}, staked tokens: {}, initial stake: {}'.format(idx, len(rewards), len(self.strategy.staked_tokens_ratio), len(self.initial_stake)))
+            current_epoch_staked_tokens = (Num(self.strategy.staked_tokens_ratio[idx-1]) * Num(self.initial_stake[idx-1]))
+            avg_apy += (Num(reward) / current_epoch_staked_tokens) if current_epoch_staked_tokens!=0 else 0
+        return avg_apy/len(rewards) if len(rewards)>0 else 0
 
     def staked_tokens(self):
         '''
@@ -47,20 +49,23 @@ class Darkie(Thread):
 
     def staked_tokens_ratio(self):
         staked_ratio = Num(sum(self.strategy.staked_tokens_ratio)/len(self.strategy.staked_tokens_ratio))
+        #print('type: {}, ratio: {}'.format(self.strategy.type, staked_ratio))
+        #TODO (fix)
         assert(staked_ratio <= 100 and staked_ratio >=0)
         return staked_ratio
 
-    def apy_percentage(self):
-        return self.apy()*100
+    def apy_percentage(self, rewards):
+        return self.apy(rewards)*100
 
     def set_sigma_feedback(self, sigma, feedback, f, count, hp=True):
         self.Sigma = (Num(sigma) if hp else sigma)
         self.feedback = (Num(feedback) if hp else feedback)
         self.f = (Num(f) if hp else f)
-        self.initial_stake += [self.finalized_stake]
+        #self.initial_stake += [self.finalized_stake]
         self.slot = count
 
-    def run(self, hp=True):
+
+    def run(self, rewards, hp=True):
         k=N_TERM
         def target(tune_parameter, stake):
             x = (Num(1) if hp else 1)  - (Num(tune_parameter) if hp else tune_parameter)
@@ -68,10 +73,13 @@ class Darkie(Thread):
             sigmas = [   c/((self.Sigma+EPSILON)**i) * ( ((L_HP if hp else L)/fact(i)) ) for i in range(1, k+1) ]
             scaled_target = approx_target_in_zk(sigmas, Num(stake)) #+ (BASE_L_HP if hp else BASE_L)
             return scaled_target
+        if self.slot % EPOCH_LENGTH==0  and self.slot > EPOCH_LENGTH:
+            self.initial_stake +=[self.finalized_stake]
 
-        self.strategy.set_ratio(self.slot, self.apy_percentage())
+        self.strategy.set_ratio(self.slot, self.apy_percentage(rewards))
         T = target(self.f, self.strategy.staked_value(self.finalized_stake))
         self.won = lottery(T, hp)
+
 
     def update_vesting(self):
         if self.slot >= len(self.vesting):

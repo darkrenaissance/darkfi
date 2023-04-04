@@ -8,7 +8,7 @@ KP_STEP=1
 KP_SEARCH=0.01
 
 KI_STEP=1
-KI_SEARCH=-154.52
+KI_SEARCH=1#-154.52
 
 KD_STEP=1
 KD_SEARCH=-0.5
@@ -17,7 +17,6 @@ RUNNING_TIME=1000
 NODES = 100
 
 SHIFTING = 0.05
-
 
 highest_apy = 0
 highest_acc = 0
@@ -77,7 +76,7 @@ def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
     if avg_apy > 0:
         gain = (kp, ki, kd)
         acc_gain = (avg_apy, gain)
-        if avg_staked > highest_staked:
+        if avg_acc > highest_acc:
         #if avg_apy > highest_apy and avg_acc > highest_acc and avg_staked > highest_staked:
             new_record = True
             highest_apy = avg_apy
@@ -122,7 +121,7 @@ def crawler(crawl, range_multiplier, step=0.1):
         ki = i if crawl==KI else highest_gain[1]
         kd = i if crawl==KD else highest_gain[2]
         buff, new_record = multi_trial_exp(kp, ki, kd, distribution, hp=high_precision)
-        crawl_range.set_description('highest:{} / {}'.format(highest_apy, buff))
+        crawl_range.set_description('highest:{} / {}'.format(highest_acc, buff))
         if new_record:
             break
 
