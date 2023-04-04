@@ -44,8 +44,7 @@ use darkfi_money_contract::{
     client::{
         stake_v1::MoneyStakeCallBuilder, unstake_v1::MoneyUnstakeCallBuilder, MoneyNote, OwnCoin,
     },
-    MoneyFunction, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
 use darkfi_consensus_contract::{
@@ -81,10 +80,6 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     let (airdrop_tx, airdrop_params) = th.airdrop_native(ALICE_AIRDROP, th.alice.keypair.public)?;
     let (mint_pk, mint_zkbin) = th.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
     let (burn_pk, burn_zkbin) = th.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
-    let (consensus_mint_pk, consensus_mint_zkbin) =
-        th.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
-    let (consensus_burn_pk, consensus_burn_zkbin) =
-        th.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
 
     info!(target: "consensus", "[Faucet] ==========================");
     info!(target: "consensus", "[Faucet] Executing Alice airdrop tx");
@@ -145,8 +140,8 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
         nullifier: alice_money_stake_params.input.nullifier,
         merkle_root: alice_money_stake_params.input.merkle_root,
         signature_public: alice_money_stake_params.input.signature_public,
-        mint_zkbin: consensus_mint_zkbin.clone(),
-        mint_pk: consensus_mint_pk.clone(),
+        mint_zkbin: mint_zkbin.clone(),
+        mint_pk: mint_pk.clone(),
     }
     .build()?;
     let (alice_consensus_stake_params, alice_consensus_stake_proofs) =
@@ -228,8 +223,8 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     let alice_consensus_unstake_call_debris = ConsensusUnstakeCallBuilder {
         coin: alice_staked_oc.clone(),
         tree: th.alice.consensus_merkle_tree.clone(),
-        burn_zkbin: consensus_burn_zkbin.clone(),
-        burn_pk: consensus_burn_pk.clone(),
+        burn_zkbin: burn_zkbin.clone(),
+        burn_pk: burn_pk.clone(),
     }
     .build()?;
     let (

@@ -21,8 +21,7 @@ use darkfi_money_contract::{
     model::{ConsensusStakeParamsV1, ConsensusStakeUpdateV1, MoneyStakeParamsV1},
     CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
     CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
-    CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1, MONEY_CONTRACT_COIN_ROOTS_TREE,
-    MONEY_CONTRACT_NULLIFIERS_TREE,
+    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
@@ -59,7 +58,7 @@ pub(crate) fn consensus_stake_get_metadata_v1(
     let token_coords = output.token_commit.to_affine().coordinates().unwrap();
 
     zk_public_inputs.push((
-        CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
+        MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
         vec![
             output.coin.inner(),
             *value_coords.x(),
@@ -136,7 +135,7 @@ pub(crate) fn consensus_stake_process_instruction_v1(
     let previous_call_idx = call_idx - 1;
     let previous = &calls[previous_call_idx as usize];
     if previous.contract_id.inner() != MONEY_CONTRACT_ID.inner() {
-        msg!("[ConsensusStakeV1] Error: Previous contract call is not consensus contract");
+        msg!("[ConsensusStakeV1] Error: Previous contract call is not money contract");
         return Err(MoneyError::StakePreviousCallNotMoneyContract.into())
     }
 

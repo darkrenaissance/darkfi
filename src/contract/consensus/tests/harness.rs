@@ -43,7 +43,6 @@ use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
     client::transfer_v1::TransferCallBuilder, model::MoneyTransferParamsV1, MoneyFunction,
-    CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
     MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
@@ -146,8 +145,8 @@ impl ConsensusTestHarness {
             &CONSENSUS_CONTRACT_ID,
             SMART_CONTRACT_ZKAS_DB_NAME,
         )?;
-        mkpk!(CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1);
-        mkpk!(CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1);
+        mkpk!(MONEY_CONTRACT_ZKAS_MINT_NS_V1);
+        mkpk!(MONEY_CONTRACT_ZKAS_BURN_NS_V1);
 
         Ok(Self { faucet, alice, proving_keys })
     }

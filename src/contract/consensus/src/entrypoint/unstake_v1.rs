@@ -20,7 +20,7 @@ use darkfi_money_contract::{
     error::MoneyError,
     model::{ConsensusUnstakeParamsV1, ConsensusUnstakeUpdateV1, MoneyUnstakeParamsV1},
     CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
-    CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1,
+    MONEY_CONTRACT_ZKAS_BURN_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
@@ -62,7 +62,7 @@ pub(crate) fn consensus_unstake_get_metadata_v1(
     // `constrain_instance` calls in the zkas code.
     // Otherwise verification will fail.
     zk_public_inputs.push((
-        CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1.to_string(),
+        MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string(),
         vec![
             input.nullifier.inner(),
             *value_coords.x(),

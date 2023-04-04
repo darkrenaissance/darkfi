@@ -21,7 +21,6 @@ use darkfi_money_contract::{
     CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
     CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_DB_VERSION,
     CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
-    CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
     MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
@@ -72,23 +71,8 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
 
     let money_mint_v1_bincode = include_bytes!("../../money/proof/mint_v1.zk.bin");
     let money_burn_v1_bincode = include_bytes!("../../money/proof/burn_v1.zk.bin");
-
-    // TODO: for now we use same proof for mint and burn as Money
-    let consensus_mint_v1_bincode = include_bytes!("../../money/proof/mint_v1.zk.bin");
-    let consensus_burn_v1_bincode = include_bytes!("../../money/proof/burn_v1.zk.bin");
-
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1), &money_mint_v1_bincode[..])?;
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1), &money_burn_v1_bincode[..])?;
-    db_set(
-        zkas_db,
-        &serialize(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1),
-        &consensus_mint_v1_bincode[..],
-    )?;
-    db_set(
-        zkas_db,
-        &serialize(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1),
-        &consensus_burn_v1_bincode[..],
-    )?;
 
     // Set up a database tree to hold Merkle roots of all coins
     // k=MerkleNode, v=[]
