@@ -1,5 +1,5 @@
-from utils import *
 import math
+from core.utils import *
 
 class Strategy(object):
     def __init__(self, epoch_len=0):

@@ -1,4 +1,5 @@
-from utils import *
+from core.utils import *
+import os
 
 '''
 base discrete/takahashi PID controller
@@ -117,8 +118,8 @@ class BasePID:
             f.write(buf)
 
     def write(self, feedback_hist_file='_feedback.hist', output_hist_file='_output.hist'):
-        self.write_feedback(self.type+feedback_hist_file)
-        self.write_fval(self.type+output_hist_file)
+        self.write_feedback('log' + os.sep + self.type+feedback_hist_file)
+        self.write_fval('log'+ os.sep + self.type+output_hist_file)
 
     def acc(self):
         return sum(np.array(self.feedback_hist)==1)/float(len(self.feedback_hist))

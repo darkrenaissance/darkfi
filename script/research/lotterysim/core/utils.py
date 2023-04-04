@@ -1,7 +1,7 @@
 import random
 import math
 import numpy as np
-from constants import *
+from core.constants import *
 
 # naive factorial
 def fact(n, hp=False):

@@ -1,16 +1,15 @@
-from lottery import *
 import os
 import numpy
-from strategy import LinearStrategy
+from core.strategy import *
+from core.lottery import *
 
-os.system("rm f.hist; rm leads.hist")
+os.system("rm log/*_feedback.hist; rm log/*_output.hist")
 
 RUNNING_TIME = int(input("running time:"))
 
 NODES=100
 
 if __name__ == "__main__":
-    darkies = []
     egalitarian = ERC20DRK/NODES
     darkies = []
     for id in range(int(NODES)):

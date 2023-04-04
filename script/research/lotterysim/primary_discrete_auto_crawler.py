@@ -1,5 +1,10 @@
-from lottery import *
 from argparse import ArgumentParser
+from core.lottery import DarkfiTable
+from core.utils import *
+from core.darkie import Darkie
+from tqdm import tqdm
+from core.strategy import SigmoidStrategy
+import os
 
 AVG_LEN = 5
 
@@ -41,7 +46,7 @@ randomize_nodes = args.randomize_nodes
 rand_running_time = args.rand_running_time
 debug = args.debug
 
-def experiment(apys=[], controller_type=CONTROLLER_TYPE_DISCRETE, rkp=0, rki=0, rkd=0, distribution=[], hp=True):
+def experiment(controller_type=CONTROLLER_TYPE_DISCRETE, rkp=0, rki=0, rkd=0, distribution=[], hp=True):
     dt = DarkfiTable(ERC20DRK, RUNNING_TIME, controller_type, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0.03840000000000491, r_kp=rkp, r_ki=rki, r_kd=rkd)
     RND_NODES = random.randint(5, NODES) if randomize_nodes else NODES
     for idx in range(0,RND_NODES):
@@ -61,7 +66,7 @@ def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
     rewards = []
     stakes_ratios = []
     for i in range(0, AVG_LEN):
-        acc, apy, reward, stake_ratio = experiment(apys, CONTROLLER_TYPE_DISCRETE, rkp=kp, rki=ki, rkd=kd, distribution=distribution, hp=hp)
+        acc, apy, reward, stake_ratio = experiment(CONTROLLER_TYPE_DISCRETE, rkp=kp, rki=ki, rkd=kd, distribution=distribution, hp=hp)
         accs += [acc]
         apys += [apy]
         rewards += [reward]
@@ -81,7 +86,7 @@ def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
             highest_acc = avg_acc
             highest_staked = avg_staked
             highest_gain = (kp, ki, kd)
-            with open("highest_gain.txt", 'w') as f:
+            with open('log'+os.sep+"highest_gain.txt", 'w') as f:
                 f.write(buff)
     return buff, new_record
 

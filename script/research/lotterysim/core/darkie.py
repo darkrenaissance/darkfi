@@ -1,10 +1,8 @@
-from utils import *
-from threading import Thread
-from strategy import *
+from core.utils import *
+from core.strategy import *
 
-class Darkie(Thread):
+class Darkie():
     def __init__(self, airdrop, initial_stake=None, vesting=[], hp=False, commit=True, epoch_len=100, strategy=None, apy_window=EPOCH_LENGTH):
-        Thread.__init__(self)
         self.vesting = [0] + vesting
         self.stake = (Num(airdrop) if hp else airdrop)
         self.initial_stake = [self.stake] # for debugging purpose
@@ -55,7 +53,7 @@ class Darkie(Thread):
         return staked_ratio
 
     def apy_percentage(self, rewards):
-        return self.apy(rewards)*100
+        return Num(self.apy(rewards)*100)
 
     def set_sigma_feedback(self, sigma, feedback, f, count, hp=True):
         self.Sigma = (Num(sigma) if hp else sigma)

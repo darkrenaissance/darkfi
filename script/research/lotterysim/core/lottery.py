@@ -1,8 +1,8 @@
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from darkie import *
 import time
 from datetime import timedelta
+from core.darkie import *
 from pid.cascade import *
 
 class DarkfiTable:

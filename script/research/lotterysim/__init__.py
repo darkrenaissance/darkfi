@@ -1,0 +1,1 @@
+from lottery import DarkfiTable

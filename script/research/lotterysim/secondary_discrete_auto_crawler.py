@@ -1,10 +1,15 @@
-from lottery import *
-from threading import Thread
 from argparse import ArgumentParser
+from core.lottery import DarkfiTable
+from core.utils import *
+from core.darkie import Darkie
+from tqdm import tqdm
+from core.strategy import SigmoidStrategy
+import os
 
-avg_len = 5
 
-kp_STEP=0.01
+AVG_LEN = 5
+
+KP_STEP=0.01
 KP_SEARCH= -0.04019999999996926
 
 KI_STEP=0.01
@@ -40,13 +45,13 @@ randomize_nodes = args.randomize_nodes
 rand_running_time = args.rand_running_time
 debug = args.debug
 
-def experiment(accs=[], controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, distribution=[], hp=True):
+def experiment(controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, distribution=[], hp=True):
     dt = DarkfiTable(ERC20DRK, RUNNING_TIME, controller_type, kp=kp, ki=ki, kd=kd)
     RND_NODES = random.randint(5, NODES) if randomize_nodes else NODES
     for idx in range(0,RND_NODES):
-        darkie = Darkie(distribution[idx])
+        darkie = Darkie(distribution[idx], strategy=SigmoidStrategy(EPOCH_LENGTH), apy_window=EPOCH_LENGTH)
         dt.add_darkie(darkie)
-    acc = dt.background(rand_running_time, hp)
+    acc, apy, reward, stake_ratio = dt.background_with_apy(rand_running_time, hp)
     return acc
 
 def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
@@ -56,7 +61,7 @@ def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
     exp_threads = []
     accs = []
     for i in range(0, AVG_LEN):
-        acc = experiment(accs, CONTROLLER_TYPE_DISCRETE, kp=kp, ki=ki, kd=kd, distribution=distribution, hp=hp)
+        acc = experiment(CONTROLLER_TYPE_DISCRETE, kp=kp, ki=ki, kd=kd, distribution=distribution, hp=hp)
         accs += [acc]
     avg_acc = sum(accs)/float(AVG_LEN)
     buff = 'accuracy:{}, kp: {}, ki:{}, kd:{}'.format(avg_acc, kp, ki, kd)
@@ -67,7 +72,7 @@ def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
             new_record = True
             highest_acc = avg_acc
             highest_gain = (kp, ki, kd)
-            with open("highest_gain.txt", 'w') as f:
+            with open('log'+os.sep+"highest_gain.txt", 'w') as f:
                 f.write(buff)
     return buff, new_record
 
