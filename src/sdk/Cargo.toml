@@ -41,3 +41,7 @@ subtle = "2.4.1"
 halo2_proofs = "0.2.0"
 halo2_gadgets = {version = "0.2.0", features = ["test-dependencies"]}
 rand = "0.8.5"
+
+[patch.crates-io]
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="vk-ser"}
+
