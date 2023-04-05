@@ -44,11 +44,16 @@ use darkfi_money_contract::{
     client::{
         stake_v1::MoneyStakeCallBuilder, unstake_v1::MoneyUnstakeCallBuilder, MoneyNote, OwnCoin,
     },
-    MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    MoneyFunction, CONSENSUS_CONTRACT_ZKAS_REWARD_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
+    MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
 use darkfi_consensus_contract::{
-    client::{stake_v1::ConsensusStakeCallBuilder, unstake_v1::ConsensusUnstakeCallBuilder},
+    client::{
+        proposal_v1::ConsensusProposalCallBuilder, stake_v1::ConsensusStakeCallBuilder,
+        unstake_v1::ConsensusUnstakeCallBuilder,
+    },
+    model::REWARD,
     ConsensusFunction,
 };
 
@@ -64,6 +69,10 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     let mut stake_broadcasted_sizes = vec![];
     let mut stake_creation_times = vec![];
     let mut stake_verify_times = vec![];
+    let mut proposal_sizes = vec![];
+    let mut proposal_broadcasted_sizes = vec![];
+    let mut proposal_creation_times = vec![];
+    let mut proposal_verify_times = vec![];
     let mut unstake_sizes = vec![];
     let mut unstake_broadcasted_sizes = vec![];
     let mut unstake_creation_times = vec![];
@@ -80,6 +89,8 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     let (airdrop_tx, airdrop_params) = th.airdrop_native(ALICE_AIRDROP, th.alice.keypair.public)?;
     let (mint_pk, mint_zkbin) = th.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
     let (burn_pk, burn_zkbin) = th.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
+    let (reward_pk, reward_zkbin) =
+        th.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_REWARD_NS_V1).unwrap();
 
     info!(target: "consensus", "[Faucet] ==========================");
     info!(target: "consensus", "[Faucet] Executing Alice airdrop tx");
@@ -215,13 +226,131 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     // Verify values match
     assert!(alice_oc.note.value == alice_staked_oc.note.value);
 
+    // We asume alice became the slot proposer, so she creates a
+    // proposal transaction to burn her staked coin, reward herself
+    // and mint the new coin. Burn and Mint use the same parameters
+    // as Unstake and Stake.
+    info!(target: "consensus", "[Alice] ====================================");
+    info!(target: "consensus", "[Alice] Building proposal transaction params");
+    info!(target: "consensus", "[Alice] ====================================");
+    let timer = Instant::now();
+    let alice_consensus_proposal_call_debris = ConsensusProposalCallBuilder {
+        coin: alice_staked_oc.clone(),
+        recipient: th.alice.keypair.public,
+        tree: th.alice.consensus_merkle_tree.clone(),
+        burn_zkbin: burn_zkbin.clone(),
+        burn_pk: burn_pk.clone(),
+        reward_zkbin: reward_zkbin.clone(),
+        reward_pk: reward_pk.clone(),
+        mint_zkbin: mint_zkbin.clone(),
+        mint_pk: mint_pk.clone(),
+    }
+    .build()?;
+    let (
+        alice_consensus_unstake_params,
+        alice_consensus_unstake_proofs,
+        alice_consensus_reward_params,
+        alice_consensus_reward_proofs,
+        alice_consensus_stake_params,
+        alice_consensus_stake_proofs,
+        alice_consensus_proposal_secret_key,
+    ) = (
+        alice_consensus_proposal_call_debris.unstake_params,
+        alice_consensus_proposal_call_debris.unstake_proofs,
+        alice_consensus_proposal_call_debris.reward_params,
+        alice_consensus_proposal_call_debris.reward_proofs,
+        alice_consensus_proposal_call_debris.stake_params,
+        alice_consensus_proposal_call_debris.stake_proofs,
+        alice_consensus_proposal_call_debris.signature_secret,
+    );
+
+    info!(target: "consensus", "[Alice] ====================");
+    info!(target: "consensus", "[Alice] Building proposal tx");
+    info!(target: "consensus", "[Alice] ====================");
+    let mut data = vec![ConsensusFunction::ProposalBurnV1 as u8];
+    alice_consensus_unstake_params.encode(&mut data)?;
+    let consensus_unstake_call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
+
+    let mut data = vec![ConsensusFunction::ProposalRewardV1 as u8];
+    alice_consensus_reward_params.encode(&mut data)?;
+    let consensus_reward_call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
+
+    let mut data = vec![ConsensusFunction::ProposalMintV1 as u8];
+    alice_consensus_stake_params.encode(&mut data)?;
+    let consensus_stake_call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
+
+    let calls = vec![consensus_unstake_call, consensus_reward_call, consensus_stake_call];
+    let proofs = vec![
+        alice_consensus_unstake_proofs,
+        alice_consensus_reward_proofs,
+        alice_consensus_stake_proofs,
+    ];
+    let mut alice_proposal_tx = Transaction { calls, proofs, signatures: vec![] };
+    let consensus_unstake_sigs =
+        alice_proposal_tx.create_sigs(&mut OsRng, &[alice_consensus_proposal_secret_key])?;
+    let consensus_reward_sigs =
+        alice_proposal_tx.create_sigs(&mut OsRng, &[alice_consensus_proposal_secret_key])?;
+    let consensus_stake_sigs =
+        alice_proposal_tx.create_sigs(&mut OsRng, &[alice_consensus_proposal_secret_key])?;
+    alice_proposal_tx.signatures =
+        vec![consensus_unstake_sigs, consensus_reward_sigs, consensus_stake_sigs];
+    proposal_creation_times.push(timer.elapsed());
+
+    // Calculate transaction sizes
+    let encoded: Vec<u8> = serialize(&alice_proposal_tx);
+    let size = ::std::mem::size_of_val(&*encoded);
+    proposal_sizes.push(size);
+    let base58 = bs58::encode(&encoded).into_string();
+    let size = ::std::mem::size_of_val(&*base58);
+    proposal_broadcasted_sizes.push(size);
+
+    info!(target: "consensus", "[Faucet] ===========================");
+    info!(target: "consensus", "[Faucet] Executing Alice proposal tx");
+    info!(target: "consensus", "[Faucet] ===========================");
+    let timer = Instant::now();
+    th.faucet.state.read().await.verify_transactions(&[alice_proposal_tx.clone()], true).await?;
+    th.faucet
+        .consensus_merkle_tree
+        .append(&MerkleNode::from(alice_consensus_stake_params.output.coin.inner()));
+    proposal_verify_times.push(timer.elapsed());
+
+    info!(target: "consensus", "[Alice] ===========================");
+    info!(target: "consensus", "[Alice] Executing Alice proposal tx");
+    info!(target: "consensus", "[Alice] ===========================");
+    let timer = Instant::now();
+    th.alice.state.read().await.verify_transactions(&[alice_proposal_tx.clone()], true).await?;
+    th.alice
+        .consensus_merkle_tree
+        .append(&MerkleNode::from(alice_consensus_stake_params.output.coin.inner()));
+    proposal_verify_times.push(timer.elapsed());
+
+    assert!(
+        th.faucet.consensus_merkle_tree.root(0).unwrap() ==
+            th.alice.consensus_merkle_tree.root(0).unwrap()
+    );
+
+    // Gather new staked owncoin which includes the reward
+    let leaf_position = th.alice.consensus_merkle_tree.witness().unwrap();
+    let note: MoneyNote =
+        alice_consensus_stake_params.output.note.decrypt(&th.alice.keypair.secret)?;
+    let alice_rewarded_staked_oc = OwnCoin {
+        coin: Coin::from(alice_consensus_stake_params.output.coin),
+        note: note.clone(),
+        secret: th.alice.keypair.secret,
+        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
+        leaf_position,
+    };
+
+    // Verify values match
+    assert!((alice_staked_oc.note.value + REWARD) == alice_rewarded_staked_oc.note.value);
+
     // Now Alice can unstake her owncoin
     info!(target: "consensus", "[Alice] ==================================");
     info!(target: "consensus", "[Alice] Building Consensus::Unstake params");
     info!(target: "consensus", "[Alice] ==================================");
     let timer = Instant::now();
     let alice_consensus_unstake_call_debris = ConsensusUnstakeCallBuilder {
-        coin: alice_staked_oc.clone(),
+        coin: alice_rewarded_staked_oc.clone(),
         tree: th.alice.consensus_merkle_tree.clone(),
         burn_zkbin: burn_zkbin.clone(),
         burn_pk: burn_pk.clone(),
@@ -243,7 +372,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] Building Money::Unstake params");
     info!(target: "consensus", "[Alice] ==============================");
     let alice_money_unstake_call_debris = MoneyUnstakeCallBuilder {
-        coin: alice_staked_oc.clone(),
+        coin: alice_rewarded_staked_oc.clone(),
         recipient: th.alice.keypair.public,
         value_blind: alice_consensus_unstake_value_blind,
         token_blind: alice_consensus_unstake_params.token_blind,
@@ -321,7 +450,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     };
 
     // Verify values match
-    assert!(alice_staked_oc.note.value == alice_unstaked_oc.note.value);
+    assert!(alice_rewarded_staked_oc.note.value == alice_unstaked_oc.note.value);
 
     // Statistics
     let stake_avg = stake_sizes.iter().sum::<usize>();
@@ -336,6 +465,19 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     let stake_avg = stake_verify_times.iter().sum::<Duration>();
     let stake_avg = stake_avg / stake_verify_times.len() as u32;
     info!("Average Stake verification time: {:?}", stake_avg);
+
+    let proposal_avg = proposal_sizes.iter().sum::<usize>();
+    let proposal_avg = proposal_avg / proposal_sizes.len();
+    info!("Average Proposal size: {:?} Bytes", proposal_avg);
+    let proposal_avg = proposal_broadcasted_sizes.iter().sum::<usize>();
+    let proposal_avg = proposal_avg / proposal_broadcasted_sizes.len();
+    info!("Average Proposal broadcasted size: {:?} Bytes", proposal_avg);
+    let proposal_avg = proposal_creation_times.iter().sum::<Duration>();
+    let proposal_avg = proposal_avg / proposal_creation_times.len() as u32;
+    info!("Average Proposal creation time: {:?}", proposal_avg);
+    let proposal_avg = proposal_verify_times.iter().sum::<Duration>();
+    let proposal_avg = proposal_avg / proposal_verify_times.len() as u32;
+    info!("Average Proposal verification time: {:?}", proposal_avg);
 
     let unstake_avg = unstake_sizes.iter().sum::<usize>();
     let unstake_avg = unstake_avg / unstake_sizes.len();

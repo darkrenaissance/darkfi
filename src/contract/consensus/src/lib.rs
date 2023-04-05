@@ -25,8 +25,10 @@ use darkfi_sdk::error::ContractError;
 #[repr(u8)]
 pub enum ConsensusFunction {
     StakeV1 = 0x00,
-    //EvolveV1 = 0x01,
-    UnstakeV1 = 0x02,
+    ProposalBurnV1 = 0x01,
+    ProposalRewardV1 = 0x02,
+    ProposalMintV1 = 0x03,
+    UnstakeV1 = 0x04,
 }
 
 impl TryFrom<u8> for ConsensusFunction {
@@ -35,12 +37,17 @@ impl TryFrom<u8> for ConsensusFunction {
     fn try_from(b: u8) -> core::result::Result<Self, Self::Error> {
         match b {
             0x00 => Ok(Self::StakeV1),
-            //0x01 => Ok(Self::EvolveV1),
-            0x02 => Ok(Self::UnstakeV1),
+            0x01 => Ok(Self::ProposalBurnV1),
+            0x02 => Ok(Self::ProposalRewardV1),
+            0x03 => Ok(Self::ProposalMintV1),
+            0x04 => Ok(Self::UnstakeV1),
             _ => Err(ContractError::InvalidFunction),
         }
     }
 }
+
+/// Call parameters definitions
+pub mod model;
 
 #[cfg(not(feature = "no-entrypoint"))]
 /// WASM entrypoint functions

@@ -97,3 +97,6 @@ pub const CONSENSUS_CONTRACT_NULLIFIERS_TREE: &str = "consensus_nullifiers";
 // These are keys inside the consensus info tree
 pub const CONSENSUS_CONTRACT_DB_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const CONSENSUS_CONTRACT_COIN_MERKLE_TREE: &str = "consensus_coin_tree";
+
+/// zkas reward circuit namespace
+pub const CONSENSUS_CONTRACT_ZKAS_REWARD_NS_V1: &str = "Reward_V1";

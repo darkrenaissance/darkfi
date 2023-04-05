@@ -88,9 +88,9 @@ pub struct ConsensusStakeCallBuilder {
     pub merkle_root: MerkleNode,
     /// Public key for the signature
     pub signature_public: PublicKey,
-    /// `Consensus_Mint_V1` zkas circuit ZkBinary
+    /// `Mint_V1` zkas circuit ZkBinary
     pub mint_zkbin: ZkBinary,
-    /// Proving key for the `Consensus_Mint_V1` zk circuit
+    /// Proving key for the `Mint_V1` zk circuit
     pub mint_pk: ProvingKey,
 }
 

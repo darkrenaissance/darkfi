@@ -16,6 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_money_contract::{
+    error::MoneyError,
+    model::{ConsensusStakeParamsV1, ConsensusStakeUpdateV1},
+    CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
+    CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
+    CONSENSUS_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+};
 use darkfi_sdk::{
     crypto::{
         pasta_prelude::*, pedersen_commitment_base, Coin, ContractId, MerkleNode, PublicKey,
@@ -29,22 +36,16 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::{
-    error::MoneyError,
-    model::{ConsensusUnstakeParamsV1, MoneyUnstakeParamsV1, MoneyUnstakeUpdateV1},
-    MoneyFunction, CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
-    MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE, MONEY_CONTRACT_COIN_ROOTS_TREE,
-    MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
-};
+use crate::{model::ConsensusRewardParamsV1, ConsensusFunction};
 
-/// `get_metadata` function for `Money::UnstakeV1`
-pub(crate) fn money_unstake_get_metadata_v1(
+/// `get_metadata` function for `Consensus::ProposalMintV1`
+pub(crate) fn consensus_proposal_mint_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: MoneyUnstakeParamsV1 = deserialize(&self_.data[1..])?;
+    let params: ConsensusStakeParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
@@ -77,140 +78,127 @@ pub(crate) fn money_unstake_get_metadata_v1(
     Ok(metadata)
 }
 
-/// `process_instruction` function for `Money::UnstakeV1`
-pub(crate) fn money_unstake_process_instruction_v1(
+/// `process_instruction` function for `Consensus::ProposalMintV1`
+pub(crate) fn consensus_proposal_mint_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: MoneyUnstakeParamsV1 = deserialize(&self_.data[1..])?;
+    let params: ConsensusStakeParamsV1 = deserialize(&self_.data[1..])?;
 
     // Access the necessary databases where there is information to
     // validate this state transition.
-    let money_coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let consensus_nullifiers_db =
-        db_lookup(*CONSENSUS_CONTRACT_ID, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
-    let consensus_coin_roots_db =
-        db_lookup(*CONSENSUS_CONTRACT_ID, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
+    let coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
+    let nullifiers_db = db_lookup(cid, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
+    let coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
 
     // ===================================
     // Perform the actual state transition
     // ===================================
 
-    msg!("[MoneyUnstakeV1] Validating anonymous output");
+    msg!("[ConsensusProposalMintV1] Validating anonymous output");
     let input = &params.input;
     let output = &params.output;
 
-    // Only native token can be unstaked
+    // Only native token can be minted in a proposal
     if output.token_commit != pedersen_commitment_base(DARK_TOKEN_ID.inner(), input.token_blind) {
-        msg!("[MoneyUnstakeV1] Error: Input used non-native token");
+        msg!("[ConsensusProposalMintV1] Error: Input used non-native token");
         return Err(MoneyError::StakeInputNonNativeToken.into())
     }
 
     // Verify value commits match
     if output.value_commit != input.value_commit {
-        msg!("[MoneyUnstakeV1] Error: Value commitments do not match");
+        msg!("[ConsensusProposalMintV1] Error: Value commitments do not match");
         return Err(MoneyError::ValueMismatch.into())
     }
 
     // The Merkle root is used to know whether this is a coin that
     // existed in a previous state.
-    if !db_contains_key(consensus_coin_roots_db, &serialize(&input.merkle_root))? {
-        msg!("[MoneyUnstakeV1] Error: Merkle root not found in previous state");
+    if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
+        msg!("[ConsensusProposalMintV1] Error: Merkle root not found in previous state");
         return Err(MoneyError::TransferMerkleRootNotFound.into())
     }
 
     // The nullifiers should already exist. It is the double-mint protection.
-    if db_contains_key(consensus_nullifiers_db, &serialize(&input.nullifier))? {
-        msg!("[MoneyUnstakeV1] Error: Duplicate nullifier found");
-        return Err(MoneyError::DuplicateNullifier.into())
+    if db_contains_key(nullifiers_db, &serialize(&input.nullifier))? {
+        msg!("[ConsensusProposalMintV1] Error: Missing nullifier");
+        return Err(MoneyError::StakeMissingNullifier.into())
     }
 
     // Check previous call is consensus contract
     if call_idx == 0 {
-        msg!("[MoneyUnstakeV1] Error: previous_call_idx will be out of bounds");
+        msg!("[ConsensusProposalMintV1] Error: previous_call_idx will be out of bounds");
         return Err(MoneyError::SpendHookOutOfBounds.into())
     }
 
     let previous_call_idx = call_idx - 1;
     let previous = &calls[previous_call_idx as usize];
     if previous.contract_id.inner() != CONSENSUS_CONTRACT_ID.inner() {
-        msg!("[MoneyUnstakeV1] Error: Previous contract call is not consensus contract");
+        msg!("[ConsensusProposalMintV1] Error: Previous contract call is not consensus contract");
         return Err(MoneyError::UnstakePreviousCallNotConsensusContract.into())
     }
 
-    // Verify previous call corresponds to Consensus::UnstakeV1 (0x04)
-    if previous.data[0] != 0x04 {
-        msg!("[MoneyUnstakeV1] Error: Previous call function mismatch");
+    // Verify previous call corresponds to Consensus::ProposalRewardV1 (0x02)
+    if previous.data[0] != 0x02 {
+        msg!("[ConsensusProposalMintV1] Error: Previous call function mismatch");
         return Err(MoneyError::PreviousCallFunctionMissmatch.into())
     }
 
     // Verify previous call input is the same as this calls StakeInput
-    let previous_params: ConsensusUnstakeParamsV1 = deserialize(&previous.data[1..])?;
-    let previous_input = &previous_params.input;
+    let previous_params: ConsensusRewardParamsV1 = deserialize(&previous.data[1..])?;
+    let previous_input = &previous_params.stake_input;
     if &previous_input != &input {
-        msg!("[MoneyUnstakeV1] Error: Previous call input mismatch");
+        msg!("[ConsensusProposalMintV1] Error: Previous call input mismatch");
+        return Err(MoneyError::PreviousCallInputMissmatch.into())
+    }
+    if &previous_params.output != output {
+        msg!("[ConsensusProposalMintV1] Error: Previous call input mismatch");
         return Err(MoneyError::PreviousCallInputMissmatch.into())
     }
 
-    // Check spend hook correctness
-    if previous_input.spend_hook != CONSENSUS_CONTRACT_ID.inner() {
-        msg!("[MoneyUnstakeV1] Error: Invoking contract call does not match spend hook in input");
+    // If spend hook is set, check its correctness
+    let previous_input = &previous_params.unstake_input;
+    if previous_input.spend_hook != pallas::Base::zero() &&
+        previous_input.spend_hook != CONSENSUS_CONTRACT_ID.inner()
+    {
+        msg!("[ConsensusProposalMintV1] Error: Invoking contract call does not match spend hook in input");
         return Err(MoneyError::SpendHookMismatch.into())
-    }
-
-    // If next spend hook is set, check its correctness
-    if params.spend_hook != pallas::Base::zero() {
-        let next_call_idx = call_idx + 1;
-        if next_call_idx >= calls.len() as u32 {
-            msg!("[MoneyUnstakeV1] Error: next_call_idx out of bounds");
-            return Err(MoneyError::SpendHookOutOfBounds.into())
-        }
-
-        let next = &calls[next_call_idx as usize];
-        if next.contract_id.inner() != params.spend_hook {
-            msg!(
-                "[MoneyUnstakeV1] Error: Invoking contract call does not match spend hook in input"
-            );
-            return Err(MoneyError::SpendHookMismatch.into())
-        }
     }
 
     // Newly created coin for this call is in the output. Here we gather it,
     // and we also check that it hasn't existed before.
-    if db_contains_key(money_coins_db, &serialize(&output.coin))? {
-        msg!("[MoneyUnstakeV1] Error: Duplicate coin found in output");
+    if db_contains_key(coins_db, &serialize(&output.coin))? {
+        msg!("[ConsensusProposalMintV1] Error: Duplicate coin found in output");
         return Err(MoneyError::DuplicateCoin.into())
     }
     let coin = Coin::from(output.coin);
 
     // Create a state update.
-    let update = MoneyUnstakeUpdateV1 { coin };
+    let update = ConsensusStakeUpdateV1 { coin };
     let mut update_data = vec![];
-    update_data.write_u8(MoneyFunction::UnstakeV1 as u8)?;
+    update_data.write_u8(ConsensusFunction::StakeV1 as u8)?;
     update.encode(&mut update_data)?;
 
-    // and return it
     Ok(update_data)
 }
 
-/// `process_update` function for `Money::UnstakeV1`
-pub(crate) fn money_unstake_process_update_v1(
+/// `process_update` function for `Consensus::ProposalMintV1`
+pub(crate) fn consensus_proposal_mint_process_update_v1(
     cid: ContractId,
-    update: MoneyUnstakeUpdateV1,
+    update: ConsensusStakeUpdateV1,
 ) -> ContractResult {
     // Grab all necessary db handles for where we want to write
-    let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
-    let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let info_db = db_lookup(cid, CONSENSUS_CONTRACT_INFO_TREE)?;
+    let coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
+    let coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
 
-    msg!("[MoneyUnstakeV1] Adding new coin to the set");
+    msg!("[ConsensusProposalMintV1] Adding new coin to the set");
     db_set(coins_db, &serialize(&update.coin), &[])?;
 
-    msg!("[MoneyUnstakeV1] Adding new coin to the Merkle tree");
+    msg!("[ConsensusProposalMintV1] Adding new coin to the Merkle tree");
     let coins: Vec<_> = vec![MerkleNode::from(update.coin.inner())];
-    merkle_add(info_db, coin_roots_db, &serialize(&MONEY_CONTRACT_COIN_MERKLE_TREE), &coins)?;
+    merkle_add(info_db, coin_roots_db, &serialize(&CONSENSUS_CONTRACT_COIN_MERKLE_TREE), &coins)?;
 
     Ok(())
 }

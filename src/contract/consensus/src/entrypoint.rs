@@ -21,7 +21,8 @@ use darkfi_money_contract::{
     CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
     CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_DB_VERSION,
     CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    CONSENSUS_CONTRACT_ZKAS_REWARD_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
+    MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{ContractId, MerkleTree},
@@ -31,13 +32,34 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::ConsensusFunction;
+use crate::{model::ConsensusRewardUpdateV1, ConsensusFunction};
 
 /// `Consensus::Stake` functions
 mod stake_v1;
 use stake_v1::{
     consensus_stake_get_metadata_v1, consensus_stake_process_instruction_v1,
     consensus_stake_process_update_v1,
+};
+
+/// `Consensus::ProposalBurn` functions
+mod proposal_burn_v1;
+use proposal_burn_v1::{
+    consensus_proposal_burn_get_metadata_v1, consensus_proposal_burn_process_instruction_v1,
+    consensus_proposal_burn_process_update_v1,
+};
+
+/// `Consensus::ProposalRewardV1` functions
+mod proposal_reward_v1;
+use proposal_reward_v1::{
+    consensus_proposal_reward_get_metadata_v1, consensus_proposal_reward_process_instruction_v1,
+    consensus_proposal_reward_process_update_v1,
+};
+
+/// `Consensus::ProposalMintV1` functions
+mod proposal_mint_v1;
+use proposal_mint_v1::{
+    consensus_proposal_mint_get_metadata_v1, consensus_proposal_mint_process_instruction_v1,
+    consensus_proposal_mint_process_update_v1,
 };
 
 /// `Consensus::Unstake` functions
@@ -71,8 +93,10 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
 
     let money_mint_v1_bincode = include_bytes!("../../money/proof/mint_v1.zk.bin");
     let money_burn_v1_bincode = include_bytes!("../../money/proof/burn_v1.zk.bin");
+    let reward_v1_bincode = include_bytes!("../proof/reward_v1.zk.bin");
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1), &money_mint_v1_bincode[..])?;
     db_set(zkas_db, &serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1), &money_burn_v1_bincode[..])?;
+    db_set(zkas_db, &serialize(&CONSENSUS_CONTRACT_ZKAS_REWARD_NS_V1), &reward_v1_bincode[..])?;
 
     // Set up a database tree to hold Merkle roots of all coins
     // k=MerkleNode, v=[]
@@ -139,6 +163,18 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
             let metadata = consensus_stake_get_metadata_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
         }
+        ConsensusFunction::ProposalBurnV1 => {
+            let metadata = consensus_proposal_burn_get_metadata_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&metadata)?)
+        }
+        ConsensusFunction::ProposalRewardV1 => {
+            let metadata = consensus_proposal_reward_get_metadata_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&metadata)?)
+        }
+        ConsensusFunction::ProposalMintV1 => {
+            let metadata = consensus_proposal_mint_get_metadata_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&metadata)?)
+        }
         ConsensusFunction::UnstakeV1 => {
             let metadata = consensus_unstake_get_metadata_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
@@ -166,6 +202,19 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let update_data = consensus_stake_process_instruction_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)
         }
+        ConsensusFunction::ProposalBurnV1 => {
+            let update_data = consensus_proposal_burn_process_instruction_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&update_data)?)
+        }
+        ConsensusFunction::ProposalRewardV1 => {
+            let update_data =
+                consensus_proposal_reward_process_instruction_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&update_data)?)
+        }
+        ConsensusFunction::ProposalMintV1 => {
+            let update_data = consensus_proposal_mint_process_instruction_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&update_data)?)
+        }
         ConsensusFunction::UnstakeV1 => {
             let update_data = consensus_unstake_process_instruction_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)
@@ -182,6 +231,18 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
         ConsensusFunction::StakeV1 => {
             let update: ConsensusStakeUpdateV1 = deserialize(&update_data[1..])?;
             Ok(consensus_stake_process_update_v1(cid, update)?)
+        }
+        ConsensusFunction::ProposalBurnV1 => {
+            let update: ConsensusUnstakeUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(consensus_proposal_burn_process_update_v1(cid, update)?)
+        }
+        ConsensusFunction::ProposalRewardV1 => {
+            let update: ConsensusRewardUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(consensus_proposal_reward_process_update_v1(cid, update)?)
+        }
+        ConsensusFunction::ProposalMintV1 => {
+            let update: ConsensusStakeUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(consensus_proposal_mint_process_update_v1(cid, update)?)
         }
         ConsensusFunction::UnstakeV1 => {
             let update: ConsensusUnstakeUpdateV1 = deserialize(&update_data[1..])?;

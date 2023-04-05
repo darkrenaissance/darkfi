@@ -85,7 +85,7 @@ impl PartialEq<StakeInput> for Input {
 }
 
 /// A contract call's anonymous output
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Output {
     /// Pedersen commitment for the output's value
     pub value_commit: pallas::Point,
