@@ -65,8 +65,22 @@ new list.
 Both of these binaries have to be running when setting up a node.
 
 Currently connecting to other nodes might not be as dynamic as you'd 
-think, the approach used for now is whitelisted addresses, here's how 
-it works:
+think, there are two things we can do here:
+
+**1. `Network Requester` as open proxy:**
+
+you only need to run it like:
+
+```
+% ./nym-network-requester run --id nettestnode --open-proxy
+```
+
+This makes the whitelist not needed anymore, meaning you don't need to 
+worry about adding peers to `allowed.list` anymore, but don't share
+the address of the `Network Requester` while running as open proxy
+randomly.
+
+**2. whitelisted addresses approach, here's how it works:**
 
 - Initialize `nym-network-requester`
 - Initialize `nym-socks5-client`
@@ -78,6 +92,7 @@ can connect to peers manually, or through seed.
 
 > Note that for peer discovery you'll have to whitelist some known 
 peers and the seed itself.
+
 
 ## 4. **Setup `ircd`**
 
