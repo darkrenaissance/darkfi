@@ -33,6 +33,8 @@
   - [cashierd JSON-RPC API](clients/cashierd_jsonrpc.md)
   - [faucetd JSON-RPC API](clients/faucetd_jsonrpc.md)
   - [Anonymous Nodes](clients/anonymous_nodes.md)
+    - [Anonymous_host](clients/anonymous_host.md)
+    - [Anonymous_outbound](clients/anonymous_outbound.md)
 - [Crypto](crypto/crypto.md)
   - [FFT](crypto/fft.md)
   - [ZK explainer](crypto/zk_explainer.md)
