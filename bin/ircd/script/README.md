@@ -26,5 +26,5 @@ a link in a `PRIVMSG`.
 the tweet text and print it out in irc.
 
 ## Requirment
- `git clone https://github.com/Dastan-glitch/tweety.git`
+ `git clone https://github.com/Dastan-glitch/tweety.git`\
  `cd tweety && pip install .`
