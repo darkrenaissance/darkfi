@@ -38,6 +38,8 @@ use darkfi::zk::{
     proof::{Proof, ProvingKey, VerifyingKey},
 };
 
+mod circuit;
+
 trait NumericInstructions: Chip<pallas::Base> {
     /// Variable representing a number.
     type Num;
