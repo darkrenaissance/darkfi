@@ -15,7 +15,7 @@ class DarkfiTable:
         self.secondary_pid = SecondaryDiscretePID(kp=kp, ki=ki, kd=kd) if controller_type==CONTROLLER_TYPE_DISCRETE else SecondaryTakahashiPID(kc=kc, ti=ti, td=td, ts=ts)
         self.primary_pid = PrimaryDiscretePID(kp=r_kp, ki=r_ki, kd=r_kd) if controller_type==CONTROLLER_TYPE_DISCRETE else PrimaryTakahashiPID(kc=kc, ti=ti, td=td, ts=ts)
         self.debug=debug
-        self.rewards = [0]
+        self.rewards = []
 
     def add_darkie(self, darkie):
         self.darkies+=[darkie]
@@ -37,6 +37,11 @@ class DarkfiTable:
             total_vesting_stake = 0
             f = self.secondary_pid.pid_clipped(float(feedback), debug)
 
+            if count%EPOCH_LENGTH == 0:
+                acc = self.secondary_pid.acc_percentage()
+                reward = self.primary_pid.pid_clipped(float(self.avg_stake_ratio()), debug)
+                self.rewards += [reward]
+
             #note! thread overhead is 10X slower than sequential node execution!
             for i in range(len(self.darkies)):
                 self.darkies[i].set_sigma_feedback(self.Sigma, feedback, f, count, hp)
@@ -49,10 +54,6 @@ class DarkfiTable:
                 self.darkies[i].update_stake(self.rewards[-1])
                 ###
 
-            if count%EPOCH_LENGTH == 0 and count > EPOCH_LENGTH:
-                acc = self.secondary_pid.acc_percentage()
-                reward = self.primary_pid.pid_clipped(float(self.avg_stake_ratio()), debug)
-                self.rewards += [reward]
 
             feedback = winners
             if winners==1:
@@ -65,11 +66,15 @@ class DarkfiTable:
         avg_reward = sum(self.rewards)/len(self.rewards)
         stake_ratio = self.avg_stake_ratio()
         avg_apy = self.avg_apy()
+        avg_apr = self.avg_apr()
         #print('apy: {}, staked_ratio: {}'.format(avg_apy, stake_ratio))
-        return self.secondary_pid.acc(), avg_apy, avg_reward, stake_ratio
+        return self.secondary_pid.acc(), avg_apy, avg_reward, stake_ratio, avg_apr
 
     def avg_apy(self):
-        return sum([darkie.apy_percentage(self.rewards) for darkie in self.darkies])/len(self.darkies)
+        return sum([darkie.apy_scaled_to_epoch(self.rewards) for darkie in self.darkies])/len(self.darkies) * Num(ONE_YEAR/self.running_time) * 100
+
+    def avg_apr(self):
+        return sum([darkie.apr_scaled_to_runningtime() for darkie in self.darkies])/len(self.darkies) * (ONE_YEAR/self.running_time) * 100
 
     def avg_stake_ratio(self):
         return sum([darkie.staked_tokens_ratio() for darkie in self.darkies])/len(self.darkies)*100

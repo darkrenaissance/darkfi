@@ -50,7 +50,7 @@ def experiment(controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, distr
     for idx in range(0,RND_NODES):
         darkie = Darkie(distribution[idx], strategy=SigmoidStrategy(EPOCH_LENGTH), apy_window=EPOCH_LENGTH)
         dt.add_darkie(darkie)
-    acc, apy, reward, stake_ratio = dt.background_with_apy(rand_running_time, hp)
+    acc, apy, reward, stake_ratio, apr = dt.background_with_apy(rand_running_time, hp)
     return acc
 
 def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):

@@ -13,6 +13,6 @@ if __name__ == "__main__":
     dt  = DarkfiTable(airdrop, RUNNING_TIME, controller_type=CONTROLLER_TYPE_TAKAHASHI, kc=-2.19, ti=-0.5, td=0.25, ts=-0.35,  r_kp=-0.42, r_ki=2.71, r_kd=-0.239)
     for darkie in darkies:
         dt.add_darkie(darkie)
-    acc, apy, reward, stake_ratio = dt.background_with_apy()
+    acc, apy, reward, stake_ratio, apr = dt.background_with_apy()
     print('acc: {}'.format(acc))
     dt.write()

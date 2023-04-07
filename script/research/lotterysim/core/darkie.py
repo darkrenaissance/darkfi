@@ -2,7 +2,7 @@ from core.utils import *
 from core.strategy import *
 
 class Darkie():
-    def __init__(self, airdrop, initial_stake=None, vesting=[], hp=False, commit=True, epoch_len=100, strategy=None, apy_window=EPOCH_LENGTH):
+    def __init__(self, airdrop, initial_stake=None, vesting=[], hp=False, commit=True, epoch_len=EPOCH_LENGTH, strategy=random_strategy(EPOCH_LENGTH)):
         self.vesting = [0] + vesting
         self.stake = (Num(airdrop) if hp else airdrop)
         self.initial_stake = [self.stake] # for debugging purpose
@@ -12,8 +12,7 @@ class Darkie():
         self.f = None
         self.won=False
         self.epoch_len=epoch_len # epoch length during which the stake is static
-        self.strategy = strategy if strategy is not None else Strategy(self.epoch_len)
-        self.apy_window = apy_window
+        self.strategy = strategy
         self.slot = 0
 
     def clone(self):
@@ -28,15 +27,19 @@ class Darkie():
     '''
 
     '''
-    @rewards: array of reward per epoch
+    @rewards: array of reward per epoch, with compound interest.
     '''
-    def apy(self, rewards):
+    def apy_scaled_to_epoch(self, rewards):
         avg_apy = 0
         for idx, reward in enumerate(rewards):
-            #print('idx: {} of {}, staked tokens: {}, initial stake: {}'.format(idx, len(rewards), len(self.strategy.staked_tokens_ratio), len(self.initial_stake)))
-            current_epoch_staked_tokens = (Num(self.strategy.staked_tokens_ratio[idx-1]) * Num(self.initial_stake[idx-1]))
+            #print('slot: {}, idx: {} of {}, staked tokens: {}, initial stake: {}'.format(self.slot, idx, len(rewards), len(self.strategy.staked_tokens_ratio), len(self.initial_stake)))
+            current_epoch_staked_tokens = Num(self.strategy.staked_tokens_ratio[idx-1]) * Num(self.initial_stake[idx])
             avg_apy += (Num(reward) / current_epoch_staked_tokens) if current_epoch_staked_tokens!=0 else 0
-        return avg_apy/len(rewards) if len(rewards)>0 else 0
+        #return avg_apy/len(rewards) if len(rewards)>0 else 0
+        return avg_apy
+
+    def apr_scaled_to_runningtime(self):
+        return (self.stake - self.initial_stake[0]) / self.initial_stake[0]
 
     def staked_tokens(self):
         '''
@@ -45,6 +48,7 @@ class Darkie():
         '''
         return Num(self.initial_stake[0])*self.staked_tokens_ratio()
 
+
     def staked_tokens_ratio(self):
         staked_ratio = Num(sum(self.strategy.staked_tokens_ratio)/len(self.strategy.staked_tokens_ratio))
         #print('type: {}, ratio: {}'.format(self.strategy.type, staked_ratio))
@@ -52,8 +56,6 @@ class Darkie():
         assert(staked_ratio <= 100 and staked_ratio >=0)
         return staked_ratio
 
-    def apy_percentage(self, rewards):
-        return Num(self.apy(rewards)*100)
 
     def set_sigma_feedback(self, sigma, feedback, f, count, hp=True):
         self.Sigma = (Num(sigma) if hp else sigma)
@@ -71,10 +73,10 @@ class Darkie():
             sigmas = [   c/((self.Sigma+EPSILON)**i) * ( ((L_HP if hp else L)/fact(i)) ) for i in range(1, k+1) ]
             scaled_target = approx_target_in_zk(sigmas, Num(stake)) #+ (BASE_L_HP if hp else BASE_L)
             return scaled_target
-        if self.slot % EPOCH_LENGTH==0  and self.slot > EPOCH_LENGTH:
-            self.initial_stake +=[self.finalized_stake]
 
-        self.strategy.set_ratio(self.slot, self.apy_percentage(rewards))
+        if self.slot % EPOCH_LENGTH==0:
+            self.initial_stake +=[self.finalized_stake]
+        self.strategy.set_ratio(self.slot, self.apy_scaled_to_epoch(rewards))
         T = target(self.f, self.strategy.staked_value(self.finalized_stake))
         self.won = lottery(T, hp)
 

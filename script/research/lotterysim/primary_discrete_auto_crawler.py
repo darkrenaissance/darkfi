@@ -50,9 +50,9 @@ def experiment(controller_type=CONTROLLER_TYPE_DISCRETE, rkp=0, rki=0, rkd=0, di
     dt = DarkfiTable(ERC20DRK, RUNNING_TIME, controller_type, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0.03840000000000491, r_kp=rkp, r_ki=rki, r_kd=rkd)
     RND_NODES = random.randint(5, NODES) if randomize_nodes else NODES
     for idx in range(0,RND_NODES):
-        darkie = Darkie(distribution[idx], strategy=SigmoidStrategy(EPOCH_LENGTH), apy_window=EPOCH_LENGTH)
+        darkie = Darkie(distribution[idx])
         dt.add_darkie(darkie)
-    acc, apy, reward, stake_ratio = dt.background_with_apy(rand_running_time, hp)
+    acc, apy, reward, stake_ratio, apr = dt.background_with_apy(rand_running_time, hp)
     return acc, apy, reward, stake_ratio
 
 def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
