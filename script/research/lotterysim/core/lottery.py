@@ -20,45 +20,6 @@ class DarkfiTable:
     def add_darkie(self, darkie):
         self.darkies+=[darkie]
 
-    def background(self, rand_running_time=True, debug=False, hp=True):
-        self.debug=debug
-        self.start_time=time.time()
-        feedback=0 # number leads in previous slot
-        count = 0
-        # random running time
-        rand_running_time = random.randint(1,self.running_time) if rand_running_time else self.running_time
-        self.running_time = rand_running_time
-        #if rand_running_time and debug:
-            #print("random running time: {}".format(self.running_time))
-            #print('running time: {}'.format(self.running_time))
-        while count < self.running_time:
-            winners=0
-            total_vesting_stake = 0
-            f = self.secondary_pid.pid_clipped(float(feedback),  debug)
-            #note! thread overhead is 10X slower than sequential node execution!
-            for i in range(len(self.darkies)):
-                self.darkies[i].set_sigma_feedback(self.Sigma, feedback, f, count, hp)
-                self.darkies[i].run(self.rewards, hp)
-                total_vesting_stake+=self.darkies[i].update_vesting()
-            for i in range(len(self.darkies)):
-                winners += self.darkies[i].won
-                print('reward: {}'.format(self.rewards[-1]))
-                self.darkies[i].update_stake(self.rewards[-1])
-
-            if count%EPOCH_LENGTH == 0:
-                acc = self.secondary_pid.acc()
-                reward = self.primary_pid.pid_clipped(float(self.avg_apy()), debug)
-                self.rewards += [reward]
-            feedback = winners
-            if winners==1:
-                if count >= ERC20DRK:
-                    self.Sigma += 1
-                for i in range(len(self.darkies)):
-                    self.darkies[i].finalize_stake()
-            count+=1
-        self.end_time=time.time()
-        return self.secondary_pid.acc()
-
     def background_with_apy(self, rand_running_time=True, debug=False, hp=True):
         self.debug=debug
         self.start_time=time.time()

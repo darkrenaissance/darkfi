@@ -37,8 +37,8 @@ highest_gain = (KP_SEARCH, KI_SEARCH, KD_SEARCH)
 
 parser = ArgumentParser()
 parser.add_argument('-p', '--high-precision', action='store_true')
-parser.add_argument('-r', '--randomize-nodes', action='store_true')
-parser.add_argument('-t', '--rand-running-time', action='store_true')
+parser.add_argument('-r', '--randomize-nodes', action='store_false')
+parser.add_argument('-t', '--rand-running-time', action='store_false')
 parser.add_argument('-d', '--debug', action='store_false')
 args = parser.parse_args()
 high_precision = args.high_precision
