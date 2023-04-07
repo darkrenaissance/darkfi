@@ -6,7 +6,7 @@ reward primary PID controller.
 '''
 class RPID(BasePID):
     def __init__(self, controller_type, kp=0, ki=0, kd=0, dt=1,  Kc=0, Ti=0, Td=0, Ts=0, debug=False):
-        BasePID.__init__(self, REWARD_MIN, REWARD_MAX, PRIMARY_REWARD_TARGET, controller_type, kp=kp, ki=ki, kd=kd, dt=dt,  Kc=Kc, Ti=Ti, Td=Td, Ts=Ts, debug=debug, type='reward', swap_error_fn=True)
+        BasePID.__init__(self, PRIMARY_REWARD_TARGET, REWARD_MIN, REWARD_MAX, controller_type, kp=kp, ki=ki, kd=kd, dt=dt,  Kc=Kc, Ti=Ti, Td=Td, Ts=Ts, debug=debug, type='reward', swap_error_fn=True)
 
 
 class PrimaryDiscretePID(RPID):
@@ -22,7 +22,7 @@ lead secondary PID controller
 '''
 class LeadPID(BasePID):
     def __init__(self, controller_type, kp=0, ki=0, kd=0, dt=1, Kc=0, Ti=0, Td=0, Ts=0, debug=False):
-        BasePID.__init__(self, F_MIN, F_MAX, SECONDARY_LEAD_TARGET, controller_type, kp=kp, ki=ki, kd=kd, dt=dt, Kc=Kc, Ti=Ti, Td=Td, Ts=Ts, debug=debug, type='f')
+        BasePID.__init__(self, SECONDARY_LEAD_TARGET, F_MIN, F_MAX,  controller_type, kp=kp, ki=ki, kd=kd, dt=dt, Kc=Kc, Ti=Ti, Td=Td, Ts=Ts, debug=debug, type='f')
 
 class SecondaryDiscretePID(LeadPID):
     def __init__(self, kp, ki, kd):

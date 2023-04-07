@@ -68,6 +68,7 @@ class BasePID:
         else:
             pid_value = self.continuous_pid(feedback)
 
+        print('[{}-{}]'.format(self.clip_min, self.clip_max))
         if pid_value <= self.clip_min:
             pid_value = self.clip_min
         if pid_value >= self.clip_max:

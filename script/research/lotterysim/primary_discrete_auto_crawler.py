@@ -8,17 +8,17 @@ import os
 
 AVG_LEN = 5
 
-KP_STEP=1
+KP_STEP=10
 KP_SEARCH=0.01
 
-KI_STEP=1
+KI_STEP=10
 KI_SEARCH=1#-154.52
 
-KD_STEP=1
+KD_STEP=10
 KD_SEARCH=-0.5
 
-RUNNING_TIME=1000
-NODES = 100
+RUNNING_TIME=100
+NODES = 5
 
 SHIFTING = 0.05
 
@@ -53,7 +53,7 @@ def experiment(controller_type=CONTROLLER_TYPE_DISCRETE, rkp=0, rki=0, rkd=0, di
         darkie = Darkie(distribution[idx])
         dt.add_darkie(darkie)
     acc, apy, reward, stake_ratio, apr = dt.background_with_apy(rand_running_time, hp)
-    return acc, apy, reward, stake_ratio
+    return acc, apy, reward, stake_ratio, apr
 
 def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
     global highest_apy
@@ -65,17 +65,20 @@ def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
     apys = []
     rewards = []
     stakes_ratios = []
+    aprs = []
     for i in range(0, AVG_LEN):
-        acc, apy, reward, stake_ratio = experiment(CONTROLLER_TYPE_DISCRETE, rkp=kp, rki=ki, rkd=kd, distribution=distribution, hp=hp)
+        acc, apy, reward, stake_ratio, apr = experiment(CONTROLLER_TYPE_DISCRETE, rkp=kp, rki=ki, rkd=kd, distribution=distribution, hp=hp)
         accs += [acc]
         apys += [apy]
         rewards += [reward]
+        aprs += [apr]
         stakes_ratios += [stake_ratio]
     avg_acc = float(sum(accs))/len(accs)
     avg_apy = float(sum(apys))/float(AVG_LEN)
     avg_reward = float(sum(rewards))/len(rewards)
     avg_staked = float(sum(stakes_ratios))/len(stakes_ratios)
-    buff = 'avg(acc): {}, avg(apy): {}, avg(reward): {}, avg(stake ratio): {}, kp: {}, ki:{}, kd:{}'.format(avg_acc, avg_apy, avg_reward, avg_staked, kp, ki, kd)
+    avg_apr = float(sum(aprs))/len(aprs)
+    buff = 'avg(acc): {}, avg(apy): {}, avg(apr): {}, avg(reward): {}, avg(stake ratio): {}, kp: {}, ki:{}, kd:{}'.format(avg_acc, avg_apy, avg_apr, avg_reward, avg_staked, kp, ki, kd)
     if avg_apy > 0:
         gain = (kp, ki, kd)
         acc_gain = (avg_apy, gain)

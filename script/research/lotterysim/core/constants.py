@@ -16,9 +16,9 @@ REWARD_MAX = 1000
 
 SLOT = 90
 ONE_YEAR = 365.25*24*60*60/SLOT
-TARGET_APY = Num(0.5)
+TARGET_APY = Num(0.1)
 
-PRIMARY_REWARD_TARGET = 70 # ratio of staked tokens
+PRIMARY_REWARD_TARGET = 0.7 # ratio of staked tokens
 SECONDARY_LEAD_TARGET = 1 #number of lead per slot
 
 EPSILON = 1

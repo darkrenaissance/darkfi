@@ -48,6 +48,7 @@ class DarkfiTable:
                 self.darkies[i].run(self.rewards, hp)
                 total_vesting_stake+=self.darkies[i].update_vesting()
 
+
             #print('reward: {}'.format(rewards[-1]))
             for i in range(len(self.darkies)):
                 winners += self.darkies[i].won
@@ -77,7 +78,7 @@ class DarkfiTable:
         return sum([darkie.apr_scaled_to_runningtime() for darkie in self.darkies])/len(self.darkies) * (ONE_YEAR/self.running_time) * 100
 
     def avg_stake_ratio(self):
-        return sum([darkie.staked_tokens_ratio() for darkie in self.darkies])/len(self.darkies)*100
+        return sum([darkie.staked_tokens_ratio() for darkie in self.darkies])/len(self.darkies)
 
     def write(self):
         elapsed=self.end_time-self.start_time

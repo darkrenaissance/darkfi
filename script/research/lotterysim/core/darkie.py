@@ -33,9 +33,8 @@ class Darkie():
         avg_apy = 0
         for idx, reward in enumerate(rewards):
             #print('slot: {}, idx: {} of {}, staked tokens: {}, initial stake: {}'.format(self.slot, idx, len(rewards), len(self.strategy.staked_tokens_ratio), len(self.initial_stake)))
-            current_epoch_staked_tokens = Num(self.strategy.staked_tokens_ratio[idx-1]) * Num(self.initial_stake[idx])
+            current_epoch_staked_tokens = Num(self.strategy.staked_tokens_ratio[idx-1]) * Num(self.initial_stake[idx-1])
             avg_apy += (Num(reward) / current_epoch_staked_tokens) if current_epoch_staked_tokens!=0 else 0
-        #return avg_apy/len(rewards) if len(rewards)>0 else 0
         return avg_apy
 
     def apr_scaled_to_runningtime(self):
