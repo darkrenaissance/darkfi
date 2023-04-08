@@ -199,8 +199,13 @@ async fn main() -> Result<()> {
                 };
 
                 if task.desc.is_none() {
-                    task.desc = desc_in_editor()?;
+                    task.desc = desc_in_editor(task.clone())?;
                 };
+
+                if task.clone().desc.unwrap().trim().is_empty() {
+                    error!("Abort adding the task due to empty description.");
+                    exit(1)
+                }
 
                 return tau.add(task).await
             }

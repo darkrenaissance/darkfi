@@ -97,6 +97,28 @@ pub struct TaskInfo {
     pub comments: Vec<Comment>,
 }
 
+impl From<BaseTask> for TaskInfo {
+    fn from(value: BaseTask) -> Self {
+        Self {
+            ref_id: String::default(),
+            workspace: String::default(),
+            id: u32::default(),
+            title: value.title,
+            tags: value.tags,
+            desc: String::default(),
+            owner: String::default(),
+            assign: value.assign,
+            project: value.project,
+            due: value.due,
+            rank: value.rank,
+            created_at: i64::default(),
+            state: String::default(),
+            events: vec![],
+            comments: vec![],
+        }
+    }
+}
+
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct TaskEvent {
     pub action: String,

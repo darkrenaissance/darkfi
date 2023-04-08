@@ -28,6 +28,11 @@ use log::error;
 
 use darkfi::{util::time::Timestamp, Result};
 
+use crate::{
+    primitives::{BaseTask, TaskInfo},
+    view::print_task_info,
+};
+
 /// Parse due date (e.g. "1503" for 15 March) as i64 timestamp.
 pub fn due_as_timestamp(due: &str) -> Option<i64> {
     if due.len() != 4 || due.parse::<u32>().is_err() {
@@ -57,7 +62,8 @@ pub fn due_as_timestamp(due: &str) -> Option<i64> {
 }
 
 /// Start up the preferred editor to edit a task's description.
-pub fn desc_in_editor() -> Result<Option<String>> {
+pub fn desc_in_editor(task: BaseTask) -> Result<Option<String>> {
+    let task_info = TaskInfo::from(task);
     // Create a temporary file with some comments inside.
     let mut file_path = env::temp_dir();
     let file_name = format!("tau-{}", Timestamp::current_time().0);
@@ -65,7 +71,12 @@ pub fn desc_in_editor() -> Result<Option<String>> {
     let mut file = File::create(&file_path)?;
 
     writeln!(file, "\n# Write your task description here.")?;
-    writeln!(file, "# Lines starting with \"#\" will be removed")?;
+    writeln!(file, "# Lines starting with \"#\" will be removed.")?;
+    writeln!(file, "# An empty description aborts adding the task.")?;
+    writeln!(file, "\n# ------------------------ >8 ------------------------")?;
+    writeln!(file, "# Do not modify or remove the line above.")?;
+    writeln!(file, "# Everything below it will be ignored.")?;
+    writeln!(file, "\n{:?}", print_task_info(task_info))?;
 
     // Try $EDITOR, and if not, fallback to xdg-open.
     let editor_argv0 = match env::var("EDITOR") {
@@ -83,6 +94,9 @@ pub fn desc_in_editor() -> Result<Option<String>> {
     for i in content.lines() {
         if !i.starts_with('#') {
             lines.push(i.to_string())
+        }
+        if i == "# ------------------------ >8 ------------------------" {
+            break
         }
     }
     Ok(Some(lines.join("\n")))
