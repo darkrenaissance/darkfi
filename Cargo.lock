@@ -4217,6 +4217,7 @@ dependencies = [
  "easy-parallel",
  "futures",
  "hex",
+ "libc",
  "log",
  "rand",
  "serde",

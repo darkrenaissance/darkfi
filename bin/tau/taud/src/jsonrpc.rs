@@ -39,7 +39,7 @@ use crate::{
     error::{to_json_result, TaudError, TaudResult},
     month_tasks::MonthTasks,
     task_info::{Comment, TaskInfo},
-    util::find_free_id,
+    util::{find_free_id, set_event},
 };
 
 pub struct JsonRpcInterface {
@@ -212,6 +212,7 @@ impl JsonRpcInterface {
 
         if states.contains(&state.as_str()) {
             task.set_state(&state);
+            set_event(&mut task, "state", &self.nickname, &state);
         }
 
         self.notify_queue_sender.send(task).await.map_err(Error::from)?;
@@ -236,6 +237,7 @@ impl JsonRpcInterface {
         let mut task: TaskInfo = self.load_task_by_id(&params[0], ws)?;
 
         task.set_comment(Comment::new(&comment_content, &self.nickname));
+        set_event(&mut task, "comment", &self.nickname, &comment_content);
 
         self.notify_queue_sender.send(task).await.map_err(Error::from)?;
 
@@ -413,6 +415,7 @@ impl JsonRpcInterface {
             let title: String = serde_json::from_value(title)?;
             if !title.is_empty() {
                 task.set_title(&title);
+                set_event(&mut task, "title", &self.nickname, &title);
             }
         }
 
@@ -422,16 +425,23 @@ impl JsonRpcInterface {
                 let description: Option<String> = serde_json::from_value(description.clone())?;
                 if let Some(desc) = description {
                     task.set_desc(&desc);
+                    set_event(&mut task, "desc", &self.nickname, &desc);
                 }
             }
         }
 
         if fields.contains_key("rank") {
-            let rank_opt = fields.get("rank");
-            if let Some(rank) = rank_opt {
-                let rank: Option<f32> = serde_json::from_value(rank.clone())?;
-                if let Some(rank) = rank {
-                    task.set_rank(Some(rank));
+            let rank_opt = fields.get("rank").unwrap();
+            let rank: Option<Option<f32>> = serde_json::from_value(rank_opt.clone())?;
+            if let Some(rank) = rank {
+                task.set_rank(rank);
+                match rank {
+                    Some(r) => {
+                        set_event(&mut task, "rank", &self.nickname, &r.to_string());
+                    }
+                    None => {
+                        set_event(&mut task, "rank", &self.nickname, "None");
+                    }
                 }
             }
         }
@@ -441,6 +451,14 @@ impl JsonRpcInterface {
             let due: Option<Option<Timestamp>> = serde_json::from_value(due)?;
             if let Some(d) = due {
                 task.set_due(d);
+                match d {
+                    Some(v) => {
+                        set_event(&mut task, "due", &self.nickname, &v.to_string());
+                    }
+                    None => {
+                        set_event(&mut task, "due", &self.nickname, "None");
+                    }
+                }
             }
         }
 
@@ -449,6 +467,7 @@ impl JsonRpcInterface {
             let assign: Vec<String> = serde_json::from_value(assign)?;
             if !assign.is_empty() {
                 task.set_assign(&assign);
+                set_event(&mut task, "assign", &self.nickname, &assign.join(", "));
             }
         }
 
@@ -457,6 +476,7 @@ impl JsonRpcInterface {
             let project: Vec<String> = serde_json::from_value(project)?;
             if !project.is_empty() {
                 task.set_project(&project);
+                set_event(&mut task, "project", &self.nickname, &project.join(", "));
             }
         }
 
@@ -465,6 +485,7 @@ impl JsonRpcInterface {
             let tags: Vec<String> = serde_json::from_value(tags)?;
             if !tags.is_empty() {
                 task.set_tags(&tags);
+                set_event(&mut task, "tags", &self.nickname, &tags.join(", "));
             }
         }
 

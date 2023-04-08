@@ -37,7 +37,7 @@ use crate::{
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq, Eq)]
-struct TaskEvent {
+pub struct TaskEvent {
     action: String,
     author: String,
     content: String,
@@ -45,7 +45,7 @@ struct TaskEvent {
 }
 
 impl TaskEvent {
-    fn new(action: String, author: String, content: String) -> Self {
+    pub fn new(action: String, author: String, content: String) -> Self {
         Self { action, author, content, timestamp: Timestamp::current_time() }
     }
 }
@@ -68,7 +68,7 @@ impl Comment {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, SerialEncodable, SerialDecodable)]
-pub struct TaskEvents(Vec<TaskEvent>);
+pub struct TaskEvents(pub Vec<TaskEvent>);
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct TaskComments(Vec<Comment>);
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, SerialEncodable, SerialDecodable)]
@@ -93,7 +93,7 @@ pub struct TaskInfo {
     rank: Option<f32>,
     created_at: Timestamp,
     state: String,
-    events: TaskEvents,
+    pub(crate) events: TaskEvents,
     comments: TaskComments,
 }
 
@@ -197,13 +197,11 @@ impl TaskInfo {
     pub fn set_title(&mut self, title: &str) {
         debug!(target: "tau", "TaskInfo::set_title()");
         self.title = title.into();
-        self.set_event("title", title);
     }
 
     pub fn set_desc(&mut self, desc: &str) {
         debug!(target: "tau", "TaskInfo::set_desc()");
         self.desc = desc.into();
-        self.set_event("desc", desc);
     }
 
     pub fn set_tags(&mut self, tags: &[String]) {
@@ -217,58 +215,31 @@ impl TaskInfo {
                 self.tags.0.retain(|tag| tag != &t);
             }
         }
-        self.set_event("tags", &tags.join(", "));
     }
 
     pub fn set_assign(&mut self, assigns: &[String]) {
         debug!(target: "tau", "TaskInfo::set_assign()");
         self.assign = TaskAssigns(assigns.to_owned());
-        self.set_event("assign", &assigns.join(", "));
     }
 
     pub fn set_project(&mut self, projects: &[String]) {
         debug!(target: "tau", "TaskInfo::set_project()");
         self.project = TaskProjects(projects.to_owned());
-        self.set_event("project", &projects.join(", "));
     }
 
     pub fn set_comment(&mut self, c: Comment) {
         debug!(target: "tau", "TaskInfo::set_comment()");
-        self.comments.0.push(c.clone());
-        self.set_event("comment", &c.content);
+        self.comments.0.push(c);
     }
 
     pub fn set_rank(&mut self, r: Option<f32>) {
         debug!(target: "tau", "TaskInfo::set_rank()");
         self.rank = r;
-        match r {
-            Some(v) => {
-                self.set_event("rank", &v.to_string());
-            }
-            None => {
-                self.set_event("rank", "None");
-            }
-        }
     }
 
     pub fn set_due(&mut self, d: Option<Timestamp>) {
         debug!(target: "tau", "TaskInfo::set_due()");
         self.due = d;
-        match d {
-            Some(v) => {
-                self.set_event("due", &v.to_string());
-            }
-            None => {
-                self.set_event("due", "None");
-            }
-        }
-    }
-
-    pub fn set_event(&mut self, action: &str, content: &str) {
-        debug!(target: "tau", "TaskInfo::set_event()");
-        if !content.is_empty() {
-            self.events.0.push(TaskEvent::new(action.into(), self.owner.clone(), content.into()));
-        }
     }
 
     pub fn set_state(&mut self, state: &str) {
@@ -277,6 +248,5 @@ impl TaskInfo {
             return
         }
         self.state = state.to_string();
-        self.set_event("state", state);
     }
 }

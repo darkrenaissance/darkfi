@@ -16,6 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use log::debug;
+
+use crate::task_info::{TaskEvent, TaskInfo};
+
 pub fn find_free_id(task_ids: &[u32]) -> u32 {
     for i in 1.. {
         if !task_ids.contains(&i) {
@@ -23,6 +27,13 @@ pub fn find_free_id(task_ids: &[u32]) -> u32 {
         }
     }
     1
+}
+
+pub fn set_event(task_info: &mut TaskInfo, action: &str, author: &str, content: &str) {
+    debug!(target: "tau", "TaskInfo::set_event()");
+    if !content.is_empty() {
+        task_info.events.0.push(TaskEvent::new(action.into(), author.into(), content.into()));
+    }
 }
 
 #[cfg(test)]
