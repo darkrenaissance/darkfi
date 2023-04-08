@@ -52,7 +52,7 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
             }
         }
 
-        // Filter by month
+        // Filter by tag
         _ if filter.starts_with('+') => tasks.retain(|task| task.tags.contains(&filter.into())),
 
         // Filter by month
