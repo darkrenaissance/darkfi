@@ -14,6 +14,7 @@ class Darkie():
         self.epoch_len=epoch_len # epoch length during which the stake is static
         self.strategy = strategy
         self.slot = 0
+        self.apys = []
 
     def clone(self):
         return Darkie(self.finalized_stake)
@@ -27,18 +28,19 @@ class Darkie():
     '''
 
     '''
-    @rewards: array of reward per epoch, with compound interest.
+    @rewards: array of reward per epoch
+    return apy during runnigntime with compound interest
     '''
-    def apy_scaled_to_epoch(self, rewards):
+    def apy_scaled_to_runningtime(self, rewards):
         avg_apy = 0
         for idx, reward in enumerate(rewards):
             #print('slot: {}, idx: {} of {}, staked tokens: {}, initial stake: {}'.format(self.slot, idx, len(rewards), len(self.strategy.staked_tokens_ratio), len(self.initial_stake)))
             current_epoch_staked_tokens = Num(self.strategy.staked_tokens_ratio[idx-1]) * Num(self.initial_stake[idx-1])
             avg_apy += (Num(reward) / current_epoch_staked_tokens) if current_epoch_staked_tokens!=0 else 0
-        return avg_apy
+        return avg_apy * Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot >0 else 0
 
     def apr_scaled_to_runningtime(self):
-        return (self.stake - self.initial_stake[0]) / self.initial_stake[0]
+        return Num(self.stake - self.initial_stake[0]) / Num(self.initial_stake[0]) *  Num(ONE_YEAR/(self.slot/EPOCH_LENGTH))
 
     def staked_tokens(self):
         '''
@@ -51,8 +53,7 @@ class Darkie():
     def staked_tokens_ratio(self):
         staked_ratio = Num(sum(self.strategy.staked_tokens_ratio)/len(self.strategy.staked_tokens_ratio))
         #print('type: {}, ratio: {}'.format(self.strategy.type, staked_ratio))
-        #TODO (fix)
-        assert(staked_ratio <= 100 and staked_ratio >=0)
+        assert staked_ratio <= 1 and staked_ratio >=0, 'staked_ratio: {}'.format(staked_ratio)
         return staked_ratio
 
 
@@ -60,7 +61,6 @@ class Darkie():
         self.Sigma = (Num(sigma) if hp else sigma)
         self.feedback = (Num(feedback) if hp else feedback)
         self.f = (Num(f) if hp else f)
-        #self.initial_stake += [self.finalized_stake]
         self.slot = count
 
 
@@ -73,12 +73,15 @@ class Darkie():
             scaled_target = approx_target_in_zk(sigmas, Num(stake)) #+ (BASE_L_HP if hp else BASE_L)
             return scaled_target
 
-        if self.slot % EPOCH_LENGTH==0:
+        if self.slot % EPOCH_LENGTH ==0 and self.slot > 0:
+            apy = self.apy_scaled_to_runningtime(rewards)
+            self.apys+=[apy]
+            # staked ratio is added in strategy
+            self.strategy.set_ratio(self.slot, apy)
+            # epoch stake is added
             self.initial_stake +=[self.finalized_stake]
-        self.strategy.set_ratio(self.slot, self.apy_scaled_to_epoch(rewards))
         T = target(self.f, self.strategy.staked_value(self.finalized_stake))
         self.won = lottery(T, hp)
-
 
     def update_vesting(self):
         if self.slot >= len(self.vesting):
@@ -94,15 +97,28 @@ class Darkie():
     def update_stake(self, reward):
         if self.won:
             self.stake+=reward
+            #print('updating stake, stake: {}, last: {}'.format(self.stake, self.initial_stake[-1]))
 
     def finalize_stake(self):
+        '''
+        finalize stake if there is single leader
+        '''
         if self.won:
+            #print('finalizing stake')
             self.finalized_stake = self.stake
-        else:
-            self.stake = self.finalized_stake
+        #else:
+            #self.stake = self.finalized_stake
 
     def log_state_gain(self):
         # darkie started with self.initial_stake, self.initial_stake/self.Sigma percent
         # over the course of self.slot
         # current stake is self.stake, self.stake/self.Sigma percent
         pass
+
+    def write(self, idx):
+        with open('log/darkie'+str(idx)+'.log', 'w+') as f:
+            buf = 'initial stake:'+','.join([str(i) for i in self.initial_stake])
+            buf += '\r\n'
+            buf += 'staked ratio:'+','.join([str(i) for i in self.strategy.staked_tokens_ratio])
+            buf += 'apys: '+','.join([str(i) for i in self.apys])
+            f.write(buf)

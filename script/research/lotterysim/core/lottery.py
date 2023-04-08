@@ -39,7 +39,7 @@ class DarkfiTable:
 
             if count%EPOCH_LENGTH == 0:
                 acc = self.secondary_pid.acc_percentage()
-                reward = self.primary_pid.pid_clipped(float(self.avg_stake_ratio()), debug)
+                reward = self.primary_pid.pid_clipped(acc, debug)
                 self.rewards += [reward]
 
             #note! thread overhead is 10X slower than sequential node execution!
@@ -54,7 +54,6 @@ class DarkfiTable:
                 winners += self.darkies[i].won
                 self.darkies[i].update_stake(self.rewards[-1])
                 ###
-
 
             feedback = winners
             if winners==1:
@@ -72,16 +71,21 @@ class DarkfiTable:
         return self.secondary_pid.acc(), avg_apy, avg_reward, stake_ratio, avg_apr
 
     def avg_apy(self):
-        return sum([darkie.apy_scaled_to_epoch(self.rewards) for darkie in self.darkies])/len(self.darkies) * Num(ONE_YEAR/self.running_time) * 100
+        return Num(sum([darkie.apy_scaled_to_runningtime(self.rewards) for darkie in self.darkies])/len(self.darkies))
 
     def avg_apr(self):
-        return sum([darkie.apr_scaled_to_runningtime() for darkie in self.darkies])/len(self.darkies) * (ONE_YEAR/self.running_time) * 100
+        return Num(sum([darkie.apr_scaled_to_runningtime() for darkie in self.darkies])/len(self.darkies))
 
     def avg_stake_ratio(self):
         return sum([darkie.staked_tokens_ratio() for darkie in self.darkies])/len(self.darkies)
 
     def write(self):
         elapsed=self.end_time-self.start_time
+        for id, darkie in enumerate(self.darkies):
+            darkie.write(id)
         if self.debug:
             print("total time: {}, slot time: {}".format(str(timedelta(seconds=elapsed)), str(timedelta(seconds=elapsed/self.running_time))))
         self.secondary_pid.write()
+        with open('log/rewards.log', 'w+') as f:
+            buff = ','.join([str(i) for i in self.rewards])
+            f.write(buff)

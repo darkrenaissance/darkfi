@@ -68,7 +68,6 @@ class BasePID:
         else:
             pid_value = self.continuous_pid(feedback)
 
-        print('[{}-{}]'.format(self.clip_min, self.clip_max))
         if pid_value <= self.clip_min:
             pid_value = self.clip_min
         if pid_value >= self.clip_max:
@@ -123,7 +122,7 @@ class BasePID:
         self.write_fval('log'+ os.sep + self.type+output_hist_file)
 
     def acc(self):
-        return sum(np.array(self.feedback_hist)==1)/float(len(self.feedback_hist))
+        return sum(np.array(self.feedback_hist)==self.target)/float(len(self.feedback_hist))
 
     def acc_percentage(self):
         return self.acc() * 100

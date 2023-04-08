@@ -12,7 +12,6 @@ class Strategy(object):
         return
 
     def staked_value(self, stake):
-        #assert(self.staked_tokens_ratio[-1]>=0 and self.staked_tokens_ratio[-1]<=1)
         return Num(self.staked_tokens_ratio[-1])*Num(stake)
 
 class RandomStrategy(Strategy):
@@ -25,23 +24,21 @@ class RandomStrategy(Strategy):
             self.staked_tokens_ratio += [random.random()]
 
 class LinearStrategy(Strategy):
-    '''
-    linear staking strategy wrt apy.
-    assume optimal is 20% APY!
-    '''
     def __init__(self, epoch_len=0):
         super().__init__(epoch_len)
         self.type = 'linear'
 
     def set_ratio(self, slot, apy):
         if slot%self.epoch_len==0:
-            self.staked_tokens_ratio += [Num(apy)/Num(self.target_apy)]
+            sr = Num(apy)/Num(self.target_apy)
+            if sr>1:
+                sr = 0
+            elif sr<0:
+                sr = 0
+            self.staked_tokens_ratio += [sr]
+
 
 class LogarithmicStrategy(Strategy):
-    '''
-    logarithmic staking strategy wrt apy.
-    assume optimal is 20% APY!
-    '''
     def __init__(self, epoch_len=0):
         super().__init__(epoch_len)
         self.type = 'logarithmic'
@@ -50,15 +47,14 @@ class LogarithmicStrategy(Strategy):
         if slot%self.epoch_len==0:
             apy_ratio = math.fabs(apy/self.target_apy)
             fn = lambda x: (math.log(x, 10)+1)/2 * 0.95 + 0.05
-            print('apy_ratio: {}, output: {}'.format(apy_ratio, fn(apy_ratio)))
-            self.staked_tokens_ratio += [Num(fn(apy_ratio) if apy_ratio != 0 else 0)]
-
+            sr = Num(fn(apy_ratio) if apy_ratio != 0 else 0)
+            if sr>1:
+                sr = 0
+            elif sr<0:
+                sr = 0
+            self.staked_tokens_ratio += [sr]
 
 class SigmoidStrategy(Strategy):
-    '''
-    logarithmic staking strategy wrt apy.
-    assume optimal is 20% APY!
-    '''
     def __init__(self, epoch_len=0):
         super().__init__(epoch_len)
         self.type = 'sigmoid'
@@ -67,8 +63,12 @@ class SigmoidStrategy(Strategy):
         if slot%self.epoch_len==0:
             #TODO should be abs?
             apy_ratio = apy/self.target_apy
-            self.staked_tokens_ratio += [Num(2/(1+math.pow(math.e, -4*apy_ratio))-1)]
-
+            sr = Num(2/(1+math.pow(math.e, -4*apy_ratio))-1)
+            if sr>1:
+                sr = 0
+            elif sr<0:
+                sr = 0
+            self.staked_tokens_ratio += [sr]
 
 def random_strategy(epoch_length):
     rnd = random.random()

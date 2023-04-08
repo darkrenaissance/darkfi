@@ -8,17 +8,17 @@ import os
 
 AVG_LEN = 5
 
-KP_STEP=10
+KP_STEP=0.5
 KP_SEARCH=0.01
 
-KI_STEP=10
-KI_SEARCH=1#-154.52
+KI_STEP=0.5
+KI_SEARCH=-0.5
 
-KD_STEP=10
+KD_STEP=0.5
 KD_SEARCH=-0.5
 
-RUNNING_TIME=100
-NODES = 5
+RUNNING_TIME=1000
+NODES = 100
 
 SHIFTING = 0.05
 
@@ -74,7 +74,7 @@ def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
         aprs += [apr]
         stakes_ratios += [stake_ratio]
     avg_acc = float(sum(accs))/len(accs)
-    avg_apy = float(sum(apys))/float(AVG_LEN)
+    avg_apy = float(sum(apys))/len(apys)
     avg_reward = float(sum(rewards))/len(rewards)
     avg_staked = float(sum(stakes_ratios))/len(stakes_ratios)
     avg_apr = float(sum(aprs))/len(aprs)
