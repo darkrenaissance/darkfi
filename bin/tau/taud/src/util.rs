@@ -16,7 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::{
+    fs::{File, OpenOptions},
+    os::unix::prelude::OpenOptionsExt,
+    path::Path,
+};
+
 use log::debug;
+
+use darkfi::{Error, Result};
 
 use crate::task_info::{TaskEvent, TaskInfo};
 
@@ -34,6 +42,15 @@ pub fn set_event(task_info: &mut TaskInfo, action: &str, author: &str, content: 
     if !content.is_empty() {
         task_info.events.0.push(TaskEvent::new(action.into(), author.into(), content.into()));
     }
+}
+
+pub fn pipe_write<P: AsRef<Path>>(path: P) -> Result<File> {
+    OpenOptions::new()
+        .write(true)
+        .append(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(path)
+        .map_err(Error::from)
 }
 
 #[cfg(test)]

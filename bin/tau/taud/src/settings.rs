@@ -58,4 +58,7 @@ pub struct Args {
     /// Current display name    
     #[structopt(long)]
     pub nickname: Option<String>,
+    // Whether to pipe notifications or not
+    #[structopt(long)]
+    pub piped: bool,
 }

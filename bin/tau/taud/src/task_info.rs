@@ -38,10 +38,10 @@ use crate::{
 
 #[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq, Eq)]
 pub struct TaskEvent {
-    action: String,
-    author: String,
-    content: String,
-    timestamp: Timestamp,
+    pub action: String,
+    pub author: String,
+    pub content: String,
+    pub timestamp: Timestamp,
 }
 
 impl TaskEvent {
@@ -83,10 +83,10 @@ pub struct TaskInfo {
     pub(crate) ref_id: String,
     pub(crate) workspace: String,
     pub(crate) id: u32,
-    title: String,
+    pub(crate) title: String,
     tags: TaskTags,
     desc: String,
-    owner: String,
+    pub(crate) owner: String,
     assign: TaskAssigns,
     project: TaskProjects,
     due: Option<Timestamp>,

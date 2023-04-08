@@ -16,15 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_std::sync::{Arc, Mutex};
+use libc::mkfifo;
 use std::{
     collections::HashMap,
     env,
+    ffi::CString,
     fs::{create_dir_all, remove_dir_all},
-    io::stdin,
+    io::{stdin, Write},
     path::Path,
 };
 
-use async_std::sync::{Arc, Mutex};
 use crypto_box::{
     aead::{Aead, AeadCore},
     rand_core::OsRng,
@@ -63,6 +65,7 @@ use crate::{
     jsonrpc::JsonRpcInterface,
     settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
     task_info::TaskInfo,
+    util::pipe_write,
 };
 
 fn get_workspaces(settings: &Args) -> Result<HashMap<String, SalsaBox>> {
@@ -146,6 +149,7 @@ async fn start_sync_loop(
     workspaces: HashMap<String, SalsaBox>,
     datastore_path: std::path::PathBuf,
     missed_events: Arc<Mutex<Vec<Event<EncryptedTask>>>>,
+    piped: bool,
     p2p: P2pPtr,
 ) -> TaudResult<()> {
     loop {
@@ -176,7 +180,7 @@ async fn start_sync_loop(
 
                 missed_events.lock().await.push(event.clone());
 
-                on_receive_task(&event.action, &datastore_path, &workspaces)
+                on_receive_task(&event.action, &datastore_path, &workspaces, piped)
                     .await?;
             }
         }
@@ -187,6 +191,7 @@ async fn on_receive_task(
     task: &EncryptedTask,
     datastore_path: &Path,
     workspaces: &HashMap<String, SalsaBox>,
+    piped: bool,
 ) -> TaudResult<()> {
     for (workspace, salsa_box) in workspaces.iter() {
         let task = decrypt_task(task, salsa_box);
@@ -198,6 +203,33 @@ async fn on_receive_task(
         let mut task = task.unwrap();
         info!(target: "tau", "Save the task: ref: {}", task.ref_id);
         task.workspace = workspace.clone();
+        if piped {
+            // if we can't load tha task then it's a new task.
+            // otherwise it's a modification.
+            if TaskInfo::load(&task.ref_id, datastore_path).is_err() {
+                let file = "/tmp/tau_pipe";
+                let mut pipe_write = pipe_write(file).unwrap();
+                let buf = format!(
+                    "{{ \"action\": \"add_task\", \"owner\": \"{}\", \"content\": \"{}\" }}",
+                    task.owner.clone(),
+                    task.title.clone()
+                );
+                pipe_write.write_all(buf.as_bytes()).unwrap();
+            } else {
+                match task.events.0.last() {
+                    Some(ev) => {
+                        let file = "/tmp/tau_pipe";
+                        let mut pipe_write = pipe_write(file).unwrap();
+                        let buf = format!(
+                            "{{ \"action\": \"{}\", \"author\": \"{}\", \"content\": \"{}\" }}",
+                            ev.action, ev.author, ev.content
+                        );
+                        pipe_write.write_all(buf.as_bytes()).unwrap();
+                    }
+                    None => todo!(),
+                }
+            }
+        }
         task.save(datastore_path)?;
     }
     Ok(())
@@ -231,6 +263,12 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     if nickname.is_none() {
         error!("Provide a nickname in config file");
         return Ok(())
+    }
+
+    if settings.piped {
+        let file = "/tmp/tau_pipe";
+        let path = CString::new(file).unwrap();
+        unsafe { mkfifo(path.as_ptr(), 0o644) };
     }
 
     // mkdir datastore_path if not exists
@@ -330,6 +368,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
             workspaces.clone(),
             datastore_path.clone(),
             missed_events,
+            settings.piped,
             p2p.clone(),
         ))
         .detach();
