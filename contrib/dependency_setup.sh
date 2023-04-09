@@ -22,12 +22,12 @@ setup_mac() {
 }
 
 setup_apt() {
-	apt_deps="git make jq gcc pkg-config"
+	apt_deps="git make jq gcc pkg-config libmpg123-dev"
 	$1 install $apt_deps || return 1
 }
 
 setup_pacman() {
-	pacman_deps="git make jq gcc pkgconf"
+	pacman_deps="git make jq gcc pkgconf mpg123"
 	$1 -Sy $pacman_deps || return 1
 }
 
