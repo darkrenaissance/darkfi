@@ -54,9 +54,9 @@ def experiment(controller_type=CONTROLLER_TYPE_TAKAHASHI, kp=0, ki=0, kd=0, kc=0
     dt = DarkfiTable(ERC20DRK, RUNNING_TIME, controller_type, kp=kp, ki=ki, kd=kd, kc=kc, td=td, ti=ti, ts=ts)
     RND_NODES = random.randint(5, NODES) if randomize_nodes else NODES
     for idx in range(0,RND_NODES):
-        darkie = Darkie(distribution[idx], strategy=SigmoidStrategy(EPOCH_LENGTH), apy_window=EPOCH_LENGTH)
+        darkie = Darkie(distribution[idx], strategy=SigmoidStrategy(EPOCH_LENGTH))
         dt.add_darkie(darkie)
-    acc, apy, reward, stake_ratio, apr = dt.background_with_apy(rand_running_time, hp)
+    acc, apy, reward, stake_ratio, apr = dt.background(rand_running_time, hp)
     return acc
 
 

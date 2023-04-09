@@ -9,7 +9,7 @@ import os
 AVG_LEN = 5
 
 KP_STEP=0.5
-KP_SEARCH=0.01
+KP_SEARCH=0.14
 
 KI_STEP=0.5
 KI_SEARCH=-0.5
@@ -22,7 +22,7 @@ NODES = 100
 
 SHIFTING = 0.05
 
-highest_apy = 0
+highest_apr = 0
 highest_acc = 0
 highest_staked = 0
 KP='kp'
@@ -52,40 +52,37 @@ def experiment(controller_type=CONTROLLER_TYPE_DISCRETE, rkp=0, rki=0, rkd=0, di
     for idx in range(0,RND_NODES):
         darkie = Darkie(distribution[idx])
         dt.add_darkie(darkie)
-    acc, apy, reward, stake_ratio, apr = dt.background_with_apy(rand_running_time, hp)
+    acc, apy, reward, stake_ratio, apr = dt.background(rand_running_time, hp)
     return acc, apy, reward, stake_ratio, apr
 
 def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
-    global highest_apy
+    global highest_apr
     global highest_acc
     global highest_staked
     global highest_gain
     new_record=False
     accs = []
-    apys = []
+    aprs = []
     rewards = []
     stakes_ratios = []
     aprs = []
     for i in range(0, AVG_LEN):
         acc, apy, reward, stake_ratio, apr = experiment(CONTROLLER_TYPE_DISCRETE, rkp=kp, rki=ki, rkd=kd, distribution=distribution, hp=hp)
         accs += [acc]
-        apys += [apy]
         rewards += [reward]
         aprs += [apr]
         stakes_ratios += [stake_ratio]
     avg_acc = float(sum(accs))/len(accs)
-    avg_apy = float(sum(apys))/len(apys)
     avg_reward = float(sum(rewards))/len(rewards)
     avg_staked = float(sum(stakes_ratios))/len(stakes_ratios)
     avg_apr = float(sum(aprs))/len(aprs)
-    buff = 'avg(acc): {}, avg(apy): {}, avg(apr): {}, avg(reward): {}, avg(stake ratio): {}, kp: {}, ki:{}, kd:{}'.format(avg_acc, avg_apy, avg_apr, avg_reward, avg_staked, kp, ki, kd)
-    if avg_apy > 0:
+    buff = 'avg(acc): {}, avg(apr): {}, avg(reward): {}, avg(stake ratio): {}, kp: {}, ki:{}, kd:{}'.format(avg_acc, avg_apr, avg_reward, avg_staked, kp, ki, kd)
+    if avg_apr > 0:
         gain = (kp, ki, kd)
-        acc_gain = (avg_apy, gain)
-        if avg_acc > highest_acc:
-        #if avg_apy > highest_apy and avg_acc > highest_acc and avg_staked > highest_staked:
+        acc_gain = (avg_apr, gain)
+        if avg_acc > highest_acc and avg_apr > highest_apr and avg_staked > highest_staked:
             new_record = True
-            highest_apy = avg_apy
+            highest_apr = avg_apr
             highest_acc = avg_acc
             highest_staked = avg_staked
             highest_gain = (kp, ki, kd)

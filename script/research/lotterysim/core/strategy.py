@@ -5,7 +5,7 @@ class Strategy(object):
     def __init__(self, epoch_len=0):
         self.epoch_len = epoch_len
         self.staked_tokens_ratio = [1]
-        self.target_apy = TARGET_APY
+        self.target_apy = TARGET_APR
         self.type = 'base'
 
     def set_ratio(self, slot, apy):

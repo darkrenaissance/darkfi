@@ -14,33 +14,20 @@ class Darkie():
         self.epoch_len=epoch_len # epoch length during which the stake is static
         self.strategy = strategy
         self.slot = 0
-        self.apys = []
 
     def clone(self):
         return Darkie(self.finalized_stake)
 
-    '''
-    def apy(self):
-        staked_tokens = self.staked_tokens()
-        apy = (Num(self.stake) - staked_tokens) / staked_tokens if self.stake>0 else 0
-        #print('stake: {}, staked_tokens: {}'.format(self.stake, staked_tokens))
-        return Num(apy)
-    '''
-
-    '''
-    @rewards: array of reward per epoch
-    return apy during runnigntime with compound interest
-    '''
     def apy_scaled_to_runningtime(self, rewards):
         avg_apy = 0
         for idx, reward in enumerate(rewards):
-            #print('slot: {}, idx: {} of {}, staked tokens: {}, initial stake: {}'.format(self.slot, idx, len(rewards), len(self.strategy.staked_tokens_ratio), len(self.initial_stake)))
             current_epoch_staked_tokens = Num(self.strategy.staked_tokens_ratio[idx-1]) * Num(self.initial_stake[idx-1])
             avg_apy += (Num(reward) / current_epoch_staked_tokens) if current_epoch_staked_tokens!=0 else 0
-        return avg_apy * Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot >0 else 0
+        return avg_apy * Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot  and self.initial_stake[0]>0 >0 else 0
+
 
     def apr_scaled_to_runningtime(self):
-        return Num(self.stake - self.initial_stake[0]) / Num(self.initial_stake[0]) *  Num(ONE_YEAR/(self.slot/EPOCH_LENGTH))
+        return Num(self.stake - self.initial_stake[0]) / Num(self.initial_stake[0]) *  Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot> 0 and self.initial_stake[0]>0 else 0
 
     def staked_tokens(self):
         '''
@@ -64,7 +51,7 @@ class Darkie():
         self.slot = count
 
 
-    def run(self, rewards, hp=True):
+    def run(self, hp=True):
         k=N_TERM
         def target(tune_parameter, stake):
             x = (Num(1) if hp else 1)  - (Num(tune_parameter) if hp else tune_parameter)
@@ -74,10 +61,9 @@ class Darkie():
             return scaled_target
 
         if self.slot % EPOCH_LENGTH ==0 and self.slot > 0:
-            apy = self.apy_scaled_to_runningtime(rewards)
-            self.apys+=[apy]
+            apr = self.apr_scaled_to_runningtime()
             # staked ratio is added in strategy
-            self.strategy.set_ratio(self.slot, apy)
+            self.strategy.set_ratio(self.slot, apr)
             # epoch stake is added
             self.initial_stake +=[self.finalized_stake]
         T = target(self.f, self.strategy.staked_value(self.finalized_stake))
@@ -120,5 +106,3 @@ class Darkie():
             buf = 'initial stake:'+','.join([str(i) for i in self.initial_stake])
             buf += '\r\n'
             buf += 'staked ratio:'+','.join([str(i) for i in self.strategy.staked_tokens_ratio])
-            buf += 'apys: '+','.join([str(i) for i in self.apys])
-            f.write(buf)

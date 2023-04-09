@@ -12,14 +12,14 @@ F_MIN = 0.0001
 F_MAX = 0.9999
 
 REWARD_MIN = 0
-REWARD_MAX = 1000
+REWARD_MAX = 100
 
 SLOT = 90
 ONE_YEAR = Num(365.25*24*60*60/SLOT)
 
-TARGET_APY = Num(1)
+TARGET_APR = Num(1)
 
-PRIMARY_REWARD_TARGET = 0.33 # ratio of staked tokens
+PRIMARY_REWARD_TARGET = 0.5 # ratio of staked tokens
 SECONDARY_LEAD_TARGET = 1 #number of lead per slot
 
 EPSILON = 1

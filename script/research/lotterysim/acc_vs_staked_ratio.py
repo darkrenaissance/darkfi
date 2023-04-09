@@ -26,7 +26,7 @@ for portion in range(1,11):
         dt = DarkfiTable(airdrop, RUNNING_TIME, CONTROLLER_TYPE_DISCRETE, kp=0.005999999999989028, ki=-0.005999999985257798, kd=0.01299999999999478)
         for darkie in darkies:
             dt.add_darkie(darkie)
-        acc, apy, reward, staked_ratio, apr = dt.background_with_apy(rand_running_time=False)
+        acc, apy, reward, staked_ratio, apr = dt.background(rand_running_time=False)
         accs += [acc]
     avg_acc = sum(accs)/EXPS*100
     plot+=[(stake_portion, avg_acc)]
