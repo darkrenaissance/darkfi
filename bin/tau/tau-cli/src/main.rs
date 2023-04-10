@@ -207,7 +207,11 @@ async fn main() -> Result<()> {
                     exit(1)
                 }
 
-                return tau.add(task).await
+                let title = task.clone().title;
+                if tau.add(task).await? {
+                    println!("Created task \"{}\"", title);
+                }
+                Ok(())
             }
 
             TauSubcommand::Modify { values } => {
@@ -215,9 +219,15 @@ async fn main() -> Result<()> {
                     no_filter_warn()
                 }
                 let base_task = task_from_cli(values)?;
-                for task in tasks {
-                    tau.update(task.id.into(), base_task.clone()).await?;
+                for task in tasks.clone() {
+                    let res = tau.update(task.id.into(), base_task.clone()).await?;
+                    if res {
+                        let tsk = tau.get_task_by_id(task.id.into()).await?;
+                        print_task_info(tsk)?;
+                        println!()
+                    }
                 }
+
                 Ok(())
             }
 
@@ -227,8 +237,11 @@ async fn main() -> Result<()> {
                 }
                 let state = State::Start;
                 for task in tasks {
-                    tau.set_state(task.id.into(), &state).await?;
+                    if tau.set_state(task.id.into(), &state).await? {
+                        println!("Started task: {:?}", task.id);
+                    }
                 }
+
                 Ok(())
             }
 
@@ -238,8 +251,11 @@ async fn main() -> Result<()> {
                 }
                 let state = State::Open;
                 for task in tasks {
-                    tau.set_state(task.id.into(), &state).await?;
+                    if tau.set_state(task.id.into(), &state).await? {
+                        println!("Opened task: {:?}", task.id);
+                    }
                 }
+
                 Ok(())
             }
 
@@ -249,8 +265,11 @@ async fn main() -> Result<()> {
                 }
                 let state = State::Pause;
                 for task in tasks {
-                    tau.set_state(task.id.into(), &state).await?;
+                    if tau.set_state(task.id.into(), &state).await? {
+                        println!("Paused task: {:?}", task.id);
+                    }
                 }
+
                 Ok(())
             }
 
@@ -260,8 +279,11 @@ async fn main() -> Result<()> {
                 }
                 let state = State::Stop;
                 for task in tasks {
-                    tau.set_state(task.id.into(), &state).await?;
+                    if tau.set_state(task.id.into(), &state).await? {
+                        println!("Stopped task: {}", task.id);
+                    }
                 }
+
                 Ok(())
             }
 
@@ -275,7 +297,12 @@ async fn main() -> Result<()> {
                         let comments = comments_as_string(task.comments);
                         println!("Comments {}:\n{}", task.id, comments);
                     } else {
-                        tau.set_comment(task.id.into(), &content.join(" ")).await?;
+                        let res = tau.set_comment(task.id.into(), &content.join(" ")).await?;
+                        if res {
+                            let tsk = tau.get_task_by_id(task.id.into()).await?;
+                            print_task_info(tsk)?;
+                            println!()
+                        }
                     }
                 }
                 Ok(())
@@ -285,10 +312,18 @@ async fn main() -> Result<()> {
                 for task in tasks {
                     let task = tau.get_task_by_id(task.id.into()).await?;
                     print_task_info(task)?;
+                    println!()
                 }
                 Ok(())
             }
-            TauSubcommand::Switch { workspace } => tau.switch_ws(workspace).await,
+
+            TauSubcommand::Switch { workspace } => {
+                if tau.switch_ws(workspace.clone()).await? {
+                    println!("You are now on \"{}\" workspace", workspace);
+                }
+
+                Ok(())
+            }
 
             TauSubcommand::Export { path } => {
                 let path = path.unwrap_or_else(|| DEFAULT_PATH.into());

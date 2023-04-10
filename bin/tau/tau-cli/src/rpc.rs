@@ -17,7 +17,7 @@
  */
 
 use log::debug;
-use serde_json::json;
+use serde_json::{from_value, json};
 
 use darkfi::{rpc::jsonrpc::JsonRequest, Result};
 
@@ -32,12 +32,13 @@ impl Tau {
     }
 
     /// Add a new task.
-    pub async fn add(&self, task: BaseTask) -> Result<()> {
+    pub async fn add(&self, task: BaseTask) -> Result<bool> {
         let req = JsonRequest::new("add", json!([task]));
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);
-        Ok(())
+        let reply: bool = from_value(rep)?;
+        Ok(reply)
     }
 
     /// Get current open tasks ids.
@@ -54,30 +55,33 @@ impl Tau {
     }
 
     /// Update existing task given it's ID and some params.
-    pub async fn update(&self, id: u64, task: BaseTask) -> Result<()> {
+    pub async fn update(&self, id: u64, task: BaseTask) -> Result<bool> {
         let req = JsonRequest::new("update", json!([id, task]));
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);
-        Ok(())
+        let reply: bool = from_value(rep)?;
+        Ok(reply)
     }
 
     /// Set the state for a task.
-    pub async fn set_state(&self, id: u64, state: &State) -> Result<()> {
+    pub async fn set_state(&self, id: u64, state: &State) -> Result<bool> {
         let req = JsonRequest::new("set_state", json!([id, state.to_string()]));
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);
-        Ok(())
+        let reply: bool = from_value(rep)?;
+        Ok(reply)
     }
 
     /// Set a comment for a task.
-    pub async fn set_comment(&self, id: u64, content: &str) -> Result<()> {
+    pub async fn set_comment(&self, id: u64, content: &str) -> Result<bool> {
         let req = JsonRequest::new("set_comment", json!([id, content]));
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);
-        Ok(())
+        let reply: bool = from_value(rep)?;
+        Ok(reply)
     }
 
     /// Get task data by its ID.
@@ -97,13 +101,13 @@ impl Tau {
     }
 
     /// Switch workspace.
-    pub async fn switch_ws(&self, workspace: String) -> Result<()> {
+    pub async fn switch_ws(&self, workspace: String) -> Result<bool> {
         let req = JsonRequest::new("switch_ws", json!([workspace]));
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);
-
-        Ok(())
+        let reply: bool = from_value(rep)?;
+        Ok(reply)
     }
 
     /// Get current workspace.
