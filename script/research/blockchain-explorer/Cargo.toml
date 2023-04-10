@@ -1,7 +1,7 @@
 [package]
 name = "blockchain-explorer"
 version = "0.4.1"
-description = "Command-line client to export blockchain sled database contents"
+description = "Command-line client to display statistics or export blockchain sled database contents"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
 repository = "https://github.com/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
@@ -15,3 +15,6 @@ clap = {version = "4.1.4", features = ["derive"]}
 darkfi = {path = "../../../", features = ["blockchain", "wallet", "rpc"]}
 darkfi-sdk = {path = "../../../src/sdk"}
 sled = "0.34.7"
+
+[patch.crates-io]
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="vk-ser"}

@@ -23,13 +23,13 @@ use darkfi::{
     blockchain::{
         block_store::{BlockOrderStore, BlockStore, HeaderStore},
         slot_checkpoint_store::SlotCheckpointStore,
-        tx_store::{ErroneousTxStore, TxStore},
+        tx_store::TxStore,
         Blockchain,
     },
     cli_desc,
     consensus::{
         block::{Block, Header},
-        constants::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
+        constants::{EPOCH_LENGTH, TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
         lead_info::LeadInfo,
     },
     tx::Transaction,
@@ -52,6 +52,10 @@ struct Args {
     #[arg(short, long, default_value = "/blockchain/testnet")]
     /// Node blockchain folder
     blockchain: String,
+
+    #[arg(short, long)]
+    /// Export all contents into a JSON file
+    export: bool,
 }
 
 #[derive(Debug)]
@@ -281,34 +285,12 @@ impl TxStoreInfo {
 }
 
 #[derive(Debug)]
-struct ErroneousTxStoreInfo {
-    _transactions: Vec<blake3::Hash>,
-}
-
-impl ErroneousTxStoreInfo {
-    pub fn new(erroneoustxstore: &ErroneousTxStore) -> ErroneousTxStoreInfo {
-        let mut _transactions = Vec::new();
-        let result = erroneoustxstore.get_all();
-        match result {
-            Ok(iter) => {
-                for hash in iter.iter() {
-                    _transactions.push(hash.clone());
-                }
-            }
-            Err(e) => println!("Error: {:?}", e),
-        }
-        ErroneousTxStoreInfo { _transactions }
-    }
-}
-
-#[derive(Debug)]
 struct BlockchainInfo {
     _headers: HeaderStoreInfo,
     _blocks: BlockInfoChain,
     _order: BlockOrderStoreInfo,
     _slot_checkpoints: SlotCheckpointStoreInfo,
     _transactions: TxStoreInfo,
-    _erroneous_txs: ErroneousTxStoreInfo,
 }
 
 impl BlockchainInfo {
@@ -318,19 +300,42 @@ impl BlockchainInfo {
         let _order = BlockOrderStoreInfo::new(&blockchain.order);
         let _slot_checkpoints = SlotCheckpointStoreInfo::new(&blockchain.slot_checkpoints);
         let _transactions = TxStoreInfo::new(&blockchain.transactions);
-        let _erroneous_txs = ErroneousTxStoreInfo::new(&blockchain.erroneous_txs);
-        BlockchainInfo {
-            _headers,
-            _blocks,
-            _order,
-            _slot_checkpoints,
-            _transactions,
-            _erroneous_txs,
-        }
+        BlockchainInfo { _headers, _blocks, _order, _slot_checkpoints, _transactions }
     }
 }
 
-fn generate(folder: &str, node: &str, blockchain: &str) -> Result<()> {
+fn statistics(folder: &str, node: &str, blockchain: &str) -> Result<()> {
+    println!("Retrieving blockchain statistics for {node}...");
+
+    // Node folder
+    let folder = folder.to_owned() + node;
+
+    // Initialize or load sled database
+    let path = folder.to_owned() + blockchain;
+    let db_path = expand_path(&path).unwrap();
+    let sled_db = sled::open(&db_path)?;
+
+    // Retrieve statistics
+    let blockchain =
+        Blockchain::new(&sled_db, *TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES)?;
+    let slot = blockchain.last_slot_checkpoint()?.slot;
+    let epoch = slot / EPOCH_LENGTH as u64;
+    let (_, block) = blockchain.last()?;
+    let blocks = blockchain.len();
+    let txs = blockchain.txs_len();
+    drop(sled_db);
+
+    // Print statistics
+    println!("Latest slot: {slot}");
+    println!("Epoch: {epoch}");
+    println!("Latest block: {block}");
+    println!("Total blocks: {blocks}");
+    println!("Total transactions: {txs}");
+
+    Ok(())
+}
+
+fn export(folder: &str, node: &str, blockchain: &str) -> Result<()> {
     println!("Exporting data for {node}...");
 
     // Node folder
@@ -361,7 +366,11 @@ fn main() -> Result<()> {
     println!("Node folder path: {}", args.path);
     // Export data for each node
     for node in args.node {
-        generate(&args.path, &node, &args.blockchain)?;
+        if args.export {
+            export(&args.path, &node, &args.blockchain)?;
+            continue
+        }
+        statistics(&args.path, &node, &args.blockchain)?;
     }
 
     Ok(())

@@ -108,6 +108,11 @@ impl TxStore {
 
         Ok(txs)
     }
+
+    /// Retrieve records count
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
 }
 
 /// The `PendingTxStore` is a `sled` tree storing all the node pending

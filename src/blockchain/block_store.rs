@@ -328,6 +328,7 @@ impl BlockOrderStore {
         self.0.len()
     }
 
+    /// Check if sled contains any records
     pub fn is_empty(&self) -> bool {
         self.0.len() == 0
     }

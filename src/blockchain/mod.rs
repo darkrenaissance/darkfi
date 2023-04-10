@@ -184,6 +184,12 @@ impl Blockchain {
         self.order.len()
     }
 
+    /// Retrieve stored txs count
+    pub fn txs_len(&self) -> usize {
+        self.transactions.len()
+    }
+
+    /// Check if blockchain contains any blocks
     pub fn is_empty(&self) -> bool {
         self.order.len() == 0
     }
