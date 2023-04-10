@@ -40,7 +40,7 @@ initialization:
 % ./nym-socks5-client init --use-reply-surbs true --id sockstest --provider 8hUvtEyZK8umsdxxPS2BizQhEDmbNeXEPBZLgscE57Zh.5P2bWn6WybVL8QgoPEUHf6h2zXktmwrWaqaucEBZy7Vb@5vC8spDvw5VDQ8Zvd9fVvBhbUDv9jABR4cXzd4Kh5vz
 ```
 
-We alos set `--use-reply-surbs` flag to true, this will enable 
+We also set `--use-reply-surbs` flag to true, this will enable 
 anonymous sender tag for communication with the service provider, 
 but it will make the actual communication slower.
 
