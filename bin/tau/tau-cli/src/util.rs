@@ -30,7 +30,7 @@ use darkfi::{util::time::Timestamp, Result};
 
 use crate::{
     primitives::{BaseTask, TaskInfo},
-    view::print_task_info,
+    view::helper_taskinfo_func,
 };
 
 /// Parse due date (e.g. "1503" for 15 March) as i64 timestamp.
@@ -76,7 +76,7 @@ pub fn desc_in_editor(task: BaseTask) -> Result<Option<String>> {
     writeln!(file, "\n# ------------------------ >8 ------------------------")?;
     writeln!(file, "# Do not modify or remove the line above.")?;
     writeln!(file, "# Everything below it will be ignored.")?;
-    writeln!(file, "\n{:?}", print_task_info(task_info))?;
+    writeln!(file, "\n{}", helper_taskinfo_func(task_info)?)?;
 
     // Try $EDITOR, and if not, fallback to xdg-open.
     let editor_argv0 = match env::var("EDITOR") {

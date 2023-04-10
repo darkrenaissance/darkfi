@@ -122,7 +122,7 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String) -> Result<()> {
     Ok(())
 }
 
-pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
+pub fn helper_taskinfo_func(taskinfo: TaskInfo) -> Result<Table> {
     let due = timestamp_to_date(taskinfo.due.unwrap_or(0), DateFormat::Date);
     let created_at = timestamp_to_date(taskinfo.created_at, DateFormat::DateTime);
     let rank = if let Some(r) = taskinfo.rank { r.to_string() } else { "".to_string() };
@@ -150,6 +150,11 @@ pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
     );
 
     table.set_titles(row!["Name", "Value"]);
+    Ok(table)
+}
+
+pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
+    let table = helper_taskinfo_func(taskinfo.clone())?;
     table.printstd();
 
     let (events, timestamps) = &events_as_string(taskinfo.events);
