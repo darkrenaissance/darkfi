@@ -8,14 +8,14 @@ import os
 
 AVG_LEN = 5
 
-KP_STEP=0.5
-KP_SEARCH=0.14
+KP_STEP=0.3
+KP_SEARCH=-0.25#0.2#-0.4(10nodes,100RT,38%acc)
 
-KI_STEP=0.5
-KI_SEARCH=-0.5
+KI_STEP=0.3
+KI_SEARCH=-0.71#-0.36#-0.25(10nodes,100RT,38%acc)
 
-KD_STEP=0.5
-KD_SEARCH=-0.5
+KD_STEP=0.3
+KD_SEARCH=1#0.48#-0.29(10nodes,100RT,38%acc)
 
 RUNNING_TIME=1000
 NODES = 100
@@ -80,7 +80,7 @@ def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
     if avg_apr > 0:
         gain = (kp, ki, kd)
         acc_gain = (avg_apr, gain)
-        if avg_acc > highest_acc and avg_apr > highest_apr and avg_staked > highest_staked:
+        if avg_acc > highest_acc:
             new_record = True
             highest_apr = avg_apr
             highest_acc = avg_acc
@@ -89,7 +89,6 @@ def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
             with open('log'+os.sep+"highest_gain.txt", 'w') as f:
                 f.write(buff)
     return buff, new_record
-
 
 def crawler(crawl, range_multiplier, step=0.1):
     start = None
@@ -107,7 +106,6 @@ def crawler(crawl, range_multiplier, step=0.1):
         range_start -= SHIFTING
         range_end += SHIFTING
         step /= 10
-
 
     while True:
         try:

@@ -6,17 +6,16 @@ class Darkie():
         self.vesting = [0] + vesting
         self.stake = (Num(airdrop) if hp else airdrop)
         self.initial_stake = [self.stake] # for debugging purpose
-        self.finalized_stake = (Num(airdrop) if hp else airdrop)
         self.Sigma = None
         self.feedback = None
         self.f = None
-        self.won=False
         self.epoch_len=epoch_len # epoch length during which the stake is static
         self.strategy = strategy
         self.slot = 0
+        self.won_hist = [] # winning history boolean
 
     def clone(self):
-        return Darkie(self.finalized_stake)
+        return Darkie(self.stake)
 
     def apy_scaled_to_runningtime(self, rewards):
         avg_apy = 0
@@ -65,9 +64,10 @@ class Darkie():
             # staked ratio is added in strategy
             self.strategy.set_ratio(self.slot, apr)
             # epoch stake is added
-            self.initial_stake +=[self.finalized_stake]
-        T = target(self.f, self.strategy.staked_value(self.finalized_stake))
-        self.won = lottery(T, hp)
+            self.initial_stake +=[self.stake]
+        T = target(self.f, self.strategy.staked_value(self.stake))
+        won = lottery(T, hp)
+        self.won_hist += [won]
 
     def update_vesting(self):
         if self.slot >= len(self.vesting):
@@ -81,28 +81,20 @@ class Darkie():
         return vesting_value
 
     def update_stake(self, reward):
-        if self.won:
+        if self.won_hist[-1]:
             self.stake+=reward
             #print('updating stake, stake: {}, last: {}'.format(self.stake, self.initial_stake[-1]))
 
-    def finalize_stake(self):
+    def resync_stake(self, reward):
         '''
-        finalize stake if there is single leader
+        add resync stake
         '''
-        if self.won:
-            #print('finalizing stake')
-            self.finalized_stake = self.stake
-        #else:
-            #self.stake = self.finalized_stake
+        self.stake += reward
 
-    def log_state_gain(self):
-        # darkie started with self.initial_stake, self.initial_stake/self.Sigma percent
-        # over the course of self.slot
-        # current stake is self.stake, self.stake/self.Sigma percent
-        pass
 
     def write(self, idx):
         with open('log/darkie'+str(idx)+'.log', 'w+') as f:
             buf = 'initial stake:'+','.join([str(i) for i in self.initial_stake])
             buf += '\r\n'
             buf += 'staked ratio:'+','.join([str(i) for i in self.strategy.staked_tokens_ratio])
+            f.write(buf)

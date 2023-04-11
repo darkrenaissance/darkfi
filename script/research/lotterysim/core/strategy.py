@@ -14,6 +14,15 @@ class Strategy(object):
     def staked_value(self, stake):
         return Num(self.staked_tokens_ratio[-1])*Num(stake)
 
+class Hodler(Strategy):
+    def __init__(self, epoch_len):
+        super().__init__(epoch_len)
+        self.type = 'holder'
+
+    def set_ratio(self, slot, apy):
+        if slot%self.epoch_len==0:
+            self.staked_tokens_ratio += [1]
+
 class RandomStrategy(Strategy):
     def __init__(self, epoch_len):
         super().__init__(epoch_len)

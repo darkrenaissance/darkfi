@@ -16,6 +16,7 @@ class DarkfiTable:
         self.primary_pid = PrimaryDiscretePID(kp=r_kp, ki=r_ki, kd=r_kd) if controller_type==CONTROLLER_TYPE_DISCRETE else PrimaryTakahashiPID(kc=kc, ti=ti, td=td, ts=ts)
         self.debug=debug
         self.rewards = []
+        self.winners = []
 
     def add_darkie(self, darkie):
         self.darkies+=[darkie]
@@ -39,7 +40,8 @@ class DarkfiTable:
 
             if count%EPOCH_LENGTH == 0:
                 acc = self.secondary_pid.acc_percentage()
-                reward = self.primary_pid.pid_clipped(acc, debug)
+                #staked_ratio = self.avg_stake_ratio()
+                reward = self.primary_pid.pid_clipped(float(acc), debug)
                 self.rewards += [reward]
 
             #note! thread overhead is 10X slower than sequential node execution!
@@ -51,16 +53,38 @@ class DarkfiTable:
 
             #print('reward: {}'.format(rewards[-1]))
             for i in range(len(self.darkies)):
-                winners += self.darkies[i].won
-                self.darkies[i].update_stake(self.rewards[-1])
+                winners += self.darkies[i].won_hist[-1]
                 ###
-
+            self.winners +=[winners]
             feedback = winners
-            if winners==1:
+            if self.winners[-1]==1:
+                for i in range(len(self.darkies)):
+                    if self.darkies[i].won_hist[-1]:
+                        self.darkies[i].update_stake(self.rewards[-1])
+                        break
+                # resolve finalization
                 if count >= ERC20DRK:
                     self.Sigma += 1
-                for i in range(len(self.darkies)):
-                    self.darkies[i].finalize_stake()
+                # resync nodes
+                merge_length = 0
+                for i in reversed(self.winners[:-1]):
+                    if i !=1:
+                        merge_length+=1
+                    else:
+                        break
+                for i in range(merge_length):
+                    resync_slot_id = count-(i+1)
+                    resync_reward_id = int((resync_slot_id)/EPOCH_LENGTH)
+                    resync_reward = self.rewards[resync_reward_id]
+                    # resyncing depends on the random branch chosen,
+                    # it's simulated by choosing first wining node
+                    darkie_winning_idx = 0
+                    for darkie_idx in range(len(self.darkies)):
+                        if self.darkies[darkie_idx].won_hist[resync_slot_id]:
+                            darkie_winning_idx = darkie_idx
+                            break
+                    self.darkies[darkie_winning_idx].resync_stake(resync_reward)
+
             count+=1
         self.end_time=time.time()
         avg_reward = sum(self.rewards)/len(self.rewards)
