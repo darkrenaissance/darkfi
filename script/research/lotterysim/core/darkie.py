@@ -11,6 +11,7 @@ class Darkie():
         self.f = None
         self.epoch_len=epoch_len # epoch length during which the stake is static
         self.strategy = strategy
+        print('strategy type: {}'.format(strategy.type))
         self.slot = 0
         self.won_hist = [] # winning history boolean
 
@@ -96,5 +97,7 @@ class Darkie():
         with open('log/darkie'+str(idx)+'.log', 'w+') as f:
             buf = 'initial stake:'+','.join([str(i) for i in self.initial_stake])
             buf += '\r\n'
-            buf += 'staked ratio:'+','.join([str(i) for i in self.strategy.staked_tokens_ratio])
+            buf += '(apr,staked ratio,{}):'.format(self.strategy.type)+','.join(['('+str(apr)+','+str(sr)+')' for sr, apr in zip(self.strategy.staked_tokens_ratio, self.strategy.annual_return)])
+            buf+='\r\n'
+            buf += 'apr: {}'.format(self.apr_scaled_to_runningtime())
             f.write(buf)

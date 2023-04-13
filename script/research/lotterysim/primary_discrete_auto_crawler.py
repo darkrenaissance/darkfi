@@ -3,22 +3,21 @@ from core.lottery import DarkfiTable
 from core.utils import *
 from core.darkie import Darkie
 from tqdm import tqdm
-from core.strategy import SigmoidStrategy
 import os
+from core.strategy import random_strategy
+AVG_LEN = 10
 
-AVG_LEN = 5
+KP_STEP=10
+KP_SEARCH=20.12#-0.25#0.2#-0.4(10nodes,100RT,38%acc)
 
-KP_STEP=0.3
-KP_SEARCH=-0.25#0.2#-0.4(10nodes,100RT,38%acc)
+KI_STEP=10
+KI_SEARCH=-50.55#-0.71#-0.36#-0.25(10nodes,100RT,38%acc)
 
-KI_STEP=0.3
-KI_SEARCH=-0.71#-0.36#-0.25(10nodes,100RT,38%acc)
-
-KD_STEP=0.3
-KD_SEARCH=1#0.48#-0.29(10nodes,100RT,38%acc)
+KD_STEP=10
+KD_SEARCH=-30.535#1#0.48#-0.29(10nodes,100RT,38%acc)
 
 RUNNING_TIME=1000
-NODES = 100
+NODES = 10
 
 SHIFTING = 0.05
 
@@ -50,7 +49,7 @@ def experiment(controller_type=CONTROLLER_TYPE_DISCRETE, rkp=0, rki=0, rkd=0, di
     dt = DarkfiTable(ERC20DRK, RUNNING_TIME, controller_type, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0.03840000000000491, r_kp=rkp, r_ki=rki, r_kd=rkd)
     RND_NODES = random.randint(5, NODES) if randomize_nodes else NODES
     for idx in range(0,RND_NODES):
-        darkie = Darkie(distribution[idx])
+        darkie = Darkie(distribution[idx], strategy=random_strategy(EPOCH_LENGTH))
         dt.add_darkie(darkie)
     acc, apy, reward, stake_ratio, apr = dt.background(rand_running_time, hp)
     return acc, apy, reward, stake_ratio, apr
@@ -72,15 +71,15 @@ def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
         rewards += [reward]
         aprs += [apr]
         stakes_ratios += [stake_ratio]
-    avg_acc = float(sum(accs))/len(accs)
-    avg_reward = float(sum(rewards))/len(rewards)
-    avg_staked = float(sum(stakes_ratios))/len(stakes_ratios)
-    avg_apr = float(sum(aprs))/len(aprs)
+    avg_acc = float(sum(accs))/AVG_LEN
+    avg_reward = float(sum(rewards))/AVG_LEN
+    avg_staked = float(sum(stakes_ratios))/AVG_LEN
+    avg_apr = float(sum(aprs))/AVG_LEN
     buff = 'avg(acc): {}, avg(apr): {}, avg(reward): {}, avg(stake ratio): {}, kp: {}, ki:{}, kd:{}'.format(avg_acc, avg_apr, avg_reward, avg_staked, kp, ki, kd)
     if avg_apr > 0:
         gain = (kp, ki, kd)
         acc_gain = (avg_apr, gain)
-        if avg_acc > highest_acc:
+        if  avg_staked > highest_staked:
             new_record = True
             highest_apr = avg_apr
             highest_acc = avg_acc

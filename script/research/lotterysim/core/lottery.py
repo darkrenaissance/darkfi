@@ -39,9 +39,9 @@ class DarkfiTable:
             f = self.secondary_pid.pid_clipped(float(feedback), debug)
 
             if count%EPOCH_LENGTH == 0:
-                acc = self.secondary_pid.acc_percentage()
-                #staked_ratio = self.avg_stake_ratio()
-                reward = self.primary_pid.pid_clipped(float(acc), debug)
+                #acc = self.secondary_pid.acc_percentage()
+                staked_ratio = self.avg_stake_ratio()
+                reward = self.primary_pid.pid_clipped(float(staked_ratio), debug)
                 self.rewards += [reward]
 
             #note! thread overhead is 10X slower than sequential node execution!
@@ -79,6 +79,7 @@ class DarkfiTable:
                     # resyncing depends on the random branch chosen,
                     # it's simulated by choosing first wining node
                     darkie_winning_idx = 0
+                    random.shuffle(self.darkies)
                     for darkie_idx in range(len(self.darkies)):
                         if self.darkies[darkie_idx].won_hist[resync_slot_id]:
                             darkie_winning_idx = darkie_idx
