@@ -76,10 +76,10 @@ class SigmoidStrategy(Strategy):
 
 def random_strategy(epoch_length):
     rnd = random.random()
-    if rnd < 0.25:
+    if rnd < 0.5:
         return Hodler(epoch_length)
-    elif rnd < 0.5 and rnd >= 0.25:
-        return LinearStrategy(epoch_length)
+    #elif rnd < 0.5 and rnd >= 0.25:
+        #return LinearStrategy(epoch_length)
     elif rnd < 0.75 and rnd >= 0.5:
         return LogarithmicStrategy(epoch_length)
     else:

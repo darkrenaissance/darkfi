@@ -39,9 +39,9 @@ class DarkfiTable:
             f = self.secondary_pid.pid_clipped(float(feedback), debug)
 
             if count%EPOCH_LENGTH == 0:
-                #acc = self.secondary_pid.acc_percentage()
-                staked_ratio = self.avg_stake_ratio()
-                reward = self.primary_pid.pid_clipped(float(staked_ratio), debug)
+                acc = self.secondary_pid.acc_percentage()
+                #staked_ratio = self.avg_stake_ratio()
+                reward = self.primary_pid.pid_clipped(acc, debug)
                 self.rewards += [reward]
 
             #note! thread overhead is 10X slower than sequential node execution!

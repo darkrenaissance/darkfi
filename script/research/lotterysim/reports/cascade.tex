@@ -69,7 +69,7 @@ in stake.
 
 \end{description}
 
-\section{cascade control}
+\section{cascade control with staked ratio as set point}
 \begin{description}
 \item to incentivize stakeholders to increase staked token, another reward controller is placed between reward and staked ratio, to incentivize staked ratio to maintain stable single lead accuracy with relatively lower staked ratio.
 
@@ -122,7 +122,69 @@ in stake.
   \begin{figure}
     \includegraphics{halfstake_apr.png}
     \caption{apr sorted from left to right in range [1-9]\% and 4.2\% avg apr.}
-    \end{figure}
+  \end{figure}
+
+  \subsection {oracle for staked ratio discovery}
+  an oracle would be required to figure out the accuracy vs staked ratio curve every epoch.
+
 \end{description}
+
+\section {cascade control with accuracy set point}
+
+\begin{description}
+  \item use accuracy as set point for reward PID controller, accuracy being output (although indirect) of the secondary controller at higher frequency plugged as input to the primary reward controller would result in much better accuracy at lower staked ratio, but with lower APR.
+\end{description}
+
+\begin{figure}
+ \begin{tikzpicture}[
+    roundnode/.style={circle, draw=green!60, fill=green!5, very thick, minimum size=7mm},
+    squarednode/.style={rectangle, draw=red!60, fill=red!5, very thick, minimum size=5mm},
+    pidnode/.style={rectangle, draw=black!60, fill=red!5, very thick, minimum size=5mm}
+   ]
+   \node[roundnode]    (f)                                           {f};
+   \node[roundnode]  (accuracy)         [right=of f]                {accuracy};
+   \node[pidnode]  (finalizationPID)  [below=of f]               {finalizationPID};
+   \node[roundnode]  (leadfrequency)    [below=of finalizationPID] {lead frequency};
+   \node[pidnode] (rewardPID) [right=of accuracy]  {reward PID};
+   \node[roundnode] (reward) [above=of rewardPID] {reward};
+   \node[squarednode] (APR) [above=of reward] {APR};
+   \node[squarednode] (strategy) [left=of APR] {strategy};
+   \node[squarednode] (stakedratio) [below=of strategy] {staked ratio};
+
+  \draw[->] (finalizationPID.north) -- (f.south);
+  \draw[->] (f.east) -- (accuracy.west);
+  \draw[->] (leadfrequency.north) -- (finalizationPID.south);
+  \draw[->] (accuracy.south) .. controls +(down:10mm) and +(right:10mm) .. (leadfrequency.east);
+  %\draw[->] (stakedratio.south) -- (rewardPID.north west);
+  \draw[->] (accuracy.east) -- (rewardPID.west);
+  \draw[->] (rewardPID.north) -- (reward.south);
+  \draw[->] (reward.north) -- (APR.south);
+  \draw[->] (APR.west) -- (strategy.east);
+  \draw[->] (strategy.south) -- (stakedratio.north);
+  \draw[->] (stakedratio.south) -- (accuracy.north);
+ \end{tikzpicture}
+ \caption{cascade PID diagram}
+\end{figure}
+
+\subsection {experiments}
+\begin{description}
+\item from figure 1, 25\% staked DRK ratio result in approximately 11\% secondary controller accuracy, while with cascade control it gains 3X leverage. 24.6\% staked ratio results in 31.1\% accuracy with average reward 1.6 DRK, and 0.2\% APR (see figure 6)
+\end{description}
+\begin{figure}
+    \includegraphics{acc_setpoint_quarterstake.png}
+    \caption{with accuracy set point to primary controller}
+\end{figure}
+
+\begin{description}
+\item figure 7 shows the relation between staked DRK tokens ratio, and accuracy
+\end{description}
+\begin{figure}
+  \includegraphics{acc_setpoint_vs_sr.png}
+  \caption{relation between staked DRK ratio and accuracy of secondary controller, with accuracy as set point to primary controller}
+\end{figure}
+
+
+\section{conclusion}
+cascade control with accuracy as set point is leveraging accuracy of secondary controller of single leader per slot at low APR, while staked DRK ratio as set point can be highly inflationary, with high APR, and relatively enhanced accuracy at lower staked ratio. the former is much simpler, doesn't require staked ratio curve oracle.
 
 \end{document}

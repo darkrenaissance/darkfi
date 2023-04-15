@@ -19,7 +19,7 @@ ONE_YEAR = Num(365.25*24*60*60/SLOT)
 
 TARGET_APR = Num(0.12)
 
-PRIMARY_REWARD_TARGET = 0.5 # staked ratio
+PRIMARY_REWARD_TARGET = 0.35 # staked ratio
 SECONDARY_LEAD_TARGET = 1 #number of lead per slot
 
 EPSILON = 1
