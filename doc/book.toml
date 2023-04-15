@@ -15,10 +15,9 @@ additional-js = ["theme/mermaid.min.js", "theme/mermaid-init.js"]
 [output.html.playground]
 runnable = false
 
-[output.katex]
-
 [preprocessor.katex]
 macros = "latex-macros.txt"
+after = ["links"]
 
 [preprocessor.toc]
 command = "mdbook-toc"

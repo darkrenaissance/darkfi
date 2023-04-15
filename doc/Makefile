@@ -11,9 +11,9 @@ JSONRPC = \
 
 all: $(JSONRPC)
 	mdbook build
-	cp -f theme/logo* book/html/
+	cp -f theme/logo* book/
 	$(MAKE) -C ../ rustdoc
-	cp -r ../target/doc/* book/html/development/
+	cp -r ../target/doc/* book/development/
 
 $(DARKFID_JSONRPC):
 	@echo "# darkfid JSON-RPC API" > $@
@@ -34,6 +34,6 @@ clean:
 	rm -rf book
 
 github: all
-	ghp-import -m "Generate mdbook" -b gh-pages book/html
+	ghp-import -m "Generate mdbook" -b gh-pages book/
 
 .PHONY: $(JSONRPC) all clean github
