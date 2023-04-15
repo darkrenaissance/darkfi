@@ -9,7 +9,7 @@ import math
 os.system("rm log/*_feedback.hist; rm log/*_output.hist")
 
 RUNNING_TIME = int(input("running time:"))
-NODES=100
+NODES=1000
 
 if __name__ == "__main__":
     egalitarian = ERC20DRK/NODES
@@ -25,7 +25,7 @@ if __name__ == "__main__":
     for darkie in darkies:
         effective_airdrop+=darkie.stake
     print("network airdrop: {}, staked token: {}/{}% on {} nodes".format(airdrop, effective_airdrop, effective_airdrop/airdrop*100, len(darkies)))
-    dt = DarkfiTable(airdrop, RUNNING_TIME, CONTROLLER_TYPE_DISCRETE, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0.03840000000000491,  r_kp=0.13, r_ki=-0.5, r_kd=-0.5)
+    dt = DarkfiTable(airdrop, RUNNING_TIME, CONTROLLER_TYPE_DISCRETE, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0.03840000000000491,  r_kp=0.41, r_ki=5.65, r_kd=89.23)
     for darkie in darkies:
         dt.add_darkie(darkie)
     acc, avg_apy, avg_reward, stake_ratio, avg_apr = dt.background(rand_running_time=False)
@@ -47,8 +47,8 @@ if __name__ == "__main__":
     shifted_aprs = [apr - mu for apr in aprs]
     plt.plot([apr*100 for apr in aprs])
     plt.title('annual percentage return, avg: {:}'.format(mu*100))
+    plt.savefig('img/apr_distribution.png')
     plt.show()
 
     variance = sum(shifted_aprs)/(len(aprs)-1)
-    sigma = math.sqrt(float(variance))
     print('mu: {}, variance: {}'.format(str(mu), str(variance)))

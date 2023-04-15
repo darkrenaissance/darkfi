@@ -5,25 +5,28 @@ from core.darkie import Darkie
 from tqdm import tqdm
 import os
 from core.strategy import random_strategy
+
 AVG_LEN = 10
 
 KP_STEP=10
-KP_SEARCH=20.12#-0.25#0.2#-0.4(10nodes,100RT,38%acc)
+KP_SEARCH=0.47
 
 KI_STEP=10
-KI_SEARCH=-50.55#-0.71#-0.36#-0.25(10nodes,100RT,38%acc)
+KI_SEARCH=5.3
 
 KD_STEP=10
-KD_SEARCH=-30.535#1#0.48#-0.29(10nodes,100RT,38%acc)
+KD_SEARCH=70.77
 
 RUNNING_TIME=1000
-NODES = 10
+NODES = 100
 
 SHIFTING = 0.05
 
-highest_apr = 0
-highest_acc = 0
-highest_staked = 0
+highest_apr = 0.05
+highest_acc = 0.2
+highest_staked = 0.3
+lowest_apr2target_diff = 1
+
 KP='kp'
 KI='ki'
 KD='kd'
@@ -35,13 +38,13 @@ KD_RANGE_MULTIPLIER = 2
 highest_gain = (KP_SEARCH, KI_SEARCH, KD_SEARCH)
 
 parser = ArgumentParser()
-parser.add_argument('-p', '--high-precision', action='store_true')
-parser.add_argument('-r', '--randomize-nodes', action='store_false')
-parser.add_argument('-t', '--rand-running-time', action='store_false')
+parser.add_argument('-p', '--high-precision', action='store_false', default=False)
+parser.add_argument('-r', '--randomizenodes', action='store_true', default=True)
+parser.add_argument('-t', '--rand-running-time', action='store_true', default=True)
 parser.add_argument('-d', '--debug', action='store_false')
 args = parser.parse_args()
 high_precision = args.high_precision
-randomize_nodes = args.randomize_nodes
+randomize_nodes = args.randomizenodes
 rand_running_time = args.rand_running_time
 debug = args.debug
 
@@ -59,6 +62,7 @@ def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
     global highest_acc
     global highest_staked
     global highest_gain
+    global lowest_apr2target_diff
     new_record=False
     accs = []
     aprs = []
@@ -79,12 +83,14 @@ def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):
     if avg_apr > 0:
         gain = (kp, ki, kd)
         acc_gain = (avg_apr, gain)
-        if  avg_staked > highest_staked:
+        apr2target_diff = math.fabs(avg_apr - float(TARGET_APR))
+        if  avg_acc > highest_acc and apr2target_diff < 0.08:
             new_record = True
             highest_apr = avg_apr
             highest_acc = avg_acc
             highest_staked = avg_staked
             highest_gain = (kp, ki, kd)
+            lowest_apr2target_diff = apr2target_diff
             with open('log'+os.sep+"highest_gain.txt", 'w') as f:
                 f.write(buff)
     return buff, new_record

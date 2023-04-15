@@ -11,7 +11,6 @@ class Darkie():
         self.f = None
         self.epoch_len=epoch_len # epoch length during which the stake is static
         self.strategy = strategy
-        print('strategy type: {}'.format(strategy.type))
         self.slot = 0
         self.won_hist = [] # winning history boolean
 
