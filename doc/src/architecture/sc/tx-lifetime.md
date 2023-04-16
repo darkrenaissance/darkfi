@@ -85,7 +85,7 @@ enables composability in the anonymous smart contract context.
 
 The DAO proof states:
 
-1. There is a valud active proposal $P$, and
+1. There is a valid active proposal $P$, and
    $P = \textrm{hash}(Q, v, …, D)$, where $(Q, v)$ are the destination
    public key and amount, and $D$ is the DAO commitment.
 2. That $D = \textrm{hash}(q, r, …)$ where $q$ is the quorum threshold
