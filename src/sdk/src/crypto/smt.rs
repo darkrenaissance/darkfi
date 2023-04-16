@@ -396,7 +396,10 @@ mod tests {
         hasher: H,
         leaves: &[F],
         default_leaf: &[u8; 64],
-    ) -> SparseMerkleTree<F, H, N> {
+    ) -> SparseMerkleTree<F, H, N>
+    where
+        F: FromUniformBytes<64>,
+    {
         SparseMerkleTree::<F, H, N>::new_sequential(leaves, &hasher, default_leaf).unwrap()
     }
 

@@ -133,8 +133,8 @@ sled-overlay = {version = "0.0.3", optional = true}
 
 [dev-dependencies]
 clap = {version = "4.2.2", features = ["derive"]}
-halo2_proofs = {version = "0.2.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
-halo2_gadgets = {version = "0.2.0", features = ["dev-graph", "test-dependencies"]}
+halo2_proofs = {version = "0.3.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
+halo2_gadgets = {version = "0.3.0", features = ["test-dev-graph", "test-dependencies"]}
 plotters = "0.3.4"
 easy-parallel = "3.3.0"
 

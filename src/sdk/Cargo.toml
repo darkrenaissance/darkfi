@@ -38,8 +38,8 @@ lazy_static = "1.4.0"
 subtle = "2.4.1"
 
 [dev-dependencies]
-halo2_proofs = "0.3.0"
-halo2_gadgets = {version = "0.2.0", features = ["test-dependencies"]}
+halo2_proofs = {version = "0.3.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
+halo2_gadgets = {version = "0.3.0", features = ["test-dev-graph", "test-dependencies"]}
 rand = "0.8.5"
 
 [patch.crates-io]

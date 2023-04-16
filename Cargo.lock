@@ -1195,10 +1195,8 @@ dependencies = [
  "fast-socks5",
  "futures",
  "futures-rustls 0.24.0",
- "halo2_gadgets 0.2.0",
- "halo2_gadgets 0.3.0",
- "halo2_proofs 0.2.0",
- "halo2_proofs 0.3.0",
+ "halo2_gadgets",
+ "halo2_proofs",
  "hex",
  "indexmap",
  "indicatif",
@@ -1244,7 +1242,7 @@ dependencies = [
  "darkfi-sdk",
  "darkfi-serial",
  "getrandom",
- "halo2_proofs 0.3.0",
+ "halo2_proofs",
  "log",
  "rand",
  "simplelog",
@@ -1282,7 +1280,7 @@ dependencies = [
  "darkfi-sdk",
  "darkfi-serial",
  "getrandom",
- "halo2_proofs 0.3.0",
+ "halo2_proofs",
  "log",
  "rand",
  "simplelog",
@@ -1300,14 +1298,13 @@ dependencies = [
  "bs58",
  "chacha20poly1305",
  "darkfi-serial",
- "halo2_gadgets 0.2.0",
- "halo2_gadgets 0.3.0",
- "halo2_proofs 0.3.0",
+ "halo2_gadgets",
+ "halo2_proofs",
  "incrementalmerkletree",
  "lazy_static",
  "num-bigint",
  "num-traits",
- "pasta_curves 0.5.1",
+ "pasta_curves",
  "rand",
  "rand_core 0.6.4",
  "sha2",
@@ -1323,7 +1320,7 @@ dependencies = [
  "darkfi-derive",
  "futures-lite",
  "incrementalmerkletree",
- "pasta_curves 0.5.1",
+ "pasta_curves",
  "url",
 ]
 
@@ -1878,17 +1875,6 @@ dependencies = [
 
 [[package]]
 name = "ff"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d013fc25338cc558c5c2cfbad646908fb23591e2404481826742b651c9af7160"
-dependencies = [
- "bitvec",
- "rand_core 0.6.4",
- "subtle",
-]
-
-[[package]]
-name = "ff"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ded41244b729663b1e574f1b4fb731469f69f79c17667b5d776b16cda0479449"
@@ -2300,44 +2286,13 @@ dependencies = [
 
 [[package]]
 name = "group"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5dfbfb3a6cfbd390d5c9564ab283a0349b9b9fcd46a706c1eb10e0db70bfbac7"
-dependencies = [
- "ff 0.12.1",
- "rand_core 0.6.4",
- "subtle",
-]
-
-[[package]]
-name = "group"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0f9ef7462f7c099f518d754361858f86d8a07af53ba9af0fe635bbccb151a63"
 dependencies = [
- "ff 0.13.0",
+ "ff",
  "rand_core 0.6.4",
  "subtle",
-]
-
-[[package]]
-name = "halo2_gadgets"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85e10bf9924da1754e443641c9e7f9f00483749f8fb837fde696ef6ed6e2f079"
-dependencies = [
- "arrayvec",
- "bitvec",
- "ff 0.12.1",
- "group 0.12.1",
- "halo2_proofs 0.2.0",
- "lazy_static",
- "pasta_curves 0.4.1",
- "plotters",
- "proptest",
- "rand",
- "subtle",
- "uint",
 ]
 
 [[package]]
@@ -2348,11 +2303,13 @@ checksum = "126a150072b0c38c7b573fe3eaf0af944a7fed09e154071bf2436d3f016f7230"
 dependencies = [
  "arrayvec",
  "bitvec",
- "ff 0.13.0",
- "group 0.13.0",
- "halo2_proofs 0.3.0",
+ "ff",
+ "group",
+ "halo2_proofs",
  "lazy_static",
- "pasta_curves 0.5.1",
+ "pasta_curves",
+ "plotters",
+ "proptest",
  "rand",
  "subtle",
  "uint",
@@ -2360,33 +2317,18 @@ dependencies = [
 
 [[package]]
 name = "halo2_proofs"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cff771b9a2445cd2545c9ef26d863c290fbb44ae440c825a20eb7156f67a949a"
-dependencies = [
- "backtrace",
- "blake2b_simd",
- "ff 0.12.1",
- "group 0.12.1",
- "pasta_curves 0.4.1",
- "plotters",
- "rand_core 0.6.4",
- "rayon",
- "tabbycat",
- "tracing",
-]
-
-[[package]]
-name = "halo2_proofs"
 version = "0.3.0"
 source = "git+https://github.com/parazyd/halo2?branch=v3#09c57c6b6531f212ad687cd490c1b174ca9fe419"
 dependencies = [
+ "backtrace",
  "blake2b_simd",
- "ff 0.13.0",
- "group 0.13.0",
+ "ff",
+ "group",
  "maybe-rayon",
- "pasta_curves 0.5.1",
+ "pasta_curves",
+ "plotters",
  "rand_core 0.6.4",
+ "tabbycat",
  "tracing",
 ]
 
@@ -3130,28 +3072,13 @@ dependencies = [
 
 [[package]]
 name = "pasta_curves"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cc65faf8e7313b4b1fbaa9f7ca917a0eed499a9663be71477f87993604341d8"
-dependencies = [
- "blake2b_simd",
- "ff 0.12.1",
- "group 0.12.1",
- "lazy_static",
- "rand",
- "static_assertions",
- "subtle",
-]
-
-[[package]]
-name = "pasta_curves"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d3e57598f73cc7e1b2ac63c79c517b31a0877cd7c402cdcaa311b5208de7a095"
 dependencies = [
  "blake2b_simd",
- "ff 0.13.0",
- "group 0.13.0",
+ "ff",
+ "group",
  "lazy_static",
  "rand",
  "static_assertions",

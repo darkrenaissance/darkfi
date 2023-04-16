@@ -224,7 +224,7 @@ mod tests {
     use halo2_proofs::{
         circuit::floor_planner,
         dev::{CircuitLayout, MockProver},
-        pasta::{arithmetic::FieldExt, group::ff::PrimeField},
+        pasta::group::ff::PrimeField,
         plonk::Circuit,
     };
 
