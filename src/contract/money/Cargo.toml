@@ -11,13 +11,13 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 darkfi-sdk = { path = "../../sdk" }
 darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
-thiserror = "1.0.38"
+thiserror = "1.0.40"
 
 # The following dependencies are used for the client API and
 # probably shouldn't be in WASM
 chacha20poly1305 = { version = "0.10.1", optional = true }
 darkfi = { path = "../../../", features = ["zk", "rpc", "blockchain"], optional = true }
-halo2_proofs = { version = "0.2.0", optional = true }
+halo2_proofs = { version = "0.3.0", optional = true }
 log = { version = "0.4.17", optional = true }
 rand = { version = "0.8.5", optional = true }
 
@@ -26,9 +26,9 @@ rand = { version = "0.8.5", optional = true }
 async-std = {version = "1.12.0", features = ["attributes"]}
 bs58 = "0.4.0"
 darkfi = {path = "../../../", features = ["tx", "blockchain"]}
-simplelog = "0.12.0"
+simplelog = "0.12.1"
 sled = "0.34.7"
-sqlx = {version = "0.6.2", features = ["runtime-async-std-rustls", "sqlite"]}
+sqlx = {version = "0.6.3", features = ["runtime-async-std-rustls", "sqlite"]}
 
 # We need to disable random using "custom" which makes the crate a noop
 # so the wasm32-unknown-unknown target is enabled.

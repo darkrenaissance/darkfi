@@ -243,7 +243,7 @@ impl Blockchain {
     /// as the input transactions.
     pub fn add_pending_txs(&self, txs: &[Transaction]) -> Result<Vec<blake3::Hash>> {
         // TODO: Make db writes here completely atomic
-        let txs_hashes = self.pending_txs.insert(&txs)?;
+        let txs_hashes = self.pending_txs.insert(txs)?;
         self.pending_txs_order.insert(&txs_hashes)?;
 
         Ok(txs_hashes)

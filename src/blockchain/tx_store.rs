@@ -113,6 +113,10 @@ impl TxStore {
     pub fn len(&self) -> usize {
         self.0.len()
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.len() == 0
+    }
 }
 
 /// The `PendingTxStore` is a `sled` tree storing all the node pending

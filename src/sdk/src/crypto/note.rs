@@ -18,7 +18,7 @@
 
 use chacha20poly1305::{AeadInPlace, ChaCha20Poly1305, KeyInit};
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
-use pasta_curves::pallas;
+use pasta_curves::{group::ff::Field, pallas};
 use rand_core::{CryptoRng, RngCore};
 
 use super::{diffie_hellman, poseidon_hash, util::mod_r_p, PublicKey, SecretKey};
@@ -96,12 +96,12 @@ impl<const N: usize> ElGamalEncryptedNote<N> {
         let (ss_x, ss_y) = PublicKey::from(public.inner() * mod_r_p(ephem_secret.inner())).xy();
         let shared_secret = poseidon_hash([ss_x, ss_y]);
 
-        let mut blinds = [pallas::Base::zero(); N];
-        for i in 0..N {
-            blinds[i] = poseidon_hash([shared_secret, pallas::Base::from(i as u64 + 1)]);
+        let mut blinds = [pallas::Base::ZERO; N];
+        for (i, item) in blinds.iter_mut().enumerate().take(N) {
+            *item = poseidon_hash([shared_secret, pallas::Base::from(i as u64 + 1)]);
         }
 
-        let mut encrypted_values = [pallas::Base::zero(); N];
+        let mut encrypted_values = [pallas::Base::ZERO; N];
         for i in 0..N {
             encrypted_values[i] = values[i] + blinds[i];
         }
@@ -115,12 +115,12 @@ impl<const N: usize> ElGamalEncryptedNote<N> {
             PublicKey::from(self.ephem_public.inner() * mod_r_p(secret.inner())).xy();
         let shared_secret = poseidon_hash([ss_x, ss_y]);
 
-        let mut blinds = [pallas::Base::zero(); N];
-        for i in 0..N {
-            blinds[i] = poseidon_hash([shared_secret, pallas::Base::from(i as u64 + 1)]);
+        let mut blinds = [pallas::Base::ZERO; N];
+        for (i, item) in blinds.iter_mut().enumerate().take(N) {
+            *item = poseidon_hash([shared_secret, pallas::Base::from(i as u64 + 1)]);
         }
 
-        let mut decrypted_values = [pallas::Base::zero(); N];
+        let mut decrypted_values = [pallas::Base::ZERO; N];
         for i in 0..N {
             decrypted_values[i] = self.encrypted_values[i] - blinds[i];
         }

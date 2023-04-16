@@ -71,14 +71,9 @@ impl NickServ {
 
             "IDENTIFY" => self.identify(),
 
-            "HELP" => return Ok(Self::usage()),
+            "HELP" => Ok(Self::usage()),
 
-            c => {
-                return Err(vec![
-                    format!("Invalid command {}", c),
-                    "Type HELP to get help".to_string(),
-                ])
-            }
+            c => Err(vec![format!("Invalid command {}", c), "Type HELP to get help".to_string()]),
         }
     }
 

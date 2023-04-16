@@ -288,7 +288,7 @@ impl ValidatorState {
             }
         };
         if !erroneous_txs.is_empty() {
-            filtered_txs.retain(|x| !erroneous_txs.contains(&x));
+            filtered_txs.retain(|x| !erroneous_txs.contains(x));
         }
 
         if let Err(e) = self.blockchain.add_pending_txs(&filtered_txs) {
@@ -349,7 +349,7 @@ impl ValidatorState {
         // Verify transactions and filter erroneous ones
         let erroneous_txs = self.verify_transactions(&unproposed_txs[..], false).await?;
         if !erroneous_txs.is_empty() {
-            unproposed_txs.retain(|x| !erroneous_txs.contains(&x));
+            unproposed_txs.retain(|x| !erroneous_txs.contains(x));
         }
         let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
         // The following is pretty weird, so something better should be done.

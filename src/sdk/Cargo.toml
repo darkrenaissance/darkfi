@@ -13,7 +13,7 @@ doctest = false
 
 [dependencies]
 # Error handling
-thiserror = "1.0.38"
+thiserror = "1.0.40"
 
 # Serialization
 darkfi-serial = {version = "0.4.1", path = "../serial", features = ["derive", "pasta_curves"]}
@@ -22,14 +22,14 @@ darkfi-serial = {version = "0.4.1", path = "../serial", features = ["derive", "p
 bs58 = "0.4.0"
 
 # Cryptography
-blake2b_simd = "1.0.0"
+blake2b_simd = "1.0.1"
 blake3 = "1.3.3"
 chacha20poly1305 = "0.10.1"
-halo2_gadgets = "0.2.0"
-incrementalmerkletree = "0.3.0"
+halo2_gadgets = "0.3.0"
+incrementalmerkletree = "0.3.1"
 num-bigint = "0.4.3"
 num-traits = "0.2.15"
-pasta_curves = "0.4.1"
+pasta_curves = "0.5.1"
 rand_core = "0.6.4"
 sha2 = "0.10.6"
 
@@ -38,10 +38,9 @@ lazy_static = "1.4.0"
 subtle = "2.4.1"
 
 [dev-dependencies]
-halo2_proofs = "0.2.0"
+halo2_proofs = "0.3.0"
 halo2_gadgets = {version = "0.2.0", features = ["test-dependencies"]}
 rand = "0.8.5"
 
 [patch.crates-io]
-halo2_proofs = {git="https://github.com/parazyd/halo2", branch="vk-ser"}
-
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v3"}

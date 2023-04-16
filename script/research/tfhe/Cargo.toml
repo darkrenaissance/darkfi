@@ -8,4 +8,4 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-tfhe = {version = "0.1.7", features = ["boolean", "shortint", "x86_64"]}
+tfhe = {version = "0.2.0", features = ["boolean", "shortint", "x86_64"]}

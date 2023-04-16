@@ -17,7 +17,10 @@
  */
 
 use halo2_gadgets::poseidon::primitives as poseidon;
-use pasta_curves::{arithmetic::FieldExt, group::ff::PrimeField, pallas};
+use pasta_curves::{
+    group::ff::{FromUniformBytes, PrimeField},
+    pallas,
+};
 
 /// Hash `a` and `b` together with a prefix `persona` and return a `pallas::Scalar`
 /// element from the digest.
@@ -26,7 +29,7 @@ pub fn hash_to_scalar(persona: &[u8], a: &[u8], b: &[u8]) -> pallas::Scalar {
     hasher.update(a);
     hasher.update(b);
     let ret = hasher.finalize();
-    pallas::Scalar::from_bytes_wide(ret.as_array())
+    pallas::Scalar::from_uniform_bytes(ret.as_array())
 }
 
 /// Converts from pallas::Base to pallas::Scalar (aka $x \pmod{r_\mathbb{P}}$).

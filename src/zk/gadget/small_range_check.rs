@@ -17,9 +17,8 @@
  */
 
 use halo2_proofs::{
-    arithmetic::FieldExt,
     circuit::{AssignedCell, Chip, Layouter},
-    pasta::pallas,
+    pasta::{group::ff::WithSmallOrderMulGroup, pallas},
     plonk,
     plonk::{Advice, Column, ConstraintSystem, Constraints, Expression, Selector},
     poly::Rotation,
@@ -27,7 +26,10 @@ use halo2_proofs::{
 
 /// Checks that an expression is in the small range [0..range),
 /// i.e. 0 ≤ word < range.
-pub fn range_check<F: FieldExt>(word: Expression<F>, range: u8) -> Expression<F> {
+pub fn range_check<F: WithSmallOrderMulGroup<3> + Ord>(
+    word: Expression<F>,
+    range: u8,
+) -> Expression<F> {
     (1..(range as usize))
         .fold(word.clone(), |acc, i| acc * (Expression::Constant(F::from(i as u64)) - word.clone()))
 }

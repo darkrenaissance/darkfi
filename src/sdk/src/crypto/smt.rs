@@ -55,25 +55,31 @@ use halo2_gadgets::poseidon::{
     primitives as poseidon,
     primitives::{ConstantLength, P128Pow5T3, Spec},
 };
-use pasta_curves::arithmetic::FieldExt;
+use pasta_curves::group::ff::{FromUniformBytes, WithSmallOrderMulGroup};
 
 use crate::error::{ContractError, GenericResult};
 
-pub trait FieldHasher<F: FieldExt, const L: usize> {
+pub trait FieldHasher<F: WithSmallOrderMulGroup<3> + Ord, const L: usize> {
     fn hash(&self, inputs: [F; L]) -> GenericResult<F>;
     fn hasher() -> Self;
 }
 
 #[derive(Debug, Clone)]
-pub struct Poseidon<F: FieldExt, const L: usize>(PhantomData<F>);
+pub struct Poseidon<F: WithSmallOrderMulGroup<3> + Ord, const L: usize>(PhantomData<F>);
 
-impl<F: FieldExt, const L: usize> Poseidon<F, L> {
+impl<F: WithSmallOrderMulGroup<3> + Ord, const L: usize> Poseidon<F, L> {
     pub fn new() -> Self {
         Poseidon(PhantomData::default())
     }
 }
 
-impl<F: FieldExt, const L: usize> FieldHasher<F, L> for Poseidon<F, L>
+impl<F: WithSmallOrderMulGroup<3> + Ord, const L: usize> Default for Poseidon<F, L> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<F: WithSmallOrderMulGroup<3> + Ord, const L: usize> FieldHasher<F, L> for Poseidon<F, L>
 where
     P128Pow5T3: Spec<F, 3, 2>,
 {
@@ -92,14 +98,14 @@ where
 /// Each pair is used to identify whether an incremental Merkle root construction
 /// is valid at each intermediate step.
 #[derive(Debug, Copy, Clone)]
-pub struct Path<F: FieldExt, H: FieldHasher<F, 2>, const N: usize> {
+pub struct Path<F: WithSmallOrderMulGroup<3> + Ord, H: FieldHasher<F, 2>, const N: usize> {
     /// The path represented as a sequence of sibling pairs.
     pub path: [(F, F); N],
     /// The phantom hasher type used to reconstruct the Merkle root.
     pub marker: PhantomData<H>,
 }
 
-impl<F: FieldExt, H: FieldHasher<F, 2>, const N: usize> Path<F, H, N> {
+impl<F: WithSmallOrderMulGroup<3> + Ord, H: FieldHasher<F, 2>, const N: usize> Path<F, H, N> {
     /// Assumes leaf contains leaf-level data, i.e. hashes of secrets stored on
     /// leaf-level.
     pub fn calculate_root(&self, leaf: &F, hasher: &H) -> GenericResult<F> {
@@ -109,7 +115,7 @@ impl<F: FieldExt, H: FieldHasher<F, 2>, const N: usize> Path<F, H, N> {
 
         let mut prev = *leaf;
         // Check levels between leaf level and root
-        for &(ref left_hash, ref right_hash) in &self.path {
+        for (left_hash, right_hash) in &self.path {
             if &prev != left_hash && &prev != right_hash {
                 return Err(ContractError::SmtInvalidPathNodes)
             }
@@ -135,10 +141,10 @@ impl<F: FieldExt, H: FieldHasher<F, 2>, const N: usize> Path<F, H, N> {
         }
 
         let mut prev = *leaf;
-        let mut index = F::zero();
-        let mut twopower = F::one();
+        let mut index = F::ZERO;
+        let mut twopower = F::ONE;
         // Check levels between leaf level and root
-        for &(ref left_hash, ref right_hash) in &self.path {
+        for (left_hash, right_hash) in &self.path {
             // Check if the previous hash is for a left or right ndoe
             if &prev != left_hash {
                 index += twopower;
@@ -156,7 +162,11 @@ impl<F: FieldExt, H: FieldHasher<F, 2>, const N: usize> Path<F, H, N> {
 ///
 /// SMT stores a set of leaves represented in a map and a set of empty
 /// hashes that it uses to represent the sparse areas of the tree.
-pub struct SparseMerkleTree<F: FieldExt, H: FieldHasher<F, 2>, const N: usize> {
+pub struct SparseMerkleTree<
+    F: WithSmallOrderMulGroup<3> + Ord,
+    H: FieldHasher<F, 2>,
+    const N: usize,
+> {
     /// A map from leaf indices to leaf data stored as field elements.
     pub tree: BTreeMap<u64, F>,
     /// An array of default hashes hashed with themselves `N` times.
@@ -165,7 +175,12 @@ pub struct SparseMerkleTree<F: FieldExt, H: FieldHasher<F, 2>, const N: usize> {
     marker: PhantomData<H>,
 }
 
-impl<F: FieldExt, H: FieldHasher<F, 2>, const N: usize> SparseMerkleTree<F, H, N> {
+impl<
+        F: WithSmallOrderMulGroup<3> + Ord + FromUniformBytes<64>,
+        H: FieldHasher<F, 2>,
+        const N: usize,
+    > SparseMerkleTree<F, H, N>
+{
     /// Creates a new SMT from a map of indices to field elements.
     pub fn new(
         leaves: &BTreeMap<u32, F>,
@@ -243,7 +258,7 @@ impl<F: FieldExt, H: FieldHasher<F, 2>, const N: usize> SparseMerkleTree<F, H, N
     /// Give the path leading from the leaf at `index` up to the root. This is
     /// a "proof" in the sense of "valid path in a Merkle tree", not a ZK argument.
     pub fn generate_membership_proof(&self, index: u64) -> Path<F, H, N> {
-        let mut path = [(F::zero(), F::zero()); N];
+        let mut path = [(F::ZERO, F::ZERO); N];
 
         let tree_index = convert_index_to_last_level(index, N);
 
@@ -278,13 +293,17 @@ impl<F: FieldExt, H: FieldHasher<F, 2>, const N: usize> SparseMerkleTree<F, H, N
 /// `default_leaf` hashed with itself and repeated `N` times with the
 /// intermediate results. These are used to initialize the sparse portion
 /// of the SMT.
-pub fn gen_empty_hashes<F: FieldExt, H: FieldHasher<F, 2>, const N: usize>(
+pub fn gen_empty_hashes<
+    F: WithSmallOrderMulGroup<3> + Ord + FromUniformBytes<64>,
+    H: FieldHasher<F, 2>,
+    const N: usize,
+>(
     hasher: &H,
     default_leaf: &[u8; 64],
 ) -> GenericResult<[F; N]> {
-    let mut empty_hashes = [F::zero(); N];
+    let mut empty_hashes = [F::ZERO; N];
 
-    let mut empty_hash = F::from_bytes_wide(default_leaf);
+    let mut empty_hash = F::from_uniform_bytes(default_leaf);
     for item in empty_hashes.iter_mut().take(N) {
         *item = empty_hash;
         empty_hash = hasher.hash([empty_hash, empty_hash])?;
@@ -369,7 +388,11 @@ mod tests {
     use rand::rngs::OsRng;
 
     /// Helper to change leaves array to BTreeMap and then create SMT.
-    fn create_merkle_tree<F: FieldExt, H: FieldHasher<F, 2>, const N: usize>(
+    fn create_merkle_tree<
+        F: WithSmallOrderMulGroup<3> + Ord,
+        H: FieldHasher<F, 2>,
+        const N: usize,
+    >(
         hasher: H,
         leaves: &[F],
         default_leaf: &[u8; 64],

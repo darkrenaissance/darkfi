@@ -156,8 +156,8 @@ impl Drk {
             return Ok(())
         }
 
-        let txs_hashes: Vec<String> = txs.into_iter().map(|tx| tx.hash().to_string()).collect();
-        let txs_hashes_string = format!("{:?}", txs_hashes).replace("[", "(").replace("]", ")");
+        let txs_hashes: Vec<String> = txs.iter().map(|tx| tx.hash().to_string()).collect();
+        let txs_hashes_string = format!("{:?}", txs_hashes).replace('[', "(").replace(']', ")");
         let query = format!(
             "UPDATE {} SET {} = ?1 WHERE {} IN {};",
             WALLET_TXS_HISTORY_TABLE,

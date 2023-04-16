@@ -27,7 +27,7 @@ use futures_rustls::{
         kx_group::X25519,
         server::{ClientCertVerified, ClientCertVerifier},
         version::TLS13,
-        Certificate, ClientConfig, DistinguishedNames, ServerConfig, ServerName,
+        Certificate, ClientConfig, DistinguishedName, ServerConfig, ServerName,
     },
     TlsAcceptor, TlsConnector, TlsStream,
 };
@@ -67,8 +67,8 @@ impl ServerCertVerifier for ServerCertificateVerifier {
 
 struct ClientCertificateVerifier;
 impl ClientCertVerifier for ClientCertificateVerifier {
-    fn client_auth_root_subjects(&self) -> Option<DistinguishedNames> {
-        Some(vec![])
+    fn client_auth_root_subjects(&self) -> &[DistinguishedName] {
+        &[]
     }
 
     fn verify_client_cert(

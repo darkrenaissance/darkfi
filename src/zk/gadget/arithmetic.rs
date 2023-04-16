@@ -17,15 +17,14 @@
  */
 
 use halo2_proofs::{
-    arithmetic::FieldExt,
     circuit::{AssignedCell, Chip, Layouter},
-    pasta::pallas,
+    pasta::{group::ff::WithSmallOrderMulGroup, pallas},
     plonk,
     plonk::{Advice, Column, ConstraintSystem, Constraints, Selector},
     poly::Rotation,
 };
 
-pub trait ArithInstruction<F: FieldExt>: Chip<F> {
+pub trait ArithInstruction<F: WithSmallOrderMulGroup<3> + Ord>: Chip<F> {
     fn add(
         &self,
         layouter: impl Layouter<F>,

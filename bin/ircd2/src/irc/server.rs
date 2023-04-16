@@ -156,6 +156,7 @@ impl IrcServer {
                     // message.
                     // TODO: This needs to be protected from adversaries doing
                     //       remote execution.
+                    #[allow(clippy::single_match)]
                     match msg.target.to_lowercase().as_str() {
                         NICK_NICKSERV => {
                             //self.nickserv.act(msg);

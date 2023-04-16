@@ -23,11 +23,11 @@ use super::error::ErrorEmitter;
 const SPECIAL_CHARS: [char; 7] = ['{', '}', '(', ')', ',', ';', '='];
 
 fn is_letter(ch: char) -> bool {
-    ('a'..='z').contains(&ch) || ('A'..='Z').contains(&ch) || ch == '_'
+    ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
 }
 
 fn is_digit(ch: char) -> bool {
-    ('0'..='9').contains(&ch)
+    ch.is_ascii_digit()
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]

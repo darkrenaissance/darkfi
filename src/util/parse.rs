@@ -20,14 +20,6 @@ use std::{iter::FromIterator, str::FromStr};
 
 use crate::{Error, Result};
 
-fn is_digit(c: char) -> bool {
-    ('0'..='9').contains(&c)
-}
-
-fn char_eq(a: char, b: char) -> bool {
-    a == b
-}
-
 pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Result<u64> {
     let mut s: Vec<char> = amount.to_string().chars().collect();
 
@@ -41,7 +33,7 @@ pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Resul
 
     // Only digits should remain
     for i in &s {
-        if !is_digit(*i) {
+        if !i.is_ascii_digit() {
             return Err(Error::ParseFailed("Found non-digits"))
         }
     }
@@ -57,7 +49,7 @@ pub fn decode_base10(amount: &str, decimal_places: usize, strict: bool) -> Resul
     if actual_places > decimal_places {
         let end = point + decimal_places;
         for i in &s[end..s.len()] {
-            if !char_eq(*i, '0') {
+            if *i != '0' {
                 round = true;
                 break
             }

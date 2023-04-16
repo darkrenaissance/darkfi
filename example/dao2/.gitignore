@@ -2,3 +2,4 @@
 *.wasm
 *.zk.bin
 target/
+Cargo.lock

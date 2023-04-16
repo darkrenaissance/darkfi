@@ -14,4 +14,4 @@ lazy_static = "1.4.0"
 rand = "0.8.5"
 
 [patch.crates-io]
-halo2_proofs = {git="https://github.com/parazyd/halo2", branch="vk-ser"}
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v3"}

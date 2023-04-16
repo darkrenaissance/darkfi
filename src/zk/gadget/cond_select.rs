@@ -22,8 +22,8 @@
 use core::marker::PhantomData;
 
 use halo2_proofs::{
-    arithmetic::FieldExt,
     circuit::{AssignedCell, Chip, Layouter, Region, Value},
+    pasta::group::ff::WithSmallOrderMulGroup,
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector},
     poly::Rotation,
 };
@@ -31,18 +31,18 @@ use halo2_proofs::{
 pub const NUM_OF_UTILITY_ADVICE_COLUMNS: usize = 4;
 
 #[derive(Clone, Debug)]
-pub struct ConditionalSelectConfig<F: FieldExt> {
+pub struct ConditionalSelectConfig<F: WithSmallOrderMulGroup<3> + Ord> {
     advices: [Column<Advice>; NUM_OF_UTILITY_ADVICE_COLUMNS],
     s_cs: Selector,
     _marker: PhantomData<F>,
 }
 
-pub struct ConditionalSelectChip<F: FieldExt> {
+pub struct ConditionalSelectChip<F: WithSmallOrderMulGroup<3> + Ord> {
     config: ConditionalSelectConfig<F>,
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> Chip<F> for ConditionalSelectChip<F> {
+impl<F: WithSmallOrderMulGroup<3> + Ord> Chip<F> for ConditionalSelectChip<F> {
     type Config = ConditionalSelectConfig<F>;
     type Loaded = ();
 
@@ -55,7 +55,7 @@ impl<F: FieldExt> Chip<F> for ConditionalSelectChip<F> {
     }
 }
 
-impl<F: FieldExt> ConditionalSelectChip<F> {
+impl<F: WithSmallOrderMulGroup<3> + Ord> ConditionalSelectChip<F> {
     pub fn construct(
         config: <Self as Chip<F>>::Config,
         _loaded: <Self as Chip<F>>::Loaded,
@@ -78,7 +78,7 @@ impl<F: FieldExt> ConditionalSelectChip<F> {
             let out = meta.query_advice(advices[2], Rotation::cur());
             let cond = meta.query_advice(advices[3], Rotation::cur());
             let s_cs = meta.query_selector(s_cs);
-            let one = Expression::Constant(F::one());
+            let one = Expression::Constant(F::ONE);
 
             vec![
                 // cond is 0 or 1
@@ -110,7 +110,7 @@ impl<F: FieldExt> ConditionalSelectChip<F> {
                 let cond = cond.copy_advice(|| "copy cond", &mut region, config.advices[3], 0)?;
 
                 let selected =
-                    if cond.value().copied().to_field() == Value::known(F::one()).to_field() {
+                    if cond.value().copied().to_field() == Value::known(F::ONE).to_field() {
                         a.value().copied()
                     } else {
                         b.value().copied()
@@ -126,18 +126,18 @@ impl<F: FieldExt> ConditionalSelectChip<F> {
 }
 
 #[derive(Clone, Debug)]
-pub struct IsEqualConfig<F: FieldExt> {
+pub struct IsEqualConfig<F: WithSmallOrderMulGroup<3> + Ord> {
     s_is_eq: Selector,
     advices: [Column<Advice>; NUM_OF_UTILITY_ADVICE_COLUMNS],
     _marker: PhantomData<F>,
 }
 
-pub struct IsEqualChip<F: FieldExt> {
+pub struct IsEqualChip<F: WithSmallOrderMulGroup<3> + Ord> {
     config: IsEqualConfig<F>,
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> Chip<F> for IsEqualChip<F> {
+impl<F: WithSmallOrderMulGroup<3> + Ord> Chip<F> for IsEqualChip<F> {
     type Config = IsEqualConfig<F>;
     type Loaded = ();
 
@@ -150,7 +150,7 @@ impl<F: FieldExt> Chip<F> for IsEqualChip<F> {
     }
 }
 
-impl<F: FieldExt> IsEqualChip<F> {
+impl<F: WithSmallOrderMulGroup<3> + Ord> IsEqualChip<F> {
     pub fn construct(
         config: <Self as Chip<F>>::Config,
         _loaded: <Self as Chip<F>>::Loaded,
@@ -169,7 +169,7 @@ impl<F: FieldExt> IsEqualChip<F> {
             let out = meta.query_advice(advices[2], Rotation::cur());
             let delta_invert = meta.query_advice(advices[3], Rotation::cur());
             let s_is_eq = meta.query_selector(s_is_eq);
-            let one = Expression::Constant(F::one());
+            let one = Expression::Constant(F::ONE);
 
             vec![
                 // out is 0 or 1
@@ -211,7 +211,7 @@ impl<F: FieldExt> IsEqualChip<F> {
                     0,
                     || {
                         if a_field == b_field {
-                            Value::known(F::one())
+                            Value::known(F::ONE)
                         } else {
                             let delta = a_field - b_field;
                             delta.invert().evaluate()
@@ -219,11 +219,8 @@ impl<F: FieldExt> IsEqualChip<F> {
                     },
                 )?;
 
-                let is_eq = if a_field == b_field {
-                    Value::known(F::one())
-                } else {
-                    Value::known(F::zero())
-                };
+                let is_eq =
+                    if a_field == b_field { Value::known(F::ONE) } else { Value::known(F::ZERO) };
 
                 let cell = region.assign_advice(|| "is_eq", config.advices[2], 0, || is_eq)?;
                 Ok(cell)
@@ -235,18 +232,18 @@ impl<F: FieldExt> IsEqualChip<F> {
 }
 
 #[derive(Clone, Debug)]
-pub struct AssertEqualConfig<F: FieldExt> {
+pub struct AssertEqualConfig<F: WithSmallOrderMulGroup<3> + Ord> {
     s_eq: Selector,
     advices: [Column<Advice>; 2],
     _marker: PhantomData<F>,
 }
 
-pub struct AssertEqualChip<F: FieldExt> {
+pub struct AssertEqualChip<F: WithSmallOrderMulGroup<3> + Ord> {
     config: AssertEqualConfig<F>,
     _marker: PhantomData<F>,
 }
 
-impl<F: FieldExt> Chip<F> for AssertEqualChip<F> {
+impl<F: WithSmallOrderMulGroup<3> + Ord> Chip<F> for AssertEqualChip<F> {
     type Config = AssertEqualConfig<F>;
     type Loaded = ();
 
@@ -259,7 +256,7 @@ impl<F: FieldExt> Chip<F> for AssertEqualChip<F> {
     }
 }
 
-impl<F: FieldExt> AssertEqualChip<F> {
+impl<F: WithSmallOrderMulGroup<3> + Ord> AssertEqualChip<F> {
     pub fn construct(
         config: <Self as Chip<F>>::Config,
         _loaded: <Self as Chip<F>>::Loaded,
