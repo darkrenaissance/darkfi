@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2023.4.15)  16 APR 2023 00:54
+This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2023.4.15)  17 APR 2023 21:47
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -499,66 +499,66 @@ LaTeX Warning: `!h' float specifier changed to `!ht'.
 <fullstake_apr.png, id=25, 462.528pt x 346.896pt>
 File: fullstake_apr.png Graphic file (type png)
 <use fullstake_apr.png>
-Package pdftex.def Info: fullstake_apr.png  used on input line 118.
+Package pdftex.def Info: fullstake_apr.png  used on input line 121.
 (pdftex.def)             Requested size: 462.52686pt x 346.89514pt.
 
-Overfull \hbox (117.52686pt too wide) in paragraph at lines 118--119
+Overfull \hbox (117.52686pt too wide) in paragraph at lines 121--122
 [][] 
  []
 
 <halfstake_apr.png, id=26, 462.528pt x 346.896pt>
 File: halfstake_apr.png Graphic file (type png)
 <use halfstake_apr.png>
-Package pdftex.def Info: halfstake_apr.png  used on input line 123.
+Package pdftex.def Info: halfstake_apr.png  used on input line 126.
 (pdftex.def)             Requested size: 462.52686pt x 346.89514pt.
 
-Overfull \hbox (117.52686pt too wide) in paragraph at lines 123--124
+Overfull \hbox (117.52686pt too wide) in paragraph at lines 126--127
 [][] 
  []
 
-[4 <./fullstake_apr.png>] [5 <./halfstake_apr.png>]
-<acc_setpoint_quarterstake.png, id=35, 462.528pt x 346.896pt>
+[4] [5 <./fullstake_apr.png>] [6 <./halfstake_apr.png>] [7]
+<acc_setpoint_quarterstake.png, id=42, 462.528pt x 346.896pt>
 File: acc_setpoint_quarterstake.png Graphic file (type png)
 <use acc_setpoint_quarterstake.png>
-Package pdftex.def Info: acc_setpoint_quarterstake.png  used on input line 174.
+Package pdftex.def Info: acc_setpoint_quarterstake.png  used on input line 182.
 
-(pdftex.def)             Requested size: 462.52686pt x 346.89514pt.
-
-Overfull \hbox (117.52686pt too wide) in paragraph at lines 174--175
-[][] 
- []
-
-<acc_setpoint_vs_sr.png, id=36, 462.528pt x 346.896pt>
-File: acc_setpoint_vs_sr.png Graphic file (type png)
-<use acc_setpoint_vs_sr.png>
-Package pdftex.def Info: acc_setpoint_vs_sr.png  used on input line 182.
 (pdftex.def)             Requested size: 462.52686pt x 346.89514pt.
 
 Overfull \hbox (117.52686pt too wide) in paragraph at lines 182--183
 [][] 
  []
 
-[6] [7 <./acc_setpoint_quarterstake.png>] [8 <./acc_setpoint_vs_sr.png>]
-[9] (./cascade.aux) ) 
+<acc_setpoint_vs_sr.png, id=43, 462.528pt x 346.896pt>
+File: acc_setpoint_vs_sr.png Graphic file (type png)
+<use acc_setpoint_vs_sr.png>
+Package pdftex.def Info: acc_setpoint_vs_sr.png  used on input line 190.
+(pdftex.def)             Requested size: 462.52686pt x 346.89514pt.
+
+Overfull \hbox (117.52686pt too wide) in paragraph at lines 190--191
+[][] 
+ []
+
+[8 <./acc_setpoint_quarterstake.png>] [9 <./acc_setpoint_vs_sr.png>] [10]
+(./cascade.aux) ) 
 Here is how much of TeX's memory you used:
  13365 strings out of 478287
  274321 string characters out of 5849289
- 536047 words of memory out of 5000000
+ 539050 words of memory out of 5000000
  31323 multiletter control sequences out of 15000+600000
  474642 words of font info for 47 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 100i,8n,104p,409b,754s stack positions out of 5000i,500n,10000p,200000b,80000s
-</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts
-/cm/cmbx12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cm
-mi10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pf
-b></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr
-/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/share/
-texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/share/texlive
-/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb>
-Output written on cascade.pdf (9 pages, 177352 bytes).
+ 100i,8n,104p,461b,754s stack positions out of 5000i,500n,10000p,200000b,80000s
+</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/
+cmbx12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10
+.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></
+usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/sha
+re/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/share/texl
+ive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/share/texlive/tex
+mf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb>
+Output written on cascade.pdf (10 pages, 180008 bytes).
 PDF statistics:
- 83 PDF objects out of 1000 (max. 8388607)
- 47 compressed objects within 1 object stream
+ 86 PDF objects out of 1000 (max. 8388607)
+ 49 compressed objects within 1 object stream
  0 named destinations out of 1000 (max. 500000)
  38 words of extra memory for PDF output out of 10000 (max. 10000000)
 

@@ -6,7 +6,7 @@
 \usetikzlibrary{positioning}
 \begin{document}
 
-\title {auto-tuning reward mechanism}
+\title {consensus high incentive monetary policy}
 \author {ertosns}
 \date {2023/4/15}
 \maketitle
@@ -111,8 +111,11 @@ in stake.
 
 \item reward controller works at lower frequency on the epoch level, outputs new reward value per epoch, so reward is static per epoch.
 \end{description}
-\section{expirments}
+\section{experiments}
 \begin{description}
+  \subsection{simulation parameters}
+  \item finality controller parameters  $kp=-0.0104$, $ki=-0.0366$, $kd=0.0384$, while reward controller parameters  $kp=0.13$, $ki=-0.5$, $kd=-0.5$ on 1000 nodes, running time is 10,000 slots. stakeholders starategy is distributed equally between HODLER: stake it all, linear: stake DRK with ratio equivalent to the APR, logarithmic and sigmoid strategy that have logarithmic, and segmoid relation respectively to APR.
+
 \item when staked ratio is high (100\% in this experiment) reward reduces to 1.33, as a consequence APR 0.2\%, and staked ratio goes down on following epoch.
   \begin{figure}
     \includegraphics{fullstake_apr.png}
@@ -168,6 +171,11 @@ in stake.
 
 \subsection {experiments}
 \begin{description}
+\subsection {simulation parameters}
+\item finality controller parameters  $kp=-0.0104$, $ki=-0.0366$, $kd=0.0384$, while reward controller parameters  $kp=-2.53$, $ki=29.5$, $kd=53.77$ on 100 nodes, running time is 10,000 slots.
+  \item stakeholders starategy is distributed equally between HODLER: stake it all,  logarithmic and sigmoid strategy that have logarithmic, and segmoid relation respectively to APR. similar to previous experiment except there is no linear strategy since APR is much lower.
+
+
 \item from figure 1, 25\% staked DRK ratio result in approximately 11\% secondary controller accuracy, while with cascade control it gains 3X leverage. 24.6\% staked ratio results in 31.1\% accuracy with average reward 1.6 DRK, and 0.2\% APR (see figure 6)
 \end{description}
 \begin{figure}
