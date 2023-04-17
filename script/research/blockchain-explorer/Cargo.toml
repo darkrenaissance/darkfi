@@ -17,4 +17,4 @@ darkfi-sdk = {path = "../../../src/sdk"}
 sled = "0.34.7"
 
 [patch.crates-io]
-halo2_proofs = {git="https://github.com/parazyd/halo2", branch="vk-ser"}
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v3"}
