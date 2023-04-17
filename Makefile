@@ -1,7 +1,7 @@
 .POSIX:
 
 # Install prefix
-PREFIX = /usr/local
+PREFIX = $(HOME)/.cargo
 
 # Cargo binary
 CARGO = cargo
