@@ -24,8 +24,8 @@ mod collections;
 #[cfg(feature = "hash")]
 mod hash;
 
-#[cfg(feature = "incrementalmerkletree")]
-mod incrementalmerkletree;
+#[cfg(feature = "bridgetree")]
+mod bridgetree;
 
 #[cfg(feature = "pasta_curves")]
 mod pasta;

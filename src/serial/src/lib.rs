@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::{Cursor, Error, ErrorKind, Read, Write};
+use std::{
+    collections::VecDeque,
+    io::{Cursor, Error, ErrorKind, Read, Write},
+};
 
 #[cfg(feature = "derive")]
 pub use darkfi_derive::{SerialDecodable, SerialEncodable};
@@ -462,6 +465,30 @@ impl<T: Decodable> Decodable for Vec<T> {
         let mut ret = Vec::with_capacity(len as usize);
         for _ in 0..len {
             ret.push(Decodable::decode(&mut d)?);
+        }
+        Ok(ret)
+    }
+}
+
+impl<T: Encodable> Encodable for VecDeque<T> {
+    #[inline]
+    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+        let mut len = 0;
+        len += VarInt(self.len() as u64).encode(&mut s)?;
+        for val in self {
+            len += val.encode(&mut s)?;
+        }
+        Ok(len)
+    }
+}
+
+impl<T: Decodable> Decodable for VecDeque<T> {
+    #[inline]
+    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
+        let len = VarInt::decode(&mut d)?.0;
+        let mut ret = VecDeque::with_capacity(len as usize);
+        for _ in 0..len {
+            ret.push_back(Decodable::decode(&mut d)?);
         }
         Ok(ret)
     }
