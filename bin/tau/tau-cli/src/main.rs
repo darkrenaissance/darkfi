@@ -39,8 +39,10 @@ mod view;
 use drawdown::{drawdown, to_naivedate};
 use filter::{apply_filter, get_ids, no_filter_warn};
 use primitives::{task_from_cli, State, TaskEvent};
-use util::{desc_in_editor, due_as_timestamp};
-use view::{comments_as_string, print_task_info, print_task_list};
+use util::{due_as_timestamp, prompt_text};
+use view::{print_task_info, print_task_list};
+
+use crate::primitives::TaskInfo;
 
 const DEFAULT_PATH: &str = "~/tau_exported_tasks";
 
@@ -199,7 +201,7 @@ async fn main() -> Result<()> {
                 };
 
                 if task.desc.is_none() {
-                    task.desc = desc_in_editor(task.clone())?;
+                    task.desc = prompt_text(TaskInfo::from(task.clone()), "description")?;
                 };
 
                 if task.clone().desc.unwrap().trim().is_empty() {
@@ -292,17 +294,22 @@ async fn main() -> Result<()> {
                     no_filter_warn()
                 }
                 for task in tasks {
-                    if content.is_empty() {
-                        let task = tau.get_task_by_id(task.id.into()).await?;
-                        let comments = comments_as_string(task.comments);
-                        println!("Comments {}:\n{}", task.id, comments);
+                    let comment = if content.is_empty() {
+                        prompt_text(task.clone(), "comment")?
                     } else {
-                        let res = tau.set_comment(task.id.into(), &content.join(" ")).await?;
-                        if res {
-                            let tsk = tau.get_task_by_id(task.id.into()).await?;
-                            print_task_info(tsk)?;
-                            println!()
-                        }
+                        Some(content.join(" "))
+                    };
+
+                    if comment.clone().unwrap().trim().is_empty() || comment.is_none() {
+                        error!("Abort due to empty comment.");
+                        exit(1)
+                    }
+
+                    let res = tau.set_comment(task.id.into(), &comment.unwrap()).await?;
+                    if res {
+                        let tsk = tau.get_task_by_id(task.id.into()).await?;
+                        print_task_info(tsk)?;
+                        println!()
                     }
                 }
                 Ok(())

@@ -28,10 +28,7 @@ use log::error;
 
 use darkfi::{util::time::Timestamp, Result};
 
-use crate::{
-    primitives::{BaseTask, TaskInfo},
-    view::helper_taskinfo_func,
-};
+use crate::{primitives::TaskInfo, view::helper_taskinfo_func};
 
 /// Parse due date (e.g. "1503" for 15 March) as i64 timestamp.
 pub fn due_as_timestamp(due: &str) -> Option<i64> {
@@ -62,17 +59,16 @@ pub fn due_as_timestamp(due: &str) -> Option<i64> {
 }
 
 /// Start up the preferred editor to edit a task's description.
-pub fn desc_in_editor(task: BaseTask) -> Result<Option<String>> {
-    let task_info = TaskInfo::from(task);
+pub fn prompt_text(task_info: TaskInfo, what: &str) -> Result<Option<String>> {
     // Create a temporary file with some comments inside.
     let mut file_path = env::temp_dir();
     let file_name = format!("tau-{}", Timestamp::current_time().0);
     file_path.push(file_name);
     let mut file = File::create(&file_path)?;
 
-    writeln!(file, "\n# Write your task description here.")?;
+    writeln!(file, "\n# Write your task {what} above this line.")?;
     writeln!(file, "# Lines starting with \"#\" will be removed.")?;
-    writeln!(file, "# An empty description aborts adding the task.")?;
+    writeln!(file, "# An empty {what} aborts the operation.")?;
     writeln!(file, "\n# ------------------------ >8 ------------------------")?;
     writeln!(file, "# Do not modify or remove the line above.")?;
     writeln!(file, "# Everything below it will be ignored.")?;

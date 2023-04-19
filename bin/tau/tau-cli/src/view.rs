@@ -30,7 +30,7 @@ use darkfi::{
 };
 
 use crate::{
-    primitives::{Comment, State, TaskInfo},
+    primitives::{State, TaskInfo},
     TaskEvent,
 };
 
@@ -165,14 +165,14 @@ pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
     Ok(())
 }
 
-pub fn comments_as_string(comments: Vec<Comment>) -> String {
-    let mut comments_str = String::new();
-    for comment in comments {
-        writeln!(comments_str, "{}", comment).unwrap();
-    }
-    comments_str.pop();
-    comments_str
-}
+// pub fn comments_as_string(comments: Vec<Comment>) -> String {
+//     let mut comments_str = String::new();
+//     for comment in comments {
+//         writeln!(comments_str, "{}", comment).unwrap();
+//     }
+//     comments_str.pop();
+//     comments_str
+// }
 
 pub fn events_as_string(events: Vec<TaskEvent>) -> (String, String) {
     let mut events_str = String::new();
