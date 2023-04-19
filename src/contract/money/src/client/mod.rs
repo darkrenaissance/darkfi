@@ -27,7 +27,8 @@
 //! are able to abstract away any wallet interfaces to client implementations.
 
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, MerklePosition, Nullifier, SecretKey, TokenId, DARK_TOKEN_ID},
+    bridgetree,
+    crypto::{pasta_prelude::*, Nullifier, SecretKey, TokenId, DARK_TOKEN_ID},
     pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
@@ -131,7 +132,7 @@ pub struct OwnCoin {
     /// Coin's nullifier
     pub nullifier: Nullifier,
     /// Coin's leaf position in the Merkle tree of coins
-    pub leaf_position: MerklePosition,
+    pub leaf_position: bridgetree::Position,
 }
 
 /// `ConsensusNote` holds the inner attributes of a `Coin`.
@@ -181,7 +182,7 @@ pub struct ConsensusOwnCoin {
     /// Coin's nullifier
     pub nullifier: Nullifier,
     /// Coin's leaf position in the Merkle tree of coins
-    pub leaf_position: MerklePosition,
+    pub leaf_position: bridgetree::Position,
 }
 
 impl From<ConsensusOwnCoin> for OwnCoin {

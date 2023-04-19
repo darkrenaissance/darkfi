@@ -24,11 +24,12 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
+    bridgetree,
+    bridgetree::Hashable,
     crypto::{
         pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash,
-        MerkleNode, MerklePosition, MerkleTree, Nullifier, PublicKey, SecretKey, DARK_TOKEN_ID,
+        MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey, DARK_TOKEN_ID,
     },
-    incrementalmerkletree::{Hashable, Tree},
     pasta::pallas,
 };
 use log::{debug, info};
@@ -80,7 +81,7 @@ impl MoneyStakeBurnRevealed {
 }
 
 pub struct TransactionBuilderInputInfo {
-    pub leaf_position: MerklePosition,
+    pub leaf_position: bridgetree::Position,
     pub merkle_path: Vec<MerkleNode>,
     pub secret: SecretKey,
     pub note: MoneyNote,
@@ -100,21 +101,19 @@ pub struct MoneyStakeCallBuilder {
 
 impl MoneyStakeCallBuilder {
     pub fn build(&self) -> Result<MoneyStakeCallDebris> {
-        debug!("Building Money::StakeV1 contract call");
+        info!("Building Money::StakeV1 contract call");
         assert!(self.coin.note.value != 0);
         assert!(self.coin.note.token_id == *DARK_TOKEN_ID);
 
-        debug!("Building anonymous input");
+        debug!("Building Money::StakeV1 anonymous input");
         let leaf_position = self.coin.leaf_position;
-        let root = self.tree.root(0).unwrap();
-        let merkle_path = self.tree.authentication_path(leaf_position, &root).unwrap();
+        let merkle_path = self.tree.witness(leaf_position, 0).unwrap();
         let input = TransactionBuilderInputInfo {
             leaf_position,
             merkle_path,
             secret: self.coin.secret,
             note: self.coin.note.clone(),
         };
-        debug!("Finished building input");
 
         // Create new random blinds and an ephemeral signature key
         let value_blind = pallas::Scalar::random(&mut OsRng);
@@ -122,7 +121,7 @@ impl MoneyStakeCallBuilder {
         let signature_secret = SecretKey::random(&mut OsRng);
         let user_data_blind = pallas::Base::random(&mut OsRng);
 
-        info!("Creating stake burn proof for input");
+        info!("Building Money::Stake V1 Burn ZK proof");
         let (proof, public_inputs) = create_stake_burn_proof(
             &self.burn_zkbin,
             &self.burn_pk,

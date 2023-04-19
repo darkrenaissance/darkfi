@@ -524,6 +524,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "bridgetree"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63489cf3bacd4322a34940b86bf68dc51fb37669203059242c8dd37fa5a76daa"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "bs58"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1415,12 +1424,12 @@ version = "0.4.1"
 dependencies = [
  "blake2b_simd",
  "blake3",
+ "bridgetree",
  "bs58",
  "chacha20poly1305",
  "darkfi-serial",
  "halo2_gadgets",
  "halo2_proofs",
- "incrementalmerkletree",
  "lazy_static",
  "num-bigint",
  "num-traits",
@@ -1437,9 +1446,9 @@ name = "darkfi-serial"
 version = "0.4.1"
 dependencies = [
  "blake3",
+ "bridgetree",
  "darkfi-derive",
  "futures-lite",
- "incrementalmerkletree",
  "pasta_curves",
  "url",
 ]
@@ -2661,15 +2670,6 @@ dependencies = [
  "num-rational",
  "num-traits",
  "png",
-]
-
-[[package]]
-name = "incrementalmerkletree"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5ad43a3f5795945459d577f6589cf62a476e92c79b75e70cd954364e14ce17b"
-dependencies = [
- "serde",
 ]
 
 [[package]]

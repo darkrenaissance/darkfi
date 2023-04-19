@@ -27,7 +27,6 @@ use darkfi_sdk::{
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::*, MerkleTree, PublicKey, SecretKey, TokenId,
     },
-    incrementalmerkletree::Tree,
     pasta::pallas,
 };
 use darkfi_serial::serialize;
@@ -109,8 +108,7 @@ impl SwapCallBuilder {
         }
 
         let leaf_position = self.coin.leaf_position;
-        let root = self.tree.root(0).unwrap();
-        let merkle_path = self.tree.authentication_path(leaf_position, &root).unwrap();
+        let merkle_path = self.tree.witness(leaf_position, 0).unwrap();
 
         let input = TransactionBuilderInputInfo {
             leaf_position,

@@ -26,10 +26,8 @@
 
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
-    crypto::{
-        merkle_prelude::*, pallas, pasta_prelude::*, poseidon_hash, MerkleNode, Nullifier,
-        MONEY_CONTRACT_ID,
-    },
+    crypto::{pasta_prelude::*, poseidon_hash, MerkleNode, Nullifier, MONEY_CONTRACT_ID},
+    pasta::pallas,
     ContractCall,
 };
 use darkfi_serial::Encodable;
@@ -94,7 +92,7 @@ async fn txs_verification() -> Result<()> {
         .verify_transactions(&[alice_mint_tx.clone()], current_slot, true)
         .await?;
     assert!(erroneous_txs.is_empty());
-    th.faucet.merkle_tree.append(&MerkleNode::from(alice_params.output.coin.inner()));
+    th.faucet.merkle_tree.append(MerkleNode::from(alice_params.output.coin.inner()));
 
     info!(target: "money", "[Alice] =============================");
     info!(target: "money", "[Alice] Executing Alice token mint tx");
@@ -107,9 +105,9 @@ async fn txs_verification() -> Result<()> {
         .verify_transactions(&[alice_mint_tx.clone()], current_slot, true)
         .await?;
     assert!(erroneous_txs.is_empty());
-    th.alice.merkle_tree.append(&MerkleNode::from(alice_params.output.coin.inner()));
-    // Alice has to witness this coin because it's hers.
-    let alice_leaf_pos = th.alice.merkle_tree.witness().unwrap();
+    th.alice.merkle_tree.append(MerkleNode::from(alice_params.output.coin.inner()));
+    // Alice has to mark this coin because it's hers.
+    let alice_leaf_pos = th.alice.merkle_tree.mark().unwrap();
 
     info!(target: "money", "[Bob] =============================");
     info!(target: "money", "[Bob] Executing Alice token mint tx");
@@ -122,7 +120,7 @@ async fn txs_verification() -> Result<()> {
         .verify_transactions(&[alice_mint_tx.clone()], current_slot, true)
         .await?;
     assert!(erroneous_txs.is_empty());
-    th.bob.merkle_tree.append(&MerkleNode::from(alice_params.output.coin.inner()));
+    th.bob.merkle_tree.append(MerkleNode::from(alice_params.output.coin.inner()));
 
     assert!(th.alice.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
@@ -242,8 +240,8 @@ async fn txs_verification() -> Result<()> {
     let erroneous_txs =
         th.faucet.state.read().await.verify_transactions(&valid_txs, current_slot, true).await?;
     assert!(erroneous_txs.is_empty());
-    th.faucet.merkle_tree.append(&MerkleNode::from(txs_params[0].outputs[0].coin.inner()));
-    th.faucet.merkle_tree.append(&MerkleNode::from(txs_params[0].outputs[1].coin.inner()));
+    th.faucet.merkle_tree.append(MerkleNode::from(txs_params[0].outputs[0].coin.inner()));
+    th.faucet.merkle_tree.append(MerkleNode::from(txs_params[0].outputs[1].coin.inner()));
 
     info!(target: "money", "[Alice] ==============================");
     info!(target: "money", "[Alice] Executing Alice2Bob payment tx");
@@ -254,9 +252,9 @@ async fn txs_verification() -> Result<()> {
     let erroneous_txs =
         th.alice.state.read().await.verify_transactions(&valid_txs, current_slot, true).await?;
     assert!(erroneous_txs.is_empty());
-    th.alice.merkle_tree.append(&MerkleNode::from(txs_params[0].outputs[0].coin.inner()));
-    let alice_leaf_pos = th.alice.merkle_tree.witness().unwrap();
-    th.alice.merkle_tree.append(&MerkleNode::from(txs_params[0].outputs[1].coin.inner()));
+    th.alice.merkle_tree.append(MerkleNode::from(txs_params[0].outputs[0].coin.inner()));
+    let alice_leaf_pos = th.alice.merkle_tree.mark().unwrap();
+    th.alice.merkle_tree.append(MerkleNode::from(txs_params[0].outputs[1].coin.inner()));
 
     info!(target: "money", "[Bob] ==============================");
     info!(target: "money", "[Bob] Executing Alice2Bob payment tx");
@@ -267,9 +265,9 @@ async fn txs_verification() -> Result<()> {
     let erroneous_txs =
         th.bob.state.read().await.verify_transactions(&valid_txs, current_slot, true).await?;
     assert!(erroneous_txs.is_empty());
-    th.bob.merkle_tree.append(&MerkleNode::from(txs_params[0].outputs[0].coin.inner()));
-    th.bob.merkle_tree.append(&MerkleNode::from(txs_params[0].outputs[1].coin.inner()));
-    let bob_leaf_pos = th.bob.merkle_tree.witness().unwrap();
+    th.bob.merkle_tree.append(MerkleNode::from(txs_params[0].outputs[0].coin.inner()));
+    th.bob.merkle_tree.append(MerkleNode::from(txs_params[0].outputs[1].coin.inner()));
+    let bob_leaf_pos = th.bob.merkle_tree.mark().unwrap();
 
     assert!(th.alice.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());

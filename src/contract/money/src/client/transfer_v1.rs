@@ -24,12 +24,13 @@ use darkfi::{
     ClientFailed, Result,
 };
 use darkfi_sdk::{
+    bridgetree,
+    bridgetree::Hashable,
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_base,
-        pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, MerklePosition, MerkleTree,
-        Nullifier, PublicKey, SecretKey, TokenId,
+        pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier,
+        PublicKey, SecretKey, TokenId,
     },
-    incrementalmerkletree::{Hashable, Tree},
     pasta::pallas,
 };
 use log::{debug, error, info};
@@ -110,7 +111,7 @@ pub struct TransactionBuilderClearInputInfo {
 }
 
 pub struct TransactionBuilderInputInfo {
-    pub leaf_position: MerklePosition,
+    pub leaf_position: bridgetree::Position,
     pub merkle_path: Vec<MerkleNode>,
     pub secret: SecretKey,
     pub note: MoneyNote,
@@ -203,8 +204,7 @@ impl TransferCallBuilder {
                 }
 
                 let leaf_position = coin.leaf_position;
-                let root = self.tree.root(0).unwrap();
-                let merkle_path = self.tree.authentication_path(leaf_position, &root).unwrap();
+                let merkle_path = self.tree.witness(leaf_position, 0).unwrap();
                 inputs_value += coin.note.value;
 
                 let input = TransactionBuilderInputInfo {

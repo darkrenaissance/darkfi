@@ -20,10 +20,8 @@ use std::{env, str::FromStr};
 
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
-    crypto::{
-        merkle_prelude::*, pallas, pasta_prelude::*, poseidon_hash, MerkleNode, Nullifier,
-        MONEY_CONTRACT_ID,
-    },
+    crypto::{pasta_prelude::*, poseidon_hash, MerkleNode, Nullifier, MONEY_CONTRACT_ID},
+    pasta::pallas,
     ContractCall,
 };
 use darkfi_serial::Encodable;
@@ -83,7 +81,7 @@ async fn alice2alice_random_amounts() -> Result<()> {
         .verify_transactions(&[airdrop_tx.clone()], current_slot, true)
         .await?;
     assert!(erroneous_txs.is_empty());
-    th.faucet.merkle_tree.append(&MerkleNode::from(airdrop_params.outputs[0].coin.inner()));
+    th.faucet.merkle_tree.append(MerkleNode::from(airdrop_params.outputs[0].coin.inner()));
     info!(target: "money", "[Alice] ==========================");
     info!(target: "money", "[Alice] Executing Alice airdrop tx");
     info!(target: "money", "[Alice] ==========================");
@@ -95,13 +93,13 @@ async fn alice2alice_random_amounts() -> Result<()> {
         .verify_transactions(&[airdrop_tx.clone()], current_slot, true)
         .await?;
     assert!(erroneous_txs.is_empty());
-    th.alice.merkle_tree.append(&MerkleNode::from(airdrop_params.outputs[0].coin.inner()));
+    th.alice.merkle_tree.append(MerkleNode::from(airdrop_params.outputs[0].coin.inner()));
 
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
 
     // Gather new owncoins
     let mut owncoins = vec![];
-    let leaf_position = th.alice.merkle_tree.witness().unwrap();
+    let leaf_position = th.alice.merkle_tree.mark().unwrap();
     let note: MoneyNote = airdrop_params.outputs[0].note.decrypt(&th.alice.keypair.secret)?;
     let token_id = note.token_id;
     owncoins.push(OwnCoin {
@@ -179,7 +177,7 @@ async fn alice2alice_random_amounts() -> Result<()> {
             .await?;
         assert!(erroneous_txs.is_empty());
         for output in &params.outputs {
-            th.faucet.merkle_tree.append(&MerkleNode::from(output.coin.inner()));
+            th.faucet.merkle_tree.append(MerkleNode::from(output.coin.inner()));
         }
         info!(target: "money", "[Alice] ================================");
         info!(target: "money", "[Alice] Executing Alice2Alice payment tx");
@@ -194,9 +192,9 @@ async fn alice2alice_random_amounts() -> Result<()> {
         assert!(erroneous_txs.is_empty());
         // Gather new owncoins and apply the state transitions
         for output in params.outputs {
-            th.alice.merkle_tree.append(&MerkleNode::from(output.coin.inner()));
+            th.alice.merkle_tree.append(MerkleNode::from(output.coin.inner()));
             let note: MoneyNote = output.note.decrypt(&th.alice.keypair.secret)?;
-            let leaf_position = th.alice.merkle_tree.witness().unwrap();
+            let leaf_position = th.alice.merkle_tree.mark().unwrap();
 
             let owncoin = OwnCoin {
                 coin: Coin::from(output.coin),
@@ -266,7 +264,7 @@ async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
             .verify_transactions(&[mint_tx.clone()], current_slot, true)
             .await?;
         assert!(erroneous_txs.is_empty());
-        th.faucet.merkle_tree.append(&MerkleNode::from(mint_params.output.coin.inner()));
+        th.faucet.merkle_tree.append(MerkleNode::from(mint_params.output.coin.inner()));
         info!(target: "money", "[Alice] =======================");
         info!(target: "money", "[Alice] Executing Alice mint tx");
         info!(target: "money", "[Alice] =======================");
@@ -278,12 +276,12 @@ async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
             .verify_transactions(&[mint_tx.clone()], current_slot, true)
             .await?;
         assert!(erroneous_txs.is_empty());
-        th.alice.merkle_tree.append(&MerkleNode::from(mint_params.output.coin.inner()));
+        th.alice.merkle_tree.append(MerkleNode::from(mint_params.output.coin.inner()));
 
         assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
 
         // Gather new owncoins
-        let leaf_position = th.alice.merkle_tree.witness().unwrap();
+        let leaf_position = th.alice.merkle_tree.mark().unwrap();
         let note: MoneyNote = mint_params.output.note.decrypt(&th.alice.keypair.secret)?;
         let token_id = note.token_id;
         owncoins.push(vec![OwnCoin {
@@ -373,10 +371,10 @@ async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
 
             // Gather new owncoins
             for output in params.outputs {
-                th.faucet.merkle_tree.append(&MerkleNode::from(output.coin.inner()));
-                th.alice.merkle_tree.append(&MerkleNode::from(output.coin.inner()));
+                th.faucet.merkle_tree.append(MerkleNode::from(output.coin.inner()));
+                th.alice.merkle_tree.append(MerkleNode::from(output.coin.inner()));
                 let note: MoneyNote = output.note.decrypt(&th.alice.keypair.secret)?;
-                let leaf_position = th.alice.merkle_tree.witness().unwrap();
+                let leaf_position = th.alice.merkle_tree.mark().unwrap();
 
                 let owncoin = OwnCoin {
                     coin: Coin::from(output.coin),
