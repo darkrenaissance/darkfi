@@ -153,32 +153,44 @@ pub fn helper_taskinfo_func(taskinfo: TaskInfo) -> Result<Table> {
     Ok(table)
 }
 
+pub fn helper_events_func(taskinfo: TaskInfo) -> Result<Table> {
+    let (events, timestamps) = &events_as_string(taskinfo.events);
+    let mut events_table = table!([events, timestamps]);
+    events_table.set_format(*FORMAT_NO_COLSEP);
+    events_table.set_titles(row!["Events"]);
+    Ok(events_table)
+}
+
+pub fn helper_comments_func(taskinfo: TaskInfo) -> Result<Table> {
+    let (events, timestamps) = &comments_as_string(taskinfo.events);
+    let mut comments_table = table!([events, timestamps]);
+    comments_table.set_format(*FORMAT_NO_COLSEP);
+    comments_table.set_titles(row!["Comments"]);
+
+    Ok(comments_table)
+}
+
 pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
     let table = helper_taskinfo_func(taskinfo.clone())?;
     table.printstd();
 
-    let (events, timestamps) = &events_as_string(taskinfo.events);
-    let mut event_table = table!([events, timestamps]);
-    event_table.set_format(*FORMAT_NO_COLSEP);
-    event_table.printstd();
+    let events_table = helper_events_func(taskinfo.clone())?;
+    events_table.printstd();
+
+    let comments_table = helper_comments_func(taskinfo)?;
+    comments_table.printstd();
 
     Ok(())
 }
-
-// pub fn comments_as_string(comments: Vec<Comment>) -> String {
-//     let mut comments_str = String::new();
-//     for comment in comments {
-//         writeln!(comments_str, "{}", comment).unwrap();
-//     }
-//     comments_str.pop();
-//     comments_str
-// }
 
 pub fn events_as_string(events: Vec<TaskEvent>) -> (String, String) {
     let mut events_str = String::new();
     let mut timestamps_str = String::new();
     let width = 50;
     for event in events {
+        if event.action.as_str() == "comment" {
+            continue
+        }
         writeln!(timestamps_str, "{}", event.timestamp).unwrap();
         match event.action.as_str() {
             "title" => {
@@ -213,16 +225,6 @@ pub fn events_as_string(events: Vec<TaskEvent>) -> (String, String) {
                 )
                 .unwrap();
             }
-            "comment" => {
-                // wrap long comments
-                let ev_content =
-                    fill(&event.content, textwrap::Options::new(width).subsequent_indent("  "));
-                // skip wrapped lines to align timestamp with the first line
-                for _ in 1..ev_content.lines().count() {
-                    writeln!(timestamps_str, " ").unwrap();
-                }
-                writeln!(events_str, "- {} made a comment: {}", event.author, ev_content).unwrap();
-            }
             "desc" => {
                 // wrap long description
                 let ev_content =
@@ -235,6 +237,29 @@ pub fn events_as_string(events: Vec<TaskEvent>) -> (String, String) {
                     .unwrap();
             }
             _ => {}
+        }
+    }
+    (events_str, timestamps_str)
+}
+
+pub fn comments_as_string(events: Vec<TaskEvent>) -> (String, String) {
+    let mut events_str = String::new();
+    let mut timestamps_str = String::new();
+    let width = 50;
+    for event in events {
+        if event.action.as_str() != "comment" {
+            continue
+        }
+        writeln!(timestamps_str, "{}", event.timestamp).unwrap();
+        if event.action.as_str() == "comment" {
+            // wrap long comments
+            let ev_content =
+                fill(&event.content, textwrap::Options::new(width).subsequent_indent("    "));
+            // skip wrapped lines to align timestamp with the first line
+            for _ in 1..ev_content.lines().count() {
+                writeln!(timestamps_str, " ").unwrap();
+            }
+            writeln!(events_str, "{}>  {}", event.author, ev_content).unwrap();
         }
     }
     (events_str, timestamps_str)
