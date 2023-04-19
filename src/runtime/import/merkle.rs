@@ -18,17 +18,12 @@
 
 use std::io::Cursor;
 
-use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, MerkleNode},
-    incrementalmerkletree::{bridgetree::BridgeTree, Tree},
-};
+use darkfi_sdk::crypto::{MerkleNode, MerkleTree};
 use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
 use log::{debug, error};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::runtime::vm_runtime::{ContractSection, Env};
-
-type MerkleTree = BridgeTree<MerkleNode, { MERKLE_DEPTH }>;
 
 pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
     let env = ctx.data();
@@ -166,7 +161,7 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             let mut new_roots = vec![];
 
             for coin in coins {
-                tree.append(&coin);
+                tree.append(coin);
                 let Some(root) = tree.root(0) else {
                     error!(target: "runtime::merkle", "Unable to read the root of tree");
                     return -2;

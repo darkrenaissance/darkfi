@@ -17,9 +17,8 @@
  */
 use std::io::Cursor;
 
-use darkfi_sdk::{
-    crypto::{pedersen::pedersen_commitment_u64, util::mod_r_p, MerkleNode, PublicKey, SecretKey},
-    incrementalmerkletree::{bridgetree::BridgeTree, Tree},
+use darkfi_sdk::crypto::{
+    pedersen::pedersen_commitment_u64, util::mod_r_p, MerkleNode, MerkleTree, PublicKey, SecretKey,
 };
 use halo2_gadgets::poseidon::{
     primitives as poseidon,
@@ -90,7 +89,7 @@ fn halo2_vk_ser() -> Result<()> {
     let a = pallas::Base::from(42);
     let b = pallas::Base::from(69);
 
-    let mut tree = BridgeTree::<MerkleNode, 32>::new(100);
+    let mut tree = MerkleTree::new(100);
     let c0 = pallas::Base::random(&mut OsRng);
     let c1 = pallas::Base::random(&mut OsRng);
     let c3 = pallas::Base::random(&mut OsRng);
@@ -99,16 +98,16 @@ fn halo2_vk_ser() -> Result<()> {
         poseidon::Hash::<_, P128Pow5T3, ConstantLength<3>, 3, 2>::init().hash(messages)
     };
 
-    tree.append(&MerkleNode::from(c0));
-    tree.witness();
-    tree.append(&MerkleNode::from(c1));
-    tree.append(&MerkleNode::from(c2));
-    let leaf_pos = tree.witness().unwrap();
-    tree.append(&MerkleNode::from(c3));
-    tree.witness();
+    tree.append(MerkleNode::from(c0));
+    tree.mark();
+    tree.append(MerkleNode::from(c1));
+    tree.append(MerkleNode::from(c2));
+    let leaf_pos = tree.mark().unwrap();
+    tree.append(MerkleNode::from(c3));
+    tree.mark();
 
     let root = tree.root(0).unwrap();
-    let merkle_path = tree.authentication_path(leaf_pos, &root).unwrap();
+    let merkle_path = tree.witness(leaf_pos, 0).unwrap();
     let leaf_pos: u64 = leaf_pos.into();
 
     let ephem_secret = SecretKey::random(&mut OsRng);

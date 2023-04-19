@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub use incrementalmerkletree;
+pub use bridgetree;
 pub use num_bigint;
 pub use num_traits;
 pub use pasta_curves as pasta;

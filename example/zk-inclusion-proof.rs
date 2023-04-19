@@ -28,15 +28,13 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, poseidon_hash, MerkleNode},
-    incrementalmerkletree::{bridgetree::BridgeTree, Hashable, Tree},
+    bridgetree::Hashable,
+    crypto::{poseidon_hash, MerkleNode, MerkleTree},
     pasta::{group::ff::Field, pallas},
 };
 use darkfi_serial::Encodable;
 use halo2_proofs::circuit::Value;
 use rand::rngs::OsRng;
-
-type MerkleTree = BridgeTree<MerkleNode, { MERKLE_DEPTH }>;
 
 fn main() -> Result<()> {
     let mut tree = MerkleTree::new(100);
@@ -45,26 +43,23 @@ fn main() -> Result<()> {
     for _ in 0..10 {
         let random_leaf = pallas::Base::random(&mut OsRng);
         let node = MerkleNode::from(random_leaf);
-        tree.append(&node);
+        tree.append(node);
     }
 
     let leaf = pallas::Base::random(&mut OsRng);
     let node = MerkleNode::from(leaf);
-    tree.append(&node);
+    tree.append(node);
 
-    let leaf_position = tree.witness().unwrap();
+    let leaf_position = tree.mark().unwrap();
 
     // Add 10 more random things to the tree
     for _ in 0..10 {
         let random_leaf = pallas::Base::random(&mut OsRng);
         let node = MerkleNode::from(random_leaf);
-        tree.append(&node);
+        tree.append(node);
     }
 
-    let root = tree.root(0).unwrap();
-
     // Now begin zk proof API
-
     let bincode = include_bytes!("../proof/inclusion_proof.zk.bin");
     let zkbin = ZkBinary::decode(bincode)?;
 
@@ -77,7 +72,7 @@ fn main() -> Result<()> {
     println!("k = {}", k);
 
     // Witness values
-    let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+    let merkle_path = tree.witness(leaf_position, 0).unwrap();
     let leaf_position: u64 = leaf_position.into();
     let blind = pallas::Base::random(&mut OsRng);
 
@@ -103,7 +98,7 @@ fn main() -> Result<()> {
         current
     };
 
-    let enc_leaf = poseidon_hash::<2>([leaf, blind]);
+    let enc_leaf = poseidon_hash([leaf, blind]);
     let public_inputs = vec![merkle_root.inner(), enc_leaf];
 
     // Create the circuit
