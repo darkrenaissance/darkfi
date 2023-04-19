@@ -24,7 +24,10 @@ use crate::{
     Error, Result,
 };
 
-use darkfi_sdk::{crypto::MerkleNode, pasta::pallas};
+use darkfi_sdk::{
+    crypto::{MerkleNode},
+    pasta::pallas,
+};
 
 const SLED_HEADER_TREE: &[u8] = b"_headers";
 const SLED_BLOCK_TREE: &[u8] = b"_blocks";
@@ -90,7 +93,7 @@ impl HeaderStore {
             } else {
                 if strict {
                     let s = hash.to_hex().as_str().to_string();
-                    return Err(Error::HeaderNotFound(s));
+                    return Err(Error::HeaderNotFound(s))
                 }
                 ret.push(None);
             }
@@ -118,7 +121,8 @@ impl HeaderStore {
 
 /// The `BlockStore` is a `sled` tree storing all the blockchain's blocks
 /// where the key is the blocks' hash, and value is the serialized block.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[derive(Debug)]
 pub struct BlockStore(sled::Tree);
 
 impl BlockStore {
@@ -179,7 +183,7 @@ impl BlockStore {
             } else {
                 if strict {
                     let s = hash.to_hex().as_str().to_string();
-                    return Err(Error::BlockNotFound(s));
+                    return Err(Error::BlockNotFound(s))
                 }
                 ret.push(None);
             }
@@ -261,7 +265,7 @@ impl BlockOrderStore {
                 ret.push(Some(hash));
             } else {
                 if strict {
-                    return Err(Error::SlotNotFound(*slot));
+                    return Err(Error::SlotNotFound(*slot))
                 }
                 ret.push(None);
             }
@@ -303,9 +307,9 @@ impl BlockOrderStore {
                 let blockhash = deserialize(&found.1)?;
                 ret.push(blockhash);
                 counter += 1;
-                continue;
+                continue
             }
-            break;
+            break
         }
 
         Ok(ret)
@@ -338,52 +342,48 @@ impl BlockOrderStore {
 
 #[cfg(test)]
 mod tests {
-    // Note this useful idiom: importing names from outer (for mod tests) scope.
-    use super::*;
+  // Note this useful idiom: importing names from outer (for mod tests) scope.
+  use super::*;
 
-    fn create_tmp_db() -> Result<BlockStore> {
-        let db = sled::Config::new().temporary(true).open()?;
-        return BlockStore::new(
-            &db,
-            Timestamp::current_time(),
-            blake3::hash(b"unit-testing-blockstore"),
-        );
-    }
+  fn create_tmp_db() -> Result<BlockStore> {
+      let db = sled::Config::new().temporary(true).open()?;
+      return BlockStore::new(&db,Timestamp::current_time(),blake3::hash(b"unit-testing-blockstore"));
+  }
 
-    #[test]
-    fn test_new() {
-        let bs = create_tmp_db();
-        assert_eq!(bs.is_ok(), true);
-    }
+  #[test]
+  fn test_new() {
+      let bs = create_tmp_db();
+      assert_eq!(bs.is_ok(), true);
+  }
 
-    #[test]
-    fn test_insert() {
-        let res = create_tmp_db();
-        let bs = res.unwrap();
-        let txs: Vec<blake3::Hash> = gen_hashes(3);
-        let merkle = MerkleNode::new(pallas::Base::from(42));
-        let blk = Block::new(blake3::hash(b"some-block"), 1, 0, txs, merkle, LeadInfo::default());
-        let hres = bs.insert(&[blk]);
-        let hh = hres.unwrap();
-        let first = hh[0];
+  #[test]
+  fn test_insert() {
+      let res = create_tmp_db();
+      let bs = res.unwrap();
+      let txs:Vec<blake3::Hash> = gen_hashes(3); 
+      let merkle = MerkleNode::new(pallas::Base::from(42));
+      let blk = Block::new(blake3::hash(b"some-block"),1,0,txs, merkle, LeadInfo::default());
+      let hres =  bs.insert(&[blk]);
+      let hh = hres.unwrap();
+      let first = hh[0];
 
-        let mut contains = bs.contains(&first);
-        assert_eq!(contains.is_ok(), true);
-        let badhash = blake3::hash(b"blabla");
-        contains = bs.contains(&badhash);
-        assert_eq!(contains.is_ok(), true);
-        let v = contains.unwrap();
-        assert_eq!(v, false);
-        let g = bs.get(&[first], true);
-        assert_eq!(g.is_ok(), true);
-    }
+      let mut contains = bs.contains(&first);
+      assert_eq!(contains.is_ok(), true);
+      let badhash = blake3::hash(b"blabla");
+      contains = bs.contains(&badhash); 
+      assert_eq!(contains.is_ok(), true);
+      let v=contains.unwrap();
+      assert_eq!(v, false);
+      let g = bs.get(&[first], true);
+      assert_eq!(g.is_ok(), true);
+  }
 
-    fn gen_hashes(num: u64) -> Vec<blake3::Hash> {
-        let mut v: Vec<blake3::Hash> = Vec::new();
-        for n in 0..num {
-            let h = blake3::hash(&n.to_be_bytes());
-            v.push(h);
-        }
-        return v;
-    }
+  fn gen_hashes(num:u64) -> Vec<blake3::Hash> {
+      let mut v:Vec<blake3::Hash> = Vec::new();
+      for n in 0..num {
+         let h = blake3::hash(&n.to_be_bytes());
+         v.push(h);
+      }
+      return v;
+  }
 }
