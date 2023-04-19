@@ -90,7 +90,7 @@ impl HeaderStore {
             } else {
                 if strict {
                     let s = hash.to_hex().as_str().to_string();
-                    return Err(Error::HeaderNotFound(s));
+                    return Err(Error::HeaderNotFound(s))
                 }
                 ret.push(None);
             }
@@ -179,7 +179,7 @@ impl BlockStore {
             } else {
                 if strict {
                     let s = hash.to_hex().as_str().to_string();
-                    return Err(Error::BlockNotFound(s));
+                    return Err(Error::BlockNotFound(s))
                 }
                 ret.push(None);
             }
@@ -261,7 +261,7 @@ impl BlockOrderStore {
                 ret.push(Some(hash));
             } else {
                 if strict {
-                    return Err(Error::SlotNotFound(*slot));
+                    return Err(Error::SlotNotFound(*slot))
                 }
                 ret.push(None);
             }
@@ -303,9 +303,9 @@ impl BlockOrderStore {
                 let blockhash = deserialize(&found.1)?;
                 ret.push(blockhash);
                 counter += 1;
-                continue;
+                continue
             }
-            break;
+            break
         }
 
         Ok(ret)
@@ -347,7 +347,7 @@ mod tests {
             &db,
             Timestamp::current_time(),
             blake3::hash(b"unit-testing-blockstore"),
-        );
+        )
     }
 
     #[test]
@@ -384,6 +384,6 @@ mod tests {
             let h = blake3::hash(&n.to_be_bytes());
             v.push(h);
         }
-        return v;
+        return v
     }
 }
