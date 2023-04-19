@@ -16,8 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{
-    merkle_prelude::*, note::AeadEncryptedNote, MerkleNode, MerklePosition, MerkleTree, SecretKey,
+use darkfi_sdk::{
+    bridgetree,
+    crypto::{note::AeadEncryptedNote, MerkleNode, MerkleTree, SecretKey},
 };
 
 use darkfi_money_contract::{client::MoneyNote, model::Coin};
@@ -25,7 +26,7 @@ use darkfi_money_contract::{client::MoneyNote, model::Coin};
 pub struct OwnCoin {
     pub coin: Coin,
     pub note: MoneyNote,
-    pub leaf_position: MerklePosition,
+    pub leaf_position: bridgetree::Position,
 }
 
 pub struct WalletCache {
@@ -66,14 +67,13 @@ impl WalletCache {
 
     pub fn try_decrypt_note(&mut self, coin: Coin, ciphertext: &AeadEncryptedNote) {
         // Add the new coins to the Merkle tree
-        let node = MerkleNode::from(coin.inner());
-        self.tree.append(&node);
+        self.tree.append(MerkleNode::from(coin.inner()));
 
         // Loop through all our secret keys...
         for (secret, own_coins) in self.cache.iter_mut() {
             // .. attempt to decrypt the note ...
             if let Ok(note) = ciphertext.decrypt(secret) {
-                let leaf_position = self.tree.witness().expect("coin should be in tree");
+                let leaf_position = self.tree.mark().expect("coin should be in tree");
                 own_coins.push(OwnCoin { coin, note, leaf_position });
             }
         }

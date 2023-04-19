@@ -21,10 +21,10 @@ use std::time::{Duration, Instant};
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
     crypto::{
-        merkle_prelude::*, pallas, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash,
-        Keypair, MerkleNode, MerkleTree, SecretKey, TokenId, DAO_CONTRACT_ID, DARK_TOKEN_ID,
-        MONEY_CONTRACT_ID,
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, MerkleTree,
+        SecretKey, TokenId, DAO_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
     },
+    pasta::pallas,
     ContractCall,
 };
 use darkfi_serial::{Decodable, Encodable};
@@ -129,8 +129,8 @@ async fn integration_test() -> Result<()> {
     let mut dao_tree = MerkleTree::new(100);
     let dao_leaf_position = {
         let node = MerkleNode::from(params.dao_bulla.inner());
-        dao_tree.append(&node);
-        dao_tree.witness().unwrap()
+        dao_tree.append(node);
+        dao_tree.mark().unwrap()
     };
     let dao_bulla = params.dao_bulla;
     debug!(target: "dao", "Created DAO bulla: {:?}", dao_bulla.inner());
@@ -392,8 +392,7 @@ async fn integration_test() -> Result<()> {
     let (money_leaf_position, money_merkle_path) = {
         let tree = &cache.tree;
         let leaf_position = gov_recv[0].leaf_position;
-        let root = tree.root(0).unwrap();
-        let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+        let merkle_path = tree.witness(leaf_position, 0).unwrap();
         (leaf_position, merkle_path)
     };
 
@@ -411,7 +410,7 @@ async fn integration_test() -> Result<()> {
     let (dao_merkle_path, dao_merkle_root) = {
         let tree = &dao_tree;
         let root = tree.root(0).unwrap();
-        let merkle_path = tree.authentication_path(dao_leaf_position, &root).unwrap();
+        let merkle_path = tree.witness(dao_leaf_position, 0).unwrap();
         (merkle_path, root)
     };
 
@@ -514,8 +513,7 @@ async fn integration_test() -> Result<()> {
     let (money_leaf_position, money_merkle_path) = {
         let tree = &cache.tree;
         let leaf_position = gov_recv[0].leaf_position;
-        let root = tree.root(0).unwrap();
-        let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+        let merkle_path = tree.witness(leaf_position, 0).unwrap();
         (leaf_position, merkle_path)
     };
 
@@ -590,8 +588,7 @@ async fn integration_test() -> Result<()> {
     let (money_leaf_position, money_merkle_path) = {
         let tree = &cache.tree;
         let leaf_position = gov_recv[1].leaf_position;
-        let root = tree.root(0).unwrap();
-        let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+        let merkle_path = tree.witness(leaf_position, 0).unwrap();
         (leaf_position, merkle_path)
     };
 
@@ -663,8 +660,7 @@ async fn integration_test() -> Result<()> {
     let (money_leaf_position, money_merkle_path) = {
         let tree = &cache.tree;
         let leaf_position = gov_recv[2].leaf_position;
-        let root = tree.root(0).unwrap();
-        let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+        let merkle_path = tree.witness(leaf_position, 0).unwrap();
         (leaf_position, merkle_path)
     };
 
@@ -818,8 +814,7 @@ async fn integration_test() -> Result<()> {
     let (treasury_leaf_position, treasury_merkle_path) = {
         let tree = &cache.tree;
         let leaf_position = dao_recv_coin.leaf_position;
-        let root = tree.root(0).unwrap();
-        let merkle_path = tree.authentication_path(leaf_position, &root).unwrap();
+        let merkle_path = tree.witness(leaf_position, 0).unwrap();
         (leaf_position, merkle_path)
     };
 

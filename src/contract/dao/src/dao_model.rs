@@ -17,8 +17,9 @@
  */
 
 use darkfi_sdk::{
-    crypto::{pallas, pasta_prelude::*, MerkleNode, Nullifier, PublicKey},
+    crypto::{pasta_prelude::*, MerkleNode, Nullifier, PublicKey},
     error::ContractError,
+    pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 

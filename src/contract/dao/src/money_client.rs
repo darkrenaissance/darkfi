@@ -24,9 +24,13 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_sdk::crypto::{
-    note::AeadEncryptedNote, pallas, pasta_prelude::*, MerkleNode, MerklePosition, PublicKey,
-    SecretKey, TokenId, ValueBlind,
+use darkfi_sdk::{
+    bridgetree,
+    crypto::{
+        note::AeadEncryptedNote, pasta_prelude::*, MerkleNode, PublicKey, SecretKey, TokenId,
+        ValueBlind,
+    },
+    pasta::pallas,
 };
 
 use rand::rngs::OsRng;
@@ -55,7 +59,7 @@ pub struct TransferClearInput {
 }
 
 pub struct TransferInput {
-    pub leaf_position: MerklePosition,
+    pub leaf_position: bridgetree::Position,
     pub merkle_path: Vec<MerkleNode>,
     pub secret: SecretKey,
     pub note: MoneyNote,

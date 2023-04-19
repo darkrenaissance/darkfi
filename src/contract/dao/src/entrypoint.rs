@@ -20,12 +20,13 @@ use std::io::Cursor;
 
 use darkfi_sdk::{
     crypto::{
-        pallas, pasta_prelude::*, ContractId, MerkleNode, MerkleTree, PublicKey, DAO_CONTRACT_ID,
+        pasta_prelude::*, ContractId, MerkleNode, MerkleTree, PublicKey, DAO_CONTRACT_ID,
         MONEY_CONTRACT_ID,
     },
     db::{db_contains_key, db_del, db_get, db_init, db_lookup, db_set, zkas_db_set},
     error::{ContractError, ContractResult},
     merkle_add, msg,
+    pasta::pallas,
     util::set_return_data,
     ContractCall,
 };

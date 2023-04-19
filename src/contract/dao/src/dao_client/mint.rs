@@ -21,7 +21,10 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_sdk::crypto::{pallas, poseidon_hash, PublicKey, SecretKey, TokenId};
+use darkfi_sdk::{
+    crypto::{poseidon_hash, PublicKey, SecretKey, TokenId},
+    pasta::pallas,
+};
 use log::debug;
 use rand::rngs::OsRng;
 

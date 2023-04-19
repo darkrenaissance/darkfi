@@ -16,9 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{
-    merkle_prelude::*, pallas, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Keypair,
-    MerkleNode, MerklePosition, Nullifier, PublicKey, SecretKey,
+use darkfi_sdk::{
+    bridgetree,
+    bridgetree::Hashable,
+    crypto::{
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, Nullifier,
+        PublicKey, SecretKey,
+    },
+    pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::debug;
@@ -48,7 +53,7 @@ pub struct DaoVoteNote {
 pub struct DaoVoteInput {
     pub secret: SecretKey,
     pub note: darkfi_money_contract::client::MoneyNote,
-    pub leaf_position: MerklePosition,
+    pub leaf_position: bridgetree::Position,
     pub merkle_path: Vec<MerkleNode>,
     pub signature_secret: SecretKey,
 }

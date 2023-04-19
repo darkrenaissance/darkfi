@@ -16,8 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{
-    pallas, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, SecretKey,
+use darkfi_sdk::{
+    crypto::{pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, SecretKey},
+    pasta::pallas,
 };
 
 use halo2_proofs::circuit::Value;

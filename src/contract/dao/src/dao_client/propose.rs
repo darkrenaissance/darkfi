@@ -16,9 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{
-    merkle_prelude::*, pallas, pasta_prelude::*, pedersen::pedersen_commitment_u64, poseidon_hash,
-    MerkleNode, MerklePosition, PublicKey, SecretKey, TokenId,
+use darkfi_sdk::{
+    bridgetree,
+    bridgetree::Hashable,
+    crypto::{
+        pasta_prelude::*, pedersen::pedersen_commitment_u64, poseidon_hash, MerkleNode, PublicKey,
+        SecretKey, TokenId,
+    },
+    pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
@@ -52,7 +57,7 @@ pub struct DaoProposeNote {
 pub struct DaoProposeStakeInput {
     pub secret: SecretKey,
     pub note: darkfi_money_contract::client::MoneyNote,
-    pub leaf_position: MerklePosition,
+    pub leaf_position: bridgetree::Position,
     pub merkle_path: Vec<MerkleNode>,
     pub signature_secret: SecretKey,
 }
@@ -61,7 +66,7 @@ pub struct DaoProposeCall {
     pub inputs: Vec<DaoProposeStakeInput>,
     pub proposal: DaoProposalInfo,
     pub dao: DaoInfo,
-    pub dao_leaf_position: MerklePosition,
+    pub dao_leaf_position: bridgetree::Position,
     pub dao_merkle_path: Vec<MerkleNode>,
     pub dao_merkle_root: MerkleNode,
 }
