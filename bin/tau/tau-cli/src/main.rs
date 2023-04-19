@@ -305,7 +305,7 @@ async fn main() -> Result<()> {
                         exit(1)
                     }
 
-                    let res = tau.set_comment(task.id.into(), &comment.unwrap()).await?;
+                    let res = tau.set_comment(task.id.into(), comment.unwrap().trim()).await?;
                     if res {
                         let tsk = tau.get_task_by_id(task.id.into()).await?;
                         print_task_info(tsk)?;

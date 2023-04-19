@@ -30,7 +30,7 @@ use darkfi::{util::time::Timestamp, Result};
 
 use crate::{
     primitives::TaskInfo,
-    view::{helper_comments_func, helper_events_func, helper_taskinfo_func},
+    view::{comments_table, events_table, taskinfo_table},
 };
 
 /// Parse due date (e.g. "1503" for 15 March) as i64 timestamp.
@@ -75,9 +75,9 @@ pub fn prompt_text(task_info: TaskInfo, what: &str) -> Result<Option<String>> {
     writeln!(file, "\n# ------------------------ >8 ------------------------")?;
     writeln!(file, "# Do not modify or remove the line above.")?;
     writeln!(file, "# Everything below it will be ignored.")?;
-    writeln!(file, "\n{}", helper_taskinfo_func(task_info.clone())?)?;
-    writeln!(file, "{}", helper_events_func(task_info.clone())?)?;
-    writeln!(file, "{}", helper_comments_func(task_info)?)?;
+    writeln!(file, "\n{}", taskinfo_table(task_info.clone())?)?;
+    writeln!(file, "{}", events_table(task_info.clone())?)?;
+    writeln!(file, "{}", comments_table(task_info)?)?;
 
     // Try $EDITOR, and if not, fallback to xdg-open.
     let editor_argv0 = match env::var("EDITOR") {

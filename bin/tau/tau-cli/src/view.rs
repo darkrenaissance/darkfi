@@ -122,7 +122,7 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String) -> Result<()> {
     Ok(())
 }
 
-pub fn helper_taskinfo_func(taskinfo: TaskInfo) -> Result<Table> {
+pub fn taskinfo_table(taskinfo: TaskInfo) -> Result<Table> {
     let due = timestamp_to_date(taskinfo.due.unwrap_or(0), DateFormat::Date);
     let created_at = timestamp_to_date(taskinfo.created_at, DateFormat::DateTime);
     let rank = if let Some(r) = taskinfo.rank { r.to_string() } else { "".to_string() };
@@ -153,7 +153,7 @@ pub fn helper_taskinfo_func(taskinfo: TaskInfo) -> Result<Table> {
     Ok(table)
 }
 
-pub fn helper_events_func(taskinfo: TaskInfo) -> Result<Table> {
+pub fn events_table(taskinfo: TaskInfo) -> Result<Table> {
     let (events, timestamps) = &events_as_string(taskinfo.events);
     let mut events_table = table!([events, timestamps]);
     events_table.set_format(*FORMAT_NO_COLSEP);
@@ -161,7 +161,7 @@ pub fn helper_events_func(taskinfo: TaskInfo) -> Result<Table> {
     Ok(events_table)
 }
 
-pub fn helper_comments_func(taskinfo: TaskInfo) -> Result<Table> {
+pub fn comments_table(taskinfo: TaskInfo) -> Result<Table> {
     let (events, timestamps) = &comments_as_string(taskinfo.events);
     let mut comments_table = table!([events, timestamps]);
     comments_table.set_format(*FORMAT_NO_COLSEP);
@@ -171,13 +171,13 @@ pub fn helper_comments_func(taskinfo: TaskInfo) -> Result<Table> {
 }
 
 pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
-    let table = helper_taskinfo_func(taskinfo.clone())?;
+    let table = taskinfo_table(taskinfo.clone())?;
     table.printstd();
 
-    let events_table = helper_events_func(taskinfo.clone())?;
+    let events_table = events_table(taskinfo.clone())?;
     events_table.printstd();
 
-    let comments_table = helper_comments_func(taskinfo)?;
+    let comments_table = comments_table(taskinfo)?;
     comments_table.printstd();
 
     Ok(())
