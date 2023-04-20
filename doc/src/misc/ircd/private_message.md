@@ -6,6 +6,9 @@ Any two users on the ircd server can establish a fully encrypted
 
 ## Configuring ircd_config.toml
 
+`ircd_config.toml` should be created by default in `~/.config/darkfi/`
+when you first run `ircd`.
+
 Generate a keypair using the command 
 
 ```shell
@@ -13,7 +16,7 @@ Generate a keypair using the command
 ```
 This is the Private key used for encryption of messages across the network.
 
-Save the privateKey safely & add it to the ircd_config.toml file as shown below.
+Save the privateKey safely & add it to the `ircd_config.toml` file as shown below.
 
 ```toml
 [private_key.”your_private_key_goes_here”]
@@ -29,7 +32,7 @@ Note: This message will be publically visible on the IRC chat
 See the [example ircd_config.toml](https://github.com/darkrenaissance/darkfi/blob/master/bin/ircd/ircd_config.toml) for more details
 
 ## Example
-Lets start by configuring our contacts list in the generated ircd_config.toml file
+Lets start by configuring our contacts list in the generated `ircd_config.toml` file
 (you can also refer to the examples written in the comments of the toml file)
 
 ```toml
@@ -39,7 +42,7 @@ contact_pubkey = “XXXXXXX”
 contact_pubkey = “YYYYYYY”
 ```
 
-<u>Note</u>: After configuring our ircd_config.toml file, you will need to restart your irc demon for the changes to reflect. 
+<u>Note</u>: After configuring our `ircd_config.toml` file, you will need to restart your irc demon for the changes to reflect. 
 
 
 Lets see an Example where 'User_A' sends “Hi” message to 'User_B' using the /msg command  
