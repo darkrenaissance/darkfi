@@ -52,11 +52,11 @@ pub struct Args {
     pub config: Option<String>,
 
     /// JSON-RPC listen URL
-    #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:25550")]
+    #[structopt(long = "rpc", default_value = "tcp://127.0.0.1:26660")]
     pub rpc_listen: Url,
 
     /// IRC listen URL
-    #[structopt(long = "irc", default_value = "tcp://127.0.0.1:6667")]
+    #[structopt(long = "irc", default_value = "tcp://127.0.0.1:7776")]
     pub irc_listen: Url,
 
     /// Optional TLS certificate file path if `irc_listen` uses TLS

@@ -79,6 +79,6 @@ topic = "DarkFi Development HQ"
 ## Per-contact settings
 ## contact nickname (this is not irc nickname, and could be anything you want)
 ## irc msgs should be pointed to this nickname.
-#[contact."narodnik"]
+#[contact."bar"]
 ## contact public key
 #contact_pubkey = "C9vC6HNDfGQofWCapZfQK5MkV1JR8Cct839RDUCqbDGK"
