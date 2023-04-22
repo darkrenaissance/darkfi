@@ -56,6 +56,11 @@ setup_emerge() {
 	$1 $emerge_deps || return 1
 }
 
+setup_pkg() {
+	pkg_deps="git bash jq gcc findutils cantarell-fonts devel/pkgconf gmake devel/automake pulseaudio-module-sndio"
+	$1 install -y $pkg_deps || return 1
+}
+
 case "$(uname -s)" in
 Linux)
 	if command -v apt >/dev/null; then
@@ -118,7 +123,46 @@ Linux)
 	echo "Error: Could not recognize your package manager." >&2
 	exit 1
 	;;
+*BSD*)
+	if command -v pkg; then
+		echo "Setting up for pkg/BSD" >&2
+		setup_pkg "$SUDO $(command -v pkg)" || exit 1
+		echo "Dependencies installed!" >&2
+		cat <<'ENDOFCAT' >&2
+=======================
+Few more things needed:
+Install rust from https://www.rust-lang.org/tools/install
+Execute: rustup target add wasm32-unknown-unknown
+And apply few patches ...
+cd ..
+git clone --recurse-submodules -j8 https://github.com/stainless-steel/mpg123-sys
+cd ./mpg123-sys
+sed -e's/$(RM)/rm -f/g' -i.bak  source/Makefile.in
 
+patch -p0 build.rs <<'EOF'
+43a44
+>             .arg(&format!("--with-audio=sndio"))
+EOF
+
+cargo build  # to see if it works fine
+
+cd ../darkfi
+
+patch -p0 Cargo.toml <<'EOF'
+329a330
+> mpg123-sys = { path = "../mpg123-sys" }
+EOF
+
+gmake test  # no errors expected
+gmake
+ls -al darkfid ircd dnetview faucetd vanityaddr  # list of built executables
+ENDOFCAT
+		exit 0
+	fi
+
+	echo "Error: Could not recognize your package manager." >&2
+	exit 1
+	;;
 Darwin)
 	echo "Setting up for OSX" >&2
 	setup_mac || exit 1

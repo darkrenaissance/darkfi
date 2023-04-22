@@ -1,0 +1,56 @@
+# Beware, uses emulation, with AMD 24 threads: Building 7788.3s
+# Use: docker build . --platform=linux/arm64 --pull -t darkfi:alpine_arm64 -f ./contrib/docker/Dockerfile.alpineARMviaEmulation
+#   optionally with: --build-arg OS_VER=3.17 --build-arg RUST_VER=nightly
+
+ARG RUST_VER=1.67
+ARG OS_VER=3.17
+ARG REPOSITORY=arm64v8/alpine
+
+FROM --platform=$TARGETPLATFORM ${REPOSITORY}:${OS_VER} as rust_builder
+
+ARG RUST_VER
+ARG OS_VER
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+RUN echo "I am running on $BUILDPLATFORM, building for $TARGETPLATFORM with Rust $RUST_VER"
+
+RUN apk update
+
+RUN apk add cmake jq wget clang curl gcc make llvm-dev \
+  openssl-dev expat-dev freetype-dev libudev-zero-dev \
+  libgudev-dev pkgconf clang-dev fontconfig-dev bash \
+  ttf-opensans musl-dev
+
+RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
+
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+RUN rustup target add wasm32-unknown-unknown
+
+RUN cargo search whatever  # creates .cargo cache
+
+# 2. stage
+FROM --platform=$TARGETPLATFORM rust_builder as builder
+
+WORKDIR /opt/darkfi
+
+COPY . ./
+
+ARG RUSTFLAGS="-C target-feature=-crt-static"
+
+RUN make clean
+
+RUN rm -rf ./target/
+
+RUN bash -c 'make -j test &&  make -j'
+
+# 3. stage
+FROM --platform=$TARGETPLATFORM ${REPOSITORY}:${OS_VER}
+
+RUN apk add --no-cache openssl ttf-opensans libgcc mpg123-libs
+
+WORKDIR /opt/darkfi
+
+COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
+   /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/faucetd \
+   /opt/darkfi/zkas /opt/darkfi/vanityaddr  ./
