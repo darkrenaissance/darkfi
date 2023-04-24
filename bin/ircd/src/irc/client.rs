@@ -450,7 +450,6 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     }
 
     async fn on_receive_privmsg(&mut self, line: &str, target: &str) -> Result<()> {
-        info!("line: {}", line);
         let message = match line.find(':') {
             Some(substr_idx) => {
                 if substr_idx >= line.len() {
@@ -459,8 +458,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                 line[substr_idx + 1..].to_string()
             }
             None => {
-                let split = line.split(' ').collect::<Vec<&str>>()[2];
-                split.to_string()
+                let split = line.split(' ').collect::<Vec<_>>()[2..].to_vec();
+                split.join(" ")
             }
         };
 
