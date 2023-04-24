@@ -24,7 +24,7 @@ use crate::PrivMsgEvent;
 
 #[derive(Debug, Clone, Default)]
 pub struct NickServ {
-    db: BTreeMap<IVec, IVec>,
+    _db: BTreeMap<IVec, IVec>,
 }
 
 impl NickServ {

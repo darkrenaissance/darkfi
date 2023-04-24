@@ -1350,6 +1350,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "darkirc"
+version = "0.4.1"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "bs58",
+ "chrono",
+ "clap 4.2.2",
+ "crypto_box",
+ "ctrlc",
+ "darkfi",
+ "darkfi-serial",
+ "easy-parallel",
+ "futures",
+ "futures-rustls 0.24.0",
+ "hex",
+ "log",
+ "rand",
+ "ripemd",
+ "rustls-pemfile",
+ "serde",
+ "serde_json",
+ "simplelog",
+ "sled",
+ "smol",
+ "structopt",
+ "structopt-toml",
+ "toml 0.7.3",
+ "url",
+]
+
+[[package]]
 name = "darling"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2570,38 +2602,6 @@ dependencies = [
  "serde",
  "serde_json",
  "simplelog",
- "smol",
- "structopt",
- "structopt-toml",
- "toml 0.7.3",
- "url",
-]
-
-[[package]]
-name = "ircd2"
-version = "0.4.1"
-dependencies = [
- "async-std",
- "async-trait",
- "bs58",
- "chrono",
- "clap 4.2.2",
- "crypto_box",
- "ctrlc",
- "darkfi",
- "darkfi-serial",
- "easy-parallel",
- "futures",
- "futures-rustls 0.24.0",
- "hex",
- "log",
- "rand",
- "ripemd",
- "rustls-pemfile",
- "serde",
- "serde_json",
- "simplelog",
- "sled",
  "smol",
  "structopt",
  "structopt-toml",
