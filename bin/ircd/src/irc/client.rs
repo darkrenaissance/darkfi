@@ -450,13 +450,19 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     }
 
     async fn on_receive_privmsg(&mut self, line: &str, target: &str) -> Result<()> {
-        let substr_idx = line.find(':').ok_or(Error::MalformedPacket)?;
-
-        if substr_idx >= line.len() {
-            return Err(Error::MalformedPacket)
-        }
-
-        let message = line[substr_idx + 1..].to_string();
+        info!("line: {}", line);
+        let message = match line.find(':') {
+            Some(substr_idx) => {
+                if substr_idx >= line.len() {
+                    return Err(Error::MalformedPacket)
+                }
+                line[substr_idx + 1..].to_string()
+            }
+            None => {
+                let split = line.split(' ').collect::<Vec<&str>>()[2];
+                split.to_string()
+            }
+        };
 
         info!("[CLIENT {}] (Plain) PRIVMSG {} :{}", self.address, target, message,);
 
