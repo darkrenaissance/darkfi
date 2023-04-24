@@ -61,6 +61,11 @@ setup_pkg() {
 	$1 install -y $pkg_deps || return 1
 }
 
+setup_pkg_add() {
+	pkg_add_deps="git bash jq gcc-11.2.0p6 findutils cantarell-fonts pkgconf gmake automake-1.15.1"
+	$1 -I $pkg_add_deps || return 1
+}
+
 case "$(uname -s)" in
 Linux)
 	if command -v apt >/dev/null; then
@@ -125,8 +130,19 @@ Linux)
 	;;
 *BSD*)
 	if command -v pkg; then
-		echo "Setting up for pkg/BSD" >&2
+		echo "Setting up for pkg/FreeBSD" >&2
 		setup_pkg "$SUDO $(command -v pkg)" || exit 1
+	fi
+
+	if command -v pkg_add; then
+		echo "Setting up for pkg_add/OpenBSD" >&2
+		setup_pkg_add "$SUDO $(command -v pkg_add)" || exit 1
+		echo "Rust support is not yet ready for OpenBSD, see https://github.com/rust-lang/rustup/issues/2168#issuecomment-1505185711"
+		echo "You may try to compile rustc and cargo yourself or get the latest with:"
+		echo "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y --default-toolchain nightly --default-host x86_64-unknown-openbsd"
+	fi
+
+	if command -v pkg || command -v pkg_add; then
 		echo "Dependencies installed!" >&2
 		cat <<'ENDOFCAT' >&2
 =======================
