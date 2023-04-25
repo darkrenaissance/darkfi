@@ -87,7 +87,7 @@ pub struct Args {
     pub gen_keypair: bool,
 
     /// Recover public key from secret key
-    #[structopt(long = "recover_pubkey")]
+    #[structopt(long = "recover-pubkey")]
     pub secret: Option<String>,
 
     /// Path to save keypair in
