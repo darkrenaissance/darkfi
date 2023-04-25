@@ -37,4 +37,5 @@ seeds=["tls://lilith0.dark.fi:23331", "tls://lilith1.dark.fi:23331"]
 #channel_handshake_seconds=4
 #channel_heartbeat_seconds=10
 
-
+# Enable channel log
+#channel_log = false
