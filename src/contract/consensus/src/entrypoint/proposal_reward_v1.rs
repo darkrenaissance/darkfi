@@ -54,10 +54,12 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
 
     // Grab the pedersen commitment for the burnt value
     let value_coords = &params.unstake_input.value_commit.to_affine().coordinates().unwrap();
+    // Grab the pedersen commitment for the minted value
+    let new_value_coords = &params.stake_input.value_commit.to_affine().coordinates().unwrap();
 
     zk_public_inputs.push((
         CONSENSUS_CONTRACT_ZKAS_REWARD_NS_V1.to_string(),
-        vec![*value_coords.x(), *value_coords.y()],
+        vec![*value_coords.x(), *value_coords.y(), *new_value_coords.x(), *new_value_coords.y()],
     ));
 
     signature_pubkeys.push(params.stake_input.signature_public);

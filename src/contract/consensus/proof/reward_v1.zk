@@ -6,6 +6,8 @@ constant "Reward_V1" {
 contract "Reward_V1" {
 	# The value of the burnt coin
 	Base value,
+	# The reward value
+	Base reward,
 	# Random blinding factor for the value commitment
 	Scalar value_blind,
 }
@@ -14,6 +16,7 @@ circuit "Reward_V1" {
 	# This is a dummy check for now.
 	# TODO: Here we will constrain all the consensus
 	# parameters for the slot.
+
 	# Pedersen commitment for coin's value
 	vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
 	vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
@@ -22,6 +25,16 @@ circuit "Reward_V1" {
 	# and constrain them:
 	constrain_instance(ec_get_x(value_commit));
 	constrain_instance(ec_get_y(value_commit));
+
+	# Pedersen commitment for new coin's value
+	new_value = base_add(value, reward);
+	nvcv = ec_mul_short(new_value, VALUE_COMMIT_VALUE);
+	nvcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
+	new_value_commit = ec_add(nvcv, nvcr);
+	# Since the new value commit is also a curve point, we'll do the same
+	# coordinate dance:
+	constrain_instance(ec_get_x(new_value_commit));
+	constrain_instance(ec_get_y(new_value_commit));
 
 	# At this point we've enforced all of our public inputs.
 }

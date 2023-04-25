@@ -58,15 +58,17 @@ pub struct ConsensusProposalCallDebris {
 
 pub struct ConsensusProposalRewardRevealed {
     pub value_commit: pallas::Point,
+    pub new_value_commit: pallas::Point,
 }
 
 impl ConsensusProposalRewardRevealed {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
+        let new_value_coords = self.new_value_commit.to_affine().coordinates().unwrap();
 
         // NOTE: It's important to keep these in the same order
         // as the `constrain_instance` calls in the zkas code.
-        vec![*value_coords.x(), *value_coords.y()]
+        vec![*value_coords.x(), *value_coords.y(), *new_value_coords.x(), *new_value_coords.y()]
     }
 }
 
@@ -235,11 +237,13 @@ pub fn create_proposal_reward_proof(
     value_blind: pallas::Scalar,
 ) -> Result<(Proof, ConsensusProposalRewardRevealed)> {
     let value_commit = pedersen_commitment_u64(value, value_blind);
+    let new_value_commit = pedersen_commitment_u64(value + REWARD, value_blind);
 
-    let public_inputs = ConsensusProposalRewardRevealed { value_commit };
+    let public_inputs = ConsensusProposalRewardRevealed { value_commit, new_value_commit };
 
     let prover_witnesses = vec![
         Witness::Base(Value::known(pallas::Base::from(value))),
+        Witness::Base(Value::known(pallas::Base::from(REWARD))),
         Witness::Scalar(Value::known(value_blind)),
     ];
 
