@@ -47,8 +47,8 @@ class DarkfiTable:
             #note! thread overhead is 10X slower than sequential node execution!
             for i in range(len(self.darkies)):
                 self.darkies[i].set_sigma_feedback(self.Sigma, feedback, f, count, hp)
-                self.darkies[i].run(hp)
                 total_vesting_stake+=self.darkies[i].update_vesting()
+                self.darkies[i].run(hp)
 
 
             #print('reward: {}'.format(rewards[-1]))

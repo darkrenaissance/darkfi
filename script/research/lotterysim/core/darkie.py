@@ -72,7 +72,7 @@ class Darkie():
     def update_vesting(self):
         if self.slot >= len(self.vesting):
             return 0
-        slot2vest_index = int(self.slot/28800.0)
+        slot2vest_index = int(self.slot/28800.0) #slot to month conversion
         slot2vest_prev_index = int((self.slot-1)/28800.0)
         slot2vest_index_shifted = slot2vest_index - 1 # by end of month
         slot2vest_prev_index_shifted = slot2vest_prev_index - 1 # by end of month

@@ -14,6 +14,7 @@ NODES=100
 if __name__ == "__main__":
     egalitarian = ERC20DRK/NODES
     darkies = []
+
     for id in range(int(NODES)):
         darkie = Darkie(random.gauss(egalitarian, egalitarian*0.1), strategy=random_strategy(EPOCH_LENGTH))
         darkies += [darkie]

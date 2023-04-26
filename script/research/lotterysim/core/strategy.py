@@ -79,7 +79,7 @@ def random_strategy(epoch_length):
     if rnd < 0.25:
         return Hodler(epoch_length)
     elif rnd < 0.5 and rnd >= 0.25:
-        #return LinearStrategy(epoch_length)
+        return LinearStrategy(epoch_length)
     elif rnd < 0.75 and rnd >= 0.5:
         return LogarithmicStrategy(epoch_length)
     else:
