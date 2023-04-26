@@ -84,6 +84,13 @@ This will set up the server, save the settings, and exit weechat.
 You are now ready to begin using the chat. Simply start weechat
 and everything should work.
 
+When you join, you will not see any users displayed. This is normal
+since there is no concept of nicknames or registration on this
+anonymous chat.
+
+You can change your nickname using `/nick foo`, and navigate channels
+using F5/F6 or ALT+X where X is the channel number displayed.
+
 ## Usage (Local Deployment)
 
 These steps below are only for developers who wish to make a testing
