@@ -73,8 +73,8 @@ class BasePID:
         if pid_value >= self.clip_max:
             pid_value =  self.clip_max
 
-        if self.integral(feedback) == 0 and len(self.feedback_hist) >=3 and self.feedback_hist[-1] == 0 and self.feedback_hist[-2] == 0 and self.feedback_hist[-3] == 0:
-            pid_value = 0.9**self.zero_feedback_hist()
+        #if self.integral(feedback) == 0 and len(self.feedback_hist) >=3 and self.feedback_hist[-1] == 0 and self.feedback_hist[-2] == 0 and self.feedback_hist[-3] == 0:
+            #pid_value = 0.9**self.zero_feedback_hist()
 
         self.output_hist+=[pid_value]
         return pid_value

@@ -5,6 +5,7 @@ from core.lottery import *
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 import math
+from draw import draw
 
 os.system("rm log/*_feedback.hist; rm log/*_output.hist")
 
@@ -16,7 +17,7 @@ if __name__ == "__main__":
     darkies = []
 
     for id in range(int(NODES)):
-        darkie = Darkie(random.gauss(egalitarian, egalitarian*0.1), strategy=random_strategy(EPOCH_LENGTH))
+        darkie = Darkie(random.gauss(egalitarian, egalitarian*0.1), strategy=random_strategy())
         darkies += [darkie]
 
     #TODO try rpid with 0mint
@@ -53,3 +54,4 @@ if __name__ == "__main__":
 
     variance = sum(shifted_aprs)/(len(aprs)-1)
     print('mu: {}, variance: {}'.format(str(mu), str(variance)))
+    draw()

@@ -4,6 +4,7 @@ import time
 from datetime import timedelta
 from core.darkie import *
 from pid.cascade import *
+from tqdm import tqdm
 
 class DarkfiTable:
     def __init__(self, airdrop, running_time, controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, dt=1, kc=0, ti=0, td=0, ts=0, debug=False, r_kp=0, r_ki=0, r_kd=0):
@@ -13,7 +14,9 @@ class DarkfiTable:
         self.start_time=None
         self.end_time=None
         self.secondary_pid = SecondaryDiscretePID(kp=kp, ki=ki, kd=kd) if controller_type==CONTROLLER_TYPE_DISCRETE else SecondaryTakahashiPID(kc=kc, ti=ti, td=td, ts=ts)
+        print('secondary min/max : {}/{}'.format(self.secondary_pid.clip_min, self.secondary_pid.clip_max))
         self.primary_pid = PrimaryDiscretePID(kp=r_kp, ki=r_ki, kd=r_kd) if controller_type==CONTROLLER_TYPE_DISCRETE else PrimaryTakahashiPID(kc=kc, ti=ti, td=td, ts=ts)
+        print('primary min/max : {}/{}'.format(self.primary_pid.clip_min, self.primary_pid.clip_max))
         self.debug=debug
         self.rewards = []
         self.winners = []
@@ -33,9 +36,10 @@ class DarkfiTable:
             #print("random running time: {}".format(self.running_time))
             #print('running time: {}'.format(self.running_time))
 
-        while count < self.running_time:
+        rt_range = tqdm(np.arange(0,self.running_time, 1))
+        for count in rt_range:
+        #while count < self.running_time:
             winners=0
-            total_vesting_stake = 0
             f = self.secondary_pid.pid_clipped(float(feedback), debug)
 
             if count%EPOCH_LENGTH == 0:
@@ -44,12 +48,12 @@ class DarkfiTable:
                 reward = self.primary_pid.pid_clipped(acc, debug)
                 self.rewards += [reward]
 
+            rt_range.set_description('issuance {} DRK'.format(sum(self.rewards)))
             #note! thread overhead is 10X slower than sequential node execution!
             for i in range(len(self.darkies)):
                 self.darkies[i].set_sigma_feedback(self.Sigma, feedback, f, count, hp)
-                total_vesting_stake+=self.darkies[i].update_vesting()
+                self.darkies[i].update_vesting()
                 self.darkies[i].run(hp)
-
 
             #print('reward: {}'.format(rewards[-1]))
             for i in range(len(self.darkies)):

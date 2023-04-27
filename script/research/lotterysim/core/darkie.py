@@ -3,9 +3,9 @@ from core.strategy import *
 
 class Darkie():
     def __init__(self, airdrop, initial_stake=None, vesting=[], hp=False, commit=True, epoch_len=EPOCH_LENGTH, strategy=random_strategy(EPOCH_LENGTH)):
-        self.vesting = [0] + vesting
+        self.vesting = vesting
         self.stake = (Num(airdrop) if hp else airdrop)
-        self.initial_stake = [self.stake] # for debugging purpose
+        self.initial_stake = [self.stake]
         self.Sigma = None
         self.feedback = None
         self.f = None
@@ -24,9 +24,16 @@ class Darkie():
             avg_apy += (Num(reward) / current_epoch_staked_tokens) if current_epoch_staked_tokens!=0 else 0
         return avg_apy * Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot  and self.initial_stake[0]>0 >0 else 0
 
+    def vesting_wrapped_initial_stake(self):
+        #print('initial stake: {}, corresponding vesting: {}'.format(self.initial_stake[0], self.vesting[int((self.slot)/VESTING_PERIOD)]))
+        # note index is previous slot since update_vesting is called after background execution.
+        return self.current_vesting() if self.slot>0 else self.initial_stake[0]
 
     def apr_scaled_to_runningtime(self):
-        return Num(self.stake - self.initial_stake[0]) / Num(self.initial_stake[0]) *  Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot> 0 and self.initial_stake[0]>0 else 0
+        initial_stake = self.vesting_wrapped_initial_stake()
+        #print('stake: {}, initial_stake: {}'.format(self.stake, initial_stake))
+        assert self.stake >= initial_stake, 'stake: {}, initial_stake: {}, slot: {}, current: {}, previous: {} vesting'.format(self.stake, initial_stake, self.slot, self.current_vesting(), self.prev_vesting())
+        return Num(self.stake - initial_stake) / Num(initial_stake) *  Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot> 0 and self.initial_stake[0]>0 else 0
 
     def staked_tokens(self):
         '''
@@ -70,14 +77,22 @@ class Darkie():
         self.won_hist += [won]
 
     def update_vesting(self):
-        if self.slot >= len(self.vesting):
-            return 0
-        slot2vest_index = int(self.slot/28800.0) #slot to month conversion
-        slot2vest_prev_index = int((self.slot-1)/28800.0)
-        slot2vest_index_shifted = slot2vest_index - 1 # by end of month
-        slot2vest_prev_index_shifted = slot2vest_prev_index - 1 # by end of month
-        vesting_value = float(self.vesting[slot2vest_index_shifted]) - self.vesting[slot2vest_prev_index_shifted]
-        self.stake+= vesting_value
+        self.stake+= self.vesting_differential()
+
+    def current_vesting(self):
+        '''
+        current corresponding slot vesting
+        '''
+        return self.vesting[int(self.slot/VESTING_PERIOD)]
+
+    def prev_vesting(self):
+        '''
+        previous corresponding slot vesting
+        '''
+        return self.vesting[int((self.slot-1)/VESTING_PERIOD)] if self.slot>0 else self.current_vesting()
+
+    def vesting_differential(self):
+        vesting_value =  self.current_vesting() - self.prev_vesting()
         return vesting_value
 
     def update_stake(self, reward):

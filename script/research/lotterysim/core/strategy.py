@@ -74,7 +74,7 @@ class SigmoidStrategy(Strategy):
             self.staked_tokens_ratio += [sr]
             self.annual_return += [apr]
 
-def random_strategy(epoch_length):
+def random_strategy(epoch_length=EPOCH_LENGTH):
     rnd = random.random()
     if rnd < 0.25:
         return Hodler(epoch_length)
