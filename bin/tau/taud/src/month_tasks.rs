@@ -27,7 +27,7 @@ use serde::{Deserialize, Serialize};
 
 use darkfi::util::{
     file::{load_json_file, save_json_file},
-    time::Timestamp,
+    time::NanoTimestamp,
 };
 
 use crate::{
@@ -37,7 +37,7 @@ use crate::{
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MonthTasks {
-    created_at: Timestamp,
+    created_at: NanoTimestamp,
     active_tks: Vec<String>,
     deactive_tks: Vec<String>,
 }
@@ -45,7 +45,7 @@ pub struct MonthTasks {
 impl MonthTasks {
     pub fn new(active_tks: &[String], deactive_tks: &[String]) -> Self {
         Self {
-            created_at: Timestamp::current_time(),
+            created_at: NanoTimestamp::current_time(),
             active_tks: active_tks.to_owned(),
             deactive_tks: deactive_tks.to_owned(),
         }
@@ -84,12 +84,12 @@ impl MonthTasks {
         }
     }
 
-    pub fn set_date(&mut self, date: &Timestamp) {
+    pub fn set_date(&mut self, date: &NanoTimestamp) {
         debug!(target: "tau", "MonthTasks::set_date()");
         self.created_at = *date;
     }
 
-    fn get_path(date: &Timestamp, dataset_path: &Path) -> PathBuf {
+    fn get_path(date: &NanoTimestamp, dataset_path: &Path) -> PathBuf {
         debug!(target: "tau", "MonthTasks::get_path()");
         dataset_path
             .join("month")
@@ -114,7 +114,7 @@ impl MonthTasks {
         Ok(entries)
     }
 
-    fn create(date: &Timestamp, dataset_path: &Path) -> TaudResult<Self> {
+    fn create(date: &NanoTimestamp, dataset_path: &Path) -> TaudResult<Self> {
         debug!(target: "tau", "MonthTasks::create()");
 
         let mut mt = Self::new(&[], &[]);
@@ -123,7 +123,7 @@ impl MonthTasks {
         Ok(mt)
     }
 
-    pub fn load_or_create(date: Option<&Timestamp>, dataset_path: &Path) -> TaudResult<Self> {
+    pub fn load_or_create(date: Option<&NanoTimestamp>, dataset_path: &Path) -> TaudResult<Self> {
         debug!(target: "tau", "MonthTasks::load_or_create()");
 
         // if a date is given we load that date's month tasks
@@ -181,7 +181,7 @@ impl MonthTasks {
     pub fn load_stop_tasks(
         dataset_path: &Path,
         ws: String,
-        date: Option<&Timestamp>,
+        date: Option<&NanoTimestamp>,
     ) -> TaudResult<Vec<TaskInfo>> {
         let mt = Self::load_or_create(date, dataset_path)?;
         Ok(mt
@@ -255,7 +255,8 @@ mod tests {
 
         mt.save(&dataset_path)?;
 
-        let mt_load = MonthTasks::load_or_create(Some(&Timestamp::current_time()), &dataset_path)?;
+        let mt_load =
+            MonthTasks::load_or_create(Some(&NanoTimestamp::current_time()), &dataset_path)?;
 
         assert_eq!(mt, mt_load);
 
@@ -263,7 +264,8 @@ mod tests {
 
         mt.save(&dataset_path)?;
 
-        let mt_load = MonthTasks::load_or_create(Some(&Timestamp::current_time()), &dataset_path)?;
+        let mt_load =
+            MonthTasks::load_or_create(Some(&NanoTimestamp::current_time()), &dataset_path)?;
 
         assert_eq!(mt, mt_load);
 
@@ -282,7 +284,8 @@ mod tests {
 
         task.save(&dataset_path)?;
 
-        let mt_load = MonthTasks::load_or_create(Some(&Timestamp::current_time()), &dataset_path)?;
+        let mt_load =
+            MonthTasks::load_or_create(Some(&NanoTimestamp::current_time()), &dataset_path)?;
 
         assert!(mt_load.active_tks.contains(&task.ref_id));
 

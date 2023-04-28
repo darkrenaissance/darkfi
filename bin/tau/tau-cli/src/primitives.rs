@@ -18,7 +18,7 @@
 
 use std::{fmt, str::FromStr};
 
-use darkfi::{util::time::Timestamp, Error, Result};
+use darkfi::{util::time::NanoTimestamp, Error, Result};
 
 use crate::due_as_timestamp;
 
@@ -124,7 +124,7 @@ pub struct TaskEvent {
     pub action: String,
     pub author: String,
     pub content: String,
-    pub timestamp: Timestamp,
+    pub timestamp: NanoTimestamp,
 }
 
 impl std::fmt::Display for TaskEvent {
@@ -139,7 +139,7 @@ impl Default for TaskEvent {
             action: State::Open.to_string(),
             author: "".to_string(),
             content: "".to_string(),
-            timestamp: Timestamp::current_time(),
+            timestamp: NanoTimestamp::current_time(),
         }
     }
 }
@@ -148,7 +148,7 @@ impl Default for TaskEvent {
 pub struct Comment {
     content: String,
     author: String,
-    timestamp: Timestamp,
+    timestamp: NanoTimestamp,
 }
 
 impl std::fmt::Display for Comment {
