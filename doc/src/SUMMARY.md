@@ -71,7 +71,7 @@
     - [Debugging](learn/dchat/network-tools/debug.md)
 - [Miscellaneous tools](misc/misc.md)
   - [vanityaddr](misc/vanityaddr.md)
-  - [ircd](misc/ircd/ircd.md)
+  - [darkirc](misc/ircd/ircd.md)
   	- [Specification](misc/ircd/specification.md)
   	- [Private Message](misc/ircd/private_message.md)
   - [tau](misc/tau.md)

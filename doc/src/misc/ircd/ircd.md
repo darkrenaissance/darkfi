@@ -1,4 +1,4 @@
-# P2P IRC
+# DarkIRC: Strong Anonymity P2P Chat
 
 In DarkFi, we organize our communication using resilient and
 censorship-resistant infrastructure. For chatting, `ircd` is a
