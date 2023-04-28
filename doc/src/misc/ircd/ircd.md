@@ -10,10 +10,15 @@ between hosts.
 ## Benefits
 
 * Encrypted using same algorithms as Signal.
-* Completely anonymous. You can rename yourself easily so messages
-  are unlinkable.
+* There are no identities. You cannot see who is in the chat.
+* Completely anonymous. You can rename yourself easily by using the
+  command `/nick foo`. This means all messages are unlinkable.
 * God-fearing based CLI without soy gui shit.
 * p2p decentralized.
+* Optionally run it over Tor or Nym for network level anonymity.
+
+Therefore this is the world's most strongly anonymous chat in existence.
+Nothing else exists like it.
 
 ## Installation
 
