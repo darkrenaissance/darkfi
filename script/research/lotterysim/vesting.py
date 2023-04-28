@@ -41,7 +41,7 @@ with open(VESTING_FILE) as f:
         vesting[keyval[0]] = eval(eval(val))
 
 nodes = len(vesting)
-running_time = int(input("running time (leave it empty to run the whole vesting running time):"))
+running_time = input("running time (leave it empty to run the whole vesting running time):")
 if running_time=='':
     running_time = len(next(iter(vesting.values())))*VESTING_PERIOD
 else:
