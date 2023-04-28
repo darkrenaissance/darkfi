@@ -79,7 +79,7 @@ impl Clock {
     /// returns time since genesis in seconds.
     async fn time_to_genesis(&self) -> Timestamp {
         //TODO this value need to be assigned to kickoff time.
-        let genesis_time: i64 = self.genesis_time.0;
+        let genesis_time = self.genesis_time.0;
         let abs_time = self.time().await.unwrap();
         Timestamp(abs_time.0 - genesis_time)
     }

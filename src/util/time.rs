@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::UNIX_EPOCH;
 
 use chrono::{NaiveDateTime, Utc};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
@@ -61,16 +61,10 @@ impl TimeKeeper {
     }
 
     /// Calculates seconds until next Nth slot starting time.
-    pub fn next_n_slot_start(&self, n: u64) -> Duration {
+    pub fn next_n_slot_start(&self, n: u64) -> u64 {
         assert!(n > 0);
-        let start_time = NaiveDateTime::from_timestamp_opt(self.genesis_ts.0, 0).unwrap();
-        let current_slot = self.current_slot() + n;
-        let next_slot_start = (current_slot * self.slot_time) + (start_time.timestamp() as u64);
-        let next_slot_start = NaiveDateTime::from_timestamp_opt(next_slot_start as i64, 0).unwrap();
-        let current_time = NaiveDateTime::from_timestamp_opt(Utc::now().timestamp(), 0).unwrap();
-        let diff = next_slot_start - current_time;
-
-        Duration::new(diff.num_seconds().try_into().unwrap(), 0)
+        let next_slot_start = self.genesis_ts.0 + (self.current_slot() + n) * self.slot_time;
+        next_slot_start - Timestamp::current_time().0
     }
 
     /// Calculate slots until next Nth epoch.
@@ -82,7 +76,7 @@ impl TimeKeeper {
     }
 
     /// Calculates seconds until next Nth epoch starting time.
-    pub fn next_n_epoch_start(&self, n: u64) -> Duration {
+    pub fn next_n_epoch_start(&self, n: u64) -> u64 {
         self.next_n_slot_start(self.slots_to_next_n_epoch(n))
     }
 
@@ -91,7 +85,7 @@ impl TimeKeeper {
     }
 }
 
-/// Wrapper struct to represent [`chrono`] UTC timestamps.
+/// Wrapper struct to represent system timestamps.
 #[derive(
     Clone,
     Copy,
@@ -104,35 +98,26 @@ impl TimeKeeper {
     PartialOrd,
     Eq,
 )]
-pub struct Timestamp(pub i64);
+pub struct Timestamp(pub u64);
 
 impl Timestamp {
     /// Generate a `Timestamp` of the current time.
     pub fn current_time() -> Self {
-        Self(Utc::now().timestamp())
+        Self(UNIX_EPOCH.elapsed().unwrap().as_secs())
     }
 
     /// Calculates elapsed time of a `Timestamp`.
     pub fn elapsed(&self) -> u64 {
-        let start_time = NaiveDateTime::from_timestamp_opt(self.0, 0).unwrap();
-        let end_time = NaiveDateTime::from_timestamp_opt(Utc::now().timestamp(), 0).unwrap();
-        let diff = end_time - start_time;
-        diff.num_seconds() as u64
+        UNIX_EPOCH.elapsed().unwrap().as_secs() - self.0
     }
 
     /// Increment a 'Timestamp'.
-    pub fn add(&mut self, inc: i64) {
+    pub fn add(&mut self, inc: u64) {
         self.0 += inc;
     }
 }
 
-impl std::fmt::Display for Timestamp {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let date = timestamp_to_date(self.0, DateFormat::DateTime);
-        write!(f, "{}", date)
-    }
-}
-
+// TODO: NanoTimestamp to not use chrono
 #[derive(
     Clone,
     Copy,

@@ -31,7 +31,7 @@ use crate::{util::time::Timestamp, Error, Result};
 const RETRIES: u8 = 10;
 /// TODO: Loop through set of ntps, get their average response concurrenyly.
 const NTP_ADDRESS: &str = "pool.ntp.org:123";
-const EPOCH: i64 = 2208988800; // 1900
+const EPOCH: u32 = 2208988800; // 1900
 
 /// JSON-RPC request to a network peer (randomly selected), to
 /// retrieve their current system clock.
@@ -72,7 +72,7 @@ pub async fn ntp_request() -> Result<Timestamp> {
     sock.recv(&mut packet[..])?;
     let (bytes, _) = packet[40..44].split_at(core::mem::size_of::<u32>());
     let num = u32::from_be_bytes(bytes.try_into().unwrap());
-    let timestamp = Timestamp(num as i64 - EPOCH);
+    let timestamp = Timestamp((num - EPOCH) as u64);
 
     Ok(timestamp)
 }
@@ -113,8 +113,8 @@ async fn clock_check(peers: &[Url]) -> Result<()> {
     let mut ntp_time = ntp_request().await?;
 
     // Stop elapsed time counters
-    let ntp_elapsed_time = ntp_request_start.elapsed() as i64;
-    let requests_elapsed_time = requests_start.elapsed() as i64;
+    let ntp_elapsed_time = ntp_request_start.elapsed();
+    let requests_elapsed_time = requests_start.elapsed();
 
     // Current system time
     let system_time = Timestamp::current_time();

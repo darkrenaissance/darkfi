@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Duration;
-
 use async_std::sync::Arc;
 use log::{debug, error, info, warn};
 
@@ -47,18 +45,18 @@ pub async fn proposal_task(
         sleep(diff as u64).await;
     } else {
         let mut sleep_time = state.read().await.consensus.time_keeper.next_n_slot_start(1);
-        let sync_offset = Duration::new(constants::FINAL_SYNC_DUR, 0);
+        let sync_offset = constants::FINAL_SYNC_DUR;
         loop {
             if sleep_time > sync_offset {
                 sleep_time -= sync_offset;
                 break
             }
             info!(target: "consensus::proposal", "consensus: Waiting for next slot ({:?})", sleep_time);
-            sleep(sleep_time.as_secs()).await;
+            sleep(sleep_time).await;
             sleep_time = state.read().await.consensus.time_keeper.next_n_slot_start(1);
         }
         info!(target: "consensus::proposal", "consensus: Waiting for finalization sync period ({:?})", sleep_time);
-        sleep(sleep_time.as_secs()).await;
+        sleep(sleep_time).await;
     }
 
     let mut retries = 0;
@@ -181,7 +179,7 @@ async fn consensus_loop(
 /// Returns flag in case node needs to resync.
 async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool {
     // Node sleeps until next slot
-    let seconds_next_slot = state.read().await.consensus.time_keeper.next_n_slot_start(1).as_secs();
+    let seconds_next_slot = state.read().await.consensus.time_keeper.next_n_slot_start(1);
     info!(target: "consensus::proposal", "consensus: Waiting for next slot ({} sec)", seconds_next_slot);
     sleep(seconds_next_slot).await;
 
@@ -229,7 +227,7 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
 
     // Node checks if it missed finalization period due to proposal creation
     let next_slot_start = state.read().await.consensus.time_keeper.next_n_slot_start(1);
-    if next_slot_start.as_secs() <= constants::FINAL_SYNC_DUR {
+    if next_slot_start <= constants::FINAL_SYNC_DUR {
         warn!(
             target: "consensus::proposal",
             "consensus: Node missed slot {} finalization period due to proposal creation, resyncing...",
@@ -280,9 +278,8 @@ async fn finalization_period(
 ) -> bool {
     // Node sleeps until finalization sync period starts
     let next_slot_start = state.read().await.consensus.time_keeper.next_n_slot_start(1);
-    if next_slot_start.as_secs() > constants::FINAL_SYNC_DUR {
-        let seconds_sync_period =
-            (next_slot_start - Duration::new(constants::FINAL_SYNC_DUR, 0)).as_secs();
+    if next_slot_start > constants::FINAL_SYNC_DUR {
+        let seconds_sync_period = next_slot_start - constants::FINAL_SYNC_DUR;
         info!(target: "consensus::proposal", "consensus: Waiting for finalization sync period ({} sec)", seconds_sync_period);
         sleep(seconds_sync_period).await;
     } else {
