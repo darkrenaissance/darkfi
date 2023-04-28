@@ -258,10 +258,22 @@ impl Runtime {
                     import::merkle::merkle_add,
                 ),
 
-                "get_system_time_" => Function::new_typed_with_env(
+                "get_current_epoch_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
-                    import::util::get_system_time,
+                    import::util::get_current_epoch,
+                ),
+
+                "get_current_slot_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::get_current_slot,
+                ),
+
+                "get_blockchain_time_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::get_blockchain_time,
                 ),
             }
         };

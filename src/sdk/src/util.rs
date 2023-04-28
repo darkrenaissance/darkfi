@@ -16,9 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::error::{ContractError, GenericResult};
-
-pub const CALL_FAILED: u64 = 0;
+use super::error::ContractError;
 
 pub fn set_return_data(data: &[u8]) -> Result<(), ContractError> {
     unsafe {
@@ -41,20 +39,31 @@ pub fn get_object_size(object_index: u32) -> i64 {
     unsafe { get_object_size_(object_index) }
 }
 
-/// Everyone can call this. Will return current system timestamp.
+/// Everyone can call this. Will return current epoch.
 ///
 /// ```
-/// timestamp = get_system_time();
+/// epoch = get_current_epoch();
 /// ```
-pub fn get_system_time() -> GenericResult<u64> {
-    let ret = unsafe { get_system_time_() };
+pub fn get_current_epoch() -> u64 {
+    unsafe { get_current_epoch_() }
+}
 
-    match ret {
-        // 0 here means system time is less or equal than UNIX_EPOCH
-        CALL_FAILED => return Err(ContractError::GetSystemTimeFailed),
-        // In any other case we can return the value
-        _ => Ok(ret),
-    }
+/// Everyone can call this. Will return current slot.
+///
+/// ```
+/// slot = get_current_slot();
+/// ```
+pub fn get_current_slot() -> u64 {
+    unsafe { get_current_slot_() }
+}
+
+/// Everyone can call this. Will return current blockchain timestamp.
+///
+/// ```
+/// timestamp = get_blockchain_time();
+/// ```
+pub fn get_blockchain_time() -> u64 {
+    unsafe { get_blockchain_time_() }
 }
 
 extern "C" {
@@ -63,5 +72,7 @@ extern "C" {
     fn get_object_bytes_(ptr: *const u8, len: u32) -> i64;
     fn get_object_size_(len: u32) -> i64;
 
-    fn get_system_time_() -> u64;
+    fn get_current_epoch_() -> u64;
+    fn get_current_slot_() -> u64;
+    fn get_blockchain_time_() -> u64;
 }

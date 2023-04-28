@@ -80,7 +80,17 @@ impl TimeKeeper {
         self.next_n_slot_start(self.slots_to_next_n_epoch(n))
     }
 
-    pub fn unix_timestamp(&self) -> Result<u64> {
+    /// Calculates current blockchain timestamp.
+    /// Blockchain timestamp is the time elapsed since
+    /// Genesis timestamp, based on slot time ticking,
+    /// therefore representing the starting timestamp of
+    /// current slot.
+    pub fn blockchain_timestamp(&self) -> u64 {
+        self.genesis_ts.0 + self.current_slot() * self.slot_time
+    }
+
+    /// Calculates current system timestamp.
+    pub fn system_timestamp(&self) -> Result<u64> {
         Ok(UNIX_EPOCH.elapsed()?.as_secs())
     }
 }

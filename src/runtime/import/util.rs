@@ -149,11 +149,14 @@ pub(crate) fn get_object_size(ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
     obj.len() as i64
 }
 
-pub(crate) fn get_system_time(ctx: FunctionEnvMut<Env>) -> u64 {
-    let env = ctx.data();
+pub(crate) fn get_current_epoch(ctx: FunctionEnvMut<Env>) -> u64 {
+    ctx.data().time_keeper.current_epoch()
+}
 
-    match env.time_keeper.unix_timestamp() {
-        Ok(t) => t,
-        Err(_) => 0,
-    }
+pub(crate) fn get_current_slot(ctx: FunctionEnvMut<Env>) -> u64 {
+    ctx.data().time_keeper.current_slot()
+}
+
+pub(crate) fn get_blockchain_time(ctx: FunctionEnvMut<Env>) -> u64 {
+    ctx.data().time_keeper.blockchain_timestamp()
 }
