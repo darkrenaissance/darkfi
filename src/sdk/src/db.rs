@@ -21,6 +21,7 @@ use darkfi_serial::Encodable;
 use super::{
     crypto::ContractId,
     error::{ContractError, GenericResult},
+    util::{get_object_bytes, get_object_size},
 };
 
 pub type DbHandle = u32;
@@ -198,33 +199,7 @@ pub fn zkas_db_set(bincode: &[u8]) -> GenericResult<()> {
     }
 }
 
-pub fn set_return_data(data: &[u8]) -> Result<(), ContractError> {
-    unsafe {
-        match set_return_data_(data.as_ptr(), data.len() as u32) {
-            0 => Ok(()),
-            errcode => Err(ContractError::from(errcode)),
-        }
-    }
-}
-
-pub fn put_object_bytes(data: &[u8]) -> i64 {
-    unsafe { put_object_bytes_(data.as_ptr(), data.len() as u32) }
-}
-
-pub fn get_object_bytes(data: &mut [u8], object_index: u32) -> i64 {
-    unsafe { get_object_bytes_(data.as_mut_ptr(), object_index) }
-}
-
-pub fn get_object_size(object_index: u32) -> i64 {
-    unsafe { get_object_size_(object_index) }
-}
-
 extern "C" {
-    fn set_return_data_(ptr: *const u8, len: u32) -> i64;
-    fn put_object_bytes_(ptr: *const u8, len: u32) -> i64;
-    fn get_object_bytes_(ptr: *const u8, len: u32) -> i64;
-    fn get_object_size_(len: u32) -> i64;
-
     fn db_init_(ptr: *const u8, len: u32) -> i32;
     fn db_lookup_(ptr: *const u8, len: u32) -> i32;
     fn db_get_(ptr: *const u8, len: u32) -> i64;

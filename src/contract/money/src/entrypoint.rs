@@ -18,9 +18,11 @@
 
 use darkfi_sdk::{
     crypto::{ContractId, MerkleTree, PublicKey},
-    db::{db_init, db_lookup, db_set, set_return_data, zkas_db_set},
+    db::{db_init, db_lookup, db_set, zkas_db_set},
     error::{ContractError, ContractResult},
-    msg, ContractCall,
+    msg,
+    util::set_return_data,
+    ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 

@@ -591,7 +591,7 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
             }
         }
         Err(e) => {
-            error!(target: "runtime::db::zkas_db_get()", "Internal error getting from tree: {}", e);
+            error!(target: "runtime::db::zkas_db_set()", "Internal error getting from tree: {}", e);
             return DB_SET_FAILED
         }
     };

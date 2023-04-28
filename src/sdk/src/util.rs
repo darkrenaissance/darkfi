@@ -18,28 +18,50 @@
 
 use super::error::{ContractError, GenericResult};
 
-pub const GET_SYSTEM_TIME_FAILED: i64 = -1;
+pub const CALL_FAILED: u64 = 0;
+
+pub fn set_return_data(data: &[u8]) -> Result<(), ContractError> {
+    unsafe {
+        match set_return_data_(data.as_ptr(), data.len() as u32) {
+            0 => Ok(()),
+            errcode => Err(ContractError::from(errcode)),
+        }
+    }
+}
+
+pub fn put_object_bytes(data: &[u8]) -> i64 {
+    unsafe { put_object_bytes_(data.as_ptr(), data.len() as u32) }
+}
+
+pub fn get_object_bytes(data: &mut [u8], object_index: u32) -> i64 {
+    unsafe { get_object_bytes_(data.as_mut_ptr(), object_index) }
+}
+
+pub fn get_object_size(object_index: u32) -> i64 {
+    unsafe { get_object_size_(object_index) }
+}
 
 /// Everyone can call this. Will return current system timestamp.
 ///
 /// ```
 /// timestamp = get_system_time();
 /// ```
-pub fn get_system_time() -> GenericResult<i64> {
-    unsafe {
-        let ret = get_system_time_();
+pub fn get_system_time() -> GenericResult<u64> {
+    let ret = unsafe { get_system_time_() };
 
-        if ret < 0 {
-            match ret {
-                GET_SYSTEM_TIME_FAILED => return Err(ContractError::GetSystemTimeFailed),
-                _ => unimplemented!(),
-            }
-        }
-
-        Ok(ret)
+    match ret {
+        // 0 here means system time is less or equal than UNIX_EPOCH
+        CALL_FAILED => return Err(ContractError::GetSystemTimeFailed),
+        // In any other case we can return the value
+        _ => Ok(ret),
     }
 }
 
 extern "C" {
-    fn get_system_time_() -> i64;
+    fn set_return_data_(ptr: *const u8, len: u32) -> i64;
+    fn put_object_bytes_(ptr: *const u8, len: u32) -> i64;
+    fn get_object_bytes_(ptr: *const u8, len: u32) -> i64;
+    fn get_object_size_(len: u32) -> i64;
+
+    fn get_system_time_() -> u64;
 }

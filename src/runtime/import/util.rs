@@ -151,9 +151,9 @@ pub(crate) fn get_object_size(ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
     obj.len() as i64
 }
 
-pub(crate) fn get_system_time() -> i64 {
+pub(crate) fn get_system_time() -> u64 {
     match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-        Ok(t) => t.as_secs() as i64,
-        Err(_) => -1,
+        Ok(t) => t.as_secs(),
+        Err(_) => 0,
     }
 }

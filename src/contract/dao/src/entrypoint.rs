@@ -23,11 +23,11 @@ use darkfi_sdk::{
         pallas, pasta_prelude::*, ContractId, MerkleNode, MerkleTree, PublicKey, DAO_CONTRACT_ID,
         MONEY_CONTRACT_ID,
     },
-    db::{
-        db_contains_key, db_del, db_get, db_init, db_lookup, db_set, set_return_data, zkas_db_set,
-    },
+    db::{db_contains_key, db_del, db_get, db_init, db_lookup, db_set, zkas_db_set},
     error::{ContractError, ContractResult},
-    merkle_add, msg, ContractCall,
+    merkle_add, msg,
+    util::set_return_data,
+    ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
 
