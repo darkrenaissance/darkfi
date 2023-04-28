@@ -885,7 +885,7 @@ mod tests {
             *TESTNET_GENESIS_HASH_BYTES,
             *TESTNET_INITIAL_DISTRIBUTION,
             true,
-        )?;
+        );
 
         let precision_diff = Float10::try_from(
             "10000000000000000000000000000000000000000000000000000000000000000000000000",

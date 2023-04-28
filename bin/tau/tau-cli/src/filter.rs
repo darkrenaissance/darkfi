@@ -21,7 +21,7 @@ use std::{
     process::exit,
 };
 
-use chrono::{Datelike, Local, NaiveDateTime, Utc};
+use chrono::{Datelike, Local, TimeZone, Utc};
 use log::error;
 use serde_json::Value;
 
@@ -72,7 +72,7 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
                     let year = year + (Utc::now().year() / 100) * 100;
                     tasks.retain(|task| {
                         let date = task.created_at;
-                        let task_date = NaiveDateTime::from_timestamp_opt(date, 0).unwrap().date();
+                        let task_date = Utc.timestamp_nanos(date).date_naive();
                         task_date.month() == month && task_date.year() == year
                     })
                 } else {
@@ -147,13 +147,12 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
                             Local::now().date_naive()
                         } else {
                             let due_date = due_as_timestamp(value).unwrap_or(0);
-                            NaiveDateTime::from_timestamp_opt(due_date, 0).unwrap().date()
+                            Utc.timestamp_nanos(due_date).date_naive()
                         };
 
                         tasks.retain(|task| {
                             let date = task.due.unwrap_or(0);
-                            let task_date =
-                                NaiveDateTime::from_timestamp_opt(date, 0).unwrap().date();
+                            let task_date = Utc.timestamp_nanos(date).date_naive();
 
                             match due_op {
                                 "not" => task_date != filter_date,

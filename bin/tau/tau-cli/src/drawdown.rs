@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 
-use chrono::{Datelike, Duration, NaiveDate, NaiveDateTime, Utc};
+use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
 use colored::Colorize;
 use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
 
@@ -111,11 +111,9 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, assignee: Option<String>) ->
                 .into_iter()
                 .filter(|t| {
                     // last event is always state stop
-                    let event_date = NaiveDateTime::from_timestamp_opt(
+                    let event_date = Utc.timestamp_nanos(
                         t.events.last().unwrap_or(&TaskEvent::default()).timestamp.0,
-                        0,
-                    )
-                    .unwrap();
+                    );
                     event_date.day() == day
                 })
                 .collect();
