@@ -31,13 +31,9 @@ use darkfi::{
 };
 use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
-<<<<<<< HEAD
     crypto::{
         Keypair, MerkleTree, PublicKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
     },
-<<<<<<< HEAD
-=======
-    crypto::{Keypair, MerkleTree, PublicKey, DARK_TOKEN_ID, MONEY_CONTRACT_ID},
     pasta::pallas,
     ContractCall,
 };
