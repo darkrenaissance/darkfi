@@ -165,7 +165,7 @@ impl ProtocolSync {
             // in case they go out of sync and become a none-consensus node.
             if self.consensus_mode {
                 let lock = self.state.read().await;
-                let current = lock.consensus.current_slot();
+                let current = lock.consensus.time_keeper.current_slot();
                 let participating = lock.consensus.participating;
                 if participating.is_some() {
                     let slot = participating.unwrap();
@@ -313,7 +313,7 @@ impl ProtocolSync {
             // in case they go out of sync and become a none-consensus node.
             if self.consensus_mode {
                 let lock = self.state.read().await;
-                let current = lock.consensus.current_slot();
+                let current = lock.consensus.time_keeper.current_slot();
                 let participating = lock.consensus.participating;
                 if participating.is_some() {
                     let slot = participating.unwrap();

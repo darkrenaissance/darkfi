@@ -16,9 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Duration;
-
-use chrono::{NaiveDateTime, Utc};
 use darkfi_sdk::{
     crypto::{constants::MERKLE_DEPTH, MerkleNode},
     incrementalmerkletree::bridgetree::BridgeTree,
@@ -36,8 +33,12 @@ use super::{
     Block, BlockProposal, Float10,
 };
 use crate::{
-    blockchain::Blockchain, net, tx::Transaction, util::time::Timestamp, wallet::WalletPtr, Error,
-    Result,
+    blockchain::Blockchain,
+    net,
+    tx::Transaction,
+    util::time::{TimeKeeper, Timestamp},
+    wallet::WalletPtr,
+    Error, Result,
 };
 
 use std::{
@@ -53,8 +54,8 @@ pub struct ConsensusState {
     pub blockchain: Blockchain,
     /// Network bootstrap timestamp
     pub bootstrap_ts: Timestamp,
-    /// Genesis block creation timestamp
-    pub genesis_ts: Timestamp,
+    /// Helper structure to calculate time related operations
+    pub time_keeper: TimeKeeper,
     /// Genesis block hash
     pub genesis_block: blake3::Hash,
     /// Total sum of initial staking coins
@@ -99,13 +100,15 @@ impl ConsensusState {
         genesis_data: blake3::Hash,
         initial_distribution: u64,
         single_node: bool,
-    ) -> Result<Self> {
+    ) -> Self {
         let genesis_block = Block::genesis_block(genesis_ts, genesis_data).blockhash();
-        Ok(Self {
+        let time_keeper =
+            TimeKeeper::new(genesis_ts, constants::EPOCH_LENGTH as u64, constants::SLOT_TIME);
+        Self {
             wallet,
             blockchain,
             bootstrap_ts,
-            genesis_ts,
+            time_keeper,
             genesis_block,
             initial_distribution,
             single_node,
@@ -122,29 +125,7 @@ impl ConsensusState {
             coins: vec![],
             coins_tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH * 100),
             nullifiers: vec![],
-        })
-    }
-
-    /// Calculates current epoch.
-    pub fn current_epoch(&self) -> u64 {
-        self.slot_epoch(self.current_slot())
-    }
-
-    /// Calculates the epoch of the provided slot.
-    /// Epoch duration is configured using the `EPOCH_LENGTH` value.
-    pub fn slot_epoch(&self, slot: u64) -> u64 {
-        slot / constants::EPOCH_LENGTH as u64
-    }
-
-    /// Calculates current slot, based on elapsed time from the genesis block.
-    /// Slot duration is configured using the `SLOT_TIME` constant.
-    pub fn current_slot(&self) -> u64 {
-        self.genesis_ts.elapsed() / constants::SLOT_TIME
-    }
-
-    /// Calculates the relative number of the provided slot.
-    pub fn relative_slot(&self, slot: u64) -> u64 {
-        slot % constants::EPOCH_LENGTH as u64
+        }
     }
 
     /// Finds the last slot a proposal or block was generated.
@@ -168,44 +149,15 @@ impl ConsensusState {
         Ok(last_slot)
     }
 
-    /// Calculates seconds until next Nth slot starting time.
-    /// Slots duration is configured using the SLOT_TIME constant.
-    pub fn next_n_slot_start(&self, n: u64) -> Duration {
-        assert!(n > 0);
-        let start_time = NaiveDateTime::from_timestamp_opt(self.genesis_ts.0, 0).unwrap();
-        let current_slot = self.current_slot() + n;
-        let next_slot_start =
-            (current_slot * constants::SLOT_TIME) + (start_time.timestamp() as u64);
-        let next_slot_start = NaiveDateTime::from_timestamp_opt(next_slot_start as i64, 0).unwrap();
-        let current_time = NaiveDateTime::from_timestamp_opt(Utc::now().timestamp(), 0).unwrap();
-        let diff = next_slot_start - current_time;
-
-        Duration::new(diff.num_seconds().try_into().unwrap(), 0)
-    }
-
-    /// Calculate slots until next Nth epoch.
-    /// Epoch duration is configured using the EPOCH_LENGTH value.
-    pub fn slots_to_next_n_epoch(&self, n: u64) -> u64 {
-        assert!(n > 0);
-        let slots_till_next_epoch =
-            constants::EPOCH_LENGTH as u64 - self.relative_slot(self.current_slot());
-        ((n - 1) * constants::EPOCH_LENGTH as u64) + slots_till_next_epoch
-    }
-
-    /// Calculates seconds until next Nth epoch starting time.
-    pub fn next_n_epoch_start(&self, n: u64) -> Duration {
-        self.next_n_slot_start(self.slots_to_next_n_epoch(n))
-    }
-
     /// Set participating slot to next.
     pub fn set_participating(&mut self) -> Result<()> {
-        self.participating = Some(self.current_slot() + 1);
+        self.participating = Some(self.time_keeper.current_slot() + 1);
         Ok(())
     }
 
     /// Generate current slot checkpoint
     fn generate_slot_checkpoint(&mut self, sigma1: pallas::Base, sigma2: pallas::Base) {
-        let slot = self.current_slot();
+        let slot = self.time_keeper.current_slot();
         let eta = self.get_eta();
         info!(target: "consensus::state", "generate_slot_checkpoint: slot: {:?}, eta: {:?}", slot, eta);
         let checkpoint = SlotCheckpoint { slot, eta, sigma1, sigma2 };
@@ -214,7 +166,7 @@ impl ConsensusState {
 
     // Initialize node lead coins and set current epoch and eta.
     pub async fn init_coins(&mut self) -> Result<()> {
-        self.epoch = self.current_epoch();
+        self.epoch = self.time_keeper.current_epoch();
         self.coins = self.create_coins().await?;
         self.update_forks_checkpoints();
         Ok(())
@@ -228,7 +180,7 @@ impl ConsensusState {
         sigma2: pallas::Base,
     ) -> Result<bool> {
         self.generate_slot_checkpoint(sigma1, sigma2);
-        let epoch = self.current_epoch();
+        let epoch = self.time_keeper.current_epoch();
         if epoch <= self.epoch {
             return Ok(false)
         }
@@ -313,7 +265,7 @@ impl ConsensusState {
                 //let stake = self.initial_distribution;
                 let c = LeadCoin::new(
                     0,
-                    self.current_slot(),
+                    self.time_keeper.current_slot(),
                     epoch_secrets.secret_keys[0].inner(),
                     epoch_secrets.merkle_roots[0],
                     0,
@@ -472,7 +424,7 @@ impl ConsensusState {
                 sigma1,
                 sigma2,
                 self.get_eta(),
-                pallas::Base::from(self.current_slot()),
+                pallas::Base::from(self.time_keeper.current_slot()),
             );
 
             if first_winning && !won {
@@ -613,7 +565,7 @@ impl ConsensusState {
     /// Auxillary function to check if node has seen current or previous slot checkpoints.
     /// This check ensures that either the slots exist in memory or node has seen the finalization of these slots.
     pub fn slot_checkpoints_is_empty(&self) -> bool {
-        let current_slot = self.current_slot();
+        let current_slot = self.time_keeper.current_slot();
         if self.get_slot_checkpoint(current_slot).is_ok() {
             return false
         }

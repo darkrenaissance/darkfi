@@ -131,7 +131,7 @@ impl ValidatorState {
             genesis_data,
             initial_distribution,
             single_node,
-        )?;
+        );
 
         // -----NATIVE WASM CONTRACTS-----
         // This is the current place where native contracts are being deployed.
@@ -170,7 +170,12 @@ impl ValidatorState {
         let blockchain_overlay = BlockchainOverlay::new(&blockchain)?;
         for nc in native_contracts {
             info!(target: "consensus::validator", "Deploying {} with ContractID {}", nc.0, nc.1);
-            let mut runtime = Runtime::new(&nc.2[..], blockchain_overlay.clone(), nc.1)?;
+            let mut runtime = Runtime::new(
+                &nc.2[..],
+                blockchain_overlay.clone(),
+                nc.1,
+                consensus.time_keeper.clone(),
+            )?;
             runtime.deploy(&nc.3)?;
             info!(target: "consensus::validator", "Successfully deployed {}", nc.0);
         }
@@ -376,7 +381,7 @@ impl ValidatorState {
             sigma1,
             sigma2,
             eta,
-            pallas::Base::from(self.consensus.current_slot()),
+            pallas::Base::from(self.consensus.time_keeper.current_slot()),
             self.lead_proving_key.as_ref().unwrap(),
             derived_blind,
         );
@@ -385,7 +390,7 @@ impl ValidatorState {
         let secret_key = coin.coin1_sk;
         let header = Header::new(
             prev_hash,
-            self.consensus.slot_epoch(slot),
+            self.consensus.time_keeper.slot_epoch(slot),
             slot,
             Timestamp::current_time(),
             root,
@@ -447,7 +452,7 @@ impl ValidatorState {
         proposal: &BlockProposal,
         coin: Option<(usize, LeadCoin, pallas::Scalar)>,
     ) -> Result<bool> {
-        let current = self.consensus.current_slot();
+        let current = self.consensus.time_keeper.current_slot();
         // Node hasn't started participating
         match self.consensus.participating {
             Some(start) => {
@@ -547,7 +552,7 @@ impl ValidatorState {
             // Validate proposal public value against coin creation slot checkpoint
             let (mu_y, mu_rho) = LeadCoin::election_seeds_u64(
                 self.consensus.get_eta(),
-                self.consensus.current_slot(),
+                self.consensus.time_keeper.current_slot(),
             );
             // y
             let prop_mu_y = lf.public_inputs[constants::PI_MU_Y_INDEX];
@@ -692,7 +697,7 @@ impl ValidatorState {
     /// When fork chain proposals are finalized, the rest of fork chains are removed and all
     /// slot checkpoints are apppended to canonical state.
     pub async fn chain_finalization(&mut self) -> Result<(Vec<BlockInfo>, Vec<SlotCheckpoint>)> {
-        let slot = self.consensus.current_slot();
+        let slot = self.consensus.time_keeper.current_slot();
         info!(target: "consensus::validator", "chain_finalization(): Started finalization check for slot: {}", slot);
         // Set last slot finalization check occured to current slot
         self.consensus.checked_finalization = slot;
@@ -872,7 +877,7 @@ impl ValidatorState {
     /// Validate and append to canonical state received finalized block.
     /// Returns boolean flag indicating already existing block.
     pub async fn receive_finalized_block(&mut self, block: BlockInfo) -> Result<bool> {
-        if block.header.slot > self.consensus.current_slot() {
+        if block.header.slot > self.consensus.time_keeper.current_slot() {
             warn!(target: "consensus::validator", "receive_finalized_block(): Ignoring future block: {}", block.header.slot);
             return Ok(false)
         }
@@ -915,7 +920,7 @@ impl ValidatorState {
     pub async fn receive_sync_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
         let mut new_blocks = vec![];
         for block in blocks {
-            if block.header.slot > self.consensus.current_slot() {
+            if block.header.slot > self.consensus.time_keeper.current_slot() {
                 warn!(target: "consensus::validator", "receive_sync_blocks(): Ignoring future block: {}", block.header.slot);
                 continue
             }
@@ -993,7 +998,12 @@ impl ValidatorState {
             let runtime_key = call.contract_id.to_string();
             if !runtimes.contains_key(&runtime_key) {
                 let wasm = self.blockchain.wasm_bincode.get(call.contract_id)?;
-                let r = Runtime::new(&wasm, blockchain_overlay.clone(), call.contract_id)?;
+                let r = Runtime::new(
+                    &wasm,
+                    blockchain_overlay.clone(),
+                    call.contract_id,
+                    self.consensus.time_keeper.clone(),
+                )?;
                 runtimes.insert(runtime_key.clone(), r);
             }
             let runtime = runtimes.get_mut(&runtime_key).unwrap();
@@ -1140,7 +1150,7 @@ impl ValidatorState {
         info!(target: "consensus::validator", "receive_slot_checkpoints(): Appending slot checkpoints to ledger");
         let mut filtered = vec![];
         for slot_checkpoint in slot_checkpoints {
-            if slot_checkpoint.slot > self.consensus.current_slot() {
+            if slot_checkpoint.slot > self.consensus.time_keeper.current_slot() {
                 warn!(target: "consensus::validator", "receive_slot_checkpoints(): Ignoring future slot checkpoint: {}", slot_checkpoint.slot);
                 continue
             }

@@ -46,7 +46,7 @@ pub async fn proposal_task(
         info!(target: "consensus::proposal", "consensus: Waiting for network bootstrap: {} seconds", diff);
         sleep(diff as u64).await;
     } else {
-        let mut sleep_time = state.read().await.consensus.next_n_slot_start(1);
+        let mut sleep_time = state.read().await.consensus.time_keeper.next_n_slot_start(1);
         let sync_offset = Duration::new(constants::FINAL_SYNC_DUR, 0);
         loop {
             if sleep_time > sync_offset {
@@ -55,7 +55,7 @@ pub async fn proposal_task(
             }
             info!(target: "consensus::proposal", "consensus: Waiting for next slot ({:?})", sleep_time);
             sleep(sleep_time.as_secs()).await;
-            sleep_time = state.read().await.consensus.next_n_slot_start(1);
+            sleep_time = state.read().await.consensus.time_keeper.next_n_slot_start(1);
         }
         info!(target: "consensus::proposal", "consensus: Waiting for finalization sync period ({:?})", sleep_time);
         sleep(sleep_time.as_secs()).await;
@@ -104,13 +104,13 @@ pub async fn proposal_task(
         }
 
         // Record epoch we start the consensus loop
-        let start_epoch = state.read().await.consensus.current_epoch();
+        let start_epoch = state.read().await.consensus.time_keeper.current_epoch();
 
         // Start executing consensus
         consensus_loop(consensus_p2p.clone(), sync_p2p.clone(), state.clone(), ex.clone()).await;
 
         // Reset retries counter if more epochs have passed than sync retries duration
-        let break_epoch = state.read().await.consensus.current_epoch();
+        let break_epoch = state.read().await.consensus.time_keeper.current_epoch();
         if (break_epoch - start_epoch) > constants::SYNC_RETRIES_DURATION {
             retries = 0;
         }
@@ -156,7 +156,7 @@ async fn consensus_loop(
             warn!(
                 target: "consensus::proposal",
                 "consensus: Node missed slot {} due to proposal processing, resyncing...",
-                state.read().await.consensus.current_slot()
+                state.read().await.consensus.time_keeper.current_slot()
             );
             break
         }
@@ -167,7 +167,7 @@ async fn consensus_loop(
             warn!(
                 target: "consensus::proposal",
                 "consensus: Node missed slot {} due to finalizated blocks processing, resyncing...",
-                state.read().await.consensus.current_slot()
+                state.read().await.consensus.time_keeper.current_slot()
             );
             break
         }
@@ -181,12 +181,12 @@ async fn consensus_loop(
 /// Returns flag in case node needs to resync.
 async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool {
     // Node sleeps until next slot
-    let seconds_next_slot = state.read().await.consensus.next_n_slot_start(1).as_secs();
+    let seconds_next_slot = state.read().await.consensus.time_keeper.next_n_slot_start(1).as_secs();
     info!(target: "consensus::proposal", "consensus: Waiting for next slot ({} sec)", seconds_next_slot);
     sleep(seconds_next_slot).await;
 
     // Keep a record of slot to verify if next slot got skipped during processing
-    let processing_slot = state.read().await.consensus.current_slot();
+    let processing_slot = state.read().await.consensus.time_keeper.current_slot();
 
     // Retrieve slot sigmas
     let (sigma1, sigma2) = state.write().await.consensus.sigmas();
@@ -228,12 +228,12 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
     };
 
     // Node checks if it missed finalization period due to proposal creation
-    let next_slot_start = state.read().await.consensus.next_n_slot_start(1);
+    let next_slot_start = state.read().await.consensus.time_keeper.next_n_slot_start(1);
     if next_slot_start.as_secs() <= constants::FINAL_SYNC_DUR {
         warn!(
             target: "consensus::proposal",
             "consensus: Node missed slot {} finalization period due to proposal creation, resyncing...",
-            state.read().await.consensus.current_slot()
+            state.read().await.consensus.time_keeper.current_slot()
         );
         return true
     }
@@ -268,7 +268,7 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
     }
 
     // Verify node didn't skip next slot
-    processing_slot != state.read().await.consensus.current_slot()
+    processing_slot != state.read().await.consensus.time_keeper.current_slot()
 }
 
 /// async function to wait and execute consensus protocol finalization period.
@@ -279,7 +279,7 @@ async fn finalization_period(
     ex: Arc<smol::Executor<'_>>,
 ) -> bool {
     // Node sleeps until finalization sync period starts
-    let next_slot_start = state.read().await.consensus.next_n_slot_start(1);
+    let next_slot_start = state.read().await.consensus.time_keeper.next_n_slot_start(1);
     if next_slot_start.as_secs() > constants::FINAL_SYNC_DUR {
         let seconds_sync_period =
             (next_slot_start - Duration::new(constants::FINAL_SYNC_DUR, 0)).as_secs();
@@ -289,13 +289,13 @@ async fn finalization_period(
         warn!(
             target: "consensus::proposal",
             "consensus: Node missed slot {} finalization period due to proposals processing, resyncing...",
-            state.read().await.consensus.current_slot()
+            state.read().await.consensus.time_keeper.current_slot()
         );
         return true
     }
 
     // Keep a record of slot to verify if next slot got skipped during processing
-    let completed_slot = state.read().await.consensus.current_slot();
+    let completed_slot = state.read().await.consensus.time_keeper.current_slot();
 
     // Check if any forks can be finalized
     match state.write().await.chain_finalization().await {
@@ -334,5 +334,5 @@ async fn finalization_period(
     }
 
     // Verify node didn't skip next slot
-    completed_slot != state.read().await.consensus.current_slot()
+    completed_slot != state.read().await.consensus.time_keeper.current_slot()
 }

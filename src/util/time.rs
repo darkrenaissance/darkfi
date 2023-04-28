@@ -16,13 +16,80 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, UNIX_EPOCH};
 
 use chrono::{NaiveDateTime, Utc};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use serde::{Deserialize, Serialize};
 
 use crate::Result;
+
+/// Helper structure providing time related calculations.
+#[derive(Clone)]
+pub struct TimeKeeper {
+    /// Genesis block creation timestamp
+    pub genesis_ts: Timestamp,
+    /// Currently configured epoch duration.
+    pub epoch_length: u64,
+    /// Currently configured slot duration.
+    pub slot_time: u64,
+}
+
+impl TimeKeeper {
+    pub fn new(genesis_ts: Timestamp, epoch_length: u64, slot_time: u64) -> Self {
+        Self { genesis_ts, epoch_length, slot_time }
+    }
+
+    /// Calculates current epoch.
+    pub fn current_epoch(&self) -> u64 {
+        self.slot_epoch(self.current_slot())
+    }
+
+    /// Calculates the epoch of the provided slot.    
+    pub fn slot_epoch(&self, slot: u64) -> u64 {
+        slot / self.epoch_length
+    }
+
+    /// Calculates current slot, based on elapsed time from the genesis block.
+    pub fn current_slot(&self) -> u64 {
+        self.genesis_ts.elapsed() / self.slot_time
+    }
+
+    /// Calculates the relative number of the provided slot.
+    pub fn relative_slot(&self, slot: u64) -> u64 {
+        slot % self.epoch_length
+    }
+
+    /// Calculates seconds until next Nth slot starting time.
+    pub fn next_n_slot_start(&self, n: u64) -> Duration {
+        assert!(n > 0);
+        let start_time = NaiveDateTime::from_timestamp_opt(self.genesis_ts.0, 0).unwrap();
+        let current_slot = self.current_slot() + n;
+        let next_slot_start = (current_slot * self.slot_time) + (start_time.timestamp() as u64);
+        let next_slot_start = NaiveDateTime::from_timestamp_opt(next_slot_start as i64, 0).unwrap();
+        let current_time = NaiveDateTime::from_timestamp_opt(Utc::now().timestamp(), 0).unwrap();
+        let diff = next_slot_start - current_time;
+
+        Duration::new(diff.num_seconds().try_into().unwrap(), 0)
+    }
+
+    /// Calculate slots until next Nth epoch.
+    /// Epoch duration is configured using the EPOCH_LENGTH value.
+    pub fn slots_to_next_n_epoch(&self, n: u64) -> u64 {
+        assert!(n > 0);
+        let slots_till_next_epoch = self.epoch_length - self.relative_slot(self.current_slot());
+        ((n - 1) * self.epoch_length) + slots_till_next_epoch
+    }
+
+    /// Calculates seconds until next Nth epoch starting time.
+    pub fn next_n_epoch_start(&self, n: u64) -> Duration {
+        self.next_n_slot_start(self.slots_to_next_n_epoch(n))
+    }
+
+    pub fn unix_timestamp(&self) -> Result<u64> {
+        Ok(UNIX_EPOCH.elapsed()?.as_secs())
+    }
+}
 
 /// Wrapper struct to represent [`chrono`] UTC timestamps.
 #[derive(
@@ -123,8 +190,4 @@ pub fn timestamp_to_date(timestamp: i64, format: DateFormat) -> String {
         }
         DateFormat::Default => "".to_string(),
     }
-}
-
-pub fn unix_timestamp() -> Result<u64> {
-    Ok(UNIX_EPOCH.elapsed()?.as_secs())
 }

@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::SystemTime;
-
 use log::error;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
@@ -151,9 +149,11 @@ pub(crate) fn get_object_size(ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
     obj.len() as i64
 }
 
-pub(crate) fn get_system_time() -> u64 {
-    match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-        Ok(t) => t.as_secs(),
+pub(crate) fn get_system_time(ctx: FunctionEnvMut<Env>) -> u64 {
+    let env = ctx.data();
+
+    match env.time_keeper.unix_timestamp() {
+        Ok(t) => t,
         Err(_) => 0,
     }
 }

@@ -36,7 +36,7 @@ use crate::{
 /// so it can immediately start proposing proposals.
 pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Result<bool> {
     info!(target: "consensus::consensus_sync", "Starting consensus state sync...");
-    let current_slot = state.read().await.consensus.current_slot();
+    let current_slot = state.read().await.consensus.time_keeper.current_slot();
     // Loop through connected channels
     let channels_map = p2p.channels().lock().await;
     let values = channels_map.values();

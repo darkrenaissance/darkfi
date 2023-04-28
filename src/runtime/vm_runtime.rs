@@ -35,7 +35,7 @@ use wasmer_middlewares::{
 };
 
 use super::{import, import::db::DbHandle, memory::MemoryManipulation};
-use crate::{blockchain::BlockchainOverlayPtr, Error, Result};
+use crate::{blockchain::BlockchainOverlayPtr, util::time::TimeKeeper, Error, Result};
 
 /// Name of the wasm linear memory in our guest module
 const MEMORY: &str = "memory";
@@ -92,6 +92,8 @@ pub struct Env {
     pub memory: Option<Memory>,
     /// Object store for transferring memory from the host to VM
     pub objects: RefCell<Vec<Vec<u8>>>,
+    /// Helper structure to calculate time related operations
+    pub time_keeper: TimeKeeper,
 }
 
 impl Env {
@@ -124,6 +126,7 @@ impl Runtime {
         wasm_bytes: &[u8],
         blockchain: BlockchainOverlayPtr,
         contract_id: ContractId,
+        time_keeper: TimeKeeper,
     ) -> Result<Self> {
         info!(target: "runtime::vm_runtime", "Instantiating a new runtime");
         // TODO: Add necessary operators
@@ -171,6 +174,7 @@ impl Runtime {
                 logs,
                 memory: None,
                 objects: RefCell::new(vec![]),
+                time_keeper,
             },
         );
 
@@ -254,8 +258,9 @@ impl Runtime {
                     import::merkle::merkle_add,
                 ),
 
-                "get_system_time_" => Function::new_typed(
+                "get_system_time_" => Function::new_typed_with_env(
                     &mut store,
+                    &ctx,
                     import::util::get_system_time,
                 ),
             }
