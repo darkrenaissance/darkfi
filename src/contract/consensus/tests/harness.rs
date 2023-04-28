@@ -22,6 +22,7 @@ use darkfi::{
         ValidatorState, ValidatorStatePtr, TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
         TESTNET_GENESIS_TIMESTAMP, TESTNET_INITIAL_DISTRIBUTION,
     },
+    runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
     tx::Transaction,
     wallet::{WalletDb, WalletPtr},
     zk::{empty_witnesses, halo2::Field, ProvingKey, ZkCircuit},
@@ -34,26 +35,20 @@ use darkfi_sdk::{
     crypto::{
         Keypair, MerkleTree, PublicKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
     },
+<<<<<<< HEAD
 =======
     crypto::{Keypair, MerkleTree, PublicKey, DARK_TOKEN_ID, MONEY_CONTRACT_ID},
->>>>>>> 2b38600b8a (contract/consensus: laid foundation)
-    db::SMART_CONTRACT_ZKAS_DB_NAME,
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::{serialize, Encodable};
+use darkfi_serial::{deserialize, serialize, Encodable};
 use log::warn;
 use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
     client::transfer_v1::TransferCallBuilder, model::MoneyTransferParamsV1, MoneyFunction,
-<<<<<<< HEAD
     CONSENSUS_CONTRACT_ZKAS_REWARD_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
     MONEY_CONTRACT_ZKAS_MINT_NS_V1,
-=======
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
-    MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
->>>>>>> 2b38600b8a (contract/consensus: laid foundation)
 };
 
 pub fn init_logger() {
@@ -78,10 +73,7 @@ pub struct Wallet {
     pub keypair: Keypair,
     pub state: ValidatorStatePtr,
     pub merkle_tree: MerkleTree,
-<<<<<<< HEAD
     pub consensus_merkle_tree: MerkleTree,
-=======
->>>>>>> 2b38600b8a (contract/consensus: laid foundation)
     pub wallet: WalletPtr,
     pub coins: Vec<OwnCoin>,
     pub spent_coins: Vec<OwnCoin>,
@@ -106,30 +98,18 @@ impl Wallet {
         .await?;
 
         let merkle_tree = MerkleTree::new(100);
-<<<<<<< HEAD
         let consensus_merkle_tree = MerkleTree::new(100);
-=======
->>>>>>> 2b38600b8a (contract/consensus: laid foundation)
 
         let coins = vec![];
         let spent_coins = vec![];
 
-<<<<<<< HEAD
         Ok(Self { keypair, state, merkle_tree, consensus_merkle_tree, wallet, coins, spent_coins })
-=======
-        Ok(Self { keypair, state, merkle_tree, wallet, coins, spent_coins })
->>>>>>> 2b38600b8a (contract/consensus: laid foundation)
     }
 }
 
 pub struct ConsensusTestHarness {
     pub faucet: Wallet,
     pub alice: Wallet,
-<<<<<<< HEAD
-=======
-    pub bob: Wallet,
-    pub charlie: Wallet,
->>>>>>> 2b38600b8a (contract/consensus: laid foundation)
     pub proving_keys: HashMap<&'static str, (ProvingKey, ZkBinary)>,
 }
 
@@ -142,23 +122,10 @@ impl ConsensusTestHarness {
         let alice_kp = Keypair::random(&mut OsRng);
         let alice = Wallet::new(alice_kp, &faucet_pubkeys).await?;
 
-<<<<<<< HEAD
         // Get the zkas circuits and build proving keys
         let mut proving_keys = HashMap::new();
         let alice_sled = alice.state.read().await.blockchain.sled_db.clone();
         let mut db_handle = alice.state.read().await.blockchain.contracts.lookup(
-=======
-        let bob_kp = Keypair::random(&mut OsRng);
-        let bob = Wallet::new(bob_kp, &faucet_pubkeys).await?;
-
-        let charlie_kp = Keypair::random(&mut OsRng);
-        let charlie = Wallet::new(charlie_kp, &faucet_pubkeys).await?;
-
-        // Get the zkas circuits and build proving keys
-        let mut proving_keys = HashMap::new();
-        let alice_sled = alice.state.read().await.blockchain.sled_db.clone();
-        let db_handle = alice.state.read().await.blockchain.contracts.lookup(
->>>>>>> 2b38600b8a (contract/consensus: laid foundation)
             &alice_sled,
             &MONEY_CONTRACT_ID,
             SMART_CONTRACT_ZKAS_DB_NAME,
@@ -166,7 +133,8 @@ impl ConsensusTestHarness {
 
         macro_rules! mkpk {
             ($ns:expr) => {
-                let zkbin = db_handle.get(&serialize(&$ns))?.unwrap();
+                let zkas_bytes = db_handle.get(&serialize(&$ns))?.unwrap();
+                let (zkbin, _): (Vec<u8>, Vec<u8>) = deserialize(&zkas_bytes)?;
                 let zkbin = ZkBinary::decode(&zkbin)?;
                 let witnesses = empty_witnesses(&zkbin);
                 let circuit = ZkCircuit::new(witnesses, zkbin.clone());
@@ -177,7 +145,6 @@ impl ConsensusTestHarness {
 
         mkpk!(MONEY_CONTRACT_ZKAS_MINT_NS_V1);
         mkpk!(MONEY_CONTRACT_ZKAS_BURN_NS_V1);
-<<<<<<< HEAD
 
         db_handle = alice.state.read().await.blockchain.contracts.lookup(
             &alice_sled,
@@ -189,12 +156,6 @@ impl ConsensusTestHarness {
         mkpk!(CONSENSUS_CONTRACT_ZKAS_REWARD_NS_V1);
 
         Ok(Self { faucet, alice, proving_keys })
-=======
-        mkpk!(MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1);
-        mkpk!(MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1);
-
-        Ok(Self { faucet, alice, bob, charlie, proving_keys })
->>>>>>> 2b38600b8a (contract/consensus: laid foundation)
     }
 
     pub fn airdrop_native(
