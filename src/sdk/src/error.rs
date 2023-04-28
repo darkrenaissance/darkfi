@@ -80,6 +80,9 @@ pub enum ContractError {
 
     #[error("SMT: Path nodes are not consistent")]
     SmtInvalidPathNodes,
+
+    #[error("Error retrieving system time")]
+    GetSystemTimeFailed,
 }
 
 /// Builtin return values occupy the upper 32 bits
@@ -107,6 +110,7 @@ pub const INVALID_FUNCTION: i64 = to_builtin!(15);
 pub const DB_DEL_FAILED: i64 = to_builtin!(16);
 pub const SMT_INVALID_LEAF: i64 = to_builtin!(17);
 pub const SMT_INVALID_PATH_NODES: i64 = to_builtin!(18);
+pub const GET_SYSTEM_TIME_FAILED: i64 = to_builtin!(19);
 
 impl From<ContractError> for i64 {
     fn from(err: ContractError) -> Self {
@@ -128,6 +132,7 @@ impl From<ContractError> for i64 {
             ContractError::DbDelFailed => DB_DEL_FAILED,
             ContractError::SmtInvalidLeaf => SMT_INVALID_LEAF,
             ContractError::SmtInvalidPathNodes => SMT_INVALID_PATH_NODES,
+            ContractError::GetSystemTimeFailed => GET_SYSTEM_TIME_FAILED,
             ContractError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -160,6 +165,7 @@ impl From<i64> for ContractError {
             DB_DEL_FAILED => Self::DbDelFailed,
             SMT_INVALID_LEAF => Self::SmtInvalidLeaf,
             SMT_INVALID_PATH_NODES => Self::SmtInvalidPathNodes,
+            GET_SYSTEM_TIME_FAILED => Self::GetSystemTimeFailed,
             _ => Self::Custom(error as u32),
         }
     }

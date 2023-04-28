@@ -253,6 +253,11 @@ impl Runtime {
                     &ctx,
                     import::merkle::merkle_add,
                 ),
+
+                "get_system_time_" => Function::new_typed(
+                    &mut store,
+                    import::util::get_system_time,
+                ),
             }
         };
 

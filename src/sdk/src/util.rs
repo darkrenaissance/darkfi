@@ -16,31 +16,30 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub use incrementalmerkletree;
-pub use pasta_curves as pasta;
+use super::error::{ContractError, GenericResult};
 
-/// Database functions
-pub mod db;
+pub const GET_SYSTEM_TIME_FAILED: i64 = -1;
 
-/// Entrypoint used for the wasm binaries
-pub mod entrypoint;
+/// Everyone can call this. Will return current system timestamp.
+///
+/// ```
+/// timestamp = get_system_time();
+/// ```
+pub fn get_system_time() -> GenericResult<i64> {
+    unsafe {
+        let ret = get_system_time_();
 
-/// Error handling
-pub mod error;
+        if ret < 0 {
+            match ret {
+                GET_SYSTEM_TIME_FAILED => return Err(ContractError::GetSystemTimeFailed),
+                _ => unimplemented!(),
+            }
+        }
 
-/// Logging infrastructure
-pub mod log;
+        Ok(ret)
+    }
+}
 
-/// Crypto-related definitions
-pub mod crypto;
-
-/// Merkle
-pub mod merkle;
-pub use merkle::merkle_add;
-
-/// Transaction structure
-pub mod tx;
-pub use tx::ContractCall;
-
-/// Utility functions
-pub mod util;
+extern "C" {
+    fn get_system_time_() -> i64;
+}
