@@ -31,6 +31,13 @@ visible on the IRC chat.
 
 See the [example ircd_config.toml](https://github.com/darkrenaissance/darkfi/blob/master/bin/ircd/ircd_config.toml) for more details
 
+It's always a good practice to save your keys somewhere safe, but in 
+case you lost your Public Key and you still have your Private key in 
+`ircd_config.toml` file, you recover the Public Key like so:
+```shell
+% ircd --recover-pubkey {your_private_key}
+```
+
 ## Example
 Lets start by configuring our contacts list in the generated `ircd_config.toml` file
 (you can also refer to the examples written in the comments of the toml file)
