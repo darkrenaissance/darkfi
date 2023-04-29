@@ -39,12 +39,11 @@ use darkfi_money_contract::{
     MoneyFunction,
 };
 use darkfi_sdk::{
+    bridgetree,
     crypto::{
         poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey, TokenId,
         MONEY_CONTRACT_ID,
     },
-    incrementalmerkletree,
-    incrementalmerkletree::Tree,
     pasta::pallas,
 };
 use darkfi_serial::{deserialize, serialize};
@@ -332,7 +331,7 @@ impl Drk {
             let nullifier: Nullifier = deserialize(&nullifier_bytes)?;
 
             let leaf_position_bytes: Vec<u8> = serde_json::from_value(row[12].clone())?;
-            let leaf_position: incrementalmerkletree::Position = deserialize(&leaf_position_bytes)?;
+            let leaf_position: bridgetree::Position = deserialize(&leaf_position_bytes)?;
 
             let memo: Vec<u8> = serde_json::from_value(row[13].clone())?;
 
@@ -546,14 +545,14 @@ impl Drk {
             let coin = output.coin;
 
             // Append the new coin to the Merkle tree. Every coin has to be added.
-            tree.append(&MerkleNode::from(coin.inner()));
+            tree.append(MerkleNode::from(coin.inner()));
 
             // Attempt to decrypt the note
             for secret in secrets.iter().chain(dao_secrets.iter()) {
                 if let Ok(note) = output.note.decrypt::<MoneyNote>(secret) {
                     eprintln!("Successfully decrypted a Money Note");
                     eprintln!("Witnessing coin in Merkle tree");
-                    let leaf_position = tree.witness().unwrap();
+                    let leaf_position = tree.mark().unwrap();
 
                     let owncoin = OwnCoin {
                         coin,
