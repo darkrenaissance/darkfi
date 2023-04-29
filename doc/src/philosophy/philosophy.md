@@ -49,6 +49,52 @@ is separate from patriotism.
 >
 > ~ Ocalan's "PKK and Kurdish Question in the 21st century"
 
+## Defining the State
+
+The state is a centralized organization that imposes and enforces rules over a
+population through the monopoly on the legitimate use of violence. In discussing
+the rise of militarism, Ocalan says:
+
+> Essentially, he attempted to establish his authority over two key groups: 
+> the hunters at his side and the women he was trying to confine to the 
+> home. Along the way, as shamans (proto-priests) and gerontocratic
+> elements (groups of elders) joined the crafty strongman, the first
+> hierarchical authority was formed in many societies in various forms.
+>
+> Section called "Society’s Militarism Problem" from "The Sociology of Freedom"
+
+The state is defined as:
+
+1. Ideological hegemony represented by the system of priests and shamans in
+   pre-state formations. Today this is the media industry, schools, and
+   big tech (for example "fake news" and surveillance systems).
+2. Monopolization on the use of violence through military and police.
+   Powerful commanders like Gilgamesh conquered neighbouring tribes, creating
+   nascent state polities whose main business model was to hunt and enslave
+   barbarian tribes. This enabled state to expand agricultural output
+   which they seized through taxation.
+3. State bureaucracy and administration represented in tribal societies and
+   proto-states through the council of elders. This arm of the state also
+   includes scientific research institutes, state psychology groups and various
+   forms of manipulation including modern AI and data harvesting.
+   This tendency is a misappropriation of scientific methods to serve power
+   thus retarding scientific and technological development, and impoverishing
+   society by depriving it of its great benefits.
+
+The state is a parasite on society, extracting value created. There are many
+historical stateless societies such as the Medean Confederation, the Iroquiois
+Confederation, the ninja republics of Iga and Kōga, the Swiss pre-Sonderbund
+Confederation Helvetica, and Cossack society.
+
+Government is the system or people administrating a society. Although most
+governments are nation-state ones, we can create stateless societies with
+autonomous governments. Within free society, government is local, broadly
+democratic and autonomous. Society is widely engaged at every level in
+decision making through local people's councils, as well as possessing the
+use of violence through a system of gun ownership and local militias.
+Government also answers to a network of various interest groups from various
+nations such as women or youth.
+
 ## Modernity and the Subject of Ideology
 
 **Modernity** was born in the "age of reason" and represents the overturning of
@@ -174,5 +220,6 @@ to enact their vision and put their ideas into practice.
 <!-- TODO:
 - liberal vs expansive democracy
 - fostering democratic orgs, democratic culture, lifecycle of an org
+- nationalism vs patriotism
 -->
 
