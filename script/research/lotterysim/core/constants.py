@@ -33,4 +33,4 @@ F_MAX_HP = Num(F_MAX)
 EPSILON_HP = Num(EPSILON)
 REWARD_MIN_HP = Num(REWARD_MIN)
 REWARD_MAX_HP = Num(REWARD_MAX)
-VESTING_FILE='vested_distribution.csv'
+VESTING_FILE='example.csv'
