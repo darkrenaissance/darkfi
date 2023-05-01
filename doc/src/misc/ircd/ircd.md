@@ -22,16 +22,16 @@ Nothing else exists like it.
 
 ## Installation
 
+Follow the instructions in the
+[README](https://darkrenaissance.github.io/darkfi/index.html#build) to ensure
+you have all the necessary dependencies.
+
 ```shell
 % git clone https://github.com/darkrenaissance/darkfi 
 % cd darkfi
 % make BINS=ircd
 % sudo make install BINS=ircd
 ```
-
-Follow the instructions in the
-[README](https://darkrenaissance.github.io/darkfi/index.html) to ensure
-you have all the necessary dependenices.
 
 ## Usage (DarkFi Network)
 
