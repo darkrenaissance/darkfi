@@ -210,6 +210,12 @@ impl Runtime {
                     import::db::db_get,
                 ),
 
+                "db_get_slot_checkpoint_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::db::db_get_slot_checkpoint,
+                ),
+
                 "db_contains_key_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,

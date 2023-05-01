@@ -23,9 +23,10 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, ContractId, PublicKey,
-        CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
+        pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash,
+        ContractId, PublicKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
     },
+    db::db_get_slot_checkpoint,
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
@@ -34,7 +35,8 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, Encodable, WriteExt};
 
 use crate::{
-    model::{ConsensusRewardParamsV1, ConsensusRewardUpdateV1, REWARD},
+    error::ConsensusError,
+    model::{ConsensusRewardParamsV1, ConsensusRewardUpdateV1, SlotCheckpoint, REWARD},
     ConsensusFunction,
 };
 
@@ -54,12 +56,44 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
 
     // Grab the pedersen commitment for the burnt value
     let value_coords = &params.unstake_input.value_commit.to_affine().coordinates().unwrap();
+
     // Grab the pedersen commitment for the minted value
     let new_value_coords = &params.stake_input.value_commit.to_affine().coordinates().unwrap();
 
+    // Grab proposal coin y and rho for lottery
+    let y = &params.y;
+    let rho = &params.rho;
+
+    // Grab the slot checkpoint to validate consensus parameters against
+    let slot = &params.slot;
+    let Some(slot_checkpoint) = db_get_slot_checkpoint(*slot)? else {
+        msg!("[ConsensusProposalRewardV1] Error: Missing slot checkpoint {} from db", slot);
+        return Err(ConsensusError::ProposalMissingSlotCheckpoint.into())
+    };
+    let slot_checkpoint: SlotCheckpoint = deserialize(&slot_checkpoint)?;
+
+    // Calculate election seeds
+    let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
+    let mu_y = poseidon_hash([pallas::Base::from(22), slot_checkpoint.eta, slot_pallas]);
+    let mu_rho = poseidon_hash([pallas::Base::from(3), slot_checkpoint.eta, slot_pallas]);
+
+    // Grab sigmas from slot checkpoint
+    let (sigma1, sigma2) = (slot_checkpoint.sigma1, slot_checkpoint.sigma2);
+
     zk_public_inputs.push((
         CONSENSUS_CONTRACT_ZKAS_REWARD_NS_V1.to_string(),
-        vec![*value_coords.x(), *value_coords.y(), *new_value_coords.x(), *new_value_coords.y()],
+        vec![
+            *value_coords.x(),
+            *value_coords.y(),
+            *new_value_coords.x(),
+            *new_value_coords.y(),
+            mu_y,
+            *y,
+            mu_rho,
+            *rho,
+            sigma1,
+            sigma2,
+        ],
     ));
 
     signature_pubkeys.push(params.stake_input.signature_public);

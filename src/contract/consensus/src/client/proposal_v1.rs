@@ -19,6 +19,7 @@
 //! This API is crufty. Please rework it into something nice to read and nice to use.
 
 use darkfi::{
+    consensus::SlotCheckpoint,
     zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
@@ -29,8 +30,8 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, MerkleTree, PublicKey,
-        SecretKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
+        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash,
+        MerkleTree, PublicKey, SecretKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
     },
     incrementalmerkletree::Tree,
     pasta::pallas,
@@ -59,6 +60,12 @@ pub struct ConsensusProposalCallDebris {
 pub struct ConsensusProposalRewardRevealed {
     pub value_commit: pallas::Point,
     pub new_value_commit: pallas::Point,
+    pub mu_y: pallas::Base,
+    pub y: pallas::Base,
+    pub mu_rho: pallas::Base,
+    pub rho: pallas::Base,
+    pub sigma1: pallas::Base,
+    pub sigma2: pallas::Base,
 }
 
 impl ConsensusProposalRewardRevealed {
@@ -68,7 +75,18 @@ impl ConsensusProposalRewardRevealed {
 
         // NOTE: It's important to keep these in the same order
         // as the `constrain_instance` calls in the zkas code.
-        vec![*value_coords.x(), *value_coords.y(), *new_value_coords.x(), *new_value_coords.y()]
+        vec![
+            *value_coords.x(),
+            *value_coords.y(),
+            *new_value_coords.x(),
+            *new_value_coords.y(),
+            self.mu_y,
+            self.y,
+            self.mu_rho,
+            self.rho,
+            self.sigma1,
+            self.sigma2,
+        ]
     }
 }
 
@@ -78,6 +96,8 @@ pub struct ConsensusProposalCallBuilder {
     pub coin: OwnCoin,
     /// Recipient's public key
     pub recipient: PublicKey,
+    /// Rewarded slot checkpoint
+    pub slot_checkpoint: SlotCheckpoint,
     /// Merkle tree of coins used to create inclusion proofs
     pub tree: MerkleTree,
     /// `Burn_V1` zkas circuit ZkBinary
@@ -208,11 +228,24 @@ impl ConsensusProposalCallBuilder {
         let stake_input = input;
 
         debug!("Building Consensus::RewardV1 contract call for proposal");
-        let (proof, _public_inputs) =
-            create_proposal_reward_proof(&self.reward_zkbin, &self.reward_pk, value, value_blind)?;
+        let coin = self.coin.coin.inner();
+        let secret_key = self.coin.secret.inner();
+        let (proof, public_inputs) = create_proposal_reward_proof(
+            &self.reward_zkbin,
+            &self.reward_pk,
+            &self.slot_checkpoint,
+            coin,
+            secret_key,
+            value,
+            value_blind,
+        )?;
 
         // We now fill this with necessary stuff
-        let reward_params = ConsensusRewardParamsV1 { unstake_input, stake_input, output };
+        let slot = self.slot_checkpoint.slot;
+        let y = public_inputs.y;
+        let rho = public_inputs.rho;
+        let reward_params =
+            ConsensusRewardParamsV1 { unstake_input, stake_input, output, slot, y, rho };
         let reward_proofs = vec![proof];
 
         // Now we should have all the params, zk proofs and signature secret.
@@ -233,18 +266,49 @@ impl ConsensusProposalCallBuilder {
 pub fn create_proposal_reward_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
+    slot_checkpoint: &SlotCheckpoint,
+    coin: pallas::Base,
+    secret_key: pallas::Base,
     value: u64,
     value_blind: pallas::Scalar,
 ) -> Result<(Proof, ConsensusProposalRewardRevealed)> {
+    // Proof parameters
+    let zero = pallas::Base::from(0);
+    let seed_prefix = pallas::Base::from(3);
     let value_commit = pedersen_commitment_u64(value, value_blind);
     let new_value_commit = pedersen_commitment_u64(value + REWARD, value_blind);
+    let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
+    let mu_y = poseidon_hash([pallas::Base::from(22), slot_checkpoint.eta, slot_pallas]);
+    let seed = poseidon_hash([seed_prefix, coin, secret_key, zero]);
+    let y = poseidon_hash([seed, mu_y]);
+    let mu_rho = poseidon_hash([pallas::Base::from(3), slot_checkpoint.eta, slot_pallas]);
+    let rho = poseidon_hash([seed, mu_rho]);
+    let headstart = darkfi::consensus::LeadCoin::headstart();
+    let (sigma1, sigma2) = (slot_checkpoint.sigma1, slot_checkpoint.sigma2);
 
-    let public_inputs = ConsensusProposalRewardRevealed { value_commit, new_value_commit };
+    // Generate public inputs, witnesses and proof
+    let public_inputs = ConsensusProposalRewardRevealed {
+        value_commit,
+        new_value_commit,
+        mu_y,
+        y,
+        mu_rho,
+        rho,
+        sigma1,
+        sigma2,
+    };
 
     let prover_witnesses = vec![
+        Witness::Base(Value::known(coin)),
+        Witness::Base(Value::known(secret_key)),
         Witness::Base(Value::known(pallas::Base::from(value))),
         Witness::Base(Value::known(pallas::Base::from(REWARD))),
         Witness::Scalar(Value::known(value_blind)),
+        Witness::Base(Value::known(mu_y)),
+        Witness::Base(Value::known(mu_rho)),
+        Witness::Base(Value::known(headstart)),
+        Witness::Base(Value::known(sigma1)),
+        Witness::Base(Value::known(sigma2)),
     ];
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());

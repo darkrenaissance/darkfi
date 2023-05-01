@@ -20,14 +20,14 @@ use darkfi_sdk::error::ContractError;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ConsensusError {
-    #[error("Error")]
-    SomeError,
+    #[error("Missing slot checkpoint from db")]
+    ProposalMissingSlotCheckpoint,
 }
 
 impl From<ConsensusError> for ContractError {
     fn from(e: ConsensusError) -> Self {
         match e {
-            ConsensusError::SomeError => Self::Custom(1),
+            ConsensusError::ProposalMissingSlotCheckpoint => Self::Custom(1),
         }
     }
 }

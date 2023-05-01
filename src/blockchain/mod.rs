@@ -33,7 +33,7 @@ pub mod block_store;
 pub use block_store::{BlockOrderStore, BlockStore, HeaderStore};
 
 pub mod slot_checkpoint_store;
-pub use slot_checkpoint_store::SlotCheckpointStore;
+pub use slot_checkpoint_store::{SlotCheckpointStore, SlotCheckpointStoreOverlay};
 
 pub mod tx_store;
 pub use tx_store::{PendingTxOrderStore, PendingTxStore, TxStore};
@@ -298,6 +298,8 @@ pub type BlockchainOverlayPtr = Arc<Mutex<BlockchainOverlay>>;
 pub struct BlockchainOverlay {
     /// Main [`sled_overlay::SledDbOverlay`] to the sled db connection
     pub overlay: SledDbOverlayPtr,
+    /// Slot checkpoints overlay
+    pub slot_checkpoints: SlotCheckpointStoreOverlay,
     /// Contract states overlay
     pub contracts: ContractStateStoreOverlay,
     /// Wasm bincodes overlay
@@ -308,9 +310,10 @@ impl BlockchainOverlay {
     /// Instantiate a new `BlockchainOverlay` over the given [`Blockchain`] instance.
     pub fn new(blockchain: &Blockchain) -> Result<BlockchainOverlayPtr> {
         let overlay = Arc::new(Mutex::new(sled_overlay::SledDbOverlay::new(&blockchain.sled_db)));
+        let slot_checkpoints = SlotCheckpointStoreOverlay::new(overlay.clone())?;
         let contracts = ContractStateStoreOverlay::new(overlay.clone())?;
         let wasm_bincode = WasmStoreOverlay::new(overlay.clone())?;
 
-        Ok(Arc::new(Mutex::new(Self { overlay, contracts, wasm_bincode })))
+        Ok(Arc::new(Mutex::new(Self { overlay, slot_checkpoints, contracts, wasm_bincode })))
     }
 }

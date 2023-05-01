@@ -226,10 +226,16 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     // Verify values match
     assert!(alice_oc.note.value == alice_staked_oc.note.value);
 
-    // We asume alice became the slot proposer, so she creates a
-    // proposal transaction to burn her staked coin, reward herself
-    // and mint the new coin. Burn and Mint use the same parameters
-    // as Unstake and Stake.
+    // We simulate the proposal of genesis slot
+    let slot_checkpoint =
+        th.alice.state.read().await.blockchain.get_slot_checkpoints_by_slot(&[0])?[0]
+            .clone()
+            .unwrap();
+
+    // With alice's current coin value she can become the slot proposer,
+    // so she creates a proposal transaction to burn her staked coin,
+    // reward herself and mint the new coin. Burn and Mint use the same
+    // parameters as Unstake and Stake.
     info!(target: "consensus", "[Alice] ====================================");
     info!(target: "consensus", "[Alice] Building proposal transaction params");
     info!(target: "consensus", "[Alice] ====================================");
@@ -237,6 +243,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     let alice_consensus_proposal_call_debris = ConsensusProposalCallBuilder {
         coin: alice_staked_oc.clone(),
         recipient: th.alice.keypair.public,
+        slot_checkpoint,
         tree: th.alice.consensus_merkle_tree.clone(),
         burn_zkbin: burn_zkbin.clone(),
         burn_pk: burn_pk.clone(),

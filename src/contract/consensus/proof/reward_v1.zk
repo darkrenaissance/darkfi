@@ -4,18 +4,32 @@ constant "Reward_V1" {
 }
 
 contract "Reward_V1" {
+	# Burnt coin
+	Base coin,
+	# Burnt coin secret key
+	Base secret_key,
 	# The value of the burnt coin
 	Base value,
 	# The reward value
 	Base reward,
 	# Random blinding factor for the value commitment
 	Scalar value_blind,
+	# Election seed y
+	Base mu_y,
+	# Election seed rho
+	Base mu_rho,
+	# Lottery headstart
+	Base headstart,
+	# Sigma1
+	Base sigma1,
+	# Sigma2
+	Base sigma2,
 }
 
 circuit "Reward_V1" {
-	# This is a dummy check for now.
-	# TODO: Here we will constrain all the consensus
-	# parameters for the slot.
+	# Constants
+	ZERO = witness_base(0);
+	SEED_PREFIX = witness_base(3);
 
 	# Pedersen commitment for coin's value
 	vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
@@ -35,6 +49,29 @@ circuit "Reward_V1" {
 	# coordinate dance:
 	constrain_instance(ec_get_x(new_value_commit));
 	constrain_instance(ec_get_y(new_value_commit));
+
+	# Coin y:
+	seed = poseidon_hash(SEED_PREFIX, coin, secret_key, ZERO);
+	y = poseidon_hash(seed, mu_y);
+	constrain_instance(mu_y);
+	constrain_instance(y);
+
+	# Coin rho(seed):
+	rho = poseidon_hash(seed, mu_rho);
+	constrain_instance(mu_rho);
+	constrain_instance(rho);
+
+	# Calculate lottery target
+	term_1 =  base_mul(sigma1, value);
+	term_2 = base_mul(sigma2, value);
+	shifted_term_2 = base_mul(term_2, value);
+	target = base_add(term_1, shifted_term_2);
+	shifted_target = base_add(target, headstart);
+	constrain_instance(sigma1);
+	constrain_instance(sigma2);
+
+	# Play lottery
+	less_than_loose(y, shifted_target);
 
 	# At this point we've enforced all of our public inputs.
 }

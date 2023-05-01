@@ -17,10 +17,8 @@
  */
 
 use darkfi_money_contract::model::{Input, Output, StakeInput};
+use darkfi_sdk::pasta::pallas;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-
-// TODO: Don't set this here
-pub const REWARD: u64 = 1;
 
 /// Parameters for `Consensus::Reward`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -31,8 +29,31 @@ pub struct ConsensusRewardParamsV1 {
     pub stake_input: StakeInput,
     /// Anonymous output
     pub output: Output,
+    /// Rewarded slot
+    pub slot: u64,
+    /// Coin y
+    pub y: pallas::Base,
+    /// Lottery rho used
+    pub rho: pallas::Base,
 }
 
 /// State update for `Consensus::Reward`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ConsensusRewardUpdateV1 {}
+
+// TODO: Don't set these here
+pub const REWARD: u64 = 1;
+
+/// Auxiliary structure to decode `darkfi::consensus::state::SlotCheckpoint`
+/// to use in contract.
+#[derive(SerialDecodable)]
+pub struct SlotCheckpoint {
+    /// Slot UID
+    pub slot: u64,
+    /// Slot eta
+    pub eta: pallas::Base,
+    /// Slot sigma1
+    pub sigma1: pallas::Base,
+    /// Slot sigma2
+    pub sigma2: pallas::Base,
+}

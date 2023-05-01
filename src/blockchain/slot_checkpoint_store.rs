@@ -18,7 +18,7 @@
 
 use darkfi_serial::{deserialize, serialize};
 
-use crate::{consensus::SlotCheckpoint, Error, Result};
+use crate::{blockchain::SledDbOverlayPtr, consensus::SlotCheckpoint, Error, Result};
 
 const SLED_SLOT_CHECKPOINT_TREE: &[u8] = b"_slot_checkpoints";
 
@@ -139,5 +139,23 @@ impl SlotCheckpointStore {
 
     pub fn is_empty(&self) -> bool {
         self.0.len() == 0
+    }
+}
+
+/// Overlay structure over a [`SlotCheckpointStore`] instance.
+pub struct SlotCheckpointStoreOverlay(SledDbOverlayPtr);
+
+impl SlotCheckpointStoreOverlay {
+    pub fn new(overlay: SledDbOverlayPtr) -> Result<Self> {
+        overlay.lock().unwrap().open_tree(SLED_SLOT_CHECKPOINT_TREE)?;
+        Ok(Self(overlay))
+    }
+
+    /// Fetch given slot from the slotcheckpointstore.
+    pub fn get(&self, slot: u64) -> Result<Vec<u8>> {
+        match self.0.lock().unwrap().get(&SLED_SLOT_CHECKPOINT_TREE, &slot.to_be_bytes())? {
+            Some(found) => Ok(found.to_vec()),
+            None => Err(Error::SlotNotFound(slot)),
+        }
     }
 }

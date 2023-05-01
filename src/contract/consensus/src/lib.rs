@@ -46,6 +46,9 @@ impl TryFrom<u8> for ConsensusFunction {
     }
 }
 
+/// Internal contract errors
+pub mod error;
+
 /// Call parameters definitions
 pub mod model;
 
