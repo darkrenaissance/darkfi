@@ -22,7 +22,7 @@ use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
     crypto::{
         merkle_prelude::*, pallas, pasta_prelude::*, poseidon_hash, Coin, MerkleNode, Nullifier,
-        TokenId, MONEY_CONTRACT_ID,
+        MONEY_CONTRACT_ID,
     },
     ContractCall,
 };
