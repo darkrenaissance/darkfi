@@ -28,10 +28,24 @@ notice below that both y,T in the pallas field, and simulation have same range.
 
 ![alt text](https://github.com/darkrenaissance/darkfi/blob/master/script/research/lotterysim/img/lottery_dist.png?raw=true)
 
-
 # conclusion
 
 using discrete controller the lottery accuracy > 33% with randomized number of nodes, and randomized relative stake.
 can be coupled with khonsu[^1] to achieve 100% accuracy and instant finality.
+
+# usage
+
+Replace `example.csv` with local distribution data. Modify the file name
+in core/constants.py as follows:
+
+```python
+VESTING_FILE='example.csv'
+```
+
+Then run the program:
+
+```shell
+python vesting.py
+```
 
 [^1]: https://github.com/ertosns/thunderbolt
