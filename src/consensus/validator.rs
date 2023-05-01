@@ -45,7 +45,7 @@ use super::{
 use crate::{
     blockchain::{Blockchain, BlockchainOverlay, BlockchainOverlayPtr},
     rpc::jsonrpc::JsonNotification,
-    runtime::vm_runtime::{Runtime, SMART_CONTRACT_ZKAS_DB_NAME},
+    runtime::vm_runtime::Runtime,
     system::{Subscriber, SubscriberPtr},
     tx::Transaction,
     util::time::Timestamp,
