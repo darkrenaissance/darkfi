@@ -16,13 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::UNIX_EPOCH;
+use std::{fmt, time::UNIX_EPOCH};
 
 use chrono::{NaiveDateTime, Utc};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use serde::{Deserialize, Serialize};
 
 use crate::Result;
+
+const SECS_IN_DAY: u64 = 86400;
+const MIN_IN_HOUR: u64 = 60;
+const SECS_IN_HOUR: u64 = 3600;
 
 /// Helper structure providing time related calculations.
 #[derive(Clone)]
@@ -161,6 +165,91 @@ pub enum DateFormat {
     Nanos,
 }
 
+#[derive(Clone, Debug, Default)]
+pub struct DateTime {
+    pub nanos: u32,
+    pub sec: u32,
+    pub min: u32,
+    pub hour: u32,
+    pub day: u32,
+    pub month: u32,
+    pub year: u32,
+}
+
+impl DateTime {
+    pub fn new() -> Self {
+        Self { nanos: 0, sec: 0, min: 0, hour: 0, day: 0, month: 0, year: 0 }
+    }
+
+    pub fn date(&self) -> Date {
+        Date { day: self.day, month: self.month, year: self.year }
+    }
+
+    pub fn from_timestamp(secs: u64, nsecs: u32) -> Self {
+        let leapyear = |year| -> bool { year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) };
+
+        static MONTHS: [[u64; 12]; 2] = [
+            [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
+            [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
+        ];
+
+        let mut datetime = DateTime::new();
+        let mut year = 1970;
+
+        let time = secs % SECS_IN_DAY;
+        let mut dayno = secs / SECS_IN_DAY;
+
+        datetime.nanos = nsecs;
+        datetime.sec = (time % MIN_IN_HOUR) as u32;
+        datetime.min = ((time % SECS_IN_HOUR) / MIN_IN_HOUR) as u32;
+        datetime.hour = (time / SECS_IN_HOUR) as u32;
+
+        loop {
+            let yearsize = if leapyear(year) { 366 } else { 365 };
+            if dayno >= yearsize {
+                dayno -= yearsize;
+                year += 1;
+            } else {
+                break
+            }
+        }
+        datetime.year = year;
+
+        let mut month = 0;
+        while dayno >= MONTHS[if leapyear(year) { 1 } else { 0 }][month] {
+            dayno -= MONTHS[if leapyear(year) { 1 } else { 0 }][month];
+            month += 1;
+        }
+        datetime.month = month as u32 + 1;
+        datetime.day = dayno as u32 + 1;
+
+        datetime
+    }
+}
+
+impl fmt::Display for DateTime {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC",
+            self.year, self.month, self.day, self.hour, self.min, self.sec
+        )
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Date {
+    pub day: u32,
+    pub month: u32,
+    pub year: u32,
+}
+
+impl fmt::Display for Date {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:04}-{:02}-{:02} UTC", self.year, self.month, self.day)
+    }
+}
+
 pub fn timestamp_to_date(timestamp: i64, format: DateFormat) -> String {
     if timestamp <= 0 {
         return "".to_string()
@@ -184,5 +273,22 @@ pub fn timestamp_to_date(timestamp: i64, format: DateFormat) -> String {
                 .to_string()
         }
         DateFormat::Default => "".to_string(),
+    }
+}
+
+fn _seconds_to_datetime(timestamp: u64, format: DateFormat) -> String {
+    match format {
+        DateFormat::Default => "".to_string(),
+        DateFormat::Date => DateTime::from_timestamp(timestamp, 0).date().to_string(),
+        DateFormat::DateTime => DateTime::from_timestamp(timestamp, 0).to_string(),
+        DateFormat::Nanos => {
+            const A_BILLION: u64 = 1_000_000_000;
+            let dt =
+                DateTime::from_timestamp(timestamp / A_BILLION, (timestamp % A_BILLION) as u32);
+            format!(
+                "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{} UTC",
+                dt.year, dt.month, dt.day, dt.hour, dt.min, dt.sec, dt.nanos
+            )
+        }
     }
 }
