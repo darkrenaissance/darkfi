@@ -42,8 +42,8 @@ for i in range(n):
 # Distribution
 # ============
 # The dealer selects a secret s:
-#s = Fp.random_element()
-s = Fq(42)
+s = Fq.random_element()
+#s = Fq(42)
 
 # The dealer picks a random polynomial p of degree at most t-1 with
 # coefficients in Fp and sets s=alpha_0
