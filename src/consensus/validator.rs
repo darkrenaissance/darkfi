@@ -1131,7 +1131,7 @@ impl ValidatorState {
         }
 
         let lock = blockchain_overlay.lock().unwrap();
-        let overlay = lock.overlay.lock().unwrap();
+        let mut overlay = lock.overlay.lock().unwrap();
         if !erroneous_txs.is_empty() {
             warn!(target: "consensus::validator", "Erroneous transactions found in set");
             overlay.purge_new_trees()?;
