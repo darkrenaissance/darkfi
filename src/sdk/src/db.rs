@@ -21,7 +21,7 @@ use darkfi_serial::Encodable;
 use super::{
     crypto::ContractId,
     error::{ContractError, GenericResult},
-    util::{get_object_bytes, get_object_size},
+    util::parse_ret,
 };
 
 pub type DbHandle = u32;
@@ -96,36 +96,7 @@ pub fn db_get(db_handle: DbHandle, key: &[u8]) -> GenericResult<Option<Vec<u8>>>
     len += key.to_vec().encode(&mut buf)?;
 
     let ret = unsafe { db_get_(buf.as_ptr(), len as u32) };
-    db_ret(ret)
-}
-
-/// Everyone can call this. Will return requested slot checkpoint from `SlotCheckpointStore`.
-///
-/// ```
-/// slot_checkpoint = db_get_slot(slot);
-/// ```
-pub fn db_get_slot_checkpoint(slot: u64) -> GenericResult<Option<Vec<u8>>> {
-    let ret = unsafe { db_get_slot_checkpoint_(slot) };
-    db_ret(ret)
-}
-
-/// Auxiliary to parse db_get* calls.
-fn db_ret(ret: i64) -> GenericResult<Option<Vec<u8>>> {
-    if ret < 0 {
-        match ret as i32 {
-            CALLER_ACCESS_DENIED => return Err(ContractError::CallerAccessDenied),
-            DB_GET_FAILED => return Err(ContractError::DbGetFailed),
-            -127 => return Ok(None),
-            _ => unimplemented!(),
-        }
-    }
-
-    let obj = ret as u32;
-    let obj_size = get_object_size(obj);
-    let mut buf = vec![0u8; obj_size as usize];
-    get_object_bytes(&mut buf, obj);
-
-    Ok(Some(buf))
+    parse_ret(ret)
 }
 
 /// Everyone can call this. Checks if a key is contained in the key-value store.
@@ -217,7 +188,6 @@ extern "C" {
     fn db_init_(ptr: *const u8, len: u32) -> i32;
     fn db_lookup_(ptr: *const u8, len: u32) -> i32;
     fn db_get_(ptr: *const u8, len: u32) -> i64;
-    fn db_get_slot_checkpoint_(slot: u64) -> i64;
     fn db_contains_key_(ptr: *const u8, len: u32) -> i32;
     fn db_set_(ptr: *const u8, len: u32) -> i32;
     fn db_del_(ptr: *const u8, len: u32) -> i32;

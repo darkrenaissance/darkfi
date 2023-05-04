@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::error::ContractError;
+use super::{
+    db::{CALLER_ACCESS_DENIED, DB_GET_FAILED},
+    error::{ContractError, GenericResult},
+};
 
 pub fn set_return_data(data: &[u8]) -> Result<(), ContractError> {
     unsafe {
@@ -39,6 +42,25 @@ pub fn get_object_size(object_index: u32) -> i64 {
     unsafe { get_object_size_(object_index) }
 }
 
+/// Auxiliary function to parse db_get and get_slot_checkpoint return value.
+pub(crate) fn parse_ret(ret: i64) -> GenericResult<Option<Vec<u8>>> {
+    if ret < 0 {
+        match ret as i32 {
+            CALLER_ACCESS_DENIED => return Err(ContractError::CallerAccessDenied),
+            DB_GET_FAILED => return Err(ContractError::DbGetFailed),
+            -127 => return Ok(None),
+            _ => unimplemented!(),
+        }
+    }
+
+    let obj = ret as u32;
+    let obj_size = get_object_size(obj);
+    let mut buf = vec![0u8; obj_size as usize];
+    get_object_bytes(&mut buf, obj);
+
+    Ok(Some(buf))
+}
+
 /// Everyone can call this. Will return current epoch.
 ///
 /// ```
@@ -55,6 +77,16 @@ pub fn get_current_epoch() -> u64 {
 /// ```
 pub fn get_current_slot() -> u64 {
     unsafe { get_current_slot_() }
+}
+
+/// Everyone can call this. Will return requested slot checkpoint from `SlotCheckpointStore`.
+///
+/// ```
+/// slot_checkpoint = get_slot_checkpoint(slot);
+/// ```
+pub fn get_slot_checkpoint(slot: u64) -> GenericResult<Option<Vec<u8>>> {
+    let ret = unsafe { get_slot_checkpoint_(slot) };
+    parse_ret(ret)
 }
 
 /// Everyone can call this. Will return current blockchain timestamp.
@@ -74,5 +106,6 @@ extern "C" {
 
     fn get_current_epoch_() -> u64;
     fn get_current_slot_() -> u64;
+    fn get_slot_checkpoint_(slot: u64) -> i64;
     fn get_blockchain_time_() -> u64;
 }

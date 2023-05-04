@@ -213,7 +213,7 @@ async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
     let mut minted_amounts = vec![];
     let mut owncoins = vec![];
     for i in 0..10 {
-        let amount = rand::thread_rng().gen_range(1..1000);
+        let amount = rand::thread_rng().gen_range(2..1000);
         info!(target: "money", "[Faucet] ===================================================");
         info!(target: "money", "[Faucet] Building Money::Mint params for Alice's mint for token {} and amount {}", i, amount);
         info!(target: "money", "[Faucet] ===================================================");

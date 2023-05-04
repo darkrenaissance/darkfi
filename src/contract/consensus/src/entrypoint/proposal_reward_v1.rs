@@ -26,10 +26,10 @@ use darkfi_sdk::{
         pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash,
         ContractId, PublicKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
     },
-    db::db_get_slot_checkpoint,
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
+    util::get_slot_checkpoint,
     ContractCall,
 };
 use darkfi_serial::{deserialize, Encodable, WriteExt};
@@ -66,7 +66,7 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
 
     // Grab the slot checkpoint to validate consensus parameters against
     let slot = &params.slot;
-    let Some(slot_checkpoint) = db_get_slot_checkpoint(*slot)? else {
+    let Some(slot_checkpoint) = get_slot_checkpoint(*slot)? else {
         msg!("[ConsensusProposalRewardV1] Error: Missing slot checkpoint {} from db", slot);
         return Err(ConsensusError::ProposalMissingSlotCheckpoint.into())
     };

@@ -50,6 +50,7 @@ $(PROOFS_BIN): zkas $(PROOFS_SRC)
 contracts: zkas
 	$(MAKE) -C src/contract/money
 	$(MAKE) -C src/contract/dao
+	$(MAKE) -C src/contract/consensus
 
 token_lists:
 	$(MAKE) -C contrib/token all

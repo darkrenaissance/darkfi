@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_sdk::db::{CALLER_ACCESS_DENIED, DB_GET_FAILED};
 use log::error;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
@@ -149,14 +150,43 @@ pub(crate) fn get_object_size(ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
     obj.len() as i64
 }
 
+/// Will return current epoch number.
 pub(crate) fn get_current_epoch(ctx: FunctionEnvMut<Env>) -> u64 {
     ctx.data().time_keeper.current_epoch()
 }
 
+/// Will return current slot number.
 pub(crate) fn get_current_slot(ctx: FunctionEnvMut<Env>) -> u64 {
     ctx.data().time_keeper.current_slot()
 }
 
+/// Will return requested slot checkpoint from `SlotCheckpointStore`.
+pub(crate) fn get_slot_checkpoint(ctx: FunctionEnvMut<Env>, slot: u64) -> i64 {
+    let env = ctx.data();
+
+    if env.contract_section != ContractSection::Deploy &&
+        env.contract_section != ContractSection::Exec &&
+        env.contract_section != ContractSection::Metadata
+    {
+        error!(target: "runtime::db::db_get_slot_checkpoint()", "db_get_slot_checkpoint called in unauthorized section");
+        return CALLER_ACCESS_DENIED.into()
+    }
+
+    let ret = match env.blockchain.lock().unwrap().slot_checkpoints.get(slot) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(target: "runtime::db::db_get_slot_checkpoint()", "Internal error getting from slot checkpoints tree: {}", e);
+            return DB_GET_FAILED.into()
+        }
+    };
+
+    // Copy Vec<u8> to the VM
+    let mut objects = env.objects.borrow_mut();
+    objects.push(ret.to_vec());
+    (objects.len() - 1) as i64
+}
+
+/// Will return current blockchain timestamp.
 pub(crate) fn get_blockchain_time(ctx: FunctionEnvMut<Env>) -> u64 {
     ctx.data().time_keeper.blockchain_timestamp()
 }
