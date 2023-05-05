@@ -137,7 +137,6 @@ impl std::fmt::Display for Timestamp {
     }
 }
 
-// TODO: NanoTimestamp to not use chrono
 #[derive(
     Clone,
     Copy,

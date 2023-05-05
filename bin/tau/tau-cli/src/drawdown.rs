@@ -115,15 +115,6 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, assignee: Option<String>) ->
                         t.events.last().unwrap_or(&TaskEvent::default()).timestamp.0,
                         0,
                     );
-                    // let event_date = Utc.timestamp_nanos(
-                    //     t.events
-                    //         .last()
-                    //         .unwrap_or(&TaskEvent::default())
-                    //         .timestamp
-                    //         .0
-                    //         .try_into()
-                    //         .unwrap(),
-                    // );
                     event_date.day == day
                 })
                 .collect();
