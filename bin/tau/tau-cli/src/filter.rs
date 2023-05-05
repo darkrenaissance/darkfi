@@ -72,7 +72,7 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
                     let year = year + (Utc::now().year() / 100) * 100;
                     tasks.retain(|task| {
                         let date = task.created_at;
-                        let task_date = Utc.timestamp_nanos(date).date_naive();
+                        let task_date = Utc.timestamp_nanos(date.try_into().unwrap()).date_naive();
                         task_date.month() == month && task_date.year() == year
                     })
                 } else {
@@ -147,12 +147,13 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
                             Local::now().date_naive()
                         } else {
                             let due_date = due_as_timestamp(value).unwrap_or(0);
-                            Utc.timestamp_nanos(due_date).date_naive()
+                            Utc.timestamp_nanos(due_date.try_into().unwrap()).date_naive()
                         };
 
                         tasks.retain(|task| {
                             let date = task.due.unwrap_or(0);
-                            let task_date = Utc.timestamp_nanos(date).date_naive();
+                            let task_date =
+                                Utc.timestamp_nanos(date.try_into().unwrap()).date_naive();
 
                             match due_op {
                                 "not" => task_date != filter_date,

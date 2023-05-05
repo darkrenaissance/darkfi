@@ -26,7 +26,7 @@ use darkfi::{
     event_graph::gen_id,
     util::{
         file::{load_json_file, save_json_file},
-        time::NanoTimestamp,
+        time::Timestamp,
     },
 };
 
@@ -41,12 +41,12 @@ pub struct TaskEvent {
     pub action: String,
     pub author: String,
     pub content: String,
-    pub timestamp: NanoTimestamp,
+    pub timestamp: Timestamp,
 }
 
 impl TaskEvent {
     pub fn new(action: String, author: String, content: String) -> Self {
-        Self { action, author, content, timestamp: NanoTimestamp::current_time() }
+        Self { action, author, content, timestamp: Timestamp::current_time() }
     }
 }
 
@@ -54,7 +54,7 @@ impl TaskEvent {
 pub struct Comment {
     content: String,
     author: String,
-    timestamp: NanoTimestamp,
+    timestamp: Timestamp,
 }
 
 impl Comment {
@@ -62,7 +62,7 @@ impl Comment {
         Self {
             content: content.into(),
             author: author.into(),
-            timestamp: NanoTimestamp::current_time(),
+            timestamp: Timestamp::current_time(),
         }
     }
 }
@@ -89,9 +89,9 @@ pub struct TaskInfo {
     pub(crate) owner: String,
     assign: TaskAssigns,
     project: TaskProjects,
-    due: Option<NanoTimestamp>,
+    due: Option<Timestamp>,
     rank: Option<f32>,
-    created_at: NanoTimestamp,
+    created_at: Timestamp,
     state: String,
     pub(crate) events: TaskEvents,
     comments: TaskComments,
@@ -103,14 +103,14 @@ impl TaskInfo {
         title: &str,
         desc: &str,
         owner: &str,
-        due: Option<NanoTimestamp>,
+        due: Option<Timestamp>,
         rank: Option<f32>,
         dataset_path: &Path,
     ) -> TaudResult<Self> {
         // generate ref_id
         let ref_id = gen_id(30);
 
-        let created_at = NanoTimestamp::current_time();
+        let created_at = Timestamp::current_time();
 
         let task_ids: Vec<u32> =
             MonthTasks::load_current_tasks(dataset_path, workspace.clone(), false)?
@@ -121,7 +121,7 @@ impl TaskInfo {
         let id: u32 = find_free_id(&task_ids);
 
         if let Some(d) = &due {
-            if *d < NanoTimestamp::current_time() {
+            if *d < Timestamp::current_time() {
                 return Err(TaudError::InvalidDueTime)
             }
         }
@@ -237,7 +237,7 @@ impl TaskInfo {
         self.rank = r;
     }
 
-    pub fn set_due(&mut self, d: Option<NanoTimestamp>) {
+    pub fn set_due(&mut self, d: Option<Timestamp>) {
         debug!(target: "tau", "TaskInfo::set_due()");
         self.due = d;
     }

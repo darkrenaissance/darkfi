@@ -18,11 +18,11 @@
 
 use std::collections::HashMap;
 
-use chrono::{Datelike, Duration, NaiveDate, TimeZone, Utc};
+use chrono::{Datelike, Duration, NaiveDate, Utc};
 use colored::Colorize;
 use term_grid::{Cell, Direction, Filling, Grid, GridOptions};
 
-use darkfi::{Error, Result};
+use darkfi::{util::time::DateTime, Error, Result};
 
 use crate::primitives::{TaskEvent, TaskInfo};
 
@@ -111,10 +111,20 @@ pub fn drawdown(date: String, tasks: Vec<TaskInfo>, assignee: Option<String>) ->
                 .into_iter()
                 .filter(|t| {
                     // last event is always state stop
-                    let event_date = Utc.timestamp_nanos(
+                    let event_date = DateTime::from_timestamp(
                         t.events.last().unwrap_or(&TaskEvent::default()).timestamp.0,
+                        0,
                     );
-                    event_date.day() == day
+                    // let event_date = Utc.timestamp_nanos(
+                    //     t.events
+                    //         .last()
+                    //         .unwrap_or(&TaskEvent::default())
+                    //         .timestamp
+                    //         .0
+                    //         .try_into()
+                    //         .unwrap(),
+                    // );
+                    event_date.day == day
                 })
                 .collect();
 

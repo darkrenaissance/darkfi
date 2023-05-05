@@ -31,7 +31,7 @@ use darkfi::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
         server::RequestHandler,
     },
-    util::{path::expand_path, time::NanoTimestamp},
+    util::{path::expand_path, time::Timestamp},
     Error,
 };
 
@@ -58,7 +58,7 @@ struct BaseTaskInfo {
     desc: String,
     assign: Vec<String>,
     project: Vec<String>,
-    due: Option<NanoTimestamp>,
+    due: Option<Timestamp>,
     rank: Option<f32>,
 }
 
@@ -271,7 +271,7 @@ impl JsonRpcInterface {
         if params.len() != 1 {
             return Err(TaudError::InvalidData("len of params should be 1".into()))
         }
-        let month = params[0].as_i64().map(NanoTimestamp);
+        let month = params[0].as_u64().map(Timestamp);
         let ws = self.workspace.lock().await.clone();
 
         let tasks = MonthTasks::load_stop_tasks(&self.dataset_path, ws, month.as_ref())?;
@@ -448,7 +448,7 @@ impl JsonRpcInterface {
 
         if fields.contains_key("due") {
             let due = fields.get("due").unwrap().clone();
-            let due: Option<Option<NanoTimestamp>> = serde_json::from_value(due)?;
+            let due: Option<Option<Timestamp>> = serde_json::from_value(due)?;
             if let Some(d) = due {
                 task.set_due(d);
                 match d {

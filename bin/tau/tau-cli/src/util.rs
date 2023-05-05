@@ -34,7 +34,7 @@ use crate::{
 };
 
 /// Parse due date (e.g. "1503" for 15 March) as i64 timestamp.
-pub fn due_as_timestamp(due: &str) -> Option<i64> {
+pub fn due_as_timestamp(due: &str) -> Option<u64> {
     if due.len() != 4 || due.parse::<u32>().is_err() {
         error!("Due date must be digits of length 4 (e.g. \"1503\" for 15 March)");
         return None
@@ -58,7 +58,7 @@ pub fn due_as_timestamp(due: &str) -> Option<i64> {
     }
 
     let dt = NaiveDate::from_ymd_opt(year, month, day).unwrap().and_hms_opt(12, 0, 0).unwrap();
-    Some(dt.timestamp())
+    dt.timestamp().try_into().ok()
 }
 
 /// Start up the preferred editor to edit a task's description.

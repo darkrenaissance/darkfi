@@ -128,19 +128,19 @@ pub fn taskinfo_table(taskinfo: TaskInfo) -> Result<Table> {
     let rank = if let Some(r) = taskinfo.rank { r.to_string() } else { "".to_string() };
 
     let mut table = table!(
-        [Bd => "ref_id", &taskinfo.ref_id],
-        ["workspace", &taskinfo.workspace],
-        [Bd =>"id", &taskinfo.id.to_string()],
-        ["owner", &taskinfo.owner],
-        [Bd =>"title", &taskinfo.title],
-        ["tags", &taskinfo.tags.join(", ")],
-        [Bd =>"desc", &taskinfo.desc.to_string()],
-        ["assign", taskinfo.assign.join(", ")],
-        [Bd =>"project", taskinfo.project.join(", ")],
-        ["due", due],
-        [Bd =>"rank", rank],
-        ["created_at", created_at],
-        [Bd =>"current_state", &taskinfo.state]);
+         [Bd => "ref_id", &taskinfo.ref_id],
+         ["workspace", &taskinfo.workspace],
+         [Bd =>"id", &taskinfo.id.to_string()],
+         ["owner", &taskinfo.owner],
+         [Bd =>"title", &taskinfo.title],
+         ["tags", &taskinfo.tags.join(", ")],
+         [Bd =>"desc", &taskinfo.desc.to_string()],
+         ["assign", taskinfo.assign.join(", ")],
+         [Bd =>"project", taskinfo.project.join(", ")],
+         ["due", due],
+         [Bd =>"rank", rank],
+         ["created_at", created_at],
+         [Bd =>"current_state", &taskinfo.state]);
 
     table.set_format(
         FormatBuilder::new()
@@ -221,7 +221,7 @@ pub fn events_as_string(events: Vec<TaskEvent>) -> (String, String) {
                     events_str,
                     "- {} changed due date to {}",
                     event.author,
-                    timestamp_to_date(event.content.parse::<i64>().unwrap_or(0), DateFormat::Date)
+                    timestamp_to_date(event.content.parse::<u64>().unwrap_or(0), DateFormat::Date)
                 )
                 .unwrap();
             }

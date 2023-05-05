@@ -18,7 +18,7 @@
 
 use std::{fmt, str::FromStr};
 
-use darkfi::{util::time::NanoTimestamp, Error, Result};
+use darkfi::{util::time::Timestamp, Error, Result};
 
 use crate::due_as_timestamp;
 
@@ -74,7 +74,7 @@ pub struct BaseTask {
     pub desc: Option<String>,
     pub assign: Vec<String>,
     pub project: Vec<String>,
-    pub due: Option<i64>,
+    pub due: Option<u64>,
     pub rank: Option<f32>,
 }
 
@@ -89,9 +89,9 @@ pub struct TaskInfo {
     pub owner: String,
     pub assign: Vec<String>,
     pub project: Vec<String>,
-    pub due: Option<i64>,
+    pub due: Option<u64>,
     pub rank: Option<f32>,
-    pub created_at: i64,
+    pub created_at: u64,
     pub state: String,
     pub events: Vec<TaskEvent>,
     pub comments: Vec<Comment>,
@@ -111,7 +111,7 @@ impl From<BaseTask> for TaskInfo {
             project: value.project,
             due: value.due,
             rank: value.rank,
-            created_at: i64::default(),
+            created_at: u64::default(),
             state: String::default(),
             events: vec![],
             comments: vec![],
@@ -124,7 +124,7 @@ pub struct TaskEvent {
     pub action: String,
     pub author: String,
     pub content: String,
-    pub timestamp: NanoTimestamp,
+    pub timestamp: Timestamp,
 }
 
 impl std::fmt::Display for TaskEvent {
@@ -139,7 +139,7 @@ impl Default for TaskEvent {
             action: State::Open.to_string(),
             author: "".to_string(),
             content: "".to_string(),
-            timestamp: NanoTimestamp::current_time(),
+            timestamp: Timestamp::current_time(),
         }
     }
 }
@@ -148,7 +148,7 @@ impl Default for TaskEvent {
 pub struct Comment {
     content: String,
     author: String,
-    timestamp: NanoTimestamp,
+    timestamp: Timestamp,
 }
 
 impl std::fmt::Display for Comment {

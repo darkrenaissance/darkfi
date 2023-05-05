@@ -18,7 +18,6 @@
 
 use std::{fmt, time::UNIX_EPOCH};
 
-use chrono::{NaiveDateTime, Utc};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use serde::{Deserialize, Serialize};
 
@@ -131,6 +130,13 @@ impl Timestamp {
     }
 }
 
+impl std::fmt::Display for Timestamp {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let date = timestamp_to_date(self.0, DateFormat::DateTime);
+        write!(f, "{}", date)
+    }
+}
+
 // TODO: NanoTimestamp to not use chrono
 #[derive(
     Clone,
@@ -144,16 +150,16 @@ impl Timestamp {
     PartialOrd,
     Eq,
 )]
-pub struct NanoTimestamp(pub i64);
+pub struct NanoTimestamp(pub u128);
 
 impl NanoTimestamp {
     pub fn current_time() -> Self {
-        Self(Utc::now().timestamp_nanos())
+        Self(UNIX_EPOCH.elapsed().unwrap().as_nanos())
     }
 }
 impl std::fmt::Display for NanoTimestamp {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let date = timestamp_to_date(self.0, DateFormat::Nanos);
+        let date = timestamp_to_date(self.0.try_into().unwrap(), DateFormat::Nanos);
         write!(f, "{}", date)
     }
 }
@@ -186,44 +192,44 @@ impl DateTime {
     }
 
     pub fn from_timestamp(secs: u64, nsecs: u32) -> Self {
-        let leapyear = |year| -> bool { year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) };
+        let leap_year = |year| -> bool { year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) };
 
         static MONTHS: [[u64; 12]; 2] = [
             [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
             [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31],
         ];
 
-        let mut datetime = DateTime::new();
+        let mut date_time = DateTime::new();
         let mut year = 1970;
 
         let time = secs % SECS_IN_DAY;
-        let mut dayno = secs / SECS_IN_DAY;
+        let mut day_number = secs / SECS_IN_DAY;
 
-        datetime.nanos = nsecs;
-        datetime.sec = (time % MIN_IN_HOUR) as u32;
-        datetime.min = ((time % SECS_IN_HOUR) / MIN_IN_HOUR) as u32;
-        datetime.hour = (time / SECS_IN_HOUR) as u32;
+        date_time.nanos = nsecs;
+        date_time.sec = (time % MIN_IN_HOUR) as u32;
+        date_time.min = ((time % SECS_IN_HOUR) / MIN_IN_HOUR) as u32;
+        date_time.hour = (time / SECS_IN_HOUR) as u32;
 
         loop {
-            let yearsize = if leapyear(year) { 366 } else { 365 };
-            if dayno >= yearsize {
-                dayno -= yearsize;
+            let year_size = if leap_year(year) { 366 } else { 365 };
+            if day_number >= year_size {
+                day_number -= year_size;
                 year += 1;
             } else {
                 break
             }
         }
-        datetime.year = year;
+        date_time.year = year;
 
         let mut month = 0;
-        while dayno >= MONTHS[if leapyear(year) { 1 } else { 0 }][month] {
-            dayno -= MONTHS[if leapyear(year) { 1 } else { 0 }][month];
+        while day_number >= MONTHS[if leap_year(year) { 1 } else { 0 }][month] {
+            day_number -= MONTHS[if leap_year(year) { 1 } else { 0 }][month];
             month += 1;
         }
-        datetime.month = month as u32 + 1;
-        datetime.day = dayno as u32 + 1;
+        date_time.month = month as u32 + 1;
+        date_time.day = day_number as u32 + 1;
 
-        datetime
+        date_time
     }
 }
 
@@ -250,33 +256,11 @@ impl fmt::Display for Date {
     }
 }
 
-pub fn timestamp_to_date(timestamp: i64, format: DateFormat) -> String {
-    if timestamp <= 0 {
+pub fn timestamp_to_date(timestamp: u64, format: DateFormat) -> String {
+    if timestamp == 0 {
         return "".to_string()
     }
 
-    match format {
-        DateFormat::Date => NaiveDateTime::from_timestamp_opt(timestamp, 0)
-            .unwrap()
-            .date()
-            .format("%-d %b")
-            .to_string(),
-        DateFormat::DateTime => NaiveDateTime::from_timestamp_opt(timestamp, 0)
-            .unwrap()
-            .format("%H:%M:%S %A %-d %B")
-            .to_string(),
-        DateFormat::Nanos => {
-            const A_BILLION: i64 = 1_000_000_000;
-            NaiveDateTime::from_timestamp_opt(timestamp / A_BILLION, (timestamp % A_BILLION) as u32)
-                .unwrap()
-                .format("%H:%M:%S.%f")
-                .to_string()
-        }
-        DateFormat::Default => "".to_string(),
-    }
-}
-
-fn _seconds_to_datetime(timestamp: u64, format: DateFormat) -> String {
     match format {
         DateFormat::Default => "".to_string(),
         DateFormat::Date => DateTime::from_timestamp(timestamp, 0).date().to_string(),
