@@ -27,11 +27,11 @@ use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use log::debug;
 use rand::{rngs::OsRng, RngCore};
 
-use super::{get_current_time, EventMsg};
+use super::EventMsg;
 use crate::{
     event_graph::model::{Event, EventId, ModelPtr},
     net,
-    util::async_util::sleep,
+    util::{async_util::sleep, time::Timestamp},
     Result,
 };
 
@@ -152,7 +152,7 @@ where
         // prune expired events
         let mut prune_ids = vec![];
         for (id, e) in self.events.iter() {
-            if e.timestamp + (UNREAD_EVENT_EXPIRE_TIME * 1000) < get_current_time() {
+            if e.timestamp.0 + (UNREAD_EVENT_EXPIRE_TIME * 1000) < Timestamp::current_time().0 {
                 prune_ids.push(*id);
             }
         }

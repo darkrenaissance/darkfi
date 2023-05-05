@@ -23,7 +23,7 @@ use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use log::error;
 use ripemd::{Digest, Ripemd256};
 
-use crate::event_graph::events_queue::EventsQueuePtr;
+use crate::{event_graph::events_queue::EventsQueuePtr, util::time::Timestamp};
 
 use super::EventMsg;
 
@@ -36,7 +36,7 @@ const MAX_HEIGHT: u32 = 300;
 pub struct Event<T: Send + Sync> {
     pub previous_event_hash: EventId,
     pub action: T,
-    pub timestamp: u64,
+    pub timestamp: Timestamp,
     pub read_confirms: u8,
 }
 
@@ -87,7 +87,7 @@ where
             event: Event {
                 previous_event_hash: [0u8; 32],
                 action: T::new(),
-                timestamp: 1674512021323,
+                timestamp: Timestamp(1674512021323),
                 read_confirms: 0,
             },
             children: Vec::new(),
@@ -400,7 +400,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event_graph::{events_queue::EventsQueue, get_current_time};
+    use crate::event_graph::events_queue::EventsQueue;
 
     #[derive(SerialEncodable, SerialDecodable, Clone, Debug)]
     pub struct PrivMsgEvent {
@@ -426,7 +426,12 @@ mod tests {
     }
 
     fn create_message(previous_event_hash: EventId, timestamp: u64) -> Event<PrivMsgEvent> {
-        Event { previous_event_hash, action: PrivMsgEvent::new(), timestamp, read_confirms: 4 }
+        Event {
+            previous_event_hash,
+            action: PrivMsgEvent::new(),
+            timestamp: Timestamp(timestamp),
+            read_confirms: 4,
+        }
     }
 
     /* THIS IS FAILING
@@ -615,7 +620,7 @@ mod tests {
         let model = Model::new(events_queue);
         let root_id = model.current_root;
 
-        let timestamp = get_current_time() + 1;
+        let timestamp = Timestamp::current_time().0 + 1;
         let event = create_message(root_id, timestamp);
         let mut event2 = event.clone();
 

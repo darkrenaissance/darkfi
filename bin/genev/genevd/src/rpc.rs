@@ -23,7 +23,6 @@ use serde_json::{json, Value};
 
 use darkfi::{
     event_graph::{
-        get_current_time,
         model::{Event, EventId, ModelPtr},
         protocol_event::{SeenPtr, UnreadEvents},
     },
@@ -32,6 +31,7 @@ use darkfi::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         server::RequestHandler,
     },
+    util::time::Timestamp,
 };
 
 use crate::genevent::GenEvent;
@@ -105,7 +105,7 @@ impl JsonRpcInterface {
         let event = Event {
             previous_event_hash: self.model.lock().await.get_head_hash(),
             action: genevent,
-            timestamp: get_current_time(),
+            timestamp: Timestamp::current_time(),
             read_confirms: 0,
         };
 

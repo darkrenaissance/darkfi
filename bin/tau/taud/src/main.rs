@@ -41,7 +41,6 @@ use darkfi::{
     async_daemonize,
     event_graph::{
         events_queue::EventsQueue,
-        get_current_time,
         model::{Event, EventId, Model, ModelPtr},
         protocol_event::{ProtocolEvent, Seen, SeenPtr, UnreadEvents},
         view::{View, ViewPtr},
@@ -49,7 +48,7 @@ use darkfi::{
     },
     net::{self, P2pPtr},
     rpc::server::listen_and_serve,
-    util::path::expand_path,
+    util::{path::expand_path, time::Timestamp},
     Error, Result,
 };
 
@@ -164,7 +163,7 @@ async fn start_sync_loop(
                     let event = Event {
                         previous_event_hash: model.lock().await.get_head_hash(),
                         action: encrypted_task,
-                        timestamp: get_current_time(),
+                        timestamp: Timestamp::current_time(),
                         read_confirms: 0,
                     };
 

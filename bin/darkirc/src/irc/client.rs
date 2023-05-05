@@ -558,7 +558,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         }
         // Process missed messages if any (sorted by event's timestamp)
         let mut hash_vec = self.missed_events.lock().await.clone();
-        hash_vec.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+        hash_vec.sort_by(|a, b| a.timestamp.0.cmp(&b.timestamp.0));
 
         for event in hash_vec {
             let mut action = event.action.clone();
