@@ -114,6 +114,9 @@ fn main() {
     let (output, proof) = prove(&input, &keypair.secret);
     assert!(verify(&input, &keypair.public, &output, &proof));
 
+    let forge_public = PublicKey::from_secret(SecretKey::random(&mut OsRng));
+    assert!(!verify(&input, &forge_public, &output, &proof));
+
     let input = vec![0xde, 0xad, 0xbe, 0xed];
     assert!(!verify(&input, &keypair.public, &output, &proof));
 }
