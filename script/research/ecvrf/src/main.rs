@@ -113,4 +113,7 @@ fn main() {
     let input = vec![0xde, 0xad, 0xbe, 0xef];
     let (output, proof) = prove(&input, &keypair.secret);
     assert!(verify(&input, &keypair.public, &output, &proof));
+
+    let input = vec![0xde, 0xad, 0xbe, 0xed];
+    assert!(!verify(&input, &keypair.public, &output, &proof));
 }
