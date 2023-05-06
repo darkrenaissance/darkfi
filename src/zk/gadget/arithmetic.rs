@@ -16,15 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::marker::PhantomData;
+
 use halo2_proofs::{
     circuit::{AssignedCell, Chip, Layouter},
-    pasta::{group::ff::WithSmallOrderMulGroup, pallas},
+    pasta::group::ff::WithSmallOrderMulGroup,
     plonk,
     plonk::{Advice, Column, ConstraintSystem, Constraints, Selector},
     poly::Rotation,
 };
 
+/// Arithmetic instructions implemented in the chip
 pub trait ArithInstruction<F: WithSmallOrderMulGroup<3> + Ord>: Chip<F> {
+    /// Add two field elements and return their sum
     fn add(
         &self,
         layouter: impl Layouter<F>,
@@ -32,6 +36,7 @@ pub trait ArithInstruction<F: WithSmallOrderMulGroup<3> + Ord>: Chip<F> {
         b: &AssignedCell<F, F>,
     ) -> Result<AssignedCell<F, F>, plonk::Error>;
 
+    /// Subtract two field elements and return their difference
     fn sub(
         &self,
         layouter: impl Layouter<F>,
@@ -39,6 +44,7 @@ pub trait ArithInstruction<F: WithSmallOrderMulGroup<3> + Ord>: Chip<F> {
         b: &AssignedCell<F, F>,
     ) -> Result<AssignedCell<F, F>, plonk::Error>;
 
+    /// Multiply two field elements and return their product
     fn mul(
         &self,
         layouter: impl Layouter<F>,
@@ -47,21 +53,30 @@ pub trait ArithInstruction<F: WithSmallOrderMulGroup<3> + Ord>: Chip<F> {
     ) -> Result<AssignedCell<F, F>, plonk::Error>;
 }
 
+/// Configuration for the Arithmetic Chip
 #[derive(Clone, Debug)]
 pub struct ArithConfig {
+    /// lhs
     a: Column<Advice>,
+    /// rhs
     b: Column<Advice>,
+    /// out
     c: Column<Advice>,
+    /// Selector for the `add` operation
     q_add: Selector,
+    /// Selector for the `sub` operation
     q_sub: Selector,
+    /// Selector for the `mul` operation
     q_mul: Selector,
 }
 
-pub struct ArithChip {
+/// Arithmetic Chip
+pub struct ArithChip<F> {
     config: ArithConfig,
+    _marker: PhantomData<F>,
 }
 
-impl Chip<pallas::Base> for ArithChip {
+impl<F: WithSmallOrderMulGroup<3> + Ord> Chip<F> for ArithChip<F> {
     type Config = ArithConfig;
     type Loaded = ();
 
@@ -74,9 +89,10 @@ impl Chip<pallas::Base> for ArithChip {
     }
 }
 
-impl ArithChip {
+impl<F: WithSmallOrderMulGroup<3> + Ord> ArithChip<F> {
+    /// Configure the Arithmetic chip with the given columns
     pub fn configure(
-        meta: &mut ConstraintSystem<pallas::Base>,
+        meta: &mut ConstraintSystem<F>,
         a: Column<Advice>,
         b: Column<Advice>,
         c: Column<Advice>,
@@ -94,7 +110,7 @@ impl ArithChip {
             Constraints::with_selector(q_add, Some(a + b - c))
         });
 
-        meta.create_gate("Field element substitution: c = a - b", |meta| {
+        meta.create_gate("Field element subtraction: c = a - b", |meta| {
             let q_sub = meta.query_selector(q_sub);
             let a = meta.query_advice(a, Rotation::cur());
             let b = meta.query_advice(b, Rotation::cur());
@@ -116,17 +132,17 @@ impl ArithChip {
     }
 
     pub fn construct(config: ArithConfig) -> Self {
-        Self { config }
+        Self { config, _marker: PhantomData }
     }
 }
 
-impl ArithInstruction<pallas::Base> for ArithChip {
+impl<F: WithSmallOrderMulGroup<3> + Ord> ArithInstruction<F> for ArithChip<F> {
     fn add(
         &self,
-        mut layouter: impl Layouter<pallas::Base>,
-        a: &AssignedCell<pallas::Base, pallas::Base>,
-        b: &AssignedCell<pallas::Base, pallas::Base>,
-    ) -> Result<AssignedCell<pallas::Base, pallas::Base>, plonk::Error> {
+        mut layouter: impl Layouter<F>,
+        a: &AssignedCell<F, F>,
+        b: &AssignedCell<F, F>,
+    ) -> Result<AssignedCell<F, F>, plonk::Error> {
         layouter.assign_region(
             || "c = a + b",
             |mut region| {
@@ -135,7 +151,7 @@ impl ArithInstruction<pallas::Base> for ArithChip {
                 a.copy_advice(|| "copy a", &mut region, self.config.a, 0)?;
                 b.copy_advice(|| "copy b", &mut region, self.config.b, 0)?;
 
-                let scalar_val = a.value().zip(b.value()).map(|(a, b)| a + b);
+                let scalar_val = a.value().zip(b.value()).map(|(a, b)| *a + b);
                 region.assign_advice(|| "c", self.config.c, 0, || scalar_val)
             },
         )
@@ -143,10 +159,10 @@ impl ArithInstruction<pallas::Base> for ArithChip {
 
     fn sub(
         &self,
-        mut layouter: impl Layouter<pallas::Base>,
-        a: &AssignedCell<pallas::Base, pallas::Base>,
-        b: &AssignedCell<pallas::Base, pallas::Base>,
-    ) -> Result<AssignedCell<pallas::Base, pallas::Base>, plonk::Error> {
+        mut layouter: impl Layouter<F>,
+        a: &AssignedCell<F, F>,
+        b: &AssignedCell<F, F>,
+    ) -> Result<AssignedCell<F, F>, plonk::Error> {
         layouter.assign_region(
             || "c = a - b",
             |mut region| {
@@ -155,7 +171,7 @@ impl ArithInstruction<pallas::Base> for ArithChip {
                 a.copy_advice(|| "copy a", &mut region, self.config.a, 0)?;
                 b.copy_advice(|| "copy b", &mut region, self.config.b, 0)?;
 
-                let scalar_val = a.value().zip(b.value()).map(|(a, b)| a - b);
+                let scalar_val = a.value().zip(b.value()).map(|(a, b)| *a - b);
                 region.assign_advice(|| "c", self.config.c, 0, || scalar_val)
             },
         )
@@ -163,10 +179,10 @@ impl ArithInstruction<pallas::Base> for ArithChip {
 
     fn mul(
         &self,
-        mut layouter: impl Layouter<pallas::Base>,
-        a: &AssignedCell<pallas::Base, pallas::Base>,
-        b: &AssignedCell<pallas::Base, pallas::Base>,
-    ) -> Result<AssignedCell<pallas::Base, pallas::Base>, plonk::Error> {
+        mut layouter: impl Layouter<F>,
+        a: &AssignedCell<F, F>,
+        b: &AssignedCell<F, F>,
+    ) -> Result<AssignedCell<F, F>, plonk::Error> {
         layouter.assign_region(
             || "c = a * b",
             |mut region| {
@@ -175,7 +191,7 @@ impl ArithInstruction<pallas::Base> for ArithChip {
                 a.copy_advice(|| "copy a", &mut region, self.config.a, 0)?;
                 b.copy_advice(|| "copy b", &mut region, self.config.b, 0)?;
 
-                let scalar_val = a.value().zip(b.value()).map(|(a, b)| a * b);
+                let scalar_val = a.value().zip(b.value()).map(|(a, b)| *a * b);
                 region.assign_advice(|| "c", self.config.c, 0, || scalar_val)
             },
         )
@@ -185,33 +201,20 @@ impl ArithInstruction<pallas::Base> for ArithChip {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        zk::{
-            assign_free_advice,
-            proof::{Proof, ProvingKey, VerifyingKey},
-        },
-        Result,
-    };
-
+    use crate::zk::assign_free_advice;
+    use darkfi_sdk::pasta::pallas;
     use halo2_proofs::{
+        arithmetic::Field,
         circuit::{floor_planner, Value},
         dev::{CircuitLayout, MockProver},
         plonk::{Circuit, Instance as InstanceColumn},
     };
-    use rand::rngs::OsRng;
-    use std::time::Instant;
 
     #[derive(Clone)]
     struct ArithCircuitConfig {
         primary: Column<InstanceColumn>,
         advices: [Column<Advice>; 3],
         arith_config: ArithConfig,
-    }
-
-    impl ArithCircuitConfig {
-        fn arithmetic_chip(&self) -> ArithChip {
-            ArithChip::construct(self.arith_config.clone())
-        }
     }
 
     #[derive(Default)]
@@ -241,30 +244,30 @@ mod tests {
 
             let arith_config = ArithChip::configure(meta, advices[0], advices[1], advices[2]);
 
-            ArithCircuitConfig { primary, advices, arith_config }
+            Self::Config { primary, advices, arith_config }
         }
 
         fn synthesize(
             &self,
             config: Self::Config,
             mut layouter: impl Layouter<pallas::Base>,
-        ) -> std::result::Result<(), plonk::Error> {
-            let arith_chip = config.arithmetic_chip();
+        ) -> Result<(), plonk::Error> {
+            let arith_chip = ArithChip::construct(config.arith_config.clone());
 
             let one = assign_free_advice(
-                layouter.namespace(|| "Load base one"),
+                layouter.namespace(|| "Load Fp(1)"),
                 config.advices[0],
                 self.one,
             )?;
 
             let minus_one = assign_free_advice(
-                layouter.namespace(|| "Load minus one"),
+                layouter.namespace(|| "Load Fp(-1)"),
                 config.advices[1],
                 self.minus_one,
             )?;
 
             let factor = assign_free_advice(
-                layouter.namespace(|| "Load factor"),
+                layouter.namespace(|| "Load Fp(factor)"),
                 config.advices[2],
                 self.factor,
             )?;
@@ -277,12 +280,12 @@ mod tests {
                 arith_chip.add(layouter.namespace(|| "one + minus_one"), &one, &minus_one)?;
             layouter.constrain_instance(zero.cell(), config.primary, 1)?;
 
-            let min1_min1 = arith_chip.add(
+            let min_1_min_1 = arith_chip.add(
                 layouter.namespace(|| "minus_one + minus_one"),
                 &minus_one,
                 &minus_one,
             )?;
-            layouter.constrain_instance(min1_min1.cell(), config.primary, 2)?;
+            layouter.constrain_instance(min_1_min_1.cell(), config.primary, 2)?;
 
             let product =
                 arith_chip.mul(layouter.namespace(|| "minus_one * factor"), &minus_one, &factor)?;
@@ -293,13 +296,13 @@ mod tests {
     }
 
     #[test]
-    fn arithmetic_circuit_assert() -> Result<()> {
-        let one = pallas::Base::one();
-        let minus_one = -pallas::Base::one();
+    fn arithmetic_chip() -> crate::Result<()> {
+        let one = pallas::Base::ONE;
+        let minus_one = -pallas::Base::ONE;
         let factor = pallas::Base::from(644211);
 
         let public_inputs =
-            vec![one - minus_one, pallas::Base::zero(), minus_one + minus_one, minus_one * factor];
+            vec![one - minus_one, pallas::Base::ZERO, minus_one + minus_one, minus_one * factor];
 
         let circuit = ArithCircuit {
             one: Value::known(one),
@@ -316,23 +319,6 @@ mod tests {
 
         let prover = MockProver::run(4, &circuit, vec![public_inputs.clone()])?;
         prover.assert_satisfied();
-
-        let now = Instant::now();
-        let proving_key = ProvingKey::build(4, &circuit);
-        println!("ProvingKey built [{:?}]", now.elapsed());
-        let now = Instant::now();
-        let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
-        println!("Proof created [{:?}]", now.elapsed());
-
-        let circuit = ArithCircuit::default();
-        let now = Instant::now();
-        let verifying_key = VerifyingKey::build(4, &circuit);
-        println!("VerifyingKey built [{:?}]", now.elapsed());
-        let now = Instant::now();
-        proof.verify(&verifying_key, &public_inputs)?;
-        println!("Proof verified [{:?}]", now.elapsed());
-
-        println!("Proof size [{} kB]", proof.as_ref().len() as f64 / 1024.0);
 
         Ok(())
     }

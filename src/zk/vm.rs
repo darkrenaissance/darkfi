@@ -102,7 +102,7 @@ impl VmConfig {
         PoseidonChip::construct(self.poseidon_config.clone())
     }
 
-    fn arithmetic_chip(&self) -> ArithChip {
+    fn arithmetic_chip(&self) -> ArithChip<pallas::Base> {
         ArithChip::construct(self.arith_config.clone())
     }
 }
