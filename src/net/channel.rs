@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::VecDeque;
+
 use async_std::sync::{Arc, Mutex};
 use futures::{
     io::{ReadHalf, WriteHalf},
@@ -42,19 +44,40 @@ use crate::{
 /// Atomic pointer to async channel.
 pub type ChannelPtr = Arc<Channel>;
 
+const SIZE_OF_BUFFER: usize = 65536;
+
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+struct RingBuffer<T> {
+    pub items: VecDeque<T>,
+}
+
+impl<T: Eq + PartialEq + Clone> RingBuffer<T> {
+    pub fn new(capacity: usize) -> Self {
+        let items = VecDeque::with_capacity(capacity);
+        Self { items }
+    }
+
+    pub fn push(&mut self, val: T) {
+        if self.items.len() == self.items.capacity() {
+            self.items.pop_front();
+        }
+        self.items.push_back(val);
+    }
+}
+
 struct ChannelInfo {
     random_id: u32,
     remote_node_id: String,
     last_msg: String,
     last_status: String,
     // Message log which is cleared on querying get_info
-    log: Option<Mutex<Vec<(NanoTimestamp, String, String)>>>,
+    log: Option<Mutex<RingBuffer<(NanoTimestamp, String, String)>>>,
 }
 
 impl ChannelInfo {
     fn new(channel_log: bool) -> Self {
         let log = match channel_log {
-            true => Some(Mutex::new(Vec::new())),
+            true => Some(Mutex::new(RingBuffer::new(SIZE_OF_BUFFER))),
             false => None,
         };
 
@@ -73,10 +96,10 @@ impl ChannelInfo {
             Some(l) => {
                 let mut lock = l.lock().await;
                 let ret = lock.clone();
-                *lock = Vec::new();
+                *lock = RingBuffer::new(SIZE_OF_BUFFER);
                 ret
             }
-            None => vec![],
+            None => RingBuffer::new(0),
         };
 
         json!({
