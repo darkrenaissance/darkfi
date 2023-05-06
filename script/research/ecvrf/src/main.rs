@@ -1,7 +1,6 @@
 /* This file is part of DarkFi (https://dark.fi)
  *
  * Copyright (C) 2020-2023 Dyne.org foundation
- * Copyright (C) 2021 Silur <https://github.com/Silur/ECVRF/>
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as
@@ -17,12 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+//! https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-vrf-04#section-5
+#![allow(non_snake_case)]
+
 use darkfi_sdk::{
     crypto::{
         constants::NullifierK,
-        pasta_prelude::{CurveExt, Field},
+        pasta_prelude::{CurveExt, Field, Group},
         util::mod_r_p,
-        Keypair, PublicKey, SecretKey,
     },
     pasta::{
         group::{ff::FromUniformBytes, GroupEncoding},
@@ -30,93 +31,84 @@ use darkfi_sdk::{
     },
 };
 use halo2_gadgets::ecc::chip::FixedPoint;
+use lazy_static::lazy_static;
 use rand::rngs::OsRng;
 
+lazy_static! {
+    /// The `B` generator
+    static ref B: pallas::Affine = NullifierK.generator();
+}
+
+const VRF_DOMAIN: &str = "ECVRF";
+
+#[derive(Copy, Clone, Debug)]
 struct VrfProof {
     gamma: pallas::Point,
-    c: [u8; 32],
+    c: blake3::Hash,
     s: pallas::Scalar,
 }
 
-fn keygen() -> Keypair {
-    Keypair::random(&mut OsRng)
-}
+fn prove(x: pallas::Base, alpha_string: &[u8]) -> VrfProof {
+    let Y = *B * mod_r_p(x);
 
-/// The output of a VRF function is the VRF hash and the proof to verify
-/// we generated this hash with the supplied key.
-fn prove(input: &[u8], secret_key: &SecretKey) -> ([u8; 32], VrfProof) {
-    let h = pallas::Point::hash_to_curve("ecvrf")(input);
-    let gamma = h * mod_r_p(secret_key.inner());
+    let pallas_hasher = pallas::Point::hash_to_curve(VRF_DOMAIN);
+    let H = pallas_hasher(&Y.to_bytes()) + pallas_hasher(alpha_string);
+
+    let gamma = H * mod_r_p(x);
     let k = pallas::Scalar::random(&mut OsRng);
 
-    // TODO: Valid to use this as basepoint?
-    let g = NullifierK.generator();
-
     let mut hasher = blake3::Hasher::new();
-    // TODO: Basepoint?
-    hasher.update(&g.to_bytes());
-    hasher.update(&h.to_bytes());
-    hasher.update(&(g * mod_r_p(secret_key.inner())).to_bytes());
-    hasher.update(&(h * mod_r_p(secret_key.inner())).to_bytes());
-    hasher.update(&(g * k).to_bytes());
-    hasher.update(&(h * k).to_bytes());
+    hasher.update(&H.to_bytes());
+    hasher.update(&gamma.to_bytes());
+    hasher.update(&(*B * k).to_bytes());
+    hasher.update(&(H * k).to_bytes());
+    let c = hasher.finalize();
 
-    let mut c = [0_u8; 64];
-    let binding = hasher.finalize();
-    let hres = binding.as_bytes();
-    for i in 0..hres.len() {
-        c[i] = hres[i];
-    }
+    let mut c_scalar = [0u8; 64];
+    c_scalar[..blake3::OUT_LEN].copy_from_slice(c.as_bytes());
+    let c_scalar = pallas::Scalar::from_uniform_bytes(&c_scalar);
 
-    let c_scalar = pallas::Scalar::from_uniform_bytes(&c);
-    let s = k - c_scalar * mod_r_p(secret_key.inner());
-    let beta = blake3::hash(&gamma.to_bytes());
+    let s = k + c_scalar * mod_r_p(x);
 
-    (beta.into(), VrfProof { gamma, c: c[..32].try_into().unwrap(), s })
+    VrfProof { gamma, c, s }
 }
 
-fn verify(input: &[u8], pubkey: &PublicKey, output: &[u8; 32], proof: &VrfProof) -> bool {
-    let mut c = [0_u8; 64];
-    for i in 0..proof.c.len() {
-        c[i] = proof.c[i];
-    }
+fn verify(Y: pallas::Point, proof: VrfProof, alpha_string: &[u8]) -> bool {
+    let pallas_hasher = pallas::Point::hash_to_curve(VRF_DOMAIN);
+    let H = pallas_hasher(&Y.to_bytes()) + pallas_hasher(alpha_string);
 
-    // TODO: Valid to use this as basepoint?
-    let g = NullifierK.generator();
-
+    let mut c = [0u8; 64];
+    c[..blake3::OUT_LEN].copy_from_slice(proof.c.as_bytes());
     let c_scalar = pallas::Scalar::from_uniform_bytes(&c);
-    let u = pubkey.inner() * c_scalar + g * proof.s;
-    let h = pallas::Point::hash_to_curve("ecvrf")(input);
-    let v = proof.gamma * c_scalar + h * proof.s;
+
+    let U = *B * proof.s - Y * c_scalar;
+    let V = H * proof.s - proof.gamma * c_scalar;
 
     let mut hasher = blake3::Hasher::new();
-    // TODO: Basepoint?
-    hasher.update(&g.to_bytes());
-    hasher.update(&h.to_bytes());
-    hasher.update(&pubkey.inner().to_bytes());
+    hasher.update(&H.to_bytes());
     hasher.update(&proof.gamma.to_bytes());
-    hasher.update(&u.to_bytes());
-    hasher.update(&v.to_bytes());
+    hasher.update(&U.to_bytes());
+    hasher.update(&V.to_bytes());
 
-    let mut local_c = [0_u8; 32];
-    let binding = hasher.finalize();
-    let hres = binding.as_bytes();
-    for i in 0..hres.len() {
-        local_c[i] = hres[i];
-    }
-
-    blake3::hash(&proof.gamma.to_bytes()).as_bytes() == output && local_c == proof.c
+    hasher.finalize() == proof.c
 }
 
 fn main() {
-    let keypair = keygen();
-    let input = vec![0xde, 0xad, 0xbe, 0xef];
-    let (output, proof) = prove(&input, &keypair.secret);
-    assert!(verify(&input, &keypair.public, &output, &proof));
+    // VRF secret key
+    let secret_key = pallas::Base::random(&mut OsRng);
+    // VRF public key
+    let public_key = *B * mod_r_p(secret_key);
+    // VRF input
+    let input = [0xde, 0xad, 0xbe, 0xef];
 
-    let forge_public = PublicKey::from_secret(SecretKey::random(&mut OsRng));
-    assert!(!verify(&input, &forge_public, &output, &proof));
+    let proof = prove(secret_key, &input);
+    assert!(verify(public_key, proof, &input));
 
-    let input = vec![0xde, 0xad, 0xbe, 0xed];
-    assert!(!verify(&input, &keypair.public, &output, &proof));
+    // Forged public key
+    let forged_public_key = pallas::Point::random(&mut OsRng);
+    assert!(!verify(forged_public_key, proof, &input));
+
+    // Forged input
+    let forged_input = [0xde, 0xad, 0xba, 0xbe];
+    assert!(!verify(public_key, proof, &forged_input));
 }
