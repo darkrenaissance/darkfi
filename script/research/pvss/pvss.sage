@@ -1,6 +1,9 @@
 # Publicly Verifiable Secret Sharing
 # https://www.win.tue.nl/~berry/papers/crypto99.pdf
 # This scheme depends on an honest dealer.
+from random import sample
+from hashlib import sha256
+from itertools import chain
 
 t = 3  # Threshold
 n = 5  # Participants
@@ -34,7 +37,6 @@ x = []
 y = []
 for i in range(n):
     x_i = Fq.random_element()
-    #x_i = Fq(i+2)
     x.append(x_i)
     y.append(G * x_i)
 
@@ -43,14 +45,12 @@ for i in range(n):
 # ============
 # The dealer selects a secret s:
 s = Fq.random_element()
-#s = Fq(42)
 
 # The dealer picks a random polynomial p of degree at most t-1 with
 # coefficients in Fp and sets s=alpha_0
 alpha = []
 for i in range(t):
     alpha.append(Fq.random_element())
-    #alpha.append(Fq(i+2))
 alpha[0] = s
 R.<ω> = PolynomialRing(Fq)
 p = R(alpha)
@@ -86,7 +86,59 @@ for i in range(1, n+1):
     assert Y[i-1] == y[i-1] * p(i)
 
 # For a non-interactive proof, we can use the Fiat-Shamir technique.
-# TODO: See DLEQ in the paper.
+# (See DLEQ in the paper)
+
+# The prover calculates a1_i and a2_i:
+w_i = []
+p_a1 = []
+p_a2 = []
+for i in range(n):
+    w = Fq.random_element()
+    w_i.append(w)
+    a1_i = g * w
+    a2_i = y[i] * w
+    p_a1.append(a1_i)
+    p_a2.append(a2_i)
+
+# And then hashes the necessary values in order to produce c:
+assert len(X) == len(Y) == len(p_a1) == len(p_a2)
+c_hasher = sha256()
+for point in chain(X, Y, p_a1, p_a2):
+    x_coord, y_coord = point.xy()
+    c_hasher.update(str(x_coord).encode())
+    c_hasher.update(str(y_coord).encode())
+
+# Prover publishes c
+c = Fq(int(c_hasher.hexdigest(), 16))
+
+# And finally, prover calculates and publishes r_i responses:
+r = []
+for i in range(1, n+1):
+    r_i = w_i[i-1] - p(i) * c
+    r.append(r_i)
+
+# The verifier calculates a1_i and a2_i:
+# a1_i = g^r_i * X_i^c
+# a2_i = y_i^r_i * Y_i^c
+v_a1 = []
+v_a2 = []
+for i in range(n):
+    a1_i = (g * r[i]) + (X[i] * c)
+    a2_i = (y[i] * r[i]) + (Y[i] * c)
+    v_a1.append(a1_i)
+    v_a2.append(a2_i)
+
+# And then hashes the necessary values in order to produce c:
+v_hasher = sha256()
+for point in chain(X, Y, v_a1, v_a2):
+    x_coord, y_coord = point.xy()
+    v_hasher.update(str(x_coord).encode())
+    v_hasher.update(str(y_coord).encode())
+
+v_c = Fq(int(v_hasher.hexdigest(), 16))
+
+# And checks that the hash matches the published c
+assert v_c == c
 
 # ==============
 # Reconstruction
@@ -99,24 +151,24 @@ for i in range(1, n+1):
 # of the protocol DLEQ(G, y_i, S_i, Y_i).
 S = []
 for i in range(n):
-    S_i = Y[i] * (1 / x[i])
+    S_i = Y[i] * x[i].inverse_of_unit()
     assert S_i == G * p(i+1)
     S.append(S_i)
 
 # Pooling the shares. Sample a set of t shares and reconstruct secret.
-# FIXME: This is for 1,...,t, we should be able to take random ones.
-shares = S[:t]
+sample_indices = sorted(sample(range(n), t))
+sampled_shares = [S[i] for i in sample_indices]
 pooled = Ep(0)
 
-def lambda_func(i, t):
+def lambda_func(i, t, indices):
     lambda_i = Fq(1)
-    for j in range(1, t+1):
+    for j in indices:
         if j != i:
-            lambda_i *= Fq(j) * (Fq(j-i))**(-1)
+            lambda_i *= Fq(j+1) / (Fq(i+1) - Fq(j+1))
     return lambda_i
 
-for i in range(t):
-    pooled += shares[i] * lambda_func(i+1, t)
+for idx, share in zip(sample_indices, sampled_shares):
+    pooled += share * lambda_func(idx, t, sample_indices)
 
 # Assert reconstructed secret
 assert G*s == G*p(0) == pooled
