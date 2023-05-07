@@ -66,6 +66,14 @@ Y = []
 for i in range(1, n+1):
     Y.append(y[i-1] * p(i))
 
+# Let X_i = prod_{j=0}^{t-1} C_j * i^j. The verifier computes this from the
+# published commitments C_j.
+X = []
+for i in range(1, n+1):
+    X_i = Ep(0)
+    for j in range(t):
+        X_i += C[j] * (i^j)
+    X.append(X_i)
 
 # The dealer shows that the encrypted shares are consistent by
 # producing a proof of knowledge of the unique p(i), 1 ≤ i ≤ n,
@@ -104,15 +112,6 @@ r = []
 for i in range(1, n+1):
     r_i = w_i[i-1] - p(i) * c
     r.append(r_i)
-
-# Let X_i = prod_{j=0}^{t-1} C_j * i^j. The verifier computes this from the
-# published commitments C_j.
-X = []
-for i in range(1, n+1):
-    X_i = Ep(0)
-    for j in range(t):
-        X_i += C[j] * (i^j)
-    X.append(X_i)
 
 # The verifier calculates a1_i and a2_i:
 # a1_i = g^r_i * X_i^c
