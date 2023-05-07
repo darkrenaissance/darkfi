@@ -155,6 +155,39 @@ for i in range(n):
     assert S_i == G * p(i+1)
     S.append(S_i)
 
+
+# DLEQ proofs for reconstruction
+dleq_proofs = []
+for i in range(n):
+    w = Fq.random_element()
+    a1 = G * w
+    a2 = S[i] * w
+
+    dleq_hasher = sha256()
+    for point in [G, y[i], S[i], Y[i], a1, a2]:
+        x_coord, y_coord = point.xy()
+        dleq_hasher.update(str(x_coord).encode())
+        dleq_hasher.update(str(y_coord).encode())
+
+    c = Fq(int(dleq_hasher.hexdigest(), 16))
+    r = w - x[i] * c
+    dleq_proofs.append((c, r))
+
+# DLEQ verifications for reconstruction
+for i in range(n):
+    c, r = dleq_proofs[i]
+    a1 = G * r + y[i] * c
+    a2 = S[i] * r + Y[i] * c
+
+    dleq_hasher = sha256()
+    for point in [G, y[i], S[i], Y[i], a1, a2]:
+        x_coord, y_coord = point.xy()
+        dleq_hasher.update(str(x_coord).encode())
+        dleq_hasher.update(str(y_coord).encode())
+
+    v_c = Fq(int(dleq_hasher.hexdigest(), 16))
+    assert v_c == c
+
 # Pooling the shares. Sample a set of t shares and reconstruct secret.
 sample_indices = sorted(sample(range(n), t))
 sampled_shares = [S[i] for i in sample_indices]
