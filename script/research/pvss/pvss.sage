@@ -15,8 +15,6 @@ Fp = GF(p)
 Fq = GF(q)
 Ep = EllipticCurve(Fp, (0, 5))
 Ep.set_order(q * 0x01)
-Eq = EllipticCurve(Fq, (0, 5))
-Eq.set_order(p * 0x01)
 
 # ValueCommitR Generator: g
 vcr_x = 0x07f444550fa409bb4f66235bea8d2048406ed745ee90802f0ec3c668883c5a91
@@ -47,11 +45,10 @@ for i in range(n):
 s = Fq.random_element()
 
 # The dealer picks a random polynomial p of degree at most t-1 with
-# coefficients in Fp and sets s=alpha_0
-alpha = []
-for i in range(t):
+# coefficients in Fq and sets s=alpha_0
+alpha = [s]
+for i in range(t-1):
     alpha.append(Fq.random_element())
-alpha[0] = s
 R.<ω> = PolynomialRing(Fq)
 p = R(alpha)
 assert p.degree() == t-1
@@ -64,19 +61,11 @@ for j in range(t):
     C.append(g * alpha[j])
 
 # The dealer also publishes the encrypted shares Y_i = y_i ^ p(i),
-# for 1 ≤ i ≤ n , using the public keys of the participants
+# for 1 ≤ i ≤ n , using the public keys of the participants:
 Y = []
 for i in range(1, n+1):
     Y.append(y[i-1] * p(i))
 
-# Finally, let X_i = prod_{j=0}^{t-1} C_j * i^j. The verifier computes
-# this from the published commitments.
-X = []
-for i in range(1, n+1):
-    X_i = Ep(0)
-    for j in range(t):
-        X_i += C[j] * (i^j)
-    X.append(X_i)
 
 # The dealer shows that the encrypted shares are consistent by
 # producing a proof of knowledge of the unique p(i), 1 ≤ i ≤ n,
@@ -87,7 +76,6 @@ for i in range(1, n+1):
 
 # For a non-interactive proof, we can use the Fiat-Shamir technique.
 # (See DLEQ in the paper)
-
 # The prover calculates a1_i and a2_i:
 w_i = []
 p_a1 = []
@@ -116,6 +104,15 @@ r = []
 for i in range(1, n+1):
     r_i = w_i[i-1] - p(i) * c
     r.append(r_i)
+
+# Let X_i = prod_{j=0}^{t-1} C_j * i^j. The verifier computes this from the
+# published commitments C_j.
+X = []
+for i in range(1, n+1):
+    X_i = Ep(0)
+    for j in range(t):
+        X_i += C[j] * (i^j)
+    X.append(X_i)
 
 # The verifier calculates a1_i and a2_i:
 # a1_i = g^r_i * X_i^c
