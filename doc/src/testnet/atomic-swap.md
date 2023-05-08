@@ -1,7 +1,7 @@
 # Atomic Swaps
 
 In order to do an atomic swap with someone, you will first have to come
-to consensus on what tokens you wish to swap. For example purposes,
+to a consensus on what tokens you wish to swap. For example purposes,
 let's say you want to swap `40` `WCKD` (which is the balance you
 should have left over after doing the payment from the previous page)
 for your counterparty's `20` `MLDY`. For this tutorial the counterparty
@@ -30,7 +30,7 @@ $ ./drk otc join < half_swap > full_swap
 ```
 
 They will sign the full_swap file and send it back to you. Finally,
-to make the swap transaction valid, you need so sign it as well,
+to make the swap transaction valid, you need to sign it as well,
 and broadcast it:
 
 ```

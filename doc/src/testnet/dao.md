@@ -15,7 +15,7 @@ You can see what these parameters mean with the `help` command.
 $ ./drk help dao create
 ```
 
-Lets create our DAO.
+Let's create our DAO.
 
 ```
 $ ./drk dao create 20 10 0.67 MLDY > dao.dat
@@ -70,7 +70,7 @@ $ ./drk dao balance 1
 
 ## Creating a proposal
 
-Now that the DAO has something in their treasury, we can create a
+Now that the DAO has something in its treasury, we can create a
 proposal to send it somewhere. Let's send 5 of the 10 tokens to our
 address (we can find that with `drk wallet --address`):
 

@@ -35,7 +35,7 @@ Config file created in "~/.config/darkfi/darkfid_config.toml". Please review it 
 ## Running
 
 Once that's in place, you can run it again and `darkfid` will start,
-create necessary keys for validation of blocks and transactions, and
+create the necessary keys for validation of blocks and transactions, and
 begin syncing the blockchain. Keep it running, and you should see a
 `Blockchain is synced!` message after some time.
 

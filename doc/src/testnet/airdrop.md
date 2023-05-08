@@ -12,11 +12,11 @@ $ ./drk airdrop 42.69
 
 There is a limit of 100 for testnet airdrops currently.
 
-Note: you have wait some minutes between airdrops since they're
+Note: you have to wait some minutes between airdrops since they're
 rate-limited.
 
 On success, you should see a transaction ID. If successful,
-the airdrop transactions will how be in the consensus' mempool,
+the airdrop transactions will now be in the consensus' mempool,
 waiting for inclusion in the next block. Depending on the network,
 finalization of the blocks could take some time. You'll have to wait
 for this to happen.  If your `drk subscribe blocks` is running, then after
@@ -34,7 +34,7 @@ $ ./drk wallet --balance
 
 To make our life easier, we can create token ID aliases, so when we
 are performing transactions with them, we can use that instead of the
-full token ID. Multiple aliases per token ID is supported.
+full token ID. Multiple aliases per token ID are supported.
 
 Example addition:
 
@@ -42,7 +42,7 @@ Example addition:
 $ ./drk alias add {ALIAS} {TOKEN}
 ```
 
-So lets add the native token as `DARK` by executing:
+So let's add the native token as `DARK` by executing:
 
 ```
 $ ./drk alias add DARK 12ea8e3KVuBhmSnr29iV34Zd2RsD1MEeGk9xJhcipUqx
@@ -57,8 +57,8 @@ We can also list all our aliases using:
 $ ./drk alias show
 ```
 
-Note: this aliases are only local to your machine. When exchanging
-with other users, always verify that your aliases token IDs match.
+Note: these aliases are only local to your machine. When exchanging
+with other users, always verify that your aliases' token IDs match.
 
 # Minting tokens
 
@@ -81,14 +81,14 @@ You can list your mint authorities with:
 $ ./drk token list
 ```
 
-Now lets add those two token IDs to our aliases:
+Now let's add those two token IDs to our aliases:
 
 ```
 $ ./drk alias add WCKD {TOKEN1}
 $ ./drk alias add MLDY {TOKEN2}
 ```
 
-Now let's mint some tokens to ourself. First grab your wallet address,
+Now let's mint some tokens for ourselves. First grab your wallet address,
 and then create the token mint transaction, and finally - broadcast it:
 
 ```
