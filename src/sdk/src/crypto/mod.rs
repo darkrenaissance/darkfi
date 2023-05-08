@@ -68,6 +68,9 @@ pub mod schnorr;
 /// MiMC VDF
 pub mod mimc_vdf;
 
+/// Elliptic curve VRF (Verifiable Random Function)
+pub mod ecvrf;
+
 /// Sparse Merkle Tree implementation
 pub mod smt;
 
