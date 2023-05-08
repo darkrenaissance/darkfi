@@ -16,7 +16,7 @@ doctest = false
 thiserror = "1.0.40"
 
 # Serialization
-darkfi-serial = {version = "0.4.1", path = "../serial", features = ["derive", "pasta_curves"]}
+darkfi-serial = {version = "0.4.1", path = "../serial", features = ["derive", "pasta_curves", "hash"]}
 
 # Encoding
 bs58 = "0.4.0"

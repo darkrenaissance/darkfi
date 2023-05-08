@@ -19,6 +19,7 @@
 //! https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-vrf-04#section-5
 #![allow(non_snake_case)]
 
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{
     arithmetic::CurveExt,
@@ -36,7 +37,7 @@ use super::{constants::NullifierK, util::mod_r_p, PublicKey, SecretKey};
 const VRF_DOMAIN: &str = "DarkFi_ECVRF";
 
 /// VRF Proof
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct VrfProof {
     gamma: pallas::Point,
     c: blake3::Hash,
