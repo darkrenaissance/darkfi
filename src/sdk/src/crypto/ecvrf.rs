@@ -36,12 +36,9 @@ use super::{constants::NullifierK, util::mod_r_p, PublicKey, SecretKey};
 const VRF_DOMAIN: &str = "DarkFi_ECVRF";
 
 /// VRF Proof
-///
-/// `gamma` is the deterministic randomness produced by the function.
 #[derive(Copy, Clone, Debug)]
 pub struct VrfProof {
-    /// Deterministic randomness produced by the VRF function
-    pub gamma: pallas::Point,
+    gamma: pallas::Point,
     c: blake3::Hash,
     s: pallas::Scalar,
 }
@@ -99,6 +96,16 @@ impl VrfProof {
         hasher.update(&V.to_bytes());
 
         hasher.finalize() == self.c
+    }
+
+    /// Returns the VRF output. **It is necessary** to do `VrfProof::verify` first in
+    /// order to trust this function's output.
+    pub fn hash_output(&self) -> blake3::Hash {
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(VRF_DOMAIN.as_bytes());
+        hasher.update(&[0x03]);
+        hasher.update(&self.gamma.to_bytes());
+        hasher.finalize()
     }
 }
 
