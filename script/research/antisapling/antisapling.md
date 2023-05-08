@@ -28,10 +28,7 @@
 - Burnt coin constrain:
     Constrain burnt coin nullifier in reward proof, so we ensure same coin is used in burn and reward steps of the sequence.
 
-- Mint coin constrain:
-    Constrain minted coin poseidon in reward proof, so we ensure same coin is used in reward and mint steps of the sequence.
-
 - Lottery seed:
     Minted coin serial to be derived from burnt coin serial: minted_serial = poseidon_hash(NONCE_PREFIX, secret_key, burnt_coin_serial, ZERRO).
     Deterministic function code block: https://github.com/darkrenaissance/darkfi/blob/master/src/consensus/lead_coin.rs#L231-L240
-    Use minted coin serial to calculate lottery seed in proof: SEED = seed = poseidon_hash(SEED_PREFIX, minted_serial, ZERO);
+    Use burnt coin serial to calculate lottery seed in proof: seed = poseidon_hash(SEED_PREFIX, burnt_serial, ZERO);
