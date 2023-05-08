@@ -47,7 +47,7 @@ states:
    of all presently existing coins.
 5. Any additional checks such as value and token commitments.
 
-Outputs $O_j$ contain the publiic coin commitment $C_j$, a proof of
+Outputs $O_j$ contain the public coin commitment $C_j$, a proof of
 their construction $\mu_j$, and corresponding value/token commitments.
 The unlinkability property comes from only the nullifier $N$ being
 revealed in inputs (while $C$ is hidden), while the coin $C$ appears
