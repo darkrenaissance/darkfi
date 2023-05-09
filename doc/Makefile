@@ -10,7 +10,7 @@ JSONRPC = \
 all: $(JSONRPC)
 	mdbook build
 	cp -f theme/logo* book/
-	#$(MAKE) -C ../ rustdoc
+	$(MAKE) -C ../ rustdoc
 	cp -r ../target/doc/* book/development/
 
 $(DARKFID_JSONRPC):
