@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import numpy
-from finite_fields.finitefield import IntegersModP
 from constants import round_constants, MDS_matrix
 
 # Width
@@ -14,7 +13,7 @@ RATE = 2
 
 # pallas
 p = 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001
-Fp = IntegersModP(p)
+Fp = GF(p)
 
 MDS_MATRIX = numpy.array([[Fp(0)] * T] * T)
 ROUND_CONSTANTS = []
