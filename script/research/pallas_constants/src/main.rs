@@ -17,25 +17,25 @@
  */
 
 use darkfi::consensus::lead_coin::LeadCoin;
-use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::Fp};
+use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
 
-/// Convert a pallas::Base repr to corresponding bytes array
-fn to_bytes(repr: <Fp as PrimeField>::Repr) -> [u64; 4] {
+/// Generate a string represenation of a pallas::Base constant
+fn to_constant(name: &str, pallas: pallas::Base) -> String {
+    let repr = pallas.to_repr();
     let mut res = [0; 4];
     res[0] = u64::from_le_bytes(repr[0..8].try_into().unwrap());
     res[1] = u64::from_le_bytes(repr[8..16].try_into().unwrap());
     res[2] = u64::from_le_bytes(repr[16..24].try_into().unwrap());
     res[3] = u64::from_le_bytes(repr[24..32].try_into().unwrap());
 
-    res
+    format!("    const {name}: pallas::Base = pallas::Base::from_raw({res:?});")
 }
 
-/// Extract currently configured consensus parameters
-/// pallas::Base::Repr bytes to use as constants.
+/// Generate constants for corresponding pallas::Base.
 fn main() {
-    let headstart = to_bytes(LeadCoin::headstart().to_repr());
+    let headstart = to_constant("HEADSTART", LeadCoin::headstart());
     println!("Constants:");
-    println!("\tconst HEADSTART: pallas::Base = pallas::Base::from_raw({headstart:?});");
+    println!("{headstart}");
 }
 
 #[cfg(test)]
