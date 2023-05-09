@@ -1,7 +1,7 @@
 [package]
-name = "consensus_headstart"
+name = "consensus_parameters"
 version = "0.4.1"
-description = "Command-line tool to extract currently configured consensus headstart parameter"
+description = "Command-line tool to extract currently configured consensus parameters"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
 repository = "https://github.com/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
@@ -10,11 +10,7 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-bs58 = "0.4.0"
 darkfi = {path = "../../../", features = ["blockchain"]}
-darkfi-serial = {path = "../../../src/serial"}
-
-[dev-dependencies]
 darkfi-sdk = {path = "../../../src/sdk"}
 
 [patch.crates-io]
