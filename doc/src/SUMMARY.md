@@ -23,7 +23,7 @@
   - [Smart Contracts](architecture/smart_contracts.md)
   - [Bridge](architecture/bridge.md)
   - [Tooling](architecture/tooling.md)
-- [Smart Contracts]()
+- [Smart Contracts](architecture/sc/sc.md)
   - [Transaction lifetime](architecture/sc/tx-lifetime.md)
 - [zkas](zkas/index.md)
   - [Bincode](zkas/bincode.md)
