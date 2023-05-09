@@ -46,3 +46,5 @@ pub use tx::ContractCall;
 
 /// Utility functions
 pub mod util;
+
+pub mod float10;
