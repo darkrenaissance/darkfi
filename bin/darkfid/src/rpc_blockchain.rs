@@ -37,6 +37,13 @@ impl Darkfid {
     // Queries the blockchain database for a block in the given slot.
     // Returns a readable block upon success.
     //
+    // **Params:**
+    // * `array[0]`: `u64` slot ID
+    //
+    // **Returns:**
+    // * [`BlockInfo`](https://darkrenaissance.github.io/darkfi/development/darkfi/consensus/block/struct.BlockInfo.html)
+    //   struct as a JSON object
+    //
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_slot", "params": [0], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
     pub async fn blockchain_get_slot(&self, id: Value, params: &[Value]) -> JsonResult {
@@ -66,8 +73,15 @@ impl Darkfid {
     }
 
     // RPCAPI:
-    // Queries the blockchain database for a block in the given slot.
-    // Returns a readable block upon success.
+    // Queries the blockchain database for a given transaction.
+    // Returns a serialized `Transaction` object.
+    //
+    // **Params:**
+    // * `array[0]`: Hex-encoded transaction hash string
+    //
+    // **Returns:**
+    // * Serialized [`Transaction`](https://darkrenaissance.github.io/darkfi/development/darkfi/tx/struct.Transaction.html)
+    //   object
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_tx", "params": ["TxHash"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
@@ -110,6 +124,12 @@ impl Darkfid {
 
     // RPCAPI:
     // Queries the blockchain database to find the last known slot
+    //
+    // **Params:**
+    // * `None`
+    //
+    // **Returns:**
+    // * `u64` ID of the last known slot
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.last_known_slot", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": 1234, "id": 1}
@@ -165,6 +185,14 @@ impl Darkfid {
     // RPCAPI:
     // Performs a lookup of zkas bincodes for a given contract ID and returns all of
     // them, including their namespace.
+    //
+    // **Params:**
+    // * `array[0]`: base58-encoded contract ID string
+    //
+    // **Returns:**
+    // * `array[n]`: Pairs of: `zkas_namespace` string, serialized
+    //   [`ZkBinary`](https://darkrenaissance.github.io/darkfi/development/darkfi/zkas/decoder/struct.ZkBinary.html)
+    //   object
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.lookup_zkas", "params": ["6Ef42L1KLZXBoxBuCDto7coi9DA2D2SRtegNqNU4sd74"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [["Foo", [...]], ["Bar", [...]]], "id": 1}

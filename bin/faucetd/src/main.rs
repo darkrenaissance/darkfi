@@ -380,7 +380,7 @@ impl Faucetd {
     // * `array[1]`: n steps (`u64`) needed for VDF evaluation
     //
     // --> {"jsonrpc": "2.0", "method": "challenge", "params": ["1DarkFi..."], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": "["0x123...", 10000]", "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": ["0x123...", 10000], "id": 1}
     async fn challenge(&self, id: Value, params: &[Value]) -> JsonResult {
         const N_STEPS: u64 = 2_000_000;
 
