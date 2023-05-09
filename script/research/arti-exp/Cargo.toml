@@ -8,7 +8,7 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-anyhow = "1.0.70"
+anyhow = "1.0.71"
 async-std = {version = "1.12.0", features = ["attributes"]}
-arti-client = {version = "0.8.3", default-features = false, features = ["async-std", "pt-client", "rustls", "compression"]}
+arti-client = {version = "0.9.0", default-features = false, features = ["async-std", "pt-client", "rustls", "compression"]}
 simplelog = "0.12.1"

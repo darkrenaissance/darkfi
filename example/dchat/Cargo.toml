@@ -26,6 +26,6 @@ simplelog = "0.12.1"
 url = "2.3.1"
 
 serde_json = "1.0.96"
-serde = {version = "1.0.160", features = ["derive"]}
+serde = {version = "1.0.162", features = ["derive"]}
 toml = "0.7.3"
 # ANCHOR_END: dependencies

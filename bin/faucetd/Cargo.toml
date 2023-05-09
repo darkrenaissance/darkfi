@@ -30,6 +30,6 @@ sqlx = {version = "0.6.3", features = ["runtime-async-std-rustls", "sqlite"]}
 url = "2.3.1"
 
 # Argument parsing
-serde = {version = "1.0.160", features = ["derive"]}
+serde = {version = "1.0.162", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
