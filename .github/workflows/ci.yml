@@ -41,7 +41,7 @@ jobs:
 
       - name: Compile all bins
         run: |
-          ./script/compile_all_bins.sh
+          ./contrib/compile_all_bins.sh
 
   feature-powerset:
     name: Test crate feature powerset on ${{ matrix.os }}
