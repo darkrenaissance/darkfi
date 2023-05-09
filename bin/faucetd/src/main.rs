@@ -371,11 +371,13 @@ impl Faucetd {
     // Request a VDF challenge in order to become eligible for an airdrop. It is then
     // necessary to execute the VDF with the challenge as input and pass it to the
     // `airdrop` call, which the faucet will then verify.
-    // Params:
-    // 0: base58 encoded address of the recipient
-    // Returns:
-    // 0: hex-encoded challenge string
-    // 1: n steps needed for VDF evaluation
+    //
+    // ### Params:
+    // * `array[0]`: base58 encoded address string of the recipient
+    //
+    // ### Returns:
+    // * `array[0]`: hex-encoded challenge string
+    // * `array[1]`: n steps (`u64`) needed for VDF evaluation
     //
     // --> {"jsonrpc": "2.0", "method": "challenge", "params": ["1DarkFi..."], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "["0x123...", 10000]", "id": 1}
@@ -423,10 +425,14 @@ impl Faucetd {
     // RPCAPI:
     // Processes a native token airdrop request and airdrops requested amount to address.
     // Returns the transaction ID upon success.
-    // Params:
-    // 0: base58 encoded address of the recipient
-    // 1: Amount to airdrop in form of f64
-    // 2: VDF evaluation witness as hex-encoded BigUint string
+    //
+    // ### Params:
+    // * `array[0]`: base58 encoded address string of the recipient
+    // * `array[1]`: Amount to airdrop in form of f64
+    // * `array[2]`: VDF evaluation witness as hex-encoded BigUint string
+    //
+    // ### Returns:
+    // * hex-encoded transaction ID string
     //
     // --> {"jsonrpc": "2.0", "method": "airdrop", "params": ["1DarkFi...", 1.42, "0x123..."], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID", "id": 1}
