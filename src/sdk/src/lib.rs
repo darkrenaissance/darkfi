@@ -17,6 +17,8 @@
  */
 
 pub use incrementalmerkletree;
+pub use num_bigint;
+pub use num_traits;
 pub use pasta_curves as pasta;
 
 /// Database functions
