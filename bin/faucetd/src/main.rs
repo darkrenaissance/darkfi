@@ -45,10 +45,12 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        constants::MERKLE_DEPTH, contract_id::MONEY_CONTRACT_ID, Keypair, MerkleNode, PublicKey,
-        DARK_TOKEN_ID,
+        constants::MERKLE_DEPTH, contract_id::MONEY_CONTRACT_ID, mimc_vdf, Keypair, MerkleNode,
+        PublicKey, DARK_TOKEN_ID,
     },
     incrementalmerkletree::bridgetree::BridgeTree,
+    num_bigint::BigUint,
+    num_traits::Num,
     pasta::{group::ff::PrimeField, pallas},
     tx::ContractCall,
 };
@@ -191,6 +193,7 @@ pub struct Faucetd {
     airdrop_timeout: i64,
     airdrop_limit: u64,
     airdrop_map: Arc<Mutex<HashMap<[u8; 32], i64>>>,
+    challenge_map: Arc<Mutex<HashMap<[u8; 32], (BigUint, u64)>>>,
     proving_keys: ProvingKeyMap,
 }
 
@@ -204,6 +207,7 @@ impl RequestHandler for Faucetd {
         let params = req.params.as_array().unwrap();
 
         match req.method.as_str() {
+            Some("challenge") => return self.challenge(req.id, params).await,
             Some("airdrop") => return self.airdrop(req.id, params).await,
             Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
@@ -283,6 +287,7 @@ impl Faucetd {
             airdrop_timeout: timeout,
             airdrop_limit: limit,
             airdrop_map: Arc::new(Mutex::new(HashMap::new())),
+            challenge_map: Arc::new(Mutex::new(HashMap::new())),
             proving_keys,
         };
 
@@ -363,16 +368,74 @@ impl Faucetd {
     }
 
     // RPCAPI:
+    // Request a VDF challenge in order to become eligible for an airdrop. It is then
+    // necessary to execute the VDF with the challenge as input and pass it to the
+    // `airdrop` call, which the faucet will then verify.
+    // Params:
+    // 0: base58 encoded address of the recipient
+    // Returns:
+    // 0: hex-encoded challenge string
+    // 1: n steps needed for VDF evaluation
+    //
+    // --> {"jsonrpc": "2.0", "method": "challenge", "params": ["1DarkFi..."], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "["0x123...", 10000]", "id": 1}
+    async fn challenge(&self, id: Value, params: &[Value]) -> JsonResult {
+        const N_STEPS: u64 = 2_000_000;
+
+        if params.len() != 1 || !params[0].is_string() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        if !(*self.synced.lock().await) {
+            error!("challenge(): Blockchain is not yet synced");
+            return JsonError::new(InternalError, None, id).into()
+        }
+
+        let pubkey = match PublicKey::from_str(params[0].as_str().unwrap()) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("challenge(): Failed parsing PublicKey from String: {}", e);
+                return server_error(RpcError::ParseError, id)
+            }
+        };
+
+        let map = self.challenge_map.lock().await;
+        if map.contains_key(&pubkey.to_bytes()) {
+            return server_error(RpcError::RateLimitReached, id)
+        }
+        drop(map);
+
+        // Create a random challenge
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(&pubkey.to_bytes());
+        hasher.update(&pallas::Base::random(&mut OsRng).to_repr());
+        let h = hasher.finalize();
+        let c = BigUint::from_str_radix(&h.to_hex(), 16).unwrap();
+
+        // Add/Update this airdrop into the hashmap
+        let mut map = self.challenge_map.lock().await;
+        map.insert(pubkey.to_bytes(), (c.clone(), N_STEPS));
+        drop(map);
+
+        JsonResponse::new(json!([c.to_str_radix(16), N_STEPS]), id).into()
+    }
+
+    // RPCAPI:
     // Processes a native token airdrop request and airdrops requested amount to address.
     // Returns the transaction ID upon success.
     // Params:
     // 0: base58 encoded address of the recipient
     // 1: Amount to airdrop in form of f64
+    // 2: VDF evaluation witness as hex-encoded BigUint string
     //
-    // --> {"jsonrpc": "2.0", "method": "airdrop", "params": ["1DarkFi...", 1.42], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "airdrop", "params": ["1DarkFi...", 1.42, "0x123..."], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID", "id": 1}
     async fn airdrop(&self, id: Value, params: &[Value]) -> JsonResult {
-        if params.len() != 2 || !params[0].is_string() || !params[1].is_f64() {
+        if params.len() != 3 ||
+            !params[0].is_string() ||
+            !params[1].is_f64() ||
+            !params[2].is_string()
+        {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
@@ -381,6 +444,7 @@ impl Faucetd {
             return JsonError::new(InternalError, None, id).into()
         }
 
+        // Decode public key
         let pubkey = match PublicKey::from_str(params[0].as_str().unwrap()) {
             Ok(v) => v,
             Err(e) => {
@@ -389,6 +453,7 @@ impl Faucetd {
             }
         };
 
+        // Decode requested airdrop amount
         let amount = params[1].as_f64().unwrap().to_string();
         let amount = match decode_base10(&amount, 8, true) {
             Ok(v) => v,
@@ -402,15 +467,44 @@ impl Faucetd {
             return server_error(RpcError::AmountExceedsLimit, id)
         }
 
+        // Decode VDF witness
+        let witness = params[2].as_str().unwrap();
+        let Ok(witness) = BigUint::from_str_radix(witness, 16) else {
+            error!("airdrop(): Failed parsing VDF witness from string");
+            return server_error(RpcError::ParseError, id)
+        };
+
         // Check if there as a previous airdrop and the timeout has passed.
         let now = Utc::now().timestamp();
         let map = self.airdrop_map.lock().await;
         if let Some(last_airdrop) = map.get(&pubkey.to_bytes()) {
             if now - last_airdrop <= self.airdrop_timeout {
+                error!("airdrop(): Time limit reached for {}", pubkey);
                 return server_error(RpcError::TimeLimitReached, id)
             }
         };
         drop(map);
+
+        // Check if a VDF challenge exists
+        let map = self.challenge_map.lock().await;
+        let Some((challenge, n_steps)) = map.get(&pubkey.to_bytes()).cloned() else {
+                error!("airdrop(): No VDF challenge found for {}", pubkey);
+            return server_error(RpcError::NoVdfChallenge, id)
+        };
+        drop(map);
+
+        // Verify the VDF
+        info!("airdrop(): Verifying VDF for {}...", pubkey);
+        if !mimc_vdf::verify(&challenge, n_steps, &witness) {
+            error!("airdrop(): VDF verification failed for {}", pubkey);
+            return server_error(RpcError::VdfVerifyFailed, id)
+        }
+
+        // Remove the challenge from the map at this point. Latter stuff might
+        // fail, but we want clients to be able to request things again.
+        let mut mut_map = self.challenge_map.lock().await;
+        mut_map.remove(&pubkey.to_bytes());
+        drop(mut_map);
 
         let cid = *MONEY_CONTRACT_ID;
 
@@ -496,16 +590,20 @@ impl Faucetd {
     }
 }
 
-async fn prune_airdrop_map(map: Arc<Mutex<HashMap<[u8; 32], i64>>>, timeout: i64) {
+async fn prune_airdrop_maps(
+    rate_map: Arc<Mutex<HashMap<[u8; 32], i64>>>,
+    challenge_map: Arc<Mutex<HashMap<[u8; 32], (BigUint, u64)>>>,
+    timeout: i64,
+) {
     loop {
         sleep(timeout as u64).await;
-        debug!("Pruning airdrop map");
+        debug!("Pruning airdrop maps");
 
         let now = Utc::now().timestamp();
 
         let mut prune = vec![];
 
-        let im_map = map.lock().await;
+        let im_map = rate_map.lock().await;
         for (k, v) in im_map.iter() {
             if now - *v > timeout {
                 prune.push(*k);
@@ -513,11 +611,16 @@ async fn prune_airdrop_map(map: Arc<Mutex<HashMap<[u8; 32], i64>>>, timeout: i64
         }
         drop(im_map);
 
-        let mut mut_map = map.lock().await;
+        let mut mut_rate_map = rate_map.lock().await;
+        let mut mut_challenge_map = challenge_map.lock().await;
+
         for i in prune {
-            mut_map.remove(&i);
+            mut_rate_map.remove(&i);
+            mut_challenge_map.remove(&i);
         }
-        drop(mut_map);
+
+        drop(mut_rate_map);
+        drop(mut_challenge_map);
     }
 }
 
@@ -655,8 +758,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     .await?;
     let faucetd = Arc::new(faucetd);
 
-    // Task to periodically clean up the hashmap of airdrops.
-    ex.spawn(prune_airdrop_map(faucetd.airdrop_map.clone(), airdrop_timeout)).detach();
+    // Task to periodically clean up the airdrop rate/challenge hashmaps
+    ex.spawn(prune_airdrop_maps(
+        faucetd.airdrop_map.clone(),
+        faucetd.challenge_map.clone(),
+        airdrop_timeout,
+    ))
+    .detach();
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");

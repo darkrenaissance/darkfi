@@ -46,7 +46,7 @@ localnet = true
 channel_log = true
 
 # Airdrop timeout limit in seconds
-airdrop_timeout = 10
+airdrop_timeout = 120
 
 # Airdrop amount limit
 airdrop_limit = "1000000"

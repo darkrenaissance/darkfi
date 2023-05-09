@@ -25,6 +25,9 @@ pub enum RpcError {
     TimeLimitReached = -32108,
     ParseError = -32109,
     InternalError = -32110,
+    RateLimitReached = -32111,
+    NoVdfChallenge = -32112,
+    VdfVerifyFailed = -32113,
 }
 
 fn to_tuple(e: RpcError) -> (i64, String) {
@@ -33,6 +36,9 @@ fn to_tuple(e: RpcError) -> (i64, String) {
         RpcError::TimeLimitReached => "Timeout not expired, try again later",
         RpcError::ParseError => "Parse error",
         RpcError::InternalError => "Internal error",
+        RpcError::RateLimitReached => "Rate limit reached, try again later",
+        RpcError::NoVdfChallenge => "No VDF challenge found for pubkey, request it first",
+        RpcError::VdfVerifyFailed => "VDF verification failed",
     };
 
     (e as i64, msg.to_string())

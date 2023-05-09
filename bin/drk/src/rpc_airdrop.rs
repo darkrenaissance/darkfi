@@ -16,9 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use darkfi::rpc::{client::RpcClient, jsonrpc::JsonRequest};
-use darkfi_sdk::crypto::PublicKey;
+use darkfi_sdk::{
+    crypto::{mimc_vdf, PublicKey},
+    num_bigint::BigUint,
+    num_traits::Num,
+};
 use serde_json::json;
 use url::Url;
 
@@ -34,7 +38,30 @@ impl Drk {
         address: PublicKey,
     ) -> Result<String> {
         let rpc_client = RpcClient::new(faucet_endpoint).await?;
-        let params = json!([format!("{}", address), amount]);
+
+        // First we request a VDF challenge from the faucet
+        let params = json!([format!("{}", address)]);
+        let req = JsonRequest::new("challenge", params);
+        let rep = rpc_client.request(req).await?;
+
+        let Some(rep) = rep.as_array() else {
+            return Err(anyhow!("Invalid challenge response from faucet: {:?}", rep))
+        };
+        if rep.len() != 2 || !rep[0].is_string() || !rep[1].is_u64() {
+            return Err(anyhow!("Invalid challenge response from faucet: {:?}", rep))
+        }
+
+        // Retrieve VDF challenge
+        let challenge = BigUint::from_str_radix(rep[0].as_str().unwrap(), 16)?;
+        let n_steps = rep[1].as_u64().unwrap();
+
+        // Then evaluate the VDF
+        eprintln!("Evaluating VDF with n_steps={} ... (this could take about a minute)", n_steps);
+        let witness = mimc_vdf::eval(&challenge, n_steps);
+        eprintln!("Done! Sending airdrop request...");
+
+        // And finally request airdrop with the VDF evaluation witness
+        let params = json!([format!("{}", address), amount, witness.to_str_radix(16)]);
         let req = JsonRequest::new("airdrop", params);
         let rep = rpc_client.oneshot_request(req).await?;
 
