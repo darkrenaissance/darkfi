@@ -11,4 +11,4 @@ This directory contains native WASM contracts on DarkFi.
 
 ## Consensus
 
-* TODO: add link here
+* https://darkrenaissance.github.io/darkfi/development/darkfi_consensus_contract/index.html
