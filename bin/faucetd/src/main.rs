@@ -372,10 +372,10 @@ impl Faucetd {
     // necessary to execute the VDF with the challenge as input and pass it to the
     // `airdrop` call, which the faucet will then verify.
     //
-    // ### Params:
+    // **Params:**
     // * `array[0]`: base58 encoded address string of the recipient
     //
-    // ### Returns:
+    // **Returns:**
     // * `array[0]`: hex-encoded challenge string
     // * `array[1]`: n steps (`u64`) needed for VDF evaluation
     //
@@ -426,12 +426,12 @@ impl Faucetd {
     // Processes a native token airdrop request and airdrops requested amount to address.
     // Returns the transaction ID upon success.
     //
-    // ### Params:
+    // **Params:**
     // * `array[0]`: base58 encoded address string of the recipient
     // * `array[1]`: Amount to airdrop in form of f64
     // * `array[2]`: VDF evaluation witness as hex-encoded BigUint string
     //
-    // ### Returns:
+    // **Returns:**
     // * hex-encoded transaction ID string
     //
     // --> {"jsonrpc": "2.0", "method": "airdrop", "params": ["1DarkFi...", 1.42, "0x123..."], "id": 1}
