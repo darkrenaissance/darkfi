@@ -138,6 +138,7 @@ halo2_proofs = {version = "0.3.0", features = ["dev-graph", "gadget-traces", "sa
 halo2_gadgets = {version = "0.3.0", features = ["test-dev-graph", "test-dependencies"]}
 plotters = "0.3.4"
 easy-parallel = "3.3.0"
+prettytable-rs = "0.10.0"
 
 # -----BEGIN LIBRARY FEATURES-----
 [features]
