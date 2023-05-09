@@ -1,0 +1,21 @@
+[package]
+name = "consensus_headstart"
+version = "0.4.1"
+description = "Command-line tool to extract currently configured consensus headstart parameter"
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+repository = "https://github.com/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+bs58 = "0.4.0"
+darkfi = {path = "../../../", features = ["blockchain"]}
+darkfi-serial = {path = "../../../src/serial"}
+
+[dev-dependencies]
+darkfi-sdk = {path = "../../../src/sdk"}
+
+[patch.crates-io]
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v3"}
