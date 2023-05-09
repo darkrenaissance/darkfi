@@ -1205,7 +1205,6 @@ dependencies = [
  "itertools",
  "lazy_static",
  "libc",
- "libsqlite3-sys",
  "log",
  "plotters",
  "prettytable-rs",

@@ -125,7 +125,6 @@ wasmer-compiler-singlepass = {version = "3.3.0", optional = true}
 wasmer-middlewares = {version = "3.3.0", optional = true}
 
 # Wallet management
-libsqlite3-sys = {version = "0.24.1", features = ["bundled-sqlcipher"],  optional = true }
 sqlx = {version = "0.6.3", features = ["runtime-async-std-rustls", "sqlite"], optional = true}
 
 # Blockchain store
@@ -276,7 +275,6 @@ wallet = [
     "async-std",
     "rand",
     "sqlx",
-    "libsqlite3-sys",
 
     "darkfi-serial",
     "util",
