@@ -29,9 +29,6 @@ pub mod encoding;
 /// Filesystem utilities
 pub mod file;
 
-/// Network differentiations (TODO: shouldn't be here in util module))
-pub mod net_name;
-
 /// Parsing helpers
 pub mod parse;
 
