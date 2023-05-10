@@ -32,7 +32,7 @@ use chrono::Utc;
 use darkfi::{
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
     tx::Transaction,
-    zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses},
+    zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses},
     zkas::ZkBinary,
 };
 use darkfi_money_contract::{

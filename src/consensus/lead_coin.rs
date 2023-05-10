@@ -37,7 +37,7 @@ use crate::{
     zk::{
         proof::{Proof, ProvingKey},
         vm::ZkCircuit,
-        vm_stack::Witness,
+        vm_heap::Witness,
     },
     zkas::ZkBinary,
     Result,

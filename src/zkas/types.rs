@@ -16,15 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/// Stack types in bincode & vm
+/// Heap types in bincode & vm
 #[derive(Clone, Debug)]
 #[repr(u8)]
-pub enum StackType {
+pub enum HeapType {
     Var = 0x00,
     Lit = 0x01,
 }
 
-impl StackType {
+impl HeapType {
     pub fn from_repr(b: u8) -> Option<Self> {
         match b {
             0x00 => Some(Self::Var),

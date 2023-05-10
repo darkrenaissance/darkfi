@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//! VM stack type abstractions
+//! VM heap type abstractions
 use darkfi_sdk::crypto::{constants::OrchardFixedBases, MerkleNode};
 use halo2_gadgets::ecc::{
     chip::EccChip, FixedPoint, FixedPointBaseField, FixedPointShort, NonIdentityPoint, Point,
@@ -71,7 +71,7 @@ pub fn empty_witnesses(zkbin: &ZkBinary) -> Vec<Witness> {
 /// These represent the witness types inside the circuit
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone)]
-pub enum StackVar {
+pub enum HeapVar {
     EcPoint(Point<pallas::Affine, EccChip<OrchardFixedBases>>),
     EcNiPoint(NonIdentityPoint<pallas::Affine, EccChip<OrchardFixedBases>>),
     EcFixedPoint(FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>),
@@ -87,10 +87,10 @@ pub enum StackVar {
 // TODO: Make this not panic (try_from)
 macro_rules! impl_from {
     ($variant:ident, $fortype:ty) => {
-        impl From<StackVar> for $fortype {
-            fn from(value: StackVar) -> Self {
+        impl From<HeapVar> for $fortype {
+            fn from(value: HeapVar) -> Self {
                 match value {
-                    StackVar::$variant(v) => v,
+                    HeapVar::$variant(v) => v,
                     _ => unreachable!(),
                 }
             }

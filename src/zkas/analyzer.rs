@@ -32,7 +32,7 @@ pub struct Analyzer {
     pub witnesses: Vec<Witness>,
     pub statements: Vec<Statement>,
     pub literals: Vec<Literal>,
-    pub stack: Vec<Variable>,
+    pub heap: Vec<Variable>,
     error: ErrorEmitter,
 }
 
@@ -49,15 +49,15 @@ impl Analyzer {
         let lines: Vec<String> = source.as_str().lines().map(|x| x.to_string()).collect();
         let error = ErrorEmitter::new("Semantic", filename, lines);
 
-        Self { constants, witnesses, statements, literals: vec![], stack: vec![], error }
+        Self { constants, witnesses, statements, literals: vec![], heap: vec![], error }
     }
 
     pub fn analyze_types(&mut self) {
         // To work around the pedantic safety, we'll make new vectors and then
-        // replace the `statements` and `stack` vectors from the `Analyzer`
+        // replace the `statements` and `heap` vectors from the `Analyzer`
         // object when we are done.
         let mut statements = vec![];
-        let mut stack = vec![];
+        let mut heap = vec![];
 
         for statement in &self.statements {
             //println!("{:?}", statement);
@@ -120,7 +120,7 @@ impl Analyzer {
                 // convert it to another statement that will get executed
                 // before this one. An important assumption is that this
                 // opcode has a return value. When executed we will push
-                // this value onto the stack and use it as a reference to
+                // this value onto the heap and use it as a reference to
                 // the actual statement we're parsing at this moment.
                 // TODO: FIXME: This needs a recursive algorithm, as this
                 //              only allows a single nested function.
@@ -238,16 +238,16 @@ impl Analyzer {
                     // Add this to the list of statements.
                     statements.push(s);
 
-                    // We replace self.stack here so we can do proper stack lookups.
-                    stack.push(v.clone());
-                    self.stack = stack.clone();
+                    // We replace self.heap here so we can do proper heap lookups.
+                    heap.push(v.clone());
+                    self.heap = heap.clone();
 
-                    //println!("{:#?}", stack);
+                    //println!("{:#?}", heap);
                     //println!("{:#?}", statements);
                     continue
                 } // <-- Arg::Func
 
-                // The literals get pushed on their own "stack", and
+                // The literals get pushed on their own "heap", and
                 // then the compiler will reference them by their own
                 // index when it comes to running the statement that
                 // requires the literal type.
@@ -336,27 +336,27 @@ impl Analyzer {
             stmt.rhs = rhs;
 
             // In case this statement is an assignment, we will push its
-            // result on the stack.
+            // result on the heap.
             if statement.typ == StatementType::Assign {
                 let mut var = statement.lhs.clone().unwrap();
                 var.typ = return_types[0];
                 stmt.lhs = Some(var.clone());
-                stack.push(var.clone());
-                self.stack = stack.clone();
+                heap.push(var.clone());
+                self.heap = heap.clone();
             }
 
             //println!("{:#?}", stmt);
             statements.push(stmt);
         } // <-- for statement in &self.statements
 
-        // Here we replace the self.statements and self.stack with what we
+        // Here we replace the self.statements and self.heap with what we
         // built so far. These can be used later on by the compiler after
         // this function is finished.
         self.statements = statements;
-        self.stack = stack;
+        self.heap = heap;
 
         //println!("=================STATEMENTS===============\n{:#?}", self.statements);
-        //println!("===================STACK==================\n{:#?}", self.stack);
+        //println!("====================HEAP==================\n{:#?}", self.heap);
         //println!("==================LITERALS================\n{:#?}", self.literals);
     }
 
@@ -369,7 +369,7 @@ impl Analyzer {
             return Some(Var::Witness(r))
         }
 
-        if let Some(r) = self.lookup_stack(name) {
+        if let Some(r) = self.lookup_heap(name) {
             return Some(Var::Variable(r))
         }
 
@@ -396,8 +396,8 @@ impl Analyzer {
         None
     }
 
-    fn lookup_stack(&self, name: &str) -> Option<Variable> {
-        for i in &self.stack {
+    fn lookup_heap(&self, name: &str) -> Option<Variable> {
+        for i in &self.heap {
             if i.name == name {
                 return Some(i.clone())
             }
@@ -407,22 +407,22 @@ impl Analyzer {
     }
 
     pub fn analyze_semantic(&mut self) {
-        let mut stack = vec![];
+        let mut heap = vec![];
 
         println!("Loading constants...\n-----");
         for i in &self.constants {
-            println!("Adding `{}` to stack", i.name);
-            stack.push(&i.name);
+            println!("Adding `{}` to heap", i.name);
+            heap.push(&i.name);
             Analyzer::pause();
         }
-        println!("Stack:\n{:#?}\n-----", stack);
+        println!("Heap:\n{:#?}\n-----", heap);
         println!("Loading witnesses...\n-----");
         for i in &self.witnesses {
-            println!("Adding `{}` to stack", i.name);
-            stack.push(&i.name);
+            println!("Adding `{}` to heap", i.name);
+            heap.push(&i.name);
             Analyzer::pause();
         }
-        println!("Stack:\n{:#?}\n-----", stack);
+        println!("Heap:\n{:#?}\n-----", heap);
         println!("Loading circuit...");
         for i in &self.statements {
             let mut argnames = vec![];
@@ -441,12 +441,12 @@ impl Analyzer {
 
             for arg in &i.rhs {
                 if let Arg::Var(arg) = arg {
-                    print!("Looking up `{}` on the stack... ", arg.name);
-                    if let Some(index) = stack.iter().position(|&r| r == &arg.name) {
-                        println!("Found at stack index {}", index);
+                    print!("Looking up `{}` on the heap... ", arg.name);
+                    if let Some(index) = heap.iter().position(|&r| r == &arg.name) {
+                        println!("Found at heap index {}", index);
                     } else {
                         self.error.abort(
-                            &format!("Could not find `{}` on the stack", arg.name),
+                            &format!("Could not find `{}` on the heap", arg.name),
                             arg.line,
                             arg.column,
                         );
@@ -462,9 +462,9 @@ impl Analyzer {
             }
             match i.typ {
                 StatementType::Assign => {
-                    println!("Pushing result as `{}` to stack", &i.lhs.as_ref().unwrap().name);
-                    stack.push(&i.lhs.as_ref().unwrap().name);
-                    println!("Stack:\n{:#?}\n-----", stack);
+                    println!("Pushing result as `{}` to heap", &i.lhs.as_ref().unwrap().name);
+                    heap.push(&i.lhs.as_ref().unwrap().name);
+                    println!("Heap:\n{:#?}\n-----", heap);
                 }
                 StatementType::Call => {
                     println!("-----");

@@ -20,7 +20,7 @@ use anyhow::{anyhow, Result};
 use darkfi::{
     tx::Transaction,
     util::parse::{decode_base10, encode_base10},
-    zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses},
+    zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses},
     zkas::ZkBinary,
 };
 use darkfi_dao_contract::dao_model::DaoBulla;

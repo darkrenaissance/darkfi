@@ -22,7 +22,7 @@ use darkfi::{
     zk::{
         proof::{Proof, ProvingKey, VerifyingKey},
         vm::{Witness, ZkCircuit},
-        vm_stack::empty_witnesses,
+        vm_heap::empty_witnesses,
     },
     zkas::decoder::ZkBinary,
     Result,

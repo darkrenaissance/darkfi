@@ -48,7 +48,7 @@ use halo2_proofs::{
 };
 use log::{error, trace};
 
-pub use super::vm_stack::{StackVar, Witness};
+pub use super::vm_heap::{HeapVar, Witness};
 use super::{
     assign_free_advice,
     gadget::{
@@ -59,7 +59,7 @@ use super::{
     },
 };
 use crate::zkas::{
-    types::{LitType, StackType},
+    types::{HeapType, LitType},
     Opcode, ZkBinary,
 };
 
@@ -111,7 +111,7 @@ pub struct ZkCircuit {
     constants: Vec<String>,
     witnesses: Vec<Witness>,
     literals: Vec<(LitType, String)>,
-    opcodes: Vec<(Opcode, Vec<(StackType, usize)>)>,
+    opcodes: Vec<(Opcode, Vec<(HeapType, usize)>)>,
 }
 
 impl ZkCircuit {
@@ -291,12 +291,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
         // VM Setup
         //====================
 
-        // Our stack which holds every variable we reference and create.
-        let mut stack: Vec<StackVar> = vec![];
+        // Our heap which holds every variable we reference and create.
+        let mut heap: Vec<HeapVar> = vec![];
 
-        // Our stack which holds all the literal values we have in the circuit.
+        // Our heap which holds all the literal values we have in the circuit.
         // For now, we only support u64.
-        let mut litstack: Vec<u64> = vec![];
+        let mut litheap: Vec<u64> = vec![];
 
         // Offset for public inputs
         let mut public_inputs_offset = 0;
@@ -346,29 +346,29 @@ impl Circuit<pallas::Base> for ZkCircuit {
             Value::known(pallas::Base::one()),
         )?;
 
-        // Lookup and push constants onto the stack
+        // Lookup and push constants onto the heap
         for constant in &self.constants {
             trace!(
                 target: "zk::vm",
-                "Pushing constant `{}` to stack index {}",
+                "Pushing constant `{}` to heap address {}",
                 constant.as_str(),
-                stack.len()
+                heap.len()
             );
             match constant.as_str() {
                 "VALUE_COMMIT_VALUE" => {
                     let vcv = ValueCommitV;
                     let vcv = FixedPointShort::from_inner(ecc_chip.clone(), vcv);
-                    stack.push(StackVar::EcFixedPointShort(vcv));
+                    heap.push(HeapVar::EcFixedPointShort(vcv));
                 }
                 "VALUE_COMMIT_RANDOM" => {
                     let vcr = OrchardFixedBasesFull::ValueCommitR;
                     let vcr = FixedPoint::from_inner(ecc_chip.clone(), vcr);
-                    stack.push(StackVar::EcFixedPoint(vcr));
+                    heap.push(HeapVar::EcFixedPoint(vcr));
                 }
                 "NULLIFIER_K" => {
                     let nfk = NullifierK;
                     let nfk = FixedPointBaseField::from_inner(ecc_chip.clone(), nfk);
-                    stack.push(StackVar::EcFixedPointBase(nfk));
+                    heap.push(HeapVar::EcFixedPointBase(nfk));
                 }
 
                 _ => {
@@ -378,12 +378,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
             }
         }
 
-        // Load the literals onto the literal stack.
+        // Load the literals onto the literal heap
         // N.B. Only uint64 is supported right now.
         for literal in &self.literals {
             match literal.0 {
                 LitType::Uint64 => match literal.1.parse::<u64>() {
-                    Ok(v) => litstack.push(v),
+                    Ok(v) => litheap.push(v),
                     Err(e) => {
                         error!(target: "zk::vm", "Failed converting u64 literal: {}", e);
                         return Err(plonk::Error::Synthesis)
@@ -396,7 +396,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             }
         }
 
-        // Push the witnesses onto the stack, and potentially, if the witness
+        // Push the witnesses onto the heap, and potentially, if the witness
         // is in the Base field (like the entire circuit is), load it into a
         // table cell.
         for witness in &self.witnesses {
@@ -409,8 +409,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         w.as_ref().map(|cm| cm.to_affine()),
                     )?;
 
-                    trace!(target: "zk::vm", "Pushing EcPoint to stack index {}", stack.len());
-                    stack.push(StackVar::EcPoint(point));
+                    trace!(target: "zk::vm", "Pushing EcPoint to heap address {}", heap.len());
+                    heap.push(HeapVar::EcPoint(point));
                 }
 
                 Witness::EcNiPoint(w) => {
@@ -421,8 +421,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         w.as_ref().map(|cm| cm.to_affine()),
                     )?;
 
-                    trace!(target: "zk::vm", "Pushing EcNiPoint to stack index {}", stack.len());
-                    stack.push(StackVar::EcNiPoint(point));
+                    trace!(target: "zk::vm", "Pushing EcNiPoint to heap address {}", heap.len());
+                    heap.push(HeapVar::EcNiPoint(point));
                 }
 
                 Witness::EcFixedPoint(_) => {
@@ -438,16 +438,16 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         *w,
                     )?;
 
-                    trace!(target: "zk::vm", "Pushing Base to stack index {}", stack.len());
-                    stack.push(StackVar::Base(base));
+                    trace!(target: "zk::vm", "Pushing Base to heap address {}", heap.len());
+                    heap.push(HeapVar::Base(base));
                 }
 
                 Witness::Scalar(w) => {
                     // NOTE: Because the type in `halo2_gadgets` does not have a `Clone`
-                    //       impl, we push scalars as-is to the stack. They get witnessed
+                    //       impl, we push scalars as-is to the heap. They get witnessed
                     //       when they get used.
-                    trace!(target: "zk::vm", "Pushing Scalar to stack index {}", stack.len());
-                    stack.push(StackVar::Scalar(*w));
+                    trace!(target: "zk::vm", "Pushing Scalar to heap address {}", heap.len());
+                    heap.push(HeapVar::Scalar(*w));
                 }
 
                 Witness::MerklePath(w) => {
@@ -455,18 +455,18 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let path: Value<[pallas::Base; MERKLE_DEPTH_ORCHARD]> =
                         w.map(|typed_path| gen_const_array(|i| typed_path[i].inner()));
 
-                    trace!(target: "zk::vm", "Pushing MerklePath to stack index {}", stack.len());
-                    stack.push(StackVar::MerklePath(path));
+                    trace!(target: "zk::vm", "Pushing MerklePath to heap address {}", heap.len());
+                    heap.push(HeapVar::MerklePath(path));
                 }
 
                 Witness::Uint32(w) => {
-                    trace!(target: "zk::vm", "Pushing Uint32 to stack index {}", stack.len());
-                    stack.push(StackVar::Uint32(*w));
+                    trace!(target: "zk::vm", "Pushing Uint32 to heap address {}", heap.len());
+                    heap.push(HeapVar::Uint32(*w));
                 }
 
                 Witness::Uint64(w) => {
-                    trace!(target: "zk::vm", "Pushing Uint64 to stack index {}", stack.len());
-                    stack.push(StackVar::Uint64(*w));
+                    trace!(target: "zk::vm", "Pushing Uint64 to heap address {}", heap.len());
+                    heap.push(HeapVar::Uint64(*w));
                 }
             }
         }
@@ -482,15 +482,15 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[0].1].clone().into();
+                        heap[args[0].1].clone().into();
 
                     let rhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[1].1].clone().into();
+                        heap[args[1].1].clone().into();
 
                     let ret = lhs.add(layouter.namespace(|| "EcAdd()"), &rhs)?;
 
-                    trace!(target: "zk::vm", "Pushing result to stack index {}", stack.len());
-                    stack.push(StackVar::EcPoint(ret));
+                    trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
+                    heap.push(HeapVar::EcPoint(ret));
                 }
 
                 Opcode::EcMul => {
@@ -498,18 +498,18 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[1].1].clone().into();
+                        heap[args[1].1].clone().into();
 
                     let rhs = ScalarFixed::new(
                         ecc_chip.clone(),
                         layouter.namespace(|| "EcMul: ScalarFixed::new()"),
-                        stack[args[0].1].clone().into(),
+                        heap[args[0].1].clone().into(),
                     )?;
 
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMul()"), rhs)?;
 
-                    trace!(target: "zk::vm", "Pushing result to stack index {}", stack.len());
-                    stack.push(StackVar::EcPoint(ret));
+                    trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
+                    heap.push(HeapVar::EcPoint(ret));
                 }
 
                 Opcode::EcMulVarBase => {
@@ -517,9 +517,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: NonIdentityPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[1].1].clone().into();
+                        heap[args[1].1].clone().into();
 
-                    let rhs: AssignedCell<Fp, Fp> = stack[args[0].1].clone().into();
+                    let rhs: AssignedCell<Fp, Fp> = heap[args[0].1].clone().into();
                     let rhs = ScalarVar::from_base(
                         ecc_chip.clone(),
                         layouter.namespace(|| "EcMulVarBase::from_base()"),
@@ -528,8 +528,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMulVarBase()"), rhs)?;
 
-                    trace!(target: "zk::vm", "Pushing result to stack index {}", stack.len());
-                    stack.push(StackVar::EcPoint(ret));
+                    trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
+                    heap.push(HeapVar::EcPoint(ret));
                 }
 
                 Opcode::EcMulBase => {
@@ -537,14 +537,14 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[1].1].clone().into();
+                        heap[args[1].1].clone().into();
 
-                    let rhs: AssignedCell<Fp, Fp> = stack[args[0].1].clone().into();
+                    let rhs: AssignedCell<Fp, Fp> = heap[args[0].1].clone().into();
 
                     let ret = lhs.mul(layouter.namespace(|| "EcMulBase()"), rhs)?;
 
-                    trace!(target: "zk::vm", "Pushing result to stack index {}", stack.len());
-                    stack.push(StackVar::EcPoint(ret));
+                    trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
+                    heap.push(HeapVar::EcPoint(ret));
                 }
 
                 Opcode::EcMulShort => {
@@ -552,18 +552,18 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[1].1].clone().into();
+                        heap[args[1].1].clone().into();
 
                     let rhs = ScalarFixedShort::new(
                         ecc_chip.clone(),
                         layouter.namespace(|| "EcMulShort: ScalarFixedShort::new()"),
-                        (stack[args[0].1].clone().into(), one.clone()),
+                        (heap[args[0].1].clone().into(), one.clone()),
                     )?;
 
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMulShort()"), rhs)?;
 
-                    trace!(target: "zk::vm", "Pushing result to stack index {}", stack.len());
-                    stack.push(StackVar::EcPoint(ret));
+                    trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
+                    heap.push(HeapVar::EcPoint(ret));
                 }
 
                 Opcode::EcGetX => {
@@ -571,12 +571,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let point: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[0].1].clone().into();
+                        heap[args[0].1].clone().into();
 
                     let ret = point.inner().x();
 
-                    trace!(target: "zk::vm", "Pushing result to stack index {}", stack.len());
-                    stack.push(StackVar::Base(ret));
+                    trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
+                    heap.push(HeapVar::Base(ret));
                 }
 
                 Opcode::EcGetY => {
@@ -584,12 +584,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let point: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[0].1].clone().into();
+                        heap[args[0].1].clone().into();
 
                     let ret = point.inner().y();
 
-                    trace!(target: "zk::vm", "Pushing result to stack index {}", stack.len());
-                    stack.push(StackVar::Base(ret));
+                    trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
+                    heap.push(HeapVar::Base(ret));
                 }
 
                 Opcode::PoseidonHash => {
@@ -600,7 +600,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         Vec::with_capacity(args.len());
 
                     for idx in args {
-                        poseidon_message.push(stack[idx.1].clone().into());
+                        poseidon_message.push(heap[idx.1].clone().into());
                     }
 
                     macro_rules! poseidon_hash {
@@ -624,8 +624,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                             let $cell: AssignedCell<Fp, Fp> = $output.into();
 
-                            trace!(target: "zk::vm", "Pushing hash to stack index {}", stack.len());
-                            stack.push(StackVar::Base($cell));
+                            trace!(target: "zk::vm", "Pushing hash to heap address {}", heap.len());
+                            heap.push(HeapVar::Base($cell));
                         };
                     }
 
@@ -650,9 +650,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `MerkleRoot{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let leaf_pos = stack[args[0].1].clone().into();
-                    let merkle_path = stack[args[1].1].clone().into();
-                    let leaf = stack[args[2].1].clone().into();
+                    let leaf_pos = heap[args[0].1].clone().into();
+                    let merkle_path = heap[args[1].1].clone().into();
+                    let leaf = heap[args[2].1].clone().into();
 
                     let merkle_inputs = MerklePath::construct(
                         [config.merkle_chip_1(), config.merkle_chip_2()],
@@ -664,55 +664,55 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let root = merkle_inputs
                         .calculate_root(layouter.namespace(|| "MerkleRoot()"), leaf)?;
 
-                    trace!(target: "zk::vm", "Pushing merkle root to stack index {}", stack.len());
-                    stack.push(StackVar::Base(root));
+                    trace!(target: "zk::vm", "Pushing merkle root to heap address {}", heap.len());
+                    heap.push(HeapVar::Base(root));
                 }
 
                 Opcode::BaseAdd => {
                     trace!(target: "zk::vm", "Executing `BaseAdd{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs = &stack[args[0].1].clone().into();
-                    let rhs = &stack[args[1].1].clone().into();
+                    let lhs = &heap[args[0].1].clone().into();
+                    let rhs = &heap[args[1].1].clone().into();
 
                     let sum = arith_chip.add(layouter.namespace(|| "BaseAdd()"), lhs, rhs)?;
 
-                    trace!(target: "zk::vm", "Pushing sum to stack index {}", stack.len());
-                    stack.push(StackVar::Base(sum));
+                    trace!(target: "zk::vm", "Pushing sum to heap address {}", heap.len());
+                    heap.push(HeapVar::Base(sum));
                 }
 
                 Opcode::BaseMul => {
                     trace!(target: "zk::vm", "Executing `BaseSub{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs = &stack[args[0].1].clone().into();
-                    let rhs = &stack[args[1].1].clone().into();
+                    let lhs = &heap[args[0].1].clone().into();
+                    let rhs = &heap[args[1].1].clone().into();
 
                     let product = arith_chip.mul(layouter.namespace(|| "BaseMul()"), lhs, rhs)?;
 
-                    trace!(target: "zk::vm", "Pushing product to stack index {}", stack.len());
-                    stack.push(StackVar::Base(product));
+                    trace!(target: "zk::vm", "Pushing product to heap address {}", heap.len());
+                    heap.push(HeapVar::Base(product));
                 }
 
                 Opcode::BaseSub => {
                     trace!(target: "zk::vm", "Executing `BaseSub{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs = &stack[args[0].1].clone().into();
-                    let rhs = &stack[args[1].1].clone().into();
+                    let lhs = &heap[args[0].1].clone().into();
+                    let rhs = &heap[args[1].1].clone().into();
 
                     let difference =
                         arith_chip.sub(layouter.namespace(|| "BaseSub()"), lhs, rhs)?;
 
-                    trace!(target: "zk::vm", "Pushing difference to stack index {}", stack.len());
-                    stack.push(StackVar::Base(difference));
+                    trace!(target: "zk::vm", "Pushing difference to heap address {}", heap.len());
+                    heap.push(HeapVar::Base(difference));
                 }
 
                 Opcode::WitnessBase => {
                     trace!(target: "zk::vm", "Executing `WitnessBase{:?}` opcode", opcode.1);
                     //let args = &opcode.1;
 
-                    let lit = litstack[literals_offset];
+                    let lit = litheap[literals_offset];
                     literals_offset += 1;
 
                     let witness = assign_free_advice(
@@ -721,18 +721,18 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         Value::known(pallas::Base::from(lit)),
                     )?;
 
-                    trace!(target: "zk::vm", "Pushing assignment to stack index {}", stack.len());
-                    stack.push(StackVar::Base(witness));
+                    trace!(target: "zk::vm", "Pushing assignment to heap address {}", heap.len());
+                    heap.push(HeapVar::Base(witness));
                 }
 
                 Opcode::RangeCheck => {
                     trace!(target: "zk::vm", "Executing `RangeCheck{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lit = litstack[literals_offset];
+                    let lit = litheap[literals_offset];
                     literals_offset += 1;
 
-                    let arg = stack[args[1].1].clone();
+                    let arg = heap[args[1].1].clone();
 
                     match lit {
                         64 => {
@@ -760,8 +760,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `LessThanStrict{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let a = stack[args[0].1].clone().into();
-                    let b = stack[args[1].1].clone().into();
+                    let a = heap[args[0].1].clone().into();
+                    let b = heap[args[1].1].clone().into();
 
                     lessthan_chip.copy_less_than(
                         layouter.namespace(|| "copy a<b check"),
@@ -776,8 +776,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `LessThanLoose{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let a = stack[args[0].1].clone().into();
-                    let b = stack[args[1].1].clone().into();
+                    let a = heap[args[0].1].clone().into();
+                    let b = heap[args[1].1].clone().into();
 
                     lessthan_chip.copy_less_than(
                         layouter.namespace(|| "copy a<b check"),
@@ -792,7 +792,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `BoolCheck{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let w = stack[args[0].1].clone().into();
+                    let w = heap[args[0].1].clone().into();
 
                     boolcheck_chip
                         .small_range_check(layouter.namespace(|| "copy boolean check"), w)?;
@@ -802,8 +802,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `ConstrainEqualBase{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs: AssignedCell<Fp, Fp> = stack[args[0].1].clone().into();
-                    let rhs: AssignedCell<Fp, Fp> = stack[args[1].1].clone().into();
+                    let lhs: AssignedCell<Fp, Fp> = heap[args[0].1].clone().into();
+                    let rhs: AssignedCell<Fp, Fp> = heap[args[1].1].clone().into();
 
                     layouter.assign_region(
                         || "constrain witnessed base equality",
@@ -816,10 +816,10 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[0].1].clone().into();
+                        heap[args[0].1].clone().into();
 
                     let rhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        stack[args[1].1].clone().into();
+                        heap[args[1].1].clone().into();
 
                     lhs.constrain_equal(
                         layouter.namespace(|| "constrain ec point equality"),
@@ -831,7 +831,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `ConstrainInstance{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let var: AssignedCell<Fp, Fp> = stack[args[0].1].clone().into();
+                    let var: AssignedCell<Fp, Fp> = heap[args[0].1].clone().into();
 
                     layouter.constrain_instance(
                         var.cell(),

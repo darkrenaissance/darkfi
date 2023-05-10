@@ -21,7 +21,7 @@ use anyhow::{anyhow, Result};
 use darkfi::{
     tx::Transaction,
     util::parse::encode_base10,
-    zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses, Proof},
+    zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses, Proof},
     zkas::ZkBinary,
 };
 use darkfi_money_contract::{

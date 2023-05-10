@@ -20,7 +20,7 @@ use anyhow::{anyhow, Result};
 use darkfi::{
     tx::Transaction,
     util::parse::decode_base10,
-    zk::{proof::ProvingKey, vm::ZkCircuit, vm_stack::empty_witnesses},
+    zk::{proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses},
     zkas::ZkBinary,
 };
 use darkfi_money_contract::{

@@ -18,7 +18,7 @@
 
 use darkfi_serial::{deserialize_partial, VarInt};
 
-use super::{compiler::MAGIC_BYTES, types::StackType, LitType, Opcode, VarType};
+use super::{compiler::MAGIC_BYTES, types::HeapType, LitType, Opcode, VarType};
 use crate::{Error::ZkasDecoderError as ZkasErr, Result};
 
 /// A ZkBinary decoded from compiled zkas code.
@@ -29,7 +29,7 @@ pub struct ZkBinary {
     pub constants: Vec<(VarType, String)>,
     pub literals: Vec<(LitType, String)>,
     pub witnesses: Vec<VarType>,
-    pub opcodes: Vec<(Opcode, Vec<(StackType, usize)>)>,
+    pub opcodes: Vec<(Opcode, Vec<(HeapType, usize)>)>,
 }
 
 // https://stackoverflow.com/questions/35901547/how-can-i-find-a-subsequence-in-a-u8-slice
@@ -177,7 +177,7 @@ impl ZkBinary {
     }
 
     #[allow(clippy::type_complexity)]
-    fn parse_circuit(bytes: &[u8]) -> Result<Vec<(Opcode, Vec<(StackType, usize)>)>> {
+    fn parse_circuit(bytes: &[u8]) -> Result<Vec<(Opcode, Vec<(HeapType, usize)>)>> {
         let mut opcodes = vec![];
 
         let mut iter_offset = 0;
@@ -198,20 +198,17 @@ impl ZkBinary {
 
             let mut args = vec![];
             for _ in 0..arg_num.0 {
-                let stack_type = bytes[iter_offset];
+                let heap_type = bytes[iter_offset];
                 iter_offset += 1;
-                let (stack_index, offset) = deserialize_partial::<VarInt>(&bytes[iter_offset..])?;
+                let (heap_index, offset) = deserialize_partial::<VarInt>(&bytes[iter_offset..])?;
                 iter_offset += offset;
-                let stack_type = match StackType::from_repr(stack_type) {
+                let heap_type = match HeapType::from_repr(heap_type) {
                     Some(v) => v,
                     None => {
-                        return Err(ZkasErr(format!(
-                            "Could not decode StackType from {}",
-                            stack_type
-                        )))
+                        return Err(ZkasErr(format!("Could not decode HeapType from {}", heap_type)))
                     }
                 };
-                args.push((stack_type, stack_index.0 as usize)); // FIXME, why?
+                args.push((heap_type, heap_index.0 as usize)); // FIXME, why?
             }
 
             opcodes.push((opcode, args));

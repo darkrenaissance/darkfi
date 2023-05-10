@@ -53,7 +53,7 @@ use crate::{
     zk::{
         proof::{ProvingKey, VerifyingKey},
         vm::ZkCircuit,
-        vm_stack::empty_witnesses,
+        vm_heap::empty_witnesses,
     },
     zkas::ZkBinary,
     Error, Result,

@@ -9,9 +9,9 @@ Our programs consist of four sections: `constant`, `literal`,
 same. Additionally, there is an optional section called `.debug`
 which can hold debug info related to the binary.
 
-We currently keep all variables on one stack, and literals on another
-stack. Therefore before each `STACK_INDEX` we prepend `STACK_TYPE` so
-the VM is able to know which stack it should do lookup from.
+We currently keep all variables on one heap, and literals on another
+heap. Therefore before each `HEAP_INDEX` we prepend `HEAP_TYPE` so
+the VM is able to know which heap it should do lookup from.
 
 The compiled binary blob has the following layout:
 
@@ -32,8 +32,8 @@ WITNESS_TYPE
 WITNESS_TYPE
 ...
 .circuit
-OPCODE ARG_NUM STACK_TYPE STACK_INDEX ... STACK_TYPE STACK_INDEX
-OPCODE ARG_NUM STACK_TYPE STACK_INDEX ... STACK_TYPE STACK_INDEX
+OPCODE ARG_NUM HEAP_TYPE HEAP_INDEX ... HEAP_TYPE HEAP_INDEX
+OPCODE ARG_NUM HEAP_TYPE HEAP_INDEX ... HEAP_TYPE HEAP_INDEX
 ...
 .debug
 TBD
@@ -78,7 +78,7 @@ The string is serialized with variable-integer encoding.
 
 The constants in the `.constant` section are declared with their type
 and name, so that the VM knows how to search for the builtin constant
-and add it to the stack.
+and add it to the heap.
 
 ### `.literal`
 
@@ -90,7 +90,7 @@ could be extended with signed integers, and strings.
 ### `.witness`
 
 The `.witness` section holds the circuit witness values in the form
-of `WITNESS_TYPE`. Their stack index is incremented for each witness
+of `WITNESS_TYPE`. Their heap index is incremented for each witness
 as they're kept in order like in the source file. The witnesses
 that are of the same type as the circuit itself (typically `Base`)
 will be loaded into the circuit as _private values_ using the Halo2
@@ -103,7 +103,7 @@ The `.circuit` section holds the procedural logic of the ZK proof.
 In here we have statements with opcodes that are executed as
 understood by the VM. The statements are in the form of:
 
-> `OPCODE ARG_NUM STACK_TYPE STACK_INDEX ... STACK_TYPE STACK_INDEX`
+> `OPCODE ARG_NUM HEAP_TYPE HEAP_INDEX ... HEAP_TYPE HEAP_INDEX`
 
 where:
 
@@ -112,14 +112,14 @@ where:
 | `OPCODE`      | The opcode we wish to execute                                    |
 | `ARG_NUM`     | The number of arguments given to this opcode                     |
 |               | (Note the VM should be checking the correctness of this as well) |
-| `STACK_TYPE`  | Type of the stack to do lookup from (variables or literals)      |
-|               | (This is prepended to every `STACK_INDEX`)                       |
-| `STACK_INDEX` | The location of the argument on the stack.                       |
+| `HEAP_TYPE`   | Type of the heap to do lookup from (variables or literals)       |
+|               | (This is prepended to every `HEAP_INDEX`)                        |
+| `HEAP_INDEX`  | The location of the argument on the heap.                        |
 |               | (This is supposed to be repeated `ARG_NUM` times)                |
 
 
 In case an opcode has a return value, the value shall be pushed to
-the stack and become available for later references.
+the heap and become available for later references.
 
 ### `.debug`
 
@@ -168,8 +168,8 @@ TBD
 | `LessThanStrict`     | Strictly compare if `Base` a is lesser than `Base` b            |
 | `LessThanLoose`      | Loosely compare if `Base` a is lesser than `Base` b             |
 | `BoolCheck`          | Enforce that a `Base` fits in a boolean value (either 0 or 1)   |
-| `ConstrainEqualBase` | Constrain equality of two `Base` elements from the stack        |
-| `ConstrainEqualPoint`| Constrain equality of two `EcPoint` elements from the stack     |
+| `ConstrainEqualBase` | Constrain equality of two `Base` elements from the heap         |
+| `ConstrainEqualPoint`| Constrain equality of two `EcPoint` elements from the heap      |
 | `ConstrainInstance`  | Constrain a `Base` to a Circuit's Public Input.                 |
 
 ### Built-in Opcode Wrappers

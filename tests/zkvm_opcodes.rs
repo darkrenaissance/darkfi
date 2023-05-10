@@ -36,7 +36,7 @@ use darkfi::{
     zk::{
         proof::{ProvingKey, VerifyingKey},
         vm::ZkCircuit,
-        vm_stack::{empty_witnesses, Witness},
+        vm_heap::{empty_witnesses, Witness},
         Proof,
     },
     zkas::ZkBinary,

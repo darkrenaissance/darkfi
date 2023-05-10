@@ -263,7 +263,7 @@ impl Parser {
                 // Grab tokens for each statement
                 for i in circuit_tokens[2..circuit_tokens.len() - 1].iter() {
                     if i.token_type == TokenType::Semicolon {
-                        // Push completed statement to the stack
+                        // Push completed statement to the heap
                         circuit_stmts.push(circuit_stmt.clone());
                         circuit_stmt = vec![];
                         continue
@@ -610,7 +610,7 @@ impl Parser {
         //
         //          constrain_instance(ec_get_x(token_commit));
         //
-        // The inner call's result would still get pushed on the stack,
+        // The inner call's result would still get pushed on the heap,
         // but it will not be accessible in any other scope.
         //
         // In certain opcodes, we also support literal types, and the
@@ -620,7 +620,7 @@ impl Parser {
         //           zero = witness_base(0);
         //
         // The literal type is used only in the function call's scope, but
-        // the result is then accessible on the stack to be used by further
+        // the result is then accessible on the heap to be used by further
         // computation.
         //
         // Regarding multiple return values from opcodes, this is perhaps
@@ -788,7 +788,7 @@ impl Parser {
                     // Recurse this function to get the params of the nested one.
                     let args = self.parse_function_call(arg, iter);
 
-                    // Then we assign a "fake" variable that serves as a stack
+                    // Then we assign a "fake" variable that serves as a heap
                     // reference.
                     let var = Variable {
                         name: format!("_op_inner_{}_{}", arg.line, arg.column),

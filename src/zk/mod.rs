@@ -20,8 +20,9 @@
 pub mod vm;
 pub use vm::ZkCircuit;
 
-pub mod vm_stack;
-pub use vm_stack::{empty_witnesses, Witness};
+/// VM heap variable definitions and utility functions
+pub mod vm_heap;
+pub use vm_heap::{empty_witnesses, Witness};
 
 /// ZK gadget implementations
 pub mod gadget;
