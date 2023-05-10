@@ -3,7 +3,7 @@ constant "Reward_V1" {
 	EcFixedPoint VALUE_COMMIT_RANDOM,
 }
 
-contract "Reward_V1" {
+witness "Reward_V1" {
 	# Burnt coin
 	Base coin,
 	# Burnt coin secret key

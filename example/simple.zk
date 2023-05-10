@@ -3,7 +3,7 @@ constant "Simple" {
 	EcFixedPoint VALUE_COMMIT_RANDOM,
 }
 
-contract "Simple" {
+witness "Simple" {
 	Base value,
 	Scalar value_blind,
 }

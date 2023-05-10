@@ -4,7 +4,7 @@ constant "tx" {
          EcFixedPointBase NULLIFIER_K,
 }
 
-contract "tx" {
+witness "tx" {
          # coin (1) witnesses
          Base root,
          Base c1_root_sk,

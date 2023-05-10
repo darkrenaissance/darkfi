@@ -5,7 +5,7 @@ The bincode design for zkas is the compiled code in the form of a
 binary blob, that can be read by a program and fed into the VM.
 
 Our programs consist of four sections: `constant`, `literal`,
-`contract`, and `circuit`. Our bincode represents the
+`witness`, and `circuit`. Our bincode represents the
 same. Additionally, there is an optional section called `.debug`
 which can hold debug info related to the binary.
 
@@ -27,7 +27,7 @@ CONSTANT_TYPE CONSTANT_NAME
 LITERAL
 LITERAL
 ...
-.contract
+.witness
 WITNESS_TYPE
 WITNESS_TYPE
 ...
@@ -68,7 +68,7 @@ source code, e.g.:
 
 ```
 constant "MyNamespace" { ... }
-contract "MyNamespace" { ... }
+witness  "MyNamespace" { ... }
 circuit  "MyNamespace" { ... }
 ```
 
@@ -87,9 +87,9 @@ that get parsed into a `u64` type inside the VM. In the future this
 could be extended with signed integers, and strings.
 
 
-### `.contract`
+### `.witness`
 
-The `.contract` section holds the circuit witness values in the form
+The `.witness` section holds the circuit witness values in the form
 of `WITNESS_TYPE`. Their stack index is incremented for each witness
 as they're kept in order like in the source file. The witnesses
 that are of the same type as the circuit itself (typically `Base`)

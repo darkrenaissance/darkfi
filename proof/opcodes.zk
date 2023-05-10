@@ -4,7 +4,7 @@ constant "Opcodes" {
 	EcFixedPointBase NULLIFIER_K,
 }
 
-contract "Opcodes" {
+witness "Opcodes" {
 	Base value,
 	Scalar value_blind,
 

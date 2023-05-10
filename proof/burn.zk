@@ -4,7 +4,7 @@ constant "Burn" {
 	EcFixedPointBase NULLIFIER_K,
 }
 
-contract "Burn" {
+witness "Burn" {
 	Base secret,
 	Base serial,
 	Base value,

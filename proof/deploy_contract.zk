@@ -2,7 +2,7 @@ constant "DeployContract" {
 	EcFixedPointBase NULLIFIER_K,
 }
 
-contract "DeployContract" {
+witness "DeployContract" {
 	# Amount of bytes to store on-chain
 	Base bytes,
 	# Deploy key used for signing and contract reference

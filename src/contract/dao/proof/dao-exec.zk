@@ -3,7 +3,7 @@ constant "DaoExec" {
 	EcFixedPoint VALUE_COMMIT_RANDOM,
 }
 
-contract "DaoExec" {
+witness "DaoExec" {
 	# Proposal parameters
 	Base proposal_dest_x,
 	Base proposal_dest_y,

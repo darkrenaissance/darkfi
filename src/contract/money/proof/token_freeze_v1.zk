@@ -2,7 +2,7 @@ constant "TokenFreeze_V1" {
 	EcFixedPointBase NULLIFIER_K,
 }
 
-contract "TokenFreeze_V1" {
+witness "TokenFreeze_V1" {
 	# Token mint authority secret
 	Base mint_authority,
 }

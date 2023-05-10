@@ -4,7 +4,7 @@ constant "Lead_Mint_V1" {
 	EcFixedPointBase NULLIFIER_K,
 }
 
-contract "Lead_Mint_V1" {
+witness "Lead_Mint_V1" {
 	Base c1_sk,
 	Base c1_sk_root,
 	Base c1_slot,

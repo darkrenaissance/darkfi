@@ -1,6 +1,6 @@
 constant "RlnSignal" {}
 
-contract "RlnSignal" {
+witness "RlnSignal" {
 	Base secret_key,
 	MerklePath identity_path,
 	Uint32 identity_leaf_pos,

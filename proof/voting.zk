@@ -4,7 +4,7 @@ constant "Vote" {
 	EcFixedPointBase NULLIFIER_K,
 }
 
-contract "Vote" {
+witness "Vote" {
 	Base process_id_0,
 	Base process_id_1,
 	Base secret_key,

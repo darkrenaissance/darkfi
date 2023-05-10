@@ -92,9 +92,9 @@ impl Compiler {
             bincode.extend_from_slice(&serialize(&i.name));
         }
 
-        // In the .contract section, we write all our witness types, on the stack
+        // In the .witness section, we write all our witness types, on the stack
         // they're in order of appearance.
-        bincode.extend_from_slice(b".contract");
+        bincode.extend_from_slice(b".witness");
         for i in &self.witnesses {
             tmp_stack.push(i.name.as_str());
             bincode.push(i.typ as u8);

@@ -4,7 +4,7 @@ constant "Mint_V1" {
 	EcFixedPointBase NULLIFIER_K,
 }
 
-contract "Mint_V1" {
+witness "Mint_V1" {
 	# X coordinate for public key
 	Base pub_x,
 	# Y coordinate for public key

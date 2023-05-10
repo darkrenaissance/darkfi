@@ -5,7 +5,7 @@ constant "TokenMint_V1" {
 	EcFixedPointBase NULLIFIER_K,
 }
 
-contract "TokenMint_V1" {
+witness "TokenMint_V1" {
 	# Token mint authority secret
 	Base mint_authority,
 	# Token supply

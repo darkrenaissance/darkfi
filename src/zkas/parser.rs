@@ -30,10 +30,10 @@ use super::{
 
 /// zkas language builtin keywords.
 /// These can not be used anywhere except where they are expected.
-const KEYWORDS: [&str; 3] = ["constant", "contract", "circuit"];
+const KEYWORDS: [&str; 3] = ["constant", "witness", "circuit"];
 
 /// Forbidden namespaces
-const NOPE_NS: [&str; 4] = [".constant", ".literal", ".contract", ".circuit"];
+const NOPE_NS: [&str; 4] = [".constant", ".literal", ".witness", ".circuit"];
 
 /// Valid EcFixedPoint constant names supported by the VM.
 const VALID_ECFIXEDPOINT: [&str; 1] = ["VALUE_COMMIT_RANDOM"];
@@ -63,25 +63,25 @@ impl Parser {
         // We use these to keep state while parsing.
         let mut namespace = None;
         let (mut declaring_constant, mut declared_constant) = (false, false);
-        let (mut declaring_contract, mut declared_contract) = (false, false);
+        let (mut declaring_witness, mut declared_witness) = (false, false);
         let (mut declaring_circuit, mut declared_circuit) = (false, false);
 
         // The tokens gathered from each of the sections
         let mut constant_tokens = vec![];
-        let mut contract_tokens = vec![];
+        let mut witness_tokens = vec![];
         let mut circuit_tokens = vec![];
 
         // Tokens belonging to the current statement
         let mut circuit_stmt = vec![];
         // All completed statements are pushed here
         let mut circuit_stmts = vec![];
-        // Contains constant and contract sections
+        // Contains constant and witness sections
         let mut ast_inner = IndexMap::new();
         let mut ast = IndexMap::new();
 
         if self.tokens[0].token_type != TokenType::Symbol {
             self.error.abort(
-                "Source file does not start with a section. Expected `constant/contract/circuit`.",
+                "Source file does not start with a section. Expected `constant/witness/circuit`.",
                 0,
                 0,
             );
@@ -89,7 +89,7 @@ impl Parser {
 
         let mut iter = self.tokens.iter();
         while let Some(t) = iter.next() {
-            // Sections "constant", "contract", and "circuit" are
+            // Sections "constant", "witness", and "circuit" are
             // the sections we must be declaring in our source code.
             // When we find one, we'll take all the tokens found in
             // the section and place them in their respective vec.
@@ -97,7 +97,7 @@ impl Parser {
             // the sections are closed off with braces. This should
             // be revisited later when we decide to add other lang
             // functionality that also depends on using braces.
-            if !declaring_constant && !declaring_contract && !declaring_circuit {
+            if !declaring_constant && !declaring_witness && !declaring_circuit {
                 //
                 // We use this macro to avoid code repetition in the following
                 // match statement for soaking up the section tokens.
@@ -127,9 +127,9 @@ impl Parser {
                         declaring_constant = true;
                         absorb_inner_tokens!(constant_tokens);
                     }
-                    "contract" => {
-                        declaring_contract = true;
-                        absorb_inner_tokens!(contract_tokens);
+                    "witness" => {
+                        declaring_witness = true;
+                        absorb_inner_tokens!(witness_tokens);
                     }
                     "circuit" => {
                         declaring_circuit = true;
@@ -210,19 +210,19 @@ impl Parser {
                 declared_constant = true;
             }
 
-            // Parse the contract section into the AST.
-            if declaring_contract {
-                if declared_contract {
-                    self.error.abort("Duplicate `contract` section found.", t.line, t.column);
+            // Parse the witness section into the AST.
+            if declaring_witness {
+                if declared_witness {
+                    self.error.abort("Duplicate `witness` section found.", t.line, t.column);
                 }
 
-                self.check_section_structure("contract", contract_tokens.clone());
-                check_namespace!(contract_tokens);
+                self.check_section_structure("witness", witness_tokens.clone());
+                check_namespace!(witness_tokens);
 
                 let mut witnesses_map = IndexMap::new();
                 // This is everything between the braces: { ... }
-                let mut contract_inner = contract_tokens[2..contract_tokens.len() - 1].iter();
-                while let Some((typ, name, comma)) = contract_inner.next_tuple() {
+                let mut witness_inner = witness_tokens[2..witness_tokens.len() - 1].iter();
+                while let Some((typ, name, comma)) = witness_inner.next_tuple() {
                     if comma.token_type != TokenType::Comma {
                         self.error.abort("Separator is not a comma.", comma.line, comma.column);
                     }
@@ -231,7 +231,7 @@ impl Parser {
                     if witnesses_map.contains_key(name.token.as_str()) {
                         self.error.abort(
                             &format!(
-                                "Section `contract` already contains the token `{}`.",
+                                "Section `witness` already contains the token `{}`.",
                                 &name.token
                             ),
                             name.line,
@@ -242,13 +242,13 @@ impl Parser {
                     witnesses_map.insert(name.token.clone(), (name.clone(), typ.clone()));
                 }
 
-                if contract_inner.next().is_some() {
-                    self.error.abort("Internal error, leftovers in 'contract' iterator", 0, 0);
+                if witness_inner.next().is_some() {
+                    self.error.abort("Internal error, leftovers in 'witness' iterator", 0, 0);
                 }
 
-                ast_inner.insert("contract".to_string(), witnesses_map);
-                declaring_contract = false;
-                declared_contract = true;
+                ast_inner.insert("witness".to_string(), witnesses_map);
+                declaring_witness = false;
+                declared_witness = true;
             }
 
             // Parse the circuit section into the AST.
@@ -293,14 +293,14 @@ impl Parser {
         };
 
         let witnesses = {
-            let c = match ast.get(&ns).unwrap().get("contract") {
+            let c = match ast.get(&ns).unwrap().get("witness") {
                 Some(c) => c,
                 None => {
-                    self.error.abort("Missing `contract` section in .zk source.", 0, 0);
+                    self.error.abort("Missing `witness` section in .zk source.", 0, 0);
                     unreachable!();
                 }
             };
-            self.parse_ast_contract(c)
+            self.parse_ast_witness(c)
         };
 
         let statements = self.parse_ast_circuit(circuit_stmts);
@@ -338,7 +338,7 @@ impl Parser {
         }
 
         match section {
-            "constant" | "contract" => {
+            "constant" | "witness" => {
                 if tokens.len() == 3 {
                     self.error.warn(&format!("{} section is empty.", section), 0, 0);
                 }
@@ -477,7 +477,7 @@ impl Parser {
         ret
     }
 
-    fn parse_ast_contract(&self, ast: &IndexMap<String, (Token, Token)>) -> Vec<Witness> {
+    fn parse_ast_witness(&self, ast: &IndexMap<String, (Token, Token)>) -> Vec<Witness> {
         let mut ret = vec![];
 
         // k = name

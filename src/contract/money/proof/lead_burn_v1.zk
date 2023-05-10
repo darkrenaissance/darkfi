@@ -4,7 +4,7 @@ constant "Lead_Burn_V1" {
 	EcFixedPointBase NULLIFIER_K,
 }
 
-contract "Lead_Burn_V1" {
+witness "Lead_Burn_V1" {
 	MerklePath c1_cm_path,
 	Uint32 c1_cm_pos,
 	Uint32 c1_sk_pos,

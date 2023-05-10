@@ -3,7 +3,7 @@ constant "DaoProposeMain" {
 	EcFixedPoint VALUE_COMMIT_RANDOM,
 }
 
-contract "DaoProposeMain" {
+witness "DaoProposeMain" {
 	# Proposers total number of governance tokens
 	Base total_funds,
 	Scalar total_funds_blind,

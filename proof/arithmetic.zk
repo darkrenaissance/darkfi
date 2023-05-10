@@ -1,6 +1,6 @@
 constant "Arith" {}
 
-contract "Arith" {
+witness "Arith" {
     Base a,
     Base b,
 }

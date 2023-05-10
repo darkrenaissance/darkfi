@@ -4,7 +4,7 @@ constant "Lead" {
          EcFixedPointBase NULLIFIER_K,
 }
 
-contract "Lead" {
+witness "Lead" {
          MerklePath c1_cm_path,
          Uint32 c1_cm_pos,
          Uint32 c1_sk_pos,

@@ -46,7 +46,7 @@ impl ZkBinary {
 
         let _binary_version = &bytes[4];
 
-        // After the binary version, we're supposed to have the contract namespace
+        // After the binary version, we're supposed to have the witness namespace
         let (namespace, _) = deserialize_partial(&bytes[5..])?;
 
         let constants_offset = match find_subslice(bytes, b".constant") {
@@ -59,9 +59,9 @@ impl ZkBinary {
             None => return Err(ZkasErr("Could not find .literal section".to_string())),
         };
 
-        let contract_offset = match find_subslice(bytes, b".contract") {
+        let witness_offset = match find_subslice(bytes, b".witness") {
             Some(v) => v,
-            None => return Err(ZkasErr("Could not find .contract section".to_string())),
+            None => return Err(ZkasErr("Could not find .witness section".to_string())),
         };
 
         let circuit_offset = match find_subslice(bytes, b".circuit") {
@@ -78,12 +78,12 @@ impl ZkBinary {
             return Err(ZkasErr(".literal section appeared before .constant".to_string()))
         }
 
-        if literals_offset > contract_offset {
-            return Err(ZkasErr(".contract section appeared before .literal".to_string()))
+        if literals_offset > witness_offset {
+            return Err(ZkasErr(".witness section appeared before .literal".to_string()))
         }
 
-        if contract_offset > circuit_offset {
-            return Err(ZkasErr(".circuit section appeared before .contract".to_string()))
+        if witness_offset > circuit_offset {
+            return Err(ZkasErr(".circuit section appeared before .witness".to_string()))
         }
 
         if circuit_offset > debug_offset {
@@ -91,13 +91,13 @@ impl ZkBinary {
         }
 
         let constants_section = &bytes[constants_offset + b".constant".len()..literals_offset];
-        let literals_section = &bytes[literals_offset + b".literal".len()..contract_offset];
-        let contract_section = &bytes[contract_offset + b".contract".len()..circuit_offset];
+        let literals_section = &bytes[literals_offset + b".literal".len()..witness_offset];
+        let witness_section = &bytes[witness_offset + b".witness".len()..circuit_offset];
         let circuit_section = &bytes[circuit_offset + b".circuit".len()..debug_offset];
 
         let constants = ZkBinary::parse_constants(constants_section)?;
         let literals = ZkBinary::parse_literals(literals_section)?;
-        let witnesses = ZkBinary::parse_contract(contract_section)?;
+        let witnesses = ZkBinary::parse_witness(witness_section)?;
         let opcodes = ZkBinary::parse_circuit(circuit_section)?;
 
         // TODO: Debug info
@@ -153,7 +153,7 @@ impl ZkBinary {
         Ok(literals)
     }
 
-    fn parse_contract(bytes: &[u8]) -> Result<Vec<VarType>> {
+    fn parse_witness(bytes: &[u8]) -> Result<Vec<VarType>> {
         let mut witnesses = vec![];
 
         let mut iter_offset = 0;

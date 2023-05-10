@@ -1,7 +1,7 @@
 constant "InclusionProof" {
 }
 
-contract "InclusionProof" {
+witness "InclusionProof" {
 	Base leaf,
 	Uint32 leaf_pos,
 	MerklePath path,

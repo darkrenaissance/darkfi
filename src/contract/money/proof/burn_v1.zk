@@ -4,7 +4,7 @@ constant "Burn_V1" {
 	EcFixedPointBase NULLIFIER_K,
 }
 
-contract "Burn_V1" {
+witness "Burn_V1" {
 	# The value of this coin
 	Base value,
 	# The token ID

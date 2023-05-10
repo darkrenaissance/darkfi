@@ -3,7 +3,7 @@ constant "DaoVoteMain" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
 }
 
-contract "DaoVoteMain" {
+witness "DaoVoteMain" {
 	# Proposal parameters
 	Base proposal_dest_x,
 	Base proposal_dest_y,

@@ -1,6 +1,6 @@
 constant "RlnSlash" {}
 
-contract "RlnSlash" {
+witness "RlnSlash" {
 	Base secret_key,
 	MerklePath identity_path,
 	Uint32 identity_leaf_pos,

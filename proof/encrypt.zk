@@ -7,7 +7,7 @@
 
 constant "Encrypt" {}
 
-contract "Encrypt" {
+witness "Encrypt" {
     # We are encrypting values to this public key
     EcNiPoint pubkey,
 

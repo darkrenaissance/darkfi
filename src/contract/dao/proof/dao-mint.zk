@@ -3,7 +3,7 @@ constant "DaoMint" {
 	EcFixedPointBase NULLIFIER_K,
 }
 
-contract "DaoMint" {
+witness "DaoMint" {
 	Base dao_proposer_limit,
 	Base dao_quorum,
 	Base dao_approval_ratio_quot,

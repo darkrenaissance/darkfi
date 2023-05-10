@@ -4,7 +4,7 @@ constant "DaoVoteInput" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
 }
 
-contract "DaoVoteInput" {
+witness "DaoVoteInput" {
 	Base secret,
 	Base serial,
 	Base spend_hook,
