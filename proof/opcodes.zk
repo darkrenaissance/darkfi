@@ -37,7 +37,8 @@ circuit "Opcodes" {
 	constrain_equal_point(value_commit, value_commit2);
 
 	one = witness_base(1);
-	c = poseidon_hash(one, blind);
+	two = witness_base(2);
+	c = poseidon_hash(one, two, blind);
 	constrain_instance(c);
 
 	d = poseidon_hash(one, blind, ec_get_x(value_commit), ec_get_y(value_commit));

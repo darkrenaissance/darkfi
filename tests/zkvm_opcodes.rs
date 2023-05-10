@@ -61,8 +61,8 @@ fn zkvm_opcodes() -> Result<()> {
     let c1 = pallas::Base::random(&mut OsRng);
     let c3 = pallas::Base::random(&mut OsRng);
     let c2 = {
-        let messages = [pallas::Base::one(), blind];
-        poseidon::Hash::<_, P128Pow5T3, ConstantLength<2>, 3, 2>::init().hash(messages)
+        let messages = [pallas::Base::one(), pallas::Base::from(2), blind];
+        poseidon::Hash::<_, P128Pow5T3, ConstantLength<3>, 3, 2>::init().hash(messages)
     };
 
     tree.append(&MerkleNode::from(c0));

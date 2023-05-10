@@ -327,3 +327,4 @@ required-features = ["zk"]
 
 [patch.crates-io]
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v3"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v3"}

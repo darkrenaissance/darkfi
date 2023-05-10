@@ -2363,8 +2363,7 @@ dependencies = [
 [[package]]
 name = "halo2_gadgets"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "126a150072b0c38c7b573fe3eaf0af944a7fed09e154071bf2436d3f016f7230"
+source = "git+https://github.com/parazyd/halo2?branch=v3#481f00066dbfa5199195062b7d1f497db0281c16"
 dependencies = [
  "arrayvec",
  "bitvec",
