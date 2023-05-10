@@ -37,7 +37,7 @@ use darkfi_serial::{deserialize, Encodable, WriteExt};
 use crate::{
     error::ConsensusError,
     model::{
-        ConsensusRewardParamsV1, ConsensusRewardUpdateV1, SlotCheckpoint, MU_RHO_PREFIX,
+        ConsensusRewardParamsV1, ConsensusRewardUpdateV1, SlotCheckpoint, HEADSTART, MU_RHO_PREFIX,
         MU_Y_PREFIX, REWARD, ZERO,
     },
     ConsensusFunction,
@@ -96,6 +96,7 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
             *rho,
             sigma1,
             sigma2,
+            HEADSTART,
         ],
     ));
 

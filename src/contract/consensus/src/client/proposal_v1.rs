@@ -89,6 +89,7 @@ impl ConsensusProposalRewardRevealed {
             self.rho,
             self.sigma1,
             self.sigma2,
+            HEADSTART,
         ]
     }
 }
@@ -306,9 +307,9 @@ pub fn create_proposal_reward_proof(
         Witness::Scalar(Value::known(value_blind)),
         Witness::Base(Value::known(mu_y)),
         Witness::Base(Value::known(mu_rho)),
-        Witness::Base(Value::known(HEADSTART)),
         Witness::Base(Value::known(sigma1)),
         Witness::Base(Value::known(sigma2)),
+        Witness::Base(Value::known(HEADSTART)),
     ];
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
