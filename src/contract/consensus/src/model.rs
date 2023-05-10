@@ -50,6 +50,8 @@ pub const REWARD: u64 = 1;
 pub const REWARD_PALLAS: pallas::Base = pallas::Base::from_raw([1, 0, 0, 0]);
 // `pallas::Base` used as prefix/suffix in poseidon hash
 pub const ZERO: pallas::Base = pallas::Base::zero();
+// Serial prefix, calculated by: pallas::Base::from(2)
+pub const SERIAL_PREFIX: pallas::Base = pallas::Base::from_raw([2, 0, 0, 0]);
 // Seed prefix, calculated by: pallas::Base::from(3)
 pub const SEED_PREFIX: pallas::Base = pallas::Base::from_raw([3, 0, 0, 0]);
 // Election seed y prefix, calculated by: pallas::Base::from(22)
