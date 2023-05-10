@@ -35,7 +35,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::ConsensusFunction;
+use crate::{model::ZERO, ConsensusFunction};
 
 /// `get_metadata` function for `Consensus::UnstakeV1`
 pub(crate) fn consensus_unstake_get_metadata_v1(
@@ -140,7 +140,7 @@ pub(crate) fn consensus_unstake_process_instruction_v1(
     }
 
     // Check if spend hook is set and its correctness
-    if input.spend_hook == pallas::Base::zero() {
+    if input.spend_hook == ZERO {
         msg!("[ConsensusUnstakeV1] Error: Missing spend hook");
         return Err(MoneyError::StakeMissingSpendHook.into())
     }

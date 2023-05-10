@@ -41,8 +41,28 @@ pub struct ConsensusRewardParamsV1 {
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ConsensusRewardUpdateV1 {}
 
-// TODO: Don't set these here
+// Consensus parameters configuration.
+// Note: Always verify `pallas::Base` are correct, in case of changes,
+// using pallas_constants tool.
+// Configured reward
 pub const REWARD: u64 = 1;
+// Reward `pallas::Base`, calculated by: pallas::Base::from(REWARD)
+pub const REWARD_PALLAS: pallas::Base = pallas::Base::from_raw([1, 0, 0, 0]);
+// `pallas::Base` used as prefix/suffix in poseidon hash
+pub const ZERO: pallas::Base = pallas::Base::zero();
+// Seed prefix, calculated by: pallas::Base::from(3)
+pub const SEED_PREFIX: pallas::Base = pallas::Base::from_raw([3, 0, 0, 0]);
+// Election seed y prefix, calculated by: pallas::Base::from(22)
+pub const MU_Y_PREFIX: pallas::Base = pallas::Base::from_raw([22, 0, 0, 0]);
+// Election seed rho prefix, calculated by: pallas::Base::from(5)
+pub const MU_RHO_PREFIX: pallas::Base = pallas::Base::from_raw([5, 0, 0, 0]);
+// Lottery headstart, calculated by: darkfi::consensus::LeadCoin::headstart()
+pub const HEADSTART: pallas::Base = pallas::Base::from_raw([
+    11731824086999220879,
+    11830614503713258191,
+    737869762948382064,
+    46116860184273879,
+]);
 
 /// Auxiliary structure to decode `darkfi::consensus::state::SlotCheckpoint`
 /// to use in contract.

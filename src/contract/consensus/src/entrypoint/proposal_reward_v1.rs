@@ -36,7 +36,10 @@ use darkfi_serial::{deserialize, Encodable, WriteExt};
 
 use crate::{
     error::ConsensusError,
-    model::{ConsensusRewardParamsV1, ConsensusRewardUpdateV1, SlotCheckpoint, REWARD},
+    model::{
+        ConsensusRewardParamsV1, ConsensusRewardUpdateV1, SlotCheckpoint, MU_RHO_PREFIX,
+        MU_Y_PREFIX, REWARD, ZERO,
+    },
     ConsensusFunction,
 };
 
@@ -74,8 +77,8 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
 
     // Calculate election seeds
     let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
-    let mu_y = poseidon_hash([pallas::Base::from(22), slot_checkpoint.eta, slot_pallas]);
-    let mu_rho = poseidon_hash([pallas::Base::from(3), slot_checkpoint.eta, slot_pallas]);
+    let mu_y = poseidon_hash([MU_Y_PREFIX, slot_checkpoint.eta, slot_pallas]);
+    let mu_rho = poseidon_hash([MU_RHO_PREFIX, slot_checkpoint.eta, slot_pallas]);
 
     // Grab sigmas from slot checkpoint
     let (sigma1, sigma2) = (slot_checkpoint.sigma1, slot_checkpoint.sigma2);
@@ -170,7 +173,7 @@ pub(crate) fn consensus_proposal_reward_process_instruction_v1(
     }
 
     // If spend hook is set, check its correctness
-    if previous_input.spend_hook != pallas::Base::zero() &&
+    if previous_input.spend_hook != ZERO &&
         previous_input.spend_hook != CONSENSUS_CONTRACT_ID.inner()
     {
         msg!("[ConsensusProposalRewardV1] Error: Invoking contract call does not match spend hook in input");

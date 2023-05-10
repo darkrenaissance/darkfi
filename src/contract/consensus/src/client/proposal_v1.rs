@@ -44,7 +44,10 @@ use crate::{
         stake_v1::{create_stake_mint_proof, TransactionBuilderOutputInfo as StakeTBOI},
         unstake_v1::{create_unstake_burn_proof, TransactionBuilderInputInfo as UnstakeTBII},
     },
-    model::{ConsensusRewardParamsV1, REWARD},
+    model::{
+        ConsensusRewardParamsV1, HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX, REWARD, REWARD_PALLAS,
+        SEED_PREFIX, ZERO,
+    },
 };
 
 pub struct ConsensusProposalCallDebris {
@@ -273,17 +276,14 @@ pub fn create_proposal_reward_proof(
     value_blind: pallas::Scalar,
 ) -> Result<(Proof, ConsensusProposalRewardRevealed)> {
     // Proof parameters
-    let zero = pallas::Base::from(0);
-    let seed_prefix = pallas::Base::from(3);
     let value_commit = pedersen_commitment_u64(value, value_blind);
     let new_value_commit = pedersen_commitment_u64(value + REWARD, value_blind);
     let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
-    let mu_y = poseidon_hash([pallas::Base::from(22), slot_checkpoint.eta, slot_pallas]);
-    let seed = poseidon_hash([seed_prefix, coin, secret_key, zero]);
+    let seed = poseidon_hash([SEED_PREFIX, coin, secret_key, ZERO]);
+    let mu_y = poseidon_hash([MU_Y_PREFIX, slot_checkpoint.eta, slot_pallas]);
     let y = poseidon_hash([seed, mu_y]);
-    let mu_rho = poseidon_hash([pallas::Base::from(3), slot_checkpoint.eta, slot_pallas]);
+    let mu_rho = poseidon_hash([MU_RHO_PREFIX, slot_checkpoint.eta, slot_pallas]);
     let rho = poseidon_hash([seed, mu_rho]);
-    let headstart = darkfi::consensus::LeadCoin::headstart();
     let (sigma1, sigma2) = (slot_checkpoint.sigma1, slot_checkpoint.sigma2);
 
     // Generate public inputs, witnesses and proof
@@ -302,11 +302,11 @@ pub fn create_proposal_reward_proof(
         Witness::Base(Value::known(coin)),
         Witness::Base(Value::known(secret_key)),
         Witness::Base(Value::known(pallas::Base::from(value))),
-        Witness::Base(Value::known(pallas::Base::from(REWARD))),
+        Witness::Base(Value::known(REWARD_PALLAS)),
         Witness::Scalar(Value::known(value_blind)),
         Witness::Base(Value::known(mu_y)),
         Witness::Base(Value::known(mu_rho)),
-        Witness::Base(Value::known(headstart)),
+        Witness::Base(Value::known(HEADSTART)),
         Witness::Base(Value::known(sigma1)),
         Witness::Base(Value::known(sigma2)),
     ];

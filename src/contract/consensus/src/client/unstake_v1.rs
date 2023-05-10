@@ -70,7 +70,6 @@ impl ConsensusUnstakeBurnRevealed {
             *tokcom_coords.x(),
             *tokcom_coords.y(),
             self.merkle_root.inner(),
-            // TODO: Why is spend hook in the struct but not here?
             self.user_data_enc,
             *sigpub_coords.x(),
             *sigpub_coords.y(),

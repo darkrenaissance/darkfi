@@ -26,7 +26,7 @@ use anyhow::Result;
 use darkfi::consensus::lead_coin::LeadCoin;
 use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
 
-/// Generate a string represenation of a pallas::Base constant
+/// Generate a string represenation of a `pallas::Base` constant
 fn to_constant(name: &str, x: pallas::Base, public: bool) -> String {
     let repr = x.to_repr();
     let mut res = [0_u64; 4];
@@ -41,10 +41,14 @@ fn to_constant(name: &str, x: pallas::Base, public: bool) -> String {
     format!("{p} const {name}: pallas::Base = pallas::Base::from_raw({res:?});\n")
 }
 
-/// Generate constants for corresponding pallas::Base.
+/// Generate constants for corresponding `pallas::Base`
 fn main() -> Result<()> {
     let mut source = String::new();
-    source.push_str(&to_constant("HEADSTART", LeadCoin::headstart(), false));
+    source.push_str(&to_constant("REWARD_PALLAS", pallas::Base::one(), true));
+    source.push_str(&to_constant("SEED_PREFIX", pallas::Base::from(3), true));
+    source.push_str(&to_constant("MU_Y_PREFIX", pallas::Base::from(22), true));
+    source.push_str(&to_constant("MU_RHO_PREFIX", pallas::Base::from(5), true));
+    source.push_str(&to_constant("HEADSTART", LeadCoin::headstart(), true));
 
     let mut cmd = Command::new("rustfmt");
     cmd.stdin(Stdio::piped()).stdout(Stdio::piped());
@@ -79,15 +83,27 @@ mod tests {
         let zero = pallas::Base::zero();
         let zero_arr = [0, 0, 0, 0];
 
-        let one = pallas::Base::one();
-        let one_arr = [1, 0, 0, 0];
+        let reward = pallas::Base::one();
+        let reward_arr = [1, 0, 0, 0];
+
+        let seed_prefix = pallas::Base::from(3);
+        let seed_prefix_arr = [3, 0, 0, 0];
+
+        let mu_y_prefix = pallas::Base::from(22);
+        let mu_y_prefix_arr = [22, 0, 0, 0];
+
+        let mu_rho_prefix = pallas::Base::from(5);
+        let mu_rho_prefix_arr = [5, 0, 0, 0];
 
         let headstart = LeadCoin::headstart();
         let headstart_arr =
             [11731824086999220879, 11830614503713258191, 737869762948382064, 46116860184273879];
 
         assert_eq!(zero, pallas::Base::from_raw(zero_arr));
-        assert_eq!(one, pallas::Base::from_raw(one_arr));
+        assert_eq!(reward, pallas::Base::from_raw(reward_arr));
+        assert_eq!(seed_prefix, pallas::Base::from_raw(seed_prefix_arr));
+        assert_eq!(mu_y_prefix, pallas::Base::from_raw(mu_y_prefix_arr));
+        assert_eq!(mu_rho_prefix, pallas::Base::from_raw(mu_rho_prefix_arr));
         assert_eq!(headstart, pallas::Base::from_raw(headstart_arr));
     }
 }

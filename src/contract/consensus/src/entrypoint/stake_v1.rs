@@ -36,7 +36,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::ConsensusFunction;
+use crate::{model::ZERO, ConsensusFunction};
 
 /// `get_metadata` function for `Consensus::StakeV1`
 pub(crate) fn consensus_stake_get_metadata_v1(
@@ -154,7 +154,7 @@ pub(crate) fn consensus_stake_process_instruction_v1(
     }
 
     // If spend hook is set, check its correctness
-    if previous_input.spend_hook != pallas::Base::zero() &&
+    if previous_input.spend_hook != ZERO &&
         previous_input.spend_hook != CONSENSUS_CONTRACT_ID.inner()
     {
         msg!("[ConsensusStakeV1] Error: Invoking contract call does not match spend hook in input");
