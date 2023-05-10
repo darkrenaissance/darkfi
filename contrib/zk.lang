@@ -24,7 +24,7 @@
   <definitions>
     <context id="keywords" style-ref="keyword">
       <keyword>constant</keyword>
-      <keyword>contract</keyword>
+      <keyword>witness</keyword>
       <keyword>circuit</keyword>
     </context>
     

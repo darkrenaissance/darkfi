@@ -9,7 +9,7 @@ endif
 
 syn keyword zkasKeyword 
     \ constant
-    \ contract
+    \ witness
     \ circuit
 
 syn keyword zkasType 
