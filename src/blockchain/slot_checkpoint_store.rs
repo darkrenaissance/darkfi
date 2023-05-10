@@ -153,7 +153,7 @@ impl SlotCheckpointStoreOverlay {
 
     /// Fetch given slot from the slotcheckpointstore.
     pub fn get(&self, slot: u64) -> Result<Vec<u8>> {
-        match self.0.lock().unwrap().get(&SLED_SLOT_CHECKPOINT_TREE, &slot.to_be_bytes())? {
+        match self.0.lock().unwrap().get(SLED_SLOT_CHECKPOINT_TREE, &slot.to_be_bytes())? {
             Some(found) => Ok(found.to_vec()),
             None => Err(Error::SlotNotFound(slot)),
         }

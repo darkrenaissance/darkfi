@@ -86,7 +86,7 @@ impl Clock {
 
     /// return absolute tick to genesis, and relative tick index in the slot.
     async fn tick_time(&self) -> (u64, u64, u64) {
-        let time = self.time_to_genesis().await.0 as u64;
+        let time = self.time_to_genesis().await.0;
         let tick_abs: u64 = time / self.tick_len;
         let tick_rel: u64 = time % self.tick_len;
         (time, tick_rel, tick_abs)

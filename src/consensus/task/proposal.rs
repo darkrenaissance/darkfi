@@ -42,7 +42,7 @@ pub async fn proposal_task(
     if current_ts < bootstrap_ts {
         let diff = bootstrap_ts.0 - current_ts.0;
         info!(target: "consensus::proposal", "consensus: Waiting for network bootstrap: {} seconds", diff);
-        sleep(diff as u64).await;
+        sleep(diff).await;
     } else {
         let mut sleep_time = state.read().await.consensus.time_keeper.next_n_slot_start(1);
         let sync_offset = constants::FINAL_SYNC_DUR;

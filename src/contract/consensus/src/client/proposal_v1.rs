@@ -269,7 +269,7 @@ impl ConsensusProposalCallBuilder {
         let stake_params = ConsensusProposalMintParamsV1 {
             input: input.clone(),
             output: output.clone(),
-            serial_commit: serial_commit.clone(),
+            serial_commit,
         };
         let stake_proofs = vec![proof];
         let stake_input = input;
