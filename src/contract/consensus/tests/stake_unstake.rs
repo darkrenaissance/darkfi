@@ -95,12 +95,16 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Faucet] ==========================");
     info!(target: "consensus", "[Faucet] Executing Alice airdrop tx");
     info!(target: "consensus", "[Faucet] ==========================");
-    th.faucet.state.read().await.verify_transactions(&[airdrop_tx.clone()], true).await?;
+    let erroneous_txs =
+        th.faucet.state.read().await.verify_transactions(&[airdrop_tx.clone()], true).await?;
+    assert_eq!(erroneous_txs.len(), 0);
     th.faucet.merkle_tree.append(&MerkleNode::from(airdrop_params.outputs[0].coin.inner()));
     info!(target: "consensus", "[Alice] ==========================");
     info!(target: "consensus", "[Alice] Executing Alice airdrop tx");
     info!(target: "consensus", "[Alice] ==========================");
-    th.alice.state.read().await.verify_transactions(&[airdrop_tx.clone()], true).await?;
+    let erroneous_txs =
+        th.alice.state.read().await.verify_transactions(&[airdrop_tx.clone()], true).await?;
+    assert_eq!(erroneous_txs.len(), 0);
     th.alice.merkle_tree.append(&MerkleNode::from(airdrop_params.outputs[0].coin.inner()));
 
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
@@ -189,7 +193,9 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Faucet] Executing Alice stake tx");
     info!(target: "consensus", "[Faucet] ========================");
     let timer = Instant::now();
-    th.faucet.state.read().await.verify_transactions(&[alice_stake_tx.clone()], true).await?;
+    let erroneous_txs =
+        th.faucet.state.read().await.verify_transactions(&[alice_stake_tx.clone()], true).await?;
+    assert_eq!(erroneous_txs.len(), 0);
     th.faucet
         .consensus_merkle_tree
         .append(&MerkleNode::from(alice_consensus_stake_params.output.coin.inner()));
@@ -199,7 +205,9 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] Executing Alice stake tx");
     info!(target: "consensus", "[Alice] ========================");
     let timer = Instant::now();
-    th.alice.state.read().await.verify_transactions(&[alice_stake_tx.clone()], true).await?;
+    let erroneous_txs =
+        th.alice.state.read().await.verify_transactions(&[alice_stake_tx.clone()], true).await?;
+    assert_eq!(erroneous_txs.len(), 0);
     th.alice
         .consensus_merkle_tree
         .append(&MerkleNode::from(alice_consensus_stake_params.output.coin.inner()));
@@ -315,7 +323,14 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Faucet] Executing Alice proposal tx");
     info!(target: "consensus", "[Faucet] ===========================");
     let timer = Instant::now();
-    th.faucet.state.read().await.verify_transactions(&[alice_proposal_tx.clone()], true).await?;
+    let erroneous_txs = th
+        .faucet
+        .state
+        .read()
+        .await
+        .verify_transactions(&[alice_proposal_tx.clone()], true)
+        .await?;
+    assert_eq!(erroneous_txs.len(), 0);
     th.faucet
         .consensus_merkle_tree
         .append(&MerkleNode::from(alice_consensus_stake_params.output.coin.inner()));
@@ -325,7 +340,9 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] Executing Alice proposal tx");
     info!(target: "consensus", "[Alice] ===========================");
     let timer = Instant::now();
-    th.alice.state.read().await.verify_transactions(&[alice_proposal_tx.clone()], true).await?;
+    let erroneous_txs =
+        th.alice.state.read().await.verify_transactions(&[alice_proposal_tx.clone()], true).await?;
+    assert_eq!(erroneous_txs.len(), 0);
     th.alice
         .consensus_merkle_tree
         .append(&MerkleNode::from(alice_consensus_stake_params.output.coin.inner()));
@@ -426,7 +443,9 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Faucet] Executing Alice unstake tx");
     info!(target: "consensus", "[Faucet] ==========================");
     let timer = Instant::now();
-    th.faucet.state.read().await.verify_transactions(&[alice_unstake_tx.clone()], true).await?;
+    let erroneous_txs =
+        th.faucet.state.read().await.verify_transactions(&[alice_unstake_tx.clone()], true).await?;
+    assert_eq!(erroneous_txs.len(), 0);
     th.faucet.merkle_tree.append(&MerkleNode::from(alice_money_unstake_params.output.coin.inner()));
     unstake_verify_times.push(timer.elapsed());
 
@@ -434,7 +453,9 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] Executing Alice unstake tx");
     info!(target: "consensus", "[Alice] ==========================");
     let timer = Instant::now();
-    th.alice.state.read().await.verify_transactions(&[alice_unstake_tx.clone()], true).await?;
+    let erroneous_txs =
+        th.alice.state.read().await.verify_transactions(&[alice_unstake_tx.clone()], true).await?;
+    assert_eq!(erroneous_txs.len(), 0);
     th.alice.merkle_tree.append(&MerkleNode::from(alice_money_unstake_params.output.coin.inner()));
     unstake_verify_times.push(timer.elapsed());
 
