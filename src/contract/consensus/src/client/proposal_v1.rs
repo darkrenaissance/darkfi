@@ -31,7 +31,7 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash,
-        MerkleTree, PublicKey, SecretKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
+        MerkleTree, Nullifier, PublicKey, SecretKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
     },
     incrementalmerkletree::Tree,
     pasta::pallas,
@@ -61,6 +61,7 @@ pub struct ConsensusProposalCallDebris {
 }
 
 pub struct ConsensusProposalRewardRevealed {
+    pub nullifier: Nullifier,
     pub value_commit: pallas::Point,
     pub new_value_commit: pallas::Point,
     pub mu_y: pallas::Base,
@@ -79,6 +80,7 @@ impl ConsensusProposalRewardRevealed {
         // NOTE: It's important to keep these in the same order
         // as the `constrain_instance` calls in the zkas code.
         vec![
+            self.nullifier.inner(),
             *value_coords.x(),
             *value_coords.y(),
             *new_value_coords.x(),
@@ -234,12 +236,14 @@ impl ConsensusProposalCallBuilder {
         debug!("Building Consensus::RewardV1 contract call for proposal");
         let coin = self.coin.coin.inner();
         let secret_key = self.coin.secret.inner();
+        let serial = self.coin.note.serial;
         let (proof, public_inputs) = create_proposal_reward_proof(
             &self.reward_zkbin,
             &self.reward_pk,
             &self.slot_checkpoint,
             coin,
             secret_key,
+            serial,
             value,
             value_blind,
         )?;
@@ -273,10 +277,12 @@ pub fn create_proposal_reward_proof(
     slot_checkpoint: &SlotCheckpoint,
     coin: pallas::Base,
     secret_key: pallas::Base,
+    serial: pallas::Base,
     value: u64,
     value_blind: pallas::Scalar,
 ) -> Result<(Proof, ConsensusProposalRewardRevealed)> {
     // Proof parameters
+    let nullifier = Nullifier::from(poseidon_hash([secret_key, serial]));
     let value_commit = pedersen_commitment_u64(value, value_blind);
     let new_value_commit = pedersen_commitment_u64(value + REWARD, value_blind);
     let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
@@ -289,6 +295,7 @@ pub fn create_proposal_reward_proof(
 
     // Generate public inputs, witnesses and proof
     let public_inputs = ConsensusProposalRewardRevealed {
+        nullifier,
         value_commit,
         new_value_commit,
         mu_y,
@@ -302,6 +309,7 @@ pub fn create_proposal_reward_proof(
     let prover_witnesses = vec![
         Witness::Base(Value::known(coin)),
         Witness::Base(Value::known(secret_key)),
+        Witness::Base(Value::known(serial)),
         Witness::Base(Value::known(pallas::Base::from(value))),
         Witness::Base(Value::known(REWARD_PALLAS)),
         Witness::Scalar(Value::known(value_blind)),

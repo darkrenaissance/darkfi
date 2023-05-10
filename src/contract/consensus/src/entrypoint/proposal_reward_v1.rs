@@ -57,6 +57,9 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
     // Public keys for the transaction signatures we have to verify
     let mut signature_pubkeys: Vec<PublicKey> = vec![];
 
+    // Grab the nullifier for the burnt coin
+    let nullifier = &params.unstake_input.nullifier;
+
     // Grab the pedersen commitment for the burnt value
     let value_coords = &params.unstake_input.value_commit.to_affine().coordinates().unwrap();
 
@@ -86,6 +89,7 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
     zk_public_inputs.push((
         CONSENSUS_CONTRACT_ZKAS_REWARD_NS_V1.to_string(),
         vec![
+            nullifier.inner(),
             *value_coords.x(),
             *value_coords.y(),
             *new_value_coords.x(),

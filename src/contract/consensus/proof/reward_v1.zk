@@ -8,6 +8,8 @@ witness "Reward_V1" {
 	Base coin,
 	# Burnt coin secret key
 	Base secret_key,
+	# Unique serial number corresponding to the burnt coin
+	Base serial,
 	# The value of the burnt coin
 	Base value,
 	# The reward value
@@ -30,6 +32,10 @@ circuit "Reward_V1" {
 	# Constants
 	ZERO = witness_base(0);
 	SEED_PREFIX = witness_base(3);
+
+	# Poseidon hash of the coin nullifier
+	nullifier = poseidon_hash(secret_key, serial);
+	constrain_instance(nullifier);
 
 	# Pedersen commitment for coin's value
 	vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
