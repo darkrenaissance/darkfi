@@ -98,5 +98,7 @@ pub const CONSENSUS_CONTRACT_NULLIFIERS_TREE: &str = "consensus_nullifiers";
 pub const CONSENSUS_CONTRACT_DB_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const CONSENSUS_CONTRACT_COIN_MERKLE_TREE: &str = "consensus_coin_tree";
 
-/// zkas reward circuit namespace
+/// zkas proposal reward circuit namespace
 pub const CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1: &str = "ProposalReward_V1";
+/// zkas proposal mint circuit namespace
+pub const CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1: &str = "ProposalMint_V1";

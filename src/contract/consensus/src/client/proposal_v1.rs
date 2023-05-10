@@ -30,8 +30,9 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash,
-        MerkleTree, Nullifier, PublicKey, SecretKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
+        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_base,
+        pedersen_commitment_u64, poseidon_hash, Coin, MerkleTree, Nullifier, PublicKey, SecretKey,
+        CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
     },
     incrementalmerkletree::Tree,
     pasta::pallas,
@@ -41,7 +42,10 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{
-        stake_v1::{create_stake_mint_proof, TransactionBuilderOutputInfo as StakeTBOI},
+        stake_v1::{
+            ConsensusMintRevealed, TransactionBuilderOutputInfo as StakeTBOI,
+            TransactionBuilderOutputInfo,
+        },
         unstake_v1::{create_unstake_burn_proof, TransactionBuilderInputInfo as UnstakeTBII},
     },
     model::{
@@ -110,11 +114,11 @@ pub struct ConsensusProposalCallBuilder {
     pub burn_zkbin: ZkBinary,
     /// Proving key for the `Burn_V1` zk circuit
     pub burn_pk: ProvingKey,
-    /// `Reward_V1` zkas circuit ZkBinary
+    /// `ProposalReward_V1` zkas circuit ZkBinary
     pub reward_zkbin: ZkBinary,
     /// Proving key for the `Reward_V1` zk circuit
     pub reward_pk: ProvingKey,
-    /// `Mint_V1` zkas circuit ZkBinary
+    /// `ProposalMint_V1` zkas circuit ZkBinary
     pub mint_zkbin: ZkBinary,
     /// Proving key for the `Mint_V1` zk circuit
     pub mint_pk: ProvingKey,
@@ -122,7 +126,7 @@ pub struct ConsensusProposalCallBuilder {
 
 impl ConsensusProposalCallBuilder {
     pub fn build(&self) -> Result<ConsensusProposalCallDebris> {
-        debug!("Building Consensus::UnstakeV1 contract call for proposal");
+        debug!("Building Consensus::ProposalBurnV1 contract call for proposal");
         let value = self.coin.note.value;
         let token_id = self.coin.note.token_id;
         assert!(value != 0);
@@ -170,7 +174,7 @@ impl ConsensusProposalCallBuilder {
         let unstake_proofs = vec![proof];
         let unstake_input = input;
 
-        debug!("Building Consensus::StakeV1 contract call for proposal");
+        debug!("Building Consensus::ProposalMintV1 contract call for proposal");
         let new_value = value + REWARD;
         let nullifier = public_inputs.nullifier;
         let merkle_root = public_inputs.merkle_root;
@@ -186,7 +190,7 @@ impl ConsensusProposalCallBuilder {
         let coin_blind = pallas::Base::random(&mut OsRng);
 
         info!("Creating stake mint proof for output for proposal");
-        let (proof, public_inputs) = create_stake_mint_proof(
+        let (proof, public_inputs) = create_proposal_mint_proof(
             &self.mint_zkbin,
             &self.mint_pk,
             &output,
@@ -233,7 +237,7 @@ impl ConsensusProposalCallBuilder {
         let stake_proofs = vec![proof];
         let stake_input = input;
 
-        debug!("Building Consensus::RewardV1 contract call for proposal");
+        debug!("Building Consensus::ProposalRewardV1 contract call for proposal");
         let secret_key = self.coin.secret.inner();
         let serial = self.coin.note.serial;
         let (proof, public_inputs) = create_proposal_reward_proof(
@@ -314,6 +318,53 @@ pub fn create_proposal_reward_proof(
         Witness::Base(Value::known(sigma1)),
         Witness::Base(Value::known(sigma2)),
         Witness::Base(Value::known(HEADSTART)),
+    ];
+
+    let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+    let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
+
+    Ok((proof, public_inputs))
+}
+
+pub fn create_proposal_mint_proof(
+    zkbin: &ZkBinary,
+    pk: &ProvingKey,
+    output: &TransactionBuilderOutputInfo,
+    value_blind: pallas::Scalar,
+    token_blind: pallas::Scalar,
+    serial: pallas::Base,
+    spend_hook: pallas::Base,
+    user_data: pallas::Base,
+    coin_blind: pallas::Base,
+) -> Result<(Proof, ConsensusMintRevealed)> {
+    let value_commit = pedersen_commitment_u64(output.value, value_blind);
+    let token_commit = pedersen_commitment_base(output.token_id.inner(), token_blind);
+    let (pub_x, pub_y) = output.public_key.xy();
+
+    let coin = Coin::from(poseidon_hash([
+        pub_x,
+        pub_y,
+        pallas::Base::from(output.value),
+        output.token_id.inner(),
+        serial,
+        spend_hook,
+        user_data,
+        coin_blind,
+    ]));
+
+    let public_inputs = ConsensusMintRevealed { coin, value_commit, token_commit };
+
+    let prover_witnesses = vec![
+        Witness::Base(Value::known(pub_x)),
+        Witness::Base(Value::known(pub_y)),
+        Witness::Base(Value::known(pallas::Base::from(output.value))),
+        Witness::Base(Value::known(output.token_id.inner())),
+        Witness::Base(Value::known(serial)),
+        Witness::Base(Value::known(coin_blind)),
+        Witness::Base(Value::known(spend_hook)),
+        Witness::Base(Value::known(user_data)),
+        Witness::Scalar(Value::known(value_blind)),
+        Witness::Scalar(Value::known(token_blind)),
     ];
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());

@@ -88,11 +88,13 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     let money_mint_v1_bincode = include_bytes!("../../money/proof/mint_v1.zk.bin");
     let money_burn_v1_bincode = include_bytes!("../../money/proof/burn_v1.zk.bin");
     let proposal_reward_v1_bincode = include_bytes!("../proof/proposal_reward_v1.zk.bin");
+    let proposal_mint_v1_bincode = include_bytes!("../proof/proposal_mint_v1.zk.bin");
 
     // For that, we use `zkas_db_set` and pass in the bincode.
     zkas_db_set(&money_mint_v1_bincode[..])?;
     zkas_db_set(&money_burn_v1_bincode[..])?;
     zkas_db_set(&proposal_reward_v1_bincode[..])?;
+    zkas_db_set(&proposal_mint_v1_bincode[..])?;
 
     // Set up a database tree to hold Merkle roots of all coins
     // k=MerkleNode, v=[]

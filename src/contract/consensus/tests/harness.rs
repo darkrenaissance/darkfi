@@ -43,8 +43,8 @@ use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
     client::transfer_v1::TransferCallBuilder, model::MoneyTransferParamsV1, MoneyFunction,
-    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
-    MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1,
+    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
 pub fn init_logger() {
@@ -150,6 +150,7 @@ impl ConsensusTestHarness {
         mkpk!(MONEY_CONTRACT_ZKAS_MINT_NS_V1);
         mkpk!(MONEY_CONTRACT_ZKAS_BURN_NS_V1);
         mkpk!(CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1);
+        mkpk!(CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1);
 
         Ok(Self { faucet, alice, proving_keys })
     }
