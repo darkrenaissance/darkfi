@@ -27,6 +27,7 @@
   - [Transaction lifetime](architecture/sc/tx-lifetime.md)
 - [zkas](zkas/index.md)
   - [Bincode](zkas/bincode.md)
+  - [zkVM](zkas/zkvm.md)
   - [Examples](zkas/examples.md)
     - [Anonymous voting](zkas/examples/voting.md)
     - [Anonymous payments](zkas/examples/sapling.md)

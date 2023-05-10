@@ -346,6 +346,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             Value::known(pallas::Base::one()),
         )?;
 
+        // ANCHOR: constant_init
         // Lookup and push constants onto the heap
         for constant in &self.constants {
             trace!(
@@ -377,7 +378,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
             }
         }
+        // ANCHOR_END: constant_init
 
+        // ANCHOR: literals_init
         // Load the literals onto the literal heap
         // N.B. Only uint64 is supported right now.
         for literal in &self.literals {
@@ -395,7 +398,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
             }
         }
+        // ANCHOR_END: literals_init
 
+        // ANCHOR: witness_init
         // Push the witnesses onto the heap, and potentially, if the witness
         // is in the Base field (like the entire circuit is), load it into a
         // table cell.
@@ -470,11 +475,13 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
             }
         }
+        // ANCHOR_END: witness_init
 
         // =============================
         // And now, work through opcodes
         // =============================
         // TODO: Copy constraints
+        // ANCHOR: opcode_begin
         for opcode in &self.opcodes {
             match opcode.0 {
                 Opcode::EcAdd => {
@@ -492,7 +499,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
                     heap.push(HeapVar::EcPoint(ret));
                 }
-
+                // ANCHOR_END: opcode_begin
                 Opcode::EcMul => {
                     trace!(target: "zk::vm", "Executing `EcMul{:?}` opcode", opcode.1);
                     let args = &opcode.1;
