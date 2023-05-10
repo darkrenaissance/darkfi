@@ -1,6 +1,7 @@
 constant "ProposalReward_V1" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,
+	EcFixedPointBase NULLIFIER_K,
 }
 
 witness "ProposalReward_V1" {
@@ -14,6 +15,8 @@ witness "ProposalReward_V1" {
 	Base reward,
 	# Random blinding factor for the value commitment
 	Scalar value_blind,
+	# Random blinding factor for the serial number of the new coin
+	Scalar new_serial_blind,
 	# Election seed y
 	Base mu_y,
 	# Election seed rho
@@ -29,6 +32,7 @@ witness "ProposalReward_V1" {
 circuit "ProposalReward_V1" {
 	# Constants
 	ZERO = witness_base(0);
+	SERIAL_PREFIX = witness_base(2);
 	SEED_PREFIX = witness_base(3);
 
 	# Poseidon hash of the coin nullifier
@@ -43,6 +47,16 @@ circuit "ProposalReward_V1" {
 	# and constrain them:
 	constrain_instance(ec_get_x(value_commit));
 	constrain_instance(ec_get_y(value_commit));
+
+	# Derive new coin serial from burnt one and constrain the pedersen commitment
+	new_serial = poseidon_hash(SERIAL_PREFIX, secret_key, serial, ZERO);
+	scv = ec_mul_base(new_serial, NULLIFIER_K);
+	scr = ec_mul(new_serial_blind, VALUE_COMMIT_RANDOM);
+	serial_commit = ec_add(scv, scr);
+	# Since serial commit is also a curve point, we'll do the same
+	# coordinate dance:
+	constrain_instance(ec_get_x(serial_commit));
+	constrain_instance(ec_get_y(serial_commit));
 
 	# Pedersen commitment for new coin's value
 	new_value = base_add(value, reward);

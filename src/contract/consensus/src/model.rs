@@ -29,6 +29,8 @@ pub struct ConsensusProposalRewardParamsV1 {
     pub stake_input: StakeInput,
     /// Anonymous output
     pub output: Output,
+    /// Pedersen commitment for the output's serial number
+    pub new_serial_commit: pallas::Point,
     /// Rewarded slot
     pub slot: u64,
     /// Coin y

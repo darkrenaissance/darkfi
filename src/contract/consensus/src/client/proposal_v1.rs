@@ -64,6 +64,7 @@ pub struct ConsensusProposalCallDebris {
 pub struct ConsensusProposalRewardRevealed {
     pub nullifier: Nullifier,
     pub value_commit: pallas::Point,
+    pub new_serial_commit: pallas::Point,
     pub new_value_commit: pallas::Point,
     pub mu_y: pallas::Base,
     pub y: pallas::Base,
@@ -76,6 +77,7 @@ pub struct ConsensusProposalRewardRevealed {
 impl ConsensusProposalRewardRevealed {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
+        let new_serial_coords = self.new_serial_commit.to_affine().coordinates().unwrap();
         let new_value_coords = self.new_value_commit.to_affine().coordinates().unwrap();
 
         // NOTE: It's important to keep these in the same order
@@ -84,6 +86,8 @@ impl ConsensusProposalRewardRevealed {
             self.nullifier.inner(),
             *value_coords.x(),
             *value_coords.y(),
+            *new_serial_coords.x(),
+            *new_serial_coords.y(),
             *new_value_coords.x(),
             *new_value_coords.y(),
             self.mu_y,
@@ -265,7 +269,7 @@ impl ConsensusProposalCallBuilder {
         let stake_params = ConsensusProposalMintParamsV1 {
             input: input.clone(),
             output: output.clone(),
-            serial_commit,
+            serial_commit: serial_commit.clone(),
         };
         let stake_proofs = vec![proof];
         let stake_input = input;
@@ -281,14 +285,23 @@ impl ConsensusProposalCallBuilder {
             serial,
             value,
             value_blind,
+            serial_blind,
         )?;
 
         // We now fill this with necessary stuff
+        let new_serial_commit = serial_commit;
         let slot = self.slot_checkpoint.slot;
         let y = public_inputs.y;
         let rho = public_inputs.rho;
-        let reward_params =
-            ConsensusProposalRewardParamsV1 { unstake_input, stake_input, output, slot, y, rho };
+        let reward_params = ConsensusProposalRewardParamsV1 {
+            unstake_input,
+            stake_input,
+            output,
+            new_serial_commit,
+            slot,
+            y,
+            rho,
+        };
         let reward_proofs = vec![proof];
 
         // Now we should have all the params, zk proofs and signature secret.
@@ -314,10 +327,13 @@ pub fn create_proposal_reward_proof(
     serial: pallas::Base,
     value: u64,
     value_blind: pallas::Scalar,
+    new_serial_blind: pallas::Scalar,
 ) -> Result<(Proof, ConsensusProposalRewardRevealed)> {
     // Proof parameters
     let nullifier = Nullifier::from(poseidon_hash([secret_key, serial]));
     let value_commit = pedersen_commitment_u64(value, value_blind);
+    let new_serial = poseidon_hash([SERIAL_PREFIX, secret_key, serial, ZERO]);
+    let new_serial_commit = pedersen_commitment_base(new_serial, new_serial_blind);
     let new_value_commit = pedersen_commitment_u64(value + REWARD, value_blind);
     let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
     let seed = poseidon_hash([SEED_PREFIX, serial, ZERO]);
@@ -331,6 +347,7 @@ pub fn create_proposal_reward_proof(
     let public_inputs = ConsensusProposalRewardRevealed {
         nullifier,
         value_commit,
+        new_serial_commit,
         new_value_commit,
         mu_y,
         y,
@@ -346,6 +363,7 @@ pub fn create_proposal_reward_proof(
         Witness::Base(Value::known(pallas::Base::from(value))),
         Witness::Base(Value::known(REWARD_PALLAS)),
         Witness::Scalar(Value::known(value_blind)),
+        Witness::Scalar(Value::known(new_serial_blind)),
         Witness::Base(Value::known(mu_y)),
         Witness::Base(Value::known(mu_rho)),
         Witness::Base(Value::known(sigma1)),

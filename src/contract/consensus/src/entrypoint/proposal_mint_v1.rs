@@ -153,11 +153,10 @@ pub(crate) fn consensus_proposal_mint_process_instruction_v1(
     // Verify previous call input is the same as this calls StakeInput
     let previous_params: ConsensusProposalRewardParamsV1 = deserialize(&previous.data[1..])?;
     let previous_input = &previous_params.stake_input;
-    if &previous_input != &input {
-        msg!("[ConsensusProposalMintV1] Error: Previous call input mismatch");
-        return Err(MoneyError::PreviousCallInputMissmatch.into())
-    }
-    if &previous_params.output != output {
+    if &previous_input != &input ||
+        &previous_params.output != output ||
+        &previous_params.new_serial_commit != &params.serial_commit
+    {
         msg!("[ConsensusProposalMintV1] Error: Previous call input mismatch");
         return Err(MoneyError::PreviousCallInputMissmatch.into())
     }

@@ -63,6 +63,9 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
     // Grab the pedersen commitment for the burnt value
     let value_coords = &params.unstake_input.value_commit.to_affine().coordinates().unwrap();
 
+    // Grab the pedersen commitment for the minted serial number
+    let new_serial_coords = &params.new_serial_commit.to_affine().coordinates().unwrap();
+
     // Grab the pedersen commitment for the minted value
     let new_value_coords = &params.stake_input.value_commit.to_affine().coordinates().unwrap();
 
@@ -92,6 +95,8 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
             nullifier.inner(),
             *value_coords.x(),
             *value_coords.y(),
+            *new_serial_coords.x(),
+            *new_serial_coords.y(),
             *new_value_coords.x(),
             *new_value_coords.y(),
             mu_y,
@@ -206,11 +211,10 @@ pub(crate) fn consensus_proposal_reward_process_instruction_v1(
 
     // Verify next call StakeInput is the same as this calls input
     let next_params: ConsensusProposalMintParamsV1 = deserialize(&next.data[1..])?;
-    if stake_input != &next_params.input {
-        msg!("[ConsensusProposalRewardV1] Error: Next call input mismatch");
-        return Err(MoneyError::NextCallInputMissmatch.into())
-    }
-    if output != &next_params.output {
+    if stake_input != &next_params.input ||
+        output != &next_params.output ||
+        &params.new_serial_commit != &next_params.serial_commit
+    {
         msg!("[ConsensusProposalRewardV1] Error: Next call input mismatch");
         return Err(MoneyError::NextCallInputMissmatch.into())
     }
