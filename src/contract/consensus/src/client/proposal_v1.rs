@@ -26,7 +26,7 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
-    model::{ConsensusStakeParamsV1, ConsensusUnstakeParamsV1, Input, Output, StakeInput},
+    model::{ConsensusUnstakeParamsV1, Input, Output, StakeInput},
 };
 use darkfi_sdk::{
     crypto::{
@@ -42,24 +42,21 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{
-        stake_v1::{
-            ConsensusMintRevealed, TransactionBuilderOutputInfo as StakeTBOI,
-            TransactionBuilderOutputInfo,
-        },
+        stake_v1::{TransactionBuilderOutputInfo as StakeTBOI, TransactionBuilderOutputInfo},
         unstake_v1::{create_unstake_burn_proof, TransactionBuilderInputInfo as UnstakeTBII},
     },
     model::{
-        ConsensusRewardParamsV1, HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX, REWARD, REWARD_PALLAS,
-        SEED_PREFIX, SERIAL_PREFIX, ZERO,
+        ConsensusProposalMintParamsV1, ConsensusProposalRewardParamsV1, HEADSTART, MU_RHO_PREFIX,
+        MU_Y_PREFIX, REWARD, REWARD_PALLAS, SEED_PREFIX, SERIAL_PREFIX, ZERO,
     },
 };
 
 pub struct ConsensusProposalCallDebris {
     pub unstake_params: ConsensusUnstakeParamsV1,
     pub unstake_proofs: Vec<Proof>,
-    pub reward_params: ConsensusRewardParamsV1,
+    pub reward_params: ConsensusProposalRewardParamsV1,
     pub reward_proofs: Vec<Proof>,
-    pub stake_params: ConsensusStakeParamsV1,
+    pub stake_params: ConsensusProposalMintParamsV1,
     pub stake_proofs: Vec<Proof>,
     pub signature_secret: SecretKey,
 }
@@ -96,6 +93,33 @@ impl ConsensusProposalRewardRevealed {
             self.sigma1,
             self.sigma2,
             HEADSTART,
+        ]
+    }
+}
+
+pub struct ConsensusProposalMintRevealed {
+    pub coin: Coin,
+    pub value_commit: pallas::Point,
+    pub token_commit: pallas::Point,
+    pub serial_commit: pallas::Point,
+}
+
+impl ConsensusProposalMintRevealed {
+    pub fn to_vec(&self) -> Vec<pallas::Base> {
+        let valcom_coords = self.value_commit.to_affine().coordinates().unwrap();
+        let tokcom_coords = self.token_commit.to_affine().coordinates().unwrap();
+        let sercom_coords = self.serial_commit.to_affine().coordinates().unwrap();
+
+        // NOTE: It's important to keep these in the same order
+        // as the `constrain_instance` calls in the zkas code.
+        vec![
+            self.coin.inner(),
+            *valcom_coords.x(),
+            *valcom_coords.y(),
+            *tokcom_coords.x(),
+            *tokcom_coords.y(),
+            *sercom_coords.x(),
+            *sercom_coords.y(),
         ]
     }
 }
@@ -189,6 +213,7 @@ impl ConsensusProposalCallBuilder {
         let spend_hook = CONSENSUS_CONTRACT_ID.inner();
         let user_data = pallas::Base::random(&mut OsRng);
         let coin_blind = pallas::Base::random(&mut OsRng);
+        let serial_blind = pallas::Scalar::random(&mut OsRng);
 
         info!("Creating stake mint proof for output for proposal");
         let (proof, public_inputs, serial) = create_proposal_mint_proof(
@@ -197,6 +222,7 @@ impl ConsensusProposalCallBuilder {
             &output,
             value_blind,
             token_blind,
+            serial_blind,
             burnt_secret_key,
             burnt_serial,
             spend_hook,
@@ -235,7 +261,12 @@ impl ConsensusProposalCallBuilder {
         };
 
         // We now fill this with necessary stuff
-        let stake_params = ConsensusStakeParamsV1 { input: input.clone(), output: output.clone() };
+        let serial_commit = public_inputs.serial_commit;
+        let stake_params = ConsensusProposalMintParamsV1 {
+            input: input.clone(),
+            output: output.clone(),
+            serial_commit,
+        };
         let stake_proofs = vec![proof];
         let stake_input = input;
 
@@ -257,7 +288,7 @@ impl ConsensusProposalCallBuilder {
         let y = public_inputs.y;
         let rho = public_inputs.rho;
         let reward_params =
-            ConsensusRewardParamsV1 { unstake_input, stake_input, output, slot, y, rho };
+            ConsensusProposalRewardParamsV1 { unstake_input, stake_input, output, slot, y, rho };
         let reward_proofs = vec![proof];
 
         // Now we should have all the params, zk proofs and signature secret.
@@ -334,15 +365,17 @@ pub fn create_proposal_mint_proof(
     output: &TransactionBuilderOutputInfo,
     value_blind: pallas::Scalar,
     token_blind: pallas::Scalar,
+    serial_blind: pallas::Scalar,
     burnt_secret_key: pallas::Base,
     burnt_serial: pallas::Base,
     spend_hook: pallas::Base,
     user_data: pallas::Base,
     coin_blind: pallas::Base,
-) -> Result<(Proof, ConsensusMintRevealed, pallas::Base)> {
+) -> Result<(Proof, ConsensusProposalMintRevealed, pallas::Base)> {
     let serial = poseidon_hash([SERIAL_PREFIX, burnt_secret_key, burnt_serial, ZERO]);
     let value_commit = pedersen_commitment_u64(output.value, value_blind);
     let token_commit = pedersen_commitment_base(output.token_id.inner(), token_blind);
+    let serial_commit = pedersen_commitment_base(serial, serial_blind);
     let (pub_x, pub_y) = output.public_key.xy();
 
     let coin = Coin::from(poseidon_hash([
@@ -356,7 +389,8 @@ pub fn create_proposal_mint_proof(
         coin_blind,
     ]));
 
-    let public_inputs = ConsensusMintRevealed { coin, value_commit, token_commit };
+    let public_inputs =
+        ConsensusProposalMintRevealed { coin, value_commit, token_commit, serial_commit };
 
     let prover_witnesses = vec![
         Witness::Base(Value::known(pub_x)),
@@ -370,6 +404,7 @@ pub fn create_proposal_mint_proof(
         Witness::Base(Value::known(user_data)),
         Witness::Scalar(Value::known(value_blind)),
         Witness::Scalar(Value::known(token_blind)),
+        Witness::Scalar(Value::known(serial_blind)),
     ];
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());

@@ -17,11 +17,10 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError,
-    model::{ConsensusStakeParamsV1, ConsensusStakeUpdateV1},
-    CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
-    CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
-    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1,
+    error::MoneyError, model::ConsensusStakeUpdateV1, CONSENSUS_CONTRACT_COINS_TREE,
+    CONSENSUS_CONTRACT_COIN_MERKLE_TREE, CONSENSUS_CONTRACT_COIN_ROOTS_TREE,
+    CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
+    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
@@ -37,7 +36,7 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
-    model::{ConsensusRewardParamsV1, ZERO},
+    model::{ConsensusProposalMintParamsV1, ConsensusProposalRewardParamsV1, ZERO},
     ConsensusFunction,
 };
 
@@ -48,7 +47,7 @@ pub(crate) fn consensus_proposal_mint_get_metadata_v1(
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: ConsensusStakeParamsV1 = deserialize(&self_.data[1..])?;
+    let params: ConsensusProposalMintParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
@@ -59,6 +58,7 @@ pub(crate) fn consensus_proposal_mint_get_metadata_v1(
     let output = &params.output;
     let value_coords = output.value_commit.to_affine().coordinates().unwrap();
     let token_coords = output.token_commit.to_affine().coordinates().unwrap();
+    let serial_coords = &params.serial_commit.to_affine().coordinates().unwrap();
 
     zk_public_inputs.push((
         CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1.to_string(),
@@ -68,6 +68,8 @@ pub(crate) fn consensus_proposal_mint_get_metadata_v1(
             *value_coords.y(),
             *token_coords.x(),
             *token_coords.y(),
+            *serial_coords.x(),
+            *serial_coords.y(),
         ],
     ));
 
@@ -88,7 +90,7 @@ pub(crate) fn consensus_proposal_mint_process_instruction_v1(
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: ConsensusStakeParamsV1 = deserialize(&self_.data[1..])?;
+    let params: ConsensusProposalMintParamsV1 = deserialize(&self_.data[1..])?;
 
     // Access the necessary databases where there is information to
     // validate this state transition.
@@ -149,7 +151,7 @@ pub(crate) fn consensus_proposal_mint_process_instruction_v1(
     }
 
     // Verify previous call input is the same as this calls StakeInput
-    let previous_params: ConsensusRewardParamsV1 = deserialize(&previous.data[1..])?;
+    let previous_params: ConsensusProposalRewardParamsV1 = deserialize(&previous.data[1..])?;
     let previous_input = &previous_params.stake_input;
     if &previous_input != &input {
         msg!("[ConsensusProposalMintV1] Error: Previous call input mismatch");

@@ -27,6 +27,8 @@ witness "ProposalMint_V1" {
 	Scalar value_blind,
 	# Random blinding factor for the token ID
 	Scalar token_blind,
+	# Random blinding factor for the serial number
+	Scalar serial_blind,
 }
 
 circuit "ProposalMint_V1" {
@@ -63,10 +65,19 @@ circuit "ProposalMint_V1" {
 	tcv = ec_mul_base(token, NULLIFIER_K);
 	tcr = ec_mul(token_blind, VALUE_COMMIT_RANDOM);
 	token_commit = ec_add(tcv, tcr);
-	# Since token_commit is also a curve point, we'll do the same
+	# Since token commit is also a curve point, we'll do the same
 	# coordinate dance:
 	constrain_instance(ec_get_x(token_commit));
 	constrain_instance(ec_get_y(token_commit));
+
+	# Pedersen commitment for coin's serial number
+	scv = ec_mul_base(serial, NULLIFIER_K);
+	scr = ec_mul(serial_blind, VALUE_COMMIT_RANDOM);
+	serial_commit = ec_add(scv, scr);
+	# Since serial commit is also a curve point, we'll do the same
+	# coordinate dance:
+	constrain_instance(ec_get_x(serial_commit));
+	constrain_instance(ec_get_y(serial_commit));
 
 	# At this point we've enforced all of our public inputs.
 }

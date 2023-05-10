@@ -32,7 +32,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::{model::ConsensusRewardUpdateV1, ConsensusFunction};
+use crate::{model::ConsensusProposalRewardUpdateV1, ConsensusFunction};
 
 /// `Consensus::Stake` functions
 mod stake_v1;
@@ -235,7 +235,7 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
             Ok(consensus_proposal_burn_process_update_v1(cid, update)?)
         }
         ConsensusFunction::ProposalRewardV1 => {
-            let update: ConsensusRewardUpdateV1 = deserialize(&update_data[1..])?;
+            let update: ConsensusProposalRewardUpdateV1 = deserialize(&update_data[1..])?;
             Ok(consensus_proposal_reward_process_update_v1(cid, update)?)
         }
         ConsensusFunction::ProposalMintV1 => {

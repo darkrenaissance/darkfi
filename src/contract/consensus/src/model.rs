@@ -20,9 +20,9 @@ use darkfi_money_contract::model::{Input, Output, StakeInput};
 use darkfi_sdk::pasta::pallas;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-/// Parameters for `Consensus::Reward`
+/// Parameters for `Consensus::ProposalReward`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct ConsensusRewardParamsV1 {
+pub struct ConsensusProposalRewardParamsV1 {
     /// Anonymous input of `Consensus::Unstake`
     pub unstake_input: Input,
     /// Burnt token revealed info of `Consensus::Stake`
@@ -37,9 +37,20 @@ pub struct ConsensusRewardParamsV1 {
     pub rho: pallas::Base,
 }
 
+/// Parameters for `Consensus::ProposalMint`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusProposalMintParamsV1 {
+    /// Burnt token revealed info
+    pub input: StakeInput,
+    /// Anonymous output
+    pub output: Output,
+    /// Pedersen commitment for the output's serial number
+    pub serial_commit: pallas::Point,
+}
+
 /// State update for `Consensus::Reward`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct ConsensusRewardUpdateV1 {}
+pub struct ConsensusProposalRewardUpdateV1 {}
 
 // Consensus parameters configuration.
 // Note: Always verify `pallas::Base` are correct, in case of changes,

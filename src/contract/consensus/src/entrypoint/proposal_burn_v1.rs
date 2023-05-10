@@ -36,7 +36,7 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
-    model::{ConsensusRewardParamsV1, ZERO},
+    model::{ConsensusProposalRewardParamsV1, ZERO},
     ConsensusFunction,
 };
 
@@ -160,7 +160,7 @@ pub(crate) fn consensus_proposal_burn_process_instruction_v1(
     }
 
     // Verify next call StakeInput is the same as this calls input
-    let next_params: ConsensusRewardParamsV1 = deserialize(&next.data[1..])?;
+    let next_params: ConsensusProposalRewardParamsV1 = deserialize(&next.data[1..])?;
     if input != &next_params.unstake_input {
         msg!("[ConsensusProposalBurnV1] Error: Next call input mismatch");
         return Err(MoneyError::NextCallInputMissmatch.into())

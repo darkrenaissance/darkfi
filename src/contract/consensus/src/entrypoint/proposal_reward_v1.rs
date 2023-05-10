@@ -17,8 +17,7 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError,
-    model::{ConsensusStakeParamsV1, ConsensusUnstakeParamsV1},
+    error::MoneyError, model::ConsensusUnstakeParamsV1,
     CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1,
 };
 use darkfi_sdk::{
@@ -37,8 +36,9 @@ use darkfi_serial::{deserialize, Encodable, WriteExt};
 use crate::{
     error::ConsensusError,
     model::{
-        ConsensusRewardParamsV1, ConsensusRewardUpdateV1, SlotCheckpoint, HEADSTART, MU_RHO_PREFIX,
-        MU_Y_PREFIX, REWARD, ZERO,
+        ConsensusProposalMintParamsV1, ConsensusProposalRewardParamsV1,
+        ConsensusProposalRewardUpdateV1, SlotCheckpoint, HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX,
+        REWARD, ZERO,
     },
     ConsensusFunction,
 };
@@ -50,7 +50,7 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: ConsensusRewardParamsV1 = deserialize(&self_.data[1..])?;
+    let params: ConsensusProposalRewardParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
@@ -121,7 +121,7 @@ pub(crate) fn consensus_proposal_reward_process_instruction_v1(
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: ConsensusRewardParamsV1 = deserialize(&self_.data[1..])?;
+    let params: ConsensusProposalRewardParamsV1 = deserialize(&self_.data[1..])?;
 
     // ===================================
     // Perform the actual state transition
@@ -205,7 +205,7 @@ pub(crate) fn consensus_proposal_reward_process_instruction_v1(
     }
 
     // Verify next call StakeInput is the same as this calls input
-    let next_params: ConsensusStakeParamsV1 = deserialize(&next.data[1..])?;
+    let next_params: ConsensusProposalMintParamsV1 = deserialize(&next.data[1..])?;
     if stake_input != &next_params.input {
         msg!("[ConsensusProposalRewardV1] Error: Next call input mismatch");
         return Err(MoneyError::NextCallInputMissmatch.into())
@@ -216,7 +216,7 @@ pub(crate) fn consensus_proposal_reward_process_instruction_v1(
     }
 
     // Create a state update.
-    let update = ConsensusRewardUpdateV1 {};
+    let update = ConsensusProposalRewardUpdateV1 {};
     let mut update_data = vec![];
     update_data.write_u8(ConsensusFunction::ProposalRewardV1 as u8)?;
     update.encode(&mut update_data)?;
@@ -227,7 +227,7 @@ pub(crate) fn consensus_proposal_reward_process_instruction_v1(
 /// `process_update` function for `Consensus::ProposalRewardV1`
 pub(crate) fn consensus_proposal_reward_process_update_v1(
     _cid: ContractId,
-    _update: ConsensusRewardUpdateV1,
+    _update: ConsensusProposalRewardUpdateV1,
 ) -> ContractResult {
     // This contract call doesn't produce any updates
     Ok(())
