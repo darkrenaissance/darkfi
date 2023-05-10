@@ -27,10 +27,10 @@ use halo2_gadgets::poseidon::{
 use halo2_proofs::{
     arithmetic::{CurveAffine, Field},
     circuit::Value,
+    dev::MockProver,
     pasta::{group::Curve, pallas},
 };
 use rand::rngs::OsRng;
-use simplelog::{ColorChoice, Config, LevelFilter, TermLogger, TerminalMode};
 
 use darkfi::{
     zk::{
@@ -45,9 +45,6 @@ use darkfi::{
 
 #[test]
 fn zkvm_opcodes() -> Result<()> {
-    TermLogger::init(LevelFilter::Info, Config::default(), TerminalMode::Mixed, ColorChoice::Auto)
-        .unwrap();
-
     let bincode = include_bytes!("../proof/opcodes.zk.bin");
     let zkbin = ZkBinary::decode(bincode)?;
 
@@ -119,6 +116,10 @@ fn zkvm_opcodes() -> Result<()> {
     ];
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+
+    let mockprover = MockProver::run(13, &circuit, vec![public_inputs.clone()])?;
+    mockprover.assert_satisfied();
+
     let proving_key = ProvingKey::build(13, &circuit);
     let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
 
