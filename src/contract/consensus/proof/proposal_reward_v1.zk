@@ -4,8 +4,6 @@ constant "ProposalReward_V1" {
 }
 
 witness "ProposalReward_V1" {
-	# Burnt coin
-	Base coin,
 	# Burnt coin secret key
 	Base secret_key,
 	# Unique serial number corresponding to the burnt coin
@@ -57,7 +55,7 @@ circuit "ProposalReward_V1" {
 	constrain_instance(ec_get_y(new_value_commit));
 
 	# Coin y:
-	seed = poseidon_hash(SEED_PREFIX, coin, secret_key, ZERO);
+	seed = poseidon_hash(SEED_PREFIX, serial, ZERO);
 	y = poseidon_hash(seed, mu_y);
 	constrain_instance(mu_y);
 	constrain_instance(y);

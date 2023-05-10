@@ -234,14 +234,12 @@ impl ConsensusProposalCallBuilder {
         let stake_input = input;
 
         debug!("Building Consensus::RewardV1 contract call for proposal");
-        let coin = self.coin.coin.inner();
         let secret_key = self.coin.secret.inner();
         let serial = self.coin.note.serial;
         let (proof, public_inputs) = create_proposal_reward_proof(
             &self.reward_zkbin,
             &self.reward_pk,
             &self.slot_checkpoint,
-            coin,
             secret_key,
             serial,
             value,
@@ -275,7 +273,6 @@ pub fn create_proposal_reward_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     slot_checkpoint: &SlotCheckpoint,
-    coin: pallas::Base,
     secret_key: pallas::Base,
     serial: pallas::Base,
     value: u64,
@@ -286,7 +283,7 @@ pub fn create_proposal_reward_proof(
     let value_commit = pedersen_commitment_u64(value, value_blind);
     let new_value_commit = pedersen_commitment_u64(value + REWARD, value_blind);
     let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
-    let seed = poseidon_hash([SEED_PREFIX, coin, secret_key, ZERO]);
+    let seed = poseidon_hash([SEED_PREFIX, serial, ZERO]);
     let mu_y = poseidon_hash([MU_Y_PREFIX, slot_checkpoint.eta, slot_pallas]);
     let y = poseidon_hash([seed, mu_y]);
     let mu_rho = poseidon_hash([MU_RHO_PREFIX, slot_checkpoint.eta, slot_pallas]);
@@ -307,7 +304,6 @@ pub fn create_proposal_reward_proof(
     };
 
     let prover_witnesses = vec![
-        Witness::Base(Value::known(coin)),
         Witness::Base(Value::known(secret_key)),
         Witness::Base(Value::known(serial)),
         Witness::Base(Value::known(pallas::Base::from(value))),
