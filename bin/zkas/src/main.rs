@@ -97,7 +97,7 @@ fn main() {
         println!("{:#?}", analyzer.constants);
         println!("{:#?}", analyzer.witnesses);
         println!("{:#?}", analyzer.statements);
-        println!("{:#?}", analyzer.stack);
+        println!("{:#?}", analyzer.heap);
         exit(0);
     }
 
