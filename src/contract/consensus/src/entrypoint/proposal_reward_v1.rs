@@ -19,7 +19,7 @@
 use darkfi_money_contract::{
     error::MoneyError,
     model::{ConsensusStakeParamsV1, ConsensusUnstakeParamsV1},
-    CONSENSUS_CONTRACT_ZKAS_REWARD_NS_V1,
+    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
@@ -87,7 +87,7 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
     let (sigma1, sigma2) = (slot_checkpoint.sigma1, slot_checkpoint.sigma2);
 
     zk_public_inputs.push((
-        CONSENSUS_CONTRACT_ZKAS_REWARD_NS_V1.to_string(),
+        CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1.to_string(),
         vec![
             nullifier.inner(),
             *value_coords.x(),

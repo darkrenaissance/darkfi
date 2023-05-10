@@ -44,7 +44,7 @@ use darkfi_money_contract::{
     client::{
         stake_v1::MoneyStakeCallBuilder, unstake_v1::MoneyUnstakeCallBuilder, MoneyNote, OwnCoin,
     },
-    MoneyFunction, CONSENSUS_CONTRACT_ZKAS_REWARD_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
+    MoneyFunction, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
     MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
@@ -90,7 +90,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     let (mint_pk, mint_zkbin) = th.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
     let (burn_pk, burn_zkbin) = th.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
     let (reward_pk, reward_zkbin) =
-        th.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_REWARD_NS_V1).unwrap();
+        th.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1).unwrap();
 
     info!(target: "consensus", "[Faucet] ==========================");
     info!(target: "consensus", "[Faucet] Executing Alice airdrop tx");

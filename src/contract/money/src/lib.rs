@@ -99,4 +99,4 @@ pub const CONSENSUS_CONTRACT_DB_VERSION: &str = env!("CARGO_PKG_VERSION");
 pub const CONSENSUS_CONTRACT_COIN_MERKLE_TREE: &str = "consensus_coin_tree";
 
 /// zkas reward circuit namespace
-pub const CONSENSUS_CONTRACT_ZKAS_REWARD_NS_V1: &str = "Reward_V1";
+pub const CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1: &str = "ProposalReward_V1";

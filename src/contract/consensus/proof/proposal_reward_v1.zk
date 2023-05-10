@@ -1,9 +1,9 @@
-constant "Reward_V1" {
+constant "ProposalReward_V1" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,
 }
 
-witness "Reward_V1" {
+witness "ProposalReward_V1" {
 	# Burnt coin
 	Base coin,
 	# Burnt coin secret key
@@ -28,7 +28,7 @@ witness "Reward_V1" {
 	Base headstart,
 }
 
-circuit "Reward_V1" {
+circuit "ProposalReward_V1" {
 	# Constants
 	ZERO = witness_base(0);
 	SEED_PREFIX = witness_base(3);
