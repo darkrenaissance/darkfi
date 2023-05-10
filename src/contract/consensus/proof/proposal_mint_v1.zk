@@ -13,8 +13,10 @@ witness "ProposalMint_V1" {
 	Base value,
 	# The token ID
 	Base token,
-	# Unique serial number corresponding to this coin
-	Base serial,
+	# Burnt coin secret key
+	Base burnt_secret_key,
+	# Unique serial number corresponding to the burnt coin
+	Base burnt_serial,
 	# Random blinding factor for coin
 	Base coin_blind,
 	# Allows composing this ZK proof to invoke other contracts
@@ -28,6 +30,13 @@ witness "ProposalMint_V1" {
 }
 
 circuit "ProposalMint_V1" {
+	# Constants
+	ZERO = witness_base(0);
+	SERIAL_PREFIX = witness_base(2);
+
+	# Derive new coin serial from old one
+	serial = poseidon_hash(SERIAL_PREFIX, burnt_secret_key, burnt_serial, ZERO);
+
 	# Poseidon hash of the coin
 	C = poseidon_hash(
 		pub_x,

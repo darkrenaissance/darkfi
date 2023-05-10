@@ -50,7 +50,7 @@ use crate::{
     },
     model::{
         ConsensusRewardParamsV1, HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX, REWARD, REWARD_PALLAS,
-        SEED_PREFIX, ZERO,
+        SEED_PREFIX, SERIAL_PREFIX, ZERO,
     },
 };
 
@@ -184,19 +184,21 @@ impl ConsensusProposalCallBuilder {
         let output = StakeTBOI { value: new_value, token_id, public_key: self.recipient };
         debug!("Finished building output for proposal");
 
-        let serial = pallas::Base::random(&mut OsRng);
+        let burnt_secret_key = self.coin.secret.inner();
+        let burnt_serial = self.coin.note.serial;
         let spend_hook = CONSENSUS_CONTRACT_ID.inner();
         let user_data = pallas::Base::random(&mut OsRng);
         let coin_blind = pallas::Base::random(&mut OsRng);
 
         info!("Creating stake mint proof for output for proposal");
-        let (proof, public_inputs) = create_proposal_mint_proof(
+        let (proof, public_inputs, serial) = create_proposal_mint_proof(
             &self.mint_zkbin,
             &self.mint_pk,
             &output,
             value_blind,
             token_blind,
-            serial,
+            burnt_secret_key,
+            burnt_serial,
             spend_hook,
             user_data,
             coin_blind,
@@ -332,11 +334,13 @@ pub fn create_proposal_mint_proof(
     output: &TransactionBuilderOutputInfo,
     value_blind: pallas::Scalar,
     token_blind: pallas::Scalar,
-    serial: pallas::Base,
+    burnt_secret_key: pallas::Base,
+    burnt_serial: pallas::Base,
     spend_hook: pallas::Base,
     user_data: pallas::Base,
     coin_blind: pallas::Base,
-) -> Result<(Proof, ConsensusMintRevealed)> {
+) -> Result<(Proof, ConsensusMintRevealed, pallas::Base)> {
+    let serial = poseidon_hash([SERIAL_PREFIX, burnt_secret_key, burnt_serial, ZERO]);
     let value_commit = pedersen_commitment_u64(output.value, value_blind);
     let token_commit = pedersen_commitment_base(output.token_id.inner(), token_blind);
     let (pub_x, pub_y) = output.public_key.xy();
@@ -359,7 +363,8 @@ pub fn create_proposal_mint_proof(
         Witness::Base(Value::known(pub_y)),
         Witness::Base(Value::known(pallas::Base::from(output.value))),
         Witness::Base(Value::known(output.token_id.inner())),
-        Witness::Base(Value::known(serial)),
+        Witness::Base(Value::known(burnt_secret_key)),
+        Witness::Base(Value::known(burnt_serial)),
         Witness::Base(Value::known(coin_blind)),
         Witness::Base(Value::known(spend_hook)),
         Witness::Base(Value::known(user_data)),
@@ -370,5 +375,5 @@ pub fn create_proposal_mint_proof(
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 
-    Ok((proof, public_inputs))
+    Ok((proof, public_inputs, serial))
 }
