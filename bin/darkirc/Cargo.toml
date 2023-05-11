@@ -32,7 +32,8 @@ sled = "0.34.7"
 clap = {version = "4.2.7", features = ["derive"]}
 log = "0.4.17"
 simplelog = "0.12.1"
-ctrlc = { version = "3.2.5", features = ["termination"] }
+signal-hook-async-std = "0.2.2"
+signal-hook = "0.3.15"
 url = "2.3.1"
 chrono = "0.4.24"
 ripemd = "0.1.3"

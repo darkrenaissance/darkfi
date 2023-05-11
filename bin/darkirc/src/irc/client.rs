@@ -111,6 +111,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     }
 
     pub async fn update_config(&mut self, new_config: IrcConfig) {
+        info!("[CLIENT {}] Updating config...", self.address);
+
         self.irc_config.channels.extend(new_config.channels);
         self.irc_config.contacts.extend(new_config.contacts);
         self.irc_config.nickname = new_config.nickname;
