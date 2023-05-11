@@ -22,7 +22,7 @@ use async_std::{
     task,
 };
 use irc::ClientSubMsg;
-use log::{debug, info};
+use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_async_std::Signals;
@@ -189,15 +189,19 @@ async fn handle_signals(
                 let args = Args::from_args_with_toml("").unwrap();
                 let cfg_path = darkfi::util::path::get_config_path(args.config, CONFIG_FILE)?;
                 darkfi::util::cli::spawn_config(&cfg_path, CONFIG_FILE_CONTENTS.as_bytes())?;
-                let args = Args::from_args_with_toml(&std::fs::read_to_string(cfg_path)?).unwrap();
-                let new_config = IrcConfig::new(&args)?;
+                let args = Args::from_args_with_toml(&std::fs::read_to_string(cfg_path)?);
+                if args.is_err() {
+                    error!("Error parsing the config file");
+                    continue
+                }
+                let new_config = IrcConfig::new(&args.unwrap())?;
                 subscriber.notify(ClientSubMsg::Config(new_config)).await;
             }
             SIGTERM | SIGINT | SIGQUIT => {
-                term_tx.send(()).await.unwrap();
+                term_tx.send(()).await?;
             }
 
-            _ => unreachable!(),
+            _ => warn!("Unsupported signal"),
         }
     }
     Ok(())
