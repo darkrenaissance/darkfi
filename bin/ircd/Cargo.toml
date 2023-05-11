@@ -37,7 +37,7 @@ ripemd = "0.1.3"
 
 # Encoding and parsing
 serde_json = "1.0.96"
-serde = {version = "1.0.162", features = ["derive"]}
+serde = {version = "1.0.163", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 bs58 = "0.4.0"
