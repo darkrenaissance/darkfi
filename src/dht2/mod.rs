@@ -18,7 +18,7 @@
 
 //! Filesystem-based Distributed Hash-Table (DHT) implementation
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use async_std::{
     fs,
@@ -29,7 +29,11 @@ use async_std::{
 };
 use log::{debug, warn};
 
-use crate::Result;
+use crate::{net::P2pPtr, Result};
+
+/// Networked HashMap
+mod net_hashmap;
+use net_hashmap::NetHashMap;
 
 /// Maximum size of a stored chunk (2 MiB)
 pub const MAX_CHUNK_SIZE: usize = 2_097_152;
@@ -44,9 +48,7 @@ const CHUNKS_PATH: &str = "chunks";
 /// Files distributed on the DHT
 pub struct Dht {
     /// Map of hashed files and their (ordered) chunks
-    // TODO: This HashMap should be wrapped into an interface providing the
-    //       same API, but also broadcasts changes over P2P
-    hash_map: HashMap<blake3::Hash, Vec<blake3::Hash>>,
+    hash_map: NetHashMap<blake3::Hash, Vec<blake3::Hash>>,
     /// Path to the filesystem directory where file metadata is stored
     files_path: PathBuf,
     /// Path to the filesystem directory where the file chunks are stored
@@ -60,7 +62,7 @@ impl Dht {
     ///
     /// After the object is instantiated, the caller should also run
     /// the [`Dht::garbage_collect()`] function to ensure consistency.
-    pub async fn new(base_path: &PathBuf) -> Result<Self> {
+    pub async fn new(base_path: &PathBuf, p2p: P2pPtr) -> Result<Self> {
         let mut tmp_path: PathBuf = base_path.into();
         let mut files_path: PathBuf = base_path.into();
         let mut chunks_path: PathBuf = base_path.into();
@@ -73,7 +75,7 @@ impl Dht {
         create_dir_all(&files_path).await?;
         create_dir_all(&chunks_path).await?;
 
-        Ok(Self { hash_map: HashMap::new(), files_path, chunks_path, tmp_path })
+        Ok(Self { hash_map: NetHashMap::new(p2p), files_path, chunks_path, tmp_path })
     }
 
     /// Return the `PathBuf` where the file metadata is stored
@@ -186,7 +188,7 @@ impl Dht {
                 continue
             }
 
-            self.hash_map.insert(file_hash, chunk_hashes);
+            self.hash_map.insert(file_hash, chunk_hashes).await?;
         }
 
         // At this point we scanned through our hierarchy.
@@ -224,7 +226,7 @@ impl Dht {
             let hash_str = file_path.file_name().unwrap().to_str().unwrap();
             let file_hash = blake3::Hash::from_hex(hash_str).unwrap();
 
-            self.hash_map.remove(&file_hash);
+            self.hash_map.remove(file_hash).await?;
 
             if let Err(e) = fs::remove_file(file_path).await {
                 warn!(target: "dht", "DHT::garbage_collect(): Failed to remove corrupted file: {}", e);
@@ -279,7 +281,7 @@ impl Dht {
             file_fd.write(format!("{}\n", ch.to_hex().as_str()).as_bytes()).await?;
         }
 
-        self.hash_map.insert(file_hash, chunk_hashes.clone());
+        self.hash_map.insert(file_hash, chunk_hashes.clone()).await?;
 
         Ok((file_hash, chunk_hashes))
     }
@@ -385,13 +387,18 @@ impl Dht {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{net, net::P2p};
     use rand::{rngs::OsRng, RngCore};
 
     #[async_std::test]
     async fn dht_local_get_insert() -> Result<()> {
         let mut base_path = std::env::temp_dir();
         base_path.push("dht");
-        let mut dht = Dht::new(&base_path.clone().into()).await?;
+
+        let settings = net::Settings::default();
+        let p2p = P2p::new(settings).await;
+
+        let mut dht = Dht::new(&base_path.clone().into(), p2p).await?;
         dht.garbage_collect().await?;
 
         let rng = &mut OsRng;
