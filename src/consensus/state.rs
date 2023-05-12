@@ -669,6 +669,8 @@ pub struct SlotCheckpoint {
     /// Slot UID
     pub slot: u64,
     /// Slot eta
+    // TODO: this should be renamed to previous_eta,
+    //       corresponding to previous block eta.
     pub eta: pallas::Base,
     /// Slot sigma1
     pub sigma1: pallas::Base,

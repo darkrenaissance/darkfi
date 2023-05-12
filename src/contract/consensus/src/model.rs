@@ -17,7 +17,10 @@
  */
 
 use darkfi_money_contract::model::{Input, Output, StakeInput};
-use darkfi_sdk::{crypto::PublicKey, pasta::pallas};
+use darkfi_sdk::{
+    crypto::{ecvrf::VrfProof, PublicKey},
+    pasta::pallas,
+};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 /// Parameters for `Consensus::ProposalBurn`
@@ -46,6 +49,8 @@ pub struct ConsensusProposalRewardParamsV1 {
     pub new_serial_commit: pallas::Point,
     /// Rewarded slot
     pub slot: u64,
+    /// VRF proof for eta calculation
+    pub vrf_proof: VrfProof,
     /// Coin y
     pub y: pallas::Base,
     /// Lottery rho used

@@ -24,7 +24,7 @@ use darkfi_sdk::{
     },
     error::{ContractError, ContractResult},
     msg,
-    pasta::pallas,
+    pasta::{group::ff::FromUniformBytes, pallas},
     util::get_slot_checkpoint,
     ContractCall,
 };
@@ -81,10 +81,20 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
     };
     let slot_checkpoint: SlotCheckpoint = deserialize(&slot_checkpoint)?;
 
+    // Verify eta VRF proof
+    let vrf_proof = &params.vrf_proof;
+    if !vrf_proof.verify(params.burnt_public_key, &slot_checkpoint.eta.to_repr()) {
+        msg!("[ConsensusProposalRewardV1] Error: eta VRF proof couldn't be verified");
+        return Err(ConsensusError::ProposalErroneousVrfProof.into())
+    }
+    let mut eta = [0u8; 64];
+    eta[..blake3::OUT_LEN].copy_from_slice(vrf_proof.hash_output().as_bytes());
+    let eta = pallas::Base::from_uniform_bytes(&eta);
+
     // Calculate election seeds
     let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
-    let mu_y = poseidon_hash([MU_Y_PREFIX, slot_checkpoint.eta, slot_pallas]);
-    let mu_rho = poseidon_hash([MU_RHO_PREFIX, slot_checkpoint.eta, slot_pallas]);
+    let mu_y = poseidon_hash([MU_Y_PREFIX, eta, slot_pallas]);
+    let mu_rho = poseidon_hash([MU_RHO_PREFIX, eta, slot_pallas]);
 
     // Grab sigmas from slot checkpoint
     let (sigma1, sigma2) = (slot_checkpoint.sigma1, slot_checkpoint.sigma2);

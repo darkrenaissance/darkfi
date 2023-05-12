@@ -30,12 +30,12 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_base,
+        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_base,
         pedersen_commitment_u64, poseidon_hash, Coin, MerkleTree, Nullifier, PublicKey, SecretKey,
         CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
     },
     incrementalmerkletree::Tree,
-    pasta::pallas,
+    pasta::{group::ff::FromUniformBytes, pallas},
 };
 use log::{debug, info};
 use rand::rngs::OsRng;
@@ -68,6 +68,7 @@ pub struct ConsensusProposalRewardRevealed {
     pub value_commit: pallas::Point,
     pub new_serial_commit: pallas::Point,
     pub new_value_commit: pallas::Point,
+    pub vrf_proof: VrfProof,
     pub mu_y: pallas::Base,
     pub y: pallas::Base,
     pub mu_rho: pallas::Base,
@@ -299,6 +300,7 @@ impl ConsensusProposalCallBuilder {
         let burnt_public_key = public_inputs.public_key;
         let new_serial_commit = serial_commit;
         let slot = self.slot_checkpoint.slot;
+        let vrf_proof = public_inputs.vrf_proof;
         let y = public_inputs.y;
         let rho = public_inputs.rho;
         let reward_params = ConsensusProposalRewardParamsV1 {
@@ -308,6 +310,7 @@ impl ConsensusProposalCallBuilder {
             output,
             new_serial_commit,
             slot,
+            vrf_proof,
             y,
             rho,
         };
@@ -347,9 +350,13 @@ pub fn create_proposal_reward_proof(
     let new_value_commit = pedersen_commitment_u64(value + REWARD, value_blind);
     let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
     let seed = poseidon_hash([SEED_PREFIX, serial, ZERO]);
-    let mu_y = poseidon_hash([MU_Y_PREFIX, slot_checkpoint.eta, slot_pallas]);
+    let vrf_proof = VrfProof::prove(secret_key.into(), &slot_checkpoint.eta.to_repr(), &mut OsRng);
+    let mut eta = [0u8; 64];
+    eta[..blake3::OUT_LEN].copy_from_slice(vrf_proof.hash_output().as_bytes());
+    let eta = pallas::Base::from_uniform_bytes(&eta);
+    let mu_y = poseidon_hash([MU_Y_PREFIX, eta, slot_pallas]);
     let y = poseidon_hash([seed, mu_y]);
-    let mu_rho = poseidon_hash([MU_RHO_PREFIX, slot_checkpoint.eta, slot_pallas]);
+    let mu_rho = poseidon_hash([MU_RHO_PREFIX, eta, slot_pallas]);
     let rho = poseidon_hash([seed, mu_rho]);
     let (sigma1, sigma2) = (slot_checkpoint.sigma1, slot_checkpoint.sigma2);
 
@@ -360,6 +367,7 @@ pub fn create_proposal_reward_proof(
         value_commit,
         new_serial_commit,
         new_value_commit,
+        vrf_proof,
         mu_y,
         y,
         mu_rho,

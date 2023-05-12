@@ -85,7 +85,7 @@ circuit "ProposalReward_V1" {
 	constrain_instance(rho);
 
 	# Calculate lottery target
-	term_1 =  base_mul(sigma1, value);
+	term_1 = base_mul(sigma1, value);
 	term_2 = base_mul(sigma2, value);
 	shifted_term_2 = base_mul(term_2, value);
 	target = base_add(term_1, shifted_term_2);

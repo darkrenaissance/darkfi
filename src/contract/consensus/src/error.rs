@@ -22,12 +22,16 @@ use darkfi_sdk::error::ContractError;
 pub enum ConsensusError {
     #[error("Missing slot checkpoint from db")]
     ProposalMissingSlotCheckpoint,
+
+    #[error("Eta VRF proof couldn't be verified")]
+    ProposalErroneousVrfProof,
 }
 
 impl From<ConsensusError> for ContractError {
     fn from(e: ConsensusError) -> Self {
         match e {
             ConsensusError::ProposalMissingSlotCheckpoint => Self::Custom(1),
+            ConsensusError::ProposalErroneousVrfProof => Self::Custom(2),
         }
     }
 }
