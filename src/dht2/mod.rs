@@ -57,9 +57,9 @@ impl Dht {
         let mut files_path: PathBuf = base_path.into();
         let mut chunks_path: PathBuf = base_path.into();
         let mut tmp_path: PathBuf = base_path.into();
+        tmp_path.push(TMP_PATH);
         files_path.push(FILES_PATH);
         chunks_path.push(CHUNKS_PATH);
-        tmp_path.push(TMP_PATH);
 
         // Create necessary directory structure if needed
         create_dir_all(&files_path).await?;
@@ -242,7 +242,12 @@ impl Dht {
             file_hasher.update(chunk_slice);
             chunk_hashes.push(chunk_hash);
 
-            // Write the chunk to a file
+            // Write the chunk to a file.
+            // TODO: We can avoid writing here if we do a consistency
+            //       check and make sure that the chunk on the fs is
+            //       not corrupted. Then we can only write as a last
+            //       resort, and as a side-effect we fix the corrupted
+            //       chunk.
             let mut chunk_path = self.chunks_path.clone();
             chunk_path.push(chunk_hash.to_hex().as_str());
             let mut chunk_fd = File::create(&chunk_path).await?;
@@ -251,12 +256,12 @@ impl Dht {
             chunk = vec![0u8; MAX_CHUNK_SIZE];
         }
 
-        // Write the metadata
         let file_hash = file_hasher.finalize();
         let mut file_path = self.files_path.clone();
         file_path.push(file_hash.to_hex().as_str());
-        let mut file_fd = File::create(&file_path).await?;
 
+        // Write the metadata
+        let mut file_fd = File::create(&file_path).await?;
         for ch in &chunk_hashes {
             file_fd.write(format!("{}\n", ch.to_hex().as_str()).as_bytes()).await?;
         }
@@ -276,7 +281,19 @@ impl Dht {
 
     /// Attempt to fetch a file from the DHT
     pub async fn get(&self, file_hash: &blake3::Hash) -> Result<PathBuf> {
-        // First try locally
+        // Check if we actually have this file already.
+        let mut tmp_path = self.tmp_path.clone();
+        tmp_path.push(file_hash.to_hex().as_str());
+        if tmp_path.exists().await && tmp_path.is_file().await {
+            return Ok(tmp_path)
+        }
+        if tmp_path.exists().await && !tmp_path.is_file().await {
+            // This is some directory that has been found here.
+            // Decide what to do with it
+            todo!()
+        }
+
+        // Try from local metadata/chunks
         let mut file_path = self.files_path.clone();
         file_path.push(file_hash.to_hex().as_str());
 
@@ -286,10 +303,12 @@ impl Dht {
             chunk_hashes = self.get_file_from_network(file_hash).await;
         }
 
+        // Bail on any error
+        let chunk_hashes = chunk_hashes?;
+
         // Now we know what the file's chunks are. See if we have them locally
         // and mark any missing ones. The ones we're missing we'll try to fetch
         // from the network.
-        let chunk_hashes = chunk_hashes?;
         let mut missing_chunks = HashSet::new();
 
         // Find missing chunks
@@ -310,8 +329,6 @@ impl Dht {
 
         // At this point we should have all the chunks locally.
         // Let's concatenate them into a file.
-        let mut tmp_path = self.tmp_path.clone();
-        tmp_path.push(file_hash.to_hex().as_str());
         let mut file_hasher = blake3::Hasher::new();
         let mut tmp_fd = File::create(&tmp_path).await?;
 
