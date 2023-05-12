@@ -27,6 +27,8 @@ pub mod consensus;
 
 #[cfg(feature = "dht")]
 pub mod dht;
+#[cfg(feature = "dht")]
+pub mod dht2;
 
 #[cfg(feature = "event-graph")]
 pub mod event_graph;

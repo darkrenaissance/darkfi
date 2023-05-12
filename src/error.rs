@@ -203,6 +203,10 @@ pub enum Error {
     #[error("unable to decrypt rcpt")]
     TxRcptDecryptionError,
 
+    #[cfg(feature = "blake3")]
+    #[error(transparent)]
+    Blake3FromHexError(#[from] blake3::HexError),
+
     // =======================
     // Protocol-related errors
     // =======================
