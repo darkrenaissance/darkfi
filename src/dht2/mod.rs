@@ -29,7 +29,7 @@ use async_std::{
 };
 use log::{debug, warn};
 
-use crate::{net::P2pPtr, Result};
+use crate::{net::P2pPtr, Error, Result};
 
 /// Networked HashMap
 pub mod net_hashmap;
@@ -188,7 +188,9 @@ impl Dht {
                 continue
             }
 
-            self.hash_map.insert(file_hash, chunk_hashes).await?;
+            if !self.hash_map.contains_key(&file_hash) {
+                self.hash_map.insert(file_hash, chunk_hashes).await?;
+            }
         }
 
         // At this point we scanned through our hierarchy.
@@ -296,6 +298,38 @@ impl Dht {
     /// TODO: This function should attempt to fetch them concurrently.
     async fn get_chunks_from_network(&self, _chunk_hashes: &HashSet<&blake3::Hash>) -> Result<()> {
         Ok(())
+    }
+
+    /// Attempt to fetch a chunk from the local storage. Returns a [`PathBuf`] pointing to the file.
+    pub async fn get_chunk_local(&self, chunk_hash: &blake3::Hash) -> Result<PathBuf> {
+        debug!(target: "dht", "DHT::get_chunk_local()");
+
+        let mut chunk_path = self.chunks_path();
+        chunk_path.push(chunk_hash.to_hex().as_str());
+
+        if !chunk_path.exists().await || !chunk_path.is_file().await {
+            return Err(Error::DhtChunkNotFound)
+        }
+
+        return Ok(chunk_path)
+    }
+
+    /// Attempt to fetch the list of chunks for a given file from the local storage.
+    /// Returns a `Vec<blake3::Hash>` of the chunks.
+    pub async fn get_file_chunk_hashes_local(
+        &self,
+        file_hash: &blake3::Hash,
+    ) -> Result<Vec<blake3::Hash>> {
+        debug!(target: "dht", "DHT::get_file_chunk_hashes_local");
+
+        let mut file_path = self.files_path();
+        file_path.push(file_hash.to_hex().as_str());
+
+        if !file_path.exists().await || !file_path.is_file().await {
+            return Err(Error::DhtFileMetadataNotFound)
+        }
+
+        Self::read_chunks(&file_path).await
     }
 
     /// Attempt to fetch a file from the DHT. Returns a [`PathBuf`] pointing to the file.

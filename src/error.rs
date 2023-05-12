@@ -437,6 +437,12 @@ pub enum Error {
     // ==============
     // DHT errors
     // ==============
+    #[error("Chunk not found")]
+    DhtChunkNotFound,
+
+    #[error("File metadata not found")]
+    DhtFileMetadataNotFound,
+
     // FIXME: This is out of context, be specific when writing errors.
     #[error("Did not find key")]
     UnknownKey,

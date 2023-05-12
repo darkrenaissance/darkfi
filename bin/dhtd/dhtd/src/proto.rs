@@ -37,12 +37,14 @@ use super::DhtdPtr;
 pub struct ProtocolDht {
     jobsman: ProtocolJobsManagerPtr,
     channel: ChannelPtr,
-    p2p: P2pPtr,
+    _p2p: P2pPtr,
     state: DhtdPtr,
     insert_sub: MessageSubscription<NetHashMapInsert<blake3::Hash, Vec<blake3::Hash>>>,
     remove_sub: MessageSubscription<NetHashMapRemove<blake3::Hash>>,
     chunk_request_sub: MessageSubscription<ChunkRequest>,
     chunk_reply_sub: MessageSubscription<ChunkReply>,
+    file_request_sub: MessageSubscription<FileRequest>,
+    file_reply_sub: MessageSubscription<FileReply>,
 }
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -68,6 +70,29 @@ impl net::Message for ChunkReply {
     }
 }
 
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct FileRequest {
+    pub hash: blake3::Hash,
+}
+
+impl net::Message for FileRequest {
+    fn name() -> &'static str {
+        "dhtfilerequest"
+    }
+}
+
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct FileReply {
+    pub hash: blake3::Hash,
+    pub chunks: Vec<blake3::Hash>,
+}
+
+impl net::Message for FileReply {
+    fn name() -> &'static str {
+        "dhtfilereply"
+    }
+}
+
 impl ProtocolDht {
     pub async fn init(channel: ChannelPtr, p2p: P2pPtr, state: DhtdPtr) -> Result<ProtocolBasePtr> {
         let msg_subsystem = channel.get_message_subsystem();
@@ -75,21 +100,27 @@ impl ProtocolDht {
         msg_subsystem.add_dispatch::<NetHashMapRemove<blake3::Hash>>().await;
         msg_subsystem.add_dispatch::<ChunkRequest>().await;
         msg_subsystem.add_dispatch::<ChunkReply>().await;
+        msg_subsystem.add_dispatch::<FileRequest>().await;
+        msg_subsystem.add_dispatch::<FileReply>().await;
 
         let insert_sub = channel.subscribe_msg().await?;
         let remove_sub = channel.subscribe_msg().await?;
         let chunk_request_sub = channel.subscribe_msg().await?;
         let chunk_reply_sub = channel.subscribe_msg().await?;
+        let file_request_sub = channel.subscribe_msg().await?;
+        let file_reply_sub = channel.subscribe_msg().await?;
 
         Ok(Arc::new(Self {
             jobsman: ProtocolJobsManager::new("DHTProto", channel.clone()),
             channel,
-            p2p,
+            _p2p: p2p,
             state,
             insert_sub,
             remove_sub,
             chunk_request_sub,
             chunk_reply_sub,
+            file_request_sub,
+            file_reply_sub,
         }))
     }
 
@@ -150,6 +181,28 @@ impl ProtocolDht {
             println!("{:?}", msg);
         }
     }
+
+    async fn handle_file_request(self: Arc<Self>) -> Result<()> {
+        debug!("ProtocolDht::handle_file_request START");
+        loop {
+            let Ok(msg) = self.file_request_sub.receive().await else {
+                continue
+            };
+
+            println!("{:?}", msg);
+        }
+    }
+
+    async fn handle_file_reply(self: Arc<Self>) -> Result<()> {
+        debug!("ProtocolDht::handle_file_reply START");
+        loop {
+            let Ok(msg) = self.file_reply_sub.receive().await else {
+                continue
+            };
+
+            println!("{:?}", msg);
+        }
+    }
 }
 
 #[async_trait]
@@ -161,6 +214,8 @@ impl ProtocolBase for ProtocolDht {
         self.jobsman.clone().spawn(self.clone().handle_remove(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_chunk_request(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_chunk_reply(), ex.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_file_request(), ex.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_file_reply(), ex.clone()).await;
         Ok(())
     }
 
