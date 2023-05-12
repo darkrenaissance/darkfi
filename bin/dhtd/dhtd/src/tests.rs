@@ -26,7 +26,7 @@ use async_std::{
 use darkfi::{
     dht2::{Dht, MAX_CHUNK_SIZE},
     net::{self, transport::TransportName, P2p},
-    util::async_util::sleep,
+    util::async_util::{msleep, sleep},
     Result,
 };
 use rand::{rngs::OsRng, RngCore};
@@ -101,6 +101,7 @@ async fn dht_remote_get_insert_real(ex: Arc<Executor<'_>>) -> Result<()> {
     let mut data = vec![0u8; MAX_CHUNK_SIZE];
     rng.fill_bytes(&mut data);
     let (file_hash, chunk_hashes) = dhtd.write().await.dht.insert(&data).await?;
+    msleep(1000).await;
 
     for (i, node) in dhtds.iter().enumerate() {
         if i == NET_SIZE - 1 {
@@ -114,6 +115,7 @@ async fn dht_remote_get_insert_real(ex: Arc<Executor<'_>>) -> Result<()> {
     chunk_path.push(chunk_hashes[0].to_hex().as_str());
     fs::remove_file(chunk_path).await?;
     dhtd.write().await.dht.garbage_collect().await?;
+    msleep(1000).await;
 
     for (i, node) in dhtds.iter().enumerate() {
         if i == NET_SIZE - 1 {
