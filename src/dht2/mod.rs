@@ -566,7 +566,6 @@ mod tests {
             let _ex = executor.clone();
             executor
                 .spawn(async move {
-                    println!("aaaaa");
                     if let Err(e) = _p2p.run(_ex).await {
                         error!("Failed starting P2P network: {}", e);
                         assert!(false);
