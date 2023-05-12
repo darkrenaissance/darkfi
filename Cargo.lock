@@ -1619,6 +1619,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "dhtd"
+version = "0.4.1"
+dependencies = [
+ "async-std",
+ "async-trait",
+ "blake3",
+ "darkfi",
+ "darkfi-serial",
+ "easy-parallel",
+ "log",
+ "rand",
+ "simplelog",
+ "smol",
+ "url",
+]
+
+[[package]]
 name = "digest"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -37,6 +37,7 @@ members = [
     "bin/tau/tau-cli",
     #"bin/darkwiki/darkwikid",
     #"bin/darkwiki/darkwiki-cli",
+    "bin/dhtd/dhtd",
     "bin/vanityaddr",
     "bin/lilith",
     "bin/zktool",

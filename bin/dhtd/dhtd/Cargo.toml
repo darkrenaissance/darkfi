@@ -1,0 +1,22 @@
+[package]
+name = "dhtd"
+version = "0.4.1"
+homepage = "https://dark.fi"
+description = "DHT daemon"
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+repository = "https://github.com/darkrenaissance/darkfi"
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[dependencies]
+async-std = {version = "1.12.0", features = ["attributes"]}
+async-trait = "0.1.68"
+blake3 = "1.3.3"
+darkfi = {path = "../../../", features = ["dht"]}
+darkfi-serial = {path = "../../../src/serial", features = ["derive", "crypto"]}
+easy-parallel = "3.3.0"
+log = "0.4.17"
+rand = "0.8.5"
+simplelog = "0.12.1"
+smol = "1.3.0"
+url = "2.3.1"
