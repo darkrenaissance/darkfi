@@ -386,9 +386,124 @@ impl Dht {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::{net, net::P2p};
+    use super::{
+        net_hashmap::{NetHashMapInsert, NetHashMapRemove},
+        *,
+    };
+    use crate::{
+        net,
+        net::{
+            transport::TransportName, ChannelPtr, MessageSubscription, P2p, ProtocolBase,
+            ProtocolBasePtr, ProtocolJobsManager,
+        },
+        util::async_util::sleep,
+    };
+    use async_std::{net::TcpListener, sync::Arc};
+    use async_trait::async_trait;
+    use log::{error, info};
     use rand::{rngs::OsRng, RngCore};
+    use smol::Executor;
+    use url::Url;
+
+    async fn create_p2p_net(n_peers: usize) -> Result<Vec<P2pPtr>> {
+        let mut ret = vec![];
+        let mut addrs = vec![];
+
+        for _ in 0..n_peers {
+            // Find an available port
+            let listener = TcpListener::bind("127.0.0.1:0").await?;
+            let sockaddr = listener.local_addr()?;
+            let url = Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?;
+            drop(listener);
+
+            let mut settings = net::Settings::default();
+            settings.localnet = true;
+            settings.inbound = vec![url.clone()];
+            settings.peers = addrs.clone();
+            settings.outbound_transports = vec![TransportName::try_from("tcp").unwrap()];
+            settings.outbound_connections = n_peers as u32;
+
+            addrs.push(url);
+
+            let p2p = P2p::new(settings).await;
+            let registry = p2p.protocol_registry();
+            registry
+                .register(net::SESSION_ALL, move |channel, p2p| async move {
+                    ProtoDht::init(channel, p2p).await.unwrap()
+                })
+                .await;
+
+            ret.push(p2p);
+        }
+
+        Ok(ret)
+    }
+
+    struct ProtoDht {
+        jobsman: net::ProtocolJobsManagerPtr,
+        _channel: ChannelPtr,
+        _p2p: P2pPtr,
+        insert_sub: MessageSubscription<NetHashMapInsert<blake3::Hash, Vec<blake3::Hash>>>,
+        remove_sub: MessageSubscription<NetHashMapRemove<blake3::Hash>>,
+    }
+
+    impl ProtoDht {
+        pub async fn init(channel: ChannelPtr, p2p: P2pPtr) -> Result<ProtocolBasePtr> {
+            let msg_subsystem = channel.get_message_subsystem();
+            msg_subsystem.add_dispatch::<NetHashMapInsert<blake3::Hash, Vec<blake3::Hash>>>().await;
+            msg_subsystem.add_dispatch::<NetHashMapRemove<blake3::Hash>>().await;
+
+            let insert_sub = channel.subscribe_msg().await?;
+            let remove_sub = channel.subscribe_msg().await?;
+
+            Ok(Arc::new(Self {
+                jobsman: ProtocolJobsManager::new("DHTProto", channel.clone()),
+                _channel: channel,
+                _p2p: p2p,
+                insert_sub,
+                remove_sub,
+            }))
+        }
+
+        async fn handle_insert(self: Arc<Self>) -> Result<()> {
+            info!("ProtoDht::handle_insert START");
+            loop {
+                let insert_message = match self.insert_sub.receive().await {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+
+                println!("{:?}", insert_message);
+            }
+        }
+
+        async fn handle_remove(self: Arc<Self>) -> Result<()> {
+            info!("ProtoDht::handle_remove START");
+            loop {
+                let remove_message = match self.remove_sub.receive().await {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+
+                println!("{:?}", remove_message);
+            }
+        }
+    }
+
+    #[async_trait]
+    impl ProtocolBase for ProtoDht {
+        async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+            info!("ProtoDht::start()");
+            self.jobsman.clone().start(executor.clone());
+            self.jobsman.clone().spawn(self.clone().handle_insert(), executor.clone()).await;
+            self.jobsman.clone().spawn(self.clone().handle_remove(), executor.clone()).await;
+            Ok(())
+        }
+
+        fn name(&self) -> &'static str {
+            "ProtoDHT"
+        }
+    }
 
     #[async_std::test]
     async fn dht_local_get_insert() -> Result<()> {
@@ -434,6 +549,64 @@ mod tests {
         assert_eq!(data, read_data);
 
         fs::remove_dir_all(base_path).await?;
+        Ok(())
+    }
+
+    #[async_std::test]
+    async fn dht_remote_get_insert() -> Result<()> {
+        const NET_SIZE: usize = 5;
+
+        // Logging
+        let mut cfg = simplelog::ConfigBuilder::new();
+        simplelog::TermLogger::init(
+            simplelog::LevelFilter::Debug,
+            cfg.build(),
+            simplelog::TerminalMode::Mixed,
+            simplelog::ColorChoice::Auto,
+        )?;
+
+        let peers = create_p2p_net(NET_SIZE).await?;
+        let executor = Arc::new(Executor::new());
+
+        for p2p in &peers {
+            p2p.clone().start(executor.clone()).await?;
+
+            let _p2p = p2p.clone();
+            let _ex = executor.clone();
+            executor
+                .spawn(async move {
+                    if let Err(e) = _p2p.run(_ex).await {
+                        error!("Failed starting P2P network: {}", e);
+                        assert!(false);
+                    }
+                })
+                .detach();
+
+            sleep(1).await;
+        }
+
+        let mut dhts = vec![];
+        let mut base_path = std::env::temp_dir();
+        base_path.push("dht");
+
+        for i in 0..NET_SIZE {
+            let mut node_path = base_path.clone();
+            node_path.push(format!("node_{}", i));
+
+            let mut dht = Dht::new(&node_path.into(), peers[i].clone()).await?;
+            dht.garbage_collect().await?;
+            dhts.push(dht);
+        }
+
+        let dht = &mut dhts[2];
+
+        let rng = &mut OsRng;
+        let mut data = vec![0u8; MAX_CHUNK_SIZE];
+        rng.fill_bytes(&mut data);
+        let (file_hash, chunk_hashes) = dht.insert(&data).await?;
+
+        //fs::remove_dir_all(base_path).await?;
+
         Ok(())
     }
 }
