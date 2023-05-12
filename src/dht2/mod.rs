@@ -241,6 +241,7 @@ impl Dht {
         &mut self,
         stream: impl AsRef<[u8]>,
     ) -> Result<(blake3::Hash, Vec<blake3::Hash>)> {
+        debug!(target: "dht", "DHT::insert()");
         let mut file_hasher = blake3::Hasher::new();
         let mut chunk_hashes = vec![];
 
@@ -303,6 +304,7 @@ impl Dht {
     /// The reason for this is that even if the filename exists in the tmpdir, we
     /// can still make sure that it's correct and not corrupted by rewriting it.
     pub async fn get(&self, file_hash: &blake3::Hash) -> Result<PathBuf> {
+        debug!(target: "dht", "DHT::get()");
         // Try from local metadata/chunks
         let mut file_path = self.files_path.clone();
         file_path.push(file_hash.to_hex().as_str());
@@ -396,7 +398,6 @@ mod tests {
             transport::TransportName, ChannelPtr, MessageSubscription, P2p, ProtocolBase,
             ProtocolBasePtr, ProtocolJobsManager,
         },
-        util::async_util::sleep,
     };
     use async_std::{net::TcpListener, sync::Arc};
     use async_trait::async_trait;
@@ -417,11 +418,12 @@ mod tests {
             drop(listener);
 
             let mut settings = net::Settings::default();
-            settings.localnet = true;
             settings.inbound = vec![url.clone()];
             settings.peers = addrs.clone();
             settings.outbound_transports = vec![TransportName::try_from("tcp").unwrap()];
             settings.outbound_connections = n_peers as u32;
+            settings.localnet = true;
+            settings.channel_log = true;
 
             addrs.push(url);
 
@@ -552,21 +554,10 @@ mod tests {
         Ok(())
     }
 
-    #[async_std::test]
-    async fn dht_remote_get_insert() -> Result<()> {
+    async fn dht_remote_get_insert_real(executor: Arc<Executor<'_>>) -> Result<()> {
         const NET_SIZE: usize = 5;
 
-        // Logging
-        let mut cfg = simplelog::ConfigBuilder::new();
-        simplelog::TermLogger::init(
-            simplelog::LevelFilter::Debug,
-            cfg.build(),
-            simplelog::TerminalMode::Mixed,
-            simplelog::ColorChoice::Auto,
-        )?;
-
         let peers = create_p2p_net(NET_SIZE).await?;
-        let executor = Arc::new(Executor::new());
 
         for p2p in &peers {
             p2p.clone().start(executor.clone()).await?;
@@ -575,14 +566,13 @@ mod tests {
             let _ex = executor.clone();
             executor
                 .spawn(async move {
+                    println!("aaaaa");
                     if let Err(e) = _p2p.run(_ex).await {
                         error!("Failed starting P2P network: {}", e);
                         assert!(false);
                     }
                 })
                 .detach();
-
-            sleep(1).await;
         }
 
         let mut dhts = vec![];
@@ -605,7 +595,37 @@ mod tests {
         rng.fill_bytes(&mut data);
         let (file_hash, chunk_hashes) = dht.insert(&data).await?;
 
-        //fs::remove_dir_all(base_path).await?;
+        fs::remove_dir_all(base_path).await?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn dht_remote_get_insert() -> Result<()> {
+        // Logging
+        let mut cfg = simplelog::ConfigBuilder::new();
+        cfg.add_filter_ignore("net::protocol_version".to_string());
+        cfg.add_filter_ignore("net::protocol_ping".to_string());
+
+        simplelog::TermLogger::init(
+            //simplelog::LevelFilter::Debug,
+            simplelog::LevelFilter::Info,
+            cfg.build(),
+            simplelog::TerminalMode::Mixed,
+            simplelog::ColorChoice::Auto,
+        )?;
+
+        let ex = Arc::new(Executor::new());
+        let (signal, shutdown) = async_std::channel::unbounded::<()>();
+
+        easy_parallel::Parallel::new()
+            .each(0..4, |_| smol::block_on(ex.run(shutdown.recv())))
+            .finish(|| {
+                smol::block_on(async {
+                    dht_remote_get_insert_real(ex.clone()).await.unwrap();
+                    drop(signal);
+                })
+            });
 
         Ok(())
     }
