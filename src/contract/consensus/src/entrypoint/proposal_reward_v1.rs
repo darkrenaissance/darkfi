@@ -82,8 +82,12 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
     let slot_checkpoint: SlotCheckpoint = deserialize(&slot_checkpoint)?;
 
     // Verify eta VRF proof
+    let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
+    // NOTE: slot checkpoint eta to be renamed to previous_eta,
+    //       corresponding to previous block eta.
+    let vrf_input = slot_checkpoint.eta + slot_pallas;
     let vrf_proof = &params.vrf_proof;
-    if !vrf_proof.verify(params.burnt_public_key, &slot_checkpoint.eta.to_repr()) {
+    if !vrf_proof.verify(params.burnt_public_key, &vrf_input.to_repr()) {
         msg!("[ConsensusProposalRewardV1] Error: eta VRF proof couldn't be verified");
         return Err(ConsensusError::ProposalErroneousVrfProof.into())
     }
@@ -92,7 +96,6 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
     let eta = pallas::Base::from_uniform_bytes(&eta);
 
     // Calculate election seeds
-    let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
     let mu_y = poseidon_hash([MU_Y_PREFIX, eta, slot_pallas]);
     let mu_rho = poseidon_hash([MU_RHO_PREFIX, eta, slot_pallas]);
 

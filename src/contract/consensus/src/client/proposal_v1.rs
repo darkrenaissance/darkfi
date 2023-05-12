@@ -350,7 +350,10 @@ pub fn create_proposal_reward_proof(
     let new_value_commit = pedersen_commitment_u64(value + REWARD, value_blind);
     let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
     let seed = poseidon_hash([SEED_PREFIX, serial, ZERO]);
-    let vrf_proof = VrfProof::prove(secret_key.into(), &slot_checkpoint.eta.to_repr(), &mut OsRng);
+    // NOTE: slot checkpoint eta to be renamed to previous_eta,
+    //       corresponding to previous block eta.
+    let vrf_input = slot_checkpoint.eta + slot_pallas;
+    let vrf_proof = VrfProof::prove(secret_key.into(), &vrf_input.to_repr(), &mut OsRng);
     let mut eta = [0u8; 64];
     eta[..blake3::OUT_LEN].copy_from_slice(vrf_proof.hash_output().as_bytes());
     let eta = pallas::Base::from_uniform_bytes(&eta);
