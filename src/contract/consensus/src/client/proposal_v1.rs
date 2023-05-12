@@ -352,8 +352,10 @@ pub fn create_proposal_reward_proof(
     let seed = poseidon_hash([SEED_PREFIX, serial, ZERO]);
     // NOTE: slot checkpoint eta to be renamed to previous_eta,
     //       corresponding to previous block eta.
-    let vrf_input = slot_checkpoint.eta + slot_pallas;
-    let vrf_proof = VrfProof::prove(secret_key.into(), &vrf_input.to_repr(), &mut OsRng);
+    let mut vrf_input = [0u8; 64];
+    vrf_input[..32].copy_from_slice(&slot_checkpoint.eta.to_repr());
+    vrf_input[32..].copy_from_slice(&slot_pallas.to_repr());
+    let vrf_proof = VrfProof::prove(secret_key.into(), &vrf_input, &mut OsRng);
     let mut eta = [0u8; 64];
     eta[..blake3::OUT_LEN].copy_from_slice(vrf_proof.hash_output().as_bytes());
     let eta = pallas::Base::from_uniform_bytes(&eta);
