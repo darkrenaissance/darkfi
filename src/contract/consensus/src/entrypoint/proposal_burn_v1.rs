@@ -17,10 +17,8 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError,
-    model::{ConsensusUnstakeParamsV1, ConsensusUnstakeUpdateV1},
-    CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1,
+    error::MoneyError, model::ConsensusUnstakeUpdateV1, CONSENSUS_CONTRACT_COIN_ROOTS_TREE,
+    CONSENSUS_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
@@ -36,7 +34,7 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
-    model::{ConsensusProposalRewardParamsV1, ZERO},
+    model::{ConsensusProposalBurnParamsV1, ConsensusProposalRewardParamsV1, ZERO},
     ConsensusFunction,
 };
 
@@ -47,7 +45,7 @@ pub(crate) fn consensus_proposal_burn_get_metadata_v1(
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: ConsensusUnstakeParamsV1 = deserialize(&self_.data[1..])?;
+    let params: ConsensusProposalBurnParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
@@ -96,7 +94,7 @@ pub(crate) fn consensus_proposal_burn_process_instruction_v1(
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: ConsensusUnstakeParamsV1 = deserialize(&self_.data[1..])?;
+    let params: ConsensusProposalBurnParamsV1 = deserialize(&self_.data[1..])?;
 
     // Access the necessary databases where there is information to
     // validate this state transition.
@@ -161,7 +159,7 @@ pub(crate) fn consensus_proposal_burn_process_instruction_v1(
 
     // Verify next call StakeInput is the same as this calls input
     let next_params: ConsensusProposalRewardParamsV1 = deserialize(&next.data[1..])?;
-    if input != &next_params.unstake_input {
+    if input != &next_params.burnt_input || &params.public_key != &next_params.burnt_public_key {
         msg!("[ConsensusProposalBurnV1] Error: Next call input mismatch");
         return Err(MoneyError::NextCallInputMissmatch.into())
     }

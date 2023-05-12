@@ -17,16 +17,29 @@
  */
 
 use darkfi_money_contract::model::{Input, Output, StakeInput};
-use darkfi_sdk::pasta::pallas;
+use darkfi_sdk::{crypto::PublicKey, pasta::pallas};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
+
+/// Parameters for `Consensus::ProposalBurn`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusProposalBurnParamsV1 {
+    /// Blinding factor for `token_id`
+    pub token_blind: pallas::Scalar,
+    /// Anonymous input
+    pub input: Input,
+    /// Burnt coin public key used in VRF
+    pub public_key: PublicKey,
+}
 
 /// Parameters for `Consensus::ProposalReward`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ConsensusProposalRewardParamsV1 {
-    /// Anonymous input of `Consensus::Unstake`
-    pub unstake_input: Input,
-    /// Burnt token revealed info of `Consensus::Stake`
-    pub stake_input: StakeInput,
+    /// Anonymous input of `Consensus::ProposalBurn`
+    pub burnt_input: Input,
+    /// Burnt coin public key used in VRF
+    pub burnt_public_key: PublicKey,
+    /// Burnt token revealed info of `Consensus::ProposalMint`
+    pub mint_input: StakeInput,
     /// Anonymous output
     pub output: Output,
     /// Pedersen commitment for the output's serial number

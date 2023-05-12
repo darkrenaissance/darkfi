@@ -39,6 +39,11 @@ circuit "ProposalReward_V1" {
 	nullifier = poseidon_hash(secret_key, serial);
 	constrain_instance(nullifier);
 
+	# Derive public key that will be used in VRF proof and constrain it
+	pub = ec_mul_base(secret_key, NULLIFIER_K);
+	constrain_instance(ec_get_x(pub));
+	constrain_instance(ec_get_y(pub));
+
 	# Pedersen commitment for coin's value
 	vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
 	vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);

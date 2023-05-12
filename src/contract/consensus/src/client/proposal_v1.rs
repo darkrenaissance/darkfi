@@ -26,7 +26,7 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
-    model::{ConsensusUnstakeParamsV1, Input, Output, StakeInput},
+    model::{Input, Output, StakeInput},
 };
 use darkfi_sdk::{
     crypto::{
@@ -46,23 +46,25 @@ use crate::{
         unstake_v1::{create_unstake_burn_proof, TransactionBuilderInputInfo as UnstakeTBII},
     },
     model::{
-        ConsensusProposalMintParamsV1, ConsensusProposalRewardParamsV1, HEADSTART, MU_RHO_PREFIX,
-        MU_Y_PREFIX, REWARD, REWARD_PALLAS, SEED_PREFIX, SERIAL_PREFIX, ZERO,
+        ConsensusProposalBurnParamsV1, ConsensusProposalMintParamsV1,
+        ConsensusProposalRewardParamsV1, HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX, REWARD,
+        REWARD_PALLAS, SEED_PREFIX, SERIAL_PREFIX, ZERO,
     },
 };
 
 pub struct ConsensusProposalCallDebris {
-    pub unstake_params: ConsensusUnstakeParamsV1,
-    pub unstake_proofs: Vec<Proof>,
+    pub burn_params: ConsensusProposalBurnParamsV1,
+    pub burn_proofs: Vec<Proof>,
     pub reward_params: ConsensusProposalRewardParamsV1,
     pub reward_proofs: Vec<Proof>,
-    pub stake_params: ConsensusProposalMintParamsV1,
-    pub stake_proofs: Vec<Proof>,
+    pub mint_params: ConsensusProposalMintParamsV1,
+    pub mint_proofs: Vec<Proof>,
     pub signature_secret: SecretKey,
 }
 
 pub struct ConsensusProposalRewardRevealed {
     pub nullifier: Nullifier,
+    pub public_key: PublicKey,
     pub value_commit: pallas::Point,
     pub new_serial_commit: pallas::Point,
     pub new_value_commit: pallas::Point,
@@ -76,6 +78,7 @@ pub struct ConsensusProposalRewardRevealed {
 
 impl ConsensusProposalRewardRevealed {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
+        let (pub_x, pub_y) = self.public_key.xy();
         let value_coords = self.value_commit.to_affine().coordinates().unwrap();
         let new_serial_coords = self.new_serial_commit.to_affine().coordinates().unwrap();
         let new_value_coords = self.new_value_commit.to_affine().coordinates().unwrap();
@@ -84,6 +87,8 @@ impl ConsensusProposalRewardRevealed {
         // as the `constrain_instance` calls in the zkas code.
         vec![
             self.nullifier.inner(),
+            pub_x,
+            pub_y,
             *value_coords.x(),
             *value_coords.y(),
             *new_serial_coords.x(),
@@ -198,9 +203,12 @@ impl ConsensusProposalCallBuilder {
         };
 
         // We now fill this with necessary stuff
-        let unstake_params = ConsensusUnstakeParamsV1 { token_blind, input: input.clone() };
-        let unstake_proofs = vec![proof];
-        let unstake_input = input;
+        let burnt_secret_key = self.coin.secret.inner();
+        let public_key = PublicKey::from_secret(burnt_secret_key.into());
+        let burn_params =
+            ConsensusProposalBurnParamsV1 { token_blind, input: input.clone(), public_key };
+        let burn_proofs = vec![proof];
+        let burnt_input = input;
 
         debug!("Building Consensus::ProposalMintV1 contract call for proposal");
         let new_value = value + REWARD;
@@ -212,7 +220,6 @@ impl ConsensusProposalCallBuilder {
         let output = StakeTBOI { value: new_value, token_id, public_key: self.recipient };
         debug!("Finished building output for proposal");
 
-        let burnt_secret_key = self.coin.secret.inner();
         let burnt_serial = self.coin.note.serial;
         let spend_hook = CONSENSUS_CONTRACT_ID.inner();
         let user_data = pallas::Base::random(&mut OsRng);
@@ -266,13 +273,13 @@ impl ConsensusProposalCallBuilder {
 
         // We now fill this with necessary stuff
         let serial_commit = public_inputs.serial_commit;
-        let stake_params = ConsensusProposalMintParamsV1 {
+        let mint_params = ConsensusProposalMintParamsV1 {
             input: input.clone(),
             output: output.clone(),
             serial_commit,
         };
-        let stake_proofs = vec![proof];
-        let stake_input = input;
+        let mint_proofs = vec![proof];
+        let mint_input = input;
 
         debug!("Building Consensus::ProposalRewardV1 contract call for proposal");
         let secret_key = self.coin.secret.inner();
@@ -289,13 +296,15 @@ impl ConsensusProposalCallBuilder {
         )?;
 
         // We now fill this with necessary stuff
+        let burnt_public_key = public_inputs.public_key;
         let new_serial_commit = serial_commit;
         let slot = self.slot_checkpoint.slot;
         let y = public_inputs.y;
         let rho = public_inputs.rho;
         let reward_params = ConsensusProposalRewardParamsV1 {
-            unstake_input,
-            stake_input,
+            burnt_input,
+            burnt_public_key,
+            mint_input,
             output,
             new_serial_commit,
             slot,
@@ -307,12 +316,12 @@ impl ConsensusProposalCallBuilder {
         // Now we should have all the params, zk proofs and signature secret.
         // We return it all and let the caller deal with it.
         let debris = ConsensusProposalCallDebris {
-            unstake_params,
-            unstake_proofs,
+            burn_params,
+            burn_proofs,
             reward_params,
             reward_proofs,
-            stake_params,
-            stake_proofs,
+            mint_params,
+            mint_proofs,
             signature_secret,
         };
         Ok(debris)
@@ -331,6 +340,7 @@ pub fn create_proposal_reward_proof(
 ) -> Result<(Proof, ConsensusProposalRewardRevealed)> {
     // Proof parameters
     let nullifier = Nullifier::from(poseidon_hash([secret_key, serial]));
+    let public_key = PublicKey::from_secret(secret_key.into());
     let value_commit = pedersen_commitment_u64(value, value_blind);
     let new_serial = poseidon_hash([SERIAL_PREFIX, secret_key, serial, ZERO]);
     let new_serial_commit = pedersen_commitment_base(new_serial, new_serial_blind);
@@ -346,6 +356,7 @@ pub fn create_proposal_reward_proof(
     // Generate public inputs, witnesses and proof
     let public_inputs = ConsensusProposalRewardRevealed {
         nullifier,
+        public_key,
         value_commit,
         new_serial_commit,
         new_value_commit,

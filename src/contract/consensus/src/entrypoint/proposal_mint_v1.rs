@@ -152,7 +152,7 @@ pub(crate) fn consensus_proposal_mint_process_instruction_v1(
 
     // Verify previous call input is the same as this calls StakeInput
     let previous_params: ConsensusProposalRewardParamsV1 = deserialize(&previous.data[1..])?;
-    let previous_input = &previous_params.stake_input;
+    let previous_input = &previous_params.mint_input;
     if &previous_input != &input ||
         &previous_params.output != output ||
         &previous_params.new_serial_commit != &params.serial_commit
@@ -162,7 +162,7 @@ pub(crate) fn consensus_proposal_mint_process_instruction_v1(
     }
 
     // If spend hook is set, check its correctness
-    let previous_input = &previous_params.unstake_input;
+    let previous_input = &previous_params.burnt_input;
     if previous_input.spend_hook != ZERO &&
         previous_input.spend_hook != CONSENSUS_CONTRACT_ID.inner()
     {

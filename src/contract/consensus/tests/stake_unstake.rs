@@ -247,8 +247,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
 
     // With alice's current coin value she can become the slot proposer,
     // so she creates a proposal transaction to burn her staked coin,
-    // reward herself and mint the new coin. Burn and Mint use the same
-    // parameters as Unstake and Stake.
+    // reward herself and mint the new coin.
     info!(target: "consensus", "[Alice] ====================================");
     info!(target: "consensus", "[Alice] Building proposal transaction params");
     info!(target: "consensus", "[Alice] ====================================");
@@ -267,20 +266,20 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     }
     .build()?;
     let (
-        alice_consensus_unstake_params,
-        alice_consensus_unstake_proofs,
+        alice_consensus_burn_params,
+        alice_consensus_burn_proofs,
         alice_consensus_reward_params,
         alice_consensus_reward_proofs,
-        alice_consensus_stake_params,
-        alice_consensus_stake_proofs,
+        alice_consensus_mint_params,
+        alice_consensus_mint_proofs,
         alice_consensus_proposal_secret_key,
     ) = (
-        alice_consensus_proposal_call_debris.unstake_params,
-        alice_consensus_proposal_call_debris.unstake_proofs,
+        alice_consensus_proposal_call_debris.burn_params,
+        alice_consensus_proposal_call_debris.burn_proofs,
         alice_consensus_proposal_call_debris.reward_params,
         alice_consensus_proposal_call_debris.reward_proofs,
-        alice_consensus_proposal_call_debris.stake_params,
-        alice_consensus_proposal_call_debris.stake_proofs,
+        alice_consensus_proposal_call_debris.mint_params,
+        alice_consensus_proposal_call_debris.mint_proofs,
         alice_consensus_proposal_call_debris.signature_secret,
     );
 
@@ -288,32 +287,32 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] Building proposal tx");
     info!(target: "consensus", "[Alice] ====================");
     let mut data = vec![ConsensusFunction::ProposalBurnV1 as u8];
-    alice_consensus_unstake_params.encode(&mut data)?;
-    let consensus_unstake_call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
+    alice_consensus_burn_params.encode(&mut data)?;
+    let consensus_burn_call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
 
     let mut data = vec![ConsensusFunction::ProposalRewardV1 as u8];
     alice_consensus_reward_params.encode(&mut data)?;
     let consensus_reward_call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
 
     let mut data = vec![ConsensusFunction::ProposalMintV1 as u8];
-    alice_consensus_stake_params.encode(&mut data)?;
-    let consensus_stake_call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
+    alice_consensus_mint_params.encode(&mut data)?;
+    let consensus_mint_call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
 
-    let calls = vec![consensus_unstake_call, consensus_reward_call, consensus_stake_call];
+    let calls = vec![consensus_burn_call, consensus_reward_call, consensus_mint_call];
     let proofs = vec![
-        alice_consensus_unstake_proofs,
+        alice_consensus_burn_proofs,
         alice_consensus_reward_proofs,
-        alice_consensus_stake_proofs,
+        alice_consensus_mint_proofs,
     ];
     let mut alice_proposal_tx = Transaction { calls, proofs, signatures: vec![] };
-    let consensus_unstake_sigs =
+    let consensus_burn_sigs =
         alice_proposal_tx.create_sigs(&mut OsRng, &[alice_consensus_proposal_secret_key])?;
     let consensus_reward_sigs =
         alice_proposal_tx.create_sigs(&mut OsRng, &[alice_consensus_proposal_secret_key])?;
-    let consensus_stake_sigs =
+    let consensus_mint_sigs =
         alice_proposal_tx.create_sigs(&mut OsRng, &[alice_consensus_proposal_secret_key])?;
     alice_proposal_tx.signatures =
-        vec![consensus_unstake_sigs, consensus_reward_sigs, consensus_stake_sigs];
+        vec![consensus_burn_sigs, consensus_reward_sigs, consensus_mint_sigs];
     proposal_creation_times.push(timer.elapsed());
 
     // Calculate transaction sizes
@@ -338,7 +337,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     assert!(erroneous_txs.is_empty());
     th.faucet
         .consensus_merkle_tree
-        .append(&MerkleNode::from(alice_consensus_stake_params.output.coin.inner()));
+        .append(&MerkleNode::from(alice_consensus_mint_params.output.coin.inner()));
     proposal_verify_times.push(timer.elapsed());
 
     info!(target: "consensus", "[Alice] ===========================");
@@ -350,7 +349,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     assert!(erroneous_txs.is_empty());
     th.alice
         .consensus_merkle_tree
-        .append(&MerkleNode::from(alice_consensus_stake_params.output.coin.inner()));
+        .append(&MerkleNode::from(alice_consensus_mint_params.output.coin.inner()));
     proposal_verify_times.push(timer.elapsed());
 
     assert!(
@@ -361,9 +360,9 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     // Gather new staked owncoin which includes the reward
     let leaf_position = th.alice.consensus_merkle_tree.witness().unwrap();
     let note: MoneyNote =
-        alice_consensus_stake_params.output.note.decrypt(&th.alice.keypair.secret)?;
+        alice_consensus_mint_params.output.note.decrypt(&th.alice.keypair.secret)?;
     let alice_rewarded_staked_oc = OwnCoin {
-        coin: Coin::from(alice_consensus_stake_params.output.coin),
+        coin: Coin::from(alice_consensus_mint_params.output.coin),
         note: note.clone(),
         secret: th.alice.keypair.secret,
         nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
