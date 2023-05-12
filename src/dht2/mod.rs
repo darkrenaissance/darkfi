@@ -27,15 +27,19 @@ use async_std::{
     path::PathBuf,
     stream::StreamExt,
 };
+use log::{debug, warn};
 
 use crate::Result;
 
 /// Maximum size of a stored chunk (2 MiB)
 pub const MAX_CHUNK_SIZE: usize = 2_097_152;
 
-const FILES_PATH: &str = "files";
-const CHUNKS_PATH: &str = "chunks";
+/// Path prefix where temporary files and concatenated chunks are stored
 const TMP_PATH: &str = "tmp";
+/// Path prefix where file metadata is stored
+const FILES_PATH: &str = "files";
+/// Path prefix where file chunks are stored
+const CHUNKS_PATH: &str = "chunks";
 
 /// Files distributed on the DHT
 pub struct Dht {
@@ -53,18 +57,21 @@ pub struct Dht {
 
 impl Dht {
     /// Instantiate a new [`Dht`] object
+    ///
+    /// After the object is instantiated, the caller should also run
+    /// the [`Dht::garbage_collect()`] function to ensure consistency.
     pub async fn new(base_path: &PathBuf) -> Result<Self> {
+        let mut tmp_path: PathBuf = base_path.into();
         let mut files_path: PathBuf = base_path.into();
         let mut chunks_path: PathBuf = base_path.into();
-        let mut tmp_path: PathBuf = base_path.into();
         tmp_path.push(TMP_PATH);
         files_path.push(FILES_PATH);
         chunks_path.push(CHUNKS_PATH);
 
         // Create necessary directory structure if needed
+        create_dir_all(&tmp_path).await?;
         create_dir_all(&files_path).await?;
         create_dir_all(&chunks_path).await?;
-        create_dir_all(&tmp_path).await?;
 
         Ok(Self { hash_map: HashMap::new(), files_path, chunks_path, tmp_path })
     }
@@ -101,8 +108,9 @@ impl Dht {
     /// Perform garbage collection over the filesystem hierarchy. This should always
     /// be ran after calling `Dht::new()`.
     pub async fn garbage_collect(&mut self) -> Result<()> {
-        // We track corrupt files and chunks here. After iterating through all files,
-        // we will be able to do a cleanup.
+        debug!(target: "dht", "Performing DHT garbage collection");
+        // We track corrupt files and chunks here.
+        // After iterating through all files, we will be able to do a cleanup.
         let mut corrupted_files = HashSet::new();
         let mut corrupted_chunks = HashSet::new();
 
@@ -205,9 +213,11 @@ impl Dht {
             }
         }
 
-        // Now we found all the corrupted files and chunks. Delete them.
+        // Now we found all the corrupted files and chunks. Try to delete them.
         for chunk_path in &corrupted_chunks {
-            let _ = fs::remove_file(chunk_path).await;
+            if let Err(e) = fs::remove_file(chunk_path).await {
+                warn!(target: "dht", "DHT::garbage_collect(): Failed to remove corrupted chunk: {}", e);
+            }
         }
 
         for file_path in &corrupted_files {
@@ -215,7 +225,10 @@ impl Dht {
             let file_hash = blake3::Hash::from_hex(hash_str).unwrap();
 
             self.hash_map.remove(&file_hash);
-            let _ = fs::remove_file(file_path).await;
+
+            if let Err(e) = fs::remove_file(file_path).await {
+                warn!(target: "dht", "DHT::garbage_collect(): Failed to remove corrupted file: {}", e);
+            }
         }
 
         Ok(())
@@ -275,24 +288,19 @@ impl Dht {
         todo!()
     }
 
-    async fn get_chunk_from_network(&self, _chunk_hash: &blake3::Hash) -> Result<()> {
-        todo!()
+    /// Attempt to fetch the given set of chunks from the P2P network.
+    ///
+    /// TODO: This function should attempt to fetch them concurrently.
+    async fn get_chunks_from_network(&self, _chunk_hashes: &HashSet<&blake3::Hash>) -> Result<()> {
+        Ok(())
     }
 
-    /// Attempt to fetch a file from the DHT
+    /// Attempt to fetch a file from the DHT. Returns a [`PathBuf`] pointing to the file.
+    ///
+    /// This function will always try to concatenate chunks into a new file.
+    /// The reason for this is that even if the filename exists in the tmpdir, we
+    /// can still make sure that it's correct and not corrupted by rewriting it.
     pub async fn get(&self, file_hash: &blake3::Hash) -> Result<PathBuf> {
-        // Check if we actually have this file already.
-        let mut tmp_path = self.tmp_path.clone();
-        tmp_path.push(file_hash.to_hex().as_str());
-        if tmp_path.exists().await && tmp_path.is_file().await {
-            return Ok(tmp_path)
-        }
-        if tmp_path.exists().await && !tmp_path.is_file().await {
-            // This is some directory that has been found here.
-            // Decide what to do with it
-            todo!()
-        }
-
         // Try from local metadata/chunks
         let mut file_path = self.files_path.clone();
         file_path.push(file_hash.to_hex().as_str());
@@ -320,15 +328,24 @@ impl Dht {
                 continue
             }
 
+            if chunk_path.is_dir().await {
+                // This is an externally created directory by something else.
+                // We can either return an error here or try to remove the directory.
+                // Possibly we can design the API in a way that it panics as well,
+                // although this is a bit DoS-prone.
+                panic!()
+            }
+
             missing_chunks.insert(chunk_hash);
         }
 
-        for chunk_hash in &missing_chunks {
-            self.get_chunk_from_network(chunk_hash).await?;
-        }
+        // Fetch any missing chunks from the P2P network.
+        self.get_chunks_from_network(&missing_chunks).await?;
 
         // At this point we should have all the chunks locally.
         // Let's concatenate them into a file.
+        let mut tmp_path = self.tmp_path();
+        tmp_path.push(file_hash.to_hex().as_str());
         let mut file_hasher = blake3::Hasher::new();
         let mut tmp_fd = File::create(&tmp_path).await?;
 
@@ -344,6 +361,7 @@ impl Dht {
             let hashed_chunk = blake3::hash(chunk_slice);
 
             if &hashed_chunk != chunk_hash {
+                // The chunk is corrupted/inconsistent.
                 // TODO: Run garbage collection or notify the user to GC
                 // TODO: Also return an error.
                 todo!()
@@ -353,6 +371,7 @@ impl Dht {
             tmp_fd.write_all(chunk_slice).await?;
         }
 
+        // If this check fails, it means we got the wrong chunks.
         if file_hash != &file_hasher.finalize() {
             // TODO: Run garbage collection or notify the user to GC
             // TODO: Also return an error.
