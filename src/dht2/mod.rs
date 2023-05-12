@@ -398,10 +398,11 @@ mod tests {
             transport::TransportName, ChannelPtr, MessageSubscription, P2p, ProtocolBase,
             ProtocolBasePtr, ProtocolJobsManager,
         },
+        util::async_util::sleep,
     };
     use async_std::{net::TcpListener, sync::Arc};
     use async_trait::async_trait;
-    use log::{error, info};
+    use log::error;
     use rand::{rngs::OsRng, RngCore};
     use smol::Executor;
     use url::Url;
@@ -410,7 +411,7 @@ mod tests {
         let mut ret = vec![];
         let mut addrs = vec![];
 
-        for _ in 0..n_peers {
+        for i in 0..n_peers {
             // Find an available port
             let listener = TcpListener::bind("127.0.0.1:0").await?;
             let sockaddr = listener.local_addr()?;
@@ -421,7 +422,6 @@ mod tests {
             settings.inbound = vec![url.clone()];
             settings.peers = addrs.clone();
             settings.outbound_transports = vec![TransportName::try_from("tcp").unwrap()];
-            settings.outbound_connections = n_peers as u32;
             settings.localnet = true;
             settings.channel_log = true;
 
@@ -431,7 +431,7 @@ mod tests {
             let registry = p2p.protocol_registry();
             registry
                 .register(net::SESSION_ALL, move |channel, p2p| async move {
-                    ProtoDht::init(channel, p2p).await.unwrap()
+                    ProtoDht::init(i, channel, p2p).await.unwrap()
                 })
                 .await;
 
@@ -443,6 +443,7 @@ mod tests {
 
     struct ProtoDht {
         jobsman: net::ProtocolJobsManagerPtr,
+        node_id: usize,
         _channel: ChannelPtr,
         _p2p: P2pPtr,
         insert_sub: MessageSubscription<NetHashMapInsert<blake3::Hash, Vec<blake3::Hash>>>,
@@ -450,7 +451,11 @@ mod tests {
     }
 
     impl ProtoDht {
-        pub async fn init(channel: ChannelPtr, p2p: P2pPtr) -> Result<ProtocolBasePtr> {
+        pub async fn init(
+            node_id: usize,
+            channel: ChannelPtr,
+            p2p: P2pPtr,
+        ) -> Result<ProtocolBasePtr> {
             let msg_subsystem = channel.get_message_subsystem();
             msg_subsystem.add_dispatch::<NetHashMapInsert<blake3::Hash, Vec<blake3::Hash>>>().await;
             msg_subsystem.add_dispatch::<NetHashMapRemove<blake3::Hash>>().await;
@@ -460,6 +465,7 @@ mod tests {
 
             Ok(Arc::new(Self {
                 jobsman: ProtocolJobsManager::new("DHTProto", channel.clone()),
+                node_id,
                 _channel: channel,
                 _p2p: p2p,
                 insert_sub,
@@ -468,26 +474,26 @@ mod tests {
         }
 
         async fn handle_insert(self: Arc<Self>) -> Result<()> {
-            info!("ProtoDht::handle_insert START");
+            debug!("[Node {}] ProtoDht::handle_insert START", self.node_id);
             loop {
                 let insert_message = match self.insert_sub.receive().await {
                     Ok(v) => v,
                     Err(_) => continue,
                 };
 
-                println!("{:?}", insert_message);
+                println!("[Node {}] {:?}", self.node_id, insert_message);
             }
         }
 
         async fn handle_remove(self: Arc<Self>) -> Result<()> {
-            info!("ProtoDht::handle_remove START");
+            debug!("[Node {}] ProtoDht::handle_remove START", self.node_id);
             loop {
                 let remove_message = match self.remove_sub.receive().await {
                     Ok(v) => v,
                     Err(_) => continue,
                 };
 
-                println!("{:?}", remove_message);
+                println!("[Node {}] {:?}", self.node_id, remove_message);
             }
         }
     }
@@ -495,7 +501,7 @@ mod tests {
     #[async_trait]
     impl ProtocolBase for ProtoDht {
         async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-            info!("ProtoDht::start()");
+            debug!("ProtoDht::start()");
             self.jobsman.clone().start(executor.clone());
             self.jobsman.clone().spawn(self.clone().handle_insert(), executor.clone()).await;
             self.jobsman.clone().spawn(self.clone().handle_remove(), executor.clone()).await;
@@ -572,7 +578,10 @@ mod tests {
                     }
                 })
                 .detach();
+
+            p2p.clone().wait_for_outbound(executor.clone()).await?;
         }
+        sleep(2).await;
 
         let mut dhts = vec![];
         let mut base_path = std::env::temp_dir();
