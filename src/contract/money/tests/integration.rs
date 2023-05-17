@@ -56,41 +56,49 @@ async fn money_integration() -> Result<()> {
         th.airdrop_native(200, th.alice.keypair.public)?;
 
     info!("[Faucet] Executing Alice airdrop tx");
-    th.faucet
+    let erroneous_txs = th
+        .faucet
         .state
         .read()
         .await
         .verify_transactions(&[alice_airdrop_tx.clone()], current_slot, true)
         .await?;
+    assert!(erroneous_txs.is_empty());
     th.faucet.merkle_tree.append(&MerkleNode::from(alice_airdrop_params.outputs[0].coin.inner()));
 
     info!("[Alice] Executing Alice airdrop tx");
-    th.alice
+    let erroneous_txs = th
+        .alice
         .state
         .read()
         .await
         .verify_transactions(&[alice_airdrop_tx.clone()], current_slot, true)
         .await?;
+    assert!(erroneous_txs.is_empty());
     th.alice.merkle_tree.append(&MerkleNode::from(alice_airdrop_params.outputs[0].coin.inner()));
     // Alice has to witness this coin because it's hers.
     let leaf_position = th.alice.merkle_tree.witness().unwrap();
 
     info!("[Bob] Executing Alice airdrop tx");
-    th.bob
+    let erroneous_txs = th
+        .bob
         .state
         .read()
         .await
         .verify_transactions(&[alice_airdrop_tx.clone()], current_slot, true)
         .await?;
+    assert!(erroneous_txs.is_empty());
     th.bob.merkle_tree.append(&MerkleNode::from(alice_airdrop_params.outputs[0].coin.inner()));
 
     info!("[Charlie] Executing Alice airdrop tx");
-    th.charlie
+    let erroneous_txs = th
+        .charlie
         .state
         .read()
         .await
         .verify_transactions(&[alice_airdrop_tx.clone()], current_slot, true)
         .await?;
+    assert!(erroneous_txs.is_empty());
     th.charlie.merkle_tree.append(&MerkleNode::from(alice_airdrop_params.outputs[0].coin.inner()));
 
     assert_eq!(th.alice.merkle_tree.root(0).unwrap(), th.bob.merkle_tree.root(0).unwrap());
@@ -114,39 +122,47 @@ async fn money_integration() -> Result<()> {
         th.mint_token(bob_token_authority, 500, th.charlie.keypair.public)?;
 
     info!("[Faucet] Executing BOBTOKEN mint to Charlie");
-    th.faucet
+    let erroneous_txs = th
+        .faucet
         .state
         .read()
         .await
         .verify_transactions(&[bob_charlie_mint_tx.clone()], current_slot, true)
         .await?;
+    assert!(erroneous_txs.is_empty());
     th.faucet.merkle_tree.append(&MerkleNode::from(bob_charlie_mint_params.output.coin.inner()));
 
     info!("[Alice] Executing BOBTOKEN mint to Charlie");
-    th.alice
+    let erroneous_txs = th
+        .alice
         .state
         .read()
         .await
         .verify_transactions(&[bob_charlie_mint_tx.clone()], current_slot, true)
         .await?;
+    assert!(erroneous_txs.is_empty());
     th.alice.merkle_tree.append(&MerkleNode::from(bob_charlie_mint_params.output.coin.inner()));
 
     info!("[Bob] Executing BOBTOKEN mint to Charlie");
-    th.bob
+    let erroneous_txs = th
+        .bob
         .state
         .read()
         .await
         .verify_transactions(&[bob_charlie_mint_tx.clone()], current_slot, true)
         .await?;
+    assert!(erroneous_txs.is_empty());
     th.bob.merkle_tree.append(&MerkleNode::from(bob_charlie_mint_params.output.coin.inner()));
 
     info!("[Charlie] Executing BOBTOKEN mint to Charlie");
-    th.charlie
+    let erroneous_txs = th
+        .charlie
         .state
         .read()
         .await
         .verify_transactions(&[bob_charlie_mint_tx.clone()], current_slot, true)
         .await?;
+    assert!(erroneous_txs.is_empty());
     th.charlie.merkle_tree.append(&MerkleNode::from(bob_charlie_mint_params.output.coin.inner()));
     // Charlie has to witness this coin because it's his.
     let leaf_position = th.charlie.merkle_tree.witness().unwrap();
@@ -173,36 +189,44 @@ async fn money_integration() -> Result<()> {
     let (bob_frz_tx, _) = th.freeze_token(bob_token_authority)?;
 
     info!("[Faucet] Executing BOBTOKEN freeze");
-    th.faucet
+    let erroneous_txs = th
+        .faucet
         .state
         .read()
         .await
         .verify_transactions(&[bob_frz_tx.clone()], current_slot, true)
         .await?;
+    assert!(erroneous_txs.is_empty());
 
     info!("[Alice] Executing BOBTOKEN freeze");
-    th.alice
+    let erroneous_txs = th
+        .alice
         .state
         .read()
         .await
         .verify_transactions(&[bob_frz_tx.clone()], current_slot, true)
         .await?;
+    assert!(erroneous_txs.is_empty());
 
     info!("[Bob] Executing BOBTOKEN freeze");
-    th.bob
+    let erroneous_txs = th
+        .bob
         .state
         .read()
         .await
         .verify_transactions(&[bob_frz_tx.clone()], current_slot, true)
         .await?;
+    assert!(erroneous_txs.is_empty());
 
     info!("[Charlie] Executing BOBTOKEN freeze");
-    th.charlie
+    let erroneous_txs = th
+        .charlie
         .state
         .read()
         .await
         .verify_transactions(&[bob_frz_tx.clone()], current_slot, true)
         .await?;
+    assert!(erroneous_txs.is_empty());
 
     // Thanks for reading
     Ok(())
