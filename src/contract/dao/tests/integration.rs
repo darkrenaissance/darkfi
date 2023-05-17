@@ -116,7 +116,13 @@ async fn integration_test() -> Result<()> {
     tx.signatures = vec![sigs];
 
     let timer = Instant::now();
-    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
+    let erroneous_txs = dao_th
+        .alice_state
+        .read()
+        .await
+        .verify_transactions(&[tx.clone()], current_slot, true)
+        .await?;
+    assert!(erroneous_txs.is_empty());
     mint_verify_times.push(timer.elapsed());
     // TODO: Witness and add to wallet merkle tree?
 
@@ -188,7 +194,13 @@ async fn integration_test() -> Result<()> {
     let sigs = tx.create_sigs(&mut OsRng, &vec![dao_th.faucet_kp.secret])?;
     tx.signatures = vec![sigs];
 
-    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
+    let erroneous_txs = dao_th
+        .alice_state
+        .read()
+        .await
+        .verify_transactions(&[tx.clone()], current_slot, true)
+        .await?;
+    assert!(erroneous_txs.is_empty());
 
     // Wallet stuff
 
@@ -299,12 +311,13 @@ async fn integration_test() -> Result<()> {
     let sigs = tx3.create_sigs(&mut OsRng, &[gdrk_mint_auth.secret])?;
     tx3.signatures = vec![sigs];
 
-    dao_th
+    let erroneous_txs = dao_th
         .alice_state
         .read()
         .await
         .verify_transactions(&[tx1.clone(), tx2.clone(), tx3.clone()], current_slot, true)
         .await?;
+    assert!(erroneous_txs.is_empty());
 
     // Wallet
     {
@@ -435,7 +448,13 @@ async fn integration_test() -> Result<()> {
     tx.signatures = vec![sigs];
 
     let timer = Instant::now();
-    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
+    let erroneous_txs = dao_th
+        .alice_state
+        .read()
+        .await
+        .verify_transactions(&[tx.clone()], current_slot, true)
+        .await?;
+    assert!(erroneous_txs.is_empty());
     propose_verify_times.push(timer.elapsed());
 
     //// Wallet
@@ -542,7 +561,13 @@ async fn integration_test() -> Result<()> {
     tx.signatures = vec![sigs];
 
     let timer = Instant::now();
-    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
+    let erroneous_txs = dao_th
+        .alice_state
+        .read()
+        .await
+        .verify_transactions(&[tx.clone()], current_slot, true)
+        .await?;
+    assert!(erroneous_txs.is_empty());
     vote_verify_times.push(timer.elapsed());
 
     // Secret vote info. Needs to be revealed at some point.
@@ -612,7 +637,13 @@ async fn integration_test() -> Result<()> {
     tx.signatures = vec![sigs];
 
     let timer = Instant::now();
-    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
+    let erroneous_txs = dao_th
+        .alice_state
+        .read()
+        .await
+        .verify_transactions(&[tx.clone()], current_slot, true)
+        .await?;
+    assert!(erroneous_txs.is_empty());
     vote_verify_times.push(timer.elapsed());
 
     let vote_note_2 = {
@@ -679,7 +710,13 @@ async fn integration_test() -> Result<()> {
     tx.signatures = vec![sigs];
 
     let timer = Instant::now();
-    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
+    let erroneous_txs = dao_th
+        .alice_state
+        .read()
+        .await
+        .verify_transactions(&[tx.clone()], current_slot, true)
+        .await?;
+    assert!(erroneous_txs.is_empty());
     vote_verify_times.push(timer.elapsed());
 
     // Secret vote info. Needs to be revealed at some point.
@@ -872,7 +909,13 @@ async fn integration_test() -> Result<()> {
     tx.signatures = vec![xfer_sigs, exec_sigs];
 
     let timer = Instant::now();
-    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
+    let erroneous_txs = dao_th
+        .alice_state
+        .read()
+        .await
+        .verify_transactions(&[tx.clone()], current_slot, true)
+        .await?;
+    assert!(erroneous_txs.is_empty());
     exec_verify_times.push(timer.elapsed());
 
     // Statistics
