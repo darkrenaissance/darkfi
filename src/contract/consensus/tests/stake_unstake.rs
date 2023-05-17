@@ -82,6 +82,9 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     // Some numbers we want to assert
     const ALICE_AIRDROP: u64 = 1000;
 
+    // Slot to verify against
+    let current_slot = 0;
+
     // Initialize harness
     let mut th = ConsensusTestHarness::new().await?;
     info!(target: "consensus", "[Faucet] ===================================================");
@@ -100,15 +103,25 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Faucet] ==========================");
     info!(target: "consensus", "[Faucet] Executing Alice airdrop tx");
     info!(target: "consensus", "[Faucet] ==========================");
-    let erroneous_txs =
-        th.faucet.state.read().await.verify_transactions(&[airdrop_tx.clone()], true).await?;
+    let erroneous_txs = th
+        .faucet
+        .state
+        .read()
+        .await
+        .verify_transactions(&[airdrop_tx.clone()], current_slot, true)
+        .await?;
     assert!(erroneous_txs.is_empty());
     th.faucet.merkle_tree.append(&MerkleNode::from(airdrop_params.outputs[0].coin.inner()));
     info!(target: "consensus", "[Alice] ==========================");
     info!(target: "consensus", "[Alice] Executing Alice airdrop tx");
     info!(target: "consensus", "[Alice] ==========================");
-    let erroneous_txs =
-        th.alice.state.read().await.verify_transactions(&[airdrop_tx.clone()], true).await?;
+    let erroneous_txs = th
+        .alice
+        .state
+        .read()
+        .await
+        .verify_transactions(&[airdrop_tx.clone()], current_slot, true)
+        .await?;
     assert!(erroneous_txs.is_empty());
     th.alice.merkle_tree.append(&MerkleNode::from(airdrop_params.outputs[0].coin.inner()));
 
@@ -198,8 +211,13 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Faucet] Executing Alice stake tx");
     info!(target: "consensus", "[Faucet] ========================");
     let timer = Instant::now();
-    let erroneous_txs =
-        th.faucet.state.read().await.verify_transactions(&[alice_stake_tx.clone()], true).await?;
+    let erroneous_txs = th
+        .faucet
+        .state
+        .read()
+        .await
+        .verify_transactions(&[alice_stake_tx.clone()], current_slot, true)
+        .await?;
     assert!(erroneous_txs.is_empty());
     th.faucet
         .consensus_merkle_tree
@@ -210,8 +228,13 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] Executing Alice stake tx");
     info!(target: "consensus", "[Alice] ========================");
     let timer = Instant::now();
-    let erroneous_txs =
-        th.alice.state.read().await.verify_transactions(&[alice_stake_tx.clone()], true).await?;
+    let erroneous_txs = th
+        .alice
+        .state
+        .read()
+        .await
+        .verify_transactions(&[alice_stake_tx.clone()], current_slot, true)
+        .await?;
     assert!(erroneous_txs.is_empty());
     th.alice
         .consensus_merkle_tree
@@ -241,7 +264,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
 
     // We simulate the proposal of genesis slot
     let slot_checkpoint =
-        th.alice.state.read().await.blockchain.get_slot_checkpoints_by_slot(&[0])?[0]
+        th.alice.state.read().await.blockchain.get_slot_checkpoints_by_slot(&[current_slot])?[0]
             .clone()
             .unwrap();
 
@@ -332,7 +355,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
         .state
         .read()
         .await
-        .verify_transactions(&[alice_proposal_tx.clone()], true)
+        .verify_transactions(&[alice_proposal_tx.clone()], current_slot, true)
         .await?;
     assert!(erroneous_txs.is_empty());
     th.faucet
@@ -344,8 +367,13 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] Executing Alice proposal tx");
     info!(target: "consensus", "[Alice] ===========================");
     let timer = Instant::now();
-    let erroneous_txs =
-        th.alice.state.read().await.verify_transactions(&[alice_proposal_tx.clone()], true).await?;
+    let erroneous_txs = th
+        .alice
+        .state
+        .read()
+        .await
+        .verify_transactions(&[alice_proposal_tx.clone()], current_slot, true)
+        .await?;
     assert!(erroneous_txs.is_empty());
     th.alice
         .consensus_merkle_tree
@@ -447,8 +475,13 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Faucet] Executing Alice unstake tx");
     info!(target: "consensus", "[Faucet] ==========================");
     let timer = Instant::now();
-    let erroneous_txs =
-        th.faucet.state.read().await.verify_transactions(&[alice_unstake_tx.clone()], true).await?;
+    let erroneous_txs = th
+        .faucet
+        .state
+        .read()
+        .await
+        .verify_transactions(&[alice_unstake_tx.clone()], current_slot, true)
+        .await?;
     assert!(erroneous_txs.is_empty());
     th.faucet.merkle_tree.append(&MerkleNode::from(alice_money_unstake_params.output.coin.inner()));
     unstake_verify_times.push(timer.elapsed());
@@ -457,8 +490,13 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] Executing Alice unstake tx");
     info!(target: "consensus", "[Alice] ==========================");
     let timer = Instant::now();
-    let erroneous_txs =
-        th.alice.state.read().await.verify_transactions(&[alice_unstake_tx.clone()], true).await?;
+    let erroneous_txs = th
+        .alice
+        .state
+        .read()
+        .await
+        .verify_transactions(&[alice_unstake_tx.clone()], current_slot, true)
+        .await?;
     assert!(erroneous_txs.is_empty());
     th.alice.merkle_tree.append(&MerkleNode::from(alice_money_unstake_params.output.coin.inner()));
     unstake_verify_times.push(timer.elapsed());

@@ -48,7 +48,7 @@ use crate::{
     runtime::vm_runtime::Runtime,
     system::{Subscriber, SubscriberPtr},
     tx::Transaction,
-    util::time::Timestamp,
+    util::time::{TimeKeeper, Timestamp},
     wallet::WalletPtr,
     zk::{
         proof::{ProvingKey, VerifyingKey},
@@ -238,7 +238,10 @@ impl ValidatorState {
         }
 
         info!(target: "consensus::validator", "append_tx(): Starting state transition validation");
-        match self.verify_transactions(&[tx.clone()], false).await {
+        match self
+            .verify_transactions(&[tx.clone()], self.consensus.time_keeper.current_slot(), false)
+            .await
+        {
             Ok(erroneous_txs) => {
                 if !erroneous_txs.is_empty() {
                     error!(target: "consensus::validator", "append_tx(): Erroneous transaction detected");
@@ -292,7 +295,14 @@ impl ValidatorState {
 
         // Verify transactions and filter erroneous ones
         info!(target: "consensus::validator", "append_pending_txs(): Starting state transition validation");
-        let erroneous_txs = match self.verify_transactions(&filtered_txs[..], false).await {
+        let erroneous_txs = match self
+            .verify_transactions(
+                &filtered_txs[..],
+                self.consensus.time_keeper.current_slot(),
+                false,
+            )
+            .await
+        {
             Ok(erroneous_txs) => erroneous_txs,
             Err(e) => {
                 error!(target: "consensus::validator", "append_pending_txs(): Failed to verify transactions: {}", e);
@@ -318,7 +328,9 @@ impl ValidatorState {
             info!(target: "consensus::validator", "purge_pending_txs(): No pending transactions found");
             return Ok(())
         }
-        let erroneous_txs = self.verify_transactions(&pending_txs[..], false).await?;
+        let erroneous_txs = self
+            .verify_transactions(&pending_txs[..], self.consensus.time_keeper.current_slot(), false)
+            .await?;
         if erroneous_txs.is_empty() {
             info!(target: "consensus::validator", "purge_pending_txs(): No erroneous transactions found");
             return Ok(())
@@ -359,7 +371,13 @@ impl ValidatorState {
         // Generate proposal
         let mut unproposed_txs = self.unproposed_txs(fork_index)?;
         // Verify transactions and filter erroneous ones
-        let erroneous_txs = self.verify_transactions(&unproposed_txs[..], false).await?;
+        let erroneous_txs = self
+            .verify_transactions(
+                &unproposed_txs[..],
+                self.consensus.time_keeper.current_slot(),
+                false,
+            )
+            .await?;
         if !erroneous_txs.is_empty() {
             unproposed_txs.retain(|x| !erroneous_txs.contains(x));
         }
@@ -642,7 +660,7 @@ impl ValidatorState {
         // Validate state transition against canonical state
         // TODO: This should be validated against fork state
         info!(target: "consensus::validator", "receive_proposal(): Starting state transition validation");
-        match self.verify_transactions(&proposal.block.txs, false).await {
+        match self.verify_transactions(&proposal.block.txs, current, false).await {
             Ok(erroneous_txs) => {
                 if !erroneous_txs.is_empty() {
                     error!(target: "consensus::validator", "Proposal contains erroneous transactions");
@@ -776,7 +794,7 @@ impl ValidatorState {
             // TODO: FIXME: The state transitions have already been written, they have to be in memory
             //              until this point.
             info!(target: "consensus::validator", "Applying state transition for finalized block");
-            match self.verify_transactions(&proposal.txs, true).await {
+            match self.verify_transactions(&proposal.txs, proposal.header.slot, true).await {
                 Ok(erroneous_txs) => {
                     if !erroneous_txs.is_empty() {
                         error!(target: "consensus::validator", "Finalized block contains erroneous transactions");
@@ -861,7 +879,7 @@ impl ValidatorState {
         info!(target: "consensus::validator", "receive_blocks(): Starting state transition validations");
 
         for block in blocks {
-            match self.verify_transactions(&block.txs, true).await {
+            match self.verify_transactions(&block.txs, block.header.slot, true).await {
                 Ok(erroneous_txs) => {
                     if !erroneous_txs.is_empty() {
                         error!(target: "consensus::validator", "receive_blocks(): Block contains erroneous transactions");
@@ -973,6 +991,7 @@ impl ValidatorState {
         &self,
         blockchain_overlay: BlockchainOverlayPtr,
         tx: &Transaction,
+        verifying_slot: u64,
     ) -> Result<()> {
         let mut runtimes = HashMap::new();
         let tx_hash = blake3::hash(&serialize(tx));
@@ -992,6 +1011,14 @@ impl ValidatorState {
             verifying_keys.insert(call.contract_id.to_bytes(), HashMap::new());
         }
 
+        // Generate a time keeper using transaction verifying slot
+        let time_keeper = TimeKeeper::new(
+            self.consensus.time_keeper.genesis_ts,
+            self.consensus.time_keeper.epoch_length,
+            self.consensus.time_keeper.slot_time,
+            verifying_slot,
+        );
+
         // Iterate over all calls to get the metadata
         for (idx, call) in tx.calls.iter().enumerate() {
             info!(target: "consensus::validator", "Executing contract call {}", idx);
@@ -1009,7 +1036,7 @@ impl ValidatorState {
                     &wasm,
                     blockchain_overlay.clone(),
                     call.contract_id,
-                    self.consensus.time_keeper.clone(),
+                    time_keeper.clone(),
                 )?;
                 runtimes.insert(runtime_key.clone(), r);
             }
@@ -1116,6 +1143,7 @@ impl ValidatorState {
     pub async fn verify_transactions(
         &self,
         txs: &[Transaction],
+        verifying_slot: u64,
         write: bool,
     ) -> Result<Vec<Transaction>> {
         info!(target: "consensus::validator", "Verifying {} transaction(s)", txs.len());
@@ -1124,7 +1152,9 @@ impl ValidatorState {
         let blockchain_overlay = BlockchainOverlay::new(&self.blockchain)?;
 
         for tx in txs {
-            if let Err(e) = self.verify_transaction(blockchain_overlay.clone(), tx).await {
+            if let Err(e) =
+                self.verify_transaction(blockchain_overlay.clone(), tx, verifying_slot).await
+            {
                 warn!(target: "consensus::validator", "Transaction verification failed: {}", e);
                 erroneous_txs.push(tx.clone());
             }

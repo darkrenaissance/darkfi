@@ -103,7 +103,7 @@ impl ConsensusState {
     ) -> Self {
         let genesis_block = Block::genesis_block(genesis_ts, genesis_data).blockhash();
         let time_keeper =
-            TimeKeeper::new(genesis_ts, constants::EPOCH_LENGTH as u64, constants::SLOT_TIME);
+            TimeKeeper::new(genesis_ts, constants::EPOCH_LENGTH as u64, constants::SLOT_TIME, 0);
         Self {
             wallet,
             blockchain,

@@ -45,6 +45,9 @@ async fn alice2alice_random_amounts() -> Result<()> {
 
     const ALICE_AIRDROP: u64 = 1000;
 
+    // Slot to verify against
+    let current_slot = 0;
+
     // n transactions to loop
     let mut n = 3;
     for arg in env::args() {
@@ -71,12 +74,22 @@ async fn alice2alice_random_amounts() -> Result<()> {
     info!(target: "money", "[Faucet] ==========================");
     info!(target: "money", "[Faucet] Executing Alice airdrop tx");
     info!(target: "money", "[Faucet] ==========================");
-    th.faucet.state.read().await.verify_transactions(&[airdrop_tx.clone()], true).await?;
+    th.faucet
+        .state
+        .read()
+        .await
+        .verify_transactions(&[airdrop_tx.clone()], current_slot, true)
+        .await?;
     th.faucet.merkle_tree.append(&MerkleNode::from(airdrop_params.outputs[0].coin.inner()));
     info!(target: "money", "[Alice] ==========================");
     info!(target: "money", "[Alice] Executing Alice airdrop tx");
     info!(target: "money", "[Alice] ==========================");
-    th.alice.state.read().await.verify_transactions(&[airdrop_tx.clone()], true).await?;
+    th.alice
+        .state
+        .read()
+        .await
+        .verify_transactions(&[airdrop_tx.clone()], current_slot, true)
+        .await?;
     th.alice.merkle_tree.append(&MerkleNode::from(airdrop_params.outputs[0].coin.inner()));
 
     assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
@@ -152,14 +165,14 @@ async fn alice2alice_random_amounts() -> Result<()> {
         info!(target: "money", "[Faucet] ================================");
         info!(target: "money", "[Faucet] Executing Alice2Alice payment tx");
         info!(target: "money", "[Faucet] ================================");
-        th.faucet.state.read().await.verify_transactions(&[tx.clone()], true).await?;
+        th.faucet.state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
         for output in &params.outputs {
             th.faucet.merkle_tree.append(&MerkleNode::from(output.coin.inner()));
         }
         info!(target: "money", "[Alice] ================================");
         info!(target: "money", "[Alice] Executing Alice2Alice payment tx");
         info!(target: "money", "[Alice] ================================");
-        th.alice.state.read().await.verify_transactions(&[tx.clone()], true).await?;
+        th.alice.state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
         // Gather new owncoins and apply the state transitions
         for output in params.outputs {
             th.alice.merkle_tree.append(&MerkleNode::from(output.coin.inner()));
@@ -189,6 +202,9 @@ async fn alice2alice_random_amounts() -> Result<()> {
 #[async_std::test]
 async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
     init_logger();
+
+    // Slot to verify against
+    let current_slot = 0;
 
     // N blocks to simulate
     let mut n = 3;
@@ -223,12 +239,22 @@ async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
         info!(target: "money", "[Faucet] =======================");
         info!(target: "money", "[Faucet] Executing Alice mint tx");
         info!(target: "money", "[Faucet] =======================");
-        th.faucet.state.read().await.verify_transactions(&[mint_tx.clone()], true).await?;
+        th.faucet
+            .state
+            .read()
+            .await
+            .verify_transactions(&[mint_tx.clone()], current_slot, true)
+            .await?;
         th.faucet.merkle_tree.append(&MerkleNode::from(mint_params.output.coin.inner()));
         info!(target: "money", "[Alice] =======================");
         info!(target: "money", "[Alice] Executing Alice mint tx");
         info!(target: "money", "[Alice] =======================");
-        th.alice.state.read().await.verify_transactions(&[mint_tx.clone()], true).await?;
+        th.alice
+            .state
+            .read()
+            .await
+            .verify_transactions(&[mint_tx.clone()], current_slot, true)
+            .await?;
         th.alice.merkle_tree.append(&MerkleNode::from(mint_params.output.coin.inner()));
 
         assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
@@ -351,11 +377,11 @@ async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
         info!(target: "money", "[Faucet] ================================");
         info!(target: "money", "[Faucet] Executing Alice2Alice payment tx");
         info!(target: "money", "[Faucet] ================================");
-        th.faucet.state.read().await.verify_transactions(&txs, true).await?;
+        th.faucet.state.read().await.verify_transactions(&txs, current_slot, true).await?;
         info!(target: "money", "[Alice] ================================");
         info!(target: "money", "[Alice] Executing Alice2Alice payment tx");
         info!(target: "money", "[Alice] ================================");
-        th.alice.state.read().await.verify_transactions(&txs, true).await?;
+        th.alice.state.read().await.verify_transactions(&txs, current_slot, true).await?;
 
         assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
     }

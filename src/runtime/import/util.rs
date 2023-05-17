@@ -160,6 +160,11 @@ pub(crate) fn get_current_slot(ctx: FunctionEnvMut<Env>) -> u64 {
     ctx.data().time_keeper.current_slot()
 }
 
+/// Will return current runtime configured verifying slot number.
+pub(crate) fn get_verifying_slot(ctx: FunctionEnvMut<Env>) -> u64 {
+    ctx.data().time_keeper.verifying_slot
+}
+
 /// Will return requested slot checkpoint from `SlotCheckpointStore`.
 pub(crate) fn get_slot_checkpoint(ctx: FunctionEnvMut<Env>, slot: u64) -> i64 {
     let env = ctx.data();

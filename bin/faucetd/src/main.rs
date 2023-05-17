@@ -573,9 +573,9 @@ impl Faucetd {
         tx.signatures = vec![sigs];
 
         // Safety check to see if the transaction is actually valid.
-        if let Err(e) =
-            self.validator_state.read().await.verify_transactions(&[tx.clone()], false).await
-        {
+        let lock = self.validator_state.read().await;
+        let current_slot = lock.consensus.time_keeper.current_slot();
+        if let Err(e) = lock.verify_transactions(&[tx.clone()], current_slot, false).await {
             error!("airdrop(): Failed to verify transaction before broadcasting: {}", e);
             return JsonError::new(InternalError, None, id).into()
         }

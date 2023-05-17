@@ -64,7 +64,9 @@ impl Darkfid {
         };
 
         // Simulate state transition
-        match self.validator_state.read().await.verify_transactions(&[tx], false).await {
+        let lock = self.validator_state.read().await;
+        let current_slot = lock.consensus.time_keeper.current_slot();
+        match lock.verify_transactions(&[tx], current_slot, false).await {
             Ok(erroneous_txs) => {
                 if !erroneous_txs.is_empty() {
                     error!("[RPC] tx.simulate: invalid transaction provided");
@@ -124,8 +126,9 @@ impl Darkfid {
             }
         } else {
             // We'll perform the state transition check here.
-            match self.validator_state.read().await.verify_transactions(&[tx.clone()], false).await
-            {
+            let lock = self.validator_state.read().await;
+            let current_slot = lock.consensus.time_keeper.current_slot();
+            match lock.verify_transactions(&[tx.clone()], current_slot, false).await {
                 Ok(erroneous_txs) => {
                     if !erroneous_txs.is_empty() {
                         error!("[RPC] tx.broadcast: invalid transaction provided");

@@ -270,6 +270,12 @@ impl Runtime {
                     import::util::get_current_slot,
                 ),
 
+                "get_verifying_slot_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::get_verifying_slot,
+                ),
+
                 "get_slot_checkpoint_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,

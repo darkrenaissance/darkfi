@@ -32,15 +32,22 @@ const SECS_IN_HOUR: u64 = 3600;
 pub struct TimeKeeper {
     /// Genesis block creation timestamp
     pub genesis_ts: Timestamp,
-    /// Currently configured epoch duration.
+    /// Currently configured epoch duration
     pub epoch_length: u64,
-    /// Currently configured slot duration.
+    /// Currently configured slot duration
     pub slot_time: u64,
+    /// Slot number runtime can access to verify against
+    pub verifying_slot: u64,
 }
 
 impl TimeKeeper {
-    pub fn new(genesis_ts: Timestamp, epoch_length: u64, slot_time: u64) -> Self {
-        Self { genesis_ts, epoch_length, slot_time }
+    pub fn new(
+        genesis_ts: Timestamp,
+        epoch_length: u64,
+        slot_time: u64,
+        verifying_slot: u64,
+    ) -> Self {
+        Self { genesis_ts, epoch_length, slot_time, verifying_slot }
     }
 
     /// Calculates current epoch.

@@ -65,6 +65,9 @@ async fn integration_test() -> Result<()> {
     let mut vote_verify_times = vec![];
     let mut exec_verify_times = vec![];
 
+    // Slot to verify against
+    let current_slot = 0;
+
     let dao_th = DaoTestHarness::new().await?;
 
     // Money parameters
@@ -113,7 +116,7 @@ async fn integration_test() -> Result<()> {
     tx.signatures = vec![sigs];
 
     let timer = Instant::now();
-    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
     mint_verify_times.push(timer.elapsed());
     // TODO: Witness and add to wallet merkle tree?
 
@@ -185,7 +188,7 @@ async fn integration_test() -> Result<()> {
     let sigs = tx.create_sigs(&mut OsRng, &vec![dao_th.faucet_kp.secret])?;
     tx.signatures = vec![sigs];
 
-    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
 
     // Wallet stuff
 
@@ -300,7 +303,7 @@ async fn integration_test() -> Result<()> {
         .alice_state
         .read()
         .await
-        .verify_transactions(&[tx1.clone(), tx2.clone(), tx3.clone()], true)
+        .verify_transactions(&[tx1.clone(), tx2.clone(), tx3.clone()], current_slot, true)
         .await?;
 
     // Wallet
@@ -432,7 +435,7 @@ async fn integration_test() -> Result<()> {
     tx.signatures = vec![sigs];
 
     let timer = Instant::now();
-    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
     propose_verify_times.push(timer.elapsed());
 
     //// Wallet
@@ -539,7 +542,7 @@ async fn integration_test() -> Result<()> {
     tx.signatures = vec![sigs];
 
     let timer = Instant::now();
-    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
     vote_verify_times.push(timer.elapsed());
 
     // Secret vote info. Needs to be revealed at some point.
@@ -609,7 +612,7 @@ async fn integration_test() -> Result<()> {
     tx.signatures = vec![sigs];
 
     let timer = Instant::now();
-    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
     vote_verify_times.push(timer.elapsed());
 
     let vote_note_2 = {
@@ -676,7 +679,7 @@ async fn integration_test() -> Result<()> {
     tx.signatures = vec![sigs];
 
     let timer = Instant::now();
-    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
     vote_verify_times.push(timer.elapsed());
 
     // Secret vote info. Needs to be revealed at some point.
@@ -869,7 +872,7 @@ async fn integration_test() -> Result<()> {
     tx.signatures = vec![xfer_sigs, exec_sigs];
 
     let timer = Instant::now();
-    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], true).await?;
+    dao_th.alice_state.read().await.verify_transactions(&[tx.clone()], current_slot, true).await?;
     exec_verify_times.push(timer.elapsed());
 
     // Statistics

@@ -56,6 +56,9 @@ async fn txs_verification() -> Result<()> {
     // Bob = 50 ALICE
     const ALICE_FIRST_SEND: u64 = ALICE_INITIAL - 50;
 
+    // Slot to verify against
+    let current_slot = 0;
+
     // Initialize harness
     let mut th = MoneyTestHarness::new().await?;
     let (mint_pk, mint_zkbin) = th.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
@@ -82,13 +85,23 @@ async fn txs_verification() -> Result<()> {
     info!(target: "money", "[Faucet] =============================");
     info!(target: "money", "[Faucet] Executing Alice token mint tx");
     info!(target: "money", "[Faucet] =============================");
-    th.faucet.state.read().await.verify_transactions(&[alice_mint_tx.clone()], true).await?;
+    th.faucet
+        .state
+        .read()
+        .await
+        .verify_transactions(&[alice_mint_tx.clone()], current_slot, true)
+        .await?;
     th.faucet.merkle_tree.append(&MerkleNode::from(alice_params.output.coin.inner()));
 
     info!(target: "money", "[Alice] =============================");
     info!(target: "money", "[Alice] Executing Alice token mint tx");
     info!(target: "money", "[Alice] =============================");
-    th.alice.state.read().await.verify_transactions(&[alice_mint_tx.clone()], true).await?;
+    th.alice
+        .state
+        .read()
+        .await
+        .verify_transactions(&[alice_mint_tx.clone()], current_slot, true)
+        .await?;
     th.alice.merkle_tree.append(&MerkleNode::from(alice_params.output.coin.inner()));
     // Alice has to witness this coin because it's hers.
     let alice_leaf_pos = th.alice.merkle_tree.witness().unwrap();
@@ -96,7 +109,12 @@ async fn txs_verification() -> Result<()> {
     info!(target: "money", "[Bob] =============================");
     info!(target: "money", "[Bob] Executing Alice token mint tx");
     info!(target: "money", "[Bob] =============================");
-    th.bob.state.read().await.verify_transactions(&[alice_mint_tx.clone()], true).await?;
+    th.bob
+        .state
+        .read()
+        .await
+        .verify_transactions(&[alice_mint_tx.clone()], current_slot, true)
+        .await?;
     th.bob.merkle_tree.append(&MerkleNode::from(alice_params.output.coin.inner()));
 
     assert!(th.alice.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
@@ -170,17 +188,32 @@ async fn txs_verification() -> Result<()> {
         info!(target: "money", "[Faucet] ==================================");
         info!(target: "money", "[Faucet] Verifying Alice2Bob payment tx {i}");
         info!(target: "money", "[Faucet] ==================================");
-        th.faucet.state.read().await.verify_transactions(&[alice2bob_tx.clone()], false).await?;
+        th.faucet
+            .state
+            .read()
+            .await
+            .verify_transactions(&[alice2bob_tx.clone()], current_slot, false)
+            .await?;
 
         info!(target: "money", "[Alice] ==================================");
         info!(target: "money", "[Alice] Verifying Alice2Bob payment tx {i}");
         info!(target: "money", "[Alice] ==================================");
-        th.alice.state.read().await.verify_transactions(&[alice2bob_tx.clone()], false).await?;
+        th.alice
+            .state
+            .read()
+            .await
+            .verify_transactions(&[alice2bob_tx.clone()], current_slot, false)
+            .await?;
 
         info!(target: "money", "[Bob] ==================================");
         info!(target: "money", "[Bob] Verifying Alice2Bob payment tx {i}");
         info!(target: "money", "[Bob] ==================================");
-        th.bob.state.read().await.verify_transactions(&[alice2bob_tx.clone()], false).await?;
+        th.bob
+            .state
+            .read()
+            .await
+            .verify_transactions(&[alice2bob_tx.clone()], current_slot, false)
+            .await?;
 
         transactions.push(alice2bob_tx);
         txs_params.push(alice2bob_params);
@@ -197,9 +230,9 @@ async fn txs_verification() -> Result<()> {
     info!(target: "money", "[Faucet] Executing Alice2Bob payment tx");
     info!(target: "money", "[Faucet] ==============================");
     let erroneous_txs =
-        th.faucet.state.read().await.verify_transactions(&transactions, true).await?;
+        th.faucet.state.read().await.verify_transactions(&transactions, current_slot, true).await?;
     assert_eq!(erroneous_txs.len(), duplicates - 1);
-    th.faucet.state.read().await.verify_transactions(&valid_txs, true).await?;
+    th.faucet.state.read().await.verify_transactions(&valid_txs, current_slot, true).await?;
     th.faucet.merkle_tree.append(&MerkleNode::from(txs_params[0].outputs[0].coin.inner()));
     th.faucet.merkle_tree.append(&MerkleNode::from(txs_params[0].outputs[1].coin.inner()));
 
@@ -207,9 +240,9 @@ async fn txs_verification() -> Result<()> {
     info!(target: "money", "[Alice] Executing Alice2Bob payment tx");
     info!(target: "money", "[Alice] ==============================");
     let erroneous_txs =
-        th.alice.state.read().await.verify_transactions(&transactions, true).await?;
+        th.alice.state.read().await.verify_transactions(&transactions, current_slot, true).await?;
     assert_eq!(erroneous_txs.len(), duplicates - 1);
-    th.alice.state.read().await.verify_transactions(&valid_txs, true).await?;
+    th.alice.state.read().await.verify_transactions(&valid_txs, current_slot, true).await?;
     th.alice.merkle_tree.append(&MerkleNode::from(txs_params[0].outputs[0].coin.inner()));
     let alice_leaf_pos = th.alice.merkle_tree.witness().unwrap();
     th.alice.merkle_tree.append(&MerkleNode::from(txs_params[0].outputs[1].coin.inner()));
@@ -217,9 +250,10 @@ async fn txs_verification() -> Result<()> {
     info!(target: "money", "[Bob] ==============================");
     info!(target: "money", "[Bob] Executing Alice2Bob payment tx");
     info!(target: "money", "[Bob] ==============================");
-    let erroneous_txs = th.bob.state.read().await.verify_transactions(&transactions, true).await?;
+    let erroneous_txs =
+        th.bob.state.read().await.verify_transactions(&transactions, current_slot, true).await?;
     assert_eq!(erroneous_txs.len(), duplicates - 1);
-    th.bob.state.read().await.verify_transactions(&valid_txs, true).await?;
+    th.bob.state.read().await.verify_transactions(&valid_txs, current_slot, true).await?;
     th.bob.merkle_tree.append(&MerkleNode::from(txs_params[0].outputs[0].coin.inner()));
     th.bob.merkle_tree.append(&MerkleNode::from(txs_params[0].outputs[1].coin.inner()));
     let bob_leaf_pos = th.bob.merkle_tree.witness().unwrap();
