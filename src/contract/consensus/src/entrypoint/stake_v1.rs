@@ -139,8 +139,8 @@ pub(crate) fn consensus_stake_process_instruction_v1(
         return Err(MoneyError::StakePreviousCallNotMoneyContract.into())
     }
 
-    // Verify previous call corresponds to Money::StakeV1 (0x05)
-    if previous.data[0] != 0x05 {
+    // Verify previous call corresponds to Money::StakeV1 (0x06)
+    if previous.data[0] != 0x06 {
         msg!("[ConsensusStakeV1] Error: Previous call function mismatch");
         return Err(MoneyError::PreviousCallFunctionMissmatch.into())
     }

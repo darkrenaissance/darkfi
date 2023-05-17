@@ -150,8 +150,8 @@ pub(crate) fn consensus_unstake_process_instruction_v1(
         return Err(MoneyError::UnstakeSpendHookNotConsensusContract.into())
     }
 
-    // Verify next call corresponds to Money::UnstakeV1 (0x06)
-    if next.data[0] != 0x06 {
+    // Verify next call corresponds to Money::UnstakeV1 (0x07)
+    if next.data[0] != 0x07 {
         msg!("[ConsensusUnstakeV1] Error: Next call function mismatch");
         return Err(MoneyError::NextCallFunctionMissmatch.into())
     }
