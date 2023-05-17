@@ -38,6 +38,9 @@ pub mod transfer_v1;
 /// `Money::OtcSwapV1` API
 pub mod swap_v1;
 
+/// `Money::GenesisMintV1` API
+pub mod genesis_mint_v1;
+
 /// `Money::MintV1` API
 pub mod mint_v1;
 

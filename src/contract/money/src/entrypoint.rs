@@ -50,6 +50,12 @@ use swap_v1::{
     money_otcswap_process_update_v1,
 };
 
+/// `Money::GenesisMint` functions
+mod genesis_mint_v1;
+use genesis_mint_v1::{
+    money_genesis_mint_get_metadata_v1, money_genesis_mint_process_instruction_v1,
+};
+
 /// `Money::Mint` functions
 mod mint_v1;
 use mint_v1::{
@@ -187,6 +193,11 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
             Ok(set_return_data(&metadata)?)
         }
 
+        MoneyFunction::GenesisMintV1 => {
+            let metadata = money_genesis_mint_get_metadata_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&metadata)?)
+        }
+
         MoneyFunction::MintV1 => {
             let metadata = money_mint_get_metadata_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
@@ -235,6 +246,11 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             Ok(set_return_data(&update_data)?)
         }
 
+        MoneyFunction::GenesisMintV1 => {
+            let update_data = money_genesis_mint_process_instruction_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&update_data)?)
+        }
+
         MoneyFunction::MintV1 => {
             let update_data = money_mint_process_instruction_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)
@@ -273,6 +289,12 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
             // use for `Money::Transfer`.
             let update: MoneyTransferUpdateV1 = deserialize(&update_data[1..])?;
             Ok(money_otcswap_process_update_v1(cid, update)?)
+        }
+
+        MoneyFunction::GenesisMintV1 => {
+            // GenesisMint uses the same update as normal Mint
+            let update: MoneyMintUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(money_mint_process_update_v1(cid, update)?)
         }
 
         MoneyFunction::MintV1 => {

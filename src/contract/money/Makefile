@@ -43,14 +43,19 @@ test-txs-verification: all
 		--package darkfi-money-contract \
 		--test txs_verification
 
+test-genesis-mint: all
+	$(CARGO) test --release --features=no-entrypoint,client \
+		--package darkfi-money-contract \
+		--test genesis_mint
+
 bench:
 	$(CARGO) test --release --features=no-entrypoint,client \
 		--package darkfi-money-contract \
 		--test verification_bench $(FILTER)
 
-test: test-integration test-mint-pay-swap test-txs-verification
+test: test-integration test-mint-pay-swap test-txs-verification test-genesis-mint
 
 clean:
 	rm -f $(PROOFS_BIN) $(WASM_BIN)
 
-.PHONY: all test-integration test-mint-pay-swap test-txs-verification bench test clean
+.PHONY: all test-integration test-mint-pay-swap test-txs-verification test-genesis-mint bench test clean

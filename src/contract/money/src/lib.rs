@@ -26,11 +26,12 @@ use darkfi_sdk::error::ContractError;
 pub enum MoneyFunction {
     TransferV1 = 0x00,
     OtcSwapV1 = 0x01,
-    MintV1 = 0x02,
-    FreezeV1 = 0x03,
-    //Fee = 0x04,
-    StakeV1 = 0x05,
-    UnstakeV1 = 0x06,
+    GenesisMintV1 = 0x02,
+    MintV1 = 0x03,
+    FreezeV1 = 0x04,
+    //Fee = 0x05,
+    StakeV1 = 0x06,
+    UnstakeV1 = 0x07,
 }
 
 impl TryFrom<u8> for MoneyFunction {
@@ -40,11 +41,12 @@ impl TryFrom<u8> for MoneyFunction {
         match b {
             0x00 => Ok(Self::TransferV1),
             0x01 => Ok(Self::OtcSwapV1),
-            0x02 => Ok(Self::MintV1),
-            0x03 => Ok(Self::FreezeV1),
-            //0x04 => Ok(Self::Fee),
-            0x05 => Ok(Self::StakeV1),
-            0x06 => Ok(Self::UnstakeV1),
+            0x02 => Ok(Self::GenesisMintV1),
+            0x03 => Ok(Self::MintV1),
+            0x04 => Ok(Self::FreezeV1),
+            //0x05 => Ok(Self::Fee),
+            0x06 => Ok(Self::StakeV1),
+            0x07 => Ok(Self::UnstakeV1),
             _ => Err(ContractError::InvalidFunction),
         }
     }

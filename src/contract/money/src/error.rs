@@ -111,6 +111,9 @@ pub enum MoneyError {
 
     #[error("Previous call input mismatch")]
     PreviousCallInputMissmatch,
+
+    #[error("Call is not executed on genesis slot")]
+    GenesisCallNonGenesisSlot,
 }
 
 impl From<MoneyError> for ContractError {
@@ -146,6 +149,7 @@ impl From<MoneyError> for ContractError {
             MoneyError::NextCallInputMissmatch => Self::Custom(28),
             MoneyError::PreviousCallFunctionMissmatch => Self::Custom(29),
             MoneyError::PreviousCallInputMissmatch => Self::Custom(30),
+            MoneyError::GenesisCallNonGenesisSlot => Self::Custom(31),
         }
     }
 }
