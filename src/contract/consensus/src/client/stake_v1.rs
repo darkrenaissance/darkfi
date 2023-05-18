@@ -167,6 +167,7 @@ impl ConsensusStakeCallBuilder {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_stake_mint_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,

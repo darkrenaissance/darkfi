@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{Coin, ContractId},
+    crypto::ContractId,
     db::{db_contains_key, db_lookup},
     error::{ContractError, ContractResult},
     msg,
@@ -41,7 +41,7 @@ pub(crate) fn money_otcswap_get_metadata_v1(
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     // In here we can use the same function as we use in `TransferV1`.
-    Ok(money_transfer_get_metadata_v1(cid, call_idx, calls)?)
+    money_transfer_get_metadata_v1(cid, call_idx, calls)
 }
 
 /// `process_instruction` function for `Money::OtcSwapV1`
@@ -137,14 +137,13 @@ pub(crate) fn money_otcswap_process_instruction_v1(
 
     // Newly created coins for this call are in the outputs
     for (i, output) in params.outputs.iter().enumerate() {
-        if new_coins.contains(&Coin::from(output.coin)) ||
-            db_contains_key(coins_db, &serialize(&output.coin))?
+        if new_coins.contains(&output.coin) || db_contains_key(coins_db, &serialize(&output.coin))?
         {
             msg!("[OtcSwapV1] Error: Duplicate coin found in output {}", i);
             return Err(MoneyError::DuplicateCoin.into())
         }
 
-        new_coins.push(Coin::from(output.coin));
+        new_coins.push(output.coin);
     }
 
     // Create a state update. We also use `MoneyTransferUpdateV1` because
@@ -167,5 +166,5 @@ pub(crate) fn money_otcswap_process_update_v1(
     update: MoneyTransferUpdateV1,
 ) -> ContractResult {
     // In here we can use the same function as we use in `TransferV1`.
-    Ok(money_transfer_process_update_v1(cid, update)?)
+    money_transfer_process_update_v1(cid, update)
 }

@@ -35,6 +35,7 @@ use url::Url;
 
 use super::{proto::ProtocolDht, Dhtd};
 
+#[allow(dead_code)]
 async fn dht_remote_get_insert_real(ex: Arc<Executor<'_>>) -> Result<()> {
     const NET_SIZE: usize = 5;
 

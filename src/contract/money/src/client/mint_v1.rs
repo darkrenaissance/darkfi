@@ -168,6 +168,7 @@ impl MintCallBuilder {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_token_mint_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,

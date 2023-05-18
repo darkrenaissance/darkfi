@@ -18,7 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, Coin, ContractId,
+        pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, ContractId,
         MerkleNode, PublicKey, DARK_TOKEN_ID,
     },
     db::{db_contains_key, db_get, db_lookup, db_set},
@@ -216,15 +216,14 @@ pub(crate) fn money_transfer_process_instruction_v1(
     // and we also check that they haven't existed before.
     let mut new_coins = Vec::with_capacity(params.outputs.len());
     for (i, output) in params.outputs.iter().enumerate() {
-        if new_coins.contains(&Coin::from(output.coin)) ||
-            db_contains_key(coins_db, &serialize(&output.coin))?
+        if new_coins.contains(&output.coin) || db_contains_key(coins_db, &serialize(&output.coin))?
         {
             msg!("[TransferV1] Error: Duplicate coin found in output {}", i);
             return Err(MoneyError::DuplicateCoin.into())
         }
 
         // Append this new coin to seen coins, and subtract the value commitment
-        new_coins.push(Coin::from(output.coin));
+        new_coins.push(output.coin);
         valcom_total -= output.value_commit;
     }
 

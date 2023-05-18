@@ -182,6 +182,8 @@ struct Args {
 }
 
 type ProvingKeyMap = Arc<RwLock<HashMap<[u8; 32], Vec<(String, ProvingKey, ZkBinary)>>>>;
+type AirdropMap = Arc<Mutex<HashMap<[u8; 32], i64>>>;
+type ChallengeMap = Arc<Mutex<HashMap<[u8; 32], (BigUint, u64)>>>;
 
 pub struct Faucetd {
     synced: Mutex<bool>, // AtomicBool is weird in Arc
@@ -192,8 +194,8 @@ pub struct Faucetd {
     merkle_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
     airdrop_timeout: i64,
     airdrop_limit: u64,
-    airdrop_map: Arc<Mutex<HashMap<[u8; 32], i64>>>,
-    challenge_map: Arc<Mutex<HashMap<[u8; 32], (BigUint, u64)>>>,
+    airdrop_map: AirdropMap,
+    challenge_map: ChallengeMap,
     proving_keys: ProvingKeyMap,
 }
 
@@ -596,11 +598,7 @@ impl Faucetd {
     }
 }
 
-async fn prune_airdrop_maps(
-    rate_map: Arc<Mutex<HashMap<[u8; 32], i64>>>,
-    challenge_map: Arc<Mutex<HashMap<[u8; 32], (BigUint, u64)>>>,
-    timeout: i64,
-) {
+async fn prune_airdrop_maps(rate_map: AirdropMap, challenge_map: ChallengeMap, timeout: i64) {
     loop {
         sleep(timeout as u64).await;
         debug!("Pruning airdrop maps");

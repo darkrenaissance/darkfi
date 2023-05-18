@@ -311,7 +311,7 @@ impl Dht {
             return Err(Error::DhtChunkNotFound)
         }
 
-        return Ok(chunk_path)
+        Ok(chunk_path)
     }
 
     /// Attempt to fetch the list of chunks for a given file from the local storage.

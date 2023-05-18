@@ -193,7 +193,7 @@ pub(crate) fn consensus_proposal_reward_process_instruction_v1(
     // Verify previous call input is the same as this calls StakeInput
     let previous_params: ConsensusProposalBurnParamsV1 = deserialize(&previous.data[1..])?;
     let previous_input = &previous_params.input;
-    if &previous_input != &burnt_input || &previous_params.public_key != &params.burnt_public_key {
+    if previous_input != burnt_input || previous_params.public_key != params.burnt_public_key {
         msg!("[ConsensusProposalRewardV1] Error: Previous call input mismatch");
         return Err(MoneyError::PreviousCallInputMissmatch.into())
     }
@@ -229,7 +229,7 @@ pub(crate) fn consensus_proposal_reward_process_instruction_v1(
     let next_params: ConsensusProposalMintParamsV1 = deserialize(&next.data[1..])?;
     if mint_input != &next_params.input ||
         output != &next_params.output ||
-        &params.new_serial_commit != &next_params.serial_commit
+        params.new_serial_commit != next_params.serial_commit
     {
         msg!("[ConsensusProposalRewardV1] Error: Next call input mismatch");
         return Err(MoneyError::NextCallInputMissmatch.into())

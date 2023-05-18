@@ -18,7 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, Coin, ContractId, MerkleNode, PublicKey,
+        pasta_prelude::*, pedersen_commitment_base, ContractId, MerkleNode, PublicKey,
         CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
     },
     db::{db_contains_key, db_lookup, db_set},
@@ -149,7 +149,7 @@ pub(crate) fn money_unstake_process_instruction_v1(
     // Verify previous call input is the same as this calls StakeInput
     let previous_params: ConsensusUnstakeParamsV1 = deserialize(&previous.data[1..])?;
     let previous_input = &previous_params.input;
-    if &previous_input != &input {
+    if previous_input != input {
         msg!("[MoneyUnstakeV1] Error: Previous call input mismatch");
         return Err(MoneyError::PreviousCallInputMissmatch.into())
     }
@@ -183,10 +183,9 @@ pub(crate) fn money_unstake_process_instruction_v1(
         msg!("[MoneyUnstakeV1] Error: Duplicate coin found in output");
         return Err(MoneyError::DuplicateCoin.into())
     }
-    let coin = Coin::from(output.coin);
 
     // Create a state update.
-    let update = MoneyUnstakeUpdateV1 { coin };
+    let update = MoneyUnstakeUpdateV1 { coin: output.coin };
     let mut update_data = vec![];
     update_data.write_u8(MoneyFunction::UnstakeV1 as u8)?;
     update.encode(&mut update_data)?;

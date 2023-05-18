@@ -159,7 +159,7 @@ pub(crate) fn consensus_proposal_burn_process_instruction_v1(
 
     // Verify next call StakeInput is the same as this calls input
     let next_params: ConsensusProposalRewardParamsV1 = deserialize(&next.data[1..])?;
-    if input != &next_params.burnt_input || &params.public_key != &next_params.burnt_public_key {
+    if input != &next_params.burnt_input || params.public_key != next_params.burnt_public_key {
         msg!("[ConsensusProposalBurnV1] Error: Next call input mismatch");
         return Err(MoneyError::NextCallInputMissmatch.into())
     }

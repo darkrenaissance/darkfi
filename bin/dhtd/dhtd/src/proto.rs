@@ -94,6 +94,7 @@ impl net::Message for FileReply {
 }
 
 impl ProtocolDht {
+    #[allow(dead_code)]
     pub async fn init(channel: ChannelPtr, p2p: P2pPtr, state: DhtdPtr) -> Result<ProtocolBasePtr> {
         let msg_subsystem = channel.get_message_subsystem();
         msg_subsystem.add_dispatch::<NetHashMapInsert<blake3::Hash, Vec<blake3::Hash>>>().await;
@@ -133,9 +134,7 @@ impl ProtocolDht {
 
             let mut state = self.state.write().await;
 
-            if !state.routing_table.contains_key(&msg.k) {
-                state.routing_table.insert(msg.k, HashSet::new());
-            }
+            state.routing_table.entry(msg.k).or_insert_with(HashSet::new);
 
             let hashset = state.routing_table.get_mut(&msg.k).unwrap();
             hashset.insert(self.channel.address());

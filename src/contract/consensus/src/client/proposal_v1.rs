@@ -331,6 +331,7 @@ impl ConsensusProposalCallBuilder {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_proposal_reward_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
@@ -401,6 +402,7 @@ pub fn create_proposal_reward_proof(
     Ok((proof, public_inputs))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_proposal_mint_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,

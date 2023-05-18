@@ -18,8 +18,8 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, Coin, ContractId,
-        PublicKey, DARK_TOKEN_ID,
+        pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, ContractId,
+        DARK_TOKEN_ID,
     },
     db::{db_contains_key, db_lookup},
     error::ContractError,
@@ -48,10 +48,7 @@ pub(crate) fn money_genesis_mint_get_metadata_v1(
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     // Public keys for the transaction signatures we have to verify
-    let mut signature_pubkeys: Vec<PublicKey> = vec![];
-
-    // Retrieve the pubkey from clear input
-    signature_pubkeys.push(params.input.signature_public);
+    let signature_pubkeys = vec![params.input.signature_public];
 
     // Grab the pedersen commitment from the anonymous output
     let value_coords = params.output.value_commit.to_affine().coordinates().unwrap();
@@ -126,7 +123,7 @@ pub(crate) fn money_genesis_mint_process_instruction_v1(
     }
 
     // Create a state update. We only need the new coin.
-    let update = MoneyMintUpdateV1 { coin: Coin::from(params.output.coin) };
+    let update = MoneyMintUpdateV1 { coin: params.output.coin };
     let mut update_data = vec![];
     update_data.write_u8(MoneyFunction::MintV1 as u8)?;
     update.encode(&mut update_data)?;

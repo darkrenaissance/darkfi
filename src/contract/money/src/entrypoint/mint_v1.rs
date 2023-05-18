@@ -18,8 +18,8 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash, Coin,
-        ContractId, MerkleNode, PublicKey, TokenId,
+        pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash,
+        ContractId, MerkleNode, TokenId,
     },
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -48,13 +48,11 @@ pub(crate) fn money_mint_get_metadata_v1(
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
-    // Public keys for the transaction signatures we have to verify
-    let mut signature_pubkeys: Vec<PublicKey> = vec![];
-
+    // Public keys for the transaction signatures we have to verify.
     // The minting transaction creates 1 clear input and 1 anonymous output.
     // We check the signature from the clear input, which is supposed to be
     // signed by the mint authority.
-    signature_pubkeys.push(params.input.signature_public);
+    let signature_pubkeys = vec![params.input.signature_public];
 
     let value_coords = params.output.value_commit.to_affine().coordinates().unwrap();
     let token_coords = params.output.token_commit.to_affine().coordinates().unwrap();
@@ -136,7 +134,7 @@ pub(crate) fn money_mint_process_instruction_v1(
     }
 
     // Create a state update. We only need the new coin.
-    let update = MoneyMintUpdateV1 { coin: Coin::from(params.output.coin) };
+    let update = MoneyMintUpdateV1 { coin: params.output.coin };
     let mut update_data = vec![];
     update_data.write_u8(MoneyFunction::MintV1 as u8)?;
     update.encode(&mut update_data)?;

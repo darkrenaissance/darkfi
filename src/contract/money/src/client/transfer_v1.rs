@@ -439,6 +439,7 @@ pub fn create_transfer_burn_proof(
     Ok((proof, public_inputs))
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn create_transfer_mint_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
