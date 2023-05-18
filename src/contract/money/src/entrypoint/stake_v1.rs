@@ -18,7 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, ContractId, PublicKey, CONSENSUS_CONTRACT_ID,
+        pasta_prelude::*, pedersen_commitment_base, ContractId, CONSENSUS_CONTRACT_ID,
         DARK_TOKEN_ID,
     },
     db::{db_contains_key, db_lookup, db_set},
@@ -44,15 +44,15 @@ pub(crate) fn money_stake_get_metadata_v1(
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
     let params: MoneyStakeParamsV1 = deserialize(&self_.data[1..])?;
+    let input = &params.input;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     // Public keys for the transaction signatures we have to verify
-    let mut signature_pubkeys: Vec<PublicKey> = vec![];
+    let signature_pubkeys = vec![input.signature_public];
 
     // Grab the pedersen commitments and signature pubkeys from the
     // anonymous input
-    let input = &params.input;
     let value_coords = input.value_commit.to_affine().coordinates().unwrap();
     let token_coords = input.token_commit.to_affine().coordinates().unwrap();
     let (sig_x, sig_y) = input.signature_public.xy();
@@ -74,8 +74,6 @@ pub(crate) fn money_stake_get_metadata_v1(
             sig_y,
         ],
     ));
-
-    signature_pubkeys.push(input.signature_public);
 
     // Serialize everything gathered and return it
     let mut metadata = vec![];

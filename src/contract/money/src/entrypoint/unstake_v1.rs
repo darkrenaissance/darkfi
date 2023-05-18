@@ -49,7 +49,7 @@ pub(crate) fn money_unstake_get_metadata_v1(
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     // Public keys for the transaction signatures we have to verify
-    let mut signature_pubkeys: Vec<PublicKey> = vec![];
+    let signature_pubkeys = vec![params.input.signature_public];
 
     // Grab the pedersen commitment from the anonymous output
     let output = &params.output;
@@ -66,8 +66,6 @@ pub(crate) fn money_unstake_get_metadata_v1(
             *token_coords.y(),
         ],
     ));
-
-    signature_pubkeys.push(params.input.signature_public);
 
     // Serialize everything gathered and return it
     let mut metadata = vec![];

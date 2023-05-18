@@ -20,7 +20,7 @@ use darkfi_money_contract::{error::MoneyError, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_
 use darkfi_sdk::{
     crypto::{
         pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash,
-        ContractId, PublicKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
+        ContractId, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
     },
     error::{ContractError, ContractResult},
     msg,
@@ -52,7 +52,7 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     // Public keys for the transaction signatures we have to verify
-    let mut signature_pubkeys: Vec<PublicKey> = vec![];
+    let signature_pubkeys = vec![params.mint_input.signature_public];
 
     // Grab the nullifier for the burnt coin
     let nullifier = &params.burnt_input.nullifier;
@@ -125,8 +125,6 @@ pub(crate) fn consensus_proposal_reward_get_metadata_v1(
             HEADSTART,
         ],
     ));
-
-    signature_pubkeys.push(params.mint_input.signature_public);
 
     // Serialize everything gathered and return it
     let mut metadata = vec![];
