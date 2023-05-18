@@ -142,8 +142,8 @@ pub(crate) fn consensus_proposal_mint_process_instruction_v1(
         return Err(MoneyError::UnstakePreviousCallNotConsensusContract.into())
     }
 
-    // Verify previous call corresponds to Consensus::ProposalRewardV1 (0x02)
-    if previous.data[0] != 0x02 {
+    // Verify previous call corresponds to Consensus::ProposalRewardV1 (0x03)
+    if previous.data[0] != 0x03 {
         msg!("[ConsensusProposalMintV1] Error: Previous call function mismatch");
         return Err(MoneyError::PreviousCallFunctionMissmatch.into())
     }

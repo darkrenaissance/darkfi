@@ -16,12 +16,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::model::{Input, Output, StakeInput};
+use darkfi_money_contract::model::{ClearInput, Input, Output, StakeInput};
 use darkfi_sdk::{
     crypto::{ecvrf::VrfProof, PublicKey},
     pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
+
+/// Parameters for `Consensus::GenesisStake`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusGenesisStakeParamsV1 {
+    /// Clear input
+    pub input: ClearInput,
+    /// Anonymous output
+    pub output: Output,
+}
 
 /// Parameters for `Consensus::ProposalBurn`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]

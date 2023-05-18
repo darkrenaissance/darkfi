@@ -149,8 +149,8 @@ pub(crate) fn consensus_proposal_burn_process_instruction_v1(
         return Err(MoneyError::UnstakeSpendHookNotConsensusContract.into())
     }
 
-    // Verify next call corresponds to Consensus::ProposalRewardV1 (0x02)
-    if next.data[0] != 0x02 {
+    // Verify next call corresponds to Consensus::ProposalRewardV1 (0x03)
+    if next.data[0] != 0x03 {
         msg!("[ConsensusProposalBurnV1] Error: Next call function mismatch");
         return Err(MoneyError::NextCallFunctionMissmatch.into())
     }

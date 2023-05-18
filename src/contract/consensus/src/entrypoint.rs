@@ -34,6 +34,12 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{model::ConsensusProposalRewardUpdateV1, ConsensusFunction};
 
+/// `Consensus::GenesisStake` functions
+mod genesis_stake_v1;
+use genesis_stake_v1::{
+    consensus_genesis_stake_get_metadata_v1, consensus_genesis_stake_process_instruction_v1,
+};
+
 /// `Consensus::Stake` functions
 mod stake_v1;
 use stake_v1::{
@@ -153,11 +159,15 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
     }
 
     match ConsensusFunction::try_from(calls[call_idx as usize].data[0])? {
-        ConsensusFunction::StakeV1 => {
+        ConsensusFunction::GenesisStakeV1 => {
             // We pass everything into the correct function, and it will return
             // the metadata for us, which we can then copy into the host with
             // the `set_return_data` function. On the host, this metadata will
             // be used to do external verification (zk proofs, and signatures).
+            let metadata = consensus_genesis_stake_get_metadata_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&metadata)?)
+        }
+        ConsensusFunction::StakeV1 => {
             let metadata = consensus_stake_get_metadata_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
         }
@@ -191,12 +201,16 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
     }
 
     match ConsensusFunction::try_from(calls[call_idx as usize].data[0])? {
-        ConsensusFunction::StakeV1 => {
+        ConsensusFunction::GenesisStakeV1 => {
             // Again, we pass everything into the correct function.
             // If it executes successfully, we'll get a state update
             // which we can copy into the host using `set_return_data`.
             // This update can then be written with `process_update()`
             // if everything is in order.
+            let update_data = consensus_genesis_stake_process_instruction_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&update_data)?)
+        }
+        ConsensusFunction::StakeV1 => {
             let update_data = consensus_stake_process_instruction_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)
         }
@@ -226,6 +240,11 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 /// is the update data retrieved from `process_instruction()`.
 fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
     match ConsensusFunction::try_from(update_data[0])? {
+        ConsensusFunction::GenesisStakeV1 => {
+            // GenesisStake uses the same update as normal Stake
+            let update: ConsensusStakeUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(consensus_stake_process_update_v1(cid, update)?)
+        }
         ConsensusFunction::StakeV1 => {
             let update: ConsensusStakeUpdateV1 = deserialize(&update_data[1..])?;
             Ok(consensus_stake_process_update_v1(cid, update)?)

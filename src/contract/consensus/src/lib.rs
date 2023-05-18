@@ -24,11 +24,12 @@ use darkfi_sdk::error::ContractError;
 /// Functions available in the contract
 #[repr(u8)]
 pub enum ConsensusFunction {
-    StakeV1 = 0x00,
-    ProposalBurnV1 = 0x01,
-    ProposalRewardV1 = 0x02,
-    ProposalMintV1 = 0x03,
-    UnstakeV1 = 0x04,
+    GenesisStakeV1 = 0x00,
+    StakeV1 = 0x01,
+    ProposalBurnV1 = 0x02,
+    ProposalRewardV1 = 0x03,
+    ProposalMintV1 = 0x04,
+    UnstakeV1 = 0x05,
 }
 
 impl TryFrom<u8> for ConsensusFunction {
@@ -36,11 +37,12 @@ impl TryFrom<u8> for ConsensusFunction {
 
     fn try_from(b: u8) -> core::result::Result<Self, Self::Error> {
         match b {
-            0x00 => Ok(Self::StakeV1),
-            0x01 => Ok(Self::ProposalBurnV1),
-            0x02 => Ok(Self::ProposalRewardV1),
-            0x03 => Ok(Self::ProposalMintV1),
-            0x04 => Ok(Self::UnstakeV1),
+            0x00 => Ok(Self::GenesisStakeV1),
+            0x01 => Ok(Self::StakeV1),
+            0x02 => Ok(Self::ProposalBurnV1),
+            0x03 => Ok(Self::ProposalRewardV1),
+            0x04 => Ok(Self::ProposalMintV1),
+            0x05 => Ok(Self::UnstakeV1),
             _ => Err(ContractError::InvalidFunction),
         }
     }

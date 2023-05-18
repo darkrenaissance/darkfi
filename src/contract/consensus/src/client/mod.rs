@@ -25,6 +25,9 @@
 //! the necessary objects provided by the caller. This is intentional, so we
 //! are able to abstract away any wallet interfaces to client implementations.
 
+/// `Consensus::GenesisStakeV1` API
+pub mod genesis_stake_v1;
+
 /// `Consensus::StakeV1` API
 pub mod stake_v1;
 

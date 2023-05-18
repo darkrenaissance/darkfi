@@ -142,8 +142,8 @@ pub(crate) fn money_stake_process_instruction_v1(
         return Err(MoneyError::SpendHookMismatch.into())
     }
 
-    // Verify next call corresponds to Consensus::StakeV1 (0x00)
-    if next.data[0] != 0x00 {
+    // Verify next call corresponds to Consensus::StakeV1 (0x01)
+    if next.data[0] != 0x01 {
         msg!("[MoneyStakeV1] Error: Next call function mismatch");
         return Err(MoneyError::NextCallFunctionMissmatch.into())
     }

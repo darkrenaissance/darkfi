@@ -50,7 +50,7 @@ pub(crate) fn consensus_unstake_get_metadata_v1(
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     // Public keys for the transaction signatures we have to verify
-    let signature_pubkeys: Vec<PublicKey> = vec![input.signature_public];
+    let signature_pubkeys = vec![input.signature_public];
 
     // Grab the pedersen commitments and signature pubkeys from the
     // anonymous input

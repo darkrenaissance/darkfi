@@ -47,10 +47,11 @@ use rand::rngs::OsRng;
 
 use darkfi_consensus_contract::{
     client::{
+        genesis_stake_v1::ConsensusGenesisStakeCallBuilder,
         proposal_v1::ConsensusProposalCallBuilder, stake_v1::ConsensusStakeCallBuilder,
         unstake_v1::ConsensusUnstakeCallBuilder,
     },
-    model::ConsensusProposalMintParamsV1,
+    model::{ConsensusGenesisStakeParamsV1, ConsensusProposalMintParamsV1},
     ConsensusFunction,
 };
 use darkfi_money_contract::{
@@ -93,6 +94,7 @@ pub enum Holder {
 #[derive(Debug, Eq, Hash, PartialEq)]
 pub enum TxAction {
     Airdrop,
+    GenesisStake,
     Stake,
     Proposal,
     Unstake,
@@ -227,6 +229,7 @@ impl ConsensusTestHarness {
         // Build benchmarks map
         let mut tx_action_benchmarks = HashMap::new();
         tx_action_benchmarks.insert(TxAction::Airdrop, TxActionBenchmarks::new());
+        tx_action_benchmarks.insert(TxAction::GenesisStake, TxActionBenchmarks::new());
         tx_action_benchmarks.insert(TxAction::Stake, TxActionBenchmarks::new());
         tx_action_benchmarks.insert(TxAction::Proposal, TxActionBenchmarks::new());
         tx_action_benchmarks.insert(TxAction::Unstake, TxActionBenchmarks::new());
@@ -304,6 +307,100 @@ impl ConsensusTestHarness {
             wallet.state.read().await.verify_transactions(&[tx], slot, true).await?;
         assert!(erroneous_txs.is_empty());
         wallet.merkle_tree.append(&MerkleNode::from(params.outputs[0].coin.inner()));
+        tx_action_benchmark.verify_times.push(timer.elapsed());
+
+        Ok(())
+    }
+
+    pub fn genesis_stake_native(
+        &mut self,
+        holder: Holder,
+        amount: u64,
+    ) -> Result<(Transaction, ConsensusGenesisStakeParamsV1)> {
+        let wallet = match holder {
+            Holder::Faucet => &self.faucet,
+            Holder::Alice => &self.alice,
+        };
+        let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
+        let tx_action_benchmark =
+            self.tx_action_benchmarks.get_mut(&TxAction::GenesisStake).unwrap();
+        let timer = Instant::now();
+
+        // Building Consensus::GenesisStake params
+        let genesis_stake_call_debris = ConsensusGenesisStakeCallBuilder {
+            keypair: wallet.keypair,
+            amount,
+            mint_zkbin: mint_zkbin.clone(),
+            mint_pk: mint_pk.clone(),
+        }
+        .build()?;
+        let (genesis_stake_params, genesis_stake_proofs) =
+            (genesis_stake_call_debris.params, genesis_stake_call_debris.proofs);
+
+        // Building genesis stake tx
+        let mut data = vec![ConsensusFunction::GenesisStakeV1 as u8];
+        genesis_stake_params.encode(&mut data)?;
+        let contract_call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
+        let calls = vec![contract_call];
+        let proofs = vec![genesis_stake_proofs];
+        let mut genesis_stake_tx = Transaction { calls, proofs, signatures: vec![] };
+        let sigs = genesis_stake_tx.create_sigs(&mut OsRng, &[wallet.keypair.secret])?;
+        genesis_stake_tx.signatures = vec![sigs];
+        tx_action_benchmark.creation_times.push(timer.elapsed());
+
+        // Calculate transaction sizes
+        let encoded: Vec<u8> = serialize(&genesis_stake_tx);
+        let size = ::std::mem::size_of_val(&*encoded);
+        tx_action_benchmark.sizes.push(size);
+        let base58 = bs58::encode(&encoded).into_string();
+        let size = ::std::mem::size_of_val(&*base58);
+        tx_action_benchmark.broadcasted_sizes.push(size);
+
+        Ok((genesis_stake_tx, genesis_stake_params))
+    }
+
+    pub async fn execute_genesis_stake_native_tx(
+        &mut self,
+        holder: Holder,
+        tx: Transaction,
+        params: &ConsensusGenesisStakeParamsV1,
+        slot: u64,
+    ) -> Result<()> {
+        let wallet = match holder {
+            Holder::Faucet => &mut self.faucet,
+            Holder::Alice => &mut self.alice,
+        };
+        let tx_action_benchmark =
+            self.tx_action_benchmarks.get_mut(&TxAction::GenesisStake).unwrap();
+        let timer = Instant::now();
+
+        let erroneous_txs =
+            wallet.state.read().await.verify_transactions(&[tx], slot, true).await?;
+        assert!(erroneous_txs.is_empty());
+        wallet.consensus_merkle_tree.append(&MerkleNode::from(params.output.coin.inner()));
+        tx_action_benchmark.verify_times.push(timer.elapsed());
+
+        Ok(())
+    }
+
+    pub async fn execute_erroneous_genesis_stake_native_txs(
+        &mut self,
+        holder: Holder,
+        txs: Vec<Transaction>,
+        slot: u64,
+        erroneous: usize,
+    ) -> Result<()> {
+        let wallet = match holder {
+            Holder::Faucet => &mut self.faucet,
+            Holder::Alice => &mut self.alice,
+        };
+        let tx_action_benchmark =
+            self.tx_action_benchmarks.get_mut(&TxAction::GenesisStake).unwrap();
+        let timer = Instant::now();
+
+        let erroneous_txs =
+            wallet.state.read().await.verify_transactions(&txs, slot, false).await?;
+        assert_eq!(erroneous_txs.len(), erroneous);
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())

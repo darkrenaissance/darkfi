@@ -33,9 +33,14 @@ test-stake-unstake: all
 		--package darkfi-consensus-contract \
 		--test stake_unstake
 
-test: test-stake-unstake
+test-genesis-stake-unstake: all
+	$(CARGO) test --release --features=no-entrypoint,client \
+		--package darkfi-consensus-contract \
+		--test genesis_stake_unstake
+
+test: test-genesis-stake-unstake test-stake-unstake
 
 clean:
 	rm -f $(PROOFS_BIN) $(WASM_BIN)
 
-.PHONY: all test-stake-unstake test clean
+.PHONY: all test-genesis-stake-unstake test-stake-unstake test clean

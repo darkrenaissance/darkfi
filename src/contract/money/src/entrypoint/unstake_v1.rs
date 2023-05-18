@@ -18,8 +18,8 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, ContractId, MerkleNode, PublicKey,
-        CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
+        pasta_prelude::*, pedersen_commitment_base, ContractId, MerkleNode, CONSENSUS_CONTRACT_ID,
+        DARK_TOKEN_ID,
     },
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -138,8 +138,8 @@ pub(crate) fn money_unstake_process_instruction_v1(
         return Err(MoneyError::UnstakePreviousCallNotConsensusContract.into())
     }
 
-    // Verify previous call corresponds to Consensus::UnstakeV1 (0x04)
-    if previous.data[0] != 0x04 {
+    // Verify previous call corresponds to Consensus::UnstakeV1 (0x05)
+    if previous.data[0] != 0x05 {
         msg!("[MoneyUnstakeV1] Error: Previous call function mismatch");
         return Err(MoneyError::PreviousCallFunctionMissmatch.into())
     }

@@ -182,8 +182,8 @@ pub(crate) fn consensus_proposal_reward_process_instruction_v1(
         return Err(MoneyError::UnstakePreviousCallNotConsensusContract.into())
     }
 
-    // Verify previous call corresponds to Consensus::ProposalBurnV1 (0x01)
-    if previous.data[0] != 0x01 {
+    // Verify previous call corresponds to Consensus::ProposalBurnV1 (0x02)
+    if previous.data[0] != 0x02 {
         msg!("[ConsensusProposalRewardV1] Error: Previous call function mismatch");
         return Err(MoneyError::PreviousCallFunctionMissmatch.into())
     }
@@ -217,8 +217,8 @@ pub(crate) fn consensus_proposal_reward_process_instruction_v1(
         return Err(MoneyError::StakeNextCallNotConsensusContract.into())
     }
 
-    // Verify next call corresponds to Consensus::ProposalMintV1 (0x03)
-    if next.data[0] != 0x03 {
+    // Verify next call corresponds to Consensus::ProposalMintV1 (0x04)
+    if next.data[0] != 0x04 {
         msg!("[ConsensusProposalRewardV1] Error: Next call function mismatch");
         return Err(MoneyError::NextCallFunctionMissmatch.into())
     }
