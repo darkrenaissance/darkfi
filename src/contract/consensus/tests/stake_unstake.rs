@@ -27,11 +27,9 @@
 //! TODO: Malicious cases
 
 use darkfi::Result;
-use darkfi_sdk::crypto::{merkle_prelude::*, poseidon_hash, Coin, Nullifier};
 use log::info;
 
 use darkfi_consensus_contract::model::REWARD;
-use darkfi_money_contract::client::{MoneyNote, OwnCoin};
 
 mod harness;
 use harness::{init_logger, ConsensusTestHarness, Holder};
@@ -51,7 +49,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Faucet] =========================");
     info!(target: "consensus", "[Faucet] Building Alice airdrop tx");
     info!(target: "consensus", "[Faucet] =========================");
-    let (airdrop_tx, airdrop_params) = th.airdrop_native(ALICE_AIRDROP, th.alice.keypair.public)?;
+    let (airdrop_tx, airdrop_params) = th.airdrop_native(ALICE_AIRDROP, Holder::Alice)?;
 
     info!(target: "consensus", "[Faucet] ==========================");
     info!(target: "consensus", "[Faucet] Executing Alice airdrop tx");
@@ -64,18 +62,10 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] ==========================");
     th.execute_airdrop_native_tx(Holder::Alice, airdrop_tx, &airdrop_params, current_slot).await?;
 
-    assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
+    th.assert_trees();
 
     // Gather new owncoin
-    let leaf_position = th.alice.merkle_tree.witness().unwrap();
-    let note: MoneyNote = airdrop_params.outputs[0].note.decrypt(&th.alice.keypair.secret)?;
-    let alice_oc = OwnCoin {
-        coin: Coin::from(airdrop_params.outputs[0].coin),
-        note: note.clone(),
-        secret: th.alice.keypair.secret,
-        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
-        leaf_position,
-    };
+    let alice_oc = th.gather_owncoin(Holder::Alice, airdrop_params.outputs[0].clone(), false)?;
 
     // Now Alice can stake her owncoin
     info!(target: "consensus", "[Alice] =================");
@@ -94,31 +84,16 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] ========================");
     th.execute_stake_native_tx(Holder::Alice, stake_tx, &stake_params, current_slot).await?;
 
-    assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
-    assert!(
-        th.faucet.consensus_merkle_tree.root(0).unwrap() ==
-            th.alice.consensus_merkle_tree.root(0).unwrap()
-    );
+    th.assert_trees();
 
     // Gather new staked owncoin
-    let leaf_position = th.alice.consensus_merkle_tree.witness().unwrap();
-    let note: MoneyNote = stake_params.output.note.decrypt(&th.alice.keypair.secret)?;
-    let alice_staked_oc = OwnCoin {
-        coin: Coin::from(stake_params.output.coin),
-        note: note.clone(),
-        secret: th.alice.keypair.secret,
-        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
-        leaf_position,
-    };
+    let alice_staked_oc = th.gather_owncoin(Holder::Alice, stake_params.output, true)?;
 
     // Verify values match
     assert!(alice_oc.note.value == alice_staked_oc.note.value);
 
     // We simulate the proposal of genesis slot
-    let slot_checkpoint =
-        th.alice.state.read().await.blockchain.get_slot_checkpoints_by_slot(&[current_slot])?[0]
-            .clone()
-            .unwrap();
+    let slot_checkpoint = th.get_slot_checkpoints_by_slot(current_slot).await?;
 
     // With alice's current coin value she can become the slot proposer,
     // so she creates a proposal transaction to burn her staked coin,
@@ -140,21 +115,11 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] ===========================");
     th.execute_proposal_tx(Holder::Alice, proposal_tx, &proposal_params, current_slot).await?;
 
-    assert!(
-        th.faucet.consensus_merkle_tree.root(0).unwrap() ==
-            th.alice.consensus_merkle_tree.root(0).unwrap()
-    );
+    th.assert_trees();
 
     // Gather new staked owncoin which includes the reward
-    let leaf_position = th.alice.consensus_merkle_tree.witness().unwrap();
-    let note: MoneyNote = proposal_params.output.note.decrypt(&th.alice.keypair.secret)?;
-    let alice_rewarded_staked_oc = OwnCoin {
-        coin: Coin::from(proposal_params.output.coin),
-        note: note.clone(),
-        secret: th.alice.keypair.secret,
-        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
-        leaf_position,
-    };
+    let alice_rewarded_staked_oc =
+        th.gather_owncoin(Holder::Alice, proposal_params.output, true)?;
 
     // Verify values match
     assert!((alice_staked_oc.note.value + REWARD) == alice_rewarded_staked_oc.note.value);
@@ -177,22 +142,10 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] ==========================");
     th.execute_unstake_native_tx(Holder::Alice, unstake_tx, &unstake_params, current_slot).await?;
 
-    assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
-    assert!(
-        th.faucet.consensus_merkle_tree.root(0).unwrap() ==
-            th.alice.consensus_merkle_tree.root(0).unwrap()
-    );
+    th.assert_trees();
 
     // Gather new unstaked owncoin
-    let leaf_position = th.alice.merkle_tree.witness().unwrap();
-    let note: MoneyNote = unstake_params.output.note.decrypt(&th.alice.keypair.secret)?;
-    let alice_unstaked_oc = OwnCoin {
-        coin: Coin::from(unstake_params.output.coin),
-        note: note.clone(),
-        secret: th.alice.keypair.secret,
-        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
-        leaf_position,
-    };
+    let alice_unstaked_oc = th.gather_owncoin(Holder::Alice, unstake_params.output, false)?;
 
     // Verify values match
     assert!(alice_rewarded_staked_oc.note.value == alice_unstaked_oc.note.value);

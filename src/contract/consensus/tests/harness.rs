@@ -32,11 +32,10 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
     crypto::{
-        merkle_prelude::*, Keypair, MerkleNode, MerkleTree, PublicKey, CONSENSUS_CONTRACT_ID,
-        DARK_TOKEN_ID, MONEY_CONTRACT_ID,
+        merkle_prelude::*, poseidon_hash, Coin, Keypair, MerkleNode, MerkleTree, Nullifier,
+        PublicKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
     ContractCall,
@@ -57,9 +56,9 @@ use darkfi_consensus_contract::{
 use darkfi_money_contract::{
     client::{
         stake_v1::MoneyStakeCallBuilder, transfer_v1::TransferCallBuilder,
-        unstake_v1::MoneyUnstakeCallBuilder,
+        unstake_v1::MoneyUnstakeCallBuilder, MoneyNote, OwnCoin,
     },
-    model::{ConsensusStakeParamsV1, MoneyTransferParamsV1, MoneyUnstakeParamsV1},
+    model::{ConsensusStakeParamsV1, MoneyTransferParamsV1, MoneyUnstakeParamsV1, Output},
     MoneyFunction, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1,
     CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
     MONEY_CONTRACT_ZKAS_MINT_NS_V1,
@@ -123,18 +122,26 @@ impl TxActionBenchmarks {
     }
 
     pub fn statistics(&self, action: &TxAction) {
-        let avg = self.sizes.iter().sum::<usize>();
-        let avg = avg / self.sizes.len();
-        info!("Average {:?} size: {:?} Bytes", action, avg);
-        let avg = self.broadcasted_sizes.iter().sum::<usize>();
-        let avg = avg / self.broadcasted_sizes.len();
-        info!("Average {:?} broadcasted size: {:?} Bytes", action, avg);
-        let avg = self.creation_times.iter().sum::<Duration>();
-        let avg = avg / self.creation_times.len() as u32;
-        info!("Average {:?} creation time: {:?}", action, avg);
-        let avg = self.verify_times.iter().sum::<Duration>();
-        let avg = avg / self.verify_times.len() as u32;
-        info!("Average {:?} verification time: {:?}", action, avg);
+        if !self.sizes.is_empty() {
+            let avg = self.sizes.iter().sum::<usize>();
+            let avg = avg / self.sizes.len();
+            info!(target: "consensus", "Average {:?} size: {:?} Bytes", action, avg);
+        }
+        if !self.broadcasted_sizes.is_empty() {
+            let avg = self.broadcasted_sizes.iter().sum::<usize>();
+            let avg = avg / self.broadcasted_sizes.len();
+            info!(target: "consensus", "Average {:?} broadcasted size: {:?} Bytes", action, avg);
+        }
+        if !self.creation_times.is_empty() {
+            let avg = self.creation_times.iter().sum::<Duration>();
+            let avg = avg / self.creation_times.len() as u32;
+            info!(target: "consensus", "Average {:?} creation time: {:?}", action, avg);
+        }
+        if !self.verify_times.is_empty() {
+            let avg = self.verify_times.iter().sum::<Duration>();
+            let avg = avg / self.verify_times.len() as u32;
+            info!(target: "consensus", "Average {:?} verification time: {:?}", action, avg);
+        }
     }
 }
 
@@ -177,17 +184,18 @@ impl Wallet {
 }
 
 pub struct ConsensusTestHarness {
-    pub faucet: Wallet,
-    pub alice: Wallet,
+    pub holders: HashMap<Holder, Wallet>,
     pub proving_keys: HashMap<&'static str, (ProvingKey, ZkBinary)>,
     pub tx_action_benchmarks: HashMap<TxAction, TxActionBenchmarks>,
 }
 
 impl ConsensusTestHarness {
     pub async fn new() -> Result<Self> {
+        let mut holders = HashMap::new();
         let faucet_kp = Keypair::random(&mut OsRng);
         let faucet_pubkeys = vec![faucet_kp.public];
         let faucet = Wallet::new(faucet_kp, &faucet_pubkeys).await?;
+        holders.insert(Holder::Faucet, faucet);
 
         let alice_kp = Keypair::random(&mut OsRng);
         let alice = Wallet::new(alice_kp, &faucet_pubkeys).await?;
@@ -226,6 +234,8 @@ impl ConsensusTestHarness {
         mkpk!(CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1);
         mkpk!(CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1);
 
+        holders.insert(Holder::Alice, alice);
+
         // Build benchmarks map
         let mut tx_action_benchmarks = HashMap::new();
         tx_action_benchmarks.insert(TxAction::Airdrop, TxActionBenchmarks::new());
@@ -234,21 +244,23 @@ impl ConsensusTestHarness {
         tx_action_benchmarks.insert(TxAction::Proposal, TxActionBenchmarks::new());
         tx_action_benchmarks.insert(TxAction::Unstake, TxActionBenchmarks::new());
 
-        Ok(Self { faucet, alice, proving_keys, tx_action_benchmarks })
+        Ok(Self { holders, proving_keys, tx_action_benchmarks })
     }
 
     pub fn airdrop_native(
         &mut self,
         value: u64,
-        recipient: PublicKey,
+        holder: Holder,
     ) -> Result<(Transaction, MoneyTransferParamsV1)> {
+        let recipient = self.holders.get_mut(&holder).unwrap().keypair.public;
+        let faucet = self.holders.get_mut(&Holder::Faucet).unwrap();
         let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::Airdrop).unwrap();
         let timer = Instant::now();
 
         let builder = TransferCallBuilder {
-            keypair: self.faucet.keypair,
+            keypair: faucet.keypair,
             recipient,
             value,
             token_id: *DARK_TOKEN_ID,
@@ -259,7 +271,7 @@ impl ConsensusTestHarness {
             change_user_data: pallas::Base::zero(),
             change_user_data_blind: pallas::Base::random(&mut OsRng),
             coins: vec![],
-            tree: self.faucet.merkle_tree.clone(),
+            tree: faucet.merkle_tree.clone(),
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
             burn_zkbin: burn_zkbin.clone(),
@@ -296,10 +308,7 @@ impl ConsensusTestHarness {
         params: &MoneyTransferParamsV1,
         slot: u64,
     ) -> Result<()> {
-        let wallet = match holder {
-            Holder::Faucet => &mut self.faucet,
-            Holder::Alice => &mut self.alice,
-        };
+        let wallet = self.holders.get_mut(&holder).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::Airdrop).unwrap();
         let timer = Instant::now();
 
@@ -317,10 +326,7 @@ impl ConsensusTestHarness {
         holder: Holder,
         amount: u64,
     ) -> Result<(Transaction, ConsensusGenesisStakeParamsV1)> {
-        let wallet = match holder {
-            Holder::Faucet => &self.faucet,
-            Holder::Alice => &self.alice,
-        };
+        let wallet = self.holders.get_mut(&holder).unwrap();
         let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::GenesisStake).unwrap();
@@ -366,10 +372,7 @@ impl ConsensusTestHarness {
         params: &ConsensusGenesisStakeParamsV1,
         slot: u64,
     ) -> Result<()> {
-        let wallet = match holder {
-            Holder::Faucet => &mut self.faucet,
-            Holder::Alice => &mut self.alice,
-        };
+        let wallet = self.holders.get_mut(&holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::GenesisStake).unwrap();
         let timer = Instant::now();
@@ -390,10 +393,7 @@ impl ConsensusTestHarness {
         slot: u64,
         erroneous: usize,
     ) -> Result<()> {
-        let wallet = match holder {
-            Holder::Faucet => &mut self.faucet,
-            Holder::Alice => &mut self.alice,
-        };
+        let wallet = self.holders.get_mut(&holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::GenesisStake).unwrap();
         let timer = Instant::now();
@@ -411,10 +411,7 @@ impl ConsensusTestHarness {
         holder: Holder,
         owncoin: OwnCoin,
     ) -> Result<(Transaction, ConsensusStakeParamsV1)> {
-        let wallet = match holder {
-            Holder::Faucet => &self.faucet,
-            Holder::Alice => &self.alice,
-        };
+        let wallet = self.holders.get_mut(&holder).unwrap();
         let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::Stake).unwrap();
@@ -491,10 +488,7 @@ impl ConsensusTestHarness {
         params: &ConsensusStakeParamsV1,
         slot: u64,
     ) -> Result<()> {
-        let wallet = match holder {
-            Holder::Faucet => &mut self.faucet,
-            Holder::Alice => &mut self.alice,
-        };
+        let wallet = self.holders.get_mut(&holder).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::Stake).unwrap();
         let timer = Instant::now();
 
@@ -513,10 +507,7 @@ impl ConsensusTestHarness {
         slot_checkpoint: SlotCheckpoint,
         staked_oc: OwnCoin,
     ) -> Result<(Transaction, ConsensusProposalMintParamsV1)> {
-        let wallet = match holder {
-            Holder::Faucet => &self.faucet,
-            Holder::Alice => &self.alice,
-        };
+        let wallet = self.holders.get_mut(&holder).unwrap();
         let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
         let (reward_pk, reward_zkbin) =
             self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1).unwrap();
@@ -597,10 +588,7 @@ impl ConsensusTestHarness {
         params: &ConsensusProposalMintParamsV1,
         slot: u64,
     ) -> Result<()> {
-        let wallet = match holder {
-            Holder::Faucet => &mut self.faucet,
-            Holder::Alice => &mut self.alice,
-        };
+        let wallet = self.holders.get_mut(&holder).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::Proposal).unwrap();
         let timer = Instant::now();
 
@@ -618,10 +606,7 @@ impl ConsensusTestHarness {
         holder: Holder,
         staked_oc: OwnCoin,
     ) -> Result<(Transaction, MoneyUnstakeParamsV1)> {
-        let wallet = match holder {
-            Holder::Faucet => &self.faucet,
-            Holder::Alice => &self.alice,
-        };
+        let wallet = self.holders.get_mut(&holder).unwrap();
         let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
         let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::Unstake).unwrap();
@@ -698,10 +683,7 @@ impl ConsensusTestHarness {
         params: &MoneyUnstakeParamsV1,
         slot: u64,
     ) -> Result<()> {
-        let wallet = match holder {
-            Holder::Faucet => &mut self.faucet,
-            Holder::Alice => &mut self.alice,
-        };
+        let wallet = self.holders.get_mut(&holder).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::Unstake).unwrap();
         let timer = Instant::now();
 
@@ -714,11 +696,55 @@ impl ConsensusTestHarness {
         Ok(())
     }
 
+    pub fn gather_owncoin(
+        &mut self,
+        holder: Holder,
+        output: Output,
+        consensus: bool,
+    ) -> Result<OwnCoin> {
+        let wallet = self.holders.get_mut(&holder).unwrap();
+        let leaf_position = if consensus {
+            wallet.consensus_merkle_tree.witness().unwrap()
+        } else {
+            wallet.merkle_tree.witness().unwrap()
+        };
+        let note: MoneyNote = output.note.decrypt(&wallet.keypair.secret)?;
+        let oc = OwnCoin {
+            coin: Coin::from(output.coin),
+            note: note.clone(),
+            secret: wallet.keypair.secret,
+            nullifier: Nullifier::from(poseidon_hash([wallet.keypair.secret.inner(), note.serial])),
+            leaf_position,
+        };
+
+        Ok(oc)
+    }
+
+    pub async fn get_slot_checkpoints_by_slot(&self, slot: u64) -> Result<SlotCheckpoint> {
+        let faucet = self.holders.get(&Holder::Faucet).unwrap();
+        let slot_checkpoint =
+            faucet.state.read().await.blockchain.get_slot_checkpoints_by_slot(&[slot])?[0]
+                .clone()
+                .unwrap();
+
+        Ok(slot_checkpoint)
+    }
+
+    pub fn assert_trees(&self) {
+        let faucet = self.holders.get(&Holder::Faucet).unwrap();
+        let money_root = faucet.merkle_tree.root(0).unwrap();
+        let consensus_root = faucet.consensus_merkle_tree.root(0).unwrap();
+        for wallet in self.holders.values() {
+            assert!(money_root == wallet.merkle_tree.root(0).unwrap());
+            assert!(consensus_root == wallet.consensus_merkle_tree.root(0).unwrap());
+        }
+    }
+
     pub fn statistics(&self) {
-        info!("==================== Statistics ====================");
+        info!(target: "consensus", "==================== Statistics ====================");
         for (action, tx_action_benchmark) in &self.tx_action_benchmarks {
             tx_action_benchmark.statistics(action);
         }
-        info!("====================================================");
+        info!(target: "consensus", "====================================================");
     }
 }

@@ -25,11 +25,9 @@
 //! transitions work for a single party and are able to be verified.
 
 use darkfi::Result;
-use darkfi_sdk::crypto::{merkle_prelude::*, poseidon_hash, Coin, Nullifier};
 use log::info;
 
 use darkfi_consensus_contract::model::REWARD;
-use darkfi_money_contract::client::{MoneyNote, OwnCoin};
 
 mod harness;
 use harness::{init_logger, ConsensusTestHarness, Holder};
@@ -104,30 +102,16 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     )
     .await?;
 
-    assert!(
-        th.faucet.consensus_merkle_tree.root(0).unwrap() ==
-            th.alice.consensus_merkle_tree.root(0).unwrap()
-    );
+    th.assert_trees();
 
     // Gather new staked owncoin
-    let leaf_position = th.alice.consensus_merkle_tree.witness().unwrap();
-    let note: MoneyNote = genesis_stake_params.output.note.decrypt(&th.alice.keypair.secret)?;
-    let alice_staked_oc = OwnCoin {
-        coin: Coin::from(genesis_stake_params.output.coin),
-        note: note.clone(),
-        secret: th.alice.keypair.secret,
-        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
-        leaf_position,
-    };
+    let alice_staked_oc = th.gather_owncoin(Holder::Alice, genesis_stake_params.output, true)?;
 
     // Verify values match
     assert!(ALICE_INITIAL == alice_staked_oc.note.value);
 
     // We simulate the proposal of genesis slot
-    let slot_checkpoint =
-        th.alice.state.read().await.blockchain.get_slot_checkpoints_by_slot(&[current_slot])?[0]
-            .clone()
-            .unwrap();
+    let slot_checkpoint = th.get_slot_checkpoints_by_slot(current_slot).await?;
 
     // With alice's current coin value she can become the slot proposer,
     // so she creates a proposal transaction to burn her staked coin,
@@ -149,21 +133,11 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] ===========================");
     th.execute_proposal_tx(Holder::Alice, proposal_tx, &proposal_params, current_slot).await?;
 
-    assert!(
-        th.faucet.consensus_merkle_tree.root(0).unwrap() ==
-            th.alice.consensus_merkle_tree.root(0).unwrap()
-    );
+    th.assert_trees();
 
     // Gather new staked owncoin which includes the reward
-    let leaf_position = th.alice.consensus_merkle_tree.witness().unwrap();
-    let note: MoneyNote = proposal_params.output.note.decrypt(&th.alice.keypair.secret)?;
-    let alice_rewarded_staked_oc = OwnCoin {
-        coin: Coin::from(proposal_params.output.coin),
-        note: note.clone(),
-        secret: th.alice.keypair.secret,
-        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
-        leaf_position,
-    };
+    let alice_rewarded_staked_oc =
+        th.gather_owncoin(Holder::Alice, proposal_params.output, true)?;
 
     // Verify values match
     assert!((alice_staked_oc.note.value + REWARD) == alice_rewarded_staked_oc.note.value);
@@ -186,22 +160,10 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] ==========================");
     th.execute_unstake_native_tx(Holder::Alice, unstake_tx, &unstake_params, current_slot).await?;
 
-    assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
-    assert!(
-        th.faucet.consensus_merkle_tree.root(0).unwrap() ==
-            th.alice.consensus_merkle_tree.root(0).unwrap()
-    );
+    th.assert_trees();
 
     // Gather new unstaked owncoin
-    let leaf_position = th.alice.merkle_tree.witness().unwrap();
-    let note: MoneyNote = unstake_params.output.note.decrypt(&th.alice.keypair.secret)?;
-    let alice_unstaked_oc = OwnCoin {
-        coin: Coin::from(unstake_params.output.coin),
-        note: note.clone(),
-        secret: th.alice.keypair.secret,
-        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
-        leaf_position,
-    };
+    let alice_unstaked_oc = th.gather_owncoin(Holder::Alice, unstake_params.output, false)?;
 
     // Verify values match
     assert!(alice_rewarded_staked_oc.note.value == alice_unstaked_oc.note.value);
