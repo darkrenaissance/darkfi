@@ -250,7 +250,7 @@ async fn main() -> Result<()> {
     ex.spawn(async move { listen_and_serve(accept_addr.clone(), rpc, _ex).await }).detach();
     // ANCHOR_END: json_init
 
-    let nthreads = num_cpus::get();
+    let nthreads = std::thread::available_parallelism().unwrap().get();
     let (signal, shutdown) = smol::channel::unbounded::<()>();
 
     let (_, result) = Parallel::new()

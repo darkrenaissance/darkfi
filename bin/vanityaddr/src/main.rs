@@ -128,7 +128,11 @@ fn main() {
     }
 
     // Threadpool
-    let num_threads = if args.threads.is_some() { args.threads.unwrap() } else { num_cpus::get() };
+    let num_threads = if args.threads.is_some() {
+        args.threads.unwrap()
+    } else {
+        std::thread::available_parallelism().unwrap().get()
+    };
     let rayon_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads).build().unwrap();
 
     // Handle SIGINT

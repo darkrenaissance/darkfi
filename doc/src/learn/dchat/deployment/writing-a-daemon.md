@@ -13,7 +13,7 @@ async fn main() -> Result<()> {
     let ex = Arc::new(Executor::new());
     let ex2 = ex.clone();
 
-    let nthreads = num_cpus::get();
+    let nthreads = std::thread::available_parallelism().unwrap().get();
     let (signal, shutdown) = smol::channel::unbounded::<()>();
 
     let (_, result) = Parallel::new()
@@ -30,9 +30,10 @@ async fn main() -> Result<()> {
 }
 ```
 
-We get the number of cpu cores using `num_cpus::get()` and spin up a
-bunch of threads in parallel using `easy_parallel`. Right now it doesn't
-do anything, but soon we'll run dchat inside this block.
+We get the number of cpu cores using
+`std::thread::available_parallelism()` and spin up a bunch of threads
+in parallel using `easy_parallel`. Right now it doesn't do anything,
+but soon we'll run dchat inside this block.
 
 **Note**: DarkFi includes a macro called `async_daemonize` that is used by
 DarkFi binaries to minimize boilerplate in the repo.  To keep things

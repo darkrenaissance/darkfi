@@ -189,11 +189,12 @@ macro_rules! async_daemonize {
             ])?;
 
             // https://docs.rs/smol/latest/smol/struct.Executor.html#examples
+            let n_threads = std::thread::available_parallelism().unwrap().get();
             let ex = async_std::sync::Arc::new(smol::Executor::new());
             let (signal, shutdown) = smol::channel::unbounded::<()>();
             let (_, result) = easy_parallel::Parallel::new()
                 // Run four executor threads
-                .each(0..4, |_| smol::future::block_on(ex.run(shutdown.recv())))
+                .each(0..n_threads, |_| smol::future::block_on(ex.run(shutdown.recv())))
                 // Run the main future on the current thread.
                 .finish(|| {
                     smol::future::block_on(async {

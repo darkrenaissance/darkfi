@@ -20,7 +20,7 @@ async fn main() -> Result<()> {
 
     let dchat = Dchat::new(p2p);
 
-    let nthreads = num_cpus::get();
+    let nthreads = std::thread::available_parallelism().unwrap().get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
     let ex = Arc::new(Executor::new());

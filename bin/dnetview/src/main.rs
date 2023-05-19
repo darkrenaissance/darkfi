@@ -162,7 +162,7 @@ async fn main() -> DnetViewResult<()> {
     let mut dnetview = DnetView::new(model.clone(), view);
     let parser = DataParser::new(model, config);
 
-    let nthreads = num_cpus::get();
+    let nthreads = std::thread::available_parallelism().unwrap().get();
     let (signal, shutdown) = async_channel::unbounded::<()>();
 
     let (_, result) = Parallel::new()
