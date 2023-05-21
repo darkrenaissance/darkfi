@@ -48,7 +48,8 @@ Then run the program:
 python vesting.py
 ```
 
-When prompted, enter the number of slots the simulation should run
-for. For testing purposes keep the slot time to 1-5k slots.
+When prompted, enter the exchange rate, then enter the number of slots
+the simulation should run for. For testing purposes keep the slot time
+to 1-5k slots.
 
 [^1]: https://github.com/ertosns/thunderbolt

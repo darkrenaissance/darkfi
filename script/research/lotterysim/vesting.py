@@ -3,11 +3,14 @@ from core.strategy import random_strategy
 from core.constants import *
 from pid.pid_base import *
 from draw import draw
+import logging
 import os
 
-def vesting_instance(vesting, running_time):
+logging.basicConfig(filename='log/vesting.log', encoding='utf-8', level=logging.DEBUG)
+
+def vesting_instance(vesting, exchange_rate, running_time):
     os.system("rm log/*_feedback.hist; rm log/*_output.hist log/darkie* log/rewards.log")
-    print('running time: {}'.format(running_time))
+    native_drk = ERC20DRK * exchange_rate
     total_vesting = 0
     if __name__ == "__main__":
         darkies = []
@@ -19,8 +22,8 @@ def vesting_instance(vesting, running_time):
         airdrop = 0
         for darkie in darkies:
             airdrop+=darkie.stake
-        print("network airdrop: {}/{}% on {} nodes".format(airdrop, airdrop/ERC20DRK*100, len(darkies)))
-        print('total vesting: {}/{}%'.format(total_vesting, total_vesting/ERC20DRK*100))
+        print("initial airdrop: {}/{}% on {} nodes".format(airdrop, airdrop/native_drk*100, len(darkies)))
+        print('total predistribution: {}/{}%'.format(total_vesting, total_vesting/native_drk*100))
         dt = DarkfiTable(airdrop, running_time, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0.03840000000000491,  r_kp=-2.53, r_ki=29.5, r_kd=53.77)
         for darkie in darkies:
             dt.add_darkie(darkie)
@@ -41,12 +44,13 @@ with open(VESTING_FILE) as f:
         vesting[keyval[0]] = eval(eval(val))
 
 nodes = len(vesting)
+exchange_rate = float(input("enter exchange rate:"))
 running_time = input("running time (leave it empty to run the whole vesting running time):")
 if running_time=='':
     running_time = len(next(iter(vesting.values())))*VESTING_PERIOD
 else:
     running_time = int(running_time)
 
-apr = vesting_instance(vesting, running_time)
+apr = vesting_instance(vesting, exchange_rate, running_time)
 print('avg apr: {}%'.format(apr*100))
 draw()
