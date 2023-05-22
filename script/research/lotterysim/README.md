@@ -35,21 +35,19 @@ can be coupled with khonsu[^1] to achieve 100% accuracy and instant finality.
 
 # usage
 
-Replace `example.csv` with local distribution data. Modify the file name
-in core/constants.py as follows:
+Replace `example.csv` with local distribution data. Edit config.py as follows:
 
 ```python
-VESTING_FILE='example.csv'
+vesting_file = 'your_local_data.csv'
 ```
+
+Edit config.py to define the exchange rate and simulation running time,
+measured in slots.
 
 Then run the program:
 
 ```shell
 python vesting.py
 ```
-
-When prompted, enter the exchange rate, then enter the number of slots
-the simulation should run for. For testing purposes keep the slot time
-to 1-5k slots.
 
 [^1]: https://github.com/ertosns/thunderbolt

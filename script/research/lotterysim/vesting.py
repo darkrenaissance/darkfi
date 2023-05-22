@@ -4,13 +4,14 @@ from core.constants import *
 from pid.pid_base import *
 from draw import draw
 import logging
+import config
 import os
 
 logging.basicConfig(filename='log/vesting.log', encoding='utf-8', level=logging.DEBUG)
 
-def vesting_instance(vesting, exchange_rate, running_time):
+def vesting_instance(vesting, running_time):
     os.system("rm log/*_feedback.hist; rm log/*_output.hist log/darkie* log/rewards.log")
-    native_drk = ERC20DRK * exchange_rate
+    native_drk = ERC20DRK * config.exchange_rate
     total_vesting = 0
     if __name__ == "__main__":
         darkies = []
@@ -31,12 +32,12 @@ def vesting_instance(vesting, exchange_rate, running_time):
         dt.write()
     return dt.avg_apr()
 
-if not os.path.exists(VESTING_FILE):
-    print('add vested distribution csv at path {} with vesting period {} (slots) aparts.'.format(VESTING_FILE, ONE_MONTH))
+if not os.path.exists(config.vesting_file):
+    print('add vested distribution csv at path {} with vesting period {} (slots) aparts.'.format(config.vesting_file, ONE_MONTH))
     exit()
 
 vesting = {}
-with open(VESTING_FILE) as f:
+with open(config.vesting_file) as f:
     for node  in f.readlines():
         keyval = node.split(',')
         key = keyval[0]
@@ -44,13 +45,12 @@ with open(VESTING_FILE) as f:
         vesting[keyval[0]] = eval(eval(val))
 
 nodes = len(vesting)
-exchange_rate = float(input("enter exchange rate:"))
-running_time = input("running time (leave it empty to run the whole vesting running time):")
-if running_time=='':
+if config.running_time== 0:
+    print("Running time is set to 0. Starting sim for whole vesting period...")
     running_time = len(next(iter(vesting.values())))*VESTING_PERIOD
 else:
-    running_time = int(running_time)
+    running_time = config.running_time
 
-apr = vesting_instance(vesting, exchange_rate, running_time)
+apr = vesting_instance(vesting, running_time)
 print('avg apr: {}%'.format(apr*100))
 draw()
