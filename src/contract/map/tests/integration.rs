@@ -23,11 +23,12 @@ use darkfi_sdk::{
     crypto::{poseidon_hash, Keypair, MerkleNode, Nullifier, SecretKey, MAP_CONTRACT_ID},
     incrementalmerkletree::Tree,
     pasta::pallas,
+    // db::{db_lookup, db_get} link error?
 };
 use log::{info, debug};
 use rand::rngs::OsRng;
 use darkfi_map_contract::MAP_CONTRACT_ENTRIES_TREE;
-use darkfi_serial::deserialize;
+use darkfi_serial::{deserialize, serialize};
 
 mod harness;
 use harness::{init_logger, MapTestHarness};
@@ -41,6 +42,7 @@ async fn map_integration() -> Result<()> {
     let mut th = MapTestHarness::new().await?;
     let (alice_tx, alice_params) = th.set(
         th.alice.keypair.secret,
+        pallas::Base::from(1),
         pallas::Base::from(2),
         pallas::Base::from(4),
     )?;
@@ -69,11 +71,26 @@ async fn map_integration() -> Result<()> {
         .await
         .verify_transactions(&[alice_tx.clone()], current_slot, true)
         .await?;
+    debug!("error_tx: {:?}", erroneous_txs);
     assert!(erroneous_txs.is_empty());
 
-    // let db = db_lookup(*MAP_CONTRACT_ID, MAP_CONTRACT_ENTRIES_TREE)?;
-    // poesidon_hash(account_id, 2): 0x25e70cb58fb267452c84b78df9090b516901ff822dbcde7b4e83575732d77390
-    // db_get ....
+    // let slot = poseidon_hash([alice_params.account, alice_params.key]);
+    // let db   = db_lookup(*MAP_CONTRACT_ID, MAP_CONTRACT_ENTRIES_TREE)?;
+    // db_get(db, &serialize(&slot))?;
+    // match db_get(db, &serialize(&slot))? {
+    //     None => panic!("slot should be set"),
+    //     Some(locked) => {
+    //         let lock: pallas::Base = deserialize(&locked)?;
+    //         assert!(lock == pallas::Base::one());
+    //     }
+    // };
+    // match db_get(db, &serialize(&(slot.add(&pallas::Base::one()))))? {
+    //     None => panic!("slot + 1 should be set"),
+    //     Some(value) => {
+    //         let value: pallas::Base = deserialize(&value)?;
+    //         assert!(value == pallas::Base::from(4));
+    //     }
+    // };
 
     Ok(())
 }

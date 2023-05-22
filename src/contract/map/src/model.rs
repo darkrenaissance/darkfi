@@ -15,7 +15,7 @@ pub struct SetParamsV1 {
 
 impl SetParamsV1 {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
-        vec![self.account, self.key, self.value,]
+        vec![self.account, self.lock, self.key, self.value,]
     }
 }
 
@@ -25,3 +25,4 @@ pub struct SetUpdateV1 {
     pub lock:  pallas::Base,
     pub value: pallas::Base,
 }
+

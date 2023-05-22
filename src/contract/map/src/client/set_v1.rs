@@ -12,8 +12,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public
+ * License along with this program.
+ * If not, see <https://www.gnu.org/licenses/>.
  */
 
 use darkfi::{
@@ -44,6 +45,7 @@ use crate::model::SetParamsV1;
 
 pub struct SetCallBuilder {
     pub secret:     SecretKey,
+    pub lock:       pallas::Base,
     pub key:        pallas::Base,
     pub value:      pallas::Base,
     pub zkbin:      ZkBinary,
@@ -63,6 +65,7 @@ impl SetCallBuilder {
         let params = SetParamsV1 { 
             // !!!!private computation done in rust!!!!
             account: poseidon_hash([self.secret.inner()]), 
+            lock :self.lock,
             key: self.key,
             value: self.value,
         };
@@ -75,11 +78,15 @@ impl SetCallBuilder {
         })
     }
 
-    pub fn create_set_proof(&self, public_inputs: SetParamsV1) -> Result<Proof> {
+    pub fn create_set_proof(
+        &self,
+        public_inputs: SetParamsV1
+    ) -> Result<Proof> {
         debug!("Creating map set proof");
 
         let witness       = vec![
             Witness::Base(Value::known(self.secret.inner())),
+            Witness::Base(Value::known(self.lock)),
             Witness::Base(Value::known(self.key)),
             Witness::Base(Value::known(self.value)),
         ];

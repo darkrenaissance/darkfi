@@ -12,16 +12,21 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU Affero General Public License for more details.
  *
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ * You should have received a copy of the GNU Affero General Public
+ * License along with this program.
+ * If not, see <https://www.gnu.org/licenses/>.
  */
 
 use std::collections::HashMap;
 
 use darkfi::{
     consensus::{
-        ValidatorState, ValidatorStatePtr, TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
-        TESTNET_GENESIS_TIMESTAMP, TESTNET_INITIAL_DISTRIBUTION,
+        ValidatorState,
+        ValidatorStatePtr,
+        TESTNET_BOOTSTRAP_TIMESTAMP,
+        TESTNET_GENESIS_HASH_BYTES,
+        TESTNET_GENESIS_TIMESTAMP,
+        TESTNET_INITIAL_DISTRIBUTION,
     },
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
     tx::Transaction,
@@ -31,7 +36,14 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{Keypair, MerkleTree, PublicKey, SecretKey, DARK_TOKEN_ID, MAP_CONTRACT_ID},
+    crypto::{
+        Keypair,
+        MerkleTree,
+        PublicKey,
+        SecretKey,
+        DARK_TOKEN_ID,
+        MAP_CONTRACT_ID
+    },
     pasta::pallas,
     ContractCall,
 };
@@ -52,7 +64,7 @@ pub fn init_logger() {
     cfg.add_filter_ignore("sled".to_string());
     cfg.add_filter_ignore("blockchain::contractstore".to_string());
 
-    // We check this error so we can execute same file tests in parallel,
+    // We check this error so we can execute same file tests in parallel
     // otherwise second one fails to init logger here.
     if let Err(_) = simplelog::TermLogger::init(
         // simplelog::LevelFilter::Info,
@@ -74,7 +86,10 @@ pub struct Wallet {
 }
 
 impl Wallet {
-    async fn new(keypair: Keypair, faucet_pubkeys: &[PublicKey]) -> Result<Self> {
+    async fn new(
+        keypair: Keypair,
+        faucet_pubkeys: &[PublicKey]
+        ) -> Result<Self> {
         let wallet = WalletDb::new("sqlite::memory:", "foo").await?;
         let sled_db = sled::Config::new().temporary(true).open()?;
 
@@ -114,8 +129,10 @@ impl MapTestHarness {
         let alice = Wallet::new(alice_kp, &faucet_pubkeys).await?;
 
         // Get the zkas circuits and build proving keys
-        let alice_sled = alice.state.read().await.blockchain.sled_db.clone();
-        let db_handle = alice.state.read().await.blockchain.contracts.lookup(
+        let alice_sled = 
+            alice.state.read().await.blockchain.sled_db.clone();
+        let db_handle =
+            alice.state.read().await.blockchain.contracts.lookup(
             &alice_sled,
             &MAP_CONTRACT_ID,
             SMART_CONTRACT_ZKAS_DB_NAME,
@@ -125,8 +142,10 @@ impl MapTestHarness {
         let mut proving_keys = HashMap::new();
         macro_rules! mkpk {
             ($ns:expr) => {
-                let zkas_bytes = db_handle.get(&serialize(&$ns))?.unwrap();
-                let (zkbin, _): (Vec<u8>, Vec<u8>) = deserialize(&zkas_bytes)?;
+                let zkas_bytes =
+                    db_handle.get(&serialize(&$ns))?.unwrap();
+                let (zkbin, _): (Vec<u8>, Vec<u8>) =
+                                 deserialize(&zkas_bytes)?;
                 let zkbin = ZkBinary::decode(&zkbin)?;
                 let witnesses = empty_witnesses(&zkbin);
                 let circuit = ZkCircuit::new(witnesses, zkbin.clone());
@@ -142,22 +161,28 @@ impl MapTestHarness {
     pub fn set(
         &self,
         secret: SecretKey,
+        lock: pallas::Base,
         key: pallas::Base,
         value: pallas::Base,
     ) -> Result<(Transaction, SetParamsV1)> {
         let (prove_key, zkbin) = 
-            self.proving_keys.get(&MAP_CONTRACT_ZKAS_SET_NS_V1).unwrap();   
-        let debris = (SetCallBuilder {
+            self.proving_keys.get(
+                &MAP_CONTRACT_ZKAS_SET_NS_V1
+                ).unwrap();   
+        let debris = SetCallBuilder {
             zkbin: zkbin.clone(),
             prove_key: prove_key.clone(),
             secret: secret.clone(),
+            lock: lock.clone(),
             key: key.clone(),
             value: value.clone()
-        }).build()?;
+        }.build()?;
 
         let mut data = vec![ContractFunction::Set as u8];
         debris.params.encode(&mut data)?;
-        let calls = vec![ContractCall { contract_id: *MAP_CONTRACT_ID, data: data }];
+        let calls = vec![
+            ContractCall { contract_id: *MAP_CONTRACT_ID, data: data }
+        ];
         let proofs = vec![debris.proofs];
 
         let mut tx = Transaction { calls, proofs, signatures: vec![] };

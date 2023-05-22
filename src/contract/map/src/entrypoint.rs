@@ -21,6 +21,7 @@ use crate::{
     ContractFunction,
     MAP_CONTRACT_ENTRIES_TREE,
     MAP_CONTRACT_ZKAS_SET_NS,
+    error::MapError
 };
 
 use darkfi_sdk::{
@@ -30,7 +31,7 @@ use darkfi_sdk::{
     pasta::pallas,
     ContractCall,
     util::set_return_data,
-    db::{db_init, db_lookup, db_set, zkas_db_set},
+    db::{db_init, db_lookup, db_set, zkas_db_set, db_get},
 };
 
 use darkfi_serial::{
@@ -74,7 +75,7 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
     match ContractFunction::try_from(self_.data[0])? {
         ContractFunction::Set => {
             let params: SetParamsV1 = deserialize(&self_.data[1..])?;
-
+            let signature_pubkeys: Vec<PublicKey> = vec![];
             let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)>
                 = vec![];
 
@@ -85,6 +86,7 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
     
             let mut metadata = vec![];
             zk_public_inputs.encode(&mut metadata)?;
+            signature_pubkeys.encode(&mut metadata)?;
 
             set_return_data(&metadata)?;
             Ok(())
@@ -99,18 +101,35 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         return Err(ContractError::Internal);
     }
 
-    let self_ = calls[call_idx as usize];
-    match ContractFunction::try_from(self_.data[0])? {
+    match ContractFunction::try_from(ix[0])? {
         ContractFunction::Set => {
             msg!("processing SET");
-
-            let params: SetParamsV1 = deserialize(&self_.data[1..])?;
+            let params: SetParamsV1 = 
+                deserialize(&calls[call_idx as usize].data[1..])?;
             let slot = poseidon_hash([params.account, params.key]);
+
+            // is the slot locked?
+            let db = db_lookup(cid, MAP_CONTRACT_ENTRIES_TREE)?;
+            
+            match db_get(db, &serialize(&slot))? {
+                None => msg!("[SET] slot has no value"),
+                Some(lock) => {
+                    if deserialize(&lock)? {
+                        return Err(MapError::Locked.into())
+                    }
+                }
+            };
+
             msg!("[SET] slot  = {:?}", slot);
+            msg!("[SET] lock  = {:?}", params.lock);
             msg!("[SET] value = {:?}", params.value);
 
 
-            let update = SetUpdateV1 {slot, value: params.value};
+            let update = SetUpdateV1 {
+                slot,
+                lock: params.lock,
+                value: params.value,
+            };
             let mut update_data = vec![];
             update_data.write_u8(ContractFunction::Set as u8)?;
             update.encode(&mut update_data);
@@ -130,15 +149,26 @@ fn process_update(
         ContractFunction::Set => {
             let update: SetUpdateV1 = deserialize(&update_data[1..])?;
 
-            msg!("[SET] serialized_slot  = {:?}",
+            msg!("[SET] serialized_slot     = {:?}",
                  &serialize(&update.slot));
-            msg!("[SET] serialized_value = {:?}",
+            msg!("[SET] serialized_slot + 1 = {:?}",
+                 &serialize(&(update.slot.add(&pallas::Base::one()))));
+            msg!("[SET] serialized_lock    = {:?}",
+                 &serialize(&update.lock));
+            msg!("[SET] serialized_value    = {:?}",
                  &serialize(&update.value));
 
+            // key(slot)     = lock
+            // key(slot + 1) = value
             let db = db_lookup(cid, MAP_CONTRACT_ENTRIES_TREE)?;
             db_set(
                 db,
                 &serialize(&update.slot),
+                &serialize(&update.lock),
+            ).unwrap();
+            db_set(
+                db,
+                &serialize(&(update.slot.add(&pallas::Base::one()))),
                 &serialize(&update.value),
             ).unwrap();
 
