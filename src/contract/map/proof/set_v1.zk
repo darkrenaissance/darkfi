@@ -1,0 +1,20 @@
+constant "Set_V1" {
+	EcFixedPointBase NULLIFIER_K,
+}
+
+witness "Set_V1" {
+	Base secret,
+	Base lock,
+	Base key,
+	Base value,
+}
+
+circuit "Set_V1" {
+	account = poseidon_hash(secret);
+	constrain_instance(account);
+	constrain_instance(lock);
+	constrain_instance(key);
+	constrain_instance(value);
+	bool_check(lock);
+}
+
