@@ -214,7 +214,7 @@ both automatically verified by the VM.
 
 However for verification to work, the ZK proofs also need corresponding
 public values, and the signatures need the public keys. We do this
-by exporting these values. (TODO: link the code where this happens)
+by exporting these values. For example: https://github.com/darkrenaissance/darkfi/blob/6cddfac05f0d61f3a0f077082f87282d3df72f70/src/contract/dao/src/entrypoint.rs#L487-L488
 
 These methods export the required values needed for the ZK proofs
 and signature verification from the actual call data itself.
