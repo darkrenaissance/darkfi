@@ -162,6 +162,7 @@ impl MapTestHarness {
         &self,
         secret: SecretKey,
         lock: pallas::Base,
+        car: pallas::Base,
         key: pallas::Base,
         value: pallas::Base,
     ) -> Result<(Transaction, SetParamsV1)> {
@@ -174,6 +175,7 @@ impl MapTestHarness {
             prove_key: prove_key.clone(),
             secret: secret.clone(),
             lock: lock.clone(),
+            car: car.clone(),
             key: key.clone(),
             value: value.clone()
         }.build()?;

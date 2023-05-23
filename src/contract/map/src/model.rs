@@ -9,13 +9,20 @@ use darkfi_serial::{
 pub struct SetParamsV1 {
     pub account: pallas::Base,
     pub lock:    pallas::Base,
+    pub car:     pallas::Base,
     pub key:     pallas::Base,
     pub value:   pallas::Base,
 }
 
 impl SetParamsV1 {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
-        vec![self.account, self.lock, self.key, self.value,]
+        vec![
+            self.account,
+            self.lock,
+            self.car,
+            self.key,
+            self.value,
+        ]
     }
 }
 
@@ -23,6 +30,7 @@ impl SetParamsV1 {
 pub struct SetUpdateV1 {
     pub slot:  pallas::Base,
     pub lock:  pallas::Base,
+    pub car:   pallas::Base,
     pub value: pallas::Base,
 }
 

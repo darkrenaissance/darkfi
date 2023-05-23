@@ -46,6 +46,7 @@ use crate::model::SetParamsV1;
 pub struct SetCallBuilder {
     pub secret:     SecretKey,
     pub lock:       pallas::Base,
+    pub car:        pallas::Base,
     pub key:        pallas::Base,
     pub value:      pallas::Base,
     pub zkbin:      ZkBinary,
@@ -66,6 +67,7 @@ impl SetCallBuilder {
             // !!!!private computation done in rust!!!!
             account: poseidon_hash([self.secret.inner()]), 
             lock :self.lock,
+            car :self.car,
             key: self.key,
             value: self.value,
         };
@@ -86,6 +88,7 @@ impl SetCallBuilder {
 
         let witness       = vec![
             Witness::Base(Value::known(self.secret.inner())),
+            Witness::Base(Value::known(self.car)),
             Witness::Base(Value::known(self.lock)),
             Witness::Base(Value::known(self.key)),
             Witness::Base(Value::known(self.value)),

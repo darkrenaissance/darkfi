@@ -20,7 +20,13 @@
 use std::time::Instant;
 use darkfi::Result;
 use darkfi_sdk::{
-    crypto::{poseidon_hash, Keypair, MerkleNode, Nullifier, SecretKey, MAP_CONTRACT_ID},
+    crypto::{
+        poseidon_hash,
+        Keypair,
+        MerkleNode,
+        Nullifier,
+        MAP_CONTRACT_ID
+    },
     incrementalmerkletree::Tree,
     pasta::pallas,
     // db::{db_lookup, db_get} link error?
@@ -42,9 +48,10 @@ async fn map_integration() -> Result<()> {
     let mut th = MapTestHarness::new().await?;
     let (alice_tx, alice_params) = th.set(
         th.alice.keypair.secret,
-        pallas::Base::from(1),
-        pallas::Base::from(2),
-        pallas::Base::from(4),
+        pallas::Base::from(1), // lock
+        pallas::Base::from(1), // car
+        pallas::Base::from(2), // key
+        pallas::Base::from(4), // value
     )?;
 
     info!(target: "map", "[Faucet] =============================");

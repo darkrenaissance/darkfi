@@ -94,6 +94,27 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
     }
 }
 
+/// the most imporatant things to the implementation:
+/// - there is 1 map, slot (number) -> value, so set and get are gas efficient
+/// - slot is function of a) namespace and b) key under the namespace
+///   - slot(root_namespace, darkrenaissance) = poseidon_hash(
+///                                                 0,
+///                                                 darkrenaissance
+///                                             )
+///                                           = alice_account
+///   - slot(darkrenaissance, darkfi)         = poseidon_hash(
+///                                                 alice_account,
+///                                                 darkfi
+///                                             )
+///                                           = bob_account
+///   - slot(darkfi, v0_4_1)                  = poseidon_hash(
+///                                                 bob_account,
+///                                                 v0_4_1
+///                                             )
+///                                           = value
+/// - 0 is the special account for the canonical root
+///
+///
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
     let (call_idx, calls): (u32, Vec<ContractCall>) = deserialize(ix)?;
     if call_idx >= calls.len() as u32 {
@@ -106,11 +127,15 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             msg!("processing SET");
             let params: SetParamsV1 = 
                 deserialize(&calls[call_idx as usize].data[1..])?;
-            let slot = poseidon_hash([params.account, params.key]);
+            let slot = if params.car == pallas::Base::one() {
+                poseidon_hash([pallas::Base::zero(), params.key])
+            } else {
+                poseidon_hash([params.account, params.key])
+            };
 
-            // is the slot locked?
+            // Question being answered by this block of code:
+            // is this slot locked?
             let db = db_lookup(cid, MAP_CONTRACT_ENTRIES_TREE)?;
-            
             match db_get(db, &serialize(&slot))? {
                 None => msg!("[SET] slot has no value"),
                 Some(lock) => {
@@ -119,7 +144,6 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                     }
                 }
             };
-
             msg!("[SET] slot  = {:?}", slot);
             msg!("[SET] lock  = {:?}", params.lock);
             msg!("[SET] value = {:?}", params.value);
@@ -127,6 +151,7 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 
             let update = SetUpdateV1 {
                 slot,
+                car: params.car,
                 lock: params.lock,
                 value: params.value,
             };
