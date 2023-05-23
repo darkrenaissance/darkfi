@@ -37,7 +37,7 @@ use crate::{
 
 const UNREAD_EVENT_EXPIRE_TIME: u64 = 3600; // in seconds
 const SIZE_OF_SEEN_BUFFER: usize = 65536;
-const MAX_CONFIRM: u8 = 3;
+// const MAX_CONFIRM: u8 = 3;
 
 #[derive(Clone)]
 struct RingBuffer<T> {
@@ -121,31 +121,12 @@ where
         Arc::new(Mutex::new(Self { events: HashMap::new() }))
     }
 
-    fn contains(&self, key: &EventId) -> bool {
+    fn _contains(&self, key: &EventId) -> bool {
         self.events.contains_key(key)
     }
 
     fn _get(&self, key: &EventId) -> Option<Event<T>> {
         self.events.get(key).cloned()
-    }
-
-    // Increase the read_confirms for an event, if it has exceeded the MAX_CONFIRM
-    // then remove it from the hash_map and return Some(event), otherwise return None
-    fn inc_read_confirms(&mut self, key: &EventId) -> Option<Event<T>> {
-        let mut result = None;
-
-        if let Some(event) = self.events.get_mut(key) {
-            event.read_confirms += 1;
-            if event.read_confirms >= MAX_CONFIRM {
-                result = Some(event.clone())
-            }
-        }
-
-        if result.is_some() {
-            self.events.remove(key);
-        }
-
-        result
     }
 
     pub fn insert(&mut self, event: &Event<T>) {
@@ -178,7 +159,6 @@ where
     model: ModelPtr<T>,
     seen_event: SeenPtr<EventId>,
     seen_inv: SeenPtr<InvId>,
-    unread_events: UnreadEventsPtr<T>,
 }
 
 impl<T> ProtocolEvent<T>
@@ -191,7 +171,6 @@ where
         model: ModelPtr<T>,
         seen_event: SeenPtr<EventId>,
         seen_inv: SeenPtr<InvId>,
-        unread_events: UnreadEventsPtr<T>,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Event<T>>().await;
@@ -224,7 +203,6 @@ where
             model,
             seen_event,
             seen_inv,
-            unread_events,
         })
     }
 
@@ -233,22 +211,13 @@ where
         // let exclude_list = vec![self.channel.address()];
         loop {
             let event = self.event_sub.receive().await?;
-            let mut event = (*event).to_owned();
-
-            // This could be better
+            let event = (*event).to_owned();
 
             if !self.seen_event.push(&event.hash()).await {
                 continue
             }
 
-            event.read_confirms += 1;
-
-            if event.read_confirms >= MAX_CONFIRM {
-                self.new_event(&event).await?;
-            } else {
-                self.unread_events.lock().await.insert(&event);
-            }
-
+            self.new_event(&event).await?;
             self.send_inv(&event).await?;
 
             // Broadcast the msg
@@ -269,17 +238,10 @@ where
                 continue
             }
 
-            {
-                let mut unread_events = self.unread_events.lock().await;
-
-                if !unread_events.contains(&inv_item.hash) &&
-                    self.model.lock().await.get_event(&inv_item.hash).is_none()
-                {
-                    self.send_getdata(vec![inv_item.hash]).await?;
-                } else if let Some(event) = unread_events.inc_read_confirms(&inv_item.hash) {
-                    self.new_event(&event).await?;
-                }
+            if self.model.lock().await.get_event(&inv_item.hash).is_none() {
+                self.send_getdata(vec![inv_item.hash]).await?;
             }
+
             // }
 
             // Broadcast the inv msg
@@ -293,12 +255,6 @@ where
             let events = (*getdata).to_owned().events;
 
             for event_id in events {
-                // let unread_event = self.unread_events.lock().await.get(&event_id);
-                // if let Some(event) = unread_event {
-                //     self.channel.send(event).await?;
-                //     continue
-                // }
-
                 let model_event = self.model.lock().await.get_event(&event_id);
                 if let Some(event) = model_event {
                     self.channel.send(event).await?;

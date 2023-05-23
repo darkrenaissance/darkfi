@@ -26,7 +26,7 @@ use darkfi::{
     event_graph::{
         events_queue::EventsQueue,
         model::{Event, EventId, Model},
-        protocol_event::{ProtocolEvent, Seen, SeenPtr, UnreadEvents},
+        protocol_event::{ProtocolEvent, Seen, SeenPtr},
         view::{View, ViewPtr},
     },
     net::{self, settings::SettingsOpt},
@@ -97,8 +97,6 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     // Buffers
     let seen_event = Seen::new();
     let seen_inv = Seen::new();
-    let unread_events = UnreadEvents::new();
-    let unread_events_clone = unread_events.clone();
 
     // Check the version
     let mut net_settings = args.net.clone();
@@ -115,10 +113,7 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
             let seen_event = seen_event.clone();
             let seen_inv = seen_inv.clone();
             let model = model.clone();
-            let unread_events = unread_events.clone();
-            async move {
-                ProtocolEvent::init(channel, p2p, model, seen_event, seen_inv, unread_events).await
-            }
+            async move { ProtocolEvent::init(channel, p2p, model, seen_event, seen_inv).await }
         })
         .await;
 
@@ -142,7 +137,6 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     //
     let rpc_interface = Arc::new(JsonRpcInterface::new(
         "Alolymous".to_string(),
-        unread_events_clone,
         missed_events.clone(),
         model_clone,
         seen_ids.clone(),

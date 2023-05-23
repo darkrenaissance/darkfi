@@ -42,7 +42,7 @@ use darkfi::{
     event_graph::{
         events_queue::EventsQueue,
         model::{Event, EventId, Model, ModelPtr},
-        protocol_event::{ProtocolEvent, Seen, SeenPtr, UnreadEvents},
+        protocol_event::{ProtocolEvent, Seen, SeenPtr},
         view::{View, ViewPtr},
         EventMsg,
     },
@@ -164,7 +164,6 @@ async fn start_sync_loop(
                         previous_event_hash: model.lock().await.get_head_hash(),
                         action: encrypted_task,
                         timestamp: Timestamp::current_time(),
-                        read_confirms: 0,
                     };
 
                     p2p.broadcast(event).await?;
@@ -320,7 +319,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     ////////////////////
     let seen_event = Seen::new();
     let seen_inv = Seen::new();
-    let unread_events = UnreadEvents::new();
 
     // let datastore_raft = datastore_path.join("tau.db");
 
@@ -341,10 +339,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
             let seen_event = seen_event.clone();
             let seen_inv = seen_inv.clone();
             let model = model.clone();
-            let unread_events = unread_events.clone();
-            async move {
-                ProtocolEvent::init(channel, p2p, model, seen_event, seen_inv, unread_events).await
-            }
+            async move { ProtocolEvent::init(channel, p2p, model, seen_event, seen_inv).await }
         })
         .await;
 

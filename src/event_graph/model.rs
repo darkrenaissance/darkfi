@@ -37,7 +37,6 @@ pub struct Event<T: Send + Sync> {
     pub previous_event_hash: EventId,
     pub action: T,
     pub timestamp: Timestamp,
-    pub read_confirms: u8,
 }
 
 impl<T> Event<T>
@@ -46,10 +45,7 @@ where
 {
     pub fn hash(&self) -> EventId {
         let mut bytes = Vec::new();
-        let mut event_to_be_hashed = self.clone();
-        event_to_be_hashed.read_confirms = 0;
-        event_to_be_hashed.encode(&mut bytes).expect("serialize failed!");
-
+        self.encode(&mut bytes).expect("serialize failed!");
         let mut hasher = Ripemd256::new();
         hasher.update(bytes);
         let bytes = hasher.finalize().to_vec();
@@ -88,7 +84,6 @@ where
                 previous_event_hash: [0u8; 32],
                 action: T::new(),
                 timestamp: Timestamp(1674512021323),
-                read_confirms: 0,
             },
             children: Vec::new(),
         };
@@ -426,12 +421,7 @@ mod tests {
     }
 
     fn create_message(previous_event_hash: EventId, timestamp: u64) -> Event<PrivMsgEvent> {
-        Event {
-            previous_event_hash,
-            action: PrivMsgEvent::new(),
-            timestamp: Timestamp(timestamp),
-            read_confirms: 4,
-        }
+        Event { previous_event_hash, action: PrivMsgEvent::new(), timestamp: Timestamp(timestamp) }
     }
 
     /* THIS IS FAILING
@@ -622,14 +612,12 @@ mod tests {
 
         let timestamp = Timestamp::current_time().0 + 1;
         let event = create_message(root_id, timestamp);
-        let mut event2 = event.clone();
+        let event2 = event.clone();
 
         let event_hash = event.hash();
 
-        event2.read_confirms += 3;
         let event2_hash = event2.hash();
 
         assert_eq!(event2_hash, event_hash);
-        assert_ne!(event2.read_confirms, event.read_confirms);
     }
 }

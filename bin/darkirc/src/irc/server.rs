@@ -29,7 +29,7 @@ use log::{error, info};
 use darkfi::{
     event_graph::{
         model::{Event, EventId, ModelPtr},
-        protocol_event::{Seen, SeenPtr, UnreadEventsPtr},
+        protocol_event::{Seen, SeenPtr},
         view::ViewPtr,
     },
     net::P2pPtr,
@@ -52,7 +52,6 @@ pub struct IrcServer {
     p2p: P2pPtr,
     model: ModelPtr<PrivMsgEvent>,
     view: ViewPtr<PrivMsgEvent>,
-    unread_events: UnreadEventsPtr<PrivMsgEvent>,
     clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     seen: SeenPtr<EventId>,
     missed_events: Arc<Mutex<Vec<Event<PrivMsgEvent>>>>,
@@ -66,7 +65,6 @@ impl IrcServer {
         p2p: P2pPtr,
         model: ModelPtr<PrivMsgEvent>,
         view: ViewPtr<PrivMsgEvent>,
-        unread_events: UnreadEventsPtr<PrivMsgEvent>,
         clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     ) -> Result<Self> {
         let seen = Seen::new();
@@ -76,7 +74,6 @@ impl IrcServer {
             p2p,
             model,
             view,
-            unread_events,
             clients_subscriptions,
             seen,
             missed_events,
@@ -94,7 +91,6 @@ impl IrcServer {
                 self.p2p.clone(),
                 self.model.clone(),
                 self.seen.clone(),
-                self.unread_events.clone(),
                 msg_recv,
                 self.clients_subscriptions.clone(),
             ))
@@ -141,7 +137,6 @@ impl IrcServer {
         p2p: P2pPtr,
         model: ModelPtr<PrivMsgEvent>,
         seen: SeenPtr<EventId>,
-        unread_events: UnreadEventsPtr<PrivMsgEvent>,
         recv: smol::channel::Receiver<(NotifierMsg, u64)>,
         clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     ) -> Result<()> {
@@ -169,7 +164,6 @@ impl IrcServer {
                         previous_event_hash: model.lock().await.get_head_hash(),
                         action: msg.clone(),
                         timestamp: Timestamp::current_time(),
-                        read_confirms: 0,
                     };
 
                     // Since this will be added to the View directly, other clients connected to irc
@@ -181,7 +175,6 @@ impl IrcServer {
                     if !seen.push(&event.hash()).await {
                         continue
                     }
-                    unread_events.lock().await.insert(&event);
 
                     p2p.broadcast(event).await?;
                 }

@@ -24,7 +24,7 @@ use serde_json::{json, Value};
 use darkfi::{
     event_graph::{
         model::{Event, EventId, ModelPtr},
-        protocol_event::{SeenPtr, UnreadEvents},
+        protocol_event::SeenPtr,
     },
     net,
     rpc::{
@@ -38,7 +38,6 @@ use crate::genevent::GenEvent;
 
 pub struct JsonRpcInterface {
     _nickname: String,
-    unread_events: Arc<Mutex<UnreadEvents<GenEvent>>>,
     missed_events: Arc<Mutex<Vec<Event<GenEvent>>>>,
     model: ModelPtr<GenEvent>,
     seen: SeenPtr<EventId>,
@@ -65,13 +64,12 @@ impl RequestHandler for JsonRpcInterface {
 impl JsonRpcInterface {
     pub fn new(
         _nickname: String,
-        unread_events: Arc<Mutex<UnreadEvents<GenEvent>>>,
         missed_events: Arc<Mutex<Vec<Event<GenEvent>>>>,
         model: ModelPtr<GenEvent>,
         seen: SeenPtr<EventId>,
         p2p: net::P2pPtr,
     ) -> Self {
-        Self { _nickname, unread_events, missed_events, model, seen, p2p }
+        Self { _nickname, missed_events, model, seen, p2p }
     }
 
     // RPCAPI:
@@ -106,15 +104,12 @@ impl JsonRpcInterface {
             previous_event_hash: self.model.lock().await.get_head_hash(),
             action: genevent,
             timestamp: Timestamp::current_time(),
-            read_confirms: 0,
         };
 
         if !self.seen.push(&event.hash()).await {
             let json = json!(false);
             return JsonResponse::new(json, id).into()
         }
-
-        self.unread_events.lock().await.insert(&event);
 
         self.p2p.broadcast(event).await.unwrap();
 
