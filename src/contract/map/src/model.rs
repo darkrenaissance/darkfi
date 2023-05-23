@@ -30,7 +30,6 @@ impl SetParamsV1 {
 pub struct SetUpdateV1 {
     pub slot:  pallas::Base,
     pub lock:  pallas::Base,
-    pub car:   pallas::Base,
     pub value: pallas::Base,
 }
 
