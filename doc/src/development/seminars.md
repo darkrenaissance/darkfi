@@ -1,14 +1,14 @@
 # Developer Seminars
 
-Weekly seminars on DarkFi, cryptography, code and other topics.
+Weekly seminars on DarkFi, cryptography, code and other topics. Each seminar is 2 hours long.
 
-| Date                 | Topic            | Title                                       | Notes |
-|----------------------|------------------|---------------------------------------------|-------|
-| 16:00 CET Fri 26 May | elliptic curves  | Introduction to Elliptic Curves             |       |
-| 16:00 CET Tue 30 May | abstract algebra | Group Structure and Homomorphisms           |       |
-| 16:00 CET Thu 15 Jun | consensus        | DarkFi Consensus Algorithm & Control Theory |       |
-| 16:00 CET Thu 22 Jun | consensus        | Walkthrough the Consensus Code              |       |
-| 16:00 CET Thu 29 Jun | event graph      | Walkthrough the Event Graph                 |       |
+| Date                 | Track    | Topic            | # | Title                                       | Notes |
+|----------------------|----------|------------------|---|---------------------------------------------|-------|
+| 16:00 CET Fri 26 May | Math     | elliptic curves  | 1 | Introduction to Elliptic Curves             |       |
+| 16:00 CET Tue 30 May | Math     | abstract algebra | 1 | Group Structure and Homomorphisms           |       |
+| 16:00 CET Thu 15 Jun | Research | consensus        | 1 | DarkFi Consensus Algorithm & Control Theory |       |
+| 16:00 CET Thu 22 Jun | Dev      | consensus        | 2 | Walkthrough the Consensus Code              |       |
+| 16:00 CET Thu 29 Jun | Dev      | event graph      | 1 | Walkthrough the Event Graph                 |       |
 
 The link for calls is
 [meet.jit.si/darkfi-seminar](https://meet.jit.si/darkfi-seminar).
