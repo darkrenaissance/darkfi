@@ -1,0 +1,33 @@
+## JSON-RPC listen URL
+rpc_listen="tcp://127.0.0.1:8890"
+
+## IRC listen URL
+irc_listen="tcp://127.0.0.1:22022"
+
+## List of channels to autojoin for new client connections
+autojoin = ["#dev"]
+
+## P2P net settings
+[net]
+## Connection slots
+outbound_connections=0
+
+inbound = ["tcp://127.0.0.1:25552"]
+
+external_addr = ["tcp://127.0.0.1:25552"]
+
+peers = []
+
+## Seed nodes to connect to 
+# seeds = ["tcp://127.0.0.1:25551"]
+
+# Prefered transports for outbound connections
+outbound_transports = ["tcp"]
+
+localnet = true
+#
+# [channel."#dev"]
+# topic = "DarkFi Development HQ"
+
+# [channel."#test1"]
+# secret = "HoLfk8vXBvNsBZ73e2xRPBZ9vEbnF9FVi4fDdyU9AZLU"

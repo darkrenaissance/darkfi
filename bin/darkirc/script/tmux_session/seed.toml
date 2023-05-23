@@ -1,0 +1,34 @@
+## JSON-RPC listen URL
+# rpc_listen="tcp://127.0.0.1:8888"
+
+## IRC listen URL
+# irc_listen="tcp://127.0.0.1:22020"
+
+## List of channels to autojoin for new client connections
+autojoin = ["#dev"]
+
+## TLS certificate path if IRC acceptor uses TLS (optional)
+#irc_tls_cert = "/etc/letsencrypt/ircd/fullchain.pem"
+
+## TLS secret key path if IRC acceptor uses TLS (optional)
+#irc_tls_secret = "/etc/letsencrypt/ircd/privkey.pem"
+
+## P2P net settings
+[net]
+## Connection slots
+# outbound_connections=8
+
+## P2P accept addresses
+inbound = ["tcp://127.0.0.1:25551"]
+
+# Prefered transports for outbound connections
+outbound_transports = ["tcp"]
+
+## Seed nodes to connect to 
+# seeds = ["tcp://127.0.0.1:25551", "tls://lilith1.dark.fi:25551"]
+#
+# [channel."#dev"]
+# topic = "DarkFi Development HQ"
+
+# [channel."#test1"]
+# secret = "HoLfk8vXBvNsBZ73e2xRPBZ9vEbnF9FVi4fDdyU9AZLU"
