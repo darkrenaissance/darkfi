@@ -14,6 +14,7 @@
   - [Contributing](development/contributing.md)
   - [Learn](development/learn.md)
   - [API Rustdoc](development/rustdoc.md)
+  - [Seminars](development/seminars.md)
 - [Architecture](architecture/architecture.md)
   - [Overview](architecture/overview.md)
   - [Anonymous assets](architecture/anonymous_assets.md)
