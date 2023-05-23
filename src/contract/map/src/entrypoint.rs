@@ -145,13 +145,13 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
                 }
             };
             msg!("[SET] slot  = {:?}", slot);
+            msg!("[SET] car   = {:?}", params.car);
             msg!("[SET] lock  = {:?}", params.lock);
             msg!("[SET] value = {:?}", params.value);
 
 
             let update = SetUpdateV1 {
                 slot,
-                car: params.car,
                 lock: params.lock,
                 value: params.value,
             };
