@@ -360,9 +360,8 @@ pub enum Error {
     #[error("wasm runtime out of memory")]
     WasmerOomError(String),
 
-    // TODO: FIXME: The strings are wrong
     #[cfg(feature = "darkfi-sdk")]
-    #[error("contract initialize error")]
+    #[error("Contract execution failed")]
     ContractError(darkfi_sdk::error::ContractError),
 
     #[cfg(feature = "wasm-runtime")]
