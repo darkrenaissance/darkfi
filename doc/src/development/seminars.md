@@ -17,3 +17,7 @@ For the math seminars, we use a collaborative whiteboard called
 [therapy](https://github.com/narodnik/therapy) that we made.
 The canvas will also be shared on jitsi calls.
 
+Videos will be uploaded online and linked here.
+Join [our chat](https://darkrenaissance.github.io/darkfi/misc/ircd/ircd.html)
+for more info. Links and text chat will happen there during the calls.
+
