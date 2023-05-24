@@ -25,7 +25,7 @@ syn keyword zkasInstruction
     \ range_check less_than_strict less_than_loose  bool_check
     \ witness_base
     \ constrain_equal_base constrain_equal_point
-    \ constrain_instance
+    \ constrain_instance debug
 
 syn region zkasString start='"' end='"' contained
 

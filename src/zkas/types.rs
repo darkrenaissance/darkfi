@@ -76,6 +76,9 @@ pub enum VarType {
 
     /// Unsigned 64-bit integer
     Uint64 = 0x31,
+
+    /// Catch-all for any type
+    Any = 0xff,
 }
 
 impl VarType {
@@ -93,6 +96,7 @@ impl VarType {
             0x20 => Some(Self::MerklePath),
             0x30 => Some(Self::Uint32),
             0x31 => Some(Self::Uint64),
+            0xff => Some(Self::Any),
             _ => None,
         }
     }

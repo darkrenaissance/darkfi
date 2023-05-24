@@ -72,6 +72,7 @@
       <keyword>constrain_equal_base</keyword>
       <keyword>constrain_equal_point</keyword>
       <keyword>constrain_instance</keyword>
+      <keyword>debug</keyword>
     </context>
     
     <context id="zkas" class="no-spell-check">

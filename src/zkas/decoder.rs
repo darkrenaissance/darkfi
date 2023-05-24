@@ -208,7 +208,7 @@ impl ZkBinary {
                         return Err(ZkasErr(format!("Could not decode HeapType from {}", heap_type)))
                     }
                 };
-                args.push((heap_type, heap_index.0 as usize)); // FIXME, why?
+                args.push((heap_type, heap_index.0 as usize));
             }
 
             opcodes.push((opcode, args));

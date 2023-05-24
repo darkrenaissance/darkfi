@@ -200,7 +200,7 @@ impl Opcode {
 
             Opcode::ConstrainInstance => (vec![], vec![VarType::Base]),
 
-            Opcode::DebugPrint => (vec![], vec![]),
+            Opcode::DebugPrint => (vec![], vec![VarType::Any]),
         }
     }
 }

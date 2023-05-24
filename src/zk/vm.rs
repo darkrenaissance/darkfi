@@ -849,6 +849,14 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     public_inputs_offset += 1;
                 }
 
+                Opcode::DebugPrint => {
+                    trace!(target: "zk::vm", "Executing `DebugPrint{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    println!("[ZKVM DEBUG] HEAP INDEX: {}", args[0].1);
+                    println!("[ZKVM DEBUG] {:#?}", heap[args[0].1]);
+                }
+
                 _ => {
                     error!(target: "zk::vm", "Unsupported opcode");
                     return Err(plonk::Error::Synthesis)

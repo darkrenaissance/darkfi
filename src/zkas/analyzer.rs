@@ -122,8 +122,8 @@ impl Analyzer {
                 // opcode has a return value. When executed we will push
                 // this value onto the heap and use it as a reference to
                 // the actual statement we're parsing at this moment.
-                // TODO: FIXME: This needs a recursive algorithm, as this
-                //              only allows a single nested function.
+                // TODO: This needs a recursive algorithm, as this only
+                //       allows a single nested function.
                 if let Arg::Func(func) = arg {
                     let (f_return_types, f_arg_types) = func.opcode.arg_types();
                     if f_return_types.is_empty() {
@@ -144,7 +144,6 @@ impl Analyzer {
                         column: func.lhs.clone().unwrap().column,
                     };
 
-                    // FIXME: Needs better *Array handling.
                     if arg_types[0] == VarType::BaseArray {
                         if f_return_types[0] != VarType::Base {
                             self.error.abort(
@@ -280,7 +279,6 @@ impl Analyzer {
                             Var::Variable(c) => (c.typ, c.line, c.column),
                         };
 
-                        // FIXME: Better array handling
                         if arg_types[0] == VarType::BaseArray {
                             if var_type != VarType::Base {
                                 self.error.abort(
@@ -305,7 +303,7 @@ impl Analyzer {
                                     v.column,
                                 );
                             }
-                        } else if var_type != arg_types[idx] {
+                        } else if var_type != arg_types[idx] && arg_types[idx] != VarType::Any {
                             self.error.abort(
                                 &format!(
                                     "Incorrect argument type. Expected `{:?}`, got `{:?}`.",

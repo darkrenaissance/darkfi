@@ -161,8 +161,8 @@ impl<'a> Lexer<'a> {
                 }
 
                 if in_string {
-                    // TODO: Perhaps forbid whitespace.
-                    buf.push(c);
+                    // For now we forbid whitespace in strings.
+                    self.error.abort("Strings/Namespaces can't contain whitespace", lineno, column);
                 }
 
                 continue
