@@ -32,7 +32,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::MoneyError,
-    model::{MoneyMintParamsV1, MoneyMintUpdateV1},
+    model::{MoneyTokenMintParamsV1, MoneyTokenMintUpdateV1},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
@@ -43,7 +43,7 @@ pub(crate) fn money_genesis_mint_get_metadata_v1(
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: MoneyMintParamsV1 = deserialize(&self_.data[1..])?;
+    let params: MoneyTokenMintParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
@@ -80,7 +80,7 @@ pub(crate) fn money_genesis_mint_process_instruction_v1(
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: MoneyMintParamsV1 = deserialize(&self_.data[1..])?;
+    let params: MoneyTokenMintParamsV1 = deserialize(&self_.data[1..])?;
 
     // Verify this contract call is verified against on genesis slot(0).
     let verifying_slot = get_verifying_slot();
@@ -123,9 +123,9 @@ pub(crate) fn money_genesis_mint_process_instruction_v1(
     }
 
     // Create a state update. We only need the new coin.
-    let update = MoneyMintUpdateV1 { coin: params.output.coin };
+    let update = MoneyTokenMintUpdateV1 { coin: params.output.coin };
     let mut update_data = vec![];
-    update_data.write_u8(MoneyFunction::MintV1 as u8)?;
+    update_data.write_u8(MoneyFunction::TokenMintV1 as u8)?;
     update.encode(&mut update_data)?;
 
     Ok(update_data)

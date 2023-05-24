@@ -36,8 +36,8 @@ use darkfi_dao_contract::{
 };
 
 use darkfi_money_contract::{
-    client::mint_v1::MintCallBuilder,
-    model::{MoneyMintParamsV1, MoneyTransferParamsV1},
+    client::token_mint_v1::TokenMintCallBuilder,
+    model::{MoneyTokenMintParamsV1, MoneyTransferParamsV1},
     MoneyFunction,
 };
 
@@ -266,7 +266,7 @@ async fn integration_test() -> Result<()> {
     let spend_hook = pallas::Base::from(0);
     let user_data = pallas::Base::from(0);
 
-    let mut builder = MintCallBuilder {
+    let mut builder = TokenMintCallBuilder {
         mint_authority: gdrk_mint_auth,
         recipient: dao_th.alice_kp.public,
         amount: 400000,
@@ -287,7 +287,7 @@ async fn integration_test() -> Result<()> {
     assert!(2 * 400000 + 200000 == gdrk_supply);
 
     // This should actually be 3 calls in a single tx, but w/e.
-    let mut data = vec![MoneyFunction::MintV1 as u8];
+    let mut data = vec![MoneyFunction::TokenMintV1 as u8];
     debris1.params.encode(&mut data)?;
     let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
     let proofs = vec![debris1.proofs];
@@ -295,7 +295,7 @@ async fn integration_test() -> Result<()> {
     let sigs = tx1.create_sigs(&mut OsRng, &[gdrk_mint_auth.secret])?;
     tx1.signatures = vec![sigs];
 
-    let mut data = vec![MoneyFunction::MintV1 as u8];
+    let mut data = vec![MoneyFunction::TokenMintV1 as u8];
     debris2.params.encode(&mut data)?;
     let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
     let proofs = vec![debris2.proofs];
@@ -303,7 +303,7 @@ async fn integration_test() -> Result<()> {
     let sigs = tx2.create_sigs(&mut OsRng, &[gdrk_mint_auth.secret])?;
     tx2.signatures = vec![sigs];
 
-    let mut data = vec![MoneyFunction::MintV1 as u8];
+    let mut data = vec![MoneyFunction::TokenMintV1 as u8];
     debris3.params.encode(&mut data)?;
     let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
     let proofs = vec![debris3.proofs];
@@ -325,7 +325,7 @@ async fn integration_test() -> Result<()> {
             assert_eq!(tx.calls.len(), 1);
             let calldata = &tx.calls[0].data;
             let params_data = &calldata[1..];
-            let params: MoneyMintParamsV1 = Decodable::decode(params_data)?;
+            let params: MoneyTokenMintParamsV1 = Decodable::decode(params_data)?;
             cache.try_decrypt_note(params.output.coin, &params.output.note);
         }
     }

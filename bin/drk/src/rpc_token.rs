@@ -24,7 +24,7 @@ use darkfi::{
     zkas::ZkBinary,
 };
 use darkfi_money_contract::{
-    client::{freeze_v1::FreezeCallBuilder, mint_v1::MintCallBuilder},
+    client::{token_freeze_v1::TokenFreezeCallBuilder, token_mint_v1::TokenMintCallBuilder},
     MoneyFunction, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::{
@@ -80,7 +80,7 @@ impl Drk {
             ZkCircuit::new(empty_witnesses(&token_mint_zkbin), token_mint_zkbin.clone());
 
         eprintln!("Creating token mint circuit proving keys");
-        let mint_builder = MintCallBuilder {
+        let mint_builder = TokenMintCallBuilder {
             mint_authority,
             recipient,
             amount,
@@ -94,7 +94,7 @@ impl Drk {
         let debris = mint_builder.build()?;
 
         // Encode and sign the transaction
-        let mut data = vec![MoneyFunction::MintV1 as u8];
+        let mut data = vec![MoneyFunction::TokenMintV1 as u8];
         debris.params.encode(&mut data)?;
         let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
         let proofs = vec![debris.proofs];
@@ -133,7 +133,7 @@ impl Drk {
             ZkCircuit::new(empty_witnesses(&token_freeze_zkbin), token_freeze_zkbin.clone());
 
         eprintln!("Creating token freeze circuit proving keys");
-        let freeze_builder = FreezeCallBuilder {
+        let freeze_builder = TokenFreezeCallBuilder {
             mint_authority,
             token_freeze_zkbin,
             token_freeze_pk: ProvingKey::build(k, &token_freeze_circuit),
@@ -143,7 +143,7 @@ impl Drk {
         let debris = freeze_builder.build()?;
 
         // Encode and sign the transaction
-        let mut data = vec![MoneyFunction::FreezeV1 as u8];
+        let mut data = vec![MoneyFunction::TokenFreezeV1 as u8];
         debris.params.encode(&mut data)?;
         let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
         let proofs = vec![debris.proofs];

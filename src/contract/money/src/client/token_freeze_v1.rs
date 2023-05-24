@@ -28,10 +28,10 @@ use darkfi_sdk::{
 use log::{debug, info};
 use rand::rngs::OsRng;
 
-use crate::model::MoneyFreezeParamsV1;
+use crate::model::MoneyTokenFreezeParamsV1;
 
-pub struct FreezeCallDebris {
-    pub params: MoneyFreezeParamsV1,
+pub struct TokenFreezeCallDebris {
+    pub params: MoneyTokenFreezeParamsV1,
     pub proofs: Vec<Proof>,
 }
 
@@ -45,8 +45,8 @@ impl TokenFreezeRevealed {
     }
 }
 
-/// Struct holding necessary information to build a `Money::FreezeV1` contract call.
-pub struct FreezeCallBuilder {
+/// Struct holding necessary information to build a `Money::TokenFreezeV1` contract call.
+pub struct TokenFreezeCallBuilder {
     /// Mint authority keypair
     pub mint_authority: Keypair,
     /// `TokenFreeze_V1` zkas circuit ZkBinary
@@ -55,22 +55,21 @@ pub struct FreezeCallBuilder {
     pub token_freeze_pk: ProvingKey,
 }
 
-impl FreezeCallBuilder {
-    pub fn build(&self) -> Result<FreezeCallDebris> {
-        debug!("Building Money::FreezeV1 contract call");
+impl TokenFreezeCallBuilder {
+    pub fn build(&self) -> Result<TokenFreezeCallDebris> {
+        info!("Building Money::TokenFreezeV1 contract call");
 
-        // For the Freeze call, we just need to produce a valid signature,
+        // For the TokenFreeze call, we just need to produce a valid signature,
         // and enforce the correct derivation inside ZK.
-
-        info!("Creating token freeze proof");
+        debug!("Creating token freeze ZK proof");
         let (proof, _public_inputs) = create_token_freeze_proof(
             &self.token_freeze_zkbin,
             &self.token_freeze_pk,
             &self.mint_authority,
         )?;
 
-        let params = MoneyFreezeParamsV1 { signature_public: self.mint_authority.public };
-        let debris = FreezeCallDebris { params, proofs: vec![proof] };
+        let params = MoneyTokenFreezeParamsV1 { signature_public: self.mint_authority.public };
+        let debris = TokenFreezeCallDebris { params, proofs: vec![proof] };
         Ok(debris)
     }
 }

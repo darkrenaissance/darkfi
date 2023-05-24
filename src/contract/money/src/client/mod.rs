@@ -41,11 +41,11 @@ pub mod swap_v1;
 /// `Money::GenesisMintV1` API
 pub mod genesis_mint_v1;
 
-/// `Money::MintV1` API
-pub mod mint_v1;
+/// `Money::TokenMintV1` API
+pub mod token_mint_v1;
 
-/// `Money::FreezeV1` API
-pub mod freeze_v1;
+/// `Money::TokenFreezeV1` API
+pub mod token_freeze_v1;
 
 /// `Money::StakeV1` API
 pub mod stake_v1;

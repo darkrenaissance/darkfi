@@ -41,10 +41,10 @@ use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
     client::{
-        freeze_v1::FreezeCallBuilder, mint_v1::MintCallBuilder, transfer_v1::TransferCallBuilder,
-        OwnCoin,
+        token_freeze_v1::TokenFreezeCallBuilder, token_mint_v1::TokenMintCallBuilder,
+        transfer_v1::TransferCallBuilder, OwnCoin,
     },
-    model::{MoneyFreezeParamsV1, MoneyMintParamsV1, MoneyTransferParamsV1},
+    model::{MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1, MoneyTransferParamsV1},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
     MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
@@ -202,11 +202,11 @@ impl MoneyTestHarness {
         mint_authority: Keypair,
         amount: u64,
         recipient: PublicKey,
-    ) -> Result<(Transaction, MoneyMintParamsV1)> {
+    ) -> Result<(Transaction, MoneyTokenMintParamsV1)> {
         let (token_mint_pk, token_mint_zkbin) =
             self.proving_keys.get(&MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1).unwrap();
 
-        let builder = MintCallBuilder {
+        let builder = TokenMintCallBuilder {
             mint_authority,
             recipient,
             amount,
@@ -218,7 +218,7 @@ impl MoneyTestHarness {
 
         let debris = builder.build()?;
 
-        let mut data = vec![MoneyFunction::MintV1 as u8];
+        let mut data = vec![MoneyFunction::TokenMintV1 as u8];
         debris.params.encode(&mut data)?;
         let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
         let proofs = vec![debris.proofs];
@@ -232,18 +232,18 @@ impl MoneyTestHarness {
     pub fn freeze_token(
         &self,
         mint_authority: Keypair,
-    ) -> Result<(Transaction, MoneyFreezeParamsV1)> {
+    ) -> Result<(Transaction, MoneyTokenFreezeParamsV1)> {
         let (token_freeze_pk, token_freeze_zkbin) =
             self.proving_keys.get(&MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1).unwrap();
 
-        let builder = FreezeCallBuilder {
+        let builder = TokenFreezeCallBuilder {
             mint_authority,
             token_freeze_zkbin: token_freeze_zkbin.clone(),
             token_freeze_pk: token_freeze_pk.clone(),
         };
         let debris = builder.build()?;
 
-        let mut data = vec![MoneyFunction::FreezeV1 as u8];
+        let mut data = vec![MoneyFunction::TokenFreezeV1 as u8];
         debris.params.encode(&mut data)?;
         let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
         let proofs = vec![debris.proofs];

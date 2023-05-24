@@ -117,33 +117,34 @@ pub struct MoneyTransferUpdateV1 {
     pub coins: Vec<Coin>,
 }
 
-/// Parameters for `Money::Mint`
+/// Parameters for `Money::TokenMint`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct MoneyMintParamsV1 {
+pub struct MoneyTokenMintParamsV1 {
     /// Clear input
     pub input: ClearInput,
     /// Anonymous output
     pub output: Output,
 }
 
-/// State update for `Money::Mint`
+/// State update for `Money::TokenMint`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct MoneyMintUpdateV1 {
+pub struct MoneyTokenMintUpdateV1 {
     /// The newly minted coin
     pub coin: Coin,
 }
 
-/// Parameters for `Money::Freeze`
+/// Parameters for `Money::TokenFreeze`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct MoneyFreezeParamsV1 {
+pub struct MoneyTokenFreezeParamsV1 {
     /// Mint authority public key
-    /// We also use this to derive the token ID
+    ///
+    /// We use this to derive the token ID and verify the signature.
     pub signature_public: PublicKey,
 }
 
-/// State update for `Money::Freeze`
+/// State update for `Money::TokenFreeze`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct MoneyFreezeUpdateV1 {
+pub struct MoneyTokenFreezeUpdateV1 {
     /// Mint authority public key
     pub signature_public: PublicKey,
 }

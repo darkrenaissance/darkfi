@@ -74,7 +74,7 @@ pub enum MoneyError {
     TokenIdDoesNotDeriveFromMint,
 
     #[error("Token mint is frozen")]
-    MintFrozen,
+    TokenMintFrozen,
 
     #[error("Input used non-native token")]
     StakeInputNonNativeToken,
@@ -136,7 +136,7 @@ impl From<MoneyError> for ContractError {
             MoneyError::SpendHookNonZero => Self::Custom(15),
             MoneyError::SwapMerkleRootNotFound => Self::Custom(16),
             MoneyError::TokenIdDoesNotDeriveFromMint => Self::Custom(17),
-            MoneyError::MintFrozen => Self::Custom(18),
+            MoneyError::TokenMintFrozen => Self::Custom(18),
             MoneyError::StakeInputNonNativeToken => Self::Custom(19),
             MoneyError::StakeMissingSpendHook => Self::Custom(20),
             MoneyError::StakeMissingNullifier => Self::Custom(21),

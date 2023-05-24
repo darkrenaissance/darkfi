@@ -28,8 +28,8 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     model::{
-        MoneyFreezeUpdateV1, MoneyMintUpdateV1, MoneyStakeUpdateV1, MoneyTransferUpdateV1,
-        MoneyUnstakeUpdateV1,
+        MoneyStakeUpdateV1, MoneyTokenFreezeUpdateV1, MoneyTokenMintUpdateV1,
+        MoneyTransferUpdateV1, MoneyUnstakeUpdateV1,
     },
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION, MONEY_CONTRACT_FAUCET_PUBKEYS,
@@ -56,17 +56,18 @@ use genesis_mint_v1::{
     money_genesis_mint_get_metadata_v1, money_genesis_mint_process_instruction_v1,
 };
 
-/// `Money::Mint` functions
-mod mint_v1;
-use mint_v1::{
-    money_mint_get_metadata_v1, money_mint_process_instruction_v1, money_mint_process_update_v1,
+/// `Money::TokenMint` functions
+mod token_mint_v1;
+use token_mint_v1::{
+    money_token_mint_get_metadata_v1, money_token_mint_process_instruction_v1,
+    money_token_mint_process_update_v1,
 };
 
-/// `Money::Freeze` functions
-mod freeze_v1;
-use freeze_v1::{
-    money_freeze_get_metadata_v1, money_freeze_process_instruction_v1,
-    money_freeze_process_update_v1,
+/// `Money::TokenFreeze` functions
+mod token_freeze_v1;
+use token_freeze_v1::{
+    money_token_freeze_get_metadata_v1, money_token_freeze_process_instruction_v1,
+    money_token_freeze_process_update_v1,
 };
 
 /// `Money::Stake` functions
@@ -198,13 +199,13 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
             Ok(set_return_data(&metadata)?)
         }
 
-        MoneyFunction::MintV1 => {
-            let metadata = money_mint_get_metadata_v1(cid, call_idx, calls)?;
+        MoneyFunction::TokenMintV1 => {
+            let metadata = money_token_mint_get_metadata_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
         }
 
-        MoneyFunction::FreezeV1 => {
-            let metadata = money_freeze_get_metadata_v1(cid, call_idx, calls)?;
+        MoneyFunction::TokenFreezeV1 => {
+            let metadata = money_token_freeze_get_metadata_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
         }
 
@@ -251,13 +252,13 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             Ok(set_return_data(&update_data)?)
         }
 
-        MoneyFunction::MintV1 => {
-            let update_data = money_mint_process_instruction_v1(cid, call_idx, calls)?;
+        MoneyFunction::TokenMintV1 => {
+            let update_data = money_token_mint_process_instruction_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)
         }
 
-        MoneyFunction::FreezeV1 => {
-            let update_data = money_freeze_process_instruction_v1(cid, call_idx, calls)?;
+        MoneyFunction::TokenFreezeV1 => {
+            let update_data = money_token_freeze_process_instruction_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)
         }
 
@@ -292,19 +293,19 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
         }
 
         MoneyFunction::GenesisMintV1 => {
-            // GenesisMint uses the same update as normal Mint
-            let update: MoneyMintUpdateV1 = deserialize(&update_data[1..])?;
-            Ok(money_mint_process_update_v1(cid, update)?)
+            // FIXME: GenesisMint uses the same update as `TokenMintV1`
+            let update: MoneyTokenMintUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(money_token_mint_process_update_v1(cid, update)?)
         }
 
-        MoneyFunction::MintV1 => {
-            let update: MoneyMintUpdateV1 = deserialize(&update_data[1..])?;
-            Ok(money_mint_process_update_v1(cid, update)?)
+        MoneyFunction::TokenMintV1 => {
+            let update: MoneyTokenMintUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(money_token_mint_process_update_v1(cid, update)?)
         }
 
-        MoneyFunction::FreezeV1 => {
-            let update: MoneyFreezeUpdateV1 = deserialize(&update_data[1..])?;
-            Ok(money_freeze_process_update_v1(cid, update)?)
+        MoneyFunction::TokenFreezeV1 => {
+            let update: MoneyTokenFreezeUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(money_token_freeze_process_update_v1(cid, update)?)
         }
 
         MoneyFunction::StakeV1 => {

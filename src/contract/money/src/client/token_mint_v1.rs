@@ -28,7 +28,7 @@ use darkfi_sdk::{
     },
     pasta::pallas,
 };
-use log::{debug, info};
+use log::info;
 use rand::rngs::OsRng;
 
 use crate::{
@@ -36,11 +36,11 @@ use crate::{
         transfer_v1::{TransactionBuilderClearInputInfo, TransactionBuilderOutputInfo},
         MoneyNote,
     },
-    model::{ClearInput, MoneyMintParamsV1, Output},
+    model::{ClearInput, MoneyTokenMintParamsV1, Output},
 };
 
-pub struct MintCallDebris {
-    pub params: MoneyMintParamsV1,
+pub struct TokenMintCallDebris {
+    pub params: MoneyTokenMintParamsV1,
     pub proofs: Vec<Proof>,
 }
 
@@ -69,8 +69,8 @@ impl TokenMintRevealed {
     }
 }
 
-/// Struct holding necessary information to build a `Money::MintV1` contract call.
-pub struct MintCallBuilder {
+/// Struct holding necessary information to build a `Money::TokenMintV1` contract call.
+pub struct TokenMintCallBuilder {
     /// Mint authority keypair
     pub mint_authority: Keypair,
     /// Recipient of the minted tokens
@@ -87,9 +87,9 @@ pub struct MintCallBuilder {
     pub token_mint_pk: ProvingKey,
 }
 
-impl MintCallBuilder {
-    pub fn build(&self) -> Result<MintCallDebris> {
-        debug!("Building Money::MintV1 contract call");
+impl TokenMintCallBuilder {
+    pub fn build(&self) -> Result<TokenMintCallDebris> {
+        info!("Building Money::TokenMintV1 contract call");
         assert!(self.amount != 0);
 
         // In this call, we will build one clear input and one anonymous output.
@@ -162,8 +162,8 @@ impl MintCallBuilder {
             note: encrypted_note,
         };
 
-        let params = MoneyMintParamsV1 { input: c_input, output: c_output };
-        let debris = MintCallDebris { params, proofs: vec![proof] };
+        let params = MoneyTokenMintParamsV1 { input: c_input, output: c_output };
+        let debris = TokenMintCallDebris { params, proofs: vec![proof] };
         Ok(debris)
     }
 }

@@ -32,7 +32,7 @@ use darkfi_money_contract::{
         MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE, MONEY_TOKENS_COL_IS_FROZEN,
         MONEY_TOKENS_COL_TOKEN_ID, MONEY_TOKENS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
     },
-    model::{MoneyFreezeParamsV1, MoneyMintParamsV1, MoneyTransferParamsV1, Output},
+    model::{MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1, MoneyTransferParamsV1, Output},
     MoneyFunction,
 };
 use darkfi_sdk::{
@@ -520,18 +520,18 @@ impl Drk {
                 continue
             }
 
-            if call.contract_id == cid && call.data[0] == MoneyFunction::MintV1 as u8 {
+            if call.contract_id == cid && call.data[0] == MoneyFunction::TokenMintV1 as u8 {
                 eprintln!("Found Money::MintV1 in call {}", i);
-                let params: MoneyMintParamsV1 = deserialize(&call.data[1..])?;
+                let params: MoneyTokenMintParamsV1 = deserialize(&call.data[1..])?;
 
                 outputs.push(params.output);
 
                 continue
             }
 
-            if call.contract_id == cid && call.data[0] == MoneyFunction::FreezeV1 as u8 {
+            if call.contract_id == cid && call.data[0] == MoneyFunction::TokenFreezeV1 as u8 {
                 eprintln!("Found Money::FreezeV1 in call {}", i);
-                let params: MoneyFreezeParamsV1 = deserialize(&call.data[1..])?;
+                let params: MoneyTokenFreezeParamsV1 = deserialize(&call.data[1..])?;
 
                 let (mint_x, mint_y) = params.signature_public.xy();
                 let token_id = TokenId::from(poseidon_hash([mint_x, mint_y]));
