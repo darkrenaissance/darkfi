@@ -19,7 +19,7 @@
 use std::{process::exit, sync::mpsc::channel};
 
 use clap::Parser;
-use darkfi_sdk::crypto::{PublicKey, SecretKey, TokenId};
+use darkfi_sdk::crypto::{ContractId, PublicKey, SecretKey, TokenId};
 use indicatif::{ProgressBar, ProgressStyle};
 use rand::rngs::OsRng;
 use rayon::prelude::*;
@@ -37,9 +37,17 @@ struct Args {
     #[clap(short)]
     case_sensitive: bool,
 
-    /// Search for TokenId instead of an address
+    /// Search for an Address
+    #[clap(long)]
+    address: bool,
+
+    /// Search for a Token ID
     #[clap(long)]
     token_id: bool,
+
+    /// Search for a Contract ID
+    #[clap(long)]
+    contract_id: bool,
 
     /// Number of threads to use (defaults to number of available CPUs)
     #[clap(short)]
@@ -51,65 +59,91 @@ struct DrkAddr {
     pub secret: SecretKey,
 }
 
-impl DrkAddr {
-    pub fn new() -> Self {
-        let secret = SecretKey::random(&mut OsRng);
-        let public = PublicKey::from_secret(secret);
-
-        Self { public, secret }
-    }
-
-    pub fn starts_with(&self, prefix: &str, case_sensitive: bool) -> bool {
-        if case_sensitive {
-            self.public.to_string().starts_with(prefix)
-        } else {
-            self.public.to_string().to_lowercase().starts_with(prefix.to_lowercase().as_str())
-        }
-    }
-
-    pub fn starts_with_any(&self, prefixes: &[String], case_sensitive: bool) -> bool {
-        for prefix in prefixes {
-            if self.starts_with(prefix, case_sensitive) {
-                return true
-            }
-        }
-        false
-    }
-}
-
 struct DrkToken {
     pub token_id: TokenId,
     pub secret: SecretKey,
 }
 
-impl DrkToken {
-    pub fn new() -> Self {
+struct DrkContract {
+    pub contract_id: ContractId,
+    pub secret: SecretKey,
+}
+
+trait Prefixable {
+    fn new() -> Self;
+    fn to_string(&self) -> String;
+    fn get_secret(&self) -> SecretKey;
+
+    fn starts_with(&self, prefix: &str, case_sensitive: bool) -> bool {
+        if case_sensitive {
+            self.to_string().starts_with(prefix)
+        } else {
+            self.to_string().to_lowercase().starts_with(prefix.to_lowercase().as_str())
+        }
+    }
+
+    fn starts_with_any(&self, prefixes: &[String], case_sensitive: bool) -> bool {
+        prefixes.iter().any(|prefix| self.starts_with(prefix, case_sensitive))
+    }
+}
+
+impl Prefixable for DrkAddr {
+    fn new() -> Self {
+        let secret = SecretKey::random(&mut OsRng);
+        let public = PublicKey::from_secret(secret);
+        Self { public, secret }
+    }
+
+    fn to_string(&self) -> String {
+        self.public.to_string()
+    }
+
+    fn get_secret(&self) -> SecretKey {
+        self.secret
+    }
+}
+
+impl Prefixable for DrkToken {
+    fn new() -> Self {
         let secret = SecretKey::random(&mut OsRng);
         let token_id = TokenId::derive(secret);
-
         Self { token_id, secret }
     }
 
-    pub fn starts_with(&self, prefix: &str, case_sensitive: bool) -> bool {
-        if case_sensitive {
-            self.token_id.to_string().starts_with(prefix)
-        } else {
-            self.token_id.to_string().to_lowercase().starts_with(prefix.to_lowercase().as_str())
-        }
+    fn to_string(&self) -> String {
+        self.token_id.to_string()
     }
 
-    pub fn starts_with_any(&self, prefixes: &[String], case_sensitive: bool) -> bool {
-        for prefix in prefixes {
-            if self.starts_with(prefix, case_sensitive) {
-                return true
-            }
-        }
-        false
+    fn get_secret(&self) -> SecretKey {
+        self.secret
+    }
+}
+
+impl Prefixable for DrkContract {
+    fn new() -> Self {
+        let secret = SecretKey::random(&mut OsRng);
+        let contract_id = ContractId::derive(secret);
+        Self { contract_id, secret }
+    }
+
+    fn to_string(&self) -> String {
+        self.contract_id.to_string()
+    }
+
+    fn get_secret(&self) -> SecretKey {
+        self.secret
     }
 }
 
 fn main() {
     let args = Args::parse();
+
+    if !((args.address ^ args.contract_id ^ args.token_id) &&
+        !(args.address && args.contract_id && args.token_id))
+    {
+        eprintln!("Error: Can only search for one of Address/ContractId/TokenId");
+        exit(1);
+    }
 
     if args.prefix.is_empty() {
         eprintln!("Error: No prefix given to search.");
@@ -165,7 +199,7 @@ fn main() {
                 "{{\"token_id\":\"{}\",\"attempts\":{},\"secret\":\"{}\"}}",
                 tid.token_id, attempts, tid.secret,
             );
-        } else {
+        } else if args.address {
             let addr = rayon::iter::repeat(DrkAddr::new)
                 .inspect(|_| progress.inc(1))
                 .map(|create| create())
@@ -178,6 +212,22 @@ fn main() {
             println!(
                 "{{\"address\":\"{}\",\"attempts\":{},\"secret\":\"{}\"}}",
                 addr.public, attempts, addr.secret,
+            );
+        } else if args.contract_id {
+            let cid = rayon::iter::repeat(DrkContract::new)
+                .inspect(|_| progress.inc(1))
+                .map(|create| create())
+                .find_any(|contract_id| {
+                    contract_id.starts_with_any(&args.prefix, args.case_sensitive)
+                })
+                .expect("Failed to find a contract ID match");
+
+            let attempts = progress.position();
+            progress.finish_and_clear();
+
+            println!(
+                "{{\"contract_id\":\"{}\",\"attempts\":{},\"secret\":\"{}\"}}",
+                cid.contract_id, attempts, cid.secret,
             );
         }
 
