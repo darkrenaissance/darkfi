@@ -8,21 +8,22 @@ which, when derived, starts with a given prefix.
 ## Usage
 
 ```
-vanityaddr 0.3.0
-Vanity address generation tool for DarkFi keypairs and token IDs.
+vanityaddr 0.4.1
+Vanity address generation tool for DarkFi keypairs and token IDs
 
-USAGE:
-    vanityaddr [OPTIONS] <PREFIX>
+Usage: vanityaddr [OPTIONS] [PREFIX]...
 
-ARGS:
-    <PREFIX>    Prefix to search (must start with 1)
+Arguments:
+  [PREFIX]...  Prefixes to search
 
-OPTIONS:
-    -c                  Should the search be case-sensitive
-    --token-id          Search for TokenID instead of an address
-    -h, --help          Print help information
-    -t <THREADS>        Number of threads to use (defaults to number of available CPUs)
-    -V, --version       Print version information
+Options:
+  -c                 Should the search be case-sensitive
+      --address      Search for an Address
+      --token-id     Search for a Token ID
+      --contract-id  Search for a Contract ID
+  -t <THREADS>       Number of threads to use (defaults to number of available CPUs)
+  -h, --help         Print help
+  -V, --version      Print version
 ```
 
 We can use the tool in our command line:
