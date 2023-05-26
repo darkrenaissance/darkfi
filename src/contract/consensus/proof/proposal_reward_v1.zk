@@ -35,6 +35,8 @@ circuit "ProposalReward_V1" {
 	SERIAL_PREFIX = witness_base(2);
 	SEED_PREFIX = witness_base(3);
 
+	# TODO: verify if value or reward must be > 0 and add corresponding opcodes
+
 	# Poseidon hash of the coin nullifier
 	nullifier = poseidon_hash(secret_key, serial);
 	constrain_instance(nullifier);

@@ -36,6 +36,8 @@ circuit "ProposalMint_V1" {
 	ZERO = witness_base(0);
 	SERIAL_PREFIX = witness_base(2);
 
+	# TODO: verify if value must be > 0 and add corresponding opcode
+
 	# Derive new coin serial from old one
 	serial = poseidon_hash(SERIAL_PREFIX, burnt_secret_key, burnt_serial, ZERO);
 

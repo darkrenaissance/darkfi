@@ -28,6 +28,8 @@ witness "Mint_V1" {
 }
 
 circuit "Mint_V1" {
+	# TODO: verify if value must be > 0 and add corresponding opcode
+
 	# Poseidon hash of the coin
 	C = poseidon_hash(
 		pub_x,

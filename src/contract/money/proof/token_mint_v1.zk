@@ -29,6 +29,8 @@ witness "TokenMint_V1" {
 }
 
 circuit "TokenMint_V1" {
+	# TODO: verify if supply must be > 0 and add corresponding opcode
+
 	# Derive public key for the mint authority
 	mint_public = ec_mul_base(mint_authority, NULLIFIER_K);
 	mint_x = ec_get_x(mint_public);

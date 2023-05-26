@@ -38,6 +38,8 @@ circuit "Burn_V1" {
 	nullifier = poseidon_hash(secret, serial);
 	constrain_instance(nullifier);
 
+	# TODO: verify if value must be > 0 and add corresponding opcode
+
 	# Pedersen commitment for coin's value
 	vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
 	vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
