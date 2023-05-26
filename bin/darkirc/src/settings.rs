@@ -17,18 +17,19 @@
  */
 
 use crypto_box::SalsaBox;
-use log::error;
-use serde::{self, Deserialize, Serialize};
+use log::{info, warn};
+use serde::{self, Deserialize};
 use std::collections::HashMap;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
+use toml::Value;
 use url::Url;
 
 use darkfi::{net::settings::SettingsOpt, Result};
 
 // Location for config file
-pub const CONFIG_FILE: &str = "ircd_config.toml";
-pub const CONFIG_FILE_CONTENTS: &str = include_str!("../ircd_config.toml");
+pub const CONFIG_FILE: &str = "darkirc_config.toml";
+pub const CONFIG_FILE_CONTENTS: &str = include_str!("../darkirc_config.toml");
 
 // Msg config
 pub const MAXIMUM_LENGTH_OF_MESSAGE: usize = 1024;
@@ -45,7 +46,7 @@ pub enum RPL {
 /// ircd cli
 #[derive(Clone, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
-#[structopt(name = "ircd")]
+#[structopt(name = "darkirc")]
 pub struct Args {
     /// Sets a custom config file
     #[structopt(long)]
@@ -56,7 +57,7 @@ pub struct Args {
     pub rpc_listen: Url,
 
     /// IRC listen URL
-    #[structopt(long = "irc", default_value = "tcp://127.0.0.1:7776")]
+    #[structopt(long = "irc", default_value = "tcp://127.0.0.1:6667")]
     pub irc_listen: Url,
 
     /// Optional TLS certificate file path if `irc_listen` uses TLS
@@ -81,18 +82,10 @@ pub struct Args {
     #[structopt(long)]
     pub password: Option<String>,
 
-    /// Channels
-    #[structopt(skip)]
-    pub channels: HashMap<String, ChannelInfo>,
-
-    /// Channels
-    #[structopt(skip)]
-    pub contacts: HashMap<String, ContactInfo>,
-
-    /// Private key
-    #[structopt(skip)]
-    pub private_key: Option<String>,
-
+    // /// Private key
+    // #[structopt(skip)]
+    // pub private_key: Option<String>,
+    /// Network settings
     #[structopt(flatten)]
     pub net: SettingsOpt,
 
@@ -108,30 +101,15 @@ pub struct Args {
 /// [contact."nick"]
 /// pubkey = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 /// ```
-#[derive(Default, Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone)]
 pub struct ContactInfo {
-    pub pubkey: Option<String>,
+    /// Optional NaCl box for the channel, used for {en,de}cryption.
+    pub salt_box: Option<SalsaBox>,
 }
 
 impl ContactInfo {
-    pub fn new() -> Self {
-        Self { pubkey: None }
-    }
-
-    pub fn salt_box(&self, private_key: &str, contact_name: &str) -> Option<SalsaBox> {
-        if let Ok(private) = parse_priv(private_key) {
-            if let Some(p) = &self.pubkey {
-                if let Ok(public) = parse_pub(p) {
-                    return Some(SalsaBox::new(&public, &private))
-                } else {
-                    error!("Uncorrect public key in for contact {}", contact_name);
-                }
-            }
-        } else {
-            error!("Uncorrect Private key in config",);
-        }
-
-        None
+    pub fn new() -> Result<Self> {
+        Ok(Self { salt_box: None })
     }
 }
 
@@ -148,48 +126,214 @@ impl ContactInfo {
 /// Having a topic set is useful if one wants to have a topic in the
 /// configured channel. It is not shared with others, but it is useful
 /// for personal reference.
-#[derive(Default, Clone, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone)]
 pub struct ChannelInfo {
     /// Optional topic for the channel
     pub topic: Option<String>,
     /// Optional NaCl box for the channel, used for {en,de}cryption.
-    pub secret: Option<String>,
+    pub salt_box: Option<SalsaBox>,
     /// Flag indicates whether the user has joined the channel or not
-    #[serde(default, skip_serializing)]
     pub joined: bool,
     /// All nicknames which are visible on the channel
-    #[serde(default, skip_serializing)]
     pub names: Vec<String>,
 }
 
 impl ChannelInfo {
-    pub fn new() -> Self {
-        Self { topic: None, secret: None, joined: false, names: vec![] }
+    pub fn new() -> Result<Self> {
+        Ok(Self { topic: None, salt_box: None, joined: false, names: vec![] })
+    }
+}
+
+/// Parse a TOML string for any configured channels and return
+/// a map containing said configurations.
+///
+/// ```toml
+/// [channel."#memes"]
+/// secret = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
+/// topic = "Dank Memes"
+/// ```
+pub fn parse_configured_channels(data: &str) -> Result<HashMap<String, ChannelInfo>> {
+    let mut ret = HashMap::new();
+
+    let map = match toml::from_str(data)? {
+        Value::Table(m) => m,
+        _ => return Ok(ret),
+    };
+
+    if !map.contains_key("channel") {
+        return Ok(ret)
     }
 
-    pub fn salt_box(&self, channel_name: &str) -> Option<SalsaBox> {
-        if let Some(s) = &self.secret {
-            let secret = parse_priv(s);
+    if !map["channel"].is_table() {
+        return Ok(ret)
+    }
 
-            if secret.is_err() {
-                error!("Uncorrect secret key for the channel {}", channel_name);
-                return None
-            }
+    for chan in map["channel"].as_table().unwrap() {
+        info!("Found configuration for channel {}", chan.0);
+        let mut channel_info = ChannelInfo::new()?;
 
-            let secret = secret.unwrap();
-            let public = secret.public_key();
-            return Some(SalsaBox::new(&public, &secret))
+        if chan.1.as_table().unwrap().contains_key("topic") {
+            let topic = chan.1["topic"].as_str().unwrap().to_string();
+            info!("Found topic for channel {}: {}", chan.0, topic);
+            channel_info.topic = Some(topic);
         }
-        None
+
+        if chan.1.as_table().unwrap().contains_key("secret") {
+            // Build the NaCl box
+            if let Some(s) = chan.1["secret"].as_str() {
+                let salt_box = salt_box_from_shared_secret(s)?;
+                channel_info.salt_box = Some(salt_box);
+                info!("Instantiated NaCl box for channel {}", chan.0);
+            }
+        }
+
+        ret.insert(chan.0.to_string(), channel_info);
     }
+
+    Ok(ret)
 }
 
-fn parse_priv(key: &str) -> Result<crypto_box::SecretKey> {
-    let bytes: [u8; 32] = bs58::decode(key).into_vec()?.try_into().unwrap();
-    Ok(crypto_box::SecretKey::from(bytes))
+/// Parse a TOML string for any configured contact list and return
+/// a map containing said configurations.
+///
+/// ```toml
+/// [contact."nick"]
+/// contact_pubkey = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
+/// ```
+pub fn parse_configured_contacts(data: &str) -> Result<HashMap<String, ContactInfo>> {
+    let mut ret = HashMap::new();
+
+    let map = match toml::from_str(data) {
+        Ok(Value::Table(m)) => m,
+        _ => {
+            warn!("Invalid TOML string passed as argument to parse_configured_contacts()");
+            return Ok(ret)
+        }
+    };
+
+    if !map.contains_key("contact") {
+        return Ok(ret)
+    }
+
+    if !map["contact"].is_table() {
+        warn!("TOML configuration contains a \"contact\" field, but it is not a table.");
+        return Ok(ret)
+    }
+
+    let contacts = map["contact"].as_table().unwrap();
+
+    // Our secret key for NaCl boxes.
+    let found_priv = match parse_priv_key(data) {
+        Ok(v) => v,
+        Err(_) => {
+            info!("Did not find private key in config, skipping contact configuration.");
+            return Ok(ret)
+        }
+    };
+
+    let bytes: [u8; 32] = match bs58::decode(found_priv).into_vec() {
+        Ok(v) => {
+            if v.len() != 32 {
+                warn!("Decoded base58 secret key string is not 32 bytes");
+                warn!("Skipping private contact configuration");
+                return Ok(ret)
+            }
+            v.try_into().unwrap()
+        }
+        Err(e) => {
+            warn!("Failed to decode base58 secret key from string: {}", e);
+            warn!("Skipping private contact configuration");
+            return Ok(ret)
+        }
+    };
+
+    let secret = crypto_box::SecretKey::from(bytes);
+
+    for cnt in contacts {
+        info!("Found configuration for contact {}", cnt.0);
+        let mut contact_info = ContactInfo::new()?;
+
+        if !cnt.1.is_table() {
+            warn!("Config for contact {} isn't a TOML table", cnt.0);
+            continue
+        }
+
+        let table = cnt.1.as_table().unwrap();
+        if table.is_empty() {
+            warn!("Configuration for contact {} is empty.", cnt.0);
+            continue
+        }
+
+        // Build the NaCl box
+        if !table.contains_key("contact_pubkey") || !table["contact_pubkey"].is_str() {
+            warn!("Contact {} doesn't have `contact_pubkey` set or is not a string.", cnt.0);
+            continue
+        }
+
+        let pub_str = table["contact_pubkey"].as_str().unwrap();
+        let bytes: [u8; 32] = match bs58::decode(pub_str).into_vec() {
+            Ok(v) => {
+                if v.len() != 32 {
+                    warn!("Decoded base58 string is not 32 bytes");
+                    continue
+                }
+
+                v.try_into().unwrap()
+            }
+            Err(e) => {
+                warn!("Failed to decode base58 pubkey from string: {}", e);
+                continue
+            }
+        };
+
+        let public = crypto_box::PublicKey::from(bytes);
+        contact_info.salt_box = Some(SalsaBox::new(&public, &secret));
+        ret.insert(cnt.0.to_string(), contact_info);
+        info!("Instantiated NaCl box for contact {}", cnt.0);
+    }
+
+    Ok(ret)
 }
 
-fn parse_pub(key: &str) -> Result<crypto_box::PublicKey> {
-    let bytes: [u8; 32] = bs58::decode(key).into_vec()?.try_into().unwrap();
-    Ok(crypto_box::PublicKey::from(bytes))
+fn salt_box_from_shared_secret(s: &str) -> Result<SalsaBox> {
+    let bytes: [u8; 32] = bs58::decode(s).into_vec()?.try_into().unwrap();
+    let secret = crypto_box::SecretKey::from(bytes);
+    let public = secret.public_key();
+    Ok(SalsaBox::new(&public, &secret))
 }
+
+fn parse_priv_key(data: &str) -> Result<String> {
+    let mut pk = String::new();
+
+    let map = match toml::from_str(data)? {
+        Value::Table(m) => m,
+        _ => return Ok(pk),
+    };
+
+    if !map.contains_key("private_key") {
+        return Ok(pk)
+    }
+
+    if !map["private_key"].is_table() {
+        return Ok(pk)
+    }
+
+    let private_keys = map["private_key"].as_table().unwrap();
+
+    for prv_key in private_keys {
+        pk = prv_key.0.into();
+    }
+
+    info!("Found secret key in config, noted it down.");
+    Ok(pk)
+}
+
+// fn parse_priv(key: &str) -> Result<crypto_box::SecretKey> {
+//     let bytes: [u8; 32] = bs58::decode(key).into_vec()?.try_into().unwrap();
+//     Ok(crypto_box::SecretKey::from(bytes))
+// }
+
+// fn parse_pub(key: &str) -> Result<crypto_box::PublicKey> {
+//     let bytes: [u8; 32] = bs58::decode(key).into_vec()?.try_into().unwrap();
+//     Ok(crypto_box::PublicKey::from(bytes))
+// }

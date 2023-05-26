@@ -96,6 +96,7 @@ impl IrcServer {
             ))
             .detach();
 
+        // Listen to msgs from View
         executor
             .clone()
             .spawn(Self::listen_to_view(

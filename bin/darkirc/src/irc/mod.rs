@@ -18,10 +18,13 @@
 
 use std::collections::HashMap;
 
-use darkfi::Result;
+use darkfi::{util::path::get_config_path, Result};
 
 use crate::{
-    settings::{Args, ChannelInfo, ContactInfo},
+    settings::{
+        parse_configured_channels, parse_configured_contacts, Args, ChannelInfo, ContactInfo,
+        CONFIG_FILE,
+    },
     PrivMsgEvent,
 };
 
@@ -43,10 +46,11 @@ pub struct IrcConfig {
     // user config
     pub nickname: String,
     pub password: String,
-    pub private_key: Option<String>,
+    // pub private_key: Option<String>,
     pub capabilities: HashMap<String, bool>,
 
     // channels and contacts
+    pub auto_channels: Vec<String>,
     pub channels: HashMap<String, ChannelInfo>,
     pub contacts: HashMap<String, ContactInfo>,
 }
@@ -54,17 +58,15 @@ pub struct IrcConfig {
 impl IrcConfig {
     pub fn new(settings: &Args) -> Result<Self> {
         let password = settings.password.as_ref().unwrap_or(&String::new()).clone();
-        let private_key = settings.private_key.clone();
+        // let private_key = settings.private_key.clone();
 
-        let mut channels = settings.channels.clone();
+        let auto_channels = settings.autojoin.clone();
 
-        for chan in settings.autojoin.iter() {
-            if !channels.contains_key(chan) {
-                channels.insert(chan.clone(), ChannelInfo::new());
-            }
-        }
-
-        let contacts = settings.contacts.clone();
+        // Pick up channel settings from the TOML configuration
+        let cfg_path = get_config_path(settings.config.clone(), CONFIG_FILE)?;
+        let toml_contents = std::fs::read_to_string(cfg_path)?;
+        let channels = parse_configured_channels(&toml_contents)?;
+        let contacts = parse_configured_contacts(&toml_contents)?;
 
         let mut capabilities = HashMap::new();
         capabilities.insert("no-history".to_string(), false);
@@ -77,9 +79,9 @@ impl IrcConfig {
             is_pass_init: false,
             nickname: "anon".to_string(),
             password,
+            auto_channels,
             channels,
             contacts,
-            private_key,
             capabilities,
         })
     }

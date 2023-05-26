@@ -80,40 +80,48 @@ pub fn encrypt(salt_box: &SalsaBox, plaintext: &str) -> String {
     bs58::encode(concat).into_string()
 }
 
-/// Decrypt PrivMsg target
 pub fn decrypt_target(
+    contact: &mut String,
     privmsg: &mut PrivMsgEvent,
-    configured_chans: &HashMap<String, ChannelInfo>,
-    configured_contacts: &HashMap<String, ContactInfo>,
-    private_key: &Option<String>,
+    configured_chans: HashMap<String, ChannelInfo>,
+    configured_contacts: HashMap<String, ContactInfo>,
 ) {
-    for (name, chan_info) in configured_chans {
+    for chan_name in configured_chans.keys() {
+        let chan_info = configured_chans.get(chan_name).unwrap();
         if !chan_info.joined {
             continue
         }
 
-        let salt_box = chan_info.salt_box(name).clone();
+        let salt_box = chan_info.salt_box.clone();
 
         if let Some(salt_box) = salt_box {
-            if try_decrypt(&salt_box, &privmsg.target).is_some() {
-                privmsg.target = name.clone();
+            let decrypted_target = try_decrypt(&salt_box, &privmsg.target);
+            if decrypted_target.is_none() {
+                continue
+            }
+
+            let target = decrypted_target.unwrap();
+            if *chan_name == target {
+                privmsg.target = target;
                 return
             }
         }
     }
 
-    if private_key.is_none() {
-        return
-    }
+    for cnt_name in configured_contacts.keys() {
+        let cnt_info = configured_contacts.get(cnt_name).unwrap();
 
-    for (name, contact_info) in configured_contacts {
-        let salt_box = contact_info.salt_box(private_key.as_ref().unwrap(), name).clone();
-
+        let salt_box = cnt_info.salt_box.clone();
         if let Some(salt_box) = salt_box {
-            if try_decrypt(&salt_box, &privmsg.target).is_some() {
-                privmsg.target = name.clone();
-                return
+            let decrypted_target = try_decrypt(&salt_box, &privmsg.target);
+            if decrypted_target.is_none() {
+                continue
             }
+
+            let target = decrypted_target.unwrap();
+            privmsg.target = target;
+            *contact = cnt_name.into();
+            return
         }
     }
 }
