@@ -103,7 +103,9 @@ impl Transaction {
     /// Verify Schnorr signatures for the entire transaction.
     pub fn verify_sigs(&self, pub_table: Vec<Vec<PublicKey>>) -> Result<()> {
         let tx_data = self.encode_without_sigs()?;
-        let data_hash = blake3::hash(&tx_data);
+        let mut hasher = blake3::Hasher::new();
+        hasher.update_rayon(&tx_data);
+        let data_hash = hasher.finalize();
         debug!("tx.verify_sigs: data_hash: {:?}", data_hash.as_bytes());
 
         assert!(pub_table.len() == self.signatures.len());
@@ -129,7 +131,9 @@ impl Transaction {
         secret_keys: &[SecretKey],
     ) -> Result<Vec<Signature>> {
         let tx_data = self.encode_without_sigs()?;
-        let data_hash = blake3::hash(&tx_data);
+        let mut hasher = blake3::Hasher::new();
+        hasher.update_rayon(&tx_data);
+        let data_hash = hasher.finalize();
         debug!("tx.create_sigs: data_hash: {:?}", data_hash.as_bytes());
 
         let mut sigs = vec![];
@@ -152,6 +156,8 @@ impl Transaction {
 
     /// Get the transaction hash
     pub fn hash(&self) -> blake3::Hash {
-        blake3::hash(&serialize(self))
+        let mut hasher = blake3::Hasher::new();
+        hasher.update_rayon(&serialize(self));
+        hasher.finalize()
     }
 }
