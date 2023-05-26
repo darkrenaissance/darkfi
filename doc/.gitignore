@@ -2,3 +2,4 @@ book/*
 src/clients/cashierd_jsonrpc.md
 src/clients/darkfid_jsonrpc.md
 src/clients/faucetd_jsonrpc.md
+src/development/seminars.md

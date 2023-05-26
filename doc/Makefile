@@ -8,8 +8,10 @@ JSONRPC = \
 	$(FAUCETD_JSONRPC)
 
 all: $(JSONRPC)
+	./generate_seminar_ics.py --table > src/development/seminars.md
 	mdbook build
 	cp -f theme/logo* book/
+	./generate_seminar_ics.py --ics
 	$(MAKE) -C ../ rustdoc
 	cp -r ../target/doc/* book/development/
 
