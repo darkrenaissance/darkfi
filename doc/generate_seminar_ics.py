@@ -60,7 +60,7 @@ EVENTS = [
 
 def print_table():
     x = PrettyTable()
-    x.field_names = ["Date", "Track", "Topic", "#", "Title", "Calendar", "Recording"]
+    x.field_names = ["Date", "Track", "Topic", "#", "Title", "Rec"]
     x.align = "l"
     x.hrules = HEADER
     x.junction_char = "|"
@@ -74,12 +74,11 @@ def print_table():
         ics_file = f"{event['start']}_{s}.ics"
 
         x.add_row([
-            formatted,
+            f"[{formatted}]({ics_file})",
             event["track"],
             event["topic"],
             event["#"],
             event["title"],
-            f"[dl]({ics_file})",
             f"[dl]({event['recording']})",
         ])
 
