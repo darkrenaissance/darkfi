@@ -141,4 +141,4 @@ if __name__ == "__main__":
         print_table()
         exit(0)
 
-    main()
+    usage()
