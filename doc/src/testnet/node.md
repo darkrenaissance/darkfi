@@ -78,6 +78,16 @@ Now you can leave the subscriber running. In case you stop it, just
 run `drk scan` again until the chain is fully scanned, and then you
 should be able to subscribe again.
 
+## Local Deployment
+
+For development we recommend running master. You can run a single
+consensus full node using this command:
+
+```
+cd contrib/localnet/darkfid-single-node/
+./tmux_sessions.sh -v
+```
+
 ## Advanced Usage
 
 To run a node in full debug mode:
