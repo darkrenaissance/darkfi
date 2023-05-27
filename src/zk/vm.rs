@@ -53,6 +53,7 @@ use super::{
     assign_free_advice,
     gadget::{
         arithmetic::{ArithChip, ArithConfig, ArithInstruction},
+        cond_select::{ConditionalSelectChip, ConditionalSelectConfig},
         less_than::{LessThanChip, LessThanConfig},
         native_range_check::{NativeRangeCheckChip, NativeRangeCheckConfig},
         small_range_check::{SmallRangeCheckChip, SmallRangeCheckConfig},
@@ -79,6 +80,7 @@ pub struct VmConfig {
     native_253_range_check_config: NativeRangeCheckConfig<3, 253, 85>,
     lessthan_config: LessThanConfig<3, 253, 85>,
     boolcheck_config: SmallRangeCheckConfig,
+    condselect_config: ConditionalSelectConfig<pallas::Base>,
 }
 
 impl VmConfig {
@@ -104,6 +106,10 @@ impl VmConfig {
 
     fn arithmetic_chip(&self) -> ArithChip<pallas::Base> {
         ArithChip::construct(self.arith_config.clone())
+    }
+
+    fn condselect_chip(&self) -> ConditionalSelectChip<pallas::Base> {
+        ConditionalSelectChip::construct(self.condselect_config.clone(), ())
     }
 }
 
@@ -263,6 +269,10 @@ impl Circuit<pallas::Base> for ZkCircuit {
         // chip with a range of 2, which enforces one bit, i.e. 0 or 1.
         let boolcheck_config = SmallRangeCheckChip::configure(meta, advices[9], 2);
 
+        // Cnfiguration for the conditional selection chip
+        let condselect_config =
+            ConditionalSelectChip::configure(meta, advices[1..5].try_into().unwrap());
+
         VmConfig {
             primary,
             advices,
@@ -277,6 +287,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             native_253_range_check_config,
             lessthan_config,
             boolcheck_config,
+            condselect_config,
         }
     }
 
@@ -334,6 +345,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
         // Construct the boolean check chip.
         let boolcheck_chip = SmallRangeCheckChip::construct(config.boolcheck_config.clone());
+
+        // Construct the conditional selectiono chip
+        let condselect_chip = config.condselect_chip();
 
         // ==========================
         // Constants setup
@@ -803,6 +817,25 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     boolcheck_chip
                         .small_range_check(layouter.namespace(|| "copy boolean check"), w)?;
+                }
+
+                Opcode::CondSelect => {
+                    trace!(target: "zk::vm", "Executing `CondSelect{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    let cond: AssignedCell<Fp, Fp> = heap[args[0].1].clone().into();
+                    let lhs: AssignedCell<Fp, Fp> = heap[args[1].1].clone().into();
+                    let rhs: AssignedCell<Fp, Fp> = heap[args[2].1].clone().into();
+
+                    let out: AssignedCell<Fp, Fp> = condselect_chip.conditional_select(
+                        &mut layouter.namespace(|| "cond_select"),
+                        lhs,
+                        rhs,
+                        cond,
+                    )?;
+
+                    trace!(target: "zk::vm", "Pushing assignment to heap address {}", heap.len());
+                    heap.push(HeapVar::Base(out));
                 }
 
                 Opcode::ConstrainEqualBase => {

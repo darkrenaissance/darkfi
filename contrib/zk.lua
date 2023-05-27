@@ -43,7 +43,7 @@ local instruction = token('instruction', word_match{
   'base_add', 'base_mul', 'base_sub',
   'poseidon_hash', 'merkle_root',
   'range_check', 'less_than_strict', 'less_than_loose', 'bool_check',
-  'witness_base',
+  'cond_select', 'witness_base',
   'constrain_equal_base', 'constrain_equal_point',
   'constrain_instance', 'debug',
 })

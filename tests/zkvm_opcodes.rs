@@ -92,6 +92,7 @@ fn zkvm_opcodes() -> Result<()> {
         Witness::Base(Value::known(ephem_secret.inner())),
         Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
         Witness::MerklePath(Value::known(merkle_path.try_into().unwrap())),
+        Witness::Base(Value::known(pallas::Base::ONE)),
     ];
 
     let value_commit = pedersen_commitment_u64(value, value_blind);
@@ -113,6 +114,7 @@ fn zkvm_opcodes() -> Result<()> {
         pub_y,
         ephem_x,
         ephem_y,
+        a,
     ];
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());

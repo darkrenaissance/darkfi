@@ -78,6 +78,9 @@ pub enum Opcode {
     /// Check if a field element fits in a boolean (Either 0 or 1)
     BoolCheck = 0x53,
 
+    /// Conditionally select between two base field elements given a boolean
+    CondSelect = 0x60,
+
     /// Constrain equality of two Base field elements inside the circuit
     ConstrainEqualBase = 0xe0,
 
@@ -111,6 +114,7 @@ impl Opcode {
             "less_than_strict" => Some(Self::LessThanStrict),
             "less_than_loose" => Some(Self::LessThanLoose),
             "bool_check" => Some(Self::BoolCheck),
+            "cond_select" => Some(Self::CondSelect),
             "constrain_equal_base" => Some(Self::ConstrainEqualBase),
             "constrain_equal_point" => Some(Self::ConstrainEqualPoint),
             "constrain_instance" => Some(Self::ConstrainInstance),
@@ -138,6 +142,7 @@ impl Opcode {
             0x51 => Some(Self::LessThanStrict),
             0x52 => Some(Self::LessThanLoose),
             0x53 => Some(Self::BoolCheck),
+            0x60 => Some(Self::CondSelect),
             0xe0 => Some(Self::ConstrainEqualBase),
             0xe1 => Some(Self::ConstrainEqualPoint),
             0xf0 => Some(Self::ConstrainInstance),
@@ -193,6 +198,10 @@ impl Opcode {
             Opcode::LessThanLoose => (vec![], vec![VarType::Base, VarType::Base]),
 
             Opcode::BoolCheck => (vec![], vec![VarType::Base]),
+
+            Opcode::CondSelect => {
+                (vec![VarType::Base], vec![VarType::Base, VarType::Base, VarType::Base])
+            }
 
             Opcode::ConstrainEqualBase => (vec![], vec![VarType::Base, VarType::Base]),
 

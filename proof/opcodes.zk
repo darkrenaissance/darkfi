@@ -20,6 +20,8 @@ witness "Opcodes" {
 
 	Uint32 leaf_pos,
 	MerklePath path,
+
+	Base cond,
 }
 
 circuit "Opcodes" {
@@ -64,4 +66,7 @@ circuit "Opcodes" {
 	ephem_public = ec_mul_var_base(ephem_secret, pubkey);
 	constrain_instance(ec_get_x(ephem_public));
 	constrain_instance(ec_get_y(ephem_public));
+
+	out = cond_select(cond, a, b);
+	constrain_instance(out);
 }
