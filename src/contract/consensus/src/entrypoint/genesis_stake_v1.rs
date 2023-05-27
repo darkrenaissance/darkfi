@@ -18,13 +18,10 @@
 
 use darkfi_money_contract::{
     error::MoneyError, model::ConsensusStakeUpdateV1, CONSENSUS_CONTRACT_COINS_TREE,
-    MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{
-        pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, ContractId,
-        DARK_TOKEN_ID,
-    },
+    crypto::{pasta_prelude::*, pedersen_commitment_u64, ContractId, DARK_TOKEN_ID},
     db::{db_contains_key, db_lookup},
     error::ContractError,
     msg,
@@ -34,7 +31,10 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::{model::ConsensusGenesisStakeParamsV1, ConsensusFunction};
+use crate::{
+    model::{ConsensusGenesisStakeParamsV1, ZERO},
+    ConsensusFunction,
+};
 
 /// `get_metadata` function for `Consensus::GenesisStakeV1`
 pub(crate) fn consensus_genesis_stake_get_metadata_v1(
@@ -50,20 +50,16 @@ pub(crate) fn consensus_genesis_stake_get_metadata_v1(
     // Public keys for the transaction signatures we have to verify
     let signature_pubkeys = vec![params.input.signature_public];
 
+    // Genesis stake only happens on epoch 0
+    let epoch = ZERO;
+
     // Grab the pedersen commitment from the anonymous output
     let output = &params.output;
     let value_coords = output.value_commit.to_affine().coordinates().unwrap();
-    let token_coords = output.token_commit.to_affine().coordinates().unwrap();
 
     zk_public_inputs.push((
-        MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
-        vec![
-            output.coin.inner(),
-            *value_coords.x(),
-            *value_coords.y(),
-            *token_coords.x(),
-            *token_coords.y(),
-        ],
+        CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
+        vec![epoch, output.coin.inner(), *value_coords.x(), *value_coords.y()],
     ));
 
     // Serialize everything gathered and return it
@@ -106,21 +102,14 @@ pub(crate) fn consensus_genesis_stake_process_instruction_v1(
         return Err(MoneyError::DuplicateCoin.into())
     }
 
-    // Verify that the value and token commitments match. In here we just
+    // Verify that the value commitment match. In here we just
     // confirm that the clear input and the anon output have the same
-    // commitments.
+    // commitment.
     if pedersen_commitment_u64(params.input.value, params.input.value_blind) !=
         params.output.value_commit
     {
         msg!("[GenesisStakeV1] Error: Value commitment mismatch");
         return Err(MoneyError::ValueMismatch.into())
-    }
-
-    if pedersen_commitment_base(params.input.token_id.inner(), params.input.token_blind) !=
-        params.output.token_commit
-    {
-        msg!("[GenesisStakeV1] Error: Token commitment mismatch");
-        return Err(MoneyError::TokenMismatch.into())
     }
 
     // Create a state update.

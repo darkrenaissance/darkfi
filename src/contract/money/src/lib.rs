@@ -100,6 +100,8 @@ pub const CONSENSUS_CONTRACT_NULLIFIERS_TREE: &str = "consensus_nullifiers";
 pub const CONSENSUS_CONTRACT_DB_VERSION: &str = "db_version";
 pub const CONSENSUS_CONTRACT_COIN_MERKLE_TREE: &str = "consensus_coin_tree";
 
+/// zkas consensus mint circuit namespace
+pub const CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1: &str = "ConsensusMint_V1";
 /// zkas proposal reward circuit namespace
 pub const CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1: &str = "ProposalReward_V1";
 /// zkas proposal mint circuit namespace

@@ -105,7 +105,8 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     th.assert_trees();
 
     // Gather new staked owncoin
-    let alice_staked_oc = th.gather_owncoin(Holder::Alice, genesis_stake_params.output, true)?;
+    let alice_staked_oc =
+        th.gather_consensus_owncoin(Holder::Alice, genesis_stake_params.output)?;
 
     // Verify values match
     assert!(ALICE_INITIAL == alice_staked_oc.note.value);

@@ -18,10 +18,21 @@
 
 use darkfi_money_contract::model::{ClearInput, Input, Output, StakeInput};
 use darkfi_sdk::{
-    crypto::{ecvrf::VrfProof, PublicKey},
+    crypto::{ecvrf::VrfProof, note::AeadEncryptedNote, Coin, PublicKey},
     pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
+
+/// A consensus contract call's anonymous output
+#[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
+pub struct ConsensusOutput {
+    /// Pedersen commitment for the output's value
+    pub value_commit: pallas::Point,
+    /// Minted coin
+    pub coin: Coin,
+    /// AEAD encrypted note
+    pub note: AeadEncryptedNote,
+}
 
 /// Parameters for `Consensus::GenesisStake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -29,7 +40,7 @@ pub struct ConsensusGenesisStakeParamsV1 {
     /// Clear input
     pub input: ClearInput,
     /// Anonymous output
-    pub output: Output,
+    pub output: ConsensusOutput,
 }
 
 /// Parameters for `Consensus::ProposalBurn`

@@ -23,10 +23,7 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_money_contract::{
-    client::{transfer_v1::TransactionBuilderClearInputInfo, MoneyNote},
-    model::{ClearInput, Output},
-};
+use darkfi_money_contract::{client::MoneyNote, model::ClearInput};
 use darkfi_sdk::{
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::*, Keypair, PublicKey, CONSENSUS_CONTRACT_ID,
@@ -38,8 +35,8 @@ use log::{debug, info};
 use rand::rngs::OsRng;
 
 use crate::{
-    client::stake_v1::{create_stake_mint_proof, TransactionBuilderOutputInfo},
-    model::ConsensusGenesisStakeParamsV1,
+    client::common::{create_consensus_mint_proof, TransactionBuilderOutputInfo},
+    model::{ConsensusGenesisStakeParamsV1, ConsensusOutput, ZERO},
 };
 
 pub struct ConsensusGenesisStakeCallDebris {
@@ -53,32 +50,24 @@ pub struct ConsensusGenesisStakeCallBuilder {
     pub keypair: Keypair,
     /// Amount of tokens we want to mint and stake
     pub amount: u64,
-    /// `Mint_V1` zkas circuit ZkBinary
+    /// `ConsensusMint_V1` zkas circuit ZkBinary
     pub mint_zkbin: ZkBinary,
-    /// Proving key for the `Mint_V1` zk circuit
+    /// Proving key for the `ConsensusMint_V1` zk circuit
     pub mint_pk: ProvingKey,
 }
 
 impl ConsensusGenesisStakeCallBuilder {
     pub fn build(&self) -> Result<ConsensusGenesisStakeCallDebris> {
         debug!("Building Consensus::GenesisStakeV1 contract call");
-        assert!(self.amount != 0);
+        let value = self.amount;
+        assert!(value != 0);
 
         // In this call, we will build one clear input and one anonymous output.
         // Only DARK_TOKEN_ID can be minted and staked on genesis slot.
         let token_id = *DARK_TOKEN_ID;
-
-        let input = TransactionBuilderClearInputInfo {
-            value: self.amount,
-            token_id,
-            signature_secret: self.keypair.secret,
-        };
-
-        let output = TransactionBuilderOutputInfo {
-            value: self.amount,
-            token_id,
-            public_key: self.keypair.public,
-        };
+        let epoch = 0;
+        let secret_key = self.keypair.secret;
+        let public_key = PublicKey::from_secret(secret_key);
 
         // We just create the pedersen commitment blinds here. We simply
         // enforce that the clear input and the anon output have the same
@@ -87,29 +76,22 @@ impl ConsensusGenesisStakeCallBuilder {
         let value_blind = pallas::Scalar::random(&mut OsRng);
         let token_blind = pallas::Scalar::random(&mut OsRng);
 
-        let c_input = ClearInput {
-            value: input.value,
-            token_id: input.token_id,
-            value_blind,
-            token_blind,
-            signature_public: PublicKey::from_secret(input.signature_secret),
-        };
+        let c_input =
+            ClearInput { value, token_id, value_blind, token_blind, signature_public: public_key };
+
+        let output = TransactionBuilderOutputInfo { value, token_id, public_key };
 
         let serial = pallas::Base::random(&mut OsRng);
-        let spend_hook = CONSENSUS_CONTRACT_ID.inner();
-        let user_data = pallas::Base::random(&mut OsRng);
         let coin_blind = pallas::Base::random(&mut OsRng);
 
         info!("Creating genesis stake mint proof for output");
-        let (proof, public_inputs) = create_stake_mint_proof(
+        let (proof, public_inputs) = create_consensus_mint_proof(
             &self.mint_zkbin,
             &self.mint_pk,
+            epoch,
             &output,
             value_blind,
-            token_blind,
             serial,
-            spend_hook,
-            user_data,
             coin_blind,
         )?;
 
@@ -118,8 +100,8 @@ impl ConsensusGenesisStakeCallBuilder {
             serial,
             value: output.value,
             token_id: output.token_id,
-            spend_hook,
-            user_data,
+            spend_hook: CONSENSUS_CONTRACT_ID.inner(),
+            user_data: ZERO,
             coin_blind,
             value_blind,
             token_blind,
@@ -128,9 +110,8 @@ impl ConsensusGenesisStakeCallBuilder {
 
         let encrypted_note = AeadEncryptedNote::encrypt(&note, &output.public_key, &mut OsRng)?;
 
-        let output = Output {
+        let output = ConsensusOutput {
             value_commit: public_inputs.value_commit,
-            token_commit: public_inputs.token_commit,
             coin: public_inputs.coin,
             note: encrypted_note,
         };

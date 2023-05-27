@@ -50,7 +50,7 @@ use darkfi_consensus_contract::{
         proposal_v1::ConsensusProposalCallBuilder, stake_v1::ConsensusStakeCallBuilder,
         unstake_v1::ConsensusUnstakeCallBuilder,
     },
-    model::{ConsensusGenesisStakeParamsV1, ConsensusProposalMintParamsV1},
+    model::{ConsensusGenesisStakeParamsV1, ConsensusOutput, ConsensusProposalMintParamsV1},
     ConsensusFunction,
 };
 use darkfi_money_contract::{
@@ -59,7 +59,7 @@ use darkfi_money_contract::{
         unstake_v1::MoneyUnstakeCallBuilder, MoneyNote, OwnCoin,
     },
     model::{ConsensusStakeParamsV1, MoneyTransferParamsV1, MoneyUnstakeParamsV1, Output},
-    MoneyFunction, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1,
+    MoneyFunction, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1,
     CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
     MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
@@ -230,6 +230,7 @@ impl ConsensusTestHarness {
             SMART_CONTRACT_ZKAS_DB_NAME,
         )?;
         mkpk!(MONEY_CONTRACT_ZKAS_MINT_NS_V1);
+        mkpk!(CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1);
         mkpk!(MONEY_CONTRACT_ZKAS_BURN_NS_V1);
         mkpk!(CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1);
         mkpk!(CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1);
@@ -327,7 +328,8 @@ impl ConsensusTestHarness {
         amount: u64,
     ) -> Result<(Transaction, ConsensusGenesisStakeParamsV1)> {
         let wallet = self.holders.get_mut(&holder).unwrap();
-        let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
+        let (mint_pk, mint_zkbin) =
+            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::GenesisStake).unwrap();
         let timer = Instant::now();
@@ -696,18 +698,28 @@ impl ConsensusTestHarness {
         Ok(())
     }
 
-    pub fn gather_owncoin(
+    pub fn gather_owncoin(&mut self, holder: Holder, output: Output) -> Result<OwnCoin> {
+        let wallet = self.holders.get_mut(&holder).unwrap();
+        let leaf_position = wallet.merkle_tree.witness().unwrap();
+        let note: MoneyNote = output.note.decrypt(&wallet.keypair.secret)?;
+        let oc = OwnCoin {
+            coin: Coin::from(output.coin),
+            note: note.clone(),
+            secret: wallet.keypair.secret,
+            nullifier: Nullifier::from(poseidon_hash([wallet.keypair.secret.inner(), note.serial])),
+            leaf_position,
+        };
+
+        Ok(oc)
+    }
+
+    pub fn gather_consensus_owncoin(
         &mut self,
         holder: Holder,
-        output: Output,
-        consensus: bool,
+        output: ConsensusOutput,
     ) -> Result<OwnCoin> {
         let wallet = self.holders.get_mut(&holder).unwrap();
-        let leaf_position = if consensus {
-            wallet.consensus_merkle_tree.witness().unwrap()
-        } else {
-            wallet.merkle_tree.witness().unwrap()
-        };
+        let leaf_position = wallet.consensus_merkle_tree.witness().unwrap();
         let note: MoneyNote = output.note.decrypt(&wallet.keypair.secret)?;
         let oc = OwnCoin {
             coin: Coin::from(output.coin),
