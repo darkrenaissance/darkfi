@@ -28,7 +28,6 @@ class DarkfiTable:
         self.debug=debug
         self.start_time=time.time()
         feedback=0 # number leads in previous slot
-        count = 0
         # random running time
         rand_running_time = random.randint(1,self.running_time) if rand_running_time else self.running_time
         self.running_time = rand_running_time
@@ -89,7 +88,6 @@ class DarkfiTable:
                             darkie_winning_idx = darkie_idx
                             break
                     self.darkies[darkie_winning_idx].resync_stake(resync_reward)
-
             count+=1
         self.end_time=time.time()
         avg_reward = sum(self.rewards)/len(self.rewards)

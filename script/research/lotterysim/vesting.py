@@ -3,6 +3,7 @@ from core.strategy import random_strategy
 from core.constants import *
 from pid.pid_base import *
 from draw import draw
+import metrics
 import logging
 import config
 import os
@@ -30,7 +31,9 @@ def vesting_instance(vesting, running_time):
             dt.add_darkie(darkie)
         dt.background(rand_running_time=False)
         dt.write()
-    return dt.avg_apr()
+
+        inflation = metrics.percent_change(airdrop, sum(dt.rewards))
+    return (dt.avg_apr(), inflation)
 
 if not os.path.exists(config.vesting_file):
     print('add vested distribution csv at path {} with vesting period {} (slots) aparts.'.format(config.vesting_file, ONE_MONTH))
@@ -51,6 +54,7 @@ if config.running_time== 0:
 else:
     running_time = config.running_time
 
-apr = vesting_instance(vesting, running_time)
+apr, inflation = vesting_instance(vesting, running_time)
 print('avg apr: {}%'.format(apr*100))
+print('inflation: {}%'.format(inflation))
 draw()
