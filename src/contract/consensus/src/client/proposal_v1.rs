@@ -42,8 +42,8 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{
+        common::{create_unstake_burn_proof, TransactionBuilderInputInfo as UnstakeTBII},
         stake_v1::{TransactionBuilderOutputInfo as StakeTBOI, TransactionBuilderOutputInfo},
-        unstake_v1::{create_unstake_burn_proof, TransactionBuilderInputInfo as UnstakeTBII},
     },
     model::{
         ConsensusProposalBurnParamsV1, ConsensusProposalMintParamsV1,

@@ -92,15 +92,17 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // order to be able to verify the circuits being bundled and enforcing
     // a specific tree inside sled, and also creation of VerifyingKey.
     let money_mint_v1_bincode = include_bytes!("../../money/proof/mint_v1.zk.bin");
-    let consensus_mint_v1_bincode = include_bytes!("../proof/consensus_mint_v1.zk.bin");
     let money_burn_v1_bincode = include_bytes!("../../money/proof/burn_v1.zk.bin");
+    let consensus_mint_v1_bincode = include_bytes!("../proof/consensus_mint_v1.zk.bin");
+    let consensus_burn_v1_bincode = include_bytes!("../proof/consensus_burn_v1.zk.bin");
     let proposal_reward_v1_bincode = include_bytes!("../proof/proposal_reward_v1.zk.bin");
     let proposal_mint_v1_bincode = include_bytes!("../proof/proposal_mint_v1.zk.bin");
 
     // For that, we use `zkas_db_set` and pass in the bincode.
     zkas_db_set(&money_mint_v1_bincode[..])?;
-    zkas_db_set(&consensus_mint_v1_bincode[..])?;
     zkas_db_set(&money_burn_v1_bincode[..])?;
+    zkas_db_set(&consensus_mint_v1_bincode[..])?;
+    zkas_db_set(&consensus_burn_v1_bincode[..])?;
     zkas_db_set(&proposal_reward_v1_bincode[..])?;
     zkas_db_set(&proposal_mint_v1_bincode[..])?;
 

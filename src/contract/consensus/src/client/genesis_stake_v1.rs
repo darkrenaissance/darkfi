@@ -23,20 +23,20 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_money_contract::{client::MoneyNote, model::ClearInput};
+use darkfi_money_contract::model::ClearInput;
 use darkfi_sdk::{
-    crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, Keypair, PublicKey, CONSENSUS_CONTRACT_ID,
-        DARK_TOKEN_ID,
-    },
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Keypair, PublicKey, DARK_TOKEN_ID},
     pasta::pallas,
 };
 use log::{debug, info};
 use rand::rngs::OsRng;
 
 use crate::{
-    client::common::{create_consensus_mint_proof, TransactionBuilderOutputInfo},
-    model::{ConsensusGenesisStakeParamsV1, ConsensusOutput, ZERO},
+    client::{
+        common::{create_consensus_mint_proof, TransactionBuilderOutputInfo},
+        ConsensusNote,
+    },
+    model::{ConsensusGenesisStakeParamsV1, ConsensusOutput},
 };
 
 pub struct ConsensusGenesisStakeCallDebris {
@@ -96,17 +96,7 @@ impl ConsensusGenesisStakeCallBuilder {
         )?;
 
         // Encrypted note
-        let note = MoneyNote {
-            serial,
-            value: output.value,
-            token_id: output.token_id,
-            spend_hook: CONSENSUS_CONTRACT_ID.inner(),
-            user_data: ZERO,
-            coin_blind,
-            value_blind,
-            token_blind,
-            memo: vec![],
-        };
+        let note = ConsensusNote { serial, value: output.value, epoch, coin_blind, value_blind };
 
         let encrypted_note = AeadEncryptedNote::encrypt(&note, &output.public_key, &mut OsRng)?;
 

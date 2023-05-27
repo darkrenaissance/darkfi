@@ -77,12 +77,8 @@ pub struct TransactionBuilderOutputInfo {
 pub struct MoneyUnstakeCallBuilder {
     /// `OwnCoin` we're given to use in this builder
     pub coin: OwnCoin,
-    /// Recipient's public key
-    pub recipient: PublicKey,
     /// Blinding factor for value commitment
     pub value_blind: pallas::Scalar,
-    /// Blinding factor for `token_id`
-    pub token_blind: pallas::Scalar,
     /// Revealed nullifier
     pub nullifier: Nullifier,
     /// Revealed Merkle root
@@ -105,13 +101,14 @@ impl MoneyUnstakeCallBuilder {
         let output = TransactionBuilderOutputInfo {
             value: self.coin.note.value,
             token_id: self.coin.note.token_id,
-            public_key: self.recipient,
+            public_key: self.signature_public,
         };
         debug!("Finished building output");
 
         let serial = pallas::Base::random(&mut OsRng);
         let spend_hook = pallas::Base::zero();
         let user_data_enc = pallas::Base::zero();
+        let token_blind = pallas::Scalar::random(&mut OsRng);
         let coin_blind = pallas::Base::random(&mut OsRng);
 
         info!("Creating unstake mint proof for output");
@@ -120,7 +117,7 @@ impl MoneyUnstakeCallBuilder {
             &self.mint_pk,
             &output,
             self.value_blind,
-            self.token_blind,
+            token_blind,
             serial,
             spend_hook,
             user_data_enc,
@@ -136,7 +133,7 @@ impl MoneyUnstakeCallBuilder {
             user_data: user_data_enc,
             coin_blind,
             value_blind: self.value_blind,
-            token_blind: self.token_blind,
+            token_blind,
             memo: vec![],
         };
 
@@ -150,7 +147,7 @@ impl MoneyUnstakeCallBuilder {
         };
 
         let input = StakeInput {
-            token_blind: self.token_blind,
+            token_blind,
             value_commit: public_inputs.value_commit,
             nullifier: self.nullifier,
             merkle_root: self.merkle_root,

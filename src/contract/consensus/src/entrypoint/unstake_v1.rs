@@ -20,13 +20,10 @@ use darkfi_money_contract::{
     error::MoneyError,
     model::{ConsensusUnstakeParamsV1, ConsensusUnstakeUpdateV1, MoneyUnstakeParamsV1},
     CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1,
+    CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{
-        pasta_prelude::*, pedersen_commitment_base, ContractId, CONSENSUS_CONTRACT_ID,
-        DARK_TOKEN_ID, MONEY_CONTRACT_ID,
-    },
+    crypto::{pasta_prelude::*, ContractId, MONEY_CONTRACT_ID},
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     msg,
@@ -35,7 +32,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::{model::ZERO, ConsensusFunction};
+use crate::ConsensusFunction;
 
 /// `get_metadata` function for `Consensus::UnstakeV1`
 pub(crate) fn consensus_unstake_get_metadata_v1(
@@ -55,24 +52,22 @@ pub(crate) fn consensus_unstake_get_metadata_v1(
     // Grab the pedersen commitments and signature pubkeys from the
     // anonymous input
     let value_coords = input.value_commit.to_affine().coordinates().unwrap();
-    let token_coords = input.token_commit.to_affine().coordinates().unwrap();
     let (sig_x, sig_y) = input.signature_public.xy();
+    let epoch_palas = pallas::Base::from(input.epoch);
 
     // It is very important that these are in the same order as the
     // `constrain_instance` calls in the zkas code.
     // Otherwise verification will fail.
     zk_public_inputs.push((
-        MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string(),
+        CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1.to_string(),
         vec![
             input.nullifier.inner(),
-            *value_coords.x(),
-            *value_coords.y(),
-            *token_coords.x(),
-            *token_coords.y(),
-            input.merkle_root.inner(),
-            input.user_data_enc,
+            epoch_palas,
             sig_x,
             sig_y,
+            input.merkle_root.inner(),
+            *value_coords.x(),
+            *value_coords.y(),
         ],
     ));
 
@@ -105,12 +100,6 @@ pub(crate) fn consensus_unstake_process_instruction_v1(
     msg!("[ConsensusUnstakeV1] Validating anonymous input");
     let input = &params.input;
 
-    // Only native token can be unstaked
-    if input.token_commit != pedersen_commitment_base(DARK_TOKEN_ID.inner(), params.token_blind) {
-        msg!("[ConsensusUnstakeV1] Error: Input used non-native token");
-        return Err(MoneyError::StakeInputNonNativeToken.into())
-    }
-
     // The Merkle root is used to know whether this is a coin that
     // existed in a previous state.
     if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
@@ -135,17 +124,6 @@ pub(crate) fn consensus_unstake_process_instruction_v1(
     if next.contract_id.inner() != MONEY_CONTRACT_ID.inner() {
         msg!("[ConsensusUnstakeV1] Error: Next contract call is not money contract");
         return Err(MoneyError::UnstakeNextCallNotMoneyContract.into())
-    }
-
-    // Check if spend hook is set and its correctness
-    if input.spend_hook == ZERO {
-        msg!("[ConsensusUnstakeV1] Error: Missing spend hook");
-        return Err(MoneyError::StakeMissingSpendHook.into())
-    }
-
-    if input.spend_hook != CONSENSUS_CONTRACT_ID.inner() {
-        msg!("[ConsensusUnstakeV1] Error: Spend hook is not consensus contract");
-        return Err(MoneyError::UnstakeSpendHookNotConsensusContract.into())
     }
 
     // Verify next call corresponds to Money::UnstakeV1 (0x07)

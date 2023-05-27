@@ -35,7 +35,7 @@ use darkfi::{
 use darkfi_sdk::{
     crypto::{
         merkle_prelude::*, poseidon_hash, Coin, Keypair, MerkleNode, MerkleTree, Nullifier,
-        PublicKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
+        PublicKey, SecretKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
     ContractCall,
@@ -48,7 +48,7 @@ use darkfi_consensus_contract::{
     client::{
         genesis_stake_v1::ConsensusGenesisStakeCallBuilder,
         proposal_v1::ConsensusProposalCallBuilder, stake_v1::ConsensusStakeCallBuilder,
-        unstake_v1::ConsensusUnstakeCallBuilder,
+        unstake_v1::ConsensusUnstakeCallBuilder, ConsensusNote, ConsensusOwnCoin,
     },
     model::{ConsensusGenesisStakeParamsV1, ConsensusOutput, ConsensusProposalMintParamsV1},
     ConsensusFunction,
@@ -59,9 +59,9 @@ use darkfi_money_contract::{
         unstake_v1::MoneyUnstakeCallBuilder, MoneyNote, OwnCoin,
     },
     model::{ConsensusStakeParamsV1, MoneyTransferParamsV1, MoneyUnstakeParamsV1, Output},
-    MoneyFunction, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1,
-    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
-    MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    MoneyFunction, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
+    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1,
+    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
 pub fn init_logger() {
@@ -232,6 +232,7 @@ impl ConsensusTestHarness {
         mkpk!(MONEY_CONTRACT_ZKAS_MINT_NS_V1);
         mkpk!(CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1);
         mkpk!(MONEY_CONTRACT_ZKAS_BURN_NS_V1);
+        mkpk!(CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1);
         mkpk!(CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1);
         mkpk!(CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1);
 
@@ -606,10 +607,11 @@ impl ConsensusTestHarness {
     pub fn unstake_native(
         &mut self,
         holder: Holder,
-        staked_oc: OwnCoin,
-    ) -> Result<(Transaction, MoneyUnstakeParamsV1)> {
+        staked_oc: ConsensusOwnCoin,
+    ) -> Result<(Transaction, MoneyUnstakeParamsV1, SecretKey)> {
         let wallet = self.holders.get_mut(&holder).unwrap();
-        let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
+        let (burn_pk, burn_zkbin) =
+            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
         let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::Unstake).unwrap();
         let timer = Instant::now();
@@ -636,10 +638,8 @@ impl ConsensusTestHarness {
 
         // Building Money::Unstake params
         let money_unstake_call_debris = MoneyUnstakeCallBuilder {
-            coin: staked_oc,
-            recipient: wallet.keypair.public,
+            coin: staked_oc.into(),
             value_blind: consensus_unstake_value_blind,
-            token_blind: consensus_unstake_params.token_blind,
             nullifier: consensus_unstake_params.input.nullifier,
             merkle_root: consensus_unstake_params.input.merkle_root,
             signature_public: consensus_unstake_params.input.signature_public,
@@ -675,7 +675,7 @@ impl ConsensusTestHarness {
         let size = ::std::mem::size_of_val(&*base58);
         tx_action_benchmark.broadcasted_sizes.push(size);
 
-        Ok((unstake_tx, money_unstake_params))
+        Ok((unstake_tx, money_unstake_params, consensus_unstake_secret_key))
     }
 
     pub async fn execute_unstake_native_tx(
@@ -698,10 +698,19 @@ impl ConsensusTestHarness {
         Ok(())
     }
 
-    pub fn gather_owncoin(&mut self, holder: Holder, output: Output) -> Result<OwnCoin> {
+    pub fn gather_owncoin(
+        &mut self,
+        holder: Holder,
+        output: Output,
+        secret_key: Option<SecretKey>,
+    ) -> Result<OwnCoin> {
         let wallet = self.holders.get_mut(&holder).unwrap();
         let leaf_position = wallet.merkle_tree.witness().unwrap();
-        let note: MoneyNote = output.note.decrypt(&wallet.keypair.secret)?;
+        let secret_key = match secret_key {
+            Some(key) => key,
+            None => wallet.keypair.secret,
+        };
+        let note: MoneyNote = output.note.decrypt(&secret_key)?;
         let oc = OwnCoin {
             coin: Coin::from(output.coin),
             note: note.clone(),
@@ -717,11 +726,16 @@ impl ConsensusTestHarness {
         &mut self,
         holder: Holder,
         output: ConsensusOutput,
-    ) -> Result<OwnCoin> {
+        secret_key: Option<SecretKey>,
+    ) -> Result<ConsensusOwnCoin> {
         let wallet = self.holders.get_mut(&holder).unwrap();
         let leaf_position = wallet.consensus_merkle_tree.witness().unwrap();
-        let note: MoneyNote = output.note.decrypt(&wallet.keypair.secret)?;
-        let oc = OwnCoin {
+        let secret_key = match secret_key {
+            Some(key) => key,
+            None => wallet.keypair.secret,
+        };
+        let note: ConsensusNote = output.note.decrypt(&secret_key)?;
+        let oc = ConsensusOwnCoin {
             coin: Coin::from(output.coin),
             note: note.clone(),
             secret: wallet.keypair.secret,

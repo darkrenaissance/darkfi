@@ -152,12 +152,6 @@ pub(crate) fn money_unstake_process_instruction_v1(
         return Err(MoneyError::PreviousCallInputMissmatch.into())
     }
 
-    // Check spend hook correctness
-    if previous_input.spend_hook != CONSENSUS_CONTRACT_ID.inner() {
-        msg!("[MoneyUnstakeV1] Error: Invoking contract call does not match spend hook in input");
-        return Err(MoneyError::SpendHookMismatch.into())
-    }
-
     // If next spend hook is set, check its correctness
     if params.spend_hook != pallas::Base::zero() {
         let next_call_idx = call_idx + 1;

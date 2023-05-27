@@ -84,6 +84,30 @@ impl PartialEq<StakeInput> for Input {
     }
 }
 
+/// Anonymous input for unstaking contract calls
+#[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
+pub struct UnstakeInput {
+    /// Epoch the coin was minted
+    pub epoch: u64,
+    /// Pedersen commitment for the staked coin's value
+    pub value_commit: pallas::Point,
+    /// Revealed nullifier
+    pub nullifier: Nullifier,
+    /// Revealed Merkle root
+    pub merkle_root: MerkleNode,
+    /// Public key for the signature
+    pub signature_public: PublicKey,
+}
+
+impl PartialEq<StakeInput> for UnstakeInput {
+    fn eq(&self, other: &StakeInput) -> bool {
+        self.value_commit == other.value_commit &&
+            self.nullifier == other.nullifier &&
+            self.merkle_root == other.merkle_root &&
+            self.signature_public == other.signature_public
+    }
+}
+
 /// A contract call's anonymous output
 #[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Output {
@@ -208,10 +232,8 @@ pub struct ConsensusStakeUpdateV1 {
 /// Parameters for `Consensus::Unstake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ConsensusUnstakeParamsV1 {
-    /// Blinding factor for `token_id`
-    pub token_blind: pallas::Scalar,
     /// Anonymous input
-    pub input: Input,
+    pub input: UnstakeInput,
 }
 
 /// State update for `Consensus::Unstake`
