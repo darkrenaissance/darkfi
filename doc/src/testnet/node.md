@@ -80,11 +80,21 @@ should be able to subscribe again.
 
 ## Local Deployment
 
-For development we recommend running master. You can run a single
-consensus full node using this command:
+For development we recommend running master.
+First we modify the constants specifically for a local testnet.
+This step is optional but you might find scanning takes a long time
+otherwise.
 
 ```
 cd contrib/localnet/darkfid-single-node/
+./tmux_sessions.sh now
+cd ../../../
+make darkfid
+```
+
+You can run a single consensus full node using this command:
+
+```
 ./tmux_sessions.sh -v
 ```
 
