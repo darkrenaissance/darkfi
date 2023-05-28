@@ -10,3 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = "0.18.3"
+darkfi-sdk = { path = "../sdk" }
+rand = "0.8.5"
+halo2_gadgets = "0.3.0"
+darkfi = { path = "../../", features = ["zk", "zkas"] }
