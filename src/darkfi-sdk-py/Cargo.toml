@@ -10,3 +10,4 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = "0.18.3"
+darkfi-sdk = { path = "../sdk" }
