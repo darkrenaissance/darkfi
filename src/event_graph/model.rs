@@ -20,14 +20,14 @@ use std::{cmp::Ordering, collections::HashMap, fmt::Debug};
 
 use async_std::sync::{Arc, Mutex};
 use blake3;
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
 use log::error;
 
 use crate::{event_graph::events_queue::EventsQueuePtr, util::time::Timestamp};
 
 use super::EventMsg;
 
-pub type EventId = [u8; 32];
+pub type EventId = [u8; blake3::OUT_LEN];
 
 const MAX_DEPTH: u32 = 300;
 const MAX_HEIGHT: u32 = 300;
@@ -44,12 +44,7 @@ where
     T: Send + Sync + Encodable + Decodable + Clone + EventMsg,
 {
     pub fn hash(&self) -> EventId {
-        let mut bytes = Vec::new();
-        self.encode(&mut bytes).expect("serialize failed!");
-        let mut hasher = blake3::Hasher::new();
-        hasher.update(&bytes);
-        let binding = hasher.finalize();
-        binding.as_bytes().clone().to_owned()
+        *blake3::hash(&serialize(self)).as_bytes()
     }
 }
 
@@ -79,7 +74,7 @@ where
         let root_node = EventNode {
             parent: None,
             event: Event {
-                previous_event_hash: [0u8; 32],
+                previous_event_hash: [0u8; blake3::OUT_LEN],
                 action: T::new(),
                 timestamp: Timestamp(1674512021323),
             },
