@@ -4,7 +4,7 @@ def construct(points):
     divs = []
     for i in range(0, len(points), 2):
         # Odd last remainder element
-        if i + 1 == len(divs):
+        if i + 1 == len(points):
             P = points[i]
             L = div_line(P, -P)
             Q = points[i]
