@@ -19,9 +19,9 @@
 use std::{cmp::Ordering, collections::HashMap, fmt::Debug};
 
 use async_std::sync::{Arc, Mutex};
+use blake3;
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use log::error;
-use ripemd::{Digest, Ripemd256};
 
 use crate::{event_graph::events_queue::EventsQueuePtr, util::time::Timestamp};
 
@@ -46,12 +46,10 @@ where
     pub fn hash(&self) -> EventId {
         let mut bytes = Vec::new();
         self.encode(&mut bytes).expect("serialize failed!");
-        let mut hasher = Ripemd256::new();
-        hasher.update(bytes);
-        let bytes = hasher.finalize().to_vec();
-        let mut result = [0u8; 32];
-        result.copy_from_slice(bytes.as_slice());
-        result
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(&bytes);
+        let binding = hasher.finalize();
+        binding.as_bytes().clone().to_owned()
     }
 }
 
