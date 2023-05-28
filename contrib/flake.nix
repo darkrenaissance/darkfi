@@ -52,14 +52,17 @@
       packages = rec {
         darkfi-drk = myBuildRustPackage {
           pname = "darkfi-drk";
+          cargoExtraArgs = "--package=drk";
           buildAndTestSubdir = "./bin/drk";
         };
         darkfi-darkfid = myBuildRustPackage {
           pname = "darkfi-darkfid";
+          cargoExtraArgs = "--package=darkfid";
           buildAndTestSubdir = "./bin/darkfid";
         };
         darkfi-dnetview = myBuildRustPackage {
           pname = "darkfi-dnetview";
+          cargoExtraArgs = "--package=dnetview";
           buildAndTestSubdir = "./bin/dnetview";
         };
         darkfi-ircd = myBuildRustPackage {
@@ -69,15 +72,23 @@
         };
         darkfi-tau = myBuildRustPackage {
           pname = "darkfi-tau";
+          cargoExtraArgs = "--package=tau";
           buildAndTestSubdir = "./bin/tau";
         };
         darkfi-taud = myBuildRustPackage {
           pname = "darkfi-taud";
+          cargoExtraArgs = "--package=taud";
           buildAndTestSubdir = "./bin/taud";
         };
         darkfi-zkas = myBuildRustPackage {
           pname = "darkfi-zkas";
+          cargoExtraArgs = "--package=zkas";
           buildAndTestSubdir = "./bin/zkas";
+        };
+        darkfi-vanityaddr = myBuildRustPackage {
+          pname = "darkfi-vanityaddr";
+          cargoExtraArgs = "--package=vanityaddr";
+          buildAndTestSubdir = "./bin/vanityadddr";
         };
         default = darkfi-drk;
       };
