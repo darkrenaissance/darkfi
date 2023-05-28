@@ -23,7 +23,10 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_money_contract::model::{ConsensusUnstakeParamsV1, UnstakeInput};
+use darkfi_money_contract::{
+    client::ConsensusOwnCoin,
+    model::{ConsensusInput, ConsensusUnstakeParamsV1},
+};
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, MerkleTree, SecretKey},
     incrementalmerkletree::Tree,
@@ -32,10 +35,7 @@ use darkfi_sdk::{
 use log::{debug, info};
 use rand::rngs::OsRng;
 
-use crate::client::{
-    common::{create_consensus_burn_proof, TransactionBuilderConsensusInputInfo},
-    ConsensusOwnCoin,
-};
+use crate::client::common::{create_consensus_burn_proof, ConsensusBurnInputInfo};
 
 pub struct ConsensusUnstakeCallDebris {
     pub params: ConsensusUnstakeParamsV1,
@@ -65,20 +65,22 @@ impl ConsensusUnstakeCallBuilder {
         let leaf_position = self.coin.leaf_position;
         let root = self.tree.root(0).unwrap();
         let merkle_path = self.tree.authentication_path(leaf_position, &root).unwrap();
-        let input = TransactionBuilderConsensusInputInfo {
+        let value_blind = pallas::Scalar::random(&mut OsRng);
+        let input = ConsensusBurnInputInfo {
             leaf_position,
             merkle_path,
             secret: self.coin.secret,
             note: self.coin.note.clone(),
+            value_blind,
         };
         debug!("Finished building input");
 
-        let value_blind = pallas::Scalar::random(&mut OsRng);
         info!("Creating unstake burn proof for input");
+        let value_blind = input.value_blind;
         let (proof, public_inputs, signature_secret) =
-            create_consensus_burn_proof(&self.burn_zkbin, &self.burn_pk, &input, value_blind)?;
+            create_consensus_burn_proof(&self.burn_zkbin, &self.burn_pk, &input)?;
 
-        let input = UnstakeInput {
+        let input = ConsensusInput {
             epoch: self.coin.note.epoch,
             value_commit: public_inputs.value_commit,
             nullifier: public_inputs.nullifier,

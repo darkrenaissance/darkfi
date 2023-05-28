@@ -18,16 +18,14 @@
 
 use darkfi_money_contract::{
     error::MoneyError,
-    model::{ConsensusStakeParamsV1, ConsensusStakeUpdateV1, MoneyStakeParamsV1},
+    model::{ConsensusStakeParamsV1, ConsensusStakeUpdateV1, MoneyStakeParamsV1, PALLAS_ZERO},
     CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
     CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1, MONEY_CONTRACT_COIN_ROOTS_TREE,
+    MONEY_CONTRACT_NULLIFIERS_TREE,
 };
 use darkfi_sdk::{
-    crypto::{
-        pasta_prelude::*, pedersen_commitment_base, ContractId, MerkleNode, CONSENSUS_CONTRACT_ID,
-        DARK_TOKEN_ID, MONEY_CONTRACT_ID,
-    },
+    crypto::{pasta_prelude::*, ContractId, MerkleNode, CONSENSUS_CONTRACT_ID, MONEY_CONTRACT_ID},
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     merkle_add, msg,
@@ -36,7 +34,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::{model::ZERO, ConsensusFunction};
+use crate::ConsensusFunction;
 
 /// `get_metadata` function for `Consensus::StakeV1`
 pub(crate) fn consensus_stake_get_metadata_v1(
@@ -52,20 +50,17 @@ pub(crate) fn consensus_stake_get_metadata_v1(
     // Public keys for the transaction signatures we have to verify
     let signature_pubkeys = vec![params.input.signature_public];
 
+    // TODO: Grab the minting epoch from the verifying slot
+    //let verifying_slot = get_verifying_slot_epoch();
+    let epoch = PALLAS_ZERO;
+
     // Grab the pedersen commitment from the anonymous output
     let output = &params.output;
     let value_coords = output.value_commit.to_affine().coordinates().unwrap();
-    let token_coords = output.token_commit.to_affine().coordinates().unwrap();
 
     zk_public_inputs.push((
-        MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
-        vec![
-            output.coin.inner(),
-            *value_coords.x(),
-            *value_coords.y(),
-            *token_coords.x(),
-            *token_coords.y(),
-        ],
+        CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
+        vec![epoch, output.coin.inner(), *value_coords.x(), *value_coords.y()],
     ));
 
     // Serialize everything gathered and return it
@@ -98,12 +93,6 @@ pub(crate) fn consensus_stake_process_instruction_v1(
     msg!("[ConsensusStakeV1] Validating anonymous output");
     let input = &params.input;
     let output = &params.output;
-
-    // Only native token can be staked
-    if output.token_commit != pedersen_commitment_base(DARK_TOKEN_ID.inner(), input.token_blind) {
-        msg!("[ConsensusStakeV1] Error: Input used non-native token");
-        return Err(MoneyError::StakeInputNonNativeToken.into())
-    }
 
     // Verify value commits match
     if output.value_commit != input.value_commit {
@@ -152,7 +141,7 @@ pub(crate) fn consensus_stake_process_instruction_v1(
     }
 
     // If spend hook is set, check its correctness
-    if previous_input.spend_hook != ZERO &&
+    if previous_input.spend_hook != PALLAS_ZERO &&
         previous_input.spend_hook != CONSENSUS_CONTRACT_ID.inner()
     {
         msg!("[ConsensusStakeV1] Error: Invoking contract call does not match spend hook in input");

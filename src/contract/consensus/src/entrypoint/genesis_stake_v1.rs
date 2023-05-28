@@ -17,8 +17,9 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError, model::ConsensusStakeUpdateV1, CONSENSUS_CONTRACT_COINS_TREE,
-    CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
+    error::MoneyError,
+    model::{ConsensusStakeUpdateV1, PALLAS_ZERO},
+    CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, pedersen_commitment_u64, ContractId, DARK_TOKEN_ID},
@@ -31,10 +32,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::{
-    model::{ConsensusGenesisStakeParamsV1, ZERO},
-    ConsensusFunction,
-};
+use crate::{model::ConsensusGenesisStakeParamsV1, ConsensusFunction};
 
 /// `get_metadata` function for `Consensus::GenesisStakeV1`
 pub(crate) fn consensus_genesis_stake_get_metadata_v1(
@@ -51,7 +49,7 @@ pub(crate) fn consensus_genesis_stake_get_metadata_v1(
     let signature_pubkeys = vec![params.input.signature_public];
 
     // Genesis stake only happens on epoch 0
-    let epoch = ZERO;
+    let epoch = PALLAS_ZERO;
 
     // Grab the pedersen commitment from the anonymous output
     let output = &params.output;

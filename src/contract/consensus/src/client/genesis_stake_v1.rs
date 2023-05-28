@@ -23,7 +23,10 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_money_contract::model::ClearInput;
+use darkfi_money_contract::{
+    client::ConsensusNote,
+    model::{ClearInput, ConsensusOutput},
+};
 use darkfi_sdk::{
     crypto::{note::AeadEncryptedNote, pasta_prelude::*, Keypair, PublicKey, DARK_TOKEN_ID},
     pasta::pallas,
@@ -32,11 +35,8 @@ use log::{debug, info};
 use rand::rngs::OsRng;
 
 use crate::{
-    client::{
-        common::{create_consensus_mint_proof, TransactionBuilderOutputInfo},
-        ConsensusNote,
-    },
-    model::{ConsensusGenesisStakeParamsV1, ConsensusOutput},
+    client::common::{create_consensus_mint_proof, ConsensusMintOutputInfo},
+    model::ConsensusGenesisStakeParamsV1,
 };
 
 pub struct ConsensusGenesisStakeCallDebris {
@@ -71,29 +71,21 @@ impl ConsensusGenesisStakeCallBuilder {
 
         // We just create the pedersen commitment blinds here. We simply
         // enforce that the clear input and the anon output have the same
-        // commitments. Not sure if this can be avoided, but also is it
-        // really necessary to avoid?
+        // commitments.
         let value_blind = pallas::Scalar::random(&mut OsRng);
         let token_blind = pallas::Scalar::random(&mut OsRng);
+        let serial = pallas::Base::random(&mut OsRng);
+        let coin_blind = pallas::Base::random(&mut OsRng);
 
         let c_input =
             ClearInput { value, token_id, value_blind, token_blind, signature_public: public_key };
 
-        let output = TransactionBuilderOutputInfo { value, token_id, public_key };
-
-        let serial = pallas::Base::random(&mut OsRng);
-        let coin_blind = pallas::Base::random(&mut OsRng);
+        let output =
+            ConsensusMintOutputInfo { value, epoch, public_key, value_blind, serial, coin_blind };
 
         info!("Creating genesis stake mint proof for output");
-        let (proof, public_inputs) = create_consensus_mint_proof(
-            &self.mint_zkbin,
-            &self.mint_pk,
-            epoch,
-            &output,
-            value_blind,
-            serial,
-            coin_blind,
-        )?;
+        let (proof, public_inputs) =
+            create_consensus_mint_proof(&self.mint_zkbin, &self.mint_pk, &output)?;
 
         // Encrypted note
         let note = ConsensusNote { serial, value: output.value, epoch, coin_blind, value_blind };

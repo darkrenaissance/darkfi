@@ -35,8 +35,8 @@ use log::{debug, info};
 use rand::rngs::OsRng;
 
 use crate::{
-    client::{MoneyNote, OwnCoin},
-    model::{MoneyUnstakeParamsV1, Output, StakeInput},
+    client::{ConsensusOwnCoin, MoneyNote},
+    model::{ConsensusInput, MoneyUnstakeParamsV1, Output, PALLAS_ZERO, SCALAR_ZERO},
 };
 
 pub struct MoneyUnstakeCallDebris {
@@ -75,8 +75,8 @@ pub struct TransactionBuilderOutputInfo {
 
 /// Struct holding necessary information to build a `Money::UnstakeV1` contract call.
 pub struct MoneyUnstakeCallBuilder {
-    /// `OwnCoin` we're given to use in this builder
-    pub coin: OwnCoin,
+    /// `ConsensusOwnCoin` we're given to use in this builder
+    pub coin: ConsensusOwnCoin,
     /// Blinding factor for value commitment
     pub value_blind: pallas::Scalar,
     /// Revealed nullifier
@@ -95,20 +95,19 @@ impl MoneyUnstakeCallBuilder {
     pub fn build(&self) -> Result<MoneyUnstakeCallDebris> {
         debug!("Building Money::UnstakeV1 contract call");
         assert!(self.coin.note.value != 0);
-        assert!(self.coin.note.token_id == *DARK_TOKEN_ID);
 
         debug!("Building anonymous output");
         let output = TransactionBuilderOutputInfo {
             value: self.coin.note.value,
-            token_id: self.coin.note.token_id,
+            token_id: *DARK_TOKEN_ID,
             public_key: self.signature_public,
         };
         debug!("Finished building output");
 
         let serial = pallas::Base::random(&mut OsRng);
-        let spend_hook = pallas::Base::zero();
-        let user_data_enc = pallas::Base::zero();
-        let token_blind = pallas::Scalar::random(&mut OsRng);
+        let spend_hook = PALLAS_ZERO;
+        let user_data_enc = PALLAS_ZERO;
+        let token_blind = SCALAR_ZERO;
         let coin_blind = pallas::Base::random(&mut OsRng);
 
         info!("Creating unstake mint proof for output");
@@ -146,8 +145,8 @@ impl MoneyUnstakeCallBuilder {
             note: encrypted_note,
         };
 
-        let input = StakeInput {
-            token_blind,
+        let input = ConsensusInput {
+            epoch: self.coin.note.epoch,
             value_commit: public_inputs.value_commit,
             nullifier: self.nullifier,
             merkle_root: self.merkle_root,

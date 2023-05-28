@@ -17,8 +17,10 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError, model::ConsensusUnstakeUpdateV1, CONSENSUS_CONTRACT_COIN_ROOTS_TREE,
-    CONSENSUS_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
+    error::MoneyError,
+    model::{ConsensusUnstakeUpdateV1, PALLAS_ZERO},
+    CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
+    MONEY_CONTRACT_ZKAS_BURN_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
@@ -34,7 +36,7 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
-    model::{ConsensusProposalBurnParamsV1, ConsensusProposalRewardParamsV1, ZERO},
+    model::{ConsensusProposalBurnParamsV1, ConsensusProposalRewardParamsV1},
     ConsensusFunction,
 };
 
@@ -139,7 +141,7 @@ pub(crate) fn consensus_proposal_burn_process_instruction_v1(
     }
 
     // Check if spend hook is set and its correctness
-    if input.spend_hook == ZERO {
+    if input.spend_hook == PALLAS_ZERO {
         msg!("[ConsensusProposalBurnV1] Error: Missing spend hook");
         return Err(MoneyError::StakeMissingSpendHook.into())
     }

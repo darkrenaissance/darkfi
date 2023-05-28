@@ -17,16 +17,14 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError, model::ConsensusStakeUpdateV1, CONSENSUS_CONTRACT_COINS_TREE,
-    CONSENSUS_CONTRACT_COIN_MERKLE_TREE, CONSENSUS_CONTRACT_COIN_ROOTS_TREE,
-    CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
-    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1,
+    error::MoneyError,
+    model::{ConsensusStakeUpdateV1, PALLAS_ZERO},
+    CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
+    CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
+    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{
-        pasta_prelude::*, pedersen_commitment_base, ContractId, MerkleNode, CONSENSUS_CONTRACT_ID,
-        DARK_TOKEN_ID,
-    },
+    crypto::{pasta_prelude::*, ContractId, MerkleNode, CONSENSUS_CONTRACT_ID},
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     merkle_add, msg,
@@ -36,7 +34,7 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
-    model::{ConsensusProposalMintParamsV1, ConsensusProposalRewardParamsV1, ZERO},
+    model::{ConsensusProposalMintParamsV1, ConsensusProposalRewardParamsV1},
     ConsensusFunction,
 };
 
@@ -104,11 +102,13 @@ pub(crate) fn consensus_proposal_mint_process_instruction_v1(
     let input = &params.input;
     let output = &params.output;
 
+    /*
     // Only native token can be minted in a proposal
     if output.token_commit != pedersen_commitment_base(DARK_TOKEN_ID.inner(), input.token_blind) {
         msg!("[ConsensusProposalMintV1] Error: Input used non-native token");
         return Err(MoneyError::StakeInputNonNativeToken.into())
     }
+    */
 
     // Verify value commits match
     if output.value_commit != input.value_commit {
@@ -161,7 +161,7 @@ pub(crate) fn consensus_proposal_mint_process_instruction_v1(
 
     // If spend hook is set, check its correctness
     let previous_input = &previous_params.burnt_input;
-    if previous_input.spend_hook != ZERO &&
+    if previous_input.spend_hook != PALLAS_ZERO &&
         previous_input.spend_hook != CONSENSUS_CONTRACT_ID.inner()
     {
         msg!("[ConsensusProposalMintV1] Error: Invoking contract call does not match spend hook in input");

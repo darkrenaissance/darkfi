@@ -48,17 +48,20 @@ use darkfi_consensus_contract::{
     client::{
         genesis_stake_v1::ConsensusGenesisStakeCallBuilder,
         proposal_v1::ConsensusProposalCallBuilder, stake_v1::ConsensusStakeCallBuilder,
-        unstake_v1::ConsensusUnstakeCallBuilder, ConsensusNote, ConsensusOwnCoin,
+        unstake_v1::ConsensusUnstakeCallBuilder,
     },
-    model::{ConsensusGenesisStakeParamsV1, ConsensusOutput, ConsensusProposalMintParamsV1},
+    model::{ConsensusGenesisStakeParamsV1, ConsensusProposalMintParamsV1},
     ConsensusFunction,
 };
 use darkfi_money_contract::{
     client::{
         stake_v1::MoneyStakeCallBuilder, transfer_v1::TransferCallBuilder,
-        unstake_v1::MoneyUnstakeCallBuilder, MoneyNote, OwnCoin,
+        unstake_v1::MoneyUnstakeCallBuilder, ConsensusNote, ConsensusOwnCoin, MoneyNote, OwnCoin,
     },
-    model::{ConsensusStakeParamsV1, MoneyTransferParamsV1, MoneyUnstakeParamsV1, Output},
+    model::{
+        ConsensusOutput, ConsensusStakeParamsV1, MoneyTransferParamsV1, MoneyUnstakeParamsV1,
+        Output,
+    },
     MoneyFunction, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
     CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1,
     MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
@@ -412,10 +415,12 @@ impl ConsensusTestHarness {
     pub fn stake_native(
         &mut self,
         holder: Holder,
+        epoch: u64,
         owncoin: OwnCoin,
-    ) -> Result<(Transaction, ConsensusStakeParamsV1)> {
+    ) -> Result<(Transaction, ConsensusStakeParamsV1, SecretKey)> {
         let wallet = self.holders.get_mut(&holder).unwrap();
-        let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
+        let (mint_pk, mint_zkbin) =
+            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::Stake).unwrap();
         let timer = Instant::now();
@@ -443,18 +448,19 @@ impl ConsensusTestHarness {
         // Building Consensus::Stake params
         let consensus_stake_call_debris = ConsensusStakeCallBuilder {
             coin: owncoin,
-            recipient: wallet.keypair.public,
+            epoch,
             value_blind: money_stake_value_blind,
-            token_blind: money_stake_params.token_blind,
             nullifier: money_stake_params.input.nullifier,
             merkle_root: money_stake_params.input.merkle_root,
-            signature_public: money_stake_params.input.signature_public,
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
         }
         .build()?;
-        let (consensus_stake_params, consensus_stake_proofs) =
-            (consensus_stake_call_debris.params, consensus_stake_call_debris.proofs);
+        let (consensus_stake_params, consensus_stake_proofs, consensus_stake_secret_key) = (
+            consensus_stake_call_debris.params,
+            consensus_stake_call_debris.proofs,
+            consensus_stake_call_debris.signature_secret,
+        );
 
         // Building stake tx
         let mut data = vec![MoneyFunction::StakeV1 as u8];
@@ -469,7 +475,7 @@ impl ConsensusTestHarness {
         let proofs = vec![money_stake_proofs, consensus_stake_proofs];
         let mut stake_tx = Transaction { calls, proofs, signatures: vec![] };
         let money_sigs = stake_tx.create_sigs(&mut OsRng, &[money_stake_secret_key])?;
-        let consensus_sigs = stake_tx.create_sigs(&mut OsRng, &[money_stake_secret_key])?;
+        let consensus_sigs = stake_tx.create_sigs(&mut OsRng, &[consensus_stake_secret_key])?;
         stake_tx.signatures = vec![money_sigs, consensus_sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());
 
@@ -481,7 +487,7 @@ impl ConsensusTestHarness {
         let size = ::std::mem::size_of_val(&*base58);
         tx_action_benchmark.broadcasted_sizes.push(size);
 
-        Ok((stake_tx, consensus_stake_params))
+        Ok((stake_tx, consensus_stake_params, consensus_stake_secret_key))
     }
 
     pub async fn execute_stake_native_tx(

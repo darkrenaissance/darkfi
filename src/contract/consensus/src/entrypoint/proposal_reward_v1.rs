@@ -16,11 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::{error::MoneyError, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1};
+use darkfi_money_contract::{
+    error::MoneyError, model::PALLAS_ZERO, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1,
+};
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash,
-        ContractId, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, CONSENSUS_CONTRACT_ID,
     },
     error::{ContractError, ContractResult},
     msg,
@@ -35,7 +36,7 @@ use crate::{
     model::{
         ConsensusProposalBurnParamsV1, ConsensusProposalMintParamsV1,
         ConsensusProposalRewardParamsV1, ConsensusProposalRewardUpdateV1, SlotCheckpoint,
-        HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX, REWARD, ZERO,
+        HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX, REWARD,
     },
     ConsensusFunction,
 };
@@ -152,12 +153,14 @@ pub(crate) fn consensus_proposal_reward_process_instruction_v1(
     let mint_input = &params.mint_input;
     let output = &params.output;
 
+    /*
     // Only native token can be rewarded in a proposal
     let dark_token_commit = pedersen_commitment_base(DARK_TOKEN_ID.inner(), mint_input.token_blind);
     if burnt_input.token_commit != dark_token_commit || output.token_commit != dark_token_commit {
         msg!("[ConsensusProposalRewardV1] Error: Input used non-native token");
         return Err(MoneyError::StakeInputNonNativeToken.into())
     }
+    */
 
     // Verify value commits match
     let mut valcom_total = pallas::Point::identity();
@@ -197,7 +200,7 @@ pub(crate) fn consensus_proposal_reward_process_instruction_v1(
     }
 
     // If spend hook is set, check its correctness
-    if previous_input.spend_hook != ZERO &&
+    if previous_input.spend_hook != PALLAS_ZERO &&
         previous_input.spend_hook != CONSENSUS_CONTRACT_ID.inner()
     {
         msg!("[ConsensusProposalRewardV1] Error: Invoking contract call does not match spend hook in input");

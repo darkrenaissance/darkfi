@@ -16,23 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::model::{ClearInput, Input, Output, StakeInput};
+use darkfi_money_contract::model::{ClearInput, ConsensusInput, ConsensusOutput, Input, Output};
 use darkfi_sdk::{
-    crypto::{ecvrf::VrfProof, note::AeadEncryptedNote, Coin, PublicKey},
+    crypto::{ecvrf::VrfProof, PublicKey},
     pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-
-/// A consensus contract call's anonymous output
-#[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
-pub struct ConsensusOutput {
-    /// Pedersen commitment for the output's value
-    pub value_commit: pallas::Point,
-    /// Minted coin
-    pub coin: Coin,
-    /// AEAD encrypted note
-    pub note: AeadEncryptedNote,
-}
 
 /// Parameters for `Consensus::GenesisStake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -62,7 +51,7 @@ pub struct ConsensusProposalRewardParamsV1 {
     /// Burnt coin public key used in VRF
     pub burnt_public_key: PublicKey,
     /// Burnt token revealed info of `Consensus::ProposalMint`
-    pub mint_input: StakeInput,
+    pub mint_input: ConsensusInput,
     /// Anonymous output
     pub output: Output,
     /// Pedersen commitment for the output's serial number
@@ -81,7 +70,7 @@ pub struct ConsensusProposalRewardParamsV1 {
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ConsensusProposalMintParamsV1 {
     /// Burnt token revealed info
-    pub input: StakeInput,
+    pub input: ConsensusInput,
     /// Anonymous output
     pub output: Output,
     /// Pedersen commitment for the output's serial number
@@ -99,8 +88,6 @@ pub struct ConsensusProposalRewardUpdateV1 {}
 pub const REWARD: u64 = 1;
 // Reward `pallas::Base`, calculated by: pallas::Base::from(REWARD)
 pub const REWARD_PALLAS: pallas::Base = pallas::Base::from_raw([1, 0, 0, 0]);
-// `pallas::Base` used as prefix/suffix in poseidon hash
-pub const ZERO: pallas::Base = pallas::Base::zero();
 // Serial prefix, calculated by: pallas::Base::from(2)
 pub const SERIAL_PREFIX: pallas::Base = pallas::Base::from_raw([2, 0, 0, 0]);
 // Seed prefix, calculated by: pallas::Base::from(3)

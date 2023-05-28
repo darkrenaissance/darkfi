@@ -31,7 +31,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::MoneyError,
-    model::{ConsensusUnstakeParamsV1, MoneyUnstakeParamsV1, MoneyUnstakeUpdateV1},
+    model::{ConsensusUnstakeParamsV1, MoneyUnstakeParamsV1, MoneyUnstakeUpdateV1, PALLAS_ZERO},
     MoneyFunction, CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
     MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE, MONEY_CONTRACT_COIN_ROOTS_TREE,
     MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
@@ -100,8 +100,12 @@ pub(crate) fn money_unstake_process_instruction_v1(
     let input = &params.input;
     let output = &params.output;
 
-    // Only native token can be unstaked
-    if output.token_commit != pedersen_commitment_base(DARK_TOKEN_ID.inner(), input.token_blind) {
+    // Only native token can be unstaked.
+    // Since consensus coins don't have token commitments or blinds,
+    // we use zero as the token blind of newlly minded token
+    if output.token_commit !=
+        pedersen_commitment_base(DARK_TOKEN_ID.inner(), pallas::Scalar::zero())
+    {
         msg!("[MoneyUnstakeV1] Error: Input used non-native token");
         return Err(MoneyError::StakeInputNonNativeToken.into())
     }
@@ -153,7 +157,7 @@ pub(crate) fn money_unstake_process_instruction_v1(
     }
 
     // If next spend hook is set, check its correctness
-    if params.spend_hook != pallas::Base::zero() {
+    if params.spend_hook != PALLAS_ZERO {
         let next_call_idx = call_idx + 1;
         if next_call_idx >= calls.len() as u32 {
             msg!("[MoneyUnstakeV1] Error: next_call_idx out of bounds");

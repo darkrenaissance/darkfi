@@ -23,18 +23,16 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_money_contract::client::MoneyNote;
+use darkfi_money_contract::client::{ConsensusNote, MoneyNote};
 use darkfi_sdk::{
     crypto::{
         pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash, Coin,
-        MerkleNode, MerklePosition, Nullifier, PublicKey, SecretKey, TokenId,
+        MerkleNode, MerklePosition, Nullifier, PublicKey, SecretKey,
     },
     incrementalmerkletree::Hashable,
     pasta::pallas,
 };
 use rand::rngs::OsRng;
-
-use crate::client::ConsensusNote;
 
 pub struct TransactionBuilderInputInfo {
     pub leaf_position: MerklePosition,
@@ -43,17 +41,21 @@ pub struct TransactionBuilderInputInfo {
     pub note: MoneyNote,
 }
 
-pub struct TransactionBuilderConsensusInputInfo {
+pub struct ConsensusMintOutputInfo {
+    pub value: u64,
+    pub epoch: u64,
+    pub public_key: PublicKey,
+    pub value_blind: pallas::Scalar,
+    pub serial: pallas::Base,
+    pub coin_blind: pallas::Base,
+}
+
+pub struct ConsensusBurnInputInfo {
     pub leaf_position: MerklePosition,
     pub merkle_path: Vec<MerkleNode>,
     pub secret: SecretKey,
     pub note: ConsensusNote,
-}
-
-pub struct TransactionBuilderOutputInfo {
-    pub value: u64,
-    pub token_id: TokenId,
-    pub public_key: PublicKey,
+    pub value_blind: pallas::Scalar,
 }
 
 pub struct ConsensusMintRevealed {
@@ -76,30 +78,32 @@ impl ConsensusMintRevealed {
 pub fn create_consensus_mint_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
-    epoch: u64,
-    output: &TransactionBuilderOutputInfo,
-    value_blind: pallas::Scalar,
-    serial: pallas::Base,
-    coin_blind: pallas::Base,
+    output: &ConsensusMintOutputInfo,
 ) -> Result<(Proof, ConsensusMintRevealed)> {
-    let epoch_pallas = pallas::Base::from(epoch);
+    let epoch_pallas = pallas::Base::from(output.epoch);
     let value_pallas = pallas::Base::from(output.value);
-    let value_commit = pedersen_commitment_u64(output.value, value_blind);
+    let value_commit = pedersen_commitment_u64(output.value, output.value_blind);
     let (pub_x, pub_y) = output.public_key.xy();
 
-    let coin =
-        Coin::from(poseidon_hash([pub_x, pub_y, value_pallas, epoch_pallas, serial, coin_blind]));
+    let coin = Coin::from(poseidon_hash([
+        pub_x,
+        pub_y,
+        value_pallas,
+        epoch_pallas,
+        output.serial,
+        output.coin_blind,
+    ]));
 
-    let public_inputs = ConsensusMintRevealed { epoch, coin, value_commit };
+    let public_inputs = ConsensusMintRevealed { epoch: output.epoch, coin, value_commit };
 
     let prover_witnesses = vec![
         Witness::Base(Value::known(pub_x)),
         Witness::Base(Value::known(pub_y)),
         Witness::Base(Value::known(value_pallas)),
         Witness::Base(Value::known(epoch_pallas)),
-        Witness::Base(Value::known(serial)),
-        Witness::Base(Value::known(coin_blind)),
-        Witness::Scalar(Value::known(value_blind)),
+        Witness::Base(Value::known(output.serial)),
+        Witness::Base(Value::known(output.coin_blind)),
+        Witness::Scalar(Value::known(output.value_blind)),
     ];
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
@@ -139,14 +143,13 @@ impl ConsensusBurnRevealed {
 pub fn create_consensus_burn_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
-    input: &TransactionBuilderConsensusInputInfo,
-    value_blind: pallas::Scalar,
+    input: &ConsensusBurnInputInfo,
 ) -> Result<(Proof, ConsensusBurnRevealed, SecretKey)> {
     let nullifier = Nullifier::from(poseidon_hash([input.secret.inner(), input.note.serial]));
     let epoch = input.note.epoch;
     let epoch_pallas = pallas::Base::from(epoch);
     let value_pallas = pallas::Base::from(input.note.value);
-    let value_commit = pedersen_commitment_u64(input.note.value, value_blind);
+    let value_commit = pedersen_commitment_u64(input.note.value, input.value_blind);
     let public_key = PublicKey::from_secret(input.secret);
     let (pub_x, pub_y) = public_key.xy();
 
@@ -186,7 +189,7 @@ pub fn create_consensus_burn_proof(
         Witness::Base(Value::known(epoch_pallas)),
         Witness::Base(Value::known(input.note.serial)),
         Witness::Base(Value::known(input.note.coin_blind)),
-        Witness::Scalar(Value::known(value_blind)),
+        Witness::Scalar(Value::known(input.value_blind)),
         Witness::Base(Value::known(input.secret.inner())),
         Witness::Uint32(Value::known(u64::from(input.leaf_position).try_into().unwrap())),
         Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),

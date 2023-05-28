@@ -26,13 +26,13 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
-    model::{Input, Output, StakeInput},
+    model::{ConsensusInput, Input, Output, PALLAS_ZERO},
 };
 use darkfi_sdk::{
     crypto::{
         ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_base,
         pedersen_commitment_u64, poseidon_hash, Coin, MerkleTree, Nullifier, PublicKey, SecretKey,
-        CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
+        TokenId, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
     },
     incrementalmerkletree::Tree,
     pasta::{group::ff::FromUniformBytes, pallas},
@@ -41,16 +41,20 @@ use log::{debug, info};
 use rand::rngs::OsRng;
 
 use crate::{
-    client::{
-        common::{create_unstake_burn_proof, TransactionBuilderInputInfo as UnstakeTBII},
-        stake_v1::{TransactionBuilderOutputInfo as StakeTBOI, TransactionBuilderOutputInfo},
-    },
+    client::common::{create_unstake_burn_proof, TransactionBuilderInputInfo as UnstakeTBII},
     model::{
         ConsensusProposalBurnParamsV1, ConsensusProposalMintParamsV1,
         ConsensusProposalRewardParamsV1, HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX, REWARD,
-        REWARD_PALLAS, SEED_PREFIX, SERIAL_PREFIX, ZERO,
+        REWARD_PALLAS, SEED_PREFIX, SERIAL_PREFIX,
     },
 };
+
+// TODO: Remove TransactionBuilderOutputInfo
+pub struct TransactionBuilderOutputInfo {
+    pub value: u64,
+    pub token_id: TokenId,
+    pub public_key: PublicKey,
+}
 
 pub struct ConsensusProposalCallDebris {
     pub burn_params: ConsensusProposalBurnParamsV1,
@@ -218,7 +222,8 @@ impl ConsensusProposalCallBuilder {
         let signature_public = public_inputs.signature_public;
 
         debug!("Building anonymous output for proposal");
-        let output = StakeTBOI { value: new_value, token_id, public_key: self.recipient };
+        let output =
+            TransactionBuilderOutputInfo { value: new_value, token_id, public_key: self.recipient };
         debug!("Finished building output for proposal");
 
         let burnt_serial = self.coin.note.serial;
@@ -264,8 +269,9 @@ impl ConsensusProposalCallBuilder {
             note: encrypted_note,
         };
 
-        let input = StakeInput {
-            token_blind,
+        // TODO: epoch = current
+        let input = ConsensusInput {
+            epoch: 0,
             value_commit: public_inputs.value_commit,
             nullifier,
             merkle_root,
@@ -346,11 +352,11 @@ pub fn create_proposal_reward_proof(
     let nullifier = Nullifier::from(poseidon_hash([secret_key, serial]));
     let public_key = PublicKey::from_secret(secret_key.into());
     let value_commit = pedersen_commitment_u64(value, value_blind);
-    let new_serial = poseidon_hash([SERIAL_PREFIX, secret_key, serial, ZERO]);
+    let new_serial = poseidon_hash([SERIAL_PREFIX, secret_key, serial, PALLAS_ZERO]);
     let new_serial_commit = pedersen_commitment_base(new_serial, new_serial_blind);
     let new_value_commit = pedersen_commitment_u64(value + REWARD, value_blind);
     let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
-    let seed = poseidon_hash([SEED_PREFIX, serial, ZERO]);
+    let seed = poseidon_hash([SEED_PREFIX, serial, PALLAS_ZERO]);
     // NOTE: slot checkpoint eta to be renamed to previous_eta,
     //       corresponding to previous block eta.
     let mut vrf_input = [0u8; 64];
@@ -416,7 +422,7 @@ pub fn create_proposal_mint_proof(
     user_data: pallas::Base,
     coin_blind: pallas::Base,
 ) -> Result<(Proof, ConsensusProposalMintRevealed, pallas::Base)> {
-    let serial = poseidon_hash([SERIAL_PREFIX, burnt_secret_key, burnt_serial, ZERO]);
+    let serial = poseidon_hash([SERIAL_PREFIX, burnt_secret_key, burnt_serial, PALLAS_ZERO]);
     let value_commit = pedersen_commitment_u64(output.value, value_blind);
     let token_commit = pedersen_commitment_base(output.token_id.inner(), token_blind);
     let serial_commit = pedersen_commitment_base(serial, serial_blind);

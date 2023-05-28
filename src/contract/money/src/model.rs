@@ -60,33 +60,9 @@ pub struct Input {
     pub signature_public: PublicKey,
 }
 
-/// Anonymous input for staking contract calls
+/// Anonymous input for consensus contract calls
 #[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
-pub struct StakeInput {
-    /// Blinding factor for `token_id`
-    pub token_blind: pallas::Scalar,
-    /// Pedersen commitment for the staked coin's value
-    pub value_commit: pallas::Point,
-    /// Revealed nullifier
-    pub nullifier: Nullifier,
-    /// Revealed Merkle root
-    pub merkle_root: MerkleNode,
-    /// Public key for the signature
-    pub signature_public: PublicKey,
-}
-
-impl PartialEq<StakeInput> for Input {
-    fn eq(&self, other: &StakeInput) -> bool {
-        self.value_commit == other.value_commit &&
-            self.nullifier == other.nullifier &&
-            self.merkle_root == other.merkle_root &&
-            self.signature_public == other.signature_public
-    }
-}
-
-/// Anonymous input for unstaking contract calls
-#[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
-pub struct UnstakeInput {
+pub struct ConsensusInput {
     /// Epoch the coin was minted
     pub epoch: u64,
     /// Pedersen commitment for the staked coin's value
@@ -99,12 +75,11 @@ pub struct UnstakeInput {
     pub signature_public: PublicKey,
 }
 
-impl PartialEq<StakeInput> for UnstakeInput {
-    fn eq(&self, other: &StakeInput) -> bool {
+impl PartialEq<ConsensusInput> for Input {
+    fn eq(&self, other: &ConsensusInput) -> bool {
         self.value_commit == other.value_commit &&
             self.nullifier == other.nullifier &&
-            self.merkle_root == other.merkle_root &&
-            self.signature_public == other.signature_public
+            self.merkle_root == other.merkle_root
     }
 }
 
@@ -115,6 +90,17 @@ pub struct Output {
     pub value_commit: pallas::Point,
     /// Pedersen commitment for the output's token ID
     pub token_commit: pallas::Point,
+    /// Minted coin
+    pub coin: Coin,
+    /// AEAD encrypted note
+    pub note: AeadEncryptedNote,
+}
+
+/// A consensus contract call's anonymous output
+#[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
+pub struct ConsensusOutput {
+    /// Pedersen commitment for the output's value
+    pub value_commit: pallas::Point,
     /// Minted coin
     pub coin: Coin,
     /// AEAD encrypted note
@@ -193,7 +179,7 @@ pub struct MoneyStakeUpdateV1 {
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyUnstakeParamsV1 {
     /// Burnt token revealed info
-    pub input: StakeInput,
+    pub input: ConsensusInput,
     /// Spend hook used to invoke other contracts.
     /// If this value is nonzero then the subsequent contract call in the tx
     /// must have this value as its ID.
@@ -217,9 +203,9 @@ pub struct MoneyUnstakeUpdateV1 {
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ConsensusStakeParamsV1 {
     /// Burnt token revealed info
-    pub input: StakeInput,
+    pub input: ConsensusInput,
     /// Anonymous output
-    pub output: Output,
+    pub output: ConsensusOutput,
 }
 
 /// State update for `Consensus::Stake`
@@ -233,7 +219,7 @@ pub struct ConsensusStakeUpdateV1 {
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ConsensusUnstakeParamsV1 {
     /// Anonymous input
-    pub input: UnstakeInput,
+    pub input: ConsensusInput,
 }
 
 /// State update for `Consensus::Unstake`
@@ -242,3 +228,8 @@ pub struct ConsensusUnstakeUpdateV1 {
     /// Revealed nullifier
     pub nullifier: Nullifier,
 }
+
+// `pallas::Base` used as prefix/suffix in poseidon hash
+pub const PALLAS_ZERO: pallas::Base = pallas::Base::zero();
+// `pallas::Scalar` used as prefix/suffix in poseidon hash
+pub const SCALAR_ZERO: pallas::Scalar = pallas::Scalar::zero();
