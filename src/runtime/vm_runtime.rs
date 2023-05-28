@@ -269,6 +269,12 @@ impl Runtime {
                     import::util::get_verifying_slot,
                 ),
 
+                "get_verifying_slot_epoch_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::get_verifying_slot_epoch,
+                ),
+
                 "get_slot_checkpoint_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,

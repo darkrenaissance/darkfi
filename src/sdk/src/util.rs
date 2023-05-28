@@ -83,10 +83,20 @@ pub fn get_current_slot() -> u64 {
 /// verifying slot.
 ///
 /// ```
-/// slot = get_current_slot();
+/// slot = get_verifying_slot();
 /// ```
 pub fn get_verifying_slot() -> u64 {
     unsafe { get_verifying_slot_() }
+}
+
+/// Everyone can call this. Will return runtime configured
+/// verifying slot epoch.
+///
+/// ```
+/// slot = get_verifying_slot_epoch();
+/// ```
+pub fn get_verifying_slot_epoch() -> u64 {
+    unsafe { get_verifying_slot_epoch_() }
 }
 
 /// Everyone can call this. Will return requested slot checkpoint from `SlotCheckpointStore`.
@@ -117,6 +127,7 @@ extern "C" {
     fn get_current_epoch_() -> u64;
     fn get_current_slot_() -> u64;
     fn get_verifying_slot_() -> u64;
+    fn get_verifying_slot_epoch_() -> u64;
     fn get_slot_checkpoint_(slot: u64) -> i64;
     fn get_blockchain_time_() -> u64;
 }

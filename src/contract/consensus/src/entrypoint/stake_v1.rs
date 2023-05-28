@@ -30,6 +30,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     merkle_add, msg,
     pasta::pallas,
+    util::get_verifying_slot_epoch,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -50,9 +51,8 @@ pub(crate) fn consensus_stake_get_metadata_v1(
     // Public keys for the transaction signatures we have to verify
     let signature_pubkeys = vec![params.input.signature_public];
 
-    // TODO: Grab the minting epoch from the verifying slot
-    //let verifying_slot = get_verifying_slot_epoch();
-    let epoch = PALLAS_ZERO;
+    // Grab the minting epoch of the verifying slot
+    let epoch = get_verifying_slot_epoch();
 
     // Grab the pedersen commitment from the anonymous output
     let output = &params.output;
@@ -60,7 +60,7 @@ pub(crate) fn consensus_stake_get_metadata_v1(
 
     zk_public_inputs.push((
         CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
-        vec![epoch, output.coin.inner(), *value_coords.x(), *value_coords.y()],
+        vec![epoch.into(), output.coin.inner(), *value_coords.x(), *value_coords.y()],
     ));
 
     // Serialize everything gathered and return it

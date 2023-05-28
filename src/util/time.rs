@@ -70,6 +70,11 @@ impl TimeKeeper {
         slot % self.epoch_length
     }
 
+    /// Calculates the epoch of the verifying slot.
+    pub fn verifying_slot_epoch(&self) -> u64 {
+        self.slot_epoch(self.verifying_slot)
+    }
+
     /// Calculates seconds until next Nth slot starting time.
     pub fn next_n_slot_start(&self, n: u64) -> u64 {
         assert!(n > 0);
