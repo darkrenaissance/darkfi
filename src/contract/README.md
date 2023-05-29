@@ -1,9 +1,8 @@
-This directory contains native WASM contracts on DarkFi.
+This directory contains native WASM contracts on DarkFi:
 
 ## Money
 
 * https://darkrenaissance.github.io/darkfi/development/darkfi_money_contract/index.html
-
 
 ## DAO
 
@@ -12,3 +11,7 @@ This directory contains native WASM contracts on DarkFi.
 ## Consensus
 
 * https://darkrenaissance.github.io/darkfi/development/darkfi_consensus_contract/index.html
+
+## Deployooor
+
+* https://darkrenaissance.github.io/darkfi/development/darkfi_deployooor_contract/index.html

@@ -1230,6 +1230,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "darkfi-deployooor-contract"
+version = "0.4.1"
+dependencies = [
+ "darkfi-sdk",
+ "darkfi-serial",
+ "getrandom",
+ "thiserror",
+]
+
+[[package]]
 name = "darkfi-derive"
 version = "0.4.1"
 dependencies = [
