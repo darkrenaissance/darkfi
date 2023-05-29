@@ -370,6 +370,7 @@ impl Runtime {
     /// state, and it can create, delete, modify, read, and write to databases it's allowed to.
     /// The permissions for this are handled by the `ContractId` in the overlay db API so we
     /// assume that the contract is only able to do write operations on its own overlay trees.
+    /// TODO: This should also be in sled-overlay!
     pub fn deploy(&mut self, payload: &[u8]) -> Result<()> {
         info!(target: "runtime::vm_runtime", "[wasm-runtime] Running deploy");
 
