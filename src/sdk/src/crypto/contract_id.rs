@@ -29,17 +29,24 @@ lazy_static! {
     // avoid hardcoding contract IDs for arbitrary contract deployments, because
     // the contracts with 0 as their x coordinate can never have a valid signature.
 
+    /// Derivation prefix for `ContractId`
+    pub static ref CONTRACT_ID_PREFIX: pallas::Base = pallas::Base::from(42);
+
     /// Contract ID for the native money contract
     pub static ref MONEY_CONTRACT_ID: ContractId =
-        ContractId::from(poseidon_hash([pallas::Base::zero(), pallas::Base::from(0)]));
+        ContractId::from(poseidon_hash([*CONTRACT_ID_PREFIX, pallas::Base::zero(), pallas::Base::from(0)]));
 
     /// Contract ID for the native DAO contract
     pub static ref DAO_CONTRACT_ID: ContractId =
-        ContractId::from(poseidon_hash([pallas::Base::zero(), pallas::Base::from(1)]));
+        ContractId::from(poseidon_hash([*CONTRACT_ID_PREFIX, pallas::Base::zero(), pallas::Base::from(1)]));
 
     /// Contract ID for the native Consensus contract
     pub static ref CONSENSUS_CONTRACT_ID: ContractId =
-        ContractId::from(poseidon_hash([pallas::Base::zero(), pallas::Base::from(2)]));
+        ContractId::from(poseidon_hash([*CONTRACT_ID_PREFIX, pallas::Base::zero(), pallas::Base::from(2)]));
+
+    /// Contract ID for the native Deployooor contract
+    pub static ref DEPLOYOOOR_CONTRACT_ID: ContractId =
+        ContractId::from(poseidon_hash([*CONTRACT_ID_PREFIX, pallas::Base::zero(), pallas::Base::from(3)]));
 }
 
 /// ContractId represents an on-chain identifier for a certain smart contract.
@@ -51,7 +58,14 @@ impl ContractId {
     pub fn derive(deploy_key: SecretKey) -> Self {
         let public_key = PublicKey::from_secret(deploy_key);
         let (x, y) = public_key.xy();
-        let hash = poseidon_hash::<2>([x, y]);
+        let hash = poseidon_hash([*CONTRACT_ID_PREFIX, x, y]);
+        Self(hash)
+    }
+
+    /// Derive a contract ID from a `Publickey`
+    pub fn derive_public(public_key: PublicKey) -> Self {
+        let (x, y) = public_key.xy();
+        let hash = poseidon_hash([*CONTRACT_ID_PREFIX, x, y]);
         Self(hash)
     }
 
