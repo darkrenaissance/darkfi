@@ -125,6 +125,7 @@ fn halo2_vk_ser() -> Result<()> {
         Witness::Base(Value::known(ephem_secret.inner())),
         Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
         Witness::MerklePath(Value::known(merkle_path.try_into().unwrap())),
+        Witness::Base(Value::known(pallas::Base::ONE)),
     ];
 
     let value_commit = pedersen_commitment_u64(value, value_blind);
