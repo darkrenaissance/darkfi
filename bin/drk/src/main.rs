@@ -280,7 +280,7 @@ enum DaoSubcmd {
     /// List imported DAOs (or info about a specific one)
     List {
         /// Numeric identifier for the DAO (optional)
-        dao_id: Option<u64>,
+        dao_alias: Option<String>,
     },
 
     /// Show the balance of a DAO
@@ -950,8 +950,13 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::List { dao_id } => {
+            DaoSubcmd::List { dao_alias } => {
                 let drk = Drk::new(args.endpoint).await?;
+                // We cannot use .map() since get_dao_id() uses ?
+                let dao_id = match dao_alias {
+                    Some(alias) => Some(drk.get_dao_id(&alias).await?),
+                    None => None,
+                };
 
                 drk.dao_list(dao_id).await.with_context(|| "Failed to list DAO")?;
 
