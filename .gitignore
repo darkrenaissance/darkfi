@@ -7,6 +7,7 @@
 .cargo/
 .DS_Store
 .#*
+*.profraw
 
 /target/*
 /tmp/*
