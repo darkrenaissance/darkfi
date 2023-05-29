@@ -6,9 +6,6 @@ PREFIX = $(HOME)/.cargo
 # Cargo binary
 CARGO = cargo
 
-# Flags passed to cargo/rustc
-#RUSTFLAGS = -C target-cpu=native
-
 # Optional compile target
 #RUST_TARGET = x86_64-unknown-linux-musl
 # Uncomment this if the above is uncommented
@@ -40,7 +37,7 @@ BINDEPS = \
 all: $(BINS)
 
 zkas: $(ZKASDEPS)
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) \
+	$(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) \
 		--all-features --release --package $@
 	cp -f target/$(RUST_TARGET)/release/$@ $@
 
@@ -56,30 +53,30 @@ token_lists:
 	$(MAKE) -C contrib/token all
 
 $(BINS): token_lists contracts $(PROOFS_BIN) $(BINDEPS)
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) \
+	$(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) \
 		--all-features --release --package $@
 	cp -f target/$(RUST_TARGET)/release/$@ $@
 
 check: token_lists contracts $(PROOFS_BIN)
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) hack check --release --feature-powerset --all
+	$(CARGO) hack check --release --feature-powerset --all
 
 fix: token_lists contracts $(PROOFS_BIN)
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --fix --allow-dirty --all
+	$(CARGO) clippy --release --all-features --fix --allow-dirty --all
 
 clippy: token_lists contracts $(PROOFS_BIN)
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --release --all-features --all
+	$(CARGO) clippy --release --all-features --all
 
 rustdoc: token_lists contracts $(PROOFS_BIN)
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --release --all-features --workspace --document-private-items
+	$(CARGO) doc --release --all-features --workspace --document-private-items
 
 test: token_lists $(PROOFS_BIN) contracts
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --release --all-features --all
+	$(CARGO) test --release --all-features --all
 
 cleanbin:
 	rm -f $(BINS)
 
 clean: cleanbin
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean
+	$(CARGO) clean
 
 install:
 	@for i in $(BINS); \
