@@ -432,7 +432,7 @@ impl Drk {
             query,
             QueryType::Integer as u8,
             DAO_DAOS_COL_DAO_ID,
-            QueryType::Blob as u8,
+            QueryType::Text as u8,
             DAO_DAOS_COL_NAME,
         ]);
 
@@ -450,8 +450,7 @@ impl Drk {
                     anyhow!("[get_dao_id_by_alias] Unexpected response from darkfid: {}", rep))
             };
 
-            let alias_bytes: Vec<u8> = serde_json::from_value(row[1].clone())?;
-            let alias: String = deserialize(&alias_bytes)?;
+            let alias: String = serde_json::from_value(row[1].clone())?;
             if alias != alias_filter {
                 continue
             }
@@ -496,8 +495,8 @@ impl Drk {
 
         let params = json!([
             query,
-            QueryType::Blob as u8,
-            serialize(&dao_name),
+            QueryType::Text as u8,
+            dao_name,
             QueryType::Blob as u8,
             serialize(&dao_params.proposer_limit),
             QueryType::Blob as u8,
@@ -563,7 +562,7 @@ impl Drk {
             query,
             QueryType::Integer as u8,
             DAO_DAOS_COL_DAO_ID,
-            QueryType::Blob as u8,
+            QueryType::Text as u8,
             DAO_DAOS_COL_NAME,
             QueryType::Blob as u8,
             DAO_DAOS_COL_PROPOSER_LIMIT,
@@ -603,8 +602,7 @@ impl Drk {
 
             let id: u64 = serde_json::from_value(row[0].clone())?;
 
-            let name_bytes: Vec<u8> = serde_json::from_value(row[1].clone())?;
-            let name = deserialize(&name_bytes)?;
+            let name: String = serde_json::from_value(row[1].clone())?;
 
             let proposer_limit_bytes: Vec<u8> = serde_json::from_value(row[2].clone())?;
             let proposer_limit = deserialize(&proposer_limit_bytes)?;
