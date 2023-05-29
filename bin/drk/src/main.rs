@@ -1049,6 +1049,13 @@ async fn main() -> Result<()> {
 
                 println!("{}", proposal);
 
+                let votes = drk.get_dao_proposal_votes(proposal_id).await?;
+                println!("votes:");
+                for vote in votes {
+                    let option = if vote.vote_option { "yes" } else { "no " };
+                    println!("  {} {}", option, vote.all_vote_value);
+                }
+
                 Ok(())
             }
 
