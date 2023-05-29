@@ -423,6 +423,54 @@ impl Drk {
         Ok(())
     }
 
+    pub async fn get_dao_id_by_alias(&self, alias_filter: &str) -> Result<u64> {
+        let query = format!(
+            "SELECT {}, {} FROM {}",
+            DAO_DAOS_COL_DAO_ID, DAO_DAOS_COL_NAME, DAO_DAOS_TABLE,
+        );
+        let params = json!([
+            query,
+            QueryType::Integer as u8,
+            DAO_DAOS_COL_DAO_ID,
+            QueryType::Blob as u8,
+            DAO_DAOS_COL_NAME,
+        ]);
+
+        let req = JsonRequest::new("wallet.query_row_multi", params);
+        let rep = self.rpc_client.request(req).await?;
+
+        // The returned thing should be an array of found rows.
+        let Some(rows) = rep.as_array() else {
+            return Err(anyhow!("[get_dao_id_by_alias] Unexpected response from darkfid: {}", rep))
+        };
+
+        for row in rows {
+            let Some(row) = row.as_array() else {
+                return Err(
+                    anyhow!("[get_dao_id_by_alias] Unexpected response from darkfid: {}", rep))
+            };
+
+            let alias_bytes: Vec<u8> = serde_json::from_value(row[1].clone())?;
+            let alias: String = deserialize(&alias_bytes)?;
+            if alias != alias_filter {
+                continue
+            }
+
+            let dao_id: u64 = serde_json::from_value(row[0].clone())?;
+            return Ok(dao_id)
+        }
+
+        Err(anyhow!("[get_dao_id_by_alias] DAO not found"))
+    }
+
+    /// Convenience function. Interprets the alias either as the DAO alias or its ID
+    pub async fn get_dao_id(&self, alias: &str) -> Result<u64> {
+        if let Ok(id) = self.get_dao_id_by_alias(alias).await {
+            return Ok(id)
+        }
+        Ok(alias.parse()?)
+    }
+
     /// Import given DAO params into the wallet with a given name.
     pub async fn import_dao(&self, dao_name: String, dao_params: DaoParams) -> Result<()> {
         // First let's check if we've imported this DAO with the given name before.

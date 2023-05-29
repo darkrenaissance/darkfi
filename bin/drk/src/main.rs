@@ -285,20 +285,20 @@ enum DaoSubcmd {
 
     /// Show the balance of a DAO
     Balance {
-        /// Numeric identifier for the DAO
-        dao_id: u64,
+        /// Name or numeric identifier for the DAO
+        dao_alias: String,
     },
 
     /// Mint an imported DAO on-chain
     Mint {
-        /// Numeric identifier for the DAO
-        dao_id: u64,
+        /// Name or numeric identifier for the DAO
+        dao_alias: String,
     },
 
     /// Create a proposal for a DAO
     Propose {
-        /// Numeric identifier for the DAO
-        dao_id: u64,
+        /// Name or numeric identifier for the DAO
+        dao_alias: String,
 
         /// Pubkey to send tokens to with proposal success
         recipient: String,
@@ -307,19 +307,19 @@ enum DaoSubcmd {
         amount: String,
 
         /// Token ID to send from DAO with proposal success
-        token_id: String,
+        token: String,
     },
 
     /// List DAO proposals
     Proposals {
-        /// Numeric identifier for the DAO
-        dao_id: u64,
+        /// Name or numeric identifier for the DAO
+        dao_alias: String,
     },
 
     /// View a DAO proposal data
     Proposal {
-        /// Numeric identifier for the DAO
-        dao_id: u64,
+        /// Name or numeric identifier for the DAO
+        dao_alias: String,
 
         /// Numeric identifier for the proposal
         proposal_id: u64,
@@ -327,8 +327,8 @@ enum DaoSubcmd {
 
     /// Vote on a given proposal
     Vote {
-        /// Numeric identifier for the DAO
-        dao_id: u64,
+        /// Name or numeric identifier for the DAO
+        dao_alias: String,
 
         /// Numeric identifier for the proposal
         proposal_id: u64,
@@ -342,8 +342,8 @@ enum DaoSubcmd {
 
     /// Execute a DAO proposal
     Exec {
-        /// Numeric identifier for the DAO
-        dao_id: u64,
+        /// Name or numeric identifier for the DAO
+        dao_alias: String,
 
         /// Numeric identifier for the proposal
         proposal_id: u64,
@@ -739,7 +739,7 @@ async fn main() -> Result<()> {
             let _ = f64::from_str(&amount).with_context(|| "Invalid amount")?;
             let rcpt = PublicKey::from_str(&recipient).with_context(|| "Invalid recipient")?;
             let drk = Drk::new(args.endpoint).await?;
-            let token_id = drk.get_token(token).await.with_context(|| "Invalid Token ID")?;
+            let token_id = drk.get_token(token).await.with_context(|| "Invalid token alias")?;
 
             let tx = drk
                 .transfer(&amount, token_id, rcpt, dao, dao_bulla)
@@ -958,8 +958,9 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Balance { dao_id } => {
+            DaoSubcmd::Balance { dao_alias } => {
                 let drk = Drk::new(args.endpoint).await?;
+                let dao_id = drk.get_dao_id(&dao_alias).await?;
 
                 let balmap =
                     drk.dao_balance(dao_id).await.with_context(|| "Failed to fetch DAO balance")?;
@@ -992,20 +993,22 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Mint { dao_id } => {
+            DaoSubcmd::Mint { dao_alias } => {
                 let drk = Drk::new(args.endpoint).await?;
+                let dao_id = drk.get_dao_id(&dao_alias).await?;
 
                 let tx = drk.dao_mint(dao_id).await.with_context(|| "Failed to mint DAO")?;
                 println!("{}", bs58::encode(&serialize(&tx)).into_string());
                 Ok(())
             }
 
-            DaoSubcmd::Propose { dao_id, recipient, amount, token_id } => {
+            DaoSubcmd::Propose { dao_alias, recipient, amount, token } => {
                 let _ = f64::from_str(&amount).with_context(|| "Invalid amount")?;
                 let amount = decode_base10(&amount, 8, true)?;
                 let rcpt = PublicKey::from_str(&recipient).with_context(|| "Invalid recipient")?;
                 let drk = Drk::new(args.endpoint).await?;
-                let token_id = drk.get_token(token_id).await.with_context(|| "Invalid Token ID")?;
+                let dao_id = drk.get_dao_id(&dao_alias).await?;
+                let token_id = drk.get_token(token).await.with_context(|| "Invalid token alias")?;
 
                 let tx = drk
                     .dao_propose(dao_id, rcpt, amount, token_id)
@@ -1016,8 +1019,9 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Proposals { dao_id } => {
+            DaoSubcmd::Proposals { dao_alias } => {
                 let drk = Drk::new(args.endpoint).await?;
+                let dao_id = drk.get_dao_id(&dao_alias).await?;
 
                 let proposals = drk.get_dao_proposals(dao_id).await?;
 
@@ -1028,8 +1032,9 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Proposal { dao_id, proposal_id } => {
+            DaoSubcmd::Proposal { dao_alias, proposal_id } => {
                 let drk = Drk::new(args.endpoint).await?;
+                let dao_id = drk.get_dao_id(&dao_alias).await?;
 
                 let proposals = drk.get_dao_proposals(dao_id).await?;
                 let Some(proposal) = proposals.iter().find(|x| x.id == proposal_id) else {
@@ -1042,8 +1047,9 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Vote { dao_id, proposal_id, vote, vote_weight } => {
+            DaoSubcmd::Vote { dao_alias, proposal_id, vote, vote_weight } => {
                 let drk = Drk::new(args.endpoint).await?;
+                let dao_id = drk.get_dao_id(&dao_alias).await?;
 
                 let _ = f64::from_str(&vote_weight).with_context(|| "Invalid vote weight")?;
                 let weight = decode_base10(&vote_weight, 8, true)?;
@@ -1066,8 +1072,9 @@ async fn main() -> Result<()> {
                 Ok(())
             }
 
-            DaoSubcmd::Exec { dao_id, proposal_id } => {
+            DaoSubcmd::Exec { dao_alias, proposal_id } => {
                 let drk = Drk::new(args.endpoint).await?;
+                let dao_id = drk.get_dao_id(&dao_alias).await?;
                 let dao = drk.get_dao_by_id(dao_id).await?;
                 let proposal = drk.get_dao_proposal_by_id(proposal_id).await?;
                 assert!(proposal.dao_bulla == dao.bulla());

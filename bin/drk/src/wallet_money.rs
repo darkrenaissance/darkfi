@@ -236,8 +236,6 @@ impl Drk {
     /// Optionally also fetch spent ones.
     /// The boolean in the returned tuple notes if the coin was marked as spent.
     pub async fn get_coins(&self, fetch_spent: bool) -> Result<Vec<(OwnCoin, bool)>> {
-        eprintln!("Fetching OwnCoins from the wallet");
-
         let query = if fetch_spent {
             format!("SELECT * FROM {}", MONEY_COINS_TABLE)
         } else {
@@ -703,8 +701,6 @@ impl Drk {
         alias_filter: Option<String>,
         token_id_filter: Option<TokenId>,
     ) -> Result<HashMap<String, TokenId>> {
-        eprintln!("Fetching Aliases from the wallet");
-
         let query = format!("SELECT * FROM {}", MONEY_ALIASES_TABLE);
         let params = json!([
             query,
