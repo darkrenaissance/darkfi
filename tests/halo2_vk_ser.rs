@@ -146,6 +146,7 @@ fn halo2_vk_ser() -> Result<()> {
         pub_y,
         ephem_x,
         ephem_y,
+        a,
     ];
 
     println!("Creating proof");
