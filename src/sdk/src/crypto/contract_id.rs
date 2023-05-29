@@ -54,7 +54,7 @@ lazy_static! {
 pub struct ContractId(pallas::Base);
 
 impl ContractId {
-    /// Derive a contract ID from a `SecretKey` (deploy key)
+    /// Derives a `ContractId` from a `SecretKey` (deploy key)
     pub fn derive(deploy_key: SecretKey) -> Self {
         let public_key = PublicKey::from_secret(deploy_key);
         let (x, y) = public_key.xy();
@@ -62,7 +62,7 @@ impl ContractId {
         Self(hash)
     }
 
-    /// Derive a contract ID from a `Publickey`
+    /// Derive a contract ID from a `PublicKey`
     pub fn derive_public(public_key: PublicKey) -> Self {
         let (x, y) = public_key.xy();
         let hash = poseidon_hash([*CONTRACT_ID_PREFIX, x, y]);
