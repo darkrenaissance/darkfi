@@ -4,6 +4,7 @@
 *.zk.bin
 *_circuit_layout.png
 .vscode/
+.cargo/
 .DS_Store
 .#*
 
