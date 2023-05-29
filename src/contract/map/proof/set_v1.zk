@@ -1,0 +1,26 @@
+constant "Set_V1" {} 
+
+witness "Set_V1" {
+	Base secret,
+	Base lock,
+	# Whether set canonical root
+	# 
+	# Be nice, don't spam
+	# setting slots in the canonical root namespace will be paid eventually
+	# but people can always choose to use an alt root
+	Base car,
+	Base key,
+	Base value,
+}
+
+circuit "Set_V1" {
+	account = poseidon_hash(secret);
+	constrain_instance(account);
+	constrain_instance(lock);
+	constrain_instance(car);
+	constrain_instance(key);
+	constrain_instance(value);
+	bool_check(lock);
+	bool_check(car);
+}
+

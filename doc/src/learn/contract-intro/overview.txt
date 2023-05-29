@@ -1,0 +1,93 @@
+# data storage
+
+* a contract can have any number of databases, barring any future gas limitations i assume
+```
+src/runtime/vm_runtime.rs
+
+const GAS_LIMIT: u64 = 200000000;
+
+// TODO: Add necessary operators
+// This function will be called for each `Operator` encountered during
+// the wasm module execution. It should return the cost of the operator
+// that it received as its first argument.
+// https://docs.rs/wasmparser/latest/wasmparser/enum.Operator.html
+let cost_function = |operator: &Operator| -> u64 {
+    match operator {
+        Operator::LocalGet { .. } => 1,
+        Operator::I32Const { .. } => 1,
+        Operator::I32Add { .. } => 2,
+        _ => 0,
+    }
+};
+```
+                      contract_id  db_name   key      value
+                            v         v       v         v
+* storage is keyed by (pallas::Base, &str, Vec<u8>, Vec<u8>)
+  * contract can only write its own databases, and not others'
+  * each database is a publicly readable record
+  * src/runtime/import/db.rs
+  * src/sdk/src/crypto/contract_id.rs
+
+# anonymity
+
+* a contract can choose to persist plaintext, then this contract is completely transparent, no different than a contract on a transparent blockchain
+* contract only gets anonymity by carefull persisting **only** encrypted state
+
+see how a coin is represented: note there is no owner
+```
+
+/////////////// model ////////////////
+
+/// input to contract's mint 
+pub struct MoneyMintParamsV1 {
+    pub input: ClearInput,
+    pub output: Output,
+}
+
+pub struct ClearInput {
+    /// q: for checking commitment, why?
+    pub value: u64,
+    pub token_id: TokenId,
+    pub value_blind: pallas::Scalar,
+    pub token_blind: pallas::Scalar,
+    pub signature_public: PublicKey,
+}
+
+pub struct Output {
+    pub value_commit: pallas::Point,
+    pub token_commit: pallas::Point,
+    pub coin: Coin,
+    pub note: AeadEncryptedNote,
+}
+
+/// state changes 
+pub struct MoneyMintUpdateV1 {
+    /// this is a base field element (ie a number) that doesn't reveal value or owner
+    /// yes, there is value in ClearInput, need to figure out why
+    pub coin: Coin,
+}
+
+/// src/contract/money/proof/mint_v1.zk
+circuit "TokenMint_V1" {
+	...
+	token_id = poseidon_hash(...);
+	// only token is public
+	constrain_instance(token_id);
+
+	C = poseidon_hash(
+		// receipent is hidden in the hash
+		rcpt_x,
+		rcpt_y,
+		...
+	);
+	constrain_instance(C);
+	...
+}
+//////////// zkp //////////////////
+```
+
+# runtime, instructions, apis
+
+* for zk circuits, the zk opcodes are in src/zkas/opcodes.rs
+* for wasm contract, i believe anything that compiles to wasm would work, but src/sdk have ready-made tools
+* when in doubt, look at src/contract/ for inspirations
