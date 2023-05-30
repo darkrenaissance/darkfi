@@ -61,7 +61,7 @@ pub enum ContractSection {
 }
 
 impl ContractSection {
-    pub fn name(&self) -> &str {
+    pub const fn name(&self) -> &str {
         match self {
             Self::Deploy => "__initialize",
             Self::Exec => "__entrypoint",
@@ -299,6 +299,19 @@ impl Runtime {
         Ok(Self { instance, store, ctx })
     }
 
+    /// Perform a sanity check of the WASM bincode
+    pub fn sanity_check(&self) -> Result<()> {
+        debug!(target: "runtime::vm_runtime", "Performing sanity check on wasm bincode");
+
+        // Check that we have all the necessary symbols;
+        let _ = self.instance.exports.get_function(ContractSection::Deploy.name())?;
+        let _ = self.instance.exports.get_function(ContractSection::Exec.name())?;
+        let _ = self.instance.exports.get_function(ContractSection::Update.name())?;
+        let _ = self.instance.exports.get_function(ContractSection::Metadata.name())?;
+
+        Ok(())
+    }
+
     fn call(&mut self, section: ContractSection, payload: &[u8]) -> Result<Vec<u8>> {
         debug!(target: "runtime::vm_runtime", "Calling {} method", section.name());
 
@@ -445,7 +458,7 @@ impl Runtime {
     fn print_logs(&self) {
         let logs = self.ctx.as_ref(&self.store).logs.borrow();
         for msg in logs.iter() {
-            debug!(target: "runtime::vm_runtime", "Contract log: {}", msg);
+            info!(target: "runtime::vm_runtime", "[WASM] Contract log: {}", msg);
         }
     }
 
