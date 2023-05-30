@@ -1,14 +1,18 @@
-#!/bin/bash
+#!/bin/sh
+set -e
+set -x
+
+# Path to `drk` binary
+DRK="../../../drk"
 
 while true; do
-    drk ping 2> /dev/null
-    if [ $? == 0 ]; then
+    if $DRK ping 2> /dev/null; then
         break
     fi
     sleep 1
 done
 
-drk wallet --initialize
-drk scan
-drk subscribe blocks
+$DRK wallet --initialize
+$DRK scan
+$DRK subscribe blocks
 
