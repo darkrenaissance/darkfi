@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::{deserialize, serialize};
+use darkfi_serial::deserialize;
 use log::{error, warn};
 use serde_json::{json, Value};
 
@@ -152,7 +152,7 @@ impl Darkfid {
             return server_error(RpcError::TxBroadcastFail, id, None)
         }
 
-        let tx_hash = blake3::hash(&serialize(&tx)).to_hex().as_str().to_string();
+        let tx_hash = tx.hash().to_string();
         JsonResponse::new(json!(tx_hash), id).into()
     }
 }
