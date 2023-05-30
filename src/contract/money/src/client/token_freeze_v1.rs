@@ -22,7 +22,7 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{poseidon_hash, Keypair, TokenId},
+    crypto::{Keypair, PublicKey, TokenId},
     pasta::pallas,
 };
 use log::{debug, info};
@@ -36,12 +36,14 @@ pub struct TokenFreezeCallDebris {
 }
 
 pub struct TokenFreezeRevealed {
+    pub signature_public: PublicKey,
     pub token_id: TokenId,
 }
 
 impl TokenFreezeRevealed {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
-        vec![self.token_id.inner()]
+        let (sig_x, sig_y) = self.signature_public.xy();
+        vec![sig_x, sig_y, self.token_id.inner()]
     }
 }
 
@@ -79,10 +81,9 @@ pub(crate) fn create_token_freeze_proof(
     pk: &ProvingKey,
     mint_authority: &Keypair,
 ) -> Result<(Proof, TokenFreezeRevealed)> {
-    let (mint_x, mint_y) = mint_authority.public.xy();
-    let token_id = TokenId::from(poseidon_hash([mint_x, mint_y]));
+    let token_id = TokenId::derive(mint_authority.secret);
 
-    let public_inputs = TokenFreezeRevealed { token_id };
+    let public_inputs = TokenFreezeRevealed { signature_public: mint_authority.public, token_id };
 
     let prover_witnesses = vec![Witness::Base(Value::known(mint_authority.secret.inner()))];
 

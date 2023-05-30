@@ -8,15 +8,17 @@ witness "TokenFreeze_V1" {
 }
 
 circuit "TokenFreeze_V1" {
+	# TokenID derivation path (See darkfi_sdk::crypto::ContractId)
+	derivation_path = witness_base(69);
+
 	# Derive public key for the mint authority
 	mint_public = ec_mul_base(mint_authority, NULLIFIER_K);
 	mint_x = ec_get_x(mint_public);
 	mint_y = ec_get_y(mint_public);
-	# I don't think we need to enforce these two as public inputs
-	#constrain_instance(mint_x);
-	#constrain_instance(mint_y);
+	constrain_instance(mint_x);
+	constrain_instance(mint_y);
 
 	# Derive the token ID
-	token_id = poseidon_hash(mint_x, mint_y);
+	token_id = poseidon_hash(derivation_path, mint_x, mint_y);
 	constrain_instance(token_id);
 }

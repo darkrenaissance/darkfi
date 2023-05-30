@@ -521,19 +521,14 @@ impl Drk {
             if call.contract_id == cid && call.data[0] == MoneyFunction::TokenMintV1 as u8 {
                 eprintln!("Found Money::MintV1 in call {}", i);
                 let params: MoneyTokenMintParamsV1 = deserialize(&call.data[1..])?;
-
                 outputs.push(params.output);
-
                 continue
             }
 
             if call.contract_id == cid && call.data[0] == MoneyFunction::TokenFreezeV1 as u8 {
                 eprintln!("Found Money::FreezeV1 in call {}", i);
                 let params: MoneyTokenFreezeParamsV1 = deserialize(&call.data[1..])?;
-
-                let (mint_x, mint_y) = params.signature_public.xy();
-                let token_id = TokenId::from(poseidon_hash([mint_x, mint_y]));
-
+                let token_id = TokenId::derive_public(params.signature_public);
                 freezes.push(token_id);
             }
         }

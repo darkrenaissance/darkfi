@@ -18,8 +18,8 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash,
-        ContractId, MerkleNode, TokenId,
+        pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, ContractId,
+        MerkleNode, TokenId,
     },
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -54,18 +54,19 @@ pub(crate) fn money_token_mint_get_metadata_v1(
     // signed by the mint authority.
     let signature_pubkeys = vec![params.input.signature_public];
 
+    // Derive the TokenId from the public key
+    let (sig_x, sig_y) = params.input.signature_public.xy();
+    let token_id = TokenId::derive_public(params.input.signature_public);
+
     let value_coords = params.output.value_commit.to_affine().coordinates().unwrap();
     let token_coords = params.output.token_commit.to_affine().coordinates().unwrap();
-
-    // Since we expect a signature from the mint authority, we use those coordinates
-    // as public inputs for the ZK proof:
-    let (sig_x, sig_y) = params.input.signature_public.xy();
-    let token_id = poseidon_hash([sig_x, sig_y]);
 
     zk_public_inputs.push((
         MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1.to_string(),
         vec![
-            token_id,
+            sig_x,
+            sig_y,
+            token_id.inner(),
             params.output.coin.inner(),
             *value_coords.x(),
             *value_coords.y(),
@@ -97,8 +98,7 @@ pub(crate) fn money_token_mint_process_instruction_v1(
     let token_freeze_db = db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
 
     // Check that the signature public key is actually the token ID
-    let (mint_x, mint_y) = params.input.signature_public.xy();
-    let token_id = TokenId::from(poseidon_hash([mint_x, mint_y]));
+    let token_id = TokenId::derive_public(params.input.signature_public);
     if token_id != params.input.token_id {
         msg!("[MintV1] Error: Token ID does not derive from mint authority");
         return Err(MoneyError::TokenIdDoesNotDeriveFromMint.into())

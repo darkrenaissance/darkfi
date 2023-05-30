@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{poseidon_hash, ContractId, PublicKey, TokenId},
+    crypto::{ContractId, PublicKey, TokenId},
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     msg,
@@ -46,11 +46,15 @@ pub(crate) fn money_token_freeze_get_metadata_v1(
     // Public keys for the transaction signatures we have to verify
     let signature_pubkeys: Vec<PublicKey> = vec![params.signature_public];
 
-    let (mint_x, mint_y) = params.signature_public.xy();
-    let token_id = poseidon_hash([mint_x, mint_y]);
+    // Derive the TokenId from the public key
+    let (sig_x, sig_y) = params.signature_public.xy();
+    let token_id = TokenId::derive_public(params.signature_public);
 
     // In ZK we just verify that the token ID is properly derived from the authority.
-    zk_public_inputs.push((MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1.to_string(), vec![token_id]));
+    zk_public_inputs.push((
+        MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1.to_string(),
+        vec![sig_x, sig_y, token_id.inner()],
+    ));
 
     // Serialize everything gathered and return it
     let mut metadata = vec![];
@@ -72,8 +76,7 @@ pub(crate) fn money_token_freeze_process_instruction_v1(
     // We just check if the mint was already frozen beforehand
     let token_freeze_db = db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
 
-    let (mint_x, mint_y) = params.signature_public.xy();
-    let token_id = TokenId::from(poseidon_hash([mint_x, mint_y]));
+    let token_id = TokenId::derive_public(params.signature_public);
 
     // Check that the mint is not frozen
     if db_contains_key(token_freeze_db, &serialize(&token_id))? {
@@ -96,10 +99,7 @@ pub(crate) fn money_token_freeze_process_update_v1(
     update: MoneyTokenFreezeUpdateV1,
 ) -> ContractResult {
     let token_freeze_db = db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
-
-    let (mint_x, mint_y) = update.signature_public.xy();
-    let token_id = TokenId::from(poseidon_hash([mint_x, mint_y]));
-
+    let token_id = TokenId::derive_public(update.signature_public);
     msg!("[MintV1] Freezing mint for token {}", token_id);
     db_set(token_freeze_db, &serialize(&token_id), &[])?;
 

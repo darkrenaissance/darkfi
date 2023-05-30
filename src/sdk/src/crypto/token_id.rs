@@ -29,9 +29,12 @@ lazy_static! {
     // avoid hardcoding contract IDs for arbitrary contract deployments, because
     // the contracts with 0 as their x coordinate can never have a valid signature.
 
+    /// Derivation prefix for `TokenId`
+    pub static ref TOKEN_ID_PREFIX: pallas::Base = pallas::Base::from(69);
+
     /// Native DARK token ID
     pub static ref DARK_TOKEN_ID: TokenId =
-        TokenId::from(poseidon_hash([pallas::Base::zero(), pallas::Base::from(42)]));
+        TokenId::from(poseidon_hash([*TOKEN_ID_PREFIX, pallas::Base::zero(), pallas::Base::from(42)]));
 }
 
 /// TokenId represents an on-chain identifier for a certain token.
@@ -39,11 +42,18 @@ lazy_static! {
 pub struct TokenId(pallas::Base);
 
 impl TokenId {
-    /// Derives a `TokenId` given a `SecretKey` (mint authority)
+    /// Derives a `TokenId` from a `SecretKey` (mint authority)
     pub fn derive(mint_authority: SecretKey) -> Self {
         let public_key = PublicKey::from_secret(mint_authority);
         let (x, y) = public_key.xy();
-        let hash = poseidon_hash::<2>([x, y]);
+        let hash = poseidon_hash([*TOKEN_ID_PREFIX, x, y]);
+        Self(hash)
+    }
+
+    /// Derives a `TokenId` from a `PublicKey`
+    pub fn derive_public(public_key: PublicKey) -> Self {
+        let (x, y) = public_key.xy();
+        let hash = poseidon_hash([*TOKEN_ID_PREFIX, x, y]);
         Self(hash)
     }
 

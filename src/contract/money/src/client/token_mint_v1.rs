@@ -45,6 +45,7 @@ pub struct TokenMintCallDebris {
 }
 
 pub struct TokenMintRevealed {
+    pub signature_public: PublicKey,
     pub token_id: TokenId,
     pub coin: Coin,
     pub value_commit: pallas::Point,
@@ -53,12 +54,15 @@ pub struct TokenMintRevealed {
 
 impl TokenMintRevealed {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
+        let (sig_x, sig_y) = self.signature_public.xy();
         let valcom_coords = self.value_commit.to_affine().coordinates().unwrap();
         let tokcom_coords = self.token_commit.to_affine().coordinates().unwrap();
 
         // NOTE: It's important to keep these in the same order
         // as the `constrain_instance` calls in the zkas code.
         vec![
+            sig_x,
+            sig_y,
             self.token_id.inner(),
             self.coin.inner(),
             *valcom_coords.x(),
@@ -94,8 +98,7 @@ impl TokenMintCallBuilder {
 
         // In this call, we will build one clear input and one anonymous output.
         // The mint authority pubkey is used to derive the token ID.
-        let (mint_x, mint_y) = self.mint_authority.public.xy();
-        let token_id = TokenId::from(poseidon_hash([mint_x, mint_y]));
+        let token_id = TokenId::derive(self.mint_authority.secret);
 
         let input = TransactionBuilderClearInputInfo {
             value: self.amount,
@@ -181,8 +184,7 @@ pub fn create_token_mint_proof(
     user_data: pallas::Base,
     coin_blind: pallas::Base,
 ) -> Result<(Proof, TokenMintRevealed)> {
-    let (mint_x, mint_y) = mint_authority.public.xy();
-    let token_id = TokenId::from(poseidon_hash([mint_x, mint_y]));
+    let token_id = TokenId::derive(mint_authority.secret);
 
     let value_commit = pedersen_commitment_u64(output.value, value_blind);
     let token_commit = pedersen_commitment_base(token_id.inner(), token_blind);
@@ -200,7 +202,13 @@ pub fn create_token_mint_proof(
         coin_blind,
     ]));
 
-    let public_inputs = TokenMintRevealed { token_id, coin, value_commit, token_commit };
+    let public_inputs = TokenMintRevealed {
+        signature_public: mint_authority.public,
+        token_id,
+        coin,
+        value_commit,
+        token_commit,
+    };
 
     let prover_witnesses = vec![
         Witness::Base(Value::known(mint_authority.secret.inner())),
