@@ -15,34 +15,38 @@ use darkfi_sdk::{
     incrementalmerkletree::Hashable,
     pasta::{
         arithmetic::{CurveAffine, CurveExt},
-        group::{Curve, Group},
+        group::{ff::FromUniformBytes, Curve, Group},
     },
 };
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pyo3::prelude::*;
 use rand::rngs::OsRng;
 
-/// This represents an element of $\mathbb{F}_p$ where
-///
-/// `p = 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001`
-///
-/// is the base field of the Pallas curve.
-///
-/// The internal representation of this type is four 64-bit unsigned
-/// integers in little-endian order. `Fp` values are always in
-/// Montgomery form; i.e., Fp(a) = aR mod p, with R = 2^256.
+/// The base field of the Pallas and iso-Pallas curves.
 #[pyclass]
 #[derive(Clone, Debug)]
 struct Base(pallas::Base);
 
 #[pymethods]
 impl Base {
-    /// For now, we work with 128 bits in Python.
-    /// Becasue pallas::Base has nice debug formatting for it.
-    /// TODO: change it to from_raw
-    #[new]
+    #[staticmethod]
+    fn from_raw(v: [u64; 4]) -> Self {
+        Self(pallas::Base::from_raw(v))
+    }
+
+    #[staticmethod]
+    fn from(v: u64) -> Self {
+        Self(pallas::Base::from(v))
+    }
+
+    #[staticmethod]
     fn from_u128(v: u128) -> Self {
         Self(pallas::Base::from_u128(v))
+    }
+
+    #[staticmethod]
+    fn from_uniform_bytes(bytes: [u8; 64]) -> Self {
+        Self(pallas::Base::from_uniform_bytes(&bytes))
     }
 
     #[staticmethod]
@@ -123,7 +127,7 @@ impl Base {
         }
     }
 
-    fn __repr__(&self) -> String {
+    fn __str_(&self) -> String {
         format!("Base({:?})", self.0)
     }
 
@@ -172,22 +176,18 @@ impl Base {
 
 // Why Scalar field is from the field vesta curve is defined over?
 
-/// This represents an element of $\mathbb{F}_q$ where
-///
-/// `q = 0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001`
-///
-/// is the base field of the Vesta curve.
-///
-/// The internal representation of this type is four 64-bit unsigned
-/// integers in little-endian order. `Fq` values are always in
-/// Montgomery form; i.e., Fq(a) = aR mod q, with R = 2^256.
+/// The scalar field of the Pallas and iso-Pallas curves.
 #[pyclass]
 struct Scalar(pallas::Scalar);
 
 #[pymethods]
 impl Scalar {
-    /// TODO: change it to from_raw
-    #[new]
+    #[staticmethod]
+    fn from_raw(v: [u64; 4]) -> Self {
+        Self(pallas::Scalar::from_raw(v))
+    }
+
+    #[staticmethod]
     fn from_u128(v: u128) -> Self {
         Self(pallas::Scalar::from_u128(v))
     }
@@ -212,7 +212,7 @@ impl Scalar {
         Self(pallas::Scalar::one())
     }
 
-    fn __repr__(&self) -> String {
+    fn __str__(&self) -> String {
         format!("Scalar({:?})", self.0)
     }
 
@@ -241,7 +241,7 @@ impl Scalar {
     }
 }
 
-/// Elliptic curve, Pallas
+/// A Pallas point in the projective coordinate space.
 #[pyclass]
 struct Point(pallas::Point);
 
@@ -257,7 +257,7 @@ impl Point {
         Self(pallas::Point::generator())
     }
 
-    fn __repr__(&self) -> String {
+    fn __str__(&self) -> String {
         format!("Point({:?})", self.0)
     }
 
@@ -287,12 +287,13 @@ impl Point {
     }
 }
 
+/// A Pallas point in the affine coordinate space (or the point at infinity).
 #[pyclass]
 struct Affine(pallas::Affine);
 
 #[pymethods]
 impl Affine {
-    fn __repr__(&self) -> String {
+    fn __str__(&self) -> String {
         format!("Affine({:?})", self.0)
     }
 
