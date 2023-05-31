@@ -24,7 +24,7 @@ EVENTS = [
         "topic": "Abstract Algebra",
         "title": "Group Structure and Homomorphisms",
         "#": 1,
-        "recording": "",
+        "recording": "https://ipfs.io/ipfs/QmRNgGSHjJNSXCnXBF65ThWSSWPyamJi6giBA26uVJrU1W",
     },
 
     {
@@ -73,13 +73,18 @@ def print_table():
         s = ''.join(ch if ch.isalnum() else '' for ch in event["title"])
         ics_file = f"{event['start']}_{s}.ics"
 
+        if event["recording"] != "":
+            rec = f"[dl]({event['recording']})"
+        else:
+            rec = "n/a"
+    
         x.add_row([
             f"[{formatted}]({ics_file})",
             event["track"],
             event["topic"],
             event["#"],
             event["title"],
-            f"[dl]({event['recording']})",
+            rec,
         ])
 
     print("# Developer Seminars\n")
