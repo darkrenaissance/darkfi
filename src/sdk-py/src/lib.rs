@@ -27,9 +27,10 @@ use rand::rngs::OsRng;
 /// `p = 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001`
 ///
 /// is the base field of the Pallas curve.
-// The internal representation of this type is four 64-bit unsigned
-// integers in little-endian order. `Fp` values are always in
-// Montgomery form; i.e., Fp(a) = aR mod p, with R = 2^256.
+///
+/// The internal representation of this type is four 64-bit unsigned
+/// integers in little-endian order. `Fp` values are always in
+/// Montgomery form; i.e., Fp(a) = aR mod p, with R = 2^256.
 #[pyclass]
 #[derive(Clone, Debug)]
 struct Base(pallas::Base);
@@ -168,21 +169,18 @@ impl Base {
         Self(root)
     }
 }
-/// Wrapper around poseidon in `halo2_gadgets`
-// pub fn poseidon_hash<const N: usize>(messages: [pallas::Base; N]) -> pallas::Base {
-//     poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<N>, 3, 2>::init()
-//         .hash(messages)
-// }
 
 // Why Scalar field is from the field vesta curve is defined over?
+
 /// This represents an element of $\mathbb{F}_q$ where
 ///
 /// `q = 0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001`
 ///
 /// is the base field of the Vesta curve.
-// The internal representation of this type is four 64-bit unsigned
-// integers in little-endian order. `Fq` values are always in
-// Montgomery form; i.e., Fq(a) = aR mod q, with R = 2^256.
+///
+/// The internal representation of this type is four 64-bit unsigned
+/// integers in little-endian order. `Fq` values are always in
+/// Montgomery form; i.e., Fq(a) = aR mod q, with R = 2^256.
 #[pyclass]
 struct Scalar(pallas::Scalar);
 
@@ -243,6 +241,7 @@ impl Scalar {
     }
 }
 
+/// Elliptic curve, Pallas
 #[pyclass]
 struct Point(pallas::Point);
 
@@ -256,6 +255,10 @@ impl Point {
     #[staticmethod]
     fn generator() -> Self {
         Self(pallas::Point::generator())
+    }
+
+    fn __repr__(&self) -> String {
+        format!("Point({:?})", self.0)
     }
 
     fn to_affine(&self) -> Affine {
@@ -276,7 +279,7 @@ impl Point {
     }
 
     fn mul_short(&self, value: u64) -> Self {
-        // Why does v need to be a random element from EP?
+        // QUESTION: Why does v need to be a random element from EP?
         // Why not NullifierK.generator() or some other pre-determined generator?
         let hasher = ValueCommit::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
         let v = hasher(&VALUE_COMMITMENT_V_BYTES);
@@ -289,15 +292,17 @@ struct Affine(pallas::Affine);
 
 #[pymethods]
 impl Affine {
+    fn __repr__(&self) -> String {
+        format!("Affine({:?})", self.0)
+    }
+
     fn coordinates(&self) -> (Base, Base) {
         let coords = self.0.coordinates().unwrap();
         (Base(*coords.x()), Base(*coords.y()))
     }
 }
 
-/// On how to do submodules: https://pyo3.rs/v0.18.3/module#python-submodules
-/// Binding that comes with the bolierplate.
-/// The #[pymodule] procedural macro takes care of exporting the initialization function of your module to Python.
+/// This is where you define the classes and function be added to the module.
 #[pymodule]
 fn darkfi_sdk_py(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Base>()?;
