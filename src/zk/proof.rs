@@ -103,9 +103,13 @@ pub struct ProvingKey {
 
 impl ProvingKey {
     pub fn build(k: u32, c: &impl Circuit<pallas::Base>) -> Self {
+        println!("begin build");
         let params = Params::new(k);
+        println!("built params");
         let vk = plonk::keygen_vk(&params, c).unwrap();
+        println!("built vk");
         let pk = plonk::keygen_pk(&params, vk, c).unwrap();
+        println!("built pk");
         ProvingKey { params, pk }
     }
 }
