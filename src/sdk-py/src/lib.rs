@@ -1,5 +1,7 @@
-use std::ops::{Add, Deref, Mul};
-
+use darkfi::{
+    zk::{halo2::Value, proof, vm},
+    zkas::decoder,
+};
 use darkfi_sdk::{
     crypto::{
         constants::{
@@ -21,10 +23,13 @@ use darkfi_sdk::{
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pyo3::prelude::*;
 use rand::rngs::OsRng;
+use std::ops::{Add, Deref, Mul};
+
+/// Randomness is provided on the Rust side by OsRng.
 
 /// The base field of the Pallas and iso-Pallas curves.
 #[pyclass]
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct Base(pallas::Base);
 
 #[pymethods]
@@ -303,12 +308,145 @@ impl Affine {
     }
 }
 
-/// This is where you define the classes and function be added to the module.
+#[pyclass]
+struct ZkCircuit(vm::ZkCircuit, Vec<vm::Witness>);
+
+/// QUESTION: how to deal with witness?
+/// Like Builder Object
+#[pymethods]
+impl ZkCircuit {
+    #[new]
+    fn new(circuit_code: &PyCell<ZkBinary>) -> Self {
+        let circuit_code = circuit_code.borrow().deref().0.clone();
+        let circuit = vm::ZkCircuit::new(vec![], circuit_code.clone());
+        Self(circuit, vec![])
+    }
+
+    fn build(&self) -> Self {
+        Self(self.0.clone(), self.1.clone())
+    }
+
+    fn witness_point(&mut self, v: &PyCell<Point>) {
+        let v = v.borrow();
+        let v = v.deref();
+        self.1.push(vm::Witness::EcPoint(Value::known(v.0)));
+    }
+
+    fn witness_ni_point(&mut self, v: &PyCell<Point>) {
+        let v = v.borrow();
+        let v = v.deref();
+        self.1.push(vm::Witness::EcNiPoint(Value::known(v.0)));
+    }
+
+    fn witness_fixed_point(&mut self, v: &PyCell<Point>) {
+        let v = v.borrow();
+        let v = v.deref();
+        self.1.push(vm::Witness::EcFixedPoint(Value::known(v.0)));
+    }
+
+    fn witness_scalar(&mut self, v: &PyCell<Scalar>) {
+        let v = v.borrow();
+        let v = v.deref();
+        self.1.push(vm::Witness::Scalar(Value::known(v.0)));
+    }
+
+    fn witness_base(&mut self, v: &PyCell<Base>) {
+        let v = v.borrow();
+        let v = v.deref();
+        self.1.push(vm::Witness::Base(Value::known(v.0)));
+    }
+
+    fn witness_merkle_path(&mut self, v: Vec<&PyCell<Base>>) {
+        let v: Vec<MerkleNode> = v.iter().map(|v| MerkleNode::new(v.borrow().deref().0)).collect();
+        let v: [MerkleNode; 32] = v.try_into().unwrap();
+        let v = Value::known(v);
+        self.1.push(vm::Witness::MerklePath(v));
+    }
+
+    fn witness_u32(&mut self, v: u32) {
+        self.1.push(vm::Witness::Uint32(Value::known(v)));
+    }
+
+    fn witness_u64(&mut self, v: u64) {
+        self.1.push(vm::Witness::Uint64(Value::known(v)));
+    }
+}
+
+#[pyclass]
+struct Proof(proof::Proof);
+
+#[pymethods]
+impl Proof {
+    #[staticmethod]
+    fn create(
+        pk: &PyCell<ProvingKey>,
+        circuits: Vec<&PyCell<ZkCircuit>>,
+        instances: Vec<&PyCell<Base>>,
+    ) -> Self {
+        let pk = pk.borrow().deref().0.clone();
+        let circuits: Vec<vm::ZkCircuit> =
+            circuits.iter().map(|c| c.borrow().deref().0.clone()).collect();
+        let instances: Vec<pallas::Base> = instances.iter().map(|i| i.borrow().deref().0).collect();
+        let proof =
+            proof::Proof::create(&pk, circuits.as_slice(), instances.as_slice(), &mut OsRng);
+        let proof = proof.unwrap();
+        Self(proof)
+    }
+
+    fn verify(&self, vk: &PyCell<VerifyingKey>, instances: Vec<&PyCell<Base>>) {
+        let vk = vk.borrow().deref().0.clone();
+        let proof = self.0.clone();
+        let instances: Vec<pallas::Base> = instances.iter().map(|i| i.borrow().deref().0).collect();
+        proof.verify(&vk, instances.as_slice()).unwrap();
+    }
+}
+
+#[pyclass]
+struct ProvingKey(proof::ProvingKey);
+
+#[pymethods]
+impl ProvingKey {
+    #[staticmethod]
+    fn build(k: u32, circuit: &PyCell<ZkCircuit>) -> Self {
+        let circuit_ref = circuit.borrow();
+        let circuit = &circuit_ref.deref().0;
+        let proving_key = proof::ProvingKey::build(k, circuit);
+        Self(proving_key)
+    }
+}
+
+#[pyclass]
+struct VerifyingKey(proof::VerifyingKey);
+
+#[pymethods]
+impl VerifyingKey {
+    #[staticmethod]
+    fn build(k: u32, circuit: &PyCell<ZkCircuit>) -> Self {
+        let circuit_ref = circuit.borrow();
+        let circuit = &circuit_ref.deref().0;
+        let proving_key = proof::VerifyingKey::build(k, circuit);
+        Self(proving_key)
+    }
+}
+
+#[pyclass]
+struct ZkBinary(decoder::ZkBinary);
+
+#[pymethods]
+impl ZkBinary {
+    #[staticmethod]
+    fn decode(bytes: Vec<u8>) -> Self {
+        let bincode = decoder::ZkBinary::decode(bytes.as_slice()).unwrap();
+        Self(bincode)
+    }
+}
+
 #[pymodule]
 fn darkfi_sdk_py(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Base>()?;
     m.add_class::<Scalar>()?;
     m.add_class::<Point>()?;
     m.add_class::<Affine>()?;
+    m.add_class::<Proof>()?;
     Ok(())
 }
