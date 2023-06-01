@@ -80,7 +80,7 @@ impl Drk {
             WALLET_TXS_HISTORY_COL_TX_HASH,
             QueryType::Text as u8,
             WALLET_TXS_HISTORY_COL_STATUS,
-            QueryType::Blob as u8,
+            QueryType::Text as u8,
             WALLET_TXS_HISTORY_COL_TX,
         ]);
 
@@ -99,7 +99,8 @@ impl Drk {
 
         let status: String = serde_json::from_value(arr[1].clone())?;
 
-        let tx_bytes: Vec<u8> = serde_json::from_value(arr[2].clone())?;
+        let tx_encoded: String = serde_json::from_value(arr[2].clone())?;
+        let tx_bytes: Vec<u8> = bs58::decode(&tx_encoded).into_vec()?;
         let tx: Transaction = deserialize(&tx_bytes)?;
 
         Ok((tx_hash, status, tx))
@@ -121,8 +122,8 @@ impl Drk {
             tx.hash().to_string(),
             QueryType::Text as u8,
             "Broadcasted",
-            QueryType::Blob as u8,
-            serialize(tx),
+            QueryType::Text as u8,
+            bs58::encode(&serialize(tx)).into_string().to_string(),
         ]);
 
         let req = JsonRequest::new("wallet.exec_sql", params);

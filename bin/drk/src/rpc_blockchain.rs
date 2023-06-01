@@ -171,8 +171,7 @@ impl Drk {
         let txid = serde_json::from_value(rep)?;
 
         // Store transactions history record
-        // FIXME: This breaks with the DAO::Exec transaction
-        //self.insert_tx_history_record(tx).await?;
+        self.insert_tx_history_record(tx).await?;
 
         Ok(txid)
     }
