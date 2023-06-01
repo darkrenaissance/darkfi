@@ -113,6 +113,7 @@ impl VmConfig {
     }
 }
 
+#[derive(Clone)]
 pub struct ZkCircuit {
     constants: Vec<String>,
     witnesses: Vec<Witness>,
@@ -388,7 +389,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                 _ => {
                     error!(target: "zk::vm", "Invalid constant name: {}", constant.as_str());
-                    return Err(plonk::Error::Synthesis)
+                    return Err(plonk::Error::Synthesis);
                 }
             }
         }
@@ -403,12 +404,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     Ok(v) => litheap.push(v),
                     Err(e) => {
                         error!(target: "zk::vm", "Failed converting u64 literal: {}", e);
-                        return Err(plonk::Error::Synthesis)
+                        return Err(plonk::Error::Synthesis);
                     }
                 },
                 _ => {
                     error!(target: "zk::vm", "Invalid literal: {:?}", literal);
-                    return Err(plonk::Error::Synthesis)
+                    return Err(plonk::Error::Synthesis);
                 }
             }
         }
@@ -446,7 +447,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                 Witness::EcFixedPoint(_) => {
                     error!(target: "zk::vm", "Unable to witness EcFixedPoint, this is unimplemented.");
-                    return Err(plonk::Error::Synthesis)
+                    return Err(plonk::Error::Synthesis);
                 }
 
                 Witness::Base(w) => {
@@ -571,16 +572,13 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 Opcode::EcMulShort => {
                     trace!(target: "zk::vm", "Executing `EcMulShort{:?}` opcode", opcode.1);
                     let args = &opcode.1;
-
                     let lhs: FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>> =
                         heap[args[1].1].clone().into();
-
                     let rhs = ScalarFixedShort::new(
                         ecc_chip.clone(),
                         layouter.namespace(|| "EcMulShort: ScalarFixedShort::new()"),
                         (heap[args[0].1].clone().into(), one.clone()),
                     )?;
-
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMulShort()"), rhs)?;
 
                     trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
@@ -772,7 +770,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         }
                         x => {
                             error!(target: "zk::vm", "Unsupported bit-range {} for range_check", x);
-                            return Err(plonk::Error::Synthesis)
+                            return Err(plonk::Error::Synthesis);
                         }
                     }
                 }
@@ -892,7 +890,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                 _ => {
                     error!(target: "zk::vm", "Unsupported opcode");
-                    return Err(plonk::Error::Synthesis)
+                    return Err(plonk::Error::Synthesis);
                 }
             }
         }
