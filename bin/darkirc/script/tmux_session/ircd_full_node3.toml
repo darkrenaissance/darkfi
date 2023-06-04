@@ -16,7 +16,7 @@ inbound = ["tcp://127.0.0.1:25554"]
 
 external_addr = ["tcp://127.0.0.1:25554"]
 
-peers = ["tls://127.0.0.1:25552"]
+peers = ["tcp://127.0.0.1:25552"]
 
 ## Seed nodes to connect to 
 # seeds = ["tcp://127.0.0.1:25551"]
