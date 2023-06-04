@@ -57,13 +57,14 @@ impl Point {
 
     // why not a pycell
     #[staticmethod]
-    fn blinding_point(blind: &Scalar) -> Self {
+    fn mul_r_generator(blind: &Scalar) -> Self {
         let hasher = ValueCommit::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
         let r = hasher(&VALUE_COMMITMENT_R_BYTES);
         let r = Self(r);
         r.mul(blind)
     }
 
+    #[pyo3(name = "__str__")]
     fn __str__(&self) -> String {
         format!("Point({:?})", self.0)
     }

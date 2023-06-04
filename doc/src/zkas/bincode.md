@@ -180,7 +180,7 @@ TBD
 | `EcMul`               | `ec_mul(EcPoint a, EcPoint c)`                          | `(EcPoint c)` |
 | `EcMulBase`           | `ec_mul_base(Base a, EcFixedPointBase b)`               | `(EcPoint c)` |
 | `EcMulShort`          | `ec_mul_short(Base a, EcFixedPointShort b)`             | `(EcPoint c)` |
-| `EcMulVarBase`          | `ec_mul_var_base()`             | `()` |
+| `EcMulVarBase`        | `ec_mul_var_base()`                                     | `()`          |
 | `EcGetX`              | `ec_get_x(EcPoint a)`                                   | `(Base x)`    |
 | `EcGetY`              | `ec_get_y(EcPoint a)`                                   | `(Base y)`    |
 | `PoseidonHash`        | `poseidon_hash(Base a, ..., Base n)`                    | `(Base h)`    |

@@ -1,3 +1,9 @@
+#!/usr/bin/env python3
+
+"""
+Script for playing around with the Python SDK
+"""
+
 from darkfi_sdk_py import Base
 from darkfi_sdk_py import Scalar
 from darkfi_sdk_py import Point

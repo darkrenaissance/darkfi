@@ -498,7 +498,6 @@ impl Circuit<pallas::Base> for ZkCircuit {
         // TODO: Copy constraints
         // ANCHOR: opcode_begin
         for opcode in &self.opcodes {
-            println!("Processing opcode {:?}", opcode);
             match opcode.0 {
                 Opcode::EcAdd => {
                     trace!(target: "zk::vm", "Executing `EcAdd{:?}` opcode", opcode.1);

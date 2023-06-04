@@ -12,14 +12,14 @@ pub struct Scalar(pub(crate) pallas::Scalar);
 
 #[pymethods]
 impl Scalar {
-    #[staticmethod]
-    fn from_raw(v: [u64; 4]) -> Self {
-        Self(pallas::Scalar::from_raw(v))
+    #[new]
+    fn from_u128(v: u128) -> Self {
+        Self(pallas::Scalar::from_u128(v))
     }
 
     #[staticmethod]
-    fn from_u128(v: u128) -> Self {
-        Self(pallas::Scalar::from_u128(v))
+    fn from_raw(v: [u64; 4]) -> Self {
+        Self(pallas::Scalar::from_raw(v))
     }
 
     #[staticmethod]
@@ -42,7 +42,13 @@ impl Scalar {
         Self(pallas::Scalar::one())
     }
 
+    #[pyo3(name = "__str__")]
     fn __str__(&self) -> String {
+        format!("Scalar({:?})", self.0)
+    }
+
+    #[pyo3(name = "__repr__")]
+    fn __repr__(&self) -> String {
         format!("Scalar({:?})", self.0)
     }
 

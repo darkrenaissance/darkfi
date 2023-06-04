@@ -18,15 +18,15 @@ pub struct Base(pub(crate) pallas::Base);
 
 #[pymethods]
 impl Base {
+    // Why is this not callable?
+    #[new]
+    fn from_u64(v: u64) -> Self {
+        Self(pallas::Base::from(v))
+    }
+
     #[staticmethod]
     fn from_raw(v: [u64; 4]) -> Self {
         Self(pallas::Base::from_raw(v))
-    }
-
-    // Why is this not callable?
-    #[staticmethod]
-    fn from_u64(v: u64) -> Self {
-        Self(pallas::Base::from(v))
     }
 
     #[staticmethod]
@@ -130,7 +130,15 @@ impl Base {
         Self(root)
     }
 
+    // For some reason, the name needs to be explictely stated
+    // for Python to correctly implement
+    #[pyo3(name = "__str__")]
     fn __str_(&self) -> String {
+        format!("Base({:?})", self.0)
+    }
+
+    #[pyo3(name = "__repr__")]
+    fn __repr_(&self) -> String {
         format!("Base({:?})", self.0)
     }
 
