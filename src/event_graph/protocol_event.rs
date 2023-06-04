@@ -21,7 +21,7 @@ use std::{collections::VecDeque, fmt::Debug};
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
-use log::debug;
+use log::{debug, info};
 use rand::{rngs::OsRng, RngCore};
 
 use super::EventMsg;
@@ -165,7 +165,7 @@ where
 
     async fn handle_receive_event(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolEvent::handle_receive_event() [START]");
-        // let exclude_list = vec![self.channel.address()];
+        let exclude_list = vec![self.channel.address()];
         loop {
             let event = self.event_sub.receive().await?;
             let event = (*event).to_owned();
@@ -174,11 +174,13 @@ where
                 continue
             }
 
+            info!("[P2P] Received: {:?}", event.action);
+
             self.new_event(&event).await?;
             self.send_inv(&event).await?;
 
             // Broadcast the msg
-            // self.p2p.broadcast_with_exclude(event, &exclude_list).await?;
+            self.p2p.broadcast_with_exclude(event, &exclude_list).await?;
         }
     }
 
