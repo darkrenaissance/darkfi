@@ -127,15 +127,14 @@ IGNORED_OPCODES = {
     'ConstrainEqualPoint',
     'DebugPrint'
 }
-
 K = 13
 
 if __name__ ==  "__main__":
 
     ##### Script inputs #####
 
-    # bincode_path = "opcodes.no-nipoint.zk.bin"
-    bincode_path = "../example/simple.zk.bin"
+    bincode_path = "opcodes.no-nipoint.zk.bin"
+    # bincode_path = "../../example/simple.zk.bin"
     bincode_data_ = bincode_data(bincode_path)
     zkbin, statements, constant_count, literals = bincode_data_['zkbin'], bincode_data_['statements'], bincode_data_['constant_count'], bincode_data_['literals']
     witnesses = [
