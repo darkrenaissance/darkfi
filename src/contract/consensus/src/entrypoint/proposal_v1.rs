@@ -27,7 +27,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     merkle_add, msg,
     pasta::{group::ff::FromUniformBytes, pallas},
-    util::{get_slot_checkpoint, get_verifying_slot_epoch},
+    util::get_slot_checkpoint,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -78,9 +78,6 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
 
     // Grab the pedersen commitment for the minted value
     let new_value_coords = &params.output.value_commit.to_affine().coordinates().unwrap();
-
-    // Grab the minting epoch of the verifying slot
-    let new_epoch = get_verifying_slot_epoch();
 
     // Grab the new coin
     let new_coin = params.output.coin.inner();
@@ -135,7 +132,6 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
             reward_pallas,
             *new_value_coords.x(),
             *new_value_coords.y(),
-            new_epoch.into(),
             new_coin,
             mu_y,
             *y,
@@ -211,7 +207,7 @@ pub(crate) fn consensus_proposal_process_instruction_v1(
     // At this point the state transition has passed, so we create a state update
     let update = ConsensusProposalUpdateV1 { nullifier: input.nullifier, coin: output.coin };
     let mut update_data = vec![];
-    update_data.write_u8(ConsensusFunction::UnstakeV1 as u8)?;
+    update_data.write_u8(ConsensusFunction::ProposalV1 as u8)?;
     update.encode(&mut update_data)?;
 
     // and return it

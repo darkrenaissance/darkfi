@@ -19,7 +19,7 @@
 //! This API is crufty. Please rework it into something nice to read and nice to use.
 
 use darkfi::{
-    consensus::{constants::EPOCH_LENGTH, SlotCheckpoint},
+    consensus::SlotCheckpoint,
     zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
@@ -63,7 +63,6 @@ pub struct ConsensusProposalRevealed {
     pub new_serial: pallas::Base,
     pub new_serial_commit: pallas::Point,
     pub new_value_commit: pallas::Point,
-    pub new_epoch: u64,
     pub new_coin: Coin,
     pub vrf_proof: VrfProof,
     pub mu_y: pallas::Base,
@@ -82,7 +81,6 @@ impl ConsensusProposalRevealed {
         let new_serial_coords = self.new_serial_commit.to_affine().coordinates().unwrap();
         let reward_pallas = pallas::Base::from(REWARD);
         let new_value_coords = self.new_value_commit.to_affine().coordinates().unwrap();
-        let new_epoch_palas = pallas::Base::from(self.epoch);
 
         // NOTE: It's important to keep these in the same order
         // as the `constrain_instance` calls in the zkas code.
@@ -99,7 +97,6 @@ impl ConsensusProposalRevealed {
             reward_pallas,
             *new_value_coords.x(),
             *new_value_coords.y(),
-            new_epoch_palas,
             self.new_coin.inner(),
             self.mu_y,
             self.y,
@@ -131,7 +128,6 @@ impl ConsensusProposalCallBuilder {
         debug!("Building Consensus::ProposalBurnV1 contract call for proposal");
         let value = self.coin.note.value;
         assert!(value != 0);
-        let epoch = self.slot_checkpoint.slot / EPOCH_LENGTH as u64;
 
         debug!("Building Consensus::ProposalV1 anonymous input");
         let leaf_position = self.coin.leaf_position;
@@ -151,7 +147,7 @@ impl ConsensusProposalCallBuilder {
         let new_coin_blind = pallas::Base::random(&mut OsRng);
         let output = ConsensusMintOutputInfo {
             value: self.coin.note.value + REWARD,
-            epoch: self.coin.note.epoch,
+            epoch: 0,
             public_key: PublicKey::from_secret(self.coin.secret),
             value_blind: new_value_blind,
             serial: self.coin.note.serial,
@@ -180,7 +176,7 @@ impl ConsensusProposalCallBuilder {
         let note = ConsensusNote {
             serial: public_inputs.new_serial,
             value: output.value,
-            epoch,
+            epoch: 0,
             coin_blind: new_coin_blind,
             value_blind: new_value_blind,
             reward: REWARD,
@@ -268,7 +264,6 @@ pub fn create_proposal_proof(
     let new_serial_blind = pallas::Scalar::random(&mut OsRng);
     let new_serial_commit = pedersen_commitment_base(new_serial, new_serial_blind);
     let new_value_commit = pedersen_commitment_u64(output.value, output.value_blind);
-    let new_epoch_pallas = pallas::Base::from(output.epoch);
     let new_value_pallas = pallas::Base::from(output.value);
     let (new_pub_x, new_pub_y) = output.public_key.xy();
 
@@ -276,8 +271,8 @@ pub fn create_proposal_proof(
         new_pub_x,
         new_pub_y,
         new_value_pallas,
-        new_epoch_pallas,
-        output.serial,
+        PALLAS_ZERO,
+        new_serial,
         output.coin_blind,
     ]));
 
@@ -308,7 +303,6 @@ pub fn create_proposal_proof(
         new_serial,
         new_serial_commit,
         new_value_commit,
-        new_epoch: output.epoch,
         new_coin,
         vrf_proof,
         mu_y,
@@ -330,7 +324,6 @@ pub fn create_proposal_proof(
         Witness::Uint32(Value::known(u64::from(input.leaf_position).try_into().unwrap())),
         Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
         Witness::Scalar(Value::known(new_serial_blind)),
-        Witness::Base(Value::known(new_epoch_pallas)),
         Witness::Base(Value::known(new_pub_x)),
         Witness::Base(Value::known(new_pub_y)),
         Witness::Scalar(Value::known(output.value_blind)),

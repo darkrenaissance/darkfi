@@ -25,8 +25,6 @@ witness "ConsensusProposal_V1" {
 	MerklePath path,
 	# Random blinding factor for the serial number of the new coin
 	Scalar new_serial_blind,
-	# The epoch the new coin was minted on
-	Base new_epoch,
 	# X coordinate for new coins' public key
 	Base new_pub_x,
 	# Y coordinate for new coins' public key
@@ -113,16 +111,13 @@ circuit "ConsensusProposal_V1" {
 	# coordinate dance:
 	constrain_instance(ec_get_x(new_value_commit));
 	constrain_instance(ec_get_y(new_value_commit));
-	
-	# Constrain the epoch the new coin was minted on
-	constrain_instance(new_epoch);
 
 	# Poseidon hash of the new coin
 	new_coin = poseidon_hash(
 		new_pub_x,
 		new_pub_y,
 		new_value,
-		new_epoch,
+		ZERO,
 		new_serial,
 		new_coin_blind,
 	);
