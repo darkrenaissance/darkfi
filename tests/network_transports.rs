@@ -35,7 +35,7 @@ async fn unix_transport() {
 
     let listener = unix.listen_on(url.clone()).unwrap().await.unwrap();
 
-    let _ = task::spawn(async move {
+    task::spawn(async move {
         let mut incoming = listener.incoming();
         while let Some(stream) = incoming.next().await {
             let stream = stream.unwrap();
@@ -62,7 +62,7 @@ async fn tcp_transport() {
 
     let listener = tcp.listen_on(url.clone()).unwrap().await.unwrap();
 
-    let _ = task::spawn(async move {
+    task::spawn(async move {
         let mut incoming = listener.incoming();
         while let Some(stream) = incoming.next().await {
             let stream = stream.unwrap();
@@ -89,7 +89,7 @@ async fn tcp_tls_transport() {
     let listener = tcp.listen_on(url.clone()).unwrap().await.unwrap();
     let (acceptor, listener) = tcp.upgrade_listener(listener).unwrap().await.unwrap();
 
-    let _ = task::spawn(async move {
+    task::spawn(async move {
         let mut incoming = listener.incoming();
         while let Some(stream) = incoming.next().await {
             let stream = stream.unwrap();
@@ -127,7 +127,7 @@ For example: \'export DARKFI_TOR_PUBLIC_ADDRESS=\"tor://abcdefghij234567.onion\"
     let tor = TorTransport::new(url, None).unwrap();
     let listener = tor.clone().listen_on(hurl).unwrap().await.unwrap();
 
-    let _ = task::spawn(async move {
+    task::spawn(async move {
         let mut incoming = listener.incoming();
         while let Some(stream) = incoming.next().await {
             let stream = stream.unwrap();
@@ -152,7 +152,7 @@ async fn tor_transport_with_control() {
         "Please set the env var DARKFI_TOR_COOKIE to the configured tor cookie file. \
 For example: \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'",
     );
-    let auth_cookie = hex::encode(&fs::read(auth_cookie).unwrap());
+    let auth_cookie = hex::encode(fs::read(auth_cookie).unwrap());
     let socks_url = Url::parse("socks5://127.0.0.1:9050").unwrap();
     let torc_url = Url::parse("tcp://127.0.0.1:9051").unwrap();
     let local_url = Url::parse("tcp://127.0.0.1:8787").unwrap();
@@ -163,7 +163,7 @@ For example: \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'",
 
     let listener = tor.clone().listen_on(local_url).unwrap().await.unwrap();
 
-    let _ = task::spawn(async move {
+    task::spawn(async move {
         let mut incoming = listener.incoming();
         while let Some(stream) = incoming.next().await {
             let stream = stream.unwrap();
@@ -189,7 +189,7 @@ async fn tor_transport_with_control_dropped() {
         "Please set the env var DARKFI_TOR_COOKIE to the configured tor cookie file. \
 For example: \'export DARKFI_TOR_COOKIE=\"/var/lib/tor/control_auth_cookie\"\'",
     );
-    let auth_cookie = hex::encode(&fs::read(auth_cookie).unwrap());
+    let auth_cookie = hex::encode(fs::read(auth_cookie).unwrap());
     let socks_url = Url::parse("socks5://127.0.0.1:9050").unwrap();
     let torc_url = Url::parse("tcp://127.0.0.1:9051").unwrap();
     let local_url = Url::parse("tcp://127.0.0.1:8787").unwrap();
