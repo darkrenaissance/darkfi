@@ -41,7 +41,7 @@ use crate::{blockchain::BlockchainOverlayPtr, util::time::TimeKeeper, Error, Res
 const MEMORY: &str = "memory";
 
 /// Gas limit for a contract
-const GAS_LIMIT: u64 = 200000000;
+const GAS_LIMIT: u64 = 400000000;
 
 /// The hardcoded db name for the zkas circuits database tree
 pub const SMART_CONTRACT_ZKAS_DB_NAME: &str = "_zkas";
