@@ -41,13 +41,18 @@ impl ZkBinary {
     pub fn decode(bytes: &[u8]) -> Result<Self> {
         let magic_bytes = &bytes[0..4];
         if magic_bytes != MAGIC_BYTES {
-            return Err(ZkasErr("Magic bytes are incorrect.".to_string()))
+            return Err(ZkasErr("Magic bytes are incorrect".to_string()))
         }
 
         let _binary_version = &bytes[4];
 
         // After the binary version, we're supposed to have the witness namespace
-        let (namespace, _) = deserialize_partial(&bytes[5..])?;
+        let (namespace, _): (String, _) = deserialize_partial(&bytes[5..])?;
+
+        // Enforce a limit on the namespace string length
+        if namespace.len() > 32 {
+            return Err(ZkasErr("Namespace too long".to_string()))
+        }
 
         let constants_offset = match find_subslice(bytes, b".constant") {
             Some(v) => v,
@@ -192,6 +197,8 @@ impl ZkBinary {
                 }
             };
             iter_offset += 1;
+
+            // TODO: Check that the types and arg number are correct
 
             let (arg_num, offset) = deserialize_partial::<VarInt>(&bytes[iter_offset..])?;
             iter_offset += offset;
