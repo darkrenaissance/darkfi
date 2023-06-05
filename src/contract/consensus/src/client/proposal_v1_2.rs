@@ -259,8 +259,7 @@ pub fn create_proposal_proof(
     };
 
     // New coin
-    let new_serial =
-        poseidon_hash([SERIAL_PREFIX, input.secret.inner(), input.note.serial]);
+    let new_serial = poseidon_hash([SERIAL_PREFIX, input.secret.inner(), input.note.serial]);
     let new_serial_blind = pallas::Scalar::random(&mut OsRng);
     let new_serial_commit = pedersen_commitment_base(new_serial, new_serial_blind);
     let new_value_commit = pedersen_commitment_u64(output.value, output.value_blind);
