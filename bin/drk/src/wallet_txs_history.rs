@@ -123,7 +123,7 @@ impl Drk {
             QueryType::Text as u8,
             "Broadcasted",
             QueryType::Text as u8,
-            bs58::encode(&serialize(tx)).into_string().to_string(),
+            bs58::encode(&serialize(tx)).into_string(),
         ]);
 
         let req = JsonRequest::new("wallet.exec_sql", params);
