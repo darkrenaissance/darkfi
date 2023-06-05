@@ -260,7 +260,7 @@ pub fn create_proposal_proof(
 
     // New coin
     let new_serial =
-        poseidon_hash([SERIAL_PREFIX, input.secret.inner(), input.note.serial, PALLAS_ZERO]);
+        poseidon_hash([SERIAL_PREFIX, input.secret.inner(), input.note.serial]);
     let new_serial_blind = pallas::Scalar::random(&mut OsRng);
     let new_serial_commit = pedersen_commitment_base(new_serial, new_serial_blind);
     let new_value_commit = pedersen_commitment_u64(output.value, output.value_blind);
@@ -277,7 +277,7 @@ pub fn create_proposal_proof(
     ]));
 
     let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
-    let seed = poseidon_hash([SEED_PREFIX, input.note.serial, PALLAS_ZERO]);
+    let seed = poseidon_hash([SEED_PREFIX, input.note.serial]);
     // NOTE: slot checkpoint eta to be renamed to previous_eta,
     //       corresponding to previous block eta.
     let mut vrf_input = [0u8; 64];

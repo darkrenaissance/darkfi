@@ -90,7 +90,7 @@ circuit "ConsensusProposal_V1" {
 	constrain_instance(ec_get_y(value_commit));
 
 	# Derive new coin serial from burnt one and constrain the pedersen commitment
-	new_serial = poseidon_hash(SERIAL_PREFIX, secret_key, serial, ZERO);
+	new_serial = poseidon_hash(SERIAL_PREFIX, secret_key, serial);
 	scv = ec_mul_base(new_serial, NULLIFIER_K);
 	scr = ec_mul(new_serial_blind, VALUE_COMMIT_RANDOM);
 	serial_commit = ec_add(scv, scr);
@@ -124,7 +124,7 @@ circuit "ConsensusProposal_V1" {
 	constrain_instance(new_coin);
 
 	# Coin y:
-	seed = poseidon_hash(SEED_PREFIX, serial, ZERO);
+	seed = poseidon_hash(SEED_PREFIX, serial);
 	y = poseidon_hash(seed, mu_y);
 	constrain_instance(mu_y);
 	constrain_instance(y);

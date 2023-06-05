@@ -146,8 +146,6 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     // Verify values match
     assert!((alice_staked_oc.note.value + REWARD) == alice_rewarded_staked_oc.note.value);
 
-    let alice_rewarded_staked_oc = alice_staked_oc;
-
     // Now Alice can unstake her owncoin
     info!(target: "consensus", "[Alice] ===================");
     info!(target: "consensus", "[Alice] Building unstake tx");
