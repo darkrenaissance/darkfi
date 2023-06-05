@@ -63,7 +63,7 @@ use crate::{
     error::TaudResult,
     jsonrpc::JsonRpcInterface,
     settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
-    task_info::TaskInfo,
+    task_info::{TaskEvent, TaskInfo},
     util::pipe_write,
 };
 
@@ -202,29 +202,35 @@ async fn on_receive_task(
         info!(target: "tau", "Save the task: ref: {}", task.ref_id);
         task.workspace = workspace.clone();
         if piped {
-            // if we can't load tha task then it's a new task.
+            // if we can't load the task then it's a new task.
             // otherwise it's a modification.
-            if TaskInfo::load(&task.ref_id, datastore_path).is_err() {
-                let file = "/tmp/tau_pipe";
-                let mut pipe_write = pipe_write(file).unwrap();
-                let buf = format!(
-                    "{{ \"action\": \"add_task\", \"owner\": \"{}\", \"content\": \"{}\" }}",
-                    task.owner.clone(),
-                    task.title.clone()
-                );
-                pipe_write.write_all(buf.as_bytes()).unwrap();
-            } else {
-                match task.events.0.last() {
-                    Some(ev) => {
-                        let file = "/tmp/tau_pipe";
-                        let mut pipe_write = pipe_write(file).unwrap();
-                        let buf = format!(
-                            "{{ \"action\": \"{}\", \"author\": \"{}\", \"content\": \"{}\" }}",
-                            ev.action, ev.author, ev.content
-                        );
-                        pipe_write.write_all(buf.as_bytes()).unwrap();
-                    }
-                    None => todo!(),
+            match TaskInfo::load(&task.ref_id, datastore_path) {
+                Ok(loaded_task) => {
+                    let loaded_events = loaded_task.events.0;
+                    let mut events = task.events.0.clone();
+                    events.retain(|ev| !loaded_events.contains(ev));
+
+                    let file = "/tmp/tau_pipe";
+                    let mut pipe_write = pipe_write(file)?;
+                    let mut task_clone = task.clone();
+                    task_clone.events.0 = events;
+
+                    let json = serde_json::to_string(&task_clone).unwrap();
+                    pipe_write.write_all(json.as_bytes())?;
+                }
+                Err(_) => {
+                    let file = "/tmp/tau_pipe";
+                    let mut pipe_write = pipe_write(file)?;
+                    let mut task_clone = task.clone();
+
+                    task_clone.events.0.push(TaskEvent::new(
+                        "add_task".to_string(),
+                        task_clone.owner.clone(),
+                        "".to_string(),
+                    ));
+
+                    let json = serde_json::to_string(&task_clone).unwrap();
+                    pipe_write.write_all(json.as_bytes())?;
                 }
             }
         }
@@ -320,8 +326,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     let seen_event = Seen::new();
     let seen_inv = Seen::new();
 
-    // let datastore_raft = datastore_path.join("tau.db");
-
     let (broadcast_snd, broadcast_rcv) = smol::channel::unbounded::<TaskInfo>();
 
     //
@@ -331,7 +335,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     net_settings.app_version = Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string());
 
     let p2p = net::P2p::new(net_settings.into()).await;
-    // let p2p = p2p.clone();
     let registry = p2p.protocol_registry();
 
     registry

@@ -3,8 +3,8 @@
 set -e
 
 tmux new-session -s "darkirc" -n "darkirc" -d
-# tmux send-keys "../../../../darkirc --localnet --config seed.toml" Enter && sleep 1
-# tmux split-window -h
+tmux send-keys "../../../../darkirc --config seed.toml" Enter && sleep 1
+tmux split-window -h
 tmux send-keys "../../../../darkirc --config ircd_full_node1.toml" Enter && sleep 1
 tmux split-window -h
 tmux send-keys "../../../../darkirc --config ircd_full_node2.toml" Enter

@@ -39,6 +39,9 @@ pub use state::SlotCheckpoint;
 pub mod validator;
 pub use validator::{ValidatorState, ValidatorStatePtr};
 
+/// Fee calculations
+pub mod fees;
+
 /// P2P net protocols
 pub mod proto;
 

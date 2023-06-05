@@ -5,7 +5,7 @@ rpc_listen="tcp://127.0.0.1:8891"
 irc_listen="tcp://127.0.0.1:22023"
 
 ## List of channels to autojoin for new client connections
-autojoin = ["#dev"]
+autojoin = ["#dev", "#test"]
 
 ## P2P net settings
 [net]
@@ -16,10 +16,10 @@ inbound = ["tcp://127.0.0.1:25553"]
 
 external_addr = ["tcp://127.0.0.1:25553"]
 
-peers = ["tls://127.0.0.1:25552"]
+# peers = ["tcp://127.0.0.1:25552"]
 
 ## Seed nodes to connect to 
-# seeds = ["tcp://127.0.0.1:25551"]
+seeds = ["tcp://127.0.0.1:25551"]
 
 # Prefered transports for outbound connections
 outbound_transports = ["tcp"]
@@ -29,5 +29,5 @@ localnet = true
 # [channel."#dev"]
 # topic = "DarkFi Development HQ"
 
-# [channel."#test1"]
-# secret = "HoLfk8vXBvNsBZ73e2xRPBZ9vEbnF9FVi4fDdyU9AZLU"
+[channel."#test"]
+secret = "HoLfk8vXBvNsBZ73e2xRPBZ9vEbnF9FVi4fDdyU9AZLU"

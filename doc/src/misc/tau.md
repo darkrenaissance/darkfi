@@ -21,35 +21,34 @@ To run your own instance check [Local Deployment](#local-deployment)
 ```shell
 % tau --help 
 ```
-	tau 0.3.0
+	tau 0.4.1
 
-	USAGE:
-	    tau [OPTIONS] [FILTERS]... [SUBCOMMAND]
+	Usage: tau [OPTIONS] [FILTERS]... [COMMAND]
 
-	ARGS:
-	    <FILTERS>...    Search filters (zero or more)                                 
+	Commands:
+	  add      Add a new task.
+	  modify   Modify/Edit an existing task
+	  list     List tasks
+	  start    Start task(s)
+	  open     Open task(s)
+	  pause    Pause task(s)
+	  stop     Stop task(s)
+	  comment  Set or Get comment for task(s)
+	  info     Get all data about selected task(s)
+	  switch   Switch workspace
+	  import   Import tasks from a specified directory
+	  export   Export tasks to a specified directory
+	  log      Log drawdown
+	  help     Print this message or the help of the given subcommand(s)
 
-	OPTIONS:
-	    -e, --endpoint <ENDPOINT>    taud JSON-RPC endpoint [default: tcp://127.0.0.1:23330]
-	    -h, --help                   Print help information
-	    -v                           Increase verbosity (-vvv supported)
-	    -V, --version                Print version information
+	Arguments:
+	  [FILTERS]...  Search filters (zero or more)
 
-	SUBCOMMANDS:
-	    add        Add a new task.                                                    
-	    comment    Set or Get comment for task(s)
-	    export     Export tasks to a specified directory
-	    help       Print this message or the help of the given subcommand(s)
-	    import     Import tasks from a specified directory
-	    info       Get all data about selected task(s)
-	    list       List tasks
-	    log        Log drawdown
-	    modify     Modify/Edit an existing task
-	    open       Open task(s)
-	    pause      Pause task(s)
-	    start      Start task(s)
-	    stop       Stop task(s)
-	    switch     Switch workspace
+	Options:
+	  -v...                      Increase verbosity (-vvv supported)
+	  -e, --endpoint <ENDPOINT>  taud JSON-RPC endpoint [default: tcp://127.0.0.1:23330]
+	  -h, --help                 Print help
+	  -V, --version              Print version
 
 ```shell
 % tau [SUBCOMMAND] --help
@@ -63,7 +62,7 @@ Add a new task with the title "review tau usage" with the description text
 "description" set to "review tau".
 
 ```bash
-tau add review tau usage "desc:review tau"
+tau add review tau usage desc:"review tau"
 ```
 
 Add another task with the title "second task" assigned to dave.
@@ -71,7 +70,7 @@ Because no description is set, it will open your EDITOR and prompt you
 for a description which allows entering multiline text.
 
 ```bash
-tau add second task @dave
+tau add second task assign:dave
 ```
 
 ```
@@ -115,7 +114,7 @@ Note: All filters from the previous section could work with mod commands.
 
 ```shell
 % tau 1 comment "content foo bar"	# will add a comment to task 1
-% tau 3 comment				# will show comments on task 3 
+% tau 3 comment				# will open the editor to write a comment
 ```
 
 #### Log drawdown

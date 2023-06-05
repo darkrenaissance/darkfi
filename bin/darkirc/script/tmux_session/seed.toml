@@ -24,6 +24,8 @@ inbound = ["tcp://127.0.0.1:25551"]
 # Prefered transports for outbound connections
 outbound_transports = ["tcp"]
 
+localnet = true
+
 ## Seed nodes to connect to 
 # seeds = ["tcp://127.0.0.1:25551", "tls://lilith1.dark.fi:25551"]
 #

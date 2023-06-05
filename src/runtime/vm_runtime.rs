@@ -41,7 +41,7 @@ use crate::{blockchain::BlockchainOverlayPtr, util::time::TimeKeeper, Error, Res
 const MEMORY: &str = "memory";
 
 /// Gas limit for a contract
-const GAS_LIMIT: u64 = 200000000;
+const GAS_LIMIT: u64 = 400000000;
 
 /// The hardcoded db name for the zkas circuits database tree
 pub const SMART_CONTRACT_ZKAS_DB_NAME: &str = "_zkas";
@@ -129,19 +129,12 @@ impl Runtime {
         time_keeper: TimeKeeper,
     ) -> Result<Self> {
         info!(target: "runtime::vm_runtime", "Instantiating a new runtime");
-        // TODO: Add necessary operators
         // This function will be called for each `Operator` encountered during
         // the wasm module execution. It should return the cost of the operator
-        // that it received as its first argument.
+        // that it received as its first argument. For now, every wasm opcode
+        // has a cost of `1`.
         // https://docs.rs/wasmparser/latest/wasmparser/enum.Operator.html
-        let cost_function = |operator: &Operator| -> u64 {
-            match operator {
-                Operator::LocalGet { .. } => 1,
-                Operator::I32Const { .. } => 1,
-                Operator::I32Add { .. } => 2,
-                _ => 0,
-            }
-        };
+        let cost_function = |_operator: &Operator| -> u64 { 1 };
 
         // `Metering` needs to be conigured with a limit and a cost function.
         // For each `Operator`, the metering middleware will call the cost
@@ -337,12 +330,12 @@ impl Runtime {
         let ret = match entrypoint.call(&mut self.store, &[Value::I32(0_i32)]) {
             Ok(retvals) => {
                 self.print_logs();
-                debug!(target: "runtime::vm_runtime", "{}", self.gas_info());
+                info!(target: "runtime::vm_runtime", "{}", self.gas_info());
                 retvals
             }
             Err(e) => {
                 self.print_logs();
-                debug!(target: "runtime::vm_runtime", "{}", self.gas_info());
+                info!(target: "runtime::vm_runtime", "{}", self.gas_info());
                 // WasmerRuntimeError panics are handled here. Return from run() immediately.
                 error!(target: "runtime::vm_runtime", "Wasmer Runtime Error: {:#?}", e);
                 return Err(e.into())
@@ -462,16 +455,22 @@ impl Runtime {
         }
     }
 
-    fn gas_info(&mut self) -> String {
+    fn gas_used(&mut self) -> u64 {
         let remaining_points = get_remaining_points(&mut self.store, &self.instance);
 
         match remaining_points {
-            MeteringPoints::Remaining(rem) => {
-                format!("Gas used: {}/{}", GAS_LIMIT - rem, GAS_LIMIT)
-            }
-            MeteringPoints::Exhausted => {
-                format!("Gas fully exhausted: {}/{}", GAS_LIMIT + 1, GAS_LIMIT)
-            }
+            MeteringPoints::Remaining(rem) => GAS_LIMIT - rem,
+            MeteringPoints::Exhausted => GAS_LIMIT + 1,
+        }
+    }
+
+    fn gas_info(&mut self) -> String {
+        let gas_used = self.gas_used();
+
+        if gas_used > GAS_LIMIT {
+            format!("Gas fully exhausted: {}/{}", gas_used, GAS_LIMIT)
+        } else {
+            format!("Gas used: {}/{}", gas_used, GAS_LIMIT)
         }
     }
 

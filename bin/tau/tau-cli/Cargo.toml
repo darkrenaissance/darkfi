@@ -9,16 +9,22 @@ homepage = "https://dark.fi"
 repository = "https://github.com/darkrenaissance/darkfi"
 
 [dependencies]
-async-std = {version = "1.12.0", features = ["attributes"]}
-chrono = "0.4.24"
-clap = {version = "4.2.7", features = ["derive"]}
-colored = "2.0.0"
 darkfi = { path = "../../../", features = ["rpc"]}
+
+# Async
+async-std = {version = "1.12.0", features = ["attributes"]}
+
+# Misc
+chrono = "0.4.24"
+colored = "2.0.0"
 log = "0.4.17"
 prettytable-rs = "0.10.0"
-serde = {version = "1.0.163", features = ["derive"]}
-serde_json = "1.0.96"
 simplelog = "0.12.1"
 term_grid = { git = "https://github.com/Dastan-glitch/rust-term-grid.git" }
-textwrap = "0.15.2"
+textwrap = "0.16.0"
 url = "2.3.1"
+
+# Encoding and parsing
+clap = {version = "4.2.7", features = ["derive"]}
+serde = {version = "1.0.163", features = ["derive"]}
+serde_json = "1.0.96"

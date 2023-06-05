@@ -16,26 +16,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::{HashMap, VecDeque},
-    fmt::Debug,
-};
+use std::{collections::VecDeque, fmt::Debug};
 
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
-use log::debug;
+use log::{debug, info};
 use rand::{rngs::OsRng, RngCore};
 
 use super::EventMsg;
 use crate::{
     event_graph::model::{Event, EventId, ModelPtr},
     net,
-    util::{async_util::sleep, time::Timestamp},
+    util::async_util::sleep,
     Result,
 };
 
-const UNREAD_EVENT_EXPIRE_TIME: u64 = 3600; // in seconds
 const SIZE_OF_SEEN_BUFFER: usize = 65536;
 // const MAX_CONFIRM: u8 = 3;
 
@@ -106,45 +102,6 @@ impl<T: Eq + PartialEq + Clone> Seen<T> {
     }
 }
 
-pub type UnreadEventsPtr<T> = Arc<Mutex<UnreadEvents<T>>>;
-
-#[derive(Debug)]
-pub struct UnreadEvents<T: Send + Sync> {
-    pub events: HashMap<EventId, Event<T>>,
-}
-
-impl<T> UnreadEvents<T>
-where
-    T: Send + Sync + Encodable + Decodable + Clone + EventMsg,
-{
-    pub fn new() -> UnreadEventsPtr<T> {
-        Arc::new(Mutex::new(Self { events: HashMap::new() }))
-    }
-
-    fn _contains(&self, key: &EventId) -> bool {
-        self.events.contains_key(key)
-    }
-
-    fn _get(&self, key: &EventId) -> Option<Event<T>> {
-        self.events.get(key).cloned()
-    }
-
-    pub fn insert(&mut self, event: &Event<T>) {
-        // prune expired events
-        let mut prune_ids = vec![];
-        for (id, e) in self.events.iter() {
-            if e.timestamp.0 + (UNREAD_EVENT_EXPIRE_TIME * 1000) < Timestamp::current_time().0 {
-                prune_ids.push(*id);
-            }
-        }
-        for id in prune_ids {
-            self.events.remove(&id);
-        }
-
-        self.events.insert(event.hash(), event.clone());
-    }
-}
-
 pub struct ProtocolEvent<T>
 where
     T: Send + Sync + Encodable + Decodable + Debug + 'static,
@@ -208,7 +165,7 @@ where
 
     async fn handle_receive_event(self: Arc<Self>) -> Result<()> {
         debug!(target: "ircd", "ProtocolEvent::handle_receive_event() [START]");
-        // let exclude_list = vec![self.channel.address()];
+        let exclude_list = vec![self.channel.address()];
         loop {
             let event = self.event_sub.receive().await?;
             let event = (*event).to_owned();
@@ -217,11 +174,13 @@ where
                 continue
             }
 
+            info!("[P2P] Received: {:?}", event.action);
+
             self.new_event(&event).await?;
             self.send_inv(&event).await?;
 
             // Broadcast the msg
-            // self.p2p.broadcast_with_exclude(event, &exclude_list).await?;
+            self.p2p.broadcast_with_exclude(event, &exclude_list).await?;
         }
     }
 
