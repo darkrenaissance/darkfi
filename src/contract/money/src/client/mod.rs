@@ -147,6 +147,10 @@ pub struct ConsensusNote {
     pub coin_blind: pallas::Base,
     /// Blinding factor for the value pedersen commitment
     pub value_blind: pallas::Scalar,
+    /// Value of the reward
+    pub reward: u64,
+    /// Blinding factor for the reward value pedersen commitment
+    pub reward_blind: pallas::Scalar,
 }
 
 impl From<ConsensusNote> for MoneyNote {

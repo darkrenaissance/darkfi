@@ -95,6 +95,8 @@ impl ConsensusStakeCallBuilder {
             epoch: self.epoch,
             coin_blind,
             value_blind: self.value_blind,
+            reward: 0,
+            reward_blind: self.value_blind,
         };
 
         let encrypted_note = AeadEncryptedNote::encrypt(&note, &output.public_key, &mut OsRng)?;

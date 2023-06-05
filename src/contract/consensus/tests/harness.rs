@@ -47,10 +47,10 @@ use rand::rngs::OsRng;
 use darkfi_consensus_contract::{
     client::{
         genesis_stake_v1::ConsensusGenesisStakeCallBuilder,
-        proposal_v1::ConsensusProposalCallBuilder, stake_v1::ConsensusStakeCallBuilder,
+        proposal_v1_2::ConsensusProposalCallBuilder, stake_v1::ConsensusStakeCallBuilder,
         unstake_v1::ConsensusUnstakeCallBuilder,
     },
-    model::{ConsensusGenesisStakeParamsV1, ConsensusProposalMintParamsV1},
+    model::{ConsensusGenesisStakeParamsV1, ConsensusProposalParamsV1},
     ConsensusFunction,
 };
 use darkfi_money_contract::{
@@ -63,8 +63,9 @@ use darkfi_money_contract::{
         Output,
     },
     MoneyFunction, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
-    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1,
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1,
+    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
+    MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
 pub fn init_logger() {
@@ -238,6 +239,7 @@ impl ConsensusTestHarness {
         mkpk!(CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1);
         mkpk!(CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1);
         mkpk!(CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1);
+        mkpk!(CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1);
 
         holders.insert(Holder::Alice, alice);
 
@@ -514,87 +516,56 @@ impl ConsensusTestHarness {
         &mut self,
         holder: Holder,
         slot_checkpoint: SlotCheckpoint,
-        staked_oc: OwnCoin,
-    ) -> Result<(Transaction, ConsensusProposalMintParamsV1)> {
+        staked_oc: ConsensusOwnCoin,
+    ) -> Result<(Transaction, ConsensusProposalParamsV1, SecretKey)> {
         let wallet = self.holders.get_mut(&holder).unwrap();
-        let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
-        let (reward_pk, reward_zkbin) =
-            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1).unwrap();
-        let (mint_pk, mint_zkbin) =
-            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1).unwrap();
+        let (proposal_pk, proposal_zkbin) =
+            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::Proposal).unwrap();
         let timer = Instant::now();
 
         // Building Consensus::Unstake params
         let proposal_call_debris = ConsensusProposalCallBuilder {
-            coin: staked_oc.clone(),
-            recipient: wallet.keypair.public,
+            coin: staked_oc,
             slot_checkpoint,
             tree: wallet.consensus_merkle_tree.clone(),
-            burn_zkbin: burn_zkbin.clone(),
-            burn_pk: burn_pk.clone(),
-            reward_zkbin: reward_zkbin.clone(),
-            reward_pk: reward_pk.clone(),
-            mint_zkbin: mint_zkbin.clone(),
-            mint_pk: mint_pk.clone(),
+            proposal_zkbin: proposal_zkbin.clone(),
+            proposal_pk: proposal_pk.clone(),
         }
         .build()?;
-        let (
-            burn_params,
-            burn_proofs,
-            reward_params,
-            reward_proofs,
-            mint_params,
-            mint_proofs,
-            proposal_secret_key,
-        ) = (
-            proposal_call_debris.burn_params,
-            proposal_call_debris.burn_proofs,
-            proposal_call_debris.reward_params,
-            proposal_call_debris.reward_proofs,
-            proposal_call_debris.mint_params,
-            proposal_call_debris.mint_proofs,
+        let (params, proofs, secret_key) = (
+            proposal_call_debris.params,
+            proposal_call_debris.proofs,
             proposal_call_debris.signature_secret,
         );
 
-        // Building proposal tx
-        let mut data = vec![ConsensusFunction::ProposalBurnV1 as u8];
-        burn_params.encode(&mut data)?;
-        let burn_call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
+        let mut data = vec![ConsensusFunction::ProposalV1 as u8];
+        params.encode(&mut data)?;
+        let call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
 
-        let mut data = vec![ConsensusFunction::ProposalRewardV1 as u8];
-        reward_params.encode(&mut data)?;
-        let reward_call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
-
-        let mut data = vec![ConsensusFunction::ProposalMintV1 as u8];
-        mint_params.encode(&mut data)?;
-        let mint_call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
-
-        let calls = vec![burn_call, reward_call, mint_call];
-        let proofs = vec![burn_proofs, reward_proofs, mint_proofs];
-        let mut proposal_tx = Transaction { calls, proofs, signatures: vec![] };
-        let burn_sigs = proposal_tx.create_sigs(&mut OsRng, &[proposal_secret_key])?;
-        let reward_sigs = proposal_tx.create_sigs(&mut OsRng, &[proposal_secret_key])?;
-        let mint_sigs = proposal_tx.create_sigs(&mut OsRng, &[proposal_secret_key])?;
-        proposal_tx.signatures = vec![burn_sigs, reward_sigs, mint_sigs];
+        let calls = vec![call];
+        let proofs = vec![proofs];
+        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let sigs = tx.create_sigs(&mut OsRng, &[secret_key])?;
+        tx.signatures = vec![sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());
 
         // Calculate transaction sizes
-        let encoded: Vec<u8> = serialize(&proposal_tx);
+        let encoded: Vec<u8> = serialize(&tx);
         let size = ::std::mem::size_of_val(&*encoded);
         tx_action_benchmark.sizes.push(size);
         let base58 = bs58::encode(&encoded).into_string();
         let size = ::std::mem::size_of_val(&*base58);
         tx_action_benchmark.broadcasted_sizes.push(size);
 
-        Ok((proposal_tx, mint_params))
+        Ok((tx, params, secret_key))
     }
 
     pub async fn execute_proposal_tx(
         &mut self,
         holder: Holder,
         tx: Transaction,
-        params: &ConsensusProposalMintParamsV1,
+        params: &ConsensusProposalParamsV1,
         slot: u64,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(&holder).unwrap();

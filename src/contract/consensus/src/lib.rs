@@ -30,6 +30,7 @@ pub enum ConsensusFunction {
     ProposalRewardV1 = 0x03,
     ProposalMintV1 = 0x04,
     UnstakeV1 = 0x05,
+    ProposalV1 = 0x06,
 }
 
 impl TryFrom<u8> for ConsensusFunction {
@@ -43,6 +44,7 @@ impl TryFrom<u8> for ConsensusFunction {
             0x03 => Ok(Self::ProposalRewardV1),
             0x04 => Ok(Self::ProposalMintV1),
             0x05 => Ok(Self::UnstakeV1),
+            0x06 => Ok(Self::ProposalV1),
             _ => Err(ContractError::InvalidFunction),
         }
     }

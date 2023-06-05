@@ -110,39 +110,42 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
 
     // Verify values match
     assert!(ALICE_INITIAL == alice_staked_oc.note.value);
-    /*
-        // We simulate the proposal of genesis slot
-        let slot_checkpoint = th.get_slot_checkpoints_by_slot(current_slot).await?;
 
-        // With alice's current coin value she can become the slot proposer,
-        // so she creates a proposal transaction to burn her staked coin,
-        // reward herself and mint the new coin.
-        info!(target: "consensus", "[Alice] ====================");
-        info!(target: "consensus", "[Alice] Building proposal tx");
-        info!(target: "consensus", "[Alice] ====================");
-        let (proposal_tx, proposal_params) =
-            th.proposal(Holder::Alice, slot_checkpoint, alice_staked_oc.clone())?;
+    // We simulate the proposal of genesis slot
+    let slot_checkpoint = th.get_slot_checkpoints_by_slot(current_slot).await?;
 
-        info!(target: "consensus", "[Faucet] ===========================");
-        info!(target: "consensus", "[Faucet] Executing Alice proposal tx");
-        info!(target: "consensus", "[Faucet] ===========================");
-        th.execute_proposal_tx(Holder::Faucet, proposal_tx.clone(), &proposal_params, current_slot)
-            .await?;
+    // With alice's current coin value she can become the slot proposer,
+    // so she creates a proposal transaction to burn her staked coin,
+    // reward herself and mint the new coin.
+    info!(target: "consensus", "[Alice] ====================");
+    info!(target: "consensus", "[Alice] Building proposal tx");
+    info!(target: "consensus", "[Alice] ====================");
+    let (proposal_tx, proposal_params, proposal_secret_key) =
+        th.proposal(Holder::Alice, slot_checkpoint, alice_staked_oc.clone())?;
 
-        info!(target: "consensus", "[Alice] ===========================");
-        info!(target: "consensus", "[Alice] Executing Alice proposal tx");
-        info!(target: "consensus", "[Alice] ===========================");
-        th.execute_proposal_tx(Holder::Alice, proposal_tx, &proposal_params, current_slot).await?;
+    info!(target: "consensus", "[Faucet] ===========================");
+    info!(target: "consensus", "[Faucet] Executing Alice proposal tx");
+    info!(target: "consensus", "[Faucet] ===========================");
+    th.execute_proposal_tx(Holder::Faucet, proposal_tx.clone(), &proposal_params, current_slot)
+        .await?;
 
-        th.assert_trees();
+    info!(target: "consensus", "[Alice] ===========================");
+    info!(target: "consensus", "[Alice] Executing Alice proposal tx");
+    info!(target: "consensus", "[Alice] ===========================");
+    th.execute_proposal_tx(Holder::Alice, proposal_tx, &proposal_params, current_slot).await?;
 
-        // Gather new staked owncoin which includes the reward
-        let alice_rewarded_staked_oc =
-            th.gather_consensus_owncoin(Holder::Alice, proposal_params.output)?;
+    th.assert_trees();
 
-        // Verify values match
-        assert!((alice_staked_oc.note.value + REWARD) == alice_rewarded_staked_oc.note.value);
-    */
+    // Gather new staked owncoin which includes the reward
+    let alice_rewarded_staked_oc = th.gather_consensus_owncoin(
+        Holder::Alice,
+        proposal_params.output,
+        Some(proposal_secret_key),
+    )?;
+
+    // Verify values match
+    assert!((alice_staked_oc.note.value + REWARD) == alice_rewarded_staked_oc.note.value);
+
     let alice_rewarded_staked_oc = alice_staked_oc;
 
     // Now Alice can unstake her owncoin

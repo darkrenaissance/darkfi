@@ -1,0 +1,156 @@
+constant "ConsensusProposal_V1" {
+	EcFixedPointShort VALUE_COMMIT_VALUE,
+	EcFixedPoint VALUE_COMMIT_RANDOM,
+	EcFixedPointBase NULLIFIER_K,
+}
+
+witness "ConsensusProposal_V1" {
+	# Burnt coin secret key
+	Base secret_key,
+	# Unique serial number corresponding to the burnt coin
+	Base serial,
+	# The value of the burnt coin
+	Base value,
+	# The epoch the burnt coin was minted on
+	Base epoch,
+	# The reward value
+	Base reward,
+	# Random blinding factor for the value commitment
+	Scalar value_blind,
+	# Random blinding factor for coin
+	Base coin_blind,
+	# Leaf position of the coin in the Merkle tree of coins
+	Uint32 leaf_pos,
+	# Merkle path to the coin
+	MerklePath path,
+	# Random blinding factor for the serial number of the new coin
+	Scalar new_serial_blind,
+	# The epoch the new coin was minted on
+	Base new_epoch,
+	# X coordinate for new coins' public key
+	Base new_pub_x,
+	# Y coordinate for new coins' public key
+	Base new_pub_y,
+	# Random blinding factor for the value commitment of the new coin
+	Scalar new_value_blind,
+	# Random blinding factor for new coin
+	Base new_coin_blind,
+	# Election seed y
+	Base mu_y,
+	# Election seed rho
+	Base mu_rho,
+	# Sigma1
+	Base sigma1,
+	# Sigma2
+	Base sigma2,
+	# Lottery headstart
+	Base headstart,
+}
+
+circuit "ConsensusProposal_V1" {
+	# Constants
+	ZERO = witness_base(0);
+	SERIAL_PREFIX = witness_base(2);
+	SEED_PREFIX = witness_base(3);
+
+	# Poseidon hash of the nullifier
+	nullifier = poseidon_hash(secret_key, serial);
+	constrain_instance(nullifier);
+
+	# Constrain the epoch this coin was minted on
+	constrain_instance(epoch);
+
+	# We derive coins' public key for the signature and
+	# VRF proof and constrain its coordinates:
+	pub = ec_mul_base(secret_key, NULLIFIER_K);
+	pub_x = ec_get_x(pub);
+	pub_y = ec_get_y(pub);
+	constrain_instance(pub_x);
+	constrain_instance(pub_y);
+
+	# Coin hash	
+	C = poseidon_hash(
+		pub_x,
+		pub_y,
+		value,
+		epoch,
+		serial,
+		coin_blind,
+	);
+
+	# Merkle root
+	root = merkle_root(leaf_pos, path, C);
+	constrain_instance(root);
+	
+	# Pedersen commitment for coin's value
+	vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
+	vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
+	value_commit = ec_add(vcv, vcr);
+	# Since value_commit is a curve point, we fetch its coordinates
+	# and constrain them:
+	constrain_instance(ec_get_x(value_commit));
+	constrain_instance(ec_get_y(value_commit));
+
+	# Derive new coin serial from burnt one and constrain the pedersen commitment
+	new_serial = poseidon_hash(SERIAL_PREFIX, secret_key, serial, ZERO);
+	scv = ec_mul_base(new_serial, NULLIFIER_K);
+	scr = ec_mul(new_serial_blind, VALUE_COMMIT_RANDOM);
+	serial_commit = ec_add(scv, scr);
+	# Since serial commit is also a curve point, we'll do the same
+	# coordinate dance:
+	constrain_instance(ec_get_x(serial_commit));
+	constrain_instance(ec_get_y(serial_commit));
+
+	# Constrain reward value
+	constrain_instance(reward);
+
+	# Pedersen commitment for new coin's value
+	new_value = base_add(value, reward);
+	nvcv = ec_mul_short(new_value, VALUE_COMMIT_VALUE);
+	nvcr = ec_mul(new_value_blind, VALUE_COMMIT_RANDOM);
+	new_value_commit = ec_add(nvcv, nvcr);
+	# Since the new value commit is also a curve point, we'll do the same
+	# coordinate dance:
+	constrain_instance(ec_get_x(new_value_commit));
+	constrain_instance(ec_get_y(new_value_commit));
+	
+	# Constrain the epoch the new coin was minted on
+	constrain_instance(new_epoch);
+
+	# Poseidon hash of the new coin
+	new_coin = poseidon_hash(
+		new_pub_x,
+		new_pub_y,
+		new_value,
+		new_epoch,
+		new_serial,
+		new_coin_blind,
+	);
+	constrain_instance(new_coin);
+
+	# Coin y:
+	seed = poseidon_hash(SEED_PREFIX, serial, ZERO);
+	y = poseidon_hash(seed, mu_y);
+	constrain_instance(mu_y);
+	constrain_instance(y);
+
+	# Coin rho(seed):
+	rho = poseidon_hash(seed, mu_rho);
+	constrain_instance(mu_rho);
+	constrain_instance(rho);
+
+	# Calculate lottery target
+	term_1 = base_mul(sigma1, value);
+	term_2 = base_mul(sigma2, value);
+	shifted_term_2 = base_mul(term_2, value);
+	target = base_add(term_1, shifted_term_2);
+	shifted_target = base_add(target, headstart);
+	constrain_instance(sigma1);
+	constrain_instance(sigma2);
+	constrain_instance(headstart);
+
+	# Play lottery
+	less_than_loose(y, shifted_target);
+
+	# At this point we've enforced all of our public inputs.
+}

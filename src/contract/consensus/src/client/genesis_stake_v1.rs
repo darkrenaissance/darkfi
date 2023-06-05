@@ -88,7 +88,15 @@ impl ConsensusGenesisStakeCallBuilder {
             create_consensus_mint_proof(&self.mint_zkbin, &self.mint_pk, &output)?;
 
         // Encrypted note
-        let note = ConsensusNote { serial, value: output.value, epoch, coin_blind, value_blind };
+        let note = ConsensusNote {
+            serial,
+            value: output.value,
+            epoch,
+            coin_blind,
+            value_blind,
+            reward: 0,
+            reward_blind: value_blind,
+        };
 
         let encrypted_note = AeadEncryptedNote::encrypt(&note, &output.public_key, &mut OsRng)?;
 

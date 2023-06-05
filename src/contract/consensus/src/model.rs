@@ -18,7 +18,7 @@
 
 use darkfi_money_contract::model::{ClearInput, ConsensusInput, ConsensusOutput, Input, Output};
 use darkfi_sdk::{
-    crypto::{ecvrf::VrfProof, PublicKey},
+    crypto::{ecvrf::VrfProof, Coin, Nullifier, PublicKey},
     pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
@@ -80,6 +80,38 @@ pub struct ConsensusProposalMintParamsV1 {
 /// State update for `Consensus::Reward`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ConsensusProposalRewardUpdateV1 {}
+
+/// Parameters for `Consensus::Proposal`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusProposalParamsV1 {
+    /// Anonymous input
+    pub input: ConsensusInput,
+    /// Anonymous output
+    pub output: ConsensusOutput,
+    /// Reward value
+    pub reward: u64,
+    /// Blinding factor for reward value
+    pub reward_blind: pallas::Scalar,
+    /// Pedersen commitment for the output's serial number
+    pub new_serial_commit: pallas::Point,
+    /// Rewarded slot
+    pub slot: u64,
+    /// VRF proof for eta calculation
+    pub vrf_proof: VrfProof,
+    /// Coin y
+    pub y: pallas::Base,
+    /// Lottery rho used
+    pub rho: pallas::Base,
+}
+
+/// State update for `Consensus::Proposal`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusProposalUpdateV1 {
+    /// Revealed nullifier
+    pub nullifier: Nullifier,
+    /// The newly minted coin
+    pub coin: Coin,
+}
 
 // Consensus parameters configuration.
 // Note: Always verify `pallas::Base` are correct, in case of changes,

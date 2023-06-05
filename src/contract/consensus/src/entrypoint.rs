@@ -32,7 +32,10 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::{model::ConsensusProposalRewardUpdateV1, ConsensusFunction};
+use crate::{
+    model::{ConsensusProposalRewardUpdateV1, ConsensusProposalUpdateV1},
+    ConsensusFunction,
+};
 
 /// `Consensus::GenesisStake` functions
 mod genesis_stake_v1;
@@ -68,6 +71,13 @@ use proposal_mint_v1::{
     consensus_proposal_mint_process_update_v1,
 };
 
+/// `Consensus::ProposalV1` functions
+mod proposal_v1;
+use proposal_v1::{
+    consensus_proposal_get_metadata_v1, consensus_proposal_process_instruction_v1,
+    consensus_proposal_process_update_v1,
+};
+
 /// `Consensus::Unstake` functions
 mod unstake_v1;
 use unstake_v1::{
@@ -97,6 +107,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     let consensus_burn_v1_bincode = include_bytes!("../proof/consensus_burn_v1.zk.bin");
     let proposal_reward_v1_bincode = include_bytes!("../proof/proposal_reward_v1.zk.bin");
     let proposal_mint_v1_bincode = include_bytes!("../proof/proposal_mint_v1.zk.bin");
+    let consensus_proposal_v1_bincode = include_bytes!("../proof/consensus_proposal_v1.zk.bin");
 
     // For that, we use `zkas_db_set` and pass in the bincode.
     zkas_db_set(&money_mint_v1_bincode[..])?;
@@ -105,6 +116,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     zkas_db_set(&consensus_burn_v1_bincode[..])?;
     zkas_db_set(&proposal_reward_v1_bincode[..])?;
     zkas_db_set(&proposal_mint_v1_bincode[..])?;
+    zkas_db_set(&consensus_proposal_v1_bincode[..])?;
 
     // Set up a database tree to hold Merkle roots of all coins
     // k=MerkleNode, v=[]
@@ -187,6 +199,10 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
             let metadata = consensus_proposal_mint_get_metadata_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
         }
+        ConsensusFunction::ProposalV1 => {
+            let metadata = consensus_proposal_get_metadata_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&metadata)?)
+        }
         ConsensusFunction::UnstakeV1 => {
             let metadata = consensus_unstake_get_metadata_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
@@ -231,6 +247,10 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let update_data = consensus_proposal_mint_process_instruction_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)
         }
+        ConsensusFunction::ProposalV1 => {
+            let update_data = consensus_proposal_process_instruction_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&update_data)?)
+        }
         ConsensusFunction::UnstakeV1 => {
             let update_data = consensus_unstake_process_instruction_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)
@@ -264,6 +284,10 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
         ConsensusFunction::ProposalMintV1 => {
             let update: ConsensusStakeUpdateV1 = deserialize(&update_data[1..])?;
             Ok(consensus_proposal_mint_process_update_v1(cid, update)?)
+        }
+        ConsensusFunction::ProposalV1 => {
+            let update: ConsensusProposalUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(consensus_proposal_process_update_v1(cid, update)?)
         }
         ConsensusFunction::UnstakeV1 => {
             let update: ConsensusUnstakeUpdateV1 = deserialize(&update_data[1..])?;

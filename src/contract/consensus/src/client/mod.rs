@@ -39,5 +39,8 @@ pub mod stake_v1;
 /// and `Consensus::ProposalMintV1` contract calls.
 pub mod proposal_v1;
 
+/// Proposal transaction building API.
+pub mod proposal_v1_2;
+
 /// `Consensus::UnstakeV1` API
 pub mod unstake_v1;
