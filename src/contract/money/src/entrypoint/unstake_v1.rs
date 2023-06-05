@@ -142,8 +142,8 @@ pub(crate) fn money_unstake_process_instruction_v1(
         return Err(MoneyError::UnstakePreviousCallNotConsensusContract.into())
     }
 
-    // Verify previous call corresponds to Consensus::UnstakeV1 (0x05)
-    if previous.data[0] != 0x05 {
+    // Verify previous call corresponds to Consensus::UnstakeV1 (0x03)
+    if previous.data[0] != 0x03 {
         msg!("[MoneyUnstakeV1] Error: Previous call function mismatch");
         return Err(MoneyError::PreviousCallFunctionMissmatch.into())
     }

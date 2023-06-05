@@ -104,9 +104,5 @@ pub const CONSENSUS_CONTRACT_COIN_MERKLE_TREE: &str = "consensus_coin_tree";
 pub const CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1: &str = "ConsensusMint_V1";
 /// zkas consensus burn circuit namespace
 pub const CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1: &str = "ConsensusBurn_V1";
-/// zkas proposal reward circuit namespace
-pub const CONSENSUS_CONTRACT_ZKAS_PROPOSAL_REWARD_NS_V1: &str = "ProposalReward_V1";
-/// zkas proposal mint circuit namespace
-pub const CONSENSUS_CONTRACT_ZKAS_PROPOSAL_MINT_NS_V1: &str = "ProposalMint_V1";
 /// zkas proposal circuit namespace
 pub const CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1: &str = "ConsensusProposal_V1";
