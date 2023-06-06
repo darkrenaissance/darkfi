@@ -27,7 +27,8 @@ use crate::{event_graph::events_queue::EventsQueuePtr, util::time::Timestamp};
 
 use super::EventMsg;
 
-pub type EventId = [u8; blake3::OUT_LEN];
+//pub type EventId = [u8; blake3::OUT_LEN];
+pub type EventId = blake3::Hash;
 
 const MAX_DEPTH: u32 = 300;
 const MAX_HEIGHT: u32 = 300;
@@ -44,7 +45,7 @@ where
     T: Send + Sync + Encodable + Decodable + Clone + EventMsg,
 {
     pub fn hash(&self) -> EventId {
-        *blake3::hash(&serialize(self)).as_bytes()
+        blake3::hash(&serialize(self))
     }
 }
 
@@ -74,7 +75,7 @@ where
         let root_node = EventNode {
             parent: None,
             event: Event {
-                previous_event_hash: [0u8; blake3::OUT_LEN],
+                previous_event_hash: blake3::hash(b""), // This is a blake3 hash of NULL
                 action: T::new(),
                 timestamp: Timestamp(1674512021323),
             },
@@ -377,11 +378,11 @@ where
     fn _debug(&self) {
         for (event_id, event_node) in &self.event_map {
             let depth = self.find_depth(*event_id, &self.current_root);
-            println!("{}: {:?} [depth={}]", hex::encode(event_id), event_node.event, depth);
+            println!("{}: {:?} [depth={}]", event_id, event_node.event, depth);
         }
 
-        println!("root: {}", hex::encode(self.current_root));
-        println!("head: {}", hex::encode(self.find_head()));
+        println!("root: {}", self.current_root);
+        println!("head: {}", self.find_head());
     }
 }
 

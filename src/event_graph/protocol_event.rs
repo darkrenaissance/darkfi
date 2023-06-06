@@ -35,17 +35,17 @@ use crate::{
 const SIZE_OF_SEEN_BUFFER: usize = 65536;
 // const MAX_CONFIRM: u8 = 3;
 
-type InvId = u64;
+pub type InvId = u64;
 
 #[derive(SerialEncodable, SerialDecodable, Clone, Debug, PartialEq, Eq, Hash)]
-struct InvItem {
-    id: InvId,
-    hash: EventId,
+pub struct InvItem {
+    pub id: InvId,
+    pub hash: EventId,
 }
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
-struct Inv {
-    invs: Vec<InvItem>,
+pub struct Inv {
+    pub invs: Vec<InvItem>,
 }
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
