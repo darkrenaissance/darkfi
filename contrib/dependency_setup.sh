@@ -22,17 +22,17 @@ setup_mac() {
 }
 
 setup_apt() {
-	apt_deps="git make jq gcc"
+	apt_deps="git make jq gcc pkg-config libasound2-dev"
 	$1 install $apt_deps || return 1
 }
 
 setup_pacman() {
-	pacman_deps="git make jq gcc"
+	pacman_deps="git make jq gcc pkgconf alsa-lib"
 	$1 -Sy $pacman_deps || return 1
 }
 
 setup_xbps() {
-	xbps_deps="git make jq gcc pkg-config"
+	xbps_deps="git make jq gcc pkg-config alsa-lib-devel"
 	$1 -S $xbps_deps || return 1
 }
 
@@ -42,7 +42,7 @@ setup_dnf() {
 }
 
 setup_apk() {
-	apk_deps="git make jq gcc musl-dev"
+	apk_deps="git make jq gcc musl-dev pkgconfig alsa-lib-dev"
 	$1 add $apk_deps || return 1
 }
 
@@ -52,7 +52,7 @@ setup_zypper() {
 }
 
 setup_emerge() {
-	emerge_deps="dev-vcs/git app-misc/jq"
+	emerge_deps="dev-vcs/git app-misc/jq media-libs/alsa-lib"
 	$1 $emerge_deps || return 1
 }
 
