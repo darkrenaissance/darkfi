@@ -22,7 +22,6 @@ use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use log::{debug, info};
-use rand::{rngs::OsRng, RngCore};
 
 use super::EventMsg;
 use crate::{
@@ -33,13 +32,9 @@ use crate::{
 };
 
 const SIZE_OF_SEEN_BUFFER: usize = 65536;
-// const MAX_CONFIRM: u8 = 3;
-
-pub type InvId = u64;
 
 #[derive(SerialEncodable, SerialDecodable, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct InvItem {
-    pub id: InvId,
     pub hash: EventId,
 }
 
@@ -92,7 +87,7 @@ where
     channel: net::ChannelPtr,
     model: ModelPtr<T>,
     seen_event: SeenPtr<EventId>,
-    seen_inv: SeenPtr<InvId>,
+    seen_inv: SeenPtr<EventId>,
 }
 
 impl<T> ProtocolEvent<T>
@@ -104,7 +99,7 @@ where
         p2p: net::P2pPtr,
         model: ModelPtr<T>,
         seen_event: SeenPtr<EventId>,
-        seen_inv: SeenPtr<InvId>,
+        seen_inv: SeenPtr<EventId>,
     ) -> net::ProtocolBasePtr {
         let message_subsytem = channel.get_message_subsystem();
         message_subsytem.add_dispatch::<Event<T>>().await;
@@ -170,7 +165,7 @@ where
             let inv_item = inv.invs[0].clone();
 
             // for inv in inv.invs.iter() {
-            if !self.seen_inv.push(&inv_item.id).await {
+            if !self.seen_inv.push(&inv_item.hash).await {
                 continue
             }
 
@@ -242,8 +237,7 @@ where
     }
 
     async fn send_inv(&self, event: &Event<T>) -> Result<()> {
-        let id = OsRng.next_u64();
-        self.p2p.broadcast(Inv { invs: vec![InvItem { id, hash: event.hash() }] }).await?;
+        self.p2p.broadcast(Inv { invs: vec![InvItem { hash: event.hash() }] }).await?;
 
         Ok(())
     }

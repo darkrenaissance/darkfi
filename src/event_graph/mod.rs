@@ -36,13 +36,12 @@ mod tests {
     use super::{
         events_queue::EventsQueue,
         model::{Event, EventId, Model},
-        protocol_event::{Inv, InvId, InvItem, Seen, SeenPtr},
+        protocol_event::{Inv, InvItem, Seen, SeenPtr},
         view::View,
         EventMsg,
     };
     use crate::util::time::Timestamp;
     use darkfi_serial::{SerialDecodable, SerialEncodable};
-    use rand::{rngs::OsRng, RngCore};
 
     #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
     struct TestEvent {
@@ -65,7 +64,7 @@ mod tests {
 
         // Buffers
         let seen_event: SeenPtr<EventId> = Seen::new();
-        let seen_inv: SeenPtr<InvId> = Seen::new();
+        let seen_inv: SeenPtr<EventId> = Seen::new();
 
         let seen_ids = Seen::new();
         // Keeps track of the events we received, but haven't read yet
@@ -92,13 +91,12 @@ mod tests {
         // Add the event into the model
         model.add(event0.clone()).await;
 
-        // Send inventory? Why is there both an ID and a hash?
-        let id0 = OsRng.next_u64();
-        let inv0 = Inv { invs: vec![InvItem { id: id0, hash: event0.hash() }] };
+        // Send inventory
+        let inv0 = Inv { invs: vec![InvItem { hash: event0.hash() }] };
         // Simulate recieving the inventory
-        assert!(seen_inv.push(&inv0.invs[0].id).await);
+        assert!(seen_inv.push(&inv0.invs[0].hash).await);
         // Simulate recieving the inventory again
-        assert!(!seen_inv.push(&inv0.invs[0].id).await);
+        assert!(!seen_inv.push(&inv0.invs[0].hash).await);
 
         // TODO: getdata (self.send_getdata(vec![inv_item.hash]).await?)
 
