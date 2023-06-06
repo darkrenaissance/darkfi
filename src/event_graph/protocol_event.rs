@@ -136,7 +136,7 @@ where
     }
 
     async fn handle_receive_event(self: Arc<Self>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolEvent::handle_receive_event() [START]");
+        debug!(target: "event_graph", "ProtocolEvent::handle_receive_event() [START]");
         let exclude_list = vec![self.channel.address()];
         loop {
             let event = self.event_sub.receive().await?;
@@ -157,7 +157,7 @@ where
     }
 
     async fn handle_receive_inv(self: Arc<Self>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolEvent::handle_receive_inv() [START]");
+        debug!(target: "event_graph", "ProtocolEvent::handle_receive_inv() [START]");
         let exclude_list = vec![self.channel.address()];
         loop {
             let inv = self.inv_sub.receive().await?;
@@ -180,7 +180,7 @@ where
         }
     }
     async fn handle_receive_getdata(self: Arc<Self>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolEvent::handle_receive_getdata() [START]");
+        debug!(target: "event_graph", "ProtocolEvent::handle_receive_getdata() [START]");
         loop {
             let getdata = self.getdata_sub.receive().await?;
             let events = (*getdata).to_owned().events;
@@ -195,7 +195,7 @@ where
     }
 
     async fn handle_receive_syncevent(self: Arc<Self>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolEvent::handle_receive_syncevent() [START]");
+        debug!(target: "event_graph", "ProtocolEvent::handle_receive_syncevent() [START]");
         loop {
             let syncevent = self.syncevent_sub.receive().await?;
 
@@ -222,6 +222,7 @@ where
 
     // every 6 seconds send a SyncEvent msg
     async fn send_sync_hash_loop(self: Arc<Self>) -> Result<()> {
+        debug!(target: "event_graph", "ProtocolEvent::send_sync_hash_loop() [START]");
         loop {
             sleep(6).await;
             let leaves = self.model.lock().await.find_leaves();
@@ -230,6 +231,7 @@ where
     }
 
     async fn new_event(&self, event: &Event<T>) -> Result<()> {
+        debug!(target: "event_graph", "ProtocolEvent::new_event()");
         let mut model = self.model.lock().await;
         model.add(event.clone()).await;
 
@@ -237,12 +239,14 @@ where
     }
 
     async fn send_inv(&self, event: &Event<T>) -> Result<()> {
+        debug!(target: "event_graph", "ProtocolEvent::send_inv()");
         self.p2p.broadcast(Inv { invs: vec![InvItem { hash: event.hash() }] }).await?;
 
         Ok(())
     }
 
     async fn send_getdata(&self, events: Vec<EventId>) -> Result<()> {
+        debug!(target: "event_graph", "ProtocolEvent::send_getdata()");
         self.channel.send(GetData { events }).await?;
         Ok(())
     }
@@ -254,14 +258,14 @@ where
     T: Send + Sync + Encodable + Decodable + Clone + EventMsg + Debug,
 {
     async fn start(self: Arc<Self>, executor: Arc<smol::Executor<'_>>) -> Result<()> {
-        debug!(target: "ircd", "ProtocolEvent::start() [START]");
+        debug!(target: "event_graph", "ProtocolEvent::start() [START]");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().handle_receive_event(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_receive_inv(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_receive_getdata(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_receive_syncevent(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().send_sync_hash_loop(), executor.clone()).await;
-        debug!(target: "ircd", "ProtocolEvent::start() [END]");
+        debug!(target: "event_graph", "ProtocolEvent::start() [END]");
         Ok(())
     }
 
