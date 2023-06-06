@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//! https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-vrf-04#section-5
+//! <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-vrf-04#section-5>
 #![allow(non_snake_case)]
 
 use darkfi_serial::{SerialDecodable, SerialEncodable};
