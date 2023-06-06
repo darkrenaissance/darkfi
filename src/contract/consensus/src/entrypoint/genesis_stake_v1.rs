@@ -19,7 +19,8 @@
 use darkfi_money_contract::{
     error::MoneyError,
     model::{ConsensusStakeUpdateV1, PALLAS_ZERO},
-    CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
+    CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE,
+    CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, pedersen_commitment_u64, ContractId, DARK_TOKEN_ID},
@@ -92,10 +93,18 @@ pub(crate) fn consensus_genesis_stake_process_instruction_v1(
 
     // Access the necessary databases where there is information to
     // validate this state transition.
-    let consensus_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
+    let coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
+    let unstaked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE)?;
 
     // Check that the coin from the output hasn't existed before.
-    if db_contains_key(consensus_coins_db, &serialize(&params.output.coin))? {
+    let coin = serialize(&params.output.coin);
+    if db_contains_key(coins_db, &coin)? {
+        msg!("[GenesisStakeV1] Error: Duplicate coin in output");
+        return Err(MoneyError::DuplicateCoin.into())
+    }
+
+    // Check that the coin from the output hasn't existed before in unstake set.
+    if db_contains_key(unstaked_coins_db, &coin)? {
         msg!("[GenesisStakeV1] Error: Duplicate coin in output");
         return Err(MoneyError::DuplicateCoin.into())
     }

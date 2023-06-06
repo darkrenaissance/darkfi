@@ -48,6 +48,7 @@ use darkfi_consensus_contract::{
     client::{
         genesis_stake_v1::ConsensusGenesisStakeCallBuilder,
         proposal_v1::ConsensusProposalCallBuilder, stake_v1::ConsensusStakeCallBuilder,
+        unstake_request_v1::ConsensusUnstakeRequestCallBuilder,
         unstake_v1::ConsensusUnstakeCallBuilder,
     },
     model::{ConsensusGenesisStakeParamsV1, ConsensusProposalParamsV1},
@@ -99,6 +100,7 @@ pub enum TxAction {
     GenesisStake,
     Stake,
     Proposal,
+    UnstakeRequest,
     Unstake,
 }
 
@@ -244,6 +246,7 @@ impl ConsensusTestHarness {
         tx_action_benchmarks.insert(TxAction::GenesisStake, TxActionBenchmarks::new());
         tx_action_benchmarks.insert(TxAction::Stake, TxActionBenchmarks::new());
         tx_action_benchmarks.insert(TxAction::Proposal, TxActionBenchmarks::new());
+        tx_action_benchmarks.insert(TxAction::UnstakeRequest, TxActionBenchmarks::new());
         tx_action_benchmarks.insert(TxAction::Unstake, TxActionBenchmarks::new());
 
         Ok(Self { holders, proving_keys, tx_action_benchmarks })
@@ -323,7 +326,7 @@ impl ConsensusTestHarness {
         Ok(())
     }
 
-    pub fn genesis_stake_native(
+    pub fn genesis_stake(
         &mut self,
         holder: Holder,
         amount: u64,
@@ -368,7 +371,7 @@ impl ConsensusTestHarness {
         Ok((genesis_stake_tx, genesis_stake_params))
     }
 
-    pub async fn execute_genesis_stake_native_tx(
+    pub async fn execute_genesis_stake_tx(
         &mut self,
         holder: Holder,
         tx: Transaction,
@@ -389,7 +392,7 @@ impl ConsensusTestHarness {
         Ok(())
     }
 
-    pub async fn execute_erroneous_genesis_stake_native_txs(
+    pub async fn execute_erroneous_genesis_stake_txs(
         &mut self,
         holder: Holder,
         txs: Vec<Transaction>,
@@ -409,10 +412,10 @@ impl ConsensusTestHarness {
         Ok(())
     }
 
-    pub fn stake_native(
+    pub async fn stake(
         &mut self,
         holder: Holder,
-        epoch: u64,
+        slot: u64,
         owncoin: OwnCoin,
     ) -> Result<(Transaction, ConsensusStakeParamsV1, SecretKey)> {
         let wallet = self.holders.get_mut(&holder).unwrap();
@@ -420,6 +423,7 @@ impl ConsensusTestHarness {
             self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::Stake).unwrap();
+        let epoch = wallet.state.read().await.consensus.time_keeper.slot_epoch(slot);
         let timer = Instant::now();
 
         // Building Money::Stake params
@@ -487,7 +491,7 @@ impl ConsensusTestHarness {
         Ok((stake_tx, consensus_stake_params, consensus_stake_secret_key))
     }
 
-    pub async fn execute_stake_native_tx(
+    pub async fn execute_stake_tx(
         &mut self,
         holder: Holder,
         tx: Transaction,
@@ -595,7 +599,103 @@ impl ConsensusTestHarness {
         Ok(())
     }
 
-    pub fn unstake_native(
+    pub async fn unstake_request(
+        &mut self,
+        holder: Holder,
+        slot: u64,
+        staked_oc: ConsensusOwnCoin,
+    ) -> Result<(Transaction, ConsensusStakeParamsV1, SecretKey)> {
+        let wallet = self.holders.get_mut(&holder).unwrap();
+        let (burn_pk, burn_zkbin) =
+            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
+        let (mint_pk, mint_zkbin) =
+            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
+        let tx_action_benchmark =
+            self.tx_action_benchmarks.get_mut(&TxAction::UnstakeRequest).unwrap();
+        let epoch = wallet.state.read().await.consensus.time_keeper.slot_epoch(slot);
+        let timer = Instant::now();
+
+        // Building Consensus::Unstake params
+        let unstake_request_call_debris = ConsensusUnstakeRequestCallBuilder {
+            coin: staked_oc.clone(),
+            epoch,
+            tree: wallet.consensus_merkle_tree.clone(),
+            burn_zkbin: burn_zkbin.clone(),
+            burn_pk: burn_pk.clone(),
+            mint_zkbin: mint_zkbin.clone(),
+            mint_pk: mint_pk.clone(),
+        }
+        .build()?;
+        let (unstake_request_params, unstake_request_proofs, unstake_request_secret_key) = (
+            unstake_request_call_debris.params,
+            unstake_request_call_debris.proofs,
+            unstake_request_call_debris.signature_secret,
+        );
+
+        // Building unstake request tx
+        let mut data = vec![ConsensusFunction::UnstakeRequestV1 as u8];
+        unstake_request_params.encode(&mut data)?;
+        let call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
+        let calls = vec![call];
+        let proofs = vec![unstake_request_proofs];
+        let mut unstake_request_tx = Transaction { calls, proofs, signatures: vec![] };
+        let sigs = unstake_request_tx.create_sigs(&mut OsRng, &[unstake_request_secret_key])?;
+        unstake_request_tx.signatures = vec![sigs];
+        tx_action_benchmark.creation_times.push(timer.elapsed());
+
+        // Calculate transaction sizes
+        let encoded: Vec<u8> = serialize(&unstake_request_tx);
+        let size = ::std::mem::size_of_val(&*encoded);
+        tx_action_benchmark.sizes.push(size);
+        let base58 = bs58::encode(&encoded).into_string();
+        let size = ::std::mem::size_of_val(&*base58);
+        tx_action_benchmark.broadcasted_sizes.push(size);
+
+        Ok((unstake_request_tx, unstake_request_params, unstake_request_secret_key))
+    }
+
+    pub async fn execute_unstake_request_tx(
+        &mut self,
+        holder: Holder,
+        tx: Transaction,
+        params: &ConsensusStakeParamsV1,
+        slot: u64,
+    ) -> Result<()> {
+        let wallet = self.holders.get_mut(&holder).unwrap();
+        let tx_action_benchmark =
+            self.tx_action_benchmarks.get_mut(&TxAction::UnstakeRequest).unwrap();
+        let timer = Instant::now();
+
+        let erroneous_txs =
+            wallet.state.read().await.verify_transactions(&[tx], slot, true).await?;
+        assert!(erroneous_txs.is_empty());
+        wallet.consensus_merkle_tree.append(&MerkleNode::from(params.output.coin.inner()));
+        tx_action_benchmark.verify_times.push(timer.elapsed());
+
+        Ok(())
+    }
+
+    pub async fn execute_erroneous_unstake_request_txs(
+        &mut self,
+        holder: Holder,
+        txs: Vec<Transaction>,
+        slot: u64,
+        erroneous: usize,
+    ) -> Result<()> {
+        let wallet = self.holders.get_mut(&holder).unwrap();
+        let tx_action_benchmark =
+            self.tx_action_benchmarks.get_mut(&TxAction::UnstakeRequest).unwrap();
+        let timer = Instant::now();
+
+        let erroneous_txs =
+            wallet.state.read().await.verify_transactions(&txs, slot, false).await?;
+        assert_eq!(erroneous_txs.len(), erroneous);
+        tx_action_benchmark.verify_times.push(timer.elapsed());
+
+        Ok(())
+    }
+
+    pub fn unstake(
         &mut self,
         holder: Holder,
         staked_oc: ConsensusOwnCoin,
@@ -669,7 +769,7 @@ impl ConsensusTestHarness {
         Ok((unstake_tx, money_unstake_params, consensus_unstake_secret_key))
     }
 
-    pub async fn execute_unstake_native_tx(
+    pub async fn execute_unstake_tx(
         &mut self,
         holder: Holder,
         tx: Transaction,
@@ -770,9 +870,11 @@ impl ConsensusTestHarness {
         let faucet = self.holders.get(&Holder::Faucet).unwrap();
         let money_root = faucet.merkle_tree.root(0).unwrap();
         let consensus_root = faucet.consensus_merkle_tree.root(0).unwrap();
+        let consensus_unstake_root = faucet.consensus_merkle_tree.root(0).unwrap();
         for wallet in self.holders.values() {
             assert!(money_root == wallet.merkle_tree.root(0).unwrap());
             assert!(consensus_root == wallet.consensus_merkle_tree.root(0).unwrap());
+            assert!(consensus_unstake_root == wallet.consensus_merkle_tree.root(0).unwrap());
         }
     }
 

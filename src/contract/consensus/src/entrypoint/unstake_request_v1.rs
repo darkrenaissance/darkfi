@@ -17,33 +17,38 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError,
-    model::{ConsensusUnstakeParamsV1, ConsensusUnstakeUpdateV1, MoneyUnstakeParamsV1},
-    CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
-    CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1,
+    error::MoneyError, model::ConsensusStakeParamsV1, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
+    CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
+    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE,
+    CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, ContractId, MONEY_CONTRACT_ID},
+    crypto::{pasta_prelude::*, ContractId, MerkleNode},
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
-    msg,
+    merkle_add, msg,
     pasta::pallas,
     util::get_verifying_slot_epoch,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::{error::ConsensusError, model::calculate_grace_period, ConsensusFunction};
+use crate::{
+    error::ConsensusError,
+    model::{calculate_grace_period, ConsensusProposalUpdateV1},
+    ConsensusFunction,
+};
 
-/// `get_metadata` function for `Consensus::UnstakeV1`
-pub(crate) fn consensus_unstake_get_metadata_v1(
+/// `get_metadata` function for `Consensus::UnstakeRequestV1`
+pub(crate) fn consensus_unstake_request_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: ConsensusUnstakeParamsV1 = deserialize(&self_.data[1..])?;
+    let params: ConsensusStakeParamsV1 = deserialize(&self_.data[1..])?;
     let input = &params.input;
+    let output = &params.output;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
@@ -54,7 +59,6 @@ pub(crate) fn consensus_unstake_get_metadata_v1(
     // anonymous input
     let value_coords = input.value_commit.to_affine().coordinates().unwrap();
     let (sig_x, sig_y) = input.signature_public.xy();
-    let epoch_palas = pallas::Base::from(input.epoch);
 
     // It is very important that these are in the same order as the
     // `constrain_instance` calls in the zkas code.
@@ -63,13 +67,24 @@ pub(crate) fn consensus_unstake_get_metadata_v1(
         CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1.to_string(),
         vec![
             input.nullifier.inner(),
-            epoch_palas,
+            input.epoch.into(),
             sig_x,
             sig_y,
             input.merkle_root.inner(),
             *value_coords.x(),
             *value_coords.y(),
         ],
+    ));
+
+    // Grab the minting epoch of the verifying slot
+    let epoch = get_verifying_slot_epoch();
+
+    // Grab the pedersen commitment from the anonymous output
+    let value_coords = output.value_commit.to_affine().coordinates().unwrap();
+
+    zk_public_inputs.push((
+        CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
+        vec![epoch.into(), output.coin.inner(), *value_coords.x(), *value_coords.y()],
     ));
 
     // Serialize everything gathered and return it
@@ -80,99 +95,93 @@ pub(crate) fn consensus_unstake_get_metadata_v1(
     Ok(metadata)
 }
 
-/// `process_instruction` function for `Consensus::UnstakeV1`
-pub(crate) fn consensus_unstake_process_instruction_v1(
+/// `process_instruction` function for `Consensus::UnstakeRequestV1`
+pub(crate) fn consensus_unstake_request_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: ConsensusUnstakeParamsV1 = deserialize(&self_.data[1..])?;
+    let params: ConsensusStakeParamsV1 = deserialize(&self_.data[1..])?;
     let input = &params.input;
+    let output = &params.output;
 
     // Access the necessary databases where there is information to
     // validate this state transition.
+    let coins_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
     let nullifiers_db = db_lookup(cid, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
-    let coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
     let unstaked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE)?;
 
     // ===================================
     // Perform the actual state transition
     // ===================================
 
-    msg!("[ConsensusUnstakeV1] Validating anonymous input");
+    msg!("[ConsensusUnstakeRequestV1] Validating anonymous input");
 
-    // The coin has passed through the grace period and is allowed to get unstaked.
-    if get_verifying_slot_epoch() - input.epoch <= calculate_grace_period() {
-        msg!("[ConsensusUnstakeV1] Error: Coin is not allowed to get unstaked yet");
+    // The coin has passed through the grace period and is allowed to request unstake.
+    if input.epoch != 0 && get_verifying_slot_epoch() - input.epoch <= calculate_grace_period() {
+        msg!("[ConsensusUnstakeRequestV1] Error: Coin is not allowed to request unstake yet");
         return Err(ConsensusError::CoinStillInGracePeriod.into())
     }
 
-    // Check that the coin exists in unstake set.
-    if !db_contains_key(unstaked_coins_db, &serialize(&params.coin))? {
-        msg!("[GenesisStakeV1] Error: Unstaked coin is not in unstake set");
-        return Err(ConsensusError::CoinNotInUnstakeSet.into())
-    }
-
-    // The Merkle root is used to know whether this is an unstaked coin that
+    // The Merkle root is used to know whether this is a coin that
     // existed in a previous state.
-    if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
-        msg!("[ConsensusUnstakeV1] Error: Merkle root not found in previous state");
+    if !db_contains_key(coins_roots_db, &serialize(&input.merkle_root))? {
+        msg!("[ConsensusUnstakeRequestV1] Error: Merkle root not found in previous state");
         return Err(MoneyError::TransferMerkleRootNotFound.into())
     }
 
     // The nullifiers should not already exist. It is the double-spend protection.
     if db_contains_key(nullifiers_db, &serialize(&input.nullifier))? {
-        msg!("[ConsensusUnstakeV1] Error: Duplicate nullifier found");
+        msg!("[ConsensusUnstakeRequestV1] Error: Duplicate nullifier found");
         return Err(MoneyError::DuplicateNullifier.into())
     }
 
-    // Check next call is money contract
-    let next_call_idx = call_idx + 1;
-    if next_call_idx >= calls.len() as u32 {
-        msg!("[ConsensusUnstakeV1] Error: next_call_idx out of bounds");
-        return Err(MoneyError::SpendHookOutOfBounds.into())
+    msg!("[ConsensusUnstakeRequestV1] Validating anonymous output");
+
+    // Verify value commits match
+    if output.value_commit != input.value_commit {
+        msg!("[ConsensusUnstakeRequestV1] Error: Value commitments do not match");
+        return Err(MoneyError::ValueMismatch.into())
     }
 
-    let next = &calls[next_call_idx as usize];
-    if next.contract_id.inner() != MONEY_CONTRACT_ID.inner() {
-        msg!("[ConsensusUnstakeV1] Error: Next contract call is not money contract");
-        return Err(MoneyError::UnstakeNextCallNotMoneyContract.into())
-    }
-
-    // Verify next call corresponds to Money::UnstakeV1 (0x07)
-    if next.data[0] != 0x07 {
-        msg!("[ConsensusUnstakeV1] Error: Next call function mismatch");
-        return Err(MoneyError::NextCallFunctionMissmatch.into())
-    }
-
-    // Verify next call StakeInput is the same as this calls input
-    let next_params: MoneyUnstakeParamsV1 = deserialize(&next.data[1..])?;
-    if input != &next_params.input {
-        msg!("[ConsensusUnstakeV1] Error: Next call input mismatch");
-        return Err(MoneyError::NextCallInputMissmatch.into())
+    // Newly created coin for this call is in the output. Here we gather it,
+    // and we also check that it hasn't existed before.
+    if db_contains_key(unstaked_coins_db, &serialize(&output.coin))? {
+        msg!("[ConsensusUnstakeRequestV1] Error: Duplicate coin found in output");
+        return Err(MoneyError::DuplicateCoin.into())
     }
 
     // At this point the state transition has passed, so we create a state update
-    let update = ConsensusUnstakeUpdateV1 { nullifier: input.nullifier };
+    let update = ConsensusProposalUpdateV1 { nullifier: input.nullifier, coin: output.coin };
     let mut update_data = vec![];
-    update_data.write_u8(ConsensusFunction::UnstakeV1 as u8)?;
+    update_data.write_u8(ConsensusFunction::UnstakeRequestV1 as u8)?;
     update.encode(&mut update_data)?;
 
     // and return it
     Ok(update_data)
 }
 
-/// `process_update` function for `Consensus::UnstakeV1`
-pub(crate) fn consensus_unstake_process_update_v1(
+/// `process_update` function for `Consensus::UnstakeRequestV1`
+pub(crate) fn consensus_unstake_request_process_update_v1(
     cid: ContractId,
-    update: ConsensusUnstakeUpdateV1,
+    update: ConsensusProposalUpdateV1,
 ) -> ContractResult {
     // Grab all necessary db handles for where we want to write
     let nullifiers_db = db_lookup(cid, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
+    let info_db = db_lookup(cid, CONSENSUS_CONTRACT_INFO_TREE)?;
+    let coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
+    let unstaked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE)?;
 
-    msg!("[ConsensusUnstakeV1] Adding new nullifier to the set");
+    msg!("[ConsensusUnstakeRequestV1] Adding new nullifier to the set");
     db_set(nullifiers_db, &serialize(&update.nullifier), &[])?;
+
+    msg!("[ConsensusUnstakeRequestV1] Adding new coin to the set");
+    db_set(unstaked_coins_db, &serialize(&update.coin), &[])?;
+
+    msg!("[ConsensusUnstakeRequestV1] Adding new coin to the Merkle tree");
+    let coins: Vec<_> = vec![MerkleNode::from(update.coin.inner())];
+    merkle_add(info_db, coin_roots_db, &serialize(&CONSENSUS_CONTRACT_COIN_MERKLE_TREE), &coins)?;
 
     Ok(())
 }

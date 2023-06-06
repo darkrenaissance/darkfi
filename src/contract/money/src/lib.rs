@@ -95,6 +95,7 @@ pub const CONSENSUS_CONTRACT_INFO_TREE: &str = "consensus_info";
 pub const CONSENSUS_CONTRACT_COINS_TREE: &str = "consensus_coins";
 pub const CONSENSUS_CONTRACT_COIN_ROOTS_TREE: &str = "consensus_coin_roots";
 pub const CONSENSUS_CONTRACT_NULLIFIERS_TREE: &str = "consensus_nullifiers";
+pub const CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE: &str = "consensus_unstaked_coins";
 
 // These are keys inside the consensus info tree
 pub const CONSENSUS_CONTRACT_DB_VERSION: &str = "db_version";

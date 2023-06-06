@@ -21,8 +21,8 @@ use darkfi_money_contract::{
     model::{ConsensusStakeParamsV1, ConsensusStakeUpdateV1, MoneyStakeParamsV1, PALLAS_ZERO},
     CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
     CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
-    CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1, MONEY_CONTRACT_COIN_ROOTS_TREE,
-    MONEY_CONTRACT_NULLIFIERS_TREE,
+    CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
+    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_NULLIFIERS_TREE,
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, ContractId, MerkleNode, CONSENSUS_CONTRACT_ID, MONEY_CONTRACT_ID},
@@ -83,6 +83,7 @@ pub(crate) fn consensus_stake_process_instruction_v1(
     // Access the necessary databases where there is information to
     // validate this state transition.
     let consensus_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
+    let consensus_unstaked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE)?;
     let money_nullifiers_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let money_coin_roots_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
@@ -107,7 +108,7 @@ pub(crate) fn consensus_stake_process_instruction_v1(
         return Err(MoneyError::TransferMerkleRootNotFound.into())
     }
 
-    // The nullifiers should already exist. It is the double-mint protection.
+    // The nullifiers should not already exist. It is the double-mint protection.
     if db_contains_key(money_nullifiers_db, &serialize(&input.nullifier))? {
         msg!("[ConsensusStakeV1] Error: Missing nullifier");
         return Err(MoneyError::StakeMissingNullifier.into())
@@ -150,8 +151,15 @@ pub(crate) fn consensus_stake_process_instruction_v1(
 
     // Newly created coin for this call is in the output. Here we gather it,
     // and we also check that it hasn't existed before.
-    if db_contains_key(consensus_coins_db, &serialize(&output.coin))? {
+    let coin = serialize(&output.coin);
+    if db_contains_key(consensus_coins_db, &coin)? {
         msg!("[ConsensusStakeV1] Error: Duplicate coin found in output");
+        return Err(MoneyError::DuplicateCoin.into())
+    }
+
+    // Check that the coin hasn't existed before in unstake set.
+    if db_contains_key(consensus_unstaked_coins_db, &coin)? {
+        msg!("[ConsensusStakeV1] Error: Unstaked coin found in output");
         return Err(MoneyError::DuplicateCoin.into())
     }
 

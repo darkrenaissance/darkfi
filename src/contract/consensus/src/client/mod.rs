@@ -37,5 +37,8 @@ pub mod stake_v1;
 /// Proposal transaction building API.
 pub mod proposal_v1;
 
+/// `Consensus::UnstakeRequestV1` API
+pub mod unstake_request_v1;
+
 /// `Consensus::UnstakeV1` API
 pub mod unstake_v1;

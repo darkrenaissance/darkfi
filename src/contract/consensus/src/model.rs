@@ -16,11 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::model::{
-    ClearInput, Coin, ConsensusInput, ConsensusOutput, Input, Output,
-};
+use darkfi_money_contract::model::{ClearInput, Coin, ConsensusInput, ConsensusOutput, Output};
 use darkfi_sdk::{
-    crypto::{ecvrf::VrfProof, Nullifier, PublicKey},
+    crypto::{ecvrf::VrfProof, Nullifier},
     pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
@@ -33,55 +31,6 @@ pub struct ConsensusGenesisStakeParamsV1 {
     /// Anonymous output
     pub output: ConsensusOutput,
 }
-
-/// Parameters for `Consensus::ProposalBurn`
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct ConsensusProposalBurnParamsV1 {
-    /// Blinding factor for `token_id`
-    pub token_blind: pallas::Scalar,
-    /// Anonymous input
-    pub input: Input,
-    /// Burnt coin public key used in VRF
-    pub public_key: PublicKey,
-}
-
-/// Parameters for `Consensus::ProposalReward`
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct ConsensusProposalRewardParamsV1 {
-    /// Anonymous input of `Consensus::ProposalBurn`
-    pub burnt_input: Input,
-    /// Burnt coin public key used in VRF
-    pub burnt_public_key: PublicKey,
-    /// Burnt token revealed info of `Consensus::ProposalMint`
-    pub mint_input: ConsensusInput,
-    /// Anonymous output
-    pub output: Output,
-    /// Pedersen commitment for the output's serial number
-    pub new_serial_commit: pallas::Point,
-    /// Rewarded slot
-    pub slot: u64,
-    /// VRF proof for eta calculation
-    pub vrf_proof: VrfProof,
-    /// Coin y
-    pub y: pallas::Base,
-    /// Lottery rho used
-    pub rho: pallas::Base,
-}
-
-/// Parameters for `Consensus::ProposalMint`
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct ConsensusProposalMintParamsV1 {
-    /// Burnt token revealed info
-    pub input: ConsensusInput,
-    /// Anonymous output
-    pub output: Output,
-    /// Pedersen commitment for the output's serial number
-    pub serial_commit: pallas::Point,
-}
-
-/// State update for `Consensus::Reward`
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct ConsensusProposalRewardUpdateV1 {}
 
 /// Parameters for `Consensus::Proposal`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -113,6 +62,15 @@ pub struct ConsensusProposalUpdateV1 {
     pub nullifier: Nullifier,
     /// The newly minted coin
     pub coin: Coin,
+}
+
+/// Parameters for `Consensus::UnstakeRequest`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusUnstakeRequestParamsV1 {
+    /// Burnt token revealed info
+    pub input: ConsensusInput,
+    /// Anonymous output
+    pub output: Output,
 }
 
 /// Consensus parameters configuration.

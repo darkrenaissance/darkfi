@@ -60,11 +60,10 @@ pub struct ConsensusMintRevealed {
 impl ConsensusMintRevealed {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
         let valcom_coords = self.value_commit.to_affine().coordinates().unwrap();
-        let epoch_palas = pallas::Base::from(self.epoch);
 
         // NOTE: It's important to keep these in the same order
         // as the `constrain_instance` calls in the zkas code.
-        vec![epoch_palas, self.coin.inner(), *valcom_coords.x(), *valcom_coords.y()]
+        vec![self.epoch.into(), self.coin.inner(), *valcom_coords.x(), *valcom_coords.y()]
     }
 }
 

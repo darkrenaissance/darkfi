@@ -19,7 +19,8 @@
 use darkfi_money_contract::{
     error::MoneyError, CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
     CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
-    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1,
+    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE,
+    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode},
@@ -159,25 +160,24 @@ pub(crate) fn consensus_proposal_process_instruction_v1(
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
     let params: ConsensusProposalParamsV1 = deserialize(&self_.data[1..])?;
+    let input = &params.input;
+    let output = &params.output;
 
     // Access the necessary databases where there is information to
     // validate this state transition.
     let nullifiers_db = db_lookup(cid, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
     let coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
     let coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
+    let unstaked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE)?;
 
     // ===================================
     // Perform the actual state transition
     // ===================================
 
     msg!("[ConsensusProposalV1] Validating anonymous input");
-    let input = &params.input;
-    let output = &params.output;
 
     // The coin has passed through the grace period and is allowed to propose.
-    if params.input.epoch != 0 &&
-        get_verifying_slot_epoch() - params.input.epoch <= calculate_grace_period()
-    {
+    if input.epoch != 0 && get_verifying_slot_epoch() - input.epoch <= calculate_grace_period() {
         msg!("[ConsensusProposalV1] Error: Coin is not allowed to make proposals yet");
         return Err(ConsensusError::CoinStillInGracePeriod.into())
     }
@@ -207,8 +207,15 @@ pub(crate) fn consensus_proposal_process_instruction_v1(
 
     // Newly created coin for this call is in the output. Here we gather it,
     // and we also check that it hasn't existed before.
-    if db_contains_key(coins_db, &serialize(&output.coin))? {
+    let coin = serialize(&output.coin);
+    if db_contains_key(coins_db, &coin)? {
         msg!("[ConsensusProposalV1] Error: Duplicate coin found in output");
+        return Err(MoneyError::DuplicateCoin.into())
+    }
+
+    // Check that the coin hasn't existed before in unstake set.
+    if db_contains_key(unstaked_coins_db, &coin)? {
+        msg!("[ConsensusProposalV1] Error: Unstaked coin found in output");
         return Err(MoneyError::DuplicateCoin.into())
     }
 

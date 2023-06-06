@@ -256,6 +256,8 @@ pub struct ConsensusStakeUpdateV1 {
 pub struct ConsensusUnstakeParamsV1 {
     /// Anonymous input
     pub input: ConsensusInput,
+    /// The unstaked coin
+    pub coin: Coin,
 }
 
 /// State update for `Consensus::Unstake`

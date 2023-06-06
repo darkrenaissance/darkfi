@@ -28,6 +28,9 @@ pub enum ConsensusError {
 
     #[error("Coin is still in grace period")]
     CoinStillInGracePeriod,
+
+    #[error("Coin doesn't exist in unstake set")]
+    CoinNotInUnstakeSet,
 }
 
 impl From<ConsensusError> for ContractError {
@@ -36,6 +39,7 @@ impl From<ConsensusError> for ContractError {
             ConsensusError::ProposalMissingSlotCheckpoint => Self::Custom(1),
             ConsensusError::ProposalErroneousVrfProof => Self::Custom(2),
             ConsensusError::CoinStillInGracePeriod => Self::Custom(3),
+            ConsensusError::CoinNotInUnstakeSet => Self::Custom(4),
         }
     }
 }

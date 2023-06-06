@@ -24,41 +24,49 @@ use darkfi::{
     Result,
 };
 use darkfi_money_contract::{
-    client::ConsensusOwnCoin,
-    model::{ConsensusInput, ConsensusUnstakeParamsV1},
+    client::{ConsensusNote, ConsensusOwnCoin},
+    model::{ConsensusInput, ConsensusOutput, ConsensusStakeParamsV1},
 };
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, MerkleTree, SecretKey},
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, MerkleTree, SecretKey},
     incrementalmerkletree::Tree,
     pasta::pallas,
 };
 use log::{debug, info};
 use rand::rngs::OsRng;
 
-use crate::client::common::{create_consensus_burn_proof, ConsensusBurnInputInfo};
+use crate::client::common::{
+    create_consensus_burn_proof, create_consensus_mint_proof, ConsensusBurnInputInfo,
+    ConsensusMintOutputInfo,
+};
 
-pub struct ConsensusUnstakeCallDebris {
-    pub params: ConsensusUnstakeParamsV1,
+pub struct ConsensusUnstakeRequestCallDebris {
+    pub params: ConsensusStakeParamsV1,
     pub proofs: Vec<Proof>,
     pub signature_secret: SecretKey,
-    pub value_blind: pallas::Scalar,
 }
 
-/// Struct holding necessary information to build a `Consensus::UnstakeV1` contract call.
-pub struct ConsensusUnstakeCallBuilder {
+/// Struct holding necessary information to build a `Consensus::UnstakeRequestV1` contract call.
+pub struct ConsensusUnstakeRequestCallBuilder {
     /// `ConsensusOwnCoin` we're given to use in this builder
     pub coin: ConsensusOwnCoin,
+    /// Epoch unstaked coin is minted
+    pub epoch: u64,
     /// Merkle tree of coins used to create inclusion proofs
     pub tree: MerkleTree,
     /// `ConsensusBurn_V1` zkas circuit ZkBinary
     pub burn_zkbin: ZkBinary,
     /// Proving key for the `ConsensusBurn_V1` zk circuit
     pub burn_pk: ProvingKey,
+    /// `ConsensusMint_V1` zkas circuit ZkBinary
+    pub mint_zkbin: ZkBinary,
+    /// Proving key for the `ConsensusMint_V1` zk circuit
+    pub mint_pk: ProvingKey,
 }
 
-impl ConsensusUnstakeCallBuilder {
-    pub fn build(&self) -> Result<ConsensusUnstakeCallDebris> {
-        debug!("Building Consensus::UnstakeV1 contract call");
+impl ConsensusUnstakeRequestCallBuilder {
+    pub fn build(&self) -> Result<ConsensusUnstakeRequestCallDebris> {
+        debug!("Building Consensus::UnstakeRequestV1 contract call");
         assert!(self.coin.note.value != 0);
 
         debug!("Building anonymous input");
@@ -77,7 +85,7 @@ impl ConsensusUnstakeCallBuilder {
 
         info!("Creating unstake burn proof for input");
         let value_blind = input.value_blind;
-        let (proof, public_inputs, signature_secret) =
+        let (burn_proof, public_inputs, signature_secret) =
             create_consensus_burn_proof(&self.burn_zkbin, &self.burn_pk, &input)?;
 
         let input = ConsensusInput {
@@ -88,13 +96,51 @@ impl ConsensusUnstakeCallBuilder {
             signature_public: public_inputs.signature_public,
         };
 
-        // We now fill this with necessary stuff
-        let params = ConsensusUnstakeParamsV1 { input, coin: self.coin.coin };
-        let proofs = vec![proof];
+        debug!("Building anonymous output");
+        let serial = pallas::Base::random(&mut OsRng);
+        let coin_blind = pallas::Base::random(&mut OsRng);
+        let public_key = public_inputs.signature_public;
 
-        // Now we should have all the params, zk proof, signature secret and token blind.
+        let output = ConsensusMintOutputInfo {
+            value: self.coin.note.value,
+            epoch: self.epoch,
+            public_key,
+            value_blind,
+            serial,
+            coin_blind,
+        };
+        debug!("Finished building output");
+
+        info!("Creating stake mint proof for output");
+        let (mint_proof, public_inputs) =
+            create_consensus_mint_proof(&self.mint_zkbin, &self.mint_pk, &output)?;
+
+        // Encrypted note
+        let note = ConsensusNote {
+            serial,
+            value: output.value,
+            epoch: self.epoch,
+            coin_blind,
+            value_blind,
+            reward: 0,
+            reward_blind: value_blind,
+        };
+
+        let encrypted_note = AeadEncryptedNote::encrypt(&note, &output.public_key, &mut OsRng)?;
+
+        let output = ConsensusOutput {
+            value_commit: public_inputs.value_commit,
+            coin: public_inputs.coin,
+            note: encrypted_note,
+        };
+
+        // We now fill this with necessary stuff
+        let params = ConsensusStakeParamsV1 { input, output };
+        let proofs = vec![burn_proof, mint_proof];
+
+        // Now we should have all the params, zk proof, and signature secret.
         // We return it all and let the caller deal with it.
-        let debris = ConsensusUnstakeCallDebris { params, proofs, signature_secret, value_blind };
+        let debris = ConsensusUnstakeRequestCallDebris { params, proofs, signature_secret };
         Ok(debris)
     }
 }
