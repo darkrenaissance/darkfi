@@ -1,18 +1,18 @@
-
 # Use: docker build . --pull --network=host -t darkfi:debian -f ./contrib/docker/Dockerfile.debian
-#   optionally with: --build-arg BUILD_OS_VER=slim-buster --build-arg RUN_OS_VER=buster-slim --build-arg RUST_VER=1.65
+#   optionally with: --build-arg BUILD_OS_VER=slim-buster --build-arg RUN_OS_VER=buster-slim --build-arg RUST_VER=1.70
 #   rust nightly with: BUILD_OS_VER=bullseye-slim RUN_OS_VER=bullseye-slim RUST_VER=nightly REPOSITORY=rustlang/rust
 
-ARG RUST_VER=1.67  # 1.65
-ARG BUILD_OS_VER=slim-bookworm  # (12); slim-bullseye (11); slim-buster (10)
-ARG RUN_OS_VER=bookworm-slim    # (12); bullseye-slim (11); buster-slim (10)
-ARG REPOSITORY=rust             # rustlang/rust
+ARG RUST_VER=1.70              # 1.67
+ARG BUILD_OS_VER=slim-bookworm # (12); slim-bullseye (11); slim-buster (10)
+ARG RUN_OS_VER=bookworm-slim   # (12); bullseye-slim (11); buster-slim (10)
+ARG REPOSITORY=rust            # rustlang/rust
 
 FROM ${REPOSITORY}:${RUST_VER}-${BUILD_OS_VER} as builder
 
 RUN apt-get update && apt-get install -y build-essential cmake jq wget \
   pkg-config clang libclang-dev llvm-dev libudev-dev libfreetype6-dev \
-  libexpat1-dev curl gcc make libssl-dev fonts-lato libfontconfig-dev
+  libexpat1-dev curl gcc make libssl-dev fonts-lato libfontconfig-dev \
+  libasound2-dev
 
 RUN mkdir /opt/darkfi
 
@@ -26,7 +26,7 @@ RUN make clean
 
 RUN rm -rf ./target/*
 
-RUN bash -c 'make -j test &&  make -j all'
+RUN bash -c 'make -j test && make -j all'
 
 # 2. stage
 FROM debian:${RUN_OS_VER}
@@ -38,4 +38,4 @@ WORKDIR /opt/darkfi
 
 COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
    /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/faucetd \
-   /opt/darkfi/zkas /opt/darkfi/vanityaddr  ./
+   /opt/darkfi/zkas /opt/darkfi/vanityaddr ./

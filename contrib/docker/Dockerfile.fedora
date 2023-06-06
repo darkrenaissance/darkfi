@@ -1,9 +1,8 @@
-
 # Use: docker build . --pull --network=host -t darkfi:fedora -f ./contrib/docker/Dockerfile.fedora
 #   optionally with: --build-arg OS_VER=fedora:36 --build-arg RUST_VER=nightly
 
-ARG RUST_VER=1.67       # stable nightly beta 1.65
-ARG OS_VER=fedora:37    # fedora:36
+ARG RUST_VER=1.70    # stable nightly beta 1.67
+ARG OS_VER=fedora:37 # fedora:36
 
 FROM ${OS_VER} as rust_builder
 
@@ -12,7 +11,7 @@ ARG RUST_VER
 RUN dnf -y install gcc gcc-c++ kernel-headers cmake jq wget \
   pkg-config clang clang-libs llvm-libs \
   openssl-devel findutils fontconfig-devel \
-  lato-fonts
+  lato-fonts alsa-lib-devel
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 
@@ -20,7 +19,7 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 
 RUN rustup target add wasm32-unknown-unknown
 
-RUN cargo search whatever  # creates .cargo cache
+RUN cargo search whatever # creates .cargo cache
 
 # 2. stage
 FROM rust_builder as builder
@@ -33,7 +32,7 @@ RUN make clean
 
 RUN rm -rf ./target/
 
-RUN bash -c 'make -j test &&  make -j all'
+RUN bash -c 'make -j test && make -j all'
 
 # 3. stage
 FROM ${OS_VER}

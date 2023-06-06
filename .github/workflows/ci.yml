@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies (Linux)
         run: |
           sudo apt update
-          sudo apt -y install jq build-essential clang libclang-dev llvm-dev libudev-dev pkg-config
+          sudo apt -y install jq build-essential clang libclang-dev llvm-dev libudev-dev pkg-config libasound2-dev
         if: matrix.os == 'ubuntu-latest'
 
       - name: Install dependencies (macOS)
@@ -67,7 +67,7 @@ jobs:
       - name: Install dependencies (Linux)
         run: |
           sudo apt update
-          sudo apt -y install jq build-essential clang libclang-dev llvm-dev libudev-dev pkg-config
+          sudo apt -y install jq build-essential clang libclang-dev llvm-dev libudev-dev pkg-config libasound2-dev
         if: matrix.os == 'ubuntu-latest'
 
       - name: Install dependencies (macOS)
