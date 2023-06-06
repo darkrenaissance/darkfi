@@ -72,6 +72,9 @@ rustdoc: token_lists contracts $(PROOFS_BIN)
 test: token_lists $(PROOFS_BIN) contracts
 	$(CARGO) test --release --all-features --all
 
+coverage: token_lists contracts $(PROOFS_BIN)
+	$(CARGO) llvm-cov --release --all-features --workspace --html
+
 cleanbin:
 	rm -f $(BINS)
 
@@ -97,4 +100,4 @@ uninstall:
 		rm -f $(DESTDIR)$(PREFIX)/bin/$$i; \
 	done;
 
-.PHONY: all contracts token_lists check fix clippy rustdoc test cleanbin clean install uninstall
+.PHONY: all contracts token_lists check fix clippy rustdoc test cleanbin clean install uninstall coverage
