@@ -42,7 +42,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     const ALICE_AIRDROP: u64 = 1000;
 
     // Slot to verify against
-    let mut current_slot = 11;
+    let mut current_slot = 1;
     let mut current_epoch = 1;
 
     // Initialize harness
@@ -105,7 +105,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] ====================");
     info!(target: "consensus", "[Alice] Building proposal tx");
     info!(target: "consensus", "[Alice] ====================");
-    let (proposal_tx, proposal_params, proposal_secret_key) =
+    let (proposal_tx, _, _) =
         th.proposal(Holder::Alice, slot_checkpoint, alice_staked_oc.clone())?;
 
     info!(target: "consensus", "[Malicious] =====================================");

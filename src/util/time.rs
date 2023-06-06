@@ -55,9 +55,17 @@ impl TimeKeeper {
         self.slot_epoch(self.current_slot())
     }
 
-    /// Calculates the epoch of the provided slot.    
+    /// Calculates the epoch of the provided slot.
+    /// Only slot 0 exists in epoch 0, everything
+    /// else is incremented by one. This practically
+    /// means that epoch 0 has 1 slot(the genesis slot),
+    /// epoch 1 has one less slot(the genesis slot) and
+    /// rest epoch have the normal amount of slots.
     pub fn slot_epoch(&self, slot: u64) -> u64 {
-        slot / self.epoch_length
+        if slot == 0 {
+            return 0
+        }
+        (slot / self.epoch_length) + 1
     }
 
     /// Calculates current slot, based on elapsed time from the genesis block.
