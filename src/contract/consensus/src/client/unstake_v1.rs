@@ -82,6 +82,7 @@ impl ConsensusUnstakeCallBuilder {
 
         let input = ConsensusInput {
             epoch: self.coin.note.epoch,
+            coin: self.coin.coin,
             value_commit: public_inputs.value_commit,
             nullifier: public_inputs.nullifier,
             merkle_root: public_inputs.merkle_root,
@@ -89,7 +90,7 @@ impl ConsensusUnstakeCallBuilder {
         };
 
         // We now fill this with necessary stuff
-        let params = ConsensusUnstakeParamsV1 { input, coin: self.coin.coin };
+        let params = ConsensusUnstakeParamsV1 { input };
         let proofs = vec![proof];
 
         // Now we should have all the params, zk proof, signature secret and token blind.

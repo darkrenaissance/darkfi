@@ -90,6 +90,7 @@ impl ConsensusUnstakeRequestCallBuilder {
 
         let input = ConsensusInput {
             epoch: self.coin.note.epoch,
+            coin: self.coin.coin,
             value_commit: public_inputs.value_commit,
             nullifier: public_inputs.nullifier,
             merkle_root: public_inputs.merkle_root,

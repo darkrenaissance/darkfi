@@ -147,6 +147,7 @@ impl MoneyUnstakeCallBuilder {
 
         let input = ConsensusInput {
             epoch: self.coin.note.epoch,
+            coin: self.coin.coin,
             value_commit: public_inputs.value_commit,
             nullifier: self.nullifier,
             merkle_root: self.merkle_root,

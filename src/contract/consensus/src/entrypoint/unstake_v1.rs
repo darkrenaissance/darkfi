@@ -109,7 +109,7 @@ pub(crate) fn consensus_unstake_process_instruction_v1(
     }
 
     // Check that the coin exists in unstake set.
-    if !db_contains_key(unstaked_coins_db, &serialize(&params.coin))? {
+    if !db_contains_key(unstaked_coins_db, &serialize(&input.coin))? {
         msg!("[GenesisStakeV1] Error: Unstaked coin is not in unstake set");
         return Err(ConsensusError::CoinNotInUnstakeSet.into())
     }
