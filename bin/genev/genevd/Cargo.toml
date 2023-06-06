@@ -14,12 +14,12 @@ darkfi-serial = {path = "../../../src/serial"}
 
 async-std = {version = "1.12.0", features = ["attributes"]}
 async-trait = "0.1.68"
-ctrlc = { version = "3.2.5", features = ["termination"] }
+ctrlc = { version = "3.4.0", features = ["termination"] }
 easy-parallel = "3.3.0"
 simplelog = "0.12.1"
 smol = "1.3.0"
-log = "0.4.17"
-url = "2.3.1"
+log = "0.4.18"
+url = "2.4.0"
 
 # Argument parsing
 serde = {version = "1.0.163", features = ["derive"]}

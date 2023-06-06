@@ -19,7 +19,7 @@ thiserror = "1.0.40"
 darkfi-serial = {version = "0.4.1", path = "../serial", features = ["derive", "crypto"]}
 
 # Encoding
-bs58 = "0.4.0"
+bs58 = "0.5.0"
 
 # Cryptography
 blake2b_simd = "1.0.1"
@@ -35,7 +35,7 @@ sha2 = "0.10.6"
 
 # Misc
 lazy_static = "1.4.0"
-subtle = "2.4.1"
+subtle = "2.5.0"
 
 [dev-dependencies]
 halo2_proofs = {version = "0.3.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}

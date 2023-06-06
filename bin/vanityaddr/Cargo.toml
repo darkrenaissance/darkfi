@@ -9,11 +9,11 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
-bs58 = "0.4.0"
-clap = {version = "4.2.7", features = ["derive"]}
-ctrlc = "3.2.5"
+bs58 = "0.5.0"
+clap = {version = "4.3.2", features = ["derive"]}
+ctrlc = "3.4.0"
 darkfi = {path = "../../"}
 darkfi-sdk = {path = "../../src/sdk"}
-indicatif = "0.17.3"
+indicatif = "0.17.5"
 rand = "0.8.5"
 rayon = "1.7.0"

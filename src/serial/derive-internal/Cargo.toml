@@ -9,6 +9,6 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
-proc-macro2 = "1.0.56"
-quote = "1.0.27"
+proc-macro2 = "1.0.59"
+quote = "1.0.28"
 syn = {version = "1.0.109", features = ["full", "fold"]}

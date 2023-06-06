@@ -24,11 +24,11 @@ easy-parallel = "3.3.0"
 async-channel = "1.8.0"
 
 # Misc
-clap = {version = "4.2.7", features = ["derive"]}
+clap = {version = "4.3.2", features = ["derive"]}
 rand = "0.8.5"
 simplelog = "0.12.1"
-log = "0.4.17"
-url = "2.3.1"
+log = "0.4.18"
+url = "2.4.0"
 thiserror = "1.0.40"
 
 # Encoding and parsing

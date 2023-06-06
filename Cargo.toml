@@ -58,7 +58,7 @@ members = [
 [dependencies]
 # Hard dependencies
 libc = "0.2.144"
-log = "0.4.17"
+log = "0.4.18"
 thiserror = "1.0.40"
 
 # async-runtime
@@ -71,7 +71,7 @@ smol = {version = "1.3.0", optional = true}
 futures-rustls = {version = "0.24.0", features = ["dangerous_configuration"], optional = true}
 iprange = {version = "0.6.7", optional = true}
 ipnet = {version = "2.7.2", optional = true}
-socket2 = {version = "0.5.2", optional = true, features = ["all"]}
+socket2 = {version = "0.5.3", optional = true, features = ["all"]}
 
 # TLS cert utilities
 ed25519-compact = {version = "2.0.4", features = ["pem"], optional = true}
@@ -79,19 +79,19 @@ rcgen = {version = "0.10.0", features = ["pem"], optional = true}
 rustls-pemfile = {version = "1.0.2", optional = true}
 
 # Encoding
-bs58 = {version = "0.4.0", optional = true}
+bs58 = {version = "0.5.0", optional = true}
 hex = {version = "0.4.3", optional = true}
 serde_json = {version = "1.0.96", optional = true}
 serde = {version = "1.0.163", features = ["derive"], optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
-toml = {version = "0.7.3", optional = true}
+toml = {version = "0.7.4", optional = true}
 # Big float high precision arithmetics
 dashu = { version = "0.3.1", optional=true }
 
 # Utilities
 # TODO: check chrono usage and impl our own
-chrono = {version = "0.4.24", optional = true}
+chrono = {version = "0.4.26", optional = true}
 darkfi-serial = {path = "src/serial", optional = true}
 darkfi-derive = {path = "src/serial/derive", optional = true}
 darkfi-derive-internal = {path = "src/serial/derive-internal", optional = true}
@@ -99,16 +99,16 @@ indexmap = {version = "1.9.3", optional = true}
 itertools = {version = "0.10.5", optional = true}
 lazy_static = {version = "1.4.0", optional = true}
 # TODO: Test without serde
-url = {version = "2.3.1", features = ["serde"], optional = true}
+url = {version = "2.4.0", features = ["serde"], optional = true}
 
 # Misc
 # TODO: Implement something simple and kill these deps
-indicatif = {version = "0.17.3", optional = true}
+indicatif = {version = "0.17.5", optional = true}
 simplelog = {version = "0.12.1", optional = true}
 ripemd = {version = "0.1.3", optional = true}
 
 # Websockets
-async-tungstenite = {version = "0.22.1", optional = true}
+async-tungstenite = {version = "0.22.2", optional = true}
 
 # socks5
 fast-socks5 = {version = "0.4.3", optional = true}
@@ -134,7 +134,7 @@ sled = {version = "0.34.7", optional = true}
 sled-overlay = {version = "0.0.4", optional = true}
 
 [dev-dependencies]
-clap = {version = "4.2.7", features = ["derive"]}
+clap = {version = "4.3.2", features = ["derive"]}
 halo2_proofs = {version = "0.3.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
 halo2_gadgets = {version = "0.3.0", features = ["test-dev-graph", "test-dependencies"]}
 plotters = "0.3.4"
