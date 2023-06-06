@@ -576,6 +576,25 @@ impl ConsensusTestHarness {
         Ok(())
     }
 
+    pub async fn execute_erroneous_proposal_txs(
+        &mut self,
+        holder: Holder,
+        txs: Vec<Transaction>,
+        slot: u64,
+        erroneous: usize,
+    ) -> Result<()> {
+        let wallet = self.holders.get_mut(&holder).unwrap();
+        let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::Proposal).unwrap();
+        let timer = Instant::now();
+
+        let erroneous_txs =
+            wallet.state.read().await.verify_transactions(&txs, slot, false).await?;
+        assert_eq!(erroneous_txs.len(), erroneous);
+        tx_action_benchmark.verify_times.push(timer.elapsed());
+
+        Ok(())
+    }
+
     pub fn unstake_native(
         &mut self,
         holder: Holder,
@@ -718,12 +737,31 @@ impl ConsensusTestHarness {
         Ok(oc)
     }
 
-    pub async fn get_slot_checkpoints_by_slot(&self, slot: u64) -> Result<SlotCheckpoint> {
+    pub async fn get_slot_checkpoint_by_slot(&self, slot: u64) -> Result<SlotCheckpoint> {
         let faucet = self.holders.get(&Holder::Faucet).unwrap();
         let slot_checkpoint =
             faucet.state.read().await.blockchain.get_slot_checkpoints_by_slot(&[slot])?[0]
                 .clone()
                 .unwrap();
+
+        Ok(slot_checkpoint)
+    }
+
+    pub async fn generate_slot_checkpoint(&self, slot: u64) -> Result<SlotCheckpoint> {
+        // We grab the genesis slot to generate slot checkpoint
+        // using same consensus parameters
+        let genesis_slot = self.get_slot_checkpoint_by_slot(0).await?;
+        let slot_checkpoint = SlotCheckpoint {
+            slot,
+            eta: genesis_slot.eta,
+            sigma1: genesis_slot.sigma1,
+            sigma2: genesis_slot.sigma2,
+        };
+
+        // Store generated slot checkpoint
+        for wallet in self.holders.values() {
+            wallet.state.write().await.receive_slot_checkpoints(&[slot_checkpoint.clone()]).await?;
+        }
 
         Ok(slot_checkpoint)
     }

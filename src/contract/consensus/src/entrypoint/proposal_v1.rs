@@ -27,7 +27,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     merkle_add, msg,
     pasta::{group::ff::FromUniformBytes, pallas},
-    util::get_slot_checkpoint,
+    util::{get_slot_checkpoint, get_verifying_slot_epoch},
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -35,8 +35,8 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 use crate::{
     error::ConsensusError,
     model::{
-        ConsensusProposalParamsV1, ConsensusProposalUpdateV1, SlotCheckpoint, HEADSTART,
-        MU_RHO_PREFIX, MU_Y_PREFIX,
+        calculate_grace_period, ConsensusProposalParamsV1, ConsensusProposalUpdateV1,
+        SlotCheckpoint, HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX,
     },
     ConsensusFunction,
 };
@@ -173,6 +173,14 @@ pub(crate) fn consensus_proposal_process_instruction_v1(
     msg!("[ConsensusProposalV1] Validating anonymous input");
     let input = &params.input;
     let output = &params.output;
+
+    // The coin has passed through the grace period and is allowed to propose.
+    if params.input.epoch != 0 &&
+        get_verifying_slot_epoch() - params.input.epoch <= calculate_grace_period()
+    {
+        msg!("[ConsensusProposalV1] Error: Coin is not allowed to make proposals yet");
+        return Err(ConsensusError::CoinStillInGracePeriod.into())
+    }
 
     // The Merkle root is used to know whether this is a coin that
     // existed in a previous state.

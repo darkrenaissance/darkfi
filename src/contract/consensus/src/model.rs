@@ -115,22 +115,28 @@ pub struct ConsensusProposalUpdateV1 {
     pub coin: Coin,
 }
 
-// Consensus parameters configuration.
-// Note: Always verify `pallas::Base` are correct, in case of changes,
-// using pallas_constants tool.
-// Configured reward
+/// Consensus parameters configuration.
+/// Note: Always verify `pallas::Base` are correct, in case of changes,
+/// using pallas_constants tool.
+/// Number of slots in one epoch
+pub const EPOCH_LENGTH: u64 = 10;
+/// Slot time in seconds
+pub const SLOT_TIME: u64 = 90;
+/// Grace period days target
+pub const GRACE_PERIOD_DAYS: u64 = 2;
+/// Configured reward
 pub const REWARD: u64 = 1;
-// Reward `pallas::Base`, calculated by: pallas::Base::from(REWARD)
+/// Reward `pallas::Base`, calculated by: pallas::Base::from(REWARD)
 pub const REWARD_PALLAS: pallas::Base = pallas::Base::from_raw([1, 0, 0, 0]);
-// Serial prefix, calculated by: pallas::Base::from(2)
+/// Serial prefix, calculated by: pallas::Base::from(2)
 pub const SERIAL_PREFIX: pallas::Base = pallas::Base::from_raw([2, 0, 0, 0]);
-// Seed prefix, calculated by: pallas::Base::from(3)
+/// Seed prefix, calculated by: pallas::Base::from(3)
 pub const SEED_PREFIX: pallas::Base = pallas::Base::from_raw([3, 0, 0, 0]);
-// Election seed y prefix, calculated by: pallas::Base::from(22)
+/// Election seed y prefix, calculated by: pallas::Base::from(22)
 pub const MU_Y_PREFIX: pallas::Base = pallas::Base::from_raw([22, 0, 0, 0]);
-// Election seed rho prefix, calculated by: pallas::Base::from(5)
+/// Election seed rho prefix, calculated by: pallas::Base::from(5)
 pub const MU_RHO_PREFIX: pallas::Base = pallas::Base::from_raw([5, 0, 0, 0]);
-// Lottery headstart, calculated by: darkfi::consensus::LeadCoin::headstart()
+/// Lottery headstart, calculated by: darkfi::consensus::LeadCoin::headstart()
 pub const HEADSTART: pallas::Base = pallas::Base::from_raw([
     11731824086999220879,
     11830614503713258191,
@@ -150,4 +156,11 @@ pub struct SlotCheckpoint {
     pub sigma1: pallas::Base,
     /// Slot sigma2
     pub sigma2: pallas::Base,
+}
+
+/// Auxiliary function to calculate the grace(locked) period, denominated
+/// in epochs.
+pub fn calculate_grace_period() -> u64 {
+    // 86400 seconds in a day
+    (86400 * GRACE_PERIOD_DAYS) / (SLOT_TIME * EPOCH_LENGTH)
 }

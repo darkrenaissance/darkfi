@@ -112,7 +112,7 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     assert!(ALICE_INITIAL == alice_staked_oc.note.value);
 
     // We simulate the proposal of genesis slot
-    let slot_checkpoint = th.get_slot_checkpoints_by_slot(current_slot).await?;
+    let slot_checkpoint = th.get_slot_checkpoint_by_slot(current_slot).await?;
 
     // With alice's current coin value she can become the slot proposer,
     // so she creates a proposal transaction to burn her staked coin,

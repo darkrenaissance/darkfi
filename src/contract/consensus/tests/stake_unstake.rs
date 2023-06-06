@@ -29,7 +29,7 @@
 use darkfi::Result;
 use log::info;
 
-use darkfi_consensus_contract::model::REWARD;
+use darkfi_consensus_contract::model::{calculate_grace_period, EPOCH_LENGTH, REWARD};
 
 mod harness;
 use harness::{init_logger, ConsensusTestHarness, Holder};
@@ -42,8 +42,8 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     const ALICE_AIRDROP: u64 = 1000;
 
     // Slot to verify against
-    let current_slot = 0;
-    let current_epoch = 0;
+    let mut current_slot = 11;
+    let mut current_epoch = 1;
 
     // Initialize harness
     let mut th = ConsensusTestHarness::new().await?;
@@ -95,8 +95,30 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     // Verify values match
     assert!(alice_oc.note.value == alice_staked_oc.note.value);
 
-    // We simulate the proposal of genesis slot
-    let slot_checkpoint = th.get_slot_checkpoints_by_slot(current_slot).await?;
+    // We progress one slot
+    current_slot += 1;
+
+    // We generate current slot checkpoint to simulate its proposal
+    let slot_checkpoint = th.generate_slot_checkpoint(current_slot).await?;
+
+    // Since alice didn't wait for the grace period to pass, her proposal should fail
+    info!(target: "consensus", "[Alice] ====================");
+    info!(target: "consensus", "[Alice] Building proposal tx");
+    info!(target: "consensus", "[Alice] ====================");
+    let (proposal_tx, proposal_params, proposal_secret_key) =
+        th.proposal(Holder::Alice, slot_checkpoint, alice_staked_oc.clone())?;
+
+    info!(target: "consensus", "[Malicious] =====================================");
+    info!(target: "consensus", "[Malicious] Checking proposal before grace period");
+    info!(target: "consensus", "[Malicious] =====================================");
+    th.execute_erroneous_proposal_txs(Holder::Alice, vec![proposal_tx], current_slot, 1).await?;
+
+    // We progress after grace period
+    current_epoch += calculate_grace_period();
+    current_slot += current_epoch * EPOCH_LENGTH;
+
+    // We generate current slot checkpoint to simulate its proposal
+    let slot_checkpoint = th.generate_slot_checkpoint(current_slot).await?;
 
     // With alice's current coin value she can become the slot proposer,
     // so she creates a proposal transaction to burn her staked coin,
