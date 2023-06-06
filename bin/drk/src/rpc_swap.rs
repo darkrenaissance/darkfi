@@ -26,14 +26,14 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{swap_v1::SwapCallBuilder, MoneyNote},
-    model::MoneyTransferParamsV1,
+    model::{Coin, MoneyTransferParamsV1},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
         contract_id::MONEY_CONTRACT_ID,
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
-        poseidon_hash, Coin, PublicKey, SecretKey, TokenId,
+        poseidon_hash, PublicKey, SecretKey, TokenId,
     },
     pasta::pallas,
     tx::ContractCall,

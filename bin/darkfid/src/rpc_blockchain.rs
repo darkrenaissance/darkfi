@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::str::FromStr;
+
 use darkfi_sdk::crypto::ContractId;
 use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
@@ -201,7 +203,7 @@ impl Darkfid {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let contract_id = match ContractId::try_from(params[0].as_str().unwrap()) {
+        let contract_id = match ContractId::from_str(params[0].as_str().unwrap()) {
             Ok(v) => v,
             Err(e) => {
                 error!("[RPC] blockchain.lookup_zkas: Error decoding string to ContractId: {}", e);

@@ -27,8 +27,9 @@ use anyhow::{anyhow, Context, Result};
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{generate, Shell};
 use darkfi::{tx::Transaction, util::parse::decode_base10, zk::halo2::Field};
+use darkfi_money_contract::model::Coin;
 use darkfi_sdk::{
-    crypto::{Coin, PublicKey, SecretKey, TokenId},
+    crypto::{PublicKey, SecretKey, TokenId},
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{deserialize, serialize};
@@ -1197,7 +1198,7 @@ async fn main() -> Result<()> {
                 }
 
                 let token_id =
-                    TokenId::try_from(token.as_str()).with_context(|| "Invalid Token ID")?;
+                    TokenId::from_str(token.as_str()).with_context(|| "Invalid Token ID")?;
                 let drk = Drk::new(args.endpoint).await?;
                 drk.add_alias(alias, token_id).await?;
 
@@ -1207,7 +1208,7 @@ async fn main() -> Result<()> {
             AliasSubcmd::Show { alias, token } => {
                 let token_id = match token {
                     Some(t) => {
-                        Some(TokenId::try_from(t.as_str()).with_context(|| "Invalid Token ID")?)
+                        Some(TokenId::from_str(t.as_str()).with_context(|| "Invalid Token ID")?)
                     }
                     None => None,
                 };

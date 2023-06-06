@@ -15,7 +15,8 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use std::collections::HashMap;
+
+use std::{collections::HashMap, str::FromStr};
 
 use anyhow::{anyhow, Result};
 use darkfi::{rpc::jsonrpc::JsonRequest, tx::Transaction, wallet::walletdb::QueryType};
@@ -32,13 +33,15 @@ use darkfi_money_contract::{
         MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE, MONEY_TOKENS_COL_IS_FROZEN,
         MONEY_TOKENS_COL_TOKEN_ID, MONEY_TOKENS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
     },
-    model::{MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1, MoneyTransferParamsV1, Output},
+    model::{
+        Coin, MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1, MoneyTransferParamsV1, Output,
+    },
     MoneyFunction,
 };
 use darkfi_sdk::{
     crypto::{
-        poseidon_hash, Coin, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey,
-        TokenId, MONEY_CONTRACT_ID,
+        poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey, TokenId,
+        MONEY_CONTRACT_ID,
     },
     incrementalmerkletree,
     incrementalmerkletree::Tree,
@@ -766,7 +769,7 @@ impl Drk {
             }
         }
         // Else parse input
-        Ok(TokenId::try_from(input.as_str())?)
+        Ok(TokenId::from_str(input.as_str())?)
     }
 
     /// Create an alias record for provided Token ID

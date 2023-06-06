@@ -17,11 +17,10 @@
  */
 
 use darkfi_sdk::crypto::{
-    merkle_prelude::*, note::AeadEncryptedNote, Coin, MerkleNode, MerklePosition, MerkleTree,
-    SecretKey,
+    merkle_prelude::*, note::AeadEncryptedNote, MerkleNode, MerklePosition, MerkleTree, SecretKey,
 };
 
-use darkfi_money_contract::client::MoneyNote;
+use darkfi_money_contract::{client::MoneyNote, model::Coin};
 
 pub struct OwnCoin {
     pub coin: Coin,

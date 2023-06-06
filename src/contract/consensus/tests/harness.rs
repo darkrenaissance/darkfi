@@ -34,8 +34,8 @@ use darkfi::{
 };
 use darkfi_sdk::{
     crypto::{
-        merkle_prelude::*, poseidon_hash, Coin, Keypair, MerkleNode, MerkleTree, Nullifier,
-        PublicKey, SecretKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
+        merkle_prelude::*, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey,
+        SecretKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
     ContractCall,
@@ -59,7 +59,7 @@ use darkfi_money_contract::{
         unstake_v1::MoneyUnstakeCallBuilder, ConsensusNote, ConsensusOwnCoin, MoneyNote, OwnCoin,
     },
     model::{
-        ConsensusOutput, ConsensusStakeParamsV1, MoneyTransferParamsV1, MoneyUnstakeParamsV1,
+        Coin, ConsensusOutput, ConsensusStakeParamsV1, MoneyTransferParamsV1, MoneyUnstakeParamsV1,
         Output,
     },
     MoneyFunction, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,

@@ -26,7 +26,7 @@ use darkfi::{
 use darkfi_sdk::{
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_base,
-        pedersen_commitment_u64, poseidon_hash, Coin, MerkleNode, Nullifier, PublicKey, TokenId,
+        pedersen_commitment_u64, poseidon_hash, MerkleNode, Nullifier, PublicKey, TokenId,
         DARK_TOKEN_ID,
     },
     pasta::pallas,
@@ -36,7 +36,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{ConsensusOwnCoin, MoneyNote},
-    model::{ConsensusInput, MoneyUnstakeParamsV1, Output, PALLAS_ZERO, SCALAR_ZERO},
+    model::{Coin, ConsensusInput, MoneyUnstakeParamsV1, Output, PALLAS_ZERO, SCALAR_ZERO},
 };
 
 pub struct MoneyUnstakeCallDebris {

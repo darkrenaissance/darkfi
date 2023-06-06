@@ -32,7 +32,7 @@ use std::time::{Duration, Instant};
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
     crypto::{
-        merkle_prelude::*, pallas, pasta_prelude::*, poseidon_hash, Coin, MerkleNode, Nullifier,
+        merkle_prelude::*, pallas, pasta_prelude::*, poseidon_hash, MerkleNode, Nullifier,
         ValueBlind, MONEY_CONTRACT_ID,
     },
     ContractCall,
@@ -43,7 +43,7 @@ use rand::rngs::OsRng;
 
 use darkfi_money_contract::{
     client::{swap_v1::SwapCallBuilder, transfer_v1::TransferCallBuilder, MoneyNote, OwnCoin},
-    model::MoneyTransferParamsV1 as MoneyTransferParams,
+    model::{Coin, MoneyTransferParamsV1 as MoneyTransferParams},
     MoneyFunction::{OtcSwapV1 as MoneyOtcSwap, TransferV1 as MoneyTransfer},
     MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };

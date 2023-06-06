@@ -24,7 +24,7 @@ use darkfi::{
 use darkfi_sdk::{
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_base,
-        pedersen_commitment_u64, poseidon_hash, Coin, Keypair, PublicKey, TokenId,
+        pedersen_commitment_u64, poseidon_hash, Keypair, PublicKey, TokenId,
     },
     pasta::pallas,
 };
@@ -36,7 +36,7 @@ use crate::{
         transfer_v1::{TransactionBuilderClearInputInfo, TransactionBuilderOutputInfo},
         MoneyNote,
     },
-    model::{ClearInput, MoneyTokenMintParamsV1, Output},
+    model::{ClearInput, Coin, MoneyTokenMintParamsV1, Output},
 };
 
 pub struct TokenMintCallDebris {

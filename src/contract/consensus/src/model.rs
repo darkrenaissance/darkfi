@@ -16,9 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::model::{ClearInput, ConsensusInput, ConsensusOutput, Input, Output};
+use darkfi_money_contract::model::{
+    ClearInput, Coin, ConsensusInput, ConsensusOutput, Input, Output,
+};
 use darkfi_sdk::{
-    crypto::{ecvrf::VrfProof, Coin, Nullifier, PublicKey},
+    crypto::{ecvrf::VrfProof, Nullifier, PublicKey},
     pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};

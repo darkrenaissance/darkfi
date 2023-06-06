@@ -26,8 +26,8 @@ use darkfi::{
 use darkfi_sdk::{
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_base,
-        pedersen_commitment_u64, poseidon_hash, Coin, Keypair, MerkleNode, MerklePosition,
-        MerkleTree, Nullifier, PublicKey, SecretKey, TokenId,
+        pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, MerklePosition, MerkleTree,
+        Nullifier, PublicKey, SecretKey, TokenId,
     },
     incrementalmerkletree::{Hashable, Tree},
     pasta::pallas,
@@ -37,7 +37,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{MoneyNote, OwnCoin},
-    model::{ClearInput, Input, MoneyTransferParamsV1, Output},
+    model::{ClearInput, Coin, Input, MoneyTransferParamsV1, Output},
 };
 
 pub struct TransferCallDebris {

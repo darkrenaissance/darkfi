@@ -30,10 +30,6 @@ pub use util::poseidon_hash;
 pub mod keypair;
 pub use keypair::{Keypair, PublicKey, SecretKey};
 
-/// Coin definitions and methods
-pub mod coin;
-pub use coin::Coin;
-
 /// Contract ID definitions and methods
 pub mod contract_id;
 pub use contract_id::{ContractId, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
@@ -86,5 +82,51 @@ pub mod pasta_prelude {
             ff::{Field, PrimeField},
             Curve, Group,
         },
+    };
+}
+
+#[macro_export]
+macro_rules! fp_from_bs58 {
+    ($ty:ident) => {
+        impl FromStr for $ty {
+            type Err = ContractError;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                let bytes = match bs58::decode(s).into_vec() {
+                    Ok(v) => v,
+                    Err(e) => return Err(ContractError::IoError(e.to_string())),
+                };
+
+                if bytes.len() != 32 {
+                    return Err(ContractError::IoError(
+                        "Length of decoded bytes is not 32".to_string(),
+                    ))
+                }
+
+                Self::from_bytes(bytes.try_into().unwrap())
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! fp_to_bs58 {
+    ($ty:ident) => {
+        impl std::fmt::Display for $ty {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "{}", bs58::encode(self.to_bytes()).into_string())
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! ty_from_fp {
+    ($ty:ident) => {
+        impl From<pallas::Base> for $ty {
+            fn from(x: pallas::Base) -> Self {
+                Self(x)
+            }
+        }
     };
 }

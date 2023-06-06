@@ -30,7 +30,7 @@ use std::time::{Duration, Instant};
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
     crypto::{
-        merkle_prelude::*, pallas, pasta_prelude::*, poseidon_hash, Coin, MerkleNode, Nullifier,
+        merkle_prelude::*, pallas, pasta_prelude::*, poseidon_hash, MerkleNode, Nullifier,
         MONEY_CONTRACT_ID,
     },
     ContractCall,
@@ -44,6 +44,7 @@ use darkfi_money_contract::{
         genesis_mint_v1::GenesisMintCallBuilder, transfer_v1::TransferCallBuilder, MoneyNote,
         OwnCoin,
     },
+    model::Coin,
     MoneyFunction::{GenesisMintV1 as GenesisMint, TransferV1 as MoneyTransfer},
     MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };

@@ -21,7 +21,7 @@ use std::time::{Duration, Instant};
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
     crypto::{
-        merkle_prelude::*, pallas, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Coin,
+        merkle_prelude::*, pallas, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash,
         Keypair, MerkleNode, MerkleTree, SecretKey, TokenId, DAO_CONTRACT_ID, DARK_TOKEN_ID,
         MONEY_CONTRACT_ID,
     },
@@ -37,7 +37,7 @@ use darkfi_dao_contract::{
 
 use darkfi_money_contract::{
     client::token_mint_v1::TokenMintCallBuilder,
-    model::{MoneyTokenMintParamsV1, MoneyTransferParamsV1},
+    model::{Coin, MoneyTokenMintParamsV1, MoneyTransferParamsV1},
     MoneyFunction,
 };
 
@@ -235,7 +235,7 @@ async fn integration_test() -> Result<()> {
         treasury_note.user_data,
         treasury_note.coin_blind,
     ]);
-    assert_eq!(coin, dao_recv_coin.coin.0);
+    assert_eq!(coin, dao_recv_coin.coin.inner());
 
     assert_eq!(treasury_note.spend_hook, spend_hook);
     assert_eq!(treasury_note.user_data, dao_bulla.inner());
@@ -356,7 +356,7 @@ async fn integration_test() -> Result<()> {
                 note.user_data,
                 note.coin_blind,
             ]);
-            assert_eq!(coin, recv_coin.coin.0);
+            assert_eq!(coin, recv_coin.coin.inner());
 
             debug!(target: "dao", "Holder{} received a coin worth {} gDRK", i, note.value);
 

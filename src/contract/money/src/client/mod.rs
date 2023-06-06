@@ -27,12 +27,12 @@
 //! are able to abstract away any wallet interfaces to client implementations.
 
 use darkfi_sdk::{
-    crypto::{Coin, MerklePosition, Nullifier, SecretKey, TokenId, DARK_TOKEN_ID},
+    crypto::{MerklePosition, Nullifier, SecretKey, TokenId, DARK_TOKEN_ID},
     pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-use crate::model::{PALLAS_ZERO, SCALAR_ZERO};
+use crate::model::{Coin, PALLAS_ZERO, SCALAR_ZERO};
 
 /// `Money::TransferV1` API
 pub mod transfer_v1;

@@ -72,47 +72,14 @@ impl TokenId {
             }
         }
     }
-}
 
-impl From<pallas::Base> for TokenId {
-    fn from(x: pallas::Base) -> Self {
-        Self(x)
+    /// Convert the `TokenId` type into 32 raw bytes
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0.to_repr()
     }
 }
 
-impl core::fmt::Display for TokenId {
-    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        // Base58 encoding
-        let tokenid: String = bs58::encode(self.0.to_repr()).into_string();
-        write!(f, "{}", tokenid)
-    }
-}
-
-impl TryFrom<&str> for TokenId {
-    type Error = ContractError;
-
-    fn try_from(s: &str) -> Result<Self, Self::Error> {
-        let bytes: [u8; 32] = match bs58::decode(s).into_vec() {
-            Ok(v) => {
-                if v.len() != 32 {
-                    return Err(ContractError::IoError(
-                        "Decoded bs58 string for TokenId is not 32 bytes long".to_string(),
-                    ))
-                }
-
-                v.try_into().unwrap()
-            }
-            Err(e) => {
-                return Err(ContractError::IoError(format!(
-                    "Failed to decode bs58 for TokenId: {}",
-                    e
-                )))
-            }
-        };
-
-        match pallas::Base::from_repr(bytes).into() {
-            Some(v) => Ok(Self(v)),
-            None => Err(ContractError::IoError("Bytes for TokenId are noncanonical".to_string())),
-        }
-    }
-}
+use core::str::FromStr;
+crate::fp_from_bs58!(TokenId);
+crate::fp_to_bs58!(TokenId);
+crate::ty_from_fp!(TokenId);

@@ -23,10 +23,10 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_money_contract::client::ConsensusNote;
+use darkfi_money_contract::{client::ConsensusNote, model::Coin};
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Coin, MerkleNode, MerklePosition,
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, MerkleNode, MerklePosition,
         Nullifier, PublicKey, SecretKey,
     },
     incrementalmerkletree::Hashable,

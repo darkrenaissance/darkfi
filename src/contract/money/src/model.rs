@@ -17,10 +17,46 @@
  */
 
 use darkfi_sdk::{
-    crypto::{note::AeadEncryptedNote, Coin, MerkleNode, Nullifier, PublicKey, TokenId},
+    crypto::{
+        note::AeadEncryptedNote, pasta_prelude::PrimeField, MerkleNode, Nullifier, PublicKey,
+        TokenId,
+    },
+    error::ContractError,
     pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
+
+/// A `Coin` represented in the Money state
+#[derive(Debug, Clone, Copy, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+pub struct Coin(pallas::Base);
+
+impl Coin {
+    /// Reference the raw inner base field element
+    pub fn inner(&self) -> pallas::Base {
+        self.0
+    }
+
+    /// Create a `Coin` object from given bytes, erroring if the input
+    /// bytes are noncanonical.
+    pub fn from_bytes(x: [u8; 32]) -> Result<Self, ContractError> {
+        match pallas::Base::from_repr(x).into() {
+            Some(v) => Ok(Self(v)),
+            None => {
+                Err(ContractError::IoError("Failed to instantiate Coin from bytes".to_string()))
+            }
+        }
+    }
+
+    /// Convert the `Coin` type into 32 raw bytes
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0.to_repr()
+    }
+}
+
+use core::str::FromStr;
+darkfi_sdk::fp_from_bs58!(Coin);
+darkfi_sdk::fp_to_bs58!(Coin);
+darkfi_sdk::ty_from_fp!(Coin);
 
 /// A contract call's clear input
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]

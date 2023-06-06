@@ -26,12 +26,12 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{ConsensusNote, ConsensusOwnCoin},
-    model::{ConsensusInput, ConsensusOutput, PALLAS_ZERO},
+    model::{Coin, ConsensusInput, ConsensusOutput, PALLAS_ZERO},
 };
 use darkfi_sdk::{
     crypto::{
         ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_base,
-        pedersen_commitment_u64, poseidon_hash, Coin, MerkleNode, MerkleTree, Nullifier, PublicKey,
+        pedersen_commitment_u64, poseidon_hash, MerkleNode, MerkleTree, Nullifier, PublicKey,
         SecretKey,
     },
     incrementalmerkletree::{Hashable, Tree},
