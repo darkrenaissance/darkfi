@@ -19,6 +19,9 @@ WASM_SRC = \
 # wasm contract binary
 WASM_BIN = money_contract.wasm
 
+# Just compile the tests
+NO_RUN = "--no-run"
+
 all: $(WASM_BIN)
 
 $(WASM_BIN): $(WASM_SRC) $(PROOFS_BIN)
@@ -31,22 +34,22 @@ $(PROOFS_BIN): $(ZKAS) $(PROOFS_SRC)
 test-integration: all
 	$(CARGO) test --release --features=no-entrypoint,client \
 		--package darkfi-money-contract \
-		--test integration
+		--test integration $(ARGS)
 
 test-mint-pay-swap: all
 	$(CARGO) test --release --features=no-entrypoint,client \
 		--package darkfi-money-contract \
-		--test mint_pay_swap
+		--test mint_pay_swap $(ARGS)
 
 test-txs-verification: all
 	$(CARGO) test --release --features=no-entrypoint,client \
 		--package darkfi-money-contract \
-		--test txs_verification
+		--test txs_verification $(ARGS)
 
 test-genesis-mint: all
 	$(CARGO) test --release --features=no-entrypoint,client \
 		--package darkfi-money-contract \
-		--test genesis_mint
+		--test genesis_mint $(ARGS)
 
 bench:
 	$(CARGO) test --release --features=no-entrypoint,client \
@@ -54,6 +57,12 @@ bench:
 		--test verification_bench $(FILTER)
 
 test: test-integration test-mint-pay-swap test-txs-verification test-genesis-mint
+
+test-no-run:
+	$(MAKE) test-integration ARGS=$(NO_RUN)
+	$(MAKE) test-mint-pay-swap ARGS=$(NO_RUN)
+	$(MAKE) test-txs-verification ARGS=$(NO_RUN)
+	$(MAKE) test-genesis-mint ARGS=$(NO_RUN)
 
 clean:
 	rm -f $(PROOFS_BIN) $(WASM_BIN)

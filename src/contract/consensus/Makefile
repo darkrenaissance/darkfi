@@ -19,6 +19,9 @@ WASM_SRC = \
 # wasm contract binary
 WASM_BIN = consensus_contract.wasm
 
+# Just compile the tests
+NO_RUN = "--no-run"
+
 all: $(WASM_BIN)
 
 $(WASM_BIN): $(WASM_SRC) $(PROOFS_BIN)
@@ -31,14 +34,18 @@ $(PROOFS_BIN): $(ZKAS) $(PROOFS_SRC)
 test-stake-unstake: all
 	$(CARGO) test --release --features=no-entrypoint,client \
 		--package darkfi-consensus-contract \
-		--test stake_unstake
+		--test stake_unstake $(ARGS)
 
 test-genesis-stake-unstake: all
 	$(CARGO) test --release --features=no-entrypoint,client \
 		--package darkfi-consensus-contract \
-		--test genesis_stake_unstake
+		--test genesis_stake_unstake $(ARGS)
 
 test: test-genesis-stake-unstake test-stake-unstake
+
+test-no-run:
+	$(MAKE) test-genesis-stake-unstake ARGS=$(NO_RUN)
+	$(MAKE) test-stake-unstake ARGS=$(NO_RUN)
 
 clean:
 	rm -f $(PROOFS_BIN) $(WASM_BIN)
