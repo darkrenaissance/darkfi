@@ -37,3 +37,6 @@ pub mod path;
 
 /// Time utilities
 pub mod time;
+
+/// Ring Buffer implementation
+pub mod ringbuffer;

@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::VecDeque;
-
 use async_std::sync::{Arc, Mutex};
 use futures::{
     io::{ReadHalf, WriteHalf},
@@ -37,7 +35,7 @@ use super::{
 };
 use crate::{
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
-    util::time::NanoTimestamp,
+    util::{ringbuffer::RingBuffer, time::NanoTimestamp},
     Error, Result,
 };
 
@@ -45,25 +43,6 @@ use crate::{
 pub type ChannelPtr = Arc<Channel>;
 
 const SIZE_OF_BUFFER: usize = 65536;
-
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
-struct RingBuffer<T> {
-    pub items: VecDeque<T>,
-}
-
-impl<T: Eq + PartialEq + Clone> RingBuffer<T> {
-    pub fn new(capacity: usize) -> Self {
-        let items = VecDeque::with_capacity(capacity);
-        Self { items }
-    }
-
-    pub fn push(&mut self, val: T) {
-        if self.items.len() == self.items.capacity() {
-            self.items.pop_front();
-        }
-        self.items.push_back(val);
-    }
-}
 
 struct ChannelInfo {
     random_id: u32,

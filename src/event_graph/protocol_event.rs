@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::VecDeque, fmt::Debug};
+use std::fmt::Debug;
 
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
@@ -28,35 +28,12 @@ use super::EventMsg;
 use crate::{
     event_graph::model::{Event, EventId, ModelPtr},
     net,
-    util::async_util::sleep,
+    util::{async_util::sleep, ringbuffer::RingBuffer},
     Result,
 };
 
 const SIZE_OF_SEEN_BUFFER: usize = 65536;
 // const MAX_CONFIRM: u8 = 3;
-
-#[derive(Clone)]
-struct RingBuffer<T> {
-    pub items: VecDeque<T>,
-}
-
-impl<T: Eq + PartialEq + Clone> RingBuffer<T> {
-    pub fn new(capacity: usize) -> Self {
-        let items = VecDeque::with_capacity(capacity);
-        Self { items }
-    }
-
-    pub fn push(&mut self, val: T) {
-        if self.items.len() == self.items.capacity() {
-            self.items.pop_front();
-        }
-        self.items.push_back(val);
-    }
-
-    pub fn contains(&self, val: &T) -> bool {
-        self.items.contains(val)
-    }
-}
 
 type InvId = u64;
 
