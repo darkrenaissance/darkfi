@@ -83,7 +83,7 @@ pub async fn kaching() {
         return
     };
 
-    if let Err(_) = stream_handle.play_raw(source.convert_samples()) {
+    if stream_handle.play_raw(source.convert_samples()).is_err() {
         return
     }
 
