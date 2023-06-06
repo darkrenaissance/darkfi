@@ -47,15 +47,13 @@ The following dependencies are also required:
 | make           | make             |
 | jq             | jq               |
 | gcc            | gcc              |
-| pkg-config     | pkg-config       |
-| libmpg123      | libmpg123-dev    |
 
 Users of Debian-based systems (e.g. Ubuntu) can simply run the
 following to install the required dependencies:
 
 ```shell
 # apt-get update
-# apt-get install -y git make jq gcc pkg-config libmpg123-dev
+# apt-get install -y git make jq gcc
 ```
 
 Alternatively, users can try using the automated script under `contrib`

@@ -645,8 +645,8 @@ impl Drk {
             let _ = self.rpc_client.request(req).await?;
         }
 
-        if !owncoins.is_empty() && (kaching().await).is_err() {
-            return Ok(())
+        if !owncoins.is_empty() {
+            kaching().await;
         }
 
         Ok(())

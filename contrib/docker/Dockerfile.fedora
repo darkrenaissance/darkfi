@@ -38,7 +38,7 @@ RUN bash -c 'make -j test &&  make -j all'
 # 3. stage
 FROM ${OS_VER}
 
-RUN dnf -y install openssl lato-fonts mpg123-libs \
+RUN dnf -y install openssl lato-fonts \
   && dnf clean all \
   && rm -rf /var/cache/dnf
 

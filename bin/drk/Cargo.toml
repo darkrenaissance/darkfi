@@ -8,9 +8,6 @@ repository = "https://github.com/darkrenaissance/darkfi"
 license = "AGPL-3.0-only"
 edition = "2021"
 
-[build-dependencies]
-pkg-config = "0.3.26"
-
 [dependencies]
 anyhow = "1.0.71"
 async-std = {version = "1.12.0", features = ["attributes"]}
@@ -32,4 +29,4 @@ signal-hook-async-std = "0.2.2"
 signal-hook = "0.3.15"
 sqlx = {version = "0.6.3", features = ["runtime-async-std-rustls", "sqlite"]}
 url = "2.3.1"
-play = {version = "0.5.3", optional = true}
+rodio = {version = "0.17.1", default-features = false, features = ["minimp3"]}

@@ -22,12 +22,12 @@ setup_mac() {
 }
 
 setup_apt() {
-	apt_deps="git make jq gcc pkg-config libmpg123-dev"
+	apt_deps="git make jq gcc"
 	$1 install $apt_deps || return 1
 }
 
 setup_pacman() {
-	pacman_deps="git make jq gcc pkgconf mpg123"
+	pacman_deps="git make jq gcc"
 	$1 -Sy $pacman_deps || return 1
 }
 
@@ -52,17 +52,17 @@ setup_zypper() {
 }
 
 setup_emerge() {
-	emerge_deps="dev-vcs/git app-misc/jq dev-util/pkgconf"
+	emerge_deps="dev-vcs/git app-misc/jq"
 	$1 $emerge_deps || return 1
 }
 
 setup_pkg() {
-	pkg_deps="git bash jq gcc findutils cantarell-fonts devel/pkgconf gmake devel/automake pulseaudio-module-sndio"
+	pkg_deps="git bash jq gcc findutils cantarell-fonts gmake devel/automake"
 	$1 install -y $pkg_deps || return 1
 }
 
 setup_pkg_add() {
-	pkg_add_deps="git bash jq gcc-11.2.0p6 findutils cantarell-fonts pkgconf gmake automake-1.15.1"
+	pkg_add_deps="git bash jq gcc-11.2.0p6 findutils cantarell-fonts gmake automake-1.15.1"
 	$1 -I $pkg_add_deps || return 1
 }
 
@@ -146,40 +146,6 @@ Linux)
 		echo "Rust support is not yet ready for OpenBSD, see https://github.com/rust-lang/rustup/issues/2168#issuecomment-1505185711"
 		echo "You may try to compile rustc and cargo yourself or get the latest with:"
 		echo "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y --default-toolchain nightly --default-host x86_64-unknown-openbsd"
-	fi
-
-	if command -v pkg || command -v pkg_add || command -v pkgin; then
-		echo "Dependencies installed!" >&2
-		cat <<'ENDOFCAT' >&2
-=======================
-Few more things may be needed:
-Install rust from https://www.rust-lang.org/tools/install
-Execute: rustup target add wasm32-unknown-unknown
-And apply few patches ...
-cd ..
-git clone --recurse-submodules -j8 https://github.com/stainless-steel/mpg123-sys
-cd ./mpg123-sys
-sed -e's/$(RM)/rm -f/g' -i.bak  source/Makefile.in
-
-patch -p0 build.rs <<'EOF'
-43a44
->             .arg(&format!("--with-audio=sndio"))
-EOF
-
-cargo build  # to see if it works fine
-
-cd ../darkfi
-
-patch -p0 Cargo.toml <<'EOF'
-329a330
-> mpg123-sys = { path = "../mpg123-sys" }
-EOF
-
-gmake test  # no errors expected
-gmake
-ls -al darkfid ircd dnetview faucetd vanityaddr  # list of built executables
-ENDOFCAT
-		exit 0
 	fi
 
 	echo "Error: Could not recognize your package manager." >&2

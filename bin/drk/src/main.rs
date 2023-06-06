@@ -69,7 +69,7 @@ mod rpc_blockchain;
 
 /// CLI utility functions
 mod cli_util;
-use cli_util::{parse_token_pair, parse_value_pair};
+use cli_util::{kaching, parse_token_pair, parse_value_pair};
 
 /// Wallet functionality related to drk operations
 mod wallet;
@@ -104,6 +104,9 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Subcmd {
+    /// Fun
+    Kaching,
+
     /// Send a ping request to the darkfid RPC endpoint
     Ping,
 
@@ -487,6 +490,11 @@ async fn main() -> Result<()> {
     }
 
     match args.command {
+        Subcmd::Kaching => {
+            kaching().await;
+            Ok(())
+        }
+
         Subcmd::Ping => {
             let drk = Drk::new(args.endpoint).await?;
             drk.ping().await.with_context(|| "Failed to ping darkfid RPC endpoint")?;

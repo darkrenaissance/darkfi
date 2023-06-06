@@ -15,11 +15,14 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use std::{path::Path, process::exit};
+use std::{io::Cursor, process::exit};
 
-use async_std::{fs::File, io::WriteExt};
-use darkfi::{util::parse::decode_base10, Result};
+use darkfi::{
+    util::{async_util::sleep, parse::decode_base10},
+    Result,
+};
 use darkfi_sdk::crypto::TokenId;
+use rodio::{source::Source, Decoder, OutputStream};
 
 use super::Drk;
 
@@ -67,21 +70,22 @@ pub async fn parse_token_pair(drk: &Drk, s: &str) -> Result<(TokenId, TokenId)> 
 }
 
 /// Fun police go away
-pub async fn kaching() -> Result<()> {
-    #[cfg(feature = "play")]
-    {
-        const WALLET_MP3: &[u8] = include_bytes!("../wallet.mp3");
-        const MP3_DROP: &str = "/tmp/wallet.mp3";
+pub async fn kaching() {
+    const WALLET_MP3: &[u8] = include_bytes!("../wallet.mp3");
 
-        if !Path::new(MP3_DROP).exists() {
-            let mut f = File::create(MP3_DROP).await?;
-            f.write_all(WALLET_MP3).await?;
-        }
+    let cursor = Cursor::new(WALLET_MP3);
 
-        if play::play(MP3_DROP).is_err() {
-            return Ok(())
-        }
+    let Ok((_stream, stream_handle)) = OutputStream::try_default() else {
+        return
+    };
+
+    let Ok(source) = Decoder::new(cursor) else {
+        return
+    };
+
+    if let Err(_) = stream_handle.play_raw(source.convert_samples()) {
+        return
     }
 
-    Ok(())
+    sleep(2).await;
 }
