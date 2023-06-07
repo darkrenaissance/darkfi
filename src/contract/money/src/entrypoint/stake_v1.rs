@@ -104,6 +104,12 @@ pub(crate) fn money_stake_process_instruction_v1(
     msg!("[MoneyStakeV1] Validating anonymous input");
     let input = &params.input;
 
+    // Spend hook should be zero so there's no protocol holding the tokens back.
+    if input.spend_hook != pallas::Base::ZERO {
+        msg!("[MoneyStakeV1] Error: Input has a non-zero spend hook set");
+        return Err(MoneyError::SpendHookNonZero.into())
+    }
+
     // Only native token can be staked
     if input.token_commit != pedersen_commitment_base(DARK_TOKEN_ID.inner(), params.token_blind) {
         msg!("[MoneyStakeV1] Error: Input used non-native token");
@@ -130,19 +136,13 @@ pub(crate) fn money_stake_process_instruction_v1(
         return Err(MoneyError::SpendHookOutOfBounds.into())
     }
 
+    // Verify next call corresponds to Consensus::StakeV1 (0x01)
     let next = &calls[next_call_idx as usize];
     if next.contract_id.inner() != CONSENSUS_CONTRACT_ID.inner() {
         msg!("[MoneyStakeV1] Error: Next contract call is not consensus contract");
         return Err(MoneyError::StakeNextCallNotConsensusContract.into())
     }
 
-    // If spend hook is set, check its correctness
-    if input.spend_hook != pallas::Base::ZERO && next.contract_id.inner() != input.spend_hook {
-        msg!("[MoneyStakeV1] Error: Invoking contract call does not match spend hook in input");
-        return Err(MoneyError::SpendHookMismatch.into())
-    }
-
-    // Verify next call corresponds to Consensus::StakeV1 (0x01)
     if next.data[0] != 0x01 {
         msg!("[MoneyStakeV1] Error: Next call function mismatch");
         return Err(MoneyError::NextCallFunctionMissmatch.into())

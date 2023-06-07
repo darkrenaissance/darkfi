@@ -116,10 +116,12 @@ impl MoneyStakeCallBuilder {
         };
         debug!("Finished building input");
 
+        // Create new random blinds and an ephemeral signature key
         let value_blind = pallas::Scalar::random(&mut OsRng);
         let token_blind = pallas::Scalar::random(&mut OsRng);
         let signature_secret = SecretKey::random(&mut OsRng);
         let user_data_blind = pallas::Base::random(&mut OsRng);
+
         info!("Creating stake burn proof for input");
         let (proof, public_inputs) = create_stake_burn_proof(
             &self.burn_zkbin,

@@ -443,6 +443,7 @@ impl ConsensusTestHarness {
             burn_pk: burn_pk.clone(),
         }
         .build()?;
+
         let (
             money_stake_params,
             money_stake_proofs,
@@ -466,6 +467,7 @@ impl ConsensusTestHarness {
             mint_pk: mint_pk.clone(),
         }
         .build()?;
+
         let (consensus_stake_params, consensus_stake_proofs, consensus_stake_secret_key) = (
             consensus_stake_call_debris.params,
             consensus_stake_call_debris.proofs,
@@ -491,10 +493,10 @@ impl ConsensusTestHarness {
 
         // Calculate transaction sizes
         let encoded: Vec<u8> = serialize(&stake_tx);
-        let size = ::std::mem::size_of_val(&*encoded);
+        let size = std::mem::size_of_val(&*encoded);
         tx_action_benchmark.sizes.push(size);
         let base58 = bs58::encode(&encoded).into_string();
-        let size = ::std::mem::size_of_val(&*base58);
+        let size = std::mem::size_of_val(&*base58);
         tx_action_benchmark.broadcasted_sizes.push(size);
 
         Ok((stake_tx, consensus_stake_params, consensus_stake_secret_key))

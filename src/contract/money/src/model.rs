@@ -199,12 +199,14 @@ pub struct MoneyTokenFreezeUpdateV1 {
 
 /// Parameters for `Money::Stake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+// ANCHOR: MoneyStakeParams
 pub struct MoneyStakeParamsV1 {
     /// Blinding factor for `token_id`
     pub token_blind: pallas::Scalar,
     /// Anonymous input
     pub input: Input,
 }
+// ANCHOR_END: MoneyStakeParams
 
 /// State update for `Money::Stake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -239,12 +241,14 @@ pub struct MoneyUnstakeUpdateV1 {
 
 /// Parameters for `Consensus::Stake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+// ANCHOR: ConsensusStakeParams
 pub struct ConsensusStakeParamsV1 {
     /// Burnt token revealed info
     pub input: ConsensusInput,
     /// Anonymous output
     pub output: ConsensusOutput,
 }
+// ANCHOR_END: ConsensusStakeParams
 
 /// State update for `Consensus::Stake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
