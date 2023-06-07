@@ -362,7 +362,7 @@ impl ValidatorState {
         sigma1: pallas::Base,
         sigma2: pallas::Base,
     ) -> Result<Option<(BlockProposal, LeadCoin, pallas::Scalar)>> {
-        let eta = self.consensus.get_eta();
+        let eta = self.consensus.get_previous_eta();
         // Check if node can produce proposals
         if !self.consensus.proposing {
             return Ok(None)
@@ -576,7 +576,7 @@ impl ValidatorState {
 
             // Validate proposal public value against coin creation slot checkpoint
             let (mu_y, mu_rho) = LeadCoin::election_seeds_u64(
-                self.consensus.get_eta(),
+                self.consensus.get_previous_eta(),
                 self.consensus.time_keeper.current_slot(),
             );
             // y

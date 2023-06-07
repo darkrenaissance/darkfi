@@ -156,11 +156,16 @@ impl ConsensusState {
     }
 
     /// Generate current slot checkpoint
-    fn generate_slot_checkpoint(&mut self, sigma1: pallas::Base, sigma2: pallas::Base) {
+    fn generate_slot_checkpoint(
+        &mut self,
+        fork_hashes: Vec<blake3::Hash>,
+        sigma1: pallas::Base,
+        sigma2: pallas::Base,
+    ) {
         let slot = self.time_keeper.current_slot();
-        let eta = self.get_eta();
-        info!(target: "consensus::state", "generate_slot_checkpoint: slot: {:?}, eta: {:?}", slot, eta);
-        let checkpoint = SlotCheckpoint { slot, eta, sigma1, sigma2 };
+        let previous_eta = self.get_previous_eta();
+        let checkpoint = SlotCheckpoint { slot, previous_eta, fork_hashes, sigma1, sigma2 };
+        info!(target: "consensus::state", "generate_slot_checkpoint: {:?}", checkpoint);
         self.slot_checkpoints.push(checkpoint);
     }
 
@@ -176,10 +181,11 @@ impl ConsensusState {
     /// Returns flag to signify if epoch has changed.
     pub async fn epoch_changed(
         &mut self,
+        fork_hashes: Vec<blake3::Hash>,
         sigma1: pallas::Base,
         sigma2: pallas::Base,
     ) -> Result<bool> {
-        self.generate_slot_checkpoint(sigma1, sigma2);
+        self.generate_slot_checkpoint(fork_hashes, sigma1, sigma2);
         let epoch = self.time_keeper.current_epoch();
         if epoch <= self.epoch {
             return Ok(false)
@@ -423,7 +429,7 @@ impl ConsensusState {
             let first_winning = coin.is_leader(
                 sigma1,
                 sigma2,
-                self.get_eta(),
+                self.get_previous_eta(),
                 pallas::Base::from(self.time_keeper.current_slot()),
             );
 
@@ -534,7 +540,7 @@ impl ConsensusState {
 
     /// Utility function to extract leader selection lottery randomness(eta),
     /// defined as the hash of the last block, converted to pallas base.
-    pub fn get_eta(&self) -> pallas::Base {
+    pub fn get_previous_eta(&self) -> pallas::Base {
         let (_, hash) = self.blockchain.last().unwrap();
         let mut bytes: [u8; 32] = *hash.as_bytes();
         // Read first 254 bits
@@ -582,6 +588,22 @@ impl ConsensusState {
                 state_checkpoint.coins_tree = self.coins_tree.clone();
             }
         }
+    }
+
+    /// Retrieve current forks last proposal hashes.
+    /// If node holds no fork, retrieve last canonical hash.
+    pub fn fork_hashes(&self) -> Vec<blake3::Hash> {
+        let mut hashes = vec![];
+        for fork in &self.forks {
+            hashes.push(fork.sequence.last().unwrap().proposal.hash);
+        }
+
+        if hashes.is_empty() {
+            let (_, hash) = self.blockchain.last().unwrap();
+            hashes.push(hash);
+        }
+
+        hashes
     }
 
     /// Auxiliary structure to reset consensus state for a resync
@@ -668,10 +690,11 @@ impl net::Message for ConsensusSlotCheckpointsResponse {
 pub struct SlotCheckpoint {
     /// Slot UID
     pub slot: u64,
-    /// Slot eta
-    // TODO: this should be renamed to previous_eta,
-    //       corresponding to previous block eta.
-    pub eta: pallas::Base,
+    /// Previous slot eta
+    pub previous_eta: pallas::Base,
+    /// Previous slot forks last proposal/block hashes,
+    /// as observed by the validator
+    pub fork_hashes: Vec<blake3::Hash>,
     /// Slot sigma1
     pub sigma1: pallas::Base,
     /// Slot sigma2
@@ -679,17 +702,24 @@ pub struct SlotCheckpoint {
 }
 
 impl SlotCheckpoint {
-    pub fn new(slot: u64, eta: pallas::Base, sigma1: pallas::Base, sigma2: pallas::Base) -> Self {
-        Self { slot, eta, sigma1, sigma2 }
+    pub fn new(
+        slot: u64,
+        previous_eta: pallas::Base,
+        fork_hashes: Vec<blake3::Hash>,
+        sigma1: pallas::Base,
+        sigma2: pallas::Base,
+    ) -> Self {
+        Self { slot, previous_eta, fork_hashes, sigma1, sigma2 }
     }
 
     /// Generate the genesis slot checkpoint.
     pub fn genesis_slot_checkpoint() -> Self {
-        let eta = pallas::Base::zero();
+        let previous_eta = pallas::Base::zero();
+        let fork_hashes = vec![];
         let sigma1 = pallas::Base::zero();
         let sigma2 = pallas::Base::zero();
 
-        Self::new(0, eta, sigma1, sigma2)
+        Self::new(0, previous_eta, fork_hashes, sigma1, sigma2)
     }
 }
 

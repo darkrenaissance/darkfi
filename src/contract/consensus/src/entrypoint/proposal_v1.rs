@@ -97,10 +97,8 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
 
     // Verify eta VRF proof
     let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
-    // NOTE: slot checkpoint eta to be renamed to previous_eta,
-    //       corresponding to previous block eta.
     let mut vrf_input = Vec::with_capacity(32 + 32);
-    vrf_input.extend_from_slice(&slot_checkpoint.eta.to_repr());
+    vrf_input.extend_from_slice(&slot_checkpoint.previous_eta.to_repr());
     vrf_input.extend_from_slice(&slot_pallas.to_repr());
     let vrf_proof = &params.vrf_proof;
     if !vrf_proof.verify(params.input.signature_public, &vrf_input) {

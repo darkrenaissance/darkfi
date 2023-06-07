@@ -113,8 +113,11 @@ pub const HEADSTART: pallas::Base = pallas::Base::from_raw([
 pub struct SlotCheckpoint {
     /// Slot UID
     pub slot: u64,
-    /// Slot eta
-    pub eta: pallas::Base,
+    /// Previous slot eta
+    pub previous_eta: pallas::Base,
+    /// Previous slot forks last proposal/block hashes,
+    /// as observed by the validator
+    pub fork_hashes: Vec<blake3::Hash>,
     /// Slot sigma1
     pub sigma1: pallas::Base,
     /// Slot sigma2

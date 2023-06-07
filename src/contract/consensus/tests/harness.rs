@@ -850,10 +850,13 @@ impl ConsensusTestHarness {
     pub async fn generate_slot_checkpoint(&self, slot: u64) -> Result<SlotCheckpoint> {
         // We grab the genesis slot to generate slot checkpoint
         // using same consensus parameters
+        let faucet = self.holders.get(&Holder::Faucet).unwrap();
+        let fork_hashes = vec![faucet.state.read().await.consensus.genesis_block];
         let genesis_slot = self.get_slot_checkpoint_by_slot(0).await?;
         let slot_checkpoint = SlotCheckpoint {
             slot,
-            eta: genesis_slot.eta,
+            previous_eta: genesis_slot.previous_eta,
+            fork_hashes,
             sigma1: genesis_slot.sigma1,
             sigma2: genesis_slot.sigma2,
         };
