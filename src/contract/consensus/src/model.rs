@@ -77,22 +77,21 @@ pub struct ConsensusUnstakeRequestParamsV1 {
     pub output: Output,
 }
 
-// ==================================
+// ======================================================================
 // Consensus parameters configuration
-// Note: Always verify `pallas::Base` are correct, in case of changes,
-// using pallas_constants tool.
-// ==================================
-
+// NOTE: In case of changes, always verify that the `pallas::Base` consts
+// are correct using the `pallas_constants` tool in `script/research/`.
+// ======================================================================
 /// Number of slots in one epoch
 pub const EPOCH_LENGTH: u64 = 10;
 /// Slot time in seconds
 pub const SLOT_TIME: u64 = 90;
 /// Grace period days target
 pub const GRACE_PERIOD_DAYS: u64 = 2;
-/// Configured block reward
-pub const REWARD: u64 = 1;
+/// Configured block reward (1 DRK == 1 * 10^8)
+pub const REWARD: u64 = 100_000_000;
 /// Reward `pallas::Base`, calculated by: pallas::Base::from(REWARD)
-pub const REWARD_PALLAS: pallas::Base = pallas::Base::from_raw([1, 0, 0, 0]);
+pub const REWARD_PALLAS: pallas::Base = pallas::Base::from_raw([100000000, 0, 0, 0]);
 /// Serial prefix, calculated by: pallas::Base::from(2)
 pub const SERIAL_PREFIX: pallas::Base = pallas::Base::from_raw([2, 0, 0, 0]);
 /// Seed prefix, calculated by: pallas::Base::from(3)

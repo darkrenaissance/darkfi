@@ -44,7 +44,7 @@ fn to_constant(name: &str, x: pallas::Base, public: bool) -> String {
 /// Generate constants for corresponding `pallas::Base`
 fn main() -> Result<()> {
     let mut source = String::new();
-    source.push_str(&to_constant("REWARD_PALLAS", pallas::Base::one(), true));
+    source.push_str(&to_constant("REWARD_PALLAS", pallas::Base::from(100_000_000), true));
     source.push_str(&to_constant("SERIAL_PREFIX", pallas::Base::from(2), true));
     source.push_str(&to_constant("SEED_PREFIX", pallas::Base::from(3), true));
     source.push_str(&to_constant("MU_Y_PREFIX", pallas::Base::from(22), true));

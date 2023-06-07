@@ -67,6 +67,7 @@ impl ConsensusMintRevealed {
     }
 }
 
+/// Create a ZK proof for minting a coin in the Consensus coin state.
 pub fn create_consensus_mint_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,

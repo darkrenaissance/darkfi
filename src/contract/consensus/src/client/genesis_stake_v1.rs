@@ -46,8 +46,10 @@ pub struct ConsensusGenesisStakeCallDebris {
 
 /// Struct holding necessary information to build a `Consensus::GenesisStakeV1` contract call.
 pub struct ConsensusGenesisStakeCallBuilder {
-    /// Caller's keypair
+    /// Signer keypair, this pubkey is in the clear input, and used to sign the tx.
     pub keypair: Keypair,
+    /// Output pubkey, to whom the minted coin goes. The secret should be managed externally.
+    pub recipient: PublicKey,
     /// Amount of tokens we want to mint and stake
     pub amount: u64,
     /// `ConsensusMint_V1` zkas circuit ZkBinary
@@ -65,23 +67,39 @@ impl ConsensusGenesisStakeCallBuilder {
         // In this call, we will build one clear input and one anonymous output.
         // Only DARK_TOKEN_ID can be minted and staked on genesis slot.
         let token_id = *DARK_TOKEN_ID;
+
+        // With genesis, our epoch is 0.
         let epoch = 0;
-        let secret_key = self.keypair.secret;
-        let public_key = PublicKey::from_secret(secret_key);
 
         // We just create the pedersen commitment blinds here. We simply
         // enforce that the clear input and the anon output have the same
         // commitments.
+        let coin_blind = pallas::Base::random(&mut OsRng);
         let value_blind = pallas::Scalar::random(&mut OsRng);
         let token_blind = pallas::Scalar::random(&mut OsRng);
+        let reward_blind = pallas::Scalar::random(&mut OsRng);
+
+        // FIXME: The coin's serial number here is arbitrary, and allows grinding attacks.
         let serial = pallas::Base::random(&mut OsRng);
-        let coin_blind = pallas::Base::random(&mut OsRng);
 
-        let c_input =
-            ClearInput { value, token_id, value_blind, token_blind, signature_public: public_key };
+        // Parameters for the clear input
+        let c_input = ClearInput {
+            value,
+            token_id,
+            value_blind,
+            token_blind,
+            signature_public: self.keypair.public,
+        };
 
-        let output =
-            ConsensusMintOutputInfo { value, epoch, public_key, value_blind, serial, coin_blind };
+        // Parameters for the anonymous output
+        let output = ConsensusMintOutputInfo {
+            value,
+            epoch,
+            public_key: self.recipient,
+            value_blind,
+            serial,
+            coin_blind,
+        };
 
         info!("Creating genesis stake mint proof for output");
         let (proof, public_inputs) =
@@ -95,10 +113,10 @@ impl ConsensusGenesisStakeCallBuilder {
             coin_blind,
             value_blind,
             reward: 0,
-            reward_blind: value_blind,
+            reward_blind,
         };
 
-        let encrypted_note = AeadEncryptedNote::encrypt(&note, &output.public_key, &mut OsRng)?;
+        let encrypted_note = AeadEncryptedNote::encrypt(&note, &self.recipient, &mut OsRng)?;
 
         let output = ConsensusOutput {
             value_commit: public_inputs.value_commit,
