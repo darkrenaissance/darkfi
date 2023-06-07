@@ -25,7 +25,7 @@ use darkfi_money_contract::{
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_NULLIFIERS_TREE,
 };
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, ContractId, MerkleNode, CONSENSUS_CONTRACT_ID, MONEY_CONTRACT_ID},
+    crypto::{pasta_prelude::*, ContractId, MerkleNode, PublicKey, MONEY_CONTRACT_ID},
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     merkle_add, msg,
@@ -48,8 +48,11 @@ pub(crate) fn consensus_stake_get_metadata_v1(
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
-    // Public keys for the transaction signatures we have to verify
-    let signature_pubkeys = vec![params.input.signature_public];
+    // We are already verifying this input's signature through `Money::Stake`,
+    // so it's redundant to verify it here again. However it's important to
+    // compare it with the previous call when we do the state transition to
+    // ensure they're the same.
+    let signature_pubkeys: Vec<PublicKey> = vec![];
 
     // Grab the minting epoch of the verifying slot
     let epoch = get_verifying_slot_epoch();
@@ -95,7 +98,7 @@ pub(crate) fn consensus_stake_process_instruction_v1(
     let input = &params.input;
     let output = &params.output;
 
-    // Verify value commits match
+    // Verify value commitments match
     if output.value_commit != input.value_commit {
         msg!("[ConsensusStakeV1] Error: Value commitments do not match");
         return Err(MoneyError::ValueMismatch.into())

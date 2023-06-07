@@ -20,7 +20,7 @@ use darkfi_sdk::error::ContractError;
 
 #[derive(Debug, Clone, thiserror::Error)]
 // TODO: Make generic contract common errors like
-// NextCallFunctionMissmatch
+// NextCallFunctionMismatch
 pub enum MoneyError {
     #[error("Missing inputs in transfer call")]
     TransferMissingInputs,
