@@ -131,7 +131,7 @@ pub(crate) fn consensus_unstake_process_instruction_v1(
     let next_call_idx = call_idx + 1;
     if next_call_idx >= calls.len() as u32 {
         msg!("[ConsensusUnstakeV1] Error: next_call_idx out of bounds");
-        return Err(MoneyError::SpendHookOutOfBounds.into())
+        return Err(MoneyError::CallIdxOutOfBounds.into())
     }
 
     let next = &calls[next_call_idx as usize];
@@ -143,14 +143,14 @@ pub(crate) fn consensus_unstake_process_instruction_v1(
     // Verify next call corresponds to Money::UnstakeV1 (0x07)
     if next.data[0] != 0x07 {
         msg!("[ConsensusUnstakeV1] Error: Next call function mismatch");
-        return Err(MoneyError::NextCallFunctionMissmatch.into())
+        return Err(MoneyError::NextCallFunctionMismatch.into())
     }
 
     // Verify next call StakeInput is the same as this calls input
     let next_params: MoneyUnstakeParamsV1 = deserialize(&next.data[1..])?;
     if input != &next_params.input {
         msg!("[ConsensusUnstakeV1] Error: Next call input mismatch");
-        return Err(MoneyError::NextCallInputMissmatch.into())
+        return Err(MoneyError::NextCallInputMismatch.into())
     }
 
     // At this point the state transition has passed, so we create a state update

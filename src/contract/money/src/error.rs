@@ -43,8 +43,8 @@ pub enum MoneyError {
     #[error("Duplicate nullifier found")]
     DuplicateNullifier,
 
-    #[error("Spend hook out of bounds")]
-    SpendHookOutOfBounds,
+    #[error("Call index out of bounds")]
+    CallIdxOutOfBounds,
 
     #[error("Spend hook mismatch")]
     SpendHookMismatch,
@@ -101,16 +101,16 @@ pub enum MoneyError {
     UnstakePreviousCallNotConsensusContract,
 
     #[error("Next call function mismatch")]
-    NextCallFunctionMissmatch,
+    NextCallFunctionMismatch,
 
     #[error("Next call input mismatch")]
-    NextCallInputMissmatch,
+    NextCallInputMismatch,
 
     #[error("Previous call function mismatch")]
-    PreviousCallFunctionMissmatch,
+    PreviousCallFunctionMismatch,
 
     #[error("Previous call input mismatch")]
-    PreviousCallInputMissmatch,
+    PreviousCallInputMismatch,
 
     #[error("Call is not executed on genesis slot")]
     GenesisCallNonGenesisSlot,
@@ -126,7 +126,7 @@ impl From<MoneyError> for ContractError {
             MoneyError::TransferClearInputUnauthorised => Self::Custom(5),
             MoneyError::TransferMerkleRootNotFound => Self::Custom(6),
             MoneyError::DuplicateNullifier => Self::Custom(7),
-            MoneyError::SpendHookOutOfBounds => Self::Custom(8),
+            MoneyError::CallIdxOutOfBounds => Self::Custom(8),
             MoneyError::SpendHookMismatch => Self::Custom(9),
             MoneyError::DuplicateCoin => Self::Custom(10),
             MoneyError::ValueMismatch => Self::Custom(11),
@@ -145,10 +145,10 @@ impl From<MoneyError> for ContractError {
             MoneyError::UnstakeSpendHookNotConsensusContract => Self::Custom(24),
             MoneyError::UnstakeNextCallNotMoneyContract => Self::Custom(25),
             MoneyError::UnstakePreviousCallNotConsensusContract => Self::Custom(26),
-            MoneyError::NextCallFunctionMissmatch => Self::Custom(27),
-            MoneyError::NextCallInputMissmatch => Self::Custom(28),
-            MoneyError::PreviousCallFunctionMissmatch => Self::Custom(29),
-            MoneyError::PreviousCallInputMissmatch => Self::Custom(30),
+            MoneyError::NextCallFunctionMismatch => Self::Custom(27),
+            MoneyError::NextCallInputMismatch => Self::Custom(28),
+            MoneyError::PreviousCallFunctionMismatch => Self::Custom(29),
+            MoneyError::PreviousCallInputMismatch => Self::Custom(30),
             MoneyError::GenesisCallNonGenesisSlot => Self::Custom(31),
         }
     }

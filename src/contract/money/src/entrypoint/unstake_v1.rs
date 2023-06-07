@@ -132,7 +132,7 @@ pub(crate) fn money_unstake_process_instruction_v1(
     // Check previous call is consensus contract
     if call_idx == 0 {
         msg!("[MoneyUnstakeV1] Error: previous_call_idx will be out of bounds");
-        return Err(MoneyError::SpendHookOutOfBounds.into())
+        return Err(MoneyError::CallIdxOutOfBounds.into())
     }
 
     let previous_call_idx = call_idx - 1;
@@ -145,7 +145,7 @@ pub(crate) fn money_unstake_process_instruction_v1(
     // Verify previous call corresponds to Consensus::UnstakeV1 (0x04)
     if previous.data[0] != 0x04 {
         msg!("[MoneyUnstakeV1] Error: Previous call function mismatch");
-        return Err(MoneyError::PreviousCallFunctionMissmatch.into())
+        return Err(MoneyError::PreviousCallFunctionMismatch.into())
     }
 
     // Verify previous call input is the same as this calls StakeInput
@@ -153,7 +153,7 @@ pub(crate) fn money_unstake_process_instruction_v1(
     let previous_input = &previous_params.input;
     if previous_input != input {
         msg!("[MoneyUnstakeV1] Error: Previous call input mismatch");
-        return Err(MoneyError::PreviousCallInputMissmatch.into())
+        return Err(MoneyError::PreviousCallInputMismatch.into())
     }
 
     // If next spend hook is set, check its correctness
@@ -161,7 +161,7 @@ pub(crate) fn money_unstake_process_instruction_v1(
         let next_call_idx = call_idx + 1;
         if next_call_idx >= calls.len() as u32 {
             msg!("[MoneyUnstakeV1] Error: next_call_idx out of bounds");
-            return Err(MoneyError::SpendHookOutOfBounds.into())
+            return Err(MoneyError::CallIdxOutOfBounds.into())
         }
 
         let next = &calls[next_call_idx as usize];

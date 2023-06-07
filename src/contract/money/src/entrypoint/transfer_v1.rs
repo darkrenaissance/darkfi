@@ -197,7 +197,7 @@ pub(crate) fn money_transfer_process_instruction_v1(
             let next_call_idx = call_idx + 1;
             if next_call_idx >= calls.len() as u32 {
                 msg!("[TransferV1] Error: next_call_idx out of bounds (input {})", i);
-                return Err(MoneyError::SpendHookOutOfBounds.into())
+                return Err(MoneyError::CallIdxOutOfBounds.into())
             }
 
             let next = &calls[next_call_idx as usize];

@@ -133,7 +133,7 @@ pub(crate) fn money_stake_process_instruction_v1(
     let next_call_idx = call_idx + 1;
     if next_call_idx >= calls.len() as u32 {
         msg!("[MoneyStakeV1] Error: next_call_idx out of bounds");
-        return Err(MoneyError::SpendHookOutOfBounds.into())
+        return Err(MoneyError::CallIdxOutOfBounds.into())
     }
 
     // Verify next call corresponds to Consensus::StakeV1 (0x01)
@@ -145,14 +145,14 @@ pub(crate) fn money_stake_process_instruction_v1(
 
     if next.data[0] != 0x01 {
         msg!("[MoneyStakeV1] Error: Next call function mismatch");
-        return Err(MoneyError::NextCallFunctionMissmatch.into())
+        return Err(MoneyError::NextCallFunctionMismatch.into())
     }
 
     // Verify next call ConsensusInput is the same as this calls input
     let next_params: ConsensusStakeParamsV1 = deserialize(&next.data[1..])?;
     if input != &next_params.input {
         msg!("[MoneyStakeV1] Error: Next call input mismatch");
-        return Err(MoneyError::NextCallInputMissmatch.into())
+        return Err(MoneyError::NextCallInputMismatch.into())
     }
 
     // At this point the state transition has passed, so we create a state update
