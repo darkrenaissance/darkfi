@@ -17,10 +17,12 @@
  */
 
 use darkfi_sdk::{
-    crypto::ContractId,
+    crypto::{pasta_prelude::*, ContractId},
     db::{db_contains_key, db_lookup},
     error::{ContractError, ContractResult},
-    msg, ContractCall,
+    msg,
+    pasta::pallas,
+    ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 

@@ -20,6 +20,7 @@
   - [Anonymous assets](architecture/anonymous_assets.md)
   - [Blockchain](architecture/blockchain.md)
   - [Consensus](architecture/consensus.md)
+    - [GenesisStake](architecture/consensus/genesis_stake.md)
   - [Transactions](architecture/tx_lifetime.md)
   - [Smart Contracts](architecture/smart_contracts.md)
   - [Bridge](architecture/bridge.md)

@@ -27,7 +27,7 @@
 //! are able to abstract away any wallet interfaces to client implementations.
 
 use darkfi_sdk::{
-    crypto::{MerklePosition, Nullifier, SecretKey, TokenId, DARK_TOKEN_ID},
+    crypto::{pasta_prelude::*, MerklePosition, Nullifier, SecretKey, TokenId, DARK_TOKEN_ID},
     pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
