@@ -202,10 +202,12 @@ pub struct MoneyStakeParamsV1 {
 
 /// State update for `Money::Stake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+// ANCHOR: MoneyStakeUpdate
 pub struct MoneyStakeUpdateV1 {
     /// Revealed nullifier
     pub nullifier: Nullifier,
 }
+// ANCHOR_END: MoneyStakeUpdate
 
 /// Parameters for `Money::Unstake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
