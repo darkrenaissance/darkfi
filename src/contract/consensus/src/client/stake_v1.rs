@@ -25,13 +25,10 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{ConsensusNote, OwnCoin},
-    model::{ConsensusInput, ConsensusOutput, ConsensusStakeParamsV1},
+    model::{ConsensusOutput, ConsensusStakeParamsV1, Input},
 };
 use darkfi_sdk::{
-    crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, MerkleNode, Nullifier, PublicKey, SecretKey,
-        DARK_TOKEN_ID,
-    },
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, PublicKey, SecretKey, DARK_TOKEN_ID},
     pasta::pallas,
 };
 use log::{debug, info};
@@ -53,10 +50,8 @@ pub struct ConsensusStakeCallBuilder {
     pub epoch: u64,
     /// Blinding factor for value commitment
     pub value_blind: pallas::Scalar,
-    /// Revealed nullifier
-    pub nullifier: Nullifier,
-    /// Revealed Merkle root
-    pub merkle_root: MerkleNode,
+    /// The money `Input` (comes from the previous `Money::Stake` contract call)
+    pub money_input: Input,
     /// `ConsensusMint_V1` zkas circuit ZkBinary
     pub mint_zkbin: ZkBinary,
     /// Proving key for the `ConsensusMint_V1` zk circuit
@@ -107,17 +102,8 @@ impl ConsensusStakeCallBuilder {
             note: encrypted_note,
         };
 
-        let input = ConsensusInput {
-            epoch: self.epoch,
-            coin: self.coin.coin,
-            value_commit: public_inputs.value_commit,
-            nullifier: self.nullifier,
-            merkle_root: self.merkle_root,
-            signature_public: public_key,
-        };
-
         // We now fill this with necessary stuff
-        let params = ConsensusStakeParamsV1 { input, output };
+        let params = ConsensusStakeParamsV1 { input: self.money_input.clone(), output };
         let proofs = vec![proof];
 
         // Now we should have all the params and zk proof.

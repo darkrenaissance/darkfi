@@ -60,8 +60,8 @@ use darkfi_money_contract::{
         unstake_v1::MoneyUnstakeCallBuilder, ConsensusNote, ConsensusOwnCoin, MoneyNote, OwnCoin,
     },
     model::{
-        Coin, ConsensusOutput, ConsensusStakeParamsV1, MoneyTransferParamsV1, MoneyUnstakeParamsV1,
-        Output,
+        Coin, ConsensusOutput, ConsensusStakeParamsV1, ConsensusUnstakeReqParamsV1,
+        MoneyTransferParamsV1, MoneyUnstakeParamsV1, Output,
     },
     MoneyFunction, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
     CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
@@ -461,8 +461,7 @@ impl ConsensusTestHarness {
             coin: owncoin,
             epoch,
             value_blind: money_stake_value_blind,
-            nullifier: money_stake_params.input.nullifier,
-            merkle_root: money_stake_params.input.merkle_root,
+            money_input: money_stake_params.input.clone(),
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
         }
@@ -619,7 +618,7 @@ impl ConsensusTestHarness {
         holder: Holder,
         slot: u64,
         staked_oc: ConsensusOwnCoin,
-    ) -> Result<(Transaction, ConsensusStakeParamsV1, SecretKey)> {
+    ) -> Result<(Transaction, ConsensusUnstakeReqParamsV1, SecretKey)> {
         let wallet = self.holders.get_mut(&holder).unwrap();
         let (burn_pk, burn_zkbin) =
             self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
@@ -673,7 +672,7 @@ impl ConsensusTestHarness {
         &mut self,
         holder: Holder,
         tx: Transaction,
-        params: &ConsensusStakeParamsV1,
+        params: &ConsensusUnstakeReqParamsV1,
         slot: u64,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(&holder).unwrap();

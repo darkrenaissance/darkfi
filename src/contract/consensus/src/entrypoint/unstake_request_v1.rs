@@ -17,7 +17,7 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError, model::ConsensusStakeParamsV1, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
+    error::MoneyError, model::ConsensusUnstakeReqParamsV1, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
     CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
     CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE,
     CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
@@ -46,7 +46,7 @@ pub(crate) fn consensus_unstake_request_get_metadata_v1(
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: ConsensusStakeParamsV1 = deserialize(&self_.data[1..])?;
+    let params: ConsensusUnstakeReqParamsV1 = deserialize(&self_.data[1..])?;
     let input = &params.input;
     let output = &params.output;
 
@@ -102,7 +102,7 @@ pub(crate) fn consensus_unstake_request_process_instruction_v1(
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: ConsensusStakeParamsV1 = deserialize(&self_.data[1..])?;
+    let params: ConsensusUnstakeReqParamsV1 = deserialize(&self_.data[1..])?;
     let input = &params.input;
     let output = &params.output;
 

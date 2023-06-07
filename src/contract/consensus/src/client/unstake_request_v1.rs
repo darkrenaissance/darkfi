@@ -25,7 +25,7 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{ConsensusNote, ConsensusOwnCoin},
-    model::{ConsensusInput, ConsensusOutput, ConsensusStakeParamsV1},
+    model::{ConsensusInput, ConsensusOutput, ConsensusUnstakeReqParamsV1},
 };
 use darkfi_sdk::{
     crypto::{note::AeadEncryptedNote, pasta_prelude::*, MerkleTree, SecretKey},
@@ -41,7 +41,7 @@ use crate::client::common::{
 };
 
 pub struct ConsensusUnstakeRequestCallDebris {
-    pub params: ConsensusStakeParamsV1,
+    pub params: ConsensusUnstakeReqParamsV1,
     pub proofs: Vec<Proof>,
     pub signature_secret: SecretKey,
 }
@@ -136,7 +136,7 @@ impl ConsensusUnstakeRequestCallBuilder {
         };
 
         // We now fill this with necessary stuff
-        let params = ConsensusStakeParamsV1 { input, output };
+        let params = ConsensusUnstakeReqParamsV1 { input, output };
         let proofs = vec![burn_proof, mint_proof];
 
         // Now we should have all the params, zk proof, and signature secret.

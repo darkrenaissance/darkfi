@@ -251,6 +251,13 @@ pub struct ConsensusStakeUpdateV1 {
 }
 // ANCHOR_END: ConsensusStakeUpdate
 
+/// Parameters for `Consensus::UnstakeRequest`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct ConsensusUnstakeReqParamsV1 {
+    pub input: ConsensusInput,
+    pub output: ConsensusOutput,
+}
+
 /// Parameters for `Consensus::Unstake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ConsensusUnstakeParamsV1 {
