@@ -599,8 +599,7 @@ impl ConsensusState {
         }
 
         if hashes.is_empty() {
-            let (_, hash) = self.blockchain.last().unwrap();
-            hashes.push(hash);
+            hashes.push(self.genesis_block);
         }
 
         hashes

@@ -102,7 +102,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Malicious] Checking proposal before grace period");
     info!(target: "consensus", "[Malicious] =====================================");
     let (proposal_tx, _, _) =
-        th.proposal(Holder::Alice, slot_checkpoint, alice_staked_oc.clone())?;
+        th.proposal(Holder::Alice, slot_checkpoint, alice_staked_oc.clone()).await?;
     th.execute_erroneous_proposal_txs(Holder::Alice, vec![proposal_tx], current_slot, 1).await?;
 
     // We progress after grace period
@@ -116,7 +116,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] Building proposal tx");
     info!(target: "consensus", "[Alice] ====================");
     let (proposal_tx, proposal_params, proposal_secret_key) =
-        th.proposal(Holder::Alice, slot_checkpoint, alice_staked_oc.clone())?;
+        th.proposal(Holder::Alice, slot_checkpoint, alice_staked_oc.clone()).await?;
 
     info!(target: "consensus", "[Faucet] ===========================");
     info!(target: "consensus", "[Faucet] Executing Alice proposal tx");
@@ -194,7 +194,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Malicious] Checking using unstaked coin in proposal");
     info!(target: "consensus", "[Malicious] ========================================");
     let (proposal_tx, _, _) =
-        th.proposal(Holder::Alice, slot_checkpoint, alice_unstake_request_oc.clone())?;
+        th.proposal(Holder::Alice, slot_checkpoint, alice_unstake_request_oc.clone()).await?;
     th.execute_erroneous_proposal_txs(Holder::Alice, vec![proposal_tx], current_slot, 1).await?;
 
     info!(target: "consensus", "[Malicious] =============================");

@@ -511,7 +511,7 @@ impl ConsensusTestHarness {
         Ok(())
     }
 
-    pub fn proposal(
+    pub async fn proposal(
         &mut self,
         holder: Holder,
         slot_checkpoint: SlotCheckpoint,
@@ -523,10 +523,14 @@ impl ConsensusTestHarness {
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::Proposal).unwrap();
         let timer = Instant::now();
 
+        // Proposals always extend genesis block
+        let previous_hash = wallet.state.read().await.consensus.genesis_block;
+
         // Building Consensus::Unstake params
         let proposal_call_debris = ConsensusProposalCallBuilder {
             coin: staked_oc,
             slot_checkpoint,
+            previous_hash,
             tree: wallet.consensus_merkle_tree.clone(),
             proposal_zkbin: proposal_zkbin.clone(),
             proposal_pk: proposal_pk.clone(),

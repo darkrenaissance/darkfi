@@ -23,6 +23,9 @@ pub enum ConsensusError {
     #[error("Missing slot checkpoint from db")]
     ProposalMissingSlotCheckpoint,
 
+    #[error("Proposal extends unknown fork")]
+    ProposalExtendsUnknownFork,
+
     #[error("Eta VRF proof couldn't be verified")]
     ProposalErroneousVrfProof,
 
@@ -37,9 +40,10 @@ impl From<ConsensusError> for ContractError {
     fn from(e: ConsensusError) -> Self {
         match e {
             ConsensusError::ProposalMissingSlotCheckpoint => Self::Custom(1),
-            ConsensusError::ProposalErroneousVrfProof => Self::Custom(2),
-            ConsensusError::CoinStillInGracePeriod => Self::Custom(3),
-            ConsensusError::CoinNotInUnstakeSet => Self::Custom(4),
+            ConsensusError::ProposalExtendsUnknownFork => Self::Custom(2),
+            ConsensusError::ProposalErroneousVrfProof => Self::Custom(3),
+            ConsensusError::CoinStillInGracePeriod => Self::Custom(4),
+            ConsensusError::CoinNotInUnstakeSet => Self::Custom(5),
         }
     }
 }

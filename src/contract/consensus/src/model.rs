@@ -49,6 +49,8 @@ pub struct ConsensusProposalParamsV1 {
     pub new_serial_commit: pallas::Point,
     /// Rewarded slot
     pub slot: u64,
+    /// Extending fork last proposal/block hash
+    pub previous_hash: blake3::Hash,
     /// VRF proof for eta calculation
     pub vrf_proof: VrfProof,
     /// Coin y

@@ -115,6 +115,8 @@ pub struct ConsensusProposalCallBuilder {
     pub coin: ConsensusOwnCoin,
     /// Rewarded slot checkpoint
     pub slot_checkpoint: SlotCheckpoint,
+    /// Extending fork last proposal/block hash
+    pub previous_hash: blake3::Hash,
     /// Merkle tree of coins used to create inclusion proofs
     pub tree: MerkleTree,
     /// `Proposal_V1` zkas circuit ZkBinary
@@ -162,6 +164,7 @@ impl ConsensusProposalCallBuilder {
             &input,
             &output,
             &self.slot_checkpoint,
+            self.previous_hash,
         )?;
 
         let input = ConsensusInput {
@@ -205,6 +208,7 @@ impl ConsensusProposalCallBuilder {
             reward_blind,
             new_serial_commit,
             slot,
+            previous_hash: self.previous_hash,
             vrf_proof,
             y,
             rho,
@@ -225,6 +229,7 @@ pub fn create_proposal_proof(
     input: &ConsensusBurnInputInfo,
     output: &ConsensusMintOutputInfo,
     slot_checkpoint: &SlotCheckpoint,
+    previous_hash: blake3::Hash,
 ) -> Result<(Proof, ConsensusProposalRevealed)> {
     // Proof parameters
     let nullifier = Nullifier::from(poseidon_hash([input.secret.inner(), input.note.serial]));
@@ -278,8 +283,9 @@ pub fn create_proposal_proof(
 
     let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
     let seed = poseidon_hash([SEED_PREFIX, input.note.serial]);
-    let mut vrf_input = Vec::with_capacity(32 + 32);
+    let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
     vrf_input.extend_from_slice(&slot_checkpoint.previous_eta.to_repr());
+    vrf_input.extend_from_slice(previous_hash.as_bytes());
     vrf_input.extend_from_slice(&slot_pallas.to_repr());
     let vrf_proof = VrfProof::prove(input.secret, &vrf_input, &mut OsRng);
     let mut eta = [0u8; 64];

@@ -112,7 +112,9 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     assert!(ALICE_INITIAL == alice_staked_oc.note.value);
 
     // We simulate the proposal of genesis slot
-    let slot_checkpoint = th.get_slot_checkpoint_by_slot(current_slot).await?;
+    // We progress 1 slot and simulate its proposal
+    current_slot += 1;
+    let slot_checkpoint = th.generate_slot_checkpoint(current_slot).await?;
 
     // With alice's current coin value she can become the slot proposer,
     // so she creates a proposal transaction to burn her staked coin,
@@ -121,7 +123,7 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] Building proposal tx");
     info!(target: "consensus", "[Alice] ====================");
     let (proposal_tx, proposal_params, proposal_secret_key) =
-        th.proposal(Holder::Alice, slot_checkpoint, alice_staked_oc.clone())?;
+        th.proposal(Holder::Alice, slot_checkpoint, alice_staked_oc.clone()).await?;
 
     info!(target: "consensus", "[Faucet] ===========================");
     info!(target: "consensus", "[Faucet] Executing Alice proposal tx");
