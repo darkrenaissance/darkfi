@@ -280,9 +280,9 @@ pub fn create_proposal_proof(
     let seed = poseidon_hash([SEED_PREFIX, input.note.serial]);
     // NOTE: slot checkpoint eta to be renamed to previous_eta,
     //       corresponding to previous block eta.
-    let mut vrf_input = [0u8; 64];
-    vrf_input[..32].copy_from_slice(&slot_checkpoint.eta.to_repr());
-    vrf_input[32..].copy_from_slice(&slot_pallas.to_repr());
+    let mut vrf_input = Vec::with_capacity(32 + 32);
+    vrf_input.extend_from_slice(&slot_checkpoint.eta.to_repr());
+    vrf_input.extend_from_slice(&slot_pallas.to_repr());
     let vrf_proof = VrfProof::prove(input.secret, &vrf_input, &mut OsRng);
     let mut eta = [0u8; 64];
     eta[..blake3::OUT_LEN].copy_from_slice(vrf_proof.hash_output().as_bytes());
