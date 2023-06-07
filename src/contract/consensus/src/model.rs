@@ -25,12 +25,14 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 /// Parameters for `Consensus::GenesisStake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+// ANCHOR: ConsensusGenesisStakeParams
 pub struct ConsensusGenesisStakeParamsV1 {
     /// Clear input
     pub input: ClearInput,
     /// Anonymous output
     pub output: ConsensusOutput,
 }
+// ANCHOR_END: ConsensusGenesisStakeParams
 
 /// Parameters for `Consensus::Proposal`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -73,16 +75,19 @@ pub struct ConsensusUnstakeRequestParamsV1 {
     pub output: Output,
 }
 
-/// Consensus parameters configuration.
-/// Note: Always verify `pallas::Base` are correct, in case of changes,
-/// using pallas_constants tool.
+// ==================================
+// Consensus parameters configuration
+// Note: Always verify `pallas::Base` are correct, in case of changes,
+// using pallas_constants tool.
+// ==================================
+
 /// Number of slots in one epoch
 pub const EPOCH_LENGTH: u64 = 10;
 /// Slot time in seconds
 pub const SLOT_TIME: u64 = 90;
 /// Grace period days target
 pub const GRACE_PERIOD_DAYS: u64 = 2;
-/// Configured reward
+/// Configured block reward
 pub const REWARD: u64 = 1;
 /// Reward `pallas::Base`, calculated by: pallas::Base::from(REWARD)
 pub const REWARD_PALLAS: pallas::Base = pallas::Base::from_raw([1, 0, 0, 0]);
@@ -118,7 +123,8 @@ pub struct SlotCheckpoint {
 
 /// Auxiliary function to calculate the grace(locked) period, denominated
 /// in epochs.
-pub fn calculate_grace_period() -> u64 {
+#[inline]
+pub const fn calculate_grace_period() -> u64 {
     // 86400 seconds in a day
     (86400 * GRACE_PERIOD_DAYS) / (SLOT_TIME * EPOCH_LENGTH)
 }

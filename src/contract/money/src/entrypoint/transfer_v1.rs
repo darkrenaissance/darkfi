@@ -31,7 +31,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::MoneyError,
-    model::{MoneyTransferParamsV1, MoneyTransferUpdateV1, PALLAS_ZERO},
+    model::{MoneyTransferParamsV1, MoneyTransferUpdateV1},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_FAUCET_PUBKEYS, MONEY_CONTRACT_INFO_TREE,
     MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
@@ -193,7 +193,7 @@ pub(crate) fn money_transfer_process_instruction_v1(
         }
 
         // If spend hook is set, check its correctness
-        if input.spend_hook != PALLAS_ZERO {
+        if input.spend_hook != pallas::Base::ZERO {
             let next_call_idx = call_idx + 1;
             if next_call_idx >= calls.len() as u32 {
                 msg!("[TransferV1] Error: next_call_idx out of bounds (input {})", i);

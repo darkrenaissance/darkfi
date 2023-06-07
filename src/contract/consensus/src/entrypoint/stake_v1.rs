@@ -18,7 +18,7 @@
 
 use darkfi_money_contract::{
     error::MoneyError,
-    model::{ConsensusStakeParamsV1, ConsensusStakeUpdateV1, MoneyStakeParamsV1, PALLAS_ZERO},
+    model::{ConsensusStakeParamsV1, ConsensusStakeUpdateV1, MoneyStakeParamsV1},
     CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
     CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
     CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
@@ -142,7 +142,7 @@ pub(crate) fn consensus_stake_process_instruction_v1(
     }
 
     // If spend hook is set, check its correctness
-    if previous_input.spend_hook != PALLAS_ZERO &&
+    if previous_input.spend_hook != pallas::Base::ZERO &&
         previous_input.spend_hook != CONSENSUS_CONTRACT_ID.inner()
     {
         msg!("[ConsensusStakeV1] Error: Invoking contract call does not match spend hook in input");

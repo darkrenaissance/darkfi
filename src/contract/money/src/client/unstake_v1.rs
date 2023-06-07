@@ -36,7 +36,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{ConsensusOwnCoin, MoneyNote},
-    model::{Coin, ConsensusInput, MoneyUnstakeParamsV1, Output, PALLAS_ZERO, SCALAR_ZERO},
+    model::{Coin, ConsensusInput, MoneyUnstakeParamsV1, Output},
 };
 
 pub struct MoneyUnstakeCallDebris {
@@ -105,9 +105,9 @@ impl MoneyUnstakeCallBuilder {
         debug!("Finished building output");
 
         let serial = pallas::Base::random(&mut OsRng);
-        let spend_hook = PALLAS_ZERO;
-        let user_data_enc = PALLAS_ZERO;
-        let token_blind = SCALAR_ZERO;
+        let spend_hook = pallas::Base::ZERO;
+        let user_data_enc = pallas::Base::ZERO;
+        let token_blind = pallas::Scalar::ZERO;
         let coin_blind = pallas::Base::random(&mut OsRng);
 
         info!("Creating unstake mint proof for output");

@@ -248,10 +248,12 @@ pub struct ConsensusStakeParamsV1 {
 
 /// State update for `Consensus::Stake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+// ANCHOR: ConsensusStakeUpdate
 pub struct ConsensusStakeUpdateV1 {
     /// The newly minted coin
     pub coin: Coin,
 }
+// ANCHOR_END: ConsensusStakeUpdate
 
 /// Parameters for `Consensus::Unstake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -266,8 +268,3 @@ pub struct ConsensusUnstakeUpdateV1 {
     /// Revealed nullifier
     pub nullifier: Nullifier,
 }
-
-// `pallas::Base` used as prefix/suffix in poseidon hash
-pub const PALLAS_ZERO: pallas::Base = pallas::Base::zero();
-// `pallas::Scalar` used as prefix/suffix in poseidon hash
-pub const SCALAR_ZERO: pallas::Scalar = pallas::Scalar::zero();

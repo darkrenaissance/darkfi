@@ -26,7 +26,7 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{ConsensusNote, ConsensusOwnCoin},
-    model::{Coin, ConsensusInput, ConsensusOutput, PALLAS_ZERO},
+    model::{Coin, ConsensusInput, ConsensusOutput},
 };
 use darkfi_sdk::{
     crypto::{
@@ -271,7 +271,7 @@ pub fn create_proposal_proof(
         new_pub_x,
         new_pub_y,
         new_value_pallas,
-        PALLAS_ZERO,
+        pallas::Base::ZERO,
         new_serial,
         output.coin_blind,
     ]));

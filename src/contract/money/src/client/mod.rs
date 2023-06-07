@@ -32,7 +32,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-use crate::model::{Coin, PALLAS_ZERO, SCALAR_ZERO};
+use crate::model::Coin;
 
 /// `Money::TransferV1` API
 pub mod transfer_v1;
@@ -159,11 +159,11 @@ impl From<ConsensusNote> for MoneyNote {
             serial: consensus_note.serial,
             value: consensus_note.value,
             token_id: *DARK_TOKEN_ID,
-            spend_hook: PALLAS_ZERO,
-            user_data: PALLAS_ZERO,
+            spend_hook: pallas::Base::ZERO,
+            user_data: pallas::Base::ZERO,
             coin_blind: consensus_note.coin_blind,
             value_blind: consensus_note.value_blind,
-            token_blind: SCALAR_ZERO,
+            token_blind: pallas::Scalar::ZERO,
             memo: vec![],
         }
     }

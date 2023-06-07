@@ -31,7 +31,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::MoneyError,
-    model::{ConsensusStakeParamsV1, MoneyStakeParamsV1, MoneyStakeUpdateV1, PALLAS_ZERO},
+    model::{ConsensusStakeParamsV1, MoneyStakeParamsV1, MoneyStakeUpdateV1},
     MoneyFunction, MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_NULLIFIERS_TREE,
     MONEY_CONTRACT_ZKAS_BURN_NS_V1,
 };
@@ -137,7 +137,7 @@ pub(crate) fn money_stake_process_instruction_v1(
     }
 
     // If spend hook is set, check its correctness
-    if input.spend_hook != PALLAS_ZERO && next.contract_id.inner() != input.spend_hook {
+    if input.spend_hook != pallas::Base::ZERO && next.contract_id.inner() != input.spend_hook {
         msg!("[MoneyStakeV1] Error: Invoking contract call does not match spend hook in input");
         return Err(MoneyError::SpendHookMismatch.into())
     }

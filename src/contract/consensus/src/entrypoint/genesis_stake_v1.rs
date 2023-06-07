@@ -17,10 +17,8 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError,
-    model::{ConsensusStakeUpdateV1, PALLAS_ZERO},
-    CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE,
-    CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
+    error::MoneyError, model::ConsensusStakeUpdateV1, CONSENSUS_CONTRACT_COINS_TREE,
+    CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, pedersen_commitment_u64, ContractId, DARK_TOKEN_ID},
@@ -36,6 +34,10 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 use crate::{model::ConsensusGenesisStakeParamsV1, ConsensusFunction};
 
 /// `get_metadata` function for `Consensus::GenesisStakeV1`
+///
+/// Here we gather the signature pubkey from the clear input in order
+/// to verify the transaction, and we extract the necessary public inputs
+/// that go into the `ConsensusMint_V1` proof verification.
 pub(crate) fn consensus_genesis_stake_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
@@ -50,15 +52,14 @@ pub(crate) fn consensus_genesis_stake_get_metadata_v1(
     let signature_pubkeys = vec![params.input.signature_public];
 
     // Genesis stake only happens on epoch 0
-    let epoch = PALLAS_ZERO;
+    let epoch = pallas::Base::ZERO;
 
     // Grab the pedersen commitment from the anonymous output
-    let output = &params.output;
-    let value_coords = output.value_commit.to_affine().coordinates().unwrap();
+    let value_coords = params.output.value_commit.to_affine().coordinates().unwrap();
 
     zk_public_inputs.push((
         CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
-        vec![epoch, output.coin.inner(), *value_coords.x(), *value_coords.y()],
+        vec![epoch, params.output.coin.inner(), *value_coords.x(), *value_coords.y()],
     ));
 
     // Serialize everything gathered and return it
@@ -78,7 +79,7 @@ pub(crate) fn consensus_genesis_stake_process_instruction_v1(
     let self_ = &calls[call_idx as usize];
     let params: ConsensusGenesisStakeParamsV1 = deserialize(&self_.data[1..])?;
 
-    // Verify this contract call is verified against on genesis slot(0).
+    // Verify this contract call is verified on the genesis slot (0).
     let verifying_slot = get_verifying_slot();
     if verifying_slot != 0 {
         msg!("[GenesisStakeV1] Error: Call is executed for slot {}, not genesis", verifying_slot);
@@ -99,19 +100,18 @@ pub(crate) fn consensus_genesis_stake_process_instruction_v1(
     // Check that the coin from the output hasn't existed before.
     let coin = serialize(&params.output.coin);
     if db_contains_key(coins_db, &coin)? {
-        msg!("[GenesisStakeV1] Error: Duplicate coin in output");
+        msg!("[GenesisStakeV1] Error: Output coin was already seen in the set of staked coins");
         return Err(MoneyError::DuplicateCoin.into())
     }
 
     // Check that the coin from the output hasn't existed before in unstake set.
     if db_contains_key(unstaked_coins_db, &coin)? {
-        msg!("[GenesisStakeV1] Error: Duplicate coin in output");
+        msg!("[GenesisStakeV1] Error: Output coin was already seen in the set of unstaked coins");
         return Err(MoneyError::DuplicateCoin.into())
     }
 
-    // Verify that the value commitment match. In here we just
-    // confirm that the clear input and the anon output have the same
-    // commitment.
+    // Verify that the value commitments match. In here we just confirm
+    // that the clear input and the anon output have the same commitment.
     if pedersen_commitment_u64(params.input.value, params.input.value_blind) !=
         params.output.value_commit
     {
