@@ -113,14 +113,6 @@ pub struct ConsensusInput {
     pub signature_public: PublicKey,
 }
 
-impl PartialEq<ConsensusInput> for Input {
-    fn eq(&self, other: &ConsensusInput) -> bool {
-        self.value_commit == other.value_commit &&
-            self.nullifier == other.nullifier &&
-            self.merkle_root == other.merkle_root
-    }
-}
-
 /// A contract call's anonymous output
 #[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Output {
@@ -244,7 +236,7 @@ pub struct MoneyUnstakeUpdateV1 {
 // ANCHOR: ConsensusStakeParams
 pub struct ConsensusStakeParamsV1 {
     /// Burnt token revealed info
-    pub input: ConsensusInput,
+    pub input: Input,
     /// Anonymous output
     pub output: ConsensusOutput,
 }

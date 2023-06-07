@@ -83,6 +83,34 @@ pub(crate) fn consensus_stake_process_instruction_v1(
     let self_ = &calls[call_idx as usize];
     let params: ConsensusStakeParamsV1 = deserialize(&self_.data[1..])?;
 
+    // Check previous call is money contract
+    // FIXME: This changes with Money::Fee
+    if call_idx == 0 {
+        msg!("[ConsensusStakeV1] Error: previous_call_idx will be out of bounds");
+        return Err(MoneyError::CallIdxOutOfBounds.into())
+    }
+
+    // Verify previous call corresponds to Money::StakeV1 (0x06)
+    let previous_call_idx = call_idx - 1;
+    let previous = &calls[previous_call_idx as usize];
+    if previous.contract_id.inner() != MONEY_CONTRACT_ID.inner() {
+        msg!("[ConsensusStakeV1] Error: Previous contract call is not money contract");
+        return Err(MoneyError::StakePreviousCallNotMoneyContract.into())
+    }
+
+    if previous.data[0] != 0x06 {
+        msg!("[ConsensusStakeV1] Error: Previous call function mismatch");
+        return Err(MoneyError::PreviousCallFunctionMismatch.into())
+    }
+
+    // Verify that the previous call's input is the same as this one's
+    let previous_params: MoneyStakeParamsV1 = deserialize(&previous.data[1..])?;
+    let previous_input = &previous_params.input;
+    if previous_input != &params.input {
+        msg!("[ConsensusStakeV1] Error: Previous call input mismatch");
+        return Err(MoneyError::PreviousCallInputMismatch.into())
+    }
+
     // Access the necessary databases where there is information to
     // validate this state transition.
     let consensus_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
@@ -115,41 +143,6 @@ pub(crate) fn consensus_stake_process_instruction_v1(
     if db_contains_key(money_nullifiers_db, &serialize(&input.nullifier))? {
         msg!("[ConsensusStakeV1] Error: Missing nullifier");
         return Err(MoneyError::StakeMissingNullifier.into())
-    }
-
-    // Check previous call is money contract
-    if call_idx == 0 {
-        msg!("[ConsensusStakeV1] Error: previous_call_idx will be out of bounds");
-        return Err(MoneyError::SpendHookOutOfBounds.into())
-    }
-
-    let previous_call_idx = call_idx - 1;
-    let previous = &calls[previous_call_idx as usize];
-    if previous.contract_id.inner() != MONEY_CONTRACT_ID.inner() {
-        msg!("[ConsensusStakeV1] Error: Previous contract call is not money contract");
-        return Err(MoneyError::StakePreviousCallNotMoneyContract.into())
-    }
-
-    // Verify previous call corresponds to Money::StakeV1 (0x06)
-    if previous.data[0] != 0x06 {
-        msg!("[ConsensusStakeV1] Error: Previous call function mismatch");
-        return Err(MoneyError::PreviousCallFunctionMissmatch.into())
-    }
-
-    // Verify previous call input is the same as this calls StakeInput
-    let previous_params: MoneyStakeParamsV1 = deserialize(&previous.data[1..])?;
-    let previous_input = &previous_params.input;
-    if previous_input != input {
-        msg!("[ConsensusStakeV1] Error: Previous call input mismatch");
-        return Err(MoneyError::PreviousCallInputMissmatch.into())
-    }
-
-    // If spend hook is set, check its correctness
-    if previous_input.spend_hook != pallas::Base::ZERO &&
-        previous_input.spend_hook != CONSENSUS_CONTRACT_ID.inner()
-    {
-        msg!("[ConsensusStakeV1] Error: Invoking contract call does not match spend hook in input");
-        return Err(MoneyError::SpendHookMismatch.into())
     }
 
     // Newly created coin for this call is in the output. Here we gather it,
