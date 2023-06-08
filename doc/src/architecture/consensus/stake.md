@@ -26,6 +26,20 @@ The contract calls execute in sequence:
 1. `Money::Stake`
 2. `Consensus::Stake`
 
+The ZK proof we use to prove burning of the coin in _Money_ is the
+`Burn_V1` circuit:
+
+```
+{{#include ../../../../src/contract/money/proof/burn_v1.zk}}
+```
+
+The ZK proof we use to prove minting of the coin in _Consensus_ is the
+`ConsensusMint_V1` circuit:
+
+```
+{{#include ../../../../src/contract/consensus/proof/consensus_mint_v1.zk}}
+```
+
 ## Contract logic
 
 ### [`Money::get_metadata()`](https://github.com/darkrenaissance/darkfi/blob/master/src/contract/money/src/entrypoint/stake_v1.rs#L40)
