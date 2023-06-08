@@ -6,31 +6,31 @@ constant "ConsensusProposal_V1" {
 
 witness "ConsensusProposal_V1" {
 	# Burnt coin secret key
-	Base secret_key,
+	Base input_secret_key,
 	# Unique serial number corresponding to the burnt coin
-	Base serial,
+	Base input_serial,
 	# The value of the burnt coin
-	Base value,
+	Base input_value,
 	# The epoch the burnt coin was minted on
 	Base epoch,
 	# The reward value
 	Base reward,
 	# Random blinding factor for the value commitment
-	Scalar value_blind,
+	Scalar input_value_blind,
 	# Random blinding factor for coin
-	Base coin_blind,
+	Base input_coin_blind,
 	# Leaf position of the coin in the Merkle tree of coins
 	Uint32 leaf_pos,
 	# Merkle path to the coin
 	MerklePath path,
-	# X coordinate for new coins' public key
-	Base new_pub_x,
-	# Y coordinate for new coins' public key
-	Base new_pub_y,
+	# x coordinate for the new coin's public key
+	Base output_pub_x,
+	# y coordinate for new coin's public key
+	Base output_pub_y,
 	# Random blinding factor for the value commitment of the new coin
-	Scalar new_value_blind,
+	Scalar output_value_blind,
 	# Random blinding factor for new coin
-	Base new_coin_blind,
+	Base output_coin_blind,
 	# Election seed y
 	Base mu_y,
 	# Election seed rho
@@ -54,7 +54,7 @@ circuit "ConsensusProposal_V1" {
 	# =============
 
 	# Poseidon hash of the nullifier
-	nullifier = poseidon_hash(secret_key, serial);
+	nullifier = poseidon_hash(input_secret_key, input_serial);
 	constrain_instance(nullifier);
 
 	# Constrain the epoch this coin was minted on.
@@ -63,9 +63,9 @@ circuit "ConsensusProposal_V1" {
 
 	# We derive the coin's public key for the signature and
 	# VRF proof verification and constrain its coordinates:
-	pub = ec_mul_base(secret_key, NULLIFIER_K);
-	pub_x = ec_get_x(pub);
-	pub_y = ec_get_y(pub);
+	input_pub = ec_mul_base(input_secret_key, NULLIFIER_K);
+	pub_x = ec_get_x(input_pub);
+	pub_y = ec_get_y(input_pub);
 	constrain_instance(pub_x);
 	constrain_instance(pub_y);
 
@@ -73,10 +73,10 @@ circuit "ConsensusProposal_V1" {
 	C = poseidon_hash(
 		pub_x,
 		pub_y,
-		value,
+		input_value,
 		epoch,
-		serial,
-		coin_blind,
+		input_serial,
+		input_coin_blind,
 	);
 
 	# Merkle inclusion proof
@@ -84,8 +84,8 @@ circuit "ConsensusProposal_V1" {
 	constrain_instance(root);
 	
 	# Pedersen commitment for burned coin's value
-	vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
-	vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
+	vcv = ec_mul_short(input_value, VALUE_COMMIT_VALUE);
+	vcr = ec_mul(input_value_blind, VALUE_COMMIT_RANDOM);
 	value_commit = ec_add(vcv, vcr);
 	# Since value_commit is a curve point, we fetch its coordinates
 	# and constrain them:
@@ -100,32 +100,32 @@ circuit "ConsensusProposal_V1" {
 	constrain_instance(reward);
 
 	# Pedersen commitment for new coin's value (old value + reward)
-	new_value = base_add(value, reward);
-	nvcv = ec_mul_short(new_value, VALUE_COMMIT_VALUE);
-	nvcr = ec_mul(new_value_blind, VALUE_COMMIT_RANDOM);
-	new_value_commit = ec_add(nvcv, nvcr);
+	output_value = base_add(input_value, reward);
+	nvcv = ec_mul_short(output_value, VALUE_COMMIT_VALUE);
+	nvcr = ec_mul(output_value_blind, VALUE_COMMIT_RANDOM);
+	output_value_commit = ec_add(nvcv, nvcr);
 	# Since the new value commit is also a curve point, we'll do the same
 	# coordinate dance:
-	constrain_instance(ec_get_x(new_value_commit));
-	constrain_instance(ec_get_y(new_value_commit));
+	constrain_instance(ec_get_x(output_value_commit));
+	constrain_instance(ec_get_y(output_value_commit));
 
 	# The serial of the new coin is derived from the old coin
-	new_serial = poseidon_hash(SERIAL_PREFIX, secret_key, serial);
+	output_serial = poseidon_hash(SERIAL_PREFIX, input_secret_key, input_serial);
 	# Poseidon hash of the new coin
 	# In here we set the new epoch as ZERO, thus removing a
 	# potentially existing timelock.
-	new_coin = poseidon_hash(
-		new_pub_x,
-		new_pub_y,
-		new_value,
+	output_coin = poseidon_hash(
+		output_pub_x,
+		output_pub_y,
+		output_value,
 		ZERO,
-		new_serial,
-		new_coin_blind,
+		output_serial,
+		output_coin_blind,
 	);
-	constrain_instance(new_coin);
+	constrain_instance(output_coin);
 
 	# Coin y, constructed with the old serial for seeding:
-	seed = poseidon_hash(SEED_PREFIX, serial);
+	seed = poseidon_hash(SEED_PREFIX, input_serial);
 	y = poseidon_hash(seed, mu_y);
 	constrain_instance(mu_y);
 	constrain_instance(y);
@@ -136,9 +136,9 @@ circuit "ConsensusProposal_V1" {
 	constrain_instance(rho);
 
 	# Calculate lottery target
-	term_1 = base_mul(sigma1, value);
-	term_2 = base_mul(sigma2, value);
-	shifted_term_2 = base_mul(term_2, value);
+	term_1 = base_mul(sigma1, input_value);
+	term_2 = base_mul(sigma2, input_value);
+	shifted_term_2 = base_mul(term_2, input_value);
 	target = base_add(term_1, shifted_term_2);
 	shifted_target = base_add(target, headstart);
 	constrain_instance(sigma1);
