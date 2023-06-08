@@ -137,11 +137,13 @@ pub(crate) fn consensus_unstake_request_process_instruction_v1(
         return Err(MoneyError::DuplicateNullifier.into())
     }
 
+    /*
     // Check that the coin hasn't existed before in unstake set.
     if db_contains_key(unstaked_coins_db, &serialize(&input.coin))? {
         msg!("[ConsensusUnstakeRequestV1] Error: Unstaked coin found in input");
         return Err(MoneyError::DuplicateCoin.into())
     }
+    */
 
     msg!("[ConsensusUnstakeRequestV1] Validating anonymous output");
 

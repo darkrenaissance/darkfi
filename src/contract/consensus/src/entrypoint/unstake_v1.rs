@@ -108,11 +108,13 @@ pub(crate) fn consensus_unstake_process_instruction_v1(
         return Err(ConsensusError::CoinStillInGracePeriod.into())
     }
 
+    /*
     // Check that the coin exists in unstake set.
     if !db_contains_key(unstaked_coins_db, &serialize(&input.coin))? {
         msg!("[GenesisStakeV1] Error: Unstaked coin is not in unstake set");
         return Err(ConsensusError::CoinNotInUnstakeSet.into())
     }
+    */
 
     // The Merkle root is used to know whether this is an unstaked coin that
     // existed in a previous state.

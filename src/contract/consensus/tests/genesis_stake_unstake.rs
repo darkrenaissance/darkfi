@@ -122,7 +122,7 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] ====================");
     info!(target: "consensus", "[Alice] Building proposal tx");
     info!(target: "consensus", "[Alice] ====================");
-    let (proposal_tx, proposal_params, proposal_secret_key) =
+    let (proposal_tx, proposal_params, _proposal_signing_secret_key, proposal_output_secret_key) =
         th.proposal(Holder::Alice, slot_checkpoint, alice_staked_oc.clone()).await?;
 
     info!(target: "consensus", "[Faucet] ===========================");
@@ -142,7 +142,7 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     let alice_rewarded_staked_oc = th.gather_consensus_owncoin(
         Holder::Alice,
         proposal_params.output,
-        Some(proposal_secret_key),
+        Some(proposal_output_secret_key),
     )?;
 
     // Verify values match

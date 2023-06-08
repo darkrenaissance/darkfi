@@ -71,9 +71,6 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
     // Grab the pedersen commitment for the burnt value
     let value_coords = &params.input.value_commit.to_affine().coordinates().unwrap();
 
-    // Grab the pedersen commitment for the minted serial number
-    let new_serial_coords = &params.new_serial_commit.to_affine().coordinates().unwrap();
-
     // Grab the reward pallas
     let reward_pallas = pallas::Base::from(params.reward);
 
@@ -144,8 +141,6 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
             merkle_root,
             *value_coords.x(),
             *value_coords.y(),
-            *new_serial_coords.x(),
-            *new_serial_coords.y(),
             reward_pallas,
             *new_value_coords.x(),
             *new_value_coords.y(),
@@ -211,11 +206,13 @@ pub(crate) fn consensus_proposal_process_instruction_v1(
         return Err(MoneyError::DuplicateNullifier.into())
     }
 
+    /*
     // Check that the coin hasn't existed before in unstake set.
     if db_contains_key(unstaked_coins_db, &serialize(&input.coin))? {
         msg!("[ConsensusProposalV1] Error: Unstaked coin found in input");
         return Err(MoneyError::DuplicateCoin.into())
     }
+    */
 
     // Verify value commits match between burnt and mint inputs
     let mut valcom_total = pallas::Point::identity();

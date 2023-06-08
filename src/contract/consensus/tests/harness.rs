@@ -305,10 +305,10 @@ impl ConsensusTestHarness {
 
         // Calculate transaction sizes
         let encoded: Vec<u8> = serialize(&tx);
-        let size = ::std::mem::size_of_val(&*encoded);
+        let size = std::mem::size_of_val(&*encoded);
         tx_action_benchmark.sizes.push(size);
         let base58 = bs58::encode(&encoded).into_string();
-        let size = ::std::mem::size_of_val(&*base58);
+        let size = std::mem::size_of_val(&*base58);
         tx_action_benchmark.broadcasted_sizes.push(size);
 
         Ok((tx, debris.params))
@@ -371,10 +371,10 @@ impl ConsensusTestHarness {
 
         // Calculate transaction sizes
         let encoded: Vec<u8> = serialize(&genesis_stake_tx);
-        let size = ::std::mem::size_of_val(&*encoded);
+        let size = std::mem::size_of_val(&*encoded);
         tx_action_benchmark.sizes.push(size);
         let base58 = bs58::encode(&encoded).into_string();
-        let size = ::std::mem::size_of_val(&*base58);
+        let size = std::mem::size_of_val(&*base58);
         tx_action_benchmark.broadcasted_sizes.push(size);
 
         Ok((genesis_stake_tx, genesis_stake_params))
@@ -526,7 +526,7 @@ impl ConsensusTestHarness {
         holder: Holder,
         slot_checkpoint: SlotCheckpoint,
         staked_oc: ConsensusOwnCoin,
-    ) -> Result<(Transaction, ConsensusProposalParamsV1, SecretKey)> {
+    ) -> Result<(Transaction, ConsensusProposalParamsV1, SecretKey, SecretKey)> {
         let wallet = self.holders.get_mut(&holder).unwrap();
         let (proposal_pk, proposal_zkbin) =
             self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1).unwrap();
@@ -536,20 +536,22 @@ impl ConsensusTestHarness {
         // Proposals always extend genesis block
         let fork_hash = wallet.state.read().await.consensus.genesis_block;
 
-        // Building Consensus::Unstake params
+        // Building Consensus::Propose params
         let proposal_call_debris = ConsensusProposalCallBuilder {
-            coin: staked_oc,
+            owncoin: staked_oc,
             slot_checkpoint,
             fork_hash,
             fork_previous_hash: fork_hash,
-            tree: wallet.consensus_merkle_tree.clone(),
+            merkle_tree: wallet.consensus_merkle_tree.clone(),
             proposal_zkbin: proposal_zkbin.clone(),
             proposal_pk: proposal_pk.clone(),
         }
         .build()?;
-        let (params, proofs, secret_key) = (
+
+        let (params, proofs, output_keypair, signature_secret_key) = (
             proposal_call_debris.params,
             proposal_call_debris.proofs,
+            proposal_call_debris.keypair,
             proposal_call_debris.signature_secret,
         );
 
@@ -560,19 +562,19 @@ impl ConsensusTestHarness {
         let calls = vec![call];
         let proofs = vec![proofs];
         let mut tx = Transaction { calls, proofs, signatures: vec![] };
-        let sigs = tx.create_sigs(&mut OsRng, &[secret_key])?;
+        let sigs = tx.create_sigs(&mut OsRng, &[signature_secret_key])?;
         tx.signatures = vec![sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());
 
         // Calculate transaction sizes
         let encoded: Vec<u8> = serialize(&tx);
-        let size = ::std::mem::size_of_val(&*encoded);
+        let size = std::mem::size_of_val(&*encoded);
         tx_action_benchmark.sizes.push(size);
         let base58 = bs58::encode(&encoded).into_string();
-        let size = ::std::mem::size_of_val(&*base58);
+        let size = std::mem::size_of_val(&*base58);
         tx_action_benchmark.broadcasted_sizes.push(size);
 
-        Ok((tx, params, secret_key))
+        Ok((tx, params, signature_secret_key, output_keypair.secret))
     }
 
     pub async fn execute_proposal_tx(
@@ -820,7 +822,7 @@ impl ConsensusTestHarness {
         let oc = OwnCoin {
             coin: Coin::from(output.coin),
             note: note.clone(),
-            secret: wallet.keypair.secret,
+            secret: secret_key,
             nullifier: Nullifier::from(poseidon_hash([wallet.keypair.secret.inner(), note.serial])),
             leaf_position,
         };
@@ -844,7 +846,7 @@ impl ConsensusTestHarness {
         let oc = ConsensusOwnCoin {
             coin: Coin::from(output.coin),
             note: note.clone(),
-            secret: wallet.keypair.secret,
+            secret: secret_key,
             nullifier: Nullifier::from(poseidon_hash([wallet.keypair.secret.inner(), note.serial])),
             leaf_position,
         };

@@ -153,7 +153,7 @@ impl ConsensusProposalCallBuilder {
         let output_keypair = Keypair::random(&mut OsRng);
 
         // The output's serial is derived from the old serial
-        let new_serial =
+        let output_serial =
             poseidon_hash([SERIAL_PREFIX, self.owncoin.secret.inner(), self.owncoin.note.serial]);
 
         let output = ConsensusMintOutputInfo {
@@ -161,7 +161,7 @@ impl ConsensusProposalCallBuilder {
             epoch: 0, // We set the epoch as 0 here to eliminate a potential timelock
             public_key: output_keypair.public,
             value_blind: output_value_blind,
-            serial: new_serial,
+            serial: output_serial,
             coin_blind: output_coin_blind,
         };
 
