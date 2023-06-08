@@ -36,6 +36,7 @@ pub struct ConsensusGenesisStakeParamsV1 {
 
 /// Parameters for `Consensus::Proposal`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+// ANCHOR: ConsensusProposalParams
 pub struct ConsensusProposalParamsV1 {
     /// Anonymous input
     pub input: ConsensusInput,
@@ -43,10 +44,8 @@ pub struct ConsensusProposalParamsV1 {
     pub output: ConsensusOutput,
     /// Reward value
     pub reward: u64,
-    /// Blinding factor for reward value
+    /// Revealed blinding factor for reward value
     pub reward_blind: pallas::Scalar,
-    /// Pedersen commitment for the output's serial number
-    pub new_serial_commit: pallas::Point,
     /// Rewarded slot
     pub slot: u64,
     /// Extending fork last proposal/block hash
@@ -60,6 +59,7 @@ pub struct ConsensusProposalParamsV1 {
     /// Lottery rho used
     pub rho: pallas::Base,
 }
+// ANCHOR_END: ConsensusProposalParams
 
 /// State update for `Consensus::Proposal`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -88,8 +88,8 @@ pub struct ConsensusUnstakeRequestParamsV1 {
 pub const EPOCH_LENGTH: u64 = 10;
 /// Slot time in seconds
 pub const SLOT_TIME: u64 = 90;
-/// Grace period days target
-pub const GRACE_PERIOD_DAYS: u64 = 2;
+// Stake/Unstake timelock length in epochs
+pub const GRACE_PERIOD: u64 = calculate_grace_period();
 /// Configured block reward (1 DRK == 1 * 10^8)
 pub const REWARD: u64 = 100_000_000;
 /// Reward `pallas::Base`, calculated by: pallas::Base::from(REWARD)
@@ -130,10 +130,13 @@ pub struct SlotCheckpoint {
     pub sigma2: pallas::Base,
 }
 
-/// Auxiliary function to calculate the grace(locked) period, denominated
+/// Auxiliary function to calculate the grace (locked) period, denominated
 /// in epochs.
 #[inline]
 pub const fn calculate_grace_period() -> u64 {
+    // Grace period days target
+    const GRACE_PERIOD_DAYS: u64 = 2;
+
     // 86400 seconds in a day
     (86400 * GRACE_PERIOD_DAYS) / (SLOT_TIME * EPOCH_LENGTH)
 }

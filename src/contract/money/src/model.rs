@@ -101,8 +101,6 @@ pub struct Input {
 pub struct ConsensusInput {
     /// Epoch the coin was minted
     pub epoch: u64,
-    /// The coin
-    pub coin: Coin,
     /// Pedersen commitment for the staked coin's value
     pub value_commit: pallas::Point,
     /// Revealed nullifier
