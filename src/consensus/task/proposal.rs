@@ -186,14 +186,18 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
     // Keep a record of slot to verify if next slot got skipped during processing
     let processing_slot = state.read().await.consensus.time_keeper.current_slot();
 
-    // Retrieve current forks last hash
-    let fork_hashes = state.read().await.consensus.fork_hashes();
+    // Retrieve current forks last and second to last hash
+    let (fork_hashes, fork_previous_hashes) = state.read().await.consensus.fork_hashes();
 
     // Retrieve slot sigmas
     let (sigma1, sigma2) = state.write().await.consensus.sigmas();
     // Node checks if epoch has changed and generate slot checkpoint
-    let epoch_changed =
-        state.write().await.consensus.epoch_changed(fork_hashes, sigma1, sigma2).await;
+    let epoch_changed = state
+        .write()
+        .await
+        .consensus
+        .epoch_changed(fork_hashes, fork_previous_hashes, sigma1, sigma2)
+        .await;
     match epoch_changed {
         Ok(changed) => {
             if changed {

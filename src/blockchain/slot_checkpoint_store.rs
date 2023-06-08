@@ -30,13 +30,13 @@ pub struct SlotCheckpointStore(sled::Tree);
 
 impl SlotCheckpointStore {
     /// Opens a new or existing `SlotCheckpointStore` on the given sled database.
-    pub fn new(db: &sled::Db) -> Result<Self> {
+    pub fn new(db: &sled::Db, genesis_block: blake3::Hash) -> Result<Self> {
         let tree = db.open_tree(SLED_SLOT_CHECKPOINT_TREE)?;
         let store = Self(tree);
 
         // In case the store is empty, initialize it with the genesis checkpoint.
         if store.0.is_empty() {
-            let genesis_checkpoint = SlotCheckpoint::genesis_slot_checkpoint();
+            let genesis_checkpoint = SlotCheckpoint::genesis_slot_checkpoint(genesis_block);
             store.insert(&[genesis_checkpoint])?;
         }
 

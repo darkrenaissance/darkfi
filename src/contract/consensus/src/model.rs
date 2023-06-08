@@ -50,7 +50,9 @@ pub struct ConsensusProposalParamsV1 {
     /// Rewarded slot
     pub slot: u64,
     /// Extending fork last proposal/block hash
-    pub previous_hash: blake3::Hash,
+    pub fork_hash: blake3::Hash,
+    /// Extending fork second to last proposal/block hash
+    pub fork_previous_hash: blake3::Hash,
     /// VRF proof for eta calculation
     pub vrf_proof: VrfProof,
     /// Coin y
@@ -119,6 +121,9 @@ pub struct SlotCheckpoint {
     /// Previous slot forks last proposal/block hashes,
     /// as observed by the validator
     pub fork_hashes: Vec<blake3::Hash>,
+    /// Previous slot second to last proposal/block hashes,
+    /// as observed by the validator
+    pub fork_previous_hashes: Vec<blake3::Hash>,
     /// Slot sigma1
     pub sigma1: pallas::Base,
     /// Slot sigma2

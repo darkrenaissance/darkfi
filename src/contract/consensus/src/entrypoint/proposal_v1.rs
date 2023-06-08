@@ -96,8 +96,19 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
     let slot_checkpoint: SlotCheckpoint = deserialize(&slot_checkpoint)?;
 
     // Verify proposal extends a known fork
-    if !slot_checkpoint.fork_hashes.contains(&params.previous_hash) {
-        msg!("[ConsensusProposalV1] Error: Proposal extends unknown fork {}", params.previous_hash);
+    if !slot_checkpoint.fork_hashes.contains(&params.fork_hash) {
+        msg!("[ConsensusProposalV1] Error: Proposal extends unknown fork {}", params.fork_hash);
+        return Err(ConsensusError::ProposalExtendsUnknownFork.into())
+    }
+
+    // TODO: add fork rank check using params.fork_hash
+
+    // And sequence is correct
+    if !slot_checkpoint.fork_previous_hashes.contains(&params.fork_previous_hash) {
+        msg!(
+            "[ConsensusProposalV1] Error: Proposal extends unknown fork {}",
+            params.fork_previous_hash
+        );
         return Err(ConsensusError::ProposalExtendsUnknownFork.into())
     }
 
@@ -105,7 +116,7 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
     let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
     let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
     vrf_input.extend_from_slice(&slot_checkpoint.previous_eta.to_repr());
-    vrf_input.extend_from_slice(params.previous_hash.as_bytes());
+    vrf_input.extend_from_slice(params.fork_previous_hash.as_bytes());
     vrf_input.extend_from_slice(&slot_pallas.to_repr());
     let vrf_proof = &params.vrf_proof;
     if !vrf_proof.verify(params.input.signature_public, &vrf_input) {

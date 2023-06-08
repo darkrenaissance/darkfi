@@ -534,13 +534,14 @@ impl ConsensusTestHarness {
         let timer = Instant::now();
 
         // Proposals always extend genesis block
-        let previous_hash = wallet.state.read().await.consensus.genesis_block;
+        let fork_hash = wallet.state.read().await.consensus.genesis_block;
 
         // Building Consensus::Unstake params
         let proposal_call_debris = ConsensusProposalCallBuilder {
             coin: staked_oc,
             slot_checkpoint,
-            previous_hash,
+            fork_hash,
+            fork_previous_hash: fork_hash,
             tree: wallet.consensus_merkle_tree.clone(),
             proposal_zkbin: proposal_zkbin.clone(),
             proposal_pk: proposal_pk.clone(),
@@ -865,12 +866,15 @@ impl ConsensusTestHarness {
         // We grab the genesis slot to generate slot checkpoint
         // using same consensus parameters
         let faucet = self.holders.get(&Holder::Faucet).unwrap();
-        let fork_hashes = vec![faucet.state.read().await.consensus.genesis_block];
+        let genesis_block = faucet.state.read().await.consensus.genesis_block;
+        let fork_hashes = vec![genesis_block];
+        let fork_previous_hashes = vec![genesis_block];
         let genesis_slot = self.get_slot_checkpoint_by_slot(0).await?;
         let slot_checkpoint = SlotCheckpoint {
             slot,
             previous_eta: genesis_slot.previous_eta,
             fork_hashes,
+            fork_previous_hashes,
             sigma1: genesis_slot.sigma1,
             sigma2: genesis_slot.sigma2,
         };

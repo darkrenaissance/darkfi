@@ -74,7 +74,7 @@ impl Blockchain {
         let headers = HeaderStore::new(db, genesis_ts, genesis_data)?;
         let blocks = BlockStore::new(db, genesis_ts, genesis_data)?;
         let order = BlockOrderStore::new(db, genesis_ts, genesis_data)?;
-        let slot_checkpoints = SlotCheckpointStore::new(db)?;
+        let slot_checkpoints = SlotCheckpointStore::new(db, genesis_data)?;
         let transactions = TxStore::new(db)?;
         let pending_txs = PendingTxStore::new(db)?;
         let pending_txs_order = PendingTxOrderStore::new(db)?;
