@@ -23,8 +23,6 @@ witness "ConsensusProposal_V1" {
 	Uint32 leaf_pos,
 	# Merkle path to the coin
 	MerklePath path,
-	# Random blinding factor for the serial number of the new coin
-	Scalar new_serial_blind,
 	# X coordinate for new coins' public key
 	Base new_pub_x,
 	# Y coordinate for new coins' public key
@@ -46,27 +44,32 @@ witness "ConsensusProposal_V1" {
 }
 
 circuit "ConsensusProposal_V1" {
-	# Constants
+	# Witnessed constants
 	ZERO = witness_base(0);
 	SERIAL_PREFIX = witness_base(2);
 	SEED_PREFIX = witness_base(3);
+
+	# =============
+	# Burn old coin
+	# =============
 
 	# Poseidon hash of the nullifier
 	nullifier = poseidon_hash(secret_key, serial);
 	constrain_instance(nullifier);
 
-	# Constrain the epoch this coin was minted on
+	# Constrain the epoch this coin was minted on.
+	# We use this as our timelock mechanism.
 	constrain_instance(epoch);
 
-	# We derive coins' public key for the signature and
-	# VRF proof and constrain its coordinates:
+	# We derive the coin's public key for the signature and
+	# VRF proof verification and constrain its coordinates:
 	pub = ec_mul_base(secret_key, NULLIFIER_K);
 	pub_x = ec_get_x(pub);
 	pub_y = ec_get_y(pub);
 	constrain_instance(pub_x);
 	constrain_instance(pub_y);
 
-	# Coin hash	
+	# Construct the burned coin
 	C = poseidon_hash(
 		pub_x,
 		pub_y,
@@ -76,11 +79,11 @@ circuit "ConsensusProposal_V1" {
 		coin_blind,
 	);
 
-	# Merkle root
+	# Merkle inclusion proof
 	root = merkle_root(leaf_pos, path, C);
 	constrain_instance(root);
 	
-	# Pedersen commitment for coin's value
+	# Pedersen commitment for burned coin's value
 	vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
 	vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
 	value_commit = ec_add(vcv, vcr);
@@ -89,20 +92,14 @@ circuit "ConsensusProposal_V1" {
 	constrain_instance(ec_get_x(value_commit));
 	constrain_instance(ec_get_y(value_commit));
 
-	# Derive new coin serial from burnt one and constrain the pedersen commitment
-	new_serial = poseidon_hash(SERIAL_PREFIX, secret_key, serial);
-	scv = ec_mul_base(new_serial, NULLIFIER_K);
-	scr = ec_mul(new_serial_blind, VALUE_COMMIT_RANDOM);
-	serial_commit = ec_add(scv, scr);
-	# Since serial commit is also a curve point, we'll do the same
-	# coordinate dance:
-	constrain_instance(ec_get_x(serial_commit));
-	constrain_instance(ec_get_y(serial_commit));
+	# =============
+	# Mint new coin
+	# =============
 
 	# Constrain reward value
 	constrain_instance(reward);
 
-	# Pedersen commitment for new coin's value
+	# Pedersen commitment for new coin's value (old value + reward)
 	new_value = base_add(value, reward);
 	nvcv = ec_mul_short(new_value, VALUE_COMMIT_VALUE);
 	nvcr = ec_mul(new_value_blind, VALUE_COMMIT_RANDOM);
@@ -112,7 +109,11 @@ circuit "ConsensusProposal_V1" {
 	constrain_instance(ec_get_x(new_value_commit));
 	constrain_instance(ec_get_y(new_value_commit));
 
+	# The serial of the new coin is derived from the old coin
+	new_serial = poseidon_hash(SERIAL_PREFIX, secret_key, serial);
 	# Poseidon hash of the new coin
+	# In here we set the new epoch as ZERO, thus removing a
+	# potentially existing timelock.
 	new_coin = poseidon_hash(
 		new_pub_x,
 		new_pub_y,
@@ -123,13 +124,13 @@ circuit "ConsensusProposal_V1" {
 	);
 	constrain_instance(new_coin);
 
-	# Coin y:
+	# Coin y, constructed with the old serial for seeding:
 	seed = poseidon_hash(SEED_PREFIX, serial);
 	y = poseidon_hash(seed, mu_y);
 	constrain_instance(mu_y);
 	constrain_instance(y);
 
-	# Coin rho(seed):
+	# Coin rho (seed):
 	rho = poseidon_hash(seed, mu_rho);
 	constrain_instance(mu_rho);
 	constrain_instance(rho);
