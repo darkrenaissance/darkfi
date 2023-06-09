@@ -8,7 +8,7 @@ tunned with a discrete controller to achieve a stable supply.
 ## Blockchain
 
 Blockchain $\mathbb{C_{loc}}$ is a series of epochs: it's a tree of chains,
-$C^1$, $C^2$, $\dots$, $C^n$, the chain ending in a single leader per slot singls finalization.
+$C^1$, $C^2$, $\dots$, $C^n$, the chain ending in a single leader per slot single finalization.
 
 Crypsinous Blockchain is built on top of Zerocash sapling scheme, and Ouroboros Genesis  blockchain.
 Each participant $U_p$ stores it's own local view of the Blockchain $C_{loc}^{U_p}$.
