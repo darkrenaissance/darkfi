@@ -46,8 +46,6 @@ pub struct ConsensusProposalParamsV1 {
     pub reward: u64,
     /// Revealed blinding factor for reward value
     pub reward_blind: pallas::Scalar,
-    /// Rewarded slot
-    pub slot: u64,
     /// Extending fork last proposal/block hash
     pub fork_hash: blake3::Hash,
     /// Extending fork second to last proposal/block hash

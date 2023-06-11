@@ -215,7 +215,6 @@ impl ConsensusProposalCallBuilder {
             output: tx_output,
             reward: REWARD,
             reward_blind: output_reward_blind,
-            slot: self.slot_checkpoint.slot,
             fork_hash: self.fork_hash,
             fork_previous_hash: self.fork_previous_hash,
             vrf_proof,
