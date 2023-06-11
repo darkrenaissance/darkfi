@@ -124,6 +124,10 @@ circuit "ConsensusProposal_V1" {
 	);
 	constrain_instance(output_coin);
 
+	# ============================
+	# Constrain lottery parameters
+	# ============================
+
 	# Coin y, constructed with the old serial for seeding:
 	seed = poseidon_hash(SEED_PREFIX, input_serial);
 	y = poseidon_hash(seed, mu_y);
