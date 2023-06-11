@@ -19,8 +19,7 @@
 use darkfi_money_contract::{
     error::MoneyError, CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
     CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
-    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE,
-    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1,
+    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode},
@@ -36,8 +35,8 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 use crate::{
     error::ConsensusError,
     model::{
-        calculate_grace_period, ConsensusProposalParamsV1, ConsensusProposalUpdateV1,
-        SlotCheckpoint, HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX,
+        ConsensusProposalParamsV1, ConsensusProposalUpdateV1, SlotCheckpoint, GRACE_PERIOD,
+        HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX,
     },
     ConsensusFunction,
 };
@@ -53,44 +52,27 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
-    // Public keys for the transaction signatures we have to verify
+    // Public keys for the transaction signatures we have to verify.
+    // The transaction should be signed with the same key that is used for
+    // the VRF proof, and also constrained in ZK by enforcing its derivation.
     let signature_pubkeys = vec![params.input.signature_public];
-
-    // Grab the nullifier for the burnt coin
-    let nullifier = &params.input.nullifier;
-
-    // Grab the mint epoch pallas for the burnt coin
-    let epoch_pallas = pallas::Base::from(params.input.epoch);
 
     // Grab the public key coordinates for the burnt coin
     let (pub_x, pub_y) = &params.input.signature_public.xy();
 
-    // Grab the burnt coin merkle root
-    let merkle_root = params.input.merkle_root.inner();
-
     // Grab the pedersen commitment for the burnt value
-    let value_coords = &params.input.value_commit.to_affine().coordinates().unwrap();
-
-    // Grab the reward pallas
-    let reward_pallas = pallas::Base::from(params.reward);
+    let input_value_coords = &params.input.value_commit.to_affine().coordinates().unwrap();
 
     // Grab the pedersen commitment for the minted value
-    let new_value_coords = &params.output.value_commit.to_affine().coordinates().unwrap();
+    let output_value_coords = &params.output.value_commit.to_affine().coordinates().unwrap();
 
-    // Grab the new coin
-    let new_coin = params.output.coin.inner();
-
-    // Grab proposal coin y and rho for lottery
-    let y = &params.y;
-    let rho = &params.rho;
-
-    // Grab the slot checkpoint to validate consensus parameters against
-    let slot = &params.slot;
-    let Some(slot_checkpoint) = get_slot_checkpoint(*slot)? else {
-        msg!("[ConsensusProposalV1] Error: Missing slot checkpoint {} from db", slot);
+    // Grab the slot checkpoint to validate consensus params against
+    let Some(slot_checkpoint) = get_slot_checkpoint(params.slot)? else {
+        msg!("[ConsensusProposalV1] Error: Missing slot checkpoint {} from db", params.slot);
         return Err(ConsensusError::ProposalMissingSlotCheckpoint.into())
     };
     let slot_checkpoint: SlotCheckpoint = deserialize(&slot_checkpoint)?;
+    let slot_fp = pallas::Base::from(slot_checkpoint.slot);
 
     // Verify proposal extends a known fork
     if !slot_checkpoint.fork_hashes.contains(&params.fork_hash) {
@@ -98,35 +80,35 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
         return Err(ConsensusError::ProposalExtendsUnknownFork.into())
     }
 
-    // TODO: add fork rank check using params.fork_hash
+    // TODO: Add fork rank check using params.fork_hash
 
-    // And sequence is correct
+    // Verify sequence is correct
     if !slot_checkpoint.fork_previous_hashes.contains(&params.fork_previous_hash) {
-        msg!(
-            "[ConsensusProposalV1] Error: Proposal extends unknown fork {}",
-            params.fork_previous_hash
-        );
+        let fork_prev = &params.fork_previous_hash;
+        msg!("[ConsensusProposalV1] Error: Proposal extends unknown fork {}", fork_prev);
         return Err(ConsensusError::ProposalExtendsUnknownFork.into())
     }
 
-    // Verify eta VRF proof
-    let slot_pallas = pallas::Base::from(slot_checkpoint.slot);
+    // Construct VRF input
     let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
     vrf_input.extend_from_slice(&slot_checkpoint.previous_eta.to_repr());
     vrf_input.extend_from_slice(params.fork_previous_hash.as_bytes());
-    vrf_input.extend_from_slice(&slot_pallas.to_repr());
-    let vrf_proof = &params.vrf_proof;
-    if !vrf_proof.verify(params.input.signature_public, &vrf_input) {
+    vrf_input.extend_from_slice(&slot_fp.to_repr());
+
+    // Verify VRF proof
+    if !params.vrf_proof.verify(params.input.signature_public, &vrf_input) {
         msg!("[ConsensusProposalV1] Error: eta VRF proof couldn't be verified");
         return Err(ConsensusError::ProposalErroneousVrfProof.into())
     }
+
+    // Construct eta
     let mut eta = [0u8; 64];
-    eta[..blake3::OUT_LEN].copy_from_slice(vrf_proof.hash_output().as_bytes());
+    eta[..blake3::OUT_LEN].copy_from_slice(params.vrf_proof.hash_output().as_bytes());
     let eta = pallas::Base::from_uniform_bytes(&eta);
 
     // Calculate election seeds
-    let mu_y = poseidon_hash([MU_Y_PREFIX, eta, slot_pallas]);
-    let mu_rho = poseidon_hash([MU_RHO_PREFIX, eta, slot_pallas]);
+    let mu_y = poseidon_hash([MU_Y_PREFIX, eta, slot_fp]);
+    let mu_rho = poseidon_hash([MU_RHO_PREFIX, eta, slot_fp]);
 
     // Grab sigmas from slot checkpoint
     let (sigma1, sigma2) = (slot_checkpoint.sigma1, slot_checkpoint.sigma2);
@@ -134,21 +116,21 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
     zk_public_inputs.push((
         CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1.to_string(),
         vec![
-            nullifier.inner(),
-            epoch_pallas,
+            params.input.nullifier.inner(),
+            pallas::Base::from(params.input.epoch),
             *pub_x,
             *pub_y,
-            merkle_root,
-            *value_coords.x(),
-            *value_coords.y(),
-            reward_pallas,
-            *new_value_coords.x(),
-            *new_value_coords.y(),
-            new_coin,
+            params.input.merkle_root.inner(),
+            *input_value_coords.x(),
+            *input_value_coords.y(),
+            pallas::Base::from(params.reward),
+            *output_value_coords.x(),
+            *output_value_coords.y(),
+            params.output.coin.inner(),
             mu_y,
-            *y,
+            params.y,
             mu_rho,
-            *rho,
+            params.rho,
             sigma1,
             sigma2,
             HEADSTART,
@@ -179,7 +161,6 @@ pub(crate) fn consensus_proposal_process_instruction_v1(
     let nullifiers_db = db_lookup(cid, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
     let coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
     let coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
-    let unstaked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE)?;
 
     // ===================================
     // Perform the actual state transition
@@ -188,7 +169,10 @@ pub(crate) fn consensus_proposal_process_instruction_v1(
     msg!("[ConsensusProposalV1] Validating anonymous input");
 
     // The coin has passed through the grace period and is allowed to propose.
-    if input.epoch != 0 && get_verifying_slot_epoch() - input.epoch <= calculate_grace_period() {
+    // Important to note is that the epoch has to be enforced through ZK. The
+    // only time when the epoch of the burned coin can be zero is when there
+    // was a previous winning proposal, or the coin was minted at genesis.
+    if input.epoch != 0 && get_verifying_slot_epoch() - input.epoch <= GRACE_PERIOD {
         msg!("[ConsensusProposalV1] Error: Coin is not allowed to make proposals yet");
         return Err(ConsensusError::CoinStillInGracePeriod.into())
     }
@@ -206,15 +190,8 @@ pub(crate) fn consensus_proposal_process_instruction_v1(
         return Err(MoneyError::DuplicateNullifier.into())
     }
 
-    /*
-    // Check that the coin hasn't existed before in unstake set.
-    if db_contains_key(unstaked_coins_db, &serialize(&input.coin))? {
-        msg!("[ConsensusProposalV1] Error: Unstaked coin found in input");
-        return Err(MoneyError::DuplicateCoin.into())
-    }
-    */
-
-    // Verify value commits match between burnt and mint inputs
+    // Verify value commits match between burnt and mint inputs.
+    // Here we check that input+reward == output
     let mut valcom_total = pallas::Point::identity();
     valcom_total += input.value_commit;
     valcom_total += pedersen_commitment_u64(params.reward, params.reward_blind);
@@ -224,17 +201,10 @@ pub(crate) fn consensus_proposal_process_instruction_v1(
         return Err(MoneyError::ValueMismatch.into())
     }
 
-    // Newly created coin for this call is in the output. Here we gather it,
-    // and we also check that it hasn't existed before.
-    let coin = serialize(&output.coin);
-    if db_contains_key(coins_db, &coin)? {
+    // Newly created coin for this call is in the output. Here we check that
+    // it hasn't existed before.
+    if db_contains_key(coins_db, &serialize(&output.coin))? {
         msg!("[ConsensusProposalV1] Error: Duplicate coin found in output");
-        return Err(MoneyError::DuplicateCoin.into())
-    }
-
-    // Check that the coin hasn't existed before in unstake set.
-    if db_contains_key(unstaked_coins_db, &coin)? {
-        msg!("[ConsensusProposalV1] Error: Unstaked coin found in output");
         return Err(MoneyError::DuplicateCoin.into())
     }
 
@@ -243,8 +213,6 @@ pub(crate) fn consensus_proposal_process_instruction_v1(
     let mut update_data = vec![];
     update_data.write_u8(ConsensusFunction::ProposalV1 as u8)?;
     update.encode(&mut update_data)?;
-
-    // and return it
     Ok(update_data)
 }
 
