@@ -63,12 +63,14 @@ pub struct ConsensusProposalParamsV1 {
 
 /// State update for `Consensus::Proposal`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+// ANCHOR: ConsensusProposalUpdate
 pub struct ConsensusProposalUpdateV1 {
     /// Revealed nullifier
     pub nullifier: Nullifier,
     /// The newly minted coin
     pub coin: Coin,
 }
+// ANCHOR_END: ConsensusProposalUpdate
 
 /// Parameters for `Consensus::UnstakeRequest`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]

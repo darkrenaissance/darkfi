@@ -27,7 +27,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     merkle_add, msg,
     pasta::{group::ff::FromUniformBytes, pallas},
-    util::{get_slot_checkpoint, get_verifying_slot_epoch},
+    util::{get_slot_checkpoint, get_verifying_slot, get_verifying_slot_epoch},
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -36,7 +36,7 @@ use crate::{
     error::ConsensusError,
     model::{
         ConsensusProposalParamsV1, ConsensusProposalUpdateV1, SlotCheckpoint, GRACE_PERIOD,
-        HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX,
+        HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX, REWARD, REWARD_PALLAS,
     },
     ConsensusFunction,
 };
@@ -67,8 +67,9 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
     let output_value_coords = &params.output.value_commit.to_affine().coordinates().unwrap();
 
     // Grab the slot checkpoint to validate consensus params against
-    let Some(slot_checkpoint) = get_slot_checkpoint(params.slot)? else {
-        msg!("[ConsensusProposalV1] Error: Missing slot checkpoint {} from db", params.slot);
+    let v_slot = get_verifying_slot();
+    let Some(slot_checkpoint) = get_slot_checkpoint(v_slot)? else {
+        msg!("[ConsensusProposalV1] Error: Missing slot checkpoint {} from db", v_slot);
         return Err(ConsensusError::ProposalMissingSlotCheckpoint.into())
     };
     let slot_checkpoint: SlotCheckpoint = deserialize(&slot_checkpoint)?;
@@ -123,7 +124,7 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
             params.input.merkle_root.inner(),
             *input_value_coords.x(),
             *input_value_coords.y(),
-            pallas::Base::from(params.reward),
+            REWARD_PALLAS,
             *output_value_coords.x(),
             *output_value_coords.y(),
             params.output.coin.inner(),
@@ -194,7 +195,7 @@ pub(crate) fn consensus_proposal_process_instruction_v1(
     // Here we check that input+reward == output
     let mut valcom_total = pallas::Point::identity();
     valcom_total += input.value_commit;
-    valcom_total += pedersen_commitment_u64(params.reward, params.reward_blind);
+    valcom_total += pedersen_commitment_u64(REWARD, params.reward_blind);
     valcom_total -= output.value_commit;
     if valcom_total != pallas::Point::identity() {
         msg!("[ConsensusProposalV1] Error: Value commitments do not result in identity");
