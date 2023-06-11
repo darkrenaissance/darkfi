@@ -19,8 +19,8 @@
 use darkfi_money_contract::{
     error::MoneyError,
     model::{ConsensusStakeParamsV1, ConsensusStakeUpdateV1, MoneyStakeParamsV1},
-    CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
-    CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
+    CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_STAKED_COINS_TREE,
+    CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE, CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE,
     CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_NULLIFIERS_TREE,
 };
@@ -113,7 +113,7 @@ pub(crate) fn consensus_stake_process_instruction_v1(
 
     // Access the necessary databases where there is information to
     // validate this state transition.
-    let consensus_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
+    let consensus_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_STAKED_COINS_TREE)?;
     let consensus_unstaked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE)?;
     let money_nullifiers_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let money_coin_roots_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
@@ -175,15 +175,20 @@ pub(crate) fn consensus_stake_process_update_v1(
 ) -> ContractResult {
     // Grab all necessary db handles for where we want to write
     let info_db = db_lookup(cid, CONSENSUS_CONTRACT_INFO_TREE)?;
-    let coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
-    let coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
+    let staked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_STAKED_COINS_TREE)?;
+    let staked_coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE)?;
 
     msg!("[ConsensusStakeV1] Adding new coin to the set");
-    db_set(coins_db, &serialize(&update.coin), &[])?;
+    db_set(staked_coins_db, &serialize(&update.coin), &[])?;
 
     msg!("[ConsensusStakeV1] Adding new coin to the Merkle tree");
     let coins: Vec<_> = vec![MerkleNode::from(update.coin.inner())];
-    merkle_add(info_db, coin_roots_db, &serialize(&CONSENSUS_CONTRACT_COIN_MERKLE_TREE), &coins)?;
+    merkle_add(
+        info_db,
+        staked_coin_roots_db,
+        &serialize(&CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE),
+        &coins,
+    )?;
 
     Ok(())
 }

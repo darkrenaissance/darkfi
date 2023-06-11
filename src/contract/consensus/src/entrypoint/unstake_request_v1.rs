@@ -17,10 +17,11 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError, model::ConsensusUnstakeReqParamsV1, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
-    CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
-    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE,
-    CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
+    error::MoneyError, model::ConsensusUnstakeReqParamsV1, CONSENSUS_CONTRACT_INFO_TREE,
+    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE,
+    CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE, CONSENSUS_CONTRACT_UNSTAKED_COIN_MERKLE_TREE,
+    CONSENSUS_CONTRACT_UNSTAKED_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1,
+    CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, ContractId, MerkleNode},
@@ -108,9 +109,9 @@ pub(crate) fn consensus_unstake_request_process_instruction_v1(
 
     // Access the necessary databases where there is information to
     // validate this state transition.
-    let coins_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
     let nullifiers_db = db_lookup(cid, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
     let unstaked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE)?;
+    let staked_coins_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE)?;
 
     // ===================================
     // Perform the actual state transition
@@ -126,7 +127,7 @@ pub(crate) fn consensus_unstake_request_process_instruction_v1(
 
     // The Merkle root is used to know whether this is a coin that
     // existed in a previous state.
-    if !db_contains_key(coins_roots_db, &serialize(&input.merkle_root))? {
+    if !db_contains_key(staked_coins_roots_db, &serialize(&input.merkle_root))? {
         msg!("[ConsensusUnstakeRequestV1] Error: Merkle root not found in previous state");
         return Err(MoneyError::TransferMerkleRootNotFound.into())
     }
@@ -176,10 +177,10 @@ pub(crate) fn consensus_unstake_request_process_update_v1(
     update: ConsensusProposalUpdateV1,
 ) -> ContractResult {
     // Grab all necessary db handles for where we want to write
-    let nullifiers_db = db_lookup(cid, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
     let info_db = db_lookup(cid, CONSENSUS_CONTRACT_INFO_TREE)?;
-    let coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
+    let nullifiers_db = db_lookup(cid, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
     let unstaked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE)?;
+    let unstaked_coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_UNSTAKED_COIN_ROOTS_TREE)?;
 
     msg!("[ConsensusUnstakeRequestV1] Adding new nullifier to the set");
     db_set(nullifiers_db, &serialize(&update.nullifier), &[])?;
@@ -189,7 +190,12 @@ pub(crate) fn consensus_unstake_request_process_update_v1(
 
     msg!("[ConsensusUnstakeRequestV1] Adding new coin to the Merkle tree");
     let coins: Vec<_> = vec![MerkleNode::from(update.coin.inner())];
-    merkle_add(info_db, coin_roots_db, &serialize(&CONSENSUS_CONTRACT_COIN_MERKLE_TREE), &coins)?;
+    merkle_add(
+        info_db,
+        unstaked_coin_roots_db,
+        &serialize(&CONSENSUS_CONTRACT_UNSTAKED_COIN_MERKLE_TREE),
+        &coins,
+    )?;
 
     Ok(())
 }

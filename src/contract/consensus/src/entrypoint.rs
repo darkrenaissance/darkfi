@@ -18,10 +18,11 @@
 
 use darkfi_money_contract::{
     model::{ConsensusStakeUpdateV1, ConsensusUnstakeUpdateV1},
-    CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
-    CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_DB_VERSION,
-    CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
-    CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE,
+    CONSENSUS_CONTRACT_DB_VERSION, CONSENSUS_CONTRACT_INFO_TREE,
+    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_STAKED_COINS_TREE,
+    CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE, CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE,
+    CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE, CONSENSUS_CONTRACT_UNSTAKED_COIN_MERKLE_TREE,
+    CONSENSUS_CONTRACT_UNSTAKED_COIN_ROOTS_TREE,
 };
 use darkfi_sdk::{
     crypto::{ContractId, MerkleTree},
@@ -94,22 +95,28 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     zkas_db_set(&consensus_burn_v1_bincode[..])?;
     zkas_db_set(&consensus_proposal_v1_bincode[..])?;
 
-    // Set up a database tree to hold Merkle roots of all coins
+    // Set up a database tree to hold Merkle roots of all staked coins
     // k=MerkleNode, v=[]
-    if db_lookup(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE).is_err() {
-        db_init(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
+    if db_lookup(cid, CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE).is_err() {
+        db_init(cid, CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE)?;
     }
 
-    // Set up a database tree to hold all coins ever seen
+    // Set up a database tree to hold all staked coins ever seen
     // k=Coin, v=[]
-    if db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE).is_err() {
-        db_init(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
+    if db_lookup(cid, CONSENSUS_CONTRACT_STAKED_COINS_TREE).is_err() {
+        db_init(cid, CONSENSUS_CONTRACT_STAKED_COINS_TREE)?;
     }
 
     // Set up a database tree to hold nullifiers of all spent coins
     // k=Nullifier, v=[]
     if db_lookup(cid, CONSENSUS_CONTRACT_NULLIFIERS_TREE).is_err() {
         db_init(cid, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
+    }
+
+    // Set up a database tree to hold Merkle roots of all unstaked coins
+    // k=MerkleNode, v=[]
+    if db_lookup(cid, CONSENSUS_CONTRACT_UNSTAKED_COIN_ROOTS_TREE).is_err() {
+        db_init(cid, CONSENSUS_CONTRACT_UNSTAKED_COIN_ROOTS_TREE)?;
     }
 
     // Set up a database tree to hold all unstaked coins ever seen
@@ -124,14 +131,24 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
         Err(_) => {
             let info_db = db_init(cid, CONSENSUS_CONTRACT_INFO_TREE)?;
 
-            // Create the incrementalmerkletree for seen coins
+            // Create the incrementalmerkletree for staked and unstaked coins.
+            // We can simply reuse the same empty tree twice.
             let coin_tree = MerkleTree::new(100);
             let mut coin_tree_data = vec![];
 
             coin_tree_data.write_u32(0)?;
             coin_tree.encode(&mut coin_tree_data)?;
 
-            db_set(info_db, &serialize(&CONSENSUS_CONTRACT_COIN_MERKLE_TREE), &coin_tree_data)?;
+            db_set(
+                info_db,
+                &serialize(&CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE),
+                &coin_tree_data,
+            )?;
+            db_set(
+                info_db,
+                &serialize(&CONSENSUS_CONTRACT_UNSTAKED_COIN_MERKLE_TREE),
+                &coin_tree_data,
+            )?;
             info_db
         }
     };

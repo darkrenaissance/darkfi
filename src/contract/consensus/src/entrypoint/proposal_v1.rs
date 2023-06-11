@@ -17,9 +17,9 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError, CONSENSUS_CONTRACT_COINS_TREE, CONSENSUS_CONTRACT_COIN_MERKLE_TREE,
-    CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_INFO_TREE,
-    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1,
+    error::MoneyError, CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
+    CONSENSUS_CONTRACT_STAKED_COINS_TREE, CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE,
+    CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode},
@@ -160,8 +160,8 @@ pub(crate) fn consensus_proposal_process_instruction_v1(
     // Access the necessary databases where there is information to
     // validate this state transition.
     let nullifiers_db = db_lookup(cid, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
-    let coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
-    let coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
+    let staked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_STAKED_COINS_TREE)?;
+    let staked_coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE)?;
 
     // ===================================
     // Perform the actual state transition
@@ -180,7 +180,7 @@ pub(crate) fn consensus_proposal_process_instruction_v1(
 
     // The Merkle root is used to know whether this is a coin that
     // existed in a previous state.
-    if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
+    if !db_contains_key(staked_coin_roots_db, &serialize(&input.merkle_root))? {
         msg!("[ConsensusProposalV1] Error: Merkle root not found in previous state");
         return Err(MoneyError::TransferMerkleRootNotFound.into())
     }
@@ -204,7 +204,7 @@ pub(crate) fn consensus_proposal_process_instruction_v1(
 
     // Newly created coin for this call is in the output. Here we check that
     // it hasn't existed before.
-    if db_contains_key(coins_db, &serialize(&output.coin))? {
+    if db_contains_key(staked_coins_db, &serialize(&output.coin))? {
         msg!("[ConsensusProposalV1] Error: Duplicate coin found in output");
         return Err(MoneyError::DuplicateCoin.into())
     }
@@ -223,20 +223,25 @@ pub(crate) fn consensus_proposal_process_update_v1(
     update: ConsensusProposalUpdateV1,
 ) -> ContractResult {
     // Grab all necessary db handles for where we want to write
-    let nullifiers_db = db_lookup(cid, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
     let info_db = db_lookup(cid, CONSENSUS_CONTRACT_INFO_TREE)?;
-    let coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
-    let coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
+    let nullifiers_db = db_lookup(cid, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
+    let staked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_STAKED_COINS_TREE)?;
+    let staked_coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE)?;
 
     msg!("[ConsensusProposalV1] Adding new nullifier to the set");
     db_set(nullifiers_db, &serialize(&update.nullifier), &[])?;
 
-    msg!("[ConsensusProposalV1] Adding new coin to the set");
-    db_set(coins_db, &serialize(&update.coin), &[])?;
+    msg!("[ConsensusProposalV1] Adding new coin to the staked coin set");
+    db_set(staked_coins_db, &serialize(&update.coin), &[])?;
 
     msg!("[ConsensusProposalV1] Adding new coin to the Merkle tree");
     let coins: Vec<_> = vec![MerkleNode::from(update.coin.inner())];
-    merkle_add(info_db, coin_roots_db, &serialize(&CONSENSUS_CONTRACT_COIN_MERKLE_TREE), &coins)?;
+    merkle_add(
+        info_db,
+        staked_coin_roots_db,
+        &serialize(&CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE),
+        &coins,
+    )?;
 
     Ok(())
 }

@@ -17,7 +17,7 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError, model::ConsensusStakeUpdateV1, CONSENSUS_CONTRACT_COINS_TREE,
+    error::MoneyError, model::ConsensusStakeUpdateV1, CONSENSUS_CONTRACT_STAKED_COINS_TREE,
     CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
@@ -94,12 +94,12 @@ pub(crate) fn consensus_genesis_stake_process_instruction_v1(
 
     // Access the necessary databases where there is information to
     // validate this state transition.
-    let coins_db = db_lookup(cid, CONSENSUS_CONTRACT_COINS_TREE)?;
+    let staked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_STAKED_COINS_TREE)?;
     let unstaked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE)?;
 
     // Check that the coin from the output hasn't existed before.
     let coin = serialize(&params.output.coin);
-    if db_contains_key(coins_db, &coin)? {
+    if db_contains_key(staked_coins_db, &coin)? {
         msg!("[GenesisStakeV1] Error: Output coin was already seen in the set of staked coins");
         return Err(MoneyError::DuplicateCoin.into())
     }

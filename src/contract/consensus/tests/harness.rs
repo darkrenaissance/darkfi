@@ -892,12 +892,14 @@ impl ConsensusTestHarness {
     pub fn assert_trees(&self) {
         let faucet = self.holders.get(&Holder::Faucet).unwrap();
         let money_root = faucet.money_merkle_tree.root(0).unwrap();
-        let consensus_root = faucet.consensus_merkle_tree.root(0).unwrap();
-        let consensus_unstake_root = faucet.consensus_merkle_tree.root(0).unwrap();
+        let consensus_stake_root = faucet.consensus_staked_merkle_tree.root(0).unwrap();
+        let consensus_unstake_root = faucet.consensus_unstaked_merkle_tree.root(0).unwrap();
         for wallet in self.holders.values() {
             assert!(money_root == wallet.money_merkle_tree.root(0).unwrap());
-            assert!(consensus_root == wallet.consensus_merkle_tree.root(0).unwrap());
-            assert!(consensus_unstake_root == wallet.consensus_merkle_tree.root(0).unwrap());
+            assert!(consensus_stake_root == wallet.consensus_staked_merkle_tree.root(0).unwrap());
+            assert!(
+                consensus_unstake_root == wallet.consensus_unstaked_merkle_tree.root(0).unwrap()
+            );
         }
     }
 

@@ -92,14 +92,16 @@ pub const MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1: &str = "TokenFreeze_V1";
 // We keep them here so we can reference them both in `Money`
 // and `Consensus` contracts.
 pub const CONSENSUS_CONTRACT_INFO_TREE: &str = "consensus_info";
-pub const CONSENSUS_CONTRACT_COINS_TREE: &str = "consensus_coins";
-pub const CONSENSUS_CONTRACT_COIN_ROOTS_TREE: &str = "consensus_coin_roots";
 pub const CONSENSUS_CONTRACT_NULLIFIERS_TREE: &str = "consensus_nullifiers";
+pub const CONSENSUS_CONTRACT_STAKED_COINS_TREE: &str = "consensus_staked_coins";
 pub const CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE: &str = "consensus_unstaked_coins";
+pub const CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE: &str = "consensus_staked_coin_roots";
+pub const CONSENSUS_CONTRACT_UNSTAKED_COIN_ROOTS_TREE: &str = "consensus_unstaked_coin_roots";
 
 // These are keys inside the consensus info tree
 pub const CONSENSUS_CONTRACT_DB_VERSION: &str = "db_version";
-pub const CONSENSUS_CONTRACT_COIN_MERKLE_TREE: &str = "consensus_coin_tree";
+pub const CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE: &str = "consensus_staked_coin_tree";
+pub const CONSENSUS_CONTRACT_UNSTAKED_COIN_MERKLE_TREE: &str = "consensus_unstaked_coin_tree";
 
 /// zkas consensus mint circuit namespace
 pub const CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1: &str = "ConsensusMint_V1";
