@@ -154,7 +154,8 @@ pub struct Wallet {
     pub keypair: Keypair,
     pub state: ValidatorStatePtr,
     pub money_merkle_tree: MerkleTree,
-    pub consensus_merkle_tree: MerkleTree,
+    pub consensus_staked_merkle_tree: MerkleTree,
+    pub consensus_unstaked_merkle_tree: MerkleTree,
     pub wallet: WalletPtr,
     pub coins: Vec<OwnCoin>,
     pub spent_coins: Vec<OwnCoin>,
@@ -179,7 +180,8 @@ impl Wallet {
         .await?;
 
         let money_merkle_tree = MerkleTree::new(100);
-        let consensus_merkle_tree = MerkleTree::new(100);
+        let consensus_staked_merkle_tree = MerkleTree::new(100);
+        let consensus_unstaked_merkle_tree = MerkleTree::new(100);
 
         let coins = vec![];
         let spent_coins = vec![];
@@ -188,7 +190,8 @@ impl Wallet {
             keypair,
             state,
             money_merkle_tree,
-            consensus_merkle_tree,
+            consensus_staked_merkle_tree,
+            consensus_unstaked_merkle_tree,
             wallet,
             coins,
             spent_coins,
@@ -395,7 +398,7 @@ impl ConsensusTestHarness {
         let erroneous_txs =
             wallet.state.read().await.verify_transactions(&[tx], slot, true).await?;
         assert!(erroneous_txs.is_empty());
-        wallet.consensus_merkle_tree.append(&MerkleNode::from(params.output.coin.inner()));
+        wallet.consensus_staked_merkle_tree.append(&MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
@@ -515,7 +518,7 @@ impl ConsensusTestHarness {
         let erroneous_txs =
             wallet.state.read().await.verify_transactions(&[tx], slot, true).await?;
         assert!(erroneous_txs.is_empty());
-        wallet.consensus_merkle_tree.append(&MerkleNode::from(params.output.coin.inner()));
+        wallet.consensus_staked_merkle_tree.append(&MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
@@ -542,7 +545,7 @@ impl ConsensusTestHarness {
             slot_checkpoint,
             fork_hash,
             fork_previous_hash: fork_hash,
-            merkle_tree: wallet.consensus_merkle_tree.clone(),
+            merkle_tree: wallet.consensus_staked_merkle_tree.clone(),
             proposal_zkbin: proposal_zkbin.clone(),
             proposal_pk: proposal_pk.clone(),
         }
@@ -591,7 +594,7 @@ impl ConsensusTestHarness {
         let erroneous_txs =
             wallet.state.read().await.verify_transactions(&[tx], slot, true).await?;
         assert!(erroneous_txs.is_empty());
-        wallet.consensus_merkle_tree.append(&MerkleNode::from(params.output.coin.inner()));
+        wallet.consensus_staked_merkle_tree.append(&MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
@@ -636,7 +639,7 @@ impl ConsensusTestHarness {
         let unstake_request_call_debris = ConsensusUnstakeRequestCallBuilder {
             coin: staked_oc.clone(),
             epoch,
-            tree: wallet.consensus_merkle_tree.clone(),
+            tree: wallet.consensus_staked_merkle_tree.clone(),
             burn_zkbin: burn_zkbin.clone(),
             burn_pk: burn_pk.clone(),
             mint_zkbin: mint_zkbin.clone(),
@@ -686,7 +689,7 @@ impl ConsensusTestHarness {
         let erroneous_txs =
             wallet.state.read().await.verify_transactions(&[tx], slot, true).await?;
         assert!(erroneous_txs.is_empty());
-        wallet.consensus_merkle_tree.append(&MerkleNode::from(params.output.coin.inner()));
+        wallet.consensus_unstaked_merkle_tree.append(&MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
@@ -727,7 +730,7 @@ impl ConsensusTestHarness {
         // Building Consensus::Unstake params
         let consensus_unstake_call_debris = ConsensusUnstakeCallBuilder {
             coin: staked_oc.clone(),
-            tree: wallet.consensus_merkle_tree.clone(),
+            tree: wallet.consensus_unstaked_merkle_tree.clone(),
             burn_zkbin: burn_zkbin.clone(),
             burn_pk: burn_pk.clone(),
         }
@@ -830,14 +833,38 @@ impl ConsensusTestHarness {
         Ok(oc)
     }
 
-    pub fn gather_consensus_owncoin(
+    pub fn gather_consensus_staked_owncoin(
         &mut self,
         holder: Holder,
         output: ConsensusOutput,
         secret_key: Option<SecretKey>,
     ) -> Result<ConsensusOwnCoin> {
         let wallet = self.holders.get_mut(&holder).unwrap();
-        let leaf_position = wallet.consensus_merkle_tree.witness().unwrap();
+        let leaf_position = wallet.consensus_staked_merkle_tree.witness().unwrap();
+        let secret_key = match secret_key {
+            Some(key) => key,
+            None => wallet.keypair.secret,
+        };
+        let note: ConsensusNote = output.note.decrypt(&secret_key)?;
+        let oc = ConsensusOwnCoin {
+            coin: Coin::from(output.coin),
+            note: note.clone(),
+            secret: secret_key,
+            nullifier: Nullifier::from(poseidon_hash([wallet.keypair.secret.inner(), note.serial])),
+            leaf_position,
+        };
+
+        Ok(oc)
+    }
+
+    pub fn gather_consensus_unstaked_owncoin(
+        &mut self,
+        holder: Holder,
+        output: ConsensusOutput,
+        secret_key: Option<SecretKey>,
+    ) -> Result<ConsensusOwnCoin> {
+        let wallet = self.holders.get_mut(&holder).unwrap();
+        let leaf_position = wallet.consensus_unstaked_merkle_tree.witness().unwrap();
         let secret_key = match secret_key {
             Some(key) => key,
             None => wallet.keypair.secret,

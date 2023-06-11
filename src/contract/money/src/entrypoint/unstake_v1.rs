@@ -32,7 +32,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 use crate::{
     error::MoneyError,
     model::{ConsensusUnstakeParamsV1, MoneyUnstakeParamsV1, MoneyUnstakeUpdateV1},
-    MoneyFunction, CONSENSUS_CONTRACT_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
+    MoneyFunction, CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_UNSTAKED_COIN_ROOTS_TREE,
     MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE, MONEY_CONTRACT_COIN_ROOTS_TREE,
     MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
@@ -89,8 +89,8 @@ pub(crate) fn money_unstake_process_instruction_v1(
     let money_coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
     let consensus_nullifiers_db =
         db_lookup(*CONSENSUS_CONTRACT_ID, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
-    let consensus_coin_roots_db =
-        db_lookup(*CONSENSUS_CONTRACT_ID, CONSENSUS_CONTRACT_COIN_ROOTS_TREE)?;
+    let consensus_unstaked_coin_roots_db =
+        db_lookup(*CONSENSUS_CONTRACT_ID, CONSENSUS_CONTRACT_UNSTAKED_COIN_ROOTS_TREE)?;
 
     // ===================================
     // Perform the actual state transition
@@ -118,7 +118,7 @@ pub(crate) fn money_unstake_process_instruction_v1(
 
     // The Merkle root is used to know whether this is a coin that
     // existed in a previous state.
-    if !db_contains_key(consensus_coin_roots_db, &serialize(&input.merkle_root))? {
+    if !db_contains_key(consensus_unstaked_coin_roots_db, &serialize(&input.merkle_root))? {
         msg!("[MoneyUnstakeV1] Error: Merkle root not found in previous state");
         return Err(MoneyError::TransferMerkleRootNotFound.into())
     }

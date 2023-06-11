@@ -36,7 +36,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::ConsensusError,
-    model::{calculate_grace_period, ConsensusProposalUpdateV1},
+    model::{ConsensusProposalUpdateV1, GRACE_PERIOD},
     ConsensusFunction,
 };
 
@@ -120,7 +120,7 @@ pub(crate) fn consensus_unstake_request_process_instruction_v1(
     msg!("[ConsensusUnstakeRequestV1] Validating anonymous input");
 
     // The coin has passed through the grace period and is allowed to request unstake.
-    if input.epoch != 0 && get_verifying_slot_epoch() - input.epoch <= calculate_grace_period() {
+    if input.epoch != 0 && get_verifying_slot_epoch() - input.epoch <= GRACE_PERIOD {
         msg!("[ConsensusUnstakeRequestV1] Error: Coin is not allowed to request unstake yet");
         return Err(ConsensusError::CoinStillInGracePeriod.into())
     }
@@ -137,14 +137,6 @@ pub(crate) fn consensus_unstake_request_process_instruction_v1(
         msg!("[ConsensusUnstakeRequestV1] Error: Duplicate nullifier found");
         return Err(MoneyError::DuplicateNullifier.into())
     }
-
-    /*
-    // Check that the coin hasn't existed before in unstake set.
-    if db_contains_key(unstaked_coins_db, &serialize(&input.coin))? {
-        msg!("[ConsensusUnstakeRequestV1] Error: Unstaked coin found in input");
-        return Err(MoneyError::DuplicateCoin.into())
-    }
-    */
 
     msg!("[ConsensusUnstakeRequestV1] Validating anonymous output");
 
@@ -166,8 +158,6 @@ pub(crate) fn consensus_unstake_request_process_instruction_v1(
     let mut update_data = vec![];
     update_data.write_u8(ConsensusFunction::UnstakeRequestV1 as u8)?;
     update.encode(&mut update_data)?;
-
-    // and return it
     Ok(update_data)
 }
 
@@ -185,10 +175,10 @@ pub(crate) fn consensus_unstake_request_process_update_v1(
     msg!("[ConsensusUnstakeRequestV1] Adding new nullifier to the set");
     db_set(nullifiers_db, &serialize(&update.nullifier), &[])?;
 
-    msg!("[ConsensusUnstakeRequestV1] Adding new coin to the set");
+    msg!("[ConsensusUnstakeRequestV1] Adding new coin to the unstaked coins set");
     db_set(unstaked_coins_db, &serialize(&update.coin), &[])?;
 
-    msg!("[ConsensusUnstakeRequestV1] Adding new coin to the Merkle tree");
+    msg!("[ConsensusUnstakeRequestV1] Adding new coin to the unstaked coins Merkle tree");
     let coins: Vec<_> = vec![MerkleNode::from(update.coin.inner())];
     merkle_add(
         info_db,

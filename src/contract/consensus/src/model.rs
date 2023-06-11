@@ -72,12 +72,14 @@ pub struct ConsensusProposalUpdateV1 {
 
 /// Parameters for `Consensus::UnstakeRequest`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+// ANCHOR: ConsensusUnstakeRequestParams
 pub struct ConsensusUnstakeRequestParamsV1 {
     /// Burnt token revealed info
     pub input: ConsensusInput,
     /// Anonymous output
     pub output: Output,
 }
+// ANCHOR_END: ConsensusUnstakeRequestParams
 
 // ======================================================================
 // Consensus parameters configuration

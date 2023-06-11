@@ -87,8 +87,11 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     th.assert_trees();
 
     // Gather new staked owncoin
-    let alice_staked_oc =
-        th.gather_consensus_owncoin(Holder::Alice, stake_params.output, Some(stake_secret_key))?;
+    let alice_staked_oc = th.gather_consensus_staked_owncoin(
+        Holder::Alice,
+        stake_params.output,
+        Some(stake_secret_key),
+    )?;
 
     // Verify values match
     assert!(alice_oc.note.value == alice_staked_oc.note.value);
@@ -136,7 +139,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     th.assert_trees();
 
     // Gather new staked owncoin which includes the reward
-    let alice_rewarded_staked_oc = th.gather_consensus_owncoin(
+    let alice_rewarded_staked_oc = th.gather_consensus_staked_owncoin(
         Holder::Alice,
         proposal_params.output,
         Some(proposal_decryption_secret_key),
@@ -181,7 +184,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     th.assert_trees();
 
     // Gather new unstake request owncoin
-    let alice_unstake_request_oc = th.gather_consensus_owncoin(
+    let alice_unstake_request_oc = th.gather_consensus_unstaked_owncoin(
         Holder::Alice,
         unstake_request_params.output,
         Some(unstake_request_secret_key),
