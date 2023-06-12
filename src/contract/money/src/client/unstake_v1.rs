@@ -76,14 +76,16 @@ pub struct TransactionBuilderOutputInfo {
 /// Struct holding necessary information to build a `Money::UnstakeV1` contract call.
 pub struct MoneyUnstakeCallBuilder {
     /// `ConsensusOwnCoin` we're given to use in this builder
-    pub coin: ConsensusOwnCoin,
+    pub owncoin: ConsensusOwnCoin,
+    /// Recipient pubkey of the minted output
+    pub recipient: PublicKey,
     /// Blinding factor for value commitment
     pub value_blind: pallas::Scalar,
     /// Revealed nullifier
     pub nullifier: Nullifier,
     /// Revealed Merkle root
     pub merkle_root: MerkleNode,
-    /// Public key for the signature
+    /// Signature public key used in the input
     pub signature_public: PublicKey,
     /// `Mint_V1` zkas circuit ZkBinary
     pub mint_zkbin: ZkBinary,
@@ -93,24 +95,23 @@ pub struct MoneyUnstakeCallBuilder {
 
 impl MoneyUnstakeCallBuilder {
     pub fn build(&self) -> Result<MoneyUnstakeCallDebris> {
-        debug!("Building Money::UnstakeV1 contract call");
-        assert!(self.coin.note.value != 0);
+        info!("Building Money::UnstakeV1 contract call");
+        assert!(self.owncoin.note.value != 0);
 
-        debug!("Building anonymous output");
+        debug!("Building Money::UnstakeV1 anonymous output");
         let output = TransactionBuilderOutputInfo {
-            value: self.coin.note.value,
+            value: self.owncoin.note.value,
             token_id: *DARK_TOKEN_ID,
-            public_key: self.signature_public,
+            public_key: self.recipient,
         };
-        debug!("Finished building output");
 
         let serial = pallas::Base::random(&mut OsRng);
         let spend_hook = pallas::Base::ZERO;
-        let user_data_enc = pallas::Base::ZERO;
+        let user_data_enc = pallas::Base::random(&mut OsRng);
         let token_blind = pallas::Scalar::ZERO;
         let coin_blind = pallas::Base::random(&mut OsRng);
 
-        info!("Creating unstake mint proof for output");
+        info!("Building Money::UnstakeV1 Mint ZK proof");
         let (proof, public_inputs) = create_unstake_mint_proof(
             &self.mint_zkbin,
             &self.mint_pk,
@@ -138,15 +139,15 @@ impl MoneyUnstakeCallBuilder {
 
         let encrypted_note = AeadEncryptedNote::encrypt(&note, &output.public_key, &mut OsRng)?;
 
-        let output = Output {
+        let tx_output = Output {
             value_commit: public_inputs.value_commit,
             token_commit: public_inputs.token_commit,
             coin: public_inputs.coin,
             note: encrypted_note,
         };
 
-        let input = ConsensusInput {
-            epoch: self.coin.note.epoch,
+        let tx_input = ConsensusInput {
+            epoch: self.owncoin.note.epoch,
             value_commit: public_inputs.value_commit,
             nullifier: self.nullifier,
             merkle_root: self.merkle_root,
@@ -154,12 +155,11 @@ impl MoneyUnstakeCallBuilder {
         };
 
         // We now fill this with necessary stuff
-        let params = MoneyUnstakeParamsV1 { input, spend_hook, user_data_enc, output };
-        let proofs = vec![proof];
+        let params = MoneyUnstakeParamsV1 { input: tx_input, output: tx_output };
 
         // Now we should have all the params and zk proof.
         // We return it all and let the caller deal with it.
-        let debris = MoneyUnstakeCallDebris { params, proofs };
+        let debris = MoneyUnstakeCallDebris { params, proofs: vec![proof] };
         Ok(debris)
     }
 }

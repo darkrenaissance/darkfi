@@ -114,6 +114,9 @@ pub enum MoneyError {
 
     #[error("Call is not executed on genesis slot")]
     GenesisCallNonGenesisSlot,
+
+    #[error("Missing nullifier in set")]
+    MissingNullifier,
 }
 
 impl From<MoneyError> for ContractError {
@@ -150,6 +153,7 @@ impl From<MoneyError> for ContractError {
             MoneyError::PreviousCallFunctionMismatch => Self::Custom(29),
             MoneyError::PreviousCallInputMismatch => Self::Custom(30),
             MoneyError::GenesisCallNonGenesisSlot => Self::Custom(31),
+            MoneyError::MissingNullifier => Self::Custom(32),
         }
     }
 }

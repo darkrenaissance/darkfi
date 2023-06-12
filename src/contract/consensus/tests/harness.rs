@@ -742,7 +742,7 @@ impl ConsensusTestHarness {
 
         // Building Consensus::Unstake params
         let consensus_unstake_call_debris = ConsensusUnstakeCallBuilder {
-            coin: staked_oc.clone(),
+            owncoin: staked_oc.clone(),
             tree: wallet.consensus_unstaked_merkle_tree.clone(),
             burn_zkbin: burn_zkbin.clone(),
             burn_pk: burn_pk.clone(),
@@ -762,7 +762,8 @@ impl ConsensusTestHarness {
 
         // Building Money::Unstake params
         let money_unstake_call_debris = MoneyUnstakeCallBuilder {
-            coin: staked_oc.into(),
+            owncoin: staked_oc.into(),
+            recipient: self.holders.get_mut(&holder).unwrap().keypair.public,
             value_blind: consensus_unstake_value_blind,
             nullifier: consensus_unstake_params.input.nullifier,
             merkle_root: consensus_unstake_params.input.merkle_root,

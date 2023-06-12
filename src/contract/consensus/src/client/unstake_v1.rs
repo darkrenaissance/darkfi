@@ -63,7 +63,7 @@ pub struct ConsensusUnstakeCallBuilder {
 impl ConsensusUnstakeCallBuilder {
     pub fn build(&self) -> Result<ConsensusUnstakeCallDebris> {
         info!("Building Consensus::UnstakeV1 contract call");
-        assert!(self.coin.note.value != 0);
+        assert!(self.owncoin.note.value != 0);
 
         debug!("Building Consensus::UnstakeV1 anonymous input");
         let root = self.tree.root(0).unwrap();
@@ -90,7 +90,7 @@ impl ConsensusUnstakeCallBuilder {
         };
 
         // We now fill this with necessary stuff
-        let params = ConsensusUnstakeParamsV1 { input };
+        let params = ConsensusUnstakeParamsV1 { input: tx_input };
 
         // Construct debris
         let debris = ConsensusUnstakeCallDebris {

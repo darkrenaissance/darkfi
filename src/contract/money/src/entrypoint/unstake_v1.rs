@@ -18,8 +18,8 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, ContractId, MerkleNode, CONSENSUS_CONTRACT_ID,
-        DARK_TOKEN_ID,
+        pasta_prelude::*, pedersen_commitment_base, ContractId, MerkleNode, PublicKey,
+        CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
     },
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -48,18 +48,18 @@ pub(crate) fn money_unstake_get_metadata_v1(
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
-    // Public keys for the transaction signatures we have to verify
-    let signature_pubkeys = vec![params.input.signature_public];
+    // We don't have to verify any signatures here, since they're already
+    // in the previous contract call (Consensus::UnstakeV1)
+    let signature_pubkeys: Vec<PublicKey> = vec![];
 
     // Grab the pedersen commitment from the anonymous output
-    let output = &params.output;
-    let value_coords = output.value_commit.to_affine().coordinates().unwrap();
-    let token_coords = output.token_commit.to_affine().coordinates().unwrap();
+    let value_coords = params.output.value_commit.to_affine().coordinates().unwrap();
+    let token_coords = params.output.token_commit.to_affine().coordinates().unwrap();
 
     zk_public_inputs.push((
         MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
         vec![
-            output.coin.inner(),
+            params.output.coin.inner(),
             *value_coords.x(),
             *value_coords.y(),
             *token_coords.x(),
@@ -71,7 +71,6 @@ pub(crate) fn money_unstake_get_metadata_v1(
     let mut metadata = vec![];
     zk_public_inputs.encode(&mut metadata)?;
     signature_pubkeys.encode(&mut metadata)?;
-
     Ok(metadata)
 }
 
@@ -83,6 +82,8 @@ pub(crate) fn money_unstake_process_instruction_v1(
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
     let params: MoneyUnstakeParamsV1 = deserialize(&self_.data[1..])?;
+    let input = &params.input;
+    let output = &params.output;
 
     // Access the necessary databases where there is information to
     // validate this state transition.
@@ -95,39 +96,6 @@ pub(crate) fn money_unstake_process_instruction_v1(
     // ===================================
     // Perform the actual state transition
     // ===================================
-
-    msg!("[MoneyUnstakeV1] Validating anonymous output");
-    let input = &params.input;
-    let output = &params.output;
-
-    // Only native token can be unstaked.
-    // Since consensus coins don't have token commitments or blinds,
-    // we use zero as the token blind of newlly minded token
-    if output.token_commit !=
-        pedersen_commitment_base(DARK_TOKEN_ID.inner(), pallas::Scalar::zero())
-    {
-        msg!("[MoneyUnstakeV1] Error: Input used non-native token");
-        return Err(MoneyError::StakeInputNonNativeToken.into())
-    }
-
-    // Verify value commits match
-    if output.value_commit != input.value_commit {
-        msg!("[MoneyUnstakeV1] Error: Value commitments do not match");
-        return Err(MoneyError::ValueMismatch.into())
-    }
-
-    // The Merkle root is used to know whether this is a coin that
-    // existed in a previous state.
-    if !db_contains_key(consensus_unstaked_coin_roots_db, &serialize(&input.merkle_root))? {
-        msg!("[MoneyUnstakeV1] Error: Merkle root not found in previous state");
-        return Err(MoneyError::TransferMerkleRootNotFound.into())
-    }
-
-    // The nullifiers should already exist. It is the double-mint protection.
-    if db_contains_key(consensus_nullifiers_db, &serialize(&input.nullifier))? {
-        msg!("[MoneyUnstakeV1] Error: Duplicate nullifier found");
-        return Err(MoneyError::DuplicateNullifier.into())
-    }
 
     // Check previous call is consensus contract
     if call_idx == 0 {
@@ -156,22 +124,38 @@ pub(crate) fn money_unstake_process_instruction_v1(
         return Err(MoneyError::PreviousCallInputMismatch.into())
     }
 
-    // If next spend hook is set, check its correctness
-    if params.spend_hook != pallas::Base::ZERO {
-        let next_call_idx = call_idx + 1;
-        if next_call_idx >= calls.len() as u32 {
-            msg!("[MoneyUnstakeV1] Error: next_call_idx out of bounds");
-            return Err(MoneyError::CallIdxOutOfBounds.into())
-        }
-
-        let next = &calls[next_call_idx as usize];
-        if next.contract_id.inner() != params.spend_hook {
-            msg!(
-                "[MoneyUnstakeV1] Error: Invoking contract call does not match spend hook in input"
-            );
-            return Err(MoneyError::SpendHookMismatch.into())
-        }
+    msg!("[MoneyUnstakeV1] Validating anonymous output");
+    // Only native token can be minted here.
+    // Since consensus coins don't have token commitments, we use zero as
+    // the token blind for the token commitment of the newly minted token
+    if output.token_commit != pedersen_commitment_base(DARK_TOKEN_ID.inner(), pallas::Scalar::ZERO)
+    {
+        msg!("[MoneyUnstakeV1] Error: Input used non-native token");
+        return Err(MoneyError::StakeInputNonNativeToken.into())
     }
+
+    // Verify value commits match
+    if output.value_commit != input.value_commit {
+        msg!("[MoneyUnstakeV1] Error: Value commitments do not match");
+        return Err(MoneyError::ValueMismatch.into())
+    }
+
+    // The Merkle root is used to know whether this is a coin that
+    // existed in a previous state.
+    if !db_contains_key(consensus_unstaked_coin_roots_db, &serialize(&input.merkle_root))? {
+        msg!("[MoneyUnstakeV1] Error: Merkle root not found in previous state");
+        return Err(MoneyError::TransferMerkleRootNotFound.into())
+    }
+
+    // The nullifiers should already exist in the Consensus nullifier set
+    // TODO: FIXME: This should be uncommented when Validator::verify_transaction
+    //              works as Read->Write->Read->Write
+    /*
+    if !db_contains_key(consensus_nullifiers_db, &serialize(&input.nullifier))? {
+        msg!("[MoneyUnstakeV1] Error: Nullifier not found in Consensus nullifier set");
+        return Err(MoneyError::MissingNullifier.into())
+    }
+    */
 
     // Newly created coin for this call is in the output. Here we gather it,
     // and we also check that it hasn't existed before.
@@ -185,8 +169,6 @@ pub(crate) fn money_unstake_process_instruction_v1(
     let mut update_data = vec![];
     update_data.write_u8(MoneyFunction::UnstakeV1 as u8)?;
     update.encode(&mut update_data)?;
-
-    // and return it
     Ok(update_data)
 }
 

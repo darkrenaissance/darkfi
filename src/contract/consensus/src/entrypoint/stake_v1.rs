@@ -140,10 +140,14 @@ pub(crate) fn consensus_stake_process_instruction_v1(
     }
 
     // The nullifiers should not already exist. It is the double-mint protection.
-    if db_contains_key(money_nullifiers_db, &serialize(&input.nullifier))? {
+    // TODO: FIXME: This should be uncommented when Validator::verify_transaction
+    //               works as Read->Write->Read->Write
+    /*
+    if !db_contains_key(money_nullifiers_db, &serialize(&input.nullifier))? {
         msg!("[ConsensusStakeV1] Error: Missing nullifier");
         return Err(MoneyError::StakeMissingNullifier.into())
     }
+    */
 
     // Newly created coin for this call is in the output. Here we gather it,
     // and we also check that it hasn't existed before.
