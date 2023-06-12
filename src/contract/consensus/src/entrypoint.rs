@@ -131,7 +131,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
         Err(_) => {
             let info_db = db_init(cid, CONSENSUS_CONTRACT_INFO_TREE)?;
 
-            // Create the incrementalmerkletree for staked and unstaked coins.
+            // Create the Merkle tree for staked and unstaked coins.
             // We can simply reuse the same empty tree twice.
             let coin_tree = MerkleTree::new(100);
             let mut coin_tree_data = vec![];

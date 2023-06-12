@@ -29,7 +29,6 @@ use darkfi_sdk::{
         pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, MerkleNode, MerklePosition,
         Nullifier, PublicKey, SecretKey,
     },
-    incrementalmerkletree::Hashable,
     pasta::pallas,
 };
 use rand::rngs::OsRng;

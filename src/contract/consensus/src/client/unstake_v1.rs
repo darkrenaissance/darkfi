@@ -29,7 +29,6 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, MerkleTree, SecretKey},
-    incrementalmerkletree::Tree,
     pasta::pallas,
 };
 use log::{debug, info};

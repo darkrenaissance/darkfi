@@ -228,7 +228,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] ===================");
     info!(target: "consensus", "[Alice] Building unstake tx");
     info!(target: "consensus", "[Alice] ===================");
-    let (unstake_tx, unstake_params, unstake_secret_key) =
+    let (unstake_tx, unstake_params, _) =
         th.unstake(Holder::Alice, alice_unstake_request_oc.clone())?;
 
     info!(target: "consensus", "[Faucet] ==========================");

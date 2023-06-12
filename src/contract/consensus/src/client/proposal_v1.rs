@@ -33,7 +33,6 @@ use darkfi_sdk::{
         ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64,
         poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey,
     },
-    incrementalmerkletree::{Hashable, Tree},
     pasta::{group::ff::FromUniformBytes, pallas},
 };
 use log::{debug, info};

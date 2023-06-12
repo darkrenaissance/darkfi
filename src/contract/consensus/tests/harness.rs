@@ -34,8 +34,8 @@ use darkfi::{
 };
 use darkfi_sdk::{
     crypto::{
-        merkle_prelude::*, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey,
-        SecretKey, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
+        poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey,
+        CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
     ContractCall,
@@ -331,7 +331,7 @@ impl ConsensusTestHarness {
         let erroneous_txs =
             wallet.state.read().await.verify_transactions(&[tx], slot, true).await?;
         assert!(erroneous_txs.is_empty());
-        wallet.money_merkle_tree.append(&MerkleNode::from(params.outputs[0].coin.inner()));
+        wallet.money_merkle_tree.append(MerkleNode::from(params.outputs[0].coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
@@ -398,7 +398,7 @@ impl ConsensusTestHarness {
         let erroneous_txs =
             wallet.state.read().await.verify_transactions(&[tx], slot, true).await?;
         assert!(erroneous_txs.is_empty());
-        wallet.consensus_staked_merkle_tree.append(&MerkleNode::from(params.output.coin.inner()));
+        wallet.consensus_staked_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
@@ -518,7 +518,7 @@ impl ConsensusTestHarness {
         let erroneous_txs =
             wallet.state.read().await.verify_transactions(&[tx], slot, true).await?;
         assert!(erroneous_txs.is_empty());
-        wallet.consensus_staked_merkle_tree.append(&MerkleNode::from(params.output.coin.inner()));
+        wallet.consensus_staked_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
@@ -594,7 +594,7 @@ impl ConsensusTestHarness {
         let erroneous_txs =
             wallet.state.read().await.verify_transactions(&[tx], slot, true).await?;
         assert!(erroneous_txs.is_empty());
-        wallet.consensus_staked_merkle_tree.append(&MerkleNode::from(params.output.coin.inner()));
+        wallet.consensus_staked_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
@@ -702,7 +702,7 @@ impl ConsensusTestHarness {
         let erroneous_txs =
             wallet.state.read().await.verify_transactions(&[tx], slot, true).await?;
         assert!(erroneous_txs.is_empty());
-        wallet.consensus_unstaked_merkle_tree.append(&MerkleNode::from(params.output.coin.inner()));
+        wallet.consensus_unstaked_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
@@ -817,7 +817,7 @@ impl ConsensusTestHarness {
         let erroneous_txs =
             wallet.state.read().await.verify_transactions(&[tx], slot, true).await?;
         assert!(erroneous_txs.is_empty());
-        wallet.money_merkle_tree.append(&MerkleNode::from(params.output.coin.inner()));
+        wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
@@ -830,7 +830,7 @@ impl ConsensusTestHarness {
         secret_key: Option<SecretKey>,
     ) -> Result<OwnCoin> {
         let wallet = self.holders.get_mut(&holder).unwrap();
-        let leaf_position = wallet.money_merkle_tree.witness().unwrap();
+        let leaf_position = wallet.money_merkle_tree.mark().unwrap();
         let secret_key = match secret_key {
             Some(key) => key,
             None => wallet.keypair.secret,
@@ -854,7 +854,7 @@ impl ConsensusTestHarness {
         secret_key: Option<SecretKey>,
     ) -> Result<ConsensusOwnCoin> {
         let wallet = self.holders.get_mut(&holder).unwrap();
-        let leaf_position = wallet.consensus_staked_merkle_tree.witness().unwrap();
+        let leaf_position = wallet.consensus_staked_merkle_tree.mark().unwrap();
         let secret_key = match secret_key {
             Some(key) => key,
             None => wallet.keypair.secret,
@@ -878,7 +878,7 @@ impl ConsensusTestHarness {
         secret_key: Option<SecretKey>,
     ) -> Result<ConsensusOwnCoin> {
         let wallet = self.holders.get_mut(&holder).unwrap();
-        let leaf_position = wallet.consensus_unstaked_merkle_tree.witness().unwrap();
+        let leaf_position = wallet.consensus_unstaked_merkle_tree.mark().unwrap();
         let secret_key = match secret_key {
             Some(key) => key,
             None => wallet.keypair.secret,
