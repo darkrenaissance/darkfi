@@ -24,8 +24,8 @@ easy-parallel = "3.3.0"
 rand = "0.8.5"
 
 # Misc
-clap = {version = "4.3.2", features = ["derive"]}
-log = "0.4.18"
+clap = {version = "4.3.3", features = ["derive"]}
+log = "0.4.19"
 simplelog = "0.12.1"
 fxhash = "0.2.1"
 url = "2.4.0"
