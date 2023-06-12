@@ -157,7 +157,8 @@ macro_rules! define_chunk_slice_to_int {
         #[inline]
         #[allow(dead_code)]
         pub fn $name(inp: &[u8], outp: &mut [$type]) {
-            assert_eq!(inp.len(), outp.len() * ::core::mem::size_of::<$type>());
+            //assert_eq!(inp.len(), outp.len() * ::core::mem::size_of::<$type>());
+            assert_eq!(inp.len(), std::mem::size_of_val(outp));
             for (outp_val, data_bytes) in
                 outp.iter_mut().zip(inp.chunks(::core::mem::size_of::<$type>()))
             {
