@@ -26,7 +26,6 @@ use darkfi::{
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, poseidon_hash, MerkleNode, MerkleTree},
-    incrementalmerkletree::Tree,
     pasta::{Ep, Fp},
 };
 use lazy_static::lazy_static;
@@ -87,8 +86,8 @@ fn main() {
     // need to provide a valid authentication path. Therefore, the easiest
     // way is to store a hashmap.
     assert!(!identities.contains_key(&identity_commitment.to_repr()));
-    membership_tree.append(&MerkleNode::from(identity_commitment));
-    let leaf_pos = membership_tree.witness().unwrap();
+    membership_tree.append(MerkleNode::from(identity_commitment));
+    let leaf_pos = membership_tree.mark().unwrap();
     identities.insert(identity_commitment.to_repr(), leaf_pos);
     identity_roots.push(membership_tree.root(0).unwrap());
 
@@ -105,8 +104,7 @@ fn main() {
     let internal_nullifier = poseidon_hash([*NULLIFIER_DERIVATION_PATH, a_1]);
 
     let identity_root = membership_tree.root(0).unwrap();
-    let identity_path = membership_tree.authentication_path(leaf_pos, &identity_root);
-    let identity_path = identity_path.unwrap();
+    let identity_path = membership_tree.witness(leaf_pos, 0).unwrap();
 
     // zkSNARK things
     let signal_zkbin = include_bytes!("../signal.zk.bin");
@@ -231,7 +229,7 @@ fn main() {
     let identity_commitment = poseidon_hash([*IDENTITY_DERIVATION_PATH, recovered_secret]);
     let leaf_pos = identities.get(&identity_commitment.to_repr()).unwrap();
     let identity_root = membership_tree.root(0).unwrap();
-    let identity_path = membership_tree.authentication_path(*leaf_pos, &identity_root);
+    let identity_path = membership_tree.witness(*leaf_pos, 0);
     let identity_path = identity_path.unwrap();
 
     // Witnesses & public inputs
