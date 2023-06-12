@@ -38,16 +38,20 @@ use rand::rngs::OsRng;
 use crate::client::common::{create_consensus_burn_proof, ConsensusBurnInputInfo};
 
 pub struct ConsensusUnstakeCallDebris {
+    /// Payload params
     pub params: ConsensusUnstakeParamsV1,
+    /// ZK proofs
     pub proofs: Vec<Proof>,
+    /// Secret key used to sign the transaction
     pub signature_secret: SecretKey,
+    /// Value blind to be used in the `Money::UnstakeV1` call
     pub value_blind: pallas::Scalar,
 }
 
 /// Struct holding necessary information to build a `Consensus::UnstakeV1` contract call.
 pub struct ConsensusUnstakeCallBuilder {
     /// `ConsensusOwnCoin` we're given to use in this builder
-    pub coin: ConsensusOwnCoin,
+    pub owncoin: ConsensusOwnCoin,
     /// Merkle tree of coins used to create inclusion proofs
     pub tree: MerkleTree,
     /// `ConsensusBurn_V1` zkas circuit ZkBinary
@@ -58,30 +62,27 @@ pub struct ConsensusUnstakeCallBuilder {
 
 impl ConsensusUnstakeCallBuilder {
     pub fn build(&self) -> Result<ConsensusUnstakeCallDebris> {
-        debug!("Building Consensus::UnstakeV1 contract call");
+        info!("Building Consensus::UnstakeV1 contract call");
         assert!(self.coin.note.value != 0);
 
-        debug!("Building anonymous input");
-        let leaf_position = self.coin.leaf_position;
+        debug!("Building Consensus::UnstakeV1 anonymous input");
         let root = self.tree.root(0).unwrap();
-        let merkle_path = self.tree.authentication_path(leaf_position, &root).unwrap();
-        let value_blind = pallas::Scalar::random(&mut OsRng);
-        let input = ConsensusBurnInputInfo {
-            leaf_position,
-            merkle_path,
-            secret: self.coin.secret,
-            note: self.coin.note.clone(),
-            value_blind,
-        };
-        debug!("Finished building input");
+        let merkle_path = self.tree.authentication_path(self.owncoin.leaf_position, &root).unwrap();
 
-        info!("Creating unstake burn proof for input");
-        let value_blind = input.value_blind;
+        let input = ConsensusBurnInputInfo {
+            leaf_position: self.owncoin.leaf_position,
+            merkle_path,
+            secret: self.owncoin.secret,
+            note: self.owncoin.note.clone(),
+            value_blind: pallas::Scalar::random(&mut OsRng),
+        };
+
+        info!("Building Consensus::UnstakeV1 Burn ZK proof");
         let (proof, public_inputs, signature_secret) =
             create_consensus_burn_proof(&self.burn_zkbin, &self.burn_pk, &input)?;
 
-        let input = ConsensusInput {
-            epoch: self.coin.note.epoch,
+        let tx_input = ConsensusInput {
+            epoch: self.owncoin.note.epoch,
             value_commit: public_inputs.value_commit,
             nullifier: public_inputs.nullifier,
             merkle_root: public_inputs.merkle_root,
@@ -90,11 +91,14 @@ impl ConsensusUnstakeCallBuilder {
 
         // We now fill this with necessary stuff
         let params = ConsensusUnstakeParamsV1 { input };
-        let proofs = vec![proof];
 
-        // Now we should have all the params, zk proof, signature secret and token blind.
-        // We return it all and let the caller deal with it.
-        let debris = ConsensusUnstakeCallDebris { params, proofs, signature_secret, value_blind };
+        // Construct debris
+        let debris = ConsensusUnstakeCallDebris {
+            params,
+            proofs: vec![proof],
+            signature_secret,
+            value_blind: input.value_blind,
+        };
         Ok(debris)
     }
 }
