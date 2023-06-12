@@ -11,7 +11,7 @@ Blockchain $\mathbb{C_{loc}}$ is a series of epochs: it's a tree of chains,
 $C^1$, $C^2$, $\dots$, $C^n$, the chain ending in a single leader per slot single finalization.
 
 Crypsinous Blockchain is built on top of Zerocash sapling scheme, and Ouroboros Genesis  blockchain.
-Each participant $U_p$ stores it's own local view of the Blockchain $C_{loc}^{U_p}$.
+Each participant $U_p$ stores its own local view of the Blockchain $C_{loc}^{U_p}$.
 $C_{loc}$ is a sequence of blocks $B_i$ (i>0), where each $B \in C_{loc}$
 $$ B = (tx_{lead},st)$$
 $$tx_{lead} = (LEAD, header, txs, stx_{proof})$$
@@ -58,7 +58,7 @@ validation of proposed lead proof as follows:
 * verify block header hash
 * public inputs $\mu_y$, $\mu_{rho}$ are hash of current consensus $\eta$, and current slot
 * public inputs of target 2-term approximations $\sigma_1$, $\sigma_2$ are valid given total network stake and controller parameters
-* the competing coin nullifier isn't published before to protect against double spening, before burning the coin.
+* the competing coin nullifier isn't published before to protect against double spending, before burning the coin.
 * verify block transactions
 
 <!--
@@ -100,7 +100,7 @@ $$sn_{c_i}=PRF_{root_{sk_{c_i}^{COIN}}}^{sn}(\rho_{c_i}), \forall_i \in \{1,2\}$
 
 ## Epoch
 
-An epoch is a vector of blocks. Some of the  blocks might be empty if there is no winnig leader. tokens in stake are constant during the epoch.
+An epoch is a vector of blocks. Some of the  blocks might be empty if there is no winning leader. tokens in stake are constant during the epoch.
 
 ## Leader selection
 
@@ -133,9 +133,9 @@ family of functions.
 
 ### automating f tuning
 
-the stable consensus token supply is maintained by the help of discrete PID controller, that maintain stabilized occurance of single leader per slot.
+the stable consensus token supply is maintained by the help of discrete PID controller, that maintain stabilized occurrence of single leader per slot.
 
-#### control lottery f tunning paramter
+#### control lottery f tunning parameter
 
 $$f[k] = f[k-1] + K_1e[k] + K_2e[k-1] + K_3e[k-2]$$
 
@@ -233,7 +233,7 @@ be used by the protocol.
 | `rho_mu`     | `pallas::Base` | random seed base from blockchain                      |
 | `rho`        | `pallas::Base` | hash of random seed and `rho_mu` to constrain lottery |
 | `sigma1`     | `pallas::Base` | first term in 2-terms target approximation.           |
-| `sigma2`     | `pallas::Base` | second term in 2-terms target approximatino.          |
+| `sigma2`     | `pallas::Base` | second term in 2-terms target approximation.          |
 
 
 ### Linear family functions
@@ -333,7 +333,7 @@ assume there is a solution for the lead statement parameters and constants $S, f
 for the statement $y<T$, $$T=L\phi_{max}\phi(\alpha)=S\phi(\alpha)$$
 $$S=ord(G)\phi_{max}\phi(\alpha)$$
 such that S $in Z$
-$\phi_{max}=\phi(\alpha_{max})$ where $\alpha_{max}$ is the maximum stake value being $2^{64}$, following from the previous proof that the family of function haveing independent aggregation property is the exponential function $f^\alpha$, and $f \in Z | f>1$, the smallest value satisfying f is $f=2$, then $$\phi_{max} = 2^{2^{64}}$$
+$\phi_{max}=\phi(\alpha_{max})$ where $\alpha_{max}$ is the maximum stake value being $2^{64}$, following from the previous proof that the family of function having independent aggregation property is the exponential function $f^\alpha$, and $f \in Z | f>1$, the smallest value satisfying f is $f=2$, then $$\phi_{max} = 2^{2^{64}}$$
 note that since $ord(G)<<\phi_{max}$ thus $S<<1$, contradiction.
 
 
@@ -355,11 +355,11 @@ R is the epoch length in terms of slots.
 
 ### toward better decentralization in ouroboros
 
-the randomization of the leader selection at each slot is hinged on the random $y$, $\mu_y$, $\rho_c$, those three values are dervied from $\eta$, and root of the secret keys, the root of the secret keys for each stakeholder can be sampled, and derived beforehand, but $\eta$ is a response to global random oracle query, so it's security is hinged on $\textit{centralized global random node}$.
+the randomization of the leader selection at each slot is hinged on the random $y$, $\mu_y$, $\rho_c$, those three values are derived from $\eta$, and root of the secret keys, the root of the secret keys for each stakeholder can be sampled, and derived beforehand, but $\eta$ is a response to global random oracle query, so it's security is hinged on $\textit{centralized global random node}$.
 
 #### solution
 
-to break this centeralization, a decentralized emulation of $G_{ro}$ functionality for calculation of: $\eta_i=PRF^{G_{ro}}_{\eta_{i-1}}(\psi)$
+to break this centralization, a decentralized emulation of $G_{ro}$ functionality for calculation of: $\eta_i=PRF^{G_{ro}}_{\eta_{i-1}}(\psi)$
 $$\psi   =  hash(tx^{ep}_{0})$$
 $$\eta_0 =  hash(\mathrm{"let\; there\; be\; dark!"})$$
 note that first transaction in the block, is the proof transaction.
