@@ -45,10 +45,8 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        constants::MERKLE_DEPTH, contract_id::MONEY_CONTRACT_ID, mimc_vdf, Keypair, MerkleNode,
-        PublicKey, DARK_TOKEN_ID,
+        contract_id::MONEY_CONTRACT_ID, mimc_vdf, Keypair, MerkleTree, PublicKey, DARK_TOKEN_ID,
     },
-    incrementalmerkletree::bridgetree::BridgeTree,
     num_bigint::BigUint,
     num_traits::Num,
     pasta::{group::ff::PrimeField, pallas},
@@ -191,7 +189,7 @@ pub struct Faucetd {
     validator_state: ValidatorStatePtr,
     keypair: Keypair,
     _wallet: WalletPtr,
-    merkle_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    merkle_tree: MerkleTree,
     airdrop_timeout: i64,
     airdrop_limit: u64,
     airdrop_map: AirdropMap,
@@ -296,7 +294,7 @@ impl Faucetd {
         Ok(faucetd)
     }
 
-    async fn initialize_wallet(wallet: WalletPtr) -> Result<BridgeTree<MerkleNode, MERKLE_DEPTH>> {
+    async fn initialize_wallet(wallet: WalletPtr) -> Result<MerkleTree> {
         // Perform wallet initialization for the money contract
         let wallet_schema = include_str!("../../../src/contract/money/wallet.sql");
 
@@ -314,7 +312,7 @@ impl Faucetd {
                 deserialize(t.get(MONEY_TREE_COL_TREE))?
             }
             Err(_) => {
-                let tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+                let tree = MerkleTree::new(100);
                 let tree_bytes = serialize(&tree);
                 let query = format!(
                     "DELETE FROM {}; INSERT INTO {} ({}) VALUES (?1)",
