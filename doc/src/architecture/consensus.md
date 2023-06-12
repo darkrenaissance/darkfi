@@ -14,7 +14,7 @@ blockchain achieve consensus.
 | Leader                 | Block producer                                                                            |
 | Unproposed Transaction | Transaction that exists in the memory pool but has not yet been included in a block       |
 | Block proposal         | Block that has not yet been appended onto the canonical blockchain                        |
-| P2P network            | Peer-to-peer network on which nodes communicate with eachother                            |
+| P2P network            | Peer-to-peer network on which nodes communicate with each other                            |
 | Finalization           | State achieved when a block and its contents are appended to the canonical blockchain     |
 | Fork                   | Chain of block proposals that begins with the last block of the canonical blockchain      |
 
@@ -73,7 +73,7 @@ Upon receiving a block, one of the following cases may occur:
 
 ### Visual Examples
 
-| Sympol        | Description                            |
+| Symbol        | Description                            |
 |---------------|----------------------------------------|
 | [C]           | Canonical(finalized) blockchain block  |
 | [C]--...--[C] | Sequence of canonical blocks           |
@@ -129,7 +129,7 @@ to the canonical blockchain.
 Once finalized, all fork chains are removed from the memory pool.
 Practically this means that no finalization can occur while there are
 competing fork chains of the same length. In such a case, finalization
-can only occur when we have a a slot with a single leader.
+can only occur when we have a slot with a single leader.
 
 We continue Case 3 from the previous section to visualize this logic.
 On slot 5, a node observes 2 proposals. One extends the F0 fork,
