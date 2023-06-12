@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::base::Base;
-use crate::point::Point;
-use crate::scalar::Scalar;
-use crate::zk_binary::ZkBinary;
+use crate::{base::Base, point::Point, scalar::Scalar, zk_binary::ZkBinary};
 use darkfi::zk::{halo2::Value, vm, vm_heap::empty_witnesses};
 use darkfi_sdk::crypto::MerkleNode;
 use pyo3::prelude::*;
@@ -28,7 +25,6 @@ use std::ops::Deref;
 #[pyclass]
 pub struct ZkCircuit(pub(crate) vm::ZkCircuit, pub(crate) Vec<vm::Witness>);
 
-/// QUESTION: how to deal with witness?
 /// Like Builder Object
 #[pymethods]
 impl ZkCircuit {

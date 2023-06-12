@@ -16,10 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::base::Base;
-use crate::proving_key::ProvingKey;
-use crate::verifying_key::VerifyingKey;
-use crate::zk_circuit::ZkCircuit;
+use crate::{
+    base::Base, proving_key::ProvingKey, verifying_key::VerifyingKey, zk_circuit::ZkCircuit,
+};
 use darkfi::zk::{proof, vm};
 use darkfi_sdk::crypto::pallas;
 use pyo3::prelude::*;

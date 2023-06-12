@@ -23,7 +23,6 @@ use darkfi_sdk::crypto::{
 use pyo3::prelude::*;
 use rand::rngs::OsRng;
 
-/// Why does Vesta use Fq?
 /// The scalar field of the Pallas and iso-Pallas curves.
 #[pyclass]
 pub struct Scalar(pub(crate) pallas::Scalar);
