@@ -301,6 +301,10 @@ impl UMsgs {
         self.msgs.lock().await.len()
     }
 
+    pub async fn is_empty(&self) -> bool {
+        self.msgs.lock().await.len() == 0
+    }
+
     pub async fn contains(&self, key: &str) -> bool {
         self.msgs.lock().await.contains_key(key)
     }
