@@ -21,12 +21,10 @@ use std::{collections::HashMap, io::Cursor};
 use async_std::sync::{Arc, RwLock};
 use darkfi_sdk::{
     crypto::{
-        constants::MERKLE_DEPTH,
         contract_id::{CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
         schnorr::{SchnorrPublic, SchnorrSecret},
-        MerkleNode, PublicKey, SecretKey,
+        MerkleNode, MerkleTree, PublicKey, SecretKey,
     },
-    incrementalmerkletree::{bridgetree::BridgeTree, Tree},
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
@@ -381,12 +379,12 @@ impl ValidatorState {
         if !erroneous_txs.is_empty() {
             unproposed_txs.retain(|x| !erroneous_txs.contains(x));
         }
-        let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+        let mut tree = MerkleTree::new(100);
         // The following is pretty weird, so something better should be done.
         for tx in &unproposed_txs {
             let mut hash = [0_u8; 32];
             hash[0..31].copy_from_slice(&blake3::hash(&serialize(tx)).as_bytes()[0..31]);
-            tree.append(&MerkleNode::from(pallas::Base::from_repr(hash).unwrap()));
+            tree.append(MerkleNode::from(pallas::Base::from_repr(hash).unwrap()));
         }
         let root = tree.root(0).unwrap();
 

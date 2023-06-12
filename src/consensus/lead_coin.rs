@@ -21,9 +21,8 @@ use darkfi_sdk::{
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
         poseidon_hash,
         util::mod_r_p,
-        MerkleNode, SecretKey,
+        MerkleNode, MerkleTree, SecretKey,
     },
-    incrementalmerkletree::{bridgetree::BridgeTree, Tree},
     pasta::{arithmetic::CurveAffine, group::Curve, pallas},
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
@@ -109,7 +108,7 @@ impl LeadCoin {
         // coin1 nonce
         seed: pallas::Base,
         // Merkle tree of coin commitments
-        coin_commitment_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
+        coin_commitment_tree: &mut MerkleTree,
     ) -> Self {
         // Generate random blinding values for commitments:
         let coin1_blind = pallas::Scalar::random(&mut OsRng);
@@ -122,12 +121,11 @@ impl LeadCoin {
         let c1_base_msg = [*c1_cm_coords.x(), *c1_cm_coords.y()];
         let coin1_commitment_base = poseidon_hash(c1_base_msg);
         // Append the element to the Merkle tree
-        coin_commitment_tree.append(&MerkleNode::from(coin1_commitment_base));
-        let coin1_commitment_pos = coin_commitment_tree.witness().unwrap();
+        coin_commitment_tree.append(MerkleNode::from(coin1_commitment_base));
+        let coin1_commitment_pos = coin_commitment_tree.mark().unwrap();
         let coin1_commitment_root = coin_commitment_tree.root(0).unwrap();
-        let coin1_commitment_merkle_path = coin_commitment_tree
-            .authentication_path(coin1_commitment_pos, &coin1_commitment_root)
-            .unwrap();
+        let coin1_commitment_merkle_path =
+            coin_commitment_tree.witness(coin1_commitment_pos, 0).unwrap();
 
         Self {
             value,
@@ -135,7 +133,7 @@ impl LeadCoin {
             nonce: seed,
             coin1_commitment,
             coin1_commitment_root,
-            coin1_commitment_pos: u32::try_from(usize::from(coin1_commitment_pos)).unwrap(),
+            coin1_commitment_pos: u32::try_from(u64::from(coin1_commitment_pos)).unwrap(),
             coin1_commitment_merkle_path,
             coin1_sk,
             coin1_sk_root,
@@ -299,7 +297,7 @@ impl LeadCoin {
     /// in lottery.
     pub fn derive_coin(
         &self,
-        coin_commitment_tree: &mut BridgeTree<MerkleNode, MERKLE_DEPTH>,
+        coin_commitment_tree: &mut MerkleTree,
         derived_blind: pallas::Scalar,
     ) -> LeadCoin {
         info!(target: "consensus::leadcoin", "derive_coin(): Deriving new coin!");
@@ -308,18 +306,17 @@ impl LeadCoin {
         let derived_c1_cm_coord = derived_c1_cm.to_affine().coordinates().unwrap();
         let derived_c1_cm_msg = [*derived_c1_cm_coord.x(), *derived_c1_cm_coord.y()];
         let derived_c1_cm_base = poseidon_hash(derived_c1_cm_msg);
-        coin_commitment_tree.append(&MerkleNode::from(derived_c1_cm_base));
-        let leaf_pos = coin_commitment_tree.witness().unwrap();
+        coin_commitment_tree.append(MerkleNode::from(derived_c1_cm_base));
+        let leaf_pos = coin_commitment_tree.mark().unwrap();
         let commitment_root = coin_commitment_tree.root(0).unwrap();
-        let commitment_merkle_path =
-            coin_commitment_tree.authentication_path(leaf_pos, &commitment_root).unwrap();
+        let commitment_merkle_path = coin_commitment_tree.witness(leaf_pos, 0).unwrap();
         LeadCoin {
             value: self.value + constants::REWARD,
             slot: self.slot,
             nonce: derived_c1_rho,
             coin1_commitment: derived_c1_cm,
             coin1_commitment_root: commitment_root,
-            coin1_commitment_pos: u32::try_from(usize::from(leaf_pos)).unwrap(),
+            coin1_commitment_pos: u32::try_from(u64::from(leaf_pos)).unwrap(),
             coin1_commitment_merkle_path: commitment_merkle_path,
             coin1_sk: self.coin1_sk,
             coin1_sk_root: self.coin1_sk_root,
@@ -476,7 +473,7 @@ impl LeadCoinSecrets {
     /// sk[n] -> derive_function(sk[n-1]),
     /// ```
     pub fn generate() -> Self {
-        let mut tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(EPOCH_LENGTH);
+        let mut tree = MerkleTree::new(EPOCH_LENGTH);
         let mut sks = Vec::with_capacity(EPOCH_LENGTH);
         let mut root_sks = Vec::with_capacity(EPOCH_LENGTH);
         let mut path_sks = Vec::with_capacity(EPOCH_LENGTH);
@@ -498,10 +495,10 @@ impl LeadCoinSecrets {
             prev_sk = secret_key;
 
             let node = MerkleNode::from(secret_key.inner());
-            tree.append(&node);
-            let leaf_pos = tree.witness().unwrap();
+            tree.append(node);
+            let leaf_pos = tree.mark().unwrap();
             let root = tree.root(0).unwrap();
-            let path = tree.authentication_path(leaf_pos, &root).unwrap();
+            let path = tree.witness(leaf_pos, 0).unwrap();
 
             root_sks.push(root);
             path_sks.push(path);

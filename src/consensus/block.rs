@@ -19,8 +19,7 @@
 use std::fmt;
 
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, MerkleNode},
-    incrementalmerkletree::{bridgetree::BridgeTree, Tree},
+    crypto::{MerkleNode, MerkleTree},
     pasta::pallas,
 };
 use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
@@ -62,7 +61,7 @@ impl Header {
 
     /// Generate the genesis block.
     pub fn genesis_header(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Self {
-        let tree = BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(100);
+        let tree = MerkleTree::new(100);
         let root = tree.root(0).unwrap();
 
         Self::new(genesis_data, 0, 0, genesis_ts, root)

@@ -17,8 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{constants::MERKLE_DEPTH, pasta_prelude::*, MerkleNode},
-    incrementalmerkletree::bridgetree::BridgeTree,
+    crypto::{pasta_prelude::*, MerkleTree},
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
@@ -86,7 +85,7 @@ pub struct ConsensusState {
     /// Canonical competing coins
     pub coins: Vec<LeadCoin>,
     /// Canonical coin commitments tree
-    pub coins_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    pub coins_tree: MerkleTree,
     /// Canonical seen nullifiers from proposals
     pub nullifiers: Vec<pallas::Base>,
 }
@@ -123,7 +122,7 @@ impl ConsensusState {
             f_history: vec![constants::FLOAT10_ZERO.clone()],
             err_history: vec![constants::FLOAT10_ZERO.clone(), constants::FLOAT10_ZERO.clone()],
             coins: vec![],
-            coins_tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH * 100),
+            coins_tree: MerkleTree::new(constants::EPOCH_LENGTH * 100),
             nullifiers: vec![],
         }
     }
@@ -782,7 +781,7 @@ pub struct StateCheckpoint {
     /// Node competing coins current state
     pub coins: Vec<LeadCoin>,
     /// Coin commitments tree current state
-    pub coins_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
+    pub coins_tree: MerkleTree,
     /// Seen nullifiers from proposals current state
     pub nullifiers: Vec<pallas::Base>,
 }
@@ -791,7 +790,7 @@ impl StateCheckpoint {
     pub fn new(
         proposal: BlockProposal,
         coins: Vec<LeadCoin>,
-        coins_tree: BridgeTree<MerkleNode, MERKLE_DEPTH>,
+        coins_tree: MerkleTree,
         nullifiers: Vec<pallas::Base>,
     ) -> Self {
         Self { proposal, coins, coins_tree, nullifiers }
@@ -818,7 +817,7 @@ impl From<StateCheckpointInfo> for StateCheckpoint {
         Self {
             proposal: state_checkpoint_info.proposal,
             coins: vec![],
-            coins_tree: BridgeTree::<MerkleNode, MERKLE_DEPTH>::new(constants::EPOCH_LENGTH * 100),
+            coins_tree: MerkleTree::new(constants::EPOCH_LENGTH * 100),
             nullifiers: state_checkpoint_info.nullifiers,
         }
     }

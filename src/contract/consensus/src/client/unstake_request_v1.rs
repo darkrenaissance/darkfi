@@ -74,8 +74,7 @@ impl ConsensusUnstakeRequestCallBuilder {
         assert!(self.owncoin.note.value != 0);
 
         debug!("Building Consensus::UnstakeRequestV1 anonymous input");
-        let root = self.tree.root(0).unwrap();
-        let merkle_path = self.tree.authentication_path(self.owncoin.leaf_position, &root).unwrap();
+        let merkle_path = self.tree.witness(self.owncoin.leaf_position, 0).unwrap();
 
         let input = ConsensusBurnInputInfo {
             leaf_position: self.owncoin.leaf_position,

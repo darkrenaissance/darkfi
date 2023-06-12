@@ -25,9 +25,11 @@ use darkfi::{
 };
 use darkfi_money_contract::{client::ConsensusNote, model::Coin};
 use darkfi_sdk::{
+    bridgetree,
+    bridgetree::Hashable,
     crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, MerkleNode, MerklePosition,
-        Nullifier, PublicKey, SecretKey,
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, MerkleNode, Nullifier, PublicKey,
+        SecretKey,
     },
     pasta::pallas,
 };
@@ -43,7 +45,7 @@ pub struct ConsensusMintOutputInfo {
 }
 
 pub struct ConsensusBurnInputInfo {
-    pub leaf_position: MerklePosition,
+    pub leaf_position: bridgetree::Position,
     pub merkle_path: Vec<MerkleNode>,
     pub secret: SecretKey,
     pub note: ConsensusNote,

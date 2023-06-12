@@ -29,6 +29,7 @@ use darkfi_money_contract::{
     model::{Coin, ConsensusInput, ConsensusOutput},
 };
 use darkfi_sdk::{
+    bridgetree::Hashable,
     crypto::{
         ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64,
         poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey,
@@ -131,9 +132,7 @@ impl ConsensusProposalCallBuilder {
         assert!(self.owncoin.note.value != 0);
 
         debug!("Building Consensus::ProposalV1 anonymous input");
-        let root = self.merkle_tree.root(0).unwrap();
-        let merkle_path =
-            self.merkle_tree.authentication_path(self.owncoin.leaf_position, &root).unwrap();
+        let merkle_path = self.merkle_tree.witness(self.owncoin.leaf_position, 0).unwrap();
 
         let input = ConsensusBurnInputInfo {
             leaf_position: self.owncoin.leaf_position,
