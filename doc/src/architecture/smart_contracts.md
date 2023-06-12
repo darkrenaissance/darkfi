@@ -209,7 +209,7 @@ And corresponding function calls.
 ```
 
 As we can see the ZK proofs and signatures are separate from the
-actuall `call_data` interpreted by `state_transition()`. They are
+actual `call_data` interpreted by `state_transition()`. They are
 both automatically verified by the VM.
 
 However for verification to work, the ZK proofs also need corresponding

@@ -184,7 +184,7 @@ following command:
 
 ## Receive
 
-To receive anonymous tokens your darkfid account, you must retrieve your
+To receive anonymous tokens on your darkfid account, you must retrieve your
 darkfi address. Send this address to others so they can send you tokens.
 
 ```

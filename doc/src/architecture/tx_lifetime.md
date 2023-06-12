@@ -32,7 +32,7 @@ chain:
 9. `CP` proposes a block finalization containing $tx$
 10. `CP` writes the state transition update of $tx$ to their chain
 11. `CP` removes $tx$ from their `mempool`
-12. `CP` broadcasts the finalizated proposal
+12. `CP` broadcasts the finalized proposal
 13. `CS` receives the proposal and validates transactions
 14. `CS` writes the state updates to their chain
 15. `CS` removes $tx$ from their `mempool`
@@ -56,7 +56,7 @@ chain:
 in sequence
 11. `CP` writes the state transition update of $tx$ to their chain
 12. `CP` removes $tx$ from their `mempool`
-13. `CP` broadcasts the finalizated proposals sequence
+13. `CP` broadcasts the finalized proposals sequence
 14. `CS` receives the proposals sequence and validates transactions
 15. `CS` writes the state updates to their chain
 16. `CS` removes $tx$ from their `mempool`
@@ -87,7 +87,7 @@ transactions in sequence, against canonical state
 15. `CP` writes the state transition update of $tx$ to their chain
 16. `CP` removes $tx$ from their `mempool`
 17. `CP` drop rest forks and keeps only the finalized one
-18. `CP` broadcasts the finalizated proposals sequence
+18. `CP` broadcasts the finalized proposals sequence
 19. `CS` receives the proposals sequence and validates transactions
 20. `CS` writes the state updates to their chain
 21. `CS` removes $tx$ from their `mempool`
