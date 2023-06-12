@@ -22,9 +22,6 @@ use darkfi_sdk::error::ContractError;
 pub mod entrypoint;
 
 #[cfg(feature = "client")]
-pub mod note;
-
-#[cfg(feature = "client")]
 /// Transaction building API for clients interacting with DAO contract
 pub mod dao_client;
 

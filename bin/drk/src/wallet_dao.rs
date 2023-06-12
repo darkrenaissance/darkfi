@@ -40,13 +40,13 @@ use darkfi_dao_contract::{
         DAO_VOTES_COL_VOTE_OPTION, DAO_VOTES_COL_YES_VOTE_BLIND, DAO_VOTES_TABLE,
     },
     dao_model::{DaoBulla, DaoMintParams, DaoProposeParams, DaoVoteParams},
-    note::EncryptedNote2,
     DaoFunction,
 };
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        poseidon_hash, MerkleNode, MerkleTree, PublicKey, SecretKey, TokenId, DAO_CONTRACT_ID,
+        note::AeadEncryptedNote, poseidon_hash, MerkleNode, MerkleTree, PublicKey, SecretKey,
+        TokenId, DAO_CONTRACT_ID,
     },
     pasta::pallas,
 };
@@ -1037,8 +1037,7 @@ impl Drk {
 
             for proposal in new_dao_proposals {
                 proposals_tree.append(MerkleNode::from(proposal.0.proposal_bulla));
-                // FIXME: EncryptedNote2 should perhaps be something generic?
-                let enc_note = EncryptedNote2 {
+                let enc_note = AeadEncryptedNote {
                     ciphertext: proposal.0.ciphertext,
                     ephem_public: proposal.0.ephem_public,
                 };
@@ -1075,7 +1074,7 @@ impl Drk {
             }
 
             for vote in new_dao_votes {
-                let enc_note = EncryptedNote2 {
+                let enc_note = AeadEncryptedNote {
                     ciphertext: vote.0.ciphertext,
                     ephem_public: vote.0.ephem_public,
                 };

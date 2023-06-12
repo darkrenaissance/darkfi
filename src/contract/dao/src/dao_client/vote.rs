@@ -20,8 +20,8 @@ use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
     crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, Nullifier,
-        PublicKey, SecretKey,
+        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Keypair,
+        MerkleNode, Nullifier, PublicKey, SecretKey,
     },
     pasta::pallas,
 };
@@ -36,10 +36,7 @@ use darkfi::{
 };
 
 use super::{DaoInfo, DaoProposalInfo};
-use crate::{
-    dao_model::{DaoVoteParams, DaoVoteParamsInput},
-    note,
-};
+use crate::dao_model::{DaoVoteParams, DaoVoteParamsInput};
 
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct DaoVoteNote {
@@ -270,7 +267,8 @@ impl DaoVoteCall {
             all_vote_value,
             all_vote_blind,
         };
-        let enc_note = note::encrypt(&note, &self.vote_keypair.public).unwrap();
+        let enc_note =
+            AeadEncryptedNote::encrypt(&note, &self.vote_keypair.public, &mut OsRng).unwrap();
 
         let params = DaoVoteParams {
             token_commit,

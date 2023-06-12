@@ -20,8 +20,8 @@ use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
     crypto::{
-        pasta_prelude::*, pedersen::pedersen_commitment_u64, poseidon_hash, MerkleNode, PublicKey,
-        SecretKey, TokenId,
+        note::AeadEncryptedNote, pasta_prelude::*, pedersen::pedersen_commitment_u64,
+        poseidon_hash, MerkleNode, PublicKey, SecretKey, TokenId,
     },
     pasta::pallas,
 };
@@ -34,10 +34,7 @@ use darkfi::{
     Result,
 };
 
-use crate::{
-    dao_model::{DaoProposeParams, DaoProposeParamsInput},
-    note,
-};
+use crate::dao_model::{DaoProposeParams, DaoProposeParamsInput};
 
 use super::DaoInfo;
 
@@ -247,7 +244,7 @@ impl DaoProposeCall {
         proofs.push(main_proof);
 
         let note = DaoProposeNote { proposal: self.proposal };
-        let enc_note = note::encrypt(&note, &self.dao.public_key).unwrap();
+        let enc_note = AeadEncryptedNote::encrypt(&note, &self.dao.public_key, &mut OsRng).unwrap();
         let params = DaoProposeParams {
             dao_merkle_root: self.dao_merkle_root,
             proposal_bulla,

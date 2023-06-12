@@ -21,8 +21,9 @@ use std::time::{Duration, Instant};
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, MerkleTree,
-        SecretKey, TokenId, DAO_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
+        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Keypair,
+        MerkleNode, MerkleTree, SecretKey, TokenId, DAO_CONTRACT_ID, DARK_TOKEN_ID,
+        MONEY_CONTRACT_ID,
     },
     pasta::pallas,
     ContractCall,
@@ -32,7 +33,7 @@ use log::debug;
 use rand::rngs::OsRng;
 
 use darkfi_dao_contract::{
-    dao_client, dao_model, money_client, note, wallet_cache::WalletCache, DaoFunction,
+    dao_client, dao_model, money_client, wallet_cache::WalletCache, DaoFunction,
 };
 
 use darkfi_money_contract::{
@@ -460,11 +461,8 @@ async fn integration_test() -> Result<()> {
 
     // Read received proposal
     let (proposal, proposal_bulla) = {
-        // TODO: EncryptedNote should be accessible by wasm and put in the structs directly
-        let enc_note = note::EncryptedNote2 {
-            ciphertext: params.ciphertext,
-            ephem_public: params.ephem_public,
-        };
+        let enc_note =
+            AeadEncryptedNote { ciphertext: params.ciphertext, ephem_public: params.ephem_public };
         let note: dao_client::DaoProposeNote = enc_note.decrypt(&dao_th.dao_kp.secret).unwrap();
 
         // TODO: check it belongs to DAO bulla
@@ -572,10 +570,8 @@ async fn integration_test() -> Result<()> {
     // TODO: look into verifiable encryption for notes
     // TODO: look into timelock puzzle as a possibility
     let vote_note_1 = {
-        let enc_note = note::EncryptedNote2 {
-            ciphertext: params.ciphertext,
-            ephem_public: params.ephem_public,
-        };
+        let enc_note =
+            AeadEncryptedNote { ciphertext: params.ciphertext, ephem_public: params.ephem_public };
         let note: dao_client::DaoVoteNote = enc_note.decrypt(&vote_keypair_1.secret).unwrap();
         note
     };
@@ -644,10 +640,8 @@ async fn integration_test() -> Result<()> {
     vote_verify_times.push(timer.elapsed());
 
     let vote_note_2 = {
-        let enc_note = note::EncryptedNote2 {
-            ciphertext: params.ciphertext,
-            ephem_public: params.ephem_public,
-        };
+        let enc_note =
+            AeadEncryptedNote { ciphertext: params.ciphertext, ephem_public: params.ephem_public };
         let note: dao_client::DaoVoteNote = enc_note.decrypt(&vote_keypair_2.secret).unwrap();
         note
     };
@@ -719,10 +713,8 @@ async fn integration_test() -> Result<()> {
     // TODO: look into verifiable encryption for notes
     // TODO: look into timelock puzzle as a possibility
     let vote_note_3 = {
-        let enc_note = note::EncryptedNote2 {
-            ciphertext: params.ciphertext,
-            ephem_public: params.ephem_public,
-        };
+        let enc_note =
+            AeadEncryptedNote { ciphertext: params.ciphertext, ephem_public: params.ephem_public };
         let note: dao_client::DaoVoteNote = enc_note.decrypt(&vote_keypair_3.secret).unwrap();
         note
     };
