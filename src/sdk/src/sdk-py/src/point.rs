@@ -16,9 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::affine::Affine;
-use crate::base::Base;
-use crate::scalar::Scalar;
+use crate::{affine::Affine, base::Base, scalar::Scalar};
 use darkfi_sdk::{
     crypto::{
         constants::{
@@ -59,21 +57,19 @@ impl Point {
 
     #[staticmethod]
     fn mul_short(value: &Base) -> Self {
-        // QUESTION: Why does v need to be a random element from EP?
-        // Why not NullifierK.generator() or some other pre-determined generator?
         let hasher = ValueCommit::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
         let v = hasher(&VALUE_COMMITMENT_V_BYTES);
         Self(v * mod_r_p(value.0))
     }
 
-    // why value doesn't need to be a Pycell
+    // Why value doesn't need to be a Pycell?
     #[staticmethod]
     fn mul_base(value: &Base) -> Self {
         let v = NullifierK.generator();
         Self(v * mod_r_p(value.0))
     }
 
-    // why not a pycell
+    // Why not a pycell?
     #[staticmethod]
     fn mul_r_generator(blind: &Scalar) -> Self {
         let hasher = ValueCommit::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
