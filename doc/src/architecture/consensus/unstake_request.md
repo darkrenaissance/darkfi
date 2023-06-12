@@ -54,7 +54,7 @@ with the burned nullifier and the minted coin. Here we use the same
 parameters like we do in [`Proposal`](proposal.md) - a nullifier and
 a coin:
 
-```
+```rust,no_run,no_playground
 {{#include ../../../../src/contract/consensus/src/model.rs:ConsensusProposalUpdate}}
 ```
 

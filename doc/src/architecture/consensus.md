@@ -1,5 +1,14 @@
 # Consensus
 
+To understand how the consensus smart contract works and how anonymous
+staking and unstaking is achieved, read the following chapters:
+
+* [Genesis stake](consensus/genesis_stake.md)
+* [Stake](consensus/stake.md)
+* [Proposal](consensus/proposal.md)
+* [Unstake request](consensus/unstake_request.md)
+* [Unstake](consensus/unstake.md)
+
 This section of the book describes how nodes participating in the DarkFi
 blockchain achieve consensus.
 
@@ -8,13 +17,13 @@ blockchain achieve consensus.
 | Name                   | Description                                                                               |
 |------------------------|-------------------------------------------------------------------------------------------|
 | Consensus              | Algorithm for reaching blockchain consensus between participating nodes                   |
-| Node                   | darkfid daemon participating in the network                                               |
-| Slot                   | Specified timeframe for block production, measured in seconds(default=90)                 |
-| Epoch                  | Specified timeframe for blockchain events, measured in slots(default=10)                  |
+| Node                   | DarkFi daemon participating in the network                                                |
+| Slot                   | Specified timeframe for block production, measured in seconds (default=90)                |
+| Epoch                  | Specified timeframe for blockchain events, measured in slots (default=10)                 |
 | Leader                 | Block producer                                                                            |
 | Unproposed Transaction | Transaction that exists in the memory pool but has not yet been included in a block       |
 | Block proposal         | Block that has not yet been appended onto the canonical blockchain                        |
-| P2P network            | Peer-to-peer network on which nodes communicate with each other                            |
+| P2P network            | Peer-to-peer network on which Nodes communicate with each other                            |
 | Finalization           | State achieved when a block and its contents are appended to the canonical blockchain     |
 | Fork                   | Chain of block proposals that begins with the last block of the canonical blockchain      |
 

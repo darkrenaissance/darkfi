@@ -99,7 +99,7 @@ transition. We enforce that:
   the previous call (essentially copying it)
 * The value commitments in the `Input` and `ConsensusOutput` match
 * The `Input` coin's Merkle inclusion proof is valid in the _Money_ state
-* The input's _nullifier_ wasn't revealed before in the _Money_ state
+* The input's _nullifier_ is revealed and exists in the _Money_ state
 * The `ConsensusOutput` coin hasn't existed in the _Consensus_ state before
 * The `ConsensusOutput` coin hasn't existed in the _Unstaked Consensus_ state before
 

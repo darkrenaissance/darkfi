@@ -24,6 +24,7 @@
     - [Stake](architecture/consensus/stake.md)
     - [Proposal](architecture/consensus/proposal.md)
     - [UnstakeRequest](architecture/consensus/unstake_request.md)
+    - [Unstake](architecture/consensus/unstake.md)
   - [Transactions](architecture/tx_lifetime.md)
   - [Smart Contracts](architecture/smart_contracts.md)
   - [Bridge](architecture/bridge.md)
