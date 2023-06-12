@@ -28,7 +28,7 @@ use darkfi_money_contract::{
     model::{ConsensusInput, ConsensusOutput, ConsensusUnstakeReqParamsV1},
 };
 use darkfi_sdk::{
-    crypto::{note::AeadEncryptedNote, pasta_prelude::*, MerkleTree, SecretKey},
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Keypair, MerkleTree, SecretKey},
     incrementalmerkletree::Tree,
     pasta::pallas,
 };
@@ -41,15 +41,20 @@ use crate::client::common::{
 };
 
 pub struct ConsensusUnstakeRequestCallDebris {
+    /// Payload params
     pub params: ConsensusUnstakeReqParamsV1,
+    /// ZK proofs
     pub proofs: Vec<Proof>,
+    /// The new output keypair (used in the minted coin)
+    pub keypair: Keypair,
+    /// Secret key used to sign the transaction
     pub signature_secret: SecretKey,
 }
 
 /// Struct holding necessary information to build a `Consensus::UnstakeRequestV1` contract call.
 pub struct ConsensusUnstakeRequestCallBuilder {
     /// `ConsensusOwnCoin` we're given to use in this builder
-    pub coin: ConsensusOwnCoin,
+    pub owncoin: ConsensusOwnCoin,
     /// Epoch unstaked coin is minted
     pub epoch: u64,
     /// Merkle tree of coins used to create inclusion proofs
@@ -66,81 +71,82 @@ pub struct ConsensusUnstakeRequestCallBuilder {
 
 impl ConsensusUnstakeRequestCallBuilder {
     pub fn build(&self) -> Result<ConsensusUnstakeRequestCallDebris> {
-        debug!("Building Consensus::UnstakeRequestV1 contract call");
-        assert!(self.coin.note.value != 0);
+        info!("Building Consensus::UnstakeRequestV1 contract call");
+        assert!(self.owncoin.note.value != 0);
 
-        debug!("Building anonymous input");
-        let leaf_position = self.coin.leaf_position;
+        debug!("Building Consensus::UnstakeRequestV1 anonymous input");
         let root = self.tree.root(0).unwrap();
-        let merkle_path = self.tree.authentication_path(leaf_position, &root).unwrap();
-        let value_blind = pallas::Scalar::random(&mut OsRng);
-        let input = ConsensusBurnInputInfo {
-            leaf_position,
-            merkle_path,
-            secret: self.coin.secret,
-            note: self.coin.note.clone(),
-            value_blind,
-        };
-        debug!("Finished building input");
+        let merkle_path = self.tree.authentication_path(self.owncoin.leaf_position, &root).unwrap();
 
-        info!("Creating unstake burn proof for input");
-        let value_blind = input.value_blind;
+        let input = ConsensusBurnInputInfo {
+            leaf_position: self.owncoin.leaf_position,
+            merkle_path,
+            secret: self.owncoin.secret,
+            note: self.owncoin.note.clone(),
+            value_blind: pallas::Scalar::random(&mut OsRng),
+        };
+
+        debug!("Building Consensus::UnstakeRequestV1 anonymous output");
+        let output_serial = pallas::Base::random(&mut OsRng);
+        let output_coin_blind = pallas::Base::random(&mut OsRng);
+
+        // We create a new random keypair for the output
+        let output_keypair = Keypair::random(&mut OsRng);
+
+        let output = ConsensusMintOutputInfo {
+            value: self.owncoin.note.value,
+            epoch: self.epoch,
+            public_key: output_keypair.public,
+            value_blind: input.value_blind,
+            serial: output_serial,
+            coin_blind: output_coin_blind,
+        };
+
+        info!("Building Consensus::UnstakeRequestV1 Burn ZK proof");
         let (burn_proof, public_inputs, signature_secret) =
             create_consensus_burn_proof(&self.burn_zkbin, &self.burn_pk, &input)?;
 
-        let input = ConsensusInput {
-            epoch: self.coin.note.epoch,
+        let tx_input = ConsensusInput {
+            epoch: self.owncoin.note.epoch,
             value_commit: public_inputs.value_commit,
             nullifier: public_inputs.nullifier,
             merkle_root: public_inputs.merkle_root,
             signature_public: public_inputs.signature_public,
         };
 
-        debug!("Building anonymous output");
-        let serial = pallas::Base::random(&mut OsRng);
-        let coin_blind = pallas::Base::random(&mut OsRng);
-        let public_key = public_inputs.signature_public;
-
-        let output = ConsensusMintOutputInfo {
-            value: self.coin.note.value,
-            epoch: self.epoch,
-            public_key,
-            value_blind,
-            serial,
-            coin_blind,
-        };
-        debug!("Finished building output");
-
-        info!("Creating stake mint proof for output");
+        info!("Building Consensus::UnstakeRequestV1 Mint ZK proof");
         let (mint_proof, public_inputs) =
             create_consensus_mint_proof(&self.mint_zkbin, &self.mint_pk, &output)?;
 
         // Encrypted note
         let note = ConsensusNote {
-            serial,
+            serial: output_serial,
             value: output.value,
-            epoch: self.epoch,
-            coin_blind,
-            value_blind,
+            epoch: output.epoch,
+            coin_blind: output_coin_blind,
+            value_blind: input.value_blind,
             reward: 0,
-            reward_blind: value_blind,
+            reward_blind: pallas::Scalar::ZERO,
         };
 
         let encrypted_note = AeadEncryptedNote::encrypt(&note, &output.public_key, &mut OsRng)?;
 
-        let output = ConsensusOutput {
+        let tx_output = ConsensusOutput {
             value_commit: public_inputs.value_commit,
             coin: public_inputs.coin,
             note: encrypted_note,
         };
 
         // We now fill this with necessary stuff
-        let params = ConsensusUnstakeReqParamsV1 { input, output };
-        let proofs = vec![burn_proof, mint_proof];
+        let params = ConsensusUnstakeReqParamsV1 { input: tx_input, output: tx_output };
 
-        // Now we should have all the params, zk proof, and signature secret.
-        // We return it all and let the caller deal with it.
-        let debris = ConsensusUnstakeRequestCallDebris { params, proofs, signature_secret };
+        // Construct debris
+        let debris = ConsensusUnstakeRequestCallDebris {
+            params,
+            proofs: vec![burn_proof, mint_proof],
+            keypair: output_keypair,
+            signature_secret,
+        };
         Ok(debris)
     }
 }

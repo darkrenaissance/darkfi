@@ -156,8 +156,12 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] ===========================");
     info!(target: "consensus", "[Alice] Building unstake request tx");
     info!(target: "consensus", "[Alice] ===========================");
-    let (unstake_request_tx, unstake_request_params, unstake_request_secret_key) =
-        th.unstake_request(Holder::Alice, current_slot, alice_rewarded_staked_oc.clone()).await?;
+    let (
+        unstake_request_tx,
+        unstake_request_params,
+        unstake_request_output_secret_key,
+        unstake_request_signature_secret_key,
+    ) = th.unstake_request(Holder::Alice, current_slot, alice_rewarded_staked_oc.clone()).await?;
 
     info!(target: "consensus", "[Faucet] ==================================");
     info!(target: "consensus", "[Faucet] Executing Alice unstake request tx");
@@ -187,7 +191,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     let alice_unstake_request_oc = th.gather_consensus_unstaked_owncoin(
         Holder::Alice,
         unstake_request_params.output,
-        Some(unstake_request_secret_key),
+        Some(unstake_request_output_secret_key),
     )?;
 
     // Verify values match
@@ -207,7 +211,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Malicious] =============================");
     info!(target: "consensus", "[Malicious] Checking unstaking coin again");
     info!(target: "consensus", "[Malicious] =============================");
-    let (unstake_request_tx, _, _) =
+    let (unstake_request_tx, _, _, _) =
         th.unstake_request(Holder::Alice, current_slot, alice_unstake_request_oc.clone()).await?;
     th.execute_erroneous_unstake_request_txs(
         Holder::Alice,

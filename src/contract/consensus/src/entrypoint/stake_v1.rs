@@ -19,7 +19,7 @@
 use darkfi_money_contract::{
     error::MoneyError,
     model::{ConsensusStakeParamsV1, ConsensusStakeUpdateV1, MoneyStakeParamsV1},
-    CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_STAKED_COINS_TREE,
+    MoneyFunction, CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_STAKED_COINS_TREE,
     CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE, CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE,
     CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_NULLIFIERS_TREE,
@@ -90,7 +90,7 @@ pub(crate) fn consensus_stake_process_instruction_v1(
         return Err(MoneyError::CallIdxOutOfBounds.into())
     }
 
-    // Verify previous call corresponds to Money::StakeV1 (0x06)
+    // Verify previous call corresponds to Money::StakeV1
     let previous_call_idx = call_idx - 1;
     let previous = &calls[previous_call_idx as usize];
     if previous.contract_id.inner() != MONEY_CONTRACT_ID.inner() {
@@ -98,7 +98,7 @@ pub(crate) fn consensus_stake_process_instruction_v1(
         return Err(MoneyError::StakePreviousCallNotMoneyContract.into())
     }
 
-    if previous.data[0] != 0x06 {
+    if previous.data[0] != MoneyFunction::StakeV1 as u8 {
         msg!("[ConsensusStakeV1] Error: Previous call function mismatch");
         return Err(MoneyError::PreviousCallFunctionMismatch.into())
     }

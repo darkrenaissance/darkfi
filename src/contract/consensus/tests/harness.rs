@@ -624,7 +624,7 @@ impl ConsensusTestHarness {
         holder: Holder,
         slot: u64,
         staked_oc: ConsensusOwnCoin,
-    ) -> Result<(Transaction, ConsensusUnstakeReqParamsV1, SecretKey)> {
+    ) -> Result<(Transaction, ConsensusUnstakeReqParamsV1, SecretKey, SecretKey)> {
         let wallet = self.holders.get_mut(&holder).unwrap();
         let (burn_pk, burn_zkbin) =
             self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
@@ -637,7 +637,7 @@ impl ConsensusTestHarness {
 
         // Building Consensus::Unstake params
         let unstake_request_call_debris = ConsensusUnstakeRequestCallBuilder {
-            coin: staked_oc.clone(),
+            owncoin: staked_oc.clone(),
             epoch,
             tree: wallet.consensus_staked_merkle_tree.clone(),
             burn_zkbin: burn_zkbin.clone(),
@@ -646,9 +646,16 @@ impl ConsensusTestHarness {
             mint_pk: mint_pk.clone(),
         }
         .build()?;
-        let (unstake_request_params, unstake_request_proofs, unstake_request_secret_key) = (
+
+        let (
+            unstake_request_params,
+            unstake_request_proofs,
+            unstake_request_output_keypair,
+            unstake_request_signature_secret_key,
+        ) = (
             unstake_request_call_debris.params,
             unstake_request_call_debris.proofs,
+            unstake_request_call_debris.keypair,
             unstake_request_call_debris.signature_secret,
         );
 
@@ -659,19 +666,25 @@ impl ConsensusTestHarness {
         let calls = vec![call];
         let proofs = vec![unstake_request_proofs];
         let mut unstake_request_tx = Transaction { calls, proofs, signatures: vec![] };
-        let sigs = unstake_request_tx.create_sigs(&mut OsRng, &[unstake_request_secret_key])?;
+        let sigs =
+            unstake_request_tx.create_sigs(&mut OsRng, &[unstake_request_signature_secret_key])?;
         unstake_request_tx.signatures = vec![sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());
 
         // Calculate transaction sizes
         let encoded: Vec<u8> = serialize(&unstake_request_tx);
-        let size = ::std::mem::size_of_val(&*encoded);
+        let size = std::mem::size_of_val(&*encoded);
         tx_action_benchmark.sizes.push(size);
         let base58 = bs58::encode(&encoded).into_string();
-        let size = ::std::mem::size_of_val(&*base58);
+        let size = std::mem::size_of_val(&*base58);
         tx_action_benchmark.broadcasted_sizes.push(size);
 
-        Ok((unstake_request_tx, unstake_request_params, unstake_request_secret_key))
+        Ok((
+            unstake_request_tx,
+            unstake_request_params,
+            unstake_request_output_keypair.secret,
+            unstake_request_signature_secret_key,
+        ))
     }
 
     pub async fn execute_unstake_request_tx(
