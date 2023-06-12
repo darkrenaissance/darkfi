@@ -70,6 +70,7 @@ pub(crate) fn money_stake_get_metadata_v1(
             *token_coords.y(),
             input.merkle_root.inner(),
             input.user_data_enc,
+            pallas::Base::ZERO, // We enforce spend_hook==0
             sig_x,
             sig_y,
         ],

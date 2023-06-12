@@ -76,6 +76,7 @@ pub(crate) fn money_transfer_get_metadata_v1(
                 *token_coords.y(),
                 input.merkle_root.inner(),
                 input.user_data_enc,
+                input.spend_hook,
                 sig_x,
                 sig_y,
             ],

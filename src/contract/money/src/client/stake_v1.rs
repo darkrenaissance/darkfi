@@ -72,8 +72,8 @@ impl MoneyStakeBurnRevealed {
             *tokcom_coords.x(),
             *tokcom_coords.y(),
             self.merkle_root.inner(),
-            // TODO: Why is spend hook in the struct but not here?
             self.user_data_enc,
+            pallas::Base::ZERO, // We force spend_hook==0 here
             *sigpub_coords.x(),
             *sigpub_coords.y(),
         ]

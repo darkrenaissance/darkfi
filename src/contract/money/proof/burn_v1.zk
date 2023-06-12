@@ -79,6 +79,9 @@ circuit "Burn_V1" {
 	user_data_enc = poseidon_hash(user_data, user_data_blind);
 	constrain_instance(user_data_enc);
 
+	# Reveal spend_hook
+	constrain_instance(spend_hook);
+
 	# Finally, we derive a public key for the signature and
 	# constrain its coordinates:
 	signature_public = ec_mul_base(signature_secret, NULLIFIER_K);
