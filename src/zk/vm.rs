@@ -572,13 +572,16 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 Opcode::EcMulShort => {
                     trace!(target: "zk::vm", "Executing `EcMulShort{:?}` opcode", opcode.1);
                     let args = &opcode.1;
+
                     let lhs: FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>> =
                         heap[args[1].1].clone().into();
+
                     let rhs = ScalarFixedShort::new(
                         ecc_chip.clone(),
                         layouter.namespace(|| "EcMulShort: ScalarFixedShort::new()"),
                         (heap[args[0].1].clone().into(), one.clone()),
                     )?;
+
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMulShort()"), rhs)?;
 
                     trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());

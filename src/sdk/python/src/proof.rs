@@ -16,14 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{
-    base::Base, proving_key::ProvingKey, verifying_key::VerifyingKey, zk_circuit::ZkCircuit,
-};
+use std::ops::Deref;
+
 use darkfi::zk::{proof, vm};
-use pasta_curves::pallas;
+use darkfi_sdk::pasta::pallas;
 use pyo3::prelude::*;
 use rand::rngs::OsRng;
-use std::ops::Deref;
+
+use super::{
+    base::Base, proving_key::ProvingKey, verifying_key::VerifyingKey, zk_circuit::ZkCircuit,
+};
 
 #[pyclass]
 pub struct Proof(pub(crate) proof::Proof);

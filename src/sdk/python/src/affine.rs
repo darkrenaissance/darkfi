@@ -16,9 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::base::Base;
-use pasta_curves::{arithmetic::CurveAffine, pallas};
+use darkfi_sdk::pasta::{arithmetic::CurveAffine, pallas};
 use pyo3::prelude::*;
+
+use super::base::Base;
 
 /// A Pallas point in the affine coordinate space (or the point at infinity).
 #[pyclass]

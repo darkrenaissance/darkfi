@@ -16,14 +16,24 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/// Pallas point in affine space
 mod affine;
+/// Pallas base field element
 mod base;
+/// Pallas point in projective space
 mod point;
-mod proof;
-mod proving_key;
+/// Pallas scalar field element
 mod scalar;
+
+/// ZK proof creation
+mod proof;
+/// Proving key creation
+mod proving_key;
+/// Verifying key creation
 mod verifying_key;
+/// zkas ZkBinary wrappers
 mod zk_binary;
+/// zkvm wrappers
 mod zk_circuit;
 
 #[pyo3::prelude::pymodule]
