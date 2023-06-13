@@ -16,17 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::ops::Deref;
+
 use darkfi_sdk::{
     bridgetree::Hashable,
     crypto::{poseidon_hash, MerkleNode},
-};
-use pasta_curves::{
-    group::ff::{Field, FromUniformBytes, PrimeField},
-    pallas,
+    pasta::{
+        group::ff::{Field, FromUniformBytes, PrimeField},
+        pallas,
+    },
 };
 use pyo3::prelude::*;
 use rand::rngs::OsRng;
-use std::ops::Deref;
 
 /// The base field of the Pallas and iso-Pallas curves.
 /// Randomness is provided by the OS and on the Rust side.

@@ -16,11 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{base::Base, point::Point, scalar::Scalar, zk_binary::ZkBinary};
+use std::ops::Deref;
+
 use darkfi::zk::{halo2::Value, vm, vm_heap::empty_witnesses};
 use darkfi_sdk::crypto::MerkleNode;
 use pyo3::prelude::*;
-use std::ops::Deref;
+
+use super::{base::Base, point::Point, scalar::Scalar, zk_binary::ZkBinary};
 
 #[pyclass]
 pub struct ZkCircuit(pub(crate) vm::ZkCircuit, pub(crate) Vec<vm::Witness>);

@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{affine::Affine, base::Base, scalar::Scalar};
+use std::ops::{Add, Mul};
+
 use darkfi_sdk::{
     crypto::{
         constants::fixed_bases::{
@@ -29,12 +30,13 @@ use darkfi_sdk::{
     pasta::{
         arithmetic::CurveExt,
         group::{Curve, Group},
+        pallas,
     },
 };
 use halo2_gadgets::ecc::chip::FixedPoint;
-use pasta_curves::pallas;
 use pyo3::prelude::*;
-use std::ops::{Add, Mul};
+
+use super::{affine::Affine, base::Base, scalar::Scalar};
 
 /// A Pallas point in the projective coordinate space.
 #[pyclass]

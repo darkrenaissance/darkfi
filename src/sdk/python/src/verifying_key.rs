@@ -16,10 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::zk_circuit::ZkCircuit;
+use std::ops::Deref;
+
 use darkfi::zk::proof;
 use pyo3::prelude::*;
-use std::ops::Deref;
+
+use super::zk_circuit::ZkCircuit;
 
 #[pyclass]
 pub struct VerifyingKey(pub(crate) proof::VerifyingKey);
