@@ -24,7 +24,7 @@ use darkfi::{
     wallet::walletdb::QueryType,
 };
 use darkfi_dao_contract::{
-    dao_client::{
+    client::{
         DaoProposeNote, DaoVoteNote, DAO_DAOS_COL_APPROVAL_RATIO_BASE,
         DAO_DAOS_COL_APPROVAL_RATIO_QUOT, DAO_DAOS_COL_BULLA_BLIND, DAO_DAOS_COL_CALL_INDEX,
         DAO_DAOS_COL_DAO_ID, DAO_DAOS_COL_GOV_TOKEN_ID, DAO_DAOS_COL_LEAF_POSITION,
@@ -39,14 +39,13 @@ use darkfi_dao_contract::{
         DAO_VOTES_COL_PROPOSAL_ID, DAO_VOTES_COL_TX_HASH, DAO_VOTES_COL_VOTE_ID,
         DAO_VOTES_COL_VOTE_OPTION, DAO_VOTES_COL_YES_VOTE_BLIND, DAO_VOTES_TABLE,
     },
-    dao_model::{DaoBulla, DaoMintParams, DaoProposeParams, DaoVoteParams},
+    model::{DaoBulla, DaoMintParams, DaoProposeParams, DaoVoteParams},
     DaoFunction,
 };
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        note::AeadEncryptedNote, poseidon_hash, MerkleNode, MerkleTree, PublicKey, SecretKey,
-        TokenId, DAO_CONTRACT_ID,
+        poseidon_hash, MerkleNode, MerkleTree, PublicKey, SecretKey, TokenId, DAO_CONTRACT_ID,
     },
     pasta::pallas,
 };
@@ -1037,15 +1036,11 @@ impl Drk {
 
             for proposal in new_dao_proposals {
                 proposals_tree.append(MerkleNode::from(proposal.0.proposal_bulla));
-                let enc_note = AeadEncryptedNote {
-                    ciphertext: proposal.0.ciphertext,
-                    ephem_public: proposal.0.ephem_public,
-                };
 
                 // If we're able to decrypt this note, that's the way to link it
                 // to a specific DAO.
                 for dao in &daos {
-                    if let Ok(note) = enc_note.decrypt::<DaoProposeNote>(&dao.secret_key) {
+                    if let Ok(note) = proposal.0.note.decrypt::<DaoProposeNote>(&dao.secret_key) {
                         // We managed to decrypt it. Let's place this in a proper
                         // DaoProposal object. We assume we can just increment the
                         // ID by looking at how many proposals we already have.
@@ -1074,13 +1069,8 @@ impl Drk {
             }
 
             for vote in new_dao_votes {
-                let enc_note = AeadEncryptedNote {
-                    ciphertext: vote.0.ciphertext,
-                    ephem_public: vote.0.ephem_public,
-                };
-
                 for dao in &daos {
-                    if let Ok(note) = enc_note.decrypt::<DaoVoteNote>(&dao.secret_key) {
+                    if let Ok(note) = vote.0.note.decrypt::<DaoVoteNote>(&dao.secret_key) {
                         eprintln!("Managed to decrypt DAO proposal vote note");
                         let daos_proposals = self.get_dao_proposals(dao.id).await?;
                         let mut proposal_id = None;

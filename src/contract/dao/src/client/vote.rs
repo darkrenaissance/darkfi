@@ -20,12 +20,13 @@ use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, pedersen::pedersen_commitment_u64,
-        poseidon_hash, MerkleNode, PublicKey, SecretKey, TokenId,
+        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Keypair,
+        MerkleNode, Nullifier, PublicKey, SecretKey,
     },
     pasta::pallas,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
+use log::debug;
 use rand::rngs::OsRng;
 
 use darkfi::{
@@ -34,24 +35,19 @@ use darkfi::{
     Result,
 };
 
-use crate::dao_model::{DaoProposeParams, DaoProposeParamsInput};
-
-use super::DaoInfo;
-
-#[derive(SerialEncodable, SerialDecodable, Clone)]
-pub struct DaoProposalInfo {
-    pub dest: PublicKey,
-    pub amount: u64,
-    pub token_id: TokenId,
-    pub blind: pallas::Base,
-}
+use super::{DaoInfo, DaoProposalInfo};
+use crate::model::{DaoVoteParams, DaoVoteParamsInput};
 
 #[derive(SerialEncodable, SerialDecodable)]
-pub struct DaoProposeNote {
-    pub proposal: DaoProposalInfo,
+pub struct DaoVoteNote {
+    pub vote_option: bool,
+    pub yes_vote_blind: pallas::Scalar,
+    // yes_vote_value = vote_option * all_vote_value
+    pub all_vote_value: u64,
+    pub all_vote_blind: pallas::Scalar,
 }
 
-pub struct DaoProposeStakeInput {
+pub struct DaoVoteInput {
     pub secret: SecretKey,
     pub note: darkfi_money_contract::client::MoneyNote,
     pub leaf_position: bridgetree::Position,
@@ -59,35 +55,39 @@ pub struct DaoProposeStakeInput {
     pub signature_secret: SecretKey,
 }
 
-pub struct DaoProposeCall {
-    pub inputs: Vec<DaoProposeStakeInput>,
+// TODO: should be token locking voting?
+// Inside ZKproof, check proposal is correct.
+pub struct DaoVoteCall {
+    pub inputs: Vec<DaoVoteInput>,
+    pub vote_option: bool,
+    pub yes_vote_blind: pallas::Scalar,
+    pub vote_keypair: Keypair,
     pub proposal: DaoProposalInfo,
     pub dao: DaoInfo,
-    pub dao_leaf_position: bridgetree::Position,
-    pub dao_merkle_path: Vec<MerkleNode>,
-    pub dao_merkle_root: MerkleNode,
 }
 
-impl DaoProposeCall {
+impl DaoVoteCall {
     pub fn make(
         self,
         burn_zkbin: &ZkBinary,
         burn_pk: &ProvingKey,
         main_zkbin: &ZkBinary,
         main_pk: &ProvingKey,
-    ) -> Result<(DaoProposeParams, Vec<Proof>)> {
+    ) -> Result<(DaoVoteParams, Vec<Proof>)> {
+        debug!(target: "dao", "build()");
         let mut proofs = vec![];
 
         let gov_token_blind = pallas::Base::random(&mut OsRng);
 
         let mut inputs = vec![];
-        let mut total_funds = 0;
-        let mut total_funds_blinds = pallas::Scalar::from(0);
+        let mut all_vote_value = 0;
+        let mut all_vote_blind = pallas::Scalar::from(0);
 
         for input in self.inputs {
-            let funds_blind = pallas::Scalar::random(&mut OsRng);
-            total_funds += input.note.value;
-            total_funds_blinds += funds_blind;
+            let value_blind = pallas::Scalar::random(&mut OsRng);
+
+            all_vote_value += input.note.value;
+            all_vote_blind += value_blind;
 
             let signature_public = PublicKey::from_secret(input.signature_secret);
 
@@ -103,7 +103,7 @@ impl DaoProposeCall {
                 Witness::Base(halo2::Value::known(pallas::Base::from(note.value))),
                 Witness::Base(halo2::Value::known(note.token_id.inner())),
                 Witness::Base(halo2::Value::known(note.coin_blind)),
-                Witness::Scalar(halo2::Value::known(funds_blind)),
+                Witness::Scalar(halo2::Value::known(all_vote_blind)),
                 Witness::Base(halo2::Value::known(gov_token_blind)),
                 Witness::Uint32(halo2::Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(halo2::Value::known(
@@ -143,33 +143,37 @@ impl DaoProposeCall {
             let token_commit = poseidon_hash::<2>([note.token_id.inner(), gov_token_blind]);
             assert_eq!(self.dao.gov_token_id, note.token_id);
 
-            let value_commit = pedersen_commitment_u64(note.value, funds_blind);
-            let value_coords = value_commit.to_affine().coordinates().unwrap();
+            let nullifier = poseidon_hash::<2>([input.secret.inner(), note.serial]);
+
+            let vote_commit = pedersen_commitment_u64(note.value, all_vote_blind);
+            let vote_commit_coords = vote_commit.to_affine().coordinates().unwrap();
 
             let (sig_x, sig_y) = signature_public.xy();
 
             let public_inputs = vec![
-                *value_coords.x(),
-                *value_coords.y(),
+                nullifier,
+                *vote_commit_coords.x(),
+                *vote_commit_coords.y(),
                 token_commit,
                 merkle_root.inner(),
                 sig_x,
                 sig_y,
             ];
-            let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin.clone());
 
-            let proving_key = &burn_pk;
-            let input_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
-                .expect("DAO::propose() proving error!");
+            let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin.clone());
+            debug!(target: "dao", "input_proof Proof::create()");
+            let input_proof = Proof::create(burn_pk, &[circuit], &public_inputs, &mut OsRng)
+                .expect("DAO::vote() proving error!");
             proofs.push(input_proof);
 
-            let input = DaoProposeParamsInput { value_commit, merkle_root, signature_public };
+            let input = DaoVoteParamsInput {
+                nullifier: Nullifier::from(nullifier),
+                vote_commit,
+                merkle_root,
+                signature_public,
+            };
             inputs.push(input);
         }
-
-        let total_funds_commit = pedersen_commitment_u64(total_funds, total_funds_blinds);
-        let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
-        let total_funds = pallas::Base::from(total_funds);
 
         let token_commit = poseidon_hash::<2>([self.dao.gov_token_id.inner(), gov_token_blind]);
 
@@ -195,8 +199,6 @@ impl DaoProposeCall {
             self.dao.bulla_blind,
         ]);
 
-        let dao_leaf_position: u64 = self.dao_leaf_position.into();
-
         let proposal_bulla = poseidon_hash::<6>([
             proposal_dest_x,
             proposal_dest_y,
@@ -206,12 +208,17 @@ impl DaoProposeCall {
             self.proposal.blind,
         ]);
 
+        let vote_option = self.vote_option as u64;
+        assert!(vote_option == 0 || vote_option == 1);
+
+        let yes_vote_commit =
+            pedersen_commitment_u64(vote_option * all_vote_value, self.yes_vote_blind);
+        let yes_vote_commit_coords = yes_vote_commit.to_affine().coordinates().unwrap();
+
+        let all_vote_commit = pedersen_commitment_u64(all_vote_value, all_vote_blind);
+        let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
+
         let prover_witnesses = vec![
-            // Proposers total number of gov tokens
-            Witness::Base(halo2::Value::known(total_funds)),
-            Witness::Scalar(halo2::Value::known(total_funds_blinds)),
-            // Used for blinding exported gov token ID
-            Witness::Base(halo2::Value::known(gov_token_blind)),
             // proposal params
             Witness::Base(halo2::Value::known(proposal_dest_x)),
             Witness::Base(halo2::Value::known(proposal_dest_y)),
@@ -227,32 +234,44 @@ impl DaoProposeCall {
             Witness::Base(halo2::Value::known(dao_pub_x)),
             Witness::Base(halo2::Value::known(dao_pub_y)),
             Witness::Base(halo2::Value::known(self.dao.bulla_blind)),
-            Witness::Uint32(halo2::Value::known(dao_leaf_position.try_into().unwrap())),
-            Witness::MerklePath(halo2::Value::known(self.dao_merkle_path.try_into().unwrap())),
+            // Vote
+            Witness::Base(halo2::Value::known(pallas::Base::from(vote_option))),
+            Witness::Scalar(halo2::Value::known(self.yes_vote_blind)),
+            // Total number of gov tokens allocated
+            Witness::Base(halo2::Value::known(pallas::Base::from(all_vote_value))),
+            Witness::Scalar(halo2::Value::known(all_vote_blind)),
+            // gov token
+            Witness::Base(halo2::Value::known(gov_token_blind)),
         ];
+
         let public_inputs = vec![
             token_commit,
-            self.dao_merkle_root.inner(),
             proposal_bulla,
-            *total_funds_coords.x(),
-            *total_funds_coords.y(),
+            // this should be a value commit??
+            *yes_vote_commit_coords.x(),
+            *yes_vote_commit_coords.y(),
+            *all_vote_commit_coords.x(),
+            *all_vote_commit_coords.y(),
         ];
+
         let circuit = ZkCircuit::new(prover_witnesses, main_zkbin.clone());
 
+        debug!(target: "dao", "main_proof = Proof::create()");
         let main_proof = Proof::create(main_pk, &[circuit], &public_inputs, &mut OsRng)
-            .expect("DAO::propose() proving error!");
+            .expect("DAO::vote() proving error!");
         proofs.push(main_proof);
 
-        let note = DaoProposeNote { proposal: self.proposal };
-        let enc_note = AeadEncryptedNote::encrypt(&note, &self.dao.public_key, &mut OsRng).unwrap();
-        let params = DaoProposeParams {
-            dao_merkle_root: self.dao_merkle_root,
-            proposal_bulla,
-            token_commit,
-            ciphertext: enc_note.ciphertext,
-            ephem_public: enc_note.ephem_public,
-            inputs,
+        let note = DaoVoteNote {
+            vote_option: self.vote_option,
+            yes_vote_blind: self.yes_vote_blind,
+            all_vote_value,
+            all_vote_blind,
         };
+        let enc_note =
+            AeadEncryptedNote::encrypt(&note, &self.vote_keypair.public, &mut OsRng).unwrap();
+
+        let params =
+            DaoVoteParams { token_commit, proposal_bulla, yes_vote_commit, note: enc_note, inputs };
 
         Ok((params, proofs))
     }

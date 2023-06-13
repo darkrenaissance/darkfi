@@ -32,7 +32,7 @@ use darkfi::{
 };
 
 use super::{DaoInfo, DaoProposalInfo};
-use crate::dao_model::{DaoBlindAggregateVote, DaoExecParams};
+use crate::model::{DaoBlindAggregateVote, DaoExecParams};
 
 pub struct DaoExecCall {
     pub proposal: DaoProposalInfo,
@@ -184,8 +184,8 @@ impl DaoExecCall {
 
         let params = DaoExecParams {
             proposal: proposal_bulla,
-            coin_0,
-            coin_1,
+            coin_0: coin_0.into(),
+            coin_1: coin_1.into(),
             blind_total_vote: DaoBlindAggregateVote { yes_vote_commit, all_vote_commit },
             input_value_commit,
         };

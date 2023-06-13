@@ -16,35 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+//! Smart contract implementing Anonymous DAOs on DarkFi
+
 use darkfi_sdk::error::ContractError;
 
-#[cfg(not(feature = "no-entrypoint"))]
-pub mod entrypoint;
-
-#[cfg(feature = "client")]
-/// Transaction building API for clients interacting with DAO contract
-pub mod dao_client;
-
-pub mod dao_model;
-
-#[cfg(feature = "client")]
-/// Transaction building API for clients interacting with money contract
-pub mod money_client;
-
-#[cfg(feature = "client")]
-/// Decrypt incoming transaction notes to track coins sent to us
-pub mod wallet_cache;
-
-// These are the zkas circuit namespaces
-pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "DaoMint";
-pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "DaoExec";
-pub const DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS: &str = "DaoVoteInput";
-pub const DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS: &str = "DaoVoteMain";
-pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS: &str = "DaoProposeInput";
-pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "DaoProposeMain";
-
+/// Functions available in the contract
 #[repr(u8)]
-#[derive(PartialEq, Debug)]
 pub enum DaoFunction {
     Mint = 0x00,
     Propose = 0x01,
@@ -55,8 +32,8 @@ pub enum DaoFunction {
 impl TryFrom<u8> for DaoFunction {
     type Error = ContractError;
 
-    fn try_from(x: u8) -> core::result::Result<DaoFunction, Self::Error> {
-        match x {
+    fn try_from(b: u8) -> core::result::Result<Self, Self::Error> {
+        match b {
             0x00 => Ok(DaoFunction::Mint),
             0x01 => Ok(DaoFunction::Propose),
             0x02 => Ok(DaoFunction::Vote),
@@ -65,3 +42,47 @@ impl TryFrom<u8> for DaoFunction {
         }
     }
 }
+
+/// Internal contract errors
+pub mod error;
+
+/// Call parameters definitions
+pub mod model;
+
+#[cfg(not(feature = "no-entrypoint"))]
+/// WASM entrypoint functions
+pub mod entrypoint;
+
+#[cfg(feature = "client")]
+/// Client API for interaction with this smart contract
+pub mod client;
+
+// TODO: Delete these and use the proper API
+#[cfg(feature = "client")]
+pub mod money_client;
+#[cfg(feature = "client")]
+pub mod wallet_cache;
+
+// These are the different sled trees that will be created
+pub const DAO_CONTRACT_DB_INFO_TREE: &str = "dao_info";
+pub const DAO_CONTRACT_DB_DAO_BULLAS: &str = "dao_bullas";
+pub const DAO_CONTRACT_DB_DAO_MERKLE_ROOTS: &str = "dao_roots";
+pub const DAO_CONTRACT_DB_PROPOSAL_BULLAS: &str = "dao_proposals";
+pub const DAO_CONTRACT_DB_VOTE_NULLIFIERS: &str = "dao_vote_nullifiers";
+
+// These are keys inside the info tree
+pub const DAO_CONTRACT_KEY_DB_VERSION: &str = "db_version";
+pub const DAO_CONTRACT_KEY_DAO_MERKLE_TREE: &str = "dao_merkle_tree";
+
+/// zkas dao mint circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "DaoMint";
+/// zkas dao exec circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "DaoExec";
+/// zkas dao vote input circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS: &str = "DaoVoteInput";
+/// zkas dao vote main circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS: &str = "DaoVoteMain";
+/// zkas dao propose input circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS: &str = "DaoProposeInput";
+/// zkas dao propose main circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "DaoProposeMain";

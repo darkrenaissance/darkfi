@@ -44,4 +44,4 @@ test-no-run:
 clean:
 	rm -f $(PROOFS_BIN) $(WASM_BIN)
 
-.PHONY: all test clean
+.PHONY: all test test-integration test-no-run clean

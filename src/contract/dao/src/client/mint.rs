@@ -28,7 +28,7 @@ use darkfi_sdk::{
 use log::debug;
 use rand::rngs::OsRng;
 
-use crate::dao_model::DaoMintParams;
+use crate::model::DaoMintParams;
 
 #[derive(Clone)]
 pub struct DaoInfo {

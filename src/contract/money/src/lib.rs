@@ -74,7 +74,7 @@ pub const MONEY_CONTRACT_NULLIFIERS_TREE: &str = "nullifiers";
 pub const MONEY_CONTRACT_TOKEN_FREEZE_TREE: &str = "token_freezes";
 
 // These are keys inside the info tree
-pub const MONEY_CONTRACT_DB_VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const MONEY_CONTRACT_DB_VERSION: &str = "db_version";
 pub const MONEY_CONTRACT_COIN_MERKLE_TREE: &str = "coin_tree";
 pub const MONEY_CONTRACT_FAUCET_PUBKEYS: &str = "faucet_pubkeys";
 

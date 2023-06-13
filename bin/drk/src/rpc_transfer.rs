@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::str::FromStr;
+
 use anyhow::{anyhow, Result};
 use darkfi::{
     tx::Transaction,
@@ -23,7 +25,7 @@ use darkfi::{
     zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses},
     zkas::ZkBinary,
 };
-use darkfi_dao_contract::dao_model::DaoBulla;
+use darkfi_dao_contract::model::DaoBulla;
 use darkfi_money_contract::{
     client::{transfer_v1::TransferCallBuilder, OwnCoin},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
@@ -56,7 +58,7 @@ impl Drk {
                 return Err(anyhow!("Missing DAO bulla in parameters"))
             };
 
-            Some(DaoBulla::try_from(dao_bulla.as_str())?)
+            Some(DaoBulla::from_str(dao_bulla.as_str())?)
         } else {
             None
         };

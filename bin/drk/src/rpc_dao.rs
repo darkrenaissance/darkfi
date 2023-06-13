@@ -23,9 +23,9 @@ use darkfi::{
     zkas::ZkBinary,
 };
 use darkfi_dao_contract::{
-    dao_client,
-    dao_client::{DaoInfo, DaoProposalInfo, DaoVoteCall, DaoVoteInput},
-    dao_model::DaoBlindAggregateVote,
+    client as dao_client,
+    client::{DaoInfo, DaoProposalInfo, DaoVoteCall, DaoVoteInput},
+    model::DaoBlindAggregateVote,
     money_client, DaoFunction, DAO_CONTRACT_ZKAS_DAO_EXEC_NS, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
     DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
     DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,

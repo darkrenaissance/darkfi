@@ -1373,6 +1373,7 @@ dependencies = [
  "simplelog",
  "sled",
  "sqlx",
+ "thiserror",
 ]
 
 [[package]]

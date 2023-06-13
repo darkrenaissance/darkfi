@@ -21,9 +21,8 @@ use std::time::{Duration, Instant};
 use darkfi::{tx::Transaction, Result};
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Keypair,
-        MerkleNode, MerkleTree, SecretKey, TokenId, DAO_CONTRACT_ID, DARK_TOKEN_ID,
-        MONEY_CONTRACT_ID,
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, MerkleTree,
+        SecretKey, TokenId, DAO_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
     ContractCall,
@@ -32,9 +31,7 @@ use darkfi_serial::{Decodable, Encodable};
 use log::debug;
 use rand::rngs::OsRng;
 
-use darkfi_dao_contract::{
-    dao_client, dao_model, money_client, wallet_cache::WalletCache, DaoFunction,
-};
+use darkfi_dao_contract::{client, model, money_client, wallet_cache::WalletCache, DaoFunction};
 
 use darkfi_money_contract::{
     client::token_mint_v1::TokenMintCallBuilder,
@@ -81,7 +78,7 @@ async fn integration_test() -> Result<()> {
     let gdrk_token_id = TokenId::derive(gdrk_mint_auth.secret);
 
     // DAO parameters
-    let dao = dao_client::DaoInfo {
+    let dao = client::DaoInfo {
         proposer_limit: 110,
         quorum: 110,
         approval_ratio_base: 2,
@@ -101,7 +98,7 @@ async fn integration_test() -> Result<()> {
     // =======================================================
     debug!(target: "dao", "Stage 1. Creating DAO bulla");
 
-    let (params, proofs) = dao_client::make_mint_call(
+    let (params, proofs) = client::make_mint_call(
         &dao,
         &dao_th.dao_kp.secret,
         &dao_th.dao_mint_zkbin,
@@ -400,7 +397,7 @@ async fn integration_test() -> Result<()> {
     // TODO: is it possible for an invalid transfer() to be constructed on exec()?
     //       need to look into this
     let signature_secret = SecretKey::random(&mut OsRng);
-    let input = dao_client::DaoProposeStakeInput {
+    let input = client::DaoProposeStakeInput {
         secret: dao_th.alice_kp.secret,
         note: gov_recv[0].note.clone(),
         leaf_position: money_leaf_position,
@@ -415,14 +412,14 @@ async fn integration_test() -> Result<()> {
         (merkle_path, root)
     };
 
-    let proposal = dao_client::DaoProposalInfo {
+    let proposal = client::DaoProposalInfo {
         dest: receiver_keypair.public,
         amount: 1000,
         token_id: xdrk_token_id,
         blind: pallas::Base::random(&mut OsRng),
     };
 
-    let call = dao_client::DaoProposeCall {
+    let call = client::DaoProposeCall {
         inputs: vec![input],
         proposal,
         dao: dao.clone(),
@@ -461,9 +458,7 @@ async fn integration_test() -> Result<()> {
 
     // Read received proposal
     let (proposal, proposal_bulla) = {
-        let enc_note =
-            AeadEncryptedNote { ciphertext: params.ciphertext, ephem_public: params.ephem_public };
-        let note: dao_client::DaoProposeNote = enc_note.decrypt(&dao_th.dao_kp.secret).unwrap();
+        let note: client::DaoProposeNote = params.note.decrypt(&dao_th.dao_kp.secret).unwrap();
 
         // TODO: check it belongs to DAO bulla
 
@@ -516,7 +511,7 @@ async fn integration_test() -> Result<()> {
     };
 
     let signature_secret = SecretKey::random(&mut OsRng);
-    let input = dao_client::DaoVoteInput {
+    let input = client::DaoVoteInput {
         secret: dao_th.alice_kp.secret,
         note: gov_recv[0].note.clone(),
         leaf_position: money_leaf_position,
@@ -531,7 +526,7 @@ async fn integration_test() -> Result<()> {
     // For the demo MVP, you can just use the dao_keypair secret
     let vote_keypair_1 = Keypair::random(&mut OsRng);
 
-    let call = dao_client::DaoVoteCall {
+    let call = client::DaoVoteCall {
         inputs: vec![input],
         vote_option,
         yes_vote_blind: pallas::Scalar::random(&mut OsRng),
@@ -570,9 +565,7 @@ async fn integration_test() -> Result<()> {
     // TODO: look into verifiable encryption for notes
     // TODO: look into timelock puzzle as a possibility
     let vote_note_1 = {
-        let enc_note =
-            AeadEncryptedNote { ciphertext: params.ciphertext, ephem_public: params.ephem_public };
-        let note: dao_client::DaoVoteNote = enc_note.decrypt(&vote_keypair_1.secret).unwrap();
+        let note: client::DaoVoteNote = params.note.decrypt(&vote_keypair_1.secret).unwrap();
         note
     };
     debug!(target: "dao", "User 1 voted!");
@@ -589,7 +582,7 @@ async fn integration_test() -> Result<()> {
     };
 
     let signature_secret = SecretKey::random(&mut OsRng);
-    let input = dao_client::DaoVoteInput {
+    let input = client::DaoVoteInput {
         //secret: gov_keypair_2.secret,
         secret: dao_th.bob_kp.secret,
         note: gov_recv[1].note.clone(),
@@ -604,7 +597,7 @@ async fn integration_test() -> Result<()> {
     // We create a new keypair to encrypt the vote.
     let vote_keypair_2 = Keypair::random(&mut OsRng);
 
-    let call = dao_client::DaoVoteCall {
+    let call = client::DaoVoteCall {
         inputs: vec![input],
         vote_option,
         yes_vote_blind: pallas::Scalar::random(&mut OsRng),
@@ -640,9 +633,7 @@ async fn integration_test() -> Result<()> {
     vote_verify_times.push(timer.elapsed());
 
     let vote_note_2 = {
-        let enc_note =
-            AeadEncryptedNote { ciphertext: params.ciphertext, ephem_public: params.ephem_public };
-        let note: dao_client::DaoVoteNote = enc_note.decrypt(&vote_keypair_2.secret).unwrap();
+        let note: client::DaoVoteNote = params.note.decrypt(&vote_keypair_2.secret).unwrap();
         note
     };
     debug!(target: "dao", "User 2 voted!");
@@ -659,7 +650,7 @@ async fn integration_test() -> Result<()> {
     };
 
     let signature_secret = SecretKey::random(&mut OsRng);
-    let input = dao_client::DaoVoteInput {
+    let input = client::DaoVoteInput {
         //secret: gov_keypair_3.secret,
         secret: dao_th.charlie_kp.secret,
         note: gov_recv[2].note.clone(),
@@ -674,7 +665,7 @@ async fn integration_test() -> Result<()> {
     // We create a new keypair to encrypt the vote.
     let vote_keypair_3 = Keypair::random(&mut OsRng);
 
-    let call = dao_client::DaoVoteCall {
+    let call = client::DaoVoteCall {
         inputs: vec![input],
         vote_option,
         yes_vote_blind: pallas::Scalar::random(&mut OsRng),
@@ -713,9 +704,7 @@ async fn integration_test() -> Result<()> {
     // TODO: look into verifiable encryption for notes
     // TODO: look into timelock puzzle as a possibility
     let vote_note_3 = {
-        let enc_note =
-            AeadEncryptedNote { ciphertext: params.ciphertext, ephem_public: params.ephem_public };
-        let note: dao_client::DaoVoteNote = enc_note.decrypt(&vote_keypair_3.secret).unwrap();
+        let note: client::DaoVoteNote = params.note.decrypt(&vote_keypair_3.secret).unwrap();
         note
     };
     debug!(target: "dao", "User 3 voted!");
@@ -734,7 +723,7 @@ async fn integration_test() -> Result<()> {
     let mut total_yes_vote_value = 0;
     let mut total_all_vote_value = 0;
 
-    let mut blind_total_vote = dao_model::DaoBlindAggregateVote::default();
+    let mut blind_total_vote = model::DaoBlindAggregateVote::default();
 
     // Just keep track of these for the assert statements after the for loop
     // but they aren't needed otherwise.
@@ -757,7 +746,7 @@ async fn integration_test() -> Result<()> {
         let yes_vote_commit = pedersen_commitment_u64(yes_vote_value, note.yes_vote_blind);
         let all_vote_commit = pedersen_commitment_u64(note.all_vote_value, note.all_vote_blind);
 
-        let blind_vote = dao_model::DaoBlindAggregateVote { yes_vote_commit, all_vote_commit };
+        let blind_vote = model::DaoBlindAggregateVote { yes_vote_commit, all_vote_commit };
         blind_total_vote.aggregate(blind_vote);
 
         // Just for the debug
@@ -864,7 +853,7 @@ async fn integration_test() -> Result<()> {
     xfer_params.encode(&mut data)?;
     let xfer_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
-    let call = dao_client::DaoExecCall {
+    let call = client::DaoExecCall {
         proposal,
         dao,
         yes_vote_value: total_yes_vote_value,
