@@ -58,7 +58,7 @@ impl ZkBinary {
                 let opcode = format!("{opcode_:?}");
                 let args = args_
                     .iter()
-                    .map(|(heap_type, heap_idx)| (format!("{heap_type:?}"), heap_idx.clone()))
+                    .map(|(heap_type, heap_idx)| (format!("{heap_type:?}"), *heap_idx))
                     .collect();
                 (opcode, args)
             })

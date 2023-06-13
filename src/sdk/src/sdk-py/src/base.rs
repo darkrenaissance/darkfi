@@ -17,13 +17,12 @@
  */
 
 use darkfi_sdk::{
-    crypto::{
-        pallas,
-        pasta_prelude::{Field, PrimeField},
-        poseidon_hash, MerkleNode,
-    },
-    incrementalmerkletree::Hashable,
-    pasta::group::ff::FromUniformBytes,
+    bridgetree::Hashable,
+    crypto::{poseidon_hash, MerkleNode},
+};
+use pasta_curves::{
+    group::ff::{Field, FromUniformBytes, PrimeField},
+    pallas,
 };
 use pyo3::prelude::*;
 use rand::rngs::OsRng;
