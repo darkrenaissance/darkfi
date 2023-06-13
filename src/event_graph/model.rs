@@ -21,7 +21,7 @@ use std::{cmp::Ordering, collections::HashMap, fmt::Debug};
 use async_std::sync::{Arc, Mutex};
 use blake3;
 use darkfi_serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
-use log::error;
+use log::{error, info};
 
 use crate::{event_graph::events_queue::EventsQueuePtr, util::time::Timestamp};
 
@@ -88,6 +88,29 @@ where
         event_map.insert(root_node_id, root_node);
 
         Self { current_root: root_node_id, orphans: HashMap::new(), event_map, events_queue }
+    }
+
+    pub fn reset_root(&mut self, timestamp: Timestamp) {
+        let root_node = EventNode {
+            parent: None,
+            event: Event {
+                previous_event_hash: blake3::hash(b""), // This is a blake3 hash of NULL
+                action: T::new(),
+                timestamp,
+            },
+            children: Vec::new(),
+        };
+
+        let root_node_id = root_node.event.hash();
+
+        let mut event_map = HashMap::new();
+        event_map.insert(root_node_id, root_node);
+
+        self.current_root = root_node_id;
+        self.orphans = HashMap::new();
+        self.event_map = event_map;
+
+        info!("reset current root to: {:?}", self.current_root);
     }
 
     pub fn get_head_hash(&self) -> EventId {

@@ -21,6 +21,8 @@ use async_std::{
     sync::{Arc, Mutex},
     task,
 };
+
+use chrono::{Duration, Utc};
 use irc::ClientSubMsg;
 use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
@@ -32,14 +34,14 @@ use darkfi::{
     async_daemonize,
     event_graph::{
         events_queue::EventsQueue,
-        model::Model,
+        model::{Model, ModelPtr},
         protocol_event::{ProtocolEvent, Seen},
         view::View,
     },
     net,
     rpc::server::listen_and_serve,
     system::{Subscriber, SubscriberPtr},
-    util::{file::save_json_file, path::expand_path},
+    util::{async_util::sleep, file::save_json_file, path::expand_path, time::Timestamp},
     Result,
 };
 
@@ -94,6 +96,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     let model = Arc::new(Mutex::new(Model::new(events_queue.clone())));
     let view = Arc::new(Mutex::new(View::new(events_queue)));
     let model_clone = model.clone();
+    let model_clone2 = model.clone();
 
     ////////////////////
     // P2p setup
@@ -155,7 +158,10 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
 
     // Start the irc server and detach it
     let executor_cloned = executor.clone();
-    executor_cloned.spawn(async move { irc_server.start(executor.clone()).await }).detach();
+    executor.spawn(async move { irc_server.start(executor_cloned).await }).detach();
+
+    // Reset root task
+    executor.spawn(async move { reset_root(model_clone2).await }).detach();
 
     ////////////////////
     // Wait for termination signal
@@ -199,4 +205,26 @@ async fn handle_signals(
         }
     }
     Ok(())
+}
+
+async fn reset_root(model: ModelPtr<PrivMsgEvent>) {
+    loop {
+        let now = Utc::now();
+
+        // clocks are valid, safe to unwrap
+        let next_midnight = (now + Duration::days(1)).date_naive().and_hms_opt(0, 0, 0).unwrap();
+
+        let duration = next_midnight.signed_duration_since(now.naive_utc()).to_std().unwrap();
+
+        // make sure the root is the same as everyone else's at
+        // startup by passing today's date 00:00 AM UTC as
+        // timestamp to root_event
+        let now_datetime = now.date_naive().and_hms_opt(0, 0, 0).unwrap();
+        let timestamp = now_datetime.timestamp() as u64;
+
+        model.lock().await.reset_root(Timestamp(timestamp));
+
+        sleep(duration.as_secs()).await;
+        info!("Resetting root");
+    }
 }
