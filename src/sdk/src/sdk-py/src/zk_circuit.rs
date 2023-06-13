@@ -32,13 +32,13 @@ impl ZkCircuit {
     fn new(circuit_code: &PyCell<ZkBinary>) -> Self {
         let circuit_code = circuit_code.borrow().deref().0.clone();
         // DUMMY CIRCUIT
-        let circuit = vm::ZkCircuit::new(vec![], circuit_code.clone());
+        let circuit = vm::ZkCircuit::new(vec![], circuit_code);
         Self(circuit, vec![])
     }
 
     fn build(&self, circuit_code: &PyCell<ZkBinary>) -> Self {
         let circuit_code = circuit_code.borrow().deref().0.clone();
-        let circuit = vm::ZkCircuit::new(self.1.clone(), circuit_code.clone());
+        let circuit = vm::ZkCircuit::new(self.1.clone(), circuit_code);
         Self(circuit, self.1.clone())
     }
 

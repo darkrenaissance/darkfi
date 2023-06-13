@@ -19,14 +19,10 @@
 use crate::{affine::Affine, base::Base, scalar::Scalar};
 use darkfi_sdk::{
     crypto::{
-        constants::{
-            fixed_bases::{
-                VALUE_COMMITMENT_PERSONALIZATION, VALUE_COMMITMENT_R_BYTES,
-                VALUE_COMMITMENT_V_BYTES,
-            },
-            NullifierK,
+        constants::fixed_bases::{
+            NullifierK, VALUE_COMMITMENT_PERSONALIZATION, VALUE_COMMITMENT_R_BYTES,
+            VALUE_COMMITMENT_V_BYTES,
         },
-        pallas,
         util::mod_r_p,
         ValueCommit,
     },
@@ -36,6 +32,7 @@ use darkfi_sdk::{
     },
 };
 use halo2_gadgets::ecc::chip::FixedPoint;
+use pasta_curves::pallas;
 use pyo3::prelude::*;
 use std::ops::{Add, Mul};
 

@@ -17,7 +17,7 @@
  */
 
 use crate::base::Base;
-use darkfi_sdk::{crypto::pallas, pasta::arithmetic::CurveAffine};
+use pasta_curves::{arithmetic::CurveAffine, pallas};
 use pyo3::prelude::*;
 
 /// A Pallas point in the affine coordinate space (or the point at infinity).

@@ -20,7 +20,7 @@ use crate::{
     base::Base, proving_key::ProvingKey, verifying_key::VerifyingKey, zk_circuit::ZkCircuit,
 };
 use darkfi::zk::{proof, vm};
-use darkfi_sdk::crypto::pallas;
+use pasta_curves::pallas;
 use pyo3::prelude::*;
 use rand::rngs::OsRng;
 use std::ops::Deref;

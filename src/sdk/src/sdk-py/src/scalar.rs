@@ -16,10 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{
-    pallas,
-    pasta_prelude::{Field, PrimeField},
-};
+use darkfi_sdk::crypto::pasta_prelude::{Field, PrimeField};
+use pasta_curves::pallas;
 use pyo3::prelude::*;
 use rand::rngs::OsRng;
 
