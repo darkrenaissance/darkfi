@@ -18,9 +18,9 @@
 
 use darkfi_sdk::{
     crypto::pasta_prelude::{Field, PrimeField},
-    pasta::pallas,
+    pasta::{group::ff::FromUniformBytes, pallas},
 };
-use pyo3::prelude::*;
+use pyo3::{basic::CompareOp, prelude::*};
 use rand::rngs::OsRng;
 
 /// The scalar field of the Pallas and iso-Pallas curves.
@@ -29,7 +29,12 @@ pub struct Scalar(pub(crate) pallas::Scalar);
 
 #[pymethods]
 impl Scalar {
-    #[new]
+    #[staticmethod]
+    fn from_u64(v: u64) -> Self {
+        Self(pallas::Scalar::from(v))
+    }
+
+    #[staticmethod]
     fn from_u128(v: u128) -> Self {
         Self(pallas::Scalar::from_u128(v))
     }
@@ -37,6 +42,11 @@ impl Scalar {
     #[staticmethod]
     fn from_raw(v: [u64; 4]) -> Self {
         Self(pallas::Scalar::from_raw(v))
+    }
+
+    #[staticmethod]
+    fn from_uniform_bytes(bytes: [u8; 64]) -> Self {
+        Self(pallas::Scalar::from_uniform_bytes(&bytes))
     }
 
     #[staticmethod]
@@ -59,34 +69,44 @@ impl Scalar {
         Self(pallas::Scalar::one())
     }
 
-    #[pyo3(name = "__str__")]
     fn __str__(&self) -> String {
-        format!("Scalar({:?})", self.0)
+        format!("{:?}", self.0)
     }
 
-    #[pyo3(name = "__repr__")]
-    fn __repr__(&self) -> String {
-        format!("Scalar({:?})", self.0)
+    fn __repr__(slf: &PyCell<Self>) -> PyResult<String> {
+        let class_name: &str = slf.get_type().name()?;
+        Ok(format!("{}({:?})", class_name, slf.borrow().0))
     }
 
-    fn add(&self, rhs: &Self) -> Self {
-        Self(self.0.add(&rhs.0))
+    fn __add__(&self, other: &Self) -> Self {
+        Self(self.0 + other.0)
     }
 
-    fn sub(&self, rhs: &Self) -> Self {
-        Self(self.0.sub(&rhs.0))
+    fn __sub__(&self, other: &Self) -> Self {
+        Self(self.0 - other.0)
+    }
+
+    fn __mul__(&self, other: &Self) -> Self {
+        Self(self.0 * other.0)
+    }
+
+    fn __neg__(&self) -> Self {
+        Self(self.0.neg())
+    }
+
+    fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
+        match op {
+            CompareOp::Lt => Ok(self.0 < other.0),
+            CompareOp::Le => Ok(self.0 <= other.0),
+            CompareOp::Eq => Ok(self.0 == other.0),
+            CompareOp::Ne => Ok(self.0 != other.0),
+            CompareOp::Gt => Ok(self.0 > other.0),
+            CompareOp::Ge => Ok(self.0 >= other.0),
+        }
     }
 
     fn double(&self) -> Self {
         Self(self.0.double())
-    }
-
-    fn mul(&self, rhs: &Self) -> Self {
-        Self(self.0.mul(&rhs.0))
-    }
-
-    fn neg(&self) -> Self {
-        Self(self.0.neg())
     }
 
     fn square(&self) -> Self {
