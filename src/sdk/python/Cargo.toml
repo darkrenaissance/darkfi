@@ -1,7 +1,7 @@
 [package]
 name = "darkfi-sdk-py"
 description = "Python bindings for Darkfi SDK"
-version = "0.1.0"
+version = "0.4.1"
 edition = "2021"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
 license = "AGPL-3.0-only"
@@ -14,8 +14,8 @@ name = "darkfi_sdk_py"
 crate-type = ["cdylib"]
 
 [dependencies]
-darkfi = { path = "../../../../", features = ["zk", "zkas"] }
-darkfi-sdk = { path = "../../" }
+darkfi = { path = "../../../", features = ["zk", "zkas"] }
+darkfi-sdk = { path = "../" }
 halo2_gadgets = "0.3.0"
 pasta_curves = "0.5.1"
 pyo3 = "0.19.0"

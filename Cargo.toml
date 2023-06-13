@@ -43,7 +43,8 @@ members = [
     "bin/zktool",
 
     "src/sdk",
-    "src/sdk/src/sdk-py",
+    "src/sdk/python",
+
     "src/serial",
     "src/serial/derive",
     "src/serial/derive-internal",
