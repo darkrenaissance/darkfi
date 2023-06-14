@@ -27,7 +27,9 @@
 //! With this test we want to confirm the money contract state transitions
 //! work between multiple parties and are able to be verified.
 //!
-//! TODO: Malicious cases
+//! TODO:
+//!      1. Add missing functionalities(transfers, atomic swaps)
+//!      2. Malicious cases
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};

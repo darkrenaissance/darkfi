@@ -78,7 +78,8 @@ async fn txs_verification() -> Result<()> {
 
     // Alice gathers her new owncoin
     let alice_oc = th.gather_owncoin(Holder::Alice, token_mint_params.output, None)?;
-    alice_owncoins.push(alice_oc.clone());
+    let alice_token_id = alice_oc.note.token_id;
+    alice_owncoins.push(alice_oc);
 
     // Now Alice can send a little bit of funds to Bob.
     // We can duplicate this transaction to simulate double spending.
@@ -89,12 +90,13 @@ async fn txs_verification() -> Result<()> {
         info!(target: "money", "[Alice] ======================================================");
         info!(target: "money", "[Alice] Building Money::Transfer params for payment {i} to Bob");
         info!(target: "money", "[Alice] ======================================================");
-        let (transfer_tx, transfer_params) =
-            th.transfer(ALICE_SEND, Holder::Alice, Holder::Bob, &alice_oc.clone())?;
+        let (transfer_tx, transfer_params, spent_coins) =
+            th.transfer(ALICE_SEND, Holder::Alice, Holder::Bob, &alice_owncoins, alice_token_id)?;
 
         // Validating transfer params
         assert!(transfer_params.inputs.len() == 1);
         assert!(transfer_params.outputs.len() == 2);
+        assert!(spent_coins.len() == 1);
 
         // Now we simulate nodes verification, as transactions come one by one.
         // Validation should pass, even when we are trying to double spent.

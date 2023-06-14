@@ -128,7 +128,7 @@ impl TestHarness {
     pub async fn execute_erroneous_unstake_request_txs(
         &mut self,
         holder: Holder,
-        txs: &Vec<Transaction>,
+        txs: &[Transaction],
         slot: u64,
         erroneous: usize,
     ) -> Result<()> {

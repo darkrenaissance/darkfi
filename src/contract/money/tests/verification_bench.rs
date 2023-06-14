@@ -18,29 +18,17 @@
 
 use std::{env, str::FromStr};
 
-use darkfi::{tx::Transaction, Result};
-use darkfi_sdk::{
-    crypto::{pasta_prelude::*, poseidon_hash, MerkleNode, Nullifier, MONEY_CONTRACT_ID},
-    pasta::pallas,
-    ContractCall,
-};
-use darkfi_serial::Encodable;
+use darkfi::Result;
+use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
 use log::info;
-use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
-
-use darkfi_money_contract::{
-    client::{transfer_v1::TransferCallBuilder, MoneyNote, OwnCoin},
-    model::Coin,
-    MoneyFunction::TransferV1 as MoneyTransfer,
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
-};
-
-mod harness;
-use harness::{init_logger, MoneyTestHarness};
+use rand::{prelude::IteratorRandom, Rng};
 
 #[async_std::test]
 async fn alice2alice_random_amounts() -> Result<()> {
     init_logger();
+
+    // Holders this test will use
+    const HOLDERS: [Holder; 2] = [Holder::Faucet, Holder::Alice];
 
     const ALICE_AIRDROP: u64 = 1000;
 
@@ -60,55 +48,31 @@ async fn alice2alice_random_amounts() -> Result<()> {
     }
 
     // Initialize harness
-    let mut th = MoneyTestHarness::new().await?;
-    let (mint_pk, mint_zkbin) = th.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
-    let (burn_pk, burn_zkbin) = th.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
+    let mut th = TestHarness::new(&["money".to_string()]).await?;
 
-    info!(target: "money", "[Faucet] ===================================================");
-    info!(target: "money", "[Faucet] Building Money::Transfer params for Alice's airdrop");
-    info!(target: "money", "[Faucet] ===================================================");
-    let contract_id = *MONEY_CONTRACT_ID;
-    let (airdrop_tx, airdrop_params) = th.airdrop_native(ALICE_AIRDROP, th.alice.keypair.public)?;
+    info!(target: "money", "[Faucet] ========================");
+    info!(target: "money", "[Faucet] Building Alice's airdrop");
+    info!(target: "money", "[Faucet] ========================");
+    let (airdrop_tx, airdrop_params) = th.airdrop_native(ALICE_AIRDROP, Holder::Alice)?;
 
     info!(target: "money", "[Faucet] ==========================");
     info!(target: "money", "[Faucet] Executing Alice airdrop tx");
     info!(target: "money", "[Faucet] ==========================");
-    let erroneous_txs = th
-        .faucet
-        .state
-        .read()
-        .await
-        .verify_transactions(&[airdrop_tx.clone()], current_slot, true)
+    th.execute_airdrop_native_tx(Holder::Faucet, &airdrop_tx, &airdrop_params, current_slot)
         .await?;
-    assert!(erroneous_txs.is_empty());
-    th.faucet.merkle_tree.append(MerkleNode::from(airdrop_params.outputs[0].coin.inner()));
+
     info!(target: "money", "[Alice] ==========================");
     info!(target: "money", "[Alice] Executing Alice airdrop tx");
     info!(target: "money", "[Alice] ==========================");
-    let erroneous_txs = th
-        .alice
-        .state
-        .read()
-        .await
-        .verify_transactions(&[airdrop_tx.clone()], current_slot, true)
-        .await?;
-    assert!(erroneous_txs.is_empty());
-    th.alice.merkle_tree.append(MerkleNode::from(airdrop_params.outputs[0].coin.inner()));
+    th.execute_airdrop_native_tx(Holder::Alice, &airdrop_tx, &airdrop_params, current_slot).await?;
 
-    assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
+    th.assert_trees(&HOLDERS);
 
     // Gather new owncoins
     let mut owncoins = vec![];
-    let leaf_position = th.alice.merkle_tree.mark().unwrap();
-    let note: MoneyNote = airdrop_params.outputs[0].note.decrypt(&th.alice.keypair.secret)?;
-    let token_id = note.token_id;
-    owncoins.push(OwnCoin {
-        coin: Coin::from(airdrop_params.outputs[0].coin),
-        note: note.clone(),
-        secret: th.alice.keypair.secret,
-        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
-        leaf_position,
-    });
+    let owncoin = th.gather_owncoin(Holder::Alice, airdrop_params.outputs[0].clone(), None)?;
+    let token_id = owncoin.note.token_id;
+    owncoins.push(owncoin);
 
     // Execute transactions loop
     for i in 0..n {
@@ -121,43 +85,8 @@ async fn alice2alice_random_amounts() -> Result<()> {
         let amount = rand::thread_rng().gen_range(1..ALICE_AIRDROP);
         info!(target: "money", "[Alice] Sending: {}", amount);
         info!(target: "money", "[Alice] ===============================================");
-        let call_debris = TransferCallBuilder {
-            keypair: th.alice.keypair,
-            recipient: th.alice.keypair.public,
-            value: amount,
-            token_id,
-            rcpt_spend_hook: pallas::Base::zero(),
-            rcpt_user_data: pallas::Base::zero(),
-            rcpt_user_data_blind: pallas::Base::random(&mut OsRng),
-            change_spend_hook: pallas::Base::zero(),
-            change_user_data: pallas::Base::zero(),
-            change_user_data_blind: pallas::Base::random(&mut OsRng),
-            coins: owncoins.clone(),
-            tree: th.alice.merkle_tree.clone(),
-            mint_zkbin: mint_zkbin.clone(),
-            mint_pk: mint_pk.clone(),
-            burn_zkbin: burn_zkbin.clone(),
-            burn_pk: burn_pk.clone(),
-            clear_input: false,
-        }
-        .build()?;
-        let (params, proofs, secret_keys, spent_coins) = (
-            call_debris.params,
-            call_debris.proofs,
-            call_debris.signature_secrets,
-            call_debris.spent_coins,
-        );
-
-        info!(target: "money", "[Alice] ============================");
-        info!(target: "money", "[Alice] Building payment tx to Alice");
-        info!(target: "money", "[Alice] ============================");
-        let mut data = vec![MoneyTransfer as u8];
-        params.encode(&mut data)?;
-        let calls = vec![ContractCall { contract_id, data }];
-        let proofs = vec![proofs];
-        let mut tx = Transaction { calls, proofs, signatures: vec![] };
-        let sigs = tx.create_sigs(&mut OsRng, &secret_keys)?;
-        tx.signatures = vec![sigs];
+        let (tx, params, spent_coins) =
+            th.transfer(amount, Holder::Alice, Holder::Alice, &owncoins, token_id)?;
 
         // Remove the owncoins we've spent
         for spent in spent_coins {
@@ -168,57 +97,28 @@ async fn alice2alice_random_amounts() -> Result<()> {
         info!(target: "money", "[Faucet] ================================");
         info!(target: "money", "[Faucet] Executing Alice2Alice payment tx");
         info!(target: "money", "[Faucet] ================================");
-        let erroneous_txs = th
-            .faucet
-            .state
-            .read()
-            .await
-            .verify_transactions(&[tx.clone()], current_slot, true)
-            .await?;
-        assert!(erroneous_txs.is_empty());
-        for output in &params.outputs {
-            th.faucet.merkle_tree.append(MerkleNode::from(output.coin.inner()));
-        }
+        th.execute_transfer_tx(Holder::Faucet, &tx, &params, current_slot, true).await?;
+
         info!(target: "money", "[Alice] ================================");
         info!(target: "money", "[Alice] Executing Alice2Alice payment tx");
         info!(target: "money", "[Alice] ================================");
-        let erroneous_txs = th
-            .alice
-            .state
-            .read()
-            .await
-            .verify_transactions(&[tx.clone()], current_slot, true)
-            .await?;
-        assert!(erroneous_txs.is_empty());
-        // Gather new owncoins and apply the state transitions
-        for output in params.outputs {
-            th.alice.merkle_tree.append(MerkleNode::from(output.coin.inner()));
-            let note: MoneyNote = output.note.decrypt(&th.alice.keypair.secret)?;
-            let leaf_position = th.alice.merkle_tree.mark().unwrap();
+        th.execute_transfer_tx(Holder::Alice, &tx, &params, current_slot, false).await?;
 
-            let owncoin = OwnCoin {
-                coin: Coin::from(output.coin),
-                note: note.clone(),
-                secret: th.alice.keypair.secret,
-                nullifier: Nullifier::from(poseidon_hash([
-                    th.alice.keypair.secret.inner(),
-                    note.serial,
-                ])),
-                leaf_position,
-            };
+        // Gather new owncoins
+        owncoins.append(&mut th.gather_multiple_owncoins(Holder::Alice, &params.outputs)?);
 
-            owncoins.push(owncoin);
-        }
-
-        assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
+        th.assert_trees(&HOLDERS);
     }
 
     Ok(())
 }
 
 #[async_std::test]
-async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
+async fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
     init_logger();
+
+    // Holders this test will use
+    const HOLDERS: [Holder; 2] = [Holder::Faucet, Holder::Alice];
 
     // Slot to verify against
     let current_slot = 0;
@@ -236,10 +136,7 @@ async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
     }
 
     // Initialize harness
-    let mut th = MoneyTestHarness::new().await?;
-    let (mint_pk, mint_zkbin) = th.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
-    let (burn_pk, burn_zkbin) = th.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
-    let contract_id = *MONEY_CONTRACT_ID;
+    let mut th = TestHarness::new(&["money".to_string()]).await?;
 
     // Mint 10 coins
     let mut token_ids = vec![];
@@ -250,50 +147,24 @@ async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
         info!(target: "money", "[Faucet] ===================================================");
         info!(target: "money", "[Faucet] Building Money::Mint params for Alice's mint for token {} and amount {}", i, amount);
         info!(target: "money", "[Faucet] ===================================================");
-        let (mint_tx, mint_params) =
-            th.mint_token(th.alice.keypair, amount, th.alice.keypair.public)?;
+        let (mint_tx, mint_params) = th.token_mint(amount, Holder::Alice, Holder::Alice)?;
 
         info!(target: "money", "[Faucet] =======================");
         info!(target: "money", "[Faucet] Executing Alice mint tx");
         info!(target: "money", "[Faucet] =======================");
-        let erroneous_txs = th
-            .faucet
-            .state
-            .read()
-            .await
-            .verify_transactions(&[mint_tx.clone()], current_slot, true)
-            .await?;
-        assert!(erroneous_txs.is_empty());
-        th.faucet.merkle_tree.append(MerkleNode::from(mint_params.output.coin.inner()));
+        th.execute_token_mint_tx(Holder::Faucet, &mint_tx, &mint_params, current_slot).await?;
+
         info!(target: "money", "[Alice] =======================");
         info!(target: "money", "[Alice] Executing Alice mint tx");
         info!(target: "money", "[Alice] =======================");
-        let erroneous_txs = th
-            .alice
-            .state
-            .read()
-            .await
-            .verify_transactions(&[mint_tx.clone()], current_slot, true)
-            .await?;
-        assert!(erroneous_txs.is_empty());
-        th.alice.merkle_tree.append(MerkleNode::from(mint_params.output.coin.inner()));
+        th.execute_token_mint_tx(Holder::Alice, &mint_tx, &mint_params, current_slot).await?;
 
-        assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
+        th.assert_trees(&HOLDERS);
 
         // Gather new owncoins
-        let leaf_position = th.alice.merkle_tree.mark().unwrap();
-        let note: MoneyNote = mint_params.output.note.decrypt(&th.alice.keypair.secret)?;
-        let token_id = note.token_id;
-        owncoins.push(vec![OwnCoin {
-            coin: Coin::from(mint_params.output.coin),
-            note: note.clone(),
-            secret: th.alice.keypair.secret,
-            nullifier: Nullifier::from(poseidon_hash([
-                th.alice.keypair.secret.inner(),
-                note.serial,
-            ])),
-            leaf_position,
-        }]);
+        let owncoin = th.gather_owncoin(Holder::Alice, mint_params.output, None)?;
+        let token_id = owncoin.note.token_id;
+        owncoins.push(vec![owncoin]);
         minted_amounts.push(amount);
         token_ids.push(token_id);
     }
@@ -310,6 +181,7 @@ async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
 
         // Generate a transaction for each coin
         let mut txs = vec![];
+        let mut txs_params = vec![];
         for index in sample {
             info!(target: "money", "[Alice] ===============================================");
             info!(target: "money", "[Alice] Building Money::Transfer params for coin {}", index);
@@ -323,92 +195,38 @@ async fn alice2alice_random_amounts_multiplecoins() -> Result<()> {
             let amount = rand::thread_rng().gen_range(1..mint_amount);
             info!(target: "money", "[Alice] Sending: {}", amount);
             info!(target: "money", "[Alice] ===============================================");
-            let call_debris = TransferCallBuilder {
-                keypair: th.alice.keypair,
-                recipient: th.alice.keypair.public,
-                value: amount,
-                token_id,
-                rcpt_spend_hook: pallas::Base::zero(),
-                rcpt_user_data: pallas::Base::zero(),
-                rcpt_user_data_blind: pallas::Base::random(&mut OsRng),
-                change_spend_hook: pallas::Base::zero(),
-                change_user_data: pallas::Base::zero(),
-                change_user_data_blind: pallas::Base::random(&mut OsRng),
-                coins: coins.clone(),
-                tree: th.alice.merkle_tree.clone(),
-                mint_zkbin: mint_zkbin.clone(),
-                mint_pk: mint_pk.clone(),
-                burn_zkbin: burn_zkbin.clone(),
-                burn_pk: burn_pk.clone(),
-                clear_input: false,
-            }
-            .build()?;
-            let (params, proofs, secret_keys, spent_coins) = (
-                call_debris.params,
-                call_debris.proofs,
-                call_debris.signature_secrets,
-                call_debris.spent_coins,
-            );
-
-            info!(target: "money", "[Alice] ============================");
-            info!(target: "money", "[Alice] Building payment tx to Alice");
-            info!(target: "money", "[Alice] ============================");
-            let mut data = vec![MoneyTransfer as u8];
-            params.encode(&mut data)?;
-            let calls = vec![ContractCall { contract_id, data }];
-            let proofs = vec![proofs];
-            let mut tx = Transaction { calls, proofs, signatures: vec![] };
-            let sigs = tx.create_sigs(&mut OsRng, &secret_keys)?;
-            tx.signatures = vec![sigs];
+            let (tx, params, spent_coins) =
+                th.transfer(amount, Holder::Alice, Holder::Alice, &coins, token_id)?;
 
             // Remove the owncoins we've spent
             for spent in spent_coins {
                 coins.retain(|x| x != &spent);
             }
 
-            // Store transaction
-            txs.push(tx.clone());
-
             // Gather new owncoins
-            for output in params.outputs {
-                th.faucet.merkle_tree.append(MerkleNode::from(output.coin.inner()));
-                th.alice.merkle_tree.append(MerkleNode::from(output.coin.inner()));
-                let note: MoneyNote = output.note.decrypt(&th.alice.keypair.secret)?;
-                let leaf_position = th.alice.merkle_tree.mark().unwrap();
+            coins.append(&mut th.gather_multiple_owncoins(Holder::Alice, &params.outputs)?);
 
-                let owncoin = OwnCoin {
-                    coin: Coin::from(output.coin),
-                    note: note.clone(),
-                    secret: th.alice.keypair.secret,
-                    nullifier: Nullifier::from(poseidon_hash([
-                        th.alice.keypair.secret.inner(),
-                        note.serial,
-                    ])),
-                    leaf_position,
-                };
-
-                coins.push(owncoin);
-            }
+            // Store transaction and its params
+            txs.push(tx);
+            txs_params.push(params);
 
             // Replace coins
             owncoins[index] = coins;
         }
 
-        // Verify transaction
-        info!(target: "money", "[Faucet] ================================");
-        info!(target: "money", "[Faucet] Executing Alice2Alice payment tx");
-        info!(target: "money", "[Faucet] ================================");
-        let erroneous_txs =
-            th.faucet.state.read().await.verify_transactions(&txs, current_slot, true).await?;
-        assert!(erroneous_txs.is_empty());
-        info!(target: "money", "[Alice] ================================");
-        info!(target: "money", "[Alice] Executing Alice2Alice payment tx");
-        info!(target: "money", "[Alice] ================================");
-        let erroneous_txs =
-            th.alice.state.read().await.verify_transactions(&txs, current_slot, true).await?;
-        assert!(erroneous_txs.is_empty());
+        info!(target: "money", "[Faucet] =================================");
+        info!(target: "money", "[Faucet] Executing Alice2Alice payment txs");
+        info!(target: "money", "[Faucet] =================================");
+        th.execute_multiple_transfer_txs(Holder::Faucet, &txs, &txs_params, current_slot, true)
+            .await?;
 
-        assert!(th.faucet.merkle_tree.root(0).unwrap() == th.alice.merkle_tree.root(0).unwrap());
+        info!(target: "money", "[Alice] =================================");
+        info!(target: "money", "[Alice] Executing Alice2Alice payment txs");
+        info!(target: "money", "[Alice] =================================");
+        th.execute_multiple_transfer_txs(Holder::Alice, &txs, &txs_params, current_slot, false)
+            .await?;
+
+        th.assert_trees(&HOLDERS);
     }
 
     Ok(())

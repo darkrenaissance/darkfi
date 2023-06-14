@@ -104,7 +104,7 @@ impl TestHarness {
     pub async fn execute_erroneous_genesis_stake_txs(
         &mut self,
         holder: Holder,
-        txs: &Vec<Transaction>,
+        txs: &[Transaction],
         slot: u64,
         erroneous: usize,
     ) -> Result<()> {

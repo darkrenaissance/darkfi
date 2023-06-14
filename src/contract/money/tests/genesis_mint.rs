@@ -27,6 +27,7 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
+use darkfi_sdk::crypto::DARK_TOKEN_ID;
 use log::info;
 
 #[async_std::test]
@@ -68,7 +69,7 @@ async fn genesis_mint() -> Result<()> {
     info!(target: "money", "[Malicious] ==================================");
     th.execute_erroneous_genesis_mint_tx(
         Holder::Alice,
-        vec![genesis_mint_tx.clone(), genesis_mint_tx.clone()],
+        &vec![genesis_mint_tx.clone(), genesis_mint_tx.clone()],
         current_slot,
         1,
     )
@@ -79,7 +80,7 @@ async fn genesis_mint() -> Result<()> {
     info!(target: "money", "[Malicious] ============================================");
     th.execute_erroneous_genesis_mint_tx(
         Holder::Alice,
-        vec![genesis_mint_tx.clone()],
+        &vec![genesis_mint_tx.clone()],
         current_slot + 1,
         1,
     )
@@ -115,7 +116,7 @@ async fn genesis_mint() -> Result<()> {
 
     // Alice gathers her new owncoin
     let alice_oc = th.gather_owncoin(Holder::Alice, genesis_mint_params.output, None)?;
-    alice_owncoins.push(alice_oc.clone());
+    alice_owncoins.push(alice_oc);
 
     info!(target: "money", "[Bob] ========================");
     info!(target: "money", "[Bob] Building genesis mint tx");
@@ -155,13 +156,14 @@ async fn genesis_mint() -> Result<()> {
     info!(target: "money", "[Alice] ====================================================");
     info!(target: "money", "[Alice] Building Money::Transfer params for a payment to Bob");
     info!(target: "money", "[Alice] ====================================================");
-    let (transfer_tx, transfer_params) =
-        th.transfer(ALICE_SEND, Holder::Alice, Holder::Bob, &alice_oc)?;
+    let (transfer_tx, transfer_params, spent_coins) =
+        th.transfer(ALICE_SEND, Holder::Alice, Holder::Bob, &alice_owncoins, *DARK_TOKEN_ID)?;
 
     // Validating transfer params
     assert!(transfer_params.inputs.len() == 1);
     assert!(transfer_params.outputs.len() == 2);
-    alice_owncoins.retain(|x| x != &alice_oc);
+    assert!(spent_coins.len() == 1);
+    alice_owncoins.retain(|x| x != &spent_coins[0]);
     assert!(alice_owncoins.is_empty());
 
     info!(target: "money", "[Faucet] ==============================");
@@ -196,14 +198,14 @@ async fn genesis_mint() -> Result<()> {
     info!(target: "money", "[Bob] ======================================================");
     info!(target: "money", "[Bob] Building Money::Transfer params for a payment to Alice");
     info!(target: "money", "[Bob] ======================================================");
-    let bob_oc = bob_owncoins[0].clone();
-    let (transfer_tx, transfer_params) =
-        th.transfer(BOB_SEND, Holder::Bob, Holder::Alice, &bob_oc)?;
+    let (transfer_tx, transfer_params, spent_coins) =
+        th.transfer(BOB_SEND, Holder::Bob, Holder::Alice, &bob_owncoins, *DARK_TOKEN_ID)?;
 
     // Validating transfer params
     assert!(transfer_params.inputs.len() == 1);
     assert!(transfer_params.outputs.len() == 2);
-    bob_owncoins.retain(|x| x != &bob_oc);
+    assert!(spent_coins.len() == 1);
+    bob_owncoins.retain(|x| x != &spent_coins[0]);
     assert!(bob_owncoins.len() == 1);
 
     info!(target: "money", "[Faucet] ==============================");

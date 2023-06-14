@@ -25,7 +25,7 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{MerkleNode, MONEY_CONTRACT_ID},
+    crypto::{MerkleNode, TokenId, MONEY_CONTRACT_ID},
     pasta::pallas,
     ContractCall,
 };
@@ -40,8 +40,9 @@ impl TestHarness {
         amount: u64,
         holder: Holder,
         recipient: Holder,
-        owncoin: &OwnCoin,
-    ) -> Result<(Transaction, MoneyTransferParamsV1)> {
+        owncoins: &[OwnCoin],
+        token_id: TokenId,
+    ) -> Result<(Transaction, MoneyTransferParamsV1, Vec<OwnCoin>)> {
         let wallet = self.holders.get(&holder).unwrap();
         let rcpt = self.holders.get(&recipient).unwrap().keypair.public;
         let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
@@ -64,14 +65,14 @@ impl TestHarness {
             keypair: wallet.keypair,
             recipient: rcpt,
             value: amount,
-            token_id: owncoin.note.token_id,
+            token_id,
             rcpt_spend_hook,
             rcpt_user_data,
             rcpt_user_data_blind,
             change_spend_hook,
             change_user_data,
             change_user_data_blind,
-            coins: vec![owncoin.clone()],
+            coins: owncoins.to_owned(),
             tree: wallet.money_merkle_tree.clone(),
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
@@ -99,7 +100,7 @@ impl TestHarness {
         let size = std::mem::size_of_val(&*base58);
         tx_action_benchmark.broadcasted_sizes.push(size);
 
-        Ok((tx, debris.params))
+        Ok((tx, debris.params, debris.spent_coins))
     }
 
     pub async fn execute_transfer_tx(
@@ -108,6 +109,7 @@ impl TestHarness {
         tx: &Transaction,
         params: &MoneyTransferParamsV1,
         slot: u64,
+        append: bool,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(&holder).unwrap();
         let tx_action_benchmark =
@@ -117,8 +119,38 @@ impl TestHarness {
         let erroneous_txs =
             wallet.state.read().await.verify_transactions(&[tx.clone()], slot, true).await?;
         assert!(erroneous_txs.is_empty());
-        wallet.money_merkle_tree.append(MerkleNode::from(params.outputs[0].coin.inner()));
-        wallet.money_merkle_tree.append(MerkleNode::from(params.outputs[1].coin.inner()));
+        if append {
+            for output in &params.outputs {
+                wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
+            }
+        }
+        tx_action_benchmark.verify_times.push(timer.elapsed());
+
+        Ok(())
+    }
+
+    pub async fn execute_multiple_transfer_txs(
+        &mut self,
+        holder: Holder,
+        txs: &[Transaction],
+        txs_params: &Vec<MoneyTransferParamsV1>,
+        slot: u64,
+        append: bool,
+    ) -> Result<()> {
+        let wallet = self.holders.get_mut(&holder).unwrap();
+        let tx_action_benchmark =
+            self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
+        let timer = Instant::now();
+
+        let erroneous_txs = wallet.state.read().await.verify_transactions(txs, slot, true).await?;
+        assert!(erroneous_txs.is_empty());
+        if append {
+            for params in txs_params {
+                for output in &params.outputs {
+                    wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
+                }
+            }
+        }
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
@@ -146,7 +178,7 @@ impl TestHarness {
     pub async fn execute_erroneous_transfer_tx(
         &mut self,
         holder: Holder,
-        txs: &Vec<Transaction>,
+        txs: &[Transaction],
         slot: u64,
         erroneous: usize,
     ) -> Result<()> {
