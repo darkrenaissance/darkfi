@@ -34,7 +34,8 @@ use crate::{
     model::{MoneyTransferParamsV1, MoneyTransferUpdateV1},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_FAUCET_PUBKEYS, MONEY_CONTRACT_INFO_TREE,
-    MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    MONEY_CONTRACT_LATEST_COIN_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
+    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
 /// `get_metadata` function for `Money::TransferV1`
@@ -285,7 +286,13 @@ pub(crate) fn money_transfer_process_update_v1(
 
     msg!("[TransferV1] Adding new coins to the Merkle tree");
     let coins: Vec<_> = update.coins.iter().map(|x| MerkleNode::from(x.inner())).collect();
-    merkle_add(info_db, coin_roots_db, &serialize(&MONEY_CONTRACT_COIN_MERKLE_TREE), &coins)?;
+    merkle_add(
+        info_db,
+        coin_roots_db,
+        &serialize(&MONEY_CONTRACT_LATEST_COIN_ROOT),
+        &serialize(&MONEY_CONTRACT_COIN_MERKLE_TREE),
+        &coins,
+    )?;
 
     Ok(())
 }

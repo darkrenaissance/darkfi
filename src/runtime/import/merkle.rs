@@ -45,7 +45,8 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             // The buffer should deserialize into:
             // - db_info
             // - db_roots
-            // - key (as Vec<u8>) (key being the name of the sled tree where the Merkle tree is)
+            // - root_key (as Vec<u8>) (key being the name of the sled key in info_db where the latest root is)
+            // - tree_key (as Vec<u8>) (key being the name of the sled key in info_db where the Merkle tree is)
             // - coins (as Vec<MerkleNode>) (the coins being added into the Merkle tree)
             let mut buf_reader = Cursor::new(buf);
             // FIXME: There's a type DbHandle=u32, but this should maybe be renamed
@@ -86,8 +87,17 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
                 return -2
             }
 
+            // This `key` represents the sled key in info where the latest root is
+            let root_key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(target: "runtime::merkle", "Failed to decode key vec: {}", e);
+                    return -2
+                }
+            };
+
             // This `key` represents the sled database tree name
-            let key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
+            let tree_key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "runtime::merkle", "Failed to decode key vec: {}", e);
@@ -114,7 +124,7 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
                 .overlay
                 .lock()
                 .unwrap()
-                .get(&db_info.tree, &key)
+                .get(&db_info.tree, &tree_key)
             {
                 Ok(v) => v,
                 Err(e) => {
@@ -181,7 +191,7 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             // Apply changes to overlay
             let lock = env.blockchain.lock().unwrap();
             let mut overlay = lock.overlay.lock().unwrap();
-            if overlay.insert(&db_info.tree, &key, &tree_data).is_err() {
+            if overlay.insert(&db_info.tree, &tree_key, &tree_data).is_err() {
                 error!(target: "runtime::merkle", "Couldn't insert to db_info tree");
                 return -2
             }
@@ -198,6 +208,16 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
                 assert_eq!(root_value.len(), 32);
                 if overlay.insert(&db_roots.tree, &root_value, &[]).is_err() {
                     error!(target: "runtime::merkle", "Couldn't insert to db_roots tree");
+                    return -2
+                }
+            }
+
+            // Write a pointer to the latest known root
+            if !new_roots.is_empty() {
+                debug!(target: "runtime::merkle", "Replacing latest Merkle root pointer");
+                let latest_root = serialize(new_roots.last().unwrap());
+                if overlay.insert(&db_info.tree, &root_key, &latest_root).is_err() {
+                    error!(target: "runtime::merkle", "Couldn't insert latest root to db_info tree");
                     return -2
                 }
             }

@@ -71,6 +71,7 @@ pub const DAO_PROPOSALS_COL_AMOUNT: &str = "amount";
 pub const DAO_PROPOSALS_COL_SENDCOIN_TOKEN_ID: &str = "sendcoin_token_id";
 pub const DAO_PROPOSALS_COL_BULLA_BLIND: &str = "bulla_blind";
 pub const DAO_PROPOSALS_COL_LEAF_POSITION: &str = "leaf_position";
+pub const DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE: &str = "money_snapshot_tree";
 pub const DAO_PROPOSALS_COL_TX_HASH: &str = "tx_hash";
 pub const DAO_PROPOSALS_COL_CALL_INDEX: &str = "call_index";
 pub const DAO_PROPOSALS_COL_OUR_VOTE_ID: &str = "our_vote_id";

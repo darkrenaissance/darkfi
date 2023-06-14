@@ -76,6 +76,7 @@ pub const MONEY_CONTRACT_TOKEN_FREEZE_TREE: &str = "token_freezes";
 // These are keys inside the info tree
 pub const MONEY_CONTRACT_DB_VERSION: &str = "db_version";
 pub const MONEY_CONTRACT_COIN_MERKLE_TREE: &str = "coin_tree";
+pub const MONEY_CONTRACT_LATEST_COIN_ROOT: &str = "last_root";
 pub const MONEY_CONTRACT_FAUCET_PUBKEYS: &str = "faucet_pubkeys";
 
 /// zkas mint circuit namespace
@@ -101,7 +102,9 @@ pub const CONSENSUS_CONTRACT_UNSTAKED_COIN_ROOTS_TREE: &str = "consensus_unstake
 // These are keys inside the consensus info tree
 pub const CONSENSUS_CONTRACT_DB_VERSION: &str = "db_version";
 pub const CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE: &str = "consensus_staked_coin_tree";
+pub const CONSENSUS_CONTRACT_STAKED_COIN_LATEST_COIN_ROOT: &str = "consensus_staked_last_root";
 pub const CONSENSUS_CONTRACT_UNSTAKED_COIN_MERKLE_TREE: &str = "consensus_unstaked_coin_tree";
+pub const CONSENSUS_CONTRACT_UNSTAKED_COIN_LATEST_COIN_ROOT: &str = "consensus_unstaked_last_root";
 
 /// zkas consensus mint circuit namespace
 pub const CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1: &str = "ConsensusMint_V1";

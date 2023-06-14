@@ -18,8 +18,9 @@
 
 use darkfi_money_contract::{
     error::MoneyError, CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
-    CONSENSUS_CONTRACT_STAKED_COINS_TREE, CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE,
-    CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1,
+    CONSENSUS_CONTRACT_STAKED_COINS_TREE, CONSENSUS_CONTRACT_STAKED_COIN_LATEST_COIN_ROOT,
+    CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE, CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE,
+    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode},
@@ -239,6 +240,7 @@ pub(crate) fn consensus_proposal_process_update_v1(
     merkle_add(
         info_db,
         staked_coin_roots_db,
+        &serialize(&CONSENSUS_CONTRACT_STAKED_COIN_LATEST_COIN_ROOT),
         &serialize(&CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE),
         &coins,
     )?;

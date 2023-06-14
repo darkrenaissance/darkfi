@@ -30,7 +30,8 @@ use crate::{
     error::DaoError,
     model::{DaoMintParams, DaoMintUpdate},
     DaoFunction, DAO_CONTRACT_DB_DAO_BULLAS, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS,
-    DAO_CONTRACT_DB_INFO_TREE, DAO_CONTRACT_KEY_DAO_MERKLE_TREE, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
+    DAO_CONTRACT_DB_INFO_TREE, DAO_CONTRACT_KEY_DAO_MERKLE_TREE, DAO_CONTRACT_KEY_LATEST_DAO_ROOT,
+    DAO_CONTRACT_ZKAS_DAO_MINT_NS,
 };
 
 /// `get_metadata` function for `Dao::Mint`
@@ -98,7 +99,13 @@ pub(crate) fn dao_mint_process_update(cid: ContractId, update: DaoMintUpdate) ->
     db_set(bulla_db, &serialize(&update.dao_bulla), &[])?;
 
     let dao = vec![MerkleNode::from(update.dao_bulla.inner())];
-    merkle_add(info_db, roots_db, &serialize(&DAO_CONTRACT_KEY_DAO_MERKLE_TREE), &dao)?;
+    merkle_add(
+        info_db,
+        roots_db,
+        &serialize(&DAO_CONTRACT_KEY_LATEST_DAO_ROOT),
+        &serialize(&DAO_CONTRACT_KEY_DAO_MERKLE_TREE),
+        &dao,
+    )?;
 
     Ok(())
 }
