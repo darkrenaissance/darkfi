@@ -104,7 +104,7 @@ impl TestHarness {
     pub async fn execute_erroneous_genesis_stake_txs(
         &mut self,
         holder: Holder,
-        txs: Vec<Transaction>,
+        txs: &Vec<Transaction>,
         slot: u64,
         erroneous: usize,
     ) -> Result<()> {
@@ -113,8 +113,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusGenesisStake).unwrap();
         let timer = Instant::now();
 
-        let erroneous_txs =
-            wallet.state.read().await.verify_transactions(&txs, slot, false).await?;
+        let erroneous_txs = wallet.state.read().await.verify_transactions(txs, slot, false).await?;
         assert_eq!(erroneous_txs.len(), erroneous);
         tx_action_benchmark.verify_times.push(timer.elapsed());
 

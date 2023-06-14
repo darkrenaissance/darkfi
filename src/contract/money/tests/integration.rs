@@ -85,7 +85,7 @@ async fn money_integration() -> Result<()> {
     th.assert_trees(&HOLDERS);
 
     // Bob gathers his new coin
-    th.gather_owncoin(Holder::Bob, token_mint_params.output.clone(), None)?;
+    th.gather_owncoin(Holder::Bob, token_mint_params.output, None)?;
 
     info!("[Bob] Building BOB token freeze tx");
     let (token_frz_tx, token_frz_params) = th.token_freeze(Holder::Bob)?;

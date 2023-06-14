@@ -61,7 +61,7 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Malicious] ===================================");
     th.execute_erroneous_genesis_stake_txs(
         Holder::Alice,
-        vec![genesis_stake_tx.clone(), genesis_stake_tx.clone()],
+        &vec![genesis_stake_tx.clone(), genesis_stake_tx.clone()],
         current_slot,
         1,
     )
@@ -72,7 +72,7 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Malicious] =============================================");
     th.execute_erroneous_genesis_stake_txs(
         Holder::Alice,
-        vec![genesis_stake_tx.clone()],
+        &vec![genesis_stake_tx.clone()],
         current_slot + 1,
         1,
     )

@@ -24,53 +24,29 @@
 //! With this test, we want to confirm the transactions execution works
 //! between multiple parties, with detection of erroneous transactions.
 
-use darkfi::{tx::Transaction, Result};
-use darkfi_sdk::{
-    crypto::{pasta_prelude::*, poseidon_hash, MerkleNode, Nullifier, MONEY_CONTRACT_ID},
-    pasta::pallas,
-    ContractCall,
-};
-use darkfi_serial::Encodable;
+use darkfi::Result;
+use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
 use log::info;
-use rand::rngs::OsRng;
-
-use darkfi_money_contract::{
-    client::{transfer_v1::TransferCallBuilder, MoneyNote, OwnCoin},
-    model::Coin,
-    MoneyFunction::TransferV1 as MoneyTransfer,
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
-};
-
-mod harness;
-use harness::{init_logger, MoneyTestHarness};
 
 #[async_std::test]
 async fn txs_verification() -> Result<()> {
     init_logger();
+
+    // Holders this test will use
+    const HOLDERS: [Holder; 3] = [Holder::Faucet, Holder::Alice, Holder::Bob];
 
     // Some numbers we want to assert
     const ALICE_INITIAL: u64 = 100;
 
     // Alice = 50 ALICE
     // Bob = 50 ALICE
-    const ALICE_FIRST_SEND: u64 = ALICE_INITIAL - 50;
+    const ALICE_SEND: u64 = ALICE_INITIAL - 50;
 
     // Slot to verify against
     let current_slot = 0;
 
     // Initialize harness
-    let mut th = MoneyTestHarness::new().await?;
-    let (mint_pk, mint_zkbin) = th.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
-    let (burn_pk, burn_zkbin) = th.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
-    let contract_id = *MONEY_CONTRACT_ID;
-
-    // We're just going to be using a zero spend-hook and user-data
-    let rcpt_spend_hook = pallas::Base::zero();
-    let rcpt_user_data = pallas::Base::zero();
-    let rcpt_user_data_blind = pallas::Base::random(&mut OsRng);
-    let change_spend_hook = pallas::Base::zero();
-    let change_user_data = pallas::Base::zero();
-    let change_user_data_blind = pallas::Base::random(&mut OsRng);
+    let mut th = TestHarness::new(&["money".to_string()]).await?;
 
     let mut alice_owncoins = vec![];
     let mut bob_owncoins = vec![];
@@ -78,64 +54,31 @@ async fn txs_verification() -> Result<()> {
     info!(target: "money", "[Alice] ================================");
     info!(target: "money", "[Alice] Building token mint tx for Alice");
     info!(target: "money", "[Alice] ================================");
-    let (alice_mint_tx, alice_params) =
-        th.mint_token(th.alice.keypair, ALICE_INITIAL, th.alice.keypair.public)?;
+    let (token_mint_tx, token_mint_params) =
+        th.token_mint(ALICE_INITIAL, Holder::Alice, Holder::Alice)?;
 
     info!(target: "money", "[Faucet] =============================");
     info!(target: "money", "[Faucet] Executing Alice token mint tx");
     info!(target: "money", "[Faucet] =============================");
-    let erroneous_txs = th
-        .faucet
-        .state
-        .read()
-        .await
-        .verify_transactions(&[alice_mint_tx.clone()], current_slot, true)
+    th.execute_token_mint_tx(Holder::Faucet, &token_mint_tx, &token_mint_params, current_slot)
         .await?;
-    assert!(erroneous_txs.is_empty());
-    th.faucet.merkle_tree.append(MerkleNode::from(alice_params.output.coin.inner()));
 
     info!(target: "money", "[Alice] =============================");
     info!(target: "money", "[Alice] Executing Alice token mint tx");
     info!(target: "money", "[Alice] =============================");
-    let erroneous_txs = th
-        .alice
-        .state
-        .read()
-        .await
-        .verify_transactions(&[alice_mint_tx.clone()], current_slot, true)
+    th.execute_token_mint_tx(Holder::Alice, &token_mint_tx, &token_mint_params, current_slot)
         .await?;
-    assert!(erroneous_txs.is_empty());
-    th.alice.merkle_tree.append(MerkleNode::from(alice_params.output.coin.inner()));
-    // Alice has to mark this coin because it's hers.
-    let alice_leaf_pos = th.alice.merkle_tree.mark().unwrap();
 
     info!(target: "money", "[Bob] =============================");
     info!(target: "money", "[Bob] Executing Alice token mint tx");
     info!(target: "money", "[Bob] =============================");
-    let erroneous_txs = th
-        .bob
-        .state
-        .read()
-        .await
-        .verify_transactions(&[alice_mint_tx.clone()], current_slot, true)
-        .await?;
-    assert!(erroneous_txs.is_empty());
-    th.bob.merkle_tree.append(MerkleNode::from(alice_params.output.coin.inner()));
+    th.execute_token_mint_tx(Holder::Bob, &token_mint_tx, &token_mint_params, current_slot).await?;
 
-    assert!(th.alice.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
-    assert!(th.faucet.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
+    th.assert_trees(&HOLDERS);
 
-    // Alice builds an `OwnCoin` from her airdrop
-    let note: MoneyNote = alice_params.output.note.decrypt(&th.alice.keypair.secret)?;
-    let alice_token_id = note.token_id;
-    let alice_oc = OwnCoin {
-        coin: Coin::from(alice_params.output.coin),
-        note: note.clone(),
-        secret: th.alice.keypair.secret, // <-- What should this be?
-        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
-        leaf_position: alice_leaf_pos,
-    };
-    alice_owncoins.push(alice_oc);
+    // Alice gathers her new owncoin
+    let alice_oc = th.gather_owncoin(Holder::Alice, token_mint_params.output, None)?;
+    alice_owncoins.push(alice_oc.clone());
 
     // Now Alice can send a little bit of funds to Bob.
     // We can duplicate this transaction to simulate double spending.
@@ -146,82 +89,32 @@ async fn txs_verification() -> Result<()> {
         info!(target: "money", "[Alice] ======================================================");
         info!(target: "money", "[Alice] Building Money::Transfer params for payment {i} to Bob");
         info!(target: "money", "[Alice] ======================================================");
-        let alice2bob_call_debris = TransferCallBuilder {
-            keypair: th.alice.keypair,
-            recipient: th.bob.keypair.public,
-            value: ALICE_FIRST_SEND,
-            token_id: alice_token_id,
-            rcpt_spend_hook,
-            rcpt_user_data,
-            rcpt_user_data_blind,
-            change_spend_hook,
-            change_user_data,
-            change_user_data_blind,
-            coins: alice_owncoins.clone(),
-            tree: th.alice.merkle_tree.clone(),
-            mint_zkbin: mint_zkbin.clone(),
-            mint_pk: mint_pk.clone(),
-            burn_zkbin: burn_zkbin.clone(),
-            burn_pk: burn_pk.clone(),
-            clear_input: false,
-        }
-        .build()?;
-        let (alice2bob_params, alice2bob_proofs, alice2bob_secret_keys, alice2bob_spent_coins) = (
-            alice2bob_call_debris.params,
-            alice2bob_call_debris.proofs,
-            alice2bob_call_debris.signature_secrets,
-            alice2bob_call_debris.spent_coins,
-        );
+        let (transfer_tx, transfer_params) =
+            th.transfer(ALICE_SEND, Holder::Alice, Holder::Bob, &alice_oc.clone())?;
 
-        assert!(alice2bob_params.inputs.len() == 1);
-        assert!(alice2bob_params.outputs.len() == 2);
-        assert!(alice2bob_spent_coins.len() == 1);
-
-        info!(target: "money", "[Alice] ==============================");
-        info!(target: "money", "[Alice] Building payment tx {i} to Bob");
-        info!(target: "money", "[Alice] ==============================");
-        let mut data = vec![MoneyTransfer as u8];
-        alice2bob_params.encode(&mut data)?;
-        let calls = vec![ContractCall { contract_id, data }];
-        let proofs = vec![alice2bob_proofs];
-        let mut alice2bob_tx = Transaction { calls, proofs, signatures: vec![] };
-        let sigs = alice2bob_tx.create_sigs(&mut OsRng, &alice2bob_secret_keys)?;
-        alice2bob_tx.signatures = vec![sigs];
+        // Validating transfer params
+        assert!(transfer_params.inputs.len() == 1);
+        assert!(transfer_params.outputs.len() == 2);
 
         // Now we simulate nodes verification, as transactions come one by one.
         // Validation should pass, even when we are trying to double spent.
         info!(target: "money", "[Faucet] ==================================");
         info!(target: "money", "[Faucet] Verifying Alice2Bob payment tx {i}");
         info!(target: "money", "[Faucet] ==================================");
-        th.faucet
-            .state
-            .read()
-            .await
-            .verify_transactions(&[alice2bob_tx.clone()], current_slot, false)
-            .await?;
+        th.verify_transfer_tx(Holder::Faucet, &transfer_tx, current_slot).await?;
 
         info!(target: "money", "[Alice] ==================================");
         info!(target: "money", "[Alice] Verifying Alice2Bob payment tx {i}");
         info!(target: "money", "[Alice] ==================================");
-        th.alice
-            .state
-            .read()
-            .await
-            .verify_transactions(&[alice2bob_tx.clone()], current_slot, false)
-            .await?;
+        th.verify_transfer_tx(Holder::Alice, &transfer_tx, current_slot).await?;
 
         info!(target: "money", "[Bob] ==================================");
         info!(target: "money", "[Bob] Verifying Alice2Bob payment tx {i}");
         info!(target: "money", "[Bob] ==================================");
-        th.bob
-            .state
-            .read()
-            .await
-            .verify_transactions(&[alice2bob_tx.clone()], current_slot, false)
-            .await?;
+        th.verify_transfer_tx(Holder::Bob, &transfer_tx, current_slot).await?;
 
-        transactions.push(alice2bob_tx);
-        txs_params.push(alice2bob_params);
+        transactions.push(transfer_tx);
+        txs_params.push(transfer_params);
     }
     alice_owncoins = vec![];
     assert_eq!(transactions.len(), duplicates);
@@ -230,68 +123,35 @@ async fn txs_verification() -> Result<()> {
     // Now we can try to execute the transactions sequentialy.
     // Each node will detect the duplicate txs and filter them out,
     // then only apply the first txs from the set.
-    let valid_txs = vec![transactions[0].clone()];
     info!(target: "money", "[Faucet] ==============================");
     info!(target: "money", "[Faucet] Executing Alice2Bob payment tx");
     info!(target: "money", "[Faucet] ==============================");
-    let erroneous_txs =
-        th.faucet.state.read().await.verify_transactions(&transactions, current_slot, true).await?;
-    assert_eq!(erroneous_txs.len(), duplicates - 1);
-    let erroneous_txs =
-        th.faucet.state.read().await.verify_transactions(&valid_txs, current_slot, true).await?;
-    assert!(erroneous_txs.is_empty());
-    th.faucet.merkle_tree.append(MerkleNode::from(txs_params[0].outputs[0].coin.inner()));
-    th.faucet.merkle_tree.append(MerkleNode::from(txs_params[0].outputs[1].coin.inner()));
+    th.execute_erroneous_transfer_tx(Holder::Faucet, &transactions, current_slot, duplicates - 1)
+        .await?;
+    th.execute_transfer_tx(Holder::Faucet, &transactions[0], &txs_params[0], current_slot).await?;
 
     info!(target: "money", "[Alice] ==============================");
     info!(target: "money", "[Alice] Executing Alice2Bob payment tx");
     info!(target: "money", "[Alice] ==============================");
-    let erroneous_txs =
-        th.alice.state.read().await.verify_transactions(&transactions, current_slot, true).await?;
-    assert_eq!(erroneous_txs.len(), duplicates - 1);
-    let erroneous_txs =
-        th.alice.state.read().await.verify_transactions(&valid_txs, current_slot, true).await?;
-    assert!(erroneous_txs.is_empty());
-    th.alice.merkle_tree.append(MerkleNode::from(txs_params[0].outputs[0].coin.inner()));
-    let alice_leaf_pos = th.alice.merkle_tree.mark().unwrap();
-    th.alice.merkle_tree.append(MerkleNode::from(txs_params[0].outputs[1].coin.inner()));
+    th.execute_erroneous_transfer_tx(Holder::Alice, &transactions, current_slot, duplicates - 1)
+        .await?;
+    th.execute_transfer_tx(Holder::Alice, &transactions[0], &txs_params[0], current_slot).await?;
 
     info!(target: "money", "[Bob] ==============================");
     info!(target: "money", "[Bob] Executing Alice2Bob payment tx");
     info!(target: "money", "[Bob] ==============================");
-    let erroneous_txs =
-        th.bob.state.read().await.verify_transactions(&transactions, current_slot, true).await?;
-    assert_eq!(erroneous_txs.len(), duplicates - 1);
-    let erroneous_txs =
-        th.bob.state.read().await.verify_transactions(&valid_txs, current_slot, true).await?;
-    assert!(erroneous_txs.is_empty());
-    th.bob.merkle_tree.append(MerkleNode::from(txs_params[0].outputs[0].coin.inner()));
-    th.bob.merkle_tree.append(MerkleNode::from(txs_params[0].outputs[1].coin.inner()));
-    let bob_leaf_pos = th.bob.merkle_tree.mark().unwrap();
+    th.execute_erroneous_transfer_tx(Holder::Bob, &transactions, current_slot, duplicates - 1)
+        .await?;
+    th.execute_transfer_tx(Holder::Bob, &transactions[0], &txs_params[0], current_slot).await?;
 
-    assert!(th.alice.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
-    assert!(th.faucet.merkle_tree.root(0).unwrap() == th.bob.merkle_tree.root(0).unwrap());
+    th.assert_trees(&HOLDERS);
 
     // Alice should now have one OwnCoin with the change from the above transaction.
-    let note: MoneyNote = txs_params[0].outputs[0].note.decrypt(&th.alice.keypair.secret)?;
-    let alice_oc = OwnCoin {
-        coin: Coin::from(txs_params[0].outputs[0].coin),
-        note: note.clone(),
-        secret: th.alice.keypair.secret, // <-- What should this be?
-        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
-        leaf_position: alice_leaf_pos,
-    };
+    let alice_oc = th.gather_owncoin(Holder::Alice, txs_params[0].outputs[0].clone(), None)?;
     alice_owncoins.push(alice_oc);
 
     // Bob should now have this new one.
-    let note: MoneyNote = txs_params[0].outputs[1].note.decrypt(&th.bob.keypair.secret)?;
-    let bob_oc = OwnCoin {
-        coin: Coin::from(txs_params[0].outputs[1].coin),
-        note: note.clone(),
-        secret: th.bob.keypair.secret, // <-- What should this be?
-        nullifier: Nullifier::from(poseidon_hash([th.bob.keypair.secret.inner(), note.serial])),
-        leaf_position: bob_leaf_pos,
-    };
+    let bob_oc = th.gather_owncoin(Holder::Bob, txs_params[0].outputs[1].clone(), None)?;
     bob_owncoins.push(bob_oc);
 
     assert!(alice_owncoins.len() == 1);

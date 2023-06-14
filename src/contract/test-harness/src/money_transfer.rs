@@ -123,4 +123,42 @@ impl TestHarness {
 
         Ok(())
     }
+
+    pub async fn verify_transfer_tx(
+        &mut self,
+        holder: Holder,
+        tx: &Transaction,
+        slot: u64,
+    ) -> Result<()> {
+        let wallet = self.holders.get(&holder).unwrap();
+        let tx_action_benchmark =
+            self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
+        let timer = Instant::now();
+
+        let erroneous_txs =
+            wallet.state.read().await.verify_transactions(&[tx.clone()], slot, false).await?;
+        assert!(erroneous_txs.is_empty());
+        tx_action_benchmark.verify_times.push(timer.elapsed());
+
+        Ok(())
+    }
+
+    pub async fn execute_erroneous_transfer_tx(
+        &mut self,
+        holder: Holder,
+        txs: &Vec<Transaction>,
+        slot: u64,
+        erroneous: usize,
+    ) -> Result<()> {
+        let wallet = self.holders.get(&holder).unwrap();
+        let tx_action_benchmark =
+            self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
+        let timer = Instant::now();
+
+        let erroneous_txs = wallet.state.read().await.verify_transactions(txs, slot, false).await?;
+        assert_eq!(erroneous_txs.len(), erroneous);
+        tx_action_benchmark.verify_times.push(timer.elapsed());
+
+        Ok(())
+    }
 }
