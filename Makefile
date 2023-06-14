@@ -48,6 +48,7 @@ contracts: zkas
 	$(MAKE) -C src/contract/money
 	$(MAKE) -C src/contract/dao
 	$(MAKE) -C src/contract/consensus
+	$(MAKE) -C src/contract/deployooor
 
 token_lists:
 	$(MAKE) -C contrib/token all
