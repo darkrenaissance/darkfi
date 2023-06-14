@@ -82,9 +82,6 @@ pub struct Args {
     #[structopt(long)]
     pub password: Option<String>,
 
-    // /// Private key
-    // #[structopt(skip)]
-    // pub private_key: Option<String>,
     /// Network settings
     #[structopt(flatten)]
     pub net: SettingsOpt,
@@ -327,13 +324,3 @@ fn parse_priv_key(data: &str) -> Result<String> {
     info!("Found secret key in config, noted it down.");
     Ok(pk)
 }
-
-// fn parse_priv(key: &str) -> Result<crypto_box::SecretKey> {
-//     let bytes: [u8; 32] = bs58::decode(key).into_vec()?.try_into().unwrap();
-//     Ok(crypto_box::SecretKey::from(bytes))
-// }
-
-// fn parse_pub(key: &str) -> Result<crypto_box::PublicKey> {
-//     let bytes: [u8; 32] = bs58::decode(key).into_vec()?.try_into().unwrap();
-//     Ok(crypto_box::PublicKey::from(bytes))
-// }

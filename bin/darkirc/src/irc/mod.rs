@@ -46,7 +46,6 @@ pub struct IrcConfig {
     // user config
     pub nickname: String,
     pub password: String,
-    // pub private_key: Option<String>,
     pub capabilities: HashMap<String, bool>,
 
     // channels and contacts
@@ -58,7 +57,6 @@ pub struct IrcConfig {
 impl IrcConfig {
     pub fn new(settings: &Args) -> Result<Self> {
         let password = settings.password.as_ref().unwrap_or(&String::new()).clone();
-        // let private_key = settings.private_key.clone();
 
         let auto_channels = settings.autojoin.clone();
 

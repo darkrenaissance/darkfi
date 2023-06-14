@@ -119,7 +119,6 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
         self.irc_config.channels.extend(new_config.channels);
         self.irc_config.contacts.extend(new_config.contacts);
-        // self.irc_config.private_key = new_config.private_key;
         self.irc_config.password = new_config.password;
 
         if self.on_receive_join(self.irc_config.channels.keys().cloned().collect()).await.is_err() {
