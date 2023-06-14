@@ -247,10 +247,6 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             // join all channels
             self.on_receive_join(self.irc_config.auto_channels.clone()).await?;
             self.on_receive_join(self.irc_config.channels.keys().cloned().collect()).await?;
-
-            if *self.irc_config.capabilities.get("no-history").unwrap() {
-                return Ok(())
-            }
         }
         Ok(())
     }
@@ -555,6 +551,11 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                 self.reply(&t).await?;
             }
         }
+
+        if *self.irc_config.capabilities.get("no-history").unwrap() {
+            return Ok(())
+        }
+
         // Process missed messages if any (sorted by event's timestamp)
         let mut hash_vec = self.missed_events.lock().await.clone();
         hash_vec.sort_by(|a, b| a.timestamp.0.cmp(&b.timestamp.0));
