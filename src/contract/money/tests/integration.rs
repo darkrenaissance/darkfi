@@ -30,201 +30,71 @@
 //! TODO: Malicious cases
 
 use darkfi::Result;
-use darkfi_sdk::crypto::{poseidon_hash, Keypair, MerkleNode, Nullifier};
+use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
 use log::info;
-use rand::rngs::OsRng;
-
-use darkfi_money_contract::client::{MoneyNote, OwnCoin};
-
-mod harness;
-use harness::{init_logger, MoneyTestHarness};
 
 #[async_std::test]
 async fn money_integration() -> Result<()> {
     init_logger();
 
+    // Some numbers we want to assert
+    const ALICE_NATIVE_AIRDROP: u64 = 10000000000; // 100 DRK
+    const BOB_SUPPLY: u64 = 2000000000; // 10 BOB
+
     // Slot to verify against
     let current_slot = 0;
 
-    let mut th = MoneyTestHarness::new().await?;
+    // Initialize harness
+    let mut th = TestHarness::new(&["money".to_string()]).await?;
 
-    // Let's first airdrop some tokens to Alice.
-    let (alice_airdrop_tx, alice_airdrop_params) =
-        th.airdrop_native(200, th.alice.keypair.public)?;
+    info!("[Faucet] Building Alice airdrop tx");
+    let (airdrop_tx, airdrop_params) = th.airdrop_native(ALICE_NATIVE_AIRDROP, Holder::Alice)?;
 
     info!("[Faucet] Executing Alice airdrop tx");
-    let erroneous_txs = th
-        .faucet
-        .state
-        .read()
-        .await
-        .verify_transactions(&[alice_airdrop_tx.clone()], current_slot, true)
+    th.execute_airdrop_native_tx(Holder::Faucet, &airdrop_tx, &airdrop_params, current_slot)
         .await?;
-    assert!(erroneous_txs.is_empty());
-    th.faucet.merkle_tree.append(MerkleNode::from(alice_airdrop_params.outputs[0].coin.inner()));
 
     info!("[Alice] Executing Alice airdrop tx");
-    let erroneous_txs = th
-        .alice
-        .state
-        .read()
-        .await
-        .verify_transactions(&[alice_airdrop_tx.clone()], current_slot, true)
-        .await?;
-    assert!(erroneous_txs.is_empty());
-    th.alice.merkle_tree.append(MerkleNode::from(alice_airdrop_params.outputs[0].coin.inner()));
-    // Alice has to mark this coin because it's hers.
-    let leaf_position = th.alice.merkle_tree.mark().unwrap();
+    th.execute_airdrop_native_tx(Holder::Alice, &airdrop_tx, &airdrop_params, current_slot).await?;
 
     info!("[Bob] Executing Alice airdrop tx");
-    let erroneous_txs = th
-        .bob
-        .state
-        .read()
-        .await
-        .verify_transactions(&[alice_airdrop_tx.clone()], current_slot, true)
+    th.execute_airdrop_native_tx(Holder::Bob, &airdrop_tx, &airdrop_params, current_slot).await?;
+
+    // Alice gathers her new coin
+    let _ = th.gather_owncoin(Holder::Alice, airdrop_params.outputs[0].clone(), None)?;
+
+    info!("[Bob] Building BOB token mint tx");
+    let (token_mint_tx, token_mint_params) = th.token_mint(BOB_SUPPLY, Holder::Bob, Holder::Bob)?;
+
+    info!("[Faucet] Executing BOB token mint tx");
+    th.execute_token_mint_tx(Holder::Faucet, &token_mint_tx, &token_mint_params, current_slot)
         .await?;
-    assert!(erroneous_txs.is_empty());
-    th.bob.merkle_tree.append(MerkleNode::from(alice_airdrop_params.outputs[0].coin.inner()));
 
-    info!("[Charlie] Executing Alice airdrop tx");
-    let erroneous_txs = th
-        .charlie
-        .state
-        .read()
-        .await
-        .verify_transactions(&[alice_airdrop_tx.clone()], current_slot, true)
+    info!("[Alice] Executing BOB token mint tx");
+    th.execute_token_mint_tx(Holder::Alice, &token_mint_tx, &token_mint_params, current_slot)
         .await?;
-    assert!(erroneous_txs.is_empty());
-    th.charlie.merkle_tree.append(MerkleNode::from(alice_airdrop_params.outputs[0].coin.inner()));
 
-    assert_eq!(th.alice.merkle_tree.root(0).unwrap(), th.bob.merkle_tree.root(0).unwrap());
-    assert_eq!(th.bob.merkle_tree.root(0).unwrap(), th.charlie.merkle_tree.root(0).unwrap());
-    assert_eq!(th.faucet.merkle_tree.root(0).unwrap(), th.charlie.merkle_tree.root(0).unwrap());
+    info!("[Bob] Executing BOB token mint tx");
+    th.execute_token_mint_tx(Holder::Bob, &token_mint_tx, &token_mint_params, current_slot).await?;
 
-    // Alice builds an `OwnCoin` from her airdrop.
-    let note: MoneyNote = alice_airdrop_params.outputs[0].note.decrypt(&th.alice.keypair.secret)?;
-    let owncoin = OwnCoin {
-        coin: alice_airdrop_params.outputs[0].coin,
-        note: note.clone(),
-        secret: th.alice.keypair.secret,
-        nullifier: Nullifier::from(poseidon_hash([th.alice.keypair.secret.inner(), note.serial])),
-        leaf_position,
-    };
-    th.alice.coins.push(owncoin);
+    // Bob gathers his new coin
+    let _ = th.gather_owncoin(Holder::Bob, token_mint_params.output.clone(), None)?;
 
-    // Bob creates a new mint authority keypair and mints some tokens for Charlie.
-    let bob_token_authority = Keypair::random(&mut OsRng);
-    let (bob_charlie_mint_tx, bob_charlie_mint_params) =
-        th.mint_token(bob_token_authority, 500, th.charlie.keypair.public)?;
+    info!("[Bob] Building BOB token freeze tx");
+    let (token_frz_tx, token_frz_params) = th.token_freeze(Holder::Bob)?;
 
-    info!("[Faucet] Executing BOBTOKEN mint to Charlie");
-    let erroneous_txs = th
-        .faucet
-        .state
-        .read()
-        .await
-        .verify_transactions(&[bob_charlie_mint_tx.clone()], current_slot, true)
+    info!("[Faucet] Executing BOB token freeze tx");
+    th.execute_token_freeze_tx(Holder::Faucet, &token_frz_tx, &token_frz_params, current_slot)
         .await?;
-    assert!(erroneous_txs.is_empty());
-    th.faucet.merkle_tree.append(MerkleNode::from(bob_charlie_mint_params.output.coin.inner()));
 
-    info!("[Alice] Executing BOBTOKEN mint to Charlie");
-    let erroneous_txs = th
-        .alice
-        .state
-        .read()
-        .await
-        .verify_transactions(&[bob_charlie_mint_tx.clone()], current_slot, true)
+    info!("[Alice] Executing BOB token freeze tx");
+    th.execute_token_freeze_tx(Holder::Alice, &token_frz_tx, &token_frz_params, current_slot)
         .await?;
-    assert!(erroneous_txs.is_empty());
-    th.alice.merkle_tree.append(MerkleNode::from(bob_charlie_mint_params.output.coin.inner()));
 
-    info!("[Bob] Executing BOBTOKEN mint to Charlie");
-    let erroneous_txs = th
-        .bob
-        .state
-        .read()
-        .await
-        .verify_transactions(&[bob_charlie_mint_tx.clone()], current_slot, true)
-        .await?;
-    assert!(erroneous_txs.is_empty());
-    th.bob.merkle_tree.append(MerkleNode::from(bob_charlie_mint_params.output.coin.inner()));
-
-    info!("[Charlie] Executing BOBTOKEN mint to Charlie");
-    let erroneous_txs = th
-        .charlie
-        .state
-        .read()
-        .await
-        .verify_transactions(&[bob_charlie_mint_tx.clone()], current_slot, true)
-        .await?;
-    assert!(erroneous_txs.is_empty());
-    th.charlie.merkle_tree.append(MerkleNode::from(bob_charlie_mint_params.output.coin.inner()));
-    // Charlie has to mark this coin because it's his.
-    let leaf_position = th.charlie.merkle_tree.mark().unwrap();
-
-    assert_eq!(th.alice.merkle_tree.root(0).unwrap(), th.bob.merkle_tree.root(0).unwrap());
-    assert_eq!(th.bob.merkle_tree.root(0).unwrap(), th.charlie.merkle_tree.root(0).unwrap());
-    assert_eq!(th.faucet.merkle_tree.root(0).unwrap(), th.charlie.merkle_tree.root(0).unwrap());
-
-    // Charlie builds an `OwnCoin` from this mint.
-    let note: MoneyNote =
-        bob_charlie_mint_params.output.note.decrypt(&th.charlie.keypair.secret)?;
-
-    let owncoin = OwnCoin {
-        coin: bob_charlie_mint_params.output.coin,
-        note: note.clone(),
-        secret: th.charlie.keypair.secret,
-        nullifier: Nullifier::from(poseidon_hash([th.charlie.keypair.secret.inner(), note.serial])),
-        leaf_position,
-    };
-    th.charlie.coins.push(owncoin);
-
-    // Let's attempt to freeze the BOBTOKEN mint,
-    // and after that we shouldn't be able to mint anymore.
-    let (bob_frz_tx, _) = th.freeze_token(bob_token_authority)?;
-
-    info!("[Faucet] Executing BOBTOKEN freeze");
-    let erroneous_txs = th
-        .faucet
-        .state
-        .read()
-        .await
-        .verify_transactions(&[bob_frz_tx.clone()], current_slot, true)
-        .await?;
-    assert!(erroneous_txs.is_empty());
-
-    info!("[Alice] Executing BOBTOKEN freeze");
-    let erroneous_txs = th
-        .alice
-        .state
-        .read()
-        .await
-        .verify_transactions(&[bob_frz_tx.clone()], current_slot, true)
-        .await?;
-    assert!(erroneous_txs.is_empty());
-
-    info!("[Bob] Executing BOBTOKEN freeze");
-    let erroneous_txs = th
-        .bob
-        .state
-        .read()
-        .await
-        .verify_transactions(&[bob_frz_tx.clone()], current_slot, true)
-        .await?;
-    assert!(erroneous_txs.is_empty());
-
-    info!("[Charlie] Executing BOBTOKEN freeze");
-    let erroneous_txs = th
-        .charlie
-        .state
-        .read()
-        .await
-        .verify_transactions(&[bob_frz_tx.clone()], current_slot, true)
-        .await?;
-    assert!(erroneous_txs.is_empty());
+    info!("[Bob] Executing BOB token freeze tx");
+    th.execute_token_freeze_tx(Holder::Bob, &token_frz_tx, &token_frz_params, current_slot).await?;
 
     // Thanks for reading
+    th.statistics();
     Ok(())
 }
