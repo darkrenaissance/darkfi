@@ -163,6 +163,7 @@ impl ContractStateStore {
         }
 
         // We open the tree and clear it. This is unfortunately not atomic.
+        // TODO: FIXME: Can we make it atomic?
         let tree = db.open_tree(ptr)?;
         tree.clear()?;
 

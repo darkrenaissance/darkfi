@@ -47,6 +47,7 @@ members = [
     "src/serial/derive",
     "src/serial/derive-internal",
 
+    "src/contract/test-harness",
     "src/contract/money",
     "src/contract/dao",
     "src/contract/consensus",

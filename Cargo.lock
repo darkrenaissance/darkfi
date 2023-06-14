@@ -1356,6 +1356,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "darkfi-contract-test-harness"
+version = "0.4.1"
+dependencies = [
+ "blake3",
+ "bs58",
+ "darkfi",
+ "darkfi-consensus-contract",
+ "darkfi-dao-contract",
+ "darkfi-deployooor-contract",
+ "darkfi-money-contract",
+ "darkfi-sdk",
+ "darkfi-serial",
+ "log",
+ "rand",
+ "simplelog",
+ "sled",
+]
+
+[[package]]
 name = "darkfi-dao-contract"
 version = "0.4.1"
 dependencies = [
@@ -1413,6 +1432,7 @@ dependencies = [
  "bs58",
  "chacha20poly1305",
  "darkfi",
+ "darkfi-contract-test-harness",
  "darkfi-sdk",
  "darkfi-serial",
  "getrandom",

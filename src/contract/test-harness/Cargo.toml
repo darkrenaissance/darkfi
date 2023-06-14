@@ -1,0 +1,22 @@
+[package]
+name = "darkfi-contract-test-harness"
+version = "0.4.1"
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[dependencies]
+darkfi = {path = "../../../", features = ["zk", "tx", "blockchain"]}
+darkfi-sdk = {path = "../../../src/sdk"}
+darkfi-serial = {path = "../../../src/serial", features = ["derive", "crypto"]}
+darkfi-dao-contract = {path = "../dao", features = ["client", "no-entrypoint"]}
+darkfi-money-contract = {path = "../money", features = ["client", "no-entrypoint"]}
+darkfi-consensus-contract = {path = "../consensus", features = ["client", "no-entrypoint"]}
+darkfi-deployooor-contract = {path = "../deployooor", features = ["no-entrypoint"]}
+
+blake3 = "1.4.0"
+bs58 = "0.5.0"
+log = "0.4.19"
+rand = "0.8.5"
+simplelog = "0.12.1"
+sled = "0.34.7"
