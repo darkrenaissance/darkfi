@@ -17,3 +17,8 @@ a = Base.from_u64(42)
 b = Base.from_u64(69)
 a + b == Base.from_u64(111)
 ```
+
+## Randomness
+
+Note that the `random` methods take randomness 
+from the OS on the Rust side.
