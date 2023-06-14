@@ -31,3 +31,9 @@ localnet = true
 
 [channel."#test"]
 secret = "HoLfk8vXBvNsBZ73e2xRPBZ9vEbnF9FVi4fDdyU9AZLU"
+
+[private_key."GnS3vqKQtCnbJJcFMsUfTJc7w3B1E49MgZ8jKiksumYh"]
+
+[contact."node2"]
+## contact public key
+contact_pubkey = "9sfMEVLphJ4dTX3SEvm6NBhTbWDqfsxu7R2bo88CtV8g"
