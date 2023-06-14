@@ -121,8 +121,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
         Err(_) => db_init(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?,
     };
 
-    // TODO: These nullifiers should exist per-proposal, we also need to snapshot
-    //       the money state do avoid double-vote
+    // TODO: These nullifiers should exist per-proposal
     let _ = match db_lookup(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS) {
         Ok(v) => v,
         Err(_) => db_init(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS)?,

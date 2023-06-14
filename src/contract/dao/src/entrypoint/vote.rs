@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::{MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_NULLIFIERS_TREE};
+use darkfi_money_contract::MONEY_CONTRACT_NULLIFIERS_TREE;
 use darkfi_sdk::{
     crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, PublicKey},
     db::{db_contains_key, db_get, db_lookup, db_set},
@@ -29,7 +29,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::DaoError,
-    model::{DaoBlindAggregateVote, DaoVoteParams, DaoVoteUpdate},
+    model::{DaoProposalMetadata, DaoVoteParams, DaoVoteUpdate},
     DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_DB_VOTE_NULLIFIERS,
     DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
@@ -64,6 +64,11 @@ pub(crate) fn dao_vote_get_metadata(
         let value_coords = input.vote_commit.to_affine().coordinates().unwrap();
         let (sig_x, sig_y) = input.signature_public.xy();
 
+        // TODO: Here we "trust" the input param's merkle root. Instead we compare
+        // that this root equals to the proposal's snapshotted root later in the
+        // `process_instruction`. Should we just enforce it here instead/aswell?
+        // The reason is because ZK proofs are verified afterwards, so by checking
+        // in wasm first, we can potentially bail out more quickly.
         zk_public_inputs.push((
             DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS.to_string(),
             vec![
@@ -119,21 +124,25 @@ pub(crate) fn dao_vote_process_instruction(
 
     // Get the current votes, and additionally confirm proposal hasn't ended
     // TODO: Proposals should have a set length of time
-    let (mut proposal_votes, ended): (DaoBlindAggregateVote, bool) = deserialize(&data)?;
-    if ended {
+    let mut proposal_metadata: DaoProposalMetadata = deserialize(&data)?;
+
+    if proposal_metadata.ended {
         msg!("[Dao::Vote] Error: Proposal ended: {:?}", params.proposal_bulla);
         return Err(DaoError::ProposalEnded.into())
     }
 
-    // Check the Merkle roots and nullifiers for the input coins are valid
-    let money_roots_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    // Check the Merkle root and nullifiers for the input coins are valid
     let money_nullifier_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let dao_vote_nullifier_db = db_lookup(cid, DAO_CONTRACT_DB_VOTE_NULLIFIERS)?;
     let mut vote_nullifiers = vec![];
 
     for input in &params.inputs {
-        if !db_contains_key(money_roots_db, &serialize(&input.merkle_root))? {
-            msg!("[Dao::Vote] Error: Invalid input Merkle root: {}", input.merkle_root);
+        if proposal_metadata.snapshot_root != input.merkle_root {
+            msg!(
+                "[Dao::Vote] Error: Invalid input Merkle root: {} (expected {})",
+                input.merkle_root,
+                proposal_metadata.snapshot_root
+            );
             return Err(DaoError::InvalidInputMerkleRoot.into())
         }
 
@@ -153,15 +162,15 @@ pub(crate) fn dao_vote_process_instruction(
             return Err(DaoError::DoubleVote.into())
         }
 
-        proposal_votes.all_vote_commit += input.vote_commit;
+        proposal_metadata.vote_aggregate.all_vote_commit += input.vote_commit;
         vote_nullifiers.push(input.nullifier);
     }
 
-    proposal_votes.yes_vote_commit += params.yes_vote_commit;
+    proposal_metadata.vote_aggregate.yes_vote_commit += params.yes_vote_commit;
 
     // Create state update
     let update =
-        DaoVoteUpdate { proposal_bulla: params.proposal_bulla, proposal_votes, vote_nullifiers };
+        DaoVoteUpdate { proposal_bulla: params.proposal_bulla, proposal_metadata, vote_nullifiers };
 
     let mut update_data = vec![];
     update_data.write_u8(DaoFunction::Vote as u8)?;
@@ -180,7 +189,7 @@ pub(crate) fn dao_vote_process_update(cid: ContractId, update: DaoVoteUpdate) ->
     db_set(
         proposal_vote_db,
         &serialize(&update.proposal_bulla),
-        &serialize(&(update.proposal_votes, false)),
+        &serialize(&update.proposal_metadata),
     )?;
 
     // We are essentially doing: vote_nulls.append(update_nulls)

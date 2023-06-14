@@ -142,6 +142,7 @@ CREATE TABLE IF NOT EXISTS dao_proposals (
     -- these values are NULL until the proposal is minted on chain
     -- and received by the DAO
 	leaf_position BLOB,
+	money_snapshot_tree BLOB,
     tx_hash BLOB,
     call_index INTEGER,
     -- this is NULL until we have voted on this proposal

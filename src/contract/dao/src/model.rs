@@ -103,6 +103,19 @@ pub struct DaoProposeParamsInput {
 pub struct DaoProposeUpdate {
     /// Minted proposal bulla
     pub proposal_bulla: pallas::Base,
+    /// Snapshotted Merkle root in the Money state
+    pub snapshot_root: MerkleNode,
+}
+
+/// Metadata for a DAO proposal on the blockchain
+#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
+pub struct DaoProposalMetadata {
+    /// Vote aggregate
+    pub vote_aggregate: DaoBlindAggregateVote,
+    /// Snapshotted Merkle root in the Money state
+    pub snapshot_root: MerkleNode,
+    /// Proposal closed
+    pub ended: bool,
 }
 
 /// Parameters for `Dao::Vote`
@@ -138,8 +151,8 @@ pub struct DaoVoteParamsInput {
 pub struct DaoVoteUpdate {
     /// The proposal bulla being voted on
     pub proposal_bulla: pallas::Base,
-    /// The proposal votes aggregate
-    pub proposal_votes: DaoBlindAggregateVote,
+    /// The updated proposal metadata
+    pub proposal_metadata: DaoProposalMetadata,
     /// Vote nullifiers,
     pub vote_nullifiers: Vec<Nullifier>,
 }

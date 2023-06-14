@@ -52,6 +52,7 @@ use harness::{init_logger, DaoTestHarness};
 // TODO: db_* errors returned from runtime should be more specific.
 // TODO: db_* functions should be consistently ordered
 // TODO: migrate rest of func calls below to make() format and cleanup
+// TODO: Migrate to test-harness
 
 #[async_std::test]
 async fn integration_test() -> Result<()> {
@@ -456,6 +457,10 @@ async fn integration_test() -> Result<()> {
 
     //// Wallet
 
+    // HACK: Here we clone the tree so we can reproduce the root for voting.
+    //       This should be done in a nicer way
+    let tree_at_proposal = cache.tree.clone();
+
     // Read received proposal
     let (proposal, proposal_bulla) = {
         let note: client::DaoProposeNote = params.note.decrypt(&dao_th.dao_kp.secret).unwrap();
@@ -504,7 +509,7 @@ async fn integration_test() -> Result<()> {
     // User 1: YES
 
     let (money_leaf_position, money_merkle_path) = {
-        let tree = &cache.tree;
+        let tree = &tree_at_proposal;
         let leaf_position = gov_recv[0].leaf_position;
         let merkle_path = tree.witness(leaf_position, 0).unwrap();
         (leaf_position, merkle_path)
@@ -575,7 +580,7 @@ async fn integration_test() -> Result<()> {
     // User 2: NO
 
     let (money_leaf_position, money_merkle_path) = {
-        let tree = &cache.tree;
+        let tree = &tree_at_proposal;
         let leaf_position = gov_recv[1].leaf_position;
         let merkle_path = tree.witness(leaf_position, 0).unwrap();
         (leaf_position, merkle_path)
@@ -643,7 +648,7 @@ async fn integration_test() -> Result<()> {
     // User 3: YES
 
     let (money_leaf_position, money_merkle_path) = {
-        let tree = &cache.tree;
+        let tree = &tree_at_proposal;
         let leaf_position = gov_recv[2].leaf_position;
         let merkle_path = tree.witness(leaf_position, 0).unwrap();
         (leaf_position, merkle_path)

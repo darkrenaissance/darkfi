@@ -16,10 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::MONEY_CONTRACT_COIN_ROOTS_TREE;
+use darkfi_money_contract::{
+    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
+};
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, PublicKey},
-    db::{db_contains_key, db_lookup, db_set},
+    crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, MerkleNode, PublicKey},
+    db::{db_contains_key, db_get, db_lookup, db_set},
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
@@ -29,7 +31,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::DaoError,
-    model::{DaoBlindAggregateVote, DaoProposeParams, DaoProposeUpdate},
+    model::{DaoBlindAggregateVote, DaoProposalMetadata, DaoProposeParams, DaoProposeUpdate},
     DaoFunction, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS, DAO_CONTRACT_DB_PROPOSAL_BULLAS,
     DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
 };
@@ -129,8 +131,17 @@ pub(crate) fn dao_propose_process_instruction(
         return Err(DaoError::ProposalAlreadyExists.into())
     }
 
+    // Snapshot the latest Money Mekrle tree
+    let money_info_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_INFO_TREE)?;
+    let Some(data) = db_get(money_info_db, &serialize(&MONEY_CONTRACT_LATEST_COIN_ROOT))? else {
+        msg!("[Dao::Propose] Error: Failed to fetch latest Money Merkle root");
+        return Err(ContractError::Internal);
+    };
+    let snapshot_root: MerkleNode = deserialize(&data)?;
+    msg!("[Dao::Propose] Snapshotting Money at Merkle root {}", snapshot_root);
+
     // Create state update
-    let update = DaoProposeUpdate { proposal_bulla: params.proposal_bulla };
+    let update = DaoProposeUpdate { proposal_bulla: params.proposal_bulla, snapshot_root };
     let mut update_data = vec![];
     update_data.write_u8(DaoFunction::Propose as u8)?;
     update.encode(&mut update_data)?;
@@ -145,12 +156,15 @@ pub(crate) fn dao_propose_process_update(
     // Grab all db handles we want to work on
     let proposal_vote_db = db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
 
-    // Initial vote aggregate
-    let pv = DaoBlindAggregateVote::default();
-    let ended = false;
+    // Build the proposal metadata
+    let proposal_metadata = DaoProposalMetadata {
+        vote_aggregate: DaoBlindAggregateVote::default(),
+        snapshot_root: update.snapshot_root,
+        ended: false,
+    };
 
     // Set the new proposal in the db
-    db_set(proposal_vote_db, &serialize(&update.proposal_bulla), &serialize(&(pv, ended)))?;
+    db_set(proposal_vote_db, &serialize(&update.proposal_bulla), &serialize(&proposal_metadata))?;
 
     Ok(())
 }

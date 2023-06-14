@@ -55,7 +55,6 @@ pub struct DaoVoteInput {
     pub signature_secret: SecretKey,
 }
 
-// TODO: should be token locking voting?
 // Inside ZKproof, check proposal is correct.
 pub struct DaoVoteCall {
     pub inputs: Vec<DaoVoteInput>,

@@ -257,7 +257,7 @@ impl Drk {
             return Err(anyhow!("Proposal ID not found"))
         };
 
-        let money_tree = self.get_money_tree().await?;
+        let money_tree = proposal.money_snapshot_tree.clone().unwrap();
 
         let mut coins: Vec<OwnCoin> =
             self.get_coins(false).await?.iter().map(|x| x.0.clone()).collect();

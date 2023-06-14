@@ -29,7 +29,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::DaoError,
-    model::{DaoBlindAggregateVote, DaoExecParams, DaoExecUpdate},
+    model::{DaoExecParams, DaoExecUpdate, DaoProposalMetadata},
     DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
 
@@ -134,16 +134,16 @@ pub(crate) fn dao_exec_process_instruction(
         msg!("[Dao::Exec] Error: Proposal {:?} not found", params.proposal);
         return Err(DaoError::ProposalNonexistent.into())
     };
-    let (proposal_votes, ended): (DaoBlindAggregateVote, bool) = deserialize(&data)?;
+    let proposal: DaoProposalMetadata = deserialize(&data)?;
 
-    if ended {
+    if proposal.ended {
         msg!("[Dao::Exec] Error: Proposal {:?} ended", params.proposal);
         return Err(DaoError::ProposalEnded.into())
     }
 
     // 4. Check yes_vote commit and all_vote_commit are the same as in BlindAggregateVote
-    if proposal_votes.yes_vote_commit != params.blind_total_vote.yes_vote_commit ||
-        proposal_votes.all_vote_commit != params.blind_total_vote.all_vote_commit
+    if proposal.vote_aggregate.yes_vote_commit != params.blind_total_vote.yes_vote_commit ||
+        proposal.vote_aggregate.all_vote_commit != params.blind_total_vote.all_vote_commit
     {
         return Err(DaoError::VoteCommitMismatch.into())
     }

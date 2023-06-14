@@ -31,13 +31,14 @@ use darkfi_dao_contract::{
         DAO_DAOS_COL_NAME, DAO_DAOS_COL_PROPOSER_LIMIT, DAO_DAOS_COL_QUORUM, DAO_DAOS_COL_SECRET,
         DAO_DAOS_COL_TX_HASH, DAO_DAOS_TABLE, DAO_PROPOSALS_COL_AMOUNT,
         DAO_PROPOSALS_COL_BULLA_BLIND, DAO_PROPOSALS_COL_CALL_INDEX, DAO_PROPOSALS_COL_DAO_ID,
-        DAO_PROPOSALS_COL_LEAF_POSITION, DAO_PROPOSALS_COL_OUR_VOTE_ID,
-        DAO_PROPOSALS_COL_PROPOSAL_ID, DAO_PROPOSALS_COL_RECV_PUBLIC,
-        DAO_PROPOSALS_COL_SENDCOIN_TOKEN_ID, DAO_PROPOSALS_COL_TX_HASH, DAO_PROPOSALS_TABLE,
-        DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE, DAO_TREES_TABLE,
-        DAO_VOTES_COL_ALL_VOTE_BLIND, DAO_VOTES_COL_ALL_VOTE_VALUE, DAO_VOTES_COL_CALL_INDEX,
-        DAO_VOTES_COL_PROPOSAL_ID, DAO_VOTES_COL_TX_HASH, DAO_VOTES_COL_VOTE_ID,
-        DAO_VOTES_COL_VOTE_OPTION, DAO_VOTES_COL_YES_VOTE_BLIND, DAO_VOTES_TABLE,
+        DAO_PROPOSALS_COL_LEAF_POSITION, DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
+        DAO_PROPOSALS_COL_OUR_VOTE_ID, DAO_PROPOSALS_COL_PROPOSAL_ID,
+        DAO_PROPOSALS_COL_RECV_PUBLIC, DAO_PROPOSALS_COL_SENDCOIN_TOKEN_ID,
+        DAO_PROPOSALS_COL_TX_HASH, DAO_PROPOSALS_TABLE, DAO_TREES_COL_DAOS_TREE,
+        DAO_TREES_COL_PROPOSALS_TREE, DAO_TREES_TABLE, DAO_VOTES_COL_ALL_VOTE_BLIND,
+        DAO_VOTES_COL_ALL_VOTE_VALUE, DAO_VOTES_COL_CALL_INDEX, DAO_VOTES_COL_PROPOSAL_ID,
+        DAO_VOTES_COL_TX_HASH, DAO_VOTES_COL_VOTE_ID, DAO_VOTES_COL_VOTE_OPTION,
+        DAO_VOTES_COL_YES_VOTE_BLIND, DAO_VOTES_TABLE,
     },
     model::{DaoBulla, DaoMintParams, DaoProposeParams, DaoVoteParams},
     DaoFunction,
@@ -200,6 +201,8 @@ pub struct DaoProposal {
     pub bulla_blind: pallas::Base,
     /// Leaf position of this proposal in the Merkle tree of proposals
     pub leaf_position: Option<bridgetree::Position>,
+    /// Snapshotted Money Merkle tree
+    pub money_snapshot_tree: Option<MerkleTree>,
     /// Transaction hash where this proposal was proposed
     pub tx_hash: Option<blake3::Hash>,
     /// call index in the transaction where this proposal was proposed
@@ -714,6 +717,8 @@ impl Drk {
             QueryType::OptionBlob as u8,
             DAO_PROPOSALS_COL_LEAF_POSITION,
             QueryType::OptionBlob as u8,
+            DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
+            QueryType::OptionBlob as u8,
             DAO_PROPOSALS_COL_TX_HASH,
             QueryType::OptionInteger as u8,
             DAO_PROPOSALS_COL_CALL_INDEX,
@@ -754,16 +759,25 @@ impl Drk {
             let bulla_blind = deserialize(&bulla_blind_bytes)?;
 
             let leaf_position_bytes: Vec<u8> = serde_json::from_value(row[6].clone())?;
-            let tx_hash_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
 
-            let call_index = serde_json::from_value(row[8].clone())?;
+            let money_snapshot_tree_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
 
-            let vote_id_bytes: Vec<u8> = serde_json::from_value(row[9].clone())?;
+            let tx_hash_bytes: Vec<u8> = serde_json::from_value(row[8].clone())?;
+
+            let call_index = serde_json::from_value(row[9].clone())?;
+
+            let vote_id_bytes: Vec<u8> = serde_json::from_value(row[10].clone())?;
 
             let leaf_position = if leaf_position_bytes.is_empty() {
                 None
             } else {
                 Some(deserialize(&leaf_position_bytes)?)
+            };
+
+            let money_snapshot_tree = if money_snapshot_tree_bytes.is_empty() {
+                None
+            } else {
+                Some(deserialize(&money_snapshot_tree_bytes)?)
             };
 
             let tx_hash =
@@ -780,6 +794,7 @@ impl Drk {
                 token_id,
                 bulla_blind,
                 leaf_position,
+                money_snapshot_tree,
                 tx_hash,
                 call_index,
                 vote_id,
@@ -818,6 +833,8 @@ impl Drk {
             QueryType::OptionBlob as u8,
             DAO_PROPOSALS_COL_LEAF_POSITION,
             QueryType::OptionBlob as u8,
+            DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
+            QueryType::OptionBlob as u8,
             DAO_PROPOSALS_COL_TX_HASH,
             QueryType::OptionInteger as u8,
             DAO_PROPOSALS_COL_CALL_INDEX,
@@ -848,11 +865,14 @@ impl Drk {
         let bulla_blind = deserialize(&bulla_blind_bytes)?;
 
         let leaf_position_bytes: Vec<u8> = serde_json::from_value(row[6].clone())?;
-        let tx_hash_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
 
-        let call_index = serde_json::from_value(row[8].clone())?;
+        let money_snapshot_tree_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
 
-        let vote_id_bytes: Vec<u8> = serde_json::from_value(row[9].clone())?;
+        let tx_hash_bytes: Vec<u8> = serde_json::from_value(row[8].clone())?;
+
+        let call_index = serde_json::from_value(row[9].clone())?;
+
+        let vote_id_bytes: Vec<u8> = serde_json::from_value(row[10].clone())?;
 
         let leaf_position = if leaf_position_bytes.is_empty() {
             None
@@ -862,6 +882,12 @@ impl Drk {
 
         let tx_hash =
             if tx_hash_bytes.is_empty() { None } else { Some(deserialize(&tx_hash_bytes)?) };
+
+        let money_snapshot_tree = if money_snapshot_tree_bytes.is_empty() {
+            None
+        } else {
+            Some(deserialize(&money_snapshot_tree_bytes)?)
+        };
 
         let vote_id =
             if vote_id_bytes.is_empty() { None } else { Some(deserialize(&vote_id_bytes)?) };
@@ -876,6 +902,7 @@ impl Drk {
             token_id,
             bulla_blind,
             leaf_position,
+            money_snapshot_tree,
             tx_hash,
             call_index,
             vote_id,
@@ -974,7 +1001,12 @@ impl Drk {
         // DAOs that have been minted
         let mut new_dao_bullas: Vec<(DaoBulla, Option<blake3::Hash>, u32)> = vec![];
         // DAO proposals that have been minted
-        let mut new_dao_proposals: Vec<(DaoProposeParams, Option<blake3::Hash>, u32)> = vec![];
+        let mut new_dao_proposals: Vec<(
+            DaoProposeParams,
+            Option<MerkleTree>,
+            Option<blake3::Hash>,
+            u32,
+        )> = vec![];
         let mut our_proposals: Vec<DaoProposal> = vec![];
         // DAO votes that have been seen
         let mut new_dao_votes: Vec<(DaoVoteParams, Option<blake3::Hash>, u32)> = vec![];
@@ -994,7 +1026,9 @@ impl Drk {
                 eprintln!("Found Dao::Propose in call {}", i);
                 let params: DaoProposeParams = deserialize(&call.data[1..])?;
                 let tx_hash = if confirm { Some(blake3::hash(&serialize(tx))) } else { None };
-                new_dao_proposals.push((params, tx_hash, i as u32));
+                // We need to clone the tree here for reproducing the snapshot Merkle root
+                let money_tree = if confirm { Some(self.get_money_tree().await?) } else { None };
+                new_dao_proposals.push((params, money_tree, tx_hash, i as u32));
                 continue
             }
 
@@ -1057,8 +1091,9 @@ impl Drk {
                             token_id: note.proposal.token_id,
                             bulla_blind: note.proposal.blind,
                             leaf_position: proposals_tree.mark(),
-                            tx_hash: proposal.1,
-                            call_index: Some(proposal.2),
+                            money_snapshot_tree: proposal.1,
+                            tx_hash: proposal.2,
+                            call_index: Some(proposal.3),
                             vote_id: None,
                         };
 
@@ -1186,7 +1221,7 @@ impl Drk {
             };
 
             let query = format!(
-                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8);",
+                "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);",
                 DAO_PROPOSALS_TABLE,
                 DAO_PROPOSALS_COL_DAO_ID,
                 DAO_PROPOSALS_COL_RECV_PUBLIC,
@@ -1194,6 +1229,7 @@ impl Drk {
                 DAO_PROPOSALS_COL_SENDCOIN_TOKEN_ID,
                 DAO_PROPOSALS_COL_BULLA_BLIND,
                 DAO_PROPOSALS_COL_LEAF_POSITION,
+                DAO_PROPOSALS_COL_MONEY_SNAPSHOT_TREE,
                 DAO_PROPOSALS_COL_TX_HASH,
                 DAO_PROPOSALS_COL_CALL_INDEX,
             );
@@ -1212,6 +1248,8 @@ impl Drk {
                 serialize(&proposal.bulla_blind),
                 QueryType::Blob as u8,
                 serialize(&proposal.leaf_position.unwrap()),
+                QueryType::Blob as u8,
+                serialize(&proposal.money_snapshot_tree.clone().unwrap()),
                 QueryType::Blob as u8,
                 serialize(&proposal.tx_hash.unwrap()),
                 QueryType::Integer as u8,
