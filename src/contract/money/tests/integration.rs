@@ -37,6 +37,9 @@ use log::info;
 async fn money_integration() -> Result<()> {
     init_logger();
 
+    // Holders this test will use
+    const HOLDERS: [Holder; 3] = [Holder::Faucet, Holder::Alice, Holder::Bob];
+
     // Some numbers we want to assert
     const ALICE_NATIVE_AIRDROP: u64 = 10000000000; // 100 DRK
     const BOB_SUPPLY: u64 = 2000000000; // 10 BOB
@@ -60,8 +63,10 @@ async fn money_integration() -> Result<()> {
     info!("[Bob] Executing Alice airdrop tx");
     th.execute_airdrop_native_tx(Holder::Bob, &airdrop_tx, &airdrop_params, current_slot).await?;
 
+    th.assert_trees(&HOLDERS);
+
     // Alice gathers her new coin
-    let _ = th.gather_owncoin(Holder::Alice, airdrop_params.outputs[0].clone(), None)?;
+    th.gather_owncoin(Holder::Alice, airdrop_params.outputs[0].clone(), None)?;
 
     info!("[Bob] Building BOB token mint tx");
     let (token_mint_tx, token_mint_params) = th.token_mint(BOB_SUPPLY, Holder::Bob, Holder::Bob)?;
@@ -77,8 +82,10 @@ async fn money_integration() -> Result<()> {
     info!("[Bob] Executing BOB token mint tx");
     th.execute_token_mint_tx(Holder::Bob, &token_mint_tx, &token_mint_params, current_slot).await?;
 
+    th.assert_trees(&HOLDERS);
+
     // Bob gathers his new coin
-    let _ = th.gather_owncoin(Holder::Bob, token_mint_params.output.clone(), None)?;
+    th.gather_owncoin(Holder::Bob, token_mint_params.output.clone(), None)?;
 
     info!("[Bob] Building BOB token freeze tx");
     let (token_frz_tx, token_frz_params) = th.token_freeze(Holder::Bob)?;
@@ -94,7 +101,11 @@ async fn money_integration() -> Result<()> {
     info!("[Bob] Executing BOB token freeze tx");
     th.execute_token_freeze_tx(Holder::Bob, &token_frz_tx, &token_frz_params, current_slot).await?;
 
-    // Thanks for reading
+    th.assert_trees(&HOLDERS);
+
+    // Statistics
     th.statistics();
+
+    // Thanks for reading
     Ok(())
 }
