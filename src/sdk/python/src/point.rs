@@ -33,6 +33,7 @@ use darkfi_sdk::{
 };
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pyo3::{basic::CompareOp, prelude::*};
+use rand::rngs::OsRng;
 
 use super::{affine::Affine, base::Base, scalar::Scalar};
 
@@ -73,6 +74,11 @@ impl Point {
         let r = hasher(&VALUE_COMMITMENT_R_BYTES);
         let r = Self(r);
         Self(r.0 * blind.0)
+    }
+
+    #[staticmethod]
+    fn random() -> Self {
+        Self(pallas::Point::random(&mut OsRng))
     }
 
     fn __str__(&self) -> String {
