@@ -32,7 +32,7 @@ use darkfi_sdk::{
     },
 };
 use halo2_gadgets::ecc::chip::FixedPoint;
-use pyo3::prelude::*;
+use pyo3::{basic::CompareOp, prelude::*};
 
 use super::{affine::Affine, base::Base, scalar::Scalar};
 
@@ -75,9 +75,13 @@ impl Point {
         Self(r.0 * blind.0)
     }
 
-    #[pyo3(name = "__str__")]
     fn __str__(&self) -> String {
-        format!("Point({:?})", self.0)
+        format!("{:?}", self.0)
+    }
+
+    fn __repr__(slf: &PyCell<Self>) -> PyResult<String> {
+        let class_name: &str = slf.get_type().name()?;
+        Ok(format!("{}({:?})", class_name, slf.borrow().0))
     }
 
     fn to_affine(&self) -> Affine {
@@ -98,6 +102,17 @@ impl Point {
 
     fn __neg__(&self) -> Self {
         Self(-self.0)
+    }
+
+    fn __richcmp__(&self, other: &Self, op: CompareOp) -> PyResult<bool> {
+        match op {
+            CompareOp::Eq => Ok(self.0 == other.0),
+            CompareOp::Ne => Ok(self.0 != other.0),
+            CompareOp::Lt => todo!(),
+            CompareOp::Le => todo!(),
+            CompareOp::Gt => todo!(),
+            CompareOp::Ge => todo!(),
+        }
     }
 }
 
