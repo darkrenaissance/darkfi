@@ -60,7 +60,9 @@ mod consensus_stake;
 mod consensus_unstake;
 mod consensus_unstake_request;
 mod money_airdrop;
+mod money_genesis_mint;
 mod money_token;
+mod money_transfer;
 
 pub fn init_logger() {
     let mut cfg = simplelog::ConfigBuilder::new();
