@@ -39,8 +39,8 @@ impl TestHarness {
         value: u64,
         holder: Holder,
     ) -> Result<(Transaction, MoneyTransferParamsV1)> {
-        let recipient = self.holders.get_mut(&holder).unwrap().keypair.public;
-        let faucet = self.holders.get_mut(&Holder::Faucet).unwrap();
+        let recipient = self.holders.get(&holder).unwrap().keypair.public;
+        let faucet = self.holders.get(&Holder::Faucet).unwrap();
         let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
         let tx_action_benchmark =

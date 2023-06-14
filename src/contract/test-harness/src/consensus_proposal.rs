@@ -40,7 +40,7 @@ impl TestHarness {
         slot_checkpoint: SlotCheckpoint,
         staked_oc: ConsensusOwnCoin,
     ) -> Result<(Transaction, ConsensusProposalParamsV1, SecretKey, SecretKey)> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get(&holder).unwrap();
         let (proposal_pk, proposal_zkbin) =
             self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1).unwrap();
         let tx_action_benchmark =
@@ -119,7 +119,7 @@ impl TestHarness {
         slot: u64,
         erroneous: usize,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get(&holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusProposal).unwrap();
         let timer = Instant::now();

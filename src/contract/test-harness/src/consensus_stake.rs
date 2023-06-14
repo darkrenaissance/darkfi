@@ -41,7 +41,7 @@ impl TestHarness {
         slot: u64,
         owncoin: OwnCoin,
     ) -> Result<(Transaction, ConsensusStakeParamsV1, SecretKey)> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get(&holder).unwrap();
         let (mint_pk, mint_zkbin) =
             self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();

@@ -39,7 +39,7 @@ impl TestHarness {
         holder: Holder,
         amount: u64,
     ) -> Result<(Transaction, ConsensusGenesisStakeParamsV1)> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get(&holder).unwrap();
         let (mint_pk, mint_zkbin) =
             self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let tx_action_benchmark =
@@ -108,7 +108,7 @@ impl TestHarness {
         slot: u64,
         erroneous: usize,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get(&holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusGenesisStake).unwrap();
         let timer = Instant::now();

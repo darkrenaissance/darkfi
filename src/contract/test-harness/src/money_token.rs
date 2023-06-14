@@ -41,8 +41,8 @@ impl TestHarness {
         holder: Holder,
         recipient: Holder,
     ) -> Result<(Transaction, MoneyTokenMintParamsV1)> {
-        let rcpt = self.holders.get_mut(&recipient).unwrap().keypair.public;
-        let mint_authority = self.holders.get_mut(&holder).unwrap().token_mint_authority;
+        let rcpt = self.holders.get(&recipient).unwrap().keypair.public;
+        let mint_authority = self.holders.get(&holder).unwrap().token_mint_authority;
         let (mint_pk, mint_zkbin) =
             self.proving_keys.get(&MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1).unwrap();
         let tx_action_benchmark =
@@ -106,7 +106,7 @@ impl TestHarness {
         &mut self,
         holder: Holder,
     ) -> Result<(Transaction, MoneyTokenFreezeParamsV1)> {
-        let mint_authority = self.holders.get_mut(&holder).unwrap().token_mint_authority;
+        let mint_authority = self.holders.get(&holder).unwrap().token_mint_authority;
         let (frz_pk, frz_zkbin) =
             self.proving_keys.get(&MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1).unwrap();
         let tx_action_benchmark =
