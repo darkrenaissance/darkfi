@@ -30,13 +30,14 @@ use darkfi::Result;
 use log::info;
 
 use darkfi_consensus_contract::model::{calculate_grace_period, EPOCH_LENGTH, REWARD};
-
-mod harness;
-use harness::{init_logger, ConsensusTestHarness, Holder};
+use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
 
 #[async_std::test]
 async fn consensus_contract_stake_unstake() -> Result<()> {
     init_logger();
+
+    // Holders this test will use
+    const HOLDERS: [Holder; 2] = [Holder::Faucet, Holder::Alice];
 
     // Some numbers we want to assert
     const ALICE_AIRDROP: u64 = 1000;
@@ -45,7 +46,9 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     let mut current_slot = 1;
 
     // Initialize harness
-    let mut th = ConsensusTestHarness::new().await?;
+    let mut th = TestHarness::new(&["money".to_string(), "consensus".to_string()]).await?;
+
+    // Now Alice can airdrop some native tokens to herself
     info!(target: "consensus", "[Faucet] =========================");
     info!(target: "consensus", "[Faucet] Building Alice airdrop tx");
     info!(target: "consensus", "[Faucet] =========================");
@@ -54,15 +57,15 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Faucet] ==========================");
     info!(target: "consensus", "[Faucet] Executing Alice airdrop tx");
     info!(target: "consensus", "[Faucet] ==========================");
-    th.execute_airdrop_native_tx(Holder::Faucet, airdrop_tx.clone(), &airdrop_params, current_slot)
+    th.execute_airdrop_native_tx(Holder::Faucet, &airdrop_tx, &airdrop_params, current_slot)
         .await?;
 
     info!(target: "consensus", "[Alice] ==========================");
     info!(target: "consensus", "[Alice] Executing Alice airdrop tx");
     info!(target: "consensus", "[Alice] ==========================");
-    th.execute_airdrop_native_tx(Holder::Alice, airdrop_tx, &airdrop_params, current_slot).await?;
+    th.execute_airdrop_native_tx(Holder::Alice, &airdrop_tx, &airdrop_params, current_slot).await?;
 
-    th.assert_trees();
+    th.assert_trees(&HOLDERS);
 
     // Gather new owncoin
     let alice_oc = th.gather_owncoin(Holder::Alice, airdrop_params.outputs[0].clone(), None)?;
@@ -77,14 +80,14 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Faucet] ========================");
     info!(target: "consensus", "[Faucet] Executing Alice stake tx");
     info!(target: "consensus", "[Faucet] ========================");
-    th.execute_stake_tx(Holder::Faucet, stake_tx.clone(), &stake_params, current_slot).await?;
+    th.execute_stake_tx(Holder::Faucet, &stake_tx, &stake_params, current_slot).await?;
 
     info!(target: "consensus", "[Alice] ========================");
     info!(target: "consensus", "[Alice] Executing Alice stake tx");
     info!(target: "consensus", "[Alice] ========================");
-    th.execute_stake_tx(Holder::Alice, stake_tx, &stake_params, current_slot).await?;
+    th.execute_stake_tx(Holder::Alice, &stake_tx, &stake_params, current_slot).await?;
 
-    th.assert_trees();
+    th.assert_trees(&HOLDERS);
 
     // Gather new staked owncoin
     let alice_staked_oc = th.gather_consensus_staked_owncoin(
@@ -128,15 +131,14 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Faucet] ===========================");
     info!(target: "consensus", "[Faucet] Executing Alice proposal tx");
     info!(target: "consensus", "[Faucet] ===========================");
-    th.execute_proposal_tx(Holder::Faucet, proposal_tx.clone(), &proposal_params, current_slot)
-        .await?;
+    th.execute_proposal_tx(Holder::Faucet, &proposal_tx, &proposal_params, current_slot).await?;
 
     info!(target: "consensus", "[Alice] ===========================");
     info!(target: "consensus", "[Alice] Executing Alice proposal tx");
     info!(target: "consensus", "[Alice] ===========================");
-    th.execute_proposal_tx(Holder::Alice, proposal_tx, &proposal_params, current_slot).await?;
+    th.execute_proposal_tx(Holder::Alice, &proposal_tx, &proposal_params, current_slot).await?;
 
-    th.assert_trees();
+    th.assert_trees(&HOLDERS);
 
     // Gather new staked owncoin which includes the reward
     let alice_rewarded_staked_oc = th.gather_consensus_staked_owncoin(
@@ -168,7 +170,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Faucet] ==================================");
     th.execute_unstake_request_tx(
         Holder::Faucet,
-        unstake_request_tx.clone(),
+        &unstake_request_tx,
         &unstake_request_params,
         current_slot,
     )
@@ -179,13 +181,13 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] ==================================");
     th.execute_unstake_request_tx(
         Holder::Alice,
-        unstake_request_tx,
+        &unstake_request_tx,
         &unstake_request_params,
         current_slot,
     )
     .await?;
 
-    th.assert_trees();
+    th.assert_trees(&HOLDERS);
 
     // Gather new unstake request owncoin
     let alice_unstake_request_oc = th.gather_consensus_unstaked_owncoin(
@@ -234,15 +236,14 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Faucet] ==========================");
     info!(target: "consensus", "[Faucet] Executing Alice unstake tx");
     info!(target: "consensus", "[Faucet] ==========================");
-    th.execute_unstake_tx(Holder::Faucet, unstake_tx.clone(), &unstake_params, current_slot)
-        .await?;
+    th.execute_unstake_tx(Holder::Faucet, &unstake_tx, &unstake_params, current_slot).await?;
 
     info!(target: "consensus", "[Alice] ==========================");
     info!(target: "consensus", "[Alice] Executing Alice unstake tx");
     info!(target: "consensus", "[Alice] ==========================");
-    th.execute_unstake_tx(Holder::Alice, unstake_tx, &unstake_params, current_slot).await?;
+    th.execute_unstake_tx(Holder::Alice, &unstake_tx, &unstake_params, current_slot).await?;
 
-    th.assert_trees();
+    th.assert_trees(&HOLDERS);
 
     // Gather new unstaked owncoin
     let alice_unstaked_oc = th.gather_owncoin(Holder::Alice, unstake_params.output, None)?;

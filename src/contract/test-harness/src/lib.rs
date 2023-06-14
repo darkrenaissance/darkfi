@@ -20,8 +20,8 @@ use std::collections::HashMap;
 
 use darkfi::{
     consensus::{
-        ValidatorState, ValidatorStatePtr, TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
-        TESTNET_GENESIS_TIMESTAMP, TESTNET_INITIAL_DISTRIBUTION,
+        SlotCheckpoint, ValidatorState, ValidatorStatePtr, TESTNET_BOOTSTRAP_TIMESTAMP,
+        TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP, TESTNET_INITIAL_DISTRIBUTION,
     },
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
     wallet::{WalletDb, WalletPtr},
@@ -35,8 +35,8 @@ use darkfi_dao_contract::{
     DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 use darkfi_money_contract::{
-    client::{MoneyNote, OwnCoin},
-    model::Output,
+    client::{ConsensusNote, ConsensusOwnCoin, MoneyNote, OwnCoin},
+    model::{Coin, ConsensusOutput, Output},
     CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
     CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
     MONEY_CONTRACT_ZKAS_MINT_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1,
@@ -54,6 +54,11 @@ mod benchmarks;
 use benchmarks::TxActionBenchmarks;
 mod vks;
 
+mod consensus_genesis_stake;
+mod consensus_proposal;
+mod consensus_stake;
+mod consensus_unstake;
+mod consensus_unstake_request;
 mod money_airdrop;
 mod money_token;
 
@@ -92,6 +97,11 @@ pub enum TxAction {
     MoneyGenesisMint,
     MoneyTransfer,
     MoneyOtcSwap,
+    ConsensusGenesisStake,
+    ConsensusStake,
+    ConsensusProposal,
+    ConsensusUnstakeRequest,
+    ConsensusUnstake,
 }
 
 pub struct Wallet {
@@ -244,19 +254,16 @@ impl TestHarness {
         tx_action_benchmarks.insert(TxAction::MoneyGenesisMint, TxActionBenchmarks::new());
         tx_action_benchmarks.insert(TxAction::MoneyOtcSwap, TxActionBenchmarks::new());
         tx_action_benchmarks.insert(TxAction::MoneyTransfer, TxActionBenchmarks::new());
+        tx_action_benchmarks.insert(TxAction::ConsensusGenesisStake, TxActionBenchmarks::new());
+        tx_action_benchmarks.insert(TxAction::ConsensusStake, TxActionBenchmarks::new());
+        tx_action_benchmarks.insert(TxAction::ConsensusProposal, TxActionBenchmarks::new());
+        tx_action_benchmarks.insert(TxAction::ConsensusUnstakeRequest, TxActionBenchmarks::new());
+        tx_action_benchmarks.insert(TxAction::ConsensusUnstake, TxActionBenchmarks::new());
 
         // Alice jumps down the rabbit hole
         holders.insert(Holder::Alice, alice);
 
         Ok(Self { holders, proving_keys, tx_action_benchmarks })
-    }
-
-    pub fn statistics(&self) {
-        info!("==================== Statistics ====================");
-        for (action, tx_action_benchmark) in &self.tx_action_benchmarks {
-            tx_action_benchmark.statistics(action);
-        }
-        info!("====================================================");
     }
 
     pub fn gather_owncoin(
@@ -284,5 +291,117 @@ impl TestHarness {
         wallet.unspent_money_coins.push(oc.clone());
 
         Ok(oc)
+    }
+
+    pub fn gather_consensus_staked_owncoin(
+        &mut self,
+        holder: Holder,
+        output: ConsensusOutput,
+        secret_key: Option<SecretKey>,
+    ) -> Result<ConsensusOwnCoin> {
+        let wallet = self.holders.get_mut(&holder).unwrap();
+        let leaf_position = wallet.consensus_staked_merkle_tree.mark().unwrap();
+        let secret_key = match secret_key {
+            Some(key) => key,
+            None => wallet.keypair.secret,
+        };
+        let note: ConsensusNote = output.note.decrypt(&secret_key)?;
+        let oc = ConsensusOwnCoin {
+            coin: Coin::from(output.coin),
+            note: note.clone(),
+            secret: secret_key,
+            nullifier: Nullifier::from(poseidon_hash([wallet.keypair.secret.inner(), note.serial])),
+            leaf_position,
+        };
+
+        Ok(oc)
+    }
+
+    pub fn gather_consensus_unstaked_owncoin(
+        &mut self,
+        holder: Holder,
+        output: ConsensusOutput,
+        secret_key: Option<SecretKey>,
+    ) -> Result<ConsensusOwnCoin> {
+        let wallet = self.holders.get_mut(&holder).unwrap();
+        let leaf_position = wallet.consensus_unstaked_merkle_tree.mark().unwrap();
+        let secret_key = match secret_key {
+            Some(key) => key,
+            None => wallet.keypair.secret,
+        };
+        let note: ConsensusNote = output.note.decrypt(&secret_key)?;
+        let oc = ConsensusOwnCoin {
+            coin: Coin::from(output.coin),
+            note: note.clone(),
+            secret: secret_key,
+            nullifier: Nullifier::from(poseidon_hash([wallet.keypair.secret.inner(), note.serial])),
+            leaf_position,
+        };
+
+        Ok(oc)
+    }
+
+    pub async fn get_slot_checkpoint_by_slot(&self, slot: u64) -> Result<SlotCheckpoint> {
+        let faucet = self.holders.get(&Holder::Faucet).unwrap();
+        let slot_checkpoint =
+            faucet.state.read().await.blockchain.get_slot_checkpoints_by_slot(&[slot])?[0]
+                .clone()
+                .unwrap();
+
+        Ok(slot_checkpoint)
+    }
+
+    pub async fn generate_slot_checkpoint(&self, slot: u64) -> Result<SlotCheckpoint> {
+        // We grab the genesis slot to generate slot checkpoint
+        // using same consensus parameters
+        let faucet = self.holders.get(&Holder::Faucet).unwrap();
+        let genesis_block = faucet.state.read().await.consensus.genesis_block;
+        let fork_hashes = vec![genesis_block];
+        let fork_previous_hashes = vec![genesis_block];
+        let genesis_slot = self.get_slot_checkpoint_by_slot(0).await?;
+        let slot_checkpoint = SlotCheckpoint {
+            slot,
+            previous_eta: genesis_slot.previous_eta,
+            fork_hashes,
+            fork_previous_hashes,
+            sigma1: genesis_slot.sigma1,
+            sigma2: genesis_slot.sigma2,
+        };
+
+        // Store generated slot checkpoint
+        for wallet in self.holders.values() {
+            wallet.state.write().await.receive_slot_checkpoints(&[slot_checkpoint.clone()]).await?;
+        }
+
+        Ok(slot_checkpoint)
+    }
+
+    pub fn assert_trees(&self, holders: &[Holder]) {
+        assert!(holders.len() > 1);
+        // Gather wallets
+        let mut wallets = vec![];
+        for holder in holders {
+            wallets.push(self.holders.get(holder).unwrap());
+        }
+        // Compare trees
+        let wallet = wallets[0];
+        let money_root = wallet.money_merkle_tree.root(0).unwrap();
+        let consensus_stake_root = wallet.consensus_staked_merkle_tree.root(0).unwrap();
+        let consensus_unstake_root = wallet.consensus_unstaked_merkle_tree.root(0).unwrap();
+        for wallet in &wallets[1..] {
+            assert!(money_root == wallet.money_merkle_tree.root(0).unwrap());
+            assert!(consensus_stake_root == wallet.consensus_staked_merkle_tree.root(0).unwrap());
+            assert!(
+                consensus_unstake_root == wallet.consensus_unstaked_merkle_tree.root(0).unwrap()
+            );
+        }
+    }
+
+    pub fn statistics(&self) {
+        info!("==================== Statistics ====================");
+        for (action, tx_action_benchmark) in &self.tx_action_benchmarks {
+            tx_action_benchmark.statistics(action);
+        }
+        info!("====================================================");
     }
 }
