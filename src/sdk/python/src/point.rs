@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::ops::{Add, Mul};
-
 use darkfi_sdk::{
     crypto::{
         constants::fixed_bases::{
@@ -74,7 +72,7 @@ impl Point {
         let hasher = ValueCommit::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
         let r = hasher(&VALUE_COMMITMENT_R_BYTES);
         let r = Self(r);
-        r.mul(blind)
+        Self(r.0 * blind.0)
     }
 
     #[pyo3(name = "__str__")]
@@ -86,12 +84,20 @@ impl Point {
         Affine(self.0.to_affine())
     }
 
-    fn add(&self, rhs: &Self) -> Self {
-        Self(self.0.add(rhs.0))
+    fn __add__(&self, rhs: &Self) -> Self {
+        Self(self.0 + rhs.0)
     }
 
-    fn mul(&self, scalar: &Scalar) -> Self {
-        Self(self.0.mul(scalar.0))
+    fn __sub__(&self, rhs: &Self) -> Self {
+        Self(self.0 - rhs.0)
+    }
+
+    fn __mul__(&self, scalar: &Scalar) -> Self {
+        Self(self.0 * scalar.0)
+    }
+
+    fn __neg__(&self) -> Self {
+        Self(-self.0)
     }
 }
 
