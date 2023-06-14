@@ -149,8 +149,8 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         }
 
         let mut z_values: Vec<AssignedCell<pallas::Base, pallas::Base>> = vec![z_0.clone()];
-        let mut z = z_0.clone();
-        let decomposed_chunks = z_0.value().map(Self::decompose_value).transpose_vec(NUM_WINDOWS);
+        let mut z = z_0;
+        let decomposed_chunks = z.value().map(Self::decompose_value).transpose_vec(NUM_WINDOWS);
 
         let two_pow_k_inverse =
             Value::known(pallas::Base::from(1 << WINDOW_SIZE as u64).invert().unwrap());

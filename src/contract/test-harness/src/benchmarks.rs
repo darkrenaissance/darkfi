@@ -66,3 +66,9 @@ impl TxActionBenchmarks {
         }
     }
 }
+
+impl Default for TxActionBenchmarks {
+    fn default() -> Self {
+        Self::new()
+    }
+}

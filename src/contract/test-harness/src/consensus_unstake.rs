@@ -72,7 +72,7 @@ impl TestHarness {
 
         // Building Money::Unstake params
         let money_unstake_call_debris = MoneyUnstakeCallBuilder {
-            owncoin: staked_oc.into(),
+            owncoin: staked_oc,
             recipient: self.holders.get_mut(&holder).unwrap().keypair.public,
             value_blind: consensus_unstake_value_blind,
             nullifier: consensus_unstake_params.input.nullifier,

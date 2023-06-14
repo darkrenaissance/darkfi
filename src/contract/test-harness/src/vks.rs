@@ -109,7 +109,7 @@ fn read_or_gen_vks() -> Result<Vks> {
     let mut vks = vec![];
 
     for bincode in bins.iter() {
-        let zkbin = ZkBinary::decode(&bincode)?;
+        let zkbin = ZkBinary::decode(bincode)?;
         debug!("Building VK for {}", zkbin.namespace);
         let witnesses = empty_witnesses(&zkbin);
         let circuit = ZkCircuit::new(witnesses, zkbin.clone());

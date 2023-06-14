@@ -36,7 +36,7 @@ use darkfi_dao_contract::{
 };
 use darkfi_money_contract::{
     client::{ConsensusNote, ConsensusOwnCoin, MoneyNote, OwnCoin},
-    model::{Coin, ConsensusOutput, Output},
+    model::{ConsensusOutput, Output},
     CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
     CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
     MONEY_CONTRACT_ZKAS_MINT_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1,
@@ -47,7 +47,7 @@ use darkfi_sdk::crypto::{
     DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
 };
 use darkfi_serial::{deserialize, serialize};
-use log::info;
+use log::{info, warn};
 use rand::rngs::OsRng;
 
 mod benchmarks;
@@ -66,15 +66,19 @@ pub fn init_logger() {
     let mut cfg = simplelog::ConfigBuilder::new();
     cfg.add_filter_ignore("sled".to_string());
 
-    if let Err(_) = simplelog::TermLogger::init(
+    // We check this error so we can execute same file tests in parallel,
+    // otherwise second one fails to init logger here.
+    if simplelog::TermLogger::init(
         simplelog::LevelFilter::Info,
         //simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
-    ) {
-        return
+    )
+    .is_err()
+    {
+        warn!(target: "test_harness", "Logger already initialized");
     }
 }
 
@@ -248,17 +252,18 @@ impl TestHarness {
 
         // Build benchmarks map
         let mut tx_action_benchmarks = HashMap::new();
-        tx_action_benchmarks.insert(TxAction::MoneyAirdrop, TxActionBenchmarks::new());
-        tx_action_benchmarks.insert(TxAction::MoneyTokenMint, TxActionBenchmarks::new());
-        tx_action_benchmarks.insert(TxAction::MoneyTokenFreeze, TxActionBenchmarks::new());
-        tx_action_benchmarks.insert(TxAction::MoneyGenesisMint, TxActionBenchmarks::new());
-        tx_action_benchmarks.insert(TxAction::MoneyOtcSwap, TxActionBenchmarks::new());
-        tx_action_benchmarks.insert(TxAction::MoneyTransfer, TxActionBenchmarks::new());
-        tx_action_benchmarks.insert(TxAction::ConsensusGenesisStake, TxActionBenchmarks::new());
-        tx_action_benchmarks.insert(TxAction::ConsensusStake, TxActionBenchmarks::new());
-        tx_action_benchmarks.insert(TxAction::ConsensusProposal, TxActionBenchmarks::new());
-        tx_action_benchmarks.insert(TxAction::ConsensusUnstakeRequest, TxActionBenchmarks::new());
-        tx_action_benchmarks.insert(TxAction::ConsensusUnstake, TxActionBenchmarks::new());
+        tx_action_benchmarks.insert(TxAction::MoneyAirdrop, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::MoneyTokenMint, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::MoneyTokenFreeze, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::MoneyGenesisMint, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::MoneyOtcSwap, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::MoneyTransfer, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::ConsensusGenesisStake, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::ConsensusStake, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::ConsensusProposal, TxActionBenchmarks::default());
+        tx_action_benchmarks
+            .insert(TxAction::ConsensusUnstakeRequest, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::ConsensusUnstake, TxActionBenchmarks::default());
 
         // Alice jumps down the rabbit hole
         holders.insert(Holder::Alice, alice);
@@ -307,7 +312,7 @@ impl TestHarness {
         };
         let note: ConsensusNote = output.note.decrypt(&secret_key)?;
         let oc = ConsensusOwnCoin {
-            coin: Coin::from(output.coin),
+            coin: output.coin,
             note: note.clone(),
             secret: secret_key,
             nullifier: Nullifier::from(poseidon_hash([wallet.keypair.secret.inner(), note.serial])),
@@ -331,7 +336,7 @@ impl TestHarness {
         };
         let note: ConsensusNote = output.note.decrypt(&secret_key)?;
         let oc = ConsensusOwnCoin {
-            coin: Coin::from(output.coin),
+            coin: output.coin,
             note: note.clone(),
             secret: secret_key,
             nullifier: Nullifier::from(poseidon_hash([wallet.keypair.secret.inner(), note.serial])),
