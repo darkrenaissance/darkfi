@@ -1,14 +1,33 @@
-# Installation
+# darkfi-sdk-py
 
-Follow virtualenv and pyo3 setup guide: https://pyo3.rs/v0.15.1/#using-rust-from-python
+## Bootstrap
 
-## tldr
-
+This python sdk requires a virtual environment, along with a build tool.
+To create the environment, execute:
 ```
-$ python3 -m venv venv
-$ source venv/bin/activate
-$ maturin develop --release
+$ make bootstrap
 ```
+You may find more information in [pyo3](https://pyo3.rs/v0.15.1/#using-rust-from-python)
+setup guide.
+
+## Development
+
+### Build
+
+After successfully bootstrapping the virtual environment,
+you can build the sdk by simply executing:
+```
+$ make
+```
+
+After all development is finished, you need to remove
+the virtual envirnment folder, as it breaks rest make
+operations in the repo, so just execute:
+```
+$ make clean
+```
+
+### Usage example
 
 ```
 $ python3
@@ -18,7 +37,7 @@ b = Base.from_u64(69)
 a + b == Base.from_u64(111)
 ```
 
-## Randomness
+### Randomness
 
 Note that the `random` methods take randomness 
 from the OS on the Rust side.
