@@ -130,21 +130,24 @@ async fn txs_verification() -> Result<()> {
     info!(target: "money", "[Faucet] ==============================");
     th.execute_erroneous_transfer_tx(Holder::Faucet, &transactions, current_slot, duplicates - 1)
         .await?;
-    th.execute_transfer_tx(Holder::Faucet, &transactions[0], &txs_params[0], current_slot).await?;
+    th.execute_transfer_tx(Holder::Faucet, &transactions[0], &txs_params[0], current_slot, true)
+        .await?;
 
     info!(target: "money", "[Alice] ==============================");
     info!(target: "money", "[Alice] Executing Alice2Bob payment tx");
     info!(target: "money", "[Alice] ==============================");
     th.execute_erroneous_transfer_tx(Holder::Alice, &transactions, current_slot, duplicates - 1)
         .await?;
-    th.execute_transfer_tx(Holder::Alice, &transactions[0], &txs_params[0], current_slot).await?;
+    th.execute_transfer_tx(Holder::Alice, &transactions[0], &txs_params[0], current_slot, true)
+        .await?;
 
     info!(target: "money", "[Bob] ==============================");
     info!(target: "money", "[Bob] Executing Alice2Bob payment tx");
     info!(target: "money", "[Bob] ==============================");
     th.execute_erroneous_transfer_tx(Holder::Bob, &transactions, current_slot, duplicates - 1)
         .await?;
-    th.execute_transfer_tx(Holder::Bob, &transactions[0], &txs_params[0], current_slot).await?;
+    th.execute_transfer_tx(Holder::Bob, &transactions[0], &txs_params[0], current_slot, true)
+        .await?;
 
     th.assert_trees(&HOLDERS);
 
@@ -158,6 +161,9 @@ async fn txs_verification() -> Result<()> {
 
     assert!(alice_owncoins.len() == 1);
     assert!(bob_owncoins.len() == 1);
+
+    // Statistics
+    th.statistics();
 
     // Thanks for reading
     Ok(())

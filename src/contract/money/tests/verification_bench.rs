@@ -110,6 +110,10 @@ async fn alice2alice_random_amounts() -> Result<()> {
         th.assert_trees(&HOLDERS);
     }
 
+    // Statistics
+    th.statistics();
+
+    // Thanks for reading
     Ok(())
 }
 
@@ -229,5 +233,9 @@ async fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
         th.assert_trees(&HOLDERS);
     }
 
+    // Statistics
+    th.statistics();
+
+    // Thanks for reading
     Ok(())
 }

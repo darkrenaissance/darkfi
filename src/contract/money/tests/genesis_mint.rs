@@ -169,17 +169,19 @@ async fn genesis_mint() -> Result<()> {
     info!(target: "money", "[Faucet] ==============================");
     info!(target: "money", "[Faucet] Executing Alice2Bob payment tx");
     info!(target: "money", "[Faucet] ==============================");
-    th.execute_transfer_tx(Holder::Faucet, &transfer_tx, &transfer_params, current_slot).await?;
+    th.execute_transfer_tx(Holder::Faucet, &transfer_tx, &transfer_params, current_slot, true)
+        .await?;
 
     info!(target: "money", "[Alice] ==============================");
     info!(target: "money", "[Alice] Executing Alice2Bob payment tx");
     info!(target: "money", "[Alice] ==============================");
-    th.execute_transfer_tx(Holder::Alice, &transfer_tx, &transfer_params, current_slot).await?;
+    th.execute_transfer_tx(Holder::Alice, &transfer_tx, &transfer_params, current_slot, true)
+        .await?;
 
     info!(target: "money", "[Bob] ==============================");
     info!(target: "money", "[Bob] Executing Alice2Bob payment tx");
     info!(target: "money", "[Bob] ==============================");
-    th.execute_transfer_tx(Holder::Bob, &transfer_tx, &transfer_params, current_slot).await?;
+    th.execute_transfer_tx(Holder::Bob, &transfer_tx, &transfer_params, current_slot, true).await?;
 
     th.assert_trees(&HOLDERS);
 
@@ -211,17 +213,19 @@ async fn genesis_mint() -> Result<()> {
     info!(target: "money", "[Faucet] ==============================");
     info!(target: "money", "[Faucet] Executing Bob2Alice payment tx");
     info!(target: "money", "[Faucet] ==============================");
-    th.execute_transfer_tx(Holder::Faucet, &transfer_tx, &transfer_params, current_slot).await?;
+    th.execute_transfer_tx(Holder::Faucet, &transfer_tx, &transfer_params, current_slot, true)
+        .await?;
 
     info!(target: "money", "[Alice] ==============================");
     info!(target: "money", "[Alice] Executing Bob2Alice payment tx");
     info!(target: "money", "[Alice] ==============================");
-    th.execute_transfer_tx(Holder::Alice, &transfer_tx, &transfer_params, current_slot).await?;
+    th.execute_transfer_tx(Holder::Alice, &transfer_tx, &transfer_params, current_slot, true)
+        .await?;
 
     info!(target: "money", "[Bob] ==================+===========");
     info!(target: "money", "[Bob] Executing Bob2Alice payment tx");
     info!(target: "money", "[Bob] ==================+===========");
-    th.execute_transfer_tx(Holder::Bob, &transfer_tx, &transfer_params, current_slot).await?;
+    th.execute_transfer_tx(Holder::Bob, &transfer_tx, &transfer_params, current_slot, true).await?;
 
     th.assert_trees(&HOLDERS);
 

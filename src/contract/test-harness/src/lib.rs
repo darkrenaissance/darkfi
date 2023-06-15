@@ -61,6 +61,7 @@ mod consensus_unstake;
 mod consensus_unstake_request;
 mod money_airdrop;
 mod money_genesis_mint;
+mod money_otc_swap;
 mod money_token;
 mod money_transfer;
 
@@ -331,6 +332,40 @@ impl TestHarness {
         }
 
         Ok(owncoins)
+    }
+
+    pub fn gather_owncoin_at_index(
+        &mut self,
+        holder: Holder,
+        outputs: &[Output],
+        index: usize,
+    ) -> Result<OwnCoin> {
+        let wallet = self.holders.get_mut(&holder).unwrap();
+        let secret_key = wallet.keypair.secret;
+        let mut owncoin = None;
+        for (i, output) in outputs.iter().enumerate() {
+            wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
+            if i == index {
+                let leaf_position = wallet.money_merkle_tree.mark().unwrap();
+
+                let note: MoneyNote = output.note.decrypt(&secret_key)?;
+                let oc = OwnCoin {
+                    coin: output.coin,
+                    note: note.clone(),
+                    secret: secret_key,
+                    nullifier: Nullifier::from(poseidon_hash([
+                        wallet.keypair.secret.inner(),
+                        note.serial,
+                    ])),
+                    leaf_position,
+                };
+
+                wallet.unspent_money_coins.push(oc.clone());
+                owncoin = Some(oc);
+            }
+        }
+
+        Ok(owncoin.unwrap())
     }
 
     pub fn gather_consensus_staked_owncoin(

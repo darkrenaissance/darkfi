@@ -26,10 +26,9 @@
 //!
 //! With this test we want to confirm the money contract state transitions
 //! work between multiple parties and are able to be verified.
+//! Note: Transfers and atomic swaps are covered in the mint_pay_swap test.
 //!
-//! TODO:
-//!      1. Add missing functionalities(transfers, atomic swaps)
-//!      2. Malicious cases
+//! TODO: Malicious cases
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
