@@ -14,6 +14,7 @@ from pprint import pprint
 from sys import getsizeof
 from time import time
 
+
 def heap_add(heap, element):
     print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> heap")
     pprint(heap)
@@ -21,13 +22,15 @@ def heap_add(heap, element):
     pprint(element)
     heap.append(element)
 
+
 def pubin_add(pubins, element):
     print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> pubins")
     pprint(pubins)
     print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> to add")
     pprint(element)
     pubins.append(element)
-   
+
+
 def get_pubins(statements, witnesses, constant_count, literals):
     # Python heap for executing zk statements
     heap = [None] * constant_count + witnesses
@@ -65,12 +68,12 @@ def get_pubins(statements, witnesses, constant_count, literals):
             heap_add(heap, Point.mul_short(value))
         elif opcode == 'EcGetX':
             i = args[0][1]
-            point = heap[i] 
+            point = heap[i]
             x, _ = point.to_affine().coordinates()
             heap_add(heap, x)
         elif opcode == 'EcGetY':
             i = args[0][1]
-            point = heap[i] 
+            point = heap[i]
             _, y = point.to_affine().coordinates()
             heap_add(heap, y)
         elif opcode == 'PoseidonHash':
@@ -83,61 +86,64 @@ def get_pubins(statements, witnesses, constant_count, literals):
             heap_add(heap, Base.merkle_root(i, p, a))
         elif opcode == 'ConstrainInstance':
             i = args[0][1]
-            element = heap[i] 
+            element = heap[i]
             pubin_add(pubins, element)
         elif opcode == 'WitnessBase':
             type = args[0][0]
             assert type == 'Lit', f"type should LitType instead of {type}"
             i = args[0][1]
-            element = int(literals[i][1]) # (LitType, Lit)
+            element = int(literals[i][1])  # (LitType, Lit)
             base = Base.from_u64(element)
-            heap_add(heap, base)        
+            heap_add(heap, base)
         elif opcode == 'CondSelect':
             cnd = heap[args[0][1]]
             thn = heap[args[1][1]]
             els = heap[args[2][1]]
-            assert cnd == Base.from_u64(0) or cnd == Base.from_u64(1), "Failed bool check"
+            assert cnd == Base.from_u64(0) or cnd == Base.from_u64(
+                1), "Failed bool check"
             res = thn if cnd == Base.from_u64(1) else els
             heap_add(heap, res)
         elif opcode in IGNORED_OPCODES:
             print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Ignored opcode")
             pprint(opcode)
         else:
-            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Missing implementation for opcode")
+            print(
+                ">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Missing implementation for opcode"
+            )
             pprint(opcode)
     return pubins
+
 
 def bincode_data(bincode):
     with open(bincode, "rb") as f:
         bincode = f.read()
         zkbin = ZkBinary.decode(bincode)
-        return {"zkbin": zkbin,
-                "namespace": zkbin.namespace(),
-                "witnesses": zkbin.witnesses(),
-                "constant_count": zkbin.constant_count(),
-                "statements": zkbin.opcodes(),
-                "literals": zkbin.literals()}
-    
+        return {
+            "zkbin": zkbin,
+            "namespace": zkbin.namespace(),
+            "witnesses": zkbin.witnesses(),
+            "constant_count": zkbin.constant_count(),
+            "statements": zkbin.opcodes(),
+            "literals": zkbin.literals()
+        }
+
+
 IGNORED_OPCODES = {
-    'Noop',
-    'RangeCheck',
-    'LessThanStrict',
-    'LessThanLoose',
-    'BoolCheck',
-    'ConstrainEqualBase',
-    'ConstrainEqualPoint',
-    'DebugPrint'
+    'Noop', 'RangeCheck', 'LessThanStrict', 'LessThanLoose', 'BoolCheck',
+    'ConstrainEqualBase', 'ConstrainEqualPoint', 'DebugPrint'
 }
 K = 13
 
-if __name__ ==  "__main__":
+if __name__ == "__main__":
 
     ##### Script inputs #####
 
     bincode_path = "opcodes.no-nipoint.zk.bin"
     # bincode_path = "../../example/simple.zk.bin" # You must change the witnesses as well
     bincode_data_ = bincode_data(bincode_path)
-    zkbin, statements, constant_count, literals = bincode_data_['zkbin'], bincode_data_['statements'], bincode_data_['constant_count'], bincode_data_['literals']
+    zkbin, statements, constant_count, literals = bincode_data_[
+        'zkbin'], bincode_data_['statements'], bincode_data_[
+            'constant_count'], bincode_data_['literals']
     witnesses = [
         Base.from_u64(3),
         Scalar.from_u64(4),
@@ -149,12 +155,12 @@ if __name__ ==  "__main__":
         [Base.from_u64(42)] * 32,
         Base.from_u64(1),
     ]
-    
+
     ##### Proving #####
-    
+
     print("Making public inputs based off of witnesses......")
     pubins = get_pubins(statements, witnesses, constant_count, literals)
-    
+
     print("Witnessing each witness into prover's circuit.....")
     zkcircuit = ZkCircuit(zkbin)
     zkcircuit.witness_base(witnesses[0])
@@ -167,29 +173,27 @@ if __name__ ==  "__main__":
     zkcircuit.witness_merkle_path(witnesses[7])
     zkcircuit.witness_base(witnesses[8])
     zkcircuit = zkcircuit.build(zkbin)
-    
+
     print("Making proving key.....")
     start = time()
     proving_key = ProvingKey.build(K, zkcircuit)
     print(f"Time for making proving key: {time() - start}")
-    
+
     print("Proving.....")
     start = time()
     proof = Proof.create(proving_key, [zkcircuit], pubins)
     print(f"Time for proving: {time() - start}")
-    
-    
+
     ##### Verifiying #####
-    
+
     zkcircuit_v = zkcircuit.verifier_build(zkbin)
-    
+
     print(f"Making verifying key.....")
     start = time()
     verifying_key = VerifyingKey.build(K, zkcircuit_v)
     print(f"Time for making verifying key: {time() - start}")
-    
+
     print("Verifying.....")
     start = time()
     proof.verify(verifying_key, pubins)
     print(f"Time for verifying {time() - start}")
-    
