@@ -1,33 +1,10 @@
 .POSIX:
 
-# Pip install command
-PIP = pip install
-
 # Maturin binary
 MATURIN = maturin
 
-# Python dependencies
-DEPS = $(MATURIN) patchelf
-
-# WARNING:
-# After all development here
-# we need to remove the venv folder,
-# as it breaks rest make operations
-# in the repo, so just run `make clean`.
-VENV = venv
-
-# Venv setup
-VENV_SETUP = python3 -m $(VENV) $(VENV)
-
 all:
-	$(MATURIN) develop --release
+	$(MATURIN) build --release
+	@echo "You can install this wheel with pip install"
 
-bootstrap: clean
-	$(VENV_SETUP)	
-	. $(VENV)/bin/activate
-	$(PIP) $(DEPS)
-
-clean:
-	rm -rf $(VENV)
-
-.PHONY: all bootstrap clean
+.PHONY: all
