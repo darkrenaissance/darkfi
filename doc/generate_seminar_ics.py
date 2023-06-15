@@ -40,9 +40,9 @@ EVENTS = [
     {
         "start": "20230622T140000Z",
         "end": "20230622T160000Z",
-        "track": "Dev",
+        "track": "Research",
         "topic": "Consensus",
-        "title": "Walkthrough the Consensus code",
+        "title": "DarkFi Consensus Algorithm and Control Theory",
         "#": 2,
         "recording": "",
     },
