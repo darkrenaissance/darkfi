@@ -23,7 +23,7 @@ def heap_add(heap, element):
     heap.append(element)
 
 
-def pubin_add(pubins, element):
+def pubins_add(pubins, element):
     print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> pubins")
     pprint(pubins)
     print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> to add")
@@ -87,7 +87,7 @@ def get_pubins(statements, witnesses, constant_count, literals):
         elif opcode == 'ConstrainInstance':
             i = args[0][1]
             element = heap[i]
-            pubin_add(pubins, element)
+            pubins_add(pubins, element)
         elif opcode == 'WitnessBase':
             type = args[0][0]
             assert type == 'Lit', f"type should LitType instead of {type}"
