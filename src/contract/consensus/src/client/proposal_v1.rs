@@ -128,6 +128,7 @@ pub struct ConsensusProposalCallBuilder {
 
 impl ConsensusProposalCallBuilder {
     pub fn build(&self) -> Result<ConsensusProposalCallDebris> {
+        let SECRET_PREFIX = pallas::Base::from(4);
         info!("Building Consensus::ProposalBurnV1 contract call");
         assert!(self.owncoin.note.value != 0);
 
@@ -147,8 +148,9 @@ impl ConsensusProposalCallBuilder {
         let output_reward_blind = pallas::Scalar::random(&mut OsRng);
         let output_value_blind = input.value_blind + output_reward_blind;
 
-        // We create a new random keypair for the output
-        let output_keypair = Keypair::random(&mut OsRng);
+        // derive output secret from old secret key.
+        let output_secret = poseidon_hash([SECRET_PREFIX, self.owncoin.secret.inner()]);
+        let output_keypair = Keypair::new(SecretKey::from(output_secret));
 
         // The output's serial is derived from the old serial
         let output_serial =
@@ -326,8 +328,6 @@ fn create_proposal_proof(
         Witness::Base(Value::known(input.note.coin_blind)),
         Witness::Uint32(Value::known(u64::from(input.leaf_position).try_into().unwrap())),
         Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
-        Witness::Base(Value::known(output_x)),
-        Witness::Base(Value::known(output_y)),
         Witness::Scalar(Value::known(output.value_blind)),
         Witness::Base(Value::known(output.coin_blind)),
         Witness::Base(Value::known(public_inputs.mu_y)),

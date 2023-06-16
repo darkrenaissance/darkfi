@@ -28,15 +28,17 @@ use darkfi_money_contract::{
     model::{ConsensusInput, ConsensusOutput, ConsensusUnstakeReqParamsV1},
 };
 use darkfi_sdk::{
-    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Keypair, MerkleTree, SecretKey},
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Keypair, MerkleTree, SecretKey, poseidon_hash},
     pasta::pallas,
 };
 use log::{debug, info};
 use rand::rngs::OsRng;
 
-use crate::client::common::{
-    create_consensus_burn_proof, create_consensus_mint_proof, ConsensusBurnInputInfo,
-    ConsensusMintOutputInfo,
+use crate::{
+    client::common::{create_consensus_burn_proof, create_consensus_mint_proof, ConsensusBurnInputInfo, ConsensusMintOutputInfo},
+    model::{
+        SERIAL_PREFIX,
+    },
 };
 
 pub struct ConsensusUnstakeRequestCallDebris {
@@ -85,11 +87,15 @@ impl ConsensusUnstakeRequestCallBuilder {
         };
 
         debug!("Building Consensus::UnstakeRequestV1 anonymous output");
-        let output_serial = pallas::Base::random(&mut OsRng);
+        //let output_serial = pallas::Base::random(&mut OsRng);
+        // derive output secret from old secret key.
+        let output_secret = poseidon_hash([self.owncoin.secret.inner()]);
+        let output_keypair = Keypair::new(SecretKey::from(output_secret));
+        let output_serial = poseidon_hash([SERIAL_PREFIX, self.owncoin.secret.inner(), self.owncoin.note.serial]);
         let output_coin_blind = pallas::Base::random(&mut OsRng);
 
         // We create a new random keypair for the output
-        let output_keypair = Keypair::random(&mut OsRng);
+        //let output_keypair = Keypair::random(&mut OsRng);
 
         let output = ConsensusMintOutputInfo {
             value: self.owncoin.note.value,
