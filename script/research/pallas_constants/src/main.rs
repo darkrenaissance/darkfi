@@ -47,6 +47,7 @@ fn main() -> Result<()> {
     source.push_str(&to_constant("REWARD_PALLAS", pallas::Base::from(100_000_000), true));
     source.push_str(&to_constant("SERIAL_PREFIX", pallas::Base::from(2), true));
     source.push_str(&to_constant("SEED_PREFIX", pallas::Base::from(3), true));
+    source.push_str(&to_constant("SECRET_KEY_PREFIX", pallas::Base::from(4), true));
     source.push_str(&to_constant("MU_Y_PREFIX", pallas::Base::from(22), true));
     source.push_str(&to_constant("MU_RHO_PREFIX", pallas::Base::from(5), true));
     source.push_str(&to_constant("HEADSTART", LeadCoin::headstart(), true));

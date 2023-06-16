@@ -109,10 +109,9 @@ circuit "ConsensusProposal_V1" {
 	# The serial of the new coin is derived from the old coin
 	output_serial = poseidon_hash(SERIAL_PREFIX, input_secret_key, input_serial);
 
-        # output secret key derived from input key
-        output_secret_key = poseidon_hash(SECRET_PREFIX, input_secret_key);
-
-        output_pub = ec_mul_base(output_secret_key, NULLIFIER_K);
+	# The secret key of the new coin is derived from old coin
+	output_secret_key = poseidon_hash(SECRET_PREFIX, input_secret_key);
+	output_pub = ec_mul_base(output_secret_key, NULLIFIER_K);
 	output_pub_x = ec_get_x(output_pub);
 	output_pub_y = ec_get_y(output_pub);
         
@@ -127,7 +126,7 @@ circuit "ConsensusProposal_V1" {
 		output_serial,
 		output_coin_blind,
 	);
-       	constrain_instance(output_coin);
+	constrain_instance(output_coin);
 
 	# ============================
 	# Constrain lottery parameters

@@ -42,8 +42,8 @@ use rand::rngs::OsRng;
 use crate::{
     client::common::{ConsensusBurnInputInfo, ConsensusMintOutputInfo},
     model::{
-        ConsensusProposalParamsV1, HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX, REWARD, SEED_PREFIX,
-        SERIAL_PREFIX,
+        ConsensusProposalParamsV1, HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX, REWARD,
+        SECRET_KEY_PREFIX, SEED_PREFIX, SERIAL_PREFIX,
     },
 };
 
@@ -128,7 +128,6 @@ pub struct ConsensusProposalCallBuilder {
 
 impl ConsensusProposalCallBuilder {
     pub fn build(&self) -> Result<ConsensusProposalCallDebris> {
-        let SECRET_PREFIX = pallas::Base::from(4);
         info!("Building Consensus::ProposalBurnV1 contract call");
         assert!(self.owncoin.note.value != 0);
 
@@ -148,9 +147,9 @@ impl ConsensusProposalCallBuilder {
         let output_reward_blind = pallas::Scalar::random(&mut OsRng);
         let output_value_blind = input.value_blind + output_reward_blind;
 
-        // derive output secret from old secret key.
-        let output_secret = poseidon_hash([SECRET_PREFIX, self.owncoin.secret.inner()]);
-        let output_keypair = Keypair::new(SecretKey::from(output_secret));
+        // The output's secret key is derived from the old secret key
+        let output_secret_key = poseidon_hash([SECRET_KEY_PREFIX, self.owncoin.secret.inner()]);
+        let output_keypair = Keypair::new(SecretKey::from(output_secret_key));
 
         // The output's serial is derived from the old serial
         let output_serial =

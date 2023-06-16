@@ -100,6 +100,8 @@ pub const REWARD_PALLAS: pallas::Base = pallas::Base::from_raw([100000000, 0, 0,
 pub const SERIAL_PREFIX: pallas::Base = pallas::Base::from_raw([2, 0, 0, 0]);
 /// Seed prefix, calculated by: pallas::Base::from(3)
 pub const SEED_PREFIX: pallas::Base = pallas::Base::from_raw([3, 0, 0, 0]);
+/// Secret key prefix, calculated by: pallas::Base::from(4)
+pub const SECRET_KEY_PREFIX: pallas::Base = pallas::Base::from_raw([4, 0, 0, 0]);
 /// Election seed y prefix, calculated by: pallas::Base::from(22)
 pub const MU_Y_PREFIX: pallas::Base = pallas::Base::from_raw([22, 0, 0, 0]);
 /// Election seed rho prefix, calculated by: pallas::Base::from(5)
