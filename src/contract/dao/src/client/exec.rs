@@ -42,9 +42,7 @@ pub struct DaoExecCall {
     pub yes_vote_blind: pallas::Scalar,
     pub all_vote_blind: pallas::Scalar,
     pub user_serial: pallas::Base,
-    pub user_coin_blind: pallas::Base,
     pub dao_serial: pallas::Base,
-    pub dao_coin_blind: pallas::Base,
     pub input_value: u64,
     pub input_value_blind: pallas::Scalar,
     pub hook_dao_exec: pallas::Base,
@@ -96,7 +94,7 @@ impl DaoExecCall {
             self.proposal.blind,
         ]);
 
-        let coin_0 = poseidon_hash::<8>([
+        let coin_0 = poseidon_hash::<7>([
             proposal_dest_x,
             proposal_dest_y,
             proposal_amount,
@@ -104,10 +102,9 @@ impl DaoExecCall {
             self.user_serial,
             user_spend_hook,
             user_data,
-            self.user_coin_blind,
         ]);
 
-        let coin_1 = poseidon_hash::<8>([
+        let coin_1 = poseidon_hash::<7>([
             dao_pub_x,
             dao_pub_y,
             change,
@@ -115,7 +112,6 @@ impl DaoExecCall {
             self.dao_serial,
             self.hook_dao_exec,
             dao_bulla,
-            self.dao_coin_blind,
         ]);
 
         let yes_vote_commit = pedersen_commitment_u64(self.yes_vote_value, self.yes_vote_blind);
@@ -150,9 +146,7 @@ impl DaoExecCall {
             Witness::Scalar(Value::known(self.all_vote_blind)),
             // outputs + inputs
             Witness::Base(Value::known(self.user_serial)),
-            Witness::Base(Value::known(self.user_coin_blind)),
             Witness::Base(Value::known(self.dao_serial)),
-            Witness::Base(Value::known(self.dao_coin_blind)),
             Witness::Base(Value::known(input_value)),
             Witness::Scalar(Value::known(self.input_value_blind)),
             // misc

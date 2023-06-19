@@ -11,7 +11,6 @@ witness "DaoProposeInput" {
 	Base user_data,
 	Base value,
 	Base token,
-	Base coin_blind,
 	Scalar value_blind,
 	Base token_blind,
 	Uint32 leaf_pos,
@@ -46,7 +45,6 @@ circuit "DaoProposeInput" {
 		serial,
 		spend_hook,
 		user_data,
-		coin_blind
 	);
 
 	# Merkle root

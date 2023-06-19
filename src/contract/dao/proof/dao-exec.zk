@@ -29,9 +29,7 @@ witness "DaoExec" {
 
 	# Outputs + Inputs
 	Base user_serial,
-	Base user_coin_blind,
 	Base dao_serial,
-	Base dao_coin_blind,
 	Base input_value,
 	Scalar input_value_blind,
 
@@ -74,7 +72,6 @@ circuit "DaoExec" {
 		user_serial,
 		user_spend_hook,
 		user_data,
-		user_coin_blind,
 	);
 	constrain_instance(coin_0);
 
@@ -88,7 +85,6 @@ circuit "DaoExec" {
 		dao_serial,
 		dao_spend_hook,
 		dao_bulla,
-		dao_coin_blind,
 	);
 	constrain_instance(coin_1);
 

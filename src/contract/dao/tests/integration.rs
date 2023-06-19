@@ -171,7 +171,6 @@ async fn integration_test() -> Result<()> {
             token_id: xdrk_token_id,
             public: dao_th.dao_kp.public,
             serial: pallas::Base::random(&mut OsRng),
-            coin_blind: pallas::Base::random(&mut OsRng),
             spend_hook,
             user_data,
         }],
@@ -224,7 +223,7 @@ async fn integration_test() -> Result<()> {
     // Check the actual coin received is valid before accepting it
 
     let coords = dao_th.dao_kp.public.inner().to_affine().coordinates().unwrap();
-    let coin = poseidon_hash::<8>([
+    let coin = poseidon_hash::<7>([
         *coords.x(),
         *coords.y(),
         pallas::Base::from(treasury_note.value),
@@ -232,7 +231,6 @@ async fn integration_test() -> Result<()> {
         treasury_note.serial,
         treasury_note.spend_hook,
         treasury_note.user_data,
-        treasury_note.coin_blind,
     ]);
     assert_eq!(coin, dao_recv_coin.coin.inner());
 
@@ -345,7 +343,7 @@ async fn integration_test() -> Result<()> {
             assert_eq!(note.user_data, pallas::Base::from(0));
 
             let (pub_x, pub_y) = key.public.xy();
-            let coin = poseidon_hash::<8>([
+            let coin = poseidon_hash::<7>([
                 pub_x,
                 pub_y,
                 pallas::Base::from(note.value),
@@ -353,7 +351,6 @@ async fn integration_test() -> Result<()> {
                 note.serial,
                 note.spend_hook,
                 note.user_data,
-                note.coin_blind,
             ]);
             assert_eq!(coin, recv_coin.coin.inner());
 
@@ -789,9 +786,7 @@ async fn integration_test() -> Result<()> {
     let user_data_blind = pallas::Base::random(&mut OsRng);
 
     let user_serial = pallas::Base::random(&mut OsRng);
-    let user_coin_blind = pallas::Base::random(&mut OsRng);
     let dao_serial = pallas::Base::random(&mut OsRng);
-    let dao_coin_blind = pallas::Base::random(&mut OsRng);
     let input_value = treasury_note.value;
     let input_value_blind = pallas::Scalar::random(&mut OsRng);
     let xfer_signature_secret = SecretKey::random(&mut OsRng);
@@ -831,7 +826,6 @@ async fn integration_test() -> Result<()> {
                 //public: user_keypair.public,
                 public: receiver_keypair.public,
                 serial: user_serial,
-                coin_blind: user_coin_blind,
                 spend_hook: pallas::Base::from(0),
                 user_data: pallas::Base::from(0),
             },
@@ -841,7 +835,6 @@ async fn integration_test() -> Result<()> {
                 token_id: xdrk_token_id,
                 public: dao_th.dao_kp.public,
                 serial: dao_serial,
-                coin_blind: dao_coin_blind,
                 spend_hook,
                 user_data,
             },
@@ -866,9 +859,7 @@ async fn integration_test() -> Result<()> {
         yes_vote_blind: total_yes_vote_blind,
         all_vote_blind: total_all_vote_blind,
         user_serial,
-        user_coin_blind,
         dao_serial,
-        dao_coin_blind,
         input_value,
         input_value_blind,
         hook_dao_exec: spend_hook,
