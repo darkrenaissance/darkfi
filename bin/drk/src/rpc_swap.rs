@@ -356,7 +356,6 @@ impl Drk {
                 pallas::Base::from(note.value),
                 note.token_id.inner(),
                 note.serial,
-                note.coin_blind,
             ]));
 
             if coin == params.outputs[output_idx].coin {

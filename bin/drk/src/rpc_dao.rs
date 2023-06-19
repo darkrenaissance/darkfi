@@ -397,9 +397,7 @@ impl Drk {
         let user_data_blind = pallas::Base::random(&mut OsRng);
 
         let user_serial = pallas::Base::random(&mut OsRng);
-        let user_coin_blind = pallas::Base::random(&mut OsRng);
         let dao_serial = pallas::Base::random(&mut OsRng);
-        let dao_coin_blind = pallas::Base::random(&mut OsRng);
 
         // TODO: FIXME: Clean this up and create an API
         let exec_signature_secret = SecretKey::random(&mut OsRng);
@@ -446,7 +444,6 @@ impl Drk {
                 token_id: proposal.token_id,
                 public: proposal.recipient,
                 serial: user_serial,
-                coin_blind: user_coin_blind,
                 spend_hook: pallas::Base::zero(),
                 user_data: pallas::Base::zero(),
             },
@@ -456,7 +453,6 @@ impl Drk {
                 token_id: proposal.token_id,
                 public: PublicKey::from_secret(dao.secret_key),
                 serial: dao_serial,
-                coin_blind: dao_coin_blind,
                 spend_hook: DAO_CONTRACT_ID.inner(),
                 user_data: dao_bulla.inner(),
             },
@@ -553,9 +549,7 @@ impl Drk {
             yes_vote_blind: total_yes_vote_blind,
             all_vote_blind: total_all_vote_blind,
             user_serial,
-            user_coin_blind,
             dao_serial,
-            dao_coin_blind,
             input_value: input_sum, // <-- FIXME
             input_value_blind,      // <-- FIXME
             hook_dao_exec: DAO_CONTRACT_ID.inner(),

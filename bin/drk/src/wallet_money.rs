@@ -23,15 +23,15 @@ use darkfi::{rpc::jsonrpc::JsonRequest, tx::Transaction, wallet::walletdb::Query
 use darkfi_money_contract::{
     client::{
         MoneyNote, OwnCoin, MONEY_ALIASES_COL_ALIAS, MONEY_ALIASES_COL_TOKEN_ID,
-        MONEY_ALIASES_TABLE, MONEY_COINS_COL_COIN, MONEY_COINS_COL_COIN_BLIND,
-        MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_LEAF_POSITION, MONEY_COINS_COL_MEMO,
-        MONEY_COINS_COL_NULLIFIER, MONEY_COINS_COL_SECRET, MONEY_COINS_COL_SERIAL,
-        MONEY_COINS_COL_SPEND_HOOK, MONEY_COINS_COL_TOKEN_BLIND, MONEY_COINS_COL_TOKEN_ID,
-        MONEY_COINS_COL_USER_DATA, MONEY_COINS_COL_VALUE, MONEY_COINS_COL_VALUE_BLIND,
-        MONEY_COINS_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT, MONEY_INFO_TABLE,
-        MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_KEY_ID, MONEY_KEYS_COL_PUBLIC,
-        MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE, MONEY_TOKENS_COL_IS_FROZEN,
-        MONEY_TOKENS_COL_TOKEN_ID, MONEY_TOKENS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
+        MONEY_ALIASES_TABLE, MONEY_COINS_COL_COIN, MONEY_COINS_COL_IS_SPENT,
+        MONEY_COINS_COL_LEAF_POSITION, MONEY_COINS_COL_MEMO, MONEY_COINS_COL_NULLIFIER,
+        MONEY_COINS_COL_SECRET, MONEY_COINS_COL_SERIAL, MONEY_COINS_COL_SPEND_HOOK,
+        MONEY_COINS_COL_TOKEN_BLIND, MONEY_COINS_COL_TOKEN_ID, MONEY_COINS_COL_USER_DATA,
+        MONEY_COINS_COL_VALUE, MONEY_COINS_COL_VALUE_BLIND, MONEY_COINS_TABLE,
+        MONEY_INFO_COL_LAST_SCANNED_SLOT, MONEY_INFO_TABLE, MONEY_KEYS_COL_IS_DEFAULT,
+        MONEY_KEYS_COL_KEY_ID, MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE,
+        MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_TOKEN_ID, MONEY_TOKENS_TABLE,
+        MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
     },
     model::{
         Coin, MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1, MoneyTransferParamsV1, Output,
@@ -264,8 +264,6 @@ impl Drk {
             QueryType::Blob as u8,
             MONEY_COINS_COL_USER_DATA,
             QueryType::Blob as u8,
-            MONEY_COINS_COL_COIN_BLIND,
-            QueryType::Blob as u8,
             MONEY_COINS_COL_VALUE_BLIND,
             QueryType::Blob as u8,
             MONEY_COINS_COL_TOKEN_BLIND,
@@ -315,25 +313,22 @@ impl Drk {
             let user_data_bytes: Vec<u8> = serde_json::from_value(row[6].clone())?;
             let user_data: pallas::Base = deserialize(&user_data_bytes)?;
 
-            let coin_blind_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
-            let coin_blind: pallas::Base = deserialize(&coin_blind_bytes)?;
-
-            let value_blind_bytes: Vec<u8> = serde_json::from_value(row[8].clone())?;
+            let value_blind_bytes: Vec<u8> = serde_json::from_value(row[7].clone())?;
             let value_blind: pallas::Scalar = deserialize(&value_blind_bytes)?;
 
-            let token_blind_bytes: Vec<u8> = serde_json::from_value(row[9].clone())?;
+            let token_blind_bytes: Vec<u8> = serde_json::from_value(row[8].clone())?;
             let token_blind: pallas::Scalar = deserialize(&token_blind_bytes)?;
 
-            let secret_bytes: Vec<u8> = serde_json::from_value(row[10].clone())?;
+            let secret_bytes: Vec<u8> = serde_json::from_value(row[9].clone())?;
             let secret: SecretKey = deserialize(&secret_bytes)?;
 
-            let nullifier_bytes: Vec<u8> = serde_json::from_value(row[11].clone())?;
+            let nullifier_bytes: Vec<u8> = serde_json::from_value(row[10].clone())?;
             let nullifier: Nullifier = deserialize(&nullifier_bytes)?;
 
-            let leaf_position_bytes: Vec<u8> = serde_json::from_value(row[12].clone())?;
+            let leaf_position_bytes: Vec<u8> = serde_json::from_value(row[11].clone())?;
             let leaf_position: bridgetree::Position = deserialize(&leaf_position_bytes)?;
 
-            let memo: Vec<u8> = serde_json::from_value(row[13].clone())?;
+            let memo: Vec<u8> = serde_json::from_value(row[12].clone())?;
 
             let note = MoneyNote {
                 serial,
@@ -341,7 +336,6 @@ impl Drk {
                 token_id,
                 spend_hook,
                 user_data,
-                coin_blind,
                 value_blind,
                 token_blind,
                 memo,
@@ -575,7 +569,7 @@ impl Drk {
         // This is the SQL query we'll be executing to insert new coins
         // into the wallet
         let query = format!(
-            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14);",
+            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13);",
             MONEY_COINS_TABLE,
             MONEY_COINS_COL_COIN,
             MONEY_COINS_COL_IS_SPENT,
@@ -584,7 +578,6 @@ impl Drk {
             MONEY_COINS_COL_TOKEN_ID,
             MONEY_COINS_COL_SPEND_HOOK,
             MONEY_COINS_COL_USER_DATA,
-            MONEY_COINS_COL_COIN_BLIND,
             MONEY_COINS_COL_VALUE_BLIND,
             MONEY_COINS_COL_TOKEN_BLIND,
             MONEY_COINS_COL_SECRET,
@@ -612,8 +605,6 @@ impl Drk {
                 serialize(&owncoin.note.spend_hook),
                 QueryType::Blob as u8,
                 serialize(&owncoin.note.user_data),
-                QueryType::Blob as u8,
-                serialize(&owncoin.note.coin_blind),
                 QueryType::Blob as u8,
                 serialize(&owncoin.note.value_blind),
                 QueryType::Blob as u8,
