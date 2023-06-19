@@ -588,7 +588,7 @@ impl Parser {
     fn parse_ast_circuit(&self, statements: Vec<Vec<Token>>) -> Vec<Statement> {
         // The statement layouts/syntax in the language are as follows:
         //
-        // C = poseidon_hash(pub_x, pub_y, value, token, serial, coin_blind);
+        // C = poseidon_hash(pub_x, pub_y, value, token, serial);
         // | |          |                   |       |
         // V V          V                   V       V
         // variable    opcode              arg     arg

@@ -154,7 +154,7 @@ impl SwapCallBuilder {
 
         proofs.push(proof);
 
-        // For the output, we create a new serial and coin blind
+        // For the output, we create a new serial
         let serial = pallas::Base::random(&mut OsRng);
 
         info!("Creating mint proof for output");
