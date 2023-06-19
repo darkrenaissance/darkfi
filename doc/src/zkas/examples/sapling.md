@@ -100,7 +100,6 @@ let token_id = pallas::Base::random(&mut OsRng);
 let value_blind = pallas::Scalar::random(&mut OsRng);
 let token_blind = pallas::Scalar::random(&mut OsRng);
 let serial = pallas::Base::random(&mut OsRng);
-let coin_blind = pallas::Base::random(&mut OsRng);
 let public_key = PublicKey::from_secret(SecretKey::random(&mut OsRng));
 let (pub_x, pub_y) = public_key.xy();
 
@@ -110,13 +109,12 @@ let prover_witnesses = vec![
     Witness::Base(Value::known(pallas::Base::from(value))),
     Witness::Base(Value::known(token_id)),
     Witness::Base(Value::known(serial)),
-    Witness::Base(Value::known(coin_blind)),
     Witness::Scalar(Value::known(value_blind)),
     Witness::Scalar(Value::known(token_blind)),
 ];
 
 // Create the public inputs
-let msgs = [pub_x, pub_y, pallas::Base::from(value), token_id, serial, coin_blind];
+let msgs = [pub_x, pub_y, pallas::Base::from(value), token_id, serial];
 let coin = poseidon_hash(msgs);
 
 let value_commit = pedersen_commitment_u64(value, value_blind);
@@ -237,14 +235,13 @@ let token_id = pallas::Base::random(&mut OsRng);
 let value_blind = pallas::Scalar::random(&mut OsRng);
 let token_blind = pallas::Scalar::random(&mut OsRng);
 let serial = pallas::Base::random(&mut OsRng);
-let coin_blind = pallas::Base::random(&mut OsRng);
 let secret = SecretKey::random(&mut OsRng);
 let sig_secret = SecretKey::random(&mut OsRng);
 
 // Build the coin
 let coin2 = {
     let (pub_x, pub_y) = PublicKey::from_secret(secret).xy();
-    let messages = [pub_x, pub_y, pallas::Base::from(value), token_id, serial, coin_blind];
+    let messages = [pub_x, pub_y, pallas::Base::from(value), token_id, serial];
     poseidon_hash(messages)
 };
 
@@ -272,7 +269,6 @@ let prover_witnesses = vec![
     Witness::Base(Value::known(serial)),
     Witness::Base(Value::known(pallas::Base::from(value))),
     Witness::Base(Value::known(token_id)),
-    Witness::Base(Value::known(coin_blind)),
     Witness::Scalar(Value::known(value_blind)),
     Witness::Scalar(Value::known(token_blind)),
     Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),

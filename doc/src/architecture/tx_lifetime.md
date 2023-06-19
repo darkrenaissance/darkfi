@@ -180,8 +180,6 @@ pub struct Note {
     pub value: u64,
     /// Token ID of the coin
     pub token_id: TokenId,
-    /// Blinding factor for the coin bulla
-    pub coin_blind: pallas::Base,
     /// Blinding factor for the value Pedersen commitment
     pub value_blind: ValueBlind,
     /// Blinding factor for the token ID Pedersen commitment
