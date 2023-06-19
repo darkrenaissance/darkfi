@@ -9,7 +9,6 @@ witness "Burn" {
 	Base serial,
 	Base value,
 	Base token,
-	Base coin_blind,
 	Scalar value_blind,
 	Scalar token_blind,
 	Uint32 leaf_pos,
@@ -48,7 +47,7 @@ circuit "Burn" {
 	pub = ec_mul_base(secret, NULLIFIER_K);
 	pub_x = ec_get_x(pub);
 	pub_y = ec_get_y(pub);
-	C = poseidon_hash(pub_x, pub_y, value, token, serial, coin_blind);
+	C = poseidon_hash(pub_x, pub_y, value, token, serial);
 
 	# Merkle root
 	root = merkle_root(leaf_pos, path, C);

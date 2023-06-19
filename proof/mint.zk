@@ -10,14 +10,13 @@ witness "Mint" {
 	Base value,
 	Base token,
 	Base serial,
-	Base coin_blind,
 	Scalar value_blind,
 	Scalar token_blind,
 }
 
 circuit "Mint" {
 	# Poseidon hash of the coin
-	C = poseidon_hash(pub_x, pub_y, value, token, serial, coin_blind);
+	C = poseidon_hash(pub_x, pub_y, value, token, serial);
 	constrain_instance(C);
 
 	# Pedersen commitment for coin's value
