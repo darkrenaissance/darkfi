@@ -120,7 +120,6 @@ impl GenesisMintCallBuilder {
         };
 
         let serial = pallas::Base::random(&mut OsRng);
-        let coin_blind = pallas::Base::random(&mut OsRng);
 
         info!("Creating token mint proof for output");
         let (proof, public_inputs) = create_transfer_mint_proof(
@@ -132,7 +131,6 @@ impl GenesisMintCallBuilder {
             serial,
             self.spend_hook,
             self.user_data,
-            coin_blind,
         )?;
 
         let note = MoneyNote {
@@ -141,7 +139,6 @@ impl GenesisMintCallBuilder {
             token_id: output.token_id,
             spend_hook: self.spend_hook,
             user_data: self.user_data,
-            coin_blind,
             value_blind,
             token_blind,
             memo: vec![],

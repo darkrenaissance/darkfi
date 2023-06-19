@@ -101,7 +101,6 @@ impl DaoVoteCall {
                 Witness::Base(halo2::Value::known(pallas::Base::from(0))),
                 Witness::Base(halo2::Value::known(pallas::Base::from(note.value))),
                 Witness::Base(halo2::Value::known(note.token_id.inner())),
-                Witness::Base(halo2::Value::known(note.coin_blind)),
                 Witness::Scalar(halo2::Value::known(all_vote_blind)),
                 Witness::Base(halo2::Value::known(gov_token_blind)),
                 Witness::Uint32(halo2::Value::known(leaf_pos.try_into().unwrap())),
@@ -114,7 +113,7 @@ impl DaoVoteCall {
             let public_key = PublicKey::from_secret(input.secret);
             let (pub_x, pub_y) = public_key.xy();
 
-            let coin = poseidon_hash::<8>([
+            let coin = poseidon_hash::<7>([
                 pub_x,
                 pub_y,
                 pallas::Base::from(note.value),
@@ -122,7 +121,6 @@ impl DaoVoteCall {
                 note.serial,
                 pallas::Base::from(0),
                 pallas::Base::from(0),
-                note.coin_blind,
             ]);
 
             let merkle_root = {

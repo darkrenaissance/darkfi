@@ -21,8 +21,6 @@ witness "Burn_V1" {
 	Base user_data,
 	# Blinding factor for the encrypted user_data
 	Base user_data_blind,
-	# Random blinding factor for coin
-	Base coin_blind,
 	# Secret key used to derive nullifier and coin's public key
 	Base secret,
 	# Leaf position of the coin in the Merkle tree of coins
@@ -68,7 +66,6 @@ circuit "Burn_V1" {
 		serial,
 		spend_hook,
 		user_data,
-		coin_blind,
 	);
 
 	# Merkle root

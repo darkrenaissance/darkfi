@@ -176,7 +176,6 @@ pub fn create_stake_burn_proof(
         input.note.serial,
         input.note.spend_hook,
         input.note.user_data,
-        input.note.coin_blind,
     ]);
 
     let merkle_root = {
@@ -216,7 +215,6 @@ pub fn create_stake_burn_proof(
         Witness::Base(Value::known(input.note.spend_hook)),
         Witness::Base(Value::known(input.note.user_data)),
         Witness::Base(Value::known(user_data_blind)),
-        Witness::Base(Value::known(input.note.coin_blind)),
         Witness::Base(Value::known(input.secret.inner())),
         Witness::Uint32(Value::known(u64::from(input.leaf_position).try_into().unwrap())),
         Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),

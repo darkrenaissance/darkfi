@@ -79,7 +79,6 @@ pub const MONEY_COINS_COL_VALUE: &str = "value";
 pub const MONEY_COINS_COL_TOKEN_ID: &str = "token_id";
 pub const MONEY_COINS_COL_SPEND_HOOK: &str = "spend_hook";
 pub const MONEY_COINS_COL_USER_DATA: &str = "user_data";
-pub const MONEY_COINS_COL_COIN_BLIND: &str = "coin_blind";
 pub const MONEY_COINS_COL_VALUE_BLIND: &str = "value_blind";
 pub const MONEY_COINS_COL_TOKEN_BLIND: &str = "token_blind";
 pub const MONEY_COINS_COL_SECRET: &str = "secret";
@@ -110,8 +109,6 @@ pub struct MoneyNote {
     pub spend_hook: pallas::Base,
     /// User data used by protocol when spend hook is enabled
     pub user_data: pallas::Base,
-    /// Blinding factor for the coin bulla
-    pub coin_blind: pallas::Base,
     /// Blinding factor for the value pedersen commitment
     pub value_blind: pallas::Scalar,
     /// Blinding factor for the token ID pedersen commitment
@@ -160,7 +157,6 @@ impl From<ConsensusNote> for MoneyNote {
             token_id: *DARK_TOKEN_ID,
             spend_hook: pallas::Base::ZERO,
             user_data: pallas::Base::ZERO,
-            coin_blind: pallas::Base::ZERO,
             value_blind: consensus_note.value_blind,
             token_blind: pallas::Scalar::ZERO,
             memo: vec![],

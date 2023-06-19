@@ -109,7 +109,6 @@ impl MoneyUnstakeCallBuilder {
         let spend_hook = pallas::Base::ZERO;
         let user_data_enc = pallas::Base::random(&mut OsRng);
         let token_blind = pallas::Scalar::ZERO;
-        let coin_blind = pallas::Base::random(&mut OsRng);
 
         info!("Building Money::UnstakeV1 Mint ZK proof");
         let (proof, public_inputs) = create_unstake_mint_proof(
@@ -121,7 +120,6 @@ impl MoneyUnstakeCallBuilder {
             serial,
             spend_hook,
             user_data_enc,
-            coin_blind,
         )?;
 
         // Encrypted note
@@ -131,7 +129,6 @@ impl MoneyUnstakeCallBuilder {
             token_id: output.token_id,
             spend_hook,
             user_data: user_data_enc,
-            coin_blind,
             value_blind: self.value_blind,
             token_blind,
             memo: vec![],
@@ -174,7 +171,6 @@ pub fn create_unstake_mint_proof(
     serial: pallas::Base,
     spend_hook: pallas::Base,
     user_data: pallas::Base,
-    coin_blind: pallas::Base,
 ) -> Result<(Proof, MoneyMintRevealed)> {
     let value_commit = pedersen_commitment_u64(output.value, value_blind);
     let token_commit = pedersen_commitment_base(output.token_id.inner(), token_blind);
@@ -188,7 +184,6 @@ pub fn create_unstake_mint_proof(
         serial,
         spend_hook,
         user_data,
-        coin_blind,
     ]));
 
     let public_inputs = MoneyMintRevealed { coin, value_commit, token_commit };
@@ -199,7 +194,6 @@ pub fn create_unstake_mint_proof(
         Witness::Base(Value::known(pallas::Base::from(output.value))),
         Witness::Base(Value::known(output.token_id.inner())),
         Witness::Base(Value::known(serial)),
-        Witness::Base(Value::known(coin_blind)),
         Witness::Base(Value::known(spend_hook)),
         Witness::Base(Value::known(user_data)),
         Witness::Scalar(Value::known(value_blind)),

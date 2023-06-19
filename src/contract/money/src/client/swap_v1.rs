@@ -156,7 +156,6 @@ impl SwapCallBuilder {
 
         // For the output, we create a new serial and coin blind
         let serial = pallas::Base::random(&mut OsRng);
-        let coin_blind = pallas::Base::random(&mut OsRng);
 
         info!("Creating mint proof for output");
         let (proof, public_inputs) = create_transfer_mint_proof(
@@ -168,7 +167,6 @@ impl SwapCallBuilder {
             serial,
             self.spend_hook_recv,
             self.user_data_recv,
-            coin_blind,
         )?;
 
         proofs.push(proof);
@@ -180,7 +178,6 @@ impl SwapCallBuilder {
             token_id: output.token_id,
             spend_hook: self.spend_hook_recv,
             user_data: self.user_data_recv,
-            coin_blind,
             value_blind: self.value_blinds[1],
             token_blind: self.token_blinds[1],
             // Here we store our secret key we use for signing

@@ -308,7 +308,6 @@ impl TransferCallBuilder {
             output_blinds.push(value_blind);
 
             let serial = pallas::Base::random(&mut OsRng);
-            let coin_blind = pallas::Base::random(&mut OsRng);
 
             let (scoped_sh, scoped_ud) = {
                 if i >= change_outputs.len() {
@@ -328,7 +327,6 @@ impl TransferCallBuilder {
                 serial,
                 scoped_sh,
                 scoped_ud,
-                coin_blind,
             )?;
 
             proofs.push(proof);
@@ -340,7 +338,6 @@ impl TransferCallBuilder {
                 token_id: output.token_id,
                 spend_hook: scoped_sh,
                 user_data: scoped_ud,
-                coin_blind,
                 value_blind,
                 token_blind,
                 memo: vec![],
@@ -386,7 +383,6 @@ pub fn create_transfer_burn_proof(
         input.note.serial,
         input.note.spend_hook,
         input.note.user_data,
-        input.note.coin_blind,
     ]);
 
     let merkle_root = {
@@ -426,7 +422,6 @@ pub fn create_transfer_burn_proof(
         Witness::Base(Value::known(input.note.spend_hook)),
         Witness::Base(Value::known(input.note.user_data)),
         Witness::Base(Value::known(user_data_blind)),
-        Witness::Base(Value::known(input.note.coin_blind)),
         Witness::Base(Value::known(input.secret.inner())),
         Witness::Uint32(Value::known(u64::from(input.leaf_position).try_into().unwrap())),
         Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
@@ -449,7 +444,6 @@ pub fn create_transfer_mint_proof(
     serial: pallas::Base,
     spend_hook: pallas::Base,
     user_data: pallas::Base,
-    coin_blind: pallas::Base,
 ) -> Result<(Proof, TransferMintRevealed)> {
     let value_commit = pedersen_commitment_u64(output.value, value_blind);
     let token_commit = pedersen_commitment_base(output.token_id.inner(), token_blind);
@@ -463,7 +457,6 @@ pub fn create_transfer_mint_proof(
         serial,
         spend_hook,
         user_data,
-        coin_blind,
     ]));
 
     let public_inputs = TransferMintRevealed { coin, value_commit, token_commit };
@@ -474,7 +467,6 @@ pub fn create_transfer_mint_proof(
         Witness::Base(Value::known(pallas::Base::from(output.value))),
         Witness::Base(Value::known(output.token_id.inner())),
         Witness::Base(Value::known(serial)),
-        Witness::Base(Value::known(coin_blind)),
         Witness::Base(Value::known(spend_hook)),
         Witness::Base(Value::known(user_data)),
         Witness::Scalar(Value::known(value_blind)),

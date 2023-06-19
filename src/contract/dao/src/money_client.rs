@@ -73,7 +73,6 @@ pub struct TransferOutput {
     pub token_id: TokenId,
     pub public: PublicKey,
     pub serial: pallas::Base,
-    pub coin_blind: pallas::Base,
     pub spend_hook: pallas::Base,
     pub user_data: pallas::Base,
 }
@@ -180,7 +179,6 @@ impl TransferCall {
             output_blinds.push(value_blind);
 
             let serial = output.serial;
-            let coin_blind = output.coin_blind;
 
             // FIXME: This is a hack between the two APIs
             let _output = TransactionBuilderOutputInfo {
@@ -198,7 +196,6 @@ impl TransferCall {
                 serial,
                 output.spend_hook,
                 output.user_data,
-                coin_blind,
             )?;
 
             proofs.push(proof);
@@ -209,7 +206,6 @@ impl TransferCall {
                 token_id: output.token_id,
                 spend_hook: output.spend_hook,
                 user_data: output.user_data,
-                coin_blind,
                 value_blind,
                 token_blind,
                 memo: Vec::new(),
