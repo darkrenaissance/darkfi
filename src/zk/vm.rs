@@ -41,6 +41,7 @@ use halo2_gadgets::{
     utilities::lookup_range_check::LookupRangeCheckConfig,
 };
 use halo2_proofs::{
+    arithmetic::Field,
     circuit::{floor_planner, AssignedCell, Layouter, Value},
     pasta::{group::Curve, pallas, Fp},
     plonk,
@@ -358,7 +359,11 @@ impl Circuit<pallas::Base> for ZkCircuit {
         let one = assign_free_advice(
             layouter.namespace(|| "Load constant one"),
             config.advices[0],
-            Value::known(pallas::Base::one()),
+            Value::known(pallas::Base::ONE),
+        )?;
+        layouter.assign_region(
+            || "constrain constant",
+            |mut region| region.constrain_constant(one.cell(), pallas::Base::ONE),
         )?;
 
         // ANCHOR: constant_init
@@ -741,6 +746,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         layouter.namespace(|| "Witness literal"),
                         config.advices[0],
                         Value::known(pallas::Base::from(lit)),
+                    )?;
+                    layouter.assign_region(
+                        || "constrain constant",
+                        |mut region| {
+                            region.constrain_constant(witness.cell(), pallas::Base::from(lit))
+                        },
                     )?;
 
                     trace!(target: "zk::vm", "Pushing assignment to heap address {}", heap.len());
