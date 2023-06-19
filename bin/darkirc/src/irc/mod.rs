@@ -23,7 +23,7 @@ use darkfi::{util::path::get_config_path, Result};
 use crate::{
     settings::{
         parse_configured_channels, parse_configured_contacts, Args, ChannelInfo, ContactInfo,
-        CONFIG_FILE,
+        CONFIG_FILE, MAXIMUM_LENGTH_OF_NICK_CHAN_CNT,
     },
     PrivMsgEvent,
 };
@@ -58,7 +58,8 @@ impl IrcConfig {
     pub fn new(settings: &Args) -> Result<Self> {
         let password = settings.password.as_ref().unwrap_or(&String::new()).clone();
 
-        let auto_channels = settings.autojoin.clone();
+        let mut auto_channels = settings.autojoin.clone();
+        auto_channels.retain(|chan| chan.len() <= MAXIMUM_LENGTH_OF_NICK_CHAN_CNT);
 
         // Pick up channel settings from the TOML configuration
         let cfg_path = get_config_path(settings.config.clone(), CONFIG_FILE)?;

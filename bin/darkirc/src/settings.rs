@@ -33,7 +33,7 @@ pub const CONFIG_FILE_CONTENTS: &str = include_str!("../darkirc_config.toml");
 
 // Msg config
 pub const MAXIMUM_LENGTH_OF_MESSAGE: usize = 1024;
-pub const MAXIMUM_LENGTH_OF_NICKNAME: usize = 32;
+pub const MAXIMUM_LENGTH_OF_NICK_CHAN_CNT: usize = 32;
 
 // IRC Client
 pub enum RPL {
@@ -166,6 +166,10 @@ pub fn parse_configured_channels(data: &str) -> Result<HashMap<String, ChannelIn
     }
 
     for chan in map["channel"].as_table().unwrap() {
+        if chan.0.len() > MAXIMUM_LENGTH_OF_NICK_CHAN_CNT {
+            warn!("Channel name is too long, skipping...");
+            continue
+        }
         info!("Found configuration for channel {}", chan.0);
         let mut channel_info = ChannelInfo::new()?;
 
@@ -247,6 +251,10 @@ pub fn parse_configured_contacts(data: &str) -> Result<HashMap<String, ContactIn
     let secret = crypto_box::SecretKey::from(bytes);
 
     for cnt in contacts {
+        if cnt.0.len() > MAXIMUM_LENGTH_OF_NICK_CHAN_CNT {
+            warn!("Contact name is too long, skipping...");
+            continue
+        }
         info!("Found configuration for contact {}", cnt.0);
         let mut contact_info = ContactInfo::new()?;
 

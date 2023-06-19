@@ -286,7 +286,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     }
 
     async fn on_receive_nick(&mut self, nickname: &str) -> Result<()> {
-        if nickname.len() > settings::MAXIMUM_LENGTH_OF_NICKNAME {
+        if nickname.len() >= settings::MAXIMUM_LENGTH_OF_NICK_CHAN_CNT {
             return Ok(())
         }
 

@@ -26,7 +26,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     privmsg::PrivMsgEvent,
-    settings::{ChannelInfo, ContactInfo},
+    settings::{ChannelInfo, ContactInfo, MAXIMUM_LENGTH_OF_NICK_CHAN_CNT},
 };
 
 #[derive(serde::Serialize)]
@@ -69,9 +69,9 @@ fn try_decrypt(salt_box: &SalsaBox, ciphertext: &str) -> Option<String> {
 }
 
 /// The format we're using is nonce+ciphertext, where nonce is 24 bytes.
-pub fn encrypt(salt_box: &SalsaBox, plaintext: &str) -> String {
+pub fn encrypt(salt_box: &SalsaBox, plaintext: &[u8]) -> String {
     let nonce = SalsaBox::generate_nonce(&mut OsRng);
-    let mut ciphertext = salt_box.encrypt(&nonce, plaintext.as_bytes()).unwrap();
+    let mut ciphertext = salt_box.encrypt(&nonce, plaintext).unwrap();
 
     let mut concat = vec![];
     concat.append(&mut nonce.as_slice().to_vec());
@@ -100,7 +100,8 @@ pub fn decrypt_target(
                 continue
             }
 
-            let target = decrypted_target.unwrap();
+            let target =
+                String::from_utf8_lossy(&unpad(decrypted_target.unwrap().into())).to_string();
             if *chan_name == target {
                 privmsg.target = target;
                 return
@@ -118,7 +119,8 @@ pub fn decrypt_target(
                 continue
             }
 
-            let target = decrypted_target.unwrap();
+            let target =
+                String::from_utf8_lossy(&unpad(decrypted_target.unwrap().into())).to_string();
             privmsg.target = target;
             *contact = cnt_name.into();
             return
@@ -135,13 +137,29 @@ pub fn decrypt_privmsg(salt_box: &SalsaBox, privmsg: &mut PrivMsgEvent) {
         return
     }
 
-    privmsg.nick = decrypted_nick.unwrap();
+    privmsg.nick = String::from_utf8_lossy(&unpad(decrypted_nick.unwrap().into())).to_string();
     privmsg.msg = decrypted_msg.unwrap();
 }
 
 /// Encrypt PrivMsg
 pub fn encrypt_privmsg(salt_box: &SalsaBox, privmsg: &mut PrivMsgEvent) {
-    privmsg.nick = encrypt(salt_box, &privmsg.nick);
-    privmsg.target = encrypt(salt_box, &privmsg.target);
-    privmsg.msg = encrypt(salt_box, &privmsg.msg);
+    privmsg.nick = encrypt(salt_box, &pad(privmsg.nick.clone().into()));
+    privmsg.target = encrypt(salt_box, &pad(privmsg.target.clone().into()));
+    privmsg.msg = encrypt(salt_box, privmsg.msg.as_bytes());
+}
+
+fn pad(mut data: Vec<u8>) -> Vec<u8> {
+    let pad_len = (MAXIMUM_LENGTH_OF_NICK_CHAN_CNT - data.len()) as u8;
+    for _ in 0..pad_len {
+        data.push(pad_len);
+    }
+    data
+}
+
+fn unpad(mut data: Vec<u8>) -> Vec<u8> {
+    let pad_len = data[data.len() - 1];
+    for _ in 0..pad_len {
+        data.pop();
+    }
+    data
 }
