@@ -11,8 +11,6 @@ witness "ConsensusBurn_V1" {
 	Base epoch,
 	# Unique serial number corresponding to this coin
 	Base serial,
-	# Random blinding factor for coin
-	Base coin_blind,
 	# Random blinding factor for value commitment
 	Scalar value_blind,
 	# Secret key used to derive nullifier and coins' public key
@@ -46,7 +44,6 @@ circuit "ConsensusBurn_V1" {
 		value,
 		epoch,
 		serial,
-		coin_blind,
 	);
 
 	# Merkle root

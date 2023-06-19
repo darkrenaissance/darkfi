@@ -17,16 +17,12 @@ witness "ConsensusProposal_V1" {
 	Base reward,
 	# Random blinding factor for the value commitment
 	Scalar input_value_blind,
-	# Random blinding factor for coin
-	Base input_coin_blind,
 	# Leaf position of the coin in the Merkle tree of coins
 	Uint32 leaf_pos,
 	# Merkle path to the coin
 	MerklePath path,
 	# Random blinding factor for the value commitment of the new coin
 	Scalar output_value_blind,
-	# Random blinding factor for new coin
-	Base output_coin_blind,
 	# Election seed y
 	Base mu_y,
 	# Election seed rho
@@ -73,7 +69,6 @@ circuit "ConsensusProposal_V1" {
 		input_value,
 		epoch,
 		input_serial,
-		input_coin_blind,
 	);
 
 	# Merkle inclusion proof
@@ -124,7 +119,6 @@ circuit "ConsensusProposal_V1" {
 		output_value,
 		ZERO,
 		output_serial,
-		output_coin_blind,
 	);
 	constrain_instance(output_coin);
 

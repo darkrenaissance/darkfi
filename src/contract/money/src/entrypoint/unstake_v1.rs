@@ -88,7 +88,7 @@ pub(crate) fn money_unstake_process_instruction_v1(
     // Access the necessary databases where there is information to
     // validate this state transition.
     let money_coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let consensus_nullifiers_db =
+    let _consensus_nullifiers_db =
         db_lookup(*CONSENSUS_CONTRACT_ID, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
     let consensus_unstaked_coin_roots_db =
         db_lookup(*CONSENSUS_CONTRACT_ID, CONSENSUS_CONTRACT_UNSTAKED_COIN_ROOTS_TREE)?;

@@ -66,7 +66,6 @@ impl ConsensusStakeCallBuilder {
 
         debug!("Building anonymous output");
         let serial = pallas::Base::random(&mut OsRng);
-        let coin_blind = pallas::Base::random(&mut OsRng);
         let public_key = PublicKey::from_secret(self.coin.secret);
 
         let output = ConsensusMintOutputInfo {
@@ -75,7 +74,6 @@ impl ConsensusStakeCallBuilder {
             public_key,
             value_blind: self.value_blind,
             serial,
-            coin_blind,
         };
         debug!("Finished building output");
 
@@ -88,7 +86,6 @@ impl ConsensusStakeCallBuilder {
             serial,
             value: output.value,
             epoch: self.epoch,
-            coin_blind,
             value_blind: self.value_blind,
             reward: 0,
             reward_blind: self.value_blind,

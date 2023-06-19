@@ -144,8 +144,6 @@ pub struct ConsensusNote {
     pub value: u64,
     /// Epoch the coin was minted
     pub epoch: u64,
-    /// Blinding factor for the coin bulla
-    pub coin_blind: pallas::Base,
     /// Blinding factor for the value pedersen commitment
     pub value_blind: pallas::Scalar,
     /// Value of the reward
@@ -162,7 +160,7 @@ impl From<ConsensusNote> for MoneyNote {
             token_id: *DARK_TOKEN_ID,
             spend_hook: pallas::Base::ZERO,
             user_data: pallas::Base::ZERO,
-            coin_blind: consensus_note.coin_blind,
+            coin_blind: pallas::Base::ZERO,
             value_blind: consensus_note.value_blind,
             token_blind: pallas::Scalar::ZERO,
             memo: vec![],

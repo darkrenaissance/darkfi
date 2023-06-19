@@ -14,8 +14,6 @@ witness "ConsensusMint_V1" {
 	Base epoch,
 	# Unique serial number corresponding to this coin
 	Base serial,
-	# Random blinding factor for coin
-	Base coin_blind,
 	# Random blinding factor for the value commitment
 	Scalar value_blind,
 }
@@ -31,7 +29,6 @@ circuit "ConsensusMint_V1" {
 		value,
 		epoch,
 		serial,
-		coin_blind,
 	);
 	constrain_instance(C);
 

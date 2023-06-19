@@ -74,7 +74,6 @@ impl ConsensusGenesisStakeCallBuilder {
         // We just create the pedersen commitment blinds here. We simply
         // enforce that the clear input and the anon output have the same
         // commitments.
-        let coin_blind = pallas::Base::random(&mut OsRng);
         let value_blind = pallas::Scalar::random(&mut OsRng);
         let token_blind = pallas::Scalar::random(&mut OsRng);
         let reward_blind = pallas::Scalar::random(&mut OsRng);
@@ -98,7 +97,6 @@ impl ConsensusGenesisStakeCallBuilder {
             public_key: self.recipient,
             value_blind,
             serial,
-            coin_blind,
         };
 
         info!("Creating genesis stake mint proof for output");
@@ -110,7 +108,6 @@ impl ConsensusGenesisStakeCallBuilder {
             serial,
             value: output.value,
             epoch,
-            coin_blind,
             value_blind,
             reward: 0,
             reward_blind,

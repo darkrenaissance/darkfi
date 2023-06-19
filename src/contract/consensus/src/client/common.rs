@@ -41,7 +41,6 @@ pub struct ConsensusMintOutputInfo {
     pub public_key: PublicKey,
     pub value_blind: pallas::Scalar,
     pub serial: pallas::Base,
-    pub coin_blind: pallas::Base,
 }
 
 pub struct ConsensusBurnInputInfo {
@@ -79,14 +78,7 @@ pub fn create_consensus_mint_proof(
     let value_commit = pedersen_commitment_u64(output.value, output.value_blind);
     let (pub_x, pub_y) = output.public_key.xy();
 
-    let coin = Coin::from(poseidon_hash([
-        pub_x,
-        pub_y,
-        value_pallas,
-        epoch_pallas,
-        output.serial,
-        output.coin_blind,
-    ]));
+    let coin = Coin::from(poseidon_hash([pub_x, pub_y, value_pallas, epoch_pallas, output.serial]));
 
     let public_inputs = ConsensusMintRevealed { epoch: output.epoch, coin, value_commit };
 
@@ -96,7 +88,6 @@ pub fn create_consensus_mint_proof(
         Witness::Base(Value::known(value_pallas)),
         Witness::Base(Value::known(epoch_pallas)),
         Witness::Base(Value::known(output.serial)),
-        Witness::Base(Value::known(output.coin_blind)),
         Witness::Scalar(Value::known(output.value_blind)),
     ];
 
@@ -147,14 +138,7 @@ pub fn create_consensus_burn_proof(
     let public_key = PublicKey::from_secret(input.secret);
     let (pub_x, pub_y) = public_key.xy();
 
-    let coin = poseidon_hash([
-        pub_x,
-        pub_y,
-        value_pallas,
-        epoch_pallas,
-        input.note.serial,
-        input.note.coin_blind,
-    ]);
+    let coin = poseidon_hash([pub_x, pub_y, value_pallas, epoch_pallas, input.note.serial]);
 
     let merkle_root = {
         let position: u64 = input.leaf_position.into();
@@ -182,7 +166,6 @@ pub fn create_consensus_burn_proof(
         Witness::Base(Value::known(value_pallas)),
         Witness::Base(Value::known(epoch_pallas)),
         Witness::Base(Value::known(input.note.serial)),
-        Witness::Base(Value::known(input.note.coin_blind)),
         Witness::Scalar(Value::known(input.value_blind)),
         Witness::Base(Value::known(input.secret.inner())),
         Witness::Uint32(Value::known(u64::from(input.leaf_position).try_into().unwrap())),

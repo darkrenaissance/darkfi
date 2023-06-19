@@ -95,7 +95,6 @@ impl ConsensusUnstakeRequestCallBuilder {
         let output_keypair = Keypair::new(SecretKey::from(output_secret_key));
         let output_serial =
             poseidon_hash([SERIAL_PREFIX, self.owncoin.secret.inner(), self.owncoin.note.serial]);
-        let output_coin_blind = pallas::Base::random(&mut OsRng);
 
         // We create a new random keypair for the output
         //let output_keypair = Keypair::random(&mut OsRng);
@@ -106,7 +105,6 @@ impl ConsensusUnstakeRequestCallBuilder {
             public_key: output_keypair.public,
             value_blind: input.value_blind,
             serial: output_serial,
-            coin_blind: output_coin_blind,
         };
 
         info!("Building Consensus::UnstakeRequestV1 Burn ZK proof");
@@ -130,7 +128,6 @@ impl ConsensusUnstakeRequestCallBuilder {
             serial: output_serial,
             value: output.value,
             epoch: output.epoch,
-            coin_blind: output_coin_blind,
             value_blind: input.value_blind,
             reward: 0,
             reward_blind: pallas::Scalar::ZERO,

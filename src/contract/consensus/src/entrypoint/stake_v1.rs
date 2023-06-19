@@ -116,7 +116,7 @@ pub(crate) fn consensus_stake_process_instruction_v1(
     // validate this state transition.
     let consensus_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_STAKED_COINS_TREE)?;
     let consensus_unstaked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE)?;
-    let money_nullifiers_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+    let _money_nullifiers_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let money_coin_roots_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
     // ===================================

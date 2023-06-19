@@ -143,7 +143,6 @@ impl ConsensusProposalCallBuilder {
         };
 
         debug!("Building Consensus::ProposalV1 anonymous output");
-        let output_coin_blind = pallas::Base::random(&mut OsRng);
         let output_reward_blind = pallas::Scalar::random(&mut OsRng);
         let output_value_blind = input.value_blind + output_reward_blind;
 
@@ -161,7 +160,6 @@ impl ConsensusProposalCallBuilder {
             public_key: output_keypair.public,
             value_blind: output_value_blind,
             serial: output_serial,
-            coin_blind: output_coin_blind,
         };
 
         info!("Building Consensus::ProposalV1 VRF proof");
@@ -194,7 +192,6 @@ impl ConsensusProposalCallBuilder {
             serial: output.serial,
             value: output.value,
             epoch: output.epoch,
-            coin_blind: output.coin_blind,
             value_blind: output.value_blind,
             reward: REWARD,
             reward_blind: output_reward_blind,
@@ -269,7 +266,6 @@ fn create_proposal_proof(
         pallas::Base::from(input.note.value),
         pallas::Base::from(input.note.epoch),
         input.note.serial,
-        input.note.coin_blind,
     ]);
 
     let merkle_root = {
@@ -294,7 +290,6 @@ fn create_proposal_proof(
         pallas::Base::from(output.value),
         pallas::Base::from(output.epoch),
         output.serial,
-        output.coin_blind,
     ]));
 
     // Create the ZK proof
@@ -324,11 +319,9 @@ fn create_proposal_proof(
         Witness::Base(Value::known(pallas::Base::from(input.note.epoch))),
         Witness::Base(Value::known(pallas::Base::from(REWARD))),
         Witness::Scalar(Value::known(input.value_blind)),
-        Witness::Base(Value::known(input.note.coin_blind)),
         Witness::Uint32(Value::known(u64::from(input.leaf_position).try_into().unwrap())),
         Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
         Witness::Scalar(Value::known(output.value_blind)),
-        Witness::Base(Value::known(output.coin_blind)),
         Witness::Base(Value::known(public_inputs.mu_y)),
         Witness::Base(Value::known(public_inputs.mu_rho)),
         Witness::Base(Value::known(public_inputs.sigma1)),
