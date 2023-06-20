@@ -148,18 +148,42 @@ pub fn encrypt_privmsg(salt_box: &SalsaBox, privmsg: &mut PrivMsgEvent) {
     privmsg.msg = encrypt(salt_box, privmsg.msg.as_bytes());
 }
 
-fn pad(mut data: Vec<u8>) -> Vec<u8> {
-    let pad_len = (MAXIMUM_LENGTH_OF_NICK_CHAN_CNT - data.len()) as u8;
-    for _ in 0..pad_len {
-        data.push(pad_len);
+fn pad(data: Vec<u8>) -> Vec<u8> {
+    if data.len() == MAXIMUM_LENGTH_OF_NICK_CHAN_CNT {
+        return data
     }
+
+    assert!(data.len() < MAXIMUM_LENGTH_OF_NICK_CHAN_CNT);
+    let padding = vec![0u8; MAXIMUM_LENGTH_OF_NICK_CHAN_CNT - data.len()];
+
+    let mut data = data.clone();
+    data.extend_from_slice(&padding);
     data
 }
 
-fn unpad(mut data: Vec<u8>) -> Vec<u8> {
-    let pad_len = data[data.len() - 1];
-    for _ in 0..pad_len {
-        data.pop();
+fn unpad(data: Vec<u8>) -> Vec<u8> {
+    assert!(data.len() == MAXIMUM_LENGTH_OF_NICK_CHAN_CNT);
+    match data.iter().position(|&x| x == 0u8) {
+        Some(idx) => data[..idx].to_vec(),
+        None => data,
     }
-    data
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_pad_unpad() {
+        let nick = String::from("terry-davis");
+
+        let padded = pad(nick.clone().into());
+        assert!(padded.len() == 32);
+        assert_eq!(nick, String::from_utf8_lossy(&unpad(padded)));
+
+        let nick = String::from("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+        let padded = pad(nick.clone().into());
+        assert_eq!(nick, String::from_utf8_lossy(&padded));
+        assert_eq!(nick, String::from_utf8_lossy(&unpad(padded)));
+    }
 }
