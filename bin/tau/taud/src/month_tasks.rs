@@ -91,9 +91,9 @@ impl MonthTasks {
 
     fn get_path(date: &Timestamp, dataset_path: &Path) -> PathBuf {
         debug!(target: "tau", "MonthTasks::get_path()");
-        dataset_path
-            .join("month")
-            .join(Utc.timestamp_nanos(date.0.try_into().unwrap()).format("%m%y").to_string())
+        dataset_path.join("month").join(
+            Utc.timestamp_opt(date.0.try_into().unwrap(), 0).unwrap().format("%m%y").to_string(),
+        )
     }
 
     pub fn save(&self, dataset_path: &Path) -> TaudResult<()> {
