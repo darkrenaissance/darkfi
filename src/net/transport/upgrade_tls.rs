@@ -36,7 +36,7 @@ use rustls_pemfile::pkcs8_private_keys;
 use x509_parser::{
     extensions::{GeneralName, ParsedExtension},
     parse_x509_certificate,
-    prelude::FromDer,
+    prelude::{FromDer, X509Certificate},
     x509::SubjectPublicKeyInfo,
 };
 
@@ -56,6 +56,67 @@ fn cipher_suite() -> rustls::SupportedCipherSuite {
     unreachable!()
 }
 
+/// Validate that the altName pubkey is the same as the certificate's pubkey.
+/// Returns `ed25519_compact::PublicKey` on success.
+fn validate_pubkey(
+    cert: &X509Certificate,
+) -> std::result::Result<ed25519_compact::PublicKey, rustls::Error> {
+    // We keep a public key in the altName, so we need to grab it.
+    // We compare that the actual public key of the certificate is
+    // the same as that one, and then we return it.
+    // The actual verification functions handle signature verification.
+    #[rustfmt::skip]
+    let oid = x509_parser::oid_registry::asn1_rs::oid!(2.5.29.17);
+    let Ok(Some(extension)) = cert.get_extension_unique(&oid) else {
+        return Err(rustls::CertificateError::BadEncoding.into())
+    };
+
+    // Crufty AF
+    // (ノಠ益ಠ)ノ彡┻━┻
+    let pubkey_bytes = match extension.parsed_extension() {
+        ParsedExtension::SubjectAlternativeName(altname) => {
+            if altname.general_names.len() != 1 {
+                return Err(rustls::CertificateError::BadEncoding.into())
+            }
+
+            match altname.general_names[0] {
+                GeneralName::DNSName(a) => base32::decode(a),
+                _ => return Err(rustls::CertificateError::BadEncoding.into()),
+            }
+        }
+        _ => return Err(rustls::CertificateError::BadEncoding.into()),
+    };
+
+    let Some(pubkey_bytes) = pubkey_bytes else {
+        return Err(rustls::CertificateError::BadEncoding.into())
+    };
+
+    if pubkey_bytes.len() != 32 {
+        return Err(rustls::CertificateError::BadEncoding.into())
+    }
+
+    let pubkey = ed25519_compact::PublicKey::new(pubkey_bytes.try_into().unwrap());
+    let pubkey_der = pubkey.to_der();
+
+    let Ok((_, parsed_pubkey)) = SubjectPublicKeyInfo::from_der(&pubkey_der) else {
+        return Err(rustls::CertificateError::BadEncoding.into())
+    };
+
+    let Ok(parsed_name_pubkey) = parsed_pubkey.parsed() else {
+        return Err(rustls::CertificateError::BadEncoding.into())
+    };
+
+    let Ok(parsed_cert_pubkey) = cert.public_key().parsed() else {
+        return Err(rustls::CertificateError::BadEncoding.into())
+    };
+
+    if parsed_name_pubkey != parsed_cert_pubkey {
+        return Err(rustls::CertificateError::BadSignature.into())
+    }
+
+    Ok(pubkey)
+}
+
 struct ServerCertificateVerifier;
 impl ServerCertVerifier for ServerCertificateVerifier {
     fn verify_server_cert(
@@ -69,70 +130,20 @@ impl ServerCertVerifier for ServerCertificateVerifier {
     ) -> std::result::Result<ServerCertVerified, rustls::Error> {
         // Parse the actual end_entity certificate
         let Ok((_, cert)) = parse_x509_certificate(&end_entity.0) else {
-            error!(target: "net::tls", "Failed parsing server TLS certificate");
+            error!(target: "net::tls", "[net::tls] Failed parsing server TLS certificate");
             return Err(rustls::CertificateError::BadEncoding.into())
         };
 
-        // We keep a public key in the altName, so we need to grab it.
-        // We compare that the actual public key of the certificate is
-        // the same as that one, and we then verify the signature of the
-        // provided certificate.
-        #[rustfmt::skip]
-        let oid = x509_parser::oid_registry::asn1_rs::oid!(2.5.29.17);
-        let Ok(Some(extension)) = cert.get_extension_unique(&oid) else {
-            error!(target: "net::tls", "Could not find OID extension for subjectAltName");
-            return Err(rustls::CertificateError::BadSignature.into())
-        };
-
-        // Parse the actual extension
-        // (ノಠ益ಠ)ノ彡┻━┻
-        let pubkey_bytes = match extension.parsed_extension() {
-            ParsedExtension::SubjectAlternativeName(altname) => {
-                if altname.general_names.len() != 1 {
-                    return Err(rustls::CertificateError::BadEncoding.into())
-                }
-
-                match altname.general_names[0] {
-                    GeneralName::DNSName(a) => base32::decode(a),
-                    _ => return Err(rustls::CertificateError::BadEncoding.into()),
-                }
-            }
-            _ => return Err(rustls::CertificateError::BadEncoding.into()),
-        };
-        let Some(pubkey_bytes) = pubkey_bytes else {
-            error!(target: "net::tls", "Could not decode server pubkey from altName");
-            return Err(rustls::CertificateError::BadSignature.into())
-        };
-        if pubkey_bytes.len() != 32 {
-            error!(target: "net::tls", "Could not decode server pubkey from altName");
-            return Err(rustls::CertificateError::BadSignature.into())
-        }
-        let pubkey_der = ed25519_compact::PublicKey::new(pubkey_bytes.try_into().unwrap()).to_der();
-        let Ok((_, parsed_pubkey)) = SubjectPublicKeyInfo::from_der(&pubkey_der) else {
-            error!(target: "net::tls", "Could not decode server pubkey from altName");
-            return Err(rustls::CertificateError::BadSignature.into())
-        };
-
-        let Ok(parsed_name_pubkey) = parsed_pubkey.parsed() else {
-            error!(target: "net::tls", "Could not parse server altName pubkey");
-            return Err(rustls::CertificateError::BadEncoding.into())
-        };
-
-        let Ok(parsed_cert_pubkey) = cert.public_key().parsed() else {
-            error!(target: "net::tls", "Could not parse server certificate pubkey");
-            return Err(rustls::CertificateError::BadEncoding.into())
-        };
-
-        if parsed_name_pubkey != parsed_cert_pubkey {
-            error!(target: "net::tls", "Server altName pubkey does not match certificate key");
-            return Err(rustls::CertificateError::BadSignature.into())
+        // Validate that the pubkey in altNames matches the certificate pubkey.
+        if let Err(e) = validate_pubkey(&cert) {
+            error!(target: "net::tls", "[net::tls] Failed verifying server certificate signature: {}", e);
+            return Err(e)
         }
 
-        // Finally verify the signature. By passing `None`, it should use
-        // the certificate pubkey, but we also verified that it matches
-        // the one in altNames above.
+        // Verify the signature. By passing `None` it should use the certificate
+        // pubkey, but we also verified that it matches the one in altNames above.
         if let Err(e) = cert.verify_signature(None) {
-            error!(target: "net::tls", "Failed verifying server certificate signature: {}", e);
+            error!(target: "net::tls", "[net::tls] Failed verifying server certificate signature: {}", e);
             return Err(rustls::CertificateError::BadSignature.into())
         }
 
@@ -148,11 +159,29 @@ impl ClientCertVerifier for ClientCertificateVerifier {
 
     fn verify_client_cert(
         &self,
-        _end_entity: &Certificate,
+        end_entity: &Certificate,
         _intermediates: &[Certificate],
         _now: SystemTime,
     ) -> std::result::Result<ClientCertVerified, rustls::Error> {
-        // TODO: upsycle
+        // Parse the actual end_entity certificate
+        let Ok((_, cert)) = parse_x509_certificate(&end_entity.0) else {
+            error!(target: "net::tls", "[net::tls] Failed parsing client TLS certificate");
+            return Err(rustls::CertificateError::BadEncoding.into())
+        };
+
+        // Validate that the pubkey in altNames matches the certificate pubkey.
+        if let Err(e) = validate_pubkey(&cert) {
+            error!(target: "net::tls", "[net::tls] Failed verifying client certificate signature: {}", e);
+            return Err(e)
+        }
+
+        // Verify the signature. By passing `None` it should use the certificate
+        // pubkey, but we also verified that it matches the one in altNames above.
+        if let Err(e) = cert.verify_signature(None) {
+            error!(target: "net::tls", "[net::tls] Failed verifying client certificate signature: {}", e);
+            return Err(rustls::CertificateError::BadSignature.into())
+        }
+
         Ok(ClientCertVerified::assertion())
     }
 }
