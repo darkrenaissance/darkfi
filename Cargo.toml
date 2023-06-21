@@ -77,9 +77,10 @@ ipnet = {version = "2.7.2", optional = true}
 socket2 = {version = "0.5.3", optional = true, features = ["all"]}
 
 # TLS cert utilities
-ed25519-compact = {version = "2.0.4", features = ["pem"], optional = true}
-rcgen = {version = "0.10.0", features = ["pem"], optional = true}
+ed25519-compact = {version = "2.0.4", optional = true}
+rcgen = {version = "0.10.0", optional = true}
 rustls-pemfile = {version = "1.0.2", optional = true}
+x509-parser = {version = "0.15.0", features = ["validate", "verify"], optional = true}
 
 # Encoding
 bs58 = {version = "0.5.0", optional = true}
@@ -213,6 +214,7 @@ net = [
     "rand",
     "rcgen",
     "rustls-pemfile",
+    "x509-parser",
     "serde",
     "serde_json",
     "socket2",
