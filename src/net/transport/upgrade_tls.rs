@@ -102,8 +102,7 @@ impl TlsUpgrade {
         cert_params.key_pair = Some(rcgen::KeyPair::from_pem(&keypair_pem).unwrap());
 
         let certificate = rcgen::Certificate::from_params(cert_params).unwrap();
-        let certificate = certificate.serialize_der().unwrap();
-        let certificate = rustls::Certificate(certificate);
+        let certificate = rustls::Certificate(certificate.serialize_der().unwrap());
 
         let client_cert_verifier = Arc::new(ClientCertificateVerifier {});
         let server_config = Arc::new(

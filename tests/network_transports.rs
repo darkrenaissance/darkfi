@@ -95,7 +95,14 @@ async fn tcp_tls_transport() {
             let stream = stream.unwrap();
             let stream = acceptor.accept(stream).await.unwrap();
             let (mut reader, mut writer) = smol::io::split(stream);
-            io::copy(&mut reader, &mut writer).await.unwrap();
+            match io::copy(&mut reader, &mut writer).await {
+                Ok(_) => {}
+                Err(e) => {
+                    if e.kind() != std::io::ErrorKind::UnexpectedEof {
+                        panic!("{}", e);
+                    }
+                }
+            }
         }
     });
 
