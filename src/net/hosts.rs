@@ -282,7 +282,7 @@ fn filter_non_resolving(connection_addr: Url, input_addrs: HashMap<Url, Vec<IpAd
 
 /// Validate a given .onion address. Currently it just checks that the
 /// length and encoding are ok, and does not do any deeper check. Should
-/// be fixed in the future.
+/// be fixed in the future when arti is ready.
 fn is_valid_onion(onion: &str) -> bool {
     let onion = match onion.strip_suffix(".onion") {
         Some(s) => s,
