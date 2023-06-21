@@ -116,7 +116,7 @@ impl HeaderStore {
 
 /// The `BlockStore` is a `sled` tree storing all the blockchain's blocks
 /// where the key is the blocks' hash, and value is the serialized block.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BlockStore(sled::Tree);
 
 impl BlockStore {
@@ -331,5 +331,43 @@ impl BlockOrderStore {
     /// Check if sled contains any records
     pub fn is_empty(&self) -> bool {
         self.0.len() == 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // use surrounding names
+    use super::*;
+    use crate::consensus::LeadInfo;
+    use darkfi_sdk::{crypto::MerkleNode, pasta::pallas};
+
+    fn create_tmp_db() -> Result<BlockStore> {
+        let db = sled::Config::new().temporary(true).open()?;
+        return BlockStore::new(
+            &db,
+            Timestamp::current_time(),
+            blake3::hash(b"unit-testing-blockstore"),
+        )
+    }
+
+    #[test]
+    fn test_block_insert() -> Result<()> {
+        let block_store = create_tmp_db()?;
+        let merkle = MerkleNode::new(pallas::Base::from(42));
+        let block =
+            Block::new(blake3::hash(b"some-block"), 1, 0, vec![], merkle, LeadInfo::default());
+        let header = block.header;
+        let block_hashes = block_store.insert(&[block])?;
+        let first = block_hashes[0];
+
+        let mut contains = block_store.contains(&first)?;
+        assert_eq!(contains, true);
+        let bad_hash = blake3::hash(b"blabla");
+        contains = block_store.contains(&bad_hash)?;
+        assert_eq!(contains, false);
+        let control = block_store.get(&[first], true)?;
+        let control_block = control[0].as_ref().unwrap();
+        assert_eq!(control_block.header, header);
+        return Ok(())
     }
 }
