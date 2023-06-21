@@ -15,59 +15,59 @@ setup_mac() {
 		bash -c "$(curl -fL "${brew_sh}")" || return 1
 	fi
 
-	for i in cmake gcc jq pkgconf llvm@13; do
+	for i in cmake gcc pkgconf llvm@13; do
 		echo "Installing $i with brew..." >&2
 		brew install "$i" || return 1
 	done
 }
 
 setup_apt() {
-	apt_deps="git make jq gcc pkg-config libasound2-dev"
+	apt_deps="git make gcc pkg-config libasound2-dev"
 	$1 install $apt_deps || return 1
 }
 
 setup_pacman() {
-	pacman_deps="git make jq gcc pkgconf alsa-lib"
+	pacman_deps="git make gcc pkgconf alsa-lib"
 	$1 -Sy $pacman_deps || return 1
 }
 
 setup_xbps() {
-	xbps_deps="git make jq gcc pkg-config alsa-lib-devel"
+	xbps_deps="git make gcc pkg-config alsa-lib-devel"
 	$1 -S $xbps_deps || return 1
 }
 
 setup_dnf() {
-	dnf_deps="git make jq gcc pkg-config findutils lato-fonts"
+	dnf_deps="git make gcc pkg-config findutils lato-fonts"
 	$1 install -y $dnf_deps || return 1
 }
 
 setup_apk() {
-	apk_deps="git make jq gcc musl-dev pkgconfig alsa-lib-dev"
+	apk_deps="git make gcc musl-dev pkgconfig alsa-lib-dev"
 	$1 add $apk_deps || return 1
 }
 
 setup_zypper() {
-	zypper_deps="git make jq gcc pkg-config findutils"
+	zypper_deps="git make gcc pkg-config findutils"
 	$1 install -y $zypper_deps || return 1
 }
 
 setup_emerge() {
-	emerge_deps="dev-vcs/git app-misc/jq media-libs/alsa-lib"
+	emerge_deps="dev-vcs/git media-libs/alsa-lib"
 	$1 $emerge_deps || return 1
 }
 
 setup_pkg() {
-	pkg_deps="git bash jq gcc findutils cantarell-fonts gmake devel/automake"
+	pkg_deps="git bash gcc findutils cantarell-fonts gmake devel/automake"
 	$1 install -y $pkg_deps || return 1
 }
 
 setup_pkg_add() {
-	pkg_add_deps="git bash jq gcc-11.2.0p6 findutils cantarell-fonts gmake automake-1.15.1"
+	pkg_add_deps="git bash gcc-11.2.0p6 findutils cantarell-fonts gmake automake-1.15.1"
 	$1 -I $pkg_add_deps || return 1
 }
 
 setup_pkgin() {
-	pkgin_deps="git bash jq gcc12 findutils cantarell-fonts pkgconf gmake automake"
+	pkgin_deps="git bash gcc12 findutils cantarell-fonts pkgconf gmake automake"
 	$1 -y install $pkgin_deps || return 1
 }
 

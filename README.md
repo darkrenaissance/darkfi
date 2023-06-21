@@ -45,7 +45,6 @@ The following dependencies are also required:
 |----------------|------------------|
 | git            | git              |
 | make           | make             |
-| jq             | jq               |
 | gcc            | gcc              |
 | pkg-config     | pkg-config       |
 | alsa-lib       | libasound2-dev   |
@@ -55,7 +54,7 @@ following to install the required dependencies:
 
 ```shell
 # apt-get update
-# apt-get install -y git make jq gcc pkg-config libasound2-dev
+# apt-get install -y git make gcc pkg-config libasound2-dev
 ```
 
 Alternatively, users can try using the automated script under `contrib`
