@@ -129,7 +129,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     }
 
     pub async fn process_msg(&mut self, msg: &mut PrivMsgEvent) -> Result<()> {
-        info!("[CLIENT {}] msg from View: {:?}", self.address, msg.to_string());
+        debug!("[CLIENT {}] msg from View: {:?}", self.address, msg.to_string());
 
         let mut msg = msg.clone();
         let mut contact = String::new();
@@ -154,7 +154,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
             if let Some(salt_box) = &chan_info.salt_box {
                 decrypt_privmsg(salt_box, &mut msg);
-                info!("Decrypted received message: {:?}", msg);
+                debug!("[P2P] Decrypted received message: {:?}", msg);
             }
 
             // add the nickname to the channel's names
@@ -173,7 +173,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                 decrypt_privmsg(salt_box, &mut msg);
                 // This is for /query
                 msg.nick = contact;
-                info!("[P2P] Decrypted received message: {:?}", msg);
+                debug!("[P2P] Decrypted received message: {:?}", msg);
             }
 
             self.reply(&msg.to_string()).await?;
@@ -191,7 +191,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             }
         };
 
-        info!("[CLIENT {}] Process msg: {}", self.address, irc_msg);
+        debug!("[CLIENT {}] Process msg: {}", self.address, irc_msg);
 
         if let Err(e) = self.update(irc_msg).await {
             warn!("[CLIENT {}] Connection error: {}", self.address, e);
@@ -480,7 +480,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
         let message = line[substr_idx + 1..].to_string();
 
-        info!("[CLIENT {}] (Plain) PRIVMSG {} :{}", self.address, target, message,);
+        debug!("[CLIENT {}] (Plain) PRIVMSG {} :{}", self.address, target, message,);
 
         let mut privmsg = PrivMsgEvent::new();
 
@@ -501,7 +501,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
 
             if let Some(salt_box) = &channel_info.salt_box {
                 encrypt_privmsg(salt_box, &mut privmsg);
-                info!("[CLIENT {}] (Encrypted) PRIVMSG: {:?}", self.address, privmsg);
+                debug!("[CLIENT {}] (Encrypted) PRIVMSG: {:?}", self.address, privmsg);
             }
         } else {
             if !self.irc_config.contacts.contains_key(target) {
@@ -511,7 +511,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             let contact_info = self.irc_config.contacts.get(target).unwrap();
             if let Some(salt_box) = &contact_info.salt_box {
                 encrypt_privmsg(salt_box, &mut privmsg);
-                info!("[CLIENT {}] (Encrypted) PRIVMSG: {:?}", self.address, privmsg);
+                debug!("[CLIENT {}] (Encrypted) PRIVMSG: {:?}", self.address, privmsg);
             }
         }
 

@@ -21,7 +21,7 @@ use std::fmt::Debug;
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
-use log::{debug, info};
+use log::debug;
 
 use super::EventMsg;
 use crate::{
@@ -146,7 +146,7 @@ where
                 continue
             }
 
-            info!("[P2P] Received: {:?}", event.action);
+            debug!("[P2P] Received: {:?}", event.action);
 
             self.new_event(&event).await?;
             self.send_inv(&event).await?;
