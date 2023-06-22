@@ -41,7 +41,7 @@ In the TOML configuration file, the contact is set as such:
 
 ```toml
 [contact."nick"]
-pubkey = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
+contact_pubkey = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 ```
 
 | Description	| Data Type		| Comments												|
