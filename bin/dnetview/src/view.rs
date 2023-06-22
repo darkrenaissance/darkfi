@@ -34,8 +34,6 @@ use crate::{
     model::{NodeInfo, SelectableObject},
 };
 
-//use log::debug;
-
 type MsgLog = Vec<(NanoTimestamp, String, String)>;
 type MsgMap = HashMap<String, MsgLog>;
 
