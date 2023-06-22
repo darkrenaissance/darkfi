@@ -35,3 +35,6 @@ mod url;
 
 #[cfg(feature = "x25519-dalek")]
 mod x25519;
+
+#[cfg(feature = "semver")]
+mod semver;
