@@ -65,7 +65,7 @@ impl TestHarness {
         let (params, proofs, output_keypair, signature_secret_key) = (
             proposal_call_debris.params,
             proposal_call_debris.proofs,
-            proposal_call_debris.keypair,
+            proposal_c5all_debris.keypair,
             proposal_call_debris.signature_secret,
         );
 

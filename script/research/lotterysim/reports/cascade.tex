@@ -33,7 +33,7 @@ DRK tokens in stake, in fact the relation is logarithmic.
 
 \item In our case f is targetting single leader per slot. An emulation of
 the leader election mechanism with PID controllers shows that f is
-oscillating around ~0.65 (depending on ration of tokens in stake). then P(C=lead)~=0.35
+oscillating around ~0.65 (depending on ration of tokens in stake). then P(C=lead)~=0.65
 
 
 \item Given the linear independence property of the target function T, the
@@ -41,9 +41,9 @@ probability of a node winning leadership at any slot with S staked tokens
 is the same as the probability of N nodes winning leadership at same slot,
 with same stake S for any S, N values.
 
-\item If the probability of stakeholder owning 0.1\% of the tokens is 0.03,
-then the probability of a pool consisting of stakeholders owning 0.1%
-of tokens is also 0.03.
+\item If the probability of stakeholder owning 10\% of the tokens is 0.035,
+then the probability of a pool consisting of stakeholders owning 10%
+of tokens is also 0.035.
 
 \item The probability of a pool of N\% stake to win the leadership at any slot is: $$ \frac{N}{100}*P(C=lead)$$
 
@@ -59,8 +59,7 @@ of tokens is also 0.03.
 
 
 \item Assume $P(C=lead)=33\%$, then if only 10\% of the total network token
-is staked the probability of having a single leader per slot is 0.03,
-or accuracy of 3\%.
+is staked the probability of having a single leader per slot is $\frac{10}{100}P(C=lead)=0.035, or accuracy of 3\%.
 
 
 \item From the graph above, and as a consequence of the linear independence
@@ -124,7 +123,7 @@ in stake.
 \item while with 68\% staked ratio reward goes up to 82.5 on average with 13.8\% apr and same accuracy as previous experiment 35.7\%
   \begin{figure}
     \includegraphics{halfstake_apr.png}
-    \caption{apr sorted from left to right in range [1-9]\% and 4.2\% avg apr.}
+    \caption{apr sorted from left to right in range [1-50]\% and 13.8\% avg apr.}
   \end{figure}
 
   \subsection {oracle for staked ratio discovery}
@@ -176,7 +175,7 @@ in stake.
   \item stakeholders starategy is distributed equally between HODLER: stake it all,  logarithmic and sigmoid strategy that have logarithmic, and segmoid relation respectively to APR. similar to previous experiment except there is no linear strategy since APR is much lower.
 
 
-\item from figure 1, 25\% staked DRK ratio result in approximately 11\% secondary controller accuracy, while with cascade control it gains 3X leverage. 24.6\% staked ratio results in 31.1\% accuracy with average reward 1.6 DRK, and 0.2\% APR (see figure 6)
+\item from figure 1, 25\% staked DRK ratio result in approximately 11\% secondary controller accuracy, while with cascade control it gains 3X leverage at lower staked ratio. 10\% staked ratio results in 30\% accuracy with average reward 1.6 DRK, and 0.2\% APR (see figure 6)
 \end{description}
 \begin{figure}
     \includegraphics{acc_setpoint_quarterstake.png}
@@ -187,7 +186,7 @@ in stake.
 \item figure 7 shows the relation between staked DRK tokens ratio, and accuracy
 \end{description}
 \begin{figure}
-  \includegraphics{acc_setpoint_vs_sr.png}
+  \includegraphics{acc_stake_1000nodes_10kslots_with_cascade.png}
   \caption{relation between staked DRK ratio and accuracy of secondary controller, with accuracy as set point to primary controller}
 \end{figure}
 

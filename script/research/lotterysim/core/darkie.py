@@ -31,6 +31,8 @@ class Darkie():
 
     def apr_scaled_to_runningtime(self):
         initial_stake = self.vesting_wrapped_initial_stake()
+        if initial_stake==0:
+            initial_stake = self.initial_stake[0]
         #print('stake: {}, initial_stake: {}'.format(self.stake, initial_stake))
         assert self.stake >= initial_stake, 'stake: {}, initial_stake: {}, slot: {}, current: {}, previous: {} vesting'.format(self.stake, initial_stake, self.slot, self.current_vesting(), self.prev_vesting())
         return Num(self.stake - initial_stake) / Num(initial_stake) *  Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot> 0 and self.initial_stake[0]>0 else 0
@@ -83,13 +85,15 @@ class Darkie():
         '''
         current corresponding slot vesting
         '''
-        return self.vesting[int(self.slot/VESTING_PERIOD)]
+        vesting_idx = int(self.slot/VESTING_PERIOD)
+        return self.vesting[vesting_idx] if vesting_idx < len(self.vesting) else 0
 
     def prev_vesting(self):
         '''
         previous corresponding slot vesting
         '''
-        return self.vesting[int((self.slot-1)/VESTING_PERIOD)] if self.slot>0 else self.current_vesting()
+        prev_vesting_idx = int((self.slot-1)/VESTING_PERIOD)
+        return (self.vesting[prev_vesting_idx] if self.slot>0 else self.current_vesting()) if prev_vesting_idx < len(self.vesting) else 0
 
     def vesting_differential(self):
         vesting_value =  self.current_vesting() - self.prev_vesting()

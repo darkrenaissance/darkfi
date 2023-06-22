@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2023.4.15)  17 APR 2023 21:47
+This is pdfTeX, Version 3.141592653-2.6-1.40.22 (TeX Live 2022/dev/Debian) (preloaded format=pdflatex 2023.6.2)  22 JUN 2023 02:56
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -492,73 +492,93 @@ Overfull \hbox (117.52686pt too wide) in paragraph at lines 56--58
 
 LaTeX Warning: `!h' float specifier changed to `!ht'.
 
+! Missing $ inserted.
+<inserted text> 
+                $
+l.63 
+     
+? 
+! Missing } inserted.
+<inserted text> 
+                }
+l.63 
+     
+? 
+! Extra }, or forgotten \endgroup.
+\par ...m \@noitemerr {\@@par }\fi \else {\@@par }
+                                                  \fi 
+l.63 
+     
+? 
 [1
 
 {/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}] [2 <./hodler_acc_vs_sr.png
 >] [3]
-<fullstake_apr.png, id=25, 462.528pt x 346.896pt>
+<fullstake_apr.png, id=26, 462.528pt x 346.896pt>
 File: fullstake_apr.png Graphic file (type png)
 <use fullstake_apr.png>
-Package pdftex.def Info: fullstake_apr.png  used on input line 121.
+Package pdftex.def Info: fullstake_apr.png  used on input line 120.
 (pdftex.def)             Requested size: 462.52686pt x 346.89514pt.
 
-Overfull \hbox (117.52686pt too wide) in paragraph at lines 121--122
+Overfull \hbox (117.52686pt too wide) in paragraph at lines 120--121
 [][] 
  []
 
-<halfstake_apr.png, id=26, 462.528pt x 346.896pt>
+<halfstake_apr.png, id=27, 462.528pt x 346.896pt>
 File: halfstake_apr.png Graphic file (type png)
 <use halfstake_apr.png>
-Package pdftex.def Info: halfstake_apr.png  used on input line 126.
+Package pdftex.def Info: halfstake_apr.png  used on input line 125.
 (pdftex.def)             Requested size: 462.52686pt x 346.89514pt.
 
-Overfull \hbox (117.52686pt too wide) in paragraph at lines 126--127
+Overfull \hbox (117.52686pt too wide) in paragraph at lines 125--126
 [][] 
  []
 
 [4] [5 <./fullstake_apr.png>] [6 <./halfstake_apr.png>] [7]
-<acc_setpoint_quarterstake.png, id=42, 462.528pt x 346.896pt>
+<acc_setpoint_quarterstake.png, id=43, 462.528pt x 346.896pt>
 File: acc_setpoint_quarterstake.png Graphic file (type png)
 <use acc_setpoint_quarterstake.png>
-Package pdftex.def Info: acc_setpoint_quarterstake.png  used on input line 182.
+Package pdftex.def Info: acc_setpoint_quarterstake.png  used on input line 181.
 
 (pdftex.def)             Requested size: 462.52686pt x 346.89514pt.
 
-Overfull \hbox (117.52686pt too wide) in paragraph at lines 182--183
+Overfull \hbox (117.52686pt too wide) in paragraph at lines 181--182
 [][] 
  []
 
-<acc_setpoint_vs_sr.png, id=43, 462.528pt x 346.896pt>
-File: acc_setpoint_vs_sr.png Graphic file (type png)
-<use acc_setpoint_vs_sr.png>
-Package pdftex.def Info: acc_setpoint_vs_sr.png  used on input line 190.
+<acc_stake_1000nodes_10kslots_with_cascade.png, id=44, 462.528pt x 346.896pt>
+File: acc_stake_1000nodes_10kslots_with_cascade.png Graphic file (type png)
+<use acc_stake_1000nodes_10kslots_with_cascade.png>
+Package pdftex.def Info: acc_stake_1000nodes_10kslots_with_cascade.png  used on
+ input line 189.
 (pdftex.def)             Requested size: 462.52686pt x 346.89514pt.
 
-Overfull \hbox (117.52686pt too wide) in paragraph at lines 190--191
+Overfull \hbox (117.52686pt too wide) in paragraph at lines 189--190
 [][] 
  []
 
-[8 <./acc_setpoint_quarterstake.png>] [9 <./acc_setpoint_vs_sr.png>] [10]
-(./cascade.aux) ) 
+[8 <./acc_setpoint_quarterstake.png>] [9 <./acc_stake_1000nodes_10kslots_with_c
+ascade.png>] [10] (./cascade.aux) ) 
 Here is how much of TeX's memory you used:
- 13365 strings out of 478287
- 274321 string characters out of 5849289
- 539050 words of memory out of 5000000
- 31323 multiletter control sequences out of 15000+600000
+ 13365 strings out of 480171
+ 274482 string characters out of 5894490
+ 534248 words of memory out of 5000000
+ 31079 multiletter control sequences out of 15000+600000
  474642 words of font info for 47 fonts, out of 8000000 for 9000
- 1141 hyphenation exceptions out of 8191
+ 59 hyphenation exceptions out of 8191
  100i,8n,104p,461b,754s stack positions out of 5000i,500n,10000p,200000b,80000s
-</usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/
-cmbx12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10
-.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></
-usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/sha
-re/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pfb></usr/share/texl
-ive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr/share/texlive/tex
-mf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb>
-Output written on cascade.pdf (10 pages, 180008 bytes).
+</usr/share/texlive/texmf-dist/fonts/type1/p
+ublic/amsfonts/cm/cmbx12.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/
+amsfonts/cm/cmmi10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfon
+ts/cm/cmmi7.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/c
+mr10.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr12.pf
+b></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr17.pfb></usr
+/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/share/t
+exlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb>
+Output written on cascade.pdf (10 pages, 188489 bytes).
 PDF statistics:
- 86 PDF objects out of 1000 (max. 8388607)
- 49 compressed objects within 1 object stream
+ 91 PDF objects out of 1000 (max. 8388607)
+ 52 compressed objects within 1 object stream
  0 named destinations out of 1000 (max. 500000)
  38 words of extra memory for PDF output out of 10000 (max. 10000000)
 
