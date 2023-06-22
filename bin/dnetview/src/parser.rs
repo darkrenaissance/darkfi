@@ -24,7 +24,7 @@ use serde_json::Value;
 use smol::Executor;
 use url::Url;
 
-use darkfi::util::{async_util, time::NanoTimestamp};
+use darkfi::util::{async_util, ringbuffer::RingBuffer, time::NanoTimestamp};
 
 use crate::{
     config::{DnvConfig, Node, NodeType},
@@ -368,13 +368,20 @@ impl DataParser {
                             let id = make_connect_id(&id)?;
                             let state = "state".to_string();
                             let parent = parent.clone();
-                            let msg_values = info2.unwrap().get("log").unwrap().as_array().unwrap();
+
                             let mut msg_log: Vec<(NanoTimestamp, String, String)> = Vec::new();
-                            for msg in msg_values {
+                            let log_buffer: RingBuffer<(NanoTimestamp, String, String)> =
+                                serde_json::from_value(info2.unwrap().get("log").unwrap().clone())
+                                    .unwrap();
+
+                            debug!(target: "dnetview", "Inbound log: {:?}", log_buffer);
+
+                            for (time, txt1, txt2) in log_buffer.iter() {
                                 let msg: (NanoTimestamp, String, String) =
-                                    serde_json::from_value(msg.clone())?;
+                                    (time.clone(), txt1.to_string(), txt2.to_string());
                                 msg_log.push(msg);
                             }
+
                             let is_empty = false;
                             let last_msg = info2
                                 .unwrap()
@@ -540,13 +547,19 @@ impl DataParser {
                             let state = &slot["state"];
                             let state = state.as_str().unwrap().to_string();
                             let parent = parent.clone();
-                            let msg_values = channel["log"].as_array().unwrap();
+
                             let mut msg_log: Vec<(NanoTimestamp, String, String)> = Vec::new();
-                            for msg in msg_values {
+                            let log_buffer: RingBuffer<(NanoTimestamp, String, String)> =
+                                serde_json::from_value(channel["log"].clone()).unwrap();
+
+                            debug!(target: "dnetview", "Outbound log: {:?}", log_buffer);
+
+                            for (time, txt1, txt2) in log_buffer.iter() {
                                 let msg: (NanoTimestamp, String, String) =
-                                    serde_json::from_value(msg.clone())?;
+                                    (time.clone(), txt1.to_string(), txt2.to_string());
                                 msg_log.push(msg);
                             }
+
                             let is_empty = false;
                             let last_msg = channel["last_msg"].as_str().unwrap().to_string();
                             let last_status = channel["last_status"].as_str().unwrap().to_string();
