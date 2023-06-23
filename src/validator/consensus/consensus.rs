@@ -16,11 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{
-    blockchain::Blockchain,
-    consensus::constants::{EPOCH_LENGTH, SLOT_TIME},
-    util::time::{TimeKeeper, Timestamp},
-};
+use crate::{blockchain::Blockchain, util::time::TimeKeeper};
 
 /// This struct represents the information required by the consensus algorithm
 pub struct Consensus {
@@ -31,8 +27,7 @@ pub struct Consensus {
 }
 
 impl Consensus {
-    pub fn new(blockchain: Blockchain, genesis_ts: Timestamp) -> Self {
-        let time_keeper = TimeKeeper::new(genesis_ts, EPOCH_LENGTH as u64, SLOT_TIME, 0);
+    pub fn new(blockchain: Blockchain, time_keeper: TimeKeeper) -> Self {
         Self { blockchain, time_keeper }
     }
 }

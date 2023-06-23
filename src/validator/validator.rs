@@ -24,7 +24,7 @@ use log::info;
 use crate::{
     blockchain::{Blockchain, BlockchainOverlay},
     runtime::vm_runtime::Runtime,
-    util::time::Timestamp,
+    util::time::TimeKeeper,
     Result,
 };
 
@@ -43,10 +43,10 @@ pub struct Validator {
 
 /// Configuration for initializing [`Validator`]
 pub struct ValidatorConfig {
-    /// Genesis timestamp
-    pub genesis_ts: Timestamp,
-    /// Genesis data
-    pub genesis_data: blake3::Hash,
+    /// Helper structure to calculate time related operations
+    pub time_keeper: TimeKeeper,
+    /// Genesis block
+    pub genesis_block: blake3::Hash,
     /// Whitelisted faucet pubkeys (testnet stuff)
     pub faucet_pubkeys: Vec<PublicKey>,
 }
@@ -58,10 +58,10 @@ impl Validator {
         info!(target: "consensus::validator", "Initializing Blockchain");
         // TODO: Initialize chain, then check if its empty, so we can execute
         // the transactions of the genesis block
-        let blockchain = Blockchain::new(db, config.genesis_ts, config.genesis_data)?;
+        let blockchain = Blockchain::new(db, config.time_keeper.genesis_ts, config.genesis_block)?;
 
         info!(target: "consensus::validator", "Initializing Consensus");
-        let consensus = Consensus::new(blockchain.clone(), config.genesis_ts);
+        let consensus = Consensus::new(blockchain.clone(), config.time_keeper);
 
         // =====================
         // NATIVE WASM CONTRACTS
