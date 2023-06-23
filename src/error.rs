@@ -22,9 +22,6 @@
 /// Main result type used throughout the codebase.
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Result type used in transaction verifications
-pub type VerifyResult<T> = std::result::Result<T, VerifyFailed>;
-
 /// Result type used in the Client module
 pub type ClientResult<T> = std::result::Result<T, ClientFailed>;
 
@@ -297,6 +294,9 @@ pub enum Error {
     #[error("Transaction {0} not found in database")]
     TransactionNotFound(String),
 
+    #[error("Transactioon already seen")]
+    TransactionAlreadySeen,
+
     #[error("Header {0} not found in database")]
     HeaderNotFound(String),
 
@@ -422,10 +422,10 @@ pub enum Error {
     // Wrappers for other error types in this library
     // ==============================================
     #[error(transparent)]
-    VerifyFailed(#[from] VerifyFailed),
+    ClientFailed(#[from] ClientFailed),
 
     #[error(transparent)]
-    ClientFailed(#[from] ClientFailed),
+    TxVerifyFailed(#[from] TxVerifyFailed),
 
     //=============
     // clock
@@ -451,47 +451,27 @@ pub enum Error {
     Custom(String),
 }
 
+#[cfg(feature = "tx")]
 /// Transaction verification errors
 #[derive(Debug, Clone, thiserror::Error)]
-pub enum VerifyFailed {
-    #[error("Transaction has no inputs")]
-    LackingInputs,
+pub enum TxVerifyFailed {
+    #[error("Invalid transaction signature")]
+    InvalidSignature,
 
-    #[error("Transaction has no outputs")]
-    LackingOutputs,
+    #[error("Missing signatures in transaction")]
+    MissingSignatures,
 
-    #[error("Invalid cashier/faucet public key for clear input {0}")]
-    InvalidCashierOrFaucetKey(usize),
+    #[error("Missing contract calls in transaction")]
+    MissingCalls,
 
-    #[error("Invalid Merkle root for input {0}")]
-    InvalidMerkle(usize),
+    #[error("Missing Money::Fee call in transaction")]
+    MissingFee,
 
-    #[error("Nullifier already exists for input {0}")]
-    NullifierExists(usize),
+    #[error("Invalid ZK proof in transaction")]
+    InvalidZkProof,
 
-    #[error("Invalid signature for input {0}")]
-    InputSignature(usize),
-
-    #[error("Invalid signature for clear input {0}")]
-    ClearInputSignature(usize),
-
-    #[error("Token commitments in inputs or outputs to not match")]
-    TokenMismatch,
-
-    #[error("Money in does not match money out (value commitments)")]
-    MissingFunds,
-
-    #[error("Mint proof verification failure for input {0}")]
-    MintProof(usize),
-
-    #[error("Burn proof verification failure for input {0}")]
-    BurnProof(usize),
-
-    #[error("Failed verifying zk proofs: {0}")]
-    ProofVerifyFailed(String),
-
-    #[error("Internal error: {0}")]
-    InternalError(String),
+    #[error("Erroneous transactions found")]
+    ErroneousTxs(Vec<crate::tx::Transaction>),
 }
 
 /// Client module errors
@@ -519,21 +499,9 @@ pub enum ClientFailed {
     VerifyError(String),
 }
 
-impl From<Error> for VerifyFailed {
-    fn from(err: Error) -> Self {
-        Self::InternalError(err.to_string())
-    }
-}
-
 impl From<Error> for ClientFailed {
     fn from(err: Error) -> Self {
         Self::InternalError(err.to_string())
-    }
-}
-
-impl From<VerifyFailed> for ClientFailed {
-    fn from(err: VerifyFailed) -> Self {
-        Self::VerifyError(err.to_string())
     }
 }
 

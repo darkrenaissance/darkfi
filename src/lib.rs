@@ -17,13 +17,16 @@
  */
 
 pub mod error;
-pub use error::{ClientFailed, ClientResult, Error, Result, VerifyFailed, VerifyResult};
+pub use error::{ClientFailed, ClientResult, Error, Result, TxVerifyFailed};
 
 #[cfg(feature = "blockchain")]
 pub mod blockchain;
 
 #[cfg(feature = "blockchain")]
 pub mod consensus;
+
+#[cfg(feature = "blockchain")]
+pub mod validator;
 
 #[cfg(feature = "dht")]
 pub mod dht;

@@ -1105,7 +1105,7 @@ impl ValidatorState {
         };
 
         info!(target: "consensus::validator", "Verifying ZK proofs for transaction {}", tx_hash);
-        match tx.verify_zkps(verifying_keys.clone(), zkp_table).await {
+        match tx.verify_zkps(&verifying_keys, zkp_table).await {
             Ok(()) => {
                 info!(target: "consensus::validator", "ZK proof verification for tx {} successful", tx_hash)
             }

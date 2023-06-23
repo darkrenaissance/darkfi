@@ -32,7 +32,7 @@ use rand::{CryptoRng, RngCore};
 
 use crate::{
     zk::{proof::VerifyingKey, Proof},
-    Error, Result, VerifyFailed,
+    Error, Result, TxVerifyFailed,
 };
 
 macro_rules! zip {
@@ -60,7 +60,7 @@ impl Transaction {
     /// Verify ZK proofs for the entire transaction.
     pub async fn verify_zkps(
         &self,
-        verifying_keys: HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
+        verifying_keys: &HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
         zkp_table: Vec<Vec<(String, Vec<pallas::Base>)>>,
     ) -> Result<()> {
         // TODO: Are we sure we should assert here?
@@ -72,7 +72,7 @@ impl Transaction {
 
             let Some(contract_map) = verifying_keys.get(&call.contract_id.to_bytes()) else {
                 error!("Verifying keys not found for contract {}", call.contract_id);
-                return Err(VerifyFailed::ProofVerifyFailed("VKs not found for contract".to_string()).into())
+                return Err(TxVerifyFailed::InvalidZkProof.into())
             };
 
             for (proof, (zk_ns, public_vals)) in proofs.iter().zip(pubvals.iter()) {
@@ -85,7 +85,7 @@ impl Transaction {
                             "Failed verifying {}::{} ZK proof: {:#?}",
                             call.contract_id, zk_ns, e
                         );
-                        return Err(VerifyFailed::ProofVerifyFailed(e.to_string()).into())
+                        return Err(TxVerifyFailed::InvalidZkProof.into())
                     }
                     debug!("Successfully verified {}::{} ZK proof", call.contract_id, zk_ns);
                     continue
@@ -93,7 +93,7 @@ impl Transaction {
 
                 let e = format!("{}:{} circuit VK nonexistent", call.contract_id, zk_ns);
                 error!("{}", e);
-                return Err(VerifyFailed::ProofVerifyFailed(e).into())
+                return Err(TxVerifyFailed::InvalidZkProof.into())
             }
         }
 
