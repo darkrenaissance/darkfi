@@ -18,12 +18,10 @@
 use std::collections::HashMap;
 
 use darkfi::{
-    consensus::{
-        ValidatorState, ValidatorStatePtr, TESTNET_BOOTSTRAP_TIMESTAMP, TESTNET_GENESIS_HASH_BYTES,
-        TESTNET_GENESIS_TIMESTAMP, TESTNET_INITIAL_DISTRIBUTION,
-    },
+    consensus::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
-    wallet::WalletDb,
+    util::time::TimeKeeper,
+    validator::{Validator, ValidatorConfig, ValidatorPtr},
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Result,
@@ -74,7 +72,7 @@ pub struct DaoTestHarness {
     /// DAO keypair
     pub dao_kp: Keypair,
 
-    pub alice_state: ValidatorStatePtr,
+    pub alice_validator: ValidatorPtr,
     pub money_contract_id: ContractId,
     pub dao_contract_id: ContractId,
     pub proving_keys: HashMap<[u8; 32], Vec<(&'static str, ProvingKey)>>,
@@ -115,33 +113,25 @@ impl DaoTestHarness {
 
         let faucet_pubkeys = vec![faucet_kp.public];
 
-        let alice_wallet = WalletDb::new("sqlite::memory:", "foo").await?;
-
         let alice_sled_db = sled::Config::new().temporary(true).open()?;
 
-        let alice_state = ValidatorState::new(
-            &alice_sled_db,
-            *TESTNET_BOOTSTRAP_TIMESTAMP,
-            *TESTNET_GENESIS_TIMESTAMP,
-            *TESTNET_GENESIS_HASH_BYTES,
-            *TESTNET_INITIAL_DISTRIBUTION,
-            alice_wallet,
-            faucet_pubkeys,
-            false,
-            false,
-        )
-        .await?;
+        // NOTE: we are not using consensus constants here so we
+        // don't get circular dependencies.
+        let time_keeper = TimeKeeper::new(*TESTNET_GENESIS_TIMESTAMP, 10, 90, 0);
+        let config =
+            ValidatorConfig::new(time_keeper, *TESTNET_GENESIS_HASH_BYTES, faucet_pubkeys.to_vec());
+        let alice_validator = Validator::new(&alice_sled_db, config).await?;
 
         let money_contract_id = *MONEY_CONTRACT_ID;
         let dao_contract_id = *DAO_CONTRACT_ID;
 
-        let alice_sled = alice_state.read().await.blockchain.sled_db.clone();
-        let money_db_handle = alice_state.read().await.blockchain.contracts.lookup(
+        let alice_sled = alice_validator.read().await.blockchain.sled_db.clone();
+        let money_db_handle = alice_validator.read().await.blockchain.contracts.lookup(
             &alice_sled,
             &money_contract_id,
             SMART_CONTRACT_ZKAS_DB_NAME,
         )?;
-        let dao_db_handle = alice_state.read().await.blockchain.contracts.lookup(
+        let dao_db_handle = alice_validator.read().await.blockchain.contracts.lookup(
             &alice_sled,
             &dao_contract_id,
             SMART_CONTRACT_ZKAS_DB_NAME,
@@ -203,7 +193,7 @@ impl DaoTestHarness {
             charlie_kp,
             rachel_kp,
             dao_kp,
-            alice_state,
+            alice_validator,
             money_contract_id,
             dao_contract_id,
             proving_keys,
