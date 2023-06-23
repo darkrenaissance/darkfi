@@ -157,6 +157,18 @@ impl Validator {
         Ok(state)
     }
 
+    // ==========================
+    // State transition functions
+    // ==========================
+    // TODO TESTNET: Write down all cases below
+    // State transition checks should be happening in the following cases for a sync node:
+    // 1) When a finalized block is received
+    // 2) When a transaction is being broadcasted to us
+    // State transition checks should be happening in the following cases for a consensus participating node:
+    // 1) When a finalized block is received
+    // 2) When a transaction is being broadcasted to us
+    // ==========================
+
     /// Append to canonical state received finalized slot checkpoints from block sync task.
     // TODO: integrate this to receive_blocks, as slot checkpoints will be part of received block.
     pub async fn receive_slot_checkpoints(
@@ -183,6 +195,7 @@ impl Validator {
         &self,
         blockchain_overlay: BlockchainOverlayPtr,
         tx: &Transaction,
+        time_keeper: &TimeKeeper,
         verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
     ) -> Result<()> {
         let tx_hash = tx.hash();
@@ -209,7 +222,7 @@ impl Validator {
                 &wasm,
                 blockchain_overlay.clone(),
                 call.contract_id,
-                self.consensus.time_keeper.clone(),
+                time_keeper.clone(),
             )?;
 
             debug!(target: "validator", "Executing \"metadata\" call");
@@ -296,7 +309,12 @@ impl Validator {
     /// In case any of the transactions fail, they will be returned to the caller.
     /// The function takes a boolean called `write` which tells it to actually write
     /// the state transitions to the database.
-    pub async fn verify_transactions(&self, txs: &[Transaction], write: bool) -> Result<()> {
+    pub async fn verify_transactions(
+        &self,
+        txs: &[Transaction],
+        verifying_slot: u64,
+        write: bool,
+    ) -> Result<()> {
         debug!(target: "validator", "Verifying {} transactions", txs.len());
 
         debug!(target: "validator", "Instantiating BlockchainOverlay");
@@ -315,10 +333,20 @@ impl Validator {
             }
         }
 
+        // Generate a time keeper using transaction verifying slot
+        let time_keeper = TimeKeeper::new(
+            self.consensus.time_keeper.genesis_ts,
+            self.consensus.time_keeper.epoch_length,
+            self.consensus.time_keeper.slot_time,
+            verifying_slot,
+        );
+
         // Iterate over transactions and attempt to verify them
         for tx in txs {
             blockchain_overlay.lock().unwrap().checkpoint();
-            if let Err(e) = self.verify_transaction(blockchain_overlay.clone(), tx, &mut vks).await
+            if let Err(e) = self
+                .verify_transaction(blockchain_overlay.clone(), tx, &time_keeper, &mut vks)
+                .await
             {
                 warn!(target: "validator", "Transaction verification failed: {}", e);
                 erroneous_txs.push(tx.clone());
