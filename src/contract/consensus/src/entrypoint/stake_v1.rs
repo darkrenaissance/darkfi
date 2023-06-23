@@ -116,7 +116,7 @@ pub(crate) fn consensus_stake_process_instruction_v1(
     // validate this state transition.
     let consensus_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_STAKED_COINS_TREE)?;
     let consensus_unstaked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE)?;
-    let _money_nullifiers_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+    let money_nullifiers_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let money_coin_roots_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
     // ===================================
@@ -141,14 +141,10 @@ pub(crate) fn consensus_stake_process_instruction_v1(
     }
 
     // The nullifiers should not already exist. It is the double-mint protection.
-    // TODO: FIXME: This should be uncommented when Validator::verify_transaction
-    //               works as Read->Write->Read->Write
-    /*
     if !db_contains_key(money_nullifiers_db, &serialize(&input.nullifier))? {
         msg!("[ConsensusStakeV1] Error: Missing nullifier");
         return Err(MoneyError::StakeMissingNullifier.into())
     }
-    */
 
     // Newly created coin for this call is in the output. Here we gather it,
     // and we also check that it hasn't existed before.

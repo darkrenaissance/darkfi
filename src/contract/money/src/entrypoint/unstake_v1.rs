@@ -88,7 +88,7 @@ pub(crate) fn money_unstake_process_instruction_v1(
     // Access the necessary databases where there is information to
     // validate this state transition.
     let money_coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let _consensus_nullifiers_db =
+    let consensus_nullifiers_db =
         db_lookup(*CONSENSUS_CONTRACT_ID, CONSENSUS_CONTRACT_NULLIFIERS_TREE)?;
     let consensus_unstaked_coin_roots_db =
         db_lookup(*CONSENSUS_CONTRACT_ID, CONSENSUS_CONTRACT_UNSTAKED_COIN_ROOTS_TREE)?;
@@ -148,14 +148,10 @@ pub(crate) fn money_unstake_process_instruction_v1(
     }
 
     // The nullifiers should already exist in the Consensus nullifier set
-    // TODO: FIXME: This should be uncommented when Validator::verify_transaction
-    //              works as Read->Write->Read->Write
-    /*
     if !db_contains_key(consensus_nullifiers_db, &serialize(&input.nullifier))? {
         msg!("[MoneyUnstakeV1] Error: Nullifier not found in Consensus nullifier set");
         return Err(MoneyError::MissingNullifier.into())
     }
-    */
 
     // Newly created coin for this call is in the output. Here we gather it,
     // and we also check that it hasn't existed before.
