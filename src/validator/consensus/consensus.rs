@@ -24,10 +24,16 @@ pub struct Consensus {
     pub blockchain: Blockchain,
     /// Helper structure to calculate time related operations
     pub time_keeper: TimeKeeper,
+    /// Genesis block hash
+    pub genesis_block: blake3::Hash,
 }
 
 impl Consensus {
-    pub fn new(blockchain: Blockchain, time_keeper: TimeKeeper) -> Self {
-        Self { blockchain, time_keeper }
+    pub fn new(
+        blockchain: Blockchain,
+        time_keeper: TimeKeeper,
+        genesis_block: blake3::Hash,
+    ) -> Self {
+        Self { blockchain, time_keeper, genesis_block }
     }
 }

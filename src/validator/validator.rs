@@ -16,19 +16,47 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::{collections::HashMap, io::Cursor};
+
 use async_std::sync::{Arc, RwLock};
-use darkfi_sdk::crypto::{PublicKey, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
-use darkfi_serial::serialize;
-use log::info;
+use darkfi_sdk::{
+    crypto::{PublicKey, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
+    pasta::pallas,
+};
+use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
+use log::{debug, error, info, warn};
 
 use crate::{
-    blockchain::{Blockchain, BlockchainOverlay},
+    blockchain::{Blockchain, BlockchainOverlay, BlockchainOverlayPtr},
+    consensus::SlotCheckpoint,
     runtime::vm_runtime::Runtime,
+    tx::Transaction,
     util::time::TimeKeeper,
-    Result,
+    zk::VerifyingKey,
+    Result, TxVerifyFailed,
 };
 
 use super::consensus::Consensus;
+
+/// Configuration for initializing [`Validator`]
+pub struct ValidatorConfig {
+    /// Helper structure to calculate time related operations
+    pub time_keeper: TimeKeeper,
+    /// Genesis block
+    pub genesis_block: blake3::Hash,
+    /// Whitelisted faucet pubkeys (testnet stuff)
+    pub faucet_pubkeys: Vec<PublicKey>,
+}
+
+impl ValidatorConfig {
+    pub fn new(
+        time_keeper: TimeKeeper,
+        genesis_block: blake3::Hash,
+        faucet_pubkeys: Vec<PublicKey>,
+    ) -> Self {
+        Self { time_keeper, genesis_block, faucet_pubkeys }
+    }
+}
 
 /// Atomic pointer to validator.
 pub type ValidatorPtr = Arc<RwLock<Validator>>;
@@ -41,27 +69,18 @@ pub struct Validator {
     pub consensus: Consensus,
 }
 
-/// Configuration for initializing [`Validator`]
-pub struct ValidatorConfig {
-    /// Helper structure to calculate time related operations
-    pub time_keeper: TimeKeeper,
-    /// Genesis block
-    pub genesis_block: blake3::Hash,
-    /// Whitelisted faucet pubkeys (testnet stuff)
-    pub faucet_pubkeys: Vec<PublicKey>,
-}
-
 impl Validator {
     pub async fn new(db: &sled::Db, config: ValidatorConfig) -> Result<ValidatorPtr> {
-        info!(target: "consensus::validator", "Initializing Validator");
+        info!(target: "validator", "Initializing Validator");
 
-        info!(target: "consensus::validator", "Initializing Blockchain");
-        // TODO: Initialize chain, then check if its empty, so we can execute
-        // the transactions of the genesis block
+        info!(target: "validator", "Initializing Blockchain");
+        // TODO: Initialize chain, then check if its empty, so we can add the
+        // genesis block and its transactions
         let blockchain = Blockchain::new(db, config.time_keeper.genesis_ts, config.genesis_block)?;
 
-        info!(target: "consensus::validator", "Initializing Consensus");
-        let consensus = Consensus::new(blockchain.clone(), config.time_keeper);
+        info!(target: "validator", "Initializing Consensus");
+        let consensus =
+            Consensus::new(blockchain.clone(), config.time_keeper, config.genesis_block);
 
         // =====================
         // NATIVE WASM CONTRACTS
@@ -109,11 +128,11 @@ impl Validator {
             ),
         ];
 
-        info!(target: "consensus::validator", "Deploying native WASM contracts");
+        info!(target: "validator", "Deploying native WASM contracts");
         let blockchain_overlay = BlockchainOverlay::new(&blockchain)?;
 
         for nc in native_contracts {
-            info!(target: "consensus::validator", "Deploying {} with ContractID {}", nc.0, nc.1);
+            info!(target: "validator", "Deploying {} with ContractID {}", nc.0, nc.1);
 
             let mut runtime = Runtime::new(
                 &nc.2[..],
@@ -124,17 +143,206 @@ impl Validator {
 
             runtime.deploy(&nc.3)?;
 
-            info!(target: "consensus::validator", "Successfully deployed {}", nc.0);
+            info!(target: "validator", "Successfully deployed {}", nc.0);
         }
 
         // Write the changes to the actual chain db
         blockchain_overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
-        info!(target: "consensus::validator", "Finished deployment of native WASM contracts");
+        info!(target: "validator", "Finished deployment of native WASM contracts");
 
         // Create the actual state
         let state = Arc::new(RwLock::new(Self { blockchain, consensus }));
 
         Ok(state)
+    }
+
+    /// Append to canonical state received finalized slot checkpoints from block sync task.
+    // TODO: integrate this to receive_blocks, as slot checkpoints will be part of received block.
+    pub async fn receive_slot_checkpoints(
+        &mut self,
+        slot_checkpoints: &[SlotCheckpoint],
+    ) -> Result<()> {
+        debug!(target: "validator", "receive_slot_checkpoints(): Appending slot checkpoints to ledger");
+        let current_slot = self.consensus.time_keeper.current_slot();
+        let mut filtered = vec![];
+        for slot_checkpoint in slot_checkpoints {
+            if slot_checkpoint.slot > current_slot {
+                warn!(target: "validator", "receive_slot_checkpoints(): Ignoring future slot checkpoint: {}", slot_checkpoint.slot);
+                continue
+            }
+            filtered.push(slot_checkpoint.clone());
+        }
+        self.blockchain.add_slot_checkpoints(&filtered[..])?;
+
+        Ok(())
+    }
+
+    /// Validate WASM execution, signatures, and ZK proofs for a given [`Transaction`].
+    async fn verify_transaction(
+        &self,
+        blockchain_overlay: BlockchainOverlayPtr,
+        tx: &Transaction,
+        verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
+    ) -> Result<()> {
+        let tx_hash = tx.hash();
+        debug!(target: "validator", "Validating transaction {}", tx_hash);
+
+        // Table of public inputs used for ZK proof verification
+        let mut zkp_table = vec![];
+        // Table of public keys used for signature verification
+        let mut sig_table = vec![];
+
+        // Iterate over all calls to get the metadata
+        for (idx, call) in tx.calls.iter().enumerate() {
+            debug!(target: "validator", "Executing contract call {}", idx);
+
+            // Write the actual payload data
+            let mut payload = vec![];
+            payload.write_u32(idx as u32)?; // Call index
+            tx.calls.encode(&mut payload)?; // Actual call data
+
+            debug!(target: "validator", "Instantiating WASM runtime");
+            let wasm = self.blockchain.wasm_bincode.get(call.contract_id)?;
+
+            let mut runtime = Runtime::new(
+                &wasm,
+                blockchain_overlay.clone(),
+                call.contract_id,
+                self.consensus.time_keeper.clone(),
+            )?;
+
+            debug!(target: "validator", "Executing \"metadata\" call");
+            let metadata = runtime.metadata(&payload)?;
+
+            // Decode the metadata retrieved from the execution
+            let mut decoder = Cursor::new(&metadata);
+
+            // The tuple is (zkasa_ns, public_inputs)
+            let zkp_pub: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
+            let sig_pub: Vec<PublicKey> = Decodable::decode(&mut decoder)?;
+            // TODO: Make sure we've read all the bytes above.
+            debug!(target: "validator", "Successfully executed \"metadata\" call");
+
+            // Here we'll look up verifying keys and insert them into the per-contract map.
+            debug!(target: "validator", "Performing VerifyingKey lookups from the sled db");
+            for (zkas_ns, _) in &zkp_pub {
+                let inner_vk_map = verifying_keys.get_mut(&call.contract_id.to_bytes()).unwrap();
+
+                // TODO: This will be a problem in case of ::deploy, unless we force a different
+                // namespace and disable updating existing circuit. Might be a smart idea to do
+                // so in order to have to care less about being able to verify historical txs.
+                if inner_vk_map.contains_key(zkas_ns.as_str()) {
+                    continue
+                }
+
+                let (_, vk) = self.blockchain.contracts.get_zkas(
+                    &self.blockchain.sled_db,
+                    &call.contract_id,
+                    zkas_ns,
+                )?;
+
+                inner_vk_map.insert(zkas_ns.to_string(), vk);
+            }
+
+            zkp_table.push(zkp_pub);
+            sig_table.push(sig_pub);
+
+            // After getting the metadata, we run the "exec" function with the same runtime
+            // and the same payload.
+            debug!(target: "validator", "Executing \"exec\" call");
+            let state_update = runtime.exec(&payload)?;
+            debug!(target: "validator", "Successfully executed \"exec\" call");
+
+            // If that was successful, we apply the state update in the ephemeral overlay.
+            debug!(target: "validator", "Executing \"apply\" call");
+            runtime.apply(&state_update)?;
+            debug!(target: "validator", "Successfully executed \"apply\" call");
+
+            // At this point we're done with the call and move on to the next one.
+        }
+
+        // When we're done looping and executing over the tx's contract calls, we now
+        // move on with verification. First we verify the signatures as that's cheaper,
+        // and then finally we verify the ZK proofs.
+        debug!(target: "validator", "Verifying signatures for transaction {}", tx_hash);
+        if sig_table.len() != tx.signatures.len() {
+            error!(target: "validator", "Incorrect number of signatures in tx {}", tx_hash);
+            return Err(TxVerifyFailed::MissingSignatures.into())
+        }
+
+        // TODO: Go through the ZK circuits that have to be verified and account for the opcodes.
+
+        if let Err(e) = tx.verify_sigs(sig_table) {
+            error!(target: "validator", "Signature verification for tx {} failed: {}", tx_hash, e);
+            return Err(TxVerifyFailed::InvalidSignature.into())
+        }
+
+        debug!(target: "validator", "Signature verification successful");
+
+        debug!(target: "validator", "Verifying ZK proofs for transaction {}", tx_hash);
+        if let Err(e) = tx.verify_zkps(verifying_keys, zkp_table).await {
+            error!(target: "consensus::validator", "ZK proof verification for tx {} failed: {}", tx_hash, e);
+            return Err(TxVerifyFailed::InvalidZkProof.into())
+        }
+
+        debug!(target: "validator", "ZK proof verification successful");
+        debug!(target: "validator", "Transaction {} verified successfully", tx_hash);
+
+        Ok(())
+    }
+
+    /// Validate a set of [`Transaction`] in sequence and apply them if all are valid.
+    /// In case any of the transactions fail, they will be returned to the caller.
+    /// The function takes a boolean called `write` which tells it to actually write
+    /// the state transitions to the database.
+    pub async fn verify_transactions(&self, txs: &[Transaction], write: bool) -> Result<()> {
+        debug!(target: "validator", "Verifying {} transactions", txs.len());
+
+        debug!(target: "validator", "Instantiating BlockchainOverlay");
+        let blockchain_overlay = BlockchainOverlay::new(&self.blockchain)?;
+
+        // Tracker for failed txs
+        let mut erroneous_txs = vec![];
+
+        // Map of ZK proof verifying keys for the current transaction batch
+        let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
+
+        // Initialize the map
+        for tx in txs {
+            for call in &tx.calls {
+                vks.insert(call.contract_id.to_bytes(), HashMap::new());
+            }
+        }
+
+        // Iterate over transactions and attempt to verify them
+        for tx in txs {
+            blockchain_overlay.lock().unwrap().checkpoint();
+            if let Err(e) = self.verify_transaction(blockchain_overlay.clone(), tx, &mut vks).await
+            {
+                warn!(target: "validator", "Transaction verification failed: {}", e);
+                erroneous_txs.push(tx.clone());
+                // TODO: verify this works as expected
+                blockchain_overlay.lock().unwrap().revert_to_checkpoint()?;
+            }
+        }
+
+        let lock = blockchain_overlay.lock().unwrap();
+        let mut overlay = lock.overlay.lock().unwrap();
+        if !erroneous_txs.is_empty() {
+            warn!(target: "validator", "Erroneous transactions found in set");
+            overlay.purge_new_trees()?;
+            return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
+        }
+
+        if !write {
+            debug!(target: "validator", "Skipping apply of state updates because write=false");
+            overlay.purge_new_trees()?;
+            return Ok(())
+        }
+
+        debug!(target: "validator", "Applying overlay changes");
+        overlay.apply()?;
+        Ok(())
     }
 }

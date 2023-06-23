@@ -18,7 +18,7 @@
 
 /// DarkFi validator
 pub mod validator;
-pub use validator::{Validator, ValidatorPtr};
+pub use validator::{Validator, ValidatorConfig, ValidatorPtr};
 
 /// DarkFi consensus
 pub mod consensus;

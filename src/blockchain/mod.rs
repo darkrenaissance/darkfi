@@ -316,4 +316,16 @@ impl BlockchainOverlay {
 
         Ok(Arc::new(Mutex::new(Self { overlay, slot_checkpoints, contracts, wasm_bincode })))
     }
+
+    /// Checkpoint overlay so we can revert to it, if needed.
+    pub fn checkpoint(&self) {
+        self.overlay.lock().unwrap().checkpoint();
+    }
+
+    /// Revert to current overlay checkpoint.
+    pub fn revert_to_checkpoint(&self) -> Result<()> {
+        self.overlay.lock().unwrap().revert_to_checkpoint()?;
+
+        Ok(())
+    }
 }
