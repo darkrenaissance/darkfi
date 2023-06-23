@@ -60,10 +60,10 @@ mod tests {
         // Base structures
         let events_queue = EventsQueue::<TestEvent>::new();
         let mut model = Model::new(events_queue.clone());
-        let view = View::new(events_queue);
+        let _view = View::new(events_queue);
 
         // Buffers
-        let seen_event: SeenPtr<EventId> = Seen::new();
+        let _seen_event: SeenPtr<EventId> = Seen::new();
         let seen_inv: SeenPtr<EventId> = Seen::new();
 
         let seen_ids = Seen::new();
@@ -72,7 +72,7 @@ mod tests {
 
         let test_event0 =
             TestEvent { nick: "brawndo".to_string(), msg: "Electrolytes".to_string() };
-        let test_event1 =
+        let _test_event1 =
             TestEvent { nick: "camacho".to_string(), msg: "Shieeeeeeeet".to_string() };
 
         // We create an event and broadcast it
