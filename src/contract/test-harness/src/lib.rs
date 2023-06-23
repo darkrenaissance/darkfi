@@ -19,11 +19,10 @@
 use std::collections::HashMap;
 
 use darkfi::{
-    consensus::{
-        SlotCheckpoint, ValidatorState, ValidatorStatePtr, TESTNET_BOOTSTRAP_TIMESTAMP,
-        TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP, TESTNET_INITIAL_DISTRIBUTION,
-    },
+    consensus::{SlotCheckpoint, TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
+    util::time::TimeKeeper,
+    validator::{Validator, ValidatorConfig, ValidatorPtr},
     wallet::{WalletDb, WalletPtr},
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
@@ -114,7 +113,7 @@ pub enum TxAction {
 pub struct Wallet {
     pub keypair: Keypair,
     pub token_mint_authority: Keypair,
-    pub state: ValidatorStatePtr,
+    pub validator: ValidatorPtr,
     pub money_merkle_tree: MerkleTree,
     pub consensus_staked_merkle_tree: MerkleTree,
     pub consensus_unstaked_merkle_tree: MerkleTree,
@@ -131,18 +130,13 @@ impl Wallet {
         // Use pregenerated vks
         vks::inject(&sled_db)?;
 
-        let state = ValidatorState::new(
-            &sled_db,
-            *TESTNET_BOOTSTRAP_TIMESTAMP,
-            *TESTNET_GENESIS_TIMESTAMP,
-            *TESTNET_GENESIS_HASH_BYTES,
-            *TESTNET_INITIAL_DISTRIBUTION,
-            wallet.clone(),
-            faucet_pubkeys.to_vec(),
-            false,
-            false,
-        )
-        .await?;
+        // Generate validator
+        // NOTE: we are not using consensus constants here so we
+        // don't get circular dependencies.
+        let time_keeper = TimeKeeper::new(*TESTNET_GENESIS_TIMESTAMP, 10, 90, 0);
+        let config =
+            ValidatorConfig::new(time_keeper, *TESTNET_GENESIS_HASH_BYTES, faucet_pubkeys.to_vec());
+        let validator = Validator::new(&sled_db, config).await?;
 
         // Create necessary Merkle trees for tracking
         let money_merkle_tree = MerkleTree::new(100);
@@ -157,7 +151,7 @@ impl Wallet {
         Ok(Self {
             keypair,
             token_mint_authority,
-            state,
+            validator,
             money_merkle_tree,
             consensus_staked_merkle_tree,
             consensus_unstaked_merkle_tree,
@@ -201,7 +195,7 @@ impl TestHarness {
 
         // Get the zkas circuits and build proving keys
         let mut proving_keys = HashMap::new();
-        let alice_sled = alice.state.read().await.blockchain.sled_db.clone();
+        let alice_sled = alice.validator.read().await.blockchain.sled_db.clone();
 
         macro_rules! mkpk {
             ($db:expr, $ns:expr) => {
@@ -217,7 +211,7 @@ impl TestHarness {
         }
 
         if contracts.contains(&"money".to_string()) {
-            let db_handle = alice.state.read().await.blockchain.contracts.lookup(
+            let db_handle = alice.validator.read().await.blockchain.contracts.lookup(
                 &alice_sled,
                 &MONEY_CONTRACT_ID,
                 SMART_CONTRACT_ZKAS_DB_NAME,
@@ -229,7 +223,7 @@ impl TestHarness {
         }
 
         if contracts.contains(&"consensus".to_string()) {
-            let db_handle = alice.state.read().await.blockchain.contracts.lookup(
+            let db_handle = alice.validator.read().await.blockchain.contracts.lookup(
                 &alice_sled,
                 &CONSENSUS_CONTRACT_ID,
                 SMART_CONTRACT_ZKAS_DB_NAME,
@@ -240,7 +234,7 @@ impl TestHarness {
         }
 
         if contracts.contains(&"dao".to_string()) {
-            let db_handle = alice.state.read().await.blockchain.contracts.lookup(
+            let db_handle = alice.validator.read().await.blockchain.contracts.lookup(
                 &alice_sled,
                 &DAO_CONTRACT_ID,
                 SMART_CONTRACT_ZKAS_DB_NAME,
@@ -419,7 +413,7 @@ impl TestHarness {
     pub async fn get_slot_checkpoint_by_slot(&self, slot: u64) -> Result<SlotCheckpoint> {
         let faucet = self.holders.get(&Holder::Faucet).unwrap();
         let slot_checkpoint =
-            faucet.state.read().await.blockchain.get_slot_checkpoints_by_slot(&[slot])?[0]
+            faucet.validator.read().await.blockchain.get_slot_checkpoints_by_slot(&[slot])?[0]
                 .clone()
                 .unwrap();
 
@@ -430,7 +424,7 @@ impl TestHarness {
         // We grab the genesis slot to generate slot checkpoint
         // using same consensus parameters
         let faucet = self.holders.get(&Holder::Faucet).unwrap();
-        let genesis_block = faucet.state.read().await.consensus.genesis_block;
+        let genesis_block = faucet.validator.read().await.consensus.genesis_block;
         let fork_hashes = vec![genesis_block];
         let fork_previous_hashes = vec![genesis_block];
         let genesis_slot = self.get_slot_checkpoint_by_slot(0).await?;
@@ -445,7 +439,12 @@ impl TestHarness {
 
         // Store generated slot checkpoint
         for wallet in self.holders.values() {
-            wallet.state.write().await.receive_slot_checkpoints(&[slot_checkpoint.clone()]).await?;
+            wallet
+                .validator
+                .write()
+                .await
+                .receive_slot_checkpoints(&[slot_checkpoint.clone()])
+                .await?;
         }
 
         Ok(slot_checkpoint)

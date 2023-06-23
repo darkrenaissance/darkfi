@@ -49,7 +49,7 @@ impl TestHarness {
             self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusUnstakeRequest).unwrap();
-        let epoch = wallet.state.read().await.consensus.time_keeper.slot_epoch(slot);
+        let epoch = wallet.validator.read().await.consensus.time_keeper.slot_epoch(slot);
         let timer = Instant::now();
 
         // Building Consensus::Unstake params
@@ -116,9 +116,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusUnstakeRequest).unwrap();
         let timer = Instant::now();
 
-        let erroneous_txs =
-            wallet.state.read().await.verify_transactions(&[tx.clone()], slot, true).await?;
-        assert!(erroneous_txs.is_empty());
+        wallet.validator.read().await.verify_transactions(&[tx.clone()], slot, true).await?;
         wallet.consensus_unstaked_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
@@ -137,7 +135,15 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusUnstakeRequest).unwrap();
         let timer = Instant::now();
 
-        let erroneous_txs = wallet.state.read().await.verify_transactions(txs, slot, false).await?;
+        let erroneous_txs = wallet
+            .validator
+            .read()
+            .await
+            .verify_transactions(txs, slot, false)
+            .await
+            .err()
+            .unwrap()
+            .retrieve_erroneous_txs()?;
         assert_eq!(erroneous_txs.len(), erroneous);
         tx_action_benchmark.verify_times.push(timer.elapsed());
 

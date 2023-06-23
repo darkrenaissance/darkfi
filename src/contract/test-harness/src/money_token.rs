@@ -93,9 +93,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTokenMint).unwrap();
         let timer = Instant::now();
 
-        let erroneous_txs =
-            wallet.state.read().await.verify_transactions(&[tx.clone()], slot, true).await?;
-        assert!(erroneous_txs.is_empty());
+        wallet.validator.read().await.verify_transactions(&[tx.clone()], slot, true).await?;
         wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
@@ -153,9 +151,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTokenFreeze).unwrap();
         let timer = Instant::now();
 
-        let erroneous_txs =
-            wallet.state.read().await.verify_transactions(&[tx.clone()], slot, true).await?;
-        assert!(erroneous_txs.is_empty());
+        wallet.validator.read().await.verify_transactions(&[tx.clone()], slot, true).await?;
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())

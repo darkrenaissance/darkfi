@@ -31,8 +31,9 @@ use log::{debug, error};
 use rand::{CryptoRng, RngCore};
 
 use crate::{
+    error::TxVerifyFailed,
     zk::{proof::VerifyingKey, Proof},
-    Error, Result, TxVerifyFailed,
+    Error, Result,
 };
 
 macro_rules! zip {

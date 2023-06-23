@@ -101,9 +101,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyAirdrop).unwrap();
         let timer = Instant::now();
 
-        let erroneous_txs =
-            wallet.state.read().await.verify_transactions(&[tx.clone()], slot, true).await?;
-        assert!(erroneous_txs.is_empty());
+        wallet.validator.read().await.verify_transactions(&[tx.clone()], slot, true).await?;
         wallet.money_merkle_tree.append(MerkleNode::from(params.outputs[0].coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 

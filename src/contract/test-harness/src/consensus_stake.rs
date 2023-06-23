@@ -47,7 +47,7 @@ impl TestHarness {
         let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusStake).unwrap();
-        let epoch = wallet.state.read().await.consensus.time_keeper.slot_epoch(slot);
+        let epoch = wallet.validator.read().await.consensus.time_keeper.slot_epoch(slot);
         let timer = Instant::now();
 
         // Building Money::Stake params
@@ -128,9 +128,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusStake).unwrap();
         let timer = Instant::now();
 
-        let erroneous_txs =
-            wallet.state.read().await.verify_transactions(&[tx.clone()], slot, true).await?;
-        assert!(erroneous_txs.is_empty());
+        wallet.validator.read().await.verify_transactions(&[tx.clone()], slot, true).await?;
         wallet.consensus_staked_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 

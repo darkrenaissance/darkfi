@@ -17,7 +17,7 @@
  */
 
 pub mod error;
-pub use error::{ClientFailed, ClientResult, Error, Result, TxVerifyFailed};
+pub use error::{ClientFailed, ClientResult, Error, Result};
 
 #[cfg(feature = "blockchain")]
 pub mod blockchain;

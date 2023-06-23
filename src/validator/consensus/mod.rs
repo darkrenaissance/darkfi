@@ -16,6 +16,24 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/// DarkFi consensus
-pub mod consensus;
-pub use consensus::Consensus;
+use crate::{blockchain::Blockchain, util::time::TimeKeeper};
+
+/// This struct represents the information required by the consensus algorithm
+pub struct Consensus {
+    /// Canonical (finalized) blockchain
+    pub blockchain: Blockchain,
+    /// Helper structure to calculate time related operations
+    pub time_keeper: TimeKeeper,
+    /// Genesis block hash
+    pub genesis_block: blake3::Hash,
+}
+
+impl Consensus {
+    pub fn new(
+        blockchain: Blockchain,
+        time_keeper: TimeKeeper,
+        genesis_block: blake3::Hash,
+    ) -> Self {
+        Self { blockchain, time_keeper, genesis_block }
+    }
+}

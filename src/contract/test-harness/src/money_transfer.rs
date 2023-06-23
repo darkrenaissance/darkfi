@@ -116,9 +116,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
         let timer = Instant::now();
 
-        let erroneous_txs =
-            wallet.state.read().await.verify_transactions(&[tx.clone()], slot, true).await?;
-        assert!(erroneous_txs.is_empty());
+        wallet.validator.read().await.verify_transactions(&[tx.clone()], slot, true).await?;
         if append {
             for output in &params.outputs {
                 wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
@@ -142,8 +140,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
         let timer = Instant::now();
 
-        let erroneous_txs = wallet.state.read().await.verify_transactions(txs, slot, true).await?;
-        assert!(erroneous_txs.is_empty());
+        wallet.validator.read().await.verify_transactions(txs, slot, true).await?;
         if append {
             for params in txs_params {
                 for output in &params.outputs {
@@ -167,9 +164,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
         let timer = Instant::now();
 
-        let erroneous_txs =
-            wallet.state.read().await.verify_transactions(&[tx.clone()], slot, false).await?;
-        assert!(erroneous_txs.is_empty());
+        wallet.validator.read().await.verify_transactions(&[tx.clone()], slot, false).await?;
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
@@ -187,7 +182,15 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
         let timer = Instant::now();
 
-        let erroneous_txs = wallet.state.read().await.verify_transactions(txs, slot, false).await?;
+        let erroneous_txs = wallet
+            .validator
+            .read()
+            .await
+            .verify_transactions(txs, slot, false)
+            .await
+            .err()
+            .unwrap()
+            .retrieve_erroneous_txs()?;
         assert_eq!(erroneous_txs.len(), erroneous);
         tx_action_benchmark.verify_times.push(timer.elapsed());
 

@@ -424,6 +424,7 @@ pub enum Error {
     #[error(transparent)]
     ClientFailed(#[from] ClientFailed),
 
+    #[cfg(feature = "tx")]
     #[error(transparent)]
     TxVerifyFailed(#[from] TxVerifyFailed),
 
@@ -449,6 +450,20 @@ pub enum Error {
     // Catch-all
     #[error("{0}")]
     Custom(String),
+}
+
+#[cfg(feature = "tx")]
+impl Error {
+    /// Auxiliary function to retrieve the vector of erroneous
+    /// transactions from a TxVerifyFailed error.
+    /// In any other case, we return the error itself.
+    pub fn retrieve_erroneous_txs(&self) -> Result<Vec<crate::tx::Transaction>> {
+        if let Self::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(erroneous_txs)) = self {
+            return Ok(erroneous_txs.clone())
+        };
+
+        Err(self.clone())
+    }
 }
 
 #[cfg(feature = "tx")]
