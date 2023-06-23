@@ -378,7 +378,7 @@ impl DataParser {
 
                             for (time, txt1, txt2) in log_buffer.iter() {
                                 let msg: (NanoTimestamp, String, String) =
-                                    (time.clone(), txt1.to_string(), txt2.to_string());
+                                    (*time, txt1.to_string(), txt2.to_string());
                                 msg_log.push(msg);
                             }
 
@@ -556,7 +556,7 @@ impl DataParser {
 
                             for (time, txt1, txt2) in log_buffer.iter() {
                                 let msg: (NanoTimestamp, String, String) =
-                                    (time.clone(), txt1.to_string(), txt2.to_string());
+                                    (*time, txt1.to_string(), txt2.to_string());
                                 msg_log.push(msg);
                             }
 

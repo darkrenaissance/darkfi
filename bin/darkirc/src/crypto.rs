@@ -156,7 +156,7 @@ fn pad(data: Vec<u8>) -> Vec<u8> {
     assert!(data.len() < MAXIMUM_LENGTH_OF_NICK_CHAN_CNT);
     let padding = vec![0u8; MAXIMUM_LENGTH_OF_NICK_CHAN_CNT - data.len()];
 
-    let mut data = data.clone();
+    let mut data = data;
     data.extend_from_slice(&padding);
     data
 }
