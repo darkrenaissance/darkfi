@@ -40,7 +40,7 @@ circuit "ConsensusProposal_V1" {
 	ZERO = witness_base(0);
 	SERIAL_PREFIX = witness_base(2);
 	SEED_PREFIX = witness_base(3);
-        SECRET_PREFIX = witness_base(4);
+	SECRET_PREFIX = witness_base(4);
 
 	# =============
 	# Burn old coin
