@@ -19,7 +19,7 @@ args = parser.parse_args()
 channels = [args.channel, args.alt_chan] if args.alt_chan is not None else args.channel
 
 ircc = irc.IRC()
-ircc.connect(args.server, args.port, channels, args.nickname)
+ircc.connect(args.server,int(args.port), channels, args.nickname)
 
 while True:
     with open(args.pipe) as handle:
