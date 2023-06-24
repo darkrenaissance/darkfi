@@ -22,7 +22,7 @@ use clap::Parser;
 use darkfi::{
     blockchain::{
         block_store::{BlockOrderStore, BlockStore, HeaderStore},
-        slot_checkpoint_store::SlotCheckpointStore,
+        slot_store::SlotStore,
         tx_store::TxStore,
         Blockchain,
     },
@@ -211,42 +211,42 @@ impl BlockOrderStoreInfo {
 }
 
 #[derive(Debug)]
-struct SlotCheckpointInfo {
-    _slot: u64,
+struct SlotInfo {
+    _id: u64,
     _eta: String,
     _sigma1: String,
     _sigma2: String,
 }
 
-impl SlotCheckpointInfo {
-    pub fn new(_slot: u64, _eta: String, _sigma1: String, _sigma2: String) -> SlotCheckpointInfo {
-        SlotCheckpointInfo { _slot, _eta, _sigma1, _sigma2 }
+impl SlotInfo {
+    pub fn new(_id: u64, _eta: String, _sigma1: String, _sigma2: String) -> SlotInfo {
+        SlotInfo { _id, _eta, _sigma1, _sigma2 }
     }
 }
 
 #[derive(Debug)]
-struct SlotCheckpointStoreInfo {
-    _slot_checkpoints: Vec<SlotCheckpointInfo>,
+struct SlotStoreInfo {
+    _slots: Vec<SlotInfo>,
 }
 
-impl SlotCheckpointStoreInfo {
-    pub fn new(slotcheckpointstore: &SlotCheckpointStore) -> SlotCheckpointStoreInfo {
-        let mut _slot_checkpoints = Vec::new();
-        let result = slotcheckpointstore.get_all();
+impl SlotStoreInfo {
+    pub fn new(slot_store: &SlotStore) -> SlotStoreInfo {
+        let mut _slots = Vec::new();
+        let result = slot_store.get_all();
         match result {
             Ok(iter) => {
-                for slot_checkpoint in iter.iter() {
-                    _slot_checkpoints.push(SlotCheckpointInfo::new(
-                        slot_checkpoint.slot,
-                        format!("{:?}", slot_checkpoint.eta),
-                        format!("{:?}", slot_checkpoint.sigma1),
-                        format!("{:?}", slot_checkpoint.sigma2),
+                for slot in iter.iter() {
+                    _slots.push(SlotInfo::new(
+                        slot.id,
+                        format!("{:?}", slot.previous_eta),
+                        format!("{:?}", slot.sigma1),
+                        format!("{:?}", slot.sigma2),
                     ));
                 }
             }
             Err(e) => println!("Error: {:?}", e),
         }
-        SlotCheckpointStoreInfo { _slot_checkpoints }
+        SlotStoreInfo { _slots }
     }
 }
 
@@ -289,7 +289,7 @@ struct BlockchainInfo {
     _headers: HeaderStoreInfo,
     _blocks: BlockInfoChain,
     _order: BlockOrderStoreInfo,
-    _slot_checkpoints: SlotCheckpointStoreInfo,
+    _slots: SlotStoreInfo,
     _transactions: TxStoreInfo,
 }
 
@@ -298,9 +298,9 @@ impl BlockchainInfo {
         let _headers = HeaderStoreInfo::new(&blockchain.headers);
         let _blocks = BlockInfoChain::new(&blockchain.blocks);
         let _order = BlockOrderStoreInfo::new(&blockchain.order);
-        let _slot_checkpoints = SlotCheckpointStoreInfo::new(&blockchain.slot_checkpoints);
+        let _slots = SlotStoreInfo::new(&blockchain.slots);
         let _transactions = TxStoreInfo::new(&blockchain.transactions);
-        BlockchainInfo { _headers, _blocks, _order, _slot_checkpoints, _transactions }
+        BlockchainInfo { _headers, _blocks, _order, _slots, _transactions }
     }
 }
 
@@ -318,7 +318,7 @@ fn statistics(folder: &str, node: &str, blockchain: &str) -> Result<()> {
     // Retrieve statistics
     let blockchain =
         Blockchain::new(&sled_db, *TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES)?;
-    let slot = blockchain.last_slot_checkpoint()?.slot;
+    let slot = blockchain.last_slot()?.id;
     let epoch = slot / EPOCH_LENGTH as u64;
     let (_, block) = blockchain.last()?;
     let blocks = blockchain.len();
