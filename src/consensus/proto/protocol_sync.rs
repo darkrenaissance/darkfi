@@ -21,10 +21,12 @@ use async_trait::async_trait;
 use log::{debug, error, info};
 use smol::Executor;
 
+use darkfi_sdk::blockchain::SlotCheckpoint;
+
 use crate::{
     consensus::{
         block::{BlockInfo, BlockOrder, BlockResponse},
-        state::{SlotCheckpoint, SlotCheckpointRequest, SlotCheckpointResponse},
+        state::{SlotCheckpointRequest, SlotCheckpointResponse},
         ValidatorStatePtr,
     },
     net::{

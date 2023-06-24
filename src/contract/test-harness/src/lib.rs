@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 
 use darkfi::{
-    consensus::{SlotCheckpoint, TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
+    consensus::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
     util::time::TimeKeeper,
     validator::{Validator, ValidatorConfig, ValidatorPtr},
@@ -41,9 +41,12 @@ use darkfi_money_contract::{
     MONEY_CONTRACT_ZKAS_MINT_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1,
     MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
-use darkfi_sdk::crypto::{
-    poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey,
-    CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+use darkfi_sdk::{
+    blockchain::SlotCheckpoint,
+    crypto::{
+        poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey,
+        CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+    },
 };
 use darkfi_serial::{deserialize, serialize};
 use log::{info, warn};

@@ -20,6 +20,7 @@ use std::{collections::HashMap, io::Cursor};
 
 use async_std::sync::{Arc, RwLock};
 use darkfi_sdk::{
+    blockchain::SlotCheckpoint,
     crypto::{PublicKey, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
     pasta::pallas,
 };
@@ -28,7 +29,6 @@ use log::{debug, error, info, warn};
 
 use crate::{
     blockchain::{Blockchain, BlockchainOverlay, BlockchainOverlayPtr},
-    consensus::SlotCheckpoint,
     error::TxVerifyFailed,
     runtime::vm_runtime::Runtime,
     tx::Transaction,

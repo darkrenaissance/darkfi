@@ -17,7 +17,8 @@
  */
 
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, MerkleTree},
+    blockchain::SlotCheckpoint,
+    crypto::MerkleTree,
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
@@ -693,51 +694,6 @@ pub struct ConsensusSlotCheckpointsResponse {
 impl net::Message for ConsensusSlotCheckpointsResponse {
     fn name() -> &'static str {
         "consensusslotcheckpointsresponse"
-    }
-}
-
-/// Auxiliary structure used to keep track of slot validation parameters.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct SlotCheckpoint {
-    /// Slot UID
-    pub slot: u64,
-    /// Previous slot eta
-    pub previous_eta: pallas::Base,
-    /// Previous slot forks last proposal/block hashes,
-    /// as observed by the validator
-    pub fork_hashes: Vec<blake3::Hash>,
-    /// Previous slot second to last proposal/block hashes,
-    /// as observed by the validator
-    pub fork_previous_hashes: Vec<blake3::Hash>,
-    /// Slot sigma1
-    pub sigma1: pallas::Base,
-    /// Slot sigma2
-    pub sigma2: pallas::Base,
-}
-
-impl SlotCheckpoint {
-    pub fn new(
-        slot: u64,
-        previous_eta: pallas::Base,
-        fork_hashes: Vec<blake3::Hash>,
-        fork_previous_hashes: Vec<blake3::Hash>,
-        sigma1: pallas::Base,
-        sigma2: pallas::Base,
-    ) -> Self {
-        Self { slot, previous_eta, fork_hashes, fork_previous_hashes, sigma1, sigma2 }
-    }
-
-    /// Generate the genesis slot checkpoint.
-    pub fn genesis_slot_checkpoint(genesis_block: blake3::Hash) -> Self {
-        let previous_eta = pallas::Base::ZERO;
-        let fork_hashes = vec![];
-        // Since genesis block has no previous,
-        // we will use its own hash as its previous.
-        let fork_previous_hashes = vec![genesis_block];
-        let sigma1 = pallas::Base::ZERO;
-        let sigma2 = pallas::Base::ZERO;
-
-        Self::new(0, previous_eta, fork_hashes, fork_previous_hashes, sigma1, sigma2)
     }
 }
 

@@ -21,6 +21,10 @@ pub use num_bigint;
 pub use num_traits;
 pub use pasta_curves as pasta;
 
+/// Blockchain structures
+pub mod blockchain;
+pub use blockchain::SlotCheckpoint;
+
 /// Database functions
 pub mod db;
 

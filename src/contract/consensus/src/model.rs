@@ -114,26 +114,6 @@ pub const HEADSTART: pallas::Base = pallas::Base::from_raw([
     46116860184273879,
 ]);
 
-/// Auxiliary structure to decode `darkfi::consensus::state::SlotCheckpoint`
-/// to use in contract.
-#[derive(SerialDecodable)]
-pub struct SlotCheckpoint {
-    /// Slot UID
-    pub slot: u64,
-    /// Previous slot eta
-    pub previous_eta: pallas::Base,
-    /// Previous slot forks last proposal/block hashes,
-    /// as observed by the validator
-    pub fork_hashes: Vec<blake3::Hash>,
-    /// Previous slot second to last proposal/block hashes,
-    /// as observed by the validator
-    pub fork_previous_hashes: Vec<blake3::Hash>,
-    /// Slot sigma1
-    pub sigma1: pallas::Base,
-    /// Slot sigma2
-    pub sigma2: pallas::Base,
-}
-
 /// Auxiliary function to calculate the grace (locked) period, denominated
 /// in epochs.
 #[inline]

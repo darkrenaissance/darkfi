@@ -16,9 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_sdk::blockchain::SlotCheckpoint;
 use darkfi_serial::{deserialize, serialize};
 
-use crate::{blockchain::SledDbOverlayPtr, consensus::SlotCheckpoint, Error, Result};
+use crate::{blockchain::SledDbOverlayPtr, Error, Result};
 
 const SLED_SLOT_CHECKPOINT_TREE: &[u8] = b"_slot_checkpoints";
 

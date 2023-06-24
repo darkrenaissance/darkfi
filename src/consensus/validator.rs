@@ -20,6 +20,7 @@ use std::{collections::HashMap, io::Cursor};
 
 use async_std::sync::{Arc, RwLock};
 use darkfi_sdk::{
+    blockchain::SlotCheckpoint,
     crypto::{
         contract_id::{CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
         schnorr::{SchnorrPublic, SchnorrSecret},
@@ -36,7 +37,7 @@ use serde_json::json;
 use super::{
     constants,
     lead_coin::LeadCoin,
-    state::{ConsensusState, Fork, SlotCheckpoint, StateCheckpoint},
+    state::{ConsensusState, Fork, StateCheckpoint},
     BlockInfo, BlockProposal, Header, LeadInfo, LeadProof,
 };
 

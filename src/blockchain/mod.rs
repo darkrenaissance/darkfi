@@ -20,10 +20,11 @@ use std::sync::{Arc, Mutex};
 
 use log::debug;
 
+use darkfi_sdk::blockchain::SlotCheckpoint;
 use darkfi_serial::serialize;
 
 use crate::{
-    consensus::{Block, BlockInfo, SlotCheckpoint},
+    consensus::{Block, BlockInfo},
     tx::Transaction,
     util::time::Timestamp,
     Result,

@@ -23,6 +23,7 @@ use darkfi_money_contract::{
     CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1,
 };
 use darkfi_sdk::{
+    blockchain::SlotCheckpoint,
     crypto::{pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode},
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -36,8 +37,8 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 use crate::{
     error::ConsensusError,
     model::{
-        ConsensusProposalParamsV1, ConsensusProposalUpdateV1, SlotCheckpoint, GRACE_PERIOD,
-        HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX, REWARD, REWARD_PALLAS,
+        ConsensusProposalParamsV1, ConsensusProposalUpdateV1, GRACE_PERIOD, HEADSTART,
+        MU_RHO_PREFIX, MU_Y_PREFIX, REWARD, REWARD_PALLAS,
     },
     ConsensusFunction,
 };

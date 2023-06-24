@@ -19,7 +19,6 @@
 //! This API is crufty. Please rework it into something nice to read and nice to use.
 
 use darkfi::{
-    consensus::SlotCheckpoint,
     zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
@@ -29,6 +28,7 @@ use darkfi_money_contract::{
     model::{Coin, ConsensusInput, ConsensusOutput},
 };
 use darkfi_sdk::{
+    blockchain::SlotCheckpoint,
     bridgetree::Hashable,
     crypto::{
         ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64,
