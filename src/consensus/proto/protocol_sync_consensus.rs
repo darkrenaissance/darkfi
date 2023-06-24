@@ -23,10 +23,7 @@ use smol::Executor;
 
 use crate::{
     consensus::{
-        state::{
-            ConsensusRequest, ConsensusResponse, ConsensusSlotCheckpointsRequest,
-            ConsensusSlotCheckpointsResponse,
-        },
+        state::{ConsensusRequest, ConsensusResponse, ConsensusSyncRequest, ConsensusSyncResponse},
         ValidatorStatePtr,
     },
     net::{
@@ -39,7 +36,7 @@ use crate::{
 pub struct ProtocolSyncConsensus {
     channel: ChannelPtr,
     request_sub: MessageSubscription<ConsensusRequest>,
-    slot_checkpoints_request_sub: MessageSubscription<ConsensusSlotCheckpointsRequest>,
+    sync_request_sub: MessageSubscription<ConsensusSyncRequest>,
     jobsman: ProtocolJobsManagerPtr,
     state: ValidatorStatePtr,
 }
@@ -52,16 +49,15 @@ impl ProtocolSyncConsensus {
     ) -> Result<ProtocolBasePtr> {
         let msg_subsystem = channel.get_message_subsystem();
         msg_subsystem.add_dispatch::<ConsensusRequest>().await;
-        msg_subsystem.add_dispatch::<ConsensusSlotCheckpointsRequest>().await;
+        msg_subsystem.add_dispatch::<ConsensusSyncRequest>().await;
 
         let request_sub = channel.subscribe_msg::<ConsensusRequest>().await?;
-        let slot_checkpoints_request_sub =
-            channel.subscribe_msg::<ConsensusSlotCheckpointsRequest>().await?;
+        let sync_request_sub = channel.subscribe_msg::<ConsensusSyncRequest>().await?;
 
         Ok(Arc::new(Self {
             channel: channel.clone(),
             request_sub,
-            slot_checkpoints_request_sub,
+            sync_request_sub,
             jobsman: ProtocolJobsManager::new("SyncConsensusProtocol", channel),
             state,
         }))
@@ -110,7 +106,7 @@ impl ProtocolSyncConsensus {
                     vec![]
                 }
             };
-            let slot_checkpoints = lock.consensus.slot_checkpoints.clone();
+            let slots = lock.consensus.slots.clone();
             let mut f_history = vec![];
             for f in &lock.consensus.f_history {
                 let f_str = format!("{:}", f);
@@ -127,7 +123,7 @@ impl ProtocolSyncConsensus {
                 current_slot,
                 forks,
                 pending_txs,
-                slot_checkpoints,
+                slots,
                 f_history,
                 err_history,
                 nullifiers,
@@ -142,17 +138,17 @@ impl ProtocolSyncConsensus {
         }
     }
 
-    async fn handle_receive_slot_checkpoints_request(self: Arc<Self>) -> Result<()> {
+    async fn handle_receive_sync_request(self: Arc<Self>) -> Result<()> {
         debug!(
-            target: "consensus::protocol_sync_consensus::handle_receive_slot_checkpoints_request()",
+            target: "consensus::protocol_sync_consensus::handle_receive_sync_request()",
             "START"
         );
         loop {
-            let req = match self.slot_checkpoints_request_sub.receive().await {
+            let req = match self.sync_request_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
                     debug!(
-                        target: "consensus::protocol_sync_consensus::handle_receive_slot_checkpoints_request()",
+                        target: "consensus::protocol_sync_consensus::handle_receive_sync_request()",
                         "recv fail: {}",
                         e
                     );
@@ -161,7 +157,7 @@ impl ProtocolSyncConsensus {
             };
 
             debug!(
-                target: "consensus::protocol_sync_consensus::handle_receive_slot_checkpoints_request()",
+                target: "consensus::protocol_sync_consensus::handle_receive_sync_request()",
                 "received {:?}",
                 req
             );
@@ -170,11 +166,11 @@ impl ProtocolSyncConsensus {
             let lock = self.state.read().await;
             let bootstrap_slot = lock.consensus.bootstrap_slot;
             let proposing = lock.consensus.proposing;
-            let is_empty = lock.consensus.slot_checkpoints_is_empty();
-            let response = ConsensusSlotCheckpointsResponse { bootstrap_slot, proposing, is_empty };
+            let is_empty = lock.consensus.slots_is_empty();
+            let response = ConsensusSyncResponse { bootstrap_slot, proposing, is_empty };
             if let Err(e) = self.channel.send(response).await {
                 error!(
-                    target: "consensus::protocol_sync_consensus::handle_receive_slot_checkpoints_request()",
+                    target: "consensus::protocol_sync_consensus::handle_receive_sync_request()",
                     "channel send fail: {}",
                     e
                 );
@@ -194,7 +190,7 @@ impl ProtocolBase for ProtocolSyncConsensus {
         self.jobsman.clone().spawn(self.clone().handle_receive_request(), executor.clone()).await;
         self.jobsman
             .clone()
-            .spawn(self.clone().handle_receive_slot_checkpoints_request(), executor.clone())
+            .spawn(self.clone().handle_receive_sync_request(), executor.clone())
             .await;
         debug!(
             target: "consensus::protocol_sync_consensus::start()",

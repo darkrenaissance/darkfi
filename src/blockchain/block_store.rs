@@ -259,7 +259,7 @@ impl BlockOrderStore {
                 ret.push(Some(hash));
             } else {
                 if strict {
-                    return Err(Error::SlotNotFound(*slot))
+                    return Err(Error::BlockSlotNotFound(*slot))
                 }
                 ret.push(None);
             }

@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    blockchain::SlotCheckpoint,
+    blockchain::Slot,
     crypto::MerkleTree,
     pasta::{group::ff::PrimeField, pallas},
 };
@@ -74,8 +74,8 @@ pub struct ConsensusState {
     pub forks: Vec<Fork>,
     /// Current epoch
     pub epoch: u64,
-    /// Hot/live slot checkpoints
-    pub slot_checkpoints: Vec<SlotCheckpoint>,
+    /// Hot/live slots
+    pub slots: Vec<Slot>,
     /// Last slot leaders count
     pub previous_leaders: u64,
     /// Controller output history
@@ -118,7 +118,7 @@ impl ConsensusState {
             checked_finalization: 0,
             forks: vec![],
             epoch: 0,
-            slot_checkpoints: vec![],
+            slots: vec![],
             previous_leaders: 0,
             f_history: vec![constants::FLOAT10_ZERO.clone()],
             err_history: vec![constants::FLOAT10_ZERO.clone(), constants::FLOAT10_ZERO.clone()],
@@ -155,26 +155,19 @@ impl ConsensusState {
         Ok(())
     }
 
-    /// Generate current slot checkpoint
-    fn generate_slot_checkpoint(
+    /// Generate current slot
+    fn generate_slot(
         &mut self,
         fork_hashes: Vec<blake3::Hash>,
         fork_previous_hashes: Vec<blake3::Hash>,
         sigma1: pallas::Base,
         sigma2: pallas::Base,
     ) {
-        let slot = self.time_keeper.current_slot();
+        let id = self.time_keeper.current_slot();
         let previous_eta = self.get_previous_eta();
-        let checkpoint = SlotCheckpoint {
-            slot,
-            previous_eta,
-            fork_hashes,
-            fork_previous_hashes,
-            sigma1,
-            sigma2,
-        };
-        info!(target: "consensus::state", "generate_slot_checkpoint: {:?}", checkpoint);
-        self.slot_checkpoints.push(checkpoint);
+        let slot = Slot { id, previous_eta, fork_hashes, fork_previous_hashes, sigma1, sigma2 };
+        info!(target: "consensus::state", "generate_slot: {:?}", slot);
+        self.slots.push(slot);
     }
 
     // Initialize node lead coins and set current epoch and eta.
@@ -185,7 +178,7 @@ impl ConsensusState {
         Ok(())
     }
 
-    /// Check if new epoch has started and generate slot checkpoint.
+    /// Check if new epoch has started and generate slot.
     /// Returns flag to signify if epoch has changed.
     pub async fn epoch_changed(
         &mut self,
@@ -194,7 +187,7 @@ impl ConsensusState {
         sigma1: pallas::Base,
         sigma2: pallas::Base,
     ) -> Result<bool> {
-        self.generate_slot_checkpoint(fork_hashes, fork_previous_hashes, sigma1, sigma2);
+        self.generate_slot(fork_hashes, fork_previous_hashes, sigma1, sigma2);
         let epoch = self.time_keeper.current_epoch();
         if epoch <= self.epoch {
             return Ok(false)
@@ -558,34 +551,34 @@ impl ConsensusState {
         pallas::Base::from_repr(bytes).unwrap()
     }
 
-    /// Auxillary function to retrieve slot checkpoint of provided slot UID.
-    pub fn get_slot_checkpoint(&self, slot: u64) -> Result<SlotCheckpoint> {
-        // Check hot/live slot checkpoints
-        for slot_checkpoint in self.slot_checkpoints.iter().rev() {
-            if slot_checkpoint.slot == slot {
-                return Ok(slot_checkpoint.clone())
+    /// Auxillary function to retrieve slot of provided slot UID.
+    pub fn get_slot(&self, id: u64) -> Result<Slot> {
+        // Check hot/live slotz
+        for slot in self.slots.iter().rev() {
+            if slot.id == id {
+                return Ok(slot.clone())
             }
         }
         // Check if slot is finalized
-        if let Ok(slot_checkpoints) = self.blockchain.get_slot_checkpoints_by_slot(&[slot]) {
-            if !slot_checkpoints.is_empty() {
-                if let Some(slot_checkpoint) = &slot_checkpoints[0] {
-                    return Ok(slot_checkpoint.clone())
+        if let Ok(slots) = self.blockchain.get_slots_by_id(&[id]) {
+            if !slots.is_empty() {
+                if let Some(known_slot) = &slots[0] {
+                    return Ok(known_slot.clone())
                 }
             }
         }
-        Err(Error::SlotCheckpointNotFound(slot))
+        Err(Error::SlotNotFound(id))
     }
 
-    /// Auxillary function to check if node has seen current or previous slot checkpoints.
+    /// Auxillary function to check if node has seen current or previous slots.
     /// This check ensures that either the slots exist in memory or node has seen the finalization of these slots.
-    pub fn slot_checkpoints_is_empty(&self) -> bool {
+    pub fn slots_is_empty(&self) -> bool {
         let current_slot = self.time_keeper.current_slot();
-        if self.get_slot_checkpoint(current_slot).is_ok() {
+        if self.get_slot(current_slot).is_ok() {
             return false
         }
         let previous_slot = current_slot - 1;
-        self.get_slot_checkpoint(previous_slot).is_err()
+        self.get_slot(previous_slot).is_err()
     }
 
     /// Auxillary function to update all fork state checkpoints to nodes coins current canonical states.
@@ -623,7 +616,7 @@ impl ConsensusState {
         self.participating = None;
         self.proposing = false;
         self.forks = vec![];
-        self.slot_checkpoints = vec![];
+        self.slots = vec![];
         self.previous_leaders = 0;
         self.f_history = vec![constants::FLOAT10_ZERO.clone()];
         self.err_history = vec![constants::FLOAT10_ZERO.clone(), constants::FLOAT10_ZERO.clone()];
@@ -652,8 +645,8 @@ pub struct ConsensusResponse {
     pub forks: Vec<ForkInfo>,
     /// Pending transactions
     pub pending_txs: Vec<Transaction>,
-    /// Hot/live slot checkpoints
-    pub slot_checkpoints: Vec<SlotCheckpoint>,
+    /// Hot/live slots
+    pub slots: Vec<Slot>,
     // TODO: When Float10 supports encoding/decoding this should be
     // replaced by directly using Vec<Float10>
     /// Controller output history
@@ -672,60 +665,60 @@ impl net::Message for ConsensusResponse {
 
 /// Auxiliary structure used for consensus syncing.
 #[derive(Debug, SerialEncodable, SerialDecodable)]
-pub struct ConsensusSlotCheckpointsRequest {}
+pub struct ConsensusSyncRequest {}
 
-impl net::Message for ConsensusSlotCheckpointsRequest {
+impl net::Message for ConsensusSyncRequest {
     fn name() -> &'static str {
-        "consensusslotcheckpointsrequest"
+        "consensussyncrequest"
     }
 }
 
 /// Auxiliary structure used for consensus syncing.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct ConsensusSlotCheckpointsResponse {
+pub struct ConsensusSyncResponse {
     /// Node known bootstrap slot
     pub bootstrap_slot: u64,
     /// Node is able to propose proposals
     pub proposing: bool,
-    /// Node has hot/live slot checkpoints
+    /// Node has hot/live slots
     pub is_empty: bool,
 }
 
-impl net::Message for ConsensusSlotCheckpointsResponse {
+impl net::Message for ConsensusSyncResponse {
     fn name() -> &'static str {
-        "consensusslotcheckpointsresponse"
+        "consensussyncresponse"
     }
 }
 
-impl net::Message for SlotCheckpoint {
+impl net::Message for Slot {
     fn name() -> &'static str {
-        "slotcheckpoint"
+        "slot"
     }
 }
 
-/// Auxiliary structure used for slot checkpoints syncing
+/// Auxiliary structure used for slots syncing
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct SlotCheckpointRequest {
+pub struct SlotRequest {
     /// Slot UID
     pub slot: u64,
 }
 
-impl net::Message for SlotCheckpointRequest {
+impl net::Message for SlotRequest {
     fn name() -> &'static str {
-        "slotcheckpointrequest"
+        "slotrequest"
     }
 }
 
-/// Auxiliary structure used for slot checkpoints syncing
+/// Auxiliary structure used for slots syncing
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct SlotCheckpointResponse {
+pub struct SlotResponse {
     /// Response blocks.
-    pub slot_checkpoints: Vec<SlotCheckpoint>,
+    pub slots: Vec<Slot>,
 }
 
-impl net::Message for SlotCheckpointResponse {
+impl net::Message for SlotResponse {
     fn name() -> &'static str {
-        "slotcheckpointresponse"
+        "slotresponse"
     }
 }
 

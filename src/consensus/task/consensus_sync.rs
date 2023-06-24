@@ -20,10 +20,7 @@ use log::{info, warn};
 
 use crate::{
     consensus::{
-        state::{
-            ConsensusRequest, ConsensusResponse, ConsensusSlotCheckpointsRequest,
-            ConsensusSlotCheckpointsResponse,
-        },
+        state::{ConsensusRequest, ConsensusResponse, ConsensusSyncRequest, ConsensusSyncResponse},
         Float10, ValidatorStatePtr,
     },
     net::P2pPtr,
@@ -51,15 +48,15 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
         return Ok(true)
     }
 
-    // Node iterates the channel peers to check if at least on peer has seen slot checkpoints
+    // Node iterates the channel peers to check if at least on peer has seen slots
     let mut peer = None;
     for channel in values {
         // Communication setup
         let msg_subsystem = channel.get_message_subsystem();
-        msg_subsystem.add_dispatch::<ConsensusSlotCheckpointsResponse>().await;
-        let response_sub = channel.subscribe_msg::<ConsensusSlotCheckpointsResponse>().await?;
-        // Node creates a `ConsensusSlotCheckpointsRequest` and sends it
-        let request = ConsensusSlotCheckpointsRequest {};
+        msg_subsystem.add_dispatch::<ConsensusSyncResponse>().await;
+        let response_sub = channel.subscribe_msg::<ConsensusSyncResponse>().await?;
+        // Node creates a `ConsensusSyncRequest` and sends it
+        let request = ConsensusSyncRequest {};
         channel.send(request).await?;
         // Node checks response
         let response = response_sub.receive().await?;
@@ -72,7 +69,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
             continue
         }
         if response.is_empty {
-            warn!(target: "consensus::consensus_sync", "Node has not seen any slot checkpoints, retrying...");
+            warn!(target: "consensus::consensus_sync", "Node has not seen any slots, retrying...");
             continue
         }
         // Keep peer to ask for consensus state
@@ -83,10 +80,10 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     // Release channels lock
     drop(channels_map);
 
-    // If no peer knows about any slot checkpoints, that means that the network was bootstrapped or restarted
+    // If no peer knows about any slots, that means that the network was bootstrapped or restarted
     // and no node has started consensus.
     if peer.is_none() {
-        warn!(target: "consensus::consensus_sync", "No node that has seen any slot checkpoints was found, or network was just boostrapped.");
+        warn!(target: "consensus::consensus_sync", "No node that has seen any slots was found, or network was just boostrapped.");
         let mut lock = state.write().await;
         lock.consensus.bootstrap_slot = current_slot;
         lock.consensus.init_coins().await?;
@@ -129,7 +126,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
 
     // Verify that the node has received all finalized blocks
     loop {
-        if !state.read().await.blockchain.has_slot(response.current_slot)? {
+        if !state.read().await.blockchain.has_slot_order(response.current_slot)? {
             warn!(target: "consensus::consensus_sync", "Node has not finished finalization, retrying...");
             sleep(1).await;
             continue
@@ -146,7 +143,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     lock.consensus.bootstrap_slot = response.bootstrap_slot;
     lock.consensus.forks = forks;
     lock.append_pending_txs(&response.pending_txs).await;
-    lock.consensus.slot_checkpoints = response.slot_checkpoints.clone();
+    lock.consensus.slots = response.slots.clone();
     lock.consensus.previous_leaders = 1;
     let mut f_history = vec![];
     for f in &response.f_history {

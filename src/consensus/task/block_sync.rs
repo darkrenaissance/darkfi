@@ -19,7 +19,7 @@
 use crate::{
     consensus::{
         block::{BlockOrder, BlockResponse},
-        state::{SlotCheckpointRequest, SlotCheckpointResponse},
+        state::{SlotRequest, SlotResponse},
         ValidatorStatePtr,
     },
     net, Result,
@@ -34,40 +34,39 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
         Some(channel) => {
             let msg_subsystem = channel.get_message_subsystem();
 
-            // Communication setup for slot checkpoints
-            msg_subsystem.add_dispatch::<SlotCheckpointResponse>().await;
-            let slot_checkpoint_response_sub =
-                channel.subscribe_msg::<SlotCheckpointResponse>().await?;
+            // Communication setup for slots
+            msg_subsystem.add_dispatch::<SlotResponse>().await;
+            let slot_response_sub = channel.subscribe_msg::<SlotResponse>().await?;
 
             // Communication setup for blocks
             msg_subsystem.add_dispatch::<BlockResponse>().await;
             let block_response_sub = channel.subscribe_msg::<BlockResponse>().await?;
 
-            // Node loops until both slot checkpoints and blocks have been synced
-            let mut slot_checkpoints_synced = false;
+            // Node loops until both slots and blocks have been synced
+            let mut slots_synced = false;
             let mut blocks_synced = false;
             loop {
-                // Node sends the last known slot checkpoint of the canonical blockchain
+                // Node sends the last known slot of the canonical blockchain
                 // and loops until the response is the same slot (used to utilize batch requests).
-                let mut last = state.read().await.blockchain.last_slot_checkpoint()?;
-                info!(target: "consensus::block_sync", "Last known slot checkpoint: {:?}", last.slot);
+                let mut last = state.read().await.blockchain.last_slot()?;
+                info!(target: "consensus::block_sync", "Last known slot: {:?}", last.id);
 
                 loop {
-                    // Node creates a `SlotCheckpointRequest` and sends it
-                    let request = SlotCheckpointRequest { slot: last.slot };
+                    // Node creates a `SlotRequest` and sends it
+                    let request = SlotRequest { slot: last.id };
                     channel.send(request).await?;
 
                     // Node stores response data.
-                    let resp = slot_checkpoint_response_sub.receive().await?;
+                    let resp = slot_response_sub.receive().await?;
 
-                    // Verify and store retrieved checkpoints
-                    debug!(target: "consensus::block_sync", "block_sync_task(): Processing received slot checkpoints");
-                    state.write().await.receive_slot_checkpoints(&resp.slot_checkpoints).await?;
+                    // Verify and store retrieveds
+                    debug!(target: "consensus::block_sync", "block_sync_task(): Processing received slots");
+                    state.write().await.receive_slots(&resp.slots).await?;
 
-                    let last_received = state.read().await.blockchain.last_slot_checkpoint()?;
-                    info!(target: "consensus::block_sync", "Last received slot checkpoint: {:?}", last_received.slot);
+                    let last_received = state.read().await.blockchain.last_slot()?;
+                    info!(target: "consensus::block_sync", "Last received slot: {:?}", last_received.id);
 
-                    if last.slot == last_received.slot {
+                    if last.id == last_received.id {
                         break
                     }
 
@@ -75,9 +74,9 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
                     last = last_received;
                 }
 
-                // We force a recheck of slot checkpoints after blocks have been synced
+                // We force a recheck of slots after blocks have been synced
                 if blocks_synced {
-                    slot_checkpoints_synced = true;
+                    slots_synced = true;
                 }
 
                 // Node sends the last known block hash of the canonical blockchain
@@ -106,11 +105,11 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
                         break
                     }
 
-                    slot_checkpoints_synced = false;
+                    slots_synced = false;
                     last = last_received;
                 }
 
-                if slot_checkpoints_synced && blocks_synced {
+                if slots_synced && blocks_synced {
                     break
                 }
             }

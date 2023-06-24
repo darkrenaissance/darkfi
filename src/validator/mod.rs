@@ -20,7 +20,7 @@ use std::{collections::HashMap, io::Cursor};
 
 use async_std::sync::{Arc, RwLock};
 use darkfi_sdk::{
-    blockchain::SlotCheckpoint,
+    blockchain::Slot,
     crypto::{PublicKey, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
     pasta::pallas,
 };
@@ -172,23 +172,20 @@ impl Validator {
     // 2) When a transaction is being broadcasted to us
     // ==========================
 
-    /// Append to canonical state received finalized slot checkpoints from block sync task.
-    // TODO: integrate this to receive_blocks, as slot checkpoints will be part of received block.
-    pub async fn receive_slot_checkpoints(
-        &mut self,
-        slot_checkpoints: &[SlotCheckpoint],
-    ) -> Result<()> {
-        debug!(target: "validator", "receive_slot_checkpoints(): Appending slot checkpoints to ledger");
+    /// Append to canonical state received finalized slots from block sync task.
+    // TODO: integrate this to receive_blocks, as slots will be part of received block.
+    pub async fn receive_slots(&mut self, slots: &[Slot]) -> Result<()> {
+        debug!(target: "validator", "receive_slots(): Appending slots to ledger");
         let current_slot = self.consensus.time_keeper.current_slot();
         let mut filtered = vec![];
-        for slot_checkpoint in slot_checkpoints {
-            if slot_checkpoint.slot > current_slot {
-                warn!(target: "validator", "receive_slot_checkpoints(): Ignoring future slot checkpoint: {}", slot_checkpoint.slot);
+        for slot in slots {
+            if slot.id > current_slot {
+                warn!(target: "validator", "receive_slots(): Ignoring future slot: {}", slot.id);
                 continue
             }
-            filtered.push(slot_checkpoint.clone());
+            filtered.push(slot.clone());
         }
-        self.blockchain.add_slot_checkpoints(&filtered[..])?;
+        self.blockchain.add_slots(&filtered[..])?;
 
         Ok(())
     }

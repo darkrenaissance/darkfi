@@ -304,10 +304,10 @@ pub enum Error {
     BlockNotFound(String),
 
     #[error("Block in slot {0} not found in database")]
-    SlotNotFound(u64),
+    BlockSlotNotFound(u64),
 
-    #[error("Slot checkpoint {0} not found in database")]
-    SlotCheckpointNotFound(u64),
+    #[error("Slot {0} not found in database")]
+    SlotNotFound(u64),
 
     #[error("Contract {0} not found in database")]
     ContractNotFound(String),

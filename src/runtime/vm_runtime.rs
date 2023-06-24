@@ -275,10 +275,10 @@ impl Runtime {
                     import::util::get_verifying_slot_epoch,
                 ),
 
-                "get_slot_checkpoint_" => Function::new_typed_with_env(
+                "get_slot_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
-                    import::util::get_slot_checkpoint,
+                    import::util::get_slot,
                 ),
 
                 "get_blockchain_time_" => Function::new_typed_with_env(

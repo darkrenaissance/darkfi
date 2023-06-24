@@ -23,13 +23,13 @@ use darkfi_money_contract::{
     CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1,
 };
 use darkfi_sdk::{
-    blockchain::SlotCheckpoint,
+    blockchain::Slot,
     crypto::{pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode},
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     merkle_add, msg,
     pasta::{group::ff::FromUniformBytes, pallas},
-    util::{get_slot_checkpoint, get_verifying_slot, get_verifying_slot_epoch},
+    util::{get_slot, get_verifying_slot, get_verifying_slot_epoch},
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -68,17 +68,17 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
     // Grab the pedersen commitment for the minted value
     let output_value_coords = &params.output.value_commit.to_affine().coordinates().unwrap();
 
-    // Grab the slot checkpoint to validate consensus params against
+    // Grab the slot to validate consensus params against
     let v_slot = get_verifying_slot();
-    let Some(slot_checkpoint) = get_slot_checkpoint(v_slot)? else {
-        msg!("[ConsensusProposalV1] Error: Missing slot checkpoint {} from db", v_slot);
-        return Err(ConsensusError::ProposalMissingSlotCheckpoint.into())
+    let Some(slot) = get_slot(v_slot)? else {
+        msg!("[ConsensusProposalV1] Error: Missing slot {} from db", v_slot);
+        return Err(ConsensusError::ProposalMissingSlot.into())
     };
-    let slot_checkpoint: SlotCheckpoint = deserialize(&slot_checkpoint)?;
-    let slot_fp = pallas::Base::from(slot_checkpoint.slot);
+    let slot: Slot = deserialize(&slot)?;
+    let slot_fp = pallas::Base::from(slot.id);
 
     // Verify proposal extends a known fork
-    if !slot_checkpoint.fork_hashes.contains(&params.fork_hash) {
+    if !slot.fork_hashes.contains(&params.fork_hash) {
         msg!("[ConsensusProposalV1] Error: Proposal extends unknown fork {}", params.fork_hash);
         return Err(ConsensusError::ProposalExtendsUnknownFork.into())
     }
@@ -86,7 +86,7 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
     // TODO: Add fork rank check using params.fork_hash
 
     // Verify sequence is correct
-    if !slot_checkpoint.fork_previous_hashes.contains(&params.fork_previous_hash) {
+    if !slot.fork_previous_hashes.contains(&params.fork_previous_hash) {
         let fork_prev = &params.fork_previous_hash;
         msg!("[ConsensusProposalV1] Error: Proposal extends unknown fork {}", fork_prev);
         return Err(ConsensusError::ProposalExtendsUnknownFork.into())
@@ -94,7 +94,7 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
 
     // Construct VRF input
     let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
-    vrf_input.extend_from_slice(&slot_checkpoint.previous_eta.to_repr());
+    vrf_input.extend_from_slice(&slot.previous_eta.to_repr());
     vrf_input.extend_from_slice(params.fork_previous_hash.as_bytes());
     vrf_input.extend_from_slice(&slot_fp.to_repr());
 
@@ -113,8 +113,8 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
     let mu_y = poseidon_hash([MU_Y_PREFIX, eta, slot_fp]);
     let mu_rho = poseidon_hash([MU_RHO_PREFIX, eta, slot_fp]);
 
-    // Grab sigmas from slot checkpoint
-    let (sigma1, sigma2) = (slot_checkpoint.sigma1, slot_checkpoint.sigma2);
+    // Grab sigmas from slot
+    let (sigma1, sigma2) = (slot.sigma1, slot.sigma2);
 
     zk_public_inputs.push((
         CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1.to_string(),

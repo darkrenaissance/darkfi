@@ -28,7 +28,7 @@ use darkfi_money_contract::{
     model::{Coin, ConsensusInput, ConsensusOutput},
 };
 use darkfi_sdk::{
-    blockchain::SlotCheckpoint,
+    blockchain::Slot,
     bridgetree::Hashable,
     crypto::{
         ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64,
@@ -112,8 +112,8 @@ impl ConsensusProposalRevealed {
 pub struct ConsensusProposalCallBuilder {
     /// `ConsensusOwnCoin` we're given to use in this builder
     pub owncoin: ConsensusOwnCoin,
-    /// Rewarded slot checkpoint
-    pub slot_checkpoint: SlotCheckpoint,
+    /// Rewarded slot
+    pub slot: Slot,
     /// Extending fork last proposal/block hash
     pub fork_hash: blake3::Hash,
     /// Extending fork second to last proposal/block hash
@@ -164,9 +164,9 @@ impl ConsensusProposalCallBuilder {
 
         info!("Building Consensus::ProposalV1 VRF proof");
         let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
-        vrf_input.extend_from_slice(&self.slot_checkpoint.previous_eta.to_repr());
+        vrf_input.extend_from_slice(&self.slot.previous_eta.to_repr());
         vrf_input.extend_from_slice(self.fork_previous_hash.as_bytes());
-        vrf_input.extend_from_slice(&pallas::Base::from(self.slot_checkpoint.slot).to_repr());
+        vrf_input.extend_from_slice(&pallas::Base::from(self.slot.id).to_repr());
         let vrf_proof = VrfProof::prove(input.secret, &vrf_input, &mut OsRng);
 
         info!("Building Consensus::ProposalV1 ZK proof");
@@ -175,7 +175,7 @@ impl ConsensusProposalCallBuilder {
             &self.proposal_pk,
             &input,
             &output,
-            &self.slot_checkpoint,
+            &self.slot,
             &vrf_proof,
         )?;
 
@@ -234,7 +234,7 @@ fn create_proposal_proof(
     pk: &ProvingKey,
     input: &ConsensusBurnInputInfo,
     output: &ConsensusMintOutputInfo,
-    checkpoint: &SlotCheckpoint,
+    slot: &Slot,
     vrf_proof: &VrfProof,
 ) -> Result<(Proof, ConsensusProposalRevealed)> {
     // TODO: fork_hash to be used as part of rank constrain in the proof
@@ -245,9 +245,9 @@ fn create_proposal_proof(
     eta[..blake3::OUT_LEN].copy_from_slice(vrf_proof.hash_output().as_bytes());
     let eta = pallas::Base::from_uniform_bytes(&eta);
 
-    let mu_y = poseidon_hash([MU_Y_PREFIX, eta, pallas::Base::from(checkpoint.slot)]);
+    let mu_y = poseidon_hash([MU_Y_PREFIX, eta, pallas::Base::from(slot.id)]);
     let y = poseidon_hash([seed, mu_y]);
-    let mu_rho = poseidon_hash([MU_RHO_PREFIX, eta, pallas::Base::from(checkpoint.slot)]);
+    let mu_rho = poseidon_hash([MU_RHO_PREFIX, eta, pallas::Base::from(slot.id)]);
     let rho = poseidon_hash([seed, mu_rho]);
 
     // Derive the input's nullifier
@@ -307,8 +307,8 @@ fn create_proposal_proof(
         y,
         mu_rho,
         rho,
-        sigma1: checkpoint.sigma1,
-        sigma2: checkpoint.sigma2,
+        sigma1: slot.sigma1,
+        sigma2: slot.sigma2,
         headstart: HEADSTART,
     };
 

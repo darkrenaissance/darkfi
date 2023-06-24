@@ -23,7 +23,7 @@ pub use pasta_curves as pasta;
 
 /// Blockchain structures
 pub mod blockchain;
-pub use blockchain::SlotCheckpoint;
+pub use blockchain::Slot;
 
 /// Database functions
 pub mod db;

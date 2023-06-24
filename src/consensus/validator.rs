@@ -20,7 +20,7 @@ use std::{collections::HashMap, io::Cursor};
 
 use async_std::sync::{Arc, RwLock};
 use darkfi_sdk::{
-    blockchain::SlotCheckpoint,
+    blockchain::Slot,
     crypto::{
         contract_id::{CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
         schnorr::{SchnorrPublic, SchnorrSecret},
@@ -573,7 +573,7 @@ impl ValidatorState {
             };
             info!(target: "consensus::validator", "receive_proposal(): Leader proof verified successfully!");
 
-            // Validate proposal public value against coin creation slot checkpoint
+            // Validate proposal public value against coin creation slot
             let (mu_y, mu_rho) = LeadCoin::election_seeds_u64(
                 self.consensus.get_previous_eta(),
                 self.consensus.time_keeper.current_slot(),
@@ -602,24 +602,24 @@ impl ValidatorState {
                 return Err(Error::ProposalPublicValuesMismatched)
             }
 
-            // Validate proposal coin sigmas against current slot checkpoint
-            let checkpoint = self.consensus.get_slot_checkpoint(current)?;
+            // Validate proposal coin sigmas against current slot
+            let slot = self.consensus.get_slot(current)?;
             // sigma1
             let prop_sigma1 = lf.public_inputs[constants::PI_SIGMA1_INDEX];
-            if checkpoint.sigma1 != prop_sigma1 {
+            if slot.sigma1 != prop_sigma1 {
                 error!(
                     target: "consensus::validator",
                     "receive_proposal(): Failed to verify public value sigma1: {:?}, to proposed: {:?}",
-                    checkpoint.sigma1, prop_sigma1
+                    slot.sigma1, prop_sigma1
                 );
             }
             // sigma2
             let prop_sigma2 = lf.public_inputs[constants::PI_SIGMA2_INDEX];
-            if checkpoint.sigma2 != prop_sigma2 {
+            if slot.sigma2 != prop_sigma2 {
                 error!(
                     target: "consensus::validator",
                     "receive_proposal(): Failed to verify public value sigma2: {:?}, to proposed: {:?}",
-                    checkpoint.sigma2, prop_sigma2
+                    slot.sigma2, prop_sigma2
                 );
             }
         }
@@ -719,8 +719,8 @@ impl ValidatorState {
     /// - If the node has observed the creation of a fork chain and no other forks exists at same or greater height,
     ///   it finalizes (appends to canonical blockchain) all proposals in that fork chain.
     /// When fork chain proposals are finalized, the rest of fork chains are removed and all
-    /// slot checkpoints are apppended to canonical state.
-    pub async fn chain_finalization(&mut self) -> Result<(Vec<BlockInfo>, Vec<SlotCheckpoint>)> {
+    /// slots are apppended to canonical state.
+    pub async fn chain_finalization(&mut self) -> Result<(Vec<BlockInfo>, Vec<Slot>)> {
         let slot = self.consensus.time_keeper.current_slot();
         info!(target: "consensus::validator", "chain_finalization(): Started finalization check for slot: {}", slot);
         // Set last slot finalization check occured to current slot
@@ -827,37 +827,36 @@ impl ValidatorState {
         self.consensus.coins_tree = last_state_checkpoint.coins_tree;
         self.consensus.nullifiers = last_state_checkpoint.nullifiers;
 
-        // Adding finalized slot checkpoints to canonical
-        let finalized_slot_checkpoints: Vec<SlotCheckpoint> =
-            self.consensus.slot_checkpoints.clone();
+        // Adding finalized slots to canonical
+        let finalized_slots: Vec<Slot> = self.consensus.slots.clone();
 
         debug!(
             target: "consensus::validator",
-            "consensus: Adding {} finalized slot checkpoints to canonical chain.",
-            finalized_slot_checkpoints.len()
+            "consensus: Adding {} finalized slots to canonical chain.",
+            finalized_slots.len()
         );
-        match self.blockchain.add_slot_checkpoints(&finalized_slot_checkpoints) {
+        match self.blockchain.add_slots(&finalized_slots) {
             Ok(v) => v,
             Err(e) => {
                 error!(
                     target: "consensus::validator",
-                    "consensus: Failed appending finalized slot checkpoints to canonical chain: {}",
+                    "consensus: Failed appending finalized slots to canonical chain: {}",
                     e
                 );
                 return Err(e)
             }
         };
 
-        // Resetting forks and slot checkpoints
+        // Resetting forks and slots
         self.consensus.forks = vec![];
-        self.consensus.slot_checkpoints = vec![];
+        self.consensus.slots = vec![];
 
         // Purge pending erroneous txs since canonical state has been changed
         if let Err(e) = self.purge_pending_txs().await {
             error!(target: "consensus::validator", "consensus: Purging pending transactions failed: {}", e);
         }
 
-        Ok((finalized, finalized_slot_checkpoints))
+        Ok((finalized, finalized_slots))
     }
 
     // ==========================
@@ -1178,47 +1177,41 @@ impl ValidatorState {
         Ok(erroneous_txs)
     }
 
-    /// Append to canonical state received finalized slot checkpoints from block sync task.
-    pub async fn receive_slot_checkpoints(
-        &mut self,
-        slot_checkpoints: &[SlotCheckpoint],
-    ) -> Result<()> {
-        info!(target: "consensus::validator", "receive_slot_checkpoints(): Appending slot checkpoints to ledger");
+    /// Append to canonical state received finalized slots from block sync task.
+    pub async fn receive_slots(&mut self, slots: &[Slot]) -> Result<()> {
+        info!(target: "consensus::validator", "receive_slots(): Appending slots to ledger");
         let mut filtered = vec![];
-        for slot_checkpoint in slot_checkpoints {
-            if slot_checkpoint.slot > self.consensus.time_keeper.current_slot() {
-                warn!(target: "consensus::validator", "receive_slot_checkpoints(): Ignoring future slot checkpoint: {}", slot_checkpoint.slot);
+        for slot in slots {
+            if slot.id > self.consensus.time_keeper.current_slot() {
+                warn!(target: "consensus::validator", "receive_slots(): Ignoring future slot: {}", slot.id);
                 continue
             }
-            filtered.push(slot_checkpoint.clone());
+            filtered.push(slot.clone());
         }
-        self.blockchain.add_slot_checkpoints(&filtered[..])?;
+        self.blockchain.add_slots(&filtered[..])?;
 
         Ok(())
     }
 
-    /// Validate and append to canonical state received finalized slot checkpoint.
-    /// Returns boolean flag indicating already existing slot checkpoint.
-    pub async fn receive_finalized_slot_checkpoints(
-        &mut self,
-        slot_checkpoint: SlotCheckpoint,
-    ) -> Result<bool> {
-        match self.blockchain.has_slot_checkpoint(&slot_checkpoint) {
+    /// Validate and append to canonical state received finalized slot.
+    /// Returns boolean flag indicating already existing slot.
+    pub async fn receive_finalized_slots(&mut self, slot: Slot) -> Result<bool> {
+        match self.blockchain.has_slot(&slot) {
             Ok(v) => {
                 if v {
                     info!(
                         target: "consensus::validator",
-                        "receive_finalized_slot_checkpoints(): Existing slot checkpoint received"
+                        "receive_finalized_slots(): Existing slot received"
                     );
                     return Ok(false)
                 }
             }
             Err(e) => {
-                error!(target: "consensus::validator", "receive_finalized_slot_checkpoints(): failed checking for has_slot_checkpoint(): {}", e);
+                error!(target: "consensus::validator", "receive_finalized_slots(): failed checking for has_slot(): {}", e);
                 return Ok(false)
             }
         };
-        self.receive_slot_checkpoints(&[slot_checkpoint]).await?;
+        self.receive_slots(&[slot]).await?;
         Ok(true)
     }
 }

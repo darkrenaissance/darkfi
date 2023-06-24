@@ -174,7 +174,7 @@ async fn consensus_loop(
 
 /// async function to wait and execute consensus protocol propose period.
 /// Propose period consists of 2 parts:
-///     - Generate slot sigmas and checkpoint
+///     - Generate current slot
 ///     - Check if slot leader to generate and broadcast proposal
 /// Returns flag in case node needs to resync.
 async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool {
@@ -191,7 +191,7 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
 
     // Retrieve slot sigmas
     let (sigma1, sigma2) = state.write().await.consensus.sigmas();
-    // Node checks if epoch has changed and generate slot checkpoint
+    // Node checks if epoch has changed and generate slot
     let epoch_changed = state
         .write()
         .await
@@ -245,7 +245,6 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
     }
 
     // Node stores the proposal and broadcast to rest nodes
-
     info!(target: "consensus::proposal", "consensus: Node is the slot leader: Proposed block: {}", proposal);
     debug!(target: "consensus::proposal", "consensus: Full proposal: {:?}", proposal);
     match state
@@ -304,9 +303,9 @@ async fn finalization_period(
 
     // Check if any forks can be finalized
     match state.write().await.chain_finalization().await {
-        Ok((to_broadcast_block, to_broadcast_slot_checkpoints)) => {
+        Ok((to_broadcast_block, to_broadcast_slots)) => {
             // Broadcasting in background
-            if !to_broadcast_block.is_empty() || !to_broadcast_slot_checkpoints.is_empty() {
+            if !to_broadcast_block.is_empty() || !to_broadcast_slots.is_empty() {
                 ex.spawn(async move {
                     // Broadcast finalized blocks info, if any:
                     info!(target: "consensus::proposal", "consensus: Broadcasting finalized blocks");
@@ -317,20 +316,20 @@ async fn finalization_period(
                         }
                     }
 
-                    // Broadcast finalized slot checkpoints, if any:
-                    info!(target: "consensus::proposal", "consensus: Broadcasting finalized slot checkpoints");
-                    for slot_checkpoint in to_broadcast_slot_checkpoints {
-                        match sync_p2p.broadcast(slot_checkpoint).await {
-                            Ok(()) => info!(target: "consensus::proposal", "consensus: Broadcasted slot_checkpoint"),
+                    // Broadcast finalized slots, if any:
+                    info!(target: "consensus::proposal", "consensus: Broadcasting finalized slots");
+                    for slot in to_broadcast_slots {
+                        match sync_p2p.broadcast(slot).await {
+                            Ok(()) => info!(target: "consensus::proposal", "consensus: Broadcasted slot"),
                             Err(e) => {
-                                error!(target: "consensus::proposal", "consensus: Failed broadcasting slot_checkpoint: {}", e)
+                                error!(target: "consensus::proposal", "consensus: Failed broadcasting slot: {}", e)
                             }
                         }
                     }
                 })
                 .detach();
             } else {
-                info!(target: "consensus::proposal", "consensus: No finalized blocks or slot checkpoints to broadcast");
+                info!(target: "consensus::proposal", "consensus: No finalized blocks or slots to broadcast");
             }
         }
         Err(e) => {

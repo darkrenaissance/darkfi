@@ -21,12 +21,12 @@ use async_trait::async_trait;
 use log::{debug, error, info};
 use smol::Executor;
 
-use darkfi_sdk::blockchain::SlotCheckpoint;
+use darkfi_sdk::blockchain::Slot;
 
 use crate::{
     consensus::{
         block::{BlockInfo, BlockOrder, BlockResponse},
-        state::{SlotCheckpointRequest, SlotCheckpointResponse},
+        state::{SlotRequest, SlotResponse},
         ValidatorStatePtr,
     },
     net::{
@@ -42,9 +42,9 @@ const BATCH: u64 = 10;
 pub struct ProtocolSync {
     channel: ChannelPtr,
     request_sub: MessageSubscription<BlockOrder>,
-    slot_checkpoin_request_sub: MessageSubscription<SlotCheckpointRequest>,
+    slot_request_sub: MessageSubscription<SlotRequest>,
     block_sub: MessageSubscription<BlockInfo>,
-    slot_checkpoints_sub: MessageSubscription<SlotCheckpoint>,
+    slots_sub: MessageSubscription<Slot>,
     jobsman: ProtocolJobsManagerPtr,
     state: ValidatorStatePtr,
     p2p: P2pPtr,
@@ -60,21 +60,21 @@ impl ProtocolSync {
     ) -> Result<ProtocolBasePtr> {
         let msg_subsystem = channel.get_message_subsystem();
         msg_subsystem.add_dispatch::<BlockOrder>().await;
-        msg_subsystem.add_dispatch::<SlotCheckpointRequest>().await;
+        msg_subsystem.add_dispatch::<SlotRequest>().await;
         msg_subsystem.add_dispatch::<BlockInfo>().await;
-        msg_subsystem.add_dispatch::<SlotCheckpoint>().await;
+        msg_subsystem.add_dispatch::<Slot>().await;
 
         let request_sub = channel.subscribe_msg::<BlockOrder>().await?;
-        let slot_checkpoin_request_sub = channel.subscribe_msg::<SlotCheckpointRequest>().await?;
+        let slot_request_sub = channel.subscribe_msg::<SlotRequest>().await?;
         let block_sub = channel.subscribe_msg::<BlockInfo>().await?;
-        let slot_checkpoints_sub = channel.subscribe_msg::<SlotCheckpoint>().await?;
+        let slots_sub = channel.subscribe_msg::<Slot>().await?;
 
         Ok(Arc::new(Self {
             channel: channel.clone(),
             request_sub,
-            slot_checkpoin_request_sub,
+            slot_request_sub,
             block_sub,
-            slot_checkpoints_sub,
+            slots_sub,
             jobsman: ProtocolJobsManager::new("SyncProtocol", channel),
             state,
             p2p,
@@ -221,17 +221,17 @@ impl ProtocolSync {
         }
     }
 
-    async fn handle_receive_slot_checkpoint_request(self: Arc<Self>) -> Result<()> {
+    async fn handle_receive_slot_request(self: Arc<Self>) -> Result<()> {
         debug!(
-            target: "consensus::protocol_sync::handle_receive_slot_checkpoint_request()",
+            target: "consensus::protocol_sync::handle_receive_slot_request()",
             "START"
         );
         loop {
-            let request = match self.slot_checkpoin_request_sub.receive().await {
+            let request = match self.slot_request_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
                     debug!(
-                        target: "consensus::protocol_sync::handle_receive_slot_checkpoint_request()",
+                        target: "consensus::protocol_sync::handle_receive_slot_request()",
                         "recv fail: {}",
                         e
                     );
@@ -240,40 +240,34 @@ impl ProtocolSync {
             };
 
             debug!(
-                target: "consensus::protocol_sync::handle_receive_slot_checkpoint_request()",
+                target: "consensus::protocol_sync::handle_receive_slot_request()",
                 "received {:?}",
                 request
             );
 
             // Extra validations can be added here
             let key = request.slot;
-            let slot_checkpoints = match self
-                .state
-                .read()
-                .await
-                .blockchain
-                .get_slot_checkpoints_after(key, BATCH)
-            {
+            let slots = match self.state.read().await.blockchain.get_slots_after(key, BATCH) {
                 Ok(v) => v,
                 Err(e) => {
                     error!(
-                        target: "consensus::protocol_sync::handle_receive_slot_checkpoint_request()",
-                        "get_slot_checkpoints_after fail: {}",
+                        target: "consensus::protocol_sync::handle_receive_slot_request()",
+                        "get_slots_after fail: {}",
                         e
                     );
                     continue
                 }
             };
             debug!(
-                target: "consensus::protocol_sync::handle_receive_slot_checkpoint_request()",
-                "Found {} slot checkpoints",
-                slot_checkpoints.len()
+                target: "consensus::protocol_sync::handle_receive_slot_request()",
+                "Found {} slots",
+                slots.len()
             );
 
-            let response = SlotCheckpointResponse { slot_checkpoints };
+            let response = SlotResponse { slots };
             if let Err(e) = self.channel.send(response).await {
                 error!(
-                    target: "consensus::protocol_sync::handle_receive_slot_checkpoint_request()",
+                    target: "consensus::protocol_sync::handle_receive_slot_request()",
                     "channel send fail: {}",
                     e
                 )
@@ -281,18 +275,18 @@ impl ProtocolSync {
         }
     }
 
-    async fn handle_receive_slot_checkpoint(self: Arc<Self>) -> Result<()> {
+    async fn handle_receive_slot(self: Arc<Self>) -> Result<()> {
         debug!(
-            target: "consensus::protocol_sync::handle_receive_slot_checkpoint()",
+            target: "consensus::protocol_sync::handle_receive_slot()",
             "START"
         );
         let exclude_list = vec![self.channel.address()];
         loop {
-            let slot_checkpoint = match self.slot_checkpoints_sub.receive().await {
+            let slot = match self.slots_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
                     debug!(
-                        target: "consensus::protocol_sync::handle_receive_slot_checkpoint()",
+                        target: "consensus::protocol_sync::handle_receive_slot()",
                         "recv fail: {}",
                         e
                     );
@@ -303,7 +297,7 @@ impl ProtocolSync {
             // Check if node has finished syncing its blockchain
             if !self.state.read().await.synced {
                 debug!(
-                    target: "consensus::protocol_sync::handle_receive_slot_checkpoint()",
+                    target: "consensus::protocol_sync::handle_receive_slot()",
                     "Node still syncing blockchain, skipping..."
                 );
                 continue
@@ -321,7 +315,7 @@ impl ProtocolSync {
                     let slot = participating.unwrap();
                     if current >= slot {
                         debug!(
-                            target: "consensus::protocol_sync::handle_receive_slot_checkpoint()",
+                            target: "consensus::protocol_sync::handle_receive_slot()",
                             "node runs in consensus mode, skipping..."
                         );
                         continue
@@ -330,36 +324,28 @@ impl ProtocolSync {
             }
 
             info!(
-                target: "consensus::protocol_sync::handle_receive_slot_checkpoint()",
-                "Received slot checkpoint: {}",
-                slot_checkpoint.slot
+                target: "consensus::protocol_sync::handle_receive_slot()",
+                "Received slot: {}",
+                slot.id
             );
 
             debug!(
-                target: "consensus::protocol_sync::handle_receive_slot_checkpoint()",
-                "Processing received slot checkpoint"
+                target: "consensus::protocol_sync::handle_receive_slot()",
+                "Processing received slot"
             );
-            let slot_checkpoint_copy = (*slot_checkpoint).clone();
-            match self
-                .state
-                .write()
-                .await
-                .receive_finalized_slot_checkpoints(slot_checkpoint_copy.clone())
-                .await
-            {
+            let slot_copy = (*slot).clone();
+            match self.state.write().await.receive_finalized_slots(slot_copy.clone()).await {
                 Ok(v) => {
                     if v {
                         debug!(
-                            target: "consensus::protocol_sync::handle_receive_slot_checkpoint()",
-                            "slot checkpoint processed successfully, broadcasting..."
+                            target: "consensus::protocol_sync::handle_receive_slot()",
+                            "slot processed successfully, broadcasting..."
                         );
-                        if let Err(e) = self
-                            .p2p
-                            .broadcast_with_exclude(slot_checkpoint_copy, &exclude_list)
-                            .await
+                        if let Err(e) =
+                            self.p2p.broadcast_with_exclude(slot_copy, &exclude_list).await
                         {
                             error!(
-                                target: "consensus::protocol_sync::handle_receive_slot_checkpoint()",
+                                target: "consensus::protocol_sync::handle_receive_slot()",
                                 "p2p broadcast fail: {}",
                                 e
                             );
@@ -368,8 +354,8 @@ impl ProtocolSync {
                 }
                 Err(e) => {
                     debug!(
-                        target: "consensus::protocol_sync::handle_receive_slot_checkpoint()",
-                        "error processing finalized slot checkpoint: {}",
+                        target: "consensus::protocol_sync::handle_receive_slot()",
+                        "error processing finalized slot: {}",
                         e
                     );
                 }
@@ -386,13 +372,10 @@ impl ProtocolBase for ProtocolSync {
         self.jobsman.clone().spawn(self.clone().handle_receive_request(), executor.clone()).await;
         self.jobsman
             .clone()
-            .spawn(self.clone().handle_receive_slot_checkpoint_request(), executor.clone())
+            .spawn(self.clone().handle_receive_slot_request(), executor.clone())
             .await;
         self.jobsman.clone().spawn(self.clone().handle_receive_block(), executor.clone()).await;
-        self.jobsman
-            .clone()
-            .spawn(self.clone().handle_receive_slot_checkpoint(), executor.clone())
-            .await;
+        self.jobsman.clone().spawn(self.clone().handle_receive_slot(), executor.clone()).await;
         debug!(target: "consensus::protocol_sync::start()", "END");
         Ok(())
     }

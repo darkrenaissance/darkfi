@@ -20,7 +20,7 @@ use std::sync::{Arc, Mutex};
 
 use log::debug;
 
-use darkfi_sdk::blockchain::SlotCheckpoint;
+use darkfi_sdk::blockchain::Slot;
 use darkfi_serial::serialize;
 
 use crate::{
@@ -33,8 +33,8 @@ use crate::{
 pub mod block_store;
 pub use block_store::{BlockOrderStore, BlockStore, HeaderStore};
 
-pub mod slot_checkpoint_store;
-pub use slot_checkpoint_store::{SlotCheckpointStore, SlotCheckpointStoreOverlay};
+pub mod slot_store;
+pub use slot_store::{SlotStore, SlotStoreOverlay};
 
 pub mod tx_store;
 pub use tx_store::{PendingTxOrderStore, PendingTxStore, TxStore};
@@ -55,8 +55,8 @@ pub struct Blockchain {
     pub blocks: BlockStore,
     /// Block order sled tree
     pub order: BlockOrderStore,
-    /// Slot checkpoints sled tree
-    pub slot_checkpoints: SlotCheckpointStore,
+    /// Slot sled tree
+    pub slots: SlotStore,
     /// Transactions sled tree
     pub transactions: TxStore,
     /// Pending transactions sled tree
@@ -75,7 +75,7 @@ impl Blockchain {
         let headers = HeaderStore::new(db, genesis_ts, genesis_data)?;
         let blocks = BlockStore::new(db, genesis_ts, genesis_data)?;
         let order = BlockOrderStore::new(db, genesis_ts, genesis_data)?;
-        let slot_checkpoints = SlotCheckpointStore::new(db, genesis_data)?;
+        let slots = SlotStore::new(db, genesis_data)?;
         let transactions = TxStore::new(db)?;
         let pending_txs = PendingTxStore::new(db)?;
         let pending_txs_order = PendingTxOrderStore::new(db)?;
@@ -87,7 +87,7 @@ impl Blockchain {
             headers,
             blocks,
             order,
-            slot_checkpoints,
+            slots,
             transactions,
             pending_txs,
             pending_txs_order,
@@ -200,38 +200,35 @@ impl Blockchain {
         self.order.get_last()
     }
 
-    /// Retrieve the last slot checkpoint.
-    pub fn last_slot_checkpoint(&self) -> Result<SlotCheckpoint> {
-        self.slot_checkpoints.get_last()
+    /// Retrieve the last slot.
+    pub fn last_slot(&self) -> Result<Slot> {
+        self.slots.get_last()
     }
 
-    /// Retrieve n checkpoints after given start slot.
-    pub fn get_slot_checkpoints_after(&self, slot: u64, n: u64) -> Result<Vec<SlotCheckpoint>> {
-        debug!(target: "blockchain", "get_slot_checkpoints_after(): {} -> {}", slot, n);
-        self.slot_checkpoints.get_after(slot, n)
+    /// Retrieve n slots after given start slot.
+    pub fn get_slots_after(&self, slot: u64, n: u64) -> Result<Vec<Slot>> {
+        debug!(target: "blockchain", "get_slots_after(): {} -> {}", slot, n);
+        self.slots.get_after(slot, n)
     }
 
-    /// Insert a given slice of [`SlotCheckpoint`] into the blockchain database.
-    pub fn add_slot_checkpoints(&self, slot_checkpoints: &[SlotCheckpoint]) -> Result<()> {
-        self.slot_checkpoints.insert(slot_checkpoints)
+    /// Insert a given slice of [`Slot`] into the blockchain database.
+    pub fn add_slots(&self, slots: &[Slot]) -> Result<()> {
+        self.slots.insert(slots)
     }
 
-    /// Retrieve [`SlotCheckpoint`]s by given slots. Does not fail if any of them are not found.
-    pub fn get_slot_checkpoints_by_slot(
-        &self,
-        slots: &[u64],
-    ) -> Result<Vec<Option<SlotCheckpoint>>> {
-        debug!(target: "blockchain", "get_slot_checkpoints_by_slot(): {:?}", slots);
-        self.slot_checkpoints.get(slots, true)
+    /// Retrieve [`Slot`]s by given ids. Does not fail if any of them are not found.
+    pub fn get_slots_by_id(&self, ids: &[u64]) -> Result<Vec<Option<Slot>>> {
+        debug!(target: "blockchain", "get_slots_by_id(): {:?}", ids);
+        self.slots.get(ids, true)
     }
 
-    /// Check if the given [`SlotCheckpoint`] is in the database and all trees.
-    pub fn has_slot_checkpoint(&self, slot_checkpoint: &SlotCheckpoint) -> Result<bool> {
-        Ok(self.slot_checkpoints.get(&[slot_checkpoint.slot], true).is_ok())
+    /// Check if the given [`Slot`] is in the database and all trees.
+    pub fn has_slot(&self, slot: &Slot) -> Result<bool> {
+        Ok(self.slots.get(&[slot.id], true).is_ok())
     }
 
     /// Check if block order for the given slot is in the database.
-    pub fn has_slot(&self, slot: u64) -> Result<bool> {
+    pub fn has_slot_order(&self, slot: u64) -> Result<bool> {
         let vec = match self.order.get(&[slot], true) {
             Ok(v) => v,
             Err(_) => return Ok(false),
@@ -299,8 +296,8 @@ pub type BlockchainOverlayPtr = Arc<Mutex<BlockchainOverlay>>;
 pub struct BlockchainOverlay {
     /// Main [`sled_overlay::SledDbOverlay`] to the sled db connection
     pub overlay: SledDbOverlayPtr,
-    /// Slot checkpoints overlay
-    pub slot_checkpoints: SlotCheckpointStoreOverlay,
+    /// Slots overlay
+    pub slots: SlotStoreOverlay,
     /// Contract states overlay
     pub contracts: ContractStateStoreOverlay,
     /// Wasm bincodes overlay
@@ -311,11 +308,11 @@ impl BlockchainOverlay {
     /// Instantiate a new `BlockchainOverlay` over the given [`Blockchain`] instance.
     pub fn new(blockchain: &Blockchain) -> Result<BlockchainOverlayPtr> {
         let overlay = Arc::new(Mutex::new(sled_overlay::SledDbOverlay::new(&blockchain.sled_db)));
-        let slot_checkpoints = SlotCheckpointStoreOverlay::new(overlay.clone())?;
+        let slots = SlotStoreOverlay::new(overlay.clone())?;
         let contracts = ContractStateStoreOverlay::new(overlay.clone())?;
         let wasm_bincode = WasmStoreOverlay::new(overlay.clone())?;
 
-        Ok(Arc::new(Mutex::new(Self { overlay, slot_checkpoints, contracts, wasm_bincode })))
+        Ok(Arc::new(Mutex::new(Self { overlay, slots, contracts, wasm_bincode })))
     }
 
     /// Checkpoint overlay so we can revert to it, if needed.

@@ -115,7 +115,7 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     // We simulate the proposal of genesis slot
     // We progress 1 slot and simulate its proposal
     current_slot += 1;
-    let slot_checkpoint = th.generate_slot_checkpoint(current_slot).await?;
+    let slot = th.generate_slot(current_slot).await?;
 
     // With alice's current coin value she can become the slot proposer,
     // so she creates a proposal transaction to burn her staked coin,
@@ -124,7 +124,7 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Alice] Building proposal tx");
     info!(target: "consensus", "[Alice] ====================");
     let (proposal_tx, proposal_params, _proposal_signing_secret_key, proposal_output_secret_key) =
-        th.proposal(Holder::Alice, slot_checkpoint, alice_staked_oc.clone()).await?;
+        th.proposal(Holder::Alice, slot, alice_staked_oc.clone()).await?;
 
     info!(target: "consensus", "[Faucet] ===========================");
     info!(target: "consensus", "[Faucet] Executing Alice proposal tx");
@@ -150,7 +150,7 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
 
     // We progress after grace period
     current_slot += calculate_grace_period() * EPOCH_LENGTH;
-    th.generate_slot_checkpoint(current_slot).await?;
+    th.generate_slot(current_slot).await?;
 
     // Alice can request for her owncoin to get unstaked
     info!(target: "consensus", "[Alice] ===========================");

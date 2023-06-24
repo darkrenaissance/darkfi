@@ -20,8 +20,8 @@ use darkfi_sdk::error::ContractError;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum ConsensusError {
-    #[error("Missing slot checkpoint from db")]
-    ProposalMissingSlotCheckpoint,
+    #[error("Missing slot from db")]
+    ProposalMissingSlot,
 
     #[error("Proposal extends unknown fork")]
     ProposalExtendsUnknownFork,
@@ -39,7 +39,7 @@ pub enum ConsensusError {
 impl From<ConsensusError> for ContractError {
     fn from(e: ConsensusError) -> Self {
         match e {
-            ConsensusError::ProposalMissingSlotCheckpoint => Self::Custom(1),
+            ConsensusError::ProposalMissingSlot => Self::Custom(1),
             ConsensusError::ProposalExtendsUnknownFork => Self::Custom(2),
             ConsensusError::ProposalErroneousVrfProof => Self::Custom(3),
             ConsensusError::CoinStillInGracePeriod => Self::Custom(4),

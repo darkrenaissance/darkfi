@@ -21,9 +21,9 @@ use pasta_curves::{group::ff::Field, pallas};
 
 /// Auxiliary structure used to keep track of slot validation parameters.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct SlotCheckpoint {
+pub struct Slot {
     /// Slot UID
-    pub slot: u64,
+    pub id: u64,
     /// Previous slot eta
     pub previous_eta: pallas::Base,
     /// Previous slot forks last proposal/block hashes,
@@ -38,20 +38,20 @@ pub struct SlotCheckpoint {
     pub sigma2: pallas::Base,
 }
 
-impl SlotCheckpoint {
+impl Slot {
     pub fn new(
-        slot: u64,
+        id: u64,
         previous_eta: pallas::Base,
         fork_hashes: Vec<blake3::Hash>,
         fork_previous_hashes: Vec<blake3::Hash>,
         sigma1: pallas::Base,
         sigma2: pallas::Base,
     ) -> Self {
-        Self { slot, previous_eta, fork_hashes, fork_previous_hashes, sigma1, sigma2 }
+        Self { id, previous_eta, fork_hashes, fork_previous_hashes, sigma1, sigma2 }
     }
 
-    /// Generate the genesis slot checkpoint.
-    pub fn genesis_slot_checkpoint(genesis_block: blake3::Hash) -> Self {
+    /// Generate the genesis slot.
+    pub fn genesis_slot(genesis_block: blake3::Hash) -> Self {
         let previous_eta = pallas::Base::ZERO;
         let fork_hashes = vec![];
         // Since genesis block has no previous,

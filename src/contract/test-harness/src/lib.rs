@@ -42,7 +42,7 @@ use darkfi_money_contract::{
     MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    blockchain::SlotCheckpoint,
+    blockchain::Slot,
     crypto::{
         poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey,
         CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
@@ -413,26 +413,24 @@ impl TestHarness {
         Ok(oc)
     }
 
-    pub async fn get_slot_checkpoint_by_slot(&self, slot: u64) -> Result<SlotCheckpoint> {
+    pub async fn get_slot_by_slot(&self, slot: u64) -> Result<Slot> {
         let faucet = self.holders.get(&Holder::Faucet).unwrap();
-        let slot_checkpoint =
-            faucet.validator.read().await.blockchain.get_slot_checkpoints_by_slot(&[slot])?[0]
-                .clone()
-                .unwrap();
+        let slot =
+            faucet.validator.read().await.blockchain.get_slots_by_id(&[slot])?[0].clone().unwrap();
 
-        Ok(slot_checkpoint)
+        Ok(slot)
     }
 
-    pub async fn generate_slot_checkpoint(&self, slot: u64) -> Result<SlotCheckpoint> {
-        // We grab the genesis slot to generate slot checkpoint
+    pub async fn generate_slot(&self, id: u64) -> Result<Slot> {
+        // We grab the genesis slot to generate slot
         // using same consensus parameters
         let faucet = self.holders.get(&Holder::Faucet).unwrap();
         let genesis_block = faucet.validator.read().await.consensus.genesis_block;
         let fork_hashes = vec![genesis_block];
         let fork_previous_hashes = vec![genesis_block];
-        let genesis_slot = self.get_slot_checkpoint_by_slot(0).await?;
-        let slot_checkpoint = SlotCheckpoint {
-            slot,
+        let genesis_slot = self.get_slot_by_slot(0).await?;
+        let slot = Slot {
+            id,
             previous_eta: genesis_slot.previous_eta,
             fork_hashes,
             fork_previous_hashes,
@@ -440,17 +438,12 @@ impl TestHarness {
             sigma2: genesis_slot.sigma2,
         };
 
-        // Store generated slot checkpoint
+        // Store generated slot
         for wallet in self.holders.values() {
-            wallet
-                .validator
-                .write()
-                .await
-                .receive_slot_checkpoints(&[slot_checkpoint.clone()])
-                .await?;
+            wallet.validator.write().await.receive_slots(&[slot.clone()]).await?;
         }
 
-        Ok(slot_checkpoint)
+        Ok(slot)
     }
 
     pub fn assert_trees(&self, holders: &[Holder]) {

@@ -25,7 +25,7 @@ use darkfi_consensus_contract::{
 };
 use darkfi_money_contract::{client::ConsensusOwnCoin, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1};
 use darkfi_sdk::{
-    blockchain::SlotCheckpoint,
+    blockchain::Slot,
     crypto::{MerkleNode, SecretKey, CONSENSUS_CONTRACT_ID},
     ContractCall,
 };
@@ -38,7 +38,7 @@ impl TestHarness {
     pub async fn proposal(
         &mut self,
         holder: Holder,
-        slot_checkpoint: SlotCheckpoint,
+        slot: Slot,
         staked_oc: ConsensusOwnCoin,
     ) -> Result<(Transaction, ConsensusProposalParamsV1, SecretKey, SecretKey)> {
         let wallet = self.holders.get(&holder).unwrap();
@@ -54,7 +54,7 @@ impl TestHarness {
         // Building Consensus::Propose params
         let proposal_call_debris = ConsensusProposalCallBuilder {
             owncoin: staked_oc,
-            slot_checkpoint,
+            slot,
             fork_hash,
             fork_previous_hash: fork_hash,
             merkle_tree: wallet.consensus_staked_merkle_tree.clone(),

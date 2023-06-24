@@ -42,7 +42,7 @@ pub fn get_object_size(object_index: u32) -> i64 {
     unsafe { get_object_size_(object_index) }
 }
 
-/// Auxiliary function to parse db_get and get_slot_checkpoint return value.
+/// Auxiliary function to parse db_get and get_slot return value.
 pub(crate) fn parse_ret(ret: i64) -> GenericResult<Option<Vec<u8>>> {
     if ret < 0 {
         match ret as i32 {
@@ -99,13 +99,13 @@ pub fn get_verifying_slot_epoch() -> u64 {
     unsafe { get_verifying_slot_epoch_() }
 }
 
-/// Everyone can call this. Will return requested slot checkpoint from `SlotCheckpointStore`.
+/// Everyone can call this. Will return requested slot from `SlotStore`.
 ///
 /// ```
-/// slot_checkpoint = get_slot_checkpoint(slot);
+/// slot = get_slot(slot);
 /// ```
-pub fn get_slot_checkpoint(slot: u64) -> GenericResult<Option<Vec<u8>>> {
-    let ret = unsafe { get_slot_checkpoint_(slot) };
+pub fn get_slot(slot: u64) -> GenericResult<Option<Vec<u8>>> {
+    let ret = unsafe { get_slot_(slot) };
     parse_ret(ret)
 }
 
@@ -128,6 +128,6 @@ extern "C" {
     fn get_current_slot_() -> u64;
     fn get_verifying_slot_() -> u64;
     fn get_verifying_slot_epoch_() -> u64;
-    fn get_slot_checkpoint_(slot: u64) -> i64;
+    fn get_slot_(slot: u64) -> i64;
     fn get_blockchain_time_() -> u64;
 }

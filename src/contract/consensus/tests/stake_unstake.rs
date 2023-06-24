@@ -101,19 +101,18 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
 
     // We progress one slot
     current_slot += 1;
-    let slot_checkpoint = th.generate_slot_checkpoint(current_slot).await?;
+    let slot = th.generate_slot(current_slot).await?;
 
     // Since alice didn't wait for the grace period to pass, her proposal should fail
     info!(target: "consensus", "[Malicious] =====================================");
     info!(target: "consensus", "[Malicious] Checking proposal before grace period");
     info!(target: "consensus", "[Malicious] =====================================");
-    let (proposal_tx, _, _, _) =
-        th.proposal(Holder::Alice, slot_checkpoint, alice_staked_oc.clone()).await?;
+    let (proposal_tx, _, _, _) = th.proposal(Holder::Alice, slot, alice_staked_oc.clone()).await?;
     th.execute_erroneous_proposal_txs(Holder::Alice, &vec![proposal_tx], current_slot, 1).await?;
 
     // We progress after grace period
     current_slot += (calculate_grace_period() * EPOCH_LENGTH) + EPOCH_LENGTH;
-    let slot_checkpoint = th.generate_slot_checkpoint(current_slot).await?;
+    let slot = th.generate_slot(current_slot).await?;
 
     // With alice's current coin value she can become the slot proposer,
     // so she creates a proposal transaction to burn her staked coin,
@@ -126,7 +125,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
         proposal_params,
         _proposal_signing_secret_key,
         proposal_decryption_secret_key,
-    ) = th.proposal(Holder::Alice, slot_checkpoint, alice_staked_oc.clone()).await?;
+    ) = th.proposal(Holder::Alice, slot, alice_staked_oc.clone()).await?;
 
     info!(target: "consensus", "[Faucet] ===========================");
     info!(target: "consensus", "[Faucet] Executing Alice proposal tx");
@@ -152,7 +151,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
 
     // We progress one slot
     current_slot += 1;
-    th.generate_slot_checkpoint(current_slot).await?;
+    th.generate_slot(current_slot).await?;
 
     // Alice can request for her owncoin to get unstaked
     info!(target: "consensus", "[Alice] ===========================");
@@ -201,13 +200,13 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
 
     // Now we will test if we can reuse token in proposal or unstake it again
     current_slot += 1;
-    let slot_checkpoint = th.generate_slot_checkpoint(current_slot).await?;
+    let slot = th.generate_slot(current_slot).await?;
 
     info!(target: "consensus", "[Malicious] ========================================");
     info!(target: "consensus", "[Malicious] Checking using unstaked coin in proposal");
     info!(target: "consensus", "[Malicious] ========================================");
     let (proposal_tx, _, _, _) =
-        th.proposal(Holder::Alice, slot_checkpoint, alice_unstake_request_oc.clone()).await?;
+        th.proposal(Holder::Alice, slot, alice_unstake_request_oc.clone()).await?;
     th.execute_erroneous_proposal_txs(Holder::Alice, &vec![proposal_tx], current_slot, 1).await?;
 
     info!(target: "consensus", "[Malicious] =============================");
