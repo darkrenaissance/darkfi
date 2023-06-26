@@ -19,42 +19,74 @@
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
+    process::exit,
 };
 
-use async_std::sync::Arc;
+use async_std::{stream::StreamExt, sync::Arc};
 use async_trait::async_trait;
-use log::{error, info, warn};
-use serde_json::{json, Value};
+use futures::future::join_all;
+use log::{debug, error, info, warn};
+use serde_json::json;
+use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
+use signal_hook_async_std::Signals;
+use smol::Executor;
+use structopt::StructOpt;
 use structopt_toml::StructOptToml;
+use toml::Value;
 use url::Url;
 
 use darkfi::{
-    async_daemonize, net,
-    net::P2pPtr,
+    async_daemonize, cli_desc,
+    net::{self, connector::Connector, protocol::ProtocolVersion, session::Session, P2p, P2pPtr},
     rpc::{
         jsonrpc::{
             ErrorCode::{InvalidParams, MethodNotFound},
             JsonError, JsonRequest, JsonResponse, JsonResult,
         },
-        server::{listen_and_serve, RequestHandler},
+        server::RequestHandler,
     },
     util::{
+        async_util::sleep,
         file::{load_file, save_file},
         path::{expand_path, get_config_path},
     },
     Result,
 };
 
-mod config;
-use config::{parse_configured_networks, Args, NetInfo};
-
 const CONFIG_FILE: &str = "lilith_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../lilith_config.toml");
 
-/// Struct representing a spawned p2p network.
+#[derive(Clone, Debug, serde::Deserialize, StructOpt, StructOptToml)]
+#[serde(default)]
+#[structopt(name = "lilith", about = cli_desc!())]
+struct Args {
+    #[structopt(long, default_value = "tcp://127.0.0.1:18927")]
+    /// JSON-RPC listen URL
+    pub rpc_listen: Url,
+
+    #[structopt(long)]
+    /// Accept addresses (URL without port)
+    pub accept_addrs: Vec<Url>,
+
+    #[structopt(short, long)]
+    /// Configuration file to use
+    pub config: Option<String>,
+
+    #[structopt(long, default_value = "~/.config/darkfi/lilith_hosts.tsv")]
+    /// Hosts .tsv file to use
+    pub hosts_file: String,
+
+    #[structopt(short, parse(from_occurrences))]
+    /// Increase verbosity (-vvv supported)
+    pub verbose: u8,
+}
+
+/// Struct representing a spawned P2P network
 struct Spawn {
-    name: String,
-    p2p: P2pPtr,
+    /// String identifier,
+    pub name: String,
+    /// P2P pointer
+    pub p2p: P2pPtr,
 }
 
 impl Spawn {
@@ -62,10 +94,9 @@ impl Spawn {
         self.p2p.hosts().load_all().await.iter().map(|addr| addr.to_string()).collect()
     }
 
-    pub async fn info(&self) -> serde_json::Value {
-        // Building addr_vec string
+    async fn info(&self) -> serde_json::Value {
         let mut addr_vec = vec![];
-        for addr in &self.p2p.settings().inbound {
+        for addr in &self.p2p.settings().inbound_addrs {
             addr_vec.push(addr.as_ref().to_string());
         }
 
@@ -77,56 +108,113 @@ impl Spawn {
     }
 }
 
-/// Struct representing the daemon.
+/// Defines the network-specific settings
+#[derive(Clone)]
+struct NetInfo {
+    /// Specific port the network will use
+    pub port: u16,
+    /// Other seeds to connect to
+    pub seeds: Vec<Url>,
+    /// Manual peers to connect to
+    pub peers: Vec<Url>,
+    /// Enable localnet hosts
+    pub localnet: bool,
+}
+
+/// Struct representing the daemon
 struct Lilith {
-    /// Configured urls
-    urls: Vec<Url>,
     /// Spawned networks
-    spawns: Vec<Spawn>,
+    pub networks: Vec<Spawn>,
 }
 
 impl Lilith {
-    async fn spawns_hosts(&self) -> HashMap<String, Vec<String>> {
-        // Building urls string
-        let mut spawns = HashMap::new();
-        for spawn in &self.spawns {
-            spawns.insert(spawn.name.clone(), spawn.addresses().await);
+    /// Internal task to run a periodic purge of unreachable hosts
+    /// for a specific P2P network.
+    async fn periodic_purge(name: String, p2p: P2pPtr, ex: Arc<Executor<'_>>) {
+        info!("Starting periodic host purge task for \"{}\"", name);
+        loop {
+            // We'll pick up to 10 hosts every minute and try to connect to
+            // them. If we can't reach them, we'll remove them from our set.
+            sleep(60).await;
+            debug!("Picking random hosts from db");
+            let lottery_winners = p2p.clone().hosts().get_n_random(10).await;
+            let win_str: Vec<&str> = lottery_winners.iter().map(|x| x.as_str()).collect();
+            debug!("Got: {:?}", win_str);
+
+            let mut tasks = vec![];
+
+            for host in &lottery_winners {
+                let p2p_ = p2p.clone();
+                let ex_ = ex.clone();
+                tasks.push(async move {
+                    let session_out = p2p_.session_outbound().await;
+                    let session_weak = Arc::downgrade(&p2p_.session_outbound().await);
+
+                    let connector = Connector::new(p2p_.settings(), Arc::new(session_weak));
+                    debug!("Connecting to {}", host);
+                    match connector.connect(host.clone()).await {
+                        Ok(channel) => {
+                            debug!("Connected successfully!");
+                            let proto_ver = ProtocolVersion::new(
+                                channel.clone(),
+                                p2p_.settings().clone(),
+                                p2p_.hosts().clone(),
+                            )
+                            .await;
+
+                            let handshake_task = session_out.perform_handshake_protocols(
+                                proto_ver,
+                                channel.clone(),
+                                ex_.clone(),
+                            );
+
+                            channel.clone().start(ex_.clone());
+
+                            match handshake_task.await {
+                                Ok(()) => {
+                                    debug!("Handshake success! Stopping channel.");
+                                    channel.stop().await;
+                                }
+                                Err(e) => {
+                                    debug!("Handshake failure! {}", e);
+                                }
+                            }
+                        }
+
+                        Err(e) => {
+                            debug!("Failed to connect to {}, removing from set ({})", host, e);
+                            // Remove from hosts set
+                            p2p_.hosts().remove(host).await;
+                        }
+                    }
+                });
+            }
+
+            join_all(tasks).await;
         }
-
-        spawns
-    }
-
-    // RPCAPI:
-    // Returns all spawned networks names with their node addresses.
-    // --> {"jsonrpc": "2.0", "method": "spawns", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "{spawns}", "id": 42}
-    async fn spawns(&self, id: Value, _params: &[Value]) -> JsonResult {
-        // Building urls string
-        let mut urls_vec = vec![];
-        for url in &self.urls {
-            urls_vec.push(url.as_ref().to_string());
-        }
-
-        // Gathering spawns info
-        let mut spawns = vec![];
-        for spawn in &self.spawns {
-            spawns.push(spawn.info().await);
-        }
-
-        // Generating json
-        let json = json!({
-            "urls": urls_vec,
-            "spawns": spawns,
-        });
-        JsonResponse::new(json, id).into()
     }
 
     // RPCAPI:
     // Replies to a ping method.
     // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
-    async fn pong(&self, id: Value, _params: &[Value]) -> JsonResult {
+    // <-- {"jsonrpc": "2.0", "result", "pong", "id: 42}
+    async fn pong(&self, id: serde_json::Value, _params: &[serde_json::Value]) -> JsonResult {
         JsonResponse::new(json!("pong"), id).into()
+    }
+
+    // RPCAPI:
+    // Returns all spawned networks names with their node addresses.
+    // --> {"jsonrpc": "2.0", "method": "spawns", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": {"spawns": spawns_info}, "id": 42}
+    async fn spawns(&self, id: serde_json::Value, _params: &[serde_json::Value]) -> JsonResult {
+        let mut spawns = vec![];
+        for spawn in &self.networks {
+            spawns.push(spawn.info().await);
+        }
+
+        let json = json!({ "spawns": spawns });
+
+        JsonResponse::new(json, id).into()
     }
 }
 
@@ -147,70 +235,29 @@ impl RequestHandler for Lilith {
     }
 }
 
-async fn spawn_network(
-    name: &str,
-    info: NetInfo,
-    urls: Vec<Url>,
-    saved_hosts: Option<&HashSet<Url>>,
-    ex: Arc<smol::Executor<'_>>,
-) -> Result<Spawn> {
-    let mut full_urls = Vec::new();
-    for url in &urls {
-        let mut url = url.clone();
-        url.set_port(Some(info.port))?;
-        full_urls.push(url);
-    }
-    let network_settings = net::Settings {
-        inbound: full_urls.clone(),
-        seeds: info.seeds,
-        peers: info.peers,
-        outbound_connections: 0,
-        localnet: info.localnet,
-        channel_log: info.channel_log,
-        app_version: None,
-        ..Default::default()
-    };
-
-    let p2p = net::P2p::new(network_settings).await;
-
-    // Setting saved hosts
-    match saved_hosts {
-        Some(hosts) => {
-            // Converting hashet to vec
-            let mut vec = vec![];
-            for url in hosts {
-                vec.push(url.clone());
+async fn handle_signals(mut signals: Signals, term_tx: smol::channel::Sender<()>) -> Result<()> {
+    debug!("Started signal handler");
+    while let Some(signal) = signals.next().await {
+        match signal {
+            SIGHUP => {
+                info!("Caught SIGHUP");
             }
-            p2p.hosts().store(vec).await;
+
+            SIGTERM | SIGINT | SIGQUIT => {
+                term_tx.send(()).await?;
+                return Ok(())
+            }
+
+            s => debug!("Caught unhandled {} signal", s),
         }
-        None => info!("No saved hosts found for {}", name),
     }
-
-    // Building ext_addr_vec string
-    let mut urls_vec = vec![];
-    for url in &full_urls {
-        urls_vec.push(url.as_ref().to_string());
-    }
-    info!("Starting seed network node for {} at: {:?}", name, urls_vec);
-    p2p.clone().start(ex.clone()).await?;
-    let _ex = ex.clone();
-    let _p2p = p2p.clone();
-    ex.spawn(async move {
-        if let Err(e) = _p2p.run(_ex).await {
-            error!("Failed starting P2P network seed: {}", e);
-        }
-    })
-    .detach();
-
-    let spawn = Spawn { name: name.to_string(), p2p };
-
-    Ok(spawn)
+    Ok(())
 }
 
-/// Retrieve saved hosts for provided networks
+/// Attempt to read existing hosts tsv
 fn load_hosts(path: &Path, networks: &[&str]) -> HashMap<String, HashSet<Url>> {
     let mut saved_hosts = HashMap::new();
-    info!("Retrieving saved hosts from: {:?}", path);
+
     let contents = load_file(path);
     if let Err(e) = contents {
         warn!("Failed retrieving saved hosts: {}", e);
@@ -224,6 +271,7 @@ fn load_hosts(path: &Path, networks: &[&str]) -> HashMap<String, HashSet<Url>> {
                 Some(hosts) => hosts.clone(),
                 None => HashSet::new(),
             };
+
             let url = match Url::parse(data[1]) {
                 Ok(u) => u,
                 Err(e) => {
@@ -231,6 +279,7 @@ fn load_hosts(path: &Path, networks: &[&str]) -> HashMap<String, HashSet<Url>> {
                     continue
                 }
             };
+
             hosts.insert(url);
             saved_hosts.insert(data[0].to_string(), hosts);
         }
@@ -239,87 +288,204 @@ fn load_hosts(path: &Path, networks: &[&str]) -> HashMap<String, HashSet<Url>> {
     saved_hosts
 }
 
-/// Save spawns current hosts
-fn save_hosts(path: &Path, spawns: HashMap<String, Vec<String>>) {
-    let mut string = "".to_string();
-    for (name, urls) in spawns {
-        for url in urls {
-            string.push_str(&name);
-            string.push('\t');
-            string.push_str(&url);
-            string.push('\n');
+async fn save_hosts(path: &Path, networks: &[Spawn]) {
+    let mut tsv = String::new();
+
+    for spawn in networks {
+        for host in spawn.p2p.hosts().load_all().await {
+            tsv.push_str(&format!("{}\t{}\n", spawn.name, host.as_str()));
         }
     }
 
-    if !string.eq("") {
-        info!("Saving current hosts of spawnned networks to: {:?}", path);
-        if let Err(e) = save_file(path, &string) {
+    if !tsv.eq("") {
+        info!("Saving current hosts of spawned networks to: {:?}", path);
+        if let Err(e) = save_file(path, &tsv) {
             error!("Failed saving hosts: {}", e);
         }
     }
 }
 
-async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
-    // We use this handler to block this function after detaching all
-    // tasks, and to catch a shutdown signal, where we can clean up and
-    // exit gracefully.
-    let (signal, shutdown) = smol::channel::bounded::<()>(1);
-    ctrlc::set_handler(move || {
-        async_std::task::block_on(signal.send(())).unwrap();
-    })
-    .unwrap();
+/// Parse a TOML string for any configured network and return a map containing
+/// said configurations.
+fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
+    let mut ret = HashMap::new();
 
-    // Pick up network settings from the TOML configuration
+    if let Value::Table(map) = toml::from_str(data)? {
+        if map.contains_key("network") && map["network"].is_table() {
+            for net in map["network"].as_table().unwrap() {
+                info!("Found configuration for network: {}", net.0);
+                let table = net.1.as_table().unwrap();
+                if !table.contains_key("port") {
+                    warn!("Network port is mandatory, skipping network.");
+                    continue
+                }
+
+                let name = net.0.to_string();
+                let port = table["port"].as_integer().unwrap().try_into().unwrap();
+
+                let mut seeds = vec![];
+                if table.contains_key("seeds") {
+                    if let Some(s) = table["seeds"].as_array() {
+                        for seed in s {
+                            if let Some(u) = seed.as_str() {
+                                if let Ok(url) = Url::parse(u) {
+                                    seeds.push(url);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let mut peers = vec![];
+                if table.contains_key("peers") {
+                    if let Some(p) = table["peers"].as_array() {
+                        for peer in p {
+                            if let Some(u) = peer.as_str() {
+                                if let Ok(url) = Url::parse(u) {
+                                    peers.push(url);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                let localnet = if table.contains_key("localnet") {
+                    table["localnet"].as_bool().unwrap()
+                } else {
+                    false
+                };
+
+                let net_info = NetInfo { port, seeds, peers, localnet };
+                ret.insert(name, net_info);
+            }
+        }
+    }
+
+    Ok(ret)
+}
+
+async fn spawn_net(
+    name: String,
+    info: &NetInfo,
+    accept_addrs: &[Url],
+    saved_hosts: &HashSet<Url>,
+    ex: Arc<Executor<'_>>,
+) -> Result<Spawn> {
+    let mut listen_urls = vec![];
+
+    // Configure listen addrs for this network
+    for url in accept_addrs {
+        let mut url = url.clone();
+        url.set_port(Some(info.port))?;
+        listen_urls.push(url);
+    }
+
+    // P2P network settings
+    let settings = net::Settings {
+        inbound_addrs: listen_urls.clone(),
+        seeds: info.seeds.clone(),
+        peers: info.peers.clone(),
+        outbound_connections: 0,
+        localnet: info.localnet,
+        allowed_transports: vec![
+            "tcp".to_string(),
+            "tcp+tls".to_string(),
+            "tor".to_string(),
+            "tor+tls".to_string(),
+            "nym".to_string(),
+            "nym+tls".to_string(),
+        ],
+        ..Default::default()
+    };
+
+    // Create P2P instance
+    let p2p = P2p::new(settings).await;
+
+    // Fill db with cached hosts
+    let hosts: Vec<Url> = saved_hosts.iter().cloned().collect();
+    p2p.hosts().store(&hosts).await;
+
+    let addrs_str: Vec<&str> = listen_urls.iter().map(|x| x.as_str()).collect();
+    info!("Starting seed network node for \"{}\" on {:?}", name, addrs_str);
+    p2p.clone().start(ex.clone()).await?;
+    let name_ = name.clone();
+    let p2p_ = p2p.clone();
+    let ex_ = ex.clone();
+    ex.spawn(async move {
+        if let Err(e) = p2p_.run(ex_).await {
+            error!("Failed starting P2P network seed for \"{}\": {}", name_, e);
+        }
+    })
+    .detach();
+
+    let spawn = Spawn { name, p2p };
+    Ok(spawn)
+}
+
+async_daemonize!(realmain);
+async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
+    // Pick up network settings from the TOML config
     let cfg_path = get_config_path(args.config, CONFIG_FILE)?;
     let toml_contents = std::fs::read_to_string(cfg_path)?;
     let configured_nets = parse_configured_networks(&toml_contents)?;
 
-    // Verify any daemon network is enabled
     if configured_nets.is_empty() {
-        info!("No daemon network is enabled!");
-        return Ok(())
+        error!("No networks are enabled in config");
+        exit(1);
     }
 
-    // Setting urls
-    let mut urls = args.urls.clone();
-    if urls.is_empty() {
-        info!("Urls are not provided, will use: tcp://127.0.0.1");
-        let url = Url::parse("tcp://127.0.0.1")?;
-        urls.push(url);
-    }
-
-    // Retrieve saved hosts for configured networks
-    let full_path = expand_path(&args.hosts_file)?;
-    let nets: Vec<&str> = configured_nets.keys().map(|x| x.as_str()).collect();
-    let saved_hosts = load_hosts(&full_path, &nets);
+    // Retrieve any saved hosts for configured networks
+    let net_names: Vec<&str> = configured_nets.keys().map(|x| x.as_str()).collect();
+    let saved_hosts = load_hosts(&expand_path(&args.hosts_file)?, &net_names);
 
     // Spawn configured networks
-    let mut spawns = vec![];
+    let mut networks = vec![];
     for (name, info) in &configured_nets {
-        match spawn_network(name, info.clone(), urls.clone(), saved_hosts.get(name), ex.clone())
-            .await
+        match spawn_net(
+            name.to_string(),
+            info,
+            &args.accept_addrs,
+            saved_hosts.get(name).unwrap_or(&HashSet::new()),
+            ex.clone(),
+        )
+        .await
         {
-            Ok(spawn) => spawns.push(spawn),
-            Err(e) => error!("Failed starting {} P2P network seed: {}", name, e),
+            Ok(spawn) => networks.push(spawn),
+            Err(e) => {
+                error!("Failed to start P2P network seed for \"{}\": {}", name, e);
+                exit(1);
+            }
         }
     }
 
-    let lilith = Lilith { urls, spawns };
-    let lilith = Arc::new(lilith);
+    // Signal handling for config reload and graceful termination.
+    let signals = Signals::new([SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
+    let handle = signals.handle();
+    let (term_tx, term_rx) = smol::channel::bounded::<()>(1);
+    ex.spawn(handle_signals(signals, term_tx)).detach();
 
-    // JSON-RPC server
-    info!("Starting JSON-RPC server");
-    let _ex = ex.clone();
-    ex.spawn(listen_and_serve(args.rpc_listen, lilith.clone(), _ex)).detach();
+    // Set up main daemon and background tasks
+    let lilith = Arc::new(Lilith { networks });
+    for network in &lilith.networks {
+        let name = network.name.clone();
+        ex.spawn(Lilith::periodic_purge(name, network.p2p.clone(), ex.clone())).detach();
+    }
 
-    // Wait for SIGINT
-    shutdown.recv().await?;
+    // Wait for termination signal
+    term_rx.recv().await?;
     print!("\r");
     info!("Caught termination signal, cleaning up and exiting...");
+    handle.close();
 
-    // Save spawns current hosts
-    save_hosts(&full_path, lilith.spawns_hosts().await);
+    // Save in-memory hosts to tsv file
+    save_hosts(&expand_path(&args.hosts_file)?, &lilith.networks).await;
 
+    // Cleanly stop p2p networks
+    for spawn in &lilith.networks {
+        info!("Stopping \"{}\" P2P", spawn.name);
+        spawn.p2p.stop().await;
+    }
+
+    info!("Bye!");
     Ok(())
 }
