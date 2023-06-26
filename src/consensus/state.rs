@@ -24,7 +24,6 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use log::info;
 use rand::{thread_rng, Rng};
-use sqlx::Row;
 
 use super::{
     constants,
@@ -253,17 +252,22 @@ impl ConsensusState {
 
         // Retrieve coin from wallet
         // NOTE: In future this will be retrieved from the money contract.
-        // Get a wallet connection
-        let mut conn = self.wallet.conn.acquire().await?;
 
         // Execute the query and see if we find any rows
         let query_str = format!("SELECT * FROM {}", constants::CONSENSUS_COIN_TABLE);
-        let mut query = sqlx::query(&query_str);
-        let coin = match query.fetch_one(&mut conn).await {
-            Ok(row) => {
-                let bytes: Vec<u8> = row.try_get(constants::CONSENSUS_COIN_COL)?;
-                deserialize(&bytes)?
-            }
+        let wallet_conn = self.wallet.conn.lock().await;
+        let mut stmt = wallet_conn.prepare(&query_str)?;
+
+        let coin = stmt.query_row((), |row| {
+            let bytes: Vec<u8> = row.get(constants::CONSENSUS_COIN_COL)?;
+            let coin = deserialize(&bytes).unwrap();
+            Ok(coin)
+        });
+
+        stmt.finalize()?;
+
+        let coin = match coin {
+            Ok(c) => c,
             Err(_) => {
                 // If no records are found, we generate a new coin and save it to the database
                 info!(target: "consensus::state", "create_coins(): No LeadCoin was found in DB, generating new one...");
@@ -286,12 +290,12 @@ impl ConsensusState {
                     constants::CONSENSUS_COIN_TABLE,
                     constants::CONSENSUS_COIN_COL
                 );
-                query = sqlx::query(&query_str);
-                query = query.bind(serialize(&c));
-                query.execute(&mut conn).await?;
+                let mut stmt = wallet_conn.prepare(&query_str)?;
+                stmt.execute([serialize(&c)])?;
                 c
             }
         };
+
         info!(target: "consensus::state", "create_coins(): Will use LeadCoin with value: {}", coin.value);
         coins.push(coin);
 
@@ -872,7 +876,7 @@ mod tests {
     #[async_std::test]
     async fn calc_sigmas_test() -> Result<()> {
         // Generate dummy state
-        let wallet = WalletDb::new("sqlite::memory:", "foo").await?;
+        let wallet = WalletDb::new(None, "foo").await?;
         let sled_db = sled::Config::new().temporary(true).open()?;
         let blockchain = Blockchain::new(&sled_db)?;
         let state = ConsensusState::new(

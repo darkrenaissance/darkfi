@@ -685,16 +685,15 @@ impl ValidatorState {
             let derived = c.derive_coin(&mut state_checkpoint.coins_tree, derived_blind);
             // Update consensus coin in wallet
             // NOTE: In future this will be redundant as consensus coins will live in the money contract.
-            // Get a wallet connection
-            let mut conn = self.wallet.conn.acquire().await?;
             let query_str = format!(
                 "UPDATE {} SET {} = ?1",
                 constants::CONSENSUS_COIN_TABLE,
                 constants::CONSENSUS_COIN_COL
             );
-            let mut query = sqlx::query(&query_str);
-            query = query.bind(serialize(&derived));
-            query.execute(&mut conn).await?;
+            let wallet_conn = self.wallet.conn.lock().await;
+            let mut stmt = wallet_conn.prepare(&query_str)?;
+            stmt.execute([serialize(&derived)])?;
+            stmt.finalize()?;
 
             state_checkpoint.coins[idx] = derived;
         }

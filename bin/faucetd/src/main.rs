@@ -29,12 +29,6 @@ use async_std::{
 };
 use async_trait::async_trait;
 use chrono::Utc;
-use darkfi::{
-    runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
-    tx::Transaction,
-    zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses},
-    zkas::ZkBinary,
-};
 use darkfi_money_contract::{
     client::{
         transfer_v1::TransferCallBuilder, MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_PUBLIC,
@@ -58,7 +52,6 @@ use rand::rngs::OsRng;
 use serde_json::{json, Value};
 use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_async_std::Signals;
-use sqlx::Row;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -83,12 +76,16 @@ use darkfi::{
         },
         server::{listen_and_serve, RequestHandler},
     },
+    runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
+    tx::Transaction,
     util::{
         async_util::sleep,
         parse::decode_base10,
         path::{expand_path, get_config_path},
     },
-    wallet::{walletdb::init_wallet, WalletPtr},
+    wallet::{WalletDb, WalletPtr},
+    zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses},
+    zkas::ZkBinary,
     Error, Result,
 };
 
@@ -300,17 +297,23 @@ impl Faucetd {
 
         // Get a wallet connection
         info!("Acquiring wallet connection");
-        let mut conn = wallet.conn.acquire().await?;
+        let conn = wallet.conn.lock().await;
 
         info!("Initializing wallet schema");
-        sqlx::query(wallet_schema).execute(&mut conn).await?;
+        conn.execute(wallet_schema, rusqlite::params![])?;
 
         let query = format!("SELECT * FROM {}", MONEY_TREE_COL_TREE);
-        let merkle_tree = match sqlx::query(&query).fetch_one(&mut conn).await {
-            Ok(t) => {
+        let merkle_tree = conn.query_row(&query, [], |row| {
+            let tree_bytes: Vec<u8> = row.get(MONEY_TREE_COL_TREE)?;
+            Ok(deserialize(&tree_bytes).unwrap())
+        });
+
+        let merkle_tree = match merkle_tree {
+            Ok(v) => {
                 info!("Merkle tree already exists");
-                deserialize(t.get(MONEY_TREE_COL_TREE))?
+                v
             }
+
             Err(_) => {
                 let tree = MerkleTree::new(100);
                 let tree_bytes = serialize(&tree);
@@ -318,7 +321,8 @@ impl Faucetd {
                     "DELETE FROM {}; INSERT INTO {} ({}) VALUES (?1)",
                     MONEY_TREE_TABLE, MONEY_TREE_TABLE, MONEY_TREE_COL_TREE
                 );
-                sqlx::query(&query).bind(tree_bytes).execute(&mut conn).await?;
+
+                conn.execute(&query, rusqlite::params![tree_bytes])?;
                 info!("Successfully initialized Merkle tree");
                 tree
             }
@@ -328,23 +332,31 @@ impl Faucetd {
     }
 
     async fn initialize_keypair(wallet: WalletPtr) -> Result<Keypair> {
-        let mut conn = wallet.conn.acquire().await?;
+        let conn = wallet.conn.lock().await;
 
         let query = format!(
             "SELECT {}, {} FROM {};",
             MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE
         );
-        let keypair = match sqlx::query(&query).fetch_one(&mut conn).await {
-            Ok(row) => {
-                let public = deserialize(row.get(MONEY_KEYS_COL_PUBLIC))?;
-                let secret = deserialize(row.get(MONEY_KEYS_COL_SECRET))?;
-                Keypair { public, secret }
-            }
+
+        let keypair = conn.query_row(&query, [], |row| {
+            let public_bytes: Vec<u8> = row.get("public")?;
+            let secret_bytes: Vec<u8> = row.get("secret")?;
+
+            let public = deserialize(&public_bytes).unwrap();
+            let secret = deserialize(&secret_bytes).unwrap();
+
+            Ok(Keypair { public, secret })
+        });
+
+        let keypair = match keypair {
+            Ok(k) => k,
             Err(_) => {
                 let keypair = Keypair::random(&mut OsRng);
                 let is_default = 0;
                 let public_bytes = serialize(&keypair.public);
                 let secret_bytes = serialize(&keypair.secret);
+
                 let query = format!(
                     "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3)",
                     MONEY_KEYS_TABLE,
@@ -352,13 +364,8 @@ impl Faucetd {
                     MONEY_KEYS_COL_PUBLIC,
                     MONEY_KEYS_COL_SECRET
                 );
-                sqlx::query(&query)
-                    .bind(is_default)
-                    .bind(public_bytes)
-                    .bind(secret_bytes)
-                    .execute(&mut conn)
-                    .await?;
 
+                conn.execute(&query, rusqlite::params![is_default, public_bytes, secret_bytes])?;
                 info!("Wrote keypair to wallet");
                 keypair
             }
@@ -581,10 +588,7 @@ impl Faucetd {
         }
 
         // Broadcast transaction to the network.
-        if let Err(e) = self.sync_p2p.broadcast(tx.clone()).await {
-            error!("airdrop(): Failed broadcasting transaction: {}", e);
-            return JsonError::new(InternalError, None, id).into()
-        };
+        self.sync_p2p.broadcast(&tx).await;
 
         // Add/Update this airdrop into the hashmap
         let mut map = self.airdrop_map.lock().await;
@@ -658,7 +662,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let signals_task = task::spawn(handle_signals(signals, cfg_path.clone(), term_tx));
 
     // Initialize or load wallet
-    let wallet = init_wallet(&args.wallet_path, &args.wallet_pass).await?;
+    let wallet = WalletDb::new(Some(expand_path(&args.wallet_path)?), &args.wallet_pass).await?;
 
     // Initialize or open sled database
     let db_path =
@@ -802,10 +806,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     info!("Flushing database...");
     let flushed_bytes = sled_db.flush_async().await?;
     info!("Flushed {} bytes", flushed_bytes);
-
-    info!("Closing wallet connection...");
-    wallet.conn.close().await;
-    info!("Closed wallet connection");
 
     Ok(())
 }

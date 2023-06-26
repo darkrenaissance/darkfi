@@ -20,7 +20,6 @@ use async_trait::async_trait;
 use darkfi_sdk::crypto::{Keypair, PublicKey, SecretKey};
 use darkfi_serial::deserialize;
 use log::debug;
-use sqlx::Row;
 
 use crate::{wallet::WalletDb, Result};
 
@@ -36,17 +35,21 @@ pub trait ConsensusWallet {
 impl ConsensusWallet for WalletDb {
     async fn get_default_keypair(&self) -> Result<Keypair> {
         debug!(target: "consensus::wallet", "Returning default keypair");
-        let mut conn = self.conn.acquire().await?;
 
-        let row = sqlx::query(&format!(
+        let wallet_conn = self.conn.lock().await;
+        let mut stmt = wallet_conn.prepare(&format!(
             "SELECT * FROM {} WHERE {} = 1",
             CONSENSUS_KEYS_TABLE, CONSENSUS_KEYS_COLUMN_IS_DEFAULT
-        ))
-        .fetch_one(&mut conn)
-        .await?;
+        ))?;
 
-        let public: PublicKey = deserialize(row.get("public"))?;
-        let secret: SecretKey = deserialize(row.get("secret"))?;
+        let (public, secret): (PublicKey, SecretKey) = stmt.query_row((), |row| {
+            let p_bytes: Vec<u8> = row.get("public")?;
+            let s_bytes: Vec<u8> = row.get("secret")?;
+            let public = deserialize(&p_bytes).unwrap();
+            let secret = deserialize(&s_bytes).unwrap();
+            Ok((public, secret))
+        })?;
+        stmt.finalize()?;
 
         Ok(Keypair { secret, public })
     }

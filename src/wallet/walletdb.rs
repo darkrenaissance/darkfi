@@ -16,19 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{path::Path, str::FromStr, time::Duration};
+use std::path::PathBuf;
 
-use async_std::{fs::create_dir_all, sync::Arc};
-use log::{debug, error, info, LevelFilter};
-use sqlx::{
-    sqlite::{SqliteConnectOptions, SqliteJournalMode},
-    ConnectOptions, SqlitePool,
-};
+use async_std::sync::{Arc, Mutex};
+use log::{debug, info};
+use rusqlite::Connection;
 
-use crate::{util::path::expand_path, Error, Result};
+use crate::Result;
 
 pub type WalletPtr = Arc<WalletDb>;
 
+/*
 /// Helper function to initialize `WalletPtr`
 pub async fn init_wallet(wallet_path: &str, wallet_pass: &str) -> Result<WalletPtr> {
     let expanded = expand_path(wallet_path)?;
@@ -36,6 +34,7 @@ pub async fn init_wallet(wallet_path: &str, wallet_pass: &str) -> Result<WalletP
     let wallet = WalletDb::new(&wallet_path, wallet_pass).await?;
     Ok(wallet)
 }
+*/
 
 /// Types we want to allow to query from the SQL wallet
 #[repr(u8)]
@@ -70,46 +69,29 @@ impl From<u8> for QueryType {
 /// Structure representing base wallet operations.
 /// Additional operations can be implemented by trait extensions.
 pub struct WalletDb {
-    pub conn: SqlitePool,
+    pub conn: Mutex<Connection>,
 }
 
 impl WalletDb {
-    pub async fn new(path: &str, password: &str) -> Result<WalletPtr> {
-        if password.trim().is_empty() {
-            error!(target: "wallet::walletdb", "Wallet password is empty. You must set a password to use the wallet.");
-            return Err(Error::WalletEmptyPassword)
-        }
+    /// Create a new wallet. If `path` is `None`, create it in memory.
+    pub async fn new(path: Option<PathBuf>, _password: &str) -> Result<WalletPtr> {
+        let conn = match path.clone() {
+            Some(p) => Connection::open(p)?,
+            None => Connection::open_in_memory()?,
+        };
 
-        if path != "sqlite::memory:" {
-            let p = Path::new(path.strip_prefix("sqlite://").unwrap());
-            if let Some(dirname) = p.parent() {
-                info!(target: "wallet::walletdb", "Creating path to wallet database: {}", dirname.display());
-                create_dir_all(&dirname).await?;
-            }
-        }
+        conn.pragma_update(None, "foreign_keys", "ON")?;
 
-        let mut connect_opts = SqliteConnectOptions::from_str(path)?
-            //.pragma("key", password.to_string())
-            .pragma("foreign_keys", "ON")
-            .create_if_missing(true)
-            .journal_mode(SqliteJournalMode::Off);
-
-        connect_opts.log_statements(LevelFilter::Trace);
-        connect_opts.log_slow_statements(LevelFilter::Trace, Duration::from_micros(10));
-
-        let conn = SqlitePool::connect_with(connect_opts).await?;
-
-        info!(target: "wallet::walletdb", "Opened wallet Sqlite connection at path {}", path);
-        Ok(Arc::new(WalletDb { conn }))
+        info!(target: "wallet::walletdb", "[WalletDb] Opened Sqlite connection at \"{:?}\"", path);
+        Ok(Arc::new(Self { conn: Mutex::new(conn) }))
     }
 
     /// This function executes a given SQL query, but isn't able to return anything.
     /// Therefore it's best to use it for initializing a table or similar things.
     pub async fn exec_sql(&self, query: &str) -> Result<()> {
-        info!(target: "wallet::walletdb", "walletdb: Executing SQL query");
+        info!(target: "wallet::walletdb", "[WalletDb] Executing SQL query");
         debug!(target: "wallet::walletdb", "\n{}", query);
-        let mut conn = self.conn.acquire().await?;
-        sqlx::query(query).execute(&mut conn).await?;
+        self.conn.lock().await.execute(query, ())?;
         Ok(())
     }
 }
