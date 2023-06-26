@@ -69,20 +69,24 @@ pub fn spawn_config(path: &Path, contents: &[u8]) -> Result<()> {
     Ok(())
 }
 
-pub fn get_log_level(verbosity_level: u64) -> simplelog::LevelFilter {
+pub fn get_log_level(verbosity_level: u8) -> simplelog::LevelFilter {
     match verbosity_level {
         0 => simplelog::LevelFilter::Info,
-        1 => simplelog::LevelFilter::Debug,
+        1 => simplelog::LevelFilter::Info,
+        2 => simplelog::LevelFilter::Debug,
         _ => simplelog::LevelFilter::Trace,
     }
 }
 
-pub fn get_log_config() -> simplelog::Config {
+pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
     match env::var("LOG_TARGETS") {
         Ok(x) => {
             let targets: Vec<String> = x.split(',').map(|x| x.to_string()).collect();
             let mut cfgbuilder = ConfigBuilder::new();
-            cfgbuilder.set_target_level(simplelog::LevelFilter::Error);
+            match verbosity_level {
+                0 => cfgbuilder.set_target_level(simplelog::LevelFilter::Debug),
+                _ => cfgbuilder.set_target_level(simplelog::LevelFilter::Error),
+            };
 
             for i in targets {
                 if i.starts_with('!') {
@@ -96,7 +100,10 @@ pub fn get_log_config() -> simplelog::Config {
         }
         Err(_) => {
             let mut cfgbuilder = ConfigBuilder::new();
-            cfgbuilder.set_target_level(simplelog::LevelFilter::Error);
+            match verbosity_level {
+                0 => cfgbuilder.set_target_level(simplelog::LevelFilter::Debug),
+                _ => cfgbuilder.set_target_level(simplelog::LevelFilter::Error),
+            };
             cfgbuilder.build()
         }
     }
@@ -159,9 +166,10 @@ macro_rules! async_daemonize {
             darkfi::util::cli::spawn_config(&cfg_path, CONFIG_FILE_CONTENTS.as_bytes())?;
             let args = Args::from_args_with_toml(&std::fs::read_to_string(cfg_path)?).unwrap();
 
-            let log_level = darkfi::util::cli::get_log_level(args.verbose.into());
-            let log_config = darkfi::util::cli::get_log_config();
+            let log_level = darkfi::util::cli::get_log_level(args.verbose);
+            let log_config = darkfi::util::cli::get_log_config(args.verbose);
 
+            /* FIXME: This is an issue. We should only log when explicitly told to
             let log_file_path = match std::env::var("DARKFI_LOG") {
                 Ok(p) => p,
                 Err(_) => {
@@ -177,6 +185,7 @@ macro_rules! async_daemonize {
 
             let log_file_path = darkfi::util::path::expand_path(&log_file_path)?;
             let log_file = std::fs::File::create(log_file_path)?;
+            */
 
             simplelog::CombinedLogger::init(vec![
                 simplelog::TermLogger::new(
@@ -185,7 +194,7 @@ macro_rules! async_daemonize {
                     simplelog::TerminalMode::Mixed,
                     simplelog::ColorChoice::Auto,
                 ),
-                simplelog::WriteLogger::new(log_level, log_config, log_file),
+                //simplelog::WriteLogger::new(log_level, log_config, log_file),
             ])?;
 
             // https://docs.rs/smol/latest/smol/struct.Executor.html#examples
