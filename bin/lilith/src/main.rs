@@ -441,6 +441,10 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     // Spawn configured networks
     let mut networks = vec![];
     for (name, info) in &configured_nets {
+        // TODO: Here we could actually differentiate between network versions
+        // e.g. p2p_v3, p2p_v4, etc. Therefore we can spawn multiple networks
+        // and they would all be version-checked, so we avoid mismatches when
+        // seeding peers.
         match spawn_net(
             name.to_string(),
             info,

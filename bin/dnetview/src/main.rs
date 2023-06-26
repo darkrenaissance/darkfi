@@ -130,8 +130,8 @@ async fn main() -> DnetViewResult<()> {
     //debug!(target: "dnetview", "main() START");
     let args = Args::parse();
 
-    let log_level = get_log_level(args.verbose.into());
-    let log_config = get_log_config();
+    let log_level = get_log_level(args.verbose);
+    let log_config = get_log_config(args.verbose);
 
     let log_file_path = expand_path(&args.log_path)?;
     if let Some(parent) = log_file_path.parent() {

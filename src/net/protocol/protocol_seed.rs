@@ -16,28 +16,33 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
-
+use async_std::sync::Arc;
 use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
 
-use crate::Result;
-
 use super::{
     super::{
-        message, message_subscriber::MessageSubscription, ChannelPtr, HostsPtr, P2pPtr, SettingsPtr,
+        channel::ChannelPtr,
+        hosts::HostsPtr,
+        message::{AddrsMessage, GetAddrsMessage},
+        message_subscriber::MessageSubscription,
+        p2p::P2pPtr,
+        settings::SettingsPtr,
     },
-    ProtocolBase, ProtocolBasePtr,
+    protocol_base::{ProtocolBase, ProtocolBasePtr},
 };
+use crate::Result;
 
-/// Implements the seed protocol.
+/// Implements the seed protocol
 pub struct ProtocolSeed {
     channel: ChannelPtr,
     hosts: HostsPtr,
     settings: SettingsPtr,
-    addr_sub: MessageSubscription<message::AddrsMessage>,
+    addr_sub: MessageSubscription<AddrsMessage>,
 }
+
+const PROTO_NAME: &str = "ProtocolSeed";
 
 impl ProtocolSeed {
     /// Create a new seed protocol.
@@ -45,58 +50,64 @@ impl ProtocolSeed {
         let hosts = p2p.hosts();
         let settings = p2p.settings();
 
-        //// Create a subscription to address message.
-        let addr_sub = channel
-            .clone()
-            .subscribe_msg::<message::AddrsMessage>()
-            .await
-            .expect("Missing addr dispatcher!");
+        // Create a subscription to address message
+        let addr_sub =
+            channel.subscribe_msg::<AddrsMessage>().await.expect("Missing addr dispatcher!");
 
         Arc::new(Self { channel, hosts, settings, addr_sub })
     }
 
     /// Sends own external addresses over a channel. Imports own external addresses
-    /// from settings, then adds that addresses to an address message and
-    /// sends it out over the channel.
+    /// from settings, then adds those addresses to an addrs message and sends it
+    /// out over the channel.
     pub async fn send_self_address(&self) -> Result<()> {
+        debug!(target: "net::protocol_seed::send_self_address()", "[START]");
         // Do nothing if external addresses are not configured
-        if self.settings.external_addr.is_empty() {
+        if self.settings.external_addrs.is_empty() {
             return Ok(())
         }
 
-        let ext_addrs = self.settings.external_addr.clone();
-        debug!(target: "net::protocol_seed::send_self_address()", "ext_addrs={:?}", ext_addrs);
-        let ext_addr_msg = message::ExtAddrsMessage { ext_addrs };
-        self.channel.clone().send(ext_addr_msg).await
+        let addrs = self.settings.external_addrs.clone();
+        debug!(
+            target: "net::protocol_seed::send_self_address()",
+            "ext_addrs={:?}, dest={}", addrs, self.channel.address(),
+        );
+
+        let ext_addr_msg = AddrsMessage { addrs };
+        self.channel.send(&ext_addr_msg).await?;
+        debug!(target: "net::protocol_seed::send_self_address()", "[END]");
+        Ok(())
     }
 }
 
 #[async_trait]
 impl ProtocolBase for ProtocolSeed {
     /// Starts the seed protocol. Creates a subscription to the address message,
-    /// then sends our address to the seed server. Sends a get-address
-    /// message and receives an address message.
-    async fn start(self: Arc<Self>, _executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::protocol_seed::start()", "START");
+    /// then sends our address to the seed server. Sends a get-address message
+    /// and receives an address messsage.
+    async fn start(self: Arc<Self>, _ex: Arc<Executor<'_>>) -> Result<()> {
+        debug!(target: "net::protocol_seed::start()", "START => address={}", self.channel.address());
 
-        // Send own address to the seed server.
+        // Send own address to the seed server
         self.send_self_address().await?;
 
-        // Send get address message.
-        let get_addr = message::GetAddrsMessage {};
-        self.channel.clone().send(get_addr).await?;
+        // Send get address message
+        let get_addr = GetAddrsMessage { max: self.settings.outbound_connections as u32 };
+        self.channel.send(&get_addr).await?;
 
-        // Receive addresses.
+        // Receive addresses
         let addrs_msg = self.addr_sub.receive().await?;
-        debug!(target: "net::protocol_seed::start()", "Received {} addrs", addrs_msg.addrs.len()
+        debug!(
+            target: "net::protocol_seed::start()",
+            "Received {} addrs from {}", addrs_msg.addrs.len(), self.channel.address(),
         );
-        self.hosts.store(addrs_msg.addrs.clone()).await;
+        self.hosts.store(&addrs_msg.addrs).await;
 
-        debug!(target: "net::protocol_seed::start()", "END");
+        debug!(target: "net::protocol_seed::start()", "END => address={}", self.channel.address());
         Ok(())
     }
 
     fn name(&self) -> &'static str {
-        "ProtocolSeed"
+        PROTO_NAME
     }
 }

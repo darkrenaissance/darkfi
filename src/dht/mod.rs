@@ -130,10 +130,7 @@ impl Dht {
         };
 
         let request = LookupRequest::new(self.id, key, 0);
-        if let Err(e) = self.p2p.broadcast(request).await {
-            error!(target: "dht", "Failed broadcasting request: {}", e);
-            return Err(e)
-        }
+        self.p2p.broadcast(&request).await;
 
         Ok(Some(key))
     }
@@ -145,7 +142,7 @@ impl Dht {
             Some(_) => {
                 debug!(target: "dht", "Key removed: {}", key);
                 let request = LookupRequest::new(self.id, key, 1);
-                if let Err(e) = self.p2p.broadcast(request).await {
+                if let Err(e) = self.p2p.broadcast(&request).await {
                     error!(target: "dht", "Failed broadcasting request: {}", e);
                     return Err(e)
                 }
@@ -247,13 +244,13 @@ impl Dht {
             // Node iterates the channel peers to ask for their lookup map
             for channel in values {
                 // Communication setup
-                let msg_subsystem = channel.get_message_subsystem();
+                let msg_subsystem = channel.message_subsystem();
                 msg_subsystem.add_dispatch::<LookupMapResponse>().await;
                 let response_sub = channel.subscribe_msg::<LookupMapResponse>().await?;
 
                 // Node creates a `LookupMapRequest` and sends it
                 let order = LookupMapRequest::new(self.id);
-                channel.send(order).await?;
+                channel.send(&order).await?;
 
                 // Node stores response data.
                 let resp = response_sub.receive().await?;
@@ -285,11 +282,7 @@ impl Dht {
 pub async fn waiting_for_response(dht: DhtPtr) -> Result<Option<KeyResponse>> {
     let (p2p_recv_channel, stop_signal, timeout) = {
         let _dht = dht.read().await;
-        (
-            _dht.p2p_recv_channel.clone(),
-            _dht.stop_signal.clone(),
-            _dht.p2p.settings().connect_timeout_seconds as u64,
-        )
+        (_dht.p2p_recv_channel.clone(), _dht.stop_signal.clone(), 666)
     };
     let ex = Arc::new(Executor::new());
     let (timeout_s, timeout_r) = smol::channel::unbounded::<()>();

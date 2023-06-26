@@ -46,25 +46,22 @@ impl ProtocolProposal {
         p2p: P2pPtr,
     ) -> Result<ProtocolBasePtr> {
         debug!(target: "consensus::protocol_proposal::init()", "Adding ProtocolProposal to the protocol registry");
-        let msg_subsystem = channel.get_message_subsystem();
+        let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<BlockProposal>().await;
 
         let proposal_sub = channel.subscribe_msg::<BlockProposal>().await?;
 
-        let channel_address = channel.address();
-
         Ok(Arc::new(Self {
             proposal_sub,
-            jobsman: ProtocolJobsManager::new("ProposalProtocol", channel),
+            jobsman: ProtocolJobsManager::new("ProposalProtocol", channel.clone()),
             state,
             p2p,
-            channel_address,
+            channel_address: channel.address().clone(),
         }))
     }
 
     async fn handle_receive_proposal(self: Arc<Self>) -> Result<()> {
         debug!(target: "consensus::protocol_proposal::handle_receive_proposal()", "START");
-
         let exclude_list = vec![self.channel_address.clone()];
         loop {
             let proposal = match self.proposal_sub.receive().await {
@@ -104,15 +101,7 @@ impl ProtocolProposal {
                 Ok(broadcast) => {
                     if broadcast {
                         // Broadcast proposal to rest of nodes
-                        if let Err(e) =
-                            self.p2p.broadcast_with_exclude(proposal_copy, &exclude_list).await
-                        {
-                            error!(
-                                target: "consensus::protocol_proposal::handle_receive_proposal()",
-                                "proposal broadcast fail: {}",
-                                e
-                            );
-                        };
+                        self.p2p.broadcast_with_exclude(&proposal_copy, &exclude_list).await;
                     }
                 }
                 Err(e) => {

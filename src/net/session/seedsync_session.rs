@@ -16,6 +16,27 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+//! Seed sync session creates a connection to the seed nodes specified in settings.
+//! A new seed sync session is created every time we call [`P2p::start()`]. The
+//! seed sync session loops through all the configured seeds and tries to connect
+//! to them using a [`Connector`]. Seed sync either connects successfully, fails
+//! with an error, or times out.
+//!
+//! If a seed node connects successfully, it runs a version exchange protocol,
+//! stores the channel in the p2p list of channels, and discoonnects, removing
+//! the channel from the channel list.
+//!
+//! The channel is registered using the [`Session::register_channel()`] trait
+//! method. This invokes the Protocol Registry method `attach()`. Usually this
+//! returns a list of protocols that we loop through and start. In this case,
+//! `attach()` uses the bitflag selector to identify seed sessions and exclude
+//! them.
+//!
+//! The version exchange occurs inside `register_channel()`. We create a handshake
+//! task that runs the version exchange with the `perform_handshake_protocols()`
+//! function. This runs the version exchange protocol, stores the channel in the
+//! p2p list of channels, and subscribes to a stop signal.
+
 use std::time::Duration;
 
 use async_std::{
@@ -24,161 +45,161 @@ use async_std::{
 };
 use async_trait::async_trait;
 use futures::future::join_all;
-use log::*;
-use serde_json::json;
+use log::{debug, error, info, warn};
 use smol::Executor;
 use url::Url;
 
+use super::{
+    super::{connector::Connector, p2p::P2p},
+    P2pPtr, Session, SessionBitFlag, SESSION_SEED,
+};
 use crate::Result;
 
-use super::{
-    super::{Connector, P2p},
-    Session, SessionBitflag, SESSION_SEED,
-};
+pub type SeedSyncSessionPtr = Arc<SeedSyncSession>;
 
-/// Defines seed connections session.
+/// Defines seed connections session
 pub struct SeedSyncSession {
     p2p: Weak<P2p>,
 }
 
 impl SeedSyncSession {
-    /// Create a new seed sync session instance.
-    pub fn new(p2p: Weak<P2p>) -> Arc<Self> {
+    /// Create a new seed sync session instance
+    pub fn new(p2p: Weak<P2p>) -> SeedSyncSessionPtr {
         Arc::new(Self { p2p })
     }
 
-    /// Start the seed sync session. Creates a new task for every seed connection and
-    /// starts the seed on each task.
+    /// Start the seed sync session. Creates a new task for every seed
+    /// connection and starts the seed on each task.
     pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::seedsync_session", "SeedSyncSession::start() [START]");
+        debug!(target: "net::session::seedsync_session", "SeedSyncSession::start() [START]");
         let settings = self.p2p().settings();
 
         if settings.seeds.is_empty() {
-            warn!(target: "net::seedsync_session", "Skipping seed sync process since no seeds are configured.");
-            // Store external addresses in hosts explicitly
-            if !settings.external_addr.is_empty() {
-                self.p2p().hosts().store(settings.external_addr.clone()).await
-            }
+            warn!(
+                target: "net::session::seedsync_session",
+                "[P2P] Skipping seed sync process since no seeds are configured.",
+            );
 
             return Ok(())
         }
 
-        // if cached addresses then quit
-
-        let mut tasks = Vec::new();
-
-        // This loops through all the seeds and tries to start them.
-        // If the seed_query_timeout_seconds times out before they are finished,
-        // it will return an error.
+        // Gather tasks so we can execute concurrently
+        let mut tasks = Vec::with_capacity(settings.seeds.len());
+        let conn_timeout = Duration::from_secs(settings.seed_query_timeout);
         for (i, seed) in settings.seeds.iter().enumerate() {
-            let ex2 = executor.clone();
-            let self2 = self.clone();
-            let sett2 = settings.clone();
-            tasks.push(async move {
-                let task = self2.clone().start_seed(i, seed.clone(), ex2.clone());
+            let ex_ = executor.clone();
+            let self_ = self.clone();
 
-                let result =
-                    timeout(Duration::from_secs(sett2.seed_query_timeout_seconds.into()), task)
-                        .await;
+            tasks.push(async move {
+                let task = self_.clone().start_seed(i, seed.clone(), ex_.clone());
+                let result = timeout(conn_timeout, task).await;
 
                 match result {
                     Ok(t) => match t {
                         Ok(()) => {
-                            info!(target: "net::seedsync_session", "Seed #{} connected successfully", i)
+                            info!(
+                                target: "net::session::seedsync_session",
+                                "[P2P] Seed #{} connected successfully", i,
+                            );
                         }
                         Err(err) => {
-                            warn!(target: "net::seedsync_session", "Seed #{} failed for reason {}", i, err)
+                            warn!(
+                                target: "net::session::seedsync_session",
+                                "[P2P] Seed #{} connection failed: {}", i, err,
+                            );
                         }
                     },
-                    Err(_err) => error!(target: "net::seedsync_session", "Seed #{} timed out", i),
+                    Err(_) => {
+                        error!(
+                            target: "net::session::seedsync_session",
+                            "[P2P] Seed #{} timed out", i
+                        );
+                    }
                 }
             });
         }
+        // Poll concurrently
         join_all(tasks).await;
 
         // Seed process complete
         if self.p2p().hosts().is_empty().await {
-            warn!(target: "net::seedsync_session", "Hosts pool still empty after seeding");
+            warn!(target: "net::session::seedsync_session", "[P2P] Hosts pool empty after seeding");
         }
 
-        debug!(target: "net::seedsync_session", "SeedSyncSession::start() [END]");
+        debug!(target: "net::session::seedsync_session", "SeedSyncSession::start() [END]");
         Ok(())
     }
 
-    /// Connects to a seed socket address.
+    /// Connects to a seed socket address
     async fn start_seed(
         self: Arc<Self>,
         seed_index: usize,
         seed: Url,
-        executor: Arc<Executor<'_>>,
+        ex: Arc<Executor<'_>>,
     ) -> Result<()> {
-        debug!(target: "net::seedsync_session", "SeedSyncSession::start_seed(i={}) [START]", seed_index);
-        let (_hosts, settings) = {
-            let p2p = self.p2p.upgrade().unwrap();
-            (p2p.hosts(), p2p.settings())
-        };
+        debug!(
+            target: "net::session::seedsync_session", "SeedSyncSession::start_seed(i={}) [START]",
+            seed_index
+        );
 
+        let settings = self.p2p.upgrade().unwrap().settings();
         let parent = Arc::downgrade(&self);
         let connector = Connector::new(settings.clone(), Arc::new(parent));
+
         match connector.connect(seed.clone()).await {
-            Ok(channel) => {
-                // Blacklist goes here
+            Ok(ch) => {
+                info!(
+                    target: "net::session::seedsync_session",
+                    "[P2P] Connected seed #{} [{}]", seed_index, seed,
+                );
 
-                info!(target: "net::seedsync_session", "Connected seed #{} [{}]", seed_index, seed);
-
-                if let Err(err) =
-                    self.clone().register_channel(channel.clone(), executor.clone()).await
-                {
-                    warn!(target: "net::seedsync_session", "Failure during seed sync session #{} [{}]: {}", seed_index, seed, err);
+                if let Err(e) = self.clone().register_channel(ch.clone(), ex.clone()).await {
+                    warn!(
+                        target: "net::session::seedsync_session",
+                        "[P2P] Failure during sync seed session #{} [{}]: {}",
+                        seed_index, seed, e,
+                    );
                 }
 
-                info!(target: "net::seedsync_session", "Disconnecting from seed #{} [{}]", seed_index, seed);
-                channel.stop().await;
-
-                debug!(target: "net::seedsync_session", "SeedSyncSession::start_seed(i={}) [END]", seed_index);
-                Ok(())
+                info!(
+                    target: "net::session::seedsync_session",
+                    "[P2P] Disconnecting from seed #{} [{}]",
+                    seed_index, seed,
+                );
+                ch.stop().await;
             }
-            Err(err) => {
-                warn!(target: "net::seedsync_session", "Failure contacting seed #{} [{}]: {}", seed_index, seed, err);
-                Err(err)
+
+            Err(e) => {
+                warn!(
+                    target: "net::session:seedsync_session",
+                    "[P2P] Failure contacting seed #{} [{}]: {}",
+                    seed_index, seed, e
+                );
+                return Err(e)
             }
         }
+
+        debug!(
+            target: "net::session::seedsync_session",
+            "SeedSyncSession::start_seed(i={}) [END]",
+            seed_index
+        );
+
+        Ok(())
     }
-
-    // Starts keep-alive messages and seed protocol.
-    /*async fn attach_protocols(
-      self: Arc<Self>,
-      channel: ChannelPtr,
-      hosts: HostsPtr,
-      settings: SettingsPtr,
-      executor: Arc<Executor<'_>>,
-      ) -> Result<()> {
-      let protocol_ping = ProtocolPing::new(channel.clone(), self.p2p());
-      protocol_ping.start(executor.clone()).await;
-
-      let protocol_seed = ProtocolSeed::new(channel.clone(), hosts, settings.clone());
-    // This will block until seed process is complete
-    protocol_seed.start(executor.clone()).await?;
-
-    channel.stop().await;
-
-    Ok(())
-    }*/
 }
 
 #[async_trait]
 impl Session for SeedSyncSession {
-    async fn get_info(&self) -> serde_json::Value {
-        json!({
-            "key": 110
-        })
-    }
-
-    fn p2p(&self) -> Arc<P2p> {
+    fn p2p(&self) -> P2pPtr {
         self.p2p.upgrade().unwrap()
     }
 
-    fn type_id(&self) -> SessionBitflag {
+    fn type_id(&self) -> SessionBitFlag {
         SESSION_SEED
+    }
+
+    async fn get_info(&self) -> serde_json::Value {
+        todo!()
     }
 }

@@ -30,9 +30,9 @@ use log::{debug, info, warn};
 pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Result<()> {
     info!(target: "consensus::block_sync", "Starting blockchain sync...");
     // Getting a random connected channel to ask from peers
-    match p2p.clone().random_channel().await {
+    match p2p.random_channel().await {
         Some(channel) => {
-            let msg_subsystem = channel.get_message_subsystem();
+            let msg_subsystem = channel.message_subsystem();
 
             // Communication setup for slots
             msg_subsystem.add_dispatch::<SlotResponse>().await;
@@ -54,7 +54,7 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
                 loop {
                     // Node creates a `SlotRequest` and sends it
                     let request = SlotRequest { slot: last.id };
-                    channel.send(request).await?;
+                    channel.send(&request).await?;
 
                     // Node stores response data.
                     let resp = slot_response_sub.receive().await?;
@@ -88,7 +88,7 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
                 loop {
                     // Node creates a `BlockOrder` and sends it
                     let order = BlockOrder { slot: last.0, block: last.1 };
-                    channel.send(order).await?;
+                    channel.send(&order).await?;
 
                     // Node stores response data.
                     let _resp = block_response_sub.receive().await?;

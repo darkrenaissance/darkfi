@@ -18,9 +18,7 @@
 
 use std::time::SystemTime;
 
-use async_std::{net::TcpListener, sync::Arc};
-use futures::prelude::*;
-use futures_rustls::{
+use async_rustls::{
     rustls,
     rustls::{
         client::{ServerCertVerified, ServerCertVerifier},
@@ -31,6 +29,7 @@ use futures_rustls::{
     },
     TlsAcceptor, TlsConnector, TlsStream,
 };
+use async_std::sync::Arc;
 use log::error;
 use rustls_pemfile::pkcs8_private_keys;
 use x509_parser::{
@@ -201,14 +200,19 @@ impl TlsUpgrade {
         let secret_key = pkcs8_private_keys(&mut keypair_pem.as_bytes()).unwrap();
         let secret_key = rustls::PrivateKey(secret_key[0].clone());
 
-        let altname = base32::encode(false, keypair.pk.as_slice()).to_ascii_lowercase();
-        let altnames = vec![altname];
+        let altnames = vec![base32::encode(false, keypair.pk.as_slice())];
+
         let mut cert_params = rcgen::CertificateParams::new(altnames);
         cert_params.alg = &rcgen::PKCS_ED25519;
         cert_params.key_pair = Some(rcgen::KeyPair::from_pem(&keypair_pem).unwrap());
+        cert_params.extended_key_usages = vec![
+            rcgen::ExtendedKeyUsagePurpose::ClientAuth,
+            rcgen::ExtendedKeyUsagePurpose::ServerAuth,
+        ];
 
         let certificate = rcgen::Certificate::from_params(cert_params).unwrap();
-        let certificate = rustls::Certificate(certificate.serialize_der().unwrap());
+        let certificate = certificate.serialize_der().unwrap();
+        let certificate = rustls::Certificate(certificate);
 
         let client_cert_verifier = Arc::new(ClientCertificateVerifier {});
         let server_config = Arc::new(
@@ -237,21 +241,23 @@ impl TlsUpgrade {
         Self { server_config, client_config }
     }
 
-    pub async fn upgrade_listener_tls(
-        self,
-        listener: TcpListener,
-    ) -> Result<(TlsAcceptor, TcpListener)> {
-        Ok((TlsAcceptor::from(self.server_config), listener))
-    }
-
     pub async fn upgrade_dialer_tls<IO>(self, stream: IO) -> Result<TlsStream<IO>>
     where
-        IO: AsyncRead + AsyncWrite + Unpin,
+        IO: super::PtStream,
     {
         let server_name = ServerName::try_from("dark.fi").unwrap();
         let connector = TlsConnector::from(self.client_config);
         let stream = connector.connect(server_name, stream).await?;
         Ok(TlsStream::Client(stream))
+    }
+
+    // FIXME: Try to find a transparent way for this instead of implementing separately for all
+    #[cfg(feature = "p2p-transport-tcp")]
+    pub async fn upgrade_listener_tcp_tls(
+        self,
+        listener: async_std::net::TcpListener,
+    ) -> Result<(TlsAcceptor, async_std::net::TcpListener)> {
+        Ok((TlsAcceptor::from(self.server_config), listener))
     }
 }
 

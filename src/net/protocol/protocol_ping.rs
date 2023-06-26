@@ -16,135 +16,152 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 
+use async_std::sync::Arc;
 use async_trait::async_trait;
 use log::{debug, error};
-use rand::Rng;
+use rand::{rngs::OsRng, Rng};
 use smol::Executor;
 
+use super::{
+    super::{
+        channel::ChannelPtr,
+        message::{PingMessage, PongMessage},
+        message_subscriber::MessageSubscription,
+        p2p::P2pPtr,
+        settings::SettingsPtr,
+    },
+    protocol_base::{ProtocolBase, ProtocolBasePtr},
+    protocol_jobs_manager::{ProtocolJobsManager, ProtocolJobsManagerPtr},
+};
 use crate::{util::async_util::sleep, Error, Result};
 
-use super::{
-    super::{message, message_subscriber::MessageSubscription, ChannelPtr, P2pPtr, SettingsPtr},
-    ProtocolBase, ProtocolBasePtr, ProtocolJobsManager, ProtocolJobsManagerPtr,
-};
-
-/// Defines ping and pong messages.
+/// Defines ping and pong messages
 pub struct ProtocolPing {
     channel: ChannelPtr,
-    ping_sub: MessageSubscription<message::PingMessage>,
-    pong_sub: MessageSubscription<message::PongMessage>,
+    ping_sub: MessageSubscription<PingMessage>,
+    pong_sub: MessageSubscription<PongMessage>,
     settings: SettingsPtr,
     jobsman: ProtocolJobsManagerPtr,
 }
+
+const PROTO_NAME: &str = "ProtocolPing";
 
 impl ProtocolPing {
     /// Create a new ping-pong protocol.
     pub async fn init(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let settings = p2p.settings();
 
-        // Creates a subscription to ping message.
-        let ping_sub = channel
-            .clone()
-            .subscribe_msg::<message::PingMessage>()
-            .await
-            .expect("Missing ping dispatcher!");
+        // Creates a subscription to ping message
+        let ping_sub =
+            channel.subscribe_msg::<PingMessage>().await.expect("Missing ping dispatcher!");
 
-        // Creates a subscription to pong message.
-        let pong_sub = channel
-            .clone()
-            .subscribe_msg::<message::PongMessage>()
-            .await
-            .expect("Missing pong dispatcher!");
+        // Creates a subscription to pong message
+        let pong_sub =
+            channel.subscribe_msg::<PongMessage>().await.expect("Missing pong dispatcher!");
 
         Arc::new(Self {
             channel: channel.clone(),
             ping_sub,
             pong_sub,
             settings,
-            jobsman: ProtocolJobsManager::new("ProtocolPing", channel),
+            jobsman: ProtocolJobsManager::new(PROTO_NAME, channel),
         })
     }
 
-    /// Runs ping-pong protocol. Creates a subscription to pong, then starts a
-    /// loop. Loop sleeps for the duration of the channel heartbeat, then
-    /// sends a ping message with a random nonce. Loop starts a timer, waits
-    /// for the pong reply and insures the nonce is the same.
+    /// Runs the ping-pong protocol. Creates a subscription to pong, then
+    /// starts a loop. Loop sleeps for the duration of the channel heartbeat,
+    /// then sends a ping message with a random nonce. Loop starts a timer,
+    /// waits for the pong reply and ensures the nonce is the same.
     async fn run_ping_pong(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::protocol_ping::run_ping_pong()", "START");
-        loop {
-            // Wait channel_heartbeat amount of time.
-            sleep(self.settings.channel_heartbeat_seconds.into()).await;
+        debug!(
+            target: "net::protocol_ping::run_ping_pong()",
+            "START => address={}", self.channel.address(),
+        );
 
+        loop {
             // Create a random nonce.
             let nonce = Self::random_nonce();
 
             // Send ping message.
-            let ping = message::PingMessage { nonce };
-            self.channel.clone().send(ping).await?;
-            debug!(target: "net::protocol_ping::run_ping_pong()", "Send Ping message");
-            // Start the timer for ping timer.
-            let start = Instant::now();
+            let ping = PingMessage { nonce };
+            self.channel.send(&ping).await?;
+
+            // Start the timer for the ping timer
+            let timer = Instant::now();
 
             // Wait for pong, check nonce matches.
             let pong_msg = self.pong_sub.receive().await?;
             if pong_msg.nonce != nonce {
-                // TODO: this is too extreme
                 error!(
                     target: "net::protocol_ping::run_ping_pong()",
-                    "Wrong nonce for ping reply. Disconnecting from channel."
+                    "[P2P] Wrong nonce in pingpong, disconnecting {}",
+                    self.channel.address(),
                 );
                 self.channel.stop().await;
                 return Err(Error::ChannelStopped)
             }
-            let duration = start.elapsed().as_millis();
+
             debug!(
                 target: "net::protocol_ping::run_ping_pong()",
-                "Received Pong message {}ms from [{:?}]",
-                duration,
-                self.channel.address()
+                "Received Pong from {}: {}ms",
+                timer.elapsed().as_millis(),
+                self.channel.address(),
+            );
+
+            // Sleep until next heartbeat
+            sleep(self.settings.channel_heartbeat_interval).await;
+        }
+    }
+
+    /// Waits for ping, then replies with pong.
+    /// Copies ping's nonce into the pong reply.
+    async fn reply_to_ping(self: Arc<Self>) -> Result<()> {
+        debug!(
+            target: "net::protocol_ping::reply_to_ping()",
+            "START => address={}", self.channel.address(),
+        );
+
+        loop {
+            // Wait for ping, reply with pong that has a matching nonce.
+            let ping = self.ping_sub.receive().await?;
+            debug!(
+                target: "net::protocol_ping::reply_to_ping()",
+                "Received Ping from {}", self.channel.address(),
+            );
+
+            // Send pong message
+            let pong = PongMessage { nonce: ping.nonce };
+            self.channel.send(&pong).await?;
+
+            debug!(
+                target: "net::protocol_ping::reply_to_ping()",
+                "Sent Pong reply to {}", self.channel.address(),
             );
         }
     }
 
-    /// Waits for ping, then replies with pong. Copies ping's nonce into the
-    /// pong reply.
-    async fn reply_to_ping(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::protocol_ping::reply_to_ping()", "START");
-        loop {
-            // Wait for ping, reply with pong that has a matching nonce.
-            let ping = self.ping_sub.receive().await?;
-            debug!(target: "net::protocol_ping::reply_to_ping()", "Received Ping message");
-
-            // Send pong message.
-            let pong = message::PongMessage { nonce: ping.nonce };
-            self.channel.clone().send(pong).await?;
-            debug!(target: "net::protocol_ping::reply_to_ping()", "Sent Pong reply");
-        }
-    }
-
-    fn random_nonce() -> u32 {
-        let mut rng = rand::thread_rng();
-        rng.gen()
+    fn random_nonce() -> u16 {
+        OsRng::gen(&mut OsRng)
     }
 }
 
 #[async_trait]
 impl ProtocolBase for ProtocolPing {
-    /// Starts ping-pong keep-alive messages exchange. Runs ping-pong in the
+    /// Starts ping-pong keepalive messages exchange. Runs ping-pong in the
     /// protocol task manager, then queues the reply. Sends out a ping and
     /// waits for pong reply. Waits for ping and replies with a pong.
-    async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::protocol_ping::start()", "START");
-        self.jobsman.clone().start(executor.clone());
-        self.jobsman.clone().spawn(self.clone().run_ping_pong(), executor.clone()).await;
-        self.jobsman.clone().spawn(self.reply_to_ping(), executor).await;
-        debug!(target: "net::protocol_ping::start()", "END");
+    async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
+        debug!(target: "net::protocol_ping::start()", "START => address={}", self.channel.address());
+        self.jobsman.clone().start(ex.clone());
+        self.jobsman.clone().spawn(self.clone().run_ping_pong(), ex.clone()).await;
+        self.jobsman.clone().spawn(self.clone().reply_to_ping(), ex).await;
+        debug!(target: "net::protocol_ping::start()", "END => address={}", self.channel.address());
         Ok(())
     }
 
     fn name(&self) -> &'static str {
-        "ProtocolPing"
+        PROTO_NAME
     }
 }

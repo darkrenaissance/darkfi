@@ -100,6 +100,12 @@ pub enum Error {
     // ======================
     // Network-related errors
     // ======================
+    #[error("Invalid Dialer scheme")]
+    InvalidDialerScheme,
+
+    #[error("Invalid Listener scheme")]
+    InvalidListenerScheme,
+
     #[error("Unsupported network transport: {0}")]
     UnsupportedTransport(String),
 
@@ -135,6 +141,10 @@ pub enum Error {
 
     #[error("Network operation failed")]
     NetworkOperationFailed,
+
+    #[cfg(feature = "arti-client")]
+    #[error(transparent)]
+    ArtiError(#[from] arti_client::Error),
 
     #[error("Malformed packet")]
     MalformedPacket,
@@ -189,11 +199,11 @@ pub enum Error {
     #[error("Invalid DarkFi address")]
     InvalidAddress,
 
-    #[cfg(feature = "futures-rustls")]
+    #[cfg(feature = "async-rustls")]
     #[error(transparent)]
-    RustlsError(#[from] futures_rustls::rustls::Error),
+    RustlsError(#[from] async_rustls::rustls::Error),
 
-    #[cfg(feature = "futures-rustls")]
+    #[cfg(feature = "async-rustls")]
     #[error("Invalid DNS Name {0}")]
     RustlsInvalidDns(String),
 
@@ -279,9 +289,9 @@ pub enum Error {
     // ===============
     // Database errors
     // ===============
-    #[cfg(feature = "sqlx")]
-    #[error("Sqlx error: {0}")]
-    SqlxError(String),
+    #[cfg(feature = "rusqlite")]
+    #[error("rusqlite error: {0}")]
+    RusqliteError(String),
 
     #[cfg(feature = "sled")]
     #[error(transparent)]
@@ -589,10 +599,10 @@ impl From<log::SetLoggerError> for Error {
     }
 }
 
-#[cfg(feature = "sqlx")]
-impl From<sqlx::error::Error> for Error {
-    fn from(err: sqlx::error::Error) -> Self {
-        Self::SqlxError(err.to_string())
+#[cfg(feature = "rusqlite")]
+impl From<rusqlite::Error> for Error {
+    fn from(err: rusqlite::Error) -> Self {
+        Self::RusqliteError(err.to_string())
     }
 }
 
@@ -619,9 +629,9 @@ impl From<async_tungstenite::tungstenite::Error> for Error {
     }
 }
 
-#[cfg(feature = "futures-rustls")]
-impl From<futures_rustls::rustls::client::InvalidDnsNameError> for Error {
-    fn from(err: futures_rustls::rustls::client::InvalidDnsNameError) -> Self {
+#[cfg(feature = "async-rustls")]
+impl From<async_rustls::rustls::client::InvalidDnsNameError> for Error {
+    fn from(err: async_rustls::rustls::client::InvalidDnsNameError) -> Self {
         Self::RustlsInvalidDns(err.to_string())
     }
 }

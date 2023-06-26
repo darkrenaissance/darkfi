@@ -106,8 +106,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     let seen_inv = Seen::new();
 
     // Check the version
-    let mut net_settings = settings.net.clone();
-    net_settings.app_version = Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string());
+    let net_settings = settings.net.clone();
 
     // New p2p
     let p2p = net::P2p::new(net_settings.into()).await;

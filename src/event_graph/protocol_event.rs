@@ -26,7 +26,8 @@ use log::debug;
 use super::EventMsg;
 use crate::{
     event_graph::model::{Event, EventId, ModelPtr},
-    net,
+    impl_p2p_message, net,
+    net::Message,
     util::{async_util::sleep, ringbuffer::RingBuffer},
     Result,
 };
@@ -42,16 +43,19 @@ pub struct InvItem {
 pub struct Inv {
     pub invs: Vec<InvItem>,
 }
+impl_p2p_message!(Inv, "inv");
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 struct SyncEvent {
     leaves: Vec<EventId>,
 }
+impl_p2p_message!(SyncEvent, "syncevent");
 
 #[derive(SerialDecodable, SerialEncodable, Clone, Debug)]
 struct GetData {
     events: Vec<EventId>,
 }
+impl_p2p_message!(GetData, "getdata");
 
 pub type SeenPtr<T> = Arc<Seen<T>>;
 
@@ -101,7 +105,7 @@ where
         seen_event: SeenPtr<EventId>,
         seen_inv: SeenPtr<EventId>,
     ) -> net::ProtocolBasePtr {
-        let message_subsytem = channel.get_message_subsystem();
+        let message_subsytem = channel.message_subsystem();
         message_subsytem.add_dispatch::<Event<T>>().await;
         message_subsytem.add_dispatch::<Inv>().await;
         message_subsytem.add_dispatch::<GetData>().await;
@@ -137,7 +141,7 @@ where
 
     async fn handle_receive_event(self: Arc<Self>) -> Result<()> {
         debug!(target: "event_graph", "ProtocolEvent::handle_receive_event() [START]");
-        let exclude_list = vec![self.channel.address()];
+        let exclude_list = vec![self.channel.address().clone()];
         loop {
             let event = self.event_sub.receive().await?;
             let event = (*event).to_owned();
@@ -152,13 +156,13 @@ where
             self.send_inv(&event).await?;
 
             // Broadcast the msg
-            self.p2p.broadcast_with_exclude(event, &exclude_list).await?;
+            self.p2p.broadcast_with_exclude(&event, &exclude_list).await;
         }
     }
 
     async fn handle_receive_inv(self: Arc<Self>) -> Result<()> {
         debug!(target: "event_graph", "ProtocolEvent::handle_receive_inv() [START]");
-        let exclude_list = vec![self.channel.address()];
+        let exclude_list = vec![self.channel.address().clone()];
         loop {
             let inv = self.inv_sub.receive().await?;
             let inv = (*inv).to_owned();
@@ -176,7 +180,7 @@ where
             // }
 
             // Broadcast the inv msg
-            self.p2p.broadcast_with_exclude(inv, &exclude_list).await?;
+            self.p2p.broadcast_with_exclude(&inv, &exclude_list).await;
         }
     }
     async fn handle_receive_getdata(self: Arc<Self>) -> Result<()> {
@@ -188,7 +192,7 @@ where
             for event_id in events {
                 let model_event = self.model.lock().await.get_event(&event_id);
                 if let Some(event) = model_event {
-                    self.channel.send(event).await?;
+                    self.channel.send(&event).await?;
                 }
             }
         }
@@ -214,7 +218,7 @@ where
                 let children = model.get_offspring(leaf);
 
                 for child in children {
-                    self.channel.send(child).await?;
+                    self.channel.send(&child).await?;
                 }
             }
         }
@@ -226,7 +230,7 @@ where
         loop {
             sleep(6).await;
             let leaves = self.model.lock().await.find_leaves();
-            self.channel.send(SyncEvent { leaves }).await?;
+            self.channel.send(&SyncEvent { leaves }).await?;
         }
     }
 
@@ -240,14 +244,14 @@ where
 
     async fn send_inv(&self, event: &Event<T>) -> Result<()> {
         debug!(target: "event_graph", "ProtocolEvent::send_inv()");
-        self.p2p.broadcast(Inv { invs: vec![InvItem { hash: event.hash() }] }).await?;
+        self.p2p.broadcast(&Inv { invs: vec![InvItem { hash: event.hash() }] }).await;
 
         Ok(())
     }
 
     async fn send_getdata(&self, events: Vec<EventId>) -> Result<()> {
         debug!(target: "event_graph", "ProtocolEvent::send_getdata()");
-        self.channel.send(GetData { events }).await?;
+        self.channel.send(&GetData { events }).await?;
         Ok(())
     }
 }
@@ -278,25 +282,5 @@ impl<T> net::Message for Event<T>
 where
     T: Send + Sync + Decodable + Encodable + 'static,
 {
-    fn name() -> &'static str {
-        "event"
-    }
-}
-
-impl net::Message for Inv {
-    fn name() -> &'static str {
-        "inv"
-    }
-}
-
-impl net::Message for SyncEvent {
-    fn name() -> &'static str {
-        "syncevent"
-    }
-}
-
-impl net::Message for GetData {
-    fn name() -> &'static str {
-        "getdata"
-    }
+    const NAME: &'static str = "event";
 }

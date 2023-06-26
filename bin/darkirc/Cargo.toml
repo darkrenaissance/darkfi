@@ -15,7 +15,7 @@ darkfi-serial = {path = "../../src/serial"}
 # Async
 smol = "1.3.0"
 futures = "0.3.28"
-futures-rustls = "0.24.0"
+async-rustls = "0.4.0"
 rustls-pemfile = "1.0.2"
 async-std = "1.12.0"
 async-trait = "0.1.68"

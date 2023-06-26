@@ -18,12 +18,12 @@
 
 use std::{fs::File, net::SocketAddr};
 
+use async_rustls::{rustls, TlsAcceptor};
 use async_std::{
     net::TcpListener,
     sync::{Arc, Mutex},
 };
 use futures::{io::BufReader, AsyncRead, AsyncReadExt, AsyncWrite};
-use futures_rustls::{rustls, TlsAcceptor};
 use log::{error, info};
 
 use darkfi::{
@@ -177,7 +177,7 @@ impl IrcServer {
                         continue
                     }
 
-                    p2p.broadcast(event).await?;
+                    p2p.broadcast(&event).await;
                 }
 
                 NotifierMsg::UpdateConfig => {

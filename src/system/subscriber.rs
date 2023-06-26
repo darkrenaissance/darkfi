@@ -26,6 +26,7 @@ pub type SubscriberPtr<T> = Arc<Subscriber<T>>;
 
 pub type SubscriptionId = u64;
 
+#[derive(Debug)]
 pub struct Subscription<T> {
     id: SubscriptionId,
     recv_queue: smol::channel::Receiver<T>,
@@ -54,7 +55,8 @@ impl<T: Clone> Subscription<T> {
     }
 }
 
-// Simple broadcast (publish-subscribe) class
+/// Simple broadcast (publish-subscribe) class
+#[derive(Debug)]
 pub struct Subscriber<T> {
     subs: Mutex<HashMap<u64, smol::channel::Sender<T>>>,
 }

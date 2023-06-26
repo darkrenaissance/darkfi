@@ -16,210 +16,171 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
-
-use serde::Deserialize;
+use async_std::sync::Arc;
 use structopt::StructOpt;
-use structopt_toml::StructOptToml;
 use url::Url;
 
-use crate::net::transport::TransportName;
-
-/// Atomic pointer to network settings.
+/// Atomic pointer to network settings
 pub type SettingsPtr = Arc<Settings>;
 
-/// Default settings for the network. Can be manually configured.
-#[derive(Clone, Debug)]
+/// P2P network settings. The scope of this is a P2P network instance
+/// configured by the library user.
+#[derive(Debug, Clone)]
 pub struct Settings {
-    /// P2P accept addresses node listens to for inbound connections
-    pub inbound: Vec<Url>,
-    /// Outbound connection slots number
-    pub outbound_connections: u32,
-    /// Manual connections retry limit, 0 for forever looping
-    pub manual_attempt_limit: u32,
-    /// Seed connection establishment timeout
-    pub seed_query_timeout_seconds: u32,
-    /// Connection establishment timeout
-    pub connect_timeout_seconds: u32,
-    /// Exchange versions (handshake) timeout
-    pub channel_handshake_seconds: u32,
-    /// Ping-pong exhange execution interval
-    pub channel_heartbeat_seconds: u32,
-    /// Try to fill an outbound slot interval
-    pub outbound_retry_seconds: u64,
-    /// P2P external addresses node advertises so other peers can reach us
-    /// and connect to us, as long us inbound addresses are also configured
-    pub external_addr: Vec<Url>,
+    /// Only used for debugging, compromises privacy when set
+    pub node_id: String,
+    /// P2P accept addresses the instance listens on for inbound connections
+    pub inbound_addrs: Vec<Url>,
+    /// P2P external addresses the instance advertises so other peers can
+    /// reach us and connect to us, as long as inbound addrs are configured
+    pub external_addrs: Vec<Url>,
     /// Peer nodes to manually connect to
     pub peers: Vec<Url>,
-    /// Seed nodes to connect to for peers retrieval and/or advertising our own
-    /// external address
+    /// Seed nodes to connect to for peer discovery and/or adversising our
+    /// own external addresses
     pub seeds: Vec<Url>,
-    /// Only used for debugging. Compromises privacy when set.
-    pub node_id: String,
-    /// Application version, used for verification between peers
-    pub app_version: Option<String>,
-    /// Prefered transports for outbound connections
-    pub outbound_transports: Vec<TransportName>,
+    /// Application version, used for convenient protocol matching
+    pub app_version: semver::Version,
+    /// Whitelisted network transports for outbound connections
+    pub allowed_transports: Vec<String>,
+    /// Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
+    pub transport_mixing: bool,
+    /// Outbound connection slots number, this many connections will be
+    /// attempted. (This does not include manual connections)
+    pub outbound_connections: usize,
+    /// Manual connections retry limit, 0 for forever looping
+    pub manual_attempt_limit: usize,
+    /// Seed connection establishment timeout (in seconds)
+    pub seed_query_timeout: u64,
+    /// Outbound connection establishment timeout (in seconds)
+    pub outbound_connect_timeout: u64,
+    /// Exchange versions (handshake) timeout (in seconds)
+    pub channel_handshake_timeout: u64,
+    /// Ping-pong exchange execution interval (in seconds)
+    pub channel_heartbeat_interval: u64,
     /// Allow localnet hosts
     pub localnet: bool,
-    /// Enable peer discovery
-    pub peer_discovery: bool,
-    /// Enable channel logging
-    pub channel_log: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
+        let version = option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0");
+        let app_version = semver::Version::parse(version).unwrap();
+
         Self {
-            inbound: Vec::new(),
+            node_id: String::new(),
+            inbound_addrs: vec![],
+            external_addrs: vec![],
+            peers: vec![],
+            seeds: vec![],
+            app_version,
+            allowed_transports: vec![],
+            transport_mixing: true,
             outbound_connections: 0,
             manual_attempt_limit: 0,
-            seed_query_timeout_seconds: 8,
-            connect_timeout_seconds: 10,
-            channel_handshake_seconds: 4,
-            channel_heartbeat_seconds: 10,
-            outbound_retry_seconds: 20,
-            external_addr: Vec::new(),
-            peers: Vec::new(),
-            seeds: Vec::new(),
-            node_id: String::new(),
-            app_version: Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string()),
-            outbound_transports: get_outbound_transports(vec![]),
+            seed_query_timeout: 30,
+            outbound_connect_timeout: 15,
+            channel_handshake_timeout: 4,
+            channel_heartbeat_interval: 10,
             localnet: false,
-            peer_discovery: true,
-            channel_log: false,
         }
     }
 }
 
+// The following is used so we can have P2P settings configurable
+// from TOML files.
+
 /// Defines the network settings.
-#[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
+#[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
 #[structopt()]
 pub struct SettingsOpt {
-    /// P2P accept addresses node listens to for inbound connections
+    /// P2P accept address node listens to for inbound connections
     #[serde(default)]
     #[structopt(long = "accept")]
     pub inbound: Vec<Url>,
 
     /// Outbound connection slots number
     #[structopt(long = "slots")]
-    pub outbound_connections: Option<u32>,
+    pub outbound_connections: Option<usize>,
 
-    /// P2P external addresses node advertises so other peers can reach us
-    /// and connect to us, as long us inbound addresses are also configured
+    /// P2P external addresses node advertises so other peers can
+    /// reach us and connect to us, as long as inbound addresses
+    /// are also configured
     #[serde(default)]
     #[structopt(long)]
-    pub external_addr: Vec<Url>,
+    pub external_addrs: Vec<Url>,
 
     /// Peer nodes to manually connect to
     #[serde(default)]
     #[structopt(long)]
     pub peers: Vec<Url>,
 
-    /// Seed nodes to connect to for peers retrieval and/or advertising our own
-    /// external address
+    /// Seed nodes to connect to for peers retrieval and/or
+    /// advertising our own external addresses
     #[serde(default)]
     #[structopt(long)]
     pub seeds: Vec<Url>,
 
     /// Manual connections retry limit
     #[structopt(skip)]
-    pub manual_attempt_limit: Option<u32>,
+    pub manual_attempt_limit: Option<usize>,
 
-    /// Seed connection establishment timeout
+    /// Seed connection establishment timeout in seconds
     #[structopt(skip)]
-    pub seed_query_timeout_seconds: Option<u32>,
+    pub seed_query_timeout: Option<u64>,
 
-    /// Connection establishment timeout
+    /// Connection establishment timeout in seconds
     #[structopt(skip)]
-    pub connect_timeout_seconds: Option<u32>,
+    pub outbound_connect_timeout: Option<u64>,
 
-    /// Exchange versions (handshake) timeout
+    /// Exchange versions (handshake) timeout in seconds
     #[structopt(skip)]
-    pub channel_handshake_seconds: Option<u32>,
+    pub channel_handshake_timeout: Option<u64>,
 
-    /// Ping-pong exhange execution interval
+    /// Ping-pong exchange execution interval in seconds
     #[structopt(skip)]
-    pub channel_heartbeat_seconds: Option<u32>,
-
-    /// Try to fill an outbound slot interval
-    #[structopt(skip)]
-    pub outbound_retry_seconds: Option<u64>,
+    pub channel_heartbeat_interval: Option<u64>,
 
     /// Only used for debugging. Compromises privacy when set.
     #[serde(default)]
     #[structopt(skip)]
     pub node_id: String,
 
-    /// Application version, used for verification between peers
-    #[serde(default)]
-    #[structopt(skip)]
-    pub app_version: Option<String>,
-
-    /// Prefered transports for outbound connections
+    /// Preferred transports for outbound connections    
     #[serde(default)]
     #[structopt(long = "transports")]
-    pub outbound_transports: Vec<String>,
+    pub allowed_transports: Vec<String>,
+
+    #[structopt(long)]
+    pub transport_mixing: bool,
 
     /// Allow localnet hosts
     #[serde(default)]
     #[structopt(long)]
     pub localnet: bool,
-
-    /// Enable peer discovery
-    #[serde(default = "default_as_true")]
-    #[structopt(long)]
-    pub peer_discovery: bool,
-
-    /// Enable channel logging
-    #[serde(default)]
-    #[structopt(long)]
-    pub channel_log: bool,
 }
 
 impl From<SettingsOpt> for Settings {
-    fn from(settings_opt: SettingsOpt) -> Self {
+    fn from(opt: SettingsOpt) -> Self {
+        let version = option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0");
+        let app_version = semver::Version::parse(version).unwrap();
+
         Self {
-            inbound: settings_opt.inbound,
-            outbound_connections: settings_opt.outbound_connections.unwrap_or(0),
-            manual_attempt_limit: settings_opt.manual_attempt_limit.unwrap_or(0),
-            seed_query_timeout_seconds: settings_opt.seed_query_timeout_seconds.unwrap_or(8),
-            connect_timeout_seconds: settings_opt.connect_timeout_seconds.unwrap_or(10),
-            channel_handshake_seconds: settings_opt.channel_handshake_seconds.unwrap_or(4),
-            channel_heartbeat_seconds: settings_opt.channel_heartbeat_seconds.unwrap_or(10),
-            outbound_retry_seconds: settings_opt.outbound_retry_seconds.unwrap_or(1200),
-            external_addr: settings_opt.external_addr,
-            peers: settings_opt.peers,
-            seeds: settings_opt.seeds,
-            node_id: settings_opt.node_id,
-            app_version: settings_opt.app_version,
-            outbound_transports: get_outbound_transports(settings_opt.outbound_transports),
-            localnet: settings_opt.localnet,
-            peer_discovery: settings_opt.peer_discovery,
-            channel_log: settings_opt.channel_log,
+            node_id: opt.node_id,
+            inbound_addrs: opt.inbound,
+            external_addrs: opt.external_addrs,
+            peers: opt.peers,
+            seeds: opt.seeds,
+            app_version,
+            allowed_transports: opt.allowed_transports,
+            transport_mixing: opt.transport_mixing,
+            outbound_connections: opt.outbound_connections.unwrap_or(0),
+            manual_attempt_limit: opt.manual_attempt_limit.unwrap_or(0),
+            seed_query_timeout: opt.seed_query_timeout.unwrap_or(30),
+            outbound_connect_timeout: opt.outbound_connect_timeout.unwrap_or(15),
+            channel_handshake_timeout: opt.channel_handshake_timeout.unwrap_or(4),
+            channel_heartbeat_interval: opt.channel_heartbeat_interval.unwrap_or(10),
+            localnet: opt.localnet,
         }
     }
-}
-
-/// Auxiliary function to convert outbound transport `Vec<String>`
-/// to `Vec<TransportName>`, using defaults if empty.
-pub fn get_outbound_transports(opt_outbound_transports: Vec<String>) -> Vec<TransportName> {
-    let mut outbound_transports = vec![];
-    for transport in opt_outbound_transports {
-        let transport_name = TransportName::try_from(transport.as_str()).unwrap();
-        outbound_transports.push(transport_name);
-    }
-
-    if outbound_transports.is_empty() {
-        let tls = TransportName::Tcp(Some("tls".into()));
-        outbound_transports.push(tls);
-    }
-
-    outbound_transports
-}
-
-/// Auxiliary function to set serde bool value to true.
-fn default_as_true() -> bool {
-    true
 }

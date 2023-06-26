@@ -23,6 +23,7 @@ use smol::Executor;
 
 pub type StoppableTaskPtr = Arc<StoppableTask>;
 
+#[derive(Debug)]
 pub struct StoppableTask {
     stop_send: smol::channel::Sender<()>,
     stop_recv: smol::channel::Receiver<()>,

@@ -133,7 +133,7 @@ struct Args {
 
     #[structopt(long, default_value = "8")]
     /// Connection slots for the syncing protocol
-    sync_slots: u32,
+    sync_slots: usize,
 
     #[structopt(long)]
     /// Connect to seed for the syncing protocol (repeatable flag)
@@ -150,10 +150,6 @@ struct Args {
     #[structopt(long)]
     /// Enable localnet hosts
     localnet: bool,
-
-    #[structopt(long)]
-    /// Enable channel log
-    channel_log: bool,
 
     #[structopt(long)]
     /// Whitelisted cashier address (repeatable flag)
@@ -719,14 +715,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     // P2P network. The faucet doesn't participate in consensus, so we only
     // build the sync protocol.
     let network_settings = net::Settings {
-        inbound: args.sync_p2p_accept,
+        inbound_addrs: args.sync_p2p_accept,
         outbound_connections: args.sync_slots,
-        external_addr: args.sync_p2p_external,
+        external_addrs: args.sync_p2p_external,
         peers: args.sync_p2p_peer.clone(),
         seeds: args.sync_p2p_seed.clone(),
-        outbound_transports: net::settings::get_outbound_transports(args.sync_p2p_transports),
+        allowed_transports: args.sync_p2p_transports,
         localnet: args.localnet,
-        channel_log: args.channel_log,
         ..Default::default()
     };
 
@@ -788,8 +783,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     })
     .detach();
 
-    info!("Waiting for sync P2P outbound connections");
-    sync_p2p.clone().wait_for_outbound(ex).await?;
+    // TODO: I think this is not needed anymore
+    //info!("Waiting for sync P2P outbound connections");
+    //sync_p2p.clone().wait_for_outbound(ex).await?;
 
     match block_sync_task(sync_p2p, state.clone()).await {
         Ok(()) => *faucetd.synced.lock().await = true,

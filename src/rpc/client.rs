@@ -27,9 +27,7 @@ use url::Url;
 
 use super::jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult};
 use crate::{
-    net::transport::{
-        TcpTransport, TorTransport, Transport, TransportName, TransportStream, UnixTransport,
-    },
+    net::transport::{Dialer, PtStream},
     system::SubscriberPtr,
     Error, Result,
 };
@@ -171,63 +169,17 @@ impl RpcClient {
         let (result_send, result_recv) = smol::channel::unbounded();
         let (stop_send, stop_recv) = smol::channel::unbounded();
 
-        let transport_name = TransportName::try_from(uri.clone())?;
-
-        macro_rules! reqrep {
-            ($stream:expr, $transport:expr, $upgrade:expr) => {{
-                if let Err(err) = $stream {
-                    error!(target: "rpc::client", "JSON-RPC client setup for {} failed: {}", uri, err);
-                    return Err(Error::ConnectFailed)
-                }
-
-                let stream = $stream?.await;
-                if let Err(err) = stream {
-                    error!(target: "rpc::client", "JSON-RPC client connection to {} failed: {}", uri, err);
-                    return Err(Error::ConnectFailed)
-                }
-
-                let stream = stream?;
-                match $upgrade {
-                    None => {
-                        smol::spawn(Self::reqrep_loop(stream, result_send, data_recv, stop_recv))
-                            .detach();
-                    }
-                    Some(u) if u == "tls" => {
-                        let stream = $transport.upgrade_dialer(stream)?.await?;
-                        smol::spawn(Self::reqrep_loop(stream, result_send, data_recv, stop_recv))
-                            .detach();
-                    }
-                    Some(u) => return Err(Error::UnsupportedTransportUpgrade(u)),
-                }
-            }};
-        }
-
-        match transport_name {
-            TransportName::Tcp(upgrade) => {
-                let transport = TcpTransport::new(None, 1024);
-                let stream = transport.dial(uri.clone(), None);
-                reqrep!(stream, transport, upgrade);
-            }
-            TransportName::Tor(upgrade) => {
-                let socks5_url = TorTransport::get_dialer_env()?;
-                let transport = TorTransport::new(socks5_url, None)?;
-                let stream = transport.clone().dial(uri.clone(), None);
-                reqrep!(stream, transport, upgrade);
-            }
-            TransportName::Unix => {
-                let transport = UnixTransport::new();
-                let stream = transport.dial(uri.clone(), None);
-                reqrep!(stream, transport, None);
-            }
-            _ => unimplemented!(),
-        }
+        let dialer = Dialer::new(uri.clone()).await?;
+        // TODO: Revisit the timeout here
+        let stream = dialer.dial(None).await?;
+        smol::spawn(Self::reqrep_loop(stream, result_send, data_recv, stop_recv)).detach();
 
         Ok((data_send, result_recv, stop_send))
     }
 
     /// Internal function that loops on a given stream and multiplexes the data.
-    async fn reqrep_loop<T: TransportStream>(
-        mut stream: T,
+    async fn reqrep_loop(
+        mut stream: Box<dyn PtStream>,
         result_send: smol::channel::Sender<JsonResult>,
         data_recv: smol::channel::Receiver<(Value, bool)>,
         stop_recv: smol::channel::Receiver<()>,

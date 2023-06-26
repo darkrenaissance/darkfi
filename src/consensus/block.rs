@@ -28,7 +28,7 @@ use super::{
     constants::{BLOCK_MAGIC_BYTES, BLOCK_VERSION},
     LeadInfo,
 };
-use crate::{net, tx::Transaction, util::time::Timestamp};
+use crate::{impl_p2p_message, net::Message, tx::Transaction, util::time::Timestamp};
 
 /// This struct represents a tuple of the form (version, previous, epoch, slot, timestamp, merkle_root).
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
@@ -100,11 +100,7 @@ pub struct Block {
     pub lead_info: LeadInfo,
 }
 
-impl net::Message for Block {
-    fn name() -> &'static str {
-        "block"
-    }
-}
+impl_p2p_message!(Block, "block");
 
 impl Block {
     pub fn new(
@@ -146,11 +142,7 @@ pub struct BlockOrder {
     pub block: blake3::Hash,
 }
 
-impl net::Message for BlockOrder {
-    fn name() -> &'static str {
-        "blockorder"
-    }
-}
+impl_p2p_message!(BlockOrder, "blockorder");
 
 /// Structure representing full block data.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -172,11 +164,7 @@ impl Default for BlockInfo {
     }
 }
 
-impl net::Message for BlockInfo {
-    fn name() -> &'static str {
-        "blockinfo"
-    }
-}
+impl_p2p_message!(BlockInfo, "blockinfo");
 
 impl BlockInfo {
     pub fn new(header: Header, txs: Vec<Transaction>, lead_info: LeadInfo) -> Self {
@@ -210,11 +198,7 @@ pub struct BlockResponse {
     pub blocks: Vec<BlockInfo>,
 }
 
-impl net::Message for BlockResponse {
-    fn name() -> &'static str {
-        "blockresponse"
-    }
-}
+impl_p2p_message!(BlockResponse, "blockresponse");
 
 /// This struct represents a block proposal, used for consensus.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -260,11 +244,7 @@ impl fmt::Display for BlockProposal {
     }
 }
 
-impl net::Message for BlockProposal {
-    fn name() -> &'static str {
-        "proposal"
-    }
-}
+impl_p2p_message!(BlockProposal, "proposal");
 
 impl From<BlockProposal> for BlockInfo {
     fn from(block: BlockProposal) -> BlockInfo {

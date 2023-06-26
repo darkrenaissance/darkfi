@@ -12,7 +12,7 @@ CARGO = cargo
 #TARGET_PRFX = --target=
 
 # Binaries to be built
-BINS = drk darkfid ircd dnetview faucetd vanityaddr
+BINS = darkfid faucetd drk darkirc dnetview vanityaddr
 
 # zkas dependencies
 ZKASDEPS = \
@@ -36,8 +36,7 @@ BINDEPS = \
 all: $(BINS)
 
 zkas: $(ZKASDEPS)
-	$(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) \
-		--all-features --release --package $@
+	$(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) --all-features --release --package $@
 	cp -f target/$(RUST_TARGET)/release/$@ $@
 
 $(PROOFS_BIN): zkas $(PROOFS_SRC)
@@ -50,8 +49,7 @@ contracts: zkas
 	$(MAKE) -C src/contract/deployooor
 
 $(BINS): contracts $(PROOFS_BIN) $(BINDEPS)
-	$(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) \
-		--all-features --release --package $@
+	$(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) --all-features --release --package $@
 	cp -f target/$(RUST_TARGET)/release/$@ $@
 
 check: contracts $(PROOFS_BIN)

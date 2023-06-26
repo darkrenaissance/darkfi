@@ -18,15 +18,15 @@
 
 use async_std::sync::Arc;
 use async_trait::async_trait;
-use log::{debug, error};
+use log::debug;
 use smol::Executor;
 use url::Url;
 
 use crate::{
     consensus::ValidatorStatePtr,
-    net,
+    impl_p2p_message,
     net::{
-        ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
+        ChannelPtr, Message, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
     tx::Transaction,
@@ -41,11 +41,7 @@ pub struct ProtocolTx {
     channel_address: Url,
 }
 
-impl net::Message for Transaction {
-    fn name() -> &'static str {
-        "tx"
-    }
-}
+impl_p2p_message!(Transaction, "tx");
 
 impl ProtocolTx {
     pub async fn init(
@@ -57,18 +53,17 @@ impl ProtocolTx {
             target: "consensus::protocol_tx::init()",
             "Adding ProtocolTx to the protocol registry"
         );
-        let msg_subsystem = channel.get_message_subsystem();
+        let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<Transaction>().await;
 
         let tx_sub = channel.subscribe_msg::<Transaction>().await?;
-        let channel_address = channel.address();
 
         Ok(Arc::new(Self {
             tx_sub,
-            jobsman: ProtocolJobsManager::new("TxProtocol", channel),
+            jobsman: ProtocolJobsManager::new("TxProtocol", channel.clone()),
             state,
             p2p,
-            channel_address,
+            channel_address: channel.address().clone(),
         }))
     }
 
@@ -104,13 +99,7 @@ impl ProtocolTx {
 
             // Nodes use unconfirmed_txs vector as seen_txs pool.
             if self.state.write().await.append_tx(tx_copy.clone()).await {
-                if let Err(e) = self.p2p.broadcast_with_exclude(tx_copy, &exclude_list).await {
-                    error!(
-                        target: "consensus::protocol_tx::handle_receive_tx()",
-                        "p2p broadcast fail: {}",
-                        e
-                    );
-                };
+                self.p2p.broadcast_with_exclude(&tx_copy, &exclude_list).await;
             }
         }
     }

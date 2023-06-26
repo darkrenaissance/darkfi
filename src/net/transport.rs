@@ -16,120 +16,275 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{net::SocketAddr, time::Duration};
+use std::time::Duration;
 
 use async_trait::async_trait;
-use futures::prelude::*;
-use futures_rustls::{TlsAcceptor, TlsStream};
+use futures::{AsyncRead, AsyncWrite};
 use url::Url;
 
-use crate::Result;
+use crate::{Error, Result};
 
-mod upgrade_tls;
-pub use upgrade_tls::TlsUpgrade;
+/// TLS Upgrade Mechanism
+pub(crate) mod tls;
 
-mod tcp;
-pub use tcp::TcpTransport;
+#[cfg(feature = "p2p-transport-tcp")]
+/// TCP Transport
+pub(crate) mod tcp;
 
-mod tor;
-pub use tor::TorTransport;
+#[cfg(feature = "p2p-transport-tor")]
+/// Tor transport
+pub(crate) mod tor;
 
-mod unix;
-pub use unix::UnixTransport;
+#[cfg(feature = "p2p-transport-nym")]
+/// Nym transport
+pub(crate) mod nym;
 
-mod nym;
-pub use nym::NymTransport;
+/// Dialer variants
+#[derive(Debug, Clone)]
+pub enum DialerVariant {
+    #[cfg(feature = "p2p-transport-tcp")]
+    /// Plain TCP
+    Tcp(tcp::TcpDialer),
 
-/// A helper function to convert SocketAddr to Url and add scheme
-pub(crate) fn socket_addr_to_url(addr: SocketAddr, scheme: &str) -> Result<Url> {
-    let url = Url::parse(&format!("{}://{}", scheme, addr))?;
-    Ok(url)
+    #[cfg(feature = "p2p-transport-tcp")]
+    /// TCP with TLS
+    TcpTls(tcp::TcpDialer),
+
+    #[cfg(feature = "p2p-transport-tor")]
+    /// Tor
+    Tor(tor::TorDialer),
+
+    #[cfg(feature = "p2p-transport-tor")]
+    /// Tor with TLS
+    TorTls(tor::TorDialer),
+
+    #[cfg(feature = "p2p-transport-nym")]
+    /// Nym
+    Nym(nym::NymDialer),
+
+    #[cfg(feature = "p2p-transport-nym")]
+    /// Nym with TLS
+    NymTls(nym::NymDialer),
 }
 
-/// Used as wrapper for stream used by Transport trait
-pub trait TransportStream: AsyncWrite + AsyncRead + Unpin + Send + Sync {}
+/// Listener variants
+#[derive(Debug, Clone)]
+pub enum ListenerVariant {
+    #[cfg(feature = "p2p-transport-tcp")]
+    /// Plain TCP
+    Tcp(tcp::TcpListener),
 
-/// Used as wrapper for listener used by Transport trait
-#[async_trait]
-pub trait TransportListener: Send + Sync + Unpin {
-    async fn next(&self) -> Result<(Box<dyn TransportStream>, Url)>;
+    #[cfg(feature = "p2p-transport-tcp")]
+    /// TCP with TLS
+    TcpTls(tcp::TcpListener),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TransportName {
-    Tcp(Option<String>),
-    Tor(Option<String>),
-    Nym(Option<String>),
-    Unix,
+/// A dialer that is able to transparently operate over arbitrary transports.
+pub struct Dialer {
+    /// The endpoint to connect to
+    endpoint: Url,
+    /// The dialer variant (transport protocol)
+    variant: DialerVariant,
 }
 
-impl TransportName {
-    pub fn to_scheme(&self) -> String {
-        match self {
-            Self::Tcp(None) => "tcp".into(),
-            Self::Tcp(Some(opt)) => format!("tcp+{}", opt),
-            Self::Tor(None) => "tor".into(),
-            Self::Tor(Some(opt)) => format!("tor+{}", opt),
-            Self::Nym(None) => "nym".into(),
-            Self::Nym(Some(opt)) => format!("nym+{}", opt),
-            Self::Unix => "unix".into(),
+impl Dialer {
+    /// Instantiate a new [`Dialer`] with the given [`Url`].
+    /// Must contain a scheme, host string, and a port.
+    pub async fn new(endpoint: Url) -> Result<Self> {
+        if endpoint.host_str().is_none() || endpoint.port().is_none() {
+            return Err(Error::InvalidDialerScheme)
+        }
+
+        match endpoint.scheme().to_lowercase().as_str() {
+            #[cfg(feature = "p2p-transport-tcp")]
+            "tcp" => {
+                // Build a TCP dialer
+                let variant = tcp::TcpDialer::new(None).await?;
+                let variant = DialerVariant::Tcp(variant);
+                Ok(Self { endpoint, variant })
+            }
+
+            #[cfg(feature = "p2p-transport-tcp")]
+            "tcp+tls" => {
+                // Build a TCP dialer wrapped with TLS
+                let variant = tcp::TcpDialer::new(None).await?;
+                let variant = DialerVariant::TcpTls(variant);
+                Ok(Self { endpoint, variant })
+            }
+
+            #[cfg(feature = "p2p-transport-tor")]
+            "tor" => {
+                // Build a Tor dialer
+                let variant = tor::TorDialer::new().await?;
+                let variant = DialerVariant::Tor(variant);
+                Ok(Self { endpoint, variant })
+            }
+
+            #[cfg(feature = "p2p-transport-tor")]
+            "tor+tls" => {
+                // Build a Tor dialer wrapped with TLS
+                let variant = tor::TorDialer::new().await?;
+                let variant = DialerVariant::TorTls(variant);
+                Ok(Self { endpoint, variant })
+            }
+
+            #[cfg(feature = "p2p-transport-nym")]
+            "nym" => {
+                // Build a Nym dialer
+                let variant = nym::NymDialer::new().await?;
+                let variant = DialerVariant::Nym(variant);
+                Ok(Self { endpoint, variant })
+            }
+
+            #[cfg(feature = "p2p-transport-nym")]
+            "nym+tls" => {
+                // Build a Nym dialer wrapped with TLS
+                let variant = nym::NymDialer::new().await?;
+                let variant = DialerVariant::NymTls(variant);
+                Ok(Self { endpoint, variant })
+            }
+
+            x => Err(Error::UnsupportedTransport(x.to_string())),
         }
     }
-}
 
-impl TryFrom<&str> for TransportName {
-    type Error = crate::Error;
+    /// Dial an instantiated [`Dialer`]. This creates a connection and returns a stream.
+    pub async fn dial(&self, timeout: Option<Duration>) -> Result<Box<dyn PtStream>> {
+        match &self.variant {
+            #[cfg(feature = "p2p-transport-tcp")]
+            DialerVariant::Tcp(dialer) => {
+                // NOTE: sockaddr here is an array, can contain both ipv4 and ipv6
+                let sockaddr = self.endpoint.socket_addrs(|| None)?;
+                let stream = dialer.do_dial(sockaddr[0], timeout).await?;
+                Ok(Box::new(stream))
+            }
 
-    fn try_from(scheme: &str) -> Result<Self> {
-        let transport_name = match scheme {
-            "tcp" => Self::Tcp(None),
-            "tcp+tls" | "tls" => Self::Tcp(Some("tls".into())),
-            "tor" => Self::Tor(None),
-            "tor+tls" => Self::Tor(Some("tls".into())),
-            "nym" => Self::Nym(None),
-            "nym+tls" => Self::Nym(Some("tls".into())),
-            "unix" => Self::Unix,
-            n => return Err(crate::Error::UnsupportedTransport(n.into())),
-        };
-        Ok(transport_name)
+            #[cfg(feature = "p2p-transport-tcp")]
+            DialerVariant::TcpTls(dialer) => {
+                let sockaddr = self.endpoint.socket_addrs(|| None)?;
+                let stream = dialer.do_dial(sockaddr[0], timeout).await?;
+                let tlsupgrade = tls::TlsUpgrade::new();
+                let stream = tlsupgrade.upgrade_dialer_tls(stream).await?;
+                Ok(Box::new(stream))
+            }
+
+            #[cfg(feature = "p2p-transport-tor")]
+            DialerVariant::Tor(dialer) => {
+                let host = self.endpoint.host_str().unwrap();
+                let port = self.endpoint.port().unwrap();
+                let stream = dialer.do_dial(host, port, timeout).await?;
+                Ok(Box::new(stream))
+            }
+
+            #[cfg(feature = "p2p-transport-tor")]
+            DialerVariant::TorTls(dialer) => {
+                let host = self.endpoint.host_str().unwrap();
+                let port = self.endpoint.port().unwrap();
+                let stream = dialer.do_dial(host, port, timeout).await?;
+                let tlsupgrade = tls::TlsUpgrade::new();
+                let stream = tlsupgrade.upgrade_dialer_tls(stream).await?;
+                Ok(Box::new(stream))
+            }
+
+            #[cfg(feature = "p2p-transport-nym")]
+            DialerVariant::Nym(dialer) => {
+                todo!();
+            }
+
+            #[cfg(feature = "p2p-transport-nym")]
+            DialerVariant::NymTls(dialer) => {
+                todo!();
+            }
+        }
+    }
+
+    /// Return a reference to the `Dialer` endpoint
+    pub fn endpoint(&self) -> &Url {
+        &self.endpoint
     }
 }
 
-impl TryFrom<Url> for TransportName {
-    type Error = crate::Error;
+/// A listener that is able to transparently listen over arbitrary transports.
+pub struct Listener {
+    /// The address to open the listener on
+    endpoint: Url,
+    /// The listener variant (transport protocol)
+    variant: ListenerVariant,
+}
 
-    fn try_from(url: Url) -> Result<Self> {
-        Self::try_from(url.scheme())
+impl Listener {
+    /// Instantiate a new [`Listener`] with the given [`Url`].
+    /// Must contain a scheme, host string, and a port.
+    pub async fn new(endpoint: Url) -> Result<Self> {
+        if endpoint.host_str().is_none() || endpoint.port().is_none() {
+            return Err(Error::InvalidListenerScheme)
+        }
+
+        match endpoint.scheme().to_lowercase().as_str() {
+            #[cfg(feature = "p2p-transport-tcp")]
+            "tcp" => {
+                // Build a TCP listener
+                let variant = tcp::TcpListener::new(1024).await?;
+                let variant = ListenerVariant::Tcp(variant);
+                Ok(Self { endpoint, variant })
+            }
+
+            #[cfg(feature = "p2p-transport-tcp")]
+            "tcp+tls" => {
+                // Build a TCP listener wrapped with TLS
+                let variant = tcp::TcpListener::new(1024).await?;
+                let variant = ListenerVariant::TcpTls(variant);
+                Ok(Self { endpoint, variant })
+            }
+
+            x => Err(Error::UnsupportedTransport(x.to_string())),
+        }
+    }
+
+    /// Listen on an instantiated [`Listener`].
+    /// This will open a socket and return the listener.
+    pub async fn listen(&self) -> Result<Box<dyn PtListener>> {
+        match &self.variant {
+            #[cfg(feature = "p2p-transport-tcp")]
+            ListenerVariant::Tcp(listener) => {
+                let sockaddr = self.endpoint.socket_addrs(|| None)?;
+                let l = listener.do_listen(sockaddr[0]).await?;
+                Ok(Box::new(l))
+            }
+
+            #[cfg(feature = "p2p-transport-tcp")]
+            ListenerVariant::TcpTls(listener) => {
+                let sockaddr = self.endpoint.socket_addrs(|| None)?;
+                let l = listener.do_listen(sockaddr[0]).await?;
+                let tlsupgrade = tls::TlsUpgrade::new();
+                let l = tlsupgrade.upgrade_listener_tcp_tls(l).await?;
+                Ok(Box::new(l))
+            }
+        }
+    }
+
+    pub fn endpoint(&self) -> &Url {
+        &self.endpoint
     }
 }
 
-/// The `Transport` trait serves as a base for implementing transport protocols.
-/// Base transports can optionally be upgraded with TLS in order to support encryption.
-/// The implementation of our TLS authentication can be found in the
-/// [`upgrade_tls`](TlsUpgrade) module.
-pub trait Transport {
-    type Acceptor;
-    type Connector;
+/// Wrapper trait for async streams
+pub trait PtStream: AsyncRead + AsyncWrite + Unpin + Send {}
 
-    type Listener: Future<Output = Result<Self::Acceptor>>;
-    type Dial: Future<Output = Result<Self::Connector>>;
+#[cfg(feature = "p2p-transport-tcp")]
+impl PtStream for async_std::net::TcpStream {}
 
-    type TlsListener: Future<Output = Result<(TlsAcceptor, Self::Acceptor)>>;
-    type TlsDialer: Future<Output = Result<TlsStream<Self::Connector>>>;
+#[cfg(feature = "p2p-transport-tcp")]
+impl PtStream for async_rustls::TlsStream<async_std::net::TcpStream> {}
 
-    fn listen_on(self, url: Url) -> Result<Self::Listener>
-    where
-        Self: Sized;
+#[cfg(feature = "p2p-transport-tor")]
+impl PtStream for arti_client::DataStream {}
 
-    fn upgrade_listener(self, acceptor: Self::Acceptor) -> Result<Self::TlsListener>
-    where
-        Self: Sized;
+#[cfg(feature = "p2p-transport-tor")]
+impl PtStream for async_rustls::TlsStream<arti_client::DataStream> {}
 
-    fn dial(self, url: Url, timeout: Option<Duration>) -> Result<Self::Dial>
-    where
-        Self: Sized;
-
-    fn upgrade_dialer(self, stream: Self::Connector) -> Result<Self::TlsDialer>
-    where
-        Self: Sized;
+/// Wrapper trait for async listeners
+#[async_trait]
+pub trait PtListener: Send + Sync + Unpin {
+    async fn next(&self) -> Result<(Box<dyn PtStream>, Url)>;
 }

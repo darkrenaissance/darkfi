@@ -52,12 +52,13 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     let mut peer = None;
     for channel in values {
         // Communication setup
-        let msg_subsystem = channel.get_message_subsystem();
+        let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<ConsensusSyncResponse>().await;
         let response_sub = channel.subscribe_msg::<ConsensusSyncResponse>().await?;
         // Node creates a `ConsensusSyncRequest` and sends it
         let request = ConsensusSyncRequest {};
-        channel.send(request).await?;
+        channel.send(&request).await?;
+
         // Node checks response
         let response = response_sub.receive().await?;
         if response.bootstrap_slot == current_slot {
@@ -103,11 +104,11 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     // This ensures that the received state always consists of 1 fork with one proposal.
     info!(target: "consensus::consensus_sync", "Finalization signal received, requesting consensus state...");
     // Communication setup
-    let msg_subsystem = peer.get_message_subsystem();
+    let msg_subsystem = peer.message_subsystem();
     msg_subsystem.add_dispatch::<ConsensusResponse>().await;
     let response_sub = peer.subscribe_msg::<ConsensusResponse>().await?;
     // Node creates a `ConsensusRequest` and sends it
-    peer.send(ConsensusRequest {}).await?;
+    peer.send(&ConsensusRequest {}).await?;
 
     // Node verifies response came from a participating node.
     // Extra validations can be added here.
@@ -117,7 +118,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
         if !response.forks.is_empty() {
             warn!(target: "consensus::consensus_sync", "Peer has not finished finalization, retrying...");
             sleep(1).await;
-            peer.send(ConsensusRequest {}).await?;
+            peer.send(&ConsensusRequest {}).await?;
             response = response_sub.receive().await?;
             continue
         }

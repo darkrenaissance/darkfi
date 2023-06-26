@@ -15,6 +15,14 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+//! Inbound connections session. Manages the creation of inbound sessions.
+//! Used to create an inbound session and start and stop the session.
+//!
+//! Class consists of 3 pointers: a weak pointer to the p2p parent class,
+//! an acceptor pointer, and a stoppable task pointer. Using a weak pointer
+//! to P2P allows us to avoid circular dependencies.
+
 use std::collections::HashMap;
 
 use async_std::sync::{Arc, Mutex, Weak};
@@ -24,16 +32,22 @@ use serde_json::json;
 use smol::Executor;
 use url::Url;
 
+use super::{
+    super::{
+        acceptor::{Acceptor, AcceptorPtr},
+        channel::ChannelPtr,
+        p2p::{P2p, P2pPtr},
+    },
+    Session, SessionBitFlag, SESSION_INBOUND,
+};
 use crate::{
     system::{StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
 
-use super::{
-    super::{Acceptor, AcceptorPtr, ChannelPtr, P2p},
-    Session, SessionBitflag, SESSION_INBOUND,
-};
+pub type InboundSessionPtr = Arc<InboundSession>;
 
+/// Channel debug info
 struct InboundInfo {
     channel: ChannelPtr,
 }
@@ -44,7 +58,7 @@ impl InboundInfo {
     }
 }
 
-/// Defines inbound connections session.
+/// Defines inbound connections session
 pub struct InboundSession {
     p2p: Weak<P2p>,
     acceptors: Mutex<Vec<AcceptorPtr>>,
@@ -53,39 +67,39 @@ pub struct InboundSession {
 }
 
 impl InboundSession {
-    /// Create a new inbound session.
-    pub async fn new(p2p: Weak<P2p>) -> Arc<Self> {
+    /// Create a new inbound session
+    pub fn new(p2p: Weak<P2p>) -> InboundSessionPtr {
         Arc::new(Self {
             p2p,
-            acceptors: Mutex::new(Vec::new()),
-            accept_tasks: Mutex::new(Vec::new()),
-            connect_infos: Mutex::new(Vec::new()),
+            acceptors: Mutex::new(vec![]),
+            accept_tasks: Mutex::new(vec![]),
+            connect_infos: Mutex::new(vec![]),
         })
     }
 
-    /// Starts the inbound session. Begins by accepting connections and fails if
-    /// the addresses are not configured. Then runs the channel subscription
+    /// Starts the inbound session. Begins by accepting connections and fails
+    /// if the addresses are not configured. Then runs the channel subscription
     /// loop.
-    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        if self.p2p().settings().inbound.is_empty() {
-            info!(target: "net::inbound_session", "Not configured for accepting incoming connections.");
+    pub async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
+        if self.p2p().settings().inbound_addrs.is_empty() {
+            info!(target: "net::inbound_session", "[P2P] Not configured for inbound connections.");
             return Ok(())
         }
 
         // Activate mutex lock on accept tasks.
         let mut accept_tasks = self.accept_tasks.lock().await;
 
-        for (index, accept_addr) in self.p2p().settings().inbound.iter().enumerate() {
-            self.clone().start_accept_session(index, accept_addr.clone(), executor.clone()).await?;
+        for (index, accept_addr) in self.p2p().settings().inbound_addrs.iter().enumerate() {
+            self.clone().start_accept_session(index, accept_addr.clone(), ex.clone()).await?;
 
             let task = StoppableTask::new();
 
             task.clone().start(
-                self.clone().channel_sub_loop(index, executor.clone()),
+                self.clone().channel_sub_loop(index, ex.clone()),
                 // Ignore stop handler
                 |_| async {},
                 Error::NetworkServiceStopped,
-                executor.clone(),
+                ex.clone(),
             );
 
             self.connect_infos.lock().await.push(HashMap::new());
@@ -113,79 +127,75 @@ impl InboundSession {
         self: Arc<Self>,
         index: usize,
         accept_addr: Url,
-        executor: Arc<Executor<'_>>,
+        ex: Arc<Executor<'_>>,
     ) -> Result<()> {
-        info!(target: "net::inbound_session", "#{} starting inbound session on {}", index, accept_addr);
+        info!(target: "net::inbound_session", "[P2P] Starting Inbound session #{} on {}", index, accept_addr);
         // Generate a new acceptor for this inbound session
         let acceptor = Acceptor::new(Mutex::new(None));
         let parent = Arc::downgrade(&self);
         *acceptor.session.lock().await = Some(Arc::new(parent));
 
         // Start listener
-        let result = acceptor.clone().start(accept_addr, executor).await;
-        if let Err(err) = result.clone() {
-            error!(target: "net::inbound_session", "#{} error starting listener: {}", index, err);
+        let result = acceptor.clone().start(accept_addr, ex).await;
+        if let Err(e) = result.clone() {
+            error!(target: "net::inbound_session", "[P2P] Error starting listener #{}: {}", index, e);
+            acceptor.stop().await;
+        } else {
+            self.acceptors.lock().await.push(acceptor);
         }
-
-        self.acceptors.lock().await.push(acceptor);
 
         result
     }
 
-    /// Wait for all new channels created by the acceptor and call
-    /// setup_channel() on them.
-    async fn channel_sub_loop(
-        self: Arc<Self>,
-        index: usize,
-        executor: Arc<Executor<'_>>,
-    ) -> Result<()> {
+    /// Wait for all new channels created by the acceptor and call setup_channel() on them.
+    async fn channel_sub_loop(self: Arc<Self>, index: usize, ex: Arc<Executor<'_>>) -> Result<()> {
         let channel_sub = self.acceptors.lock().await[index].clone().subscribe().await;
+
         loop {
             let channel = channel_sub.receive().await?;
-            // Spawn a detached task to process the channel
+            // Spawn a detached task to process the channel.
             // This will just perform the channel setup then exit.
-            executor.spawn(self.clone().setup_channel(index, channel, executor.clone())).detach();
+            ex.spawn(self.clone().setup_channel(index, channel, ex.clone())).detach();
         }
     }
 
-    /// Registers the channel. First performs a network handshake and starts the
-    /// channel. Then starts sending keep-alive and address messages across the
-    /// channel.
+    /// Registers the channel. First performs a network handshake and starts the channel.
+    /// Then starts sending keep-alive and address messages across the channel.
     async fn setup_channel(
         self: Arc<Self>,
         index: usize,
         channel: ChannelPtr,
-        executor: Arc<Executor<'_>>,
+        ex: Arc<Executor<'_>>,
     ) -> Result<()> {
-        info!(target: "net::inbound_session", "#{} connected inbound [{}]", index, channel.address());
+        info!(target: "net::inbound_session", "[P2P] Connected Inbound #{} [{}]", index, channel.address());
+        self.register_channel(channel.clone(), ex.clone()).await?;
 
-        self.clone().register_channel(channel.clone(), executor.clone()).await?;
+        let addr = channel.address().clone();
+        self.connect_infos.lock().await[index]
+            .insert(addr.clone(), InboundInfo { channel: channel.clone() });
 
-        self.manage_channel_for_get_info(index, channel).await;
+        let stop_sub = channel.subscribe_stop().await?;
+        stop_sub.receive().await;
+
+        self.connect_infos.lock().await[index].remove(&addr);
 
         Ok(())
-    }
-
-    async fn manage_channel_for_get_info(&self, index: usize, channel: ChannelPtr) {
-        let key = channel.address();
-        self.connect_infos.lock().await[index]
-            .insert(key.clone(), InboundInfo { channel: channel.clone() });
-
-        let stop_sub = channel.subscribe_stop().await;
-
-        if stop_sub.is_ok() {
-            stop_sub.unwrap().receive().await;
-        }
-
-        self.connect_infos.lock().await[index].remove(&key);
     }
 }
 
 #[async_trait]
 impl Session for InboundSession {
+    fn p2p(&self) -> P2pPtr {
+        self.p2p.upgrade().unwrap()
+    }
+
+    fn type_id(&self) -> SessionBitFlag {
+        SESSION_INBOUND
+    }
+
     async fn get_info(&self) -> serde_json::Value {
         let mut infos = HashMap::new();
-        for (index, accept_addr) in self.p2p().settings().inbound.iter().enumerate() {
+        for (index, accept_addr) in self.p2p().settings().inbound_addrs.iter().enumerate() {
             let connect_infos = &self.connect_infos.lock().await[index];
             for (addr, info) in connect_infos {
                 let json_addr = json!({ "accept_addr": accept_addr });
@@ -193,16 +203,7 @@ impl Session for InboundSession {
                 infos.insert(addr.to_string(), info);
             }
         }
-        json!({
-            "connected": infos,
-        })
-    }
 
-    fn p2p(&self) -> Arc<P2p> {
-        self.p2p.upgrade().unwrap()
-    }
-
-    fn type_id(&self) -> SessionBitflag {
-        SESSION_INBOUND
+        json!({ "connected": infos })
     }
 }

@@ -26,157 +26,134 @@ use crate::{Error, Result};
 const MAGIC_BYTES: [u8; 4] = [0xd9, 0xef, 0xb6, 0x7d];
 
 /// Generic message template.
-pub trait Message: 'static + Encodable + Decodable + Send + Sync {
-    fn name() -> &'static str;
+pub trait Message: 'static + Send + Sync + Encodable + Decodable {
+    const NAME: &'static str;
 }
 
-/// Outbound keep-alive message.
-#[derive(SerialEncodable, SerialDecodable)]
+#[macro_export]
+macro_rules! impl_p2p_message {
+    ($st:ty, $nm:expr) => {
+        impl Message for $st {
+            const NAME: &'static str = $nm;
+        }
+    };
+}
+
+/// Outbound keepalive message.
+#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
 pub struct PingMessage {
-    pub nonce: u32,
+    pub nonce: u16,
 }
+impl_p2p_message!(PingMessage, "ping");
 
-/// Inbound keep-alive message.
-#[derive(SerialEncodable, SerialDecodable)]
+/// Inbound keepalive message.
+#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
 pub struct PongMessage {
-    pub nonce: u32,
+    pub nonce: u16,
 }
+impl_p2p_message!(PongMessage, "pong");
 
-/// Requests address of outbound connection.
-#[derive(SerialEncodable, SerialDecodable)]
-pub struct GetAddrsMessage {}
+/// Requests address of outbound connecction.
+#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
+pub struct GetAddrsMessage {
+    /// Maximum number of addresses to receive
+    pub max: u32,
+}
+impl_p2p_message!(GetAddrsMessage, "getaddr");
 
-/// Sends address information to inbound connection. Response to GetAddrs
-/// message.
-#[derive(SerialEncodable, SerialDecodable)]
+/// Sends address information to inbound connection.
+/// Response to `GetAddrsMessage`.
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct AddrsMessage {
     pub addrs: Vec<Url>,
 }
-
-/// Sends external address information to inbound connection.
-#[derive(SerialEncodable, SerialDecodable)]
-pub struct ExtAddrsMessage {
-    pub ext_addrs: Vec<Url>,
-}
+impl_p2p_message!(AddrsMessage, "addr");
 
 /// Requests version information of outbound connection.
-#[derive(SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct VersionMessage {
+    /// Only used for debugging. Compromises privacy when set.
     pub node_id: String,
 }
+impl_p2p_message!(VersionMessage, "version");
 
-/// Sends version information to inbound connection. Response to VersionMessage.
-#[derive(SerialEncodable, SerialDecodable)]
+/// Sends version information to inbound connection.
+/// Response to `VersionMessage`.
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct VerackMessage {
-    // app version
-    pub app: String,
+    /// App version
+    pub app_version: semver::Version,
 }
+impl_p2p_message!(VerackMessage, "verack");
 
-impl Message for PingMessage {
-    fn name() -> &'static str {
-        "ping"
-    }
-}
-
-impl Message for PongMessage {
-    fn name() -> &'static str {
-        "pong"
-    }
-}
-
-impl Message for GetAddrsMessage {
-    fn name() -> &'static str {
-        "getaddr"
-    }
-}
-
-impl Message for AddrsMessage {
-    fn name() -> &'static str {
-        "addr"
-    }
-}
-
-impl Message for ExtAddrsMessage {
-    fn name() -> &'static str {
-        "extaddr"
-    }
-}
-
-impl Message for VersionMessage {
-    fn name() -> &'static str {
-        "version"
-    }
-}
-
-impl Message for VerackMessage {
-    fn name() -> &'static str {
-        "verack"
-    }
-}
-
-/// Packets are the base type read from the network. Converted to messages and
-/// passed to event loop.
+/// Packets are the base type read from the network.
+/// Converted to messages and passed to event loop.
+#[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct Packet {
     pub command: String,
     pub payload: Vec<u8>,
 }
 
-/// Reads and decodes an inbound payload.
+/// Reads and decodes an inbound payload from the given async stream.
+/// Returns decoded [`Packet`].
 pub async fn read_packet<R: AsyncRead + Unpin + Sized>(stream: &mut R) -> Result<Packet> {
-    // Packets have a 4 byte header of magic digits
-    // This is used for network debugging
+    // Packets should have a 4 byte header of magic digits.
+    // This is used for network debugging.
     let mut magic = [0u8; 4];
-    debug!(target: "net::message", "reading magic...");
-
+    debug!(target: "net::message", "Reading magic...");
     stream.read_exact(&mut magic).await?;
 
-    debug!(target: "net::message", "read magic {:?}", magic);
+    debug!(target: "net::message", "Read magic {:?}", magic);
     if magic != MAGIC_BYTES {
+        debug!(target: "net::message", "Error: Magic bytes mismatch");
         return Err(Error::MalformedPacket)
     }
 
-    // The type of the message
+    // The type of the message.
     let command_len = VarInt::decode_async(stream).await?.0 as usize;
     let mut cmd = vec![0u8; command_len];
-    if command_len > 0 {
-        stream.read_exact(&mut cmd).await?;
-    }
-    let cmd = String::from_utf8(cmd)?;
-    debug!(target: "net::message", "read command: {}", cmd);
-
-    let payload_len = VarInt::decode_async(stream).await?.0 as usize;
+    stream.read_exact(&mut cmd).await?;
+    let command = String::from_utf8(cmd)?;
+    debug!(target: "net::message", "Read command: {}", command);
 
     // The message-dependent data (see message types)
+    let payload_len = VarInt::decode_async(stream).await?.0 as usize;
     let mut payload = vec![0u8; payload_len];
-    if payload_len > 0 {
-        stream.read_exact(&mut payload).await?;
-    }
-    debug!(target: "net::message", "read payload {} bytes", payload_len);
+    stream.read_exact(&mut payload).await?;
+    debug!(target: "net::message", "Read payload {} bytes", payload_len);
 
-    Ok(Packet { command: cmd, payload })
+    Ok(Packet { command, payload })
 }
 
-/// Sends an outbound packet by writing data to TCP stream.
+/// Sends an outbound packet by writing data to the given async stream.
+/// Returns the total written bytes.
 pub async fn send_packet<W: AsyncWrite + Unpin + Sized>(
     stream: &mut W,
     packet: Packet,
-) -> Result<()> {
-    debug!(target: "net::message", "sending magic...");
-    stream.write_all(&MAGIC_BYTES).await?;
-    debug!(target: "net::message", "sent magic...");
-
-    VarInt(packet.command.len() as u64).encode_async(stream).await?;
+) -> Result<usize> {
     assert!(!packet.command.is_empty());
-    stream.write_all(packet.command.as_bytes()).await?;
-    debug!(target: "net::message", "sent command: {}", packet.command);
-
+    assert!(!packet.payload.is_empty());
     assert!(std::mem::size_of::<usize>() <= std::mem::size_of::<u64>());
-    VarInt(packet.payload.len() as u64).encode_async(stream).await?;
 
-    if !packet.payload.is_empty() {
-        stream.write_all(&packet.payload).await?;
-    }
-    debug!(target: "net::message", "sent payload {} bytes", packet.payload.len() as u64);
+    let mut written: usize = 0;
 
-    Ok(())
+    debug!(target: "net::message", "Sending magic...");
+    stream.write_all(&MAGIC_BYTES).await?;
+    written += MAGIC_BYTES.len();
+    debug!(target: "net::message", "Sent magic");
+
+    debug!(target: "net::message", "Sending command...");
+    written += VarInt(packet.command.len() as u64).encode_async(stream).await?;
+    let cmd_ref = packet.command.as_bytes();
+    stream.write_all(cmd_ref).await?;
+    written += cmd_ref.len();
+    debug!(target: "net::message", "Sent command: {}", packet.command);
+
+    debug!(target: "net::message", "Sending payload...");
+    written += VarInt(packet.payload.len() as u64).encode_async(stream).await?;
+    stream.write_all(&packet.payload).await?;
+    written += packet.payload.len();
+    debug!(target: "net::message", "Sent payload {} bytes", packet.payload.len() as u64);
+
+    Ok(written)
 }

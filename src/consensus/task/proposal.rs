@@ -258,14 +258,7 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
             // will always be true, since the node is able to produce proposals
             info!(target: "consensus::proposal", "consensus: Block proposal saved successfully");
             // Broadcast proposal to other consensus nodes
-            match consensus_p2p.broadcast(proposal).await {
-                Ok(()) => {
-                    info!(target: "consensus::proposal", "consensus: Proposal broadcasted successfully")
-                }
-                Err(e) => {
-                    error!(target: "consensus::proposal", "consensus: Failed broadcasting proposal: {}", e)
-                }
-            }
+            consensus_p2p.broadcast(&proposal).await;
         }
         Err(e) => {
             error!(target: "consensus::proposal", "consensus: Block proposal save failed: {}", e);
@@ -311,21 +304,15 @@ async fn finalization_period(
                     // Broadcast finalized blocks info, if any:
                     info!(target: "consensus::proposal", "consensus: Broadcasting finalized blocks");
                     for info in to_broadcast_block {
-                        match sync_p2p.broadcast(info).await {
-                            Ok(()) => info!(target: "consensus::proposal", "consensus: Broadcasted block"),
-                            Err(e) => error!(target: "consensus::proposal", "consensus: Failed broadcasting block: {}", e),
-                        }
+                        sync_p2p.broadcast(&info).await;
                     }
 
                     // Broadcast finalized slots, if any:
                     info!(target: "consensus::proposal", "consensus: Broadcasting finalized slots");
                     for slot in to_broadcast_slots {
-                        match sync_p2p.broadcast(slot).await {
-                            Ok(()) => info!(target: "consensus::proposal", "consensus: Broadcasted slot"),
-                            Err(e) => {
-                                error!(target: "consensus::proposal", "consensus: Failed broadcasting slot: {}", e)
-                            }
-                        }
+                        sync_p2p.broadcast(slot).await;
+                        info!(target: "consensus::proposal", "consensus: Broadcasted slot");
+                        // TODO: You can give an error if you query P2P and check if there are any connected channels
                     }
                 })
                 .detach();
@@ -338,7 +325,6 @@ async fn finalization_period(
         }
     }
     */
-
     // Verify node didn't skip next slot
     completed_slot != state.read().await.consensus.time_keeper.current_slot()
 }

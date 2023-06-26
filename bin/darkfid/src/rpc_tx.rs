@@ -143,8 +143,9 @@ impl Darkfid {
         }
 
         if let Some(sync_p2p) = &self.sync_p2p {
-            if let Err(e) = sync_p2p.broadcast(tx.clone()).await {
-                error!("[RPC] tx.broadcast: Failed broadcasting transaction: {}", e);
+            sync_p2p.broadcast(&tx).await;
+            if sync_p2p.channels().lock().await.is_empty() {
+                error!("[RPC] tx.broadcast: Failed broadcasting tx, no connected channels");
                 return server_error(RpcError::TxBroadcastFail, id, None)
             }
         } else {

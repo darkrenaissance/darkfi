@@ -30,7 +30,7 @@ darkfi = {path = "../../../", features = ["tx", "blockchain"]}
 darkfi-money-contract = { path = "../money", features = ["client", "no-entrypoint"] }
 simplelog = "0.12.1"
 sled = "0.34.7"
-sqlx = {version = "0.6.3", features = ["runtime-async-std-rustls", "sqlite"]}
+#sqlx = {version = "0.6.3", features = ["runtime-async-std-rustls", "sqlite"]}
 
 # We need to disable random using "custom" which makes the crate a noop
 # so the wasm32-unknown-unknown target is enabled.

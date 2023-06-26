@@ -16,118 +16,32 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::net::{TcpListener, TcpStream};
-use std::{io, net::SocketAddr, pin::Pin, time::Duration};
+use std::{io, time::Duration};
 
+use async_rustls::{TlsAcceptor, TlsStream};
+use async_std::net::{SocketAddr, TcpListener as AsyncStdTcpListener, TcpStream};
 use async_trait::async_trait;
-use futures::prelude::*;
-use futures_rustls::{TlsAcceptor, TlsStream};
-use log::{debug, error};
 use socket2::{Domain, Socket, TcpKeepalive, Type};
 use url::Url;
 
-use super::{socket_addr_to_url, TlsUpgrade, Transport, TransportListener, TransportStream};
-use crate::{Error, Result};
+use super::{PtListener, PtStream};
+use crate::Result;
 
-impl TransportStream for TcpStream {}
-impl<T: TransportStream> TransportStream for TlsStream<T> {}
-
-#[async_trait]
-impl TransportListener for TcpListener {
-    async fn next(&self) -> Result<(Box<dyn TransportStream>, Url)> {
-        let (stream, peer_addr) = match self.accept().await {
-            Ok((s, a)) => (s, a),
-            Err(err) => {
-                error!(target: "net::tcp", "Error listening for connections: {}", err);
-                return Err(Error::AcceptConnectionFailed(self.local_addr()?.to_string()))
-            }
-        };
-        let url = socket_addr_to_url(peer_addr, "tcp")?;
-        Ok((Box::new(stream), url))
-    }
-}
-
-#[async_trait]
-impl TransportListener for (TlsAcceptor, TcpListener) {
-    async fn next(&self) -> Result<(Box<dyn TransportStream>, Url)> {
-        let (stream, peer_addr) = match self.1.accept().await {
-            Ok((s, a)) => (s, a),
-            Err(err) => {
-                error!(target: "net::tcp", "Error listening for connections: {}", err);
-                return Err(Error::AcceptConnectionFailed(self.1.local_addr()?.to_string()))
-            }
-        };
-
-        let stream = self.0.accept(stream).await;
-
-        let url = socket_addr_to_url(peer_addr, "tcp+tls")?;
-
-        if let Err(err) = stream {
-            error!(target: "net::tcp", "Error wrapping the connection {} with tls: {}", url, err);
-            return Err(Error::AcceptTlsConnectionFailed(self.1.local_addr()?.to_string()))
-        }
-
-        Ok((Box::new(TlsStream::Server(stream?)), url))
-    }
-}
-
-#[derive(Copy, Clone)]
-pub struct TcpTransport {
-    /// TTL to set for opened sockets, or `None` for default
+/// TCP Dialer implementation
+#[derive(Debug, Clone)]
+pub struct TcpDialer {
+    /// TTL to set for opened sockets, or `None` for default.
     ttl: Option<u32>,
-    /// Size of the listen backlog for listen sockets
-    backlog: i32,
 }
 
-impl Transport for TcpTransport {
-    type Acceptor = TcpListener;
-    type Connector = TcpStream;
-
-    type Listener = Pin<Box<dyn Future<Output = Result<Self::Acceptor>> + Send>>;
-    type Dial = Pin<Box<dyn Future<Output = Result<Self::Connector>> + Send>>;
-
-    type TlsListener = Pin<Box<dyn Future<Output = Result<(TlsAcceptor, Self::Acceptor)>> + Send>>;
-    type TlsDialer = Pin<Box<dyn Future<Output = Result<TlsStream<Self::Connector>>> + Send>>;
-
-    fn listen_on(self, url: Url) -> Result<Self::Listener> {
-        match url.scheme() {
-            "tcp" | "tcp+tls" | "tls" => {}
-            x => return Err(Error::UnsupportedTransport(x.to_string())),
-        }
-
-        let socket_addr = url.socket_addrs(|| None)?[0];
-        debug!(target: "net::tcp", "{} transport: listening on {}", url.scheme(), socket_addr);
-        Ok(Box::pin(self.do_listen(socket_addr)))
+impl TcpDialer {
+    /// Instantiate a new [`TcpDialer`] with optional TTL.
+    pub(crate) async fn new(ttl: Option<u32>) -> Result<Self> {
+        Ok(Self { ttl })
     }
 
-    fn upgrade_listener(self, acceptor: Self::Acceptor) -> Result<Self::TlsListener> {
-        let tlsupgrade = TlsUpgrade::new();
-        Ok(Box::pin(tlsupgrade.upgrade_listener_tls(acceptor)))
-    }
-
-    fn dial(self, url: Url, timeout: Option<Duration>) -> Result<Self::Dial> {
-        match url.scheme() {
-            "tcp" | "tcp+tls" | "tls" => {}
-            x => return Err(Error::UnsupportedTransport(x.to_string())),
-        }
-
-        let socket_addr = url.socket_addrs(|| None)?[0];
-        debug!(target: "net::tcp", "{} transport: dialing {}", url.scheme(), socket_addr);
-        Ok(Box::pin(self.do_dial(socket_addr, timeout)))
-    }
-
-    fn upgrade_dialer(self, connector: Self::Connector) -> Result<Self::TlsDialer> {
-        let tlsupgrade = TlsUpgrade::new();
-        Ok(Box::pin(tlsupgrade.upgrade_dialer_tls(connector)))
-    }
-}
-
-impl TcpTransport {
-    pub fn new(ttl: Option<u32>, backlog: i32) -> Self {
-        Self { ttl, backlog }
-    }
-
-    fn create_socket(&self, socket_addr: SocketAddr) -> io::Result<Socket> {
+    /// Internal helper function to create a TCP socket.
+    async fn create_socket(&self, socket_addr: SocketAddr) -> io::Result<Socket> {
         let domain = if socket_addr.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
         let socket = Socket::new(domain, Type::STREAM, Some(socket2::Protocol::TCP))?;
 
@@ -139,30 +53,21 @@ impl TcpTransport {
             socket.set_ttl(ttl)?;
         }
 
-        // TODO: Perhaps make these configurable
         socket.set_nodelay(true)?;
         let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(20));
         socket.set_tcp_keepalive(&keepalive)?;
-        // TODO: Make sure to disallow running multiple instances of a program using this.
         socket.set_reuse_port(true)?;
 
         Ok(socket)
     }
 
-    async fn do_listen(self, socket_addr: SocketAddr) -> Result<TcpListener> {
-        let socket = self.create_socket(socket_addr)?;
-        socket.bind(&socket_addr.into())?;
-        socket.listen(self.backlog)?;
-        socket.set_nonblocking(true)?;
-        Ok(TcpListener::from(std::net::TcpListener::from(socket)))
-    }
-
-    async fn do_dial(
-        self,
+    /// Internal dial function
+    pub(crate) async fn do_dial(
+        &self,
         socket_addr: SocketAddr,
         timeout: Option<Duration>,
     ) -> Result<TcpStream> {
-        let socket = self.create_socket(socket_addr)?;
+        let socket = self.create_socket(socket_addr).await?;
 
         let connection = if timeout.is_some() {
             socket.connect_timeout(&socket_addr.into(), timeout.unwrap())
@@ -175,10 +80,83 @@ impl TcpTransport {
             Err(err) if err.raw_os_error() == Some(libc::EINPROGRESS) => {}
             Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
             Err(err) => return Err(err.into()),
-        };
+        }
 
         socket.set_nonblocking(true)?;
         let stream = TcpStream::from(std::net::TcpStream::from(socket));
         Ok(stream)
+    }
+}
+
+/// TCP Listener implementation
+#[derive(Debug, Clone)]
+pub struct TcpListener {
+    /// Size of the listen backlog for listen sockets
+    backlog: i32,
+}
+
+impl TcpListener {
+    /// Instantiate a new [`TcpListener`] with given backlog size.
+    pub async fn new(backlog: i32) -> Result<Self> {
+        Ok(Self { backlog })
+    }
+
+    /// Internal helper function to create a TCP socket.
+    async fn create_socket(&self, socket_addr: SocketAddr) -> io::Result<Socket> {
+        let domain = if socket_addr.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
+        let socket = Socket::new(domain, Type::STREAM, Some(socket2::Protocol::TCP))?;
+
+        if socket_addr.is_ipv6() {
+            socket.set_only_v6(true)?;
+        }
+
+        socket.set_nodelay(true)?;
+        let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(20));
+        socket.set_tcp_keepalive(&keepalive)?;
+        socket.set_reuse_port(true)?;
+
+        Ok(socket)
+    }
+
+    /// Internal listen function
+    pub(crate) async fn do_listen(&self, socket_addr: SocketAddr) -> Result<AsyncStdTcpListener> {
+        let socket = self.create_socket(socket_addr).await?;
+        socket.bind(&socket_addr.into())?;
+        socket.listen(self.backlog)?;
+        socket.set_nonblocking(true)?;
+        Ok(AsyncStdTcpListener::from(std::net::TcpListener::from(socket)))
+    }
+}
+
+#[async_trait]
+impl PtListener for AsyncStdTcpListener {
+    async fn next(&self) -> Result<(Box<dyn PtStream>, Url)> {
+        let (stream, peer_addr) = match self.accept().await {
+            Ok((s, a)) => (s, a),
+            Err(e) => return Err(e.into()),
+        };
+
+        let url = Url::parse(&format!("tcp://{}", peer_addr))?;
+        Ok((Box::new(stream), url))
+    }
+}
+
+#[async_trait]
+impl PtListener for (TlsAcceptor, AsyncStdTcpListener) {
+    async fn next(&self) -> Result<(Box<dyn PtStream>, Url)> {
+        let (stream, peer_addr) = match self.1.accept().await {
+            Ok((s, a)) => (s, a),
+            Err(e) => return Err(e.into()),
+        };
+
+        let stream = self.0.accept(stream).await;
+
+        let url = Url::parse(&format!("tcp+tls://{}", peer_addr))?;
+
+        if let Err(e) = stream {
+            return Err(e.into())
+        }
+
+        Ok((Box::new(TlsStream::Server(stream.unwrap())), url))
     }
 }

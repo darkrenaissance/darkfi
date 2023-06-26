@@ -84,7 +84,7 @@ where
     /// Additionally, this change will be broadcasted to the P2P network.
     pub async fn insert(&mut self, k: K, v: V) -> Result<Option<V>> {
         let message = NetHashMapInsert { k: k.clone(), v: v.clone() };
-        self.p2p.broadcast(message).await?;
+        self.p2p.broadcast(&message).await;
         Ok(self.hashmap.insert(k, v))
     }
 
@@ -101,7 +101,7 @@ where
         Q: Hash + Eq + Send + Sync + Encodable + Decodable + 'static,
     {
         let message = NetHashMapRemove { k: k.clone() };
-        self.p2p.broadcast(message).await?;
+        self.p2p.broadcast(&message).await;
         Ok(self.hashmap.remove(&k))
     }
 
@@ -138,9 +138,7 @@ where
     K: Encodable + Decodable + Send + Sync + 'static,
     V: Encodable + Decodable + Send + Sync + 'static,
 {
-    fn name() -> &'static str {
-        "nethashmap_insert"
-    }
+    const NAME: &'static str = "nethashmap_insert";
 }
 
 #[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
@@ -152,7 +150,5 @@ impl<K> net::Message for NetHashMapRemove<K>
 where
     K: Encodable + Decodable + Send + Sync + 'static,
 {
-    fn name() -> &'static str {
-        "nethashmap_remove"
-    }
+    const NAME: &'static str = "nethashmap_remove";
 }

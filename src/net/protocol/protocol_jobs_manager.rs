@@ -16,23 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Mutex;
-use std::sync::Arc;
-
+use async_std::sync::{Arc, Mutex};
 use futures::Future;
-use log::*;
-use smol::Task;
+use log::{debug, trace};
+use smol::{Executor, Task};
 
-use crate::{system::ExecutorPtr, Result};
+use super::super::channel::ChannelPtr;
+use crate::Result;
 
-use super::super::ChannelPtr;
-
-/// Pointer to protocol jobs manager.
+/// Pointer to protocol jobs manager
 pub type ProtocolJobsManagerPtr = Arc<ProtocolJobsManager>;
 
-/// Manages the tasks for the network protocol. Used by other connection
-/// protocols to handle asynchronous task execution across the network. Runs all
-/// tasks that are handed to it on an executor that has stopping functionality.
 pub struct ProtocolJobsManager {
     name: &'static str,
     channel: ChannelPtr,
@@ -40,29 +34,29 @@ pub struct ProtocolJobsManager {
 }
 
 impl ProtocolJobsManager {
-    /// Create a new protocol jobs manager.
-    pub fn new(name: &'static str, channel: ChannelPtr) -> Arc<Self> {
-        Arc::new(Self { name, channel, tasks: Mutex::new(Vec::new()) })
+    /// Create a new protocol jobs manager
+    pub fn new(name: &'static str, channel: ChannelPtr) -> ProtocolJobsManagerPtr {
+        Arc::new(Self { name, channel, tasks: Mutex::new(vec![]) })
     }
 
-    /// Runs the task on an executor. Prepares to stop all tasks when the
-    /// channel is closed.
-    pub fn start(self: Arc<Self>, executor: ExecutorPtr<'_>) {
+    /// Runs the task on an executor
+    pub fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) {
         executor.spawn(self.handle_stop()).detach()
     }
 
-    /// Spawns a new task and adds it to the internal queue.
-    pub async fn spawn<'a, F>(&self, future: F, executor: ExecutorPtr<'a>)
+    /// Spawns a new task and adds it to the internal queue
+    pub async fn spawn<'a, F>(&self, future: F, executor: Arc<Executor<'a>>)
     where
         F: Future<Output = Result<()>> + Send + 'a,
     {
         self.tasks.lock().await.push(executor.spawn(future))
     }
 
-    /// Waits for a stop signal, then closes all tasks. Insures that all tasks
-    /// are stopped when a channel closes. Called in start().
+    /// Waits for a stop signal, then closes all tasks.
+    /// Ensures that all tasks are stopped when a channel closes.
+    /// Called in `start()`
     async fn handle_stop(self: Arc<Self>) {
-        let stop_sub = self.channel.clone().subscribe_stop().await;
+        let stop_sub = self.channel.subscribe_stop().await;
 
         if stop_sub.is_ok() {
             // Wait for the stop signal
@@ -72,19 +66,24 @@ impl ProtocolJobsManager {
         self.close_all_tasks().await
     }
 
-    /// Closes all open tasks. Takes all the tasks from the internal queue and
-    /// closes them.
+    /// Closes all open tasks. Takes all the tasks from the internal queue.
     async fn close_all_tasks(self: Arc<Self>) {
-        debug!(target: "net::protocol_jobs_manager",
+        debug!(
+            target: "net::protocol_jobs_manager",
             "ProtocolJobsManager::close_all_tasks() [START, name={}, addr={}]",
-            self.name,
-            self.channel.address()
+            self.name, self.channel.address(),
         );
-        // Take all the tasks from our internal queue...
+
         let tasks = std::mem::take(&mut *self.tasks.lock().await);
+
+        trace!(target: "net::protocol_jobs_manager", "Cancelling {} tasks", tasks.len());
+        let mut i = 0;
+        #[allow(clippy::explicit_counter_loop)]
         for task in tasks {
-            // ... and cancel them
+            trace!(target: "net::protocol_jobs_manager", "Cancelling task #{}", i);
             let _ = task.cancel().await;
+            trace!(target: "net::protocol_jobs_manager", "Cancelled task #{}", i);
+            i += 1;
         }
     }
 }

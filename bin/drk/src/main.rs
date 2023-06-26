@@ -484,8 +484,8 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     if args.verbose > 0 {
-        let log_level = get_log_level(args.verbose.into());
-        let log_config = get_log_config();
+        let log_level = get_log_level(args.verbose);
+        let log_config = get_log_config(args.verbose);
         TermLogger::init(log_level, log_config, TerminalMode::Mixed, ColorChoice::Auto)?;
     }
 

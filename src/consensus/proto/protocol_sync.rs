@@ -58,7 +58,7 @@ impl ProtocolSync {
         p2p: P2pPtr,
         consensus_mode: bool,
     ) -> Result<ProtocolBasePtr> {
-        let msg_subsystem = channel.get_message_subsystem();
+        let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<BlockOrder>().await;
         msg_subsystem.add_dispatch::<SlotRequest>().await;
         msg_subsystem.add_dispatch::<BlockInfo>().await;
@@ -129,7 +129,7 @@ impl ProtocolSync {
             let blocks = vec![BlockInfo::default()];
 
             let response = BlockResponse { blocks };
-            if let Err(e) = self.channel.send(response).await {
+            if let Err(e) = self.channel.send(&response).await {
                 error!(
                     target: "consensus::protocol_sync::handle_receive_request()",
                     "channel send fail: {}",
@@ -203,15 +203,7 @@ impl ProtocolSync {
                             target: "consensus::protocol_sync::handle_receive_block()",
                             "block processed successfully, broadcasting..."
                         );
-                        if let Err(e) =
-                            self.p2p.broadcast_with_exclude(info_copy, &exclude_list).await
-                        {
-                            error!(
-                                target: "consensus::protocol_sync::handle_receive_block()",
-                                "p2p broadcast fail: {}",
-                                e
-                            );
-                        };
+                        self.p2p.broadcast_with_exclude(&info_copy, &exclude_list).await;
                     }
                 }
                 Err(e) => {
@@ -270,7 +262,7 @@ impl ProtocolSync {
             );
 
             let response = SlotResponse { slots };
-            if let Err(e) = self.channel.send(response).await {
+            if let Err(e) = self.channel.send(&response).await {
                 error!(
                     target: "consensus::protocol_sync::handle_receive_slot_request()",
                     "channel send fail: {}",
@@ -285,7 +277,7 @@ impl ProtocolSync {
             target: "consensus::protocol_sync::handle_receive_slot()",
             "START"
         );
-        let exclude_list = vec![self.channel.address()];
+        let exclude_list = vec![self.channel.address().clone()];
         loop {
             let slot = match self.slots_sub.receive().await {
                 Ok(v) => v,
@@ -346,15 +338,7 @@ impl ProtocolSync {
                             target: "consensus::protocol_sync::handle_receive_slot()",
                             "slot processed successfully, broadcasting..."
                         );
-                        if let Err(e) =
-                            self.p2p.broadcast_with_exclude(slot_copy, &exclude_list).await
-                        {
-                            error!(
-                                target: "consensus::protocol_sync::handle_receive_slot()",
-                                "p2p broadcast fail: {}",
-                                e
-                            );
-                        };
+                        self.p2p.broadcast_with_exclude(&slot_copy, &exclude_list).await;
                     }
                 }
                 Err(e) => {

@@ -47,7 +47,7 @@ impl ProtocolSyncConsensus {
         state: ValidatorStatePtr,
         _p2p: P2pPtr,
     ) -> Result<ProtocolBasePtr> {
-        let msg_subsystem = channel.get_message_subsystem();
+        let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<ConsensusRequest>().await;
         msg_subsystem.add_dispatch::<ConsensusSyncRequest>().await;
 
@@ -128,7 +128,7 @@ impl ProtocolSyncConsensus {
                 err_history,
                 nullifiers,
             };
-            if let Err(e) = self.channel.send(response).await {
+            if let Err(e) = self.channel.send(&response).await {
                 error!(
                     target: "consensus::protocol_sync_consensus::handle_receive_request()",
                     "channel send fail: {}",
@@ -168,7 +168,7 @@ impl ProtocolSyncConsensus {
             let proposing = lock.consensus.proposing;
             let is_empty = lock.consensus.slots_is_empty();
             let response = ConsensusSyncResponse { bootstrap_slot, proposing, is_empty };
-            if let Err(e) = self.channel.send(response).await {
+            if let Err(e) = self.channel.send(&response).await {
                 error!(
                     target: "consensus::protocol_sync_consensus::handle_receive_sync_request()",
                     "channel send fail: {}",

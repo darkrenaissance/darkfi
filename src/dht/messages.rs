@@ -21,7 +21,7 @@ use std::collections::{HashMap, HashSet};
 use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use rand::Rng;
 
-use crate::net;
+use crate::{impl_p2p_message, net::Message};
 
 /// This struct represents a DHT key request
 #[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
@@ -45,12 +45,7 @@ impl KeyRequest {
         Self { id, from, to, key }
     }
 }
-
-impl net::Message for KeyRequest {
-    fn name() -> &'static str {
-        "keyrequest"
-    }
-}
+impl_p2p_message!(KeyRequest, "keyrequest");
 
 /// This struct represents a DHT key request response
 #[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
@@ -76,12 +71,7 @@ impl KeyResponse {
         Self { id, from, to, key, value }
     }
 }
-
-impl net::Message for KeyResponse {
-    fn name() -> &'static str {
-        "keyresponse"
-    }
-}
+impl_p2p_message!(KeyResponse, "keyresponse");
 
 /// This struct represents a lookup map request
 #[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
@@ -105,12 +95,7 @@ impl LookupRequest {
         Self { id, daemon, key, req_type }
     }
 }
-
-impl net::Message for LookupRequest {
-    fn name() -> &'static str {
-        "lookuprequest"
-    }
-}
+impl_p2p_message!(LookupRequest, "lookuprequest");
 
 /// Auxiliary structure used for lookup map syncing.
 #[derive(Debug, SerialEncodable, SerialDecodable)]
@@ -130,12 +115,7 @@ impl LookupMapRequest {
         Self { id, daemon }
     }
 }
-
-impl net::Message for LookupMapRequest {
-    fn name() -> &'static str {
-        "lookupmaprequest"
-    }
-}
+impl_p2p_message!(LookupMapRequest, "lookupmaprequest");
 
 /// Auxiliary structure used for consensus syncing.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -155,9 +135,4 @@ impl LookupMapResponse {
         Self { id, lookup }
     }
 }
-
-impl net::Message for LookupMapResponse {
-    fn name() -> &'static str {
-        "lookupmapresponse"
-    }
-}
+impl_p2p_message!(LookupMapResponse, "lookupmapresponse");

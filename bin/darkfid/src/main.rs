@@ -49,7 +49,7 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
     },
     util::path::expand_path,
-    wallet::{walletdb::init_wallet, WalletPtr},
+    wallet::{WalletDb, WalletPtr},
     Error, Result,
 };
 
@@ -105,7 +105,7 @@ struct Args {
 
     #[structopt(long, default_value = "8")]
     /// Connection slots for the consensus protocol
-    consensus_slots: u32,
+    consensus_slots: usize,
 
     #[structopt(long)]
     /// Connect to peer for the consensus protocol (repeatable flag)
@@ -137,7 +137,7 @@ struct Args {
 
     #[structopt(long, default_value = "8")]
     /// Connection slots for the syncing protocol
-    sync_slots: u32,
+    sync_slots: usize,
 
     #[structopt(long)]
     /// Connect to peer for the syncing protocol (repeatable flag)
@@ -297,7 +297,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     .unwrap();
 
     // Initialize or load wallet
-    let wallet = init_wallet(&args.wallet_path, &args.wallet_pass).await?;
+    let wallet = WalletDb::new(Some(expand_path(&args.wallet_path)?), &args.wallet_pass).await?;
 
     // Initialize or open sled database
     let db_path =
@@ -357,14 +357,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let sync_p2p = {
         info!("Registering block sync P2P protocols...");
         let sync_network_settings = net::Settings {
-            inbound: args.sync_p2p_accept,
+            inbound_addrs: args.sync_p2p_accept,
             outbound_connections: args.sync_slots,
-            external_addr: args.sync_p2p_external,
+            external_addrs: args.sync_p2p_external,
             peers: args.sync_p2p_peer.clone(),
             seeds: args.sync_p2p_seed.clone(),
-            outbound_transports: net::settings::get_outbound_transports(args.sync_p2p_transports),
+            allowed_transports: args.sync_p2p_transports,
             localnet: args.localnet,
-            channel_log: args.channel_log,
             ..Default::default()
         };
 
@@ -401,16 +400,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         } else {
             info!("Registering consensus P2P protocols...");
             let consensus_network_settings = net::Settings {
-                inbound: args.consensus_p2p_accept,
+                inbound_addrs: args.consensus_p2p_accept,
                 outbound_connections: args.consensus_slots,
-                external_addr: args.consensus_p2p_external,
+                external_addrs: args.consensus_p2p_external,
                 peers: args.consensus_p2p_peer.clone(),
                 seeds: args.consensus_p2p_seed.clone(),
-                outbound_transports: net::settings::get_outbound_transports(
-                    args.consensus_p2p_transports,
-                ),
+                allowed_transports: args.consensus_p2p_transports,
                 localnet: args.localnet,
-                channel_log: args.channel_log,
                 ..Default::default()
             };
             let p2p = net::P2p::new(consensus_network_settings).await;
@@ -457,8 +453,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     })
     .detach();
 
-    info!("Waiting for sync P2P outbound connections");
-    sync_p2p.clone().unwrap().wait_for_outbound(ex.clone()).await?;
+    // TODO: I think this is not necessary anymore
+    //info!("Waiting for sync P2P outbound connections");
+    //sync_p2p.clone().unwrap().wait_for_outbound(ex.clone()).await?;
 
     match block_sync_task(sync_p2p.clone().unwrap(), state.clone()).await {
         Ok(()) => *darkfid.synced.lock().await = true,
@@ -478,8 +475,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         })
         .detach();
 
-        info!("Waiting for consensus P2P outbound connections");
-        consensus_p2p.clone().unwrap().wait_for_outbound(ex.clone()).await?;
+        // TODO: I think this is not necessary anymore
+        //info!("Waiting for consensus P2P outbound connections");
+        //consensus_p2p.clone().unwrap().wait_for_outbound(ex.clone()).await?;
 
         info!("Starting consensus protocol task");
         let _ex = ex.clone();
@@ -493,13 +491,11 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     print!("\r");
     info!("Caught termination signal, cleaning up and exiting...");
 
+    // TODO: STOP P2P NETS
+
     info!("Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;
     info!("Flushed {} bytes", flushed_bytes);
-
-    info!("Closing wallet connection...");
-    wallet.conn.close().await;
-    info!("Closed wallet connection");
 
     Ok(())
 }

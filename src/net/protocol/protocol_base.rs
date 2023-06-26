@@ -16,8 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
-
+use async_std::sync::Arc;
 use async_trait::async_trait;
 use smol::Executor;
 
