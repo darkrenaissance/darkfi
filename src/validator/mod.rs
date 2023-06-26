@@ -37,6 +37,9 @@ use crate::{
     Result,
 };
 
+/// DarkFi blockchain
+pub mod blockchain;
+
 /// DarkFi consensus
 pub mod consensus;
 use consensus::Consensus;

@@ -294,11 +294,20 @@ pub enum Error {
     #[error("Transaction {0} not found in database")]
     TransactionNotFound(String),
 
-    #[error("Transactioon already seen")]
+    #[error("Transaction already seen")]
     TransactionAlreadySeen,
+
+    #[error("Input vectors have different length")]
+    InvalidInputLengths,
 
     #[error("Header {0} not found in database")]
     HeaderNotFound(String),
+
+    #[error("Block {0} is invalid")]
+    BlockIsInvalid(String),
+
+    #[error("Block {0} already in database")]
+    BlockAlreadyExists(String),
 
     #[error("Block {0} not found in database")]
     BlockNotFound(String),

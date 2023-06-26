@@ -46,7 +46,7 @@ macro_rules! zip {
 // ANCHOR: transaction
 /// A Transaction contains an arbitrary number of `ContractCall` objects,
 /// along with corresponding ZK proofs and Schnorr signatures.
-#[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, Default, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Transaction {
     /// Calls executed in this transaction
     pub calls: Vec<ContractCall>,

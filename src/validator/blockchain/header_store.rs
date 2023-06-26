@@ -1,0 +1,166 @@
+/* This file is part of DarkFi (https://dark.fi)
+ *
+ * Copyright (C) 2020-2023 Dyne.org foundation
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+use darkfi_sdk::crypto::{MerkleNode, MerkleTree};
+use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
+
+use crate::{util::time::Timestamp, Error, Result};
+
+use super::block_store::BLOCK_VERSION;
+
+/// This struct represents a tuple of the form (version, previous, epoch, slot, timestamp, merkle_root).
+#[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
+pub struct Header {
+    /// Block version
+    pub version: u8,
+    /// Previous block hash
+    pub previous: blake3::Hash,
+    /// Epoch
+    pub epoch: u64,
+    /// Slot UID
+    pub slot: u64,
+    /// Block creation timestamp
+    pub timestamp: Timestamp,
+    /// Root of the transaction hashes merkle tree
+    pub root: MerkleNode,
+}
+
+impl Header {
+    pub fn new(
+        previous: blake3::Hash,
+        epoch: u64,
+        slot: u64,
+        timestamp: Timestamp,
+        root: MerkleNode,
+    ) -> Self {
+        let version = BLOCK_VERSION;
+        Self { version, previous, epoch, slot, timestamp, root }
+    }
+
+    /// Generate the genesis block for provided genesis info.
+    pub fn genesis_header(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Self {
+        let root = MerkleTree::new(100).root(0).unwrap();
+        Self::new(genesis_data, 0, 0, genesis_ts, root)
+    }
+
+    /// Calculate the header hash
+    pub fn headerhash(&self) -> blake3::Hash {
+        blake3::hash(&serialize(self))
+    }
+}
+
+impl Default for Header {
+    /// Represents the genesis header on current timestamp
+    fn default() -> Self {
+        Header::new(
+            blake3::hash(b"Let there be dark!"),
+            0,
+            0,
+            Timestamp::current_time(),
+            MerkleTree::new(100).root(0).unwrap(),
+        )
+    }
+}
+
+/// [`Header`] sled tree
+const SLED_HEADER_TREE: &[u8] = b"_headers";
+
+/// The `HeaderStore` is a `sled` tree storing all the blockchain's blocks' headers
+/// where the key is the headers' hash, and value is the serialized header.
+#[derive(Clone)]
+pub struct HeaderStore(pub sled::Tree);
+
+impl HeaderStore {
+    /// Opens a new or existing `HeaderStore` on the given sled database.
+    pub fn new(db: &sled::Db) -> Result<Self> {
+        let tree = db.open_tree(SLED_HEADER_TREE)?;
+        Ok(Self(tree))
+    }
+
+    /// Insert a slice of [`Header`] into the blockstore.
+    pub fn insert(&self, headers: &[Header]) -> Result<Vec<blake3::Hash>> {
+        let (batch, ret) = self.insert_batch(headers)?;
+        self.0.apply_batch(batch)?;
+        Ok(ret)
+    }
+
+    /// Generate the sled batch corresponding to an insert, so caller
+    /// can handle the write operation.
+    /// The headers are hashed with BLAKE3 and this header hash is used as
+    /// the key, while value is the serialized [`Header`] itself.
+    /// On success, the function returns the header hashes in the same
+    /// order, along with the corresponding operation batch.
+    pub fn insert_batch(&self, headers: &[Header]) -> Result<(sled::Batch, Vec<blake3::Hash>)> {
+        let mut ret = Vec::with_capacity(headers.len());
+        let mut batch = sled::Batch::default();
+
+        for header in headers {
+            let serialized = serialize(header);
+            let headerhash = blake3::hash(&serialized);
+            batch.insert(headerhash.as_bytes(), serialized);
+            ret.push(headerhash);
+        }
+
+        Ok((batch, ret))
+    }
+
+    /// Check if the headerstore contains a given headerhash.
+    pub fn contains(&self, headerhash: &blake3::Hash) -> Result<bool> {
+        Ok(self.0.contains_key(headerhash.as_bytes())?)
+    }
+
+    /// Fetch given headerhashes from the headerstore.
+    /// The resulting vector contains `Option`, which is `Some` if the header
+    /// was found in the headerstore, and otherwise it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one header was not found.
+    pub fn get(&self, headerhashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Header>>> {
+        let mut ret = Vec::with_capacity(headerhashes.len());
+
+        for hash in headerhashes {
+            if let Some(found) = self.0.get(hash.as_bytes())? {
+                let header = deserialize(&found)?;
+                ret.push(Some(header));
+            } else {
+                if strict {
+                    let s = hash.to_hex().as_str().to_string();
+                    return Err(Error::HeaderNotFound(s))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
+    }
+
+    /// Retrieve all headers from the headerstore in the form of a tuple
+    /// (`headerhash`, `header`).
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all(&self) -> Result<Vec<(blake3::Hash, Header)>> {
+        let mut headers = vec![];
+
+        for header in self.0.iter() {
+            let (key, value) = header.unwrap();
+            let hash_bytes: [u8; 32] = key.as_ref().try_into().unwrap();
+            let header = deserialize(&value)?;
+            headers.push((hash_bytes.into(), header));
+        }
+
+        Ok(headers)
+    }
+}
