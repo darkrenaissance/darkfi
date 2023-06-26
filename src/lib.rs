@@ -29,8 +29,6 @@ pub mod consensus;
 pub mod validator;
 
 #[cfg(feature = "dht")]
-pub mod dht;
-#[cfg(feature = "dht")]
 pub mod dht2;
 
 #[cfg(feature = "event-graph")]
@@ -38,9 +36,6 @@ pub mod event_graph;
 
 #[cfg(feature = "net")]
 pub mod net;
-
-#[cfg(feature = "raft")]
-pub mod raft;
 
 #[cfg(feature = "rpc")]
 pub mod rpc;
