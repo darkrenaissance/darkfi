@@ -64,6 +64,11 @@ impl<T: Eq + PartialEq + Clone> RingBuffer<T> {
     pub fn contains(&self, x: &T) -> bool {
         self.data.contains(x)
     }
+
+    /// Provides a reference to the back element, or `None` if empty.
+    pub fn back(&self) -> Option<&T> {
+        self.data.back()
+    }
 }
 
 #[cfg(test)]
