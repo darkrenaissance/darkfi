@@ -21,7 +21,7 @@ use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 
 use crate::{util::time::Timestamp, Error, Result};
 
-use super::block_store::BLOCK_VERSION;
+use super::{block_store::BLOCK_VERSION, SledDbOverlayPtr};
 
 /// This struct represents a tuple of the form (version, previous, epoch, slot, timestamp, merkle_root).
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
@@ -162,5 +162,58 @@ impl HeaderStore {
         }
 
         Ok(headers)
+    }
+}
+
+/// Overlay structure over a [`HeaderStore`] instance.
+pub struct HeaderStoreOverlay(SledDbOverlayPtr);
+
+impl HeaderStoreOverlay {
+    pub fn new(overlay: SledDbOverlayPtr) -> Result<Self> {
+        overlay.lock().unwrap().open_tree(SLED_HEADER_TREE)?;
+        Ok(Self(overlay))
+    }
+
+    /// Insert a slice of [`Header`] into the overlay.
+    /// The headers are hashed with BLAKE3 and this headerhash is used as
+    /// the key, while value is the serialized [`Header`] itself.
+    /// On success, the function returns the header hashes in the same order.
+    pub fn insert(&self, headers: &[Header]) -> Result<Vec<blake3::Hash>> {
+        let mut ret = Vec::with_capacity(headers.len());
+        let mut lock = self.0.lock().unwrap();
+
+        for header in headers {
+            let serialized = serialize(header);
+            let headerhash = blake3::hash(&serialized);
+            lock.insert(SLED_HEADER_TREE, headerhash.as_bytes(), &serialized)?;
+            ret.push(headerhash);
+        }
+
+        Ok(ret)
+    }
+
+    /// Fetch given headerhashes from the overlay.
+    /// The resulting vector contains `Option`, which is `Some` if the header
+    /// was found in the overlay, and otherwise it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one header was not found.
+    pub fn get(&self, headerhashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Header>>> {
+        let mut ret = Vec::with_capacity(headerhashes.len());
+        let lock = self.0.lock().unwrap();
+
+        for hash in headerhashes {
+            if let Some(found) = lock.get(SLED_HEADER_TREE, hash.as_bytes())? {
+                let header = deserialize(&found)?;
+                ret.push(Some(header));
+            } else {
+                if strict {
+                    let s = hash.to_hex().as_str().to_string();
+                    return Err(Error::HeaderNotFound(s))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
     }
 }

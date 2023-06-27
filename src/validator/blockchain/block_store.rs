@@ -21,7 +21,7 @@ use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 
 use crate::{tx::Transaction, util::time::Timestamp, Error, Result};
 
-use super::Header;
+use super::{Header, SledDbOverlayPtr};
 
 /// Block version number
 pub const BLOCK_VERSION: u8 = 1;
@@ -116,6 +116,63 @@ impl BlockInfo {
     pub fn blockhash(&self) -> blake3::Hash {
         let block: Block = self.clone().into();
         block.blockhash()
+    }
+
+    /// A block is considered valid when its parent hash is equal to the hash of the
+    /// previous block and their slots are incremental.
+    /// Additional validity rules can be applied.
+    pub fn validate(&self, previous: &Self) -> Result<()> {
+        let error = Err(Error::BlockIsInvalid(self.blockhash().to_string()));
+        let previous_hash = previous.blockhash();
+
+        // Check previous hash
+        if self.header.previous != previous_hash {
+            return error
+        }
+
+        // Check timestamps are incremental
+        if self.header.timestamp <= previous.header.timestamp {
+            return error
+        }
+
+        // Check slots are incremental
+        if self.header.slot <= previous.header.slot {
+            return error
+        }
+
+        // Verify slots exist
+        let mut slots = self.slots.clone();
+        if slots.is_empty() {
+            return error
+        }
+
+        // Sort them just to be safe
+        slots.sort_by(|a, b| b.id.cmp(&a.id));
+
+        // Verify first slot increments from previous block
+        if slots[0].id <= previous.header.slot {
+            return error
+        }
+
+        // Check all slot cover same sequence
+        for slot in &slots {
+            if !slot.fork_hashes.contains(&previous_hash) {
+                return error
+            }
+            if !slot.fork_previous_hashes.contains(&previous.header.previous) {
+                return error
+            }
+        }
+
+        // Check block slot is the last slot in the slice
+        if slots.last().unwrap().id != self.header.slot {
+            return error
+        }
+
+        // TODO: also validate slots etas and sigmas if we can derive them
+        // from previous slots
+
+        Ok(())
     }
 }
 
@@ -217,6 +274,59 @@ impl BlockStore {
         }
 
         Ok(blocks)
+    }
+}
+
+/// Overlay structure over a [`BlockStore`] instance.
+pub struct BlockStoreOverlay(SledDbOverlayPtr);
+
+impl BlockStoreOverlay {
+    pub fn new(overlay: SledDbOverlayPtr) -> Result<Self> {
+        overlay.lock().unwrap().open_tree(SLED_BLOCK_TREE)?;
+        Ok(Self(overlay))
+    }
+
+    /// Insert a slice of [`Block`] into the overlay.
+    /// The block are hashed with BLAKE3 and this blockhash is used as
+    /// the key, while value is the serialized [`Block`] itself.
+    /// On success, the function returns the block hashes in the same order.
+    pub fn insert(&self, blocks: &[Block]) -> Result<Vec<blake3::Hash>> {
+        let mut ret = Vec::with_capacity(blocks.len());
+        let mut lock = self.0.lock().unwrap();
+
+        for block in blocks {
+            let serialized = serialize(block);
+            let blockhash = blake3::hash(&serialized);
+            lock.insert(SLED_BLOCK_TREE, blockhash.as_bytes(), &serialized)?;
+            ret.push(blockhash);
+        }
+
+        Ok(ret)
+    }
+
+    /// Fetch given block hashes from the overlay.
+    /// The resulting vector contains `Option`, which is `Some` if the block
+    /// was found in the overlay, and otherwise it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one block was not found.
+    pub fn get(&self, block_hashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Block>>> {
+        let mut ret = Vec::with_capacity(block_hashes.len());
+        let lock = self.0.lock().unwrap();
+
+        for hash in block_hashes {
+            if let Some(found) = lock.get(SLED_BLOCK_TREE, hash.as_bytes())? {
+                let block = deserialize(&found)?;
+                ret.push(Some(block));
+            } else {
+                if strict {
+                    let s = hash.to_hex().as_str().to_string();
+                    return Err(Error::BlockNotFound(s))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
     }
 }
 
@@ -359,7 +469,77 @@ impl BlockOrderStore {
 
     /// Check if sled contains any records
     pub fn is_empty(&self) -> bool {
-        self.0.len() == 0
+        self.0.is_empty()
+    }
+}
+
+/// Overlay structure over a [`BlockOrderStore`] instance.
+pub struct BlockOrderStoreOverlay(SledDbOverlayPtr);
+
+impl BlockOrderStoreOverlay {
+    pub fn new(overlay: SledDbOverlayPtr) -> Result<Self> {
+        overlay.lock().unwrap().open_tree(SLED_BLOCK_ORDER_TREE)?;
+        Ok(Self(overlay))
+    }
+
+    /// Insert a slice of slots and blockhashes into the store. With sled, the
+    /// operation is done as a batch.
+    /// The block slot is used as the key, and the blockhash is used as value.
+    pub fn insert(&self, slots: &[u64], hashes: &[blake3::Hash]) -> Result<()> {
+        if slots.len() != hashes.len() {
+            return Err(Error::InvalidInputLengths)
+        }
+
+        let mut lock = self.0.lock().unwrap();
+
+        for (i, sl) in slots.iter().enumerate() {
+            lock.insert(SLED_BLOCK_ORDER_TREE, &sl.to_be_bytes(), hashes[i].as_bytes())?;
+        }
+
+        Ok(())
+    }
+
+    /// Fetch given slots from the overlay.
+    /// The resulting vector contains `Option`, which is `Some` if the slot
+    /// was found in the overlay, and otherwise it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one slot was not found.
+    pub fn get(&self, slots: &[u64], strict: bool) -> Result<Vec<Option<blake3::Hash>>> {
+        let mut ret = Vec::with_capacity(slots.len());
+        let lock = self.0.lock().unwrap();
+
+        for slot in slots {
+            if let Some(found) = lock.get(SLED_BLOCK_ORDER_TREE, &slot.to_be_bytes())? {
+                let hash_bytes: [u8; 32] = found.as_ref().try_into().unwrap();
+                let hash = blake3::Hash::from(hash_bytes);
+                ret.push(Some(hash));
+            } else {
+                if strict {
+                    return Err(Error::BlockSlotNotFound(*slot))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
+    }
+
+    /// Fetch the last blockhash in the overlay, based on the `Ord`
+    /// implementation for `Vec<u8>`.
+    pub fn get_last(&self) -> Result<(u64, blake3::Hash)> {
+        let found = self.0.lock().unwrap().last(SLED_BLOCK_ORDER_TREE)?.unwrap();
+
+        let slot_bytes: [u8; 8] = found.0.as_ref().try_into().unwrap();
+        let hash_bytes: [u8; 32] = found.1.as_ref().try_into().unwrap();
+        let slot = u64::from_be_bytes(slot_bytes);
+        let hash = blake3::Hash::from(hash_bytes);
+
+        Ok((slot, hash))
+    }
+
+    /// Check if overlay contains any records
+    pub fn is_empty(&self) -> Result<bool> {
+        Ok(self.0.lock().unwrap().is_empty(SLED_BLOCK_ORDER_TREE)?)
     }
 }
 

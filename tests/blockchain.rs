@@ -17,7 +17,7 @@
  */
 
 use darkfi::{
-    validator::blockchain::{BlockInfo, Blockchain, Header},
+    validator::blockchain::{BlockInfo, Blockchain, BlockchainOverlay, Header},
     Error, Result,
 };
 use darkfi_sdk::{
@@ -43,8 +43,8 @@ impl Harness {
     }
 
     fn validate_chains(&self) -> Result<()> {
-        self.alice.validate_chain()?;
-        self.bob.validate_chain()?;
+        self.alice.validate()?;
+        self.bob.validate()?;
 
         assert_eq!(self.alice.len(), self.bob.len());
 
@@ -83,33 +83,34 @@ impl Harness {
 
     // This is what the validator will execute when it receives a block.
     fn add_blocks_to_chain(&self, blockchain: &Blockchain, blocks: &[BlockInfo]) -> Result<()> {
-        // TODO: Use an overlay to revert changes in case of errors
         // Create overlay
+        let blockchain_overlay = BlockchainOverlay::new(&blockchain)?;
+        let lock = blockchain_overlay.lock().unwrap();
 
         // When we insert genesis, chain is empty
-        let mut previous =
-            if !blockchain.is_empty() { Some(blockchain.last_block()?) } else { None };
+        let mut previous = if !lock.is_empty()? { Some(lock.last_block()?) } else { None };
 
         // Validate and insert each block
         for block in blocks {
             // Check if block already exists
-            if blockchain.has_block(block)? {
+            if lock.has_block(block)? {
                 return Err(Error::BlockAlreadyExists(block.blockhash().to_string()))
             }
 
             // This will be true for every insert, apart from genesis
             if let Some(p) = previous {
-                blockchain.validate_block(block, &p)?;
+                block.validate(&p)?;
             }
 
             // Insert block
-            blockchain.add_block(block)?;
+            lock.add_block(block)?;
 
             // Use last inserted block as next iteration previous
             previous = Some(block.clone());
         }
 
         // Write overlay
+        lock.overlay.lock().unwrap().apply()?;
 
         Ok(())
     }

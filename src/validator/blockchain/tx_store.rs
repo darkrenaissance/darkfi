@@ -22,6 +22,8 @@ use darkfi_serial::{deserialize, serialize};
 
 use crate::{tx::Transaction, Error, Result};
 
+use super::SledDbOverlayPtr;
+
 const SLED_TX_TREE: &[u8] = b"_transactions";
 const SLED_PENDING_TX_TREE: &[u8] = b"_pending_transactions";
 const SLED_PENDING_TX_ORDER_TREE: &[u8] = b"_pending_transactions_order";
@@ -125,7 +127,65 @@ impl TxStore {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.len() == 0
+        self.0.is_empty()
+    }
+}
+
+/// Overlay structure over a [`TxStore`] instance.
+pub struct TxStoreOverlay(SledDbOverlayPtr);
+
+impl TxStoreOverlay {
+    pub fn new(overlay: SledDbOverlayPtr) -> Result<Self> {
+        overlay.lock().unwrap().open_tree(SLED_TX_TREE)?;
+        Ok(Self(overlay))
+    }
+
+    /// Insert a slice of [`Transaction`] into the overlay.
+    /// The transactions are hashed with BLAKE3 and this hash is used as
+    /// the key, while the value is the serialized [`Transaction`] itself.
+    /// On success, the function returns the transaction hashes in the same
+    /// order as the input transactions.
+    pub fn insert(&self, transactions: &[Transaction]) -> Result<Vec<blake3::Hash>> {
+        let mut ret = Vec::with_capacity(transactions.len());
+        let mut lock = self.0.lock().unwrap();
+
+        for tx in transactions {
+            let serialized = serialize(tx);
+            let tx_hash = blake3::hash(&serialized);
+            lock.insert(SLED_TX_TREE, tx_hash.as_bytes(), &serialized)?;
+            ret.push(tx_hash);
+        }
+
+        Ok(ret)
+    }
+
+    /// Fetch given tx hashes from the overlay.
+    /// The resulting vector contains `Option`, which is `Some` if the tx
+    /// was found in the overlay, and otherwise it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one block was not found.
+    pub fn get(
+        &self,
+        tx_hashes: &[blake3::Hash],
+        strict: bool,
+    ) -> Result<Vec<Option<Transaction>>> {
+        let mut ret = Vec::with_capacity(tx_hashes.len());
+        let lock = self.0.lock().unwrap();
+
+        for tx_hash in tx_hashes {
+            if let Some(found) = lock.get(SLED_TX_TREE, tx_hash.as_bytes())? {
+                let tx = deserialize(&found)?;
+                ret.push(Some(tx));
+            } else {
+                if strict {
+                    let s = tx_hash.to_hex().as_str().to_string();
+                    return Err(Error::TransactionNotFound(s))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
     }
 }
 

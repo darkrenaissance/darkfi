@@ -27,16 +27,18 @@ use darkfi_serial::serialize;
 use crate::{tx::Transaction, Error, Result};
 
 pub mod block_store;
-pub use block_store::{Block, BlockInfo, BlockOrderStore, BlockStore};
+pub use block_store::{
+    Block, BlockInfo, BlockOrderStore, BlockOrderStoreOverlay, BlockStore, BlockStoreOverlay,
+};
 
 pub mod header_store;
-pub use header_store::{Header, HeaderStore};
+pub use header_store::{Header, HeaderStore, HeaderStoreOverlay};
 
 pub mod slot_store;
 pub use slot_store::{SlotStore, SlotStoreOverlay};
 
 pub mod tx_store;
-pub use tx_store::{PendingTxOrderStore, PendingTxStore, TxStore};
+pub use tx_store::{PendingTxOrderStore, PendingTxStore, TxStore, TxStoreOverlay};
 
 pub mod contract_store;
 pub use contract_store::{
@@ -95,72 +97,15 @@ impl Blockchain {
         })
     }
 
-    /// A block is considered valid when its parent hash is equal to the hash of the
-    /// previous block and their slots are incremental.
-    /// Additional validity rules can be applied.
-    pub fn validate_block(&self, block: &BlockInfo, previous_block: &BlockInfo) -> Result<()> {
-        let error = Err(Error::BlockIsInvalid(block.blockhash().to_string()));
-        let previous_block_hash = previous_block.blockhash();
-
-        // Check previous hash
-        if block.header.previous != previous_block_hash {
-            return error
-        }
-
-        // Check timestamps are incremental
-        if block.header.timestamp <= previous_block.header.timestamp {
-            return error
-        }
-
-        // Check slots are incremental
-        if block.header.slot <= previous_block.header.slot {
-            return error
-        }
-
-        // Verify slots exist
-        let mut slots = block.slots.clone();
-        if slots.is_empty() {
-            return error
-        }
-
-        // Sort them just to be safe
-        slots.sort_by(|a, b| b.id.cmp(&a.id));
-
-        // Verify first slot increments from previous block
-        if slots[0].id <= previous_block.header.slot {
-            return error
-        }
-
-        // Check all slot cover same sequence
-        for slot in &slots {
-            if !slot.fork_hashes.contains(&previous_block_hash) {
-                return error
-            }
-            if !slot.fork_previous_hashes.contains(&previous_block.header.previous) {
-                return error
-            }
-        }
-
-        // Check block slot is the last slot in the slice
-        if slots.last().unwrap().id != block.header.slot {
-            return error
-        }
-
-        // TODO: also validate slots etas and sigmas if we can derive them
-        // from previous slots
-
-        Ok(())
-    }
-
     /// A blockchain is considered valid, when every block is valid,
     /// based on validate_block checks.
     /// Be careful as this will try to load everything in memory.
-    pub fn validate_chain(&self) -> Result<()> {
+    pub fn validate(&self) -> Result<()> {
         // We use block order store here so we have all blocks in order
         let blocks = self.order.get_all()?;
         for (index, block) in blocks[1..].iter().enumerate() {
-            let full_blocks = self.get_blocks_by_hash(&[block.1, blocks[index].1])?;
-            self.validate_block(&full_blocks[0], &full_blocks[1])?;
+            let full_blocks = self.get_blocks_by_hash(&[blocks[index].1, block.1])?;
+            full_blocks[1].validate(&full_blocks[0])?;
         }
 
         Ok(())
@@ -295,7 +240,7 @@ impl Blockchain {
 
     /// Check if blockchain contains any blocks
     pub fn is_empty(&self) -> bool {
-        self.order.len() == 0
+        self.order.is_empty()
     }
 
     /// Retrieve the last block slot and hash.
@@ -425,8 +370,16 @@ pub type BlockchainOverlayPtr = Arc<Mutex<BlockchainOverlay>>;
 pub struct BlockchainOverlay {
     /// Main [`sled_overlay::SledDbOverlay`] to the sled db connection
     pub overlay: SledDbOverlayPtr,
+    /// Headers overlay
+    pub headers: HeaderStoreOverlay,
+    /// Blocks overlay
+    pub blocks: BlockStoreOverlay,
+    /// Block order overlay
+    pub order: BlockOrderStoreOverlay,
     /// Slots overlay
     pub slots: SlotStoreOverlay,
+    /// Transactions overlay
+    pub transactions: TxStoreOverlay,
     /// Contract states overlay
     pub contracts: ContractStateStoreOverlay,
     /// Wasm bincodes overlay
@@ -437,11 +390,122 @@ impl BlockchainOverlay {
     /// Instantiate a new `BlockchainOverlay` over the given [`Blockchain`] instance.
     pub fn new(blockchain: &Blockchain) -> Result<BlockchainOverlayPtr> {
         let overlay = Arc::new(Mutex::new(sled_overlay::SledDbOverlay::new(&blockchain.sled_db)));
+        let headers = HeaderStoreOverlay::new(overlay.clone())?;
+        let blocks = BlockStoreOverlay::new(overlay.clone())?;
+        let order = BlockOrderStoreOverlay::new(overlay.clone())?;
         let slots = SlotStoreOverlay::new(overlay.clone())?;
+        let transactions = TxStoreOverlay::new(overlay.clone())?;
         let contracts = ContractStateStoreOverlay::new(overlay.clone())?;
         let wasm_bincode = WasmStoreOverlay::new(overlay.clone())?;
 
-        Ok(Arc::new(Mutex::new(Self { overlay, slots, contracts, wasm_bincode })))
+        Ok(Arc::new(Mutex::new(Self {
+            overlay,
+            headers,
+            blocks,
+            order,
+            slots,
+            transactions,
+            contracts,
+            wasm_bincode,
+        })))
+    }
+
+    /// Check if blockchain contains any blocks
+    pub fn is_empty(&self) -> Result<bool> {
+        self.order.is_empty()
+    }
+
+    /// Retrieve the last block slot and hash.
+    pub fn last(&self) -> Result<(u64, blake3::Hash)> {
+        self.order.get_last()
+    }
+
+    /// Retrieve the last block info.
+    pub fn last_block(&self) -> Result<BlockInfo> {
+        let (_, hash) = self.last()?;
+        Ok(self.get_blocks_by_hash(&[hash])?[0].clone())
+    }
+
+    /// Insert a given [`BlockInfo`] into the overlay.
+    /// This functions wraps all the logic of separating the block into specific
+    /// data that can be fed into the different trees of the overlay.
+    /// Upon success, the functions returns the block hash that
+    /// were given and appended to the overlay.
+    /// Since we are adding to the overlay, we don't need to exeucte
+    /// the writes atomically.
+    pub fn add_block(&self, block: &BlockInfo) -> Result<blake3::Hash> {
+        // Store transactions
+        self.transactions.insert(&block.txs)?;
+
+        // Store header
+        self.headers.insert(&[block.header.clone()])?;
+
+        // Store block
+        let blk: Block = Block::from(block.clone());
+        let block_hash = self.blocks.insert(&[blk])?[0];
+
+        // Store block order
+        self.order.insert(&[block.header.slot], &[block_hash])?;
+
+        // Store slot checkpoints
+        self.slots.insert(&block.slots)?;
+
+        Ok(block_hash)
+    }
+
+    /// Check if the given [`BlockInfo`] is in the database and all trees.
+    pub fn has_block(&self, block: &BlockInfo) -> Result<bool> {
+        let blockhash = match self.order.get(&[block.header.slot], true) {
+            Ok(v) => v[0].unwrap(),
+            Err(_) => return Ok(false),
+        };
+
+        // Check if we have all transactions
+        let txs: Vec<blake3::Hash> =
+            block.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
+        if self.transactions.get(&txs, true).is_err() {
+            return Ok(false)
+        }
+
+        // Check if we have all slots
+        let slots: Vec<u64> = block.slots.iter().map(|x| x.id).collect();
+        if self.slots.get(&slots, true).is_err() {
+            return Ok(false)
+        }
+
+        // Check provided info produces the same hash
+        Ok(blockhash == block.blockhash())
+    }
+
+    /// Retrieve [`BlockInfo`]s by given hashes. Fails if any of them is not found.
+    pub fn get_blocks_by_hash(&self, hashes: &[blake3::Hash]) -> Result<Vec<BlockInfo>> {
+        let blocks = self.blocks.get(hashes, true)?;
+        let blocks: Vec<Block> = blocks.iter().map(|x| x.clone().unwrap()).collect();
+        let ret = self.get_blocks_infos(&blocks)?;
+
+        Ok(ret)
+    }
+
+    /// Retrieve all [`BlockInfo`] for given slice of [`Block`].
+    /// Fails if any of them is not found
+    fn get_blocks_infos(&self, blocks: &[Block]) -> Result<Vec<BlockInfo>> {
+        let mut ret = Vec::with_capacity(blocks.len());
+        for block in blocks {
+            let headers = self.headers.get(&[block.header], true)?;
+            // Since we used strict get, its safe to unwrap here
+            let header = headers[0].clone().unwrap();
+
+            let txs = self.transactions.get(&block.txs, true)?;
+            let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
+
+            let slots = self.slots.get(&block.slots, true)?;
+            let slots = slots.iter().map(|x| x.clone().unwrap()).collect();
+
+            let info = BlockInfo::new(header, txs, block.producer.clone(), slots);
+            ret.push(info);
+        }
+
+        Ok(ret)
     }
 
     /// Checkpoint overlay so we can revert to it, if needed.

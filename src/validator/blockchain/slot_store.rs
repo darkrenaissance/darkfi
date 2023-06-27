@@ -139,7 +139,7 @@ impl SlotStore {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.len() == 0
+        self.0.is_empty()
     }
 }
 
@@ -152,11 +152,48 @@ impl SlotStoreOverlay {
         Ok(Self(overlay))
     }
 
-    /// Fetch given id from the slot store.
-    pub fn get(&self, id: u64) -> Result<Vec<u8>> {
+    /// Insert a slice of [`Slot`] into the overlay.
+    /// The slot id is used as the key, while value is the serialized [`Slot`] itself.
+    pub fn insert(&self, slots: &[Slot]) -> Result<()> {
+        let mut lock = self.0.lock().unwrap();
+
+        for slot in slots {
+            let serialized = serialize(slot);
+            lock.insert(SLED_SLOT_TREE, &slot.id.to_be_bytes(), &serialized)?;
+        }
+
+        Ok(())
+    }
+
+    /// Fetch slot from the overlay by id.
+    pub fn get_by_id(&self, id: u64) -> Result<Vec<u8>> {
         match self.0.lock().unwrap().get(SLED_SLOT_TREE, &id.to_be_bytes())? {
             Some(found) => Ok(found.to_vec()),
             None => Err(Error::SlotNotFound(id)),
         }
+    }
+
+    /// Fetch given slots from the overlay.
+    /// The resulting vector contains `Option`, which is `Some` if the slot
+    /// was found in the overlay, and otherwise it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one slot was not found.
+    pub fn get(&self, ids: &[u64], strict: bool) -> Result<Vec<Option<Slot>>> {
+        let mut ret = Vec::with_capacity(ids.len());
+        let lock = self.0.lock().unwrap();
+
+        for id in ids {
+            if let Some(found) = lock.get(SLED_SLOT_TREE, &id.to_be_bytes())? {
+                let slot = deserialize(&found)?;
+                ret.push(Some(slot));
+            } else {
+                if strict {
+                    return Err(Error::SlotNotFound(*id))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
     }
 }
