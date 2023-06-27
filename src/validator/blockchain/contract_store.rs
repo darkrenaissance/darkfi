@@ -21,7 +21,6 @@ use std::io::Cursor;
 use darkfi_sdk::crypto::ContractId;
 use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
-use sled::transaction::ConflictableTransactionError;
 
 use crate::{
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
