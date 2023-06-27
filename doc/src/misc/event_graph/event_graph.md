@@ -50,9 +50,7 @@ any nodes in the network to possess it, so A does not need to send an `inv`.
 3. For each $B_i$ in $\{B_1, \dots, B_n\}$:
     1. Create an `inv` representing the event.
     2. Broadcast to all connected nodes `p2p.broadcast(inv)`.
-4. A waits for 3 nodes to respond back with the `inv` confirming they received it.
-5. Until A receives the `inv` confirms, it will wait for 1 minute and then
-   resend the `event` message.
+
 
 Upon receiving an `inv`:
 
@@ -60,8 +58,8 @@ Upon receiving an `inv`:
 2. The node receives `getevent`, and sends `event` back.
 
 So in this diagram, A will send `event` to $B_1, \dots, B_6$. Each $B_i$ will respond
-back to A with `inv`, and A will stop sending `event`. Each one of $C_1, \dots, C_3$
-also receive `inv`, and since they don't have the event, they will send back to $B_3$,
+back to A with `inv`. Each one of $C_1, \dots, C_3$ also receive `inv`, 
+and since they don't have the event, they will send back to $B_3$,
 a `getevent` message. $B_3$ will send them the `event`.
 
 ## Genesis Event

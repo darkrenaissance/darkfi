@@ -34,12 +34,11 @@ Event object data. This is either sent when a new event is created, or in respon
 |-------------- | -------------------- | -------------------------- |
 | parents	  	| `Vec<EventId>`       | Parent events      		|
 | timestamp 	| `u64`                | Event timestamp    		|
-| action    	| `u8`                 | Type of event      		|
-| data      	| `Vec<u8>`            | Event specific data		|
+| action    	| `T`                  | Event specific data      	|
 
 ## getheads
 
-This message is *only* sent the first time a node connects to the network.
+This message is sent at fixed intervals when connecting to the network.
 It uses this message to synchronize with the current network state.
 
 Once updated, a node uses the messages above to stay synchronized.
