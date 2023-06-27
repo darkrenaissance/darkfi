@@ -83,18 +83,7 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
         }
 
         // Filter by assignee(s).
-        _ if filter.contains("assign:") => {
-            let kv: Vec<&str> = filter.split(':').collect();
-            if kv.len() == 2 {
-                if let Some(value) = Value::from(kv[1]).as_str() {
-                    if value.is_empty() {
-                        tasks.retain(|task| task.assign.is_empty())
-                    } else {
-                        tasks.retain(|task| task.assign.contains(&value.to_string()))
-                    }
-                }
-            }
-        }
+        _ if filter.starts_with('@') => tasks.retain(|task| task.assign.contains(&filter.into())),
 
         // Filter by project(s).
         _ if filter.contains("project:") => {

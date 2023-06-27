@@ -173,6 +173,10 @@ pub fn task_from_cli(values: Vec<String>) -> Result<BaseTask> {
                 tags.push(field[0].into());
                 continue
             }
+            if field[0].starts_with('@') {
+                assign.push(field[0].into());
+                continue
+            }
             title.push_str(field[0]);
             title.push(' ');
             continue
@@ -188,10 +192,6 @@ pub fn task_from_cli(values: Vec<String>) -> Result<BaseTask> {
 
         if field[0] == "desc" {
             desc = Some(field[1].into());
-        }
-
-        if field[0] == "assign" {
-            assign = field[1].split(',').map(|s| s.into()).collect();
         }
 
         if field[0] == "due" {
