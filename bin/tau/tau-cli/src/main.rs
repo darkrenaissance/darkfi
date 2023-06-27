@@ -177,6 +177,7 @@ async fn main() -> Result<()> {
     // then remove IDs from filter so we can do apply_filter() normally.
     // If not provided we use get_ids() to get them from the daemon.
     let ids = get_ids(&mut filters)?;
+    let ids_clone = ids.clone();
     let task_ids = if ids.is_empty() { tau.get_ids().await? } else { ids };
 
     let mut tasks =
@@ -187,6 +188,13 @@ async fn main() -> Result<()> {
         };
     for id in task_ids {
         tasks.push(tau.get_task_by_id(id).await?);
+    }
+
+    if ids_clone.len() == 1 && args.command.is_none() {
+        let tsk = tasks[0].clone();
+        print_task_info(tsk)?;
+
+        return Ok(())
     }
 
     for filter in filters {
@@ -229,7 +237,6 @@ async fn main() -> Result<()> {
                     if res {
                         let tsk = tau.get_task_by_id(task.id.into()).await?;
                         print_task_info(tsk)?;
-                        println!()
                     }
                 }
 
@@ -312,7 +319,6 @@ async fn main() -> Result<()> {
                     if res {
                         let tsk = tau.get_task_by_id(task.id.into()).await?;
                         print_task_info(tsk)?;
-                        println!()
                     }
                 }
                 Ok(())
@@ -322,7 +328,6 @@ async fn main() -> Result<()> {
                 for task in tasks {
                     let task = tau.get_task_by_id(task.id.into()).await?;
                     print_task_info(task)?;
-                    println!()
                 }
                 Ok(())
             }

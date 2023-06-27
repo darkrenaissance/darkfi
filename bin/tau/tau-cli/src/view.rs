@@ -180,6 +180,8 @@ pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
     let comments_table = comments_table(taskinfo)?;
     comments_table.printstd();
 
+    println!();
+
     Ok(())
 }
 
