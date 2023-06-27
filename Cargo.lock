@@ -1618,6 +1618,7 @@ dependencies = [
  "structopt-toml",
  "thiserror",
  "toml 0.7.5",
+ "tor-hscrypto",
  "url",
  "wasmer",
  "wasmer-compiler-singlepass",

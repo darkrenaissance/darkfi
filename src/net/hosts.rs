@@ -115,10 +115,37 @@ impl Hosts {
                 }
             }
 
-            // TODO: Should find a way to test the hosts are live without DNS leaks.
-            // Historically there is some code for this in cb73861bc13d3d5b43a6af931f29ce937e6fe681
-            // We could try to instantiate a channel and perform a handshake,
-            // although this seems kinda "heavy". Open to suggestions :)
+            #[cfg(not(feature = "p2p-transport-tor"))]
+            // If Tor is not enabled, we won't store the addrs as we have
+            // no means to validate them.
+            if addr.scheme() == "tor" || addr.scheme() == "tor+tls" {
+                continue
+            }
+
+            #[cfg(not(feature = "p2p-transport-nym"))]
+            // Same for Nym
+            if addr.scheme() == "nym" || addr.scheme() == "nym+tls" {
+                continue
+            }
+
+            match addr.scheme() {
+                // Validate that the address is an actual onion.
+                #[cfg(feature = "p2p-transport-tor")]
+                "tor" | "tor+tls" => {
+                    use std::str::FromStr;
+                    if tor_hscrypto::pk::HsId::from_str(host_str).is_err() {
+                        continue
+                    }
+                }
+
+                #[cfg(feature = "p2p-transport-nym")]
+                "nym" | "nym+tls" => {}
+
+                #[cfg(feature = "p2p-transport-tcp")]
+                "tcp" | "tcp+tls" => {}
+
+                _ => continue,
+            }
 
             ret.push(_addr.clone());
         }

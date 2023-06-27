@@ -78,6 +78,7 @@ socket2 = {version = "0.5.3", optional = true, features = ["all"]}
 
 # Pluggable Transports
 arti-client = {version = "0.9.1", default-features = false, features = ["async-std", "rustls", "onion-service-client"], optional = true}
+tor-hscrypto = {version = "0.2.1", optional = true}
 # TODO: nym ( Read this to figure out impl https://github.com/ChainSafe/rust-libp2p-nym )
 
 # TLS cert utilities
@@ -150,7 +151,7 @@ prettytable-rs = "0.10.0"
 # -----BEGIN LIBRARY FEATURES-----
 [features]
 p2p-transport-tcp = []
-p2p-transport-tor = ["arti-client"]
+p2p-transport-tor = ["arti-client", "tor-hscrypto"]
 p2p-transport-nym = []
 
 async-runtime = [
@@ -339,5 +340,6 @@ required-features = ["zk"]
 
 [patch.crates-io]
 arti-client = {git="https://gitlab.torproject.org/tpo/core/arti", rev="08d1155cb92568176d8b54b85ec5437dff112e01"}
+tor-hscrypto = {git="https://gitlab.torproject.org/tpo/core/arti", rev="08d1155cb92568176d8b54b85ec5437dff112e01"}
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v3"}
 halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v3"}
