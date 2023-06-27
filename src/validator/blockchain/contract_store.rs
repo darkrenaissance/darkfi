@@ -166,19 +166,12 @@ impl ContractStateStore {
             return Err(Error::ContractStateNotFound)
         }
 
-        // Remove the deleted tree from the state pointer set
+        // Remove the deleted tree from the state pointer set.
         state_pointers.retain(|x| *x != ptr);
-        // and create a batch to write in db.
-        let mut batch = sled::Batch::default();
-        batch.insert(contract_id_bytes, serialize(&state_pointers));
+        self.0.insert(contract_id_bytes, serialize(&state_pointers))?;
 
-        // We drop the tree and update the state pointer record atomically
-        self.0.transaction(|tree| {
-            db.drop_tree(ptr)?;
-            tree.apply_batch(&batch)?;
-
-            Ok::<(), ConflictableTransactionError<sled::Error>>(())
-        })?;
+        // Drop the deleted tree from the database
+        db.drop_tree(ptr)?;
 
         Ok(())
     }
