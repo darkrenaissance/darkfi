@@ -21,6 +21,7 @@ use std::io::Cursor;
 use darkfi_sdk::crypto::ContractId;
 use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
+use sled::transaction::ConflictableTransactionError;
 
 use crate::{
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
@@ -143,6 +144,8 @@ impl ContractStateStore {
     /// has been found, its contents in the tree will be cleared, and the pointer
     /// will be removed from the main `ContractStateStore`. If anything is not
     /// found as initialized, an error is returned.
+    /// NOTE: this function is not used right now, we keep it for future proofing,
+    ///       and its obviously untested.
     pub fn remove(&self, db: &sled::Db, contract_id: &ContractId, tree_name: &str) -> Result<()> {
         debug!(target: "blockchain::contractstore", "Removing state tree for {}:{}", contract_id, tree_name);
 
@@ -163,14 +166,19 @@ impl ContractStateStore {
             return Err(Error::ContractStateNotFound)
         }
 
-        // We open the tree and clear it. This is unfortunately not atomic.
-        // TODO: FIXME: Can we make it atomic?
-        let tree = db.open_tree(ptr)?;
-        tree.clear()?;
-
-        // Remove the deleted tree from the state pointer set.
+        // Remove the deleted tree from the state pointer set
         state_pointers.retain(|x| *x != ptr);
-        self.0.insert(contract_id_bytes, serialize(&state_pointers))?;
+        // and create a batch to write in db.
+        let mut batch = sled::Batch::default();
+        batch.insert(contract_id_bytes, serialize(&state_pointers));
+
+        // We drop the tree and update the state pointer record atomically
+        self.0.transaction(|tree| {
+            db.drop_tree(ptr)?;
+            tree.apply_batch(&batch)?;
+
+            Ok::<(), ConflictableTransactionError<sled::Error>>(())
+        })?;
 
         Ok(())
     }
