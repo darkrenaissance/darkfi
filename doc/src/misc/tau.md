@@ -70,12 +70,12 @@ Because no description is set, it will open your EDITOR and prompt you
 for a description which allows entering multiline text.
 
 ```bash
-tau add second task assign:dave
+tau add second task @dave
 ```
 
 ```
 % tau add Third task project:tau rank:1.1
-% tau add Fourth task assign:dave project:tau due:1509 rank:2.5
+% tau add Fourth task @dave project:tau due:1509 rank:2.5
 % tau add Five
 ```
 
@@ -90,7 +90,7 @@ tau add second task assign:dave
 % tau rank:gt:2			# all tasks that have rank greater than 2
 % tau due.not:today		# all tasks that thier due date is not today
 % tau due.after:0909		# all tasks that thier due date is after September 9th
-% tau assign:dave		# tasks that assign field is "dave"
+% tau @dave			# tasks that assign field is "dave"
 ```
 
 
