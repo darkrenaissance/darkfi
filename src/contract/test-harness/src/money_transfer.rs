@@ -116,7 +116,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.read().await.verify_transactions(&[tx.clone()], slot, true).await?;
+        wallet.validator.read().await.add_transactions(&[tx.clone()], slot, true).await?;
         if append {
             for output in &params.outputs {
                 wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
@@ -140,7 +140,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.read().await.verify_transactions(txs, slot, true).await?;
+        wallet.validator.read().await.add_transactions(txs, slot, true).await?;
         if append {
             for params in txs_params {
                 for output in &params.outputs {
@@ -164,7 +164,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.read().await.verify_transactions(&[tx.clone()], slot, false).await?;
+        wallet.validator.read().await.add_transactions(&[tx.clone()], slot, false).await?;
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
@@ -186,7 +186,7 @@ impl TestHarness {
             .validator
             .read()
             .await
-            .verify_transactions(txs, slot, false)
+            .add_transactions(txs, slot, false)
             .await
             .err()
             .unwrap()

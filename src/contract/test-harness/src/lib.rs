@@ -173,6 +173,7 @@ pub struct TestHarness {
     pub holders: HashMap<Holder, Wallet>,
     pub proving_keys: HashMap<&'static str, (ProvingKey, ZkBinary)>,
     pub tx_action_benchmarks: HashMap<TxAction, TxActionBenchmarks>,
+    pub genesis_block: blake3::Hash,
 }
 
 impl TestHarness {
@@ -273,7 +274,12 @@ impl TestHarness {
         // Alice jumps down the rabbit hole
         holders.insert(Holder::Alice, alice);
 
-        Ok(Self { holders, proving_keys, tx_action_benchmarks })
+        Ok(Self {
+            holders,
+            proving_keys,
+            tx_action_benchmarks,
+            genesis_block: genesis_block.blockhash(),
+        })
     }
 
     pub fn gather_owncoin(
@@ -429,8 +435,7 @@ impl TestHarness {
     pub async fn generate_slot(&self, id: u64) -> Result<Slot> {
         // We grab the genesis slot to generate slot
         // using same consensus parameters
-        let faucet = self.holders.get(&Holder::Faucet).unwrap();
-        let genesis_block = faucet.validator.read().await.consensus.genesis_block;
+        let genesis_block = self.genesis_block;
         let fork_hashes = vec![genesis_block];
         let fork_previous_hashes = vec![genesis_block];
         let genesis_slot = self.get_slot_by_slot(0).await?;

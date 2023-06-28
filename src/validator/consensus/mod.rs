@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{
-    blockchain::{BlockInfo, Blockchain},
-    util::time::TimeKeeper,
-};
+use crate::{blockchain::Blockchain, util::time::TimeKeeper};
 
 /// This struct represents the information required by the consensus algorithm
 pub struct Consensus {
@@ -27,16 +24,11 @@ pub struct Consensus {
     pub blockchain: Blockchain,
     /// Helper structure to calculate time related operations
     pub time_keeper: TimeKeeper,
-    /// Genesis block hash
-    pub genesis_block: blake3::Hash,
 }
 
 impl Consensus {
-    /// Generate a new Consensus state. On init, genesis block
-    /// hash is the BlockInfo::default one, so caller must
-    /// set the correct one, if different.
+    /// Generate a new Consensus state.
     pub fn new(blockchain: Blockchain, time_keeper: TimeKeeper) -> Self {
-        let genesis_block = BlockInfo::default().blockhash();
-        Self { blockchain, time_keeper, genesis_block }
+        Self { blockchain, time_keeper }
     }
 }
