@@ -21,7 +21,7 @@ use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 
 use crate::{tx::Transaction, Error, Result};
 
-use super::{Header, SledDbOverlayPtr};
+use super::{parse_record, Header, SledDbOverlayPtr};
 
 /// Block version number
 pub const BLOCK_VERSION: u8 = 1;
@@ -66,7 +66,7 @@ impl Block {
 /// Structure representing full block data.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct BlockInfo {
-    /// BlockInfo magic bytes
+    /// Block magic bytes
     pub magic: [u8; 4],
     /// Block header data
     pub header: Header,
@@ -205,7 +205,7 @@ impl BlockStore {
 
     /// Generate the sled batch corresponding to an insert, so caller
     /// can handle the write operation.
-    /// The blocks are hashed with BLAKE3 and this blockhash is used as
+    /// The blocks are hashed with BLAKE3 and this block hash is used as
     /// the key, while value is the serialized [`Block`] itself.
     /// On success, the function returns the block hashes in the same order.
     pub fn insert_batch(&self, blocks: &[Block]) -> Result<(sled::Batch, Vec<blake3::Hash>)> {
@@ -222,14 +222,14 @@ impl BlockStore {
         Ok((batch, ret))
     }
 
-    /// Check if the blockstore contains a given blockhash.
+    /// Check if the block store contains a given block hash.
     pub fn contains(&self, blockhash: &blake3::Hash) -> Result<bool> {
         Ok(self.0.contains_key(blockhash.as_bytes())?)
     }
 
-    /// Fetch given block hashes from the blockstore.
+    /// Fetch given block hashes from the block store.
     /// The resulting vector contains `Option`, which is `Some` if the block
-    /// was found in the blockstore, and otherwise it is `None`, if it has not.
+    /// was found in the block store, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
     /// case at least one block was not found.
     pub fn get(&self, block_hashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Block>>> {
@@ -251,17 +251,14 @@ impl BlockStore {
         Ok(ret)
     }
 
-    /// Retrieve all blocks from the blockstore in the form of a tuple
-    /// (`blockhash`, `block`).
+    /// Retrieve all blocks from the block store in the form of a tuple
+    /// (`hash`, `block`).
     /// Be careful as this will try to load everything in memory.
     pub fn get_all(&self) -> Result<Vec<(blake3::Hash, Block)>> {
         let mut blocks = vec![];
 
         for block in self.0.iter() {
-            let (key, value) = block.unwrap();
-            let hash_bytes: [u8; 32] = key.as_ref().try_into().unwrap();
-            let block = deserialize(&value)?;
-            blocks.push((hash_bytes.into(), block));
+            blocks.push(parse_record(block.unwrap())?);
         }
 
         Ok(blocks)
@@ -278,7 +275,7 @@ impl BlockStoreOverlay {
     }
 
     /// Insert a slice of [`Block`] into the overlay.
-    /// The block are hashed with BLAKE3 and this blockhash is used as
+    /// The block are hashed with BLAKE3 and this block hash is used as
     /// the key, while value is the serialized [`Block`] itself.
     /// On success, the function returns the block hashes in the same order.
     pub fn insert(&self, blocks: &[Block]) -> Result<Vec<blake3::Hash>> {
@@ -324,9 +321,9 @@ impl BlockStoreOverlay {
 /// Auxiliary structure used to keep track of blocks order.
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct BlockOrder {
-    /// Slot UID
-    pub slot: u64,
-    /// Block headerhash of that slot
+    /// Order number
+    pub number: u64,
+    /// Block headerhash of that number
     pub block: blake3::Hash,
 }
 
@@ -334,7 +331,7 @@ pub struct BlockOrder {
 const SLED_BLOCK_ORDER_TREE: &[u8] = b"_block_order";
 
 /// The `BlockOrderStore` is a `sled` tree storing the order of the
-/// blockchain's slots, where the key is the slot uid, and the value is
+/// blockchain's blocks, where the key is the order number, and the value is
 /// the blocks' hash. [`BlockStore`] can be queried with this hash.
 #[derive(Clone)]
 pub struct BlockOrderStore(pub sled::Tree);
@@ -346,51 +343,50 @@ impl BlockOrderStore {
         Ok(Self(tree))
     }
 
-    /// Insert a slice of slots and blockhashes into the store.
-    pub fn insert(&self, slots: &[u64], hashes: &[blake3::Hash]) -> Result<()> {
-        let batch = self.insert_batch(slots, hashes)?;
+    /// Insert a slice of `u64` and block hashes into the store.
+    pub fn insert(&self, order: &[u64], hashes: &[blake3::Hash]) -> Result<()> {
+        let batch = self.insert_batch(order, hashes)?;
         self.0.apply_batch(batch)?;
         Ok(())
     }
 
     /// Generate the sled batch corresponding to an insert, so caller
     /// can handle the write operation.
-    /// The block slot is used as the key, and the blockhash is used as value.
-    pub fn insert_batch(&self, slots: &[u64], hashes: &[blake3::Hash]) -> Result<sled::Batch> {
-        if slots.len() != hashes.len() {
+    /// The block order number is used as the key, and the block hash is used as value.
+    pub fn insert_batch(&self, order: &[u64], hashes: &[blake3::Hash]) -> Result<sled::Batch> {
+        if order.len() != hashes.len() {
             return Err(Error::InvalidInputLengths)
         }
 
         let mut batch = sled::Batch::default();
 
-        for (i, sl) in slots.iter().enumerate() {
-            batch.insert(&sl.to_be_bytes(), hashes[i].as_bytes());
+        for (i, number) in order.iter().enumerate() {
+            batch.insert(&number.to_be_bytes(), hashes[i].as_bytes());
         }
 
         Ok(batch)
     }
 
-    /// Check if the blockorderstore contains a given slot.
-    pub fn contains(&self, slot: u64) -> Result<bool> {
-        Ok(self.0.contains_key(slot.to_be_bytes())?)
+    /// Check if the block order store contains a given order number.
+    pub fn contains(&self, number: u64) -> Result<bool> {
+        Ok(self.0.contains_key(number.to_be_bytes())?)
     }
 
-    /// Fetch given slots from the blockorderstore.
-    /// The resulting vector contains `Option`, which is `Some` if the slot
-    /// was found in the blockstore, and otherwise it is `None`, if it has not.
+    /// Fetch given order numbers from the block order store.
+    /// The resulting vector contains `Option`, which is `Some` if the number
+    /// was found in the block order store, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
-    /// case at least one slot was not found.
-    pub fn get(&self, slots: &[u64], strict: bool) -> Result<Vec<Option<blake3::Hash>>> {
-        let mut ret = Vec::with_capacity(slots.len());
+    /// case at least one order number was not found.
+    pub fn get(&self, order: &[u64], strict: bool) -> Result<Vec<Option<blake3::Hash>>> {
+        let mut ret = Vec::with_capacity(order.len());
 
-        for slot in slots {
-            if let Some(found) = self.0.get(slot.to_be_bytes())? {
-                let hash_bytes: [u8; 32] = found.as_ref().try_into().unwrap();
-                let hash = blake3::Hash::from(hash_bytes);
-                ret.push(Some(hash));
+        for number in order {
+            if let Some(found) = self.0.get(number.to_be_bytes())? {
+                let block_hash = deserialize(&found)?;
+                ret.push(Some(block_hash));
             } else {
                 if strict {
-                    return Err(Error::BlockSlotNotFound(*slot))
+                    return Err(Error::BlockNumberNotFound(*number))
                 }
                 ret.push(None);
             }
@@ -399,38 +395,32 @@ impl BlockOrderStore {
         Ok(ret)
     }
 
-    /// Retrieve all slots from the blockorderstore in the form of a tuple
-    /// (`slot`, `blockhash`).
+    /// Retrieve complete order from the block order store in the form of
+    /// a vector containing (`number`, `hash`) tuples.
     /// Be careful as this will try to load everything in memory.
     pub fn get_all(&self) -> Result<Vec<(u64, blake3::Hash)>> {
-        let mut slots = vec![];
+        let mut order = vec![];
 
-        for slot in self.0.iter() {
-            let (key, value) = slot.unwrap();
-            let slot_bytes: [u8; 8] = key.as_ref().try_into().unwrap();
-            let hash_bytes: [u8; 32] = value.as_ref().try_into().unwrap();
-            let slot = u64::from_be_bytes(slot_bytes);
-            let hash = blake3::Hash::from(hash_bytes);
-            slots.push((slot, hash));
+        for record in self.0.iter() {
+            order.push(parse_record(record.unwrap())?);
         }
 
-        Ok(slots)
+        Ok(order)
     }
 
-    /// Fetch n hashes after given slot. In the iteration, if a slot is not
-    /// found, the iteration stops and the function returns what it has found
-    /// so far in the `BlockOrderStore`.
-    pub fn get_after(&self, slot: u64, n: u64) -> Result<Vec<blake3::Hash>> {
+    /// Fetch n hashes after given order number. In the iteration, if an order
+    /// number is not found, the iteration stops and the function returns what
+    /// it has found so far in the `BlockOrderStore`.
+    pub fn get_after(&self, number: u64, n: u64) -> Result<Vec<blake3::Hash>> {
         let mut ret = vec![];
 
-        let mut key = slot;
+        let mut key = number;
         let mut counter = 0;
         while counter <= n {
             if let Some(found) = self.0.get_gt(key.to_be_bytes())? {
-                let key_bytes: [u8; 8] = found.0.as_ref().try_into().unwrap();
-                key = u64::from_be_bytes(key_bytes);
-                let blockhash = deserialize(&found.1)?;
-                ret.push(blockhash);
+                let (number, hash) = parse_record(found)?;
+                key = number;
+                ret.push(hash);
                 counter += 1;
                 continue
             }
@@ -440,33 +430,25 @@ impl BlockOrderStore {
         Ok(ret)
     }
 
-    /// Fetch the first blockhash in the tree, based on the `Ord`
+    /// Fetch the first block hash in the tree, based on the `Ord`
     /// implementation for `Vec<u8>`.
     pub fn get_first(&self) -> Result<(u64, blake3::Hash)> {
         let found = match self.0.first()? {
             Some(s) => s,
-            None => return Err(Error::SlotNotFound(0)),
+            None => return Err(Error::BlockNumberNotFound(0)),
         };
+        let (number, hash) = parse_record(found)?;
 
-        let slot_bytes: [u8; 8] = found.0.as_ref().try_into().unwrap();
-        let hash_bytes: [u8; 32] = found.1.as_ref().try_into().unwrap();
-        let slot = u64::from_be_bytes(slot_bytes);
-        let hash = blake3::Hash::from(hash_bytes);
-
-        Ok((slot, hash))
+        Ok((number, hash))
     }
 
-    /// Fetch the last blockhash in the tree, based on the `Ord`
+    /// Fetch the last block hash in the tree, based on the `Ord`
     /// implementation for `Vec<u8>`.
     pub fn get_last(&self) -> Result<(u64, blake3::Hash)> {
         let found = self.0.last()?.unwrap();
+        let (number, hash) = parse_record(found)?;
 
-        let slot_bytes: [u8; 8] = found.0.as_ref().try_into().unwrap();
-        let hash_bytes: [u8; 32] = found.1.as_ref().try_into().unwrap();
-        let slot = u64::from_be_bytes(slot_bytes);
-        let hash = blake3::Hash::from(hash_bytes);
-
-        Ok((slot, hash))
+        Ok((number, hash))
     }
 
     /// Retrieve records count
@@ -489,40 +471,39 @@ impl BlockOrderStoreOverlay {
         Ok(Self(overlay))
     }
 
-    /// Insert a slice of slots and blockhashes into the store. With sled, the
+    /// Insert a slice of `u64` and block hashes into the store. With sled, the
     /// operation is done as a batch.
-    /// The block slot is used as the key, and the blockhash is used as value.
-    pub fn insert(&self, slots: &[u64], hashes: &[blake3::Hash]) -> Result<()> {
-        if slots.len() != hashes.len() {
+    /// The block order number is used as the key, and the blockhash is used as value.
+    pub fn insert(&self, order: &[u64], hashes: &[blake3::Hash]) -> Result<()> {
+        if order.len() != hashes.len() {
             return Err(Error::InvalidInputLengths)
         }
 
         let mut lock = self.0.lock().unwrap();
 
-        for (i, sl) in slots.iter().enumerate() {
-            lock.insert(SLED_BLOCK_ORDER_TREE, &sl.to_be_bytes(), hashes[i].as_bytes())?;
+        for (i, number) in order.iter().enumerate() {
+            lock.insert(SLED_BLOCK_ORDER_TREE, &number.to_be_bytes(), hashes[i].as_bytes())?;
         }
 
         Ok(())
     }
 
-    /// Fetch given slots from the overlay.
-    /// The resulting vector contains `Option`, which is `Some` if the slot
+    /// Fetch given order numbers from the overlay.
+    /// The resulting vector contains `Option`, which is `Some` if the number
     /// was found in the overlay, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
-    /// case at least one slot was not found.
-    pub fn get(&self, slots: &[u64], strict: bool) -> Result<Vec<Option<blake3::Hash>>> {
-        let mut ret = Vec::with_capacity(slots.len());
+    /// case at least one number was not found.
+    pub fn get(&self, order: &[u64], strict: bool) -> Result<Vec<Option<blake3::Hash>>> {
+        let mut ret = Vec::with_capacity(order.len());
         let lock = self.0.lock().unwrap();
 
-        for slot in slots {
-            if let Some(found) = lock.get(SLED_BLOCK_ORDER_TREE, &slot.to_be_bytes())? {
-                let hash_bytes: [u8; 32] = found.as_ref().try_into().unwrap();
-                let hash = blake3::Hash::from(hash_bytes);
-                ret.push(Some(hash));
+        for number in order {
+            if let Some(found) = lock.get(SLED_BLOCK_ORDER_TREE, &number.to_be_bytes())? {
+                let block_hash = deserialize(&found)?;
+                ret.push(Some(block_hash));
             } else {
                 if strict {
-                    return Err(Error::BlockSlotNotFound(*slot))
+                    return Err(Error::BlockNumberNotFound(*number))
                 }
                 ret.push(None);
             }
@@ -531,17 +512,13 @@ impl BlockOrderStoreOverlay {
         Ok(ret)
     }
 
-    /// Fetch the last blockhash in the overlay, based on the `Ord`
+    /// Fetch the last block hash in the overlay, based on the `Ord`
     /// implementation for `Vec<u8>`.
     pub fn get_last(&self) -> Result<(u64, blake3::Hash)> {
         let found = self.0.lock().unwrap().last(SLED_BLOCK_ORDER_TREE)?.unwrap();
+        let (number, hash) = parse_record(found)?;
 
-        let slot_bytes: [u8; 8] = found.0.as_ref().try_into().unwrap();
-        let hash_bytes: [u8; 32] = found.1.as_ref().try_into().unwrap();
-        let slot = u64::from_be_bytes(slot_bytes);
-        let hash = blake3::Hash::from(hash_bytes);
-
-        Ok((slot, hash))
+        Ok((number, hash))
     }
 
     /// Check if overlay contains any records

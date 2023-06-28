@@ -22,24 +22,29 @@ use log::debug;
 use sled::Transactional;
 
 use darkfi_sdk::blockchain::Slot;
-use darkfi_serial::serialize;
+use darkfi_serial::{deserialize, serialize, Decodable};
 
 use crate::{tx::Transaction, Error, Result};
 
+/// Block related definitions and storage implementations
 pub mod block_store;
 pub use block_store::{
     Block, BlockInfo, BlockOrderStore, BlockOrderStoreOverlay, BlockStore, BlockStoreOverlay,
 };
 
+/// Header definition and storage implementation
 pub mod header_store;
 pub use header_store::{Header, HeaderStore, HeaderStoreOverlay};
 
+/// Slots storage implementation
 pub mod slot_store;
 pub use slot_store::{SlotStore, SlotStoreOverlay};
 
+/// Transactions related storage implementations
 pub mod tx_store;
 pub use tx_store::{PendingTxOrderStore, PendingTxStore, TxStore, TxStoreOverlay};
 
+/// Contracts and Wasm storage implementations
 pub mod contract_store;
 pub use contract_store::{
     ContractStateStore, ContractStateStoreOverlay, WasmStore, WasmStoreOverlay,
@@ -524,4 +529,14 @@ impl BlockchainOverlay {
 
         Ok(())
     }
+}
+
+/// Parse a sled record in the form of a tuple (`key`, `value`).
+pub fn parse_record<T1: Decodable, T2: Decodable>(
+    record: (sled::IVec, sled::IVec),
+) -> Result<(T1, T2)> {
+    let key = deserialize(&record.0)?;
+    let value = deserialize(&record.1)?;
+
+    Ok((key, value))
 }

@@ -22,7 +22,7 @@ use darkfi_serial::{deserialize, serialize};
 
 use crate::{Error, Result};
 
-use super::SledDbOverlayPtr;
+use super::{parse_record, SledDbOverlayPtr};
 
 const SLED_SLOT_TREE: &[u8] = b"_slots";
 
@@ -93,8 +93,7 @@ impl SlotStore {
         let mut slots = vec![];
 
         for slot in self.0.iter() {
-            let (_, value) = slot.unwrap();
-            let slot = deserialize(&value)?;
+            let (_, slot): ([u8; 8], Slot) = parse_record(slot.unwrap())?;
             slots.push(slot);
         }
 
@@ -111,9 +110,8 @@ impl SlotStore {
         let mut counter = 0;
         while counter <= n {
             if let Some(found) = self.0.get_gt(key.to_be_bytes())? {
-                let key_bytes: [u8; 8] = found.0.as_ref().try_into().unwrap();
-                key = u64::from_be_bytes(key_bytes);
-                let slot = deserialize(&found.1)?;
+                let (id, slot) = parse_record(found)?;
+                key = id;
                 ret.push(slot);
                 counter += 1;
                 continue

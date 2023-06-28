@@ -22,7 +22,7 @@ use darkfi_serial::{deserialize, serialize};
 
 use crate::{tx::Transaction, Error, Result};
 
-use super::SledDbOverlayPtr;
+use super::{parse_record, SledDbOverlayPtr};
 
 const SLED_TX_TREE: &[u8] = b"_transactions";
 const SLED_PENDING_TX_TREE: &[u8] = b"_pending_transactions";
@@ -112,10 +112,7 @@ impl TxStore {
         let mut txs = vec![];
 
         for tx in self.0.iter() {
-            let (key, value) = tx.unwrap();
-            let hash_bytes: [u8; 32] = key.as_ref().try_into().unwrap();
-            let tx = deserialize(&value)?;
-            txs.push((hash_bytes.into(), tx));
+            txs.push(parse_record(tx.unwrap())?);
         }
 
         Ok(txs)
@@ -246,10 +243,8 @@ impl PendingTxStore {
         let mut txs = HashMap::new();
 
         for tx in self.0.iter() {
-            let (key, value) = tx.unwrap();
-            let hash_bytes: [u8; 32] = key.as_ref().try_into().unwrap();
-            let tx = deserialize(&value)?;
-            txs.insert(hash_bytes.into(), tx);
+            let (key, value) = parse_record(tx.unwrap())?;
+            txs.insert(key, value);
         }
 
         Ok(txs)
@@ -325,12 +320,7 @@ impl PendingTxOrderStore {
         let mut txs = vec![];
 
         for tx in self.0.iter() {
-            let (key, value) = tx.unwrap();
-            let index_bytes: [u8; 8] = key.as_ref().try_into().unwrap();
-            let hash_bytes: [u8; 32] = value.as_ref().try_into().unwrap();
-            let index = u64::from_be_bytes(index_bytes);
-            let hash = blake3::Hash::from(hash_bytes);
-            txs.push((index, hash));
+            txs.push(parse_record(tx.unwrap())?);
         }
 
         Ok(txs)

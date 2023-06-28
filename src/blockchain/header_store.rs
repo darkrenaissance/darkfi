@@ -21,7 +21,7 @@ use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 
 use crate::{util::time::Timestamp, Error, Result};
 
-use super::{block_store::BLOCK_VERSION, SledDbOverlayPtr};
+use super::{block_store::BLOCK_VERSION, parse_record, SledDbOverlayPtr};
 
 /// This struct represents a tuple of the form (version, previous, epoch, slot, timestamp, merkle_root).
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
@@ -50,12 +50,6 @@ impl Header {
     ) -> Self {
         let version = BLOCK_VERSION;
         Self { version, previous, epoch, slot, timestamp, root }
-    }
-
-    /// Generate the genesis block for provided genesis info.
-    pub fn genesis_header(genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Self {
-        let root = MerkleTree::new(100).root(0).unwrap();
-        Self::new(genesis_data, 0, 0, genesis_ts, root)
     }
 
     /// Calculate the header hash
@@ -155,10 +149,7 @@ impl HeaderStore {
         let mut headers = vec![];
 
         for header in self.0.iter() {
-            let (key, value) = header.unwrap();
-            let hash_bytes: [u8; 32] = key.as_ref().try_into().unwrap();
-            let header = deserialize(&value)?;
-            headers.push((hash_bytes.into(), header));
+            headers.push(parse_record(header.unwrap())?);
         }
 
         Ok(headers)

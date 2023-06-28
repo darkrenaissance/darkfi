@@ -312,8 +312,8 @@ pub enum Error {
     #[error("Block {0} not found in database")]
     BlockNotFound(String),
 
-    #[error("Block in slot {0} not found in database")]
-    BlockSlotNotFound(u64),
+    #[error("Block with order number {0} not found in database")]
+    BlockNumberNotFound(u64),
 
     #[error("Slot {0} not found in database")]
     SlotNotFound(u64),
