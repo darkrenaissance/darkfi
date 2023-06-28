@@ -71,6 +71,18 @@ impl WasmStoreOverlay {
         Ok(Self(overlay))
     }
 
+    /// Fetches the bincode for a given ContractId
+    /// Returns an error if the bincode is not found.
+    pub fn get(&self, contract_id: ContractId) -> Result<Vec<u8>> {
+        if let Some(bincode) =
+            self.0.lock().unwrap().get(SLED_BINCODE_TREE, &serialize(&contract_id))?
+        {
+            return Ok(bincode.to_vec())
+        }
+
+        Err(Error::WasmBincodeNotFound)
+    }
+
     /// Inserts or replaces the bincode for a given ContractId
     pub fn insert(&self, contract_id: ContractId, bincode: &[u8]) -> Result<()> {
         if let Err(e) =
@@ -283,5 +295,34 @@ impl ContractStateStoreOverlay {
         // We open the tree and return its handle
         lock.open_tree(&ptr)?;
         Ok(ptr)
+    }
+
+    /// Abstraction function for fetching a `ZkBinary` and its respective `VerifyingKey`
+    /// from a contract's zkas sled tree.
+    pub fn get_zkas(
+        &self,
+        contract_id: &ContractId,
+        zkas_ns: &str,
+    ) -> Result<(ZkBinary, VerifyingKey)> {
+        debug!(target: "blockchain::contractstore", "Looking up \"{}:{}\" zkas circuit & vk", contract_id, zkas_ns);
+
+        let zkas_tree = self.lookup(contract_id, SMART_CONTRACT_ZKAS_DB_NAME)?;
+
+        let Some(zkas_bytes) = self.0.lock().unwrap().get(&zkas_tree, &serialize(&zkas_ns))? else {
+            return Err(Error::ZkasBincodeNotFound)
+        };
+
+        // If anything in this function panics, that means corrupted data managed
+        // to get into this sled tree. This should not be possible.
+        let (zkbin, vkbin): (Vec<u8>, Vec<u8>) = deserialize(&zkas_bytes).unwrap();
+
+        // The first vec is the compiled zkas binary
+        let zkbin = ZkBinary::decode(&zkbin).unwrap();
+
+        // The second one is the serialized VerifyingKey for it
+        let mut vk_buf = Cursor::new(vkbin);
+        let vk = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut vk_buf).unwrap();
+
+        Ok((zkbin, vk))
     }
 }

@@ -199,7 +199,7 @@ impl Validator {
             tx.calls.encode(&mut payload)?; // Actual call data
 
             debug!(target: "validator", "Instantiating WASM runtime");
-            let wasm = self.blockchain.wasm_bincode.get(call.contract_id)?;
+            let wasm = blockchain_overlay.lock().unwrap().wasm_bincode.get(call.contract_id)?;
 
             let mut runtime = Runtime::new(
                 &wasm,
@@ -232,11 +232,11 @@ impl Validator {
                     continue
                 }
 
-                let (_, vk) = self.blockchain.contracts.get_zkas(
-                    &self.blockchain.sled_db,
-                    &call.contract_id,
-                    zkas_ns,
-                )?;
+                let (_, vk) = blockchain_overlay
+                    .lock()
+                    .unwrap()
+                    .contracts
+                    .get_zkas(&call.contract_id, zkas_ns)?;
 
                 inner_vk_map.insert(zkas_ns.to_string(), vk);
             }
