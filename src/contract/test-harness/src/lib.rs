@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 
 use darkfi::{
-    consensus::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
+    blockchain::BlockInfo,
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
     util::time::TimeKeeper,
     validator::{Validator, ValidatorConfig, ValidatorPtr},
@@ -126,7 +126,11 @@ pub struct Wallet {
 }
 
 impl Wallet {
-    pub async fn new(keypair: Keypair, faucet_pubkeys: &[PublicKey]) -> Result<Self> {
+    pub async fn new(
+        keypair: Keypair,
+        genesis_block: &BlockInfo,
+        faucet_pubkeys: &[PublicKey],
+    ) -> Result<Self> {
         let wallet = WalletDb::new("sqlite::memory:", "foo").await?;
         let sled_db = sled::Config::new().temporary(true).open()?;
 
@@ -136,9 +140,9 @@ impl Wallet {
         // Generate validator
         // NOTE: we are not using consensus constants here so we
         // don't get circular dependencies.
-        let time_keeper = TimeKeeper::new(*TESTNET_GENESIS_TIMESTAMP, 10, 90, 0);
+        let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
         let config =
-            ValidatorConfig::new(time_keeper, *TESTNET_GENESIS_HASH_BYTES, faucet_pubkeys.to_vec());
+            ValidatorConfig::new(time_keeper, genesis_block.clone(), faucet_pubkeys.to_vec());
         let validator = Validator::new(&sled_db, config).await?;
 
         // Create necessary Merkle trees for tracking
@@ -174,26 +178,27 @@ pub struct TestHarness {
 impl TestHarness {
     pub async fn new(contracts: &[String]) -> Result<Self> {
         let mut holders = HashMap::new();
+        let genesis_block = BlockInfo::default();
 
         let faucet_kp = Keypair::random(&mut OsRng);
         let faucet_pubkeys = vec![faucet_kp.public];
-        let faucet = Wallet::new(faucet_kp, &faucet_pubkeys).await?;
+        let faucet = Wallet::new(faucet_kp, &genesis_block, &faucet_pubkeys).await?;
         holders.insert(Holder::Faucet, faucet);
 
         let alice_kp = Keypair::random(&mut OsRng);
-        let alice = Wallet::new(alice_kp, &faucet_pubkeys).await?;
+        let alice = Wallet::new(alice_kp, &genesis_block, &faucet_pubkeys).await?;
         // Alice is inserted at end of function
 
         let bob_kp = Keypair::random(&mut OsRng);
-        let bob = Wallet::new(bob_kp, &faucet_pubkeys).await?;
+        let bob = Wallet::new(bob_kp, &genesis_block, &faucet_pubkeys).await?;
         holders.insert(Holder::Bob, bob);
 
         let charlie_kp = Keypair::random(&mut OsRng);
-        let charlie = Wallet::new(charlie_kp, &faucet_pubkeys).await?;
+        let charlie = Wallet::new(charlie_kp, &genesis_block, &faucet_pubkeys).await?;
         holders.insert(Holder::Charlie, charlie);
 
         let rachel_kp = Keypair::random(&mut OsRng);
-        let rachel = Wallet::new(rachel_kp, &faucet_pubkeys).await?;
+        let rachel = Wallet::new(rachel_kp, &genesis_block, &faucet_pubkeys).await?;
         holders.insert(Holder::Rachel, rachel);
 
         // Get the zkas circuits and build proving keys
@@ -440,7 +445,7 @@ impl TestHarness {
 
         // Store generated slot
         for wallet in self.holders.values() {
-            wallet.validator.write().await.receive_slots(&[slot.clone()]).await?;
+            wallet.validator.write().await.receive_test_slot(&slot).await?;
         }
 
         Ok(slot)

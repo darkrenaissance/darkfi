@@ -107,6 +107,7 @@ impl ProtocolSync {
             );
 
             // Extra validations can be added here
+            /*
             let key = order.slot;
             let blocks = match self.state.read().await.blockchain.get_blocks_after(key, BATCH) {
                 Ok(v) => v,
@@ -124,6 +125,8 @@ impl ProtocolSync {
                 "Found {} blocks",
                 blocks.len()
             );
+            */
+            let blocks = vec![BlockInfo::default()];
 
             let response = BlockResponse { blocks };
             if let Err(e) = self.channel.send(response).await {
@@ -138,7 +141,7 @@ impl ProtocolSync {
 
     async fn handle_receive_block(self: Arc<Self>) -> Result<()> {
         debug!(target: "consensus::protocol_sync::handle_receive_block()", "START");
-        let exclude_list = vec![self.channel.address()];
+        let _exclude_list = vec![self.channel.address()];
         loop {
             let info = match self.block_sub.receive().await {
                 Ok(v) => v,
@@ -191,6 +194,7 @@ impl ProtocolSync {
                 target: "consensus::protocol_sync::handle_receive_block()",
                 "Processing received block"
             );
+            /*
             let info_copy = (*info).clone();
             match self.state.write().await.receive_finalized_block(info_copy.clone()).await {
                 Ok(v) => {
@@ -218,6 +222,7 @@ impl ProtocolSync {
                     );
                 }
             };
+            */
         }
     }
 

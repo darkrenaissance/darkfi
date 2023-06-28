@@ -91,11 +91,11 @@ pub async fn block_sync_task(p2p: net::P2pPtr, state: ValidatorStatePtr) -> Resu
                     channel.send(order).await?;
 
                     // Node stores response data.
-                    let resp = block_response_sub.receive().await?;
+                    let _resp = block_response_sub.receive().await?;
 
                     // Verify and store retrieved blocks
                     debug!(target: "consensus::block_sync", "block_sync_task(): Processing received blocks");
-                    state.write().await.receive_sync_blocks(&resp.blocks).await?;
+                    //state.write().await.receive_sync_blocks(&resp.blocks).await?;
 
                     let last_received = state.read().await.blockchain.last()?;
                     info!(target: "consensus::block_sync", "Last received block: {:?} - {:?}", last_received.0, last_received.1);

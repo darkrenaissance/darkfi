@@ -17,7 +17,7 @@
  */
 
 use darkfi::{
-    validator::blockchain::{BlockInfo, Blockchain, BlockchainOverlay, Header},
+    blockchain::{BlockInfo, Blockchain, BlockchainOverlay, Header},
     Error, Result,
 };
 use darkfi_sdk::{

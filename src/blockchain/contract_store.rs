@@ -23,12 +23,13 @@ use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
 
 use crate::{
-    blockchain::SledDbOverlayPtr,
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
     zk::{VerifyingKey, ZkCircuit},
     zkas::ZkBinary,
     Error, Result,
 };
+
+use super::SledDbOverlayPtr;
 
 const SLED_CONTRACTS_TREE: &[u8] = b"_contracts";
 const SLED_BINCODE_TREE: &[u8] = b"_wasm_bincode";
@@ -142,6 +143,8 @@ impl ContractStateStore {
     /// has been found, its contents in the tree will be cleared, and the pointer
     /// will be removed from the main `ContractStateStore`. If anything is not
     /// found as initialized, an error is returned.
+    /// NOTE: this function is not used right now, we keep it for future proofing,
+    ///       and its obviously untested.
     pub fn remove(&self, db: &sled::Db, contract_id: &ContractId, tree_name: &str) -> Result<()> {
         debug!(target: "blockchain::contractstore", "Removing state tree for {}:{}", contract_id, tree_name);
 
@@ -162,14 +165,12 @@ impl ContractStateStore {
             return Err(Error::ContractStateNotFound)
         }
 
-        // We open the tree and clear it. This is unfortunately not atomic.
-        // TODO: FIXME: Can we make it atomic?
-        let tree = db.open_tree(ptr)?;
-        tree.clear()?;
-
         // Remove the deleted tree from the state pointer set.
         state_pointers.retain(|x| *x != ptr);
         self.0.insert(contract_id_bytes, serialize(&state_pointers))?;
+
+        // Drop the deleted tree from the database
+        db.drop_tree(ptr)?;
 
         Ok(())
     }

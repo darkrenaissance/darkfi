@@ -874,8 +874,7 @@ mod tests {
         // Generate dummy state
         let wallet = WalletDb::new("sqlite::memory:", "foo").await?;
         let sled_db = sled::Config::new().temporary(true).open()?;
-        let blockchain =
-            Blockchain::new(&sled_db, *TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES)?;
+        let blockchain = Blockchain::new(&sled_db)?;
         let state = ConsensusState::new(
             wallet,
             blockchain,

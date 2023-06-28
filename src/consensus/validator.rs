@@ -34,15 +34,8 @@ use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
 use serde_json::json;
 
-use super::{
-    constants,
-    lead_coin::LeadCoin,
-    state::{ConsensusState, Fork, StateCheckpoint},
-    BlockInfo, BlockProposal, Header, LeadInfo, LeadProof,
-};
-
 use crate::{
-    blockchain::{Blockchain, BlockchainOverlay, BlockchainOverlayPtr},
+    blockchain::{BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr},
     rpc::jsonrpc::JsonNotification,
     runtime::vm_runtime::Runtime,
     system::{Subscriber, SubscriberPtr},
@@ -56,6 +49,13 @@ use crate::{
     },
     zkas::ZkBinary,
     Error, Result,
+};
+
+use super::{
+    constants,
+    lead_coin::LeadCoin,
+    state::{ConsensusState, Fork, StateCheckpoint},
+    BlockProposal, Header, LeadInfo, LeadProof,
 };
 
 /// Atomic pointer to validator state.
@@ -121,7 +121,11 @@ impl ValidatorState {
             None
         };
 
-        let blockchain = Blockchain::new(db, genesis_ts, genesis_data)?;
+        let blockchain = Blockchain::new(db)?;
+        let mut genesis_block = BlockInfo::default();
+        genesis_block.header.timestamp = genesis_ts;
+        blockchain.add_block(&genesis_block)?;
+
         let consensus = ConsensusState::new(
             wallet.clone(),
             blockchain.clone(),
@@ -769,13 +773,14 @@ impl ValidatorState {
         let fork = self.consensus.forks[fork_index as usize].clone();
 
         // Retrieving proposals to finalize
-        let mut finalized: Vec<BlockInfo> = vec![];
-        for state_checkpoint in &fork.sequence {
-            finalized.push(state_checkpoint.proposal.clone().into());
+        let finalized: Vec<BlockInfo> = vec![];
+        for _state_checkpoint in &fork.sequence {
+            //finalized.push(state_checkpoint.proposal.clone().into());
         }
 
         // Adding finalized proposals to canonical
         info!(target: "consensus::validator", "consensus: Adding {} finalized block to canonical chain.", finalized.len());
+        /*
         match self.blockchain.add(&finalized) {
             Ok(v) => v,
             Err(e) => {
@@ -783,6 +788,7 @@ impl ValidatorState {
                 return Err(e)
             }
         };
+        */
 
         let blocks_subscriber = self.subscribers.get("blocks").unwrap().clone();
 
@@ -835,6 +841,7 @@ impl ValidatorState {
             "consensus: Adding {} finalized slots to canonical chain.",
             finalized_slots.len()
         );
+        /*
         match self.blockchain.add_slots(&finalized_slots) {
             Ok(v) => v,
             Err(e) => {
@@ -846,7 +853,7 @@ impl ValidatorState {
                 return Err(e)
             }
         };
-
+        */
         // Resetting forks and slots
         self.consensus.forks = vec![];
         self.consensus.slots = vec![];
@@ -892,7 +899,7 @@ impl ValidatorState {
         }
 
         info!(target: "consensus::validator", "receive_blocks(): All state transitions passed. Appending blocks to ledger.");
-        self.blockchain.add(blocks)?;
+        //self.blockchain.add(blocks)?;
 
         Ok(())
     }
@@ -1188,7 +1195,7 @@ impl ValidatorState {
             }
             filtered.push(slot.clone());
         }
-        self.blockchain.add_slots(&filtered[..])?;
+        //self.blockchain.add_slots(&filtered[..])?;
 
         Ok(())
     }

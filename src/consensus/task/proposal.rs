@@ -279,9 +279,9 @@ async fn propose_period(consensus_p2p: P2pPtr, state: ValidatorStatePtr) -> bool
 /// async function to wait and execute consensus protocol finalization period.
 /// Returns flag in case node needs to resync.
 async fn finalization_period(
-    sync_p2p: P2pPtr,
+    _sync_p2p: P2pPtr,
     state: ValidatorStatePtr,
-    ex: Arc<smol::Executor<'_>>,
+    _ex: Arc<smol::Executor<'_>>,
 ) -> bool {
     // Node sleeps until finalization sync period starts
     let next_slot_start = state.read().await.consensus.time_keeper.next_n_slot_start(1);
@@ -302,6 +302,7 @@ async fn finalization_period(
     let completed_slot = state.read().await.consensus.time_keeper.current_slot();
 
     // Check if any forks can be finalized
+    /*
     match state.write().await.chain_finalization().await {
         Ok((to_broadcast_block, to_broadcast_slots)) => {
             // Broadcasting in background
@@ -336,6 +337,7 @@ async fn finalization_period(
             error!(target: "consensus::proposal", "consensus: Finalization check failed: {}", e);
         }
     }
+    */
 
     // Verify node didn't skip next slot
     completed_slot != state.read().await.consensus.time_keeper.current_slot()

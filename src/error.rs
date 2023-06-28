@@ -318,6 +318,9 @@ pub enum Error {
     #[error("Slot {0} not found in database")]
     SlotNotFound(u64),
 
+    #[error("Future slot {0} was received")]
+    FutureSlotReceived(u64),
+
     #[error("Contract {0} not found in database")]
     ContractNotFound(String),
 

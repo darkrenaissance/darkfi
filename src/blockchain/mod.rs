@@ -19,25 +19,26 @@
 use std::sync::{Arc, Mutex};
 
 use log::debug;
+use sled::Transactional;
 
 use darkfi_sdk::blockchain::Slot;
 use darkfi_serial::serialize;
 
-use crate::{
-    consensus::{Block, BlockInfo},
-    tx::Transaction,
-    util::time::Timestamp,
-    Result,
-};
+use crate::{tx::Transaction, Error, Result};
 
 pub mod block_store;
-pub use block_store::{BlockOrderStore, BlockStore, HeaderStore};
+pub use block_store::{
+    Block, BlockInfo, BlockOrderStore, BlockOrderStoreOverlay, BlockStore, BlockStoreOverlay,
+};
+
+pub mod header_store;
+pub use header_store::{Header, HeaderStore, HeaderStoreOverlay};
 
 pub mod slot_store;
 pub use slot_store::{SlotStore, SlotStoreOverlay};
 
 pub mod tx_store;
-pub use tx_store::{PendingTxOrderStore, PendingTxStore, TxStore};
+pub use tx_store::{PendingTxOrderStore, PendingTxStore, TxStore, TxStoreOverlay};
 
 pub mod contract_store;
 pub use contract_store::{
@@ -71,11 +72,11 @@ pub struct Blockchain {
 
 impl Blockchain {
     /// Instantiate a new `Blockchain` with the given `sled` database.
-    pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
-        let headers = HeaderStore::new(db, genesis_ts, genesis_data)?;
-        let blocks = BlockStore::new(db, genesis_ts, genesis_data)?;
-        let order = BlockOrderStore::new(db, genesis_ts, genesis_data)?;
-        let slots = SlotStore::new(db, genesis_data)?;
+    pub fn new(db: &sled::Db) -> Result<Self> {
+        let headers = HeaderStore::new(db)?;
+        let blocks = BlockStore::new(db)?;
+        let order = BlockOrderStore::new(db)?;
+        let slots = SlotStore::new(db)?;
         let transactions = TxStore::new(db)?;
         let pending_txs = PendingTxStore::new(db)?;
         let pending_txs_order = PendingTxOrderStore::new(db)?;
@@ -96,32 +97,60 @@ impl Blockchain {
         })
     }
 
-    /// Insert a given slice of [`BlockInfo`] into the blockchain database.
-    /// This functions wraps all the logic of separating the block into specific
-    /// data that can be fed into the different trees of the database.
-    /// Upon success, the functions returns a vector of the block hashes that
-    /// were given and appended to the ledger.
-    pub fn add(&self, blocks: &[BlockInfo]) -> Result<Vec<blake3::Hash>> {
-        let mut ret = Vec::with_capacity(blocks.len());
-
-        // TODO: Make db writes here completely atomic
-        for block in blocks {
-            // Store transactions
-            self.transactions.insert(&block.txs)?;
-
-            // Store header
-            self.headers.insert(&[block.header.clone()])?;
-
-            // Store block
-            let blk: Block = Block::from(block.clone());
-            let blockhash = self.blocks.insert(&[blk])?;
-            ret.push(blockhash[0]);
-
-            // Store block order
-            self.order.insert(&[block.header.slot], &[blockhash[0]])?;
+    /// A blockchain is considered valid, when every block is valid,
+    /// based on validate_block checks.
+    /// Be careful as this will try to load everything in memory.
+    pub fn validate(&self) -> Result<()> {
+        // We use block order store here so we have all blocks in order
+        let blocks = self.order.get_all()?;
+        for (index, block) in blocks[1..].iter().enumerate() {
+            let full_blocks = self.get_blocks_by_hash(&[blocks[index].1, block.1])?;
+            full_blocks[1].validate(&full_blocks[0])?;
         }
 
-        Ok(ret)
+        Ok(())
+    }
+
+    /// Insert a given [`BlockInfo`] into the blockchain database.
+    /// This functions wraps all the logic of separating the block into specific
+    /// data that can be fed into the different trees of the database.
+    /// Upon success, the functions returns the block hash that
+    /// were given and appended to the ledger.
+    pub fn add_block(&self, block: &BlockInfo) -> Result<blake3::Hash> {
+        let mut trees = vec![];
+        let mut batches = vec![];
+
+        // Store transactions
+        let (txs_batch, _) = self.transactions.insert_batch(&block.txs)?;
+        trees.push(self.transactions.0.clone());
+        batches.push(txs_batch);
+
+        // Store header
+        let (headers_batch, _) = self.headers.insert_batch(&[block.header.clone()])?;
+        trees.push(self.headers.0.clone());
+        batches.push(headers_batch);
+
+        // Store block
+        let blk: Block = Block::from(block.clone());
+        let (bocks_batch, block_hashes) = self.blocks.insert_batch(&[blk])?;
+        let block_hash = block_hashes[0];
+        trees.push(self.blocks.0.clone());
+        batches.push(bocks_batch);
+
+        // Store block order
+        let blocks_order_batch = self.order.insert_batch(&[block.header.slot], &[block_hash])?;
+        trees.push(self.order.0.clone());
+        batches.push(blocks_order_batch);
+
+        // Store slot checkpoints
+        let slots_batch = self.slots.insert_batch(&block.slots)?;
+        trees.push(self.slots.0.clone());
+        batches.push(slots_batch);
+
+        // Perform an atomic transaction over the trees and apply the batches.
+        self.atomic_write(&trees, &batches)?;
+
+        Ok(block_hash)
     }
 
     /// Check if the given [`BlockInfo`] is in the database and all trees.
@@ -131,21 +160,37 @@ impl Blockchain {
             Err(_) => return Ok(false),
         };
 
-        // TODO: Check if we have all transactions
+        // Check if we have all transactions
+        let txs: Vec<blake3::Hash> =
+            block.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
+        if self.transactions.get(&txs, true).is_err() {
+            return Ok(false)
+        }
+
+        // Check if we have all slots
+        let slots: Vec<u64> = block.slots.iter().map(|x| x.id).collect();
+        if self.slots.get(&slots, true).is_err() {
+            return Ok(false)
+        }
 
         // Check provided info produces the same hash
         Ok(blockhash == block.blockhash())
     }
 
-    /// Retrieve [`BlockInfo`]s by given hashes. Fails if any of them are not found.
+    /// Retrieve [`BlockInfo`]s by given hashes. Fails if any of them is not found.
     pub fn get_blocks_by_hash(&self, hashes: &[blake3::Hash]) -> Result<Vec<BlockInfo>> {
-        let mut ret = Vec::with_capacity(hashes.len());
-
         let blocks = self.blocks.get(hashes, true)?;
+        let blocks: Vec<Block> = blocks.iter().map(|x| x.clone().unwrap()).collect();
+        let ret = self.get_blocks_infos(&blocks)?;
 
+        Ok(ret)
+    }
+
+    /// Retrieve all [`BlockInfo`] for given slice of [`Block`].
+    /// Fails if any of them is not found
+    fn get_blocks_infos(&self, blocks: &[Block]) -> Result<Vec<BlockInfo>> {
+        let mut ret = Vec::with_capacity(blocks.len());
         for block in blocks {
-            let block = block.unwrap();
-
             let headers = self.headers.get(&[block.header], true)?;
             // Since we used strict get, its safe to unwrap here
             let header = headers[0].clone().unwrap();
@@ -153,7 +198,10 @@ impl Blockchain {
             let txs = self.transactions.get(&block.txs, true)?;
             let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
 
-            let info = BlockInfo::new(header, txs, block.lead_info.clone());
+            let slots = self.slots.get(&block.slots, true)?;
+            let slots = slots.iter().map(|x| x.clone().unwrap()).collect();
+
+            let info = BlockInfo::new(header, txs, block.producer.clone(), slots);
             ret.push(info);
         }
 
@@ -192,12 +240,23 @@ impl Blockchain {
 
     /// Check if blockchain contains any blocks
     pub fn is_empty(&self) -> bool {
-        self.order.len() == 0
+        self.order.is_empty()
+    }
+
+    /// Retrieve genesis (first) block slot and hash.
+    pub fn genesis(&self) -> Result<(u64, blake3::Hash)> {
+        self.order.get_first()
     }
 
     /// Retrieve the last block slot and hash.
     pub fn last(&self) -> Result<(u64, blake3::Hash)> {
         self.order.get_last()
+    }
+
+    /// Retrieve the last block info.
+    pub fn last_block(&self) -> Result<BlockInfo> {
+        let (_, hash) = self.last()?;
+        Ok(self.get_blocks_by_hash(&[hash])?[0].clone())
     }
 
     /// Retrieve the last slot.
@@ -209,11 +268,6 @@ impl Blockchain {
     pub fn get_slots_after(&self, slot: u64, n: u64) -> Result<Vec<Slot>> {
         debug!(target: "blockchain", "get_slots_after(): {} -> {}", slot, n);
         self.slots.get_after(slot, n)
-    }
-
-    /// Insert a given slice of [`Slot`] into the blockchain database.
-    pub fn add_slots(&self, slots: &[Slot]) -> Result<()> {
-        self.slots.insert(slots)
     }
 
     /// Retrieve [`Slot`]s by given ids. Does not fail if any of them are not found.
@@ -240,9 +294,13 @@ impl Blockchain {
     /// On success, the function returns the transaction hashes in the same order
     /// as the input transactions.
     pub fn add_pending_txs(&self, txs: &[Transaction]) -> Result<Vec<blake3::Hash>> {
-        // TODO: Make db writes here completely atomic
-        let txs_hashes = self.pending_txs.insert(txs)?;
-        self.pending_txs_order.insert(&txs_hashes)?;
+        let (txs_batch, txs_hashes) = self.pending_txs.insert_batch(txs)?;
+        let txs_order_batch = self.pending_txs_order.insert_batch(&txs_hashes)?;
+
+        // Perform an atomic transaction over the trees and apply the batches.
+        let trees = [self.pending_txs.0.clone(), self.pending_txs_order.0.clone()];
+        let batches = [txs_batch, txs_order_batch];
+        self.atomic_write(&trees, &batches)?;
 
         Ok(txs_hashes)
     }
@@ -252,7 +310,9 @@ impl Blockchain {
     pub fn get_pending_txs(&self) -> Result<Vec<Transaction>> {
         let txs = self.pending_txs.get_all()?;
         let indexes = self.pending_txs_order.get_all()?;
-        assert_eq!(txs.len(), indexes.len());
+        if txs.len() != indexes.len() {
+            return Err(Error::InvalidInputLengths)
+        }
 
         let mut ret = Vec::with_capacity(txs.len());
         for index in indexes {
@@ -264,13 +324,11 @@ impl Blockchain {
 
     /// Remove a given slice of pending transactions from the blockchain database.
     pub fn remove_pending_txs(&self, txs: &[Transaction]) -> Result<()> {
-        let mut txs_hashes = Vec::with_capacity(txs.len());
-        for tx in txs {
-            let tx_hash = blake3::hash(&serialize(tx));
-            txs_hashes.push(tx_hash);
-        }
-
+        let txs_hashes: Vec<blake3::Hash> =
+            txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
         let indexes = self.pending_txs_order.get_all()?;
+        // We could do indexes.iter().map(|x| txs_hashes.contains(x.1)).collect.map(|x| x.0).collect but this is faster
+        // since we don't do the second iteration
         let mut removed_indexes = vec![];
         for index in indexes {
             if txs_hashes.contains(&index.1) {
@@ -278,9 +336,30 @@ impl Blockchain {
             }
         }
 
-        // TODO: Make db writes here completely atomic
-        self.pending_txs.remove(&txs_hashes)?;
-        self.pending_txs_order.remove(&removed_indexes)?;
+        let txs_batch = self.pending_txs.remove_batch(&txs_hashes);
+        let txs_order_batch = self.pending_txs_order.remove_batch(&removed_indexes);
+
+        // Perform an atomic transaction over the trees and apply the batches.
+        let trees = [self.pending_txs.0.clone(), self.pending_txs_order.0.clone()];
+        let batches = [txs_batch, txs_order_batch];
+        self.atomic_write(&trees, &batches)?;
+
+        Ok(())
+    }
+
+    /// Auxiliary function to write to multiple trees completely atomic.
+    fn atomic_write(&self, trees: &[sled::Tree], batches: &[sled::Batch]) -> Result<()> {
+        if trees.len() != batches.len() {
+            return Err(Error::InvalidInputLengths)
+        }
+
+        trees.transaction(|trees| {
+            for (index, tree) in trees.iter().enumerate() {
+                tree.apply_batch(&batches[index])?;
+            }
+
+            Ok::<(), sled::transaction::ConflictableTransactionError<sled::Error>>(())
+        })?;
 
         Ok(())
     }
@@ -296,8 +375,16 @@ pub type BlockchainOverlayPtr = Arc<Mutex<BlockchainOverlay>>;
 pub struct BlockchainOverlay {
     /// Main [`sled_overlay::SledDbOverlay`] to the sled db connection
     pub overlay: SledDbOverlayPtr,
+    /// Headers overlay
+    pub headers: HeaderStoreOverlay,
+    /// Blocks overlay
+    pub blocks: BlockStoreOverlay,
+    /// Block order overlay
+    pub order: BlockOrderStoreOverlay,
     /// Slots overlay
     pub slots: SlotStoreOverlay,
+    /// Transactions overlay
+    pub transactions: TxStoreOverlay,
     /// Contract states overlay
     pub contracts: ContractStateStoreOverlay,
     /// Wasm bincodes overlay
@@ -308,11 +395,122 @@ impl BlockchainOverlay {
     /// Instantiate a new `BlockchainOverlay` over the given [`Blockchain`] instance.
     pub fn new(blockchain: &Blockchain) -> Result<BlockchainOverlayPtr> {
         let overlay = Arc::new(Mutex::new(sled_overlay::SledDbOverlay::new(&blockchain.sled_db)));
+        let headers = HeaderStoreOverlay::new(overlay.clone())?;
+        let blocks = BlockStoreOverlay::new(overlay.clone())?;
+        let order = BlockOrderStoreOverlay::new(overlay.clone())?;
         let slots = SlotStoreOverlay::new(overlay.clone())?;
+        let transactions = TxStoreOverlay::new(overlay.clone())?;
         let contracts = ContractStateStoreOverlay::new(overlay.clone())?;
         let wasm_bincode = WasmStoreOverlay::new(overlay.clone())?;
 
-        Ok(Arc::new(Mutex::new(Self { overlay, slots, contracts, wasm_bincode })))
+        Ok(Arc::new(Mutex::new(Self {
+            overlay,
+            headers,
+            blocks,
+            order,
+            slots,
+            transactions,
+            contracts,
+            wasm_bincode,
+        })))
+    }
+
+    /// Check if blockchain contains any blocks
+    pub fn is_empty(&self) -> Result<bool> {
+        self.order.is_empty()
+    }
+
+    /// Retrieve the last block slot and hash.
+    pub fn last(&self) -> Result<(u64, blake3::Hash)> {
+        self.order.get_last()
+    }
+
+    /// Retrieve the last block info.
+    pub fn last_block(&self) -> Result<BlockInfo> {
+        let (_, hash) = self.last()?;
+        Ok(self.get_blocks_by_hash(&[hash])?[0].clone())
+    }
+
+    /// Insert a given [`BlockInfo`] into the overlay.
+    /// This functions wraps all the logic of separating the block into specific
+    /// data that can be fed into the different trees of the overlay.
+    /// Upon success, the functions returns the block hash that
+    /// were given and appended to the overlay.
+    /// Since we are adding to the overlay, we don't need to exeucte
+    /// the writes atomically.
+    pub fn add_block(&self, block: &BlockInfo) -> Result<blake3::Hash> {
+        // Store transactions
+        self.transactions.insert(&block.txs)?;
+
+        // Store header
+        self.headers.insert(&[block.header.clone()])?;
+
+        // Store block
+        let blk: Block = Block::from(block.clone());
+        let block_hash = self.blocks.insert(&[blk])?[0];
+
+        // Store block order
+        self.order.insert(&[block.header.slot], &[block_hash])?;
+
+        // Store slot checkpoints
+        self.slots.insert(&block.slots)?;
+
+        Ok(block_hash)
+    }
+
+    /// Check if the given [`BlockInfo`] is in the database and all trees.
+    pub fn has_block(&self, block: &BlockInfo) -> Result<bool> {
+        let blockhash = match self.order.get(&[block.header.slot], true) {
+            Ok(v) => v[0].unwrap(),
+            Err(_) => return Ok(false),
+        };
+
+        // Check if we have all transactions
+        let txs: Vec<blake3::Hash> =
+            block.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
+        if self.transactions.get(&txs, true).is_err() {
+            return Ok(false)
+        }
+
+        // Check if we have all slots
+        let slots: Vec<u64> = block.slots.iter().map(|x| x.id).collect();
+        if self.slots.get(&slots, true).is_err() {
+            return Ok(false)
+        }
+
+        // Check provided info produces the same hash
+        Ok(blockhash == block.blockhash())
+    }
+
+    /// Retrieve [`BlockInfo`]s by given hashes. Fails if any of them is not found.
+    pub fn get_blocks_by_hash(&self, hashes: &[blake3::Hash]) -> Result<Vec<BlockInfo>> {
+        let blocks = self.blocks.get(hashes, true)?;
+        let blocks: Vec<Block> = blocks.iter().map(|x| x.clone().unwrap()).collect();
+        let ret = self.get_blocks_infos(&blocks)?;
+
+        Ok(ret)
+    }
+
+    /// Retrieve all [`BlockInfo`] for given slice of [`Block`].
+    /// Fails if any of them is not found
+    fn get_blocks_infos(&self, blocks: &[Block]) -> Result<Vec<BlockInfo>> {
+        let mut ret = Vec::with_capacity(blocks.len());
+        for block in blocks {
+            let headers = self.headers.get(&[block.header], true)?;
+            // Since we used strict get, its safe to unwrap here
+            let header = headers[0].clone().unwrap();
+
+            let txs = self.transactions.get(&block.txs, true)?;
+            let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
+
+            let slots = self.slots.get(&block.slots, true)?;
+            let slots = slots.iter().map(|x| x.clone().unwrap()).collect();
+
+            let info = BlockInfo::new(header, txs, block.producer.clone(), slots);
+            ret.push(info);
+        }
+
+        Ok(ret)
     }
 
     /// Checkpoint overlay so we can revert to it, if needed.

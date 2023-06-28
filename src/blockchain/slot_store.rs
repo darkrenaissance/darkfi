@@ -16,37 +16,39 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// [`Slot`] is defined in the sdk so contracts can use it
 use darkfi_sdk::blockchain::Slot;
 use darkfi_serial::{deserialize, serialize};
 
-use crate::{blockchain::SledDbOverlayPtr, Error, Result};
+use crate::{Error, Result};
+
+use super::SledDbOverlayPtr;
 
 const SLED_SLOT_TREE: &[u8] = b"_slots";
 
 /// The `SlotStore` is a `sled` tree storing the blockhains' slots,
 /// where the key is the slot uid, and the value is is the serialized slot.
 #[derive(Clone)]
-pub struct SlotStore(sled::Tree);
+pub struct SlotStore(pub sled::Tree);
 
 impl SlotStore {
     /// Opens a new or existing `SlotStore` on the given sled database.
-    pub fn new(db: &sled::Db, genesis_block: blake3::Hash) -> Result<Self> {
+    pub fn new(db: &sled::Db) -> Result<Self> {
         let tree = db.open_tree(SLED_SLOT_TREE)?;
-        let store = Self(tree);
-
-        // In case the store is empty, initialize it with the genesis slot.
-        if store.0.is_empty() {
-            let genesis_slot = Slot::genesis_slot(genesis_block);
-            store.insert(&[genesis_slot])?;
-        }
-
-        Ok(store)
+        Ok(Self(tree))
     }
 
     /// Insert a slice of [`Slot`] into the slot store.
-    /// With sled, the operation is done as a batch.
-    /// The slot id is used as the key, while value is the serialized [`Slot`] itself.
     pub fn insert(&self, slots: &[Slot]) -> Result<()> {
+        let batch = self.insert_batch(slots)?;
+        self.0.apply_batch(batch)?;
+        Ok(())
+    }
+
+    /// Generate the sled batch corresponding to an insert, so caller
+    /// can handle the write operation.
+    /// The slot id is used as the key, while value is the serialized [`Slot`] itself.
+    pub fn insert_batch(&self, slots: &[Slot]) -> Result<sled::Batch> {
         let mut batch = sled::Batch::default();
 
         for slot in slots {
@@ -54,8 +56,7 @@ impl SlotStore {
             batch.insert(&slot.id.to_be_bytes(), serialized);
         }
 
-        self.0.apply_batch(batch)?;
-        Ok(())
+        Ok(batch)
     }
 
     /// Check if the slot store contains a given id.
@@ -138,7 +139,7 @@ impl SlotStore {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.0.len() == 0
+        self.0.is_empty()
     }
 }
 
@@ -151,11 +152,48 @@ impl SlotStoreOverlay {
         Ok(Self(overlay))
     }
 
-    /// Fetch given id from the slot store.
-    pub fn get(&self, id: u64) -> Result<Vec<u8>> {
+    /// Insert a slice of [`Slot`] into the overlay.
+    /// The slot id is used as the key, while value is the serialized [`Slot`] itself.
+    pub fn insert(&self, slots: &[Slot]) -> Result<()> {
+        let mut lock = self.0.lock().unwrap();
+
+        for slot in slots {
+            let serialized = serialize(slot);
+            lock.insert(SLED_SLOT_TREE, &slot.id.to_be_bytes(), &serialized)?;
+        }
+
+        Ok(())
+    }
+
+    /// Fetch slot from the overlay by id.
+    pub fn get_by_id(&self, id: u64) -> Result<Vec<u8>> {
         match self.0.lock().unwrap().get(SLED_SLOT_TREE, &id.to_be_bytes())? {
             Some(found) => Ok(found.to_vec()),
             None => Err(Error::SlotNotFound(id)),
         }
+    }
+
+    /// Fetch given slots from the overlay.
+    /// The resulting vector contains `Option`, which is `Some` if the slot
+    /// was found in the overlay, and otherwise it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one slot was not found.
+    pub fn get(&self, ids: &[u64], strict: bool) -> Result<Vec<Option<Slot>>> {
+        let mut ret = Vec::with_capacity(ids.len());
+        let lock = self.0.lock().unwrap();
+
+        for id in ids {
+            if let Some(found) = lock.get(SLED_SLOT_TREE, &id.to_be_bytes())? {
+                let slot = deserialize(&found)?;
+                ret.push(Some(slot));
+            } else {
+                if strict {
+                    return Err(Error::SlotNotFound(*id))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
     }
 }

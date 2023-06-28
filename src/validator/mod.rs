@@ -19,37 +19,34 @@
 use std::{collections::HashMap, io::Cursor};
 
 use async_std::sync::{Arc, RwLock};
-use darkfi_sdk::{
-    blockchain::Slot,
-    crypto::{PublicKey, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
-    pasta::pallas,
-};
-use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
+use darkfi_sdk::{blockchain::Slot, crypto::PublicKey, pasta::pallas};
+use darkfi_serial::{Decodable, Encodable, WriteExt};
 use log::{debug, error, info, warn};
 
 use crate::{
-    blockchain::{Blockchain, BlockchainOverlay, BlockchainOverlayPtr},
+    blockchain::{BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr},
     error::TxVerifyFailed,
     runtime::vm_runtime::Runtime,
     tx::Transaction,
     util::time::TimeKeeper,
     zk::VerifyingKey,
-    Result,
+    Error, Result,
 };
 
-/// DarkFi blockchain
-pub mod blockchain;
-
-/// DarkFi consensus
+/// DarkFi consensus module
 pub mod consensus;
 use consensus::Consensus;
+
+/// Helper utilities
+pub mod utils;
+use utils::deploy_native_contracts;
 
 /// Configuration for initializing [`Validator`]
 pub struct ValidatorConfig {
     /// Helper structure to calculate time related operations
     pub time_keeper: TimeKeeper,
     /// Genesis block
-    pub genesis_block: blake3::Hash,
+    pub genesis_block: BlockInfo,
     /// Whitelisted faucet pubkeys (testnet stuff)
     pub faucet_pubkeys: Vec<PublicKey>,
 }
@@ -57,7 +54,7 @@ pub struct ValidatorConfig {
 impl ValidatorConfig {
     pub fn new(
         time_keeper: TimeKeeper,
-        genesis_block: blake3::Hash,
+        genesis_block: BlockInfo,
         faucet_pubkeys: Vec<PublicKey>,
     ) -> Self {
         Self { time_keeper, genesis_block, faucet_pubkeys }
@@ -80,87 +77,47 @@ impl Validator {
         info!(target: "validator", "Initializing Validator");
 
         info!(target: "validator", "Initializing Blockchain");
-        // TODO: Initialize chain, then check if its empty, so we can add the
-        // genesis block and its transactions
-        let blockchain = Blockchain::new(db, config.time_keeper.genesis_ts, config.genesis_block)?;
+        let blockchain = Blockchain::new(db)?;
 
         info!(target: "validator", "Initializing Consensus");
-        let consensus =
-            Consensus::new(blockchain.clone(), config.time_keeper, config.genesis_block);
+        let consensus = Consensus::new(blockchain.clone(), config.time_keeper.clone());
 
-        // =====================
-        // NATIVE WASM CONTRACTS
-        // =====================
-        // This is the current place where native contracts are being deployed.
-        // When the `Blockchain` object is created, it doesn't care whether it
-        // already has the contract data or not. If there's existing data, it
-        // will just open the necessary db and trees, and give back what it has.
-        // This means that on subsequent runs our native contracts will already
-        // be in a deployed state, so what we actually do here is a redeployment.
-        // This kind of operation should only modify the contract's state in case
-        // it wasn't deployed before (meaning the initial run). Otherwise, it
-        // shouldn't touch anything, or just potentially update the db schemas or
-        // whatever is necessary. This logic should be handled in the init function
-        // of the actual contract, so make sure the native contracts handle this well.
+        // Create the actual state
+        let mut state = Self { blockchain: blockchain.clone(), consensus };
 
-        // The faucet pubkeys are pubkeys which are allowed to create clear inputs
-        // in the Money contract.
-        let money_contract_deploy_payload = serialize(&config.faucet_pubkeys);
-
-        // The DAO contract uses an empty payload to deploy itself.
-        let dao_contract_deploy_payload = vec![];
-
-        // The Consensus contract uses an empty payload to deploy itself.
-        let consensus_contract_deploy_payload = vec![];
-
-        let native_contracts = vec![
-            (
-                "Money Contract",
-                *MONEY_CONTRACT_ID,
-                include_bytes!("../contract/money/money_contract.wasm").to_vec(),
-                money_contract_deploy_payload,
-            ),
-            (
-                "DAO Contract",
-                *DAO_CONTRACT_ID,
-                include_bytes!("../contract/dao/dao_contract.wasm").to_vec(),
-                dao_contract_deploy_payload,
-            ),
-            (
-                "Consensus Contract",
-                *CONSENSUS_CONTRACT_ID,
-                include_bytes!("../contract/consensus/consensus_contract.wasm").to_vec(),
-                consensus_contract_deploy_payload,
-            ),
-        ];
-
-        info!(target: "validator", "Deploying native WASM contracts");
+        // Create an overlay over whole blockchain so we can write stuff
         let blockchain_overlay = BlockchainOverlay::new(&blockchain)?;
 
-        for nc in native_contracts {
-            info!(target: "validator", "Deploying {} with ContractID {}", nc.0, nc.1);
+        // Add genesis block if blockchain is empty
+        let genesis_block = match blockchain.genesis() {
+            Ok((_, hash)) => hash,
+            Err(_) => {
+                info!(target: "validator", "Appending genesis block");
+                state
+                    .add_blocks(
+                        blockchain_overlay.clone(),
+                        &config.time_keeper,
+                        &[config.genesis_block.clone()],
+                    )
+                    .await?;
+                config.genesis_block.blockhash()
+            }
+        };
+        state.consensus.genesis_block = genesis_block;
 
-            let mut runtime = Runtime::new(
-                &nc.2[..],
-                blockchain_overlay.clone(),
-                nc.1,
-                consensus.time_keeper.clone(),
-            )?;
-
-            runtime.deploy(&nc.3)?;
-
-            info!(target: "validator", "Successfully deployed {}", nc.0);
-        }
+        // Deploy native wasm contracts
+        deploy_native_contracts(
+            blockchain_overlay.clone(),
+            &config.time_keeper,
+            &config.faucet_pubkeys,
+        )?;
 
         // Write the changes to the actual chain db
         blockchain_overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
-        info!(target: "validator", "Finished deployment of native WASM contracts");
+        info!(target: "validator", "Finished initializing validator");
 
-        // Create the actual state
-        let state = Arc::new(RwLock::new(Self { blockchain, consensus }));
-
-        Ok(state)
+        Ok(Arc::new(RwLock::new(state)))
     }
 
     // ==========================
@@ -175,20 +132,43 @@ impl Validator {
     // 2) When a transaction is being broadcasted to us
     // ==========================
 
-    /// Append to canonical state received finalized slots from block sync task.
-    // TODO: integrate this to receive_blocks, as slots will be part of received block.
-    pub async fn receive_slots(&mut self, slots: &[Slot]) -> Result<()> {
-        debug!(target: "validator", "receive_slots(): Appending slots to ledger");
-        let current_slot = self.consensus.time_keeper.current_slot();
-        let mut filtered = vec![];
-        for slot in slots {
-            if slot.id > current_slot {
-                warn!(target: "validator", "receive_slots(): Ignoring future slot: {}", slot.id);
-                continue
+    /// Append provided blocks to the provided overlay. Block sequence must be valid,
+    /// meaning that each block and its transactions are valid, in order.
+    pub async fn add_blocks(
+        &self,
+        overlay: BlockchainOverlayPtr,
+        _time_keeper: &TimeKeeper,
+        blocks: &[BlockInfo],
+    ) -> Result<()> {
+        // Retrieve last block
+        let lock = overlay.lock().unwrap();
+        let mut previous = if !lock.is_empty()? { Some(lock.last_block()?) } else { None };
+        // Validate and insert each block
+        for block in blocks {
+            // Check if block already exists
+            if lock.has_block(block)? {
+                return Err(Error::BlockAlreadyExists(block.blockhash().to_string()))
             }
-            filtered.push(slot.clone());
+
+            // This will be true for every insert, apart from genesis
+            if let Some(p) = previous {
+                block.validate(&p)?;
+            }
+
+            // TODO: Add rest block verifications here
+            /*
+            let current_slot = self.consensus.time_keeper.current_slot();
+            if slot.id > current_slot {
+                return Err(Error::FutureSlotReceived(slot.id))
+            }
+            */
+
+            // Insert block
+            lock.add_block(block)?;
+
+            // Use last inserted block as next iteration previous
+            previous = Some(block.clone());
         }
-        self.blockchain.add_slots(&filtered[..])?;
 
         Ok(())
     }
@@ -374,6 +354,15 @@ impl Validator {
 
         debug!(target: "validator", "Applying overlay changes");
         overlay.apply()?;
+        Ok(())
+    }
+
+    /// Append to canonical state received slot.
+    /// This should be only used for test purposes.
+    pub async fn receive_test_slot(&mut self, slot: &Slot) -> Result<()> {
+        debug!(target: "validator", "receive_slot(): Appending slot to ledger");
+        self.blockchain.slots.insert(&[slot.clone()])?;
+
         Ok(())
     }
 }

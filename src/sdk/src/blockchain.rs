@@ -49,17 +49,11 @@ impl Slot {
     ) -> Self {
         Self { id, previous_eta, fork_hashes, fork_previous_hashes, sigma1, sigma2 }
     }
+}
 
-    /// Generate the genesis slot.
-    pub fn genesis_slot(genesis_block: blake3::Hash) -> Self {
-        let previous_eta = pallas::Base::ZERO;
-        let fork_hashes = vec![];
-        // Since genesis block has no previous,
-        // we will use its own hash as its previous.
-        let fork_previous_hashes = vec![genesis_block];
-        let sigma1 = pallas::Base::ZERO;
-        let sigma2 = pallas::Base::ZERO;
-
-        Self::new(0, previous_eta, fork_hashes, fork_previous_hashes, sigma1, sigma2)
+impl Default for Slot {
+    /// Represents the genesis slot on current timestamp
+    fn default() -> Self {
+        Self::new(0, pallas::Base::ZERO, vec![], vec![], pallas::Base::ZERO, pallas::Base::ZERO)
     }
 }

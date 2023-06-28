@@ -182,7 +182,7 @@ pub(crate) fn get_slot(ctx: FunctionEnvMut<Env>, slot: u64) -> i64 {
         return CALLER_ACCESS_DENIED.into()
     }
 
-    let ret = match env.blockchain.lock().unwrap().slots.get(slot) {
+    let ret = match env.blockchain.lock().unwrap().slots.get_by_id(slot) {
         Ok(v) => v,
         Err(e) => {
             error!(target: "runtime::db::db_get_slot()", "Internal error getting from slots tree: {}", e);

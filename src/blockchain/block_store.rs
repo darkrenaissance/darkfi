@@ -16,129 +16,199 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::{deserialize, serialize};
+use darkfi_sdk::{blockchain::Slot, crypto::schnorr::Signature};
+use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 
-use crate::{
-    consensus::{Block, Header},
-    util::time::Timestamp,
-    Error, Result,
-};
+use crate::{tx::Transaction, Error, Result};
 
-const SLED_HEADER_TREE: &[u8] = b"_headers";
-const SLED_BLOCK_TREE: &[u8] = b"_blocks";
-const SLED_BLOCK_ORDER_TREE: &[u8] = b"_block_order";
+use super::{Header, SledDbOverlayPtr};
 
-/// The `HeaderStore` is a `sled` tree storing all the blockchain's blocks' headers
-/// where the key is the headers' hash, and value is the serialized header.
-#[derive(Clone)]
-pub struct HeaderStore(sled::Tree);
+/// Block version number
+pub const BLOCK_VERSION: u8 = 1;
 
-impl HeaderStore {
-    /// Opens a new or existing `HeaderStore` on the given sled database.
-    pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
-        let tree = db.open_tree(SLED_HEADER_TREE)?;
-        let store = Self(tree);
+/// Block magic bytes
+const BLOCK_MAGIC_BYTES: [u8; 4] = [0x11, 0x6d, 0x75, 0x1f];
 
-        // In case the store is empty, initialize it with the genesis header.
-        if store.0.is_empty() {
-            let genesis_header = Header::genesis_header(genesis_ts, genesis_data);
-            store.insert(&[genesis_header])?;
+/// This struct represents a tuple of the form (`magic`, `header`, `txs`, `producer`, `slots`).
+/// The header and transactions are stored as hashes, while slots are stored as integers,
+/// serving as pointers to the actual data in the sled database.
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct Block {
+    /// Block magic bytes
+    pub magic: [u8; 4],
+    /// Block header
+    pub header: blake3::Hash,
+    /// Trasaction hashes
+    pub txs: Vec<blake3::Hash>,
+    /// Block producer info
+    pub producer: BlockProducer,
+    /// Slots up until this block
+    pub slots: Vec<u64>,
+}
+
+impl Block {
+    pub fn new(
+        header: blake3::Hash,
+        txs: Vec<blake3::Hash>,
+        producer: BlockProducer,
+        slots: Vec<u64>,
+    ) -> Self {
+        let magic = BLOCK_MAGIC_BYTES;
+        Self { magic, header, txs, producer, slots }
+    }
+
+    /// Calculate the block hash
+    pub fn blockhash(&self) -> blake3::Hash {
+        blake3::hash(&serialize(self))
+    }
+}
+
+/// Structure representing full block data.
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct BlockInfo {
+    /// BlockInfo magic bytes
+    pub magic: [u8; 4],
+    /// Block header data
+    pub header: Header,
+    /// Transactions payload
+    pub txs: Vec<Transaction>,
+    /// Block producer info
+    pub producer: BlockProducer,
+    /// Slots payload
+    pub slots: Vec<Slot>,
+}
+
+impl Default for BlockInfo {
+    /// Represents the genesis block on current timestamp
+    fn default() -> Self {
+        let magic = BLOCK_MAGIC_BYTES;
+        Self {
+            magic,
+            header: Header::default(),
+            txs: vec![],
+            producer: BlockProducer::default(),
+            slots: vec![Slot::default()],
+        }
+    }
+}
+
+impl BlockInfo {
+    pub fn new(
+        header: Header,
+        txs: Vec<Transaction>,
+        producer: BlockProducer,
+        slots: Vec<Slot>,
+    ) -> Self {
+        let magic = BLOCK_MAGIC_BYTES;
+        Self { magic, header, txs, producer, slots }
+    }
+
+    /// Calculate the block hash
+    pub fn blockhash(&self) -> blake3::Hash {
+        let block: Block = self.clone().into();
+        block.blockhash()
+    }
+
+    /// A block is considered valid when its parent hash is equal to the hash of the
+    /// previous block and their slots are incremental.
+    /// Additional validity rules can be applied.
+    pub fn validate(&self, previous: &Self) -> Result<()> {
+        let error = Err(Error::BlockIsInvalid(self.blockhash().to_string()));
+        let previous_hash = previous.blockhash();
+
+        // Check previous hash
+        if self.header.previous != previous_hash {
+            return error
         }
 
-        Ok(store)
-    }
-
-    /// Insert a slice of [`Header`] into the blockstore. With sled, the
-    /// operation is done as a batch.
-    /// The headers are hashed with BLAKE3 and this headerhash is used as
-    /// the key, while value is the serialized [`Header`] itself.
-    /// On success, the function returns the header hashes in the same order.
-    pub fn insert(&self, headers: &[Header]) -> Result<Vec<blake3::Hash>> {
-        let mut ret = Vec::with_capacity(headers.len());
-        let mut batch = sled::Batch::default();
-
-        for header in headers {
-            let serialized = serialize(header);
-            let headerhash = blake3::hash(&serialized);
-            batch.insert(headerhash.as_bytes(), serialized);
-            ret.push(headerhash);
+        // Check timestamps are incremental
+        if self.header.timestamp <= previous.header.timestamp {
+            return error
         }
 
-        self.0.apply_batch(batch)?;
-        Ok(ret)
-    }
+        // Check slots are incremental
+        if self.header.slot <= previous.header.slot {
+            return error
+        }
 
-    /// Check if the headerstore contains a given headerhash.
-    pub fn contains(&self, headerhash: &blake3::Hash) -> Result<bool> {
-        Ok(self.0.contains_key(headerhash.as_bytes())?)
-    }
+        // Verify slots exist
+        let mut slots = self.slots.clone();
+        if slots.is_empty() {
+            return error
+        }
 
-    /// Fetch given headerhashes from the headerstore.
-    /// The resulting vector contains `Option`, which is `Some` if the header
-    /// was found in the headerstore, and otherwise it is `None`, if it has not.
-    /// The second parameter is a boolean which tells the function to fail in
-    /// case at least one header was not found.
-    pub fn get(&self, headerhashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Header>>> {
-        let mut ret = Vec::with_capacity(headerhashes.len());
+        // Sort them just to be safe
+        slots.sort_by(|a, b| b.id.cmp(&a.id));
 
-        for hash in headerhashes {
-            if let Some(found) = self.0.get(hash.as_bytes())? {
-                let header = deserialize(&found)?;
-                ret.push(Some(header));
-            } else {
-                if strict {
-                    let s = hash.to_hex().as_str().to_string();
-                    return Err(Error::HeaderNotFound(s))
-                }
-                ret.push(None);
+        // Verify first slot increments from previous block
+        if slots[0].id <= previous.header.slot {
+            return error
+        }
+
+        // Check all slot cover same sequence
+        for slot in &slots {
+            if !slot.fork_hashes.contains(&previous_hash) {
+                return error
+            }
+            if !slot.fork_previous_hashes.contains(&previous.header.previous) {
+                return error
             }
         }
 
-        Ok(ret)
-    }
-
-    /// Retrieve all headers from the headerstore in the form of a tuple
-    /// (`headerhash`, `header`).
-    /// Be careful as this will try to load everything in memory.
-    pub fn get_all(&self) -> Result<Vec<(blake3::Hash, Header)>> {
-        let mut headers = vec![];
-
-        for header in self.0.iter() {
-            let (key, value) = header.unwrap();
-            let hash_bytes: [u8; 32] = key.as_ref().try_into().unwrap();
-            let header = deserialize(&value)?;
-            headers.push((hash_bytes.into(), header));
+        // Check block slot is the last slot in the slice
+        if slots.last().unwrap().id != self.header.slot {
+            return error
         }
 
-        Ok(headers)
+        // TODO: also validate slots etas and sigmas if we can derive them
+        // from previous slots
+
+        Ok(())
     }
 }
+
+impl From<BlockInfo> for Block {
+    fn from(block_info: BlockInfo) -> Self {
+        let txs = block_info.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
+        let slots = block_info.slots.iter().map(|x| x.id).collect();
+        Self {
+            magic: block_info.magic,
+            header: block_info.header.headerhash(),
+            txs,
+            producer: block_info.producer,
+            slots,
+        }
+    }
+}
+
+/// [`Block`] sled tree
+const SLED_BLOCK_TREE: &[u8] = b"_blocks";
 
 /// The `BlockStore` is a `sled` tree storing all the blockchain's blocks
 /// where the key is the blocks' hash, and value is the serialized block.
 #[derive(Clone)]
-pub struct BlockStore(sled::Tree);
+pub struct BlockStore(pub sled::Tree);
 
 impl BlockStore {
     /// Opens a new or existing `BlockStore` on the given sled database.
-    pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
+    pub fn new(db: &sled::Db) -> Result<Self> {
         let tree = db.open_tree(SLED_BLOCK_TREE)?;
-        let store = Self(tree);
-        // In case the store is empty, initialize it with the genesis block.
-        if store.0.is_empty() {
-            let genesis_block = Block::genesis_block(genesis_ts, genesis_data);
-            store.insert(&[genesis_block])?;
-        }
-
-        Ok(store)
+        Ok(Self(tree))
     }
 
-    /// Insert a slice of [`Block`] into the store. With sled, the
-    /// operation is done as a batch.
-    /// The block are hashed with BLAKE3 and this blockhash is used as
+    /// Insert a slice of [`Block`] into the store.
+    pub fn insert(&self, blocks: &[Block]) -> Result<Vec<blake3::Hash>> {
+        let (batch, ret) = self.insert_batch(blocks)?;
+        self.0.apply_batch(batch)?;
+        Ok(ret)
+    }
+
+    /// Generate the sled batch corresponding to an insert, so caller
+    /// can handle the write operation.
+    /// The blocks are hashed with BLAKE3 and this blockhash is used as
     /// the key, while value is the serialized [`Block`] itself.
     /// On success, the function returns the block hashes in the same order.
-    pub fn insert(&self, blocks: &[Block]) -> Result<Vec<blake3::Hash>> {
+    pub fn insert_batch(&self, blocks: &[Block]) -> Result<(sled::Batch, Vec<blake3::Hash>)> {
         let mut ret = Vec::with_capacity(blocks.len());
         let mut batch = sled::Batch::default();
 
@@ -149,8 +219,7 @@ impl BlockStore {
             ret.push(blockhash);
         }
 
-        self.0.apply_batch(batch)?;
-        Ok(ret)
+        Ok((batch, ret))
     }
 
     /// Check if the blockstore contains a given blockhash.
@@ -158,19 +227,15 @@ impl BlockStore {
         Ok(self.0.contains_key(blockhash.as_bytes())?)
     }
 
-    /// Fetch given blockhashhashes from the blockstore.
+    /// Fetch given block hashes from the blockstore.
     /// The resulting vector contains `Option`, which is `Some` if the block
     /// was found in the blockstore, and otherwise it is `None`, if it has not.
     /// The second parameter is a boolean which tells the function to fail in
     /// case at least one block was not found.
-    pub fn get(
-        &self,
-        blockhashhashes: &[blake3::Hash],
-        strict: bool,
-    ) -> Result<Vec<Option<Block>>> {
-        let mut ret = Vec::with_capacity(blockhashhashes.len());
+    pub fn get(&self, block_hashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Block>>> {
+        let mut ret = Vec::with_capacity(block_hashes.len());
 
-        for hash in blockhashhashes {
+        for hash in block_hashes {
             if let Some(found) = self.0.get(hash.as_bytes())? {
                 let block = deserialize(&found)?;
                 ret.push(Some(block));
@@ -203,40 +268,106 @@ impl BlockStore {
     }
 }
 
+/// Overlay structure over a [`BlockStore`] instance.
+pub struct BlockStoreOverlay(SledDbOverlayPtr);
+
+impl BlockStoreOverlay {
+    pub fn new(overlay: SledDbOverlayPtr) -> Result<Self> {
+        overlay.lock().unwrap().open_tree(SLED_BLOCK_TREE)?;
+        Ok(Self(overlay))
+    }
+
+    /// Insert a slice of [`Block`] into the overlay.
+    /// The block are hashed with BLAKE3 and this blockhash is used as
+    /// the key, while value is the serialized [`Block`] itself.
+    /// On success, the function returns the block hashes in the same order.
+    pub fn insert(&self, blocks: &[Block]) -> Result<Vec<blake3::Hash>> {
+        let mut ret = Vec::with_capacity(blocks.len());
+        let mut lock = self.0.lock().unwrap();
+
+        for block in blocks {
+            let serialized = serialize(block);
+            let blockhash = blake3::hash(&serialized);
+            lock.insert(SLED_BLOCK_TREE, blockhash.as_bytes(), &serialized)?;
+            ret.push(blockhash);
+        }
+
+        Ok(ret)
+    }
+
+    /// Fetch given block hashes from the overlay.
+    /// The resulting vector contains `Option`, which is `Some` if the block
+    /// was found in the overlay, and otherwise it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one block was not found.
+    pub fn get(&self, block_hashes: &[blake3::Hash], strict: bool) -> Result<Vec<Option<Block>>> {
+        let mut ret = Vec::with_capacity(block_hashes.len());
+        let lock = self.0.lock().unwrap();
+
+        for hash in block_hashes {
+            if let Some(found) = lock.get(SLED_BLOCK_TREE, hash.as_bytes())? {
+                let block = deserialize(&found)?;
+                ret.push(Some(block));
+            } else {
+                if strict {
+                    let s = hash.to_hex().as_str().to_string();
+                    return Err(Error::BlockNotFound(s))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
+    }
+}
+
+/// Auxiliary structure used to keep track of blocks order.
+#[derive(Debug, SerialEncodable, SerialDecodable)]
+pub struct BlockOrder {
+    /// Slot UID
+    pub slot: u64,
+    /// Block headerhash of that slot
+    pub block: blake3::Hash,
+}
+
+/// [`BlockOrder`] sled tree
+const SLED_BLOCK_ORDER_TREE: &[u8] = b"_block_order";
+
 /// The `BlockOrderStore` is a `sled` tree storing the order of the
 /// blockchain's slots, where the key is the slot uid, and the value is
 /// the blocks' hash. [`BlockStore`] can be queried with this hash.
 #[derive(Clone)]
-pub struct BlockOrderStore(sled::Tree);
+pub struct BlockOrderStore(pub sled::Tree);
 
 impl BlockOrderStore {
     /// Opens a new or existing `BlockOrderStore` on the given sled database.
-    pub fn new(db: &sled::Db, genesis_ts: Timestamp, genesis_data: blake3::Hash) -> Result<Self> {
+    pub fn new(db: &sled::Db) -> Result<Self> {
         let tree = db.open_tree(SLED_BLOCK_ORDER_TREE)?;
-        let store = Self(tree);
-
-        // In case the store is empty, initialize it with the genesis block.
-        if store.0.is_empty() {
-            let genesis_block = Block::genesis_block(genesis_ts, genesis_data);
-            store.insert(&[0], &[genesis_block.blockhash()])?;
-        }
-
-        Ok(store)
+        Ok(Self(tree))
     }
 
-    /// Insert a slice of slots and blockhashes into the store. With sled, the
-    /// operation is done as a batch.
-    /// The block slot is used as the key, and the blockhash is used as value.
+    /// Insert a slice of slots and blockhashes into the store.
     pub fn insert(&self, slots: &[u64], hashes: &[blake3::Hash]) -> Result<()> {
-        assert_eq!(slots.len(), hashes.len());
+        let batch = self.insert_batch(slots, hashes)?;
+        self.0.apply_batch(batch)?;
+        Ok(())
+    }
+
+    /// Generate the sled batch corresponding to an insert, so caller
+    /// can handle the write operation.
+    /// The block slot is used as the key, and the blockhash is used as value.
+    pub fn insert_batch(&self, slots: &[u64], hashes: &[blake3::Hash]) -> Result<sled::Batch> {
+        if slots.len() != hashes.len() {
+            return Err(Error::InvalidInputLengths)
+        }
+
         let mut batch = sled::Batch::default();
 
         for (i, sl) in slots.iter().enumerate() {
             batch.insert(&sl.to_be_bytes(), hashes[i].as_bytes());
         }
 
-        self.0.apply_batch(batch)?;
-        Ok(())
+        Ok(batch)
     }
 
     /// Check if the blockorderstore contains a given slot.
@@ -309,9 +440,24 @@ impl BlockOrderStore {
         Ok(ret)
     }
 
+    /// Fetch the first blockhash in the tree, based on the `Ord`
+    /// implementation for `Vec<u8>`.
+    pub fn get_first(&self) -> Result<(u64, blake3::Hash)> {
+        let found = match self.0.first()? {
+            Some(s) => s,
+            None => return Err(Error::SlotNotFound(0)),
+        };
+
+        let slot_bytes: [u8; 8] = found.0.as_ref().try_into().unwrap();
+        let hash_bytes: [u8; 32] = found.1.as_ref().try_into().unwrap();
+        let slot = u64::from_be_bytes(slot_bytes);
+        let hash = blake3::Hash::from(hash_bytes);
+
+        Ok((slot, hash))
+    }
+
     /// Fetch the last blockhash in the tree, based on the `Ord`
-    /// implementation for `Vec<u8>`. This should not be able to
-    /// fail because we initialize the store with the genesis block.
+    /// implementation for `Vec<u8>`.
     pub fn get_last(&self) -> Result<(u64, blake3::Hash)> {
         let found = self.0.last()?.unwrap();
 
@@ -330,6 +476,99 @@ impl BlockOrderStore {
 
     /// Check if sled contains any records
     pub fn is_empty(&self) -> bool {
-        self.0.len() == 0
+        self.0.is_empty()
+    }
+}
+
+/// Overlay structure over a [`BlockOrderStore`] instance.
+pub struct BlockOrderStoreOverlay(SledDbOverlayPtr);
+
+impl BlockOrderStoreOverlay {
+    pub fn new(overlay: SledDbOverlayPtr) -> Result<Self> {
+        overlay.lock().unwrap().open_tree(SLED_BLOCK_ORDER_TREE)?;
+        Ok(Self(overlay))
+    }
+
+    /// Insert a slice of slots and blockhashes into the store. With sled, the
+    /// operation is done as a batch.
+    /// The block slot is used as the key, and the blockhash is used as value.
+    pub fn insert(&self, slots: &[u64], hashes: &[blake3::Hash]) -> Result<()> {
+        if slots.len() != hashes.len() {
+            return Err(Error::InvalidInputLengths)
+        }
+
+        let mut lock = self.0.lock().unwrap();
+
+        for (i, sl) in slots.iter().enumerate() {
+            lock.insert(SLED_BLOCK_ORDER_TREE, &sl.to_be_bytes(), hashes[i].as_bytes())?;
+        }
+
+        Ok(())
+    }
+
+    /// Fetch given slots from the overlay.
+    /// The resulting vector contains `Option`, which is `Some` if the slot
+    /// was found in the overlay, and otherwise it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one slot was not found.
+    pub fn get(&self, slots: &[u64], strict: bool) -> Result<Vec<Option<blake3::Hash>>> {
+        let mut ret = Vec::with_capacity(slots.len());
+        let lock = self.0.lock().unwrap();
+
+        for slot in slots {
+            if let Some(found) = lock.get(SLED_BLOCK_ORDER_TREE, &slot.to_be_bytes())? {
+                let hash_bytes: [u8; 32] = found.as_ref().try_into().unwrap();
+                let hash = blake3::Hash::from(hash_bytes);
+                ret.push(Some(hash));
+            } else {
+                if strict {
+                    return Err(Error::BlockSlotNotFound(*slot))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
+    }
+
+    /// Fetch the last blockhash in the overlay, based on the `Ord`
+    /// implementation for `Vec<u8>`.
+    pub fn get_last(&self) -> Result<(u64, blake3::Hash)> {
+        let found = self.0.lock().unwrap().last(SLED_BLOCK_ORDER_TREE)?.unwrap();
+
+        let slot_bytes: [u8; 8] = found.0.as_ref().try_into().unwrap();
+        let hash_bytes: [u8; 32] = found.1.as_ref().try_into().unwrap();
+        let slot = u64::from_be_bytes(slot_bytes);
+        let hash = blake3::Hash::from(hash_bytes);
+
+        Ok((slot, hash))
+    }
+
+    /// Check if overlay contains any records
+    pub fn is_empty(&self) -> Result<bool> {
+        Ok(self.0.lock().unwrap().is_empty(SLED_BLOCK_ORDER_TREE)?)
+    }
+}
+
+/// This struct represents [`Block`] producer information.
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct BlockProducer {
+    /// Block producer signature
+    pub signature: Signature,
+    /// Proposal transaction
+    pub proposal: Transaction,
+}
+
+impl BlockProducer {
+    pub fn new(signature: Signature, proposal: Transaction) -> Self {
+        Self { signature, proposal }
+    }
+}
+
+impl Default for BlockProducer {
+    fn default() -> Self {
+        let signature = Signature::dummy();
+        let proposal = Transaction::default();
+        Self { signature, proposal }
     }
 }

@@ -18,7 +18,7 @@
 use std::collections::HashMap;
 
 use darkfi::{
-    consensus::{TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
+    blockchain::BlockInfo,
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
     util::time::TimeKeeper,
     validator::{Validator, ValidatorConfig, ValidatorPtr},
@@ -117,9 +117,9 @@ impl DaoTestHarness {
 
         // NOTE: we are not using consensus constants here so we
         // don't get circular dependencies.
-        let time_keeper = TimeKeeper::new(*TESTNET_GENESIS_TIMESTAMP, 10, 90, 0);
-        let config =
-            ValidatorConfig::new(time_keeper, *TESTNET_GENESIS_HASH_BYTES, faucet_pubkeys.to_vec());
+        let genesis_block = BlockInfo::default();
+        let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
+        let config = ValidatorConfig::new(time_keeper, genesis_block, faucet_pubkeys.to_vec());
         let alice_validator = Validator::new(&alice_sled_db, config).await?;
 
         let money_contract_id = *MONEY_CONTRACT_ID;
