@@ -58,6 +58,9 @@ check: contracts $(PROOFS_BIN)
 fix: contracts $(PROOFS_BIN)
 	$(CARGO) clippy --release --all-features --fix --allow-dirty --all
 
+fmt:
+	$(CARGO) fmt
+
 clippy: contracts $(PROOFS_BIN)
 	$(CARGO) clippy --release --all-features --all
 
@@ -98,5 +101,5 @@ uninstall:
 		rm -f $(DESTDIR)$(PREFIX)/bin/$$i; \
 	done;
 
-.PHONY: all check fix clippy test test-no-run cleanbin clean \
+.PHONY: all check fix fmt clippy test test-no-run cleanbin clean \
 	install uninstall contracts coverage
