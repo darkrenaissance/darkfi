@@ -4,7 +4,7 @@
 PREFIX = $(HOME)/.cargo
 
 # Cargo binary
-CARGO = cargo
+CARGO = cargo +nightly
 
 # Optional compile target
 #RUST_TARGET = x86_64-unknown-linux-musl

@@ -32,8 +32,13 @@ for the P2P IRC daemon.
 This project requires the Rust compiler to be installed. 
 Please visit [Rustup](https://rustup.rs/) for instructions.
 
-You have to install a native toolchain, which is set up during Rust installation, and wasm32 toolchain.
-To install wasm32 toolchain, execute:
+You have to install a native toolchain, which is set up during Rust installation,
+nightly toolchain and wasm32 target.
+To install nightly toolchain, execute:
+```shell
+% rustup toolchain install nightly
+```
+To install wasm32 target, execute:
 ```shell
 % rustup target add wasm32-unknown-unknown
 ```

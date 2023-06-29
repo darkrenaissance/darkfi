@@ -1,7 +1,7 @@
 .POSIX:
 
 # Cargo binary
-CARGO = cargo
+CARGO = cargo +nightly
 
 # zkas compiler binary
 ZKAS = ../../../zkas
