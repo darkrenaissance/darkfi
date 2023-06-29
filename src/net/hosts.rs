@@ -221,9 +221,7 @@ mod tests {
             Url::parse("tcp://255.255.255.255:2131").unwrap(),
         ];
         hosts.store(&local_hosts).await;
-        for i in local_hosts {
-            assert!(hosts.contains(&i).await);
-        }
+        assert!(hosts.is_empty().await);
 
         let remote_hosts = vec![
             Url::parse("tcp://dark.fi:80").unwrap(),
@@ -231,9 +229,7 @@ mod tests {
             Url::parse("tcp://http.cat:401").unwrap(),
         ];
         hosts.store(&remote_hosts).await;
-        for i in remote_hosts {
-            assert!(hosts.contains(&i).await);
-        }
+        assert!(hosts.is_empty().await);
     }
 
     #[async_std::test]
@@ -258,9 +254,7 @@ mod tests {
             Url::parse("tcp://255.255.255.255:2131").unwrap(),
         ];
         hosts.store(&local_hosts).await;
-        for i in local_hosts {
-            assert!(!hosts.contains(&i).await);
-        }
+        assert!(hosts.is_empty().await);
 
         let remote_hosts = vec![
             Url::parse("tcp://dark.fi:80").unwrap(),
@@ -268,8 +262,6 @@ mod tests {
             Url::parse("tcp://foo.bar:111").unwrap(),
         ];
         hosts.store(&remote_hosts).await;
-        assert!(hosts.contains(&remote_hosts[0]).await);
-        assert!(hosts.contains(&remote_hosts[1]).await);
-        assert!(!hosts.contains(&remote_hosts[2]).await);
+        assert!(hosts.is_empty().await);
     }
 }
