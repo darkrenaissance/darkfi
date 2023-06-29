@@ -20,17 +20,17 @@ jobs:
               with:
                 python-version: 3.9
 
-            - name: Install Rust
+            - name: Install Rust (nightly)
               uses: actions-rs/toolchain@v1
               with:
-                toolchain: stable
-                override: true
+                toolchain: nightly
                 components: rustfmt, clippy
+                override: true
 
             - name: Install Rust (wasm32)
               uses: actions-rs/toolchain@v1
               with:
-                toolchain: stable
+                toolchain: nightly
                 target: wasm32-unknown-unknown
                 override: true
 
