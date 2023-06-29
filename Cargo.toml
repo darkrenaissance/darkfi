@@ -28,7 +28,6 @@ members = [
     "bin/fud/fud",
     "bin/genev/genevd",
     "bin/genev/genev-cli",
-    "bin/ircd",
     "bin/darkirc",
     "bin/dnetview",
     #"bin/dao/daod",

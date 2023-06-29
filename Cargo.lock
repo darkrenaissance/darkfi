@@ -453,17 +453,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-recursion"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e97ce7de6cf12de5d7226c73f5ba9811622f4db3a5b91b55c53e987e5f91cba"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.20",
-]
-
-[[package]]
 name = "async-rustls"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2915,16 +2904,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "futures-rustls"
-version = "0.24.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35bd3cf68c183738046838e300353e4716c674dc5e56890de4826801a6622a28"
-dependencies = [
- "futures-io",
- "rustls",
-]
-
-[[package]]
 name = "futures-sink"
 version = "0.3.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3416,38 +3395,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37209be0ad225457e63814401415e748e2453a5297f9b637338f5fb8afa4ec00"
 dependencies = [
  "ipnet",
-]
-
-[[package]]
-name = "ircd"
-version = "0.4.1"
-dependencies = [
- "async-recursion",
- "async-std",
- "async-trait",
- "bs58",
- "chrono",
- "clap 4.3.8",
- "crypto_box",
- "ctrlc",
- "darkfi",
- "darkfi-serial",
- "easy-parallel",
- "futures",
- "futures-rustls",
- "hex",
- "log",
- "rand 0.8.5",
- "ripemd",
- "rustls-pemfile",
- "serde",
- "serde_json",
- "simplelog",
- "smol",
- "structopt",
- "structopt-toml",
- "toml 0.7.5",
- "url",
 ]
 
 [[package]]
