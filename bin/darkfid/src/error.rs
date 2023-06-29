@@ -23,9 +23,9 @@ use darkfi::rpc::jsonrpc::{ErrorCode::ServerError, JsonError, JsonResult};
 /// Custom RPC errors available for darkfid.
 /// Please sort them sensefully.
 pub enum RpcError {
+    /*
     // Wallet/Key-related errors
     NoRowsFoundInWallet = -32101,
-    /*
     Keygen = -32101,
     KeypairFetch = -32102,
     KeypairNotFound = -32103,
@@ -50,9 +50,9 @@ pub enum RpcError {
 
 fn to_tuple(e: RpcError) -> (i64, String) {
     let msg = match e {
+        /*
         // Wallet/Key-related errors
         RpcError::NoRowsFoundInWallet => "No queried rows found in wallet",
-        /*
         RpcError::Keygen => "Failed generating keypair",
         RpcError::KeypairFetch => "Failed fetching keypairs from wallet",
         RpcError::KeypairNotFound => "Keypair not found",

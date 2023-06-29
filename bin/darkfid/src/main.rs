@@ -180,7 +180,7 @@ pub struct Darkfid {
     synced: Mutex<bool>, // AtomicBool is weird in Arc
     consensus_p2p: Option<P2pPtr>,
     sync_p2p: Option<P2pPtr>,
-    wallet: WalletPtr,
+    _wallet: WalletPtr,
     validator_state: ValidatorStatePtr,
 }
 
@@ -259,9 +259,9 @@ impl Darkfid {
         validator_state: ValidatorStatePtr,
         consensus_p2p: Option<P2pPtr>,
         sync_p2p: Option<P2pPtr>,
-        wallet: WalletPtr,
+        _wallet: WalletPtr,
     ) -> Self {
-        Self { synced: Mutex::new(false), consensus_p2p, sync_p2p, wallet, validator_state }
+        Self { synced: Mutex::new(false), consensus_p2p, sync_p2p, _wallet, validator_state }
     }
 }
 

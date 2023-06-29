@@ -29,13 +29,13 @@ use crate::{util::encoding::base32, Result};
 struct ConnectionId([u8; 32]);
 
 impl ConnectionId {
-    fn generate() -> Self {
+    fn _generate() -> Self {
         let mut bytes = [0u8; 32];
         OsRng.fill_bytes(&mut bytes);
         Self(bytes)
     }
 
-    fn from_bytes(bytes: &[u8]) -> Self {
+    fn _from_bytes(bytes: &[u8]) -> Self {
         let mut id = [0u8; 32];
         id[..].copy_from_slice(&bytes[0..32]);
         ConnectionId(id)
@@ -58,12 +58,12 @@ impl NymDialer {
         Ok(Self {})
     }
 
-    pub(crate) async fn do_dial(
+    pub(crate) async fn _do_dial(
         &self,
-        endpoint: Url, // Recipient
-        timeout: Option<Duration>,
+        _endpoint: Url, // Recipient
+        _timeout: Option<Duration>,
     ) -> Result<()> {
-        let id = ConnectionId::generate();
+        let _id = ConnectionId::_generate();
 
         Ok(())
     }

@@ -140,7 +140,7 @@ impl ProtocolDht {
             }
 
             let hashset = state.routing_table.get_mut(&msg.k).unwrap();
-            hashset.remove(&self.channel.address());
+            hashset.remove(self.channel.address());
         }
     }
 

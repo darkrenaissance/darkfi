@@ -185,9 +185,9 @@ async fn mint_pay_swap() -> Result<()> {
     th.execute_transfer_tx(Holder::Alice, &transfer_tx, &transfer_params, current_slot, false)
         .await?;
 
-    info!(target: "money", "[Bob] ==================+===========");
+    info!(target: "money", "[Bob] ==============================");
     info!(target: "money", "[Bob] Executing Bob2Alice payment tx");
-    info!(target: "money", "[Bob] ==================+===========");
+    info!(target: "money", "[Bob] ==============================");
     th.execute_transfer_tx(Holder::Bob, &transfer_tx, &transfer_params, current_slot, false)
         .await?;
 

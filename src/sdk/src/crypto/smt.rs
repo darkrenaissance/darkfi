@@ -69,7 +69,7 @@ pub struct Poseidon<F: WithSmallOrderMulGroup<3> + Ord, const L: usize>(PhantomD
 
 impl<F: WithSmallOrderMulGroup<3> + Ord, const L: usize> Poseidon<F, L> {
     pub fn new() -> Self {
-        Poseidon(PhantomData::default())
+        Poseidon(PhantomData)
     }
 }
 
@@ -88,7 +88,7 @@ where
     }
 
     fn hasher() -> Self {
-        Poseidon(PhantomData::default())
+        Poseidon(PhantomData)
     }
 }
 

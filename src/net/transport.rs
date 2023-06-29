@@ -187,12 +187,12 @@ impl Dialer {
             }
 
             #[cfg(feature = "p2p-transport-nym")]
-            DialerVariant::Nym(dialer) => {
+            DialerVariant::Nym(_dialer) => {
                 todo!();
             }
 
             #[cfg(feature = "p2p-transport-nym")]
-            DialerVariant::NymTls(dialer) => {
+            DialerVariant::NymTls(_dialer) => {
                 todo!();
             }
         }

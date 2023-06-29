@@ -164,8 +164,8 @@ pub struct Tau {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    let log_level = get_log_level(args.verbose.into());
-    let log_config = get_log_config(args.verbose.into());
+    let log_level = get_log_level(args.verbose);
+    let log_config = get_log_config(args.verbose);
     TermLogger::init(log_level, log_config, TerminalMode::Mixed, ColorChoice::Auto)?;
 
     let rpc_client = RpcClient::new(args.endpoint).await?;

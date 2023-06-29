@@ -292,7 +292,7 @@ impl Runtime {
         debug!(target: "runtime::vm_runtime", "Instantiating module");
         let instance = Instance::new(&mut store, &module, &imports)?;
 
-        let mut env_mut = ctx.as_mut(&mut store);
+        let env_mut = ctx.as_mut(&mut store);
         env_mut.memory = Some(instance.exports.get_with_generics(MEMORY)?);
 
         Ok(Self { instance, store, ctx })
@@ -314,7 +314,7 @@ impl Runtime {
     fn call(&mut self, section: ContractSection, payload: &[u8]) -> Result<Vec<u8>> {
         debug!(target: "runtime::vm_runtime", "Calling {} method", section.name());
 
-        let mut env_mut = self.ctx.as_mut(&mut self.store);
+        let env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = section;
         assert!(env_mut.contract_return_data.take().is_none());
         env_mut.contract_return_data.set(None);
@@ -351,7 +351,7 @@ impl Runtime {
         debug!(target: "runtime::vm_runtime", "wasm executed successfully");
         debug!(target: "runtime::vm_runtime", "Contract returned: {:?}", ret[0]);
 
-        let mut env_mut = self.ctx.as_mut(&mut self.store);
+        let env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = ContractSection::Null;
         let retdata = match env_mut.contract_return_data.take() {
             Some(retdata) => retdata,
