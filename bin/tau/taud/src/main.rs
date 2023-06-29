@@ -166,7 +166,7 @@ async fn start_sync_loop(
                         timestamp: Timestamp::current_time(),
                     };
 
-                    p2p.broadcast(event).await?;
+                    p2p.broadcast(&event).await;
 
                 }
             }
@@ -331,8 +331,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     //
     // P2p setup
     //
-    let mut net_settings = settings.net.clone();
-    net_settings.app_version = Some(option_env!("CARGO_PKG_VERSION").unwrap_or("").to_string());
+    let net_settings = settings.net.clone();
 
     let p2p = net::P2p::new(net_settings.into()).await;
     let registry = p2p.protocol_registry();

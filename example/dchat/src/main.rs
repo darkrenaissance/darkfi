@@ -113,7 +113,7 @@ impl Dchat {
         debug!(target: "dchat", "Dchat::register_protocol() [START]");
         let registry = self.p2p.protocol_registry();
         registry
-            .register(!net::SESSION_SEED, move |channel, _p2p| {
+            .register(!net::session::SESSION_SEED, move |channel, _p2p| {
                 let msgs2 = msgs.clone();
                 async move { ProtocolDchat::init(channel, msgs2).await }
             })
@@ -145,7 +145,7 @@ impl Dchat {
     // ANCHOR: send
     async fn send(&self, msg: String) -> Result<()> {
         let dchatmsg = DchatMsg { msg };
-        self.p2p.broadcast(dchatmsg).await?;
+        self.p2p.broadcast(&dchatmsg).await;
         Ok(())
     }
     // ANCHOR_END: send
@@ -179,8 +179,8 @@ fn alice() -> Result<AppSettings> {
     let ext_addr = Url::parse("tcp://127.0.0.1:51554").unwrap();
 
     let net = Settings {
-        inbound: vec![inbound],
-        external_addr: vec![ext_addr],
+        inbound_addrs: vec![inbound],
+        external_addrs: vec![ext_addr],
         seeds: vec![seed],
         localnet: true,
         ..Default::default()
@@ -205,7 +205,7 @@ fn bob() -> Result<AppSettings> {
     let seed = Url::parse("tcp://127.0.0.1:50515").unwrap();
 
     let net = Settings {
-        inbound: vec![],
+        inbound_addrs: vec![],
         outbound_connections: 5,
         seeds: vec![seed],
         localnet: true,

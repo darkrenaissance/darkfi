@@ -25,7 +25,7 @@ use async_std::{
 };
 use darkfi::{
     dht2::{Dht, MAX_CHUNK_SIZE},
-    net::{self, transport::TransportName, P2p},
+    net::{self, P2p},
     util::async_util::{msleep, sleep},
     Result,
 };
@@ -52,9 +52,9 @@ async fn dht_remote_get_insert_real(ex: Arc<Executor<'_>>) -> Result<()> {
         drop(listener);
 
         let settings = net::Settings {
-            inbound: vec![url.clone()],
+            inbound_addrs: vec![url.clone()],
             peers: addrs.clone(),
-            outbound_transports: vec![TransportName::Tcp(None)],
+            allowed_transports: vec!["tcp".into()],
             localnet: true,
             ..Default::default()
         };
@@ -88,7 +88,6 @@ async fn dht_remote_get_insert_real(ex: Arc<Executor<'_>>) -> Result<()> {
 
         dhtds.push(dhtd);
 
-        p2p.wait_for_outbound(ex.clone()).await?;
         sleep(1).await;
     }
 

@@ -73,7 +73,7 @@ struct Args {
 
     #[structopt(long, default_value = "8")]
     /// Connection slots
-    slots: u32,
+    slots: usize,
 
     #[structopt(long)]
     /// Connect to seed (repeatable flag)
@@ -397,14 +397,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
 
     // P2P network
     let network_settings = net::Settings {
-        inbound: args.p2p_accept,
+        inbound_addrs: args.p2p_accept,
         outbound_connections: args.slots,
-        external_addr: args.p2p_external,
+        external_addrs: args.p2p_external,
         peers: args.peers.clone(),
         seeds: args.seeds.clone(),
-        outbound_transports: net::settings::get_outbound_transports(args.transports),
+        allowed_transports: args.transports,
         localnet: args.localnet,
-        channel_log: args.channel_log,
         ..Default::default()
     };
 
@@ -433,9 +432,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         }
     })
     .detach();
-
-    info!("Waiting for P2P outbound connections");
-    p2p.wait_for_outbound(ex).await?;
 
     fud.init().await?;
 

@@ -55,7 +55,7 @@ impl Protocol {
         p2p: P2pPtr,
     ) -> Result<ProtocolBasePtr> {
         debug!(target: "dht::protocol", "Adding Protocol to the protocol registry");
-        let msg_subsystem = channel.get_message_subsystem();
+        let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<KeyRequest>().await;
         msg_subsystem.add_dispatch::<KeyResponse>().await;
         msg_subsystem.add_dispatch::<LookupRequest>().await;

@@ -19,19 +19,15 @@
 // ANCHOR: msg
 use async_std::sync::{Arc, Mutex};
 
-use darkfi::net;
+use darkfi::{impl_p2p_message, net::Message};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 pub type DchatMsgsBuffer = Arc<Mutex<Vec<DchatMsg>>>;
-
-impl net::Message for DchatMsg {
-    fn name() -> &'static str {
-        "DchatMsg"
-    }
-}
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DchatMsg {
     pub msg: String,
 }
+
+impl_p2p_message!(DchatMsg, "DchatMsg");
 // ANCHOR_END: msg

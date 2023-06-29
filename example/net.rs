@@ -55,7 +55,7 @@ pub struct DarkCli {
     pub connect: Option<Vec<String>>,
     ///  connections slots
     #[clap(long)]
-    pub connect_slots: Option<u32>,
+    pub connect_slots: Option<usize>,
     /// RPC port
     #[clap(long)]
     pub rpc_port: Option<String>,
@@ -93,9 +93,9 @@ impl ProgramOptions {
 
         Ok(ProgramOptions {
             network_settings: net::Settings {
-                inbound: accept_addr.clone(),
+                inbound_addrs: accept_addr.clone(),
                 outbound_connections: connection_slots,
-                external_addr: accept_addr,
+                external_addrs: accept_addr,
                 peers: manual_connects,
                 seeds: seed_addrs,
                 ..Default::default()
@@ -108,7 +108,7 @@ fn main() -> Result<()> {
     let options = ProgramOptions::load()?;
 
     let lvl = get_log_level(1);
-    let conf = get_log_config();
+    let conf = get_log_config(1);
 
     TermLogger::init(lvl, conf, TerminalMode::Mixed, ColorChoice::Auto)?;
 

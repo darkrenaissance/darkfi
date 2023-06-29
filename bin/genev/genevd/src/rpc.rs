@@ -111,7 +111,7 @@ impl JsonRpcInterface {
             return JsonResponse::new(json, id).into()
         }
 
-        self.p2p.broadcast(event).await.unwrap();
+        self.p2p.broadcast(&event).await;
 
         let json = json!(true);
         JsonResponse::new(json, id).into()

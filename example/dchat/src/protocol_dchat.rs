@@ -36,7 +36,7 @@ pub struct ProtocolDchat {
 impl ProtocolDchat {
     pub async fn init(channel: net::ChannelPtr, msgs: DchatMsgsBuffer) -> net::ProtocolBasePtr {
         debug!(target: "dchat", "ProtocolDchat::init() [START]");
-        let message_subsytem = channel.get_message_subsystem();
+        let message_subsytem = channel.message_subsystem();
         message_subsytem.add_dispatch::<DchatMsg>().await;
 
         let msg_sub =

@@ -22,8 +22,9 @@ use async_std::sync::Arc;
 use async_trait::async_trait;
 use darkfi::{
     dht2::net_hashmap::{NetHashMapInsert, NetHashMapRemove},
+    impl_p2p_message,
     net::{
-        self, ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
+        ChannelPtr, Message, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
     Result,
@@ -52,11 +53,7 @@ pub struct ChunkRequest {
     pub hash: blake3::Hash,
 }
 
-impl net::Message for ChunkRequest {
-    fn name() -> &'static str {
-        "dhtchunkrequest"
-    }
-}
+impl_p2p_message!(ChunkRequest, "dhtchunkrequest");
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct ChunkReply {
@@ -64,22 +61,14 @@ pub struct ChunkReply {
     pub data: Vec<u8>,
 }
 
-impl net::Message for ChunkReply {
-    fn name() -> &'static str {
-        "dhtchunkreply"
-    }
-}
+impl_p2p_message!(ChunkReply, "dhtchunkreply");
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FileRequest {
     pub hash: blake3::Hash,
 }
 
-impl net::Message for FileRequest {
-    fn name() -> &'static str {
-        "dhtfilerequest"
-    }
-}
+impl_p2p_message!(FileRequest, "dhtfilerequest");
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct FileReply {
@@ -87,16 +76,12 @@ pub struct FileReply {
     pub chunks: Vec<blake3::Hash>,
 }
 
-impl net::Message for FileReply {
-    fn name() -> &'static str {
-        "dhtfilereply"
-    }
-}
+impl_p2p_message!(FileReply, "dhtfilereply");
 
 impl ProtocolDht {
     #[allow(dead_code)]
     pub async fn init(channel: ChannelPtr, p2p: P2pPtr, state: DhtdPtr) -> Result<ProtocolBasePtr> {
-        let msg_subsystem = channel.get_message_subsystem();
+        let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<NetHashMapInsert<blake3::Hash, Vec<blake3::Hash>>>().await;
         msg_subsystem.add_dispatch::<NetHashMapRemove<blake3::Hash>>().await;
         msg_subsystem.add_dispatch::<ChunkRequest>().await;
@@ -137,7 +122,7 @@ impl ProtocolDht {
             state.routing_table.entry(msg.k).or_insert_with(HashSet::new);
 
             let hashset = state.routing_table.get_mut(&msg.k).unwrap();
-            hashset.insert(self.channel.address());
+            hashset.insert(self.channel.address().clone());
         }
     }
 

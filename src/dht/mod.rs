@@ -142,10 +142,7 @@ impl Dht {
             Some(_) => {
                 debug!(target: "dht", "Key removed: {}", key);
                 let request = LookupRequest::new(self.id, key, 1);
-                if let Err(e) = self.p2p.broadcast(&request).await {
-                    error!(target: "dht", "Failed broadcasting request: {}", e);
-                    return Err(e)
-                }
+                self.p2p.broadcast(&request).await;
 
                 self.lookup_remove(key, self.id)
             }
@@ -225,10 +222,7 @@ impl Dht {
         let peer = *peers.iter().last().unwrap();
         let request = KeyRequest::new(self.id, peer, key);
         // TODO: ask connected peers directly, not broadcast
-        if let Err(e) = self.p2p.broadcast(request).await {
-            error!(target: "dht", "Failed broadcasting request: {}", e);
-            return Err(e)
-        }
+        self.p2p.broadcast(&request).await;
 
         Ok(())
     }
