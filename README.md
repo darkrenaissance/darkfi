@@ -41,6 +41,7 @@ To install nightly toolchain, execute:
 To install wasm32 target, execute:
 ```shell
 % rustup target add wasm32-unknown-unknown
+% rustup target add wasm32-unknown-unknown --toolchain nightly
 ```
 Minimum Rust version supported is **1.67.0 (stable)**.
 
