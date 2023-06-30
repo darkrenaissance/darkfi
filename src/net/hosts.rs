@@ -62,6 +62,7 @@ impl Hosts {
     /// Filter given addresses based on certain rulesets and validity.
     async fn filter_addresses(&self, addrs: &[Url]) -> Vec<Url> {
         let mut ret = vec![];
+        let localnet = self.settings.localnet;
 
         for _addr in addrs {
             // Validate that the format is `scheme://host_str:port`
@@ -73,18 +74,21 @@ impl Hosts {
                 continue
             }
 
-            // Our own addresses should never enter the hosts set.
             let host_str = _addr.host_str().unwrap();
-            let mut got_own = false;
-            for ext in &self.settings.external_addrs {
-                if host_str == ext.host_str().unwrap() {
-                    got_own = true;
-                    break
+
+            if !localnet {
+                // Our own addresses should never enter the hosts set.
+                let mut got_own = false;
+                for ext in &self.settings.external_addrs {
+                    if host_str == ext.host_str().unwrap() {
+                        got_own = true;
+                        break
+                    }
+                }
+                if got_own {
+                    continue
                 }
             }
-            if got_own {
-                continue
-            };
 
             // We do this hack in order to parse IPs properly.
             // https://github.com/whatwg/url/issues/749
@@ -93,7 +97,7 @@ impl Hosts {
             // Filter non-global ranges if we're not allowing localnet.
             // Should never be allowed in production, so we don't really care
             // about some of them (e.g. 0.0.0.0, or broadcast, etc.).
-            if !self.settings.localnet {
+            if !localnet {
                 // Filter private IP ranges
                 match addr.host().unwrap() {
                     url::Host::Ipv4(ip) => {
