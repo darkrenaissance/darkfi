@@ -145,9 +145,9 @@ impl SlotStore {
 pub struct SlotStoreOverlay(SledDbOverlayPtr);
 
 impl SlotStoreOverlay {
-    pub fn new(overlay: SledDbOverlayPtr) -> Result<Self> {
+    pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
         overlay.lock().unwrap().open_tree(SLED_SLOT_TREE)?;
-        Ok(Self(overlay))
+        Ok(Self(overlay.clone()))
     }
 
     /// Insert a slice of [`Slot`] into the overlay.

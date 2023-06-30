@@ -993,7 +993,7 @@ impl ValidatorState {
     /// for the contract calls.
     async fn verify_transaction(
         &self,
-        blockchain_overlay: BlockchainOverlayPtr,
+        overlay: &BlockchainOverlayPtr,
         tx: &Transaction,
         verifying_slot: u64,
     ) -> Result<()> {
@@ -1036,12 +1036,8 @@ impl ValidatorState {
             let runtime_key = call.contract_id.to_string();
             if !runtimes.contains_key(&runtime_key) {
                 let wasm = self.blockchain.wasm_bincode.get(call.contract_id)?;
-                let r = Runtime::new(
-                    &wasm,
-                    blockchain_overlay.clone(),
-                    call.contract_id,
-                    time_keeper.clone(),
-                )?;
+                let r =
+                    Runtime::new(&wasm, overlay.clone(), call.contract_id, time_keeper.clone())?;
                 runtimes.insert(runtime_key.clone(), r);
             }
             let runtime = runtimes.get_mut(&runtime_key).unwrap();
@@ -1153,18 +1149,16 @@ impl ValidatorState {
         info!(target: "consensus::validator", "Verifying {} transaction(s)", txs.len());
 
         let mut erroneous_txs = vec![];
-        let blockchain_overlay = BlockchainOverlay::new(&self.blockchain)?;
+        let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
         for tx in txs {
-            if let Err(e) =
-                self.verify_transaction(blockchain_overlay.clone(), tx, verifying_slot).await
-            {
+            if let Err(e) = self.verify_transaction(&overlay, tx, verifying_slot).await {
                 warn!(target: "consensus::validator", "Transaction verification failed: {}", e);
                 erroneous_txs.push(tx.clone());
             }
         }
 
-        let lock = blockchain_overlay.lock().unwrap();
+        let lock = overlay.lock().unwrap();
         let mut overlay = lock.overlay.lock().unwrap();
         if !erroneous_txs.is_empty() {
             warn!(target: "consensus::validator", "Erroneous transactions found in set");

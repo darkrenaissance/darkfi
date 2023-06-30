@@ -160,9 +160,9 @@ impl HeaderStore {
 pub struct HeaderStoreOverlay(SledDbOverlayPtr);
 
 impl HeaderStoreOverlay {
-    pub fn new(overlay: SledDbOverlayPtr) -> Result<Self> {
+    pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
         overlay.lock().unwrap().open_tree(SLED_HEADER_TREE)?;
-        Ok(Self(overlay))
+        Ok(Self(overlay.clone()))
     }
 
     /// Insert a slice of [`Header`] into the overlay.

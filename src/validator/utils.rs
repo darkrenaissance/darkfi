@@ -35,7 +35,7 @@ use crate::{
 /// is necessary. This logic should be handled in the init function of
 /// the actual contract, so make sure the native contracts handle this well.
 pub fn deploy_native_contracts(
-    blockchain_overlay: BlockchainOverlayPtr,
+    overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
     faucet_pubkeys: &Vec<PublicKey>,
 ) -> Result<()> {
@@ -75,8 +75,7 @@ pub fn deploy_native_contracts(
     for nc in native_contracts {
         info!(target: "validator", "Deploying {} with ContractID {}", nc.0, nc.1);
 
-        let mut runtime =
-            Runtime::new(&nc.2[..], blockchain_overlay.clone(), nc.1, time_keeper.clone())?;
+        let mut runtime = Runtime::new(&nc.2[..], overlay.clone(), nc.1, time_keeper.clone())?;
 
         runtime.deploy(&nc.3)?;
 

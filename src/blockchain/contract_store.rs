@@ -66,9 +66,9 @@ impl WasmStore {
 pub struct WasmStoreOverlay(SledDbOverlayPtr);
 
 impl WasmStoreOverlay {
-    pub fn new(overlay: SledDbOverlayPtr) -> Result<Self> {
+    pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
         overlay.lock().unwrap().open_tree(SLED_BINCODE_TREE)?;
-        Ok(Self(overlay))
+        Ok(Self(overlay.clone()))
     }
 
     /// Fetches the bincode for a given ContractId
@@ -222,9 +222,9 @@ impl ContractStateStore {
 pub struct ContractStateStoreOverlay(SledDbOverlayPtr);
 
 impl ContractStateStoreOverlay {
-    pub fn new(overlay: SledDbOverlayPtr) -> Result<Self> {
+    pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
         overlay.lock().unwrap().open_tree(SLED_CONTRACTS_TREE)?;
-        Ok(Self(overlay))
+        Ok(Self(overlay.clone()))
     }
 
     /// Try to initialize a new contract state. Contracts can create a number

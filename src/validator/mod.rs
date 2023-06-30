@@ -79,23 +79,19 @@ impl Validator {
         let blockchain = Blockchain::new(db)?;
 
         // Create an overlay over whole blockchain so we can write stuff
-        let blockchain_overlay = BlockchainOverlay::new(&blockchain)?;
+        let overlay = BlockchainOverlay::new(&blockchain)?;
 
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
             info!(target: "validator", "Appending genesis block");
-            verify_block(blockchain_overlay.clone(), &config.genesis_block, &None)?;
+            verify_block(&overlay, &config.genesis_block, None)?;
         };
 
         // Deploy native wasm contracts
-        deploy_native_contracts(
-            blockchain_overlay.clone(),
-            &config.time_keeper,
-            &config.faucet_pubkeys,
-        )?;
+        deploy_native_contracts(&overlay, &config.time_keeper, &config.faucet_pubkeys)?;
 
         // Write the changes to the actual chain db
-        blockchain_overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
+        overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
         info!(target: "validator", "Initializing Consensus");
         let consensus = Consensus::new(blockchain.clone(), config.time_keeper);
@@ -126,17 +122,24 @@ impl Validator {
 
         // Retrieve last block
         let lock = overlay.lock().unwrap();
-        let mut previous = if !lock.is_empty()? { Some(lock.last_block()?) } else { None };
+        // If blockchain is empty it will error out here
+        let last_block = match lock.last_block() {
+            Ok(l) => l,
+            Err(_) => BlockInfo::default(),
+        };
+        // We only need the reference, thats why we do it like this
+        let mut previous = if !lock.is_empty()? { Some(&last_block) } else { None };
+
         // Validate and insert each block
         for block in blocks {
-            if verify_block(overlay.clone(), block, &previous).is_err() {
+            if verify_block(&overlay, block, previous).is_err() {
                 warn!(target: "validator", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 return Err(Error::BlockIsInvalid(block.blockhash().to_string()))
             };
 
             // Use last inserted block as next iteration previous
-            previous = Some(block.clone());
+            previous = Some(block);
         }
 
         debug!(target: "validator", "Applying overlay changes");
@@ -166,7 +169,7 @@ impl Validator {
         );
 
         // Verify all transactions and get erroneous ones
-        let erroneous_txs = verify_transactions(overlay.clone(), &time_keeper, txs).await?;
+        let erroneous_txs = verify_transactions(&overlay, &time_keeper, txs).await?;
 
         let lock = overlay.lock().unwrap();
         let mut overlay = lock.overlay.lock().unwrap();

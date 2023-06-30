@@ -132,9 +132,9 @@ impl TxStore {
 pub struct TxStoreOverlay(SledDbOverlayPtr);
 
 impl TxStoreOverlay {
-    pub fn new(overlay: SledDbOverlayPtr) -> Result<Self> {
+    pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
         overlay.lock().unwrap().open_tree(SLED_TX_TREE)?;
-        Ok(Self(overlay))
+        Ok(Self(overlay.clone()))
     }
 
     /// Insert a slice of [`Transaction`] into the overlay.

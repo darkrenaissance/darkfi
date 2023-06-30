@@ -34,9 +34,9 @@ use crate::{
 
 /// Validate given [`Transaction`], and apply it to the provided overlay
 pub fn verify_block(
-    overlay: BlockchainOverlayPtr,
+    overlay: &BlockchainOverlayPtr,
     block: &BlockInfo,
-    previous: &Option<BlockInfo>,
+    previous: Option<&BlockInfo>,
 ) -> Result<()> {
     let block_hash = block.blockhash();
     debug!(target: "validator", "Validating block {}", block_hash);
@@ -65,7 +65,7 @@ pub fn verify_block(
 /// Validate WASM execution, signatures, and ZK proofs for a given [`Transaction`],
 /// and apply them it to the provided overlay.
 pub async fn verify_transaction(
-    overlay: BlockchainOverlayPtr,
+    overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
     tx: &Transaction,
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
@@ -174,7 +174,7 @@ pub async fn verify_transaction(
 /// The function takes a boolean called `write` which tells it to actually write
 /// the state transitions to the database.
 pub async fn verify_transactions(
-    overlay: BlockchainOverlayPtr,
+    overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
     txs: &[Transaction],
 ) -> Result<Vec<Transaction>> {
@@ -196,7 +196,7 @@ pub async fn verify_transactions(
     // Iterate over transactions and attempt to verify them
     for tx in txs {
         overlay.lock().unwrap().checkpoint();
-        if let Err(e) = verify_transaction(overlay.clone(), time_keeper, tx, &mut vks).await {
+        if let Err(e) = verify_transaction(overlay, time_keeper, tx, &mut vks).await {
             warn!(target: "validator", "Transaction verification failed: {}", e);
             erroneous_txs.push(tx.clone());
             // TODO: verify this works as expected

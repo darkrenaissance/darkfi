@@ -269,9 +269,9 @@ impl BlockStore {
 pub struct BlockStoreOverlay(SledDbOverlayPtr);
 
 impl BlockStoreOverlay {
-    pub fn new(overlay: SledDbOverlayPtr) -> Result<Self> {
+    pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
         overlay.lock().unwrap().open_tree(SLED_BLOCK_TREE)?;
-        Ok(Self(overlay))
+        Ok(Self(overlay.clone()))
     }
 
     /// Insert a slice of [`Block`] into the overlay.
@@ -466,9 +466,9 @@ impl BlockOrderStore {
 pub struct BlockOrderStoreOverlay(SledDbOverlayPtr);
 
 impl BlockOrderStoreOverlay {
-    pub fn new(overlay: SledDbOverlayPtr) -> Result<Self> {
+    pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
         overlay.lock().unwrap().open_tree(SLED_BLOCK_ORDER_TREE)?;
-        Ok(Self(overlay))
+        Ok(Self(overlay.clone()))
     }
 
     /// Insert a slice of `u64` and block hashes into the store. With sled, the

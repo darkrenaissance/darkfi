@@ -400,13 +400,13 @@ impl BlockchainOverlay {
     /// Instantiate a new `BlockchainOverlay` over the given [`Blockchain`] instance.
     pub fn new(blockchain: &Blockchain) -> Result<BlockchainOverlayPtr> {
         let overlay = Arc::new(Mutex::new(sled_overlay::SledDbOverlay::new(&blockchain.sled_db)));
-        let headers = HeaderStoreOverlay::new(overlay.clone())?;
-        let blocks = BlockStoreOverlay::new(overlay.clone())?;
-        let order = BlockOrderStoreOverlay::new(overlay.clone())?;
-        let slots = SlotStoreOverlay::new(overlay.clone())?;
-        let transactions = TxStoreOverlay::new(overlay.clone())?;
-        let contracts = ContractStateStoreOverlay::new(overlay.clone())?;
-        let wasm_bincode = WasmStoreOverlay::new(overlay.clone())?;
+        let headers = HeaderStoreOverlay::new(&overlay)?;
+        let blocks = BlockStoreOverlay::new(&overlay)?;
+        let order = BlockOrderStoreOverlay::new(&overlay)?;
+        let slots = SlotStoreOverlay::new(&overlay)?;
+        let transactions = TxStoreOverlay::new(&overlay)?;
+        let contracts = ContractStateStoreOverlay::new(&overlay)?;
+        let wasm_bincode = WasmStoreOverlay::new(&overlay)?;
 
         Ok(Arc::new(Mutex::new(Self {
             overlay,
