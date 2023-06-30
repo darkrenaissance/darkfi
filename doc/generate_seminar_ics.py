@@ -34,7 +34,7 @@ EVENTS = [
         "topic": "Consensus",
         "title": "DarkFi Consensus Algorithm and Control Theory",
         "#": 1,
-        "recording": "",
+        "recording": "https://ipfs.io/ipfs/QmQoe1LmfL1ubuML4LQy6jdeDjPKEGD7Z2Dk9kEevqBDtw",
     },
 
     {
