@@ -16,3 +16,20 @@ is done through `meetbot_cfg.py`.
 * Edit `meetbot_cfg.py` for your needs.
 * Navigate terminal to the folder where `meetbot.py` is.
 * Run the bot: `$ python meetbot.py`
+
+## `titlebot`
+`titlebot.py` is a bot used to print the title of a website provided by
+a link in a `PRIVMSG`.
+
+## `tweetifier`
+`tweetifier` is yet another bot that recognizes Twitter links, fetch
+the tweet text and print it out in irc.
+
+## Requirment
+ `git clone https://github.com/Dastan-glitch/tweety.git`\
+ `cd tweety && pip install .`
+
+## `tau-notifier`
+sends notifications about some `tau` commands (namely: adding a new 
+task, changing state, reassigning and new comments) to desired channels 
+in `ircd`. 
