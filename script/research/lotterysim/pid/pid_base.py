@@ -121,8 +121,9 @@ class BasePID:
         self.write_feedback('log' + os.sep + self.type+feedback_hist_file)
         self.write_fval('log'+ os.sep + self.type+output_hist_file)
 
-    def acc(self):
-        return sum(np.array(self.feedback_hist)==self.target)/float(len(self.feedback_hist))
+    def acc(self, window=ACC_WINDOW):
+        windowed_hist = [round(hist, 2) for hist in self.feedback_hist][-1*window:]
+        return sum(np.array(windowed_hist)==self.target)/float(len(windowed_hist))
 
     def acc_percentage(self):
-        return self.acc() * 100
+        return self.acc(window=0) * 100

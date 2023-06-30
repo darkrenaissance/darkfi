@@ -42,12 +42,12 @@ class DarkfiTable:
             f = self.secondary_pid.pid_clipped(float(feedback), debug)
 
             if count%EPOCH_LENGTH == 0:
-                acc = self.secondary_pid.acc_percentage()
+                acc = self.secondary_pid.acc()
                 #staked_ratio = self.avg_stake_ratio()
                 reward = self.primary_pid.pid_clipped(acc, debug)
                 self.rewards += [reward]
 
-            rt_range.set_description('issuance {} DRK'.format(sum(self.rewards)))
+            rt_range.set_description('issuance {} DRK, acc: {}'.format(round(sum(self.rewards),2), round(acc,2)))
             #note! thread overhead is 10X slower than sequential node execution!
             for i in range(len(self.darkies)):
                 self.darkies[i].set_sigma_feedback(self.Sigma, feedback, f, count, hp)
@@ -95,7 +95,7 @@ class DarkfiTable:
         avg_apy = self.avg_apy()
         avg_apr = self.avg_apr()
         #print('apy: {}, staked_ratio: {}'.format(avg_apy, stake_ratio))
-        return self.secondary_pid.acc(), avg_apy, avg_reward, stake_ratio, avg_apr
+        return self.secondary_pid.acc_percentage(), avg_apy, avg_reward, stake_ratio, avg_apr
 
     def avg_apy(self):
         return Num(sum([darkie.apy_scaled_to_runningtime(self.rewards) for darkie in self.darkies])/len(self.darkies))
