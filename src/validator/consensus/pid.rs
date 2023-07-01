@@ -16,22 +16,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{blockchain::Blockchain, util::time::TimeKeeper};
+//! TODO: this is just the foundation layout, so we can complete
+//! the basic validator. We will use pallas::Base::zero() everywhere,
+//! since we just want to simulate its functionality. After layout is
+//! complete, the proper pid functionality will be implemented.
 
-/// DarkFi consensus PID controller
-pub mod pid;
+use darkfi_sdk::pasta::pallas;
 
-/// This struct represents the information required by the consensus algorithm
-pub struct Consensus {
-    /// Canonical (finalized) blockchain
-    pub blockchain: Blockchain,
-    /// Helper structure to calculate time related operations
-    pub time_keeper: TimeKeeper,
+/// Return 2-term target approximation sigma coefficients,
+/// corresponding to current slot consensus state.
+pub fn current_sigmas() -> (pallas::Base, pallas::Base) {
+    (pallas::Base::zero(), pallas::Base::zero())
 }
 
-impl Consensus {
-    /// Generate a new Consensus state.
-    pub fn new(blockchain: Blockchain, time_keeper: TimeKeeper) -> Self {
-        Self { blockchain, time_keeper }
-    }
+/// Return 2-term target approximation sigma coefficients,
+/// corresponding to provided slot consensus state.
+pub fn slot_sigmas() -> (pallas::Base, pallas::Base) {
+    (pallas::Base::zero(), pallas::Base::zero())
 }

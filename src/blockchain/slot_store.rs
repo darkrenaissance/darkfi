@@ -20,9 +20,46 @@
 use darkfi_sdk::blockchain::Slot;
 use darkfi_serial::{deserialize, serialize};
 
-use crate::{Error, Result};
+use crate::{validator::consensus::pid::slot_sigmas, Error, Result};
 
 use super::{parse_record, SledDbOverlayPtr};
+
+/// A slot is considered valid when the following rules apply:
+///     1. Id increments previous slot id
+///     2. Forks extend previous block hash
+///     3. Forks follow previous block sequence
+///     4. Sigmas are the expected ones, based on consensus PID
+/// Additional validity rules can be applied.
+pub fn validate_slot(
+    slot: &Slot,
+    previous: &Slot,
+    previous_block_hash: &blake3::Hash,
+    previous_block_sequence: &blake3::Hash,
+) -> Result<()> {
+    let error = Err(Error::SlotIsInvalid(slot.id));
+
+    // Check slots are incremental (1)
+    if slot.id <= previous.id {
+        return error
+    }
+
+    // Check previous block hash (2)
+    if !slot.fork_hashes.contains(previous_block_hash) {
+        return error
+    }
+
+    // Check previous block sequence (3)
+    if !slot.fork_previous_hashes.contains(previous_block_sequence) {
+        return error
+    }
+
+    // Check sigmas (4)
+    if (slot.sigma1, slot.sigma2) != slot_sigmas() {
+        return error
+    }
+
+    Ok(())
+}
 
 const SLED_SLOT_TREE: &[u8] = b"_slots";
 

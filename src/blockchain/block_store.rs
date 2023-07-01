@@ -21,7 +21,7 @@ use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 
 use crate::{tx::Transaction, Error, Result};
 
-use super::{parse_record, Header, SledDbOverlayPtr};
+use super::{parse_record, validate_slot, Header, SledDbOverlayPtr};
 
 /// Block version number
 pub const BLOCK_VERSION: u8 = 1;
@@ -109,59 +109,50 @@ impl BlockInfo {
         block.blockhash()
     }
 
-    /// A block is considered valid when its parent hash is equal to the hash of the
-    /// previous block and their slots are incremental.
+    /// A block is considered valid when the following rules apply:
+    ///     1. Parent hash is equal to the hash of the previous block
+    ///     2. Timestamp increments previous block timestamp
+    ///     3. Slot increments previous block slot
+    ///     4. Slots vector is not empty and all its slots are valid
+    ///     5. Slot is the same as the slots vector last slot id
     /// Additional validity rules can be applied.
     pub fn validate(&self, previous: &Self) -> Result<()> {
         let error = Err(Error::BlockIsInvalid(self.blockhash().to_string()));
         let previous_hash = previous.blockhash();
 
-        // Check previous hash
+        // Check previous hash (1)
         if self.header.previous != previous_hash {
             return error
         }
 
-        // Check timestamps are incremental
+        // Check timestamps are incremental (2)
         if self.header.timestamp <= previous.header.timestamp {
             return error
         }
 
-        // Check slots are incremental
+        // Check slots are incremental (3)
         if self.header.slot <= previous.header.slot {
             return error
         }
 
-        // Verify slots exist
-        let mut slots = self.slots.clone();
-        if slots.is_empty() {
+        // Verify slots (4)
+        if self.slots.is_empty() {
             return error
         }
 
-        // Sort them just to be safe
-        slots.sort_by(|a, b| b.id.cmp(&a.id));
+        // Retrieve previous block last slot
+        let mut previous_slot = previous.slots.last().unwrap();
 
-        // Verify first slot increments from previous block
-        if slots[0].id <= previous.header.slot {
+        // Slots must already be in correct order (sorted by id)
+        for slot in &self.slots {
+            validate_slot(slot, previous_slot, &previous_hash, &previous.header.previous)?;
+            previous_slot = slot;
+        }
+
+        // Check block slot is the last slot id (5)
+        if self.slots.last().unwrap().id != self.header.slot {
             return error
         }
-
-        // Check all slot cover same sequence
-        for slot in &slots {
-            if !slot.fork_hashes.contains(&previous_hash) {
-                return error
-            }
-            if !slot.fork_previous_hashes.contains(&previous.header.previous) {
-                return error
-            }
-        }
-
-        // Check block slot is the last slot in the slice
-        if slots.last().unwrap().id != self.header.slot {
-            return error
-        }
-
-        // TODO: also validate slots etas and sigmas if we can derive them
-        // from previous slots
 
         Ok(())
     }

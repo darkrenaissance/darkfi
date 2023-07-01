@@ -18,7 +18,10 @@
 
 use std::{collections::HashMap, io::Cursor};
 
-use darkfi_sdk::{crypto::PublicKey, pasta::pallas};
+use darkfi_sdk::{
+    crypto::{PublicKey, CONSENSUS_CONTRACT_ID},
+    pasta::pallas,
+};
 use darkfi_serial::{Decodable, Encodable, WriteExt};
 use log::{debug, error, warn};
 
@@ -32,38 +35,92 @@ use crate::{
     Error, Result,
 };
 
-/// Validate given [`Transaction`], and apply it to the provided overlay
-pub fn verify_block(
+/// Validate given [`BlockInfo`], and apply it to the provided overlay
+pub async fn verify_block(
     overlay: &BlockchainOverlayPtr,
+    time_keeper: &TimeKeeper,
     block: &BlockInfo,
     previous: Option<&BlockInfo>,
 ) -> Result<()> {
     let block_hash = block.blockhash();
     debug!(target: "validator", "Validating block {}", block_hash);
 
-    let lock = overlay.lock().unwrap();
-
     // Check if block already exists
-    if lock.has_block(block)? {
+    if overlay.lock().unwrap().has_block(block)? {
         return Err(Error::BlockAlreadyExists(block.blockhash().to_string()))
     }
 
-    // This will be true for every block, apart from genesis
-    if let Some(p) = previous {
-        block.validate(p)?;
+    // Block slot must be the same as the time keeper verifying slot
+    if block.header.slot != time_keeper.verifying_slot {
+        return Err(Error::VerifyingSlotMissmatch())
     }
 
-    // TODO: Add rest block verifications here
+    // Validate block using its previous, excluding genesis
+    if block.header.slot != 0 {
+        if previous.is_none() {
+            return Err(Error::BlockPreviousMissing())
+        }
+        block.validate(previous.unwrap())?;
+    }
+
+    // Validate proposal transaction
+    verify_proposal_transaction(overlay, time_keeper, &block.producer.proposal).await?;
+
+    // Verify transactions
+    verify_transactions(overlay, time_keeper, &block.txs).await?;
 
     // Insert block
-    lock.add_block(block)?;
+    overlay.lock().unwrap().add_block(block)?;
 
     debug!(target: "validator", "Block {} verified successfully", block_hash);
     Ok(())
 }
 
+/// Validate WASM execution, signatures, and ZK proofs for a given proposal [`Transaction`],
+/// and apply it to the provided overlay.
+pub async fn verify_proposal_transaction(
+    overlay: &BlockchainOverlayPtr,
+    time_keeper: &TimeKeeper,
+    tx: &Transaction,
+) -> Result<()> {
+    let tx_hash = tx.hash();
+    debug!(target: "validator", "Validating proposal transaction {}", tx_hash);
+
+    // Genesis transaction must be the Transaction::default() one (empty)
+    if time_keeper.verifying_slot == 0 {
+        if *tx != Transaction::default() {
+            error!(target: "validator", "Genesis proposal transaction is not default one");
+            return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+        }
+
+        return Ok(())
+    }
+
+    // Transaction must contain a single Consensus::Proposal (0x02) call
+    if tx.calls.len() != 1 ||
+        (tx.calls[0].contract_id != *CONSENSUS_CONTRACT_ID && tx.calls[0].data[0] != 0x02)
+    {
+        error!(target: "validator", "Proposal transaction is malformed");
+        return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+    }
+
+    // Map of ZK proof verifying keys for the current transaction batch
+    let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
+
+    // Initialize the map
+    vks.insert(tx.calls[0].contract_id.to_bytes(), HashMap::new());
+
+    // TODO: when fee is implemented, differentiate here since this transaction
+    // won't have fee
+    verify_transaction(overlay, time_keeper, tx, &mut vks).await?;
+
+    debug!(target: "validator", "Proposal transaction {} verified successfully", tx_hash);
+
+    Ok(())
+}
+
 /// Validate WASM execution, signatures, and ZK proofs for a given [`Transaction`],
-/// and apply them it to the provided overlay.
+/// and apply it to the provided overlay.
 pub async fn verify_transaction(
     overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
@@ -159,7 +216,7 @@ pub async fn verify_transaction(
 
     debug!(target: "validator", "Verifying ZK proofs for transaction {}", tx_hash);
     if let Err(e) = tx.verify_zkps(verifying_keys, zkp_table).await {
-        error!(target: "consensus::validator", "ZK proof verification for tx {} failed: {}", tx_hash, e);
+        error!(target: "validator", "ZK proof verification for tx {} failed: {}", tx_hash, e);
         return Err(TxVerifyFailed::InvalidZkProof.into())
     }
 

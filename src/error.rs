@@ -319,11 +319,20 @@ pub enum Error {
     #[error("Block {0} already in database")]
     BlockAlreadyExists(String),
 
+    #[error("Didn't provide blocks' previous")]
+    BlockPreviousMissing(),
+
     #[error("Block {0} not found in database")]
     BlockNotFound(String),
 
     #[error("Block with order number {0} not found in database")]
     BlockNumberNotFound(u64),
+
+    #[error("Verifying slot missmatch")]
+    VerifyingSlotMissmatch(),
+
+    #[error("Slot {0} is invalid")]
+    SlotIsInvalid(u64),
 
     #[error("Slot {0} not found in database")]
     SlotNotFound(u64),

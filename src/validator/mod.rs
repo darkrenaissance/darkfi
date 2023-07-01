@@ -84,7 +84,7 @@ impl Validator {
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
             info!(target: "validator", "Appending genesis block");
-            verify_block(&overlay, &config.genesis_block, None)?;
+            verify_block(&overlay, &config.time_keeper, &config.genesis_block, None).await?;
         };
 
         // Deploy native wasm contracts
@@ -120,19 +120,24 @@ impl Validator {
         debug!(target: "validator", "Instantiating BlockchainOverlay");
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
-        // Retrieve last block
-        let lock = overlay.lock().unwrap();
-        // If blockchain is empty it will error out here
-        let last_block = match lock.last_block() {
+        // Retrieve last block. If blockchain is empty it will error out here
+        let last_block = match overlay.lock().unwrap().last_block() {
             Ok(l) => l,
             Err(_) => BlockInfo::default(),
         };
         // We only need the reference, thats why we do it like this
-        let mut previous = if !lock.is_empty()? { Some(&last_block) } else { None };
+        let mut previous =
+            if !overlay.lock().unwrap().is_empty()? { Some(&last_block) } else { None };
+
+        // Create a time keeper to validate each block
+        let mut time_keeper = self.consensus.time_keeper.clone();
 
         // Validate and insert each block
         for block in blocks {
-            if verify_block(&overlay, block, previous).is_err() {
+            // Use block slot in time keeper
+            time_keeper.verifying_slot = block.header.slot;
+
+            if verify_block(&overlay, &time_keeper, block, previous).await.is_err() {
                 warn!(target: "validator", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 return Err(Error::BlockIsInvalid(block.blockhash().to_string()))
