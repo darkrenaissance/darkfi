@@ -41,6 +41,7 @@ pub mod utils;
 use utils::deploy_native_contracts;
 
 /// Configuration for initializing [`Validator`]
+#[derive(Clone)]
 pub struct ValidatorConfig {
     /// Helper structure to calculate time related operations
     pub time_keeper: TimeKeeper,

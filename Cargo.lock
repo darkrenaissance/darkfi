@@ -1797,6 +1797,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "darkfid2"
+version = "0.4.1"
+dependencies = [
+ "async-std",
+ "ctrlc",
+ "darkfi",
+ "darkfi-contract-test-harness",
+ "easy-parallel",
+ "log",
+ "serde",
+ "simplelog",
+ "sled",
+ "smol",
+ "structopt",
+ "structopt-toml",
+]
+
+[[package]]
 name = "darkirc"
 version = "0.4.1"
 dependencies = [

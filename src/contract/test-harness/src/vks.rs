@@ -129,7 +129,7 @@ fn read_or_gen_vks() -> Result<Vks> {
     Ok(vks)
 }
 
-pub(crate) fn inject(sled_db: &sled::Db) -> Result<()> {
+pub fn inject(sled_db: &sled::Db) -> Result<()> {
     // Use pregenerated vks
     let vks = read_or_gen_vks()?;
 

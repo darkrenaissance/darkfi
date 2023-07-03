@@ -1,0 +1,10 @@
+## darkfid configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+##
+## The default values are left commented. They can be overridden either by
+## uncommenting, or by using the command-line.
+
+# Enable single-node mode for local testing
+single_node = false

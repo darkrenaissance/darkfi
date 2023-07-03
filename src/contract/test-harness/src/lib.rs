@@ -54,7 +54,7 @@ use rand::rngs::OsRng;
 
 mod benchmarks;
 use benchmarks::TxActionBenchmarks;
-mod vks;
+pub mod vks;
 
 mod consensus_genesis_stake;
 mod consensus_proposal;
