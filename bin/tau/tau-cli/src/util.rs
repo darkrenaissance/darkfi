@@ -85,7 +85,10 @@ pub fn prompt_text(task_info: TaskInfo, what: &str) -> Result<Option<String>> {
         Err(_) => "xdg-open".into(),
     };
 
-    Command::new(editor_argv0).arg(&file_path).status()?;
+    if let Err(e) = Command::new(editor_argv0).arg(&file_path).status() {
+        error!("Running $EDITOR failed, neither env or xdg-open are available");
+        return Err(e.into())
+    }
 
     // Whatever has been written in the temp file will be read here.
     let content = fs::read_to_string(&file_path)?;
