@@ -152,7 +152,7 @@ pub struct SettingsOpt {
     pub allowed_transports: Vec<String>,
 
     #[structopt(long)]
-    pub transport_mixing: bool,
+    pub transport_mixing: Option<bool>,
 
     /// Allow localnet hosts
     #[serde(default)]
@@ -173,7 +173,7 @@ impl From<SettingsOpt> for Settings {
             seeds: opt.seeds,
             app_version,
             allowed_transports: opt.allowed_transports,
-            transport_mixing: opt.transport_mixing,
+            transport_mixing: opt.transport_mixing.unwrap_or(false),
             outbound_connections: opt.outbound_connections.unwrap_or(0),
             manual_attempt_limit: opt.manual_attempt_limit.unwrap_or(0),
             seed_query_timeout: opt.seed_query_timeout.unwrap_or(30),
