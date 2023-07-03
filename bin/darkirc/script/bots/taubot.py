@@ -41,7 +41,7 @@ while True:
                     assigned = ", ".join(task['assign'])
 
                     project = task['project'] if task['project'] is not None else []
-                    if args.skip in project or args.skip in task['tags']:
+                    if args.skip in project or '+' + args.skip in task['tags']:
                         channel = args.alt_chan
 
                     if len(assigned) > 0:
@@ -57,7 +57,7 @@ while True:
                     title = task['title']
 
                     project = task['project'] if task['project'] is not None else []
-                    if args.skip in project or args.skip in task['tags']:
+                    if args.skip in project or '+' + args.skip in task['tags']:
                         channel = args.alt_chan
 
                     if state == "start":
@@ -76,7 +76,7 @@ while True:
                     title = task['title']
                     
                     project = task['project'] if task['project'] is not None else []
-                    if args.skip in project or args.skip in task['tags']:
+                    if args.skip in project or '+' + args.skip in task['tags']:
                         channel = args.alt_chan
 
                     notification = f"{user} commented on task ({id}): {title}"
@@ -89,7 +89,7 @@ while True:
                     title = task['title']
 
                     project = task['project'] if task['project'] is not None else []
-                    if args.skip in project or args.skip in task['tags']:
+                    if args.skip in project or '+' + args.skip in task['tags']:
                         channel = args.alt_chan
 
                     notification = f"{user} reassigned task ({id}): {title} to {assignees}"
