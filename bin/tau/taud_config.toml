@@ -8,34 +8,30 @@
 #nickname="NICKNAME"
 
 ## Workspaces
-# workspaces = ["darkfi:86MGNN31r3VxT4ULMmhQnMtV8pDnod339KwHwHCfabG2"]
+workspaces = ["darkfi-dev:2bCqQTd8BJgeUzH7JQELZxjQuWS8aCmXZ9C6w7ktNS1v"]
 
-## Raft net settings
+# P2P network settings
 [net]
 ## P2P accept addresses
-#inbound = ["tcp://127.0.0.1:23331"]
+#inbound = ["tcp+tls://127.0.0.1:23331"]
 
 ## Connection slots
 outbound_connections=8
 
-## P2P external addresses
-#external_addr = ["tls://127.0.0.1:23331"]
+## Addresses we want to advertise to peers
+## These should be reachable externally
+#external_addrs = ["tcp+tls://127.0.0.1:23331"]
 
-## Peers to connect to
-#peers = ["tls://127.0.0.1:23331"]
+## Specific peers to connect to
+#peers = ["tcp+tls://127.0.0.1:23331"]
 
 ## Seed nodes to connect to
-seeds=["tls://lilith0.dark.fi:23331", "tls://lilith1.dark.fi:23331"]
+seeds=["tcp+tls://lilith0.dark.fi:23331", "tcp+tls://lilith1.dark.fi:23331"]
 
-# Prefered transports for outbound connections
-#transports = ["tls", "tcp"]
+# Whitelisted transports for outbound connections
+allowed_transports = ["tcp+tls"]
 
-## these are the default configuration for the p2p network
-#manual_attempt_limit=0
-#seed_query_timeout_seconds=8
-#connect_timeout_seconds=10
-#channel_handshake_seconds=4
-#channel_heartbeat_seconds=10
-
-# Enable channel log
-#channel_log = false
+# Enable transport mixing
+# Allows mixing transports, e.g. tor+tls:// connecting to tcp+tls://
+# By default this is not allowed.
+#transport_mixing = false
