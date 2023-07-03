@@ -22,26 +22,30 @@ accept_addrs = [
 #hosts_file="~/.config/darkfi/lilith_hosts.tsv"
 
 ## Per-network settings
-#[network."darkfid_sync"]
+#[network."darkfid_sync_v4"]
 #port = 33032
 #seeds = []
 #peers = []
+#version = "0.4.1"
 #localnet = false
 
-#[network."darkfid_consensus"]
+#[network."darkfid_consensus_v4"]
 #port = 33033
 #seeds = []
 #peers = []
+#version = "0.4.1"
 #localnet = false
 
-#[network."ircd"]
+#[network."darkirc_v4"]
 #port = 25551
 #seeds = []
 #peers = []
+#version = "0.4.1"
 #localnet = false
 
-#[network."taud"]
+#[network."taud_v4"]
 #port = 23331
 #seeds = []
 #peers = []
+#version = "0.4.1"
 #localnet = false

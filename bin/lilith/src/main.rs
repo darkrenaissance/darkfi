@@ -26,6 +26,7 @@ use async_std::{stream::StreamExt, sync::Arc};
 use async_trait::async_trait;
 use futures::future::join_all;
 use log::{debug, error, info, warn};
+use semver::Version;
 use serde_json::json;
 use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
 use signal_hook_async_std::Signals;
@@ -117,6 +118,8 @@ struct NetInfo {
     pub seeds: Vec<Url>,
     /// Manual peers to connect to
     pub peers: Vec<Url>,
+    /// Supported network version
+    pub version: Version,
     /// Enable localnet hosts
     pub localnet: bool,
 }
@@ -355,7 +358,13 @@ fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
                     false
                 };
 
-                let net_info = NetInfo { port, seeds, peers, localnet };
+                let version = if table.contains_key("version") {
+                    semver::Version::parse(table["version"].as_str().unwrap())?
+                } else {
+                    semver::Version::parse(option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0"))?
+                };
+
+                let net_info = NetInfo { port, seeds, peers, version, localnet };
                 ret.insert(name, net_info);
             }
         }
@@ -386,6 +395,7 @@ async fn spawn_net(
         seeds: info.seeds.clone(),
         peers: info.peers.clone(),
         outbound_connections: 0,
+        app_version: info.version.clone(),
         localnet: info.localnet,
         allowed_transports: vec![
             "tcp".to_string(),

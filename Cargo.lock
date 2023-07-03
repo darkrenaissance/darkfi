@@ -3599,6 +3599,7 @@ dependencies = [
  "easy-parallel",
  "futures",
  "log",
+ "semver 1.0.17",
  "serde",
  "serde_json",
  "signal-hook",

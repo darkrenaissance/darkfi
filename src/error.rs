@@ -60,6 +60,10 @@ pub enum Error {
     #[error(transparent)]
     DashuParseError(#[from] dashu::base::error::ParseError),
 
+    #[cfg(feature = "semver")]
+    #[error("semver parse error: {0}")]
+    SemverError(String),
+
     // ===============
     // Encoding errors
     // ===============
@@ -619,6 +623,13 @@ impl From<rusqlite::Error> for Error {
 impl From<halo2_proofs::plonk::Error> for Error {
     fn from(err: halo2_proofs::plonk::Error) -> Self {
         Self::PlonkError(err.to_string())
+    }
+}
+
+#[cfg(feature = "semver")]
+impl From<semver::Error> for Error {
+    fn from(err: semver::Error) -> Self {
+        Self::SemverError(err.to_string())
     }
 }
 
