@@ -119,19 +119,6 @@ impl Hosts {
                 }
             }
 
-            #[cfg(not(feature = "p2p-transport-tor"))]
-            // If Tor is not enabled, we won't store the addrs as we have
-            // no means to validate them.
-            if addr.scheme() == "tor" || addr.scheme() == "tor+tls" {
-                continue
-            }
-
-            #[cfg(not(feature = "p2p-transport-nym"))]
-            // Same for Nym
-            if addr.scheme() == "nym" || addr.scheme() == "nym+tls" {
-                continue
-            }
-
             match addr.scheme() {
                 // Validate that the address is an actual onion.
                 #[cfg(feature = "p2p-transport-tor")]
@@ -143,7 +130,7 @@ impl Hosts {
                 }
 
                 #[cfg(feature = "p2p-transport-nym")]
-                "nym" | "nym+tls" => {}
+                "nym" | "nym+tls" => continue, // <-- Temp skip
 
                 #[cfg(feature = "p2p-transport-tcp")]
                 "tcp" | "tcp+tls" => {}
