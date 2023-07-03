@@ -20,7 +20,17 @@ use async_std::sync::Arc;
 use log::info;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 
-use darkfi::{async_daemonize, cli_desc, Result};
+use darkfi::{
+    async_daemonize,
+    blockchain::BlockInfo,
+    cli_desc,
+    util::time::TimeKeeper,
+    validator::{Validator, ValidatorConfig, ValidatorPtr},
+    Result,
+};
+
+#[cfg(test)]
+mod tests;
 
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
@@ -42,6 +52,16 @@ struct Args {
     verbose: u8,
 }
 
+pub struct Darkfid {
+    _validator: ValidatorPtr,
+}
+
+impl Darkfid {
+    pub async fn new(_validator: ValidatorPtr) -> Self {
+        Self { _validator }
+    }
+}
+
 async_daemonize!(realmain);
 async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()> {
     info!("Initializing DarkFi node...");
@@ -55,10 +75,24 @@ async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()> {
     })
     .unwrap();
 
+    // NOTE: everything is dummy for now
+    // Initialize or open sled database
+    let sled_db = sled::Config::new().temporary(true).open()?;
+
+    // Initialize validator configuration
+    let genesis_block = BlockInfo::default();
+    let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
+    let config = ValidatorConfig::new(time_keeper, genesis_block, vec![]);
+
     if args.single_node {
         info!("Node is configured to run in single-node mode!");
     }
 
+    // Initialize validator
+    let validator = Validator::new(&sled_db, config).await?;
+
+    // Initialize node
+    let _darkfid = Darkfid::new(validator).await;
     info!("Node initialized successfully!");
 
     // Wait for SIGINT

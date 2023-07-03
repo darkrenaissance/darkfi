@@ -19,18 +19,20 @@
 use darkfi::{
     blockchain::BlockInfo,
     util::time::TimeKeeper,
-    validator::{Validator, ValidatorConfig, ValidatorPtr},
+    validator::{Validator, ValidatorConfig},
     Result,
 };
-use darkfi_contract_test_harness::{init_logger, vks};
+use darkfi_contract_test_harness::vks;
 
-struct Harness {
-    pub _alice: ValidatorPtr,
-    pub _bob: ValidatorPtr,
+use crate::Darkfid;
+
+pub struct Harness {
+    pub _alice: Darkfid,
+    pub _bob: Darkfid,
 }
 
 impl Harness {
-    async fn new() -> Result<Self> {
+    pub async fn new() -> Result<Self> {
         // Generate default genesis block
         let genesis_block = BlockInfo::default();
 
@@ -43,22 +45,13 @@ impl Harness {
         // Generate validators using pregenerated vks
         let sled_db = sled::Config::new().temporary(true).open()?;
         vks::inject(&sled_db)?;
-        let _alice = Validator::new(&sled_db, config.clone()).await?;
+        let validator = Validator::new(&sled_db, config.clone()).await?;
+        let _alice = Darkfid::new(validator).await;
         let sled_db = sled::Config::new().temporary(true).open()?;
         vks::inject(&sled_db)?;
-        let _bob = Validator::new(&sled_db, config).await?;
+        let validator = Validator::new(&sled_db, config.clone()).await?;
+        let _bob = Darkfid::new(validator).await;
 
         Ok(Self { _alice, _bob })
     }
-}
-
-#[async_std::test]
-async fn add_blocks() -> Result<()> {
-    init_logger();
-
-    // Initialize harness
-    let _th = Harness::new().await?;
-
-    // Thanks for reading
-    Ok(())
 }
