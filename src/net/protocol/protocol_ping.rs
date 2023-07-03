@@ -105,9 +105,9 @@ impl ProtocolPing {
 
             debug!(
                 target: "net::protocol_ping::run_ping_pong()",
-                "Received Pong from {}: {}ms",
-                timer.elapsed().as_millis(),
+                "Received Pong from {}: {:?}",
                 self.channel.address(),
+                timer.elapsed(),
             );
 
             // Sleep until next heartbeat
