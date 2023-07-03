@@ -44,7 +44,7 @@ use darkfi::{
             ErrorCode::{InvalidParams, MethodNotFound},
             JsonError, JsonRequest, JsonResponse, JsonResult,
         },
-        server::RequestHandler,
+        server::{listen_and_serve, RequestHandler},
     },
     util::{
         async_util::sleep,
@@ -484,6 +484,11 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         let name = network.name.clone();
         ex.spawn(Lilith::periodic_purge(name, network.p2p.clone(), ex.clone())).detach();
     }
+
+    // JSON-RPC server
+    info!("Starting JSON-RPC server on {}", args.rpc_listen);
+    let _ex = ex.clone();
+    ex.spawn(listen_and_serve(args.rpc_listen, lilith.clone(), _ex)).detach();
 
     // Wait for termination signal
     term_rx.recv().await?;
