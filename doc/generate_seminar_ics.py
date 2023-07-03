@@ -48,8 +48,8 @@ EVENTS = [
     },
 
     {
-        "start": "20230629T140000Z",
-        "end": "20230629T160000Z",
+        "start": "20230727T140000Z",
+        "end": "20230727T160000Z",
         "track": "Dev",
         "topic": "Event Graph",
         "title": "Walkthrough the Event Graph",
