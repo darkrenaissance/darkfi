@@ -141,8 +141,12 @@ impl Wallet {
         // NOTE: we are not using consensus constants here so we
         // don't get circular dependencies.
         let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
-        let config =
-            ValidatorConfig::new(time_keeper, genesis_block.clone(), faucet_pubkeys.to_vec());
+        let config = ValidatorConfig::new(
+            time_keeper,
+            genesis_block.clone(),
+            faucet_pubkeys.to_vec(),
+            false,
+        );
         let validator = Validator::new(&sled_db, config).await?;
 
         // Create necessary Merkle trees for tracking

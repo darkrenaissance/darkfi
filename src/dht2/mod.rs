@@ -119,9 +119,7 @@ impl Dht {
         // Scan through available files and grab the metadata
         let mut file_paths = fs::read_dir(&self.files_path).await?;
         while let Some(file) = file_paths.next().await {
-            let Ok(entry) = file else {
-                continue
-            };
+            let Ok(entry) = file else { continue };
 
             let path = entry.path();
 
@@ -142,9 +140,7 @@ impl Dht {
             };
 
             // Read the chunk hashes from the file
-            let Ok(chunk_hashes) = Self::read_chunks(&path).await else {
-                continue
-            };
+            let Ok(chunk_hashes) = Self::read_chunks(&path).await else { continue };
 
             // Now we have to see that the chunks actually exist and also
             // confirm that hashing all the chunks results in `file_hash`.

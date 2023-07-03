@@ -1804,6 +1804,7 @@ dependencies = [
  "ctrlc",
  "darkfi",
  "darkfi-contract-test-harness",
+ "darkfi-sdk",
  "easy-parallel",
  "log",
  "serde",

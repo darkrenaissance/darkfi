@@ -44,8 +44,8 @@ struct Args {
     config: Option<String>,
 
     #[structopt(long)]
-    /// Enable single-node mode for local testing
-    single_node: bool,
+    /// Enable testing mode for local testing
+    testing_node: bool,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -82,10 +82,10 @@ async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()> {
     // Initialize validator configuration
     let genesis_block = BlockInfo::default();
     let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
-    let config = ValidatorConfig::new(time_keeper, genesis_block, vec![]);
+    let config = ValidatorConfig::new(time_keeper, genesis_block, vec![], args.testing_node);
 
-    if args.single_node {
-        info!("Node is configured to run in single-node mode!");
+    if args.testing_node {
+        info!("Node is configured to run in testing mode!");
     }
 
     // Initialize validator

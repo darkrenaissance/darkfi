@@ -67,8 +67,9 @@ impl Drk {
         };
 
         let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
-        let Some(dao_mint_zkbin) = zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_MINT_NS) else {
-            return Err(anyhow!("DAO Mint circuit not found"));
+        let Some(dao_mint_zkbin) = zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_MINT_NS)
+        else {
+            return Err(anyhow!("DAO Mint circuit not found"))
         };
 
         let dao_mint_zkbin = ZkBinary::decode(&dao_mint_zkbin.1)?;
@@ -139,22 +140,23 @@ impl Drk {
 
         // FIXME: Here we're looking for a coin == proposer_limit but this shouldn't have to
         // be the case {
-        let Some(gov_coin) = gov_owncoins.iter().find(|x| x.note.value == dao.proposer_limit) else {
-            return Err(anyhow!("Did not find a single gov coin of value {}", dao.proposer_limit));
+        let Some(gov_coin) = gov_owncoins.iter().find(|x| x.note.value == dao.proposer_limit)
+        else {
+            return Err(anyhow!("Did not find a single gov coin of value {}", dao.proposer_limit))
         };
         // }
 
         // Lookup the zkas bins
         let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
         let Some(propose_burn_zkbin) =
-            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS) else
-        {
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS)
+        else {
             return Err(anyhow!("Propose Burn circuit not found"))
         };
 
         let Some(propose_main_zkbin) =
-            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS) else
-        {
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS)
+        else {
             return Err(anyhow!("Propose Main circuit not found"))
         };
 
@@ -332,14 +334,14 @@ impl Drk {
 
         let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
         let Some(dao_vote_burn_zkbin) =
-            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS) else
-        {
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS)
+        else {
             return Err(anyhow!("DAO Vote Burn circuit not found"))
         };
 
         let Some(dao_vote_main_zkbin) =
-            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS) else
-        {
+            zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS)
+        else {
             return Err(anyhow!("DAO Vote Main circuit not found"))
         };
 
@@ -465,10 +467,12 @@ impl Drk {
         };
 
         let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
-        let Some(mint_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_MINT_NS_V1) else {
+        let Some(mint_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_MINT_NS_V1)
+        else {
             return Err(anyhow!("Money Mint circuit not found"))
         };
-        let Some(burn_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_BURN_NS_V1) else {
+        let Some(burn_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_BURN_NS_V1)
+        else {
             return Err(anyhow!("Money Burn circuit not found"))
         };
         let mint_zkbin = ZkBinary::decode(&mint_zkbin.1)?;
@@ -489,7 +493,8 @@ impl Drk {
         let xfer_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
         let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
-        let Some(exec_zkbin) = zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_EXEC_NS) else {
+        let Some(exec_zkbin) = zkas_bins.iter().find(|x| x.0 == DAO_CONTRACT_ZKAS_DAO_EXEC_NS)
+        else {
             return Err(anyhow!("DAO Exec circuit not found"))
         };
         let exec_zkbin = ZkBinary::decode(&exec_zkbin.1)?;

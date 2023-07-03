@@ -17,22 +17,26 @@
  */
 
 use darkfi::{
-    blockchain::BlockInfo,
+    blockchain::{BlockInfo, Header},
     util::time::TimeKeeper,
     validator::{Validator, ValidatorConfig},
     Result,
 };
 use darkfi_contract_test_harness::vks;
+use darkfi_sdk::{
+    blockchain::Slot,
+    pasta::{group::ff::Field, pallas},
+};
 
 use crate::Darkfid;
 
 pub struct Harness {
-    pub _alice: Darkfid,
-    pub _bob: Darkfid,
+    pub alice: Darkfid,
+    pub bob: Darkfid,
 }
 
 impl Harness {
-    pub async fn new() -> Result<Self> {
+    pub async fn new(testing_node: bool) -> Result<Self> {
         // Generate default genesis block
         let genesis_block = BlockInfo::default();
 
@@ -40,18 +44,74 @@ impl Harness {
         // NOTE: we are not using consensus constants here so we
         // don't get circular dependencies.
         let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
-        let config = ValidatorConfig::new(time_keeper, genesis_block, vec![]);
+        let config = ValidatorConfig::new(time_keeper, genesis_block, vec![], testing_node);
 
         // Generate validators using pregenerated vks
         let sled_db = sled::Config::new().temporary(true).open()?;
         vks::inject(&sled_db)?;
         let validator = Validator::new(&sled_db, config.clone()).await?;
-        let _alice = Darkfid::new(validator).await;
+        let alice = Darkfid::new(validator).await;
         let sled_db = sled::Config::new().temporary(true).open()?;
         vks::inject(&sled_db)?;
         let validator = Validator::new(&sled_db, config.clone()).await?;
-        let _bob = Darkfid::new(validator).await;
+        let bob = Darkfid::new(validator).await;
 
-        Ok(Self { _alice, _bob })
+        Ok(Self { alice, bob })
+    }
+
+    pub async fn validate_chains(&self) -> Result<()> {
+        let alice = &self.alice._validator.read().await;
+        let bob = &self.bob._validator.read().await;
+
+        alice.validate_blockchain().await?;
+        bob.validate_blockchain().await?;
+
+        assert_eq!(alice.blockchain.len(), bob.blockchain.len());
+
+        Ok(())
+    }
+
+    pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
+        let alice = &self.alice._validator.read().await;
+        let bob = &self.bob._validator.read().await;
+
+        alice.add_blocks(blocks).await?;
+        bob.add_blocks(blocks).await?;
+
+        Ok(())
+    }
+
+    pub async fn generate_next_block(&self) -> Result<BlockInfo> {
+        // Retrieve last block
+        let previous = self.alice._validator.read().await.blockchain.last_block()?;
+        let previous_hash = previous.blockhash();
+
+        // We increment timestamp so we don't have to use sleep
+        let mut timestamp = previous.header.timestamp;
+        timestamp.add(1);
+
+        // Generate header
+        let header = Header::new(
+            previous_hash,
+            previous.header.epoch,
+            previous.header.slot + 1,
+            timestamp,
+            previous.header.root.clone(),
+        );
+
+        // Generate slot
+        let slot = Slot::new(
+            previous.header.slot + 1,
+            pallas::Base::ZERO,
+            vec![previous_hash],
+            vec![previous.header.previous.clone()],
+            pallas::Base::ZERO,
+            pallas::Base::ZERO,
+        );
+
+        // Generate block
+        let block = BlockInfo::new(header, vec![], previous.producer.clone(), vec![slot]);
+
+        Ok(block)
     }
 }

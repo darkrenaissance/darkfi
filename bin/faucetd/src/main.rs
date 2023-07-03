@@ -233,12 +233,12 @@ impl Faucetd {
 
         let Some(mint_zkbytes) = db_handle.get(serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1))? else {
             error!("{} zkas bincode not found in sled database", MONEY_CONTRACT_ZKAS_MINT_NS_V1);
-            return Err(Error::ZkasBincodeNotFound);
+            return Err(Error::ZkasBincodeNotFound)
         };
 
         let Some(burn_zkbytes) = db_handle.get(serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1))? else {
             error!("{} zkas bincode not found in sled database", MONEY_CONTRACT_ZKAS_BURN_NS_V1);
-            return Err(Error::ZkasBincodeNotFound);
+            return Err(Error::ZkasBincodeNotFound)
         };
 
         let (mint_zkbin, _): (Vec<u8>, Vec<u8>) = deserialize(&mint_zkbytes)?;
@@ -497,7 +497,7 @@ impl Faucetd {
         // Check if a VDF challenge exists
         let map = self.challenge_map.lock().await;
         let Some((challenge, n_steps)) = map.get(&pubkey.to_bytes()).cloned() else {
-                error!("airdrop(): No VDF challenge found for {}", pubkey);
+            error!("airdrop(): No VDF challenge found for {}", pubkey);
             return server_error(RpcError::NoVdfChallenge, id)
         };
         drop(map);

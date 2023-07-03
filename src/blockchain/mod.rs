@@ -368,6 +368,16 @@ impl Blockchain {
 
         Ok(())
     }
+
+    /// Retrieve all blocks contained in the blockchain in order.
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all(&self) -> Result<Vec<BlockInfo>> {
+        let order = self.order.get_all()?;
+        let order: Vec<blake3::Hash> = order.iter().map(|x| x.1).collect();
+        let blocks = self.get_blocks_by_hash(&order)?;
+
+        Ok(blocks)
+    }
 }
 
 /// Atomic pointer to sled db overlay.

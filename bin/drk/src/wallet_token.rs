@@ -77,7 +77,7 @@ impl Drk {
         let rep = self.rpc_client.request(req).await?;
 
         let Some(rows) = rep.as_array() else {
-            return Err(anyhow!("[list_tokens] Unexpected response from darkfid: {}", rep));
+            return Err(anyhow!("[list_tokens] Unexpected response from darkfid: {}", rep))
         };
 
         for row in rows {

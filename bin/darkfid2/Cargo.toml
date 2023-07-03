@@ -13,6 +13,7 @@ async-std = "1.12.0"
 ctrlc = { version = "3.4.0", features = ["termination"] }
 darkfi = {path = "../../", features = ["async-runtime", "util"]}
 darkfi-contract-test-harness = {path = "../../src/contract/test-harness"}
+darkfi-sdk = {path = "../../src/sdk"}
 easy-parallel = "3.3.0"
 log = "0.4.19"
 simplelog = "0.12.1"

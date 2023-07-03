@@ -135,7 +135,7 @@ pub(crate) fn dao_propose_process_instruction(
     let money_info_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_INFO_TREE)?;
     let Some(data) = db_get(money_info_db, &serialize(&MONEY_CONTRACT_LATEST_COIN_ROOT))? else {
         msg!("[Dao::Propose] Error: Failed to fetch latest Money Merkle root");
-        return Err(ContractError::Internal);
+        return Err(ContractError::Internal)
     };
     let snapshot_root: MerkleNode = deserialize(&data)?;
     msg!("[Dao::Propose] Snapshotting Money at Merkle root {}", snapshot_root);

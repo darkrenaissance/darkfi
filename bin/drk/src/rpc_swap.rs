@@ -110,11 +110,13 @@ impl Drk {
         // We also do this through the RPC.
         let zkas_bins = self.lookup_zkas(&contract_id).await?;
 
-        let Some(mint_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_MINT_NS_V1) else {
+        let Some(mint_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_MINT_NS_V1)
+        else {
             return Err(anyhow!("Mint circuit not found"))
         };
 
-        let Some(burn_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_BURN_NS_V1) else {
+        let Some(burn_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_BURN_NS_V1)
+        else {
             return Err(anyhow!("Burn circuit not found"))
         };
 
@@ -200,11 +202,13 @@ impl Drk {
         // We also do this through the RPC.
         let zkas_bins = self.lookup_zkas(&contract_id).await?;
 
-        let Some(mint_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_MINT_NS_V1) else {
+        let Some(mint_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_MINT_NS_V1)
+        else {
             return Err(anyhow!("Mint circuit not found"))
         };
 
-        let Some(burn_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_BURN_NS_V1) else {
+        let Some(burn_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_BURN_NS_V1)
+        else {
             return Err(anyhow!("Burn circuit not found"))
         };
 

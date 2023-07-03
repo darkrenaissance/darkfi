@@ -75,13 +75,9 @@ pub async fn kaching() {
 
     let cursor = Cursor::new(WALLET_MP3);
 
-    let Ok((_stream, stream_handle)) = OutputStream::try_default() else {
-        return
-    };
+    let Ok((_stream, stream_handle)) = OutputStream::try_default() else { return };
 
-    let Ok(source) = Decoder::new(cursor) else {
-        return
-    };
+    let Ok(source) = Decoder::new(cursor) else { return };
 
     if stream_handle.play_raw(source.convert_samples()).is_err() {
         return

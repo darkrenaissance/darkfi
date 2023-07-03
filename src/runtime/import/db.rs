@@ -301,9 +301,9 @@ pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
     let memory_view = env.memory_view(&ctx);
 
     let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
-                error!(target: "runtime::db::db_del()", "Failed to make slice from ptr");
-                return DB_DEL_FAILED
-            };
+        error!(target: "runtime::db::db_del()", "Failed to make slice from ptr");
+        return DB_DEL_FAILED
+    };
 
     let mut buf = vec![0_u8; len as usize];
     if let Err(e) = mem_slice.read_slice(&mut buf) {

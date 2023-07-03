@@ -174,7 +174,7 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
                 tree.append(coin);
                 let Some(root) = tree.root(0) else {
                     error!(target: "runtime::merkle", "Unable to read the root of tree");
-                    return -2;
+                    return -2
                 };
                 new_roots.push(root);
             }

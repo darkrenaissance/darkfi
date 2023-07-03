@@ -41,6 +41,7 @@ pub async fn verify_block(
     time_keeper: &TimeKeeper,
     block: &BlockInfo,
     previous: Option<&BlockInfo>,
+    testing_mode: bool,
 ) -> Result<()> {
     let block_hash = block.blockhash();
     debug!(target: "validator", "Validating block {}", block_hash);
@@ -63,8 +64,10 @@ pub async fn verify_block(
         block.validate(previous.unwrap())?;
     }
 
-    // Validate proposal transaction
-    verify_proposal_transaction(overlay, time_keeper, &block.producer.proposal).await?;
+    // Validate proposal transaction if not in testing mode
+    if !testing_mode {
+        verify_proposal_transaction(overlay, time_keeper, &block.producer.proposal).await?;
+    }
 
     // Verify transactions
     verify_transactions(overlay, time_keeper, &block.txs).await?;

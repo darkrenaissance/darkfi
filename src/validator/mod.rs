@@ -18,7 +18,7 @@
 
 use async_std::sync::{Arc, RwLock};
 use darkfi_sdk::{blockchain::Slot, crypto::PublicKey};
-use log::{debug, info, warn};
+use log::{debug, error, info, warn};
 
 use crate::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay},
@@ -49,6 +49,8 @@ pub struct ValidatorConfig {
     pub genesis_block: BlockInfo,
     /// Whitelisted faucet pubkeys (testnet stuff)
     pub faucet_pubkeys: Vec<PublicKey>,
+    /// Flag to enable testing mode
+    pub testing_mode: bool,
 }
 
 impl ValidatorConfig {
@@ -56,8 +58,9 @@ impl ValidatorConfig {
         time_keeper: TimeKeeper,
         genesis_block: BlockInfo,
         faucet_pubkeys: Vec<PublicKey>,
+        testing_mode: bool,
     ) -> Self {
-        Self { time_keeper, genesis_block, faucet_pubkeys }
+        Self { time_keeper, genesis_block, faucet_pubkeys, testing_mode }
     }
 }
 
@@ -70,11 +73,14 @@ pub struct Validator {
     pub blockchain: Blockchain,
     /// Hot/Live data used by the consensus algorithm
     pub consensus: Consensus,
+    /// Flag to enable testing mode
+    pub testing_mode: bool,
 }
 
 impl Validator {
     pub async fn new(db: &sled::Db, config: ValidatorConfig) -> Result<ValidatorPtr> {
         info!(target: "validator", "Initializing Validator");
+        let testing_mode = config.testing_mode;
 
         info!(target: "validator", "Initializing Blockchain");
         let blockchain = Blockchain::new(db)?;
@@ -85,7 +91,8 @@ impl Validator {
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
             info!(target: "validator", "Appending genesis block");
-            verify_block(&overlay, &config.time_keeper, &config.genesis_block, None).await?;
+            verify_block(&overlay, &config.time_keeper, &config.genesis_block, None, testing_mode)
+                .await?;
         };
 
         // Deploy native wasm contracts
@@ -98,7 +105,7 @@ impl Validator {
         let consensus = Consensus::new(blockchain.clone(), config.time_keeper);
 
         // Create the actual state
-        let state = Arc::new(RwLock::new(Self { blockchain, consensus }));
+        let state = Arc::new(RwLock::new(Self { blockchain, consensus, testing_mode }));
         info!(target: "validator", "Finished initializing validator");
 
         Ok(state)
@@ -138,8 +145,11 @@ impl Validator {
             // Use block slot in time keeper
             time_keeper.verifying_slot = block.header.slot;
 
-            if verify_block(&overlay, &time_keeper, block, previous).await.is_err() {
-                warn!(target: "validator", "Erroneous block found in set");
+            if verify_block(&overlay, &time_keeper, block, previous, self.testing_mode)
+                .await
+                .is_err()
+            {
+                error!(target: "validator", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 return Err(Error::BlockIsInvalid(block.blockhash().to_string()))
             };
@@ -201,6 +211,49 @@ impl Validator {
     pub async fn receive_test_slot(&mut self, slot: &Slot) -> Result<()> {
         debug!(target: "validator", "receive_slot(): Appending slot to ledger");
         self.blockchain.slots.insert(&[slot.clone()])?;
+
+        Ok(())
+    }
+
+    /// Retrieve all existing blocks and try to apply them
+    /// to an in memory overlay to verify their correctness.
+    /// Be careful as this will try to load everything in memory.
+    pub async fn validate_blockchain(&self) -> Result<()> {
+        let blocks = self.blockchain.get_all()?;
+
+        // An empty blockchain is considered valid
+        if blocks.is_empty() {
+            return Ok(())
+        }
+
+        // Create an in memory blockchain overlay
+        let sled_db = sled::Config::new().temporary(true).open()?;
+        let blockchain = Blockchain::new(&sled_db)?;
+        let overlay = BlockchainOverlay::new(&blockchain)?;
+
+        // Set previous
+        let mut previous = None;
+
+        // Create a time keeper to validate each block
+        let mut time_keeper = self.consensus.time_keeper.clone();
+
+        // Validate and insert each block
+        for block in &blocks {
+            // Use block slot in time keeper
+            time_keeper.verifying_slot = block.header.slot;
+
+            if verify_block(&overlay, &time_keeper, block, previous, self.testing_mode)
+                .await
+                .is_err()
+            {
+                error!(target: "validator", "Erroneous block found in set");
+                overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+                return Err(Error::BlockIsInvalid(block.blockhash().to_string()))
+            };
+
+            // Use last inserted block as next iteration previous
+            previous = Some(block);
+        }
 
         Ok(())
     }

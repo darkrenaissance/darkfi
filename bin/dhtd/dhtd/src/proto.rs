@@ -113,9 +113,7 @@ impl ProtocolDht {
     async fn handle_insert(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolDht::handle_insert START");
         loop {
-            let Ok(msg) = self.insert_sub.receive().await else {
-                continue
-            };
+            let Ok(msg) = self.insert_sub.receive().await else { continue };
 
             let mut state = self.state.write().await;
 
@@ -129,9 +127,7 @@ impl ProtocolDht {
     async fn handle_remove(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolDht::handle_remove START");
         loop {
-            let Ok(msg) = self.remove_sub.receive().await else {
-                continue
-            };
+            let Ok(msg) = self.remove_sub.receive().await else { continue };
 
             let mut state = self.state.write().await;
 
@@ -147,9 +143,7 @@ impl ProtocolDht {
     async fn handle_chunk_request(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolDht::handle_chunk_request START");
         loop {
-            let Ok(msg) = self.chunk_request_sub.receive().await else {
-                continue
-            };
+            let Ok(msg) = self.chunk_request_sub.receive().await else { continue };
 
             println!("{:?}", msg);
         }
@@ -158,9 +152,7 @@ impl ProtocolDht {
     async fn handle_chunk_reply(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolDht::handle_chunk_reply START");
         loop {
-            let Ok(msg) = self.chunk_reply_sub.receive().await else {
-                continue
-            };
+            let Ok(msg) = self.chunk_reply_sub.receive().await else { continue };
 
             println!("{:?}", msg);
         }
@@ -169,9 +161,7 @@ impl ProtocolDht {
     async fn handle_file_request(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolDht::handle_file_request START");
         loop {
-            let Ok(msg) = self.file_request_sub.receive().await else {
-                continue
-            };
+            let Ok(msg) = self.file_request_sub.receive().await else { continue };
 
             println!("{:?}", msg);
         }
@@ -180,9 +170,7 @@ impl ProtocolDht {
     async fn handle_file_reply(self: Arc<Self>) -> Result<()> {
         debug!("ProtocolDht::handle_file_reply START");
         loop {
-            let Ok(msg) = self.file_reply_sub.receive().await else {
-                continue
-            };
+            let Ok(msg) = self.file_reply_sub.receive().await else { continue };
 
             println!("{:?}", msg);
         }

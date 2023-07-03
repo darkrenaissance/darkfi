@@ -52,7 +52,7 @@ impl Drk {
         let rep = self.rpc_client.request(req).await?;
 
         let Some(rows) = rep.as_array() else {
-            return Err(anyhow!("[txs_history] Unexpected response from darkfid: {}", rep));
+            return Err(anyhow!("[txs_history] Unexpected response from darkfid: {}", rep))
         };
 
         for row in rows {
@@ -88,7 +88,7 @@ impl Drk {
         let rep = self.rpc_client.request(req).await?;
 
         let Some(arr) = rep.as_array() else {
-            return Err(anyhow!("[get_tx_history_record] Unexpected response from darkfid: {}", rep));
+            return Err(anyhow!("[get_tx_history_record] Unexpected response from darkfid: {}", rep))
         };
 
         if arr.len() != 3 {

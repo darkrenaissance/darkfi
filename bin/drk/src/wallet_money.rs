@@ -157,7 +157,7 @@ impl Drk {
 
         // The returned thing should be an array of found rows.
         let Some(rows) = rep.as_array() else {
-            return Err(anyhow!("[get_money_secrets] Unexpected response from darkfid: {}", rep));
+            return Err(anyhow!("[get_money_secrets] Unexpected response from darkfid: {}", rep))
         };
 
         let mut secrets = Vec::with_capacity(rows.len());

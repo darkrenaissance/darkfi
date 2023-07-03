@@ -26,8 +26,17 @@ use harness::Harness;
 async fn add_blocks() -> Result<()> {
     init_logger();
 
-    // Initialize harness
-    let _th = Harness::new().await?;
+    // Initialize harness in testing mode
+    let th = Harness::new(true).await?;
+
+    // Generate next block
+    let block = th.generate_next_block().await?;
+
+    // Add it to nodes
+    th.add_blocks(&vec![block]).await?;
+
+    // Validate chains
+    th.validate_chains().await?;
 
     // Thanks for reading
     Ok(())

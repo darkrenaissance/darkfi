@@ -448,8 +448,10 @@ impl Drk {
 
         for row in rows {
             let Some(row) = row.as_array() else {
-                return Err(
-                    anyhow!("[get_dao_id_by_alias] Unexpected response from darkfid: {}", rep))
+                return Err(anyhow!(
+                    "[get_dao_id_by_alias] Unexpected response from darkfid: {}",
+                    rep
+                ))
             };
 
             let alias: String = serde_json::from_value(row[1].clone())?;
@@ -592,14 +594,14 @@ impl Drk {
         let rep = self.rpc_client.request(req).await?;
 
         let Some(rows) = rep.as_array() else {
-            return Err(anyhow!("[get_daos] Unexpected response from darkfid: {}", rep));
+            return Err(anyhow!("[get_daos] Unexpected response from darkfid: {}", rep))
         };
 
         let mut daos = Vec::with_capacity(rows.len());
 
         for row in rows {
             let Some(row) = row.as_array() else {
-                return Err(anyhow!("[get_daos] Unexpected response from darkfid: {}", rep));
+                return Err(anyhow!("[get_daos] Unexpected response from darkfid: {}", rep))
             };
 
             let id: u64 = serde_json::from_value(row[0].clone())?;
@@ -730,14 +732,14 @@ impl Drk {
         let rep = self.rpc_client.request(req).await?;
 
         let Some(rows) = rep.as_array() else {
-            return Err(anyhow!("[get_proposals] Unexpected response from darkfid: {}", rep));
+            return Err(anyhow!("[get_proposals] Unexpected response from darkfid: {}", rep))
         };
 
         let mut proposals = Vec::with_capacity(rows.len());
 
         for row in rows {
             let Some(row) = row.as_array() else {
-                return Err(anyhow!("[get_proposals] Unexpected response from darkfid: {}", rep));
+                return Err(anyhow!("[get_proposals] Unexpected response from darkfid: {}", rep))
             };
 
             let id: u64 = serde_json::from_value(row[0].clone())?;
@@ -846,7 +848,7 @@ impl Drk {
         let rep = self.rpc_client.request(req).await?;
 
         let Some(row) = rep.as_array() else {
-            return Err(anyhow!("[get_proposal_by_id] Unexpected response from darkfid: {}", rep));
+            return Err(anyhow!("[get_proposal_by_id] Unexpected response from darkfid: {}", rep))
         };
 
         let id: u64 = serde_json::from_value(row[0].clone())?;
@@ -942,14 +944,20 @@ impl Drk {
         let rep = self.rpc_client.request(req).await?;
 
         let Some(rows) = rep.as_array() else {
-            return Err(anyhow!("[get_dao_proposal_votes] Unexpected response from darkfid: {}", rep));
+            return Err(anyhow!(
+                "[get_dao_proposal_votes] Unexpected response from darkfid: {}",
+                rep
+            ))
         };
 
         let mut votes = Vec::with_capacity(rows.len());
 
         for row in rows {
             let Some(row) = row.as_array() else {
-                return Err(anyhow!("[get_dao_proposal_votes] Unexpected response from darkfid: {}", rep));
+                return Err(anyhow!(
+                    "[get_dao_proposal_votes] Unexpected response from darkfid: {}",
+                    rep
+                ))
             };
 
             let id: u64 = serde_json::from_value(row[0].clone())?;
