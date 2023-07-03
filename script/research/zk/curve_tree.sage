@@ -52,11 +52,11 @@ def hash_point(Ei, P, b):
 #
 # where
 #
-#   x_i = { x0  if  σ = 0
-#         { x1  if  σ = 1
+#   x_i = { x1  if  σ = 0
+#         { x2  if  σ = 1
 #
-#   y_i = { y0  if  σ = 0
-#         { y1  if  σ = 1
+#   y_i = { y1  if  σ = 0
+#         { y2  if  σ = 1
 #
 # It is just a quick hackjob proof of concept and horribly inefficient
 load("curve_tree_proofs.sage")
