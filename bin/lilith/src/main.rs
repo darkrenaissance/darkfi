@@ -139,10 +139,10 @@ impl Lilith {
             // We'll pick up to 10 hosts every minute and try to connect to
             // them. If we can't reach them, we'll remove them from our set.
             sleep(60).await;
-            debug!("Picking random hosts from db");
+            debug!("[{}] Picking random hosts from db", name);
             let lottery_winners = p2p.clone().hosts().get_n_random(10).await;
             let win_str: Vec<&str> = lottery_winners.iter().map(|x| x.as_str()).collect();
-            debug!("Got: {:?}", win_str);
+            debug!("[{}] Got: {:?}", name, win_str);
 
             let mut tasks = vec![];
 
