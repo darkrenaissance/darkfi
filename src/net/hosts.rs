@@ -52,6 +52,7 @@ impl Hosts {
         if !filtered_addrs.is_empty() {
             let mut addrs_map = self.addrs.write().await;
             for addr in filtered_addrs {
+                debug!(target: "net::hosts::store()", "Inserting {}", addr);
                 addrs_map.insert(addr);
             }
         }
@@ -119,7 +120,7 @@ impl Hosts {
                 }
             }
 
-            match addr.scheme() {
+            match _addr.scheme() {
                 // Validate that the address is an actual onion.
                 #[cfg(feature = "p2p-transport-tor")]
                 "tor" | "tor+tls" => {

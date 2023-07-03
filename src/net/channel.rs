@@ -322,7 +322,7 @@ impl Channel {
                     if Self::is_eof_error(&err) {
                         info!(
                             target: "net::channel::main_receive_loop()",
-                            "[net] Channel inbound connecion {} disconnected",
+                            "[net] Channel inbound connection {} disconnected",
                             self.address(),
                         );
                     } else {
