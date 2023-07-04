@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use async_std::sync::Arc;
+use async_std::{future::timeout, sync::Arc};
 use async_trait::async_trait;
 use log::{debug, error};
 use rand::{rngs::OsRng, Rng};
@@ -92,7 +92,25 @@ impl ProtocolPing {
             let timer = Instant::now();
 
             // Wait for pong, check nonce matches.
-            let pong_msg = self.pong_sub.receive().await?;
+            let pong_msg = match timeout(
+                Duration::from_secs(self.settings.outbound_connect_timeout),
+                self.pong_sub.receive(),
+            )
+            .await
+            {
+                Ok(msg) => {
+                    // msg will be an error when the channel is stopped
+                    // so just yield out of this function.
+                    msg?
+                }
+                Err(_e) => {
+                    // Pong timeout. We didn't receive any message back
+                    // so close the connection.
+                    self.channel.stop().await;
+                    return Err(Error::ChannelStopped)
+                }
+            };
+
             if pong_msg.nonce != nonce {
                 error!(
                     target: "net::protocol_ping::run_ping_pong()",

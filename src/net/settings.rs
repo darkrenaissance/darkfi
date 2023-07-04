@@ -52,7 +52,7 @@ pub struct Settings {
     pub manual_attempt_limit: usize,
     /// Seed connection establishment timeout (in seconds)
     pub seed_query_timeout: u64,
-    /// Outbound connection establishment timeout (in seconds)
+    /// Outbound connection timeout (in seconds)
     pub outbound_connect_timeout: u64,
     /// Exchange versions (handshake) timeout (in seconds)
     pub channel_handshake_timeout: u64,
