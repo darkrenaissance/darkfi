@@ -194,7 +194,7 @@ async fn on_receive_task(
     for (workspace, salsa_box) in workspaces.iter() {
         let task = decrypt_task(task, salsa_box);
         if let Err(e) = task {
-            info!("unable to decrypt the task: {}", e);
+            debug!("unable to decrypt the task: {}", e);
             continue
         }
 
