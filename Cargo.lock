@@ -1579,11 +1579,7 @@ dependencies = [
  "futures",
  "halo2_gadgets",
  "halo2_proofs",
- "hex",
- "indexmap 1.9.3",
  "indicatif",
- "ipnet",
- "iprange",
  "itertools 0.10.5",
  "lazy_static",
  "libc",
@@ -1593,7 +1589,6 @@ dependencies = [
  "prettytable-rs",
  "rand 0.8.5",
  "rcgen",
- "ripemd",
  "rusqlite",
  "rustls-pemfile",
  "semver 1.0.17",
@@ -3403,21 +3398,6 @@ dependencies = [
  "hermit-abi 0.3.2",
  "libc",
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "ipnet"
-version = "2.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28b29a3cd74f0f4598934efe3aeba42bae0eb4680554128851ebbecb02af14e6"
-
-[[package]]
-name = "iprange"
-version = "0.6.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37209be0ad225457e63814401415e748e2453a5297f9b637338f5fb8afa4ec00"
-dependencies = [
- "ipnet",
 ]
 
 [[package]]

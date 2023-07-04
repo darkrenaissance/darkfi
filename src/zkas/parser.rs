@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{iter::Peekable, str::Chars};
+use std::{borrow::Borrow, collections::HashMap, hash::Hash, iter::Peekable, str::Chars};
 
-use indexmap::IndexMap;
 use itertools::Itertools;
 
 use super::{
@@ -43,6 +42,49 @@ const VALID_ECFIXEDPOINTSHORT: [&str; 1] = ["VALUE_COMMIT_VALUE"];
 
 /// Valid EcFixedPointBase constant names supported by the VM.
 const VALID_ECFIXEDPOINTBASE: [&str; 1] = ["NULLIFIER_K"];
+
+#[derive(Clone)]
+struct IndexMap<K, V> {
+    pub order: Vec<K>,
+    pub map: HashMap<K, V>,
+}
+
+impl<K, V> IndexMap<K, V> {
+    fn new() -> Self {
+        Self { order: vec![], map: HashMap::new() }
+    }
+}
+
+impl<K, V> IndexMap<K, V>
+where
+    K: Eq + Hash + Send + Sync + Clone + 'static,
+    V: Send + Sync + Clone + 'static,
+{
+    fn contains_key<Q: ?Sized>(&self, k: &Q) -> bool
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq,
+    {
+        self.map.contains_key(k)
+    }
+
+    fn get<Q: ?Sized>(&self, k: &Q) -> Option<&V>
+    where
+        K: Borrow<Q>,
+        Q: Hash + Eq,
+    {
+        self.map.get(k)
+    }
+
+    fn insert(&mut self, k: K, v: V) -> Option<V> {
+        self.order.push(k.clone());
+        self.map.insert(k, v)
+    }
+
+    fn scam_iter(&self) -> Vec<(K, V)> {
+        self.order.iter().map(|k| (k.clone(), self.get(k).unwrap().clone())).collect()
+    }
+}
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -373,8 +415,8 @@ impl Parser {
 
         // k = name
         // v = (name, type)
-        for (k, v) in ast {
-            if &v.0.token != k {
+        for (k, v) in ast.scam_iter() {
+            if v.0.token != k {
                 self.error.abort(
                     &format!("Constant name `{}` doesn't match token `{}`.", v.0.token, k),
                     v.0.line,
@@ -482,8 +524,8 @@ impl Parser {
 
         // k = name
         // v = (name, type)
-        for (k, v) in ast {
-            if &v.0.token != k {
+        for (k, v) in ast.scam_iter() {
+            if v.0.token != k {
                 self.error.abort(
                     &format!("Witness name `{}` doesn't match token `{}`.", v.0.token, k),
                     v.0.line,

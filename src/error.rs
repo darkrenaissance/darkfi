@@ -94,10 +94,6 @@ pub enum Error {
     #[error(transparent)]
     Bs58DecodeError(#[from] bs58::decode::Error),
 
-    #[cfg(feature = "hex")]
-    #[error(transparent)]
-    HexDecodeError(#[from] hex::FromHexError),
-
     #[error("Bad operation type byte")]
     BadOperationType,
 
@@ -221,18 +217,6 @@ pub enum Error {
     // =======================
     // Protocol-related errors
     // =======================
-    #[error("Unsupported chain")]
-    UnsupportedChain,
-
-    #[error("Unsupported token")]
-    UnsupportedToken,
-
-    #[error("Unsupported coin network")]
-    UnsupportedCoinNetwork,
-
-    #[error("Raft error: {0}")]
-    RaftError(String),
-
     #[error("JSON-RPC error: {0}")]
     JsonRpcError(String),
 
