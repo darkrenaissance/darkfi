@@ -7,4 +7,4 @@
 ## uncommenting, or by using the command-line.
 
 # Enable testing mode for local testing
-testing_node = false
+testing_mode = false

@@ -9,15 +9,18 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
-async-std = "1.12.0"
-ctrlc = { version = "3.4.0", features = ["termination"] }
 darkfi = {path = "../../", features = ["async-runtime", "util"]}
 darkfi-contract-test-harness = {path = "../../src/contract/test-harness"}
 darkfi-sdk = {path = "../../src/sdk"}
-easy-parallel = "3.3.0"
 log = "0.4.19"
-simplelog = "0.12.1"
 sled = "0.34.7"
+
+# Daemon
+async-std = "1.12.0"
+easy-parallel = "3.3.0"
+signal-hook-async-std = "0.2.2"
+signal-hook = "0.3.15"
+simplelog = "0.12.1"
 smol = "1.3.0"
 
 # Argument parsing

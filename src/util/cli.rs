@@ -119,6 +119,8 @@ pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
 /// async-std = "1.12.0"
 /// darkfi = { path = "../../", features = ["util"] }
 /// easy-parallel = "3.2.0"
+/// signal-hook-async-std = "0.2.2"
+/// signal-hook = "0.3.15"
 /// simplelog = "0.12.0"
 /// smol = "1.2.5"
 ///
@@ -130,7 +132,7 @@ pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
 ///
 /// Example usage:
 /// ```
-/// use async_std::sync::Arc;
+/// use async_std::{stream::StreamExt, sync::Arc};
 //  use darkfi::{async_daemonize, cli_desc, Result};
 /// use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 ///
@@ -144,6 +146,10 @@ pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
 ///     #[structopt(short, long)]
 ///     /// Configuration file to use
 ///     config: Option<String>,
+///
+///     #[structopt(short, long)]
+///     /// Set log file to ouput into
+///     log: Option<String>,
 ///
 ///     #[structopt(short, parse(from_occurrences))]
 ///     /// Increase verbosity (-vvv supported)
@@ -169,33 +175,27 @@ macro_rules! async_daemonize {
             let log_level = darkfi::util::cli::get_log_level(args.verbose);
             let log_config = darkfi::util::cli::get_log_config(args.verbose);
 
-            /* FIXME: This is an issue. We should only log when explicitly told to
-            let log_file_path = match std::env::var("DARKFI_LOG") {
-                Ok(p) => p,
-                Err(_) => {
-                    let bin_name = if let Some(bin_name) = option_env!("CARGO_BIN_NAME") {
-                        bin_name
-                    } else {
-                        "darkfi"
-                    };
-                    std::fs::create_dir_all(darkfi::util::path::expand_path("~/.local/darkfi")?)?;
-                    format!("~/.local/darkfi/{}.log", bin_name)
+            // Setup terminal logger
+            let term_logger = simplelog::TermLogger::new(
+                log_level,
+                log_config.clone(),
+                simplelog::TerminalMode::Mixed,
+                simplelog::ColorChoice::Auto,
+            );
+
+            // If a log file has been configured, also create a write logger.
+            // Otherwise, output to terminal logger only.
+            match args.log {
+                Some(ref log_path) => {
+                    let log_path = darkfi::util::path::expand_path(log_path)?;
+                    let log_file = std::fs::File::create(log_path)?;
+                    let write_logger = simplelog::WriteLogger::new(log_level, log_config, log_file);
+                    simplelog::CombinedLogger::init(vec![term_logger, write_logger])?;
                 }
-            };
-
-            let log_file_path = darkfi::util::path::expand_path(&log_file_path)?;
-            let log_file = std::fs::File::create(log_file_path)?;
-            */
-
-            simplelog::CombinedLogger::init(vec![
-                simplelog::TermLogger::new(
-                    log_level,
-                    log_config.clone(),
-                    simplelog::TerminalMode::Mixed,
-                    simplelog::ColorChoice::Auto,
-                ),
-                //simplelog::WriteLogger::new(log_level, log_config, log_file),
-            ])?;
+                None => {
+                    simplelog::CombinedLogger::init(vec![term_logger])?;
+                }
+            }
 
             // https://docs.rs/smol/latest/smol/struct.Executor.html#examples
             let n_threads = std::thread::available_parallelism().unwrap().get();
@@ -214,6 +214,82 @@ macro_rules! async_daemonize {
                 });
 
             result
+        }
+
+        /// Auxiliary structure used to keep track of signals
+        struct SignalHandler {
+            /// Termination signal channel receiver
+            term_rx: smol::channel::Receiver<()>,
+            /// Signals handle
+            handle: signal_hook_async_std::Handle,
+            /// SIGHUP subscriber to retrieve new configuration,
+            sighup_sub: darkfi::system::SubscriberPtr<Args>,
+        }
+
+        impl SignalHandler {
+            fn new() -> Result<(Self, async_std::task::JoinHandle<Result<()>>)> {
+                let (term_tx, term_rx) = smol::channel::bounded::<()>(1);
+                let signals = signal_hook_async_std::Signals::new([
+                    signal_hook::consts::SIGHUP,
+                    signal_hook::consts::SIGTERM,
+                    signal_hook::consts::SIGINT,
+                    signal_hook::consts::SIGQUIT,
+                ])?;
+                let handle = signals.handle();
+                let sighup_sub = darkfi::system::Subscriber::new();
+                let signals_task =
+                    async_std::task::spawn(handle_signals(signals, term_tx, sighup_sub.clone()));
+
+                Ok((Self { term_rx, handle, sighup_sub }, signals_task))
+            }
+
+            /// Handler waits for termination signal
+            async fn wait_termination(
+                &self,
+                signals_task: async_std::task::JoinHandle<Result<()>>,
+            ) -> Result<()> {
+                self.term_rx.recv().await?;
+                print!("\r");
+                self.handle.close();
+                signals_task.await?;
+
+                Ok(())
+            }
+        }
+
+        /// Auxiliary task to handle SIGHUP, SIGTERM, SIGINT and SIGQUIT signals
+        async fn handle_signals(
+            mut signals: signal_hook_async_std::Signals,
+            term_tx: smol::channel::Sender<()>,
+            subscriber: darkfi::system::SubscriberPtr<Args>,
+        ) -> Result<()> {
+            while let Some(signal) = signals.next().await {
+                match signal {
+                    signal_hook::consts::SIGHUP => {
+                        let args = Args::from_args_with_toml("").unwrap();
+                        let cfg_path =
+                            darkfi::util::path::get_config_path(args.config, CONFIG_FILE)?;
+                        darkfi::util::cli::spawn_config(
+                            &cfg_path,
+                            CONFIG_FILE_CONTENTS.as_bytes(),
+                        )?;
+                        let args = Args::from_args_with_toml(&std::fs::read_to_string(cfg_path)?);
+                        if args.is_err() {
+                            println!("handle_signals():: Error parsing the config file");
+                            continue
+                        }
+                        subscriber.notify(args.unwrap()).await;
+                    }
+                    signal_hook::consts::SIGTERM |
+                    signal_hook::consts::SIGINT |
+                    signal_hook::consts::SIGQUIT => {
+                        term_tx.send(()).await?;
+                    }
+
+                    _ => println!("handle_signals():: Unsupported signal"),
+                }
+            }
+            Ok(())
         }
     };
 }

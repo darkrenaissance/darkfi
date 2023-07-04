@@ -1802,13 +1802,14 @@ name = "darkfid2"
 version = "0.4.1"
 dependencies = [
  "async-std",
- "ctrlc",
  "darkfi",
  "darkfi-contract-test-harness",
  "darkfi-sdk",
  "easy-parallel",
  "log",
  "serde",
+ "signal-hook",
+ "signal-hook-async-std",
  "simplelog",
  "sled",
  "smol",

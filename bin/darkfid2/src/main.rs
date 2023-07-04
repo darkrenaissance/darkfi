@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Arc;
+use async_std::{stream::StreamExt, sync::Arc};
 use log::info;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 
@@ -28,6 +28,7 @@ use darkfi::{
     validator::{Validator, ValidatorConfig, ValidatorPtr},
     Result,
 };
+use darkfi_contract_test_harness::vks;
 
 #[cfg(test)]
 mod tests;
@@ -45,7 +46,11 @@ struct Args {
 
     #[structopt(long)]
     /// Enable testing mode for local testing
-    testing_node: bool,
+    testing_mode: bool,
+
+    #[structopt(short, long)]
+    /// Set log file to ouput into
+    log: Option<String>,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -66,25 +71,20 @@ async_daemonize!(realmain);
 async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()> {
     info!("Initializing DarkFi node...");
 
-    // We use this handler to block this function after detaching all
-    // tasks, and to catch a shutdown signal, where we can clean up and
-    // exit gracefully.
-    let (signal, shutdown) = smol::channel::bounded::<()>(1);
-    ctrlc::set_handler(move || {
-        async_std::task::block_on(signal.send(())).unwrap();
-    })
-    .unwrap();
+    // Signal handling for graceful termination.
+    let (signals_handler, signals_task) = SignalHandler::new()?;
 
     // NOTE: everything is dummy for now
     // Initialize or open sled database
     let sled_db = sled::Config::new().temporary(true).open()?;
+    vks::inject(&sled_db)?;
 
     // Initialize validator configuration
     let genesis_block = BlockInfo::default();
     let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
-    let config = ValidatorConfig::new(time_keeper, genesis_block, vec![], args.testing_node);
+    let config = ValidatorConfig::new(time_keeper, genesis_block, vec![], args.testing_mode);
 
-    if args.testing_node {
+    if args.testing_mode {
         info!("Node is configured to run in testing mode!");
     }
 
@@ -95,10 +95,8 @@ async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let _darkfid = Darkfid::new(validator).await;
     info!("Node initialized successfully!");
 
-    // Wait for SIGINT
-    shutdown.recv().await?;
-    print!("\r");
+    // Wait for termination signal
+    signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
-
     Ok(())
 }
