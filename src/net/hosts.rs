@@ -202,7 +202,9 @@ mod tests {
 
         let hosts = Hosts::new(Arc::new(settings.clone()));
         hosts.store(&settings.external_addrs).await;
-        assert!(hosts.is_empty().await);
+        for i in settings.external_addrs {
+            assert!(hosts.contains(&i).await);
+        }
 
         let local_hosts = vec![
             Url::parse("tcp://localhost:3921").unwrap(),
@@ -213,7 +215,9 @@ mod tests {
             Url::parse("tcp://255.255.255.255:2131").unwrap(),
         ];
         hosts.store(&local_hosts).await;
-        assert!(hosts.is_empty().await);
+        for i in local_hosts {
+            assert!(hosts.contains(&i).await);
+        }
 
         let remote_hosts = vec![
             Url::parse("tcp://dark.fi:80").unwrap(),
@@ -221,7 +225,9 @@ mod tests {
             Url::parse("tcp://http.cat:401").unwrap(),
         ];
         hosts.store(&remote_hosts).await;
-        assert!(hosts.is_empty().await);
+        for i in remote_hosts {
+            assert!(hosts.contains(&i).await);
+        }
     }
 
     #[async_std::test]
@@ -254,6 +260,8 @@ mod tests {
             Url::parse("tcp://foo.bar:111").unwrap(),
         ];
         hosts.store(&remote_hosts).await;
-        assert!(hosts.is_empty().await);
+        assert!(hosts.contains(&remote_hosts[0]).await);
+        assert!(hosts.contains(&remote_hosts[1]).await);
+        assert!(!hosts.contains(&remote_hosts[2]).await);
     }
 }
