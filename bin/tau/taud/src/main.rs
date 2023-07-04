@@ -399,5 +399,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     print!("\r");
     info!("Caught termination signal, cleaning up and exiting...");
 
+    p2p.stop().await;
+
     Ok(())
 }

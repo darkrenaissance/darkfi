@@ -12,7 +12,7 @@ CARGO = cargo +nightly
 #TARGET_PRFX = --target=
 
 # Binaries to be built
-BINS = darkfid faucetd drk darkirc dnetview vanityaddr
+BINS = darkfid faucetd drk darkirc dnetview vanityaddr tau taud
 
 # zkas dependencies
 ZKASDEPS = \
