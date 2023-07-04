@@ -21,17 +21,14 @@ use std::{fs::File, io::Write};
 use clap::Parser;
 use darkfi::{
     blockchain::{
-        block_store::{BlockOrderStore, BlockStore, HeaderStore},
+        block_store::{Block, BlockOrderStore, BlockProducer, BlockStore},
+        header_store::{Header, HeaderStore},
         slot_store::SlotStore,
         tx_store::TxStore,
         Blockchain,
     },
     cli_desc,
-    consensus::{
-        block::{Block, Header},
-        constants::{EPOCH_LENGTH, TESTNET_GENESIS_HASH_BYTES, TESTNET_GENESIS_TIMESTAMP},
-        lead_info::LeadInfo,
-    },
+    consensus::constants::EPOCH_LENGTH,
     tx::Transaction,
     util::{path::expand_path, time::Timestamp},
     Result,
@@ -59,37 +56,16 @@ struct Args {
 }
 
 #[derive(Debug)]
-struct LeadInfoInfo {
+struct BlockProducerInfo {
     _signature: String,
-    _public_key: String,
-    _public_inputs: Vec<String>,
-    _coin_slot: u64,
-    _coin_eta: String,
-    _proof: String,
-    _leaders: u64,
+    _proposal: Transaction,
 }
 
-impl LeadInfoInfo {
-    pub fn new(lead_info: &LeadInfo) -> LeadInfoInfo {
-        let _signature = format!("{:?}", lead_info.signature);
-        let _public_key = lead_info.public_key.to_string();
-        let mut _public_inputs = vec![];
-        for public_input in &lead_info.public_inputs {
-            _public_inputs.push(format!("{:?}", public_input));
-        }
-        let _coin_slot = lead_info.coin_slot;
-        let _coin_eta = format!("{:?}", lead_info.coin_eta);
-        let _proof = format!("{:?}", lead_info.proof);
-        let _leaders = lead_info.leaders;
-        LeadInfoInfo {
-            _signature,
-            _public_key,
-            _public_inputs,
-            _coin_slot,
-            _coin_eta,
-            _proof,
-            _leaders,
-        }
+impl BlockProducerInfo {
+    pub fn new(producer: &BlockProducer) -> BlockProducerInfo {
+        let _signature = format!("{:?}", producer.signature);
+        let _proposal = producer.proposal.clone();
+        BlockProducerInfo { _signature, _proposal }
     }
 }
 
@@ -143,7 +119,8 @@ struct BlockInfo {
     _magic: [u8; 4],
     _header: blake3::Hash,
     _txs: Vec<blake3::Hash>,
-    _lead_info: LeadInfoInfo,
+    _producer: BlockProducerInfo,
+    _slots: Vec<u64>,
 }
 
 impl BlockInfo {
@@ -151,8 +128,9 @@ impl BlockInfo {
         let _magic = block.magic;
         let _header = block.header;
         let _txs = block.txs.clone();
-        let _lead_info = LeadInfoInfo::new(&block.lead_info);
-        BlockInfo { _hash, _magic, _header, _txs, _lead_info }
+        let _producer = BlockProducerInfo::new(&block.producer);
+        let _slots = block.slots.clone();
+        BlockInfo { _hash, _magic, _header, _txs, _producer, _slots }
     }
 }
 
@@ -316,8 +294,7 @@ fn statistics(folder: &str, node: &str, blockchain: &str) -> Result<()> {
     let sled_db = sled::open(&db_path)?;
 
     // Retrieve statistics
-    let blockchain =
-        Blockchain::new(&sled_db, *TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES)?;
+    let blockchain = Blockchain::new(&sled_db)?;
     let slot = blockchain.last_slot()?.id;
     let epoch = slot / EPOCH_LENGTH as u64;
     let (_, block) = blockchain.last()?;
@@ -347,8 +324,7 @@ fn export(folder: &str, node: &str, blockchain: &str) -> Result<()> {
     let sled_db = sled::open(&db_path)?;
 
     // Data export
-    let blockchain =
-        Blockchain::new(&sled_db, *TESTNET_GENESIS_TIMESTAMP, *TESTNET_GENESIS_HASH_BYTES)?;
+    let blockchain = Blockchain::new(&sled_db)?;
     let info = BlockchainInfo::new(&blockchain);
     let info_string = format!("{:#?}", info);
     let file_name = node.to_owned() + "_db";
