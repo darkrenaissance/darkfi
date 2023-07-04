@@ -27,6 +27,7 @@ async-channel = "1.8.0"
 clap = {version = "4.3.3", features = ["derive"]}
 rand = "0.8.5"
 simplelog = "0.12.1"
+libsqlite3-sys = {version = "0.26.0", features = ["bundled-sqlcipher"]}
 log = "0.4.19"
 url = "2.4.0"
 thiserror = "1.0.40"

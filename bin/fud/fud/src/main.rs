@@ -18,7 +18,7 @@
 
 use std::{collections::HashSet, fs, path::PathBuf};
 
-use async_std::sync::Arc;
+use async_std::{stream::StreamExt, sync::Arc};
 use async_trait::async_trait;
 use darkfi_serial::serialize;
 use log::{debug, error, info, warn};
@@ -94,6 +94,10 @@ struct Args {
     #[structopt(long)]
     /// Enable channel log
     channel_log: bool,
+
+    #[structopt(short, long)]
+    /// Set log file to ouput into
+    log: Option<String>,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -386,14 +390,8 @@ impl RequestHandler for Fud {
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
-    // We use this handler to block this function after detaching all
-    // tasks, and to catch a shutdown signal, where we can clean up and
-    // exit gracefully.
-    let (signal, shutdown) = smol::channel::bounded::<()>(1);
-    ctrlc::set_handler(move || {
-        async_std::task::block_on(signal.send(())).unwrap();
-    })
-    .unwrap();
+    // Signal handling for graceful termination.
+    let (signals_handler, signals_task) = SignalHandler::new()?;
 
     // P2P network
     let network_settings = net::Settings {
@@ -410,7 +408,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let p2p = net::P2p::new(network_settings).await;
 
     // Initialize daemon dht
-    let dht = Dht::new(None, p2p.clone(), shutdown.clone(), ex.clone()).await?;
+    let dht = Dht::new(None, p2p.clone(), signals_handler.term_rx.clone(), ex.clone()).await?;
 
     // Initialize daemon
     let folder = expand_path(&args.folder)?;
@@ -435,9 +433,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
 
     fud.init().await?;
 
-    // Wait for SIGINT
-    shutdown.recv().await?;
-    print!("\r");
+    // Wait for termination signal
+    signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 
     fud.disconnect().await?;

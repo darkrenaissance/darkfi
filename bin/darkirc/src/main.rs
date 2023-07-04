@@ -24,10 +24,8 @@ use async_std::{
 
 use chrono::{Duration, Utc};
 use irc::ClientSubMsg;
-use log::{debug, error, info, warn};
+use log::{debug, info};
 use rand::rngs::OsRng;
-use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
-use signal_hook_async_std::Signals;
 use structopt_toml::StructOptToml;
 
 use darkfi::{
@@ -62,11 +60,9 @@ use crate::{
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     // Signal handling for config reload and graceful termination.
-    let clients_subscriptions = Subscriber::new();
-    let signals = Signals::new([SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
-    let handle = signals.handle();
-    let (term_tx, term_rx) = smol::channel::bounded::<()>(1);
-    let signals_task = task::spawn(handle_signals(signals, term_tx, clients_subscriptions.clone()));
+    let (signals_handler, signals_task) = SignalHandler::new()?;
+    let client_sub = Subscriber::new();
+    task::spawn(parse_signals(signals_handler.sighup_sub.clone(), client_sub.clone()));
 
     ////////////////////
     // Generate new keypair and exit
@@ -146,14 +142,9 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     ////////////////////
 
     // New irc server
-    let irc_server = IrcServer::new(
-        settings.clone(),
-        p2p.clone(),
-        model_clone,
-        view.clone(),
-        clients_subscriptions,
-    )
-    .await?;
+    let irc_server =
+        IrcServer::new(settings.clone(), p2p.clone(), model_clone, view.clone(), client_sub)
+            .await?;
 
     // Start the irc server and detach it
     let executor_cloned = executor.clone();
@@ -162,48 +153,26 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     // Reset root task
     executor.spawn(async move { reset_root(model_clone2).await }).detach();
 
-    ////////////////////
     // Wait for termination signal
-    ////////////////////
-    term_rx.recv().await?;
-    print!("\r");
+    signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
-    handle.close();
-    signals_task.await?;
 
     // stop p2p
     p2p2.stop().await;
     Ok(())
 }
 
-async fn handle_signals(
-    mut signals: Signals,
-    term_tx: smol::channel::Sender<()>,
-    subscriber: SubscriberPtr<ClientSubMsg>,
+async fn parse_signals(
+    sighup_sub: SubscriberPtr<Args>,
+    client_sub: SubscriberPtr<ClientSubMsg>,
 ) -> Result<()> {
-    debug!("Started signal handler");
-    while let Some(signal) = signals.next().await {
-        match signal {
-            SIGHUP => {
-                let args = Args::from_args_with_toml("").unwrap();
-                let cfg_path = darkfi::util::path::get_config_path(args.config, CONFIG_FILE)?;
-                darkfi::util::cli::spawn_config(&cfg_path, CONFIG_FILE_CONTENTS.as_bytes())?;
-                let args = Args::from_args_with_toml(&std::fs::read_to_string(cfg_path)?);
-                if args.is_err() {
-                    error!("Error parsing the config file");
-                    continue
-                }
-                let new_config = IrcConfig::new(&args.unwrap())?;
-                subscriber.notify(ClientSubMsg::Config(new_config)).await;
-            }
-            SIGTERM | SIGINT | SIGQUIT => {
-                term_tx.send(()).await?;
-            }
-
-            _ => warn!("Unsupported signal"),
-        }
+    debug!("Started signal parsing handler");
+    let subscription = sighup_sub.subscribe().await;
+    loop {
+        let args = subscription.receive().await;
+        let new_config = IrcConfig::new(&args)?;
+        client_sub.notify(ClientSubMsg::Config(new_config)).await;
     }
-    Ok(())
 }
 
 async fn reset_root(model: ModelPtr<PrivMsgEvent>) {

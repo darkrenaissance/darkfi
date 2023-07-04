@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::{Arc, Mutex};
+use async_std::{
+    stream::StreamExt,
+    sync::{Arc, Mutex},
+};
 use libc::mkfifo;
 use std::{
     collections::HashMap,
@@ -34,7 +37,7 @@ use crypto_box::{
 };
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use futures::{select, FutureExt};
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use structopt_toml::StructOptToml;
 
 use darkfi::{
@@ -382,21 +385,9 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     let _ex = executor.clone();
     executor.spawn(listen_and_serve(settings.rpc_listen.clone(), rpc_interface, _ex)).detach();
 
-    //
-    // Waiting Exit signal
-    //
-    let (signal, shutdown) = smol::channel::bounded::<()>(1);
-    ctrlc::set_handler(move || {
-        warn!(target: "tau", "Catch exit signal");
-        // cleaning up tasks running in the background
-        if let Err(e) = async_std::task::block_on(signal.send(())) {
-            error!("Error on sending exit signal: {}", e);
-        }
-    })
-    .unwrap();
-
-    shutdown.recv().await?;
-    print!("\r");
+    // Signal handling for graceful termination.
+    let (signals_handler, signals_task) = SignalHandler::new()?;
+    signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 
     p2p.stop().await;

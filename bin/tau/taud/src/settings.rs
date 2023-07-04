@@ -70,4 +70,8 @@ pub struct Args {
     // Whether to pipe notifications or not
     #[structopt(long)]
     pub piped: bool,
+
+    #[structopt(short, long)]
+    /// Set log file to ouput into
+    pub log: Option<String>,
 }

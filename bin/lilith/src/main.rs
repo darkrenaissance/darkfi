@@ -28,8 +28,6 @@ use futures::future::join_all;
 use log::{debug, error, info, warn};
 use semver::Version;
 use serde_json::json;
-use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
-use signal_hook_async_std::Signals;
 use smol::Executor;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
@@ -76,6 +74,10 @@ struct Args {
     #[structopt(long, default_value = "~/.config/darkfi/lilith_hosts.tsv")]
     /// Hosts .tsv file to use
     pub hosts_file: String,
+
+    #[structopt(short, long)]
+    /// Set log file to ouput into
+    log: Option<String>,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -236,25 +238,6 @@ impl RequestHandler for Lilith {
             Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
-}
-
-async fn handle_signals(mut signals: Signals, term_tx: smol::channel::Sender<()>) -> Result<()> {
-    debug!("Started signal handler");
-    while let Some(signal) = signals.next().await {
-        match signal {
-            SIGHUP => {
-                info!("Caught SIGHUP");
-            }
-
-            SIGTERM | SIGINT | SIGQUIT => {
-                term_tx.send(()).await?;
-                return Ok(())
-            }
-
-            s => debug!("Caught unhandled {} signal", s),
-        }
-    }
-    Ok(())
 }
 
 /// Attempt to read existing hosts tsv
@@ -472,12 +455,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         }
     }
 
-    // Signal handling for config reload and graceful termination.
-    let signals = Signals::new([SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
-    let handle = signals.handle();
-    let (term_tx, term_rx) = smol::channel::bounded::<()>(1);
-    ex.spawn(handle_signals(signals, term_tx)).detach();
-
     // Set up main daemon and background tasks
     let lilith = Arc::new(Lilith { networks });
     for network in &lilith.networks {
@@ -490,11 +467,10 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     let _ex = ex.clone();
     ex.spawn(listen_and_serve(args.rpc_listen, lilith.clone(), _ex)).detach();
 
-    // Wait for termination signal
-    term_rx.recv().await?;
-    print!("\r");
+    // Signal handling for graceful termination.
+    let (signals_handler, signals_task) = SignalHandler::new()?;
+    signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
-    handle.close();
 
     // Save in-memory hosts to tsv file
     save_hosts(&expand_path(&args.hosts_file)?, &lilith.networks).await;

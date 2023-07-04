@@ -86,6 +86,10 @@ pub struct Args {
     #[structopt(flatten)]
     pub net: SettingsOpt,
 
+    #[structopt(short, long)]
+    /// Set log file to ouput into
+    pub log: Option<String>,
+
     /// Increase verbosity
     #[structopt(short, parse(from_occurrences))]
     pub verbose: u8,

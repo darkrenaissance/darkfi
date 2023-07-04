@@ -16,16 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-    str::FromStr,
-};
+use std::{collections::HashMap, path::Path, str::FromStr};
 
 use async_std::{
     stream::StreamExt,
     sync::{Arc, Mutex, RwLock},
-    task,
 };
 use async_trait::async_trait;
 use chrono::Utc;
@@ -50,8 +45,6 @@ use darkfi_serial::{deserialize, serialize, Encodable};
 use log::{debug, error, info};
 use rand::rngs::OsRng;
 use serde_json::{json, Value};
-use signal_hook::consts::{SIGHUP, SIGINT, SIGQUIT, SIGTERM};
-use signal_hook_async_std::Signals;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -78,11 +71,7 @@ use darkfi::{
     },
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
     tx::Transaction,
-    util::{
-        async_util::sleep,
-        parse::decode_base10,
-        path::{expand_path, get_config_path},
-    },
+    util::{async_util::sleep, parse::decode_base10, path::expand_path},
     wallet::{WalletDb, WalletPtr},
     zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses},
     zkas::ZkBinary,
@@ -166,6 +155,10 @@ struct Args {
     #[structopt(long, default_value = "10")]
     /// Airdrop amount limit
     airdrop_limit: String, // We convert this to u64 with decode_base10
+
+    #[structopt(short, long)]
+    /// Set log file to ouput into
+    log: Option<String>,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -626,37 +619,8 @@ async fn prune_airdrop_maps(rate_map: AirdropMap, challenge_map: ChallengeMap, t
     }
 }
 
-async fn handle_signals(
-    mut signals: Signals,
-    _cfg_path: PathBuf,
-    term_tx: smol::channel::Sender<()>,
-) {
-    debug!("Started signal handler");
-    while let Some(signal) = signals.next().await {
-        match signal {
-            SIGHUP => {
-                info!("Caught SIGHUP");
-            }
-
-            SIGTERM | SIGINT | SIGQUIT => {
-                term_tx.send(()).await.unwrap();
-            }
-
-            _ => unreachable!(),
-        }
-    }
-}
-
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
-    let cfg_path = get_config_path(args.config, CONFIG_FILE)?;
-
-    // Signal handling for config reload and graceful termination.
-    let signals = Signals::new([SIGHUP, SIGTERM, SIGINT, SIGQUIT])?;
-    let handle = signals.handle();
-    let (term_tx, term_rx) = smol::channel::bounded::<()>(1);
-    let signals_task = task::spawn(handle_signals(signals, cfg_path.clone(), term_tx));
-
     // Initialize or load wallet
     let wallet = WalletDb::new(Some(expand_path(&args.wallet_path)?), &args.wallet_pass).await?;
 
@@ -792,12 +756,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         Err(e) => error!("Failed syncing blockchain: {}", e),
     }
 
-    // Wait for termination signal
-    term_rx.recv().await?;
-    print!("\r");
+    // Signal handling for graceful termination.
+    let (signals_handler, signals_task) = SignalHandler::new()?;
+    signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
-    handle.close();
-    signals_task.await;
 
     info!("Flushing database...");
     let flushed_bytes = sled_db.flush_async().await?;

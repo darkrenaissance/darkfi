@@ -71,9 +71,6 @@ async_daemonize!(realmain);
 async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()> {
     info!("Initializing DarkFi node...");
 
-    // Signal handling for graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new()?;
-
     // NOTE: everything is dummy for now
     // Initialize or open sled database
     let sled_db = sled::Config::new().temporary(true).open()?;
@@ -95,8 +92,10 @@ async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let _darkfid = Darkfid::new(validator).await;
     info!("Node initialized successfully!");
 
-    // Wait for termination signal
+    // Signal handling for graceful termination.
+    let (signals_handler, signals_task) = SignalHandler::new()?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
+
     Ok(())
 }

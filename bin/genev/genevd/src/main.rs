@@ -16,9 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::{Arc, Mutex};
+use async_std::{
+    stream::StreamExt,
+    sync::{Arc, Mutex},
+};
 
-use log::{info, warn};
+use log::info;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 
 use darkfi::{
@@ -59,6 +62,10 @@ struct Args {
 
     #[structopt(flatten)]
     pub net: SettingsOpt,
+
+    #[structopt(short, long)]
+    /// Set log file to ouput into
+    log: Option<String>,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -144,19 +151,9 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     let _ex = executor.clone();
     executor.spawn(listen_and_serve(args.rpc_listen.clone(), rpc_interface, _ex)).detach();
 
-    ////////////////////
-    // Wait for SIGINT
-    ////////////////////
-    let (signal, shutdown) = smol::channel::bounded::<()>(1);
-    ctrlc::set_handler(move || {
-        warn!(target: "ircd", "ircd start Exit Signal");
-        // cleaning up tasks running in the background
-        async_std::task::block_on(signal.send(())).unwrap();
-    })
-    .unwrap();
-
-    shutdown.recv().await?;
-    print!("\r");
+    // Signal handling for graceful termination.
+    let (signals_handler, signals_task) = SignalHandler::new()?;
+    signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 
     // stop p2p

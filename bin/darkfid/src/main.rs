@@ -18,7 +18,10 @@
 
 use std::{path::Path, str::FromStr};
 
-use async_std::sync::{Arc, Mutex};
+use async_std::{
+    stream::StreamExt,
+    sync::{Arc, Mutex},
+};
 use async_trait::async_trait;
 use darkfi_sdk::crypto::PublicKey;
 use log::{error, info};
@@ -171,6 +174,10 @@ struct Args {
     /// Verify system clock is correct
     clock_sync: bool,
 
+    #[structopt(short, long)]
+    /// Set log file to ouput into
+    log: Option<String>,
+
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
@@ -286,15 +293,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
             return Err(Error::InvalidClock)
         };
     }
-
-    // We use this handler to block this function after detaching all
-    // tasks, and to catch a shutdown signal, where we can clean up and
-    // exit gracefully.
-    let (signal, shutdown) = smol::channel::bounded::<()>(1);
-    ctrlc::set_handler(move || {
-        async_std::task::block_on(signal.send(())).unwrap();
-    })
-    .unwrap();
 
     // Initialize or load wallet
     let wallet = WalletDb::new(Some(expand_path(&args.wallet_path)?), &args.wallet_pass).await?;
@@ -486,9 +484,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         info!("Not starting consensus P2P network");
     }
 
-    // Wait for SIGINT
-    shutdown.recv().await?;
-    print!("\r");
+    // Signal handling for graceful termination.
+    let (signals_handler, signals_task) = SignalHandler::new()?;
+    signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 
     // TODO: STOP P2P NETS
