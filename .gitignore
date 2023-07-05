@@ -39,4 +39,8 @@
 /darkwiki
 /darkwikid
 /zktool
+
+# tags, ctags, rusty-tags
 TAGS
+rusty-tags.emacs
+rusty-tags.vi
