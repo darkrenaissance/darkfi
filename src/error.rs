@@ -217,6 +217,9 @@ pub enum Error {
     // =======================
     // Protocol-related errors
     // =======================
+    #[error("Unsupported chain")]
+    UnsupportedChain,
+
     #[error("JSON-RPC error: {0}")]
     JsonRpcError(String),
 
