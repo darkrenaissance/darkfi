@@ -28,7 +28,7 @@ Pseudocode:
 /// corresponding to provided slot consensus state.
 fn sigmas() -> (pallas::Base, pallas::Base) {
     let f: Float10 = calculate_f();
-    let total_tokens: Float10 = previous_slot.total_tokens;
+    let total_tokens: Float10 = previous_slot.total_tokens + previous_slot.reward;
     calculate_sigmas(f, total_tokens)
 }
 ```
