@@ -13,8 +13,11 @@ To generate the slot sigmas, we have to perform the following:
 
 1. Calculate the inverse probability `f` of becoming a block producer (winning the lottery)
    having all the tokens, represented as Float10.
-2. Calculate network total tokens, deriving from genesis stake, genesis mint,
-   and all block rewarded tokens, represented as Float10.
+2. Retrieve network total tokens, up until the provided slot, represented as Float10.
+   Since each slot contains the total tokens up until that point, we simply grab the
+   previous slot total tokens. Additionally, each slot will contain its reward.
+   That enables to be flexible on reward scheme, since both constant and variable
+   rewards can be used.
 3. Calculate the sigmas using previous 2 numbers, represented as pallas::Base.
 
 Each step will be further described in the sub-sections following.
@@ -25,7 +28,7 @@ Pseudocode:
 /// corresponding to provided slot consensus state.
 fn sigmas() -> (pallas::Base, pallas::Base) {
     let f: Float10 = calculate_f();
-    let total_tokens: Float10 = total_tokens();
+    let total_tokens: Float10 = previous_slot.total_tokens;
     calculate_sigmas(f, total_tokens)
 }
 ```
@@ -67,30 +70,6 @@ fn calculate_f() -> Float10 {
     }
     
     f
-}
-```
-
-## Calculate total tokens
-
-In this step we calculate network total tokens.
-
-Pseudocode:
-```
-/// Network total tokens, assuming constant reward.
-/// Only used for fine-tuning. Since a genesis staker
-/// is needed to progress the blockchain, we know that
-/// total tokens > 0, as genesis_tokens > 0.
-fn total_tokens() -> u64 {
-    // Retrieve existing blocks count, excluding genesis,
-    // up until current slot
-    let blocks = blockchain.len_until(slot) - 1;
-    // Calculate rewarded slots, including previous slot
-    // longest fork proposals
-    let rewarded_slots = blocks + previous_slot.longest_fork_length;
-    // Calculate rewarded tokens
-    let rewarded_tokens = rewarded_slots * REWARD
-    
-    rewarded_tokens + genesis_tokens
 }
 ```
 
