@@ -81,13 +81,12 @@ Pseudocode:
 /// is needed to progress the blockchain, we know that
 /// total tokens > 0, as genesis_tokens > 0.
 fn total_tokens() -> u64 {
-    // Retrieve existing blocks count, excluding genesis
-    let blocks = (blockchain.len() as u64) - 1;
-    // Retrieve longest fork length, to include those
-    // proposals in the calculation
-    let max_fork_length = longest_chain_length() as u64;
-    // Calculate rewarded slots
-    let rewarded_slots = blocks + max_fork_length;
+    // Retrieve existing blocks count, excluding genesis,
+    // up until current slot
+    let blocks = blockchain.len_until(slot) - 1;
+    // Calculate rewarded slots, including previous slot
+    // longest fork proposals
+    let rewarded_slots = blocks + previous_slot.longest_fork_length;
     // Calculate rewarded tokens
     let rewarded_tokens = rewarded_slots * REWARD
     
