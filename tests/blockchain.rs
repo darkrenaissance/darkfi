@@ -18,6 +18,7 @@
 
 use darkfi::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay, Header},
+    validator::consensus::{next_block_reward, pid::slot_pid_output},
     Error, Result,
 };
 use darkfi_sdk::{
@@ -53,9 +54,29 @@ impl Harness {
 
     fn generate_next_block(&self, previous: &BlockInfo) -> BlockInfo {
         let previous_hash = previous.blockhash();
+
+        // Generate slot
+        let previous_slot = previous.slots.last().unwrap();
+        let (f, error, sigma1, sigma2) = slot_pid_output(&previous_slot);
+        let slot = Slot::new(
+            previous_slot.id + 1,
+            pallas::Base::ZERO,
+            vec![previous_hash],
+            vec![previous.header.previous.clone()],
+            f,
+            error,
+            previous_slot.error,
+            previous_slot.total_tokens + previous_slot.reward,
+            next_block_reward(),
+            sigma1,
+            sigma2,
+        );
+
         // We increment timestamp so we don't have to use sleep
         let mut timestamp = previous.header.timestamp;
         timestamp.add(1);
+
+        // Generate header
         let header = Header::new(
             previous_hash,
             previous.header.epoch,
@@ -63,19 +84,7 @@ impl Harness {
             timestamp,
             previous.header.root.clone(),
         );
-        let slot = Slot::new(
-            previous.header.slot + 1,
-            pallas::Base::ZERO,
-            vec![previous_hash],
-            vec![previous.header.previous.clone()],
-            0.0,
-            0.0,
-            0.0,
-            0,
-            0,
-            pallas::Base::ZERO,
-            pallas::Base::ZERO,
-        );
+
         BlockInfo::new(header, vec![], previous.producer.clone(), vec![slot])
     }
 
@@ -104,7 +113,11 @@ impl Harness {
 
             // This will be true for every insert, apart from genesis
             if let Some(p) = previous {
-                block.validate(&p)?;
+                // Retrieve expected reward
+                let expected_reward = next_block_reward();
+
+                // Validate block
+                block.validate(&p, expected_reward)?;
             }
 
             // Insert block

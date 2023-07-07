@@ -24,7 +24,7 @@ use sled::Transactional;
 use darkfi_sdk::blockchain::Slot;
 use darkfi_serial::{deserialize, serialize, Decodable};
 
-use crate::{tx::Transaction, Error, Result};
+use crate::{tx::Transaction, validator::consensus::next_block_reward, Error, Result};
 
 /// Block related definitions and storage implementations
 pub mod block_store;
@@ -110,7 +110,8 @@ impl Blockchain {
         let blocks = self.order.get_all()?;
         for (index, block) in blocks[1..].iter().enumerate() {
             let full_blocks = self.get_blocks_by_hash(&[blocks[index].1, block.1])?;
-            full_blocks[1].validate(&full_blocks[0])?;
+            let expected_reward = next_block_reward();
+            full_blocks[1].validate(&full_blocks[0], expected_reward)?;
         }
 
         Ok(())

@@ -50,6 +50,10 @@ impl Float10 {
     pub fn ln(&self) -> Self {
         Self(self.0.ln())
     }
+
+    pub fn to_f64(&self) -> f64 {
+        self.0.to_f64().value()
+    }
 }
 
 impl Add for Float10 {
@@ -124,7 +128,7 @@ impl TryFrom<f64> for Float10 {
     type Error = crate::Error;
 
     fn try_from(value: f64) -> Result<Self, Self::Error> {
-        Ok(Self(FBig::try_from(value)?.with_base().value()))
+        Ok(Self(FBig::try_from(value)?.with_precision(RADIX_BITS).value().with_base().value()))
     }
 }
 

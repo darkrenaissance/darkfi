@@ -30,7 +30,7 @@ use crate::{
 
 /// DarkFi consensus module
 pub mod consensus;
-use consensus::Consensus;
+use consensus::{next_block_reward, Consensus};
 
 /// Verification functions
 pub mod verification;
@@ -91,8 +91,15 @@ impl Validator {
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
             info!(target: "validator", "Appending genesis block");
-            verify_block(&overlay, &config.time_keeper, &config.genesis_block, None, testing_mode)
-                .await?;
+            verify_block(
+                &overlay,
+                &config.time_keeper,
+                &config.genesis_block,
+                None,
+                0,
+                testing_mode,
+            )
+            .await?;
         };
 
         // Deploy native wasm contracts
@@ -145,9 +152,20 @@ impl Validator {
             // Use block slot in time keeper
             time_keeper.verifying_slot = block.header.slot;
 
-            if verify_block(&overlay, &time_keeper, block, previous, self.testing_mode)
-                .await
-                .is_err()
+            // Retrieve expected reward
+            let expected_reward = next_block_reward();
+
+            // Verify block
+            if verify_block(
+                &overlay,
+                &time_keeper,
+                block,
+                previous,
+                expected_reward,
+                self.testing_mode,
+            )
+            .await
+            .is_err()
             {
                 error!(target: "validator", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
@@ -242,9 +260,20 @@ impl Validator {
             // Use block slot in time keeper
             time_keeper.verifying_slot = block.header.slot;
 
-            if verify_block(&overlay, &time_keeper, block, previous, self.testing_mode)
-                .await
-                .is_err()
+            // Retrieve expected reward
+            let expected_reward = next_block_reward();
+
+            // Verify block
+            if verify_block(
+                &overlay,
+                &time_keeper,
+                block,
+                previous,
+                expected_reward,
+                self.testing_mode,
+            )
+            .await
+            .is_err()
             {
                 error!(target: "validator", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;

@@ -20,7 +20,7 @@
 use darkfi_sdk::blockchain::Slot;
 use darkfi_serial::{deserialize, serialize};
 
-use crate::{validator::consensus::pid::slot_sigmas, Error, Result};
+use crate::{validator::consensus::pid::slot_pid_output, Error, Result};
 
 use super::{parse_record, SledDbOverlayPtr};
 
@@ -28,19 +28,20 @@ use super::{parse_record, SledDbOverlayPtr};
 ///     1. Id increments previous slot id
 ///     2. Forks extend previous block hash
 ///     3. Forks follow previous block sequence
-///     4. Sigmas are the expected ones, based on consensus PID
+///     4. Slot total tokens represent the total network tokens
+///        up until this slot
+///     5. Slot previous error value correspond to previous slot one
+///     6. PID output for this slot is correct
+///     7. Slot reward value is the expected one
 /// Additional validity rules can be applied.
 pub fn validate_slot(
     slot: &Slot,
     previous: &Slot,
     previous_block_hash: &blake3::Hash,
     previous_block_sequence: &blake3::Hash,
+    expected_reward: u64,
 ) -> Result<()> {
     let error = Err(Error::SlotIsInvalid(slot.id));
-
-    // TODO: Validate previous slot stuff
-    // slot.total_tokens = previous.total_tokens + previous.reward
-    // slot.previous_slot_err = previous.err;
 
     // Check slots are incremental (1)
     if slot.id <= previous.id {
@@ -57,8 +58,23 @@ pub fn validate_slot(
         return error
     }
 
-    // Check sigmas (4)
-    if (slot.sigma1, slot.sigma2) != slot_sigmas() {
+    // Check total tokens (4)
+    if slot.total_tokens != previous.total_tokens + previous.reward {
+        return error
+    }
+
+    // Check previous slot error (5)
+    if slot.previous_slot_error != previous.error {
+        return error
+    }
+
+    // Check PID output for this slot (6)
+    if (slot.f, slot.error, slot.sigma1, slot.sigma2) != slot_pid_output(previous) {
+        return error
+    }
+
+    // Check reward is the expected one (7)
+    if slot.reward != expected_reward {
         return error
     }
 

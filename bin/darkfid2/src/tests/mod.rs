@@ -29,11 +29,17 @@ async fn add_blocks() -> Result<()> {
     // Initialize harness in testing mode
     let th = Harness::new(true).await?;
 
+    // Retrieve genesis block
+    let previous = th.alice._validator.read().await.blockchain.last_block()?;
+
     // Generate next block
-    let block = th.generate_next_block().await?;
+    let block1 = th.generate_next_block(&previous, 1).await?;
+
+    // Generate next block, with 4 empty slots inbetween
+    let block2 = th.generate_next_block(&block1, 5).await?;
 
     // Add it to nodes
-    th.add_blocks(&vec![block]).await?;
+    th.add_blocks(&vec![block1, block2]).await?;
 
     // Validate chains
     th.validate_chains().await?;

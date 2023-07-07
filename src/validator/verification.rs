@@ -41,6 +41,7 @@ pub async fn verify_block(
     time_keeper: &TimeKeeper,
     block: &BlockInfo,
     previous: Option<&BlockInfo>,
+    expected_reward: u64,
     testing_mode: bool,
 ) -> Result<()> {
     let block_hash = block.blockhash();
@@ -56,12 +57,15 @@ pub async fn verify_block(
         return Err(Error::VerifyingSlotMissmatch())
     }
 
+    // TODO: on genesis block, verify slot.total_tokens = txs.total,
+    // thats our genesis distribution, and reward is 0
+
     // Validate block using its previous, excluding genesis
     if block.header.slot != 0 {
         if previous.is_none() {
             return Err(Error::BlockPreviousMissing())
         }
-        block.validate(previous.unwrap())?;
+        block.validate(previous.unwrap(), expected_reward)?;
     }
 
     // Validate proposal transaction if not in testing mode

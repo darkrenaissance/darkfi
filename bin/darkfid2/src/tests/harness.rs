@@ -19,7 +19,10 @@
 use darkfi::{
     blockchain::{BlockInfo, Header},
     util::time::TimeKeeper,
-    validator::{Validator, ValidatorConfig},
+    validator::{
+        consensus::{next_block_reward, pid::slot_pid_output},
+        Validator, ValidatorConfig,
+    },
     Result,
 };
 use darkfi_contract_test_harness::vks;
@@ -81,10 +84,51 @@ impl Harness {
         Ok(())
     }
 
-    pub async fn generate_next_block(&self) -> Result<BlockInfo> {
-        // Retrieve last block
-        let previous = self.alice._validator.read().await.blockchain.last_block()?;
+    pub async fn generate_next_block(
+        &self,
+        previous: &BlockInfo,
+        slots_count: usize,
+    ) -> Result<BlockInfo> {
         let previous_hash = previous.blockhash();
+
+        // Generate empty slots
+        let mut slots = Vec::with_capacity(slots_count);
+        let mut previous_slot = previous.slots.last().unwrap().clone();
+        for _ in 0..slots_count - 1 {
+            let (f, error, sigma1, sigma2) = slot_pid_output(&previous_slot);
+            let slot = Slot::new(
+                previous_slot.id + 1,
+                pallas::Base::ZERO,
+                vec![previous_hash],
+                vec![previous.header.previous.clone()],
+                f,
+                error,
+                previous_slot.error,
+                previous_slot.total_tokens + previous_slot.reward,
+                0,
+                sigma1,
+                sigma2,
+            );
+            slots.push(slot.clone());
+            previous_slot = slot;
+        }
+
+        // Generate slot
+        let (f, error, sigma1, sigma2) = slot_pid_output(&previous_slot);
+        let slot = Slot::new(
+            previous_slot.id + 1,
+            pallas::Base::ZERO,
+            vec![previous_hash],
+            vec![previous.header.previous.clone()],
+            f,
+            error,
+            previous_slot.error,
+            previous_slot.total_tokens + previous_slot.reward,
+            next_block_reward(),
+            sigma1,
+            sigma2,
+        );
+        slots.push(slot);
 
         // We increment timestamp so we don't have to use sleep
         let mut timestamp = previous.header.timestamp;
@@ -94,28 +138,13 @@ impl Harness {
         let header = Header::new(
             previous_hash,
             previous.header.epoch,
-            previous.header.slot + 1,
+            previous_slot.id + 1,
             timestamp,
             previous.header.root.clone(),
         );
 
-        // Generate slot
-        let slot = Slot::new(
-            previous.header.slot + 1,
-            pallas::Base::ZERO,
-            vec![previous_hash],
-            vec![previous.header.previous.clone()],
-            0.0,
-            0.0,
-            0.0,
-            0,
-            0,
-            pallas::Base::ZERO,
-            pallas::Base::ZERO,
-        );
-
         // Generate block
-        let block = BlockInfo::new(header, vec![], previous.producer.clone(), vec![slot]);
+        let block = BlockInfo::new(header, vec![], previous.producer.clone(), slots);
 
         Ok(block)
     }

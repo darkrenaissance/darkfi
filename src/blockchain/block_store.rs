@@ -116,7 +116,7 @@ impl BlockInfo {
     ///     4. Slots vector is not empty and all its slots are valid
     ///     5. Slot is the same as the slots vector last slot id
     /// Additional validity rules can be applied.
-    pub fn validate(&self, previous: &Self) -> Result<()> {
+    pub fn validate(&self, previous: &Self, expected_reward: u64) -> Result<()> {
         let error = Err(Error::BlockIsInvalid(self.blockhash().to_string()));
         let previous_hash = previous.blockhash();
 
@@ -143,11 +143,23 @@ impl BlockInfo {
         // Retrieve previous block last slot
         let mut previous_slot = previous.slots.last().unwrap();
 
-        // Slots must already be in correct order (sorted by id)
-        for slot in &self.slots {
-            validate_slot(slot, previous_slot, &previous_hash, &previous.header.previous)?;
-            previous_slot = slot;
+        // Check if empty slots existed
+        if self.slots.len() > 1 {
+            // All slots exluding the last one must have reward value set to 0.
+            // Slots must already be in correct order (sorted by id).
+            for slot in &self.slots[..self.slots.len() - 1] {
+                validate_slot(slot, previous_slot, &previous_hash, &previous.header.previous, 0)?;
+                previous_slot = slot;
+            }
         }
+
+        validate_slot(
+            self.slots.last().unwrap(),
+            previous_slot,
+            &previous_hash,
+            &previous.header.previous,
+            expected_reward,
+        )?;
 
         // Check block slot is the last slot id (5)
         if self.slots.last().unwrap().id != self.header.slot {

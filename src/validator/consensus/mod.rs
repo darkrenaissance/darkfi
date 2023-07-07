@@ -38,3 +38,11 @@ impl Consensus {
         Self { blockchain, time_keeper }
     }
 }
+
+/// Block producer reward.
+/// TODO (res) implement reward mechanism with accord to DRK, DARK token-economics.
+pub fn next_block_reward() -> u64 {
+    // Configured block reward (1 DRK == 1 * 10^8)
+    let reward: u64 = 100_000_000;
+    reward
+}

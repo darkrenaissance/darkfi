@@ -16,11 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//! TODO: this is just the foundation layout, so we can complete
-//! the basic validator. We will use pallas::Base::zero() everywhere,
-//! since we just want to simulate its functionality. After layout is
-//! complete, the proper pid functionality will be implemented.
-
 use darkfi_sdk::{blockchain::Slot, pasta::pallas};
 use lazy_static::lazy_static;
 
@@ -41,23 +36,23 @@ lazy_static! {
 }
 
 /// Return 2-term target approximation sigma coefficients,
-/// corresponding to provided slot consensus state.
-pub fn slot_sigmas() -> (pallas::Base, pallas::Base) {
-    (pallas::Base::zero(), pallas::Base::zero())
-}
-
-/// Return 2-term target approximation sigma coefficients,
-/// corresponding to provided slot consensus state.
-pub fn sigmass(previous_slot: &Slot) -> (pallas::Base, pallas::Base) {
-    let f = calculate_f(previous_slot);
+/// alogn with the inverse probability `f` of becoming a
+/// block producer and the feedback error, corresponding
+/// to provided slot consensus state,
+pub fn slot_pid_output(previous_slot: &Slot) -> (f64, f64, pallas::Base, pallas::Base) {
+    let (f, error) = calculate_f(previous_slot);
     let total_tokens =
         Float10::try_from(previous_slot.total_tokens + previous_slot.reward).unwrap();
-    calculate_sigmas(f, total_tokens)
+    let (sigma1, sigma2) = calculate_sigmas(f.clone(), total_tokens);
+
+    // TODO: log values
+
+    (f.to_f64(), error.to_f64(), sigma1, sigma2)
 }
 
 /// Calculate the inverse probability `f` of becoming a block producer (winning the lottery)
-/// having all the tokens, represented as Float10.
-fn calculate_f(previous_slot: &Slot) -> Float10 {
+/// having all the tokens, and the feedback error, represented as Float10.
+fn calculate_f(previous_slot: &Slot) -> (Float10, Float10) {
     // PID controller K values based on constants
     let k1 = KP.clone() + KI.clone() + KD.clone();
     let k2 = FLOAT10_NEG_ONE.clone() * KP.clone() + FLOAT10_NEG_TWO.clone() * KD.clone();
@@ -77,7 +72,7 @@ fn calculate_f(previous_slot: &Slot) -> Float10 {
 
     // Calculate f
     let mut f = previous_slot_f +
-        k1 * error +
+        k1 * error.clone() +
         k2 * previous_slot_error +
         k3 * previous_slot_previous_slot_error;
 
@@ -88,7 +83,7 @@ fn calculate_f(previous_slot: &Slot) -> Float10 {
         f = MAX_F.clone()
     }
 
-    f
+    (f, error)
 }
 
 /// Return 2-term target approximation sigma coefficients,
