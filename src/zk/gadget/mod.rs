@@ -34,5 +34,5 @@ pub mod is_zero;
 /// Conditional selection
 pub mod cond_select;
 
-// Sparse Merkle Tree (using poseidon hash) gadget
-//pub mod smt_poseidon;
+/// Conditional selection based on lhs (will output lhs if lhs==0, otherwise rhs)
+pub mod zero_cond;
