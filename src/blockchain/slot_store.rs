@@ -38,6 +38,10 @@ pub fn validate_slot(
 ) -> Result<()> {
     let error = Err(Error::SlotIsInvalid(slot.id));
 
+    // TODO: Validate previous slot stuff
+    // slot.total_tokens = previous.total_tokens + previous.reward
+    // slot.previous_slot_err = previous.err;
+
     // Check slots are incremental (1)
     if slot.id <= previous.id {
         return error

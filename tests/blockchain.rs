@@ -68,6 +68,11 @@ impl Harness {
             pallas::Base::ZERO,
             vec![previous_hash],
             vec![previous.header.previous.clone()],
+            0.0,
+            0.0,
+            0.0,
+            0,
+            0,
             pallas::Base::ZERO,
             pallas::Base::ZERO,
         );

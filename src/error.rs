@@ -58,6 +58,10 @@ pub enum Error {
 
     #[cfg(feature = "dashu")]
     #[error(transparent)]
+    DashuConversionError(#[from] dashu::base::error::ConversionError),
+
+    #[cfg(feature = "dashu")]
+    #[error(transparent)]
     DashuParseError(#[from] dashu::base::error::ParseError),
 
     #[cfg(feature = "semver")]

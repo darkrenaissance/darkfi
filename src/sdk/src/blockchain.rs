@@ -32,6 +32,16 @@ pub struct Slot {
     /// Previous slot second to last proposal/block hashes,
     /// as observed by the validator
     pub fork_previous_hashes: Vec<blake3::Hash>,
+    /// Slot inverse probability `f` of becoming a block producer
+    pub f: f64,
+    /// Slot feedback error
+    pub error: f64,
+    /// Previous slot feedback error
+    pub previous_slot_error: f64,
+    /// Total tokens up until this slot
+    pub total_tokens: u64,
+    /// Slot reward
+    pub reward: u64,
     /// Slot sigma1
     pub sigma1: pallas::Base,
     /// Slot sigma2
@@ -44,16 +54,45 @@ impl Slot {
         previous_eta: pallas::Base,
         fork_hashes: Vec<blake3::Hash>,
         fork_previous_hashes: Vec<blake3::Hash>,
+        f: f64,
+        error: f64,
+        previous_slot_error: f64,
+        total_tokens: u64,
+        reward: u64,
         sigma1: pallas::Base,
         sigma2: pallas::Base,
     ) -> Self {
-        Self { id, previous_eta, fork_hashes, fork_previous_hashes, sigma1, sigma2 }
+        Self {
+            id,
+            previous_eta,
+            fork_hashes,
+            fork_previous_hashes,
+            f,
+            error,
+            previous_slot_error,
+            total_tokens,
+            reward,
+            sigma1,
+            sigma2,
+        }
     }
 }
 
 impl Default for Slot {
     /// Represents the genesis slot on current timestamp
     fn default() -> Self {
-        Self::new(0, pallas::Base::ZERO, vec![], vec![], pallas::Base::ZERO, pallas::Base::ZERO)
+        Self::new(
+            0,
+            pallas::Base::ZERO,
+            vec![],
+            vec![],
+            0.0,
+            0.0,
+            0.0,
+            0,
+            0,
+            pallas::Base::ZERO,
+            pallas::Base::ZERO,
+        )
     }
 }

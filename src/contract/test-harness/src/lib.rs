@@ -440,17 +440,20 @@ impl TestHarness {
         // We grab the genesis slot to generate slot
         // using same consensus parameters
         let genesis_block = self.genesis_block;
-        let fork_hashes = vec![genesis_block];
-        let fork_previous_hashes = vec![genesis_block];
         let genesis_slot = self.get_slot_by_slot(0).await?;
-        let slot = Slot {
+        let slot = Slot::new(
             id,
-            previous_eta: genesis_slot.previous_eta,
-            fork_hashes,
-            fork_previous_hashes,
-            sigma1: genesis_slot.sigma1,
-            sigma2: genesis_slot.sigma2,
-        };
+            genesis_slot.previous_eta,
+            vec![genesis_block],
+            vec![genesis_block],
+            0.0,
+            0.0,
+            0.0,
+            0,
+            0,
+            genesis_slot.sigma1,
+            genesis_slot.sigma2,
+        );
 
         // Store generated slot
         for wallet in self.holders.values() {

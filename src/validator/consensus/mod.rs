@@ -21,6 +21,9 @@ use crate::{blockchain::Blockchain, util::time::TimeKeeper};
 /// DarkFi consensus PID controller
 pub mod pid;
 
+/// Base 10 big float implementation for high precision arithmetics
+pub mod float_10;
+
 /// This struct represents the information required by the consensus algorithm
 pub struct Consensus {
     /// Canonical (finalized) blockchain

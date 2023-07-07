@@ -165,7 +165,19 @@ impl ConsensusState {
     ) {
         let id = self.time_keeper.current_slot();
         let previous_eta = self.get_previous_eta();
-        let slot = Slot { id, previous_eta, fork_hashes, fork_previous_hashes, sigma1, sigma2 };
+        let slot = Slot::new(
+            id,
+            previous_eta,
+            fork_hashes,
+            fork_previous_hashes,
+            0.0,
+            0.0,
+            0.0,
+            0,
+            0,
+            sigma1,
+            sigma2,
+        );
         info!(target: "consensus::state", "generate_slot: {:?}", slot);
         self.slots.push(slot);
     }
