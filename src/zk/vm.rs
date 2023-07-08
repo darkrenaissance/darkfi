@@ -58,6 +58,7 @@ use super::{
         less_than::{LessThanChip, LessThanConfig},
         native_range_check::{NativeRangeCheckChip, NativeRangeCheckConfig},
         small_range_check::{SmallRangeCheckChip, SmallRangeCheckConfig},
+        zero_cond::{ZeroCondChip, ZeroCondConfig},
     },
 };
 use crate::zkas::{
@@ -82,6 +83,7 @@ pub struct VmConfig {
     lessthan_config: LessThanConfig<3, 253, 85>,
     boolcheck_config: SmallRangeCheckConfig,
     condselect_config: ConditionalSelectConfig<pallas::Base>,
+    zerocond_config: ZeroCondConfig<pallas::Base>,
 }
 
 impl VmConfig {
@@ -111,6 +113,10 @@ impl VmConfig {
 
     fn condselect_chip(&self) -> ConditionalSelectChip<pallas::Base> {
         ConditionalSelectChip::construct(self.condselect_config.clone(), ())
+    }
+
+    fn zerocond_chip(&self) -> ZeroCondChip<pallas::Base> {
+        ZeroCondChip::construct(self.zerocond_config.clone())
     }
 }
 
@@ -271,9 +277,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
         // chip with a range of 2, which enforces one bit, i.e. 0 or 1.
         let boolcheck_config = SmallRangeCheckChip::configure(meta, advices[9], 2);
 
-        // Cnfiguration for the conditional selection chip
+        // Configuration for the conditional selection chip
         let condselect_config =
             ConditionalSelectChip::configure(meta, advices[1..5].try_into().unwrap());
+
+        // Configuration for the zero_cond selection chip
+        let zerocond_config = ZeroCondChip::configure(meta, advices[1..5].try_into().unwrap());
 
         VmConfig {
             primary,
@@ -290,6 +299,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             lessthan_config,
             boolcheck_config,
             condselect_config,
+            zerocond_config,
         }
     }
 
@@ -348,8 +358,11 @@ impl Circuit<pallas::Base> for ZkCircuit {
         // Construct the boolean check chip.
         let boolcheck_chip = SmallRangeCheckChip::construct(config.boolcheck_config.clone());
 
-        // Construct the conditional selectiono chip
+        // Construct the conditional selection chip
         let condselect_chip = config.condselect_chip();
+
+        // Construct the zero_cond selection chip
+        let zerocond_chip = config.zerocond_chip();
 
         // ==========================
         // Constants setup
@@ -850,6 +863,20 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     heap.push(HeapVar::Base(out));
                 }
 
+                Opcode::ZeroCondSelect => {
+                    trace!(target: "zk::vm", "Executing `ZeroCondSelect{:?}` opcode", opcode.1);
+                    let args = &opcode.1;
+
+                    let lhs: AssignedCell<Fp, Fp> = heap[args[0].1].clone().into();
+                    let rhs: AssignedCell<Fp, Fp> = heap[args[1].1].clone().into();
+
+                    let out: AssignedCell<Fp, Fp> =
+                        zerocond_chip.assign(layouter.namespace(|| "zero_cond"), lhs, rhs)?;
+
+                    trace!(target: "zk::vm", "Pushing assignment to heap address {}", heap.len());
+                    heap.push(HeapVar::Base(out));
+                }
+
                 Opcode::ConstrainEqualBase => {
                     trace!(target: "zk::vm", "Executing `ConstrainEqualBase{:?}` opcode", opcode.1);
                     let args = &opcode.1;
@@ -902,7 +929,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     println!("[ZKVM DEBUG] {:#?}", heap[args[0].1]);
                 }
 
-                _ => {
+                Opcode::Noop => {
                     error!(target: "zk::vm", "Unsupported opcode");
                     return Err(plonk::Error::Synthesis)
                 }

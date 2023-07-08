@@ -81,6 +81,9 @@ pub enum Opcode {
     /// Conditionally select between two base field elements given a boolean
     CondSelect = 0x60,
 
+    /// Conditionally select between a and b (return a if a is zero, and b if a is nonzero)
+    ZeroCondSelect = 0x61,
+
     /// Constrain equality of two Base field elements inside the circuit
     ConstrainEqualBase = 0xe0,
 
@@ -115,6 +118,7 @@ impl Opcode {
             "less_than_loose" => Some(Self::LessThanLoose),
             "bool_check" => Some(Self::BoolCheck),
             "cond_select" => Some(Self::CondSelect),
+            "zero_cond" => Some(Self::ZeroCondSelect),
             "constrain_equal_base" => Some(Self::ConstrainEqualBase),
             "constrain_equal_point" => Some(Self::ConstrainEqualPoint),
             "constrain_instance" => Some(Self::ConstrainInstance),
@@ -143,6 +147,7 @@ impl Opcode {
             0x52 => Some(Self::LessThanLoose),
             0x53 => Some(Self::BoolCheck),
             0x60 => Some(Self::CondSelect),
+            0x61 => Some(Self::ZeroCondSelect),
             0xe0 => Some(Self::ConstrainEqualBase),
             0xe1 => Some(Self::ConstrainEqualPoint),
             0xf0 => Some(Self::ConstrainInstance),
@@ -202,6 +207,8 @@ impl Opcode {
             Opcode::CondSelect => {
                 (vec![VarType::Base], vec![VarType::Base, VarType::Base, VarType::Base])
             }
+
+            Opcode::ZeroCondSelect => (vec![VarType::Base], vec![VarType::Base, VarType::Base]),
 
             Opcode::ConstrainEqualBase => (vec![], vec![VarType::Base, VarType::Base]),
 
