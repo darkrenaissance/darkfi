@@ -329,9 +329,7 @@ impl ProgressInc {
         *position += n;
 
         let binding = self.timer.lock().unwrap();
-        let Some(elapsed) = binding.as_ref() else {
-            return
-        };
+        let Some(elapsed) = binding.as_ref() else { return };
         let elapsed = elapsed.elapsed();
         let pos = *position;
 
