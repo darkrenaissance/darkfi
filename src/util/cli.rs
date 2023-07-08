@@ -22,6 +22,8 @@ use std::{
     marker::PhantomData,
     path::{Path, PathBuf},
     str,
+    sync::{Arc, Mutex},
+    time::Instant,
 };
 
 use serde::{de::DeserializeOwned, Serialize};
@@ -304,4 +306,44 @@ pub fn fg_green(message: &str) -> String {
 
 pub fn fg_reset() -> String {
     "\x1b[0m".to_string()
+}
+
+pub struct ProgressInc {
+    position: Arc<Mutex<u64>>,
+    timer: Arc<Mutex<Option<Instant>>>,
+}
+
+impl ProgressInc {
+    pub fn new() -> Self {
+        eprint!("\x1b[?25l");
+        Self { position: Arc::new(Mutex::new(0)), timer: Arc::new(Mutex::new(None)) }
+    }
+
+    pub fn inc(&self, n: u64) {
+        let mut position = self.position.lock().unwrap();
+
+        if *position == 0 {
+            *self.timer.lock().unwrap() = Some(Instant::now());
+        }
+
+        *position += n;
+
+        let binding = self.timer.lock().unwrap();
+        let Some(elapsed) = binding.as_ref() else {
+            return
+        };
+        let elapsed = elapsed.elapsed();
+        let pos = *position;
+
+        eprint!("\r[{elapsed:?}] {pos} attempts");
+    }
+
+    pub fn position(&self) -> u64 {
+        *self.position.lock().unwrap()
+    }
+
+    pub fn finish_and_clear(&self) {
+        *self.timer.lock().unwrap() = None;
+        eprint!("\r\x1b[2K\x1b[?25h");
+    }
 }

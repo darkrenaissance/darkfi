@@ -16,11 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{process::exit, sync::mpsc::channel};
+use std::{
+    process::exit,
+    sync::{mpsc::channel, Arc},
+};
 
 use clap::Parser;
+use darkfi::util::cli::ProgressInc;
 use darkfi_sdk::crypto::{ContractId, PublicKey, SecretKey, TokenId};
-use indicatif::{ProgressBar, ProgressStyle};
 use rand::rngs::OsRng;
 use rayon::prelude::*;
 
@@ -175,16 +178,20 @@ fn main() {
         .expect("Error setting SIGINT handler");
 
     // Something fancy
+    let progress = Arc::new(ProgressInc::new());
+    /*
     let progress = ProgressBar::new_spinner();
     let template =
         ProgressStyle::default_bar().template("[{elapsed_precise}] {pos} attempts").unwrap();
     progress.set_style(template);
+    */
 
     // Fire off the threadpool
+    let progress_ = progress.clone();
     rayon_pool.spawn(move || {
         if args.token_id {
             let tid = rayon::iter::repeat(DrkToken::new)
-                .inspect(|_| progress.inc(1))
+                .inspect(|_| progress_.inc(1))
                 .map(|create| create())
                 .find_any(|token_id| token_id.starts_with_any(&args.prefix, args.case_sensitive))
                 .expect("Failed to find a token ID match");
@@ -192,8 +199,8 @@ fn main() {
             // The above will keep running until it finds a match or until the
             // program terminates. Only if a match is found shall the following
             // code be executed and the program exit successfully:
-            let attempts = progress.position();
-            progress.finish_and_clear();
+            let attempts = progress_.position();
+            progress_.finish_and_clear();
 
             println!(
                 "{{\"token_id\":\"{}\",\"attempts\":{},\"secret\":\"{}\"}}",
@@ -201,13 +208,13 @@ fn main() {
             );
         } else if args.address {
             let addr = rayon::iter::repeat(DrkAddr::new)
-                .inspect(|_| progress.inc(1))
+                .inspect(|_| progress_.inc(1))
                 .map(|create| create())
                 .find_any(|address| address.starts_with_any(&args.prefix, args.case_sensitive))
                 .expect("Failed to find an address match");
 
-            let attempts = progress.position();
-            progress.finish_and_clear();
+            let attempts = progress_.position();
+            progress_.finish_and_clear();
 
             println!(
                 "{{\"address\":\"{}\",\"attempts\":{},\"secret\":\"{}\"}}",
@@ -215,15 +222,15 @@ fn main() {
             );
         } else if args.contract_id {
             let cid = rayon::iter::repeat(DrkContract::new)
-                .inspect(|_| progress.inc(1))
+                .inspect(|_| progress_.inc(1))
                 .map(|create| create())
                 .find_any(|contract_id| {
                     contract_id.starts_with_any(&args.prefix, args.case_sensitive)
                 })
                 .expect("Failed to find a contract ID match");
 
-            let attempts = progress.position();
-            progress.finish_and_clear();
+            let attempts = progress_.position();
+            progress_.finish_and_clear();
 
             println!(
                 "{{\"contract_id\":\"{}\",\"attempts\":{},\"secret\":\"{}\"}}",
@@ -236,6 +243,7 @@ fn main() {
 
     // This now blocks and lets our threadpool execute in the background.
     rx.recv().expect("Could not receive from channel");
-    eprintln!("\rCaught SIGINT, exiting...");
+    progress.finish_and_clear();
+    eprintln!("\r\x1b[2KCaught SIGINT, exiting...");
     exit(127);
 }

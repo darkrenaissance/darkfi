@@ -106,7 +106,6 @@ url = {version = "2.4.0", features = ["serde"], optional = true}
 
 # Misc
 # TODO: Implement something simple and kill these deps
-indicatif = {version = "0.17.5", optional = true}
 simplelog = {version = "0.12.1", optional = true}
 
 # Crypto
