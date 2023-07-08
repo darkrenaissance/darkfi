@@ -19,7 +19,8 @@
 use serde_json::{json, Value};
 
 use darkfi::{
-    rpc::jsonrpc::{JsonResponse, JsonResult},
+    net::P2p,
+    rpc::jsonrpc::{ErrorCode, JsonError, JsonResponse, JsonResult},
     util::time::Timestamp,
 };
 
@@ -45,26 +46,72 @@ impl Darkfid {
     }
 
     // RPCAPI:
+    // Activate or deactivate dnet in the sync P2P stack.
+    // By sending `true`, dnet will be activated, and by sending `false` dnet
+    // will be deactivated. Returns `true` on success.
+    //
+    // --> {"jsonrpc": "2.0", "method": "sync_dnet_switch", "params": [true], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
+    pub async fn misc_sync_dnet_switch(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 1 && params[0].as_bool().is_none() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        // FIXME: Unwrapping here because lazy
+
+        if params[0].as_bool().unwrap() {
+            self.sync_p2p.as_ref().unwrap().dnet_enable().await;
+        } else {
+            self.sync_p2p.as_ref().unwrap().dnet_disable().await;
+        }
+
+        JsonResponse::new(json!(true), id).into()
+    }
+
+    // RPCAPI:
     // Returns sync P2P network information.
     //
-    // --> {"jsonrpc": "2.0", "method": "get_info", "params": [], "id": 42}
+    // --> {"jsonrpc": "2.0", "method": "sync_dnet_info", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
-    pub async fn misc_get_info(&self, id: Value, _params: &[Value]) -> JsonResult {
+    pub async fn misc_sync_dnet_info(&self, id: Value, _params: &[Value]) -> JsonResult {
         let resp = match &self.sync_p2p {
-            Some(p2p) => p2p.get_info().await,
+            Some(p2p) => P2p::map_dnet_info(p2p.dnet_info().await),
             None => json!([]),
         };
         JsonResponse::new(resp, id).into()
     }
 
     // RPCAPI:
+    // Activate or deactivate dnet in the consensus P2P stack.
+    // By sending `true`, dnet will be activated, and by sending `false` dnet
+    // will be deactivated. Returns `true` on success.
+    //
+    // --> {"jsonrpc": "2.0", "method": "consensus_dnet_switch", "params": [true], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
+    pub async fn misc_consensus_dnet_switch(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 1 && params[0].as_bool().is_none() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        // FIXME: Unwrapping here because lazy
+
+        if params[0].as_bool().unwrap() {
+            self.consensus_p2p.as_ref().unwrap().dnet_enable().await;
+        } else {
+            self.consensus_p2p.as_ref().unwrap().dnet_disable().await;
+        }
+
+        JsonResponse::new(json!(true), id).into()
+    }
+
+    // RPCAPI:
     // Returns consensus P2P network information.
     //
-    // --> {"jsonrpc": "2.0", "method": "get_consensus_info", "params": [], "id": 42}
+    // --> {"jsonrpc": "2.0", "method": "consensus_dnet_info", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
-    pub async fn misc_get_consensus_info(&self, id: Value, _params: &[Value]) -> JsonResult {
+    pub async fn misc_consensus_dnet_info(&self, id: Value, _params: &[Value]) -> JsonResult {
         let resp = match &self.consensus_p2p {
-            Some(p2p) => p2p.get_info().await,
+            Some(p2p) => P2p::map_dnet_info(p2p.dnet_info().await),
             None => json!([]),
         };
         JsonResponse::new(resp, id).into()

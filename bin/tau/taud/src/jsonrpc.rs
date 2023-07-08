@@ -84,7 +84,9 @@ impl RequestHandler for JsonRpcInterface {
             Some("import") => self.import_from(params).await,
             Some("get_stop_tasks") => self.get_stop_tasks(params).await,
             Some("ping") => self.pong(params).await,
-            Some("get_info") => self.get_info(params).await,
+
+            Some("dnet_switch") => self.dnet_switch(params).await,
+            Some("dnet_info") => self.dnet_info(params).await,
             Some(_) | None => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         };
 
@@ -106,6 +108,7 @@ impl JsonRpcInterface {
 
     // RPCAPI:
     // Replies to a ping method.
+    //
     // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
     async fn pong(&self, _params: &[Value]) -> TaudResult<Value> {
@@ -113,12 +116,34 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
+    // Activate or deactivate dnet in the P2P stack.
+    // By sending `true`, dnet will be activated, and by sending `false` dnet will
+    // be deactivated. Returns `true` on success.
+    //
+    // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
+    async fn dnet_switch(&self, params: &[Value]) -> TaudResult<Value> {
+        if params.len() != 1 && params[0].as_bool().is_none() {
+            return Err(TaudError::InvalidData("Invalid parameters".into()))
+        }
+
+        if params[0].as_bool().unwrap() {
+            self.p2p.dnet_enable().await;
+        } else {
+            self.p2p.dnet_disable().await;
+        }
+
+        Ok(json!(true))
+    }
+
+    // RPCAPI:
     // Retrieves P2P network information.
-    // --> {"jsonrpc": "2.0", "method": "get_info", "params": [], "id": 42}
+    //
+    // --> {"jsonrpc": "2.0", "method": "dnet_info", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
-    async fn get_info(&self, _params: &[Value]) -> TaudResult<Value> {
-        let resp = self.p2p.get_info().await;
-        Ok(resp)
+    async fn dnet_info(&self, _params: &[Value]) -> TaudResult<Value> {
+        let dnet_info = self.p2p.dnet_info().await;
+        Ok(net::P2p::map_dnet_info(dnet_info))
     }
 
     // RPCAPI:
@@ -228,7 +253,7 @@ impl JsonRpcInterface {
         debug!(target: "tau", "JsonRpc::set_comment() params {:?}", params);
 
         if params.len() != 2 {
-            return Err(TaudError::InvalidData("len of params should be 3".into()))
+            return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
 
         let comment_content: String = serde_json::from_value(params[1].clone())?;

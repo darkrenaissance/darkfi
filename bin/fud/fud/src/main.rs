@@ -32,6 +32,7 @@ use darkfi::{
     net,
     rpc::{
         jsonrpc::{
+            ErrorCode,
             ErrorCode::{InvalidParams, MethodNotFound},
             JsonError, JsonRequest, JsonResponse, JsonResult,
         },
@@ -359,12 +360,33 @@ impl Fud {
     }
 
     // RPCAPI:
+    // Activate or deactivate dnet in the P2P stack.
+    // By sending `true`, dnet will be activated, and by sending `false` dnet
+    // will be deactivated. Returns `true` on success.
+    //
+    // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
+    async fn dnet_switch(&self, id: Value, params: &[Value]) -> JsonResult {
+        if params.len() != 1 && params[0].as_bool().is_none() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        if params[0].as_bool().unwrap() {
+            self.dht.read().await.p2p.dnet_enable().await;
+        } else {
+            self.dht.read().await.p2p.dnet_disable().await;
+        }
+
+        JsonResponse::new(json!(true), id).into()
+    }
+
+    // RPCAPI:
     // Retrieves P2P network information.
-    // --> {"jsonrpc": "2.0", "method": "get_info", "params": [], "id": 42}
+    // --> {"jsonrpc": "2.0", "method": "dnet_info", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
-    async fn get_info(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let resp = self.dht.read().await.p2p.get_info().await;
-        JsonResponse::new(resp, id).into()
+    async fn dnet_info(&self, id: Value, _params: &[Value]) -> JsonResult {
+        let dnet_info = self.dht.read().await.p2p.dnet_info().await;
+        JsonResponse::new(net::P2p::map_dnet_info(dnet_info), id).into()
     }
 }
 
@@ -382,7 +404,8 @@ impl RequestHandler for Fud {
             Some("sync") => return self.sync(req.id, params).await,
             Some("get") => return self.get(req.id, params).await,
             Some("ping") => return self.pong(req.id, params).await,
-            Some("get_info") => return self.get_info(req.id, params).await,
+            Some("dnet_switch") => return self.dnet_switch(req.id, params).await,
+            Some("dnet_info") => return self.dnet_info(req.id, params).await,
             Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
