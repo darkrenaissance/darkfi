@@ -60,12 +60,12 @@ impl_p2p_message!(GetData, "getdata");
 pub type SeenPtr<T> = Arc<Seen<T>>;
 
 pub struct Seen<T> {
-    seen: Mutex<RingBuffer<T>>,
+    seen: Mutex<RingBuffer<T, SIZE_OF_SEEN_BUFFER>>,
 }
 
 impl<T: Eq + PartialEq + Clone> Seen<T> {
     pub fn new() -> SeenPtr<T> {
-        Arc::new(Self { seen: Mutex::new(RingBuffer::new(SIZE_OF_SEEN_BUFFER)) })
+        Arc::new(Self { seen: Mutex::new(RingBuffer::new()) })
     }
 
     pub async fn push(&self, item: &T) -> bool {

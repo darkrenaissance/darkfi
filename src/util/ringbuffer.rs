@@ -19,55 +19,52 @@
 use std::collections::{vec_deque::Iter, VecDeque};
 
 /// A ring buffer of fixed capacity
-#[derive(Eq, PartialEq, Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct RingBuffer<T> {
-    capacity: usize,
-    data: VecDeque<T>,
-}
+#[derive(Default, Eq, PartialEq, Clone, Debug)]
+pub struct RingBuffer<T, const N: usize>(VecDeque<T>);
 
-impl<T: Eq + PartialEq + Clone> RingBuffer<T> {
+impl<T: Eq + PartialEq + Clone, const N: usize> RingBuffer<T, N> {
     /// Create a new [`RingBuffer`] with given fixed capacity
-    pub fn new(capacity: usize) -> RingBuffer<T> {
-        Self { capacity, data: VecDeque::with_capacity(capacity) }
+    pub fn new() -> RingBuffer<T, N> {
+        Self(VecDeque::with_capacity(N))
     }
 
     /// Push an element to the back of the `RingBuffer`, removing
     /// the front element in case the buffer is full.
     pub fn push(&mut self, value: T) {
-        if self.data.len() == self.capacity {
-            self.data.pop_front();
+        if self.0.len() == N {
+            self.0.pop_front();
         }
-        self.data.push_back(value);
+        self.0.push_back(value);
     }
 
     /// Returns the current number of items in the buffer
     pub fn len(&self) -> usize {
-        self.data.len()
+        self.0.len()
     }
 
     /// Returns true if buffer is empty, false otherwise
     pub fn is_empty(&self) -> bool {
-        self.data.is_empty()
+        self.0.is_empty()
     }
 
     /// Removes and returns the oldest item in the buffer
     pub fn pop(&mut self) -> Option<T> {
-        self.data.pop_front()
+        self.0.pop_front()
     }
 
     /// Returns a front-to-back iterator
     pub fn iter(&self) -> Iter<'_, T> {
-        self.data.iter()
+        self.0.iter()
     }
 
     /// Returns true if the buffer contains an element equal to the given value
     pub fn contains(&self, x: &T) -> bool {
-        self.data.contains(x)
+        self.0.contains(x)
     }
 
     /// Provides a reference to the back element, or `None` if empty.
     pub fn back(&self) -> Option<&T> {
-        self.data.back()
+        self.0.back()
     }
 }
 
@@ -78,7 +75,7 @@ mod tests {
     #[test]
     fn behaviour() {
         const BUF_SIZE: usize = 10;
-        let mut buf = RingBuffer::new(BUF_SIZE);
+        let mut buf = RingBuffer::<BUF_SIZE>::new();
 
         for i in 0..BUF_SIZE {
             buf.push(i);
