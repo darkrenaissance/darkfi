@@ -31,16 +31,15 @@ use std::collections::HashSet;
 use async_std::sync::{Arc, Mutex, Weak};
 use async_trait::async_trait;
 use log::{debug, error, info};
-use serde_json::json;
 use smol::Executor;
 use url::Url;
 
 use super::{
     super::{
-        channel::ChannelPtr,
+        channel::{ChannelInfo, ChannelPtr},
         connector::Connector,
         message::GetAddrsMessage,
-        p2p::{P2p, P2pPtr},
+        p2p::{DnetInfo, P2p, P2pPtr},
     },
     Session, SessionBitFlag, SESSION_OUTBOUND,
 };
@@ -52,8 +51,9 @@ use crate::{
 
 pub type OutboundSessionPtr = Arc<OutboundSession>;
 
-#[derive(Clone)]
-enum OutboundState {
+/// Connection state
+#[derive(Copy, Clone)]
+pub enum OutboundState {
     Open,
     Pending,
     Connected,
@@ -73,29 +73,31 @@ impl std::fmt::Display for OutboundState {
     }
 }
 
+/// dnet info for an outbound connection
 #[derive(Clone)]
-struct OutboundInfo {
-    addr: Option<Url>,
-    channel: Option<ChannelPtr>,
-    state: OutboundState,
+pub struct OutboundInfo {
+    /// Remote address
+    pub addr: Option<Url>,
+    /// Channel info
+    pub channel: Option<ChannelInfo>,
+    /// Connection state
+    pub state: OutboundState,
 }
 
 impl OutboundInfo {
-    async fn get_info(&self) -> serde_json::Value {
-        let addr = match self.addr.as_ref() {
-            Some(addr) => serde_json::Value::String(addr.to_string()),
-            None => serde_json::Value::Null,
+    async fn dnet_info(&self, p2p: P2pPtr) -> Option<Self> {
+        let Some(ref addr) = self.addr else {
+            return None
         };
 
-        let channel = match &self.channel {
-            Some(channel) => channel.get_info().await,
-            None => serde_json::Value::Null,
+        let Some(chan) = p2p.channels().lock().await.get(&addr).cloned() else {
+            return None
         };
 
-        json!({
-            "addr": addr,
-            "state": self.state.to_string(),
-            "channel": channel,
+        Some(Self {
+            addr: self.addr.clone(),
+            channel: Some(chan.dnet_info().await),
+            state: self.state,
         })
     }
 }
@@ -108,13 +110,15 @@ impl Default for OutboundInfo {
 
 /// Defines outbound connections session.
 pub struct OutboundSession {
+    /// Weak pointer to parent p2p object
     p2p: Weak<P2p>,
+    /// Outbound connection slots
     connect_slots: Mutex<Vec<StoppableTaskPtr>>,
     /// Subscriber used to signal channels processing
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
     /// Flag to toggle channel_subscriber notifications
     notify: Mutex<bool>,
-    /// Channel debug info
+    /// Channel debug info, corresponds to `connect_slots`
     slot_info: Mutex<Vec<OutboundInfo>>,
 }
 
@@ -137,6 +141,7 @@ impl OutboundSession {
         // Activate mutex lock on connection slots.
         let mut connect_slots = self.connect_slots.lock().await;
 
+        // Create dnet stub
         self.slot_info.lock().await.resize(n_slots, Default::default());
 
         for i in 0..n_slots {
@@ -256,7 +261,6 @@ impl OutboundSession {
 
                 dnet!(self,
                     let info = &mut self.slot_info.lock().await[slot_number];
-                    info.channel = Some(channel.clone());
                     info.state = OutboundState::Connected;
                 );
 
@@ -286,7 +290,6 @@ impl OutboundSession {
         dnet!(self,
             let info = &mut self.slot_info.lock().await[slot_number];
             info.addr = None;
-            info.channel = None;
             info.state = OutboundState::Open;
         );
 
@@ -444,6 +447,12 @@ impl OutboundSession {
     }
 }
 
+/// Dnet information for the outbound session
+pub struct OutboundDnet {
+    /// Slot information
+    pub slots: Vec<Option<OutboundInfo>>,
+}
+
 #[async_trait]
 impl Session for OutboundSession {
     fn p2p(&self) -> P2pPtr {
@@ -454,19 +463,15 @@ impl Session for OutboundSession {
         SESSION_OUTBOUND
     }
 
-    async fn get_info(&self) -> serde_json::Value {
+    async fn dnet_info(&self) -> DnetInfo {
+        // We fetch channel infos for all outbound slots.
+        // If a slot is not connected, it will be `None`.
         let mut slots = vec![];
-        for info in &*self.slot_info.lock().await {
-            slots.push(info.get_info().await);
+
+        for slot in self.slot_info.lock().await.iter() {
+            slots.push(slot.dnet_info(self.p2p()).await);
         }
 
-        let hosts = self.p2p().hosts().load_all().await;
-        let addrs: Vec<serde_json::Value> =
-            hosts.iter().map(|addr| serde_json::Value::String(addr.to_string())).collect();
-
-        json!({
-            "slots": slots,
-            "hosts": serde_json::Value::Array(addrs),
-        })
+        DnetInfo::Outbound(OutboundDnet { slots })
     }
 }

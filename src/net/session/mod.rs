@@ -21,7 +21,11 @@ use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
 
-use super::{channel::ChannelPtr, p2p::P2pPtr, protocol::ProtocolVersion};
+use super::{
+    channel::ChannelPtr,
+    p2p::{DnetInfo, P2pPtr},
+    protocol::ProtocolVersion,
+};
 use crate::Result;
 
 pub mod inbound_session;
@@ -152,5 +156,5 @@ pub trait Session: Sync {
     fn type_id(&self) -> SessionBitFlag;
 
     /// Get network debug info
-    async fn get_info(&self) -> serde_json::Value;
+    async fn dnet_info(&self) -> DnetInfo;
 }

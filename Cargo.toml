@@ -211,7 +211,6 @@ net = [
     "x509-parser",
     "semver",
     "serde",
-    "serde_json",
     "socket2",
     "url",
 

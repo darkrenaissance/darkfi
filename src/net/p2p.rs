@@ -25,7 +25,6 @@ use async_std::{
 use futures::{stream::FuturesUnordered, TryFutureExt};
 use log::{debug, error, info, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng};
-use serde_json::json;
 use smol::Executor;
 use url::Url;
 
@@ -35,8 +34,9 @@ use super::{
     message::Message,
     protocol::{protocol_registry::ProtocolRegistry, register_default_protocols},
     session::{
-        InboundSession, InboundSessionPtr, ManualSession, ManualSessionPtr, OutboundSession,
-        OutboundSessionPtr, SeedSyncSession, Session,
+        inbound_session::InboundDnet, outbound_session::OutboundDnet, InboundSession,
+        InboundSessionPtr, ManualSession, ManualSessionPtr, OutboundSession, OutboundSessionPtr,
+        SeedSyncSession, Session,
     },
     settings::{Settings, SettingsPtr},
 };
@@ -64,6 +64,18 @@ enum P2pState {
     Run,
     /// The P2P network has been stopped
     Stopped,
+}
+
+/// Types of DnetInfo (used with sessions)
+pub enum DnetInfo {
+    /// Hosts info
+    Hosts(Vec<Url>),
+    /// Outbound Session Info
+    Outbound(OutboundDnet),
+    /// Inbound Session Info
+    Inbound(InboundDnet),
+    // Manual Session Info
+    //Manual(ManualDnet),
 }
 
 impl std::fmt::Display for P2pState {
@@ -153,21 +165,6 @@ impl P2p {
         register_default_protocols(self_.clone()).await;
 
         self_
-    }
-
-    pub async fn get_info(&self) -> serde_json::Value {
-        let mut ext = vec![];
-        for addr in &self.settings.external_addrs {
-            ext.push(addr.to_string());
-        }
-
-        json!({
-            "external_addrs": format!("{:?}", ext),
-            //"session_manual": self.session_manual().await.get_info().await,
-            "session_inbound": self.session_inbound().await.get_info().await,
-            "session_outbound": self.session_outbound().await.get_info().await,
-            "state": self.state.lock().await.to_string(),
-        })
     }
 
     /// Invoke startup and seeding sequence. Call from constructing thread.
@@ -343,15 +340,40 @@ impl P2p {
     }
 
     /// Enable network debugging
-    pub async fn enable_dnet(&self) {
+    pub async fn dnet_enable(&self) {
+        // Enable log for all connected channels if not enabled already
+        for channel in self.channels().lock().await.values() {
+            channel.dnet_enable().await;
+        }
+
         *self.dnet_enabled.lock().await = true;
         warn!("[P2P] Network debugging enabled!");
     }
 
     /// Disable network debugging
-    pub async fn disable_dnet(&self) {
+    pub async fn dnet_disable(&self) {
         *self.dnet_enabled.lock().await = false;
+
+        // Clear out any held data
+        for channel in self.channels().lock().await.values() {
+            channel.dnet_disable().await;
+        }
+
         warn!("[P2P] Network debugging disabled!");
+    }
+
+    /// Gather session dnet info and return it in a vec.
+    /// Returns an empty vec if dnet is disabled.
+    pub async fn dnet_info(&self) -> Vec<DnetInfo> {
+        let mut ret = vec![];
+
+        if *self.dnet_enabled.lock().await {
+            ret.push(self.session_inbound().await.dnet_info().await);
+            ret.push(self.session_outbound().await.dnet_info().await);
+            ret.push(DnetInfo::Hosts(self.hosts.load_all().await));
+        }
+
+        ret
     }
 }
 

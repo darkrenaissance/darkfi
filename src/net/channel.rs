@@ -24,7 +24,6 @@ use futures::{
 };
 use log::{debug, error, info};
 use rand::{rngs::OsRng, Rng};
-use serde_json::json;
 use smol::Executor;
 use url::Url;
 
@@ -45,45 +44,25 @@ use crate::{
 /// Atomic pointer to async channel
 pub type ChannelPtr = Arc<Channel>;
 
-const RINGBUFFER_SIZE: usize = 512;
-
 /// Channel debug info
-struct ChannelInfo {
-    random_id: u32,
-    remote_node_id: String,
-    log: Mutex<RingBuffer<(NanoTimestamp, String, String)>>,
+#[derive(Clone)]
+pub struct ChannelInfo {
+    pub addr: Url,
+    pub random_id: u32,
+    pub remote_node_id: String,
+    pub log: RingBuffer<(NanoTimestamp, String, String), 512>,
 }
 
 impl ChannelInfo {
-    fn new() -> Self {
-        Self {
-            random_id: OsRng.gen(),
-            remote_node_id: String::new(),
-            log: Mutex::new(RingBuffer::new(RINGBUFFER_SIZE)),
-        }
+    fn new(addr: Url) -> Self {
+        Self { addr, random_id: OsRng.gen(), remote_node_id: String::new(), log: RingBuffer::new() }
     }
 
     /// Get available debug info, resets the ringbuffer when called.
-    async fn get_info(&self) -> serde_json::Value {
-        let mut lock = self.log.lock().await;
-        let log = lock.clone();
-        *lock = RingBuffer::new(RINGBUFFER_SIZE);
-        drop(lock);
-
-        let (last_msg, last_status) = {
-            match log.back() {
-                Some((_, m, s)) => (m.clone(), s.clone()),
-                None => (String::new(), String::new()),
-            }
-        };
-
-        json!({
-            "random_id": self.random_id,
-            "remote_node_id": self.remote_node_id,
-            "last_msg": last_msg,
-            "last_status": last_status,
-            "log": log,
-        })
+    fn dnet_info(&mut self) -> Self {
+        let info = self.clone();
+        self.log = RingBuffer::new();
+        info
     }
 }
 
@@ -132,7 +111,7 @@ impl Channel {
         Self::setup_dispatchers(&message_subsystem).await;
 
         let info = if *session.upgrade().unwrap().p2p().dnet_enabled.lock().await {
-            Mutex::new(Some(ChannelInfo::new()))
+            Mutex::new(Some(ChannelInfo::new(address.clone())))
         } else {
             Mutex::new(None)
         };
@@ -160,20 +139,24 @@ impl Channel {
         subsystem.add_dispatch::<message::AddrsMessage>().await;
     }
 
-    /// Fetch debug info, if any
-    pub async fn get_info(&self) -> serde_json::Value {
-        if *self.p2p().dnet_enabled.lock().await {
-            // Maybe here we should panic? It probably should never be
-            // the case that dnet is enabled, but this stuff is empty.
-            // However it's possible that it somehow happens through a
-            // race condition, so let's be safe.
-            match self.info.lock().await.as_ref() {
-                Some(info) => info.get_info().await,
-                None => json!({}),
-            }
-        } else {
-            json!({})
+    /// Fetch dnet info for the channel, if enabled.
+    /// Returns the [`Channel::address`] and [`ChannelInfo`].
+    pub(crate) async fn dnet_info(&self) -> ChannelInfo {
+        // We're unwrapping here because if we get None it means
+        // there's a bug somehwere where we initialized dnet but
+        // ChannelInfo was not created.
+        self.info.lock().await.as_mut().unwrap().dnet_info()
+    }
+
+    pub(crate) async fn dnet_enable(&self) {
+        let mut info = self.info.lock().await;
+        if info.is_none() {
+            *info = Some(ChannelInfo::new(self.address.clone()));
         }
+    }
+
+    pub(crate) async fn dnet_disable(&self) {
+        *self.info.lock().await = None;
     }
 
     /// Starts the channel. Runs a receive loop to start receiving messages
@@ -265,9 +248,10 @@ impl Channel {
 
         dnet!(self,
             let time = NanoTimestamp::current_time();
-            let info_lock = self.info.lock().await;
-            let mut log = info_lock.as_ref().unwrap().log.lock().await;
-            log.push((time, "send".to_string(), packet.command.clone()));
+            match self.info.lock().await.as_mut() {
+                Some(info) => info.log.push((time, "send".into(), packet.command.clone())),
+                None => unreachable!(),
+            }
         );
 
         let stream = &mut *self.writer.lock().await;

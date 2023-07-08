@@ -28,15 +28,14 @@ use std::collections::HashMap;
 use async_std::sync::{Arc, Mutex, Weak};
 use async_trait::async_trait;
 use log::{error, info};
-use serde_json::json;
 use smol::Executor;
 use url::Url;
 
 use super::{
     super::{
         acceptor::{Acceptor, AcceptorPtr},
-        channel::ChannelPtr,
-        p2p::{P2p, P2pPtr},
+        channel::{ChannelInfo, ChannelPtr},
+        p2p::{DnetInfo, P2p, P2pPtr},
     },
     Session, SessionBitFlag, SESSION_INBOUND,
 };
@@ -47,14 +46,26 @@ use crate::{
 
 pub type InboundSessionPtr = Arc<InboundSession>;
 
-/// Channel debug info
-struct InboundInfo {
-    channel: ChannelPtr,
+/// dnet info for an inbound connection
+#[derive(Clone)]
+pub struct InboundInfo {
+    /// Remote address
+    pub addr: Option<Url>,
+    /// Channel info
+    pub channel: Option<ChannelInfo>,
 }
 
 impl InboundInfo {
-    async fn get_info(&self) -> serde_json::Value {
-        self.channel.get_info().await
+    async fn dnet_info(&self, p2p: P2pPtr) -> Option<Self> {
+        let Some(ref addr) = self.addr else {
+            return None
+        };
+
+        let Some(chan) = p2p.channels().lock().await.get(&addr).cloned() else {
+            return None
+        };
+
+        Some(Self { addr: self.addr.clone(), channel: Some(chan.dnet_info().await) })
     }
 }
 
@@ -171,8 +182,9 @@ impl InboundSession {
         self.register_channel(channel.clone(), ex.clone()).await?;
 
         let addr = channel.address().clone();
+
         self.connect_infos.lock().await[index]
-            .insert(addr.clone(), InboundInfo { channel: channel.clone() });
+            .insert(addr.clone(), InboundInfo { addr: Some(addr.clone()), channel: None });
 
         let stop_sub = channel.subscribe_stop().await?;
         stop_sub.receive().await;
@@ -181,6 +193,12 @@ impl InboundSession {
 
         Ok(())
     }
+}
+
+/// Dnet information for the inbound session
+pub struct InboundDnet {
+    /// Slot information
+    pub slots: Vec<Option<InboundInfo>>,
 }
 
 #[async_trait]
@@ -193,17 +211,15 @@ impl Session for InboundSession {
         SESSION_INBOUND
     }
 
-    async fn get_info(&self) -> serde_json::Value {
-        let mut infos = HashMap::new();
-        for (index, accept_addr) in self.p2p().settings().inbound_addrs.iter().enumerate() {
-            let connect_infos = &self.connect_infos.lock().await[index];
-            for (addr, info) in connect_infos {
-                let json_addr = json!({ "accept_addr": accept_addr });
-                let info = vec![json_addr, info.get_info().await];
-                infos.insert(addr.to_string(), info);
+    async fn dnet_info(&self) -> DnetInfo {
+        let mut slots = vec![];
+
+        for listen_addr in (*self.connect_infos.lock().await).iter() {
+            for slot in listen_addr.values() {
+                slots.push(slot.dnet_info(self.p2p()).await);
             }
         }
 
-        json!({ "connected": infos })
+        DnetInfo::Inbound(InboundDnet { slots })
     }
 }

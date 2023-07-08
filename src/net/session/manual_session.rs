@@ -39,7 +39,7 @@ use super::{
     super::{
         channel::ChannelPtr,
         connector::Connector,
-        p2p::{P2p, P2pPtr},
+        p2p::{DnetInfo, P2p, P2pPtr},
     },
     Session, SessionBitFlag, SESSION_MANUAL,
 };
@@ -213,7 +213,7 @@ impl Session for ManualSession {
         SESSION_MANUAL
     }
 
-    async fn get_info(&self) -> serde_json::Value {
+    async fn dnet_info(&self) -> DnetInfo {
         todo!()
     }
 }

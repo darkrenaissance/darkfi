@@ -50,8 +50,11 @@ use smol::Executor;
 use url::Url;
 
 use super::{
-    super::{connector::Connector, p2p::P2p},
-    P2pPtr, Session, SessionBitFlag, SESSION_SEED,
+    super::{
+        connector::Connector,
+        p2p::{DnetInfo, P2p, P2pPtr},
+    },
+    Session, SessionBitFlag, SESSION_SEED,
 };
 use crate::Result;
 
@@ -199,7 +202,7 @@ impl Session for SeedSyncSession {
         SESSION_SEED
     }
 
-    async fn get_info(&self) -> serde_json::Value {
+    async fn dnet_info(&self) -> DnetInfo {
         todo!()
     }
 }
