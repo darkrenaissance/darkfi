@@ -43,12 +43,28 @@ impl Connector {
     }
 
     /// Establish an outbound connection
-    pub async fn connect(&self, endpoint: Url) -> Result<ChannelPtr> {
+    pub async fn connect(&self, url: &Url) -> Result<(Url, ChannelPtr)> {
+        let mut endpoint = url.clone();
+
+        let transports = &self.settings.allowed_transports;
+        let scheme = endpoint.scheme();
+        if !transports.contains(&scheme.to_string()) && self.settings.transport_mixing {
+            if transports.contains(&"tor".to_string()) && scheme == "tcp" {
+                endpoint.set_scheme("tor")?;
+            } else if transports.contains(&"tor+tls".to_string()) && scheme == "tcp+tls" {
+                endpoint.set_scheme("tor+tls")?;
+            } else if transports.contains(&"nym".to_string()) && scheme == "tcp" {
+                endpoint.set_scheme("nym")?;
+            } else if transports.contains(&"nym+tls".to_string()) && scheme == "tcp+tls" {
+                endpoint.set_scheme("nym+tls")?;
+            }
+        }
+
         let dialer = Dialer::new(endpoint.clone()).await?;
         let timeout = Duration::from_secs(self.settings.outbound_connect_timeout);
         let ptstream = dialer.dial(Some(timeout)).await?;
 
-        let channel = Channel::new(ptstream, endpoint, self.session.clone()).await;
-        Ok(channel)
+        let channel = Channel::new(ptstream, endpoint.clone(), self.session.clone()).await;
+        Ok((endpoint, channel))
     }
 }

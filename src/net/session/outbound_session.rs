@@ -88,7 +88,7 @@ impl OutboundInfo {
     async fn dnet_info(&self, p2p: P2pPtr) -> Option<Self> {
         let Some(ref addr) = self.addr else { return None };
 
-        let Some(chan) = p2p.channels().lock().await.get(&addr).cloned() else { return None };
+        let Some(chan) = p2p.channels().lock().await.get(addr).cloned() else { return None };
 
         Some(Self {
             addr: self.addr.clone(),
@@ -237,12 +237,12 @@ impl OutboundSession {
             slot_number, addr,
         );
 
-        match connector.connect(addr.clone()).await {
-            Ok(channel) => {
+        match connector.connect(&addr).await {
+            Ok((url, channel)) => {
                 info!(
                     target: "net::outbound_session::try_connect()",
                     "[P2P] Outbound slot #{} connected [{}]",
-                    slot_number, addr
+                    slot_number, url
                 );
 
                 let stop_sub =

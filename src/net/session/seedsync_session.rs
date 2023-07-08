@@ -149,25 +149,25 @@ impl SeedSyncSession {
         let parent = Arc::downgrade(&self);
         let connector = Connector::new(settings.clone(), Arc::new(parent));
 
-        match connector.connect(seed.clone()).await {
-            Ok(ch) => {
+        match connector.connect(&seed).await {
+            Ok((url, ch)) => {
                 info!(
                     target: "net::session::seedsync_session",
-                    "[P2P] Connected seed #{} [{}]", seed_index, seed,
+                    "[P2P] Connected seed #{} [{}]", seed_index, url,
                 );
 
                 if let Err(e) = self.clone().register_channel(ch.clone(), ex.clone()).await {
                     warn!(
                         target: "net::session::seedsync_session",
                         "[P2P] Failure during sync seed session #{} [{}]: {}",
-                        seed_index, seed, e,
+                        seed_index, url, e,
                     );
                 }
 
                 info!(
                     target: "net::session::seedsync_session",
                     "[P2P] Disconnecting from seed #{} [{}]",
-                    seed_index, seed,
+                    seed_index, url,
                 );
                 ch.stop().await;
             }

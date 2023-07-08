@@ -121,11 +121,11 @@ impl ManualSession {
                 "[P2P] Connecting to manual outbound [{}] (attempt #{})",
                 addr, tried_attempts,
             );
-            match connector.connect(addr.clone()).await {
-                Ok(channel) => {
+            match connector.connect(&addr).await {
+                Ok((url, channel)) => {
                     info!(
                         target: "net::manual_session",
-                        "[P2P] Manual outbound connected [{}]", addr,
+                        "[P2P] Manual outbound connected [{}]", url,
                     );
 
                     let stop_sub =
@@ -147,7 +147,7 @@ impl ManualSession {
                     stop_sub.receive().await;
                     info!(
                         target: "net::manual_session",
-                        "[P2P] Manual outbound disconnected [{}]", addr,
+                        "[P2P] Manual outbound disconnected [{}]", url,
                     );
                     // DEV NOTE: Here we can choose to attempt reconnection again
                     return Ok(())
