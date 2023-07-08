@@ -114,6 +114,7 @@ fn zkvm_opcodes() -> Result<()> {
         ephem_x,
         ephem_y,
         a,
+        pallas::Base::ZERO,
     ];
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());

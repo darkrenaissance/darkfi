@@ -38,6 +38,7 @@ circuit "Opcodes" {
 	value_commit2 = ec_add(vcv2, vcr2);
 	constrain_equal_point(value_commit, value_commit2);
 
+	zero = witness_base(0);
 	one = witness_base(1);
 	two = witness_base(2);
 	c = poseidon_hash(one, two, blind);
@@ -69,4 +70,7 @@ circuit "Opcodes" {
 
 	out = cond_select(cond, a, b);
 	constrain_instance(out);
+
+	zz = zero_cond(zero, c);
+	constrain_instance(zz);
 }

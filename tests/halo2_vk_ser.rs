@@ -147,6 +147,7 @@ fn halo2_vk_ser() -> Result<()> {
         ephem_x,
         ephem_y,
         a,
+        pallas::Base::ZERO,
     ];
 
     println!("Creating proof");
