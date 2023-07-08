@@ -157,8 +157,8 @@ impl Lilith {
 
                     let connector = Connector::new(p2p_.settings(), Arc::new(session_weak));
                     debug!("Connecting to {}", host);
-                    match connector.connect(host.clone()).await {
-                        Ok(channel) => {
+                    match connector.connect(&host).await {
+                        Ok((_url, channel)) => {
                             debug!("Connected successfully!");
                             let proto_ver = ProtocolVersion::new(
                                 channel.clone(),
