@@ -19,7 +19,7 @@
 //! Taken from https://docs.rs/ockam_vault/latest/src/ockam_vault/xeddsa.rs.html
 //! XEdDSA according to <https://signal.org/docs/specifications/xeddsa/#xeddsa>
 use curve25519_dalek::{
-    constants::ED25519_BASEPOINT_POINT, montgomery::MontgomeryPoint, scalar::Scalar,
+    constants::ED25519_BASEPOINT_TABLE, montgomery::MontgomeryPoint, scalar::Scalar,
 };
 use digest::Digest;
 use ed25519_dalek::{Signature, VerifyingKey as Ed25519PublicKey};
@@ -52,7 +52,7 @@ impl XeddsaSigner for X25519SecretKey {
         // x25519-dalek private keys are already clamped, so just compute
         // the Ed25519 public key from the Curve25519 private key.
         let scalar_k = Scalar::from_bits(self.to_bytes());
-        let edward_point = ED25519_BASEPOINT_POINT * scalar_k;
+        let edward_point = ED25519_BASEPOINT_TABLE * &scalar_k;
         let mut compressed_edwards = edward_point.compress();
         let sign = compressed_edwards.0[31] >> 7;
         // Set the sign bit to zero after adjusting the private key
@@ -85,7 +85,7 @@ impl XeddsaSigner for X25519SecretKey {
         let r = Scalar::from_hash(hasher);
 
         // R = rB
-        let cap_r = (ED25519_BASEPOINT_POINT * r).compress();
+        let cap_r = (ED25519_BASEPOINT_TABLE * &r).compress();
 
         // h = hash(R || A || M) (mod q)
         hasher = Sha512::new();
