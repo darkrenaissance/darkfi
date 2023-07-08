@@ -313,6 +313,12 @@ pub struct ProgressInc {
     timer: Arc<Mutex<Option<Instant>>>,
 }
 
+impl Default for ProgressInc {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ProgressInc {
     pub fn new() -> Self {
         eprint!("\x1b[?25l");
