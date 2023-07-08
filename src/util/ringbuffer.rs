@@ -80,7 +80,7 @@ mod tests {
     #[test]
     fn behaviour() {
         const BUF_SIZE: usize = 10;
-        let mut buf = RingBuffer::<BUF_SIZE>::new();
+        let mut buf = RingBuffer::<usize, BUF_SIZE>::new();
 
         for i in 0..BUF_SIZE {
             buf.push(i);

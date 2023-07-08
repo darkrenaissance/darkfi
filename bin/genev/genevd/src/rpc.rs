@@ -88,7 +88,9 @@ impl JsonRpcInterface {
     //
     // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn dnet_switch(&self, id: Value, params: &[Value]) -> JsonResult {
+    async fn dnet_switch(&self, id: Value, params: Value) -> JsonResult {
+        let params = params.as_array().unwrap();
+
         if params.len() != 1 && params[0].as_bool().is_none() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }

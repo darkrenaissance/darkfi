@@ -48,7 +48,8 @@ impl RequestHandler for JsonRpcInterface {
         // ANCHOR: req_match
         match req.method.as_str() {
             Some("ping") => self.pong(req.id, req.params).await,
-            Some("get_info") => self.get_info(req.id, req.params).await,
+            Some("dnet_switch") => self.dnet_switch(req.id, req.params).await,
+            Some("dnet_info") => self.dnet_info(req.id, req.params).await,
             Some(_) | None => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
         // ANCHOR_END: req_match
@@ -67,13 +68,37 @@ impl JsonRpcInterface {
     // ANCHOR_END: pong
 
     // RPCAPI:
-    // Retrieves P2P network information.
-    // --> {"jsonrpc": "2.0", "method": "get_info", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
-    // ANCHOR: get_info
-    async fn get_info(&self, id: Value, _params: Value) -> JsonResult {
-        let resp = self.p2p.get_info().await;
-        JsonResponse::new(resp, id).into()
+    // Activate or deactivate dnet in the P2P stack.
+    // By sending `true`, dnet will be activated, and by sending `false` dnet will
+    // be deactivated. Returns `true` on success.
+    //
+    // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
+    async fn dnet_switch(&self, id: Value, params: Value) -> JsonResult {
+        let params = params.as_array().unwrap();
+
+        if params.len() != 1 && params[0].as_bool().is_none() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        if params[0].as_bool().unwrap() {
+            self.p2p.dnet_enable().await;
+        } else {
+            self.p2p.dnet_disable().await;
+        }
+
+        JsonResponse::new(json!(true), id).into()
     }
-    // ANCHOR_END: get_info
+
+    // RPCAPI:
+    // Retrieves P2P network information.
+    //
+    // --> {"jsonrpc": "2.0", "method": "dnet_info", "params": [], "id": 42}
+    // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
+    // ANCHOR: dnet_info
+    async fn dnet_info(&self, id: Value, _params: Value) -> JsonResult {
+        let dnet_info = self.p2p.dnet_info().await;
+        JsonResponse::new(net::P2p::map_dnet_info(dnet_info), id).into()
+    }
+    // ANCHOR_END: dnet_info
 }
