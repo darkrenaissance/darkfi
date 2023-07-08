@@ -37,15 +37,10 @@
 //! function. This runs the version exchange protocol, stores the channel in the
 //! p2p list of channels, and subscribes to a stop signal.
 
-use std::time::Duration;
-
-use async_std::{
-    future::timeout,
-    sync::{Arc, Weak},
-};
+use async_std::sync::{Arc, Weak};
 use async_trait::async_trait;
 use futures::future::join_all;
-use log::{debug, error, info, warn};
+use log::{debug, info, warn};
 use smol::Executor;
 use url::Url;
 
@@ -88,39 +83,20 @@ impl SeedSyncSession {
 
         // Gather tasks so we can execute concurrently
         let mut tasks = Vec::with_capacity(settings.seeds.len());
-        let conn_timeout = Duration::from_secs(settings.seed_query_timeout);
         for (i, seed) in settings.seeds.iter().enumerate() {
             let ex_ = executor.clone();
             let self_ = self.clone();
 
             tasks.push(async move {
-                let task = self_.clone().start_seed(i, seed.clone(), ex_.clone());
-                let result = timeout(conn_timeout, task).await;
-
-                match result {
-                    Ok(t) => match t {
-                        Ok(()) => {
-                            info!(
-                                target: "net::session::seedsync_session",
-                                "[P2P] Seed #{} connected successfully", i,
-                            );
-                        }
-                        Err(err) => {
-                            warn!(
-                                target: "net::session::seedsync_session",
-                                "[P2P] Seed #{} connection failed: {}", i, err,
-                            );
-                        }
-                    },
-                    Err(_) => {
-                        error!(
-                            target: "net::session::seedsync_session",
-                            "[P2P] Seed #{} timed out", i
-                        );
-                    }
+                if let Err(e) = self_.clone().start_seed(i, seed.clone(), ex_.clone()).await {
+                    warn!(
+                        target: "net::session::seedsync_session",
+                        "[P2P] Seed #{} connection failed: {}", i, e,
+                    );
                 }
             });
         }
+
         // Poll concurrently
         join_all(tasks).await;
 

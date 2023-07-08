@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 
 use async_std::{future::timeout, sync::Arc};
 use async_trait::async_trait;
-use log::{debug, error};
+use log::{debug, error, warn};
 use rand::{rngs::OsRng, Rng};
 use smol::Executor;
 
@@ -106,6 +106,10 @@ impl ProtocolPing {
                 Err(_e) => {
                     // Pong timeout. We didn't receive any message back
                     // so close the connection.
+                    warn!(
+                        target: "net::protocol_ping::run_ping_pong()",
+                        "Ping-Pong protocol timed out for {}", self.channel.address(),
+                    );
                     self.channel.stop().await;
                     return Err(Error::ChannelStopped)
                 }

@@ -19,6 +19,7 @@
 use std::time::Duration;
 
 use async_std::{future::timeout, sync::Arc};
+use futures::future::join_all;
 use log::{debug, error};
 use smol::Executor;
 
@@ -98,8 +99,22 @@ impl ProtocolVersion {
         let send = executor.spawn(self.clone().send_version());
         let recv = executor.spawn(self.clone().recv_version());
 
-        send.await?;
-        recv.await?;
+        let rets = join_all(vec![send, recv]).await;
+        if let Err(e) = &rets[0] {
+            error!(
+                target: "net::protocol_version::exchange_versions()",
+                "send_version() failed: {}", e,
+            );
+            return Err(e.clone())
+        }
+
+        if let Err(e) = &rets[1] {
+            error!(
+                target: "net::protocol_version::exchange_versions()",
+                "recv_version() failed: {}", e,
+            );
+            return Err(e.clone())
+        }
 
         debug!(
             target: "net::protocol_version::exchange_versions()",
@@ -123,13 +138,6 @@ impl ProtocolVersion {
         let verack_msg = self.verack_sub.receive().await?;
 
         // Validate peer received version against our version.
-        // Seeds get ignored
-        if self.settings.seeds.contains(self.channel.address()) {
-            debug!(target: "net::protocol_version::send_version()", "Peer is a seed, skipping version");
-            debug!(target: "net::protocol_version::send_version()", "END => address={}", self.channel.address());
-            return Ok(())
-        }
-
         debug!(
             target: "net::protocol_version::send_version()",
             "App version: {}, Recv version: {}",
@@ -152,6 +160,10 @@ impl ProtocolVersion {
         }
 
         // Versions are compatible
+        debug!(
+            target: "net::protocol_version::send_version()",
+            "END => address={}", self.channel.address(),
+        );
         Ok(())
     }
 
@@ -165,7 +177,7 @@ impl ProtocolVersion {
 
         // Receive version message
         let _version = self.version_sub.receive().await?;
-        //self.channel.set_remote_node_id(version.node_id.clone()).await;
+        // TODO: self.channel.set_remote_node_id(version.node_id.clone()).await;
 
         // Send verack
         let verack = VerackMessage { app_version: self.settings.app_version.clone() };

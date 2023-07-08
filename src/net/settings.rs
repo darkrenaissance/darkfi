@@ -50,8 +50,6 @@ pub struct Settings {
     pub outbound_connections: usize,
     /// Manual connections retry limit, 0 for forever looping
     pub manual_attempt_limit: usize,
-    /// Seed connection establishment timeout (in seconds)
-    pub seed_query_timeout: u64,
     /// Outbound connection timeout (in seconds)
     pub outbound_connect_timeout: u64,
     /// Exchange versions (handshake) timeout (in seconds)
@@ -78,9 +76,8 @@ impl Default for Settings {
             transport_mixing: true,
             outbound_connections: 0,
             manual_attempt_limit: 0,
-            seed_query_timeout: 30,
             outbound_connect_timeout: 15,
-            channel_handshake_timeout: 4,
+            channel_handshake_timeout: 10,
             channel_heartbeat_interval: 10,
             localnet: false,
         }
@@ -124,10 +121,6 @@ pub struct SettingsOpt {
     /// Manual connections retry limit
     #[structopt(skip)]
     pub manual_attempt_limit: Option<usize>,
-
-    /// Seed connection establishment timeout in seconds
-    #[structopt(skip)]
-    pub seed_query_timeout: Option<u64>,
 
     /// Connection establishment timeout in seconds
     #[structopt(skip)]
@@ -176,9 +169,8 @@ impl From<SettingsOpt> for Settings {
             transport_mixing: opt.transport_mixing.unwrap_or(false),
             outbound_connections: opt.outbound_connections.unwrap_or(0),
             manual_attempt_limit: opt.manual_attempt_limit.unwrap_or(0),
-            seed_query_timeout: opt.seed_query_timeout.unwrap_or(30),
             outbound_connect_timeout: opt.outbound_connect_timeout.unwrap_or(15),
-            channel_handshake_timeout: opt.channel_handshake_timeout.unwrap_or(4),
+            channel_handshake_timeout: opt.channel_handshake_timeout.unwrap_or(10),
             channel_heartbeat_interval: opt.channel_heartbeat_interval.unwrap_or(10),
             localnet: opt.localnet,
         }

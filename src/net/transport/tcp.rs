@@ -21,6 +21,7 @@ use std::{io, time::Duration};
 use async_rustls::{TlsAcceptor, TlsStream};
 use async_std::net::{SocketAddr, TcpListener as AsyncStdTcpListener, TcpStream};
 use async_trait::async_trait;
+use log::debug;
 use socket2::{Domain, Socket, TcpKeepalive, Type};
 use url::Url;
 
@@ -67,6 +68,7 @@ impl TcpDialer {
         socket_addr: SocketAddr,
         timeout: Option<Duration>,
     ) -> Result<TcpStream> {
+        debug!(target: "net::tcp::do_dial", "Dialing {} with TCP...", socket_addr);
         let socket = self.create_socket(socket_addr).await?;
 
         let connection = if timeout.is_some() {
