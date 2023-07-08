@@ -179,12 +179,6 @@ fn main() {
 
     // Something fancy
     let progress = Arc::new(ProgressInc::new());
-    /*
-    let progress = ProgressBar::new_spinner();
-    let template =
-        ProgressStyle::default_bar().template("[{elapsed_precise}] {pos} attempts").unwrap();
-    progress.set_style(template);
-    */
 
     // Fire off the threadpool
     let progress_ = progress.clone();

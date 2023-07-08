@@ -26,16 +26,6 @@ use crate::Result;
 
 pub type WalletPtr = Arc<WalletDb>;
 
-/*
-/// Helper function to initialize `WalletPtr`
-pub async fn init_wallet(wallet_path: &str, wallet_pass: &str) -> Result<WalletPtr> {
-    let expanded = expand_path(wallet_path)?;
-    let wallet_path = format!("sqlite://{}", expanded.to_str().unwrap());
-    let wallet = WalletDb::new(&wallet_path, wallet_pass).await?;
-    Ok(wallet)
-}
-*/
-
 /// Types we want to allow to query from the SQL wallet
 #[repr(u8)]
 pub enum QueryType {

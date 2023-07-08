@@ -20,7 +20,7 @@
 use std::{net::UdpSocket, time::Duration};
 
 use log::debug;
-use rand::prelude::SliceRandom;
+use rand::{prelude::SliceRandom, rngs::OsRng};
 use serde_json::json;
 use url::Url;
 
@@ -37,7 +37,7 @@ const EPOCH: u32 = 2208988800; // 1900
 /// retrieve their current system clock.
 async fn peer_request(peers: &[Url]) -> Result<Option<Timestamp>> {
     // Select peer, None if vector is empty.
-    let peer = peers.choose(&mut rand::thread_rng());
+    let peer = peers.choose(&mut OsRng);
     match peer {
         None => Ok(None),
         Some(p) => {

@@ -23,7 +23,7 @@ use chrono::Utc;
 use darkfi_serial::serialize;
 use futures::{select, FutureExt};
 use log::{debug, error, warn};
-use rand::Rng;
+use rand::{rngs::OsRng, Rng};
 use smol::Executor;
 
 use crate::{
@@ -77,8 +77,7 @@ impl Dht {
         ex: Arc<Executor<'_>>,
     ) -> Result<DhtPtr> {
         // Generate a random id
-        let mut rng = rand::thread_rng();
-        let n: u16 = rng.gen();
+        let n: u16 = OsRng.gen();
         let id = blake3::hash(&serialize(&n));
         let map = HashMap::default();
         let lookup = match initial {

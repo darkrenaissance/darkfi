@@ -10,8 +10,8 @@ edition = "2021"
 
 [dependencies]
 async-std = {version = "1.12.0", features = ["attributes"]}
-async-trait = "0.1.68"
-blake3 = "1.4.0"
+async-trait = "0.1.71"
+blake3 = "1.4.1"
 darkfi = {path = "../../../", features = ["dht"]}
 darkfi-serial = {path = "../../../src/serial", features = ["derive", "crypto"]}
 easy-parallel = "3.3.0"

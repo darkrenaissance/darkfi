@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use rand::{distributions::Alphanumeric, thread_rng, Rng};
+use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
 
 pub mod events_queue;
 pub mod model;
@@ -28,7 +28,7 @@ pub trait EventMsg {
 }
 
 pub fn gen_id(len: usize) -> String {
-    thread_rng().sample_iter(&Alphanumeric).take(len).map(char::from).collect()
+    OsRng.sample_iter(&Alphanumeric).take(len).map(char::from).collect()
 }
 
 #[cfg(test)]

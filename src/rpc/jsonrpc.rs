@@ -20,7 +20,7 @@
 use std::fmt;
 
 use async_std::sync::Arc;
-use rand::Rng;
+use rand::{rngs::OsRng, Rng};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{json, Value};
 
@@ -121,11 +121,9 @@ pub struct JsonRequest {
 
 impl JsonRequest {
     pub fn new(method: &str, parameters: Value) -> Self {
-        let mut rng = rand::thread_rng();
-
         Self {
             jsonrpc: json!("2.0"),
-            id: json!(rng.gen::<u64>()),
+            id: json!(OsRng.gen::<u64>()),
             method: json!(method),
             params: parameters,
         }

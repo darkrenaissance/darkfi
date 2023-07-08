@@ -19,7 +19,7 @@
 use std::collections::{HashMap, HashSet};
 
 use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
-use rand::Rng;
+use rand::{rngs::OsRng, Rng};
 
 use crate::{impl_p2p_message, net::Message};
 
@@ -39,8 +39,7 @@ pub struct KeyRequest {
 impl KeyRequest {
     pub fn new(from: blake3::Hash, to: blake3::Hash, key: blake3::Hash) -> Self {
         // Generate a random id
-        let mut rng = rand::thread_rng();
-        let n: u16 = rng.gen();
+        let n: u16 = OsRng.gen();
         let id = blake3::hash(&serialize(&n));
         Self { id, from, to, key }
     }
@@ -65,8 +64,7 @@ pub struct KeyResponse {
 impl KeyResponse {
     pub fn new(from: blake3::Hash, to: blake3::Hash, key: blake3::Hash, value: Vec<u8>) -> Self {
         // Generate a random id
-        let mut rng = rand::thread_rng();
-        let n: u16 = rng.gen();
+        let n: u16 = OsRng.gen();
         let id = blake3::hash(&serialize(&n));
         Self { id, from, to, key, value }
     }
@@ -89,8 +87,7 @@ pub struct LookupRequest {
 impl LookupRequest {
     pub fn new(daemon: blake3::Hash, key: blake3::Hash, req_type: u8) -> Self {
         // Generate a random id
-        let mut rng = rand::thread_rng();
-        let n: u16 = rng.gen();
+        let n: u16 = OsRng.gen();
         let id = blake3::hash(&serialize(&n));
         Self { id, daemon, key, req_type }
     }
@@ -109,8 +106,7 @@ pub struct LookupMapRequest {
 impl LookupMapRequest {
     pub fn new(daemon: blake3::Hash) -> Self {
         // Generate a random id
-        let mut rng = rand::thread_rng();
-        let n: u16 = rng.gen();
+        let n: u16 = OsRng.gen();
         let id = blake3::hash(&serialize(&n));
         Self { id, daemon }
     }
@@ -129,8 +125,7 @@ pub struct LookupMapResponse {
 impl LookupMapResponse {
     pub fn new(lookup: HashMap<blake3::Hash, HashSet<blake3::Hash>>) -> Self {
         // Generate a random id
-        let mut rng = rand::thread_rng();
-        let n: u16 = rng.gen();
+        let n: u16 = OsRng.gen();
         let id = blake3::hash(&serialize(&n));
         Self { id, lookup }
     }

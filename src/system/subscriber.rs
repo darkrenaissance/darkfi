@@ -20,7 +20,7 @@ use std::collections::HashMap;
 
 use async_std::sync::{Arc, Mutex};
 use log::warn;
-use rand::Rng;
+use rand::{rngs::OsRng, Rng};
 
 pub type SubscriberPtr<T> = Arc<Subscriber<T>>;
 
@@ -67,8 +67,7 @@ impl<T: Clone> Subscriber<T> {
     }
 
     fn random_id() -> SubscriptionId {
-        let mut rng = rand::thread_rng();
-        rng.gen()
+        OsRng.gen()
     }
 
     pub async fn subscribe(self: Arc<Self>) -> Subscription<T> {

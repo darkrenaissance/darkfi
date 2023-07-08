@@ -10,8 +10,8 @@ edition = "2021"
 [workspace]
 
 [dependencies]
-blake3 = "1.4.0"
-clap = {version = "4.3.3", features = ["derive"]}
+blake3 = "1.4.1"
+clap = {version = "4.3.11", features = ["derive"]}
 darkfi = {path = "../../../", features = ["blockchain", "wallet", "rpc"]}
 darkfi-sdk = {path = "../../../src/sdk"}
 sled = "0.34.7"
