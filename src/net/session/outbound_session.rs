@@ -52,7 +52,7 @@ use crate::{
 pub type OutboundSessionPtr = Arc<OutboundSession>;
 
 /// Connection state
-#[derive(Copy, Clone)]
+#[derive(Eq, PartialEq, Copy, Clone)]
 pub enum OutboundState {
     Open,
     Pending,

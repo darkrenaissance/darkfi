@@ -34,9 +34,10 @@ use super::{
     message::Message,
     protocol::{protocol_registry::ProtocolRegistry, register_default_protocols},
     session::{
-        inbound_session::InboundDnet, outbound_session::OutboundDnet, InboundSession,
-        InboundSessionPtr, ManualSession, ManualSessionPtr, OutboundSession, OutboundSessionPtr,
-        SeedSyncSession, Session,
+        inbound_session::InboundDnet,
+        outbound_session::{OutboundDnet, OutboundState},
+        InboundSession, InboundSessionPtr, ManualSession, ManualSessionPtr, OutboundSession,
+        OutboundSessionPtr, SeedSyncSession, Session,
     },
     settings::{Settings, SettingsPtr},
 };
@@ -374,6 +375,81 @@ impl P2p {
         }
 
         ret
+    }
+
+    /// Maps DnetInfo into a JSON struct usable by clients
+    pub fn map_dnet_info(dnet_info: Vec<DnetInfo>) -> serde_json::Value {
+        let mut map = serde_json::Map::new();
+        map.insert("inbound".into(), serde_json::Value::Null);
+        map.insert("outbound".into(), serde_json::Value::Null);
+        map.insert("hosts".into(), serde_json::Value::Null);
+
+        // We assume there will be one of each
+        for info in dnet_info {
+            match info {
+                DnetInfo::Hosts(hosts) => map["hosts"] = serde_json::json!(hosts),
+
+                DnetInfo::Outbound(outbound_info) => {
+                    let mut slot_info = vec![];
+                    for slot in outbound_info.slots {
+                        let Some(slot) = slot else {
+                            slot_info.push(serde_json::Value::Null);
+                            continue
+                        };
+
+                        let obj;
+                        if slot.state != OutboundState::Open {
+                            obj = serde_json::json!({
+                                "addr": slot.addr.unwrap().to_string(),
+                                "state": slot.state.to_string(),
+                                "info": {
+                                    "addr": slot.channel.as_ref().unwrap().addr.to_string(),
+                                    "random_id": slot.channel.as_ref().unwrap().random_id,
+                                    "remote_id": slot.channel.as_ref().unwrap().remote_node_id,
+                                    "log": slot.channel.as_ref().unwrap().log.to_vec(),
+                                }
+                            });
+                        } else {
+                            obj = serde_json::json!({
+                                "addr": serde_json::Value::Null,
+                                "state": slot.state.to_string(),
+                                "info": serde_json::Value::Null,
+                            });
+                        }
+
+                        slot_info.push(obj);
+                    }
+
+                    map["outbound"] = serde_json::json!(slot_info);
+                }
+
+                DnetInfo::Inbound(inbound_info) => {
+                    let mut slot_info = vec![];
+                    for slot in inbound_info.slots {
+                        let Some(slot) = slot else {
+                            slot_info.push(serde_json::Value::Null);
+                            continue
+                        };
+
+                        let obj = serde_json::json!({
+                            "addr": slot.addr.unwrap().to_string(),
+                            "info": {
+                                "addr": slot.channel.as_ref().unwrap().addr.to_string(),
+                                "random_id": slot.channel.as_ref().unwrap().random_id,
+                                "remote_id": slot.channel.as_ref().unwrap().remote_node_id,
+                                "log": slot.channel.as_ref().unwrap().log.to_vec(),
+                            }
+                        });
+
+                        slot_info.push(obj);
+                    }
+
+                    map["inbound"] = serde_json::json!(slot_info);
+                }
+            }
+        }
+
+        serde_json::json!(map)
     }
 }
 

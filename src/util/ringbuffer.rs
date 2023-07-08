@@ -66,6 +66,11 @@ impl<T: Eq + PartialEq + Clone, const N: usize> RingBuffer<T, N> {
     pub fn back(&self) -> Option<&T> {
         self.0.back()
     }
+
+    /// Cast the ringbuffer into a vec
+    pub fn to_vec(&self) -> Vec<T> {
+        self.0.iter().map(|x| x.clone()).collect()
+    }
 }
 
 #[cfg(test)]
