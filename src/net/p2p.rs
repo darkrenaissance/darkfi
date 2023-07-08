@@ -397,9 +397,8 @@ impl P2p {
                             continue
                         };
 
-                        let obj;
-                        if slot.state != OutboundState::Open {
-                            obj = serde_json::json!({
+                        let obj = if slot.state != OutboundState::Open {
+                            serde_json::json!({
                                 "addr": slot.addr.unwrap().to_string(),
                                 "state": slot.state.to_string(),
                                 "info": {
@@ -408,14 +407,14 @@ impl P2p {
                                     "remote_id": slot.channel.as_ref().unwrap().remote_node_id,
                                     "log": slot.channel.as_ref().unwrap().log.to_vec(),
                                 }
-                            });
+                            })
                         } else {
-                            obj = serde_json::json!({
+                            serde_json::json!({
                                 "addr": serde_json::Value::Null,
                                 "state": slot.state.to_string(),
                                 "info": serde_json::Value::Null,
-                            });
-                        }
+                            })
+                        };
 
                         slot_info.push(obj);
                     }

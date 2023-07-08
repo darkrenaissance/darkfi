@@ -59,7 +59,7 @@ impl InboundInfo {
     async fn dnet_info(&self, p2p: P2pPtr) -> Option<Self> {
         let Some(ref addr) = self.addr else { return None };
 
-        let Some(chan) = p2p.channels().lock().await.get(&addr).cloned() else { return None };
+        let Some(chan) = p2p.channels().lock().await.get(addr).cloned() else { return None };
 
         Some(Self { addr: self.addr.clone(), channel: Some(chan.dnet_info().await) })
     }
