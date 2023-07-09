@@ -37,7 +37,7 @@ setup_xbps() {
 }
 
 setup_dnf() {
-	dnf_deps="git make gcc pkg-config findutils lato-fonts"
+	dnf_deps="git make gcc pkg-config findutils lato-fonts fontconfig-devel perl-FindBin perl-File-Compare alsa-lib-devel python3-devel"
 	$1 install -y $dnf_deps || return 1
 }
 
