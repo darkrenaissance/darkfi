@@ -155,5 +155,7 @@ pub async fn send_packet<W: AsyncWrite + Unpin + Sized>(
     written += packet.payload.len();
     debug!(target: "net::message", "Sent payload {} bytes", packet.payload.len() as u64);
 
+    stream.flush().await?;
+
     Ok(written)
 }

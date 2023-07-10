@@ -255,7 +255,7 @@ impl Channel {
         );
 
         let stream = &mut *self.writer.lock().await;
-        let _written = message::send_packet(stream, packet).await?;
+        let _ = message::send_packet(stream, packet).await?;
 
         Ok(())
     }
