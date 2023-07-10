@@ -129,7 +129,7 @@ sled = {version = "0.34.7", optional = true}
 sled-overlay = {version = "0.0.7", optional = true}
 
 # Temporary version lock
-#curve25519-dalek = {version = "=4.0.0-rc.3", default-features = false, optional = true}
+curve25519-dalek = {version = "=4.0.0-rc.3", default-features = false, optional = true}
 
 [dev-dependencies]
 clap = {version = "4.3.11", features = ["derive"]}
