@@ -82,7 +82,7 @@ fn named_fields(
             );
 
             variant_body.extend(quote! {
-                #field_ident.encode(writer)?;
+                len += #field_ident.encode(&mut s)?;
             })
         }
     }
@@ -125,7 +125,7 @@ fn unnamed_fields(
             );
 
             variant_body.extend(quote! {
-                #field_ident.encode(writer)?;
+                len += #field_ident.encode(&mut s)?;
             })
         }
     }
@@ -192,16 +192,16 @@ pub fn enum_ser(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream> 
                     #all_variants_idx_body
                 };
 
+                let mut len = 0;
                 let bytes = variant_idx.to_le_bytes();
-
-                writer.write_all(&bytes)?;
+                s.write_all(&bytes)?;
+                len += bytes.len();
 
                 match self {
                     #fields_body
                 }
 
-                Ok(bytes.len())
-
+                Ok(len)
             }
         }
     })
@@ -214,6 +214,7 @@ pub fn enum_de(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream> {
         || WhereClause { where_token: Default::default(), predicates: Default::default() },
         Clone::clone,
     );
+
     let init_method = contains_initialize_with(&input.attrs);
     let mut variant_arms = TokenStream::new();
     let discriminants = discriminant_map(&input.variants);
@@ -284,14 +285,18 @@ pub fn enum_de(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStream> {
     Ok(quote! {
     impl #impl_generics #cratename::Decodable for #name #ty_generics #where_clause {
         fn decode<D: std::io::Read>(mut d: D) -> ::core::result::Result<Self, std::io::Error> {
+            let variant_tag: u8 = #cratename::Decodable::decode(&mut d)?;
+
             let mut return_value =
                 #variant_arms {
-                    let msg = format!("Unexpected variant index: {:?}", variant_idx);
-                    return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, msg));
-                }
-            };
-            #init
-            Ok(return_value)
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!("Unexpected variant tag: {:?}", variant_tag),
+                    ))
+                };
+                #init
+                Ok(return_value)
+            }
         }
     })
 }

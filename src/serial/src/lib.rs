@@ -861,7 +861,7 @@ mod tests {
         First = 0x01,
         Second = 0x03,
         Third = 0xf1,
-        Fourth = 0xfefe,
+        Fourth = 0xfe,
     }
 
     #[test]
@@ -877,10 +877,10 @@ mod tests {
         let second = serialize(&TestEnum1::Second);
         let third = serialize(&TestEnum1::Third);
         let fourth = serialize(&TestEnum1::Fourth);
-        assert_eq!(first, [0]);
-        assert_eq!(second, [1]);
-        assert_eq!(third, [2]);
-        assert_eq!(fourth, [3]);
+        assert_eq!(first, [0x01]);
+        assert_eq!(second, [0x03]);
+        assert_eq!(third, [0xf1]);
+        assert_eq!(fourth, [0xfe]);
     }
 
     #[derive(Debug, PartialEq, SerialEncodable, SerialDecodable)]
