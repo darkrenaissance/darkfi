@@ -378,6 +378,7 @@ async fn spawn_net(
         seeds: info.seeds.clone(),
         peers: info.peers.clone(),
         outbound_connections: 0,
+        outbound_connect_timeout: 30,
         app_version: info.version.clone(),
         localnet: info.localnet,
         allowed_transports: vec![
