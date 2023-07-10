@@ -62,6 +62,7 @@ impl Hosts {
 
     /// Filter given addresses based on certain rulesets and validity.
     async fn filter_addresses(&self, addrs: &[Url]) -> Vec<Url> {
+        debug!(target: "net::hosts::filter_addresses()", "Filtering addrs: {:?}", addrs);
         let mut ret = vec![];
         let localnet = self.settings.localnet;
 
@@ -128,13 +129,16 @@ impl Hosts {
                     if tor_hscrypto::pk::HsId::from_str(host_str).is_err() {
                         continue
                     }
+                    debug!(target: "net::hosts::filter_addresses()", "[Tor] Valid: {}", host_str);
                 }
 
                 #[cfg(feature = "p2p-transport-nym")]
                 "nym" | "nym+tls" => continue, // <-- Temp skip
 
                 #[cfg(feature = "p2p-transport-tcp")]
-                "tcp" | "tcp+tls" => {}
+                "tcp" | "tcp+tls" => {
+                    debug!(target: "net::hosts::filter_addresses()", "[TCP] Valid: {}", host_str);
+                }
 
                 _ => continue,
             }
