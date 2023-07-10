@@ -32,12 +32,12 @@ use std::{
 
 use crypto_box::{
     aead::{Aead, AeadCore},
-    rand_core::OsRng,
-    SalsaBox, SecretKey,
+    ChaChaBox, SecretKey,
 };
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use futures::{select, FutureExt};
 use log::{debug, error, info};
+use rand::rngs::OsRng;
 use structopt_toml::StructOptToml;
 
 use darkfi::{
@@ -70,7 +70,7 @@ use crate::{
     util::pipe_write,
 };
 
-fn get_workspaces(settings: &Args) -> Result<HashMap<String, SalsaBox>> {
+fn get_workspaces(settings: &Args) -> Result<HashMap<String, ChaChaBox>> {
     let mut workspaces = HashMap::new();
 
     for workspace in settings.workspaces.iter() {
@@ -84,8 +84,8 @@ fn get_workspaces(settings: &Args) -> Result<HashMap<String, SalsaBox>> {
 
         let secret = crypto_box::SecretKey::from(bytes);
         let public = secret.public_key();
-        let salsa_box = crypto_box::SalsaBox::new(&public, &secret);
-        workspaces.insert(workspace.to_string(), salsa_box);
+        let chacha_box = crypto_box::ChaChaBox::new(&public, &secret);
+        workspaces.insert(workspace.to_string(), chacha_box);
     }
 
     Ok(workspaces)
@@ -118,24 +118,24 @@ impl EventMsg for EncryptedTask {
 
 fn encrypt_task(
     task: &TaskInfo,
-    salsa_box: &SalsaBox,
+    chacha_box: &ChaChaBox,
     rng: &mut OsRng,
 ) -> TaudResult<EncryptedTask> {
     debug!("start encrypting task");
 
-    let nonce = SalsaBox::generate_nonce(rng);
+    let nonce = ChaChaBox::generate_nonce(rng);
     let payload = &serialize(task)[..];
-    let payload = salsa_box.encrypt(&nonce, payload)?;
+    let payload = chacha_box.encrypt(&nonce, payload)?;
 
     let nonce = nonce.to_vec();
     Ok(EncryptedTask { nonce, payload })
 }
 
-fn decrypt_task(encrypt_task: &EncryptedTask, salsa_box: &SalsaBox) -> TaudResult<TaskInfo> {
+fn decrypt_task(encrypt_task: &EncryptedTask, chacha_box: &ChaChaBox) -> TaudResult<TaskInfo> {
     debug!("start decrypting task");
 
     let nonce = encrypt_task.nonce.as_slice();
-    let decrypted_task = salsa_box.decrypt(nonce.into(), &encrypt_task.payload[..])?;
+    let decrypted_task = chacha_box.decrypt(nonce.into(), &encrypt_task.payload[..])?;
 
     let task = deserialize(&decrypted_task)?;
 
@@ -148,7 +148,7 @@ async fn start_sync_loop(
     view: ViewPtr<EncryptedTask>,
     model: ModelPtr<EncryptedTask>,
     seen: SeenPtr<EventId>,
-    workspaces: HashMap<String, SalsaBox>,
+    workspaces: Arc<HashMap<String, ChaChaBox>>,
     datastore_path: std::path::PathBuf,
     missed_events: Arc<Mutex<Vec<Event<EncryptedTask>>>>,
     piped: bool,
@@ -160,8 +160,8 @@ async fn start_sync_loop(
             task_event = broadcast_rcv.recv().fuse() => {
                 let tk = task_event.map_err(Error::from)?;
                 if workspaces.contains_key(&tk.workspace) {
-                    let salsa_box = workspaces.get(&tk.workspace).unwrap();
-                    let encrypted_task = encrypt_task(&tk, salsa_box, &mut OsRng)?;
+                    let chacha_box = workspaces.get(&tk.workspace).unwrap();
+                    let encrypted_task = encrypt_task(&tk, chacha_box, &mut OsRng)?;
                     info!(target: "tau", "Send the task: ref: {}", tk.ref_id);
                     let event = Event {
                         previous_event_hash: model.lock().await.get_head_hash(),
@@ -191,11 +191,11 @@ async fn start_sync_loop(
 async fn on_receive_task(
     task: &EncryptedTask,
     datastore_path: &Path,
-    workspaces: &HashMap<String, SalsaBox>,
+    workspaces: &HashMap<String, ChaChaBox>,
     piped: bool,
 ) -> TaudResult<()> {
-    for (workspace, salsa_box) in workspaces.iter() {
-        let task = decrypt_task(task, salsa_box);
+    for (workspace, chacha_box) in workspaces.iter() {
+        let task = decrypt_task(task, chacha_box);
         if let Err(e) = task {
             debug!("unable to decrypt the task: {}", e);
             continue
@@ -297,7 +297,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
                 continue
             }
             let secret_key = SecretKey::generate(&mut OsRng);
-            let encoded = bs58::encode(secret_key.as_bytes());
+            let encoded = bs58::encode(secret_key.to_bytes());
 
             println!("workspace: {}:{}", workspace, encoded.into_string());
             println!("Please add it to the config file.");
@@ -307,7 +307,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         return Ok(())
     }
 
-    let workspaces = get_workspaces(&settings)?;
+    let workspaces = Arc::new(get_workspaces(&settings)?);
 
     if workspaces.is_empty() {
         error!("Please add at least one workspace to the config file.");

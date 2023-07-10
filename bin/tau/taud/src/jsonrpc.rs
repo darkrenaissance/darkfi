@@ -16,11 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, fs::create_dir_all, path::PathBuf};
+use std::{collections::HashMap, fs::create_dir_all, path::PathBuf, sync::Arc};
 
 use async_std::sync::Mutex;
 use async_trait::async_trait;
-use crypto_box::SalsaBox;
+use crypto_box::ChaChaBox;
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -47,7 +47,7 @@ pub struct JsonRpcInterface {
     notify_queue_sender: smol::channel::Sender<TaskInfo>,
     nickname: String,
     workspace: Mutex<String>,
-    workspaces: HashMap<String, SalsaBox>,
+    workspaces: Arc<HashMap<String, ChaChaBox>>,
     p2p: net::P2pPtr,
 }
 
@@ -99,7 +99,7 @@ impl JsonRpcInterface {
         dataset_path: PathBuf,
         notify_queue_sender: smol::channel::Sender<TaskInfo>,
         nickname: String,
-        workspaces: HashMap<String, SalsaBox>,
+        workspaces: Arc<HashMap<String, ChaChaBox>>,
         p2p: net::P2pPtr,
     ) -> Self {
         let workspace = Mutex::new(workspaces.iter().last().unwrap().0.clone());
