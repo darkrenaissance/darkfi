@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crypto_box::SalsaBox;
+use async_std::sync::Arc;
+use crypto_box::ChaChaBox;
 use log::{info, warn};
 use serde::{self, Deserialize};
 use std::collections::HashMap;
@@ -105,7 +106,7 @@ pub struct Args {
 #[derive(Clone)]
 pub struct ContactInfo {
     /// Optional NaCl box for the channel, used for {en,de}cryption.
-    pub salt_box: Option<SalsaBox>,
+    pub salt_box: Option<Arc<ChaChaBox>>,
 }
 
 impl ContactInfo {
@@ -132,7 +133,7 @@ pub struct ChannelInfo {
     /// Optional topic for the channel
     pub topic: Option<String>,
     /// Optional NaCl box for the channel, used for {en,de}cryption.
-    pub salt_box: Option<SalsaBox>,
+    pub salt_box: Option<Arc<ChaChaBox>>,
     /// Flag indicates whether the user has joined the channel or not
     pub joined: bool,
     /// All nicknames which are visible on the channel
@@ -187,7 +188,7 @@ pub fn parse_configured_channels(data: &str) -> Result<HashMap<String, ChannelIn
             // Build the NaCl box
             if let Some(s) = chan.1["secret"].as_str() {
                 let salt_box = salt_box_from_shared_secret(s)?;
-                channel_info.salt_box = Some(salt_box);
+                channel_info.salt_box = Some(Arc::new(salt_box));
                 info!("Instantiated NaCl box for channel {}", chan.0);
             }
         }
@@ -296,7 +297,7 @@ pub fn parse_configured_contacts(data: &str) -> Result<HashMap<String, ContactIn
         };
 
         let public = crypto_box::PublicKey::from(bytes);
-        contact_info.salt_box = Some(SalsaBox::new(&public, &secret));
+        contact_info.salt_box = Some(Arc::new(ChaChaBox::new(&public, &secret)));
         ret.insert(cnt.0.to_string(), contact_info);
         info!("Instantiated NaCl box for contact {}", cnt.0);
     }
@@ -304,11 +305,11 @@ pub fn parse_configured_contacts(data: &str) -> Result<HashMap<String, ContactIn
     Ok(ret)
 }
 
-fn salt_box_from_shared_secret(s: &str) -> Result<SalsaBox> {
+fn salt_box_from_shared_secret(s: &str) -> Result<ChaChaBox> {
     let bytes: [u8; 32] = bs58::decode(s).into_vec()?.try_into().unwrap();
     let secret = crypto_box::SecretKey::from(bytes);
     let public = secret.public_key();
-    Ok(SalsaBox::new(&public, &secret))
+    Ok(ChaChaBox::new(&public, &secret))
 }
 
 fn parse_priv_key(data: &str) -> Result<String> {

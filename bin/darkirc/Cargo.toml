@@ -19,7 +19,7 @@ futures = "0.3.28"
 rustls-pemfile = "1.0.3"
 
 # Crypto
-crypto_box = "0.8.2"
+crypto_box = {version = "0.9.0-rc.1", features = ["std", "chacha20"]}
 rand = "0.8.5"
 
 # Misc

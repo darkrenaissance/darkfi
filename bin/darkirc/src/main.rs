@@ -70,7 +70,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     if settings.gen_keypair {
         let secret_key = crypto_box::SecretKey::generate(&mut OsRng);
         let pub_key = secret_key.public_key();
-        let prv_encoded = bs58::encode(secret_key.as_bytes()).into_string();
+        let prv_encoded = bs58::encode(secret_key.to_bytes()).into_string();
         let pub_encoded = bs58::encode(pub_key.as_bytes()).into_string();
 
         let kp = KeyPair { private_key: prv_encoded, public_key: pub_encoded };
