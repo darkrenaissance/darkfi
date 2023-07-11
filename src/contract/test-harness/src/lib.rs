@@ -131,7 +131,7 @@ impl Wallet {
         genesis_block: &BlockInfo,
         faucet_pubkeys: &[PublicKey],
     ) -> Result<Self> {
-        let wallet = WalletDb::new(None, "foo").await?;
+        let wallet = WalletDb::new(None, None)?;
         let sled_db = sled::Config::new().temporary(true).open()?;
 
         // Use pregenerated vks

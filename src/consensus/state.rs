@@ -859,7 +859,7 @@ mod tests {
     #[async_std::test]
     async fn calc_sigmas_test() -> Result<()> {
         // Generate dummy state
-        let wallet = WalletDb::new(None, "foo").await?;
+        let wallet = WalletDb::new(None, None)?;
         let sled_db = sled::Config::new().temporary(true).open()?;
         let blockchain = Blockchain::new(&sled_db)?;
         let state = ConsensusState::new(

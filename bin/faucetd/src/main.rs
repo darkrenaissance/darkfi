@@ -622,7 +622,7 @@ async fn prune_airdrop_maps(rate_map: AirdropMap, challenge_map: ChallengeMap, t
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     // Initialize or load wallet
-    let wallet = WalletDb::new(Some(expand_path(&args.wallet_path)?), &args.wallet_pass).await?;
+    let wallet = WalletDb::new(Some(expand_path(&args.wallet_path)?), Some(&args.wallet_pass))?;
 
     // Initialize or open sled database
     let db_path =

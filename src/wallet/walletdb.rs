@@ -27,7 +27,6 @@ use crate::Result;
 pub type WalletPtr = Arc<WalletDb>;
 
 /// Types we want to allow to query from the SQL wallet
-#[repr(u8)]
 pub enum QueryType {
     /// Integer gets decoded into `u64`
     Integer = 0x00,
@@ -64,12 +63,15 @@ pub struct WalletDb {
 
 impl WalletDb {
     /// Create a new wallet. If `path` is `None`, create it in memory.
-    pub async fn new(path: Option<PathBuf>, _password: &str) -> Result<WalletPtr> {
+    pub fn new(path: Option<PathBuf>, password: Option<&str>) -> Result<WalletPtr> {
         let conn = match path.clone() {
             Some(p) => Connection::open(p)?,
             None => Connection::open_in_memory()?,
         };
 
+        if let Some(password) = password {
+            conn.pragma_update(None, "key", password)?;
+        }
         conn.pragma_update(None, "foreign_keys", "ON")?;
 
         info!(target: "wallet::walletdb", "[WalletDb] Opened Sqlite connection at \"{:?}\"", path);
@@ -80,8 +82,26 @@ impl WalletDb {
     /// Therefore it's best to use it for initializing a table or similar things.
     pub async fn exec_sql(&self, query: &str) -> Result<()> {
         info!(target: "wallet::walletdb", "[WalletDb] Executing SQL query");
-        debug!(target: "wallet::walletdb", "\n{}", query);
-        self.conn.lock().await.execute(query, ())?;
+        debug!(target: "wallet::walletdb", "[WalletDb] Query:\n{}", query);
+        let _ = self.conn.lock().await.execute(query, ())?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[async_std::test]
+    async fn test_mem_wallet() {
+        let wallet = WalletDb::new(None, Some("foobar")).unwrap();
+        wallet.exec_sql("CREATE TABLE mista ( numba INTEGER );").await.unwrap();
+        wallet.exec_sql("INSERT INTO mista ( numba ) VALUES ( 42 );").await.unwrap();
+
+        let conn = wallet.conn.lock().await;
+        let mut stmt = conn.prepare("SELECT numba FROM mista").unwrap();
+        let numba: u64 = stmt.query_row((), |row| Ok(row.get("numba").unwrap())).unwrap();
+        stmt.finalize().unwrap();
+        assert!(numba == 42);
     }
 }
