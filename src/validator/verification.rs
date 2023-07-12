@@ -37,7 +37,25 @@ use crate::{
 };
 
 /// Validate given genesis [`BlockInfo`], and apply it to the provided overlay
-async fn verify_genesis_block(block: &BlockInfo, block_hash: String) -> Result<()> {
+pub async fn verify_genesis_block(
+    overlay: &BlockchainOverlayPtr,
+    time_keeper: &TimeKeeper,
+    block: &BlockInfo,
+    genesis_txs_total: u64,
+) -> Result<()> {
+    let block_hash = block.blockhash().to_string();
+    debug!(target: "validator", "Validating genesis block {}", block_hash);
+
+    // Check if block already exists
+    if overlay.lock().unwrap().has_block(block)? {
+        return Err(Error::BlockAlreadyExists(block_hash))
+    }
+
+    // Block slot must be the same as the time keeper verifying slot
+    if block.header.slot != time_keeper.verifying_slot {
+        return Err(Error::VerifyingSlotMissmatch())
+    }
+
     // Check genesis slot exist
     if block.slots.len() != 1 {
         return Err(Error::BlockIsInvalid(block_hash))
@@ -51,16 +69,11 @@ async fn verify_genesis_block(block: &BlockInfo, block_hash: String) -> Result<(
         return Err(Error::SlotIsInvalid(genesis_slot.id))
     }
 
-    // TODO:
     // Genesis block slot total token must correspond to the total
     // of all genesis transactions public inputs (genesis distribution).
-    // Retrieve genesis transactions total
-    //let txs_total = genesis_transactions_total(&block.txs);
-
-    // Verify amounts match
-    //if genesis_slot.total_tokens != txs_total {
-    //    return Err(Error::SlotIsInvalid(genesis_slot.id))
-    //}
+    if genesis_slot.total_tokens != genesis_txs_total {
+        return Err(Error::SlotIsInvalid(genesis_slot.id))
+    }
 
     // Verify there is not reward
     if genesis_slot.reward != 0 {
@@ -73,6 +86,13 @@ async fn verify_genesis_block(block: &BlockInfo, block_hash: String) -> Result<(
         return Err(TxVerifyFailed::ErroneousTxs(vec![block.producer.proposal.clone()]).into())
     }
 
+    // Verify transactions
+    verify_transactions(overlay, time_keeper, &block.txs).await?;
+
+    // Insert block
+    overlay.lock().unwrap().add_block(block)?;
+
+    debug!(target: "validator", "Genesis block {} verified successfully", block_hash);
     Ok(())
 }
 
@@ -81,16 +101,16 @@ pub async fn verify_block(
     overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
     block: &BlockInfo,
-    previous: Option<&BlockInfo>,
+    previous: &BlockInfo,
     expected_reward: u64,
     testing_mode: bool,
 ) -> Result<()> {
-    let block_hash = block.blockhash();
+    let block_hash = block.blockhash().to_string();
     debug!(target: "validator", "Validating block {}", block_hash);
 
     // Check if block already exists
     if overlay.lock().unwrap().has_block(block)? {
-        return Err(Error::BlockAlreadyExists(block_hash.to_string()))
+        return Err(Error::BlockAlreadyExists(block_hash))
     }
 
     // Block slot must be the same as the time keeper verifying slot
@@ -98,21 +118,12 @@ pub async fn verify_block(
         return Err(Error::VerifyingSlotMissmatch())
     }
 
-    // Validate block
-    if block.header.slot == 0 {
-        // Validate genesis block
-        verify_genesis_block(block, block_hash.to_string()).await?;
-    } else {
-        // Validate normal block, using its previous
-        if previous.is_none() {
-            return Err(Error::BlockPreviousMissing())
-        }
-        block.validate(previous.unwrap(), expected_reward)?;
+    // Validate block, using its previous
+    block.validate(previous, expected_reward)?;
 
-        // Validate proposal transaction if not in testing mode
-        if !testing_mode {
-            verify_proposal_transaction(overlay, time_keeper, &block.producer.proposal).await?;
-        }
+    // Validate proposal transaction if not in testing mode
+    if !testing_mode {
+        verify_proposal_transaction(overlay, time_keeper, &block.producer.proposal).await?;
     }
 
     // Verify transactions

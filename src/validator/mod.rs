@@ -34,7 +34,7 @@ use consensus::{next_block_reward, Consensus};
 
 /// Verification functions
 pub mod verification;
-use verification::{verify_block, verify_transactions};
+use verification::{verify_block, verify_genesis_block, verify_transactions};
 
 /// Helper utilities
 pub mod utils;
@@ -47,6 +47,8 @@ pub struct ValidatorConfig {
     pub time_keeper: TimeKeeper,
     /// Genesis block
     pub genesis_block: BlockInfo,
+    /// Total amount of minted tokens in genesis block
+    pub genesis_txs_total: u64,
     /// Whitelisted faucet pubkeys (testnet stuff)
     pub faucet_pubkeys: Vec<PublicKey>,
     /// Flag to enable testing mode
@@ -57,10 +59,11 @@ impl ValidatorConfig {
     pub fn new(
         time_keeper: TimeKeeper,
         genesis_block: BlockInfo,
+        genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
         testing_mode: bool,
     ) -> Self {
-        Self { time_keeper, genesis_block, faucet_pubkeys, testing_mode }
+        Self { time_keeper, genesis_block, genesis_txs_total, faucet_pubkeys, testing_mode }
     }
 }
 
@@ -91,13 +94,11 @@ impl Validator {
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
             info!(target: "validator", "Appending genesis block");
-            verify_block(
+            verify_genesis_block(
                 &overlay,
                 &config.time_keeper,
                 &config.genesis_block,
-                None,
-                0,
-                testing_mode,
+                config.genesis_txs_total,
             )
             .await?;
         };
@@ -135,14 +136,8 @@ impl Validator {
         debug!(target: "validator", "Instantiating BlockchainOverlay");
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
-        // Retrieve last block. If blockchain is empty it will error out here
-        let last_block = match overlay.lock().unwrap().last_block() {
-            Ok(l) => l,
-            Err(_) => BlockInfo::default(),
-        };
-        // We only need the reference, thats why we do it like this
-        let mut previous =
-            if !overlay.lock().unwrap().is_empty()? { Some(&last_block) } else { None };
+        // Retrieve last block
+        let mut previous = &overlay.lock().unwrap().last_block()?;
 
         // Create a time keeper to validate each block
         let mut time_keeper = self.consensus.time_keeper.clone();
@@ -160,7 +155,7 @@ impl Validator {
                 &overlay,
                 &time_keeper,
                 block,
-                previous,
+                &previous,
                 expected_reward,
                 self.testing_mode,
             )
@@ -173,7 +168,7 @@ impl Validator {
             };
 
             // Use last inserted block as next iteration previous
-            previous = Some(block);
+            previous = block;
         }
 
         debug!(target: "validator", "Applying overlay changes");
@@ -236,7 +231,7 @@ impl Validator {
     /// Retrieve all existing blocks and try to apply them
     /// to an in memory overlay to verify their correctness.
     /// Be careful as this will try to load everything in memory.
-    pub async fn validate_blockchain(&self) -> Result<()> {
+    pub async fn validate_blockchain(&self, genesis_txs_total: u64) -> Result<()> {
         let blocks = self.blockchain.get_all()?;
 
         // An empty blockchain is considered valid
@@ -250,13 +245,16 @@ impl Validator {
         let overlay = BlockchainOverlay::new(&blockchain)?;
 
         // Set previous
-        let mut previous = None;
+        let mut previous = &blocks[0];
 
         // Create a time keeper to validate each block
         let mut time_keeper = self.consensus.time_keeper.clone();
 
+        // Validate genesis block
+        verify_genesis_block(&overlay, &time_keeper, previous, genesis_txs_total).await?;
+
         // Validate and insert each block
-        for block in &blocks {
+        for block in &blocks[1..] {
             // Use block slot in time keeper
             time_keeper.verifying_slot = block.header.slot;
 
@@ -281,7 +279,7 @@ impl Validator {
             };
 
             // Use last inserted block as next iteration previous
-            previous = Some(block);
+            previous = block;
         }
 
         Ok(())

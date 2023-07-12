@@ -33,6 +33,10 @@ use darkfi_contract_test_harness::vks;
 #[cfg(test)]
 mod tests;
 
+/// Utility functions
+mod utils;
+use utils::genesis_txs_total;
+
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
 
@@ -78,8 +82,15 @@ async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()> {
 
     // Initialize validator configuration
     let genesis_block = BlockInfo::default();
+    let genesis_txs_total = genesis_txs_total(&genesis_block.txs)?;
     let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
-    let config = ValidatorConfig::new(time_keeper, genesis_block, vec![], args.testing_mode);
+    let config = ValidatorConfig::new(
+        time_keeper,
+        genesis_block,
+        genesis_txs_total,
+        vec![],
+        args.testing_mode,
+    );
 
     if args.testing_mode {
         info!("Node is configured to run in testing mode!");

@@ -145,6 +145,7 @@ impl Wallet {
         let config = ValidatorConfig::new(
             time_keeper,
             genesis_block.clone(),
+            0,
             faucet_pubkeys.to_vec(),
             false,
         );

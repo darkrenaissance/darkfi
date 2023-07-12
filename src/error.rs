@@ -314,9 +314,6 @@ pub enum Error {
     #[error("Block {0} already in database")]
     BlockAlreadyExists(String),
 
-    #[error("Didn't provide blocks' previous")]
-    BlockPreviousMissing(),
-
     #[error("Block {0} not found in database")]
     BlockNotFound(String),
 

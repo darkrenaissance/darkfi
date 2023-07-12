@@ -1780,8 +1780,11 @@ version = "0.4.1"
 dependencies = [
  "async-std",
  "darkfi",
+ "darkfi-consensus-contract",
  "darkfi-contract-test-harness",
+ "darkfi-money-contract",
  "darkfi-sdk",
+ "darkfi-serial",
  "easy-parallel",
  "log",
  "serde",

@@ -31,9 +31,10 @@ use darkfi_sdk::{
     pasta::{group::ff::Field, pallas},
 };
 
-use crate::Darkfid;
+use crate::{utils::genesis_txs_total, Darkfid};
 
 pub struct Harness {
+    pub genesis_txs_total: u64,
     pub alice: Darkfid,
     pub bob: Darkfid,
 }
@@ -43,11 +44,21 @@ impl Harness {
         // Generate default genesis block
         let genesis_block = BlockInfo::default();
 
+        // Generate each node wallet here and add their corresponding
+        // genesis txs
+        let genesis_txs_total = genesis_txs_total(&genesis_block.txs)?;
+
         // Generate validators configuration
         // NOTE: we are not using consensus constants here so we
         // don't get circular dependencies.
         let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
-        let config = ValidatorConfig::new(time_keeper, genesis_block, vec![], testing_node);
+        let config = ValidatorConfig::new(
+            time_keeper,
+            genesis_block,
+            genesis_txs_total,
+            vec![],
+            testing_node,
+        );
 
         // Generate validators using pregenerated vks
         let sled_db = sled::Config::new().temporary(true).open()?;
@@ -59,15 +70,15 @@ impl Harness {
         let validator = Validator::new(&sled_db, config.clone()).await?;
         let bob = Darkfid::new(validator).await;
 
-        Ok(Self { alice, bob })
+        Ok(Self { genesis_txs_total, alice, bob })
     }
 
     pub async fn validate_chains(&self) -> Result<()> {
         let alice = &self.alice._validator.read().await;
         let bob = &self.bob._validator.read().await;
 
-        alice.validate_blockchain().await?;
-        bob.validate_blockchain().await?;
+        alice.validate_blockchain(self.genesis_txs_total).await?;
+        bob.validate_blockchain(self.genesis_txs_total).await?;
 
         assert_eq!(alice.blockchain.len(), bob.blockchain.len());
 
