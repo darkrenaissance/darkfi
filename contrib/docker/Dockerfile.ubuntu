@@ -1,12 +1,10 @@
-# Use: docker build . --network=host --pull -t darkfi:ubuntu -f ./contrib/docker/Dockerfile.ubuntu
-#   optionally with: --build-arg BUILD_OS_VER=20.04 --build-arg RUST_VER=1.70
+# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:ubuntu -f ./contrib/docker/Dockerfile.ubuntu
+#   optionally with: --build-arg OS_VER=20.04 --build-arg RUST_VER=nightly
 
-ARG RUST_VER=1.70      # stable nightly beta 1.67
-ARG BUILD_OS_VER=22.04 # 20.04
-ARG RUN_OS_VER=${BUILD_OS_VER}
-ARG REPOSITORY=ubuntu
+ARG RUST_VER=1.70  # stable nightly beta 1.67
+ARG OS_VER=22.04   # 20.04
 
-FROM ${REPOSITORY}:${BUILD_OS_VER} as rust_builder
+FROM ubuntu:${OS_VER} as rust_builder
 
 ARG RUST_VER
 
@@ -14,7 +12,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install 
   build-essential cmake jq wget curl \
   pkg-config clang libclang-dev llvm-dev libudev-dev libfreetype6-dev \
   libexpat1-dev curl gcc make libssl-dev fonts-lato libfontconfig-dev \
-  libasound2-dev
+  libasound2-dev python3-dev
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 
@@ -31,14 +29,16 @@ WORKDIR /opt/darkfi
 
 COPY . /opt/darkfi
 
+RUN cargo update
+
 RUN make clean
 
-RUN rm -rf ./target/*
+RUN rm -rf ./target/ zkas proof/*.bin
 
 RUN bash -c 'make -j test && make -j all'
 
 # 3. stage
-FROM ${REPOSITORY}:${RUN_OS_VER}
+FROM ubuntu:${OS_VER}
 
 RUN apt-get -y update && apt-get install -y openssl fonts-lato \
   && apt-get clean && rm -rf /var/lib/apt/lists/*

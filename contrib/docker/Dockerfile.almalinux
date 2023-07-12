@@ -1,14 +1,14 @@
-# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:fedora -f ./contrib/docker/Dockerfile.fedora
-#   optionally with: --build-arg OS_VER=fedora:37 --build-arg RUST_VER=nightly
+# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:almalinux -f ./contrib/docker/Dockerfile.almalinux
+#   optionally with: --build-arg OS_VER=almalinux/8-minimal --build-arg RUST_VER=nightly
 
-ARG RUST_VER=1.70     # stable nightly beta 1.67
-ARG OS_VER=fedora:38  # fedora:37
+ARG RUST_VER=1.70    # stable nightly beta 1.67
+ARG OS_VER=almalinux/9-minimal  # almalinux/8-minimal
 
 FROM ${OS_VER} as rust_builder
 
 ARG RUST_VER
 
-RUN dnf -y install gcc gcc-c++ kernel-headers cmake jq wget \
+RUN microdnf -y install gcc gcc-c++ kernel-headers cmake jq wget \
   pkg-config clang clang-libs llvm-libs \
   openssl-devel findutils fontconfig-devel \
   lato-fonts alsa-lib-devel python3-devel \
@@ -29,9 +29,9 @@ WORKDIR /opt/darkfi
 
 COPY . /opt/darkfi
 
-RUN cargo update
-
 RUN make clean
+
+RUN cargo update
 
 RUN rm -rf ./target/ zkas proof/*.bin
 
@@ -40,8 +40,8 @@ RUN bash -c 'make -j test && make -j all'
 # 3. stage
 FROM ${OS_VER}
 
-RUN dnf -y install openssl lato-fonts \
-  && dnf clean all \
+RUN microdnf -y install openssl lato-fonts \
+  && microdnf clean all \
   && rm -rf /var/cache/dnf
 
 WORKDIR /opt/darkfi
