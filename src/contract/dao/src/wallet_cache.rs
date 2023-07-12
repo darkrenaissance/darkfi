@@ -18,7 +18,8 @@
 
 use darkfi_sdk::{
     bridgetree,
-    crypto::{note::AeadEncryptedNote, MerkleNode, MerkleTree, SecretKey},
+    crypto::{note::AeadEncryptedNote, pasta_prelude::Field, MerkleNode, MerkleTree, SecretKey},
+    pasta::pallas,
 };
 
 use darkfi_money_contract::{client::MoneyNote, model::Coin};
@@ -33,19 +34,22 @@ pub struct WalletCache {
     // Normally this would be a HashMap, but SecretKey is not Hash-able
     // TODO: This can be HashableBase
     cache: Vec<(SecretKey, Vec<OwnCoin>)>,
-    /// The entire Merkle tree state
+    /// The entire Money Merkle tree state
     pub tree: MerkleTree,
 }
 
 impl Default for WalletCache {
     fn default() -> Self {
-        Self { cache: Vec::new(), tree: MerkleTree::new(100) }
+        Self::new()
     }
 }
 
 impl WalletCache {
     pub fn new() -> Self {
-        Self { cache: Vec::new(), tree: MerkleTree::new(100) }
+        let mut tree = MerkleTree::new(100);
+        tree.append(MerkleNode::from(pallas::Base::ZERO));
+        let _ = tree.mark().unwrap();
+        Self { cache: Vec::new(), tree }
     }
 
     /// Must be called at the start to begin tracking received coins for this secret.
