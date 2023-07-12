@@ -20,14 +20,15 @@ use darkfi::Result;
 use darkfi_contract_test_harness::init_logger;
 
 mod harness;
-use harness::Harness;
+use harness::{Harness, HarnessConfig};
 
 #[async_std::test]
 async fn add_blocks() -> Result<()> {
     init_logger();
 
     // Initialize harness in testing mode
-    let th = Harness::new(true).await?;
+    let config = HarnessConfig { testing_node: true, alice_initial: 1000, bob_initial: 500 };
+    let th = Harness::new(config).await?;
 
     // Retrieve genesis block
     let previous = th.alice._validator.read().await.blockchain.last_block()?;

@@ -120,7 +120,7 @@ impl DaoTestHarness {
         let genesis_block = BlockInfo::default();
         let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
         let config =
-            ValidatorConfig::new(time_keeper, genesis_block, faucet_pubkeys.to_vec(), false);
+            ValidatorConfig::new(time_keeper, genesis_block, 0, faucet_pubkeys.to_vec(), false);
         let alice_validator = Validator::new(&alice_sled_db, config).await?;
 
         let money_contract_id = *MONEY_CONTRACT_ID;

@@ -19,7 +19,6 @@
 use std::{collections::HashMap, io::Cursor};
 
 use darkfi_sdk::{
-    blockchain::Slot,
     crypto::{PublicKey, CONSENSUS_CONTRACT_ID},
     pasta::pallas,
 };
@@ -64,11 +63,6 @@ pub async fn verify_genesis_block(
     // Retrieve genesis slot
     let genesis_slot = block.slots.last().unwrap();
 
-    // Genesis slot must be the default one
-    if genesis_slot != &Slot::default() {
-        return Err(Error::SlotIsInvalid(genesis_slot.id))
-    }
-
     // Genesis block slot total token must correspond to the total
     // of all genesis transactions public inputs (genesis distribution).
     if genesis_slot.total_tokens != genesis_txs_total {
@@ -87,7 +81,12 @@ pub async fn verify_genesis_block(
     }
 
     // Verify transactions
-    verify_transactions(overlay, time_keeper, &block.txs).await?;
+    let erroneous_txs = verify_transactions(overlay, time_keeper, &block.txs).await?;
+    if !erroneous_txs.is_empty() {
+        warn!(target: "validator", "Erroneous transactions found in set");
+        overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+        return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
+    }
 
     // Insert block
     overlay.lock().unwrap().add_block(block)?;
@@ -127,7 +126,12 @@ pub async fn verify_block(
     }
 
     // Verify transactions
-    verify_transactions(overlay, time_keeper, &block.txs).await?;
+    let erroneous_txs = verify_transactions(overlay, time_keeper, &block.txs).await?;
+    if !erroneous_txs.is_empty() {
+        warn!(target: "validator", "Erroneous transactions found in set");
+        overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+        return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
+    }
 
     // Insert block
     overlay.lock().unwrap().add_block(block)?;

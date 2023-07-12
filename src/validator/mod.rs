@@ -91,6 +91,9 @@ impl Validator {
         // Create an overlay over whole blockchain so we can write stuff
         let overlay = BlockchainOverlay::new(&blockchain)?;
 
+        // Deploy native wasm contracts
+        deploy_native_contracts(&overlay, &config.time_keeper, &config.faucet_pubkeys)?;
+
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
             info!(target: "validator", "Appending genesis block");
@@ -102,9 +105,6 @@ impl Validator {
             )
             .await?;
         };
-
-        // Deploy native wasm contracts
-        deploy_native_contracts(&overlay, &config.time_keeper, &config.faucet_pubkeys)?;
 
         // Write the changes to the actual chain db
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
@@ -231,7 +231,11 @@ impl Validator {
     /// Retrieve all existing blocks and try to apply them
     /// to an in memory overlay to verify their correctness.
     /// Be careful as this will try to load everything in memory.
-    pub async fn validate_blockchain(&self, genesis_txs_total: u64) -> Result<()> {
+    pub async fn validate_blockchain(
+        &self,
+        genesis_txs_total: u64,
+        faucet_pubkeys: Vec<PublicKey>,
+    ) -> Result<()> {
         let blocks = self.blockchain.get_all()?;
 
         // An empty blockchain is considered valid
@@ -249,6 +253,9 @@ impl Validator {
 
         // Create a time keeper to validate each block
         let mut time_keeper = self.consensus.time_keeper.clone();
+
+        // Deploy native wasm contracts
+        deploy_native_contracts(&overlay, &time_keeper, &faucet_pubkeys)?;
 
         // Validate genesis block
         verify_genesis_block(&overlay, &time_keeper, previous, genesis_txs_total).await?;
