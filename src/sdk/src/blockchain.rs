@@ -20,7 +20,7 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 use pasta_curves::{group::ff::Field, pallas};
 
 /// Auxiliary structure used to keep track of slot validation parameters.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Slot {
     /// Slot UID
     pub id: u64,

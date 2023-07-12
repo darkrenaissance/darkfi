@@ -19,6 +19,7 @@
 use std::{collections::HashMap, io::Cursor};
 
 use darkfi_sdk::{
+    blockchain::Slot,
     crypto::{PublicKey, CONSENSUS_CONTRACT_ID},
     pasta::pallas,
 };
@@ -35,6 +36,46 @@ use crate::{
     Error, Result,
 };
 
+/// Validate given genesis [`BlockInfo`], and apply it to the provided overlay
+async fn verify_genesis_block(block: &BlockInfo, block_hash: String) -> Result<()> {
+    // Check genesis slot exist
+    if block.slots.len() != 1 {
+        return Err(Error::BlockIsInvalid(block_hash))
+    }
+
+    // Retrieve genesis slot
+    let genesis_slot = block.slots.last().unwrap();
+
+    // Genesis slot must be the default one
+    if genesis_slot != &Slot::default() {
+        return Err(Error::SlotIsInvalid(genesis_slot.id))
+    }
+
+    // TODO:
+    // Genesis block slot total token must correspond to the total
+    // of all genesis transactions public inputs (genesis distribution).
+    // Retrieve genesis transactions total
+    //let txs_total = genesis_transactions_total(&block.txs);
+
+    // Verify amounts match
+    //if genesis_slot.total_tokens != txs_total {
+    //    return Err(Error::SlotIsInvalid(genesis_slot.id))
+    //}
+
+    // Verify there is not reward
+    if genesis_slot.reward != 0 {
+        return Err(Error::SlotIsInvalid(genesis_slot.id))
+    }
+
+    // Genesis transaction must be the Transaction::default() one (empty)
+    if block.producer.proposal != Transaction::default() {
+        error!(target: "validator", "Genesis proposal transaction is not default one");
+        return Err(TxVerifyFailed::ErroneousTxs(vec![block.producer.proposal.clone()]).into())
+    }
+
+    Ok(())
+}
+
 /// Validate given [`BlockInfo`], and apply it to the provided overlay
 pub async fn verify_block(
     overlay: &BlockchainOverlayPtr,
@@ -49,7 +90,7 @@ pub async fn verify_block(
 
     // Check if block already exists
     if overlay.lock().unwrap().has_block(block)? {
-        return Err(Error::BlockAlreadyExists(block.blockhash().to_string()))
+        return Err(Error::BlockAlreadyExists(block_hash.to_string()))
     }
 
     // Block slot must be the same as the time keeper verifying slot
@@ -57,20 +98,21 @@ pub async fn verify_block(
         return Err(Error::VerifyingSlotMissmatch())
     }
 
-    // TODO: on genesis block, verify slot.total_tokens = txs.total,
-    // thats our genesis distribution, and reward is 0
-
-    // Validate block using its previous, excluding genesis
-    if block.header.slot != 0 {
+    // Validate block
+    if block.header.slot == 0 {
+        // Validate genesis block
+        verify_genesis_block(block, block_hash.to_string()).await?;
+    } else {
+        // Validate normal block, using its previous
         if previous.is_none() {
             return Err(Error::BlockPreviousMissing())
         }
         block.validate(previous.unwrap(), expected_reward)?;
-    }
 
-    // Validate proposal transaction if not in testing mode
-    if !testing_mode {
-        verify_proposal_transaction(overlay, time_keeper, &block.producer.proposal).await?;
+        // Validate proposal transaction if not in testing mode
+        if !testing_mode {
+            verify_proposal_transaction(overlay, time_keeper, &block.producer.proposal).await?;
+        }
     }
 
     // Verify transactions
@@ -92,16 +134,6 @@ pub async fn verify_proposal_transaction(
 ) -> Result<()> {
     let tx_hash = tx.hash();
     debug!(target: "validator", "Validating proposal transaction {}", tx_hash);
-
-    // Genesis transaction must be the Transaction::default() one (empty)
-    if time_keeper.verifying_slot == 0 {
-        if *tx != Transaction::default() {
-            error!(target: "validator", "Genesis proposal transaction is not default one");
-            return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
-        }
-
-        return Ok(())
-    }
 
     // Transaction must contain a single Consensus::Proposal (0x02) call
     if tx.calls.len() != 1 ||
