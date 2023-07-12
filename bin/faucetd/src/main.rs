@@ -34,7 +34,8 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        contract_id::MONEY_CONTRACT_ID, mimc_vdf, Keypair, MerkleTree, PublicKey, DARK_TOKEN_ID,
+        contract_id::MONEY_CONTRACT_ID, mimc_vdf, pasta_prelude::Field, Keypair, MerkleNode,
+        MerkleTree, PublicKey, DARK_TOKEN_ID,
     },
     num_bigint::BigUint,
     num_traits::Num,
@@ -73,7 +74,7 @@ use darkfi::{
     tx::Transaction,
     util::{async_util::sleep, parse::decode_base10, path::expand_path},
     wallet::{WalletDb, WalletPtr},
-    zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses},
+    zk::{proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses},
     zkas::ZkBinary,
     Error, Result,
 };
@@ -304,7 +305,8 @@ impl Faucetd {
             }
 
             Err(_) => {
-                let tree = MerkleTree::new(100);
+                let mut tree = MerkleTree::new(100);
+                tree.append(MerkleNode::from(pallas::Base::ZERO));
                 let tree_bytes = serialize(&tree);
                 let query = format!(
                     "DELETE FROM {}; INSERT INTO {} ({}) VALUES (?1)",

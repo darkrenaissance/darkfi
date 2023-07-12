@@ -44,9 +44,10 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     blockchain::Slot,
     crypto::{
-        poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey,
-        CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+        pasta_prelude::Field, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey,
+        SecretKey, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
+    pasta::pallas,
 };
 use darkfi_serial::{deserialize, serialize};
 use log::{info, warn};
@@ -150,7 +151,8 @@ impl Wallet {
         let validator = Validator::new(&sled_db, config).await?;
 
         // Create necessary Merkle trees for tracking
-        let money_merkle_tree = MerkleTree::new(100);
+        let mut money_merkle_tree = MerkleTree::new(100);
+        money_merkle_tree.append(MerkleNode::from(pallas::Base::ZERO));
         let consensus_staked_merkle_tree = MerkleTree::new(100);
         let consensus_unstaked_merkle_tree = MerkleTree::new(100);
 

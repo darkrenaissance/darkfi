@@ -41,8 +41,8 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey, TokenId,
-        MONEY_CONTRACT_ID,
+        pasta_prelude::Field, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey,
+        SecretKey, TokenId, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
 };
@@ -87,7 +87,9 @@ impl Drk {
 
         if tree_needs_init {
             eprintln!("Initializing Money Merkle tree");
-            let tree = MerkleTree::new(100);
+            let mut tree = MerkleTree::new(100);
+            tree.append(MerkleNode::from(pallas::Base::ZERO));
+            let _ = tree.mark().unwrap();
             self.put_money_tree(&tree).await?;
             eprintln!("Successfully initialized Merkle tree for the Money contract");
         }
@@ -435,7 +437,9 @@ impl Drk {
     /// Reset the Money Merkle tree in the wallet
     pub async fn reset_money_tree(&self) -> Result<()> {
         eprintln!("Resetting Money Merkle tree");
-        let tree = MerkleTree::new(100);
+        let mut tree = MerkleTree::new(100);
+        tree.append(MerkleNode::from(pallas::Base::ZERO));
+        let _ = tree.mark().unwrap();
         self.put_money_tree(&tree).await?;
         eprintln!("Successfully reset Money Merkle tree");
 
