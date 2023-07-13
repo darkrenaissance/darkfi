@@ -34,7 +34,7 @@ use darkfi::{
     Result,
 };
 
-use crate::model::{DaoProposeParams, DaoProposeParamsInput};
+use crate::model::{DaoProposalBulla, DaoProposeParams, DaoProposeParamsInput};
 
 use super::DaoInfo;
 
@@ -195,14 +195,14 @@ impl DaoProposeCall {
 
         let dao_leaf_position: u64 = self.dao_leaf_position.into();
 
-        let proposal_bulla = poseidon_hash::<6>([
+        let proposal_bulla = DaoProposalBulla::from(poseidon_hash::<6>([
             proposal_dest_x,
             proposal_dest_y,
             proposal_amount,
             self.proposal.token_id.inner(),
             dao_bulla,
             self.proposal.blind,
-        ]);
+        ]));
 
         let prover_witnesses = vec![
             // Proposers total number of gov tokens
@@ -231,7 +231,7 @@ impl DaoProposeCall {
         let public_inputs = vec![
             token_commit,
             self.dao_merkle_root.inner(),
-            proposal_bulla,
+            proposal_bulla.inner(),
             *total_funds_coords.x(),
             *total_funds_coords.y(),
         ];

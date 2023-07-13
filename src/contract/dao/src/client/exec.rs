@@ -32,7 +32,7 @@ use darkfi::{
 };
 
 use super::{DaoInfo, DaoProposalInfo};
-use crate::model::{DaoBlindAggregateVote, DaoExecParams};
+use crate::model::{DaoBlindAggregateVote, DaoExecParams, DaoProposalBulla};
 
 pub struct DaoExecCall {
     pub proposal: DaoProposalInfo,
@@ -85,14 +85,14 @@ impl DaoExecCall {
             self.dao.bulla_blind,
         ]);
 
-        let proposal_bulla = poseidon_hash::<6>([
+        let proposal_bulla = DaoProposalBulla::from(poseidon_hash::<6>([
             proposal_dest_x,
             proposal_dest_y,
             proposal_amount,
             self.proposal.token_id.inner(),
             dao_bulla,
             self.proposal.blind,
-        ]);
+        ]));
 
         let coin_0 = poseidon_hash::<7>([
             proposal_dest_x,
@@ -157,7 +157,7 @@ impl DaoExecCall {
 
         debug!(target: "dao", "proposal_bulla: {:?}", proposal_bulla);
         let public_inputs = vec![
-            proposal_bulla,
+            proposal_bulla.inner(),
             coin_0,
             coin_1,
             *yes_vote_commit_coords.x(),

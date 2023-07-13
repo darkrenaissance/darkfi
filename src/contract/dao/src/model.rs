@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use core::str::FromStr;
+
 use darkfi_money_contract::model::Coin;
 use darkfi_sdk::{
     crypto::{note::AeadEncryptedNote, pasta_prelude::*, MerkleNode, Nullifier, PublicKey},
@@ -51,10 +53,52 @@ impl DaoBulla {
     }
 }
 
-use core::str::FromStr;
+impl std::hash::Hash for DaoBulla {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        state.write(&self.to_bytes());
+    }
+}
+
 darkfi_sdk::fp_from_bs58!(DaoBulla);
 darkfi_sdk::fp_to_bs58!(DaoBulla);
 darkfi_sdk::ty_from_fp!(DaoBulla);
+
+/// A `DaoProposalBulla` represented in the state
+#[derive(Debug, Copy, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+pub struct DaoProposalBulla(pallas::Base);
+
+impl DaoProposalBulla {
+    /// Reference the raw inner base field element
+    pub fn inner(&self) -> pallas::Base {
+        self.0
+    }
+
+    /// Create a `DaoBulla` object from given bytes, erroring if the
+    /// input bytes are noncanonical.
+    pub fn from_bytes(x: [u8; 32]) -> Result<Self, ContractError> {
+        match pallas::Base::from_repr(x).into() {
+            Some(v) => Ok(Self(v)),
+            None => Err(ContractError::IoError(
+                "Failed to instantiate DaoProposalBulla from bytes".to_string(),
+            )),
+        }
+    }
+
+    /// Convert the `DaoBulla` type into 32 raw bytes
+    pub fn to_bytes(&self) -> [u8; 32] {
+        self.0.to_repr()
+    }
+}
+
+impl std::hash::Hash for DaoProposalBulla {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        state.write(&self.to_bytes());
+    }
+}
+
+darkfi_sdk::fp_from_bs58!(DaoProposalBulla);
+darkfi_sdk::fp_to_bs58!(DaoProposalBulla);
+darkfi_sdk::ty_from_fp!(DaoProposalBulla);
 
 /// Parameters for `Dao::Mint`
 #[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
@@ -80,7 +124,7 @@ pub struct DaoProposeParams {
     /// Token ID commitment for the proposal
     pub token_commit: pallas::Base,
     /// Bulla of the DAO proposal
-    pub proposal_bulla: pallas::Base,
+    pub proposal_bulla: DaoProposalBulla,
     /// Encrypted note
     pub note: AeadEncryptedNote,
     /// Inputs for the proposal
@@ -102,7 +146,7 @@ pub struct DaoProposeParamsInput {
 #[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoProposeUpdate {
     /// Minted proposal bulla
-    pub proposal_bulla: pallas::Base,
+    pub proposal_bulla: DaoProposalBulla,
     /// Snapshotted Merkle root in the Money state
     pub snapshot_root: MerkleNode,
 }
@@ -124,7 +168,7 @@ pub struct DaoVoteParams {
     /// Token commitment for the vote inputs
     pub token_commit: pallas::Base,
     /// Proposal bulla being voted on
-    pub proposal_bulla: pallas::Base,
+    pub proposal_bulla: DaoProposalBulla,
     /// Commitment for yes votes
     pub yes_vote_commit: pallas::Point,
     /// Encrypted note
@@ -150,7 +194,7 @@ pub struct DaoVoteParamsInput {
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoVoteUpdate {
     /// The proposal bulla being voted on
-    pub proposal_bulla: pallas::Base,
+    pub proposal_bulla: DaoProposalBulla,
     /// The updated proposal metadata
     pub proposal_metadata: DaoProposalMetadata,
     /// Vote nullifiers,
@@ -188,7 +232,7 @@ impl Default for DaoBlindAggregateVote {
 #[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoExecParams {
     /// The proposal bulla
-    pub proposal: pallas::Base,
+    pub proposal: DaoProposalBulla,
     /// The output coin for the proposal recipient
     pub coin_0: Coin,
     /// The output coin for the change returned to DAO
@@ -203,5 +247,5 @@ pub struct DaoExecParams {
 #[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoExecUpdate {
     /// The proposal bulla
-    pub proposal: pallas::Base,
+    pub proposal: DaoProposalBulla,
 }

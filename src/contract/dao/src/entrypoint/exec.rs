@@ -55,7 +55,7 @@ pub(crate) fn dao_exec_get_metadata(
     zk_public_inputs.push((
         DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string(),
         vec![
-            params.proposal,
+            params.proposal.inner(),
             params.coin_0.inner(),
             params.coin_1.inner(),
             *yes_vote_coords.x(),
@@ -110,8 +110,11 @@ pub(crate) fn dao_exec_process_instruction(
     // Checks
     // ======
     // 1. Check coins in MoneyTransfer are the same as our coin 0 and coin 1
-    if mt_params.outputs[0].coin != params.coin_0 ||
-        mt_params.outputs[1].coin != params.coin_1 ||
+    // * outputs[0] is the change returned to DAO
+    // * outputs[1] is the value being sent to the recipient
+    // (This is how it's done in the client API of Money::Transfer)
+    if mt_params.outputs[0].coin != params.coin_1 ||
+        mt_params.outputs[1].coin != params.coin_0 ||
         mt_params.outputs.len() != 2
     {
         msg!("[Dao::Exec] Error: Coin commitments mismatch");

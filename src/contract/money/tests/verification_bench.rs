@@ -53,7 +53,8 @@ async fn alice2alice_random_amounts() -> Result<()> {
     info!(target: "money", "[Faucet] ========================");
     info!(target: "money", "[Faucet] Building Alice's airdrop");
     info!(target: "money", "[Faucet] ========================");
-    let (airdrop_tx, airdrop_params) = th.airdrop_native(ALICE_AIRDROP, Holder::Alice)?;
+    let (airdrop_tx, airdrop_params) =
+        th.airdrop_native(ALICE_AIRDROP, Holder::Alice, None, None, None, None)?;
 
     info!(target: "money", "[Faucet] ==========================");
     info!(target: "money", "[Faucet] Executing Alice airdrop tx");
@@ -151,7 +152,8 @@ async fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
         info!(target: "money", "[Faucet] ===================================================");
         info!(target: "money", "[Faucet] Building Money::Mint params for Alice's mint for token {} and amount {}", i, amount);
         info!(target: "money", "[Faucet] ===================================================");
-        let (mint_tx, mint_params) = th.token_mint(amount, Holder::Alice, Holder::Alice)?;
+        let (mint_tx, mint_params) =
+            th.token_mint(amount, Holder::Alice, Holder::Alice, None, None)?;
 
         info!(target: "money", "[Faucet] =======================");
         info!(target: "money", "[Faucet] Executing Alice mint tx");

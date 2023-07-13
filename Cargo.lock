@@ -1641,6 +1641,7 @@ dependencies = [
  "bs58",
  "chacha20poly1305",
  "darkfi",
+ "darkfi-contract-test-harness",
  "darkfi-money-contract",
  "darkfi-sdk",
  "darkfi-serial",

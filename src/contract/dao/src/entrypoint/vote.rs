@@ -90,7 +90,7 @@ pub(crate) fn dao_vote_get_metadata(
         DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS.to_string(),
         vec![
             params.token_commit,
-            params.proposal_bulla,
+            params.proposal_bulla.inner(),
             *yes_vote_commit_coords.x(),
             *yes_vote_commit_coords.y(),
             *all_vote_commit_coords.x(),
