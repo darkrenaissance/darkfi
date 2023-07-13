@@ -41,11 +41,22 @@ use crate::{
     model::{ClearInput, Coin, Input, MoneyTransferParamsV1, Output},
 };
 
+/// Output metadata claimed from building a `Money::Transfer` call
 pub struct TransferCallDebris {
+    /// The parameters for `Money::Transfer` respective to this call
     pub params: MoneyTransferParamsV1,
+    /// The ZK proofs created in this builder
     pub proofs: Vec<Proof>,
+    /// The ephemeral secret keys created for signing
     pub signature_secrets: Vec<SecretKey>,
+    /// The coins that have been spent in this builder
     pub spent_coins: Vec<OwnCoin>,
+    /// The coins that have been minted in this builder
+    pub minted_coins: Vec<OwnCoin>,
+    /// The value blinds created for the inputs
+    pub input_value_blinds: Vec<pallas::Scalar>,
+    /// The value blinds created for the outputs
+    pub output_value_blinds: Vec<pallas::Scalar>,
 }
 
 pub struct TransferMintRevealed {
@@ -181,6 +192,7 @@ impl TransferCallBuilder {
         let mut outputs = vec![];
         let mut change_outputs = vec![];
         let mut spent_coins = vec![];
+        let mut minted_coins = vec![];
         let mut signature_secrets = vec![];
         let mut proofs = vec![];
 
@@ -287,7 +299,7 @@ impl TransferCallBuilder {
                 token_commit: public_inputs.token_commit,
                 nullifier: public_inputs.nullifier,
                 merkle_root: public_inputs.merkle_root,
-                spend_hook: public_inputs.spend_hook, // FIXME: Do we need spend hook here?
+                spend_hook: public_inputs.spend_hook,
                 user_data_enc: public_inputs.user_data_enc,
                 signature_public: public_inputs.signature_public,
             });
@@ -345,6 +357,14 @@ impl TransferCallBuilder {
 
             let encrypted_note = AeadEncryptedNote::encrypt(&note, &output.public_key, &mut OsRng)?;
 
+            minted_coins.push(OwnCoin {
+                coin: public_inputs.coin,
+                note,
+                secret: SecretKey::from(pallas::Base::ZERO),
+                nullifier: Nullifier::from(pallas::Base::ZERO),
+                leaf_position: 0.into(),
+            });
+
             params.outputs.push(Output {
                 value_commit: public_inputs.value_commit,
                 token_commit: public_inputs.token_commit,
@@ -355,7 +375,15 @@ impl TransferCallBuilder {
 
         // Now we should have all the params, zk proofs, and signature secrets.
         // We return it all and let the caller deal with it.
-        let debris = TransferCallDebris { params, proofs, signature_secrets, spent_coins };
+        let debris = TransferCallDebris {
+            params,
+            proofs,
+            signature_secrets,
+            spent_coins,
+            minted_coins,
+            input_value_blinds: input_blinds,
+            output_value_blinds: output_blinds,
+        };
         Ok(debris)
     }
 }
