@@ -38,6 +38,10 @@ impl TestHarness {
         &mut self,
         value: u64,
         holder: Holder,
+        rcpt_spend_hook: Option<pallas::Base>,
+        rcpt_user_data: Option<pallas::Base>,
+        change_spend_hook: Option<pallas::Base>,
+        change_user_data: Option<pallas::Base>,
     ) -> Result<(Transaction, MoneyTransferParamsV1)> {
         let recipient = self.holders.get(&holder).unwrap().keypair.public;
         let faucet = self.holders.get(&Holder::Faucet).unwrap();
@@ -52,11 +56,11 @@ impl TestHarness {
             recipient,
             value,
             token_id: *DARK_TOKEN_ID,
-            rcpt_spend_hook: pallas::Base::ZERO,
-            rcpt_user_data: pallas::Base::ZERO,
+            rcpt_spend_hook: rcpt_spend_hook.unwrap_or(pallas::Base::ZERO),
+            rcpt_user_data: rcpt_user_data.unwrap_or(pallas::Base::ZERO),
             rcpt_user_data_blind: pallas::Base::random(&mut OsRng),
-            change_spend_hook: pallas::Base::ZERO,
-            change_user_data: pallas::Base::ZERO,
+            change_spend_hook: change_spend_hook.unwrap_or(pallas::Base::ZERO),
+            change_user_data: change_user_data.unwrap_or(pallas::Base::ZERO),
             change_user_data_blind: pallas::Base::random(&mut OsRng),
             coins: vec![],
             tree: faucet.money_merkle_tree.clone(),

@@ -55,7 +55,7 @@ async fn txs_verification() -> Result<()> {
     info!(target: "money", "[Alice] Building token mint tx for Alice");
     info!(target: "money", "[Alice] ================================");
     let (token_mint_tx, token_mint_params) =
-        th.token_mint(ALICE_INITIAL, Holder::Alice, Holder::Alice)?;
+        th.token_mint(ALICE_INITIAL, Holder::Alice, Holder::Alice, None, None)?;
 
     info!(target: "money", "[Faucet] =============================");
     info!(target: "money", "[Faucet] Executing Alice token mint tx");

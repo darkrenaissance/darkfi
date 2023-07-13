@@ -40,6 +40,8 @@ impl TestHarness {
         amount: u64,
         holder: Holder,
         recipient: Holder,
+        spend_hook: Option<pallas::Base>,
+        user_data: Option<pallas::Base>,
     ) -> Result<(Transaction, MoneyTokenMintParamsV1)> {
         let rcpt = self.holders.get(&recipient).unwrap().keypair.public;
         let mint_authority = self.holders.get(&holder).unwrap().token_mint_authority;
@@ -53,8 +55,8 @@ impl TestHarness {
             mint_authority,
             recipient: rcpt,
             amount,
-            spend_hook: pallas::Base::ZERO,
-            user_data: pallas::Base::ZERO,
+            spend_hook: spend_hook.unwrap_or(pallas::Base::ZERO),
+            user_data: user_data.unwrap_or(pallas::Base::ZERO),
             token_mint_zkbin: mint_zkbin.clone(),
             token_mint_pk: mint_pk.clone(),
         };

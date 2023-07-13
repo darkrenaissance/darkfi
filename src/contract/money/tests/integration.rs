@@ -52,7 +52,8 @@ async fn money_integration() -> Result<()> {
     let mut th = TestHarness::new(&["money".to_string()]).await?;
 
     info!("[Faucet] Building Alice airdrop tx");
-    let (airdrop_tx, airdrop_params) = th.airdrop_native(ALICE_NATIVE_AIRDROP, Holder::Alice)?;
+    let (airdrop_tx, airdrop_params) =
+        th.airdrop_native(ALICE_NATIVE_AIRDROP, Holder::Alice, None, None, None, None)?;
 
     info!("[Faucet] Executing Alice airdrop tx");
     th.execute_airdrop_native_tx(Holder::Faucet, &airdrop_tx, &airdrop_params, current_slot)
@@ -70,7 +71,8 @@ async fn money_integration() -> Result<()> {
     th.gather_owncoin(Holder::Alice, airdrop_params.outputs[0].clone(), None)?;
 
     info!("[Bob] Building BOB token mint tx");
-    let (token_mint_tx, token_mint_params) = th.token_mint(BOB_SUPPLY, Holder::Bob, Holder::Bob)?;
+    let (token_mint_tx, token_mint_params) =
+        th.token_mint(BOB_SUPPLY, Holder::Bob, Holder::Bob, None, None)?;
 
     info!("[Faucet] Executing BOB token mint tx");
     th.execute_token_mint_tx(Holder::Faucet, &token_mint_tx, &token_mint_params, current_slot)

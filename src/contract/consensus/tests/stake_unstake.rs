@@ -52,7 +52,8 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Faucet] =========================");
     info!(target: "consensus", "[Faucet] Building Alice airdrop tx");
     info!(target: "consensus", "[Faucet] =========================");
-    let (airdrop_tx, airdrop_params) = th.airdrop_native(ALICE_AIRDROP, Holder::Alice)?;
+    let (airdrop_tx, airdrop_params) =
+        th.airdrop_native(ALICE_AIRDROP, Holder::Alice, None, None, None, None)?;
 
     info!(target: "consensus", "[Faucet] ==========================");
     info!(target: "consensus", "[Faucet] Executing Alice airdrop tx");

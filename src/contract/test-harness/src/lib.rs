@@ -29,6 +29,7 @@ use darkfi::{
     Result,
 };
 use darkfi_dao_contract::{
+    model::{DaoBulla, DaoProposalBulla},
     DAO_CONTRACT_ZKAS_DAO_EXEC_NS, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
     DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
     DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
@@ -43,9 +44,10 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     blockchain::Slot,
+    bridgetree,
     crypto::{
         pasta_prelude::Field, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey,
-        SecretKey, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+        SecretKey, TokenId, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
 };
@@ -62,6 +64,10 @@ mod consensus_proposal;
 mod consensus_stake;
 mod consensus_unstake;
 mod consensus_unstake_request;
+mod dao_exec;
+mod dao_mint;
+mod dao_propose;
+mod dao_vote;
 mod money_airdrop;
 mod money_genesis_mint;
 mod money_otc_swap;
@@ -96,6 +102,7 @@ pub enum Holder {
     Bob,
     Charlie,
     Rachel,
+    Dao,
 }
 
 /// Enum representing transaction actions
@@ -112,6 +119,10 @@ pub enum TxAction {
     ConsensusProposal,
     ConsensusUnstakeRequest,
     ConsensusUnstake,
+    DaoMint,
+    DaoPropose,
+    DaoVote,
+    DaoExec,
 }
 
 pub struct Wallet {
@@ -121,9 +132,14 @@ pub struct Wallet {
     pub money_merkle_tree: MerkleTree,
     pub consensus_staked_merkle_tree: MerkleTree,
     pub consensus_unstaked_merkle_tree: MerkleTree,
+    pub dao_merkle_tree: MerkleTree,
+    pub dao_proposals_tree: MerkleTree,
     pub wallet: WalletPtr,
     pub unspent_money_coins: Vec<OwnCoin>,
     pub spent_money_coins: Vec<OwnCoin>,
+    pub dao_leafs: HashMap<DaoBulla, bridgetree::Position>,
+    // Here the MerkleTree is the snapshotted Money tree at the time of proposal creation
+    pub dao_prop_leafs: HashMap<DaoProposalBulla, (bridgetree::Position, MerkleTree)>,
 }
 
 impl Wallet {
@@ -157,6 +173,9 @@ impl Wallet {
         let consensus_staked_merkle_tree = MerkleTree::new(100);
         let consensus_unstaked_merkle_tree = MerkleTree::new(100);
 
+        let dao_merkle_tree = MerkleTree::new(100);
+        let dao_proposals_tree = MerkleTree::new(100);
+
         let unspent_money_coins = vec![];
         let spent_money_coins = vec![];
 
@@ -169,9 +188,13 @@ impl Wallet {
             money_merkle_tree,
             consensus_staked_merkle_tree,
             consensus_unstaked_merkle_tree,
+            dao_merkle_tree,
+            dao_proposals_tree,
             wallet,
             unspent_money_coins,
             spent_money_coins,
+            dao_leafs: HashMap::new(),
+            dao_prop_leafs: HashMap::new(),
         })
     }
 }
@@ -208,6 +231,10 @@ impl TestHarness {
         let rachel_kp = Keypair::random(&mut OsRng);
         let rachel = Wallet::new(rachel_kp, &genesis_block, &faucet_pubkeys).await?;
         holders.insert(Holder::Rachel, rachel);
+
+        let dao_kp = Keypair::random(&mut OsRng);
+        let dao = Wallet::new(dao_kp, &genesis_block, &faucet_pubkeys).await?;
+        holders.insert(Holder::Dao, dao);
 
         // Get the zkas circuits and build proving keys
         let mut proving_keys = HashMap::new();
@@ -277,6 +304,10 @@ impl TestHarness {
         tx_action_benchmarks
             .insert(TxAction::ConsensusUnstakeRequest, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::ConsensusUnstake, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::DaoMint, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::DaoPropose, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::DaoVote, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::DaoExec, TxActionBenchmarks::default());
 
         // Alice jumps down the rabbit hole
         holders.insert(Holder::Alice, alice);
@@ -485,6 +516,11 @@ impl TestHarness {
                 consensus_unstake_root == wallet.consensus_unstaked_merkle_tree.root(0).unwrap()
             );
         }
+    }
+
+    pub fn token_id(&self, holder: &Holder) -> TokenId {
+        let holder = self.holders.get(holder).unwrap();
+        TokenId::derive_public(holder.token_mint_authority.public)
     }
 
     pub fn statistics(&self) {

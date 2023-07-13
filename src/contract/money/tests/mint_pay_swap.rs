@@ -61,7 +61,8 @@ async fn mint_pay_swap() -> Result<()> {
     info!(target: "money", "[Alice] ================================");
     info!(target: "money", "[Alice] Building token mint tx for Alice");
     info!(target: "money", "[Alice] ================================");
-    let (mint_tx, params) = th.token_mint(ALICE_INITIAL, Holder::Alice, Holder::Alice)?;
+    let (mint_tx, params) =
+        th.token_mint(ALICE_INITIAL, Holder::Alice, Holder::Alice, None, None)?;
 
     info!(target: "money", "[Faucet] =============================");
     info!(target: "money", "[Faucet] Executing Alice token mint tx");
@@ -88,7 +89,7 @@ async fn mint_pay_swap() -> Result<()> {
     info!(target: "money", "[Bob] ==============================");
     info!(target: "money", "[Bob] Building token mint tx for Bob");
     info!(target: "money", "[Bob] ==============================");
-    let (mint_tx, params) = th.token_mint(BOB_INITIAL, Holder::Bob, Holder::Bob)?;
+    let (mint_tx, params) = th.token_mint(BOB_INITIAL, Holder::Bob, Holder::Bob, None, None)?;
 
     info!(target: "money", "[Faucet] ===========================");
     info!(target: "money", "[Faucet] Executing Bob token mint tx");
