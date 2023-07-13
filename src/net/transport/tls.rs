@@ -234,7 +234,7 @@ impl TlsUpgrade {
                 .with_protocol_versions(&[&TLS13])
                 .unwrap()
                 .with_custom_certificate_verifier(server_cert_verifier)
-                .with_single_cert(vec![certificate], secret_key)
+                .with_client_auth_cert(vec![certificate], secret_key)
                 .unwrap(),
         );
 
