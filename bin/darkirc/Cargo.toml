@@ -34,7 +34,7 @@ url = "2.4.0"
 # Encoding and parsing
 bs58 = "0.5.0"
 hex = "0.4.3"
-serde_json = "1.0.100"
+serde_json = "1.0.102"
 toml = "0.7.6"
 
 # Daemon

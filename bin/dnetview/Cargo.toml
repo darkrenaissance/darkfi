@@ -33,6 +33,6 @@ url = "2.4.0"
 thiserror = "1.0.43"
 
 # Encoding and parsing
-serde_json = "1.0.100"
+serde_json = "1.0.102"
 serde = {version = "1.0.171", features = ["derive"]}
 hex = "0.4.3"

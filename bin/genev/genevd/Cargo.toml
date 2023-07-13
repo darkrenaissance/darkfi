@@ -16,7 +16,7 @@ darkfi-serial = {path = "../../../src/serial"}
 async-trait = "0.1.71"
 libsqlite3-sys = {version = "0.26.0", features = ["bundled-sqlcipher-vendored-openssl"]}
 log = "0.4.19"
-serde_json = "1.0.100"
+serde_json = "1.0.102"
 url = "2.4.0"
 
 # Daemon

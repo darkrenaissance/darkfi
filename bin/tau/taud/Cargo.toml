@@ -23,7 +23,7 @@ libc = "0.2.147"
 libsqlite3-sys = {version = "0.26.0", features = ["bundled-sqlcipher-vendored-openssl"]}
 log = "0.4.19"
 rand = "0.8.5"
-serde_json = "1.0.100"
+serde_json = "1.0.102"
 thiserror = "1.0.43"
 toml = "0.7.6"
 url = "2.4.0"
