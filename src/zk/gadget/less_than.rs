@@ -249,6 +249,7 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
 #[cfg(test)]
 mod tests {
     use super::*;
+    use darkfi_sdk::crypto::poseidon_hash;
     use halo2_proofs::{
         circuit::{floor_planner, Value},
         dev::{CircuitLayout, MockProver},
@@ -384,6 +385,70 @@ mod tests {
             let b = invalid_b_vals[i];
 
             println!("64 bit (invalid) {:?} < {:?} check", a, b);
+
+            let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
+
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            assert!(prover.verify().is_err())
+        }
+    }
+
+    #[test]
+    fn less_than_253() {
+        test_circuit!(3, 253, 85);
+        let k = 7;
+
+        const HEADSTART: pallas::Base = pallas::Base::from_raw([
+            11731824086999220879,
+            11830614503713258191,
+            737869762948382064,
+            46116860184273879,
+        ]);
+
+        let seed = poseidon_hash([pallas::Base::from(3), pallas::Base::from(10)]);
+        let y = poseidon_hash([seed, pallas::Base::from(1)]);
+
+        let sigma1 = pallas::Base::from(1);
+        let sigma2 = pallas::Base::from(1);
+        let value = pallas::Base::from(100_000_000_000);
+        let target = sigma1 * value + sigma2 * value * value + HEADSTART;
+
+        let valid_a_vals = vec![pallas::Base::from(1), y];
+        let valid_b_vals = vec![pallas::Base::from(3), target];
+
+        let seed = poseidon_hash([pallas::Base::from(3), pallas::Base::from(2)]);
+
+        let invalid_a_vals = vec![
+            pallas::Base::from(3),
+            y,
+            pallas::Base::from(11),
+            poseidon_hash([seed, pallas::Base::from(1)]),
+            pallas::Base::from(0b010000100),
+        ];
+
+        let invalid_b_vals = vec![
+            pallas::Base::from(1),
+            target,
+            pallas::Base::from(11),
+            pallas::Base::from(0b010000011),
+        ];
+
+        for i in 0..valid_a_vals.len() {
+            let a = valid_a_vals[i];
+            let b = valid_b_vals[i];
+
+            println!("253 bit (valid) {:?} < {:?} check", a, b);
+
+            let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            prover.assert_satisfied();
+        }
+
+        for i in 0..invalid_a_vals.len() {
+            let a = invalid_a_vals[i];
+            let b = invalid_b_vals[i];
+
+            println!("253 bit (invalid) {:?} < {:?} check", a, b);
 
             let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
 
