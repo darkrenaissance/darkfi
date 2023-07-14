@@ -405,6 +405,19 @@ mod tests {
             46116860184273879,
         ]);
 
+        const P: pallas::Base = pallas::Base::from_raw([
+            11037532056220336122,
+            2469829653914515739,
+            0,
+            4611686018427387904,
+        ]);
+        const P_MINUS_1: pallas::Base = pallas::Base::from_raw([
+            11037532056220336121,
+            2469829653914515739,
+            0,
+            4611686018427387904,
+        ]);
+
         let seed = poseidon_hash([pallas::Base::from(3), pallas::Base::from(10)]);
         let y = poseidon_hash([seed, pallas::Base::from(1)]);
 
@@ -413,8 +426,8 @@ mod tests {
         let value = pallas::Base::from(100_000_000_000);
         let target = sigma1 * value + sigma2 * value * value + HEADSTART;
 
-        let valid_a_vals = vec![pallas::Base::from(1), y];
-        let valid_b_vals = vec![pallas::Base::from(3), target];
+        let valid_a_vals = vec![pallas::Base::from(1), y, P_MINUS_1];
+        let valid_b_vals = vec![pallas::Base::from(3), target, P];
 
         let seed = poseidon_hash([pallas::Base::from(3), pallas::Base::from(2)]);
 
