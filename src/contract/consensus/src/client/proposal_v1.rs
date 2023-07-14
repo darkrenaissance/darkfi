@@ -19,6 +19,7 @@
 //! This API is crufty. Please rework it into something nice to read and nice to use.
 
 use darkfi::{
+    error::Error::CoinIsNotSlotProducer,
     zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
@@ -249,6 +250,16 @@ fn create_proposal_proof(
     let y = poseidon_hash([seed, mu_y]);
     let mu_rho = poseidon_hash([MU_RHO_PREFIX, eta, pallas::Base::from(slot.id)]);
     let rho = poseidon_hash([seed, mu_rho]);
+
+    // Verify coin is the slot block producer
+    let value_pallas = pallas::Base::from(input.note.value);
+    let shifted_target =
+        slot.sigma1 * value_pallas + slot.sigma2 * value_pallas * value_pallas + HEADSTART;
+    // TODO: this check is true, while the proof can be created and is valid, when it shouldn't
+    if y >= shifted_target {
+        info!("1) What");
+        //return Err(CoinIsNotSlotProducer)
+    }
 
     // Derive the input's nullifier
     let nullifier = Nullifier::from(poseidon_hash([input.secret.inner(), input.note.serial]));

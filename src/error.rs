@@ -236,6 +236,9 @@ pub enum Error {
     #[error("Public inputs are invalid")]
     InvalidPublicInputsError,
 
+    #[error("Coin is not the slot block producer")]
+    CoinIsNotSlotProducer,
+
     #[error("Error during leader proof verification")]
     LeaderProofVerification,
 
