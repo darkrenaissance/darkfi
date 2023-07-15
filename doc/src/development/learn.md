@@ -181,15 +181,6 @@ and participating in crypto communities.
 * [Crypto Mega Theses](https://multicoin.capital/2019/04/24/multicoin-investment-thesis/)
 * [The Future of DeFi Must be No KYC](https://medium.com/@Austerity_Sucks/the-future-of-defi-must-be-no-kyc-7ff4578bd72e)
 * [Every single Bitcoin product banned in the UK as regulators crack down on crypto](https://www.mirror.co.uk/money/every-single-bitcoin-product-banned-22800240)
-
-## Further Reading
-
-### Current Situation and Macro Overview
-
-* [Gensler Vows Action Against DeFi](https://thedefiant.io/gensler-sec-regulate-all-crypto/)
-* [Crypto Mega Theses](https://multicoin.capital/2019/04/24/multicoin-investment-thesis/)
-* [The Future of DeFi Must be No KYC](https://medium.com/@Austerity_Sucks/the-future-of-defi-must-be-no-kyc-7ff4578bd72e)
-* [Every single Bitcoin product banned in the UK as regulators crack down on crypto](https://www.mirror.co.uk/money/every-single-bitcoin-product-banned-22800240)
 * [The DOJ’s ‘Crypto Enforcement Framework’ Argues Against Privacy Tools and for International Regulation](https://www.coindesk.com/crypto-enforcement-framework)
 * [The Coming Storm – Terrorists Using Cryptocurrency](https://www.memri.org/reports/coming-storm-%E2%80%93-terrorists-using-cryptocurrency)
 * [Report finds $50 billion of cryptocurrency moved out of China hinting at capital flight against Beijing rules](https://www.cnbc.com/2020/08/21/china-users-move-50-billion-of-cryptocurrency-out-of-country-hinting-at-capital-flight.html)
