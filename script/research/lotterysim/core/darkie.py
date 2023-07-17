@@ -65,7 +65,7 @@ class Darkie():
             x = (Num(1) if hp else 1)  - (Num(tune_parameter) if hp else tune_parameter)
             c = (x.ln() if type(x)==Num else math.log(x))
             sigmas = [   c/((self.Sigma+EPSILON)**i) * ( ((L_HP if hp else L)/fact(i)) ) for i in range(1, k+1) ]
-            scaled_target = approx_target_in_zk(sigmas, Num(stake)) #+ (BASE_L_HP if hp else BASE_L)
+            scaled_target = approx_target_in_zk(sigmas, Num(stake)) + (BASE_L_HP if hp else BASE_L)
             return scaled_target
 
         if self.slot % EPOCH_LENGTH ==0 and self.slot > 0:
