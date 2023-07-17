@@ -16,14 +16,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cmp::Ordering, collections::HashMap, fmt::Debug};
+use std::{cmp::Ordering, collections::HashMap, fmt::Debug, path::Path};
 
 use async_std::sync::{Arc, Mutex};
 use blake3;
-use darkfi_serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{
+    deserialize, serialize, Decodable, Encodable, SerialDecodable, SerialEncodable,
+};
 use log::{error, info};
 
-use crate::{event_graph::events_queue::EventsQueuePtr, util::time::Timestamp};
+use crate::{
+    event_graph::events_queue::EventsQueuePtr,
+    util::{
+        file::{load_json_file, save_json_file},
+        time::Timestamp,
+    },
+};
 
 use super::EventMsg;
 
@@ -49,7 +57,7 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(SerialEncodable, SerialDecodable, Clone, Debug)]
 struct EventNode<T: Send + Sync> {
     // Only current root has this set to None
     parent: Option<EventId>,
@@ -88,6 +96,33 @@ where
         event_map.insert(root_node_id, root_node);
 
         Self { current_root: root_node_id, orphans: HashMap::new(), event_map, events_queue }
+    }
+
+    pub fn save_tree(&self, path: &Path) -> crate::Result<()> {
+        let path = path.join("tree");
+        let tree = self.event_map.clone();
+        let ser_tree = serialize(&tree);
+
+        save_json_file(&path, &ser_tree)?;
+
+        info!("Tree is saved to disk");
+
+        Ok(())
+    }
+
+    pub fn load_tree(&mut self, path: &Path) -> crate::Result<()> {
+        let path = path.join("tree");
+        if !path.exists() {
+            return Ok(())
+        }
+
+        let loaded_tree = load_json_file::<Vec<u8>>(&path)?;
+        let dser_tree: HashMap<blake3::Hash, EventNode<T>> = deserialize(&loaded_tree)?;
+        self.event_map = dser_tree;
+
+        info!("Tree is loaded from disk");
+
+        Ok(())
     }
 
     pub fn reset_root(&mut self, timestamp: Timestamp) {

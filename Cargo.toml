@@ -189,6 +189,8 @@ event-graph = [
     "rand",
 
     "async-runtime",
+    "darkfi-serial",
+    "darkfi-serial/collections",
     "darkfi-serial/hash",
     "net",
 ]
