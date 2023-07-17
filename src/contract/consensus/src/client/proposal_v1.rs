@@ -129,6 +129,17 @@ pub struct ConsensusProposalCallBuilder {
 
 impl ConsensusProposalCallBuilder {
     pub fn build(&self) -> Result<ConsensusProposalCallDebris> {
+        let input_value_blind = pallas::Scalar::random(&mut OsRng);
+        let output_reward_blind = pallas::Scalar::random(&mut OsRng);
+
+        self.build_with_params(input_value_blind, output_reward_blind)
+    }
+
+    pub fn build_with_params(
+        &self,
+        input_value_blind: pallas::Scalar,
+        output_reward_blind: pallas::Scalar,
+    ) -> Result<ConsensusProposalCallDebris> {
         info!("Building Consensus::ProposalBurnV1 contract call");
         assert!(self.owncoin.note.value != 0);
 
@@ -140,11 +151,10 @@ impl ConsensusProposalCallBuilder {
             merkle_path,
             secret: self.owncoin.secret,
             note: self.owncoin.note.clone(),
-            value_blind: pallas::Scalar::random(&mut OsRng),
+            value_blind: input_value_blind,
         };
 
         debug!("Building Consensus::ProposalV1 anonymous output");
-        let output_reward_blind = pallas::Scalar::random(&mut OsRng);
         let output_value_blind = input.value_blind + output_reward_blind;
 
         // The output's secret key is derived from the old secret key
@@ -256,6 +266,8 @@ fn create_proposal_proof(
     let shifted_target =
         slot.sigma1 * value_pallas + slot.sigma2 * value_pallas * value_pallas + HEADSTART;
     // TODO: this check is true, while the proof can be created and is valid, when it shouldn't
+    log::error!("Y: {:?}", y);
+    log::error!("TARGET: {:?}", shifted_target);
     if y >= shifted_target {
         info!("1) What");
         //return Err(CoinIsNotSlotProducer)
