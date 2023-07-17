@@ -332,6 +332,8 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     let view = Arc::new(Mutex::new(View::new(events_queue)));
     let model_clone = model.clone();
 
+    model.lock().await.load_tree(&datastore_path)?;
+
     ////////////////////
     // Buffers
     ////////////////////
@@ -371,7 +373,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         .spawn(start_sync_loop(
             broadcast_rcv,
             view,
-            model_clone,
+            model_clone.clone(),
             seen_ids,
             workspaces.clone(),
             datastore_path.clone(),
@@ -398,6 +400,8 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     let (signals_handler, signals_task) = SignalHandler::new()?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
+
+    model_clone.lock().await.save_tree(&datastore_path)?;
 
     p2p.stop().await;
 
