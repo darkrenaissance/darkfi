@@ -10,7 +10,7 @@ from draw import draw
 os.system("rm log/*_feedback.hist; rm log/*_output.hist")
 
 RUNNING_TIME = int(input("running time:"))
-NODES=1000
+NODES=100
 
 if __name__ == "__main__":
     darkies = [Darkie(0, strategy=LinearStrategy(EPOCH_LENGTH)) for _ in range(NODES)]

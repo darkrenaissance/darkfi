@@ -74,6 +74,8 @@ class Darkie():
             self.strategy.set_ratio(self.slot, apr)
             # epoch stake is added
             self.initial_stake +=[self.stake]
+        #if self.slot == HEADSTART_AIRDROP:
+        #    self.initial_stake += [self.stake]
         T = target(self.f, self.strategy.staked_value(self.stake))
         won = lottery(T, hp)
         self.won_hist += [won]

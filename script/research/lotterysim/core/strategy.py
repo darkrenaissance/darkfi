@@ -2,8 +2,15 @@ import math
 from core.utils import *
 
 class Strategy(object):
-    def __init__(self, epoch_len=0):
+    '''
+    @type epoch_len: int
+    @epoch_len: epoch length
+    @type airdrop_period: int
+    @param airdrop_period: strategy grace period, during which strategy is HODL only
+    '''
+    def __init__(self, epoch_len=0, airdrop_period=HEADSTART_AIRDROP):
         self.epoch_len = epoch_len
+        self.airdrop_period=HEADSTART_AIRDROP
         self.staked_tokens_ratio = [1]
         self.target_apy = TARGET_APR
         self.annual_return = [0]
@@ -32,6 +39,10 @@ class LinearStrategy(Strategy):
 
     def set_ratio(self, slot, apr):
         if slot%self.epoch_len==0:
+            if slot < self.airdrop_period:
+                self.staked_tokens_ratio += [1]
+                self.annual_return +=[apr]
+                return
             sr = Num(apr)/Num(self.target_apy)
             if sr>1:
                 sr = 1
@@ -48,6 +59,10 @@ class LogarithmicStrategy(Strategy):
 
     def set_ratio(self, slot, apr):
         if slot%self.epoch_len==0:
+            if slot < self.airdrop_period:
+                self.staked_tokens_ratio += [1]
+                self.annual_return +=[apr]
+                return
             apr_ratio = math.fabs(apr/self.target_apy)
             fn = lambda x: (math.log(x, 10)+1)/2 * 0.95 + 0.05
             sr = Num(fn(apr_ratio) if apr_ratio != 0 else 0)
@@ -65,6 +80,10 @@ class SigmoidStrategy(Strategy):
 
     def set_ratio(self, slot, apr):
         if slot%self.epoch_len==0:
+            if slot < self.airdrop_period:
+                self.staked_tokens_ratio += [1]
+                self.annual_return +=[apr]
+                return
             apr_ratio = apr/self.target_apy
             sr = Num(2/(1+math.pow(math.e, -4*apr_ratio))-1)
             if sr>1:
