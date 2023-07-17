@@ -34,6 +34,8 @@ pub enum TaudError {
     SerdeJsonError(String),
     #[error("Encryption error: `{0}`")]
     EncryptionError(String),
+    #[error("Decryption error: `{0}`")]
+    DecryptionError(String),
     #[error("IO Error: `{0}`")]
     IoError(String),
 }
@@ -72,6 +74,9 @@ pub fn to_json_result(res: TaudResult<Value>, id: Value) -> JsonResult {
                 JsonError::new(ErrorCode::InvalidParams, Some("invalid due time".into()), id).into()
             }
             TaudError::EncryptionError(e) => {
+                JsonError::new(ErrorCode::InternalError, Some(e), id).into()
+            }
+            TaudError::DecryptionError(e) => {
                 JsonError::new(ErrorCode::InternalError, Some(e), id).into()
             }
             TaudError::Darkfi(e) => {
