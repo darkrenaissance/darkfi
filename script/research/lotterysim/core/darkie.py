@@ -27,15 +27,13 @@ class Darkie():
     def vesting_wrapped_initial_stake(self):
         #print('initial stake: {}, corresponding vesting: {}'.format(self.initial_stake[0], self.vesting[int((self.slot)/VESTING_PERIOD)]))
         # note index is previous slot since update_vesting is called after background execution.
-        return self.current_vesting() if self.slot>0 else self.initial_stake[0]
+        return self.current_vesting() if self.slot>0 else self.initial_stake[-1]
 
     def apr_scaled_to_runningtime(self):
         initial_stake = self.vesting_wrapped_initial_stake()
-        if initial_stake==0:
-            initial_stake = self.initial_stake[0]
         #print('stake: {}, initial_stake: {}'.format(self.stake, initial_stake))
         assert self.stake >= initial_stake, 'stake: {}, initial_stake: {}, slot: {}, current: {}, previous: {} vesting'.format(self.stake, initial_stake, self.slot, self.current_vesting(), self.prev_vesting())
-        return Num(self.stake - initial_stake) / Num(initial_stake) *  Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot> 0 and self.initial_stake[0]>0 else 0
+        return Num(self.stake - initial_stake) / Num(initial_stake) *  Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot> 0 and initial_stake>0 else 0
 
     def staked_tokens(self):
         '''
@@ -81,7 +79,7 @@ class Darkie():
         self.won_hist += [won]
 
     def update_vesting(self):
-        self.stake+= self.vesting_differential()
+        self.stake += self.vesting_differential()
 
     def current_vesting(self):
         '''
@@ -95,7 +93,7 @@ class Darkie():
         previous corresponding slot vesting
         '''
         prev_vesting_idx = int((self.slot-1)/VESTING_PERIOD)
-        return (self.vesting[prev_vesting_idx] if self.slot>0 else self.current_vesting()) if prev_vesting_idx < len(self.vesting) else 0
+        return (self.vesting[prev_vesting_idx] if self.slot>0 else self.current_vesting()) if prev_vesting_idx < len(self.vesting) else  0
 
     def vesting_differential(self):
         vesting_value =  self.current_vesting() - self.prev_vesting()

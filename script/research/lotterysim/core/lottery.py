@@ -47,13 +47,16 @@ class DarkfiTable:
                 reward = self.primary_pid.pid_clipped(acc, debug)
                 self.rewards += [reward]
 
-            rt_range.set_description('issuance {} DRK, acc: {}'.format(round(sum(self.rewards),2), round(acc,2)))
+
             #note! thread overhead is 10X slower than sequential node execution!
+            total_stake = 0
             for i in range(len(self.darkies)):
                 self.darkies[i].set_sigma_feedback(self.Sigma, feedback, f, count, hp)
-                self.darkies[i].update_vesting()
+                #self.darkies[i].update_vesting()
                 self.darkies[i].run(hp)
-
+                total_stake += self.darkies[i].stake
+                #if self.darkies[i].stake>0:
+                    #print('darkie {} has stake {} for slot {}'.format(i, self.darkies[i].stake, count))
             #print('reward: {}'.format(rewards[-1]))
             for i in range(len(self.darkies)):
                 winners += self.darkies[i].won_hist[-1]
@@ -66,8 +69,7 @@ class DarkfiTable:
                         self.darkies[i].update_stake(self.rewards[-1])
                         break
                 # resolve finalization
-                if count >= ERC20DRK:
-                    self.Sigma += 1
+                self.Sigma += self.rewards[-1]
                 # resync nodes
                 merge_length = 0
                 for i in reversed(self.winners[:-1]):
@@ -88,6 +90,10 @@ class DarkfiTable:
                             darkie_winning_idx = darkie_idx
                             break
                     self.darkies[darkie_winning_idx].resync_stake(resync_reward)
+                    self.Sigma += resync_reward
+            rt_range.set_description('issuance {} DRK, acc: {}, stake = {}%'.format(round(sum(self.rewards),2), round(acc,2), round(total_stake/self.Sigma*100 if self.Sigma>0 else 0,2)))
+            #print('[2]stake: {}, sigma: {}, reward: {}'.format(total_stake, self.Sigma, self.rewards[-1]))
+            assert(round(total_stake,1) <= round(self.Sigma,1))
             count+=1
         self.end_time=time.time()
         avg_reward = sum(self.rewards)/len(self.rewards)

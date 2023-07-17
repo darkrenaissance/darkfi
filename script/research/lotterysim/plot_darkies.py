@@ -20,8 +20,8 @@ for darkie in darkies:
 
 legends = []
 for darkie in darkies:
-    legend = ["darkie{}, apr: {}".format(darkie[2], format(darkie[1]))]
+    legend = ["darkie{}".format(darkie[2])]
     legends +=[legend]
 plt.legend(legends)
-plt.show()
 plt.savefig("log/plot_darkies.png")
+#plt.show()
