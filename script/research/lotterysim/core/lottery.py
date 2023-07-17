@@ -5,7 +5,7 @@ from datetime import timedelta
 from core.darkie import *
 from pid.cascade import *
 from tqdm import tqdm
-
+import random
 class DarkfiTable:
     def __init__(self, airdrop, running_time, controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, dt=1, kc=0, ti=0, td=0, ts=0, debug=False, r_kp=0, r_ki=0, r_kd=0):
         self.Sigma=airdrop
@@ -52,12 +52,10 @@ class DarkfiTable:
             total_stake = 0
             for i in range(len(self.darkies)):
                 self.darkies[i].set_sigma_feedback(self.Sigma, feedback, f, count, hp)
-                #self.darkies[i].update_vesting()
+                self.darkies[i].update_vesting()
                 self.darkies[i].run(hp)
                 total_stake += self.darkies[i].stake
-                #if self.darkies[i].stake>0:
-                    #print('darkie {} has stake {} for slot {}'.format(i, self.darkies[i].stake, count))
-            #print('reward: {}'.format(rewards[-1]))
+
             for i in range(len(self.darkies)):
                 winners += self.darkies[i].won_hist[-1]
                 ###
@@ -66,6 +64,10 @@ class DarkfiTable:
             if self.winners[-1]==1:
                 for i in range(len(self.darkies)):
                     if self.darkies[i].won_hist[-1]:
+                        if random.random() < SLASHING_RATIO:
+                            self.darkies.remove(self.darkies[i])
+                            print('stakeholder {} slashed'.format(i))
+                            break
                         self.darkies[i].update_stake(self.rewards[-1])
                         break
                 # resolve finalization
@@ -91,7 +93,7 @@ class DarkfiTable:
                             break
                     self.darkies[darkie_winning_idx].resync_stake(resync_reward)
                     self.Sigma += resync_reward
-            rt_range.set_description('issuance {} DRK, acc: {}, stake = {}%'.format(round(sum(self.rewards),2), round(acc,2), round(total_stake/self.Sigma*100 if self.Sigma>0 else 0,2)))
+            rt_range.set_description('issuance {} DRK, acc: {}, stake = {}%, sr: {}%, reward:{}'.format(round(sum(self.rewards),2), round(acc,2), round(total_stake/self.Sigma*100 if self.Sigma>0 else 0,2), self.avg_stake_ratio()*100, self.rewards[-1]))
             #print('[2]stake: {}, sigma: {}, reward: {}'.format(total_stake, self.Sigma, self.rewards[-1]))
             assert(round(total_stake,1) <= round(self.Sigma,1))
             count+=1

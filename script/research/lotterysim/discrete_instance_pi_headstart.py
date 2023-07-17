@@ -10,11 +10,11 @@ from draw import draw
 os.system("rm log/*_feedback.hist; rm log/*_output.hist")
 
 RUNNING_TIME = int(input("running time:"))
-NODES=100
+NODES=1000
 
 if __name__ == "__main__":
     darkies = [Darkie(0, strategy=LinearStrategy(EPOCH_LENGTH)) for _ in range(NODES)]
-    dt = DarkfiTable(0, RUNNING_TIME, CONTROLLER_TYPE_DISCRETE, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0,  r_kp=-0.63, r_ki=3.35, r_kd=0)
+    dt = DarkfiTable(0, RUNNING_TIME, CONTROLLER_TYPE_DISCRETE, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0.03840000000000491,  r_kp=-2.53, r_ki=29.5, r_kd=53.77)
     for darkie in darkies:
         dt.add_darkie(darkie)
     acc, avg_apy, avg_reward, stake_ratio, avg_apr = dt.background(rand_running_time=False)
