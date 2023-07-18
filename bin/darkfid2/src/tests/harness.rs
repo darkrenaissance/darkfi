@@ -18,6 +18,7 @@
 
 use darkfi::{
     blockchain::{BlockInfo, Header},
+    net::{P2p, Settings},
     util::time::TimeKeeper,
     validator::{
         consensus::{next_block_reward, pid::slot_pid_output},
@@ -74,14 +75,17 @@ impl Harness {
         );
 
         // Generate validators using pregenerated vks
+        let sync_p2p = P2p::new(Settings::default()).await;
         let sled_db = sled::Config::new().temporary(true).open()?;
         vks::inject(&sled_db)?;
         let validator = Validator::new(&sled_db, val_config.clone()).await?;
-        let alice = Darkfid::new(validator).await;
+        let alice = Darkfid::new(sync_p2p, None, validator).await;
+
+        let sync_p2p = P2p::new(Settings::default()).await;
         let sled_db = sled::Config::new().temporary(true).open()?;
         vks::inject(&sled_db)?;
         let validator = Validator::new(&sled_db, val_config.clone()).await?;
-        let bob = Darkfid::new(validator).await;
+        let bob = Darkfid::new(sync_p2p, None, validator).await;
 
         Ok(Self { config, alice, bob })
     }

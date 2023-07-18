@@ -1780,6 +1780,7 @@ name = "darkfid2"
 version = "0.4.1"
 dependencies = [
  "async-std",
+ "async-trait",
  "darkfi",
  "darkfi-consensus-contract",
  "darkfi-contract-test-harness",
@@ -1789,6 +1790,7 @@ dependencies = [
  "easy-parallel",
  "log",
  "serde",
+ "serde_json",
  "signal-hook",
  "signal-hook-async-std",
  "simplelog",
@@ -1796,6 +1798,7 @@ dependencies = [
  "smol",
  "structopt",
  "structopt-toml",
+ "url",
 ]
 
 [[package]]

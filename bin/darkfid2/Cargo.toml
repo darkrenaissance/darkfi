@@ -9,14 +9,22 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
+# Darkfi
 darkfi = {path = "../../", features = ["async-runtime", "util"]}
 darkfi-consensus-contract = {path = "../../src/contract/consensus"}
 darkfi-money-contract = {path = "../../src/contract/money"}
 darkfi-contract-test-harness = {path = "../../src/contract/test-harness"}
 darkfi-sdk = {path = "../../src/sdk"}
 darkfi-serial = {path = "../../src/serial"}
+
+# Misc
 log = "0.4.19"
 sled = "0.34.7"
+
+# JSON-RPC
+async-trait = "0.1.71"
+serde_json = "1.0.102"
+url = "2.4.0"
 
 # Daemon
 async-std = "1.12.0"

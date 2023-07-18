@@ -19,11 +19,14 @@
 use async_std::{stream::StreamExt, sync::Arc};
 use log::info;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use url::Url;
 
 use darkfi::{
     async_daemonize,
     blockchain::BlockInfo,
     cli_desc,
+    net::{settings::SettingsOpt, P2p, P2pPtr},
+    rpc::server::listen_and_serve,
     util::time::TimeKeeper,
     validator::{Validator, ValidatorConfig, ValidatorPtr},
     Result,
@@ -32,6 +35,9 @@ use darkfi_contract_test_harness::vks;
 
 #[cfg(test)]
 mod tests;
+
+/// JSON-RPC requests handler
+mod rpc;
 
 /// Utility functions
 mod utils;
@@ -48,6 +54,22 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
+    #[structopt(long, default_value = "tcp://127.0.0.1:8340")]
+    /// JSON-RPC listen URL
+    rpc_listen: Url,
+
+    #[structopt(long)]
+    /// Participate in the consensus protocol
+    consensus: bool,
+
+    /// Syncing network settings
+    #[structopt(flatten)]
+    sync_net: SettingsOpt,
+
+    /// Consensus network settings
+    #[structopt(flatten)]
+    consensus_net: SettingsOpt,
+
     #[structopt(long)]
     /// Enable testing mode for local testing
     testing_mode: bool,
@@ -62,18 +84,40 @@ struct Args {
 }
 
 pub struct Darkfid {
+    sync_p2p: P2pPtr,
+    consensus_p2p: Option<P2pPtr>,
     _validator: ValidatorPtr,
 }
 
 impl Darkfid {
-    pub async fn new(_validator: ValidatorPtr) -> Self {
-        Self { _validator }
+    pub async fn new(
+        sync_p2p: P2pPtr,
+        consensus_p2p: Option<P2pPtr>,
+        _validator: ValidatorPtr,
+    ) -> Self {
+        Self { sync_p2p, consensus_p2p, _validator }
     }
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     info!("Initializing DarkFi node...");
+
+    if args.testing_mode {
+        info!("Node is configured to run in testing mode!");
+    }
+
+    // Initialize syncing P2P network
+    let sync_p2p = P2p::new(args.sync_net.into()).await;
+
+    // Initialize consensus P2P network
+    let consensus_p2p = {
+        if !args.consensus {
+            None
+        } else {
+            Some(P2p::new(args.consensus_net.into()).await)
+        }
+    };
 
     // NOTE: everything is dummy for now
     // Initialize or open sled database
@@ -92,21 +136,35 @@ async fn realmain(args: Args, _ex: Arc<smol::Executor<'_>>) -> Result<()> {
         args.testing_mode,
     );
 
-    if args.testing_mode {
-        info!("Node is configured to run in testing mode!");
-    }
-
     // Initialize validator
     let validator = Validator::new(&sled_db, config).await?;
 
     // Initialize node
-    let _darkfid = Darkfid::new(validator).await;
+    let darkfid = Darkfid::new(sync_p2p, consensus_p2p, validator).await;
+    let darkfid = Arc::new(darkfid);
     info!("Node initialized successfully!");
+
+    // JSON-RPC server
+    info!("Starting JSON-RPC server");
+    let _ex = ex.clone();
+    ex.spawn(listen_and_serve(args.rpc_listen, darkfid.clone(), _ex)).detach();
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new()?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
+
+    info!("Stopping syncing P2P network...");
+    darkfid.sync_p2p.stop().await;
+
+    if args.consensus {
+        info!("Stopping consensus P2P network...");
+        darkfid.consensus_p2p.clone().unwrap().stop().await;
+    }
+
+    info!("Flushing sled database...");
+    let flushed_bytes = sled_db.flush_async().await?;
+    info!("Flushed {} bytes", flushed_bytes);
 
     Ok(())
 }
