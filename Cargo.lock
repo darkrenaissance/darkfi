@@ -1781,6 +1781,7 @@ version = "0.4.1"
 dependencies = [
  "async-std",
  "async-trait",
+ "blake3",
  "darkfi",
  "darkfi-consensus-contract",
  "darkfi-contract-test-harness",

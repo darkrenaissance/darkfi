@@ -36,8 +36,12 @@ use darkfi_contract_test_harness::vks;
 #[cfg(test)]
 mod tests;
 
+mod error;
+use error::{server_error, RpcError};
+
 /// JSON-RPC requests handler
 mod rpc;
+mod rpc_blockchain;
 
 /// Utility functions
 mod utils;
@@ -86,16 +90,16 @@ struct Args {
 pub struct Darkfid {
     sync_p2p: P2pPtr,
     consensus_p2p: Option<P2pPtr>,
-    _validator: ValidatorPtr,
+    validator: ValidatorPtr,
 }
 
 impl Darkfid {
     pub async fn new(
         sync_p2p: P2pPtr,
         consensus_p2p: Option<P2pPtr>,
-        _validator: ValidatorPtr,
+        validator: ValidatorPtr,
     ) -> Self {
-        Self { sync_p2p, consensus_p2p, _validator }
+        Self { sync_p2p, consensus_p2p, validator }
     }
 }
 
