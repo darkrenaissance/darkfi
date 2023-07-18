@@ -21,7 +21,10 @@ use log::error;
 use serde_json::{json, Value};
 
 use darkfi::{
-    rpc::jsonrpc::{ErrorCode::InvalidParams, JsonError, JsonResponse, JsonResult},
+    rpc::jsonrpc::{
+        ErrorCode::{InternalError, InvalidParams},
+        JsonError, JsonResponse, JsonResult,
+    },
     tx::Transaction,
 };
 
@@ -142,5 +145,73 @@ impl Darkfid {
 
         let tx_hash = tx.hash().to_string();
         JsonResponse::new(json!(tx_hash), id).into()
+    }
+
+    // RPCAPI:
+    // Queries the node pending transactions store to retrieve all transactions.
+    // Returns a vector of serialized `Transaction` objects.
+    //
+    // --> {"jsonrpc": "2.0", "method": "tx.pending", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "[TxHash,...]", "id": 1}
+    pub async fn tx_pending(&self, id: Value, params: &[Value]) -> JsonResult {
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        if !(*self.synced.lock().await) {
+            error!("[RPC] tx.transfer: Blockchain is not synced");
+            return server_error(RpcError::NotSynced, id, None)
+        }
+
+        let validator = self.validator.read().await;
+        let pending_txs = match validator.blockchain.get_pending_txs() {
+            Ok(v) => {
+                drop(validator);
+                v
+            }
+            Err(e) => {
+                error!("[RPC] blockchain.get_pending_txs: Failed fetching pending txs: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+        let pending_txs: Vec<String> = pending_txs.iter().map(|x| x.hash().to_string()).collect();
+        JsonResponse::new(json!(pending_txs), id).into()
+    }
+
+    // RPCAPI:
+    // Queries the node pending transactions store to remove all transactions.
+    // Returns a vector of serialized `Transaction` objects.
+    //
+    // --> {"jsonrpc": "2.0", "method": "tx.clean_pending", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "[TxHash,...]", "id": 1}
+    pub async fn tx_clean_pending(&self, id: Value, params: &[Value]) -> JsonResult {
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        if !(*self.synced.lock().await) {
+            error!("[RPC] tx.transfer: Blockchain is not synced");
+            return server_error(RpcError::NotSynced, id, None)
+        }
+
+        let validator = self.validator.read().await;
+        let pending_txs = match validator.blockchain.get_pending_txs() {
+            Ok(v) => v,
+            Err(e) => {
+                error!("[RPC] blockchain.get_pending_txs: Failed fetching pending txs: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        match validator.blockchain.remove_pending_txs(&pending_txs) {
+            Ok(()) => drop(validator),
+            Err(e) => {
+                error!("[RPC] blockchain.get_pending_txs: Failed fetching pending txs: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        let pending_txs: Vec<String> = pending_txs.iter().map(|x| x.hash().to_string()).collect();
+        JsonResponse::new(json!(pending_txs), id).into()
     }
 }

@@ -72,6 +72,8 @@ impl RequestHandler for Darkfid {
             // ===================
             Some("tx.simulate") => return self.tx_simulate(req.id, params).await,
             Some("tx.broadcast") => return self.tx_broadcast(req.id, params).await,
+            Some("tx.pending") => return self.tx_pending(req.id, params).await,
+            Some("tx.clean_pending") => return self.tx_pending(req.id, params).await,
 
             // ==============
             // Invalid method
