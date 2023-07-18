@@ -61,7 +61,7 @@ impl Darkfid {
                 v
             }
             Err(e) => {
-                error!("[RPC] blockchain.get_slot: Failed fetching block by slot: {}", e);
+                error!(target: "darkfid::rpc::blockchain_get_slot", "Failed fetching block by slot: {}", e);
                 return JsonError::new(InternalError, None, id).into()
             }
         };
@@ -111,7 +111,7 @@ impl Darkfid {
                 txs
             }
             Err(e) => {
-                error!("[RPC] blockchain.get_tx: Failed fetching tx by hash: {}", e);
+                error!(target: "darkfid::rpc::blockchain_get_tx", "Failed fetching tx by hash: {}", e);
                 return JsonError::new(InternalError, None, id).into()
             }
         };
@@ -169,7 +169,7 @@ impl Darkfid {
         let contract_id = match ContractId::from_str(params[0].as_str().unwrap()) {
             Ok(v) => v,
             Err(e) => {
-                error!("[RPC] blockchain.lookup_zkas: Error decoding string to ContractId: {}", e);
+                error!(target: "darkfid::rpc::blockchain_lookup_zkas", "Error decoding string to ContractId: {}", e);
                 return JsonError::new(InvalidParams, None, id).into()
             }
         };
@@ -182,7 +182,7 @@ impl Darkfid {
             SMART_CONTRACT_ZKAS_DB_NAME,
         ) else {
             error!(
-                "[RPC] blockchain.lookup_zkas: Did not find zkas db for ContractId: {}",
+                target: "darkfid::rpc::blockchain_lookup_zkas", "Did not find zkas db for ContractId: {}",
                 contract_id
             );
             return server_error(RpcError::ContractZkasDbNotFound, id, None)
@@ -191,9 +191,9 @@ impl Darkfid {
         let mut ret: Vec<(String, Vec<u8>)> = vec![];
 
         for i in zkas_db.iter() {
-            debug!("Iterating over zkas db");
+            debug!(target: "darkfid::rpc::blockchain_lookup_zkas", "Iterating over zkas db");
             let Ok((zkas_ns, zkas_bytes)) = i else {
-                error!("Internal sled error iterating db");
+                error!(target: "darkfid::rpc::blockchain_lookup_zkas", "Internal sled error iterating db");
                 return JsonError::new(InternalError, None, id).into()
             };
 

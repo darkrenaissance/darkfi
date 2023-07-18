@@ -40,7 +40,7 @@ impl RequestHandler for Darkfid {
 
         let params = req.params.as_array().unwrap();
 
-        debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
+        debug!(target: "darkfid::rpc", "--> {}", serde_json::to_string(&req).unwrap());
 
         match req.method.as_str() {
             // =====================

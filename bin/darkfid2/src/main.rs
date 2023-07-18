@@ -110,10 +110,10 @@ impl Darkfid {
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
-    info!("Initializing DarkFi node...");
+    info!(target: "darkfid", "Initializing DarkFi node...");
 
     if args.testing_mode {
-        info!("Node is configured to run in testing mode!");
+        info!(target: "darkfid", "Node is configured to run in testing mode!");
     }
 
     // Initialize syncing P2P network
@@ -151,10 +151,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     // Initialize node
     let darkfid = Darkfid::new(sync_p2p, consensus_p2p, validator).await;
     let darkfid = Arc::new(darkfid);
-    info!("Node initialized successfully!");
+    info!(target: "darkfid", "Node initialized successfully!");
 
     // JSON-RPC server
-    info!("Starting JSON-RPC server");
+    info!(target: "darkfid", "Starting JSON-RPC server");
     let _ex = ex.clone();
     ex.spawn(listen_and_serve(args.rpc_listen, darkfid.clone(), _ex)).detach();
 
@@ -164,19 +164,19 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new()?;
     signals_handler.wait_termination(signals_task).await?;
-    info!("Caught termination signal, cleaning up and exiting...");
+    info!(target: "darkfid", "Caught termination signal, cleaning up and exiting...");
 
-    info!("Stopping syncing P2P network...");
+    info!(target: "darkfid", "Stopping syncing P2P network...");
     darkfid.sync_p2p.stop().await;
 
     if args.consensus {
-        info!("Stopping consensus P2P network...");
+        info!(target: "darkfid", "Stopping consensus P2P network...");
         darkfid.consensus_p2p.clone().unwrap().stop().await;
     }
 
-    info!("Flushing sled database...");
+    info!(target: "darkfid", "Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;
-    info!("Flushed {} bytes", flushed_bytes);
+    info!(target: "darkfid", "Flushed {} bytes", flushed_bytes);
 
     Ok(())
 }

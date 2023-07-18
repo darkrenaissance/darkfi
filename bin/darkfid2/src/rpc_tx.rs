@@ -45,7 +45,7 @@ impl Darkfid {
         }
 
         if !(*self.synced.lock().await) {
-            error!("[RPC] tx.simulate: Blockchain is not synced");
+            error!(target: "darkfid::rpc::tx_simulate", "Blockchain is not synced");
             return server_error(RpcError::NotSynced, id, None)
         }
 
@@ -53,7 +53,7 @@ impl Darkfid {
         let tx_bytes = match bs58::decode(params[0].as_str().unwrap().trim()).into_vec() {
             Ok(v) => v,
             Err(e) => {
-                error!("[RPC] tx.simulate: Failed decoding base58 transaction: {}", e);
+                error!(target: "darkfid::rpc::tx_simulate", "Failed decoding base58 transaction: {}", e);
                 return server_error(RpcError::ParseError, id, None)
             }
         };
@@ -61,7 +61,7 @@ impl Darkfid {
         let tx: Transaction = match deserialize(&tx_bytes) {
             Ok(v) => v,
             Err(e) => {
-                error!("[RPC] tx.simulate: Failed deserializing bytes into Transaction: {}", e);
+                error!(target: "darkfid::rpc::tx_simulate", "Failed deserializing bytes into Transaction: {}", e);
                 return server_error(RpcError::ParseError, id, None)
             }
         };
@@ -72,7 +72,7 @@ impl Darkfid {
         let result = lock.add_transactions(&[tx], current_slot, false).await;
         if result.is_err() {
             error!(
-                "[RPC] tx.simulate: Failed to validate state transition: {}",
+                target: "darkfid::rpc::tx_simulate", "Failed to validate state transition: {}",
                 result.err().unwrap()
             );
             return server_error(RpcError::TxSimulationFail, id, None)
@@ -95,7 +95,7 @@ impl Darkfid {
         }
 
         if !(*self.synced.lock().await) {
-            error!("[RPC] tx.transfer: Blockchain is not synced");
+            error!(target: "darkfid::rpc::tx_broadcast", "Blockchain is not synced");
             return server_error(RpcError::NotSynced, id, None)
         }
 
@@ -103,7 +103,7 @@ impl Darkfid {
         let tx_bytes = match bs58::decode(params[0].as_str().unwrap().trim()).into_vec() {
             Ok(v) => v,
             Err(e) => {
-                error!("[RPC] tx.broadcast: Failed decoding base58 transaction: {}", e);
+                error!(target: "darkfid::rpc::tx_broadcast", "Failed decoding base58 transaction: {}", e);
                 return server_error(RpcError::ParseError, id, None)
             }
         };
@@ -111,7 +111,7 @@ impl Darkfid {
         let tx: Transaction = match deserialize(&tx_bytes) {
             Ok(v) => v,
             Err(e) => {
-                error!("[RPC] tx.broadcast: Failed deserializing bytes into Transaction: {}", e);
+                error!(target: "darkfid::rpc::tx_broadcast", "Failed deserializing bytes into Transaction: {}", e);
                 return server_error(RpcError::ParseError, id, None)
             }
         };
@@ -120,7 +120,7 @@ impl Darkfid {
             // Consider we're participating in consensus here?
             // The append_tx function performs a state transition check.
             if self.validator.write().await.append_tx(tx.clone()).await.is_err() {
-                error!("[RPC] tx.broadcast: Failed to append transaction to mempool");
+                error!(target: "darkfid::rpc::tx_broadcast", "Failed to append transaction to mempool");
                 return server_error(RpcError::TxSimulationFail, id, None)
             }
         } else {
@@ -130,7 +130,7 @@ impl Darkfid {
             let result = lock.add_transactions(&[tx.clone()], current_slot, false).await;
             if result.is_err() {
                 error!(
-                    "[RPC] tx.simulate: Failed to validate state transition: {}",
+                    target: "darkfid::rpc::tx_broadcast", "Failed to validate state transition: {}",
                     result.err().unwrap()
                 );
                 return server_error(RpcError::TxSimulationFail, id, None)
@@ -139,7 +139,7 @@ impl Darkfid {
 
         self.sync_p2p.broadcast(&tx).await;
         if self.sync_p2p.channels().lock().await.is_empty() {
-            error!("[RPC] tx.broadcast: Failed broadcasting tx, no connected channels");
+            error!(target: "darkfid::rpc::tx_broadcast", "Failed broadcasting tx, no connected channels");
             return server_error(RpcError::TxBroadcastFail, id, None)
         }
 
@@ -159,7 +159,7 @@ impl Darkfid {
         }
 
         if !(*self.synced.lock().await) {
-            error!("[RPC] tx.transfer: Blockchain is not synced");
+            error!(target: "darkfid::rpc::tx_pending", "Blockchain is not synced");
             return server_error(RpcError::NotSynced, id, None)
         }
 
@@ -170,7 +170,7 @@ impl Darkfid {
                 v
             }
             Err(e) => {
-                error!("[RPC] blockchain.get_pending_txs: Failed fetching pending txs: {}", e);
+                error!(target: "darkfid::rpc::tx_pending", "Failed fetching pending txs: {}", e);
                 return JsonError::new(InternalError, None, id).into()
             }
         };
@@ -190,7 +190,7 @@ impl Darkfid {
         }
 
         if !(*self.synced.lock().await) {
-            error!("[RPC] tx.transfer: Blockchain is not synced");
+            error!(target: "darkfid::rpc::tx_clean_pending", "Blockchain is not synced");
             return server_error(RpcError::NotSynced, id, None)
         }
 
@@ -198,7 +198,7 @@ impl Darkfid {
         let pending_txs = match validator.blockchain.get_pending_txs() {
             Ok(v) => v,
             Err(e) => {
-                error!("[RPC] blockchain.get_pending_txs: Failed fetching pending txs: {}", e);
+                error!(target: "darkfid::rpc::tx_clean_pending", "Failed fetching pending txs: {}", e);
                 return JsonError::new(InternalError, None, id).into()
             }
         };
@@ -206,7 +206,7 @@ impl Darkfid {
         match validator.blockchain.remove_pending_txs(&pending_txs) {
             Ok(()) => drop(validator),
             Err(e) => {
-                error!("[RPC] blockchain.get_pending_txs: Failed fetching pending txs: {}", e);
+                error!(target: "darkfid::rpc::tx_clean_pending", "Failed fetching pending txs: {}", e);
                 return JsonError::new(InternalError, None, id).into()
             }
         };
