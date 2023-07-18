@@ -31,7 +31,7 @@ async fn add_blocks() -> Result<()> {
     let th = Harness::new(config).await?;
 
     // Retrieve genesis block
-    let previous = th.alice._validator.read().await.blockchain.last_block()?;
+    let previous = th.alice.validator.read().await.blockchain.last_block()?;
 
     // Generate next block
     let block1 = th.generate_next_block(&previous, 1).await?;

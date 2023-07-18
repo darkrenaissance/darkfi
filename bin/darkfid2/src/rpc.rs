@@ -67,6 +67,12 @@ impl RequestHandler for Darkfid {
                 return self.blockchain_lookup_zkas(req.id, params).await
             }
 
+            // ===================
+            // Transaction methods
+            // ===================
+            Some("tx.simulate") => return self.tx_simulate(req.id, params).await,
+            Some("tx.broadcast") => return self.tx_broadcast(req.id, params).await,
+
             // ==============
             // Invalid method
             // ==============

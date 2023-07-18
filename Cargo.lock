@@ -1782,6 +1782,7 @@ dependencies = [
  "async-std",
  "async-trait",
  "blake3",
+ "bs58",
  "darkfi",
  "darkfi-consensus-contract",
  "darkfi-contract-test-harness",

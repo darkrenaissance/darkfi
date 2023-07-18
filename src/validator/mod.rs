@@ -18,6 +18,7 @@
 
 use async_std::sync::{Arc, RwLock};
 use darkfi_sdk::{blockchain::Slot, crypto::PublicKey};
+use darkfi_serial::serialize;
 use log::{debug, error, info, warn};
 
 use crate::{
@@ -117,6 +118,41 @@ impl Validator {
         info!(target: "validator", "Finished initializing validator");
 
         Ok(state)
+    }
+
+    /// The node retrieves a transaction, validates its state transition,
+    /// and appends it to the pending txs store.
+    pub async fn append_tx(&mut self, tx: Transaction) -> Result<()> {
+        let tx_hash = blake3::hash(&serialize(&tx));
+
+        // Check if we have already seen this tx
+        let tx_in_txstore = self.blockchain.transactions.contains(&tx_hash)?;
+        let tx_in_pending_txs_store = self.blockchain.pending_txs.contains(&tx_hash)?;
+
+        if tx_in_txstore || tx_in_pending_txs_store {
+            info!(target: "validator", "append_tx(): We have already seen this tx");
+            return Err(TxVerifyFailed::AlreadySeenTx(tx_hash.to_string()).into())
+        }
+
+        // Verify state transition
+        info!(target: "validator", "append_tx(): Starting state transition validation");
+        // TODO: this should be over all forks overlays
+        let overlay = BlockchainOverlay::new(&self.blockchain)?;
+
+        // Generate a time keeper for current slot
+        let time_keeper = self.consensus.time_keeper.current();
+
+        // Verify transaction
+        let erroneous_txs = verify_transactions(&overlay, &time_keeper, &[tx.clone()]).await?;
+        if !erroneous_txs.is_empty() {
+            return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
+        }
+
+        // Add transaction to pending txs store
+        self.blockchain.add_pending_txs(&[tx])?;
+        info!(target: "validator", "append_tx(): Appended tx to pending txs store");
+
+        Ok(())
     }
 
     // ==========================

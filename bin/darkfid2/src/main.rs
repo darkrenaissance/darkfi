@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::{stream::StreamExt, sync::Arc};
+use async_std::{
+    stream::StreamExt,
+    sync::{Arc, Mutex},
+};
 use log::info;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
@@ -39,9 +42,10 @@ mod tests;
 mod error;
 use error::{server_error, RpcError};
 
-/// JSON-RPC requests handler
+/// JSON-RPC requests handler and methods
 mod rpc;
 mod rpc_blockchain;
+mod rpc_tx;
 
 /// Utility functions
 mod utils;
@@ -91,6 +95,7 @@ pub struct Darkfid {
     sync_p2p: P2pPtr,
     consensus_p2p: Option<P2pPtr>,
     validator: ValidatorPtr,
+    synced: Mutex<bool>,
 }
 
 impl Darkfid {
@@ -99,7 +104,7 @@ impl Darkfid {
         consensus_p2p: Option<P2pPtr>,
         validator: ValidatorPtr,
     ) -> Self {
-        Self { sync_p2p, consensus_p2p, validator }
+        Self { synced: Mutex::new(false), sync_p2p, consensus_p2p, validator }
     }
 }
 
@@ -152,6 +157,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     info!("Starting JSON-RPC server");
     let _ex = ex.clone();
     ex.spawn(listen_and_serve(args.rpc_listen, darkfid.clone(), _ex)).detach();
+
+    // Simulate that we have synced
+    *darkfid.synced.lock().await = true;
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new()?;

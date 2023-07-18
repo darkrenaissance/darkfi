@@ -496,6 +496,9 @@ impl Error {
 /// Transaction verification errors
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum TxVerifyFailed {
+    #[error("Transaction {0} already exists")]
+    AlreadySeenTx(String),
+
     #[error("Invalid transaction signature")]
     InvalidSignature,
 

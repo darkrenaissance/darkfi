@@ -92,8 +92,8 @@ impl Harness {
 
     pub async fn validate_chains(&self) -> Result<()> {
         let genesis_txs_total = self.config.alice_initial + self.config.bob_initial;
-        let alice = &self.alice._validator.read().await;
-        let bob = &self.bob._validator.read().await;
+        let alice = &self.alice.validator.read().await;
+        let bob = &self.bob.validator.read().await;
 
         alice.validate_blockchain(genesis_txs_total, vec![]).await?;
         bob.validate_blockchain(genesis_txs_total, vec![]).await?;
@@ -104,8 +104,8 @@ impl Harness {
     }
 
     pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
-        let alice = &self.alice._validator.read().await;
-        let bob = &self.bob._validator.read().await;
+        let alice = &self.alice.validator.read().await;
+        let bob = &self.bob.validator.read().await;
 
         alice.add_blocks(blocks).await?;
         bob.add_blocks(blocks).await?;

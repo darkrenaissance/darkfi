@@ -24,15 +24,15 @@ use darkfi::rpc::jsonrpc::{ErrorCode::ServerError, JsonError, JsonResult};
 /// Please sort them sensefully.
 pub enum RpcError {
     // Transaction-related errors
-    _TxSimulationFail = -32110,
-    _TxBroadcastFail = -32111,
+    TxSimulationFail = -32110,
+    TxBroadcastFail = -32111,
 
     // State-related errors,
-    _NotSynced = -32120,
+    NotSynced = -32120,
     UnknownSlot = -32121,
 
     // Parsing errors
-    _ParseError = -32190,
+    ParseError = -32190,
 
     // Contract-related errors
     ContractZkasDbNotFound = -32200,
@@ -41,13 +41,13 @@ pub enum RpcError {
 fn to_tuple(e: RpcError) -> (i64, String) {
     let msg = match e {
         // Transaction-related errors
-        RpcError::_TxSimulationFail => "Failed simulating transaction state change",
-        RpcError::_TxBroadcastFail => "Failed broadcasting transaction",
+        RpcError::TxSimulationFail => "Failed simulating transaction state change",
+        RpcError::TxBroadcastFail => "Failed broadcasting transaction",
         // State-related errors
-        RpcError::_NotSynced => "Blockchain is not synced",
+        RpcError::NotSynced => "Blockchain is not synced",
         RpcError::UnknownSlot => "Did not find slot",
         // Parsing errors
-        RpcError::_ParseError => "Parse error",
+        RpcError::ParseError => "Parse error",
         // Contract-related errors
         RpcError::ContractZkasDbNotFound => "zkas database not found for given contract",
     };
