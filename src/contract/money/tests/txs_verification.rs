@@ -25,7 +25,7 @@
 //! between multiple parties, with detection of erroneous transactions.
 
 use darkfi::Result;
-use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
+use darkfi_contract_test_harness::{init_logger, Holder, TestHarness, TxAction};
 use log::info;
 
 #[async_std::test]
@@ -55,29 +55,19 @@ async fn txs_verification() -> Result<()> {
     info!(target: "money", "[Alice] Building token mint tx for Alice");
     info!(target: "money", "[Alice] ================================");
     let (token_mint_tx, token_mint_params) =
-        th.token_mint(ALICE_INITIAL, Holder::Alice, Holder::Alice, None, None)?;
+        th.token_mint(ALICE_INITIAL, &Holder::Alice, &Holder::Alice, None, None)?;
 
-    info!(target: "money", "[Faucet] =============================");
-    info!(target: "money", "[Faucet] Executing Alice token mint tx");
-    info!(target: "money", "[Faucet] =============================");
-    th.execute_token_mint_tx(Holder::Faucet, &token_mint_tx, &token_mint_params, current_slot)
-        .await?;
-
-    info!(target: "money", "[Alice] =============================");
-    info!(target: "money", "[Alice] Executing Alice token mint tx");
-    info!(target: "money", "[Alice] =============================");
-    th.execute_token_mint_tx(Holder::Alice, &token_mint_tx, &token_mint_params, current_slot)
-        .await?;
-
-    info!(target: "money", "[Bob] =============================");
-    info!(target: "money", "[Bob] Executing Alice token mint tx");
-    info!(target: "money", "[Bob] =============================");
-    th.execute_token_mint_tx(Holder::Bob, &token_mint_tx, &token_mint_params, current_slot).await?;
+    for holder in &HOLDERS {
+        info!(target: "money", "[{holder:?}] =============================");
+        info!(target: "money", "[{holder:?}] Executing Alice token mint tx");
+        info!(target: "money", "[{holder:?}] =============================");
+        th.execute_token_mint_tx(holder, &token_mint_tx, &token_mint_params, current_slot).await?;
+    }
 
     th.assert_trees(&HOLDERS);
 
     // Alice gathers her new owncoin
-    let alice_oc = th.gather_owncoin(Holder::Alice, token_mint_params.output, None)?;
+    let alice_oc = th.gather_owncoin(&Holder::Alice, &token_mint_params.output, None)?;
     let alice_token_id = alice_oc.note.token_id;
     alice_owncoins.push(alice_oc);
 
@@ -91,7 +81,7 @@ async fn txs_verification() -> Result<()> {
         info!(target: "money", "[Alice] Building Money::Transfer params for payment {i} to Bob");
         info!(target: "money", "[Alice] ======================================================");
         let (transfer_tx, transfer_params, spent_coins) =
-            th.transfer(ALICE_SEND, Holder::Alice, Holder::Bob, &alice_owncoins, alice_token_id)?;
+            th.transfer(ALICE_SEND, &Holder::Alice, &Holder::Bob, &alice_owncoins, alice_token_id)?;
 
         // Validating transfer params
         assert!(transfer_params.inputs.len() == 1);
@@ -100,20 +90,12 @@ async fn txs_verification() -> Result<()> {
 
         // Now we simulate nodes verification, as transactions come one by one.
         // Validation should pass, even when we are trying to double spent.
-        info!(target: "money", "[Faucet] ==================================");
-        info!(target: "money", "[Faucet] Verifying Alice2Bob payment tx {i}");
-        info!(target: "money", "[Faucet] ==================================");
-        th.verify_transfer_tx(Holder::Faucet, &transfer_tx, current_slot).await?;
-
-        info!(target: "money", "[Alice] ==================================");
-        info!(target: "money", "[Alice] Verifying Alice2Bob payment tx {i}");
-        info!(target: "money", "[Alice] ==================================");
-        th.verify_transfer_tx(Holder::Alice, &transfer_tx, current_slot).await?;
-
-        info!(target: "money", "[Bob] ==================================");
-        info!(target: "money", "[Bob] Verifying Alice2Bob payment tx {i}");
-        info!(target: "money", "[Bob] ==================================");
-        th.verify_transfer_tx(Holder::Bob, &transfer_tx, current_slot).await?;
+        for holder in &HOLDERS {
+            info!(target: "money", "[{holder:?}] ==================================");
+            info!(target: "money", "[{holder:?}] Verifying Alice2Bob payment tx {i}");
+            info!(target: "money", "[{holder:?}] ==================================");
+            th.verify_transfer_tx(holder, &transfer_tx, current_slot).await?;
+        }
 
         transactions.push(transfer_tx);
         txs_params.push(transfer_params);
@@ -125,38 +107,30 @@ async fn txs_verification() -> Result<()> {
     // Now we can try to execute the transactions sequentialy.
     // Each node will detect the duplicate txs and filter them out,
     // then only apply the first txs from the set.
-    info!(target: "money", "[Faucet] ==============================");
-    info!(target: "money", "[Faucet] Executing Alice2Bob payment tx");
-    info!(target: "money", "[Faucet] ==============================");
-    th.execute_erroneous_transfer_tx(Holder::Faucet, &transactions, current_slot, duplicates - 1)
+    for holder in &HOLDERS {
+        info!(target: "money", "[{holder:?}] ==============================");
+        info!(target: "money", "[{holder:?}] Executing Alice2Bob payment tx");
+        info!(target: "money", "[{holder:?}] ==============================");
+        th.execute_erroneous_txs(
+            TxAction::MoneyTransfer,
+            holder,
+            &transactions,
+            current_slot,
+            duplicates - 1,
+        )
         .await?;
-    th.execute_transfer_tx(Holder::Faucet, &transactions[0], &txs_params[0], current_slot, true)
-        .await?;
-
-    info!(target: "money", "[Alice] ==============================");
-    info!(target: "money", "[Alice] Executing Alice2Bob payment tx");
-    info!(target: "money", "[Alice] ==============================");
-    th.execute_erroneous_transfer_tx(Holder::Alice, &transactions, current_slot, duplicates - 1)
-        .await?;
-    th.execute_transfer_tx(Holder::Alice, &transactions[0], &txs_params[0], current_slot, true)
-        .await?;
-
-    info!(target: "money", "[Bob] ==============================");
-    info!(target: "money", "[Bob] Executing Alice2Bob payment tx");
-    info!(target: "money", "[Bob] ==============================");
-    th.execute_erroneous_transfer_tx(Holder::Bob, &transactions, current_slot, duplicates - 1)
-        .await?;
-    th.execute_transfer_tx(Holder::Bob, &transactions[0], &txs_params[0], current_slot, true)
-        .await?;
+        th.execute_transfer_tx(holder, &transactions[0], &txs_params[0], current_slot, true)
+            .await?;
+    }
 
     th.assert_trees(&HOLDERS);
 
     // Alice should now have one OwnCoin with the change from the above transaction.
-    let alice_oc = th.gather_owncoin(Holder::Alice, txs_params[0].outputs[0].clone(), None)?;
+    let alice_oc = th.gather_owncoin(&Holder::Alice, &txs_params[0].outputs[0], None)?;
     alice_owncoins.push(alice_oc);
 
     // Bob should now have this new one.
-    let bob_oc = th.gather_owncoin(Holder::Bob, txs_params[0].outputs[1].clone(), None)?;
+    let bob_oc = th.gather_owncoin(&Holder::Bob, &txs_params[0].outputs[1], None)?;
     bob_owncoins.push(bob_oc);
 
     assert!(alice_owncoins.len() == 1);

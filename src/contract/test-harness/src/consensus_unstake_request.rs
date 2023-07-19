@@ -31,6 +31,7 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
+use log::info;
 use rand::rngs::OsRng;
 
 use super::{Holder, TestHarness, TxAction};
@@ -38,11 +39,11 @@ use super::{Holder, TestHarness, TxAction};
 impl TestHarness {
     pub async fn unstake_request(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         slot: u64,
-        staked_oc: ConsensusOwnCoin,
+        staked_oc: &ConsensusOwnCoin,
     ) -> Result<(Transaction, ConsensusUnstakeReqParamsV1, SecretKey, SecretKey)> {
-        let wallet = self.holders.get(&holder).unwrap();
+        let wallet = self.holders.get(holder).unwrap();
         let (burn_pk, burn_zkbin) =
             self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
         let (mint_pk, mint_zkbin) =
@@ -106,12 +107,12 @@ impl TestHarness {
 
     pub async fn execute_unstake_request_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         params: &ConsensusUnstakeReqParamsV1,
         slot: u64,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusUnstakeRequest).unwrap();
         let timer = Instant::now();
@@ -123,30 +124,49 @@ impl TestHarness {
         Ok(())
     }
 
-    pub async fn execute_erroneous_unstake_request_txs(
+    // Execute an unstake request transaction and gather requested unstaked coin
+    pub async fn execute_unstake_request(
         &mut self,
-        holder: Holder,
-        txs: &[Transaction],
-        slot: u64,
-        erroneous: usize,
-    ) -> Result<()> {
-        let wallet = self.holders.get(&holder).unwrap();
-        let tx_action_benchmark =
-            self.tx_action_benchmarks.get_mut(&TxAction::ConsensusUnstakeRequest).unwrap();
-        let timer = Instant::now();
+        holders: &[Holder],
+        holder: &Holder,
+        current_slot: u64,
+        rewarded_staked_oc: &ConsensusOwnCoin,
+    ) -> Result<ConsensusOwnCoin> {
+        info!(target: "consensus", "[{holder:?}] ===========================");
+        info!(target: "consensus", "[{holder:?}] Building unstake request tx");
+        info!(target: "consensus", "[{holder:?}] ===========================");
+        let (
+            unstake_request_tx,
+            unstake_request_params,
+            unstake_request_output_secret_key,
+            _unstake_request_signature_secret_key,
+        ) = self.unstake_request(holder, current_slot, rewarded_staked_oc).await?;
 
-        let erroneous_txs = wallet
-            .validator
-            .read()
-            .await
-            .add_transactions(txs, slot, false)
-            .await
-            .err()
-            .unwrap()
-            .retrieve_erroneous_txs()?;
-        assert_eq!(erroneous_txs.len(), erroneous);
-        tx_action_benchmark.verify_times.push(timer.elapsed());
+        for h in holders {
+            info!(target: "consensus", "[{h:?}] ==================================");
+            info!(target: "consensus", "[{h:?}] Executing {holder:?} unstake request tx");
+            info!(target: "consensus", "[{h:?}] ==================================");
+            self.execute_unstake_request_tx(
+                h,
+                &unstake_request_tx,
+                &unstake_request_params,
+                current_slot,
+            )
+            .await?;
+        }
 
-        Ok(())
+        self.assert_trees(holders);
+
+        // Gather new unstake request owncoin
+        let unstake_request_oc = self.gather_consensus_unstaked_owncoin(
+            holder,
+            &unstake_request_params.output,
+            Some(unstake_request_output_secret_key),
+        )?;
+
+        // Verify values match
+        assert!(rewarded_staked_oc.note.value == unstake_request_oc.note.value);
+
+        Ok(unstake_request_oc)
     }
 }

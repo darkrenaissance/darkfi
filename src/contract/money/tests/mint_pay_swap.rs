@@ -62,54 +62,38 @@ async fn mint_pay_swap() -> Result<()> {
     info!(target: "money", "[Alice] Building token mint tx for Alice");
     info!(target: "money", "[Alice] ================================");
     let (mint_tx, params) =
-        th.token_mint(ALICE_INITIAL, Holder::Alice, Holder::Alice, None, None)?;
+        th.token_mint(ALICE_INITIAL, &Holder::Alice, &Holder::Alice, None, None)?;
 
-    info!(target: "money", "[Faucet] =============================");
-    info!(target: "money", "[Faucet] Executing Alice token mint tx");
-    info!(target: "money", "[Faucet] =============================");
-    th.execute_token_mint_tx(Holder::Faucet, &mint_tx, &params, current_slot).await?;
-
-    info!(target: "money", "[Alice] ===========================");
-    info!(target: "money", "[Alice] Executing Bob token mint tx");
-    info!(target: "money", "[Alice] ===========================");
-    th.execute_token_mint_tx(Holder::Alice, &mint_tx, &params, current_slot).await?;
-
-    info!(target: "money", "[Bob] =============================");
-    info!(target: "money", "[Bob] Executing Alice token mint tx");
-    info!(target: "money", "[Bob] =============================");
-    th.execute_token_mint_tx(Holder::Bob, &mint_tx, &params, current_slot).await?;
+    for holder in &HOLDERS {
+        info!(target: "money", "[{holder:?}] ==============================");
+        info!(target: "money", "[{holder:?}] Executing Alice token mint tx");
+        info!(target: "money", "[{holder:?}] ==============================");
+        th.execute_token_mint_tx(holder, &mint_tx, &params, current_slot).await?;
+    }
 
     th.assert_trees(&HOLDERS);
 
     // Alice gathers her new owncoin
-    let alice_oc = th.gather_owncoin(Holder::Alice, params.output, None)?;
+    let alice_oc = th.gather_owncoin(&Holder::Alice, &params.output, None)?;
     let alice_token_id = alice_oc.note.token_id;
     alice_owncoins.push(alice_oc);
 
     info!(target: "money", "[Bob] ==============================");
     info!(target: "money", "[Bob] Building token mint tx for Bob");
     info!(target: "money", "[Bob] ==============================");
-    let (mint_tx, params) = th.token_mint(BOB_INITIAL, Holder::Bob, Holder::Bob, None, None)?;
+    let (mint_tx, params) = th.token_mint(BOB_INITIAL, &Holder::Bob, &Holder::Bob, None, None)?;
 
-    info!(target: "money", "[Faucet] ===========================");
-    info!(target: "money", "[Faucet] Executing Bob token mint tx");
-    info!(target: "money", "[Faucet] ===========================");
-    th.execute_token_mint_tx(Holder::Faucet, &mint_tx, &params, current_slot).await?;
-
-    info!(target: "money", "[Alice] =============================");
-    info!(target: "money", "[Alice] Executing Alice token mint tx");
-    info!(target: "money", "[Alice] =============================");
-    th.execute_token_mint_tx(Holder::Alice, &mint_tx, &params, current_slot).await?;
-
-    info!(target: "money", "[Bob] ===========================");
-    info!(target: "money", "[Bob] Executing Bob token mint tx");
-    info!(target: "money", "[Bob] ===========================");
-    th.execute_token_mint_tx(Holder::Bob, &mint_tx, &params, current_slot).await?;
+    for holder in &HOLDERS {
+        info!(target: "money", "[{holder:?}] ===========================");
+        info!(target: "money", "[{holder:?}] Executing Bob token mint tx");
+        info!(target: "money", "[{holder:?}] ===========================");
+        th.execute_token_mint_tx(holder, &mint_tx, &params, current_slot).await?;
+    }
 
     th.assert_trees(&HOLDERS);
 
     // Bob  gathers hist new owncoin
-    let bob_oc = th.gather_owncoin(Holder::Bob, params.output, None)?;
+    let bob_oc = th.gather_owncoin(&Holder::Bob, &params.output, None)?;
     let bob_token_id = bob_oc.note.token_id;
     bob_owncoins.push(bob_oc);
 
@@ -117,8 +101,13 @@ async fn mint_pay_swap() -> Result<()> {
     info!(target: "money", "[Alice] ====================================================");
     info!(target: "money", "[Alice] Building Money::Transfer params for a payment to Bob");
     info!(target: "money", "[Alice] ====================================================");
-    let (transfer_tx, transfer_params, spent_coins) =
-        th.transfer(ALICE_FIRST_SEND, Holder::Alice, Holder::Bob, &alice_owncoins, alice_token_id)?;
+    let (transfer_tx, transfer_params, spent_coins) = th.transfer(
+        ALICE_FIRST_SEND,
+        &Holder::Alice,
+        &Holder::Bob,
+        &alice_owncoins,
+        alice_token_id,
+    )?;
 
     // Validating transfer params
     assert!(transfer_params.inputs.len() == 1);
@@ -127,30 +116,19 @@ async fn mint_pay_swap() -> Result<()> {
     alice_owncoins.retain(|x| x != &spent_coins[0]);
     assert!(alice_owncoins.is_empty());
 
-    info!(target: "money", "[Faucet] ==============================");
-    info!(target: "money", "[Faucet] Executing Alice2Bob payment tx");
-    info!(target: "money", "[Faucet] ==============================");
-    th.execute_transfer_tx(Holder::Faucet, &transfer_tx, &transfer_params, current_slot, true)
-        .await?;
-
-    info!(target: "money", "[Alice] ==============================");
-    info!(target: "money", "[Alice] Executing Alice2Bob payment tx");
-    info!(target: "money", "[Alice] ==============================");
-    th.execute_transfer_tx(Holder::Alice, &transfer_tx, &transfer_params, current_slot, false)
-        .await?;
-
-    info!(target: "money", "[Bob] ==============================");
-    info!(target: "money", "[Bob] Executing Alice2Bob payment tx");
-    info!(target: "money", "[Bob] ==============================");
-    th.execute_transfer_tx(Holder::Bob, &transfer_tx, &transfer_params, current_slot, false)
-        .await?;
+    for holder in &HOLDERS {
+        info!(target: "money", "[{holder:?}] ==============================");
+        info!(target: "money", "[{holder:?}] Executing Alice2Bob payment tx");
+        info!(target: "money", "[{holder:?}] ==============================");
+        th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_slot, true).await?;
+    }
 
     // Alice should now have one OwnCoin with the change from the above transaction.
-    let alice_oc = th.gather_owncoin_at_index(Holder::Alice, &transfer_params.outputs, 0)?;
+    let alice_oc = th.gather_owncoin_at_index(&Holder::Alice, &transfer_params.outputs, 0)?;
     alice_owncoins.push(alice_oc);
 
     // Bob should now have this new one.
-    let bob_oc = th.gather_owncoin_at_index(Holder::Bob, &transfer_params.outputs, 1)?;
+    let bob_oc = th.gather_owncoin_at_index(&Holder::Bob, &transfer_params.outputs, 1)?;
     bob_owncoins.push(bob_oc);
 
     assert!(alice_owncoins.len() == 1);
@@ -165,7 +143,7 @@ async fn mint_pay_swap() -> Result<()> {
     let mut bob_owncoins_tmp = bob_owncoins.clone();
     bob_owncoins_tmp.retain(|x| x.note.token_id == bob_token_id);
     let (transfer_tx, transfer_params, spent_coins) =
-        th.transfer(BOB_FIRST_SEND, Holder::Bob, Holder::Alice, &bob_owncoins_tmp, bob_token_id)?;
+        th.transfer(BOB_FIRST_SEND, &Holder::Bob, &Holder::Alice, &bob_owncoins_tmp, bob_token_id)?;
 
     // Validating transfer params
     assert!(transfer_params.inputs.len() == 1);
@@ -174,30 +152,19 @@ async fn mint_pay_swap() -> Result<()> {
     bob_owncoins.retain(|x| x != &spent_coins[0]);
     assert!(bob_owncoins.len() == 1);
 
-    info!(target: "money", "[Faucet] ==============================");
-    info!(target: "money", "[Faucet] Executing Bob2Alice payment tx");
-    info!(target: "money", "[Faucet] ==============================");
-    th.execute_transfer_tx(Holder::Faucet, &transfer_tx, &transfer_params, current_slot, true)
-        .await?;
-
-    info!(target: "money", "[Alice] ==============================");
-    info!(target: "money", "[Alice] Executing Bob2Alice payment tx");
-    info!(target: "money", "[Alice] ==============================");
-    th.execute_transfer_tx(Holder::Alice, &transfer_tx, &transfer_params, current_slot, false)
-        .await?;
-
-    info!(target: "money", "[Bob] ==============================");
-    info!(target: "money", "[Bob] Executing Bob2Alice payment tx");
-    info!(target: "money", "[Bob] ==============================");
-    th.execute_transfer_tx(Holder::Bob, &transfer_tx, &transfer_params, current_slot, false)
-        .await?;
+    for holder in &HOLDERS {
+        info!(target: "money", "[{holder:?}] ==============================");
+        info!(target: "money", "[{holder:?}] Executing Bob2Alice payment tx");
+        info!(target: "money", "[{holder:?}] ==============================");
+        th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_slot, true).await?;
+    }
 
     // Alice should now have two OwnCoins
-    let alice_oc = th.gather_owncoin_at_index(Holder::Alice, &transfer_params.outputs, 1)?;
+    let alice_oc = th.gather_owncoin_at_index(&Holder::Alice, &transfer_params.outputs, 1)?;
     alice_owncoins.push(alice_oc);
 
     // Bob should have two with the change from the above tx
-    let bob_oc = th.gather_owncoin_at_index(Holder::Bob, &transfer_params.outputs, 0)?;
+    let bob_oc = th.gather_owncoin_at_index(&Holder::Bob, &transfer_params.outputs, 0)?;
     bob_owncoins.push(bob_oc);
 
     assert!(alice_owncoins.len() == 2);
@@ -228,28 +195,17 @@ async fn mint_pay_swap() -> Result<()> {
     assert!(bob_owncoins.len() == 1);
 
     let (otc_swap_tx, otc_swap_params) =
-        th.otc_swap(Holder::Alice, alice_oc, Holder::Bob, bob_oc)?;
+        th.otc_swap(&Holder::Alice, &alice_oc, &Holder::Bob, &bob_oc)?;
 
-    info!(target: "money", "[Faucet] ==========================");
-    info!(target: "money", "[Faucet] Executing AliceBob swap tx");
-    info!(target: "money", "[Faucet] ==========================");
-    th.execute_otc_swap_tx(Holder::Faucet, &otc_swap_tx, &otc_swap_params, current_slot, true)
-        .await?;
-
-    info!(target: "money", "[Alice] ==========================");
-    info!(target: "money", "[Alice] Executing AliceBob swap tx");
-    info!(target: "money", "[Alice] ==========================");
-    th.execute_otc_swap_tx(Holder::Alice, &otc_swap_tx, &otc_swap_params, current_slot, false)
-        .await?;
-
-    info!(target: "money", "[Bob] ==========================");
-    info!(target: "money", "[Bob] Executing AliceBob swap tx");
-    info!(target: "money", "[Bob] ==========================");
-    th.execute_otc_swap_tx(Holder::Bob, &otc_swap_tx, &otc_swap_params, current_slot, false)
-        .await?;
+    for holder in &HOLDERS {
+        info!(target: "money", "[{holder:?}] ==========================");
+        info!(target: "money", "[{holder:?}] Executing AliceBob swap tx");
+        info!(target: "money", "[{holder:?}] ==========================");
+        th.execute_otc_swap_tx(holder, &otc_swap_tx, &otc_swap_params, current_slot, true).await?;
+    }
 
     // Alice should now have two OwnCoins with the same token ID (ALICE)
-    let alice_oc = th.gather_owncoin_at_index(Holder::Alice, &otc_swap_params.outputs, 0)?;
+    let alice_oc = th.gather_owncoin_at_index(&Holder::Alice, &otc_swap_params.outputs, 0)?;
     alice_owncoins.push(alice_oc);
 
     assert!(alice_owncoins.len() == 2);
@@ -257,7 +213,7 @@ async fn mint_pay_swap() -> Result<()> {
     assert!(alice_owncoins[1].note.token_id == alice_token_id);
 
     // Same for Bob with BOB tokens
-    let bob_oc = th.gather_owncoin_at_index(Holder::Bob, &otc_swap_params.outputs, 1)?;
+    let bob_oc = th.gather_owncoin_at_index(&Holder::Bob, &otc_swap_params.outputs, 1)?;
     bob_owncoins.push(bob_oc);
 
     assert!(bob_owncoins.len() == 2);
@@ -270,8 +226,13 @@ async fn mint_pay_swap() -> Result<()> {
     info!(target: "money", "[Alice] ======================================================");
     info!(target: "money", "[Alice] Building Money::Transfer params for a payment to Alice");
     info!(target: "money", "[Alice] ======================================================");
-    let (tx, params, spent_coins) =
-        th.transfer(ALICE_INITIAL, Holder::Alice, Holder::Alice, &alice_owncoins, alice_token_id)?;
+    let (tx, params, spent_coins) = th.transfer(
+        ALICE_INITIAL,
+        &Holder::Alice,
+        &Holder::Alice,
+        &alice_owncoins,
+        alice_token_id,
+    )?;
 
     for coin in spent_coins {
         alice_owncoins.retain(|x| x != &coin);
@@ -280,25 +241,17 @@ async fn mint_pay_swap() -> Result<()> {
     assert!(params.inputs.len() == 2);
     assert!(params.outputs.len() == 1);
 
-    info!(target: "money", "[Faucet] ================================");
-    info!(target: "money", "[Faucet] Executing Alice2Alice payment tx");
-    info!(target: "money", "[Faucet] ================================");
-    th.execute_transfer_tx(Holder::Faucet, &tx, &params, current_slot, true).await?;
-
-    info!(target: "money", "[Alice] ================================");
-    info!(target: "money", "[Alice] Executing Alice2Alice payment tx");
-    info!(target: "money", "[Alice] ================================");
-    th.execute_transfer_tx(Holder::Alice, &tx, &params, current_slot, true).await?;
-
-    info!(target: "money", "[Bob] ================================");
-    info!(target: "money", "[Bob] Executing Alice2Alice payment tx");
-    info!(target: "money", "[Bob] ================================");
-    th.execute_transfer_tx(Holder::Bob, &tx, &params, current_slot, true).await?;
+    for holder in &HOLDERS {
+        info!(target: "money", "[{holder:?}] ================================");
+        info!(target: "money", "[{holder:?}] Executing Alice2Alice payment tx");
+        info!(target: "money", "[{holder:?}] ================================");
+        th.execute_transfer_tx(holder, &tx, &params, current_slot, true).await?;
+    }
 
     th.assert_trees(&HOLDERS);
 
     // Alice should now have a single OwnCoin with her initial airdrop
-    let alice_oc = th.gather_owncoin(Holder::Alice, params.outputs[0].clone(), None)?;
+    let alice_oc = th.gather_owncoin(&Holder::Alice, &params.outputs[0], None)?;
     alice_owncoins.push(alice_oc);
 
     assert!(alice_owncoins.len() == 1);
@@ -310,7 +263,7 @@ async fn mint_pay_swap() -> Result<()> {
     info!(target: "money", "[Bob] Building Money::Transfer params for a payment to Bob");
     info!(target: "money", "[Bob] ====================================================");
     let (tx, params, spent_coins) =
-        th.transfer(BOB_INITIAL, Holder::Bob, Holder::Bob, &bob_owncoins, bob_token_id)?;
+        th.transfer(BOB_INITIAL, &Holder::Bob, &Holder::Bob, &bob_owncoins, bob_token_id)?;
 
     for coin in spent_coins {
         bob_owncoins.retain(|x| x != &coin);
@@ -319,25 +272,17 @@ async fn mint_pay_swap() -> Result<()> {
     assert!(params.inputs.len() == 2);
     assert!(params.outputs.len() == 1);
 
-    info!(target: "money", "[Faucet] ============================");
-    info!(target: "money", "[Faucet] Executing Bob2Bob payment tx");
-    info!(target: "money", "[Faucet] ============================");
-    th.execute_transfer_tx(Holder::Faucet, &tx, &params, current_slot, true).await?;
-
-    info!(target: "money", "[Alice] ============================");
-    info!(target: "money", "[Alice] Executing Bob2Bob payment tx");
-    info!(target: "money", "[Alice] ============================");
-    th.execute_transfer_tx(Holder::Alice, &tx, &params, current_slot, true).await?;
-
-    info!(target: "money", "[Bob] ============================");
-    info!(target: "money", "[Bob] Executing Bob2Bob payment tx");
-    info!(target: "money", "[Bob] ============================");
-    th.execute_transfer_tx(Holder::Bob, &tx, &params, current_slot, true).await?;
+    for holder in &HOLDERS {
+        info!(target: "money", "[{holder:?}] ============================");
+        info!(target: "money", "[{holder:?}] Executing Bob2Bob payment tx");
+        info!(target: "money", "[{holder:?}] ============================");
+        th.execute_transfer_tx(holder, &tx, &params, current_slot, true).await?;
+    }
 
     th.assert_trees(&HOLDERS);
 
     // Bob should now have a single OwnCoin with his initial airdrop
-    let bob_oc = th.gather_owncoin(Holder::Bob, params.outputs[0].clone(), None)?;
+    let bob_oc = th.gather_owncoin(&Holder::Bob, &params.outputs[0], None)?;
     bob_owncoins.push(bob_oc);
 
     assert!(bob_owncoins.len() == 1);
@@ -356,28 +301,17 @@ async fn mint_pay_swap() -> Result<()> {
     assert!(bob_owncoins.is_empty());
 
     let (otc_swap_tx, otc_swap_params) =
-        th.otc_swap(Holder::Alice, alice_oc, Holder::Bob, bob_oc)?;
+        th.otc_swap(&Holder::Alice, &alice_oc, &Holder::Bob, &bob_oc)?;
 
-    info!(target: "money", "[Faucet] ==========================");
-    info!(target: "money", "[Faucet] Executing AliceBob swap tx");
-    info!(target: "money", "[Faucet] ==========================");
-    th.execute_otc_swap_tx(Holder::Faucet, &otc_swap_tx, &otc_swap_params, current_slot, true)
-        .await?;
-
-    info!(target: "money", "[Alice] ==========================");
-    info!(target: "money", "[Alice] Executing AliceBob swap tx");
-    info!(target: "money", "[Alice] ==========================");
-    th.execute_otc_swap_tx(Holder::Alice, &otc_swap_tx, &otc_swap_params, current_slot, false)
-        .await?;
-
-    info!(target: "money", "[Bob] ==========================");
-    info!(target: "money", "[Bob] Executing AliceBob swap tx");
-    info!(target: "money", "[Bob] ==========================");
-    th.execute_otc_swap_tx(Holder::Bob, &otc_swap_tx, &otc_swap_params, current_slot, false)
-        .await?;
+    for holder in &HOLDERS {
+        info!(target: "money", "[{holder:?}] ==========================");
+        info!(target: "money", "[{holder:?}] Executing AliceBob swap tx");
+        info!(target: "money", "[{holder:?}] ==========================");
+        th.execute_otc_swap_tx(holder, &otc_swap_tx, &otc_swap_params, current_slot, true).await?;
+    }
 
     // Alice should now have Bob's BOB tokens
-    let alice_oc = th.gather_owncoin_at_index(Holder::Alice, &otc_swap_params.outputs, 0)?;
+    let alice_oc = th.gather_owncoin_at_index(&Holder::Alice, &otc_swap_params.outputs, 0)?;
     alice_owncoins.push(alice_oc);
 
     assert!(alice_owncoins.len() == 1);
@@ -385,7 +319,7 @@ async fn mint_pay_swap() -> Result<()> {
     assert!(alice_owncoins[0].note.token_id == bob_token_id);
 
     // And Bob should have Alice's ALICE tokens
-    let bob_oc = th.gather_owncoin_at_index(Holder::Bob, &otc_swap_params.outputs, 1)?;
+    let bob_oc = th.gather_owncoin_at_index(&Holder::Bob, &otc_swap_params.outputs, 1)?;
     bob_owncoins.push(bob_oc);
 
     assert!(bob_owncoins.len() == 1);

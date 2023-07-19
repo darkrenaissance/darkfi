@@ -20,8 +20,9 @@ use std::time::Instant;
 
 use darkfi::{tx::Transaction, zk::halo2::Field, Result};
 use darkfi_money_contract::{
-    client::transfer_v1::TransferCallBuilder, model::MoneyTransferParamsV1, MoneyFunction,
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    client::{transfer_v1::TransferCallBuilder, OwnCoin},
+    model::MoneyTransferParamsV1,
+    MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{MerkleNode, DARK_TOKEN_ID, MONEY_CONTRACT_ID},
@@ -29,6 +30,7 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
+use log::info;
 use rand::rngs::OsRng;
 
 use super::{Holder, TestHarness, TxAction};
@@ -37,13 +39,13 @@ impl TestHarness {
     pub fn airdrop_native(
         &mut self,
         value: u64,
-        holder: Holder,
+        holder: &Holder,
         rcpt_spend_hook: Option<pallas::Base>,
         rcpt_user_data: Option<pallas::Base>,
         change_spend_hook: Option<pallas::Base>,
         change_user_data: Option<pallas::Base>,
     ) -> Result<(Transaction, MoneyTransferParamsV1)> {
-        let recipient = self.holders.get(&holder).unwrap().keypair.public;
+        let recipient = self.holders.get(holder).unwrap().keypair.public;
         let faucet = self.holders.get(&Holder::Faucet).unwrap();
         let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
@@ -95,12 +97,12 @@ impl TestHarness {
 
     pub async fn execute_airdrop_native_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         params: &MoneyTransferParamsV1,
         slot: u64,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyAirdrop).unwrap();
         let timer = Instant::now();
@@ -110,5 +112,34 @@ impl TestHarness {
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
+    }
+
+    // Execute an airdrop transaction and gather the coin
+    pub async fn execute_airdrop(
+        &mut self,
+        holders: &[Holder],
+        holder: &Holder,
+        value: u64,
+        current_slot: u64,
+    ) -> Result<OwnCoin> {
+        info!(target: "consensus", "[Faucet] ==============================");
+        info!(target: "consensus", "[Faucet] Building {holder:?} airdrop tx");
+        info!(target: "consensus", "[Faucet] ==============================");
+        let (airdrop_tx, airdrop_params) =
+            self.airdrop_native(value, holder, None, None, None, None)?;
+
+        for h in holders {
+            info!(target: "consensus", "[{h:?}] ===============================");
+            info!(target: "consensus", "[{h:?}] Executing {holder:?} airdrop tx");
+            info!(target: "consensus", "[{h:?}] ===============================");
+            self.execute_airdrop_native_tx(h, &airdrop_tx, &airdrop_params, current_slot).await?;
+        }
+
+        self.assert_trees(holders);
+
+        // Gather new owncoin
+        let oc = self.gather_owncoin(holder, &airdrop_params.outputs[0], None)?;
+
+        Ok(oc)
     }
 }

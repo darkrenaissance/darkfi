@@ -16,11 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Instant};
 
 use darkfi::{
     blockchain::BlockInfo,
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
+    tx::Transaction,
     util::{
         pcg::Pcg32,
         time::{TimeKeeper, Timestamp},
@@ -327,10 +328,37 @@ impl TestHarness {
         })
     }
 
+    pub async fn execute_erroneous_txs(
+        &mut self,
+        action: TxAction,
+        holder: &Holder,
+        txs: &[Transaction],
+        slot: u64,
+        erroneous: usize,
+    ) -> Result<()> {
+        let wallet = self.holders.get(holder).unwrap();
+        let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&action).unwrap();
+        let timer = Instant::now();
+
+        let erroneous_txs = wallet
+            .validator
+            .read()
+            .await
+            .add_transactions(txs, slot, false)
+            .await
+            .err()
+            .unwrap()
+            .retrieve_erroneous_txs()?;
+        assert_eq!(erroneous_txs.len(), erroneous);
+        tx_action_benchmark.verify_times.push(timer.elapsed());
+
+        Ok(())
+    }
+
     pub fn gather_owncoin(
         &mut self,
-        holder: Holder,
-        output: Output,
+        holder: &Holder,
+        output: &Output,
         secret_key: Option<SecretKey>,
     ) -> Result<OwnCoin> {
         let wallet = self.holders.get_mut(&holder).unwrap();
@@ -358,10 +386,10 @@ impl TestHarness {
     /// before each output coin. Assumes using wallet secret key.
     pub fn gather_multiple_owncoins(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         outputs: &[Output],
     ) -> Result<Vec<OwnCoin>> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let secret_key = wallet.keypair.secret;
         let mut owncoins = vec![];
         for output in outputs {
@@ -389,11 +417,11 @@ impl TestHarness {
 
     pub fn gather_owncoin_at_index(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         outputs: &[Output],
         index: usize,
     ) -> Result<OwnCoin> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let secret_key = wallet.keypair.secret;
         let mut owncoin = None;
         for (i, output) in outputs.iter().enumerate() {
@@ -423,11 +451,11 @@ impl TestHarness {
 
     pub fn gather_consensus_staked_owncoin(
         &mut self,
-        holder: Holder,
-        output: ConsensusOutput,
+        holder: &Holder,
+        output: &ConsensusOutput,
         secret_key: Option<SecretKey>,
     ) -> Result<ConsensusOwnCoin> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let leaf_position = wallet.consensus_staked_merkle_tree.mark().unwrap();
         let secret_key = match secret_key {
             Some(key) => key,
@@ -447,11 +475,11 @@ impl TestHarness {
 
     pub fn gather_consensus_unstaked_owncoin(
         &mut self,
-        holder: Holder,
-        output: ConsensusOutput,
+        holder: &Holder,
+        output: &ConsensusOutput,
         secret_key: Option<SecretKey>,
     ) -> Result<ConsensusOwnCoin> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let leaf_position = wallet.consensus_unstaked_merkle_tree.mark().unwrap();
         let secret_key = match secret_key {
             Some(key) => key,

@@ -20,7 +20,8 @@ use std::time::Instant;
 
 use darkfi::{tx::Transaction, Result};
 use darkfi_consensus_contract::{
-    client::proposal_v1::ConsensusProposalCallBuilder, model::ConsensusProposalParamsV1,
+    client::proposal_v1::ConsensusProposalCallBuilder,
+    model::{ConsensusProposalParamsV1, REWARD},
     ConsensusFunction,
 };
 use darkfi_money_contract::{client::ConsensusOwnCoin, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1};
@@ -30,6 +31,7 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
+use log::info;
 use rand::rngs::OsRng;
 
 use super::{Holder, TestHarness, TxAction};
@@ -37,11 +39,11 @@ use super::{Holder, TestHarness, TxAction};
 impl TestHarness {
     pub async fn proposal(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         slot: Slot,
-        staked_oc: ConsensusOwnCoin,
+        staked_oc: &ConsensusOwnCoin,
     ) -> Result<(Transaction, ConsensusProposalParamsV1, SecretKey, SecretKey)> {
-        let wallet = self.holders.get(&holder).unwrap();
+        let wallet = self.holders.get(holder).unwrap();
         let (proposal_pk, proposal_zkbin) =
             self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1).unwrap();
         let tx_action_benchmark =
@@ -53,7 +55,7 @@ impl TestHarness {
 
         // Building Consensus::Propose params
         let proposal_call_debris = ConsensusProposalCallBuilder {
-            owncoin: staked_oc,
+            owncoin: staked_oc.clone(),
             slot,
             fork_hash,
             fork_previous_hash: fork_hash,
@@ -94,12 +96,12 @@ impl TestHarness {
 
     pub async fn execute_proposal_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         params: &ConsensusProposalParamsV1,
         slot: u64,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusProposal).unwrap();
         let timer = Instant::now();
@@ -111,30 +113,44 @@ impl TestHarness {
         Ok(())
     }
 
-    pub async fn execute_erroneous_proposal_txs(
+    // Execute a proposal transaction and gather rewarded coin
+    pub async fn execute_proposal(
         &mut self,
-        holder: Holder,
-        txs: &[Transaction],
-        slot: u64,
-        erroneous: usize,
-    ) -> Result<()> {
-        let wallet = self.holders.get(&holder).unwrap();
-        let tx_action_benchmark =
-            self.tx_action_benchmarks.get_mut(&TxAction::ConsensusProposal).unwrap();
-        let timer = Instant::now();
+        holders: &[Holder],
+        holder: &Holder,
+        current_slot: u64,
+        slot: Slot,
+        staked_oc: &ConsensusOwnCoin,
+    ) -> Result<ConsensusOwnCoin> {
+        info!(target: "consensus", "[{holder:?}] ====================");
+        info!(target: "consensus", "[{holder:?}] Building proposal tx");
+        info!(target: "consensus", "[{holder:?}] ====================");
+        let (
+            proposal_tx,
+            proposal_params,
+            _proposal_signing_secret_key,
+            proposal_decryption_secret_key,
+        ) = self.proposal(holder, slot, staked_oc).await?;
 
-        let erroneous_txs = wallet
-            .validator
-            .read()
-            .await
-            .add_transactions(txs, slot, false)
-            .await
-            .err()
-            .unwrap()
-            .retrieve_erroneous_txs()?;
-        assert_eq!(erroneous_txs.len(), erroneous);
-        tx_action_benchmark.verify_times.push(timer.elapsed());
+        for h in holders {
+            info!(target: "consensus", "[{h:?}] ===========================");
+            info!(target: "consensus", "[{h:?}] Executing {holder:?} proposal tx");
+            info!(target: "consensus", "[{h:?}] ===========================");
+            self.execute_proposal_tx(h, &proposal_tx, &proposal_params, current_slot).await?;
+        }
 
-        Ok(())
+        self.assert_trees(holders);
+
+        // Gather new staked owncoin which includes the reward
+        let rewarded_staked_oc = self.gather_consensus_staked_owncoin(
+            holder,
+            &proposal_params.output,
+            Some(proposal_decryption_secret_key),
+        )?;
+
+        // Verify values match
+        assert!((staked_oc.note.value + REWARD) == rewarded_staked_oc.note.value);
+
+        Ok(rewarded_staked_oc)
     }
 }

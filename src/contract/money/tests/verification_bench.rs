@@ -54,24 +54,20 @@ async fn alice2alice_random_amounts() -> Result<()> {
     info!(target: "money", "[Faucet] Building Alice's airdrop");
     info!(target: "money", "[Faucet] ========================");
     let (airdrop_tx, airdrop_params) =
-        th.airdrop_native(ALICE_AIRDROP, Holder::Alice, None, None, None, None)?;
+        th.airdrop_native(ALICE_AIRDROP, &Holder::Alice, None, None, None, None)?;
 
-    info!(target: "money", "[Faucet] ==========================");
-    info!(target: "money", "[Faucet] Executing Alice airdrop tx");
-    info!(target: "money", "[Faucet] ==========================");
-    th.execute_airdrop_native_tx(Holder::Faucet, &airdrop_tx, &airdrop_params, current_slot)
-        .await?;
-
-    info!(target: "money", "[Alice] ==========================");
-    info!(target: "money", "[Alice] Executing Alice airdrop tx");
-    info!(target: "money", "[Alice] ==========================");
-    th.execute_airdrop_native_tx(Holder::Alice, &airdrop_tx, &airdrop_params, current_slot).await?;
+    for holder in &HOLDERS {
+        info!(target: "money", "[{holder:?}] ==========================");
+        info!(target: "money", "[{holder:?}] Executing Alice airdrop tx");
+        info!(target: "money", "[{holder:?}] ==========================");
+        th.execute_airdrop_native_tx(holder, &airdrop_tx, &airdrop_params, current_slot).await?;
+    }
 
     th.assert_trees(&HOLDERS);
 
     // Gather new owncoins
     let mut owncoins = vec![];
-    let owncoin = th.gather_owncoin(Holder::Alice, airdrop_params.outputs[0].clone(), None)?;
+    let owncoin = th.gather_owncoin(&Holder::Alice, &airdrop_params.outputs[0], None)?;
     let token_id = owncoin.note.token_id;
     owncoins.push(owncoin);
 
@@ -87,7 +83,7 @@ async fn alice2alice_random_amounts() -> Result<()> {
         info!(target: "money", "[Alice] Sending: {}", amount);
         info!(target: "money", "[Alice] ===============================================");
         let (tx, params, spent_coins) =
-            th.transfer(amount, Holder::Alice, Holder::Alice, &owncoins, token_id)?;
+            th.transfer(amount, &Holder::Alice, &Holder::Alice, &owncoins, token_id)?;
 
         // Remove the owncoins we've spent
         for spent in spent_coins {
@@ -98,15 +94,15 @@ async fn alice2alice_random_amounts() -> Result<()> {
         info!(target: "money", "[Faucet] ================================");
         info!(target: "money", "[Faucet] Executing Alice2Alice payment tx");
         info!(target: "money", "[Faucet] ================================");
-        th.execute_transfer_tx(Holder::Faucet, &tx, &params, current_slot, true).await?;
+        th.execute_transfer_tx(&Holder::Faucet, &tx, &params, current_slot, true).await?;
 
         info!(target: "money", "[Alice] ================================");
         info!(target: "money", "[Alice] Executing Alice2Alice payment tx");
         info!(target: "money", "[Alice] ================================");
-        th.execute_transfer_tx(Holder::Alice, &tx, &params, current_slot, false).await?;
+        th.execute_transfer_tx(&Holder::Alice, &tx, &params, current_slot, false).await?;
 
         // Gather new owncoins
-        owncoins.append(&mut th.gather_multiple_owncoins(Holder::Alice, &params.outputs)?);
+        owncoins.append(&mut th.gather_multiple_owncoins(&Holder::Alice, &params.outputs)?);
 
         th.assert_trees(&HOLDERS);
     }
@@ -153,22 +149,19 @@ async fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
         info!(target: "money", "[Faucet] Building Money::Mint params for Alice's mint for token {} and amount {}", i, amount);
         info!(target: "money", "[Faucet] ===================================================");
         let (mint_tx, mint_params) =
-            th.token_mint(amount, Holder::Alice, Holder::Alice, None, None)?;
+            th.token_mint(amount, &Holder::Alice, &Holder::Alice, None, None)?;
 
-        info!(target: "money", "[Faucet] =======================");
-        info!(target: "money", "[Faucet] Executing Alice mint tx");
-        info!(target: "money", "[Faucet] =======================");
-        th.execute_token_mint_tx(Holder::Faucet, &mint_tx, &mint_params, current_slot).await?;
-
-        info!(target: "money", "[Alice] =======================");
-        info!(target: "money", "[Alice] Executing Alice mint tx");
-        info!(target: "money", "[Alice] =======================");
-        th.execute_token_mint_tx(Holder::Alice, &mint_tx, &mint_params, current_slot).await?;
+        for holder in &HOLDERS {
+            info!(target: "money", "[{holder:?}] =======================");
+            info!(target: "money", "[{holder:?}] Executing Alice mint tx");
+            info!(target: "money", "[{holder:?}] =======================");
+            th.execute_token_mint_tx(holder, &mint_tx, &mint_params, current_slot).await?;
+        }
 
         th.assert_trees(&HOLDERS);
 
         // Gather new owncoins
-        let owncoin = th.gather_owncoin(Holder::Alice, mint_params.output, None)?;
+        let owncoin = th.gather_owncoin(&Holder::Alice, &mint_params.output, None)?;
         let token_id = owncoin.note.token_id;
         owncoins.push(vec![owncoin]);
         minted_amounts.push(amount);
@@ -202,7 +195,7 @@ async fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
             info!(target: "money", "[Alice] Sending: {}", amount);
             info!(target: "money", "[Alice] ===============================================");
             let (tx, params, spent_coins) =
-                th.transfer(amount, Holder::Alice, Holder::Alice, &coins, token_id)?;
+                th.transfer(amount, &Holder::Alice, &Holder::Alice, &coins, token_id)?;
 
             // Remove the owncoins we've spent
             for spent in spent_coins {
@@ -210,7 +203,7 @@ async fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
             }
 
             // Gather new owncoins
-            coins.append(&mut th.gather_multiple_owncoins(Holder::Alice, &params.outputs)?);
+            coins.append(&mut th.gather_multiple_owncoins(&Holder::Alice, &params.outputs)?);
 
             // Store transaction and its params
             txs.push(tx);
@@ -223,13 +216,13 @@ async fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
         info!(target: "money", "[Faucet] =================================");
         info!(target: "money", "[Faucet] Executing Alice2Alice payment txs");
         info!(target: "money", "[Faucet] =================================");
-        th.execute_multiple_transfer_txs(Holder::Faucet, &txs, &txs_params, current_slot, true)
+        th.execute_multiple_transfer_txs(&Holder::Faucet, &txs, &txs_params, current_slot, true)
             .await?;
 
         info!(target: "money", "[Alice] =================================");
         info!(target: "money", "[Alice] Executing Alice2Alice payment txs");
         info!(target: "money", "[Alice] =================================");
-        th.execute_multiple_transfer_txs(Holder::Alice, &txs, &txs_params, current_slot, false)
+        th.execute_multiple_transfer_txs(&Holder::Alice, &txs, &txs_params, current_slot, false)
             .await?;
 
         th.assert_trees(&HOLDERS);

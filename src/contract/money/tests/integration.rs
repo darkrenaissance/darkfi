@@ -53,56 +53,39 @@ async fn money_integration() -> Result<()> {
 
     info!("[Faucet] Building Alice airdrop tx");
     let (airdrop_tx, airdrop_params) =
-        th.airdrop_native(ALICE_NATIVE_AIRDROP, Holder::Alice, None, None, None, None)?;
+        th.airdrop_native(ALICE_NATIVE_AIRDROP, &Holder::Alice, None, None, None, None)?;
 
-    info!("[Faucet] Executing Alice airdrop tx");
-    th.execute_airdrop_native_tx(Holder::Faucet, &airdrop_tx, &airdrop_params, current_slot)
-        .await?;
-
-    info!("[Alice] Executing Alice airdrop tx");
-    th.execute_airdrop_native_tx(Holder::Alice, &airdrop_tx, &airdrop_params, current_slot).await?;
-
-    info!("[Bob] Executing Alice airdrop tx");
-    th.execute_airdrop_native_tx(Holder::Bob, &airdrop_tx, &airdrop_params, current_slot).await?;
+    for holder in &HOLDERS {
+        info!("[{holder:?}] Executing Alice airdrop tx");
+        th.execute_airdrop_native_tx(holder, &airdrop_tx, &airdrop_params, current_slot).await?;
+    }
 
     th.assert_trees(&HOLDERS);
 
     // Alice gathers her new coin
-    th.gather_owncoin(Holder::Alice, airdrop_params.outputs[0].clone(), None)?;
+    th.gather_owncoin(&Holder::Alice, &airdrop_params.outputs[0], None)?;
 
     info!("[Bob] Building BOB token mint tx");
     let (token_mint_tx, token_mint_params) =
-        th.token_mint(BOB_SUPPLY, Holder::Bob, Holder::Bob, None, None)?;
+        th.token_mint(BOB_SUPPLY, &Holder::Bob, &Holder::Bob, None, None)?;
 
-    info!("[Faucet] Executing BOB token mint tx");
-    th.execute_token_mint_tx(Holder::Faucet, &token_mint_tx, &token_mint_params, current_slot)
-        .await?;
-
-    info!("[Alice] Executing BOB token mint tx");
-    th.execute_token_mint_tx(Holder::Alice, &token_mint_tx, &token_mint_params, current_slot)
-        .await?;
-
-    info!("[Bob] Executing BOB token mint tx");
-    th.execute_token_mint_tx(Holder::Bob, &token_mint_tx, &token_mint_params, current_slot).await?;
+    for holder in &HOLDERS {
+        info!("[{holder:?}] Executing BOB token mint tx");
+        th.execute_token_mint_tx(holder, &token_mint_tx, &token_mint_params, current_slot).await?;
+    }
 
     th.assert_trees(&HOLDERS);
 
     // Bob gathers his new coin
-    th.gather_owncoin(Holder::Bob, token_mint_params.output, None)?;
+    th.gather_owncoin(&Holder::Bob, &token_mint_params.output, None)?;
 
     info!("[Bob] Building BOB token freeze tx");
-    let (token_frz_tx, token_frz_params) = th.token_freeze(Holder::Bob)?;
+    let (token_frz_tx, token_frz_params) = th.token_freeze(&Holder::Bob)?;
 
-    info!("[Faucet] Executing BOB token freeze tx");
-    th.execute_token_freeze_tx(Holder::Faucet, &token_frz_tx, &token_frz_params, current_slot)
-        .await?;
-
-    info!("[Alice] Executing BOB token freeze tx");
-    th.execute_token_freeze_tx(Holder::Alice, &token_frz_tx, &token_frz_params, current_slot)
-        .await?;
-
-    info!("[Bob] Executing BOB token freeze tx");
-    th.execute_token_freeze_tx(Holder::Bob, &token_frz_tx, &token_frz_params, current_slot).await?;
+    for holder in &HOLDERS {
+        info!("[{holder:?}] Executing BOB token freeze tx");
+        th.execute_token_freeze_tx(holder, &token_frz_tx, &token_frz_params, current_slot).await?;
+    }
 
     th.assert_trees(&HOLDERS);
 

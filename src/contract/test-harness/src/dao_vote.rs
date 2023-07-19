@@ -38,12 +38,12 @@ use super::{Holder, TestHarness, TxAction};
 impl TestHarness {
     pub fn dao_vote(
         &mut self,
-        voter: Holder,
+        voter: &Holder,
         dao_kp: &Keypair,
         vote_option: bool,
-        dao: DaoInfo,
-        proposal: DaoProposalInfo,
-        proposal_bulla: DaoProposalBulla,
+        dao: &DaoInfo,
+        proposal: &DaoProposalInfo,
+        proposal_bulla: &DaoProposalBulla,
     ) -> Result<(Transaction, DaoVoteParams)> {
         let (dao_vote_burn_pk, dao_vote_burn_zkbin) =
             self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS).unwrap();
@@ -52,7 +52,7 @@ impl TestHarness {
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoVote).unwrap();
         let timer = Instant::now();
 
-        let wallet = self.holders.get(&voter).unwrap();
+        let wallet = self.holders.get(voter).unwrap();
 
         let (_proposal_leaf_pos, money_merkle_tree) =
             wallet.dao_prop_leafs.get(&proposal_bulla).unwrap();
@@ -78,8 +78,8 @@ impl TestHarness {
             vote_option,
             yes_vote_blind: pallas::Scalar::random(&mut OsRng),
             vote_keypair: *dao_kp,
-            proposal,
-            dao,
+            proposal: proposal.clone(),
+            dao: dao.clone(),
         };
 
         let (params, proofs) = call.make(
@@ -111,12 +111,12 @@ impl TestHarness {
 
     pub async fn execute_dao_vote_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         _params: &DaoVoteParams,
         slot: u64,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoVote).unwrap();
         let timer = Instant::now();
 

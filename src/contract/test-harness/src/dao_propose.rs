@@ -38,12 +38,12 @@ use super::{Holder, TestHarness, TxAction};
 impl TestHarness {
     pub fn dao_propose(
         &mut self,
-        proposer: Holder,
-        recipient: Holder,
+        proposer: &Holder,
+        recipient: &Holder,
         amount: u64,
         tx_token_id: TokenId,
-        dao: DaoInfo,
-        dao_bulla: DaoBulla,
+        dao: &DaoInfo,
+        dao_bulla: &DaoBulla,
     ) -> Result<(Transaction, DaoProposeParams, DaoProposalInfo)> {
         let (dao_propose_burn_pk, dao_propose_burn_zkbin) =
             self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS).unwrap();
@@ -82,7 +82,7 @@ impl TestHarness {
         let call = DaoProposeCall {
             inputs: vec![input],
             proposal: proposal.clone(),
-            dao,
+            dao: dao.clone(),
             dao_leaf_position: *wallet.dao_leafs.get(&dao_bulla).unwrap(),
             dao_merkle_path: wallet
                 .dao_merkle_tree
@@ -120,12 +120,12 @@ impl TestHarness {
 
     pub async fn execute_dao_propose_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         params: &DaoProposeParams,
         slot: u64,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoPropose).unwrap();
         let timer = Instant::now();
 

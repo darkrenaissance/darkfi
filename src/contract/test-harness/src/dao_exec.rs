@@ -42,9 +42,9 @@ use super::{Holder, TestHarness, TxAction};
 impl TestHarness {
     pub fn dao_exec(
         &mut self,
-        dao: DaoInfo,
-        dao_bulla: DaoBulla,
-        proposal: DaoProposalInfo,
+        dao: &DaoInfo,
+        dao_bulla: &DaoBulla,
+        proposal: &DaoProposalInfo,
         yes_vote_value: u64,
         all_vote_value: u64,
         yes_vote_blind: pallas::Scalar,
@@ -116,8 +116,8 @@ impl TestHarness {
         let user_serial = xfer_debris.minted_coins[1].note.serial;
 
         let exec_builder = DaoExecCall {
-            proposal,
-            dao,
+            proposal: proposal.clone(),
+            dao: dao.clone(),
             yes_vote_value,
             all_vote_value,
             yes_vote_blind,
@@ -158,13 +158,13 @@ impl TestHarness {
 
     pub async fn execute_dao_exec_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         xfer_params: &MoneyTransferParamsV1,
         _exec_params: &DaoExecParams,
         slot: u64,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoExec).unwrap();
         let timer = Instant::now();
 

@@ -37,10 +37,10 @@ use super::{Holder, TestHarness, TxAction};
 impl TestHarness {
     pub fn genesis_stake(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         amount: u64,
     ) -> Result<(Transaction, ConsensusGenesisStakeParamsV1)> {
-        let wallet = self.holders.get(&holder).unwrap();
+        let wallet = self.holders.get(holder).unwrap();
         let (mint_pk, mint_zkbin) =
             self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let tx_action_benchmark =
@@ -89,45 +89,18 @@ impl TestHarness {
 
     pub async fn execute_genesis_stake_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         params: &ConsensusGenesisStakeParamsV1,
         slot: u64,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusGenesisStake).unwrap();
         let timer = Instant::now();
 
         wallet.validator.read().await.add_transactions(&[tx.clone()], slot, true).await?;
         wallet.consensus_staked_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
-        tx_action_benchmark.verify_times.push(timer.elapsed());
-
-        Ok(())
-    }
-
-    pub async fn execute_erroneous_genesis_stake_txs(
-        &mut self,
-        holder: Holder,
-        txs: &[Transaction],
-        slot: u64,
-        erroneous: usize,
-    ) -> Result<()> {
-        let wallet = self.holders.get(&holder).unwrap();
-        let tx_action_benchmark =
-            self.tx_action_benchmarks.get_mut(&TxAction::ConsensusGenesisStake).unwrap();
-        let timer = Instant::now();
-
-        let erroneous_txs = wallet
-            .validator
-            .read()
-            .await
-            .add_transactions(txs, slot, false)
-            .await
-            .err()
-            .unwrap()
-            .retrieve_erroneous_txs()?;
-        assert_eq!(erroneous_txs.len(), erroneous);
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())

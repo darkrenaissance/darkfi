@@ -50,8 +50,8 @@ impl Harness {
     pub async fn new(config: HarnessConfig) -> Result<Self> {
         // Use test harness to generate genesis transactions
         let mut th = TestHarness::new(&["money".to_string(), "consensus".to_string()]).await?;
-        let (genesis_stake_tx, _) = th.genesis_stake(Holder::Alice, config.alice_initial)?;
-        let (genesis_mint_tx, _) = th.genesis_mint(Holder::Bob, config.bob_initial)?;
+        let (genesis_stake_tx, _) = th.genesis_stake(&Holder::Alice, config.alice_initial)?;
+        let (genesis_mint_tx, _) = th.genesis_mint(&Holder::Bob, config.bob_initial)?;
 
         // Generate default genesis block
         let mut genesis_block = BlockInfo::default();

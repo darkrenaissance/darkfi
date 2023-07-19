@@ -38,13 +38,13 @@ impl TestHarness {
     pub fn token_mint(
         &mut self,
         amount: u64,
-        holder: Holder,
-        recipient: Holder,
+        holder: &Holder,
+        recipient: &Holder,
         spend_hook: Option<pallas::Base>,
         user_data: Option<pallas::Base>,
     ) -> Result<(Transaction, MoneyTokenMintParamsV1)> {
-        let rcpt = self.holders.get(&recipient).unwrap().keypair.public;
-        let mint_authority = self.holders.get(&holder).unwrap().token_mint_authority;
+        let rcpt = self.holders.get(recipient).unwrap().keypair.public;
+        let mint_authority = self.holders.get(holder).unwrap().token_mint_authority;
         let (mint_pk, mint_zkbin) =
             self.proving_keys.get(&MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1).unwrap();
         let tx_action_benchmark =
@@ -85,12 +85,12 @@ impl TestHarness {
 
     pub async fn execute_token_mint_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         params: &MoneyTokenMintParamsV1,
         slot: u64,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTokenMint).unwrap();
         let timer = Instant::now();
@@ -104,9 +104,9 @@ impl TestHarness {
 
     pub fn token_freeze(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
     ) -> Result<(Transaction, MoneyTokenFreezeParamsV1)> {
-        let mint_authority = self.holders.get(&holder).unwrap().token_mint_authority;
+        let mint_authority = self.holders.get(holder).unwrap().token_mint_authority;
         let (frz_pk, frz_zkbin) =
             self.proving_keys.get(&MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1).unwrap();
         let tx_action_benchmark =
@@ -143,12 +143,12 @@ impl TestHarness {
 
     pub async fn execute_token_freeze_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         _params: &MoneyTokenFreezeParamsV1,
         slot: u64,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTokenFreeze).unwrap();
         let timer = Instant::now();

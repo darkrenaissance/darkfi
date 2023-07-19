@@ -37,7 +37,7 @@ use darkfi_sdk::{
     },
     pasta::{group::ff::FromUniformBytes, pallas},
 };
-use log::{debug, info};
+use log::{debug, error, info};
 use rand::rngs::OsRng;
 
 use crate::{
@@ -265,12 +265,11 @@ fn create_proposal_proof(
     let value_pallas = pallas::Base::from(input.note.value);
     let shifted_target =
         slot.sigma1 * value_pallas + slot.sigma2 * value_pallas * value_pallas + HEADSTART;
-    // TODO: this check is true, while the proof can be created and is valid, when it shouldn't
-    log::error!("Y: {:?}", y);
-    log::error!("TARGET: {:?}", shifted_target);
+
     if y >= shifted_target {
-        info!("1) What");
-        //return Err(CoinIsNotSlotProducer)
+        error!("Y: {:?}", y);
+        error!("TARGET: {:?}", shifted_target);
+        return Err(CoinIsNotSlotProducer)
     }
 
     // Derive the input's nullifier

@@ -37,13 +37,13 @@ use super::{Holder, TestHarness, TxAction};
 impl TestHarness {
     pub fn otc_swap(
         &mut self,
-        holder0: Holder,
-        owncoin0: OwnCoin,
-        holder1: Holder,
-        owncoin1: OwnCoin,
+        holder0: &Holder,
+        owncoin0: &OwnCoin,
+        holder1: &Holder,
+        owncoin1: &OwnCoin,
     ) -> Result<(Transaction, MoneyTransferParamsV1)> {
-        let wallet0 = self.holders.get(&holder0).unwrap();
-        let wallet1 = self.holders.get(&holder1).unwrap();
+        let wallet0 = self.holders.get(holder0).unwrap();
+        let wallet1 = self.holders.get(holder1).unwrap();
         let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
         let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
         let tx_action_benchmark =
@@ -98,7 +98,7 @@ impl TestHarness {
             user_data_recv: rcpt_user_data,
             value_blinds: [value_recv_blind, value_send_blind],
             token_blinds: [token_recv_blind, token_send_blind],
-            coin: owncoin1,
+            coin: owncoin1.clone(),
             tree: wallet1.money_merkle_tree.clone(),
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
@@ -154,7 +154,7 @@ impl TestHarness {
 
     pub async fn execute_otc_swap_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         params: &MoneyTransferParamsV1,
         slot: u64,

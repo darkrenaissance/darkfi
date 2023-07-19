@@ -67,12 +67,12 @@ impl TestHarness {
 
     pub async fn execute_dao_mint_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         params: &DaoMintParams,
         slot: u64,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoMint).unwrap();
         let timer = Instant::now();
 

@@ -23,8 +23,9 @@ use smol::Executor;
 use url::Url;
 
 use crate::{
+    impl_p2p_message,
     net::{
-        ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
+        ChannelPtr, Message, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
     tx::Transaction,
@@ -39,6 +40,8 @@ pub struct ProtocolTx {
     p2p: P2pPtr,
     channel_address: Url,
 }
+
+impl_p2p_message!(Transaction, "tx");
 
 impl ProtocolTx {
     pub async fn init(
