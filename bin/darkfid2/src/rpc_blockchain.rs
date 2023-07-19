@@ -53,13 +53,9 @@ impl Darkfid {
         }
 
         let slot = params[0].as_u64().unwrap();
-        let validator = self.validator.read().await;
 
-        let blocks = match validator.blockchain.get_blocks_by_slot(&[slot]) {
-            Ok(v) => {
-                drop(validator);
-                v
-            }
+        let blocks = match self.validator.read().await.blockchain.get_blocks_by_slot(&[slot]) {
+            Ok(v) => v,
             Err(e) => {
                 error!(target: "darkfid::rpc::blockchain_get_slot", "Failed fetching block by slot: {}", e);
                 return JsonError::new(InternalError, None, id).into()
@@ -103,13 +99,8 @@ impl Darkfid {
             return JsonError::new(ParseError, None, id).into()
         };
 
-        let validator = self.validator.read().await;
-
-        let txs = match validator.blockchain.transactions.get(&[tx_hash], true) {
-            Ok(txs) => {
-                drop(validator);
-                txs
-            }
+        let txs = match self.validator.read().await.blockchain.transactions.get(&[tx_hash], true) {
+            Ok(txs) => txs,
             Err(e) => {
                 error!(target: "darkfid::rpc::blockchain_get_tx", "Failed fetching tx by hash: {}", e);
                 return JsonError::new(InternalError, None, id).into()

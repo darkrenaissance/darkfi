@@ -44,7 +44,7 @@ impl Darkfid {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        if !(*self.synced.lock().await) {
+        if !self.validator.read().await.synced {
             error!(target: "darkfid::rpc::tx_simulate", "Blockchain is not synced");
             return server_error(RpcError::NotSynced, id, None)
         }
@@ -94,7 +94,7 @@ impl Darkfid {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        if !(*self.synced.lock().await) {
+        if !self.validator.read().await.synced {
             error!(target: "darkfid::rpc::tx_broadcast", "Blockchain is not synced");
             return server_error(RpcError::NotSynced, id, None)
         }
@@ -117,8 +117,9 @@ impl Darkfid {
         };
 
         if self.consensus_p2p.is_some() {
-            // Consider we're participating in consensus here?
-            // The append_tx function performs a state transition check.
+            // Consensus participants can directly perform
+            // the state transition check and append to their
+            // pending transactions store.
             if self.validator.write().await.append_tx(tx.clone()).await.is_err() {
                 error!(target: "darkfid::rpc::tx_broadcast", "Failed to append transaction to mempool");
                 return server_error(RpcError::TxSimulationFail, id, None)
@@ -158,17 +159,13 @@ impl Darkfid {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        if !(*self.synced.lock().await) {
+        if !self.validator.read().await.synced {
             error!(target: "darkfid::rpc::tx_pending", "Blockchain is not synced");
             return server_error(RpcError::NotSynced, id, None)
         }
 
-        let validator = self.validator.read().await;
-        let pending_txs = match validator.blockchain.get_pending_txs() {
-            Ok(v) => {
-                drop(validator);
-                v
-            }
+        let pending_txs = match self.validator.read().await.blockchain.get_pending_txs() {
+            Ok(v) => v,
             Err(e) => {
                 error!(target: "darkfid::rpc::tx_pending", "Failed fetching pending txs: {}", e);
                 return JsonError::new(InternalError, None, id).into()
@@ -189,13 +186,12 @@ impl Darkfid {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        if !(*self.synced.lock().await) {
+        if !self.validator.read().await.synced {
             error!(target: "darkfid::rpc::tx_clean_pending", "Blockchain is not synced");
             return server_error(RpcError::NotSynced, id, None)
         }
 
-        let validator = self.validator.read().await;
-        let pending_txs = match validator.blockchain.get_pending_txs() {
+        let pending_txs = match self.validator.read().await.blockchain.get_pending_txs() {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "darkfid::rpc::tx_clean_pending", "Failed fetching pending txs: {}", e);
@@ -203,12 +199,9 @@ impl Darkfid {
             }
         };
 
-        match validator.blockchain.remove_pending_txs(&pending_txs) {
-            Ok(()) => drop(validator),
-            Err(e) => {
-                error!(target: "darkfid::rpc::tx_clean_pending", "Failed fetching pending txs: {}", e);
-                return JsonError::new(InternalError, None, id).into()
-            }
+        if let Err(e) = self.validator.read().await.blockchain.remove_pending_txs(&pending_txs) {
+            error!(target: "darkfid::rpc::tx_clean_pending", "Failed fetching pending txs: {}", e);
+            return JsonError::new(InternalError, None, id).into()
         };
 
         let pending_txs: Vec<String> = pending_txs.iter().map(|x| x.hash().to_string()).collect();

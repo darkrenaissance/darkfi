@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::{
-    stream::StreamExt,
-    sync::{Arc, Mutex},
-};
+use async_std::{stream::StreamExt, sync::Arc};
 use log::info;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
@@ -28,10 +25,10 @@ use darkfi::{
     async_daemonize,
     blockchain::BlockInfo,
     cli_desc,
-    net::{settings::SettingsOpt, P2p, P2pPtr},
+    net::{settings::SettingsOpt, P2p, P2pPtr, SESSION_ALL},
     rpc::server::listen_and_serve,
     util::time::TimeKeeper,
-    validator::{Validator, ValidatorConfig, ValidatorPtr},
+    validator::{proto::ProtocolTx, Validator, ValidatorConfig, ValidatorPtr},
     Result,
 };
 use darkfi_contract_test_harness::vks;
@@ -95,7 +92,6 @@ pub struct Darkfid {
     sync_p2p: P2pPtr,
     consensus_p2p: Option<P2pPtr>,
     validator: ValidatorPtr,
-    synced: Mutex<bool>,
 }
 
 impl Darkfid {
@@ -104,7 +100,7 @@ impl Darkfid {
         consensus_p2p: Option<P2pPtr>,
         validator: ValidatorPtr,
     ) -> Self {
-        Self { synced: Mutex::new(false), sync_p2p, consensus_p2p, validator }
+        Self { sync_p2p, consensus_p2p, validator }
     }
 }
 
@@ -115,18 +111,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     if args.testing_mode {
         info!(target: "darkfid", "Node is configured to run in testing mode!");
     }
-
-    // Initialize syncing P2P network
-    let sync_p2p = P2p::new(args.sync_net.into()).await;
-
-    // Initialize consensus P2P network
-    let consensus_p2p = {
-        if !args.consensus {
-            None
-        } else {
-            Some(P2p::new(args.consensus_net.into()).await)
-        }
-    };
 
     // NOTE: everything is dummy for now
     // Initialize or open sled database
@@ -148,6 +132,32 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     // Initialize validator
     let validator = Validator::new(&sled_db, config).await?;
 
+    // Initialize syncing P2P network
+    let sync_p2p = {
+        info!("Registering sync network P2P protocols...");
+        let p2p = P2p::new(args.sync_net.into()).await;
+        let registry = p2p.protocol_registry();
+
+        let _validator = validator.clone();
+        registry
+            .register(SESSION_ALL, move |channel, p2p| {
+                let validator = _validator.clone();
+                async move { ProtocolTx::init(channel, validator, p2p).await.unwrap() }
+            })
+            .await;
+
+        p2p
+    };
+
+    // Initialize consensus P2P network
+    let consensus_p2p = {
+        if !args.consensus {
+            None
+        } else {
+            Some(P2p::new(args.consensus_net.into()).await)
+        }
+    };
+
     // Initialize node
     let darkfid = Darkfid::new(sync_p2p, consensus_p2p, validator).await;
     let darkfid = Arc::new(darkfid);
@@ -159,7 +169,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     ex.spawn(listen_and_serve(args.rpc_listen, darkfid.clone(), _ex)).detach();
 
     // Simulate that we have synced
-    *darkfid.synced.lock().await = true;
+    darkfid.validator.write().await.synced = true;
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new()?;

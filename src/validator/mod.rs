@@ -37,6 +37,9 @@ use consensus::{next_block_reward, Consensus};
 pub mod verification;
 use verification::{verify_block, verify_genesis_block, verify_transactions};
 
+/// P2P net protocols
+pub mod proto;
+
 /// Helper utilities
 pub mod utils;
 use utils::deploy_native_contracts;
@@ -77,6 +80,8 @@ pub struct Validator {
     pub blockchain: Blockchain,
     /// Hot/Live data used by the consensus algorithm
     pub consensus: Consensus,
+    /// Flag signalling node has finished initial sync
+    pub synced: bool,
     /// Flag to enable testing mode
     pub testing_mode: bool,
 }
@@ -114,7 +119,8 @@ impl Validator {
         let consensus = Consensus::new(blockchain.clone(), config.time_keeper);
 
         // Create the actual state
-        let state = Arc::new(RwLock::new(Self { blockchain, consensus, testing_mode }));
+        let state =
+            Arc::new(RwLock::new(Self { blockchain, consensus, synced: false, testing_mode }));
         info!(target: "validator", "Finished initializing validator");
 
         Ok(state)
