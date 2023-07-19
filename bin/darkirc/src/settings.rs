@@ -20,7 +20,7 @@ use async_std::sync::Arc;
 use crypto_box::ChaChaBox;
 use log::{info, warn};
 use serde::{self, Deserialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use toml::Value;
@@ -119,6 +119,86 @@ impl ContactInfo {
     }
 }
 
+/// Defined user modes
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+pub enum UserMode {
+    None,
+    Op,
+    Voice,
+    HalfOp,
+    Admin,
+    Owner,
+}
+
+impl std::fmt::Display for UserMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        match self {
+            Self::None => write!(f, ""),
+            Self::Op => write!(f, "@"),
+            Self::Voice => write!(f, "+"),
+            Self::HalfOp => write!(f, "%"),
+            Self::Admin => write!(f, "&"),
+            Self::Owner => write!(f, "~"),
+        }
+    }
+}
+
+/// This struct holds info about a specific nickname within a channel.
+/// We usually use it to implement modes.
+#[derive(Debug, Clone, Eq)]
+pub struct Nick {
+    name: String,
+    mode: UserMode,
+}
+
+impl Nick {
+    pub fn new(name: String) -> Self {
+        Self { name, mode: UserMode::None }
+    }
+
+    pub fn set_mode(&mut self, mode: UserMode) -> Option<String> {
+        if self.mode == mode {
+            return None
+        }
+
+        self.mode = mode;
+        Some(format!("+{}", mode))
+    }
+
+    pub fn unset_mode(&mut self, mode: UserMode) -> Option<String> {
+        if self.mode != mode {
+            return None
+        }
+
+        self.mode = mode;
+        Some(format!("-{}", mode))
+    }
+}
+
+impl PartialEq for Nick {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl From<String> for Nick {
+    fn from(name: String) -> Self {
+        Self { name, mode: UserMode::None }
+    }
+}
+
+impl std::hash::Hash for Nick {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        state.write(&self.name.clone().into_bytes());
+    }
+}
+
+impl std::fmt::Display for Nick {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}{}", self.mode, self.name)
+    }
+}
+
 /// This struct holds information about preconfigured channels.
 /// In the TOML configuration file, we can configure channels as such:
 /// ```toml
@@ -141,12 +221,16 @@ pub struct ChannelInfo {
     /// Flag indicates whether the user has joined the channel or not
     pub joined: bool,
     /// All nicknames which are visible on the channel
-    pub names: Vec<String>,
+    pub names: HashSet<Nick>,
 }
 
 impl ChannelInfo {
     pub fn new() -> Result<Self> {
-        Ok(Self { topic: None, salt_box: None, joined: false, names: vec![] })
+        Ok(Self { topic: None, salt_box: None, joined: false, names: HashSet::new() })
+    }
+
+    pub fn names(&self) -> String {
+        self.names.iter().map(|n| n.to_string()).collect::<Vec<String>>().join(" ")
     }
 }
 
