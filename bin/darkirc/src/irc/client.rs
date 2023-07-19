@@ -223,11 +223,11 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             _ => warn!("[CLIENT {}] Unimplemented `{}` command", self.address, command),
         }
 
-        self.registre().await?;
+        self.register().await?;
         Ok(())
     }
 
-    async fn registre(&mut self) -> Result<()> {
+    async fn register(&mut self) -> Result<()> {
         if !self.irc_config.is_pass_init && self.irc_config.password.is_empty() {
             self.irc_config.is_pass_init = true
         }
