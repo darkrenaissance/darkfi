@@ -40,3 +40,7 @@ pub mod time;
 
 /// Ring Buffer implementation
 pub mod ringbuffer;
+
+/// Permuted Congruential Generator (PCG)
+/// This is an insecure PRNG used for simulations and tests.
+pub mod pcg;

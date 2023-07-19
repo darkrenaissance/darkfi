@@ -249,6 +249,7 @@ tx = [
 ]
 
 util = [
+    "rand",
     "simplelog",
     "serde",
     "serde_json",
