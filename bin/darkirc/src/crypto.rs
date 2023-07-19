@@ -31,13 +31,13 @@ use crate::{
 
 #[derive(serde::Serialize)]
 pub struct KeyPair {
-    pub private_key: String,
-    pub public_key: String,
+    pub public: String,
+    pub secret: String,
 }
 
 impl fmt::Display for KeyPair {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Public key: {}\nPrivate key: {}", self.public_key, self.private_key)
+        write!(f, "Public key: {}\nSecret key: {}", self.public, self.secret)
     }
 }
 

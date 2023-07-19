@@ -229,15 +229,15 @@ pub fn parse_configured_contacts(data: &str) -> Result<HashMap<String, ContactIn
     let contacts = map["contact"].as_table().unwrap();
 
     // Our secret key for NaCl boxes.
-    let found_priv = match parse_priv_key(data) {
+    let found_secret = match parse_secret_key(data) {
         Ok(v) => v,
         Err(_) => {
-            info!("Did not find private key in config, skipping contact configuration.");
+            info!("Did not find secret key in config, skipping contact configuration.");
             return Ok(ret)
         }
     };
 
-    let bytes: [u8; 32] = match bs58::decode(found_priv).into_vec() {
+    let bytes: [u8; 32] = match bs58::decode(found_secret).into_vec() {
         Ok(v) => {
             if v.len() != 32 {
                 warn!("Decoded base58 secret key string is not 32 bytes");
@@ -312,28 +312,28 @@ fn salt_box_from_shared_secret(s: &str) -> Result<ChaChaBox> {
     Ok(ChaChaBox::new(&public, &secret))
 }
 
-fn parse_priv_key(data: &str) -> Result<String> {
-    let mut pk = String::new();
+fn parse_secret_key(data: &str) -> Result<String> {
+    let mut sk = String::new();
 
     let map = match toml::from_str(data)? {
         Value::Table(m) => m,
-        _ => return Ok(pk),
+        _ => return Ok(sk),
     };
 
-    if !map.contains_key("private_key") {
-        return Ok(pk)
+    if !map.contains_key("secret_key") {
+        return Ok(sk)
     }
 
-    if !map["private_key"].is_table() {
-        return Ok(pk)
+    if !map["secret_key"].is_table() {
+        return Ok(sk)
     }
 
-    let private_keys = map["private_key"].as_table().unwrap();
+    let secret_keys = map["secret_key"].as_table().unwrap();
 
-    for prv_key in private_keys {
-        pk = prv_key.0.into();
+    for key in secret_keys {
+        sk = key.0.into();
     }
 
     info!("Found secret key in config, noted it down.");
-    Ok(pk)
+    Ok(sk)
 }
