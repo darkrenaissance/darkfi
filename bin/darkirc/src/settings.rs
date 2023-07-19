@@ -204,7 +204,7 @@ pub fn parse_configured_channels(data: &str) -> Result<HashMap<String, ChannelIn
 ///
 /// ```toml
 /// [contact."nick"]
-/// contact_pubkey = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
+/// public_key = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 /// ```
 pub fn parse_configured_contacts(data: &str) -> Result<HashMap<String, ContactInfo>> {
     let mut ret = HashMap::new();
@@ -275,12 +275,12 @@ pub fn parse_configured_contacts(data: &str) -> Result<HashMap<String, ContactIn
         }
 
         // Build the NaCl box
-        if !table.contains_key("contact_pubkey") || !table["contact_pubkey"].is_str() {
-            warn!("Contact {} doesn't have `contact_pubkey` set or is not a string.", cnt.0);
+        if !table.contains_key("public_key") || !table["public_key"].is_str() {
+            warn!("Contact {} doesn't have `public_key` set or is not a valid string.", cnt.0);
             continue
         }
 
-        let pub_str = table["contact_pubkey"].as_str().unwrap();
+        let pub_str = table["public_key"].as_str().unwrap();
         let bytes: [u8; 32] = match bs58::decode(pub_str).into_vec() {
             Ok(v) => {
                 if v.len() != 32 {
@@ -299,7 +299,7 @@ pub fn parse_configured_contacts(data: &str) -> Result<HashMap<String, ContactIn
         let public = crypto_box::PublicKey::from(bytes);
         contact_info.salt_box = Some(Arc::new(ChaChaBox::new(&public, &secret)));
         ret.insert(cnt.0.to_string(), contact_info);
-        info!("Instantiated NaCl box for contact {}", cnt.0);
+        info!("Instantiated NaCl box for contact \"{}\"", cnt.0);
     }
 
     Ok(ret)
