@@ -21,7 +21,10 @@ use std::collections::HashMap;
 use darkfi::{
     blockchain::BlockInfo,
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
-    util::time::TimeKeeper,
+    util::{
+        pcg::Pcg32,
+        time::{TimeKeeper, Timestamp},
+    },
     validator::{Validator, ValidatorConfig, ValidatorPtr},
     wallet::{WalletDb, WalletPtr},
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
@@ -209,30 +212,34 @@ pub struct TestHarness {
 impl TestHarness {
     pub async fn new(contracts: &[String]) -> Result<Self> {
         let mut holders = HashMap::new();
-        let genesis_block = BlockInfo::default();
+        let mut genesis_block = BlockInfo::default();
+        genesis_block.header.timestamp = Timestamp(1689772567);
 
-        let faucet_kp = Keypair::random(&mut OsRng);
+        // Deterministic PRNG
+        let mut rng = Pcg32::new(42);
+
+        let faucet_kp = Keypair::random(&mut rng);
         let faucet_pubkeys = vec![faucet_kp.public];
         let faucet = Wallet::new(faucet_kp, &genesis_block, &faucet_pubkeys).await?;
         holders.insert(Holder::Faucet, faucet);
 
-        let alice_kp = Keypair::random(&mut OsRng);
+        let alice_kp = Keypair::random(&mut rng);
         let alice = Wallet::new(alice_kp, &genesis_block, &faucet_pubkeys).await?;
         // Alice is inserted at end of function
 
-        let bob_kp = Keypair::random(&mut OsRng);
+        let bob_kp = Keypair::random(&mut rng);
         let bob = Wallet::new(bob_kp, &genesis_block, &faucet_pubkeys).await?;
         holders.insert(Holder::Bob, bob);
 
-        let charlie_kp = Keypair::random(&mut OsRng);
+        let charlie_kp = Keypair::random(&mut rng);
         let charlie = Wallet::new(charlie_kp, &genesis_block, &faucet_pubkeys).await?;
         holders.insert(Holder::Charlie, charlie);
 
-        let rachel_kp = Keypair::random(&mut OsRng);
+        let rachel_kp = Keypair::random(&mut rng);
         let rachel = Wallet::new(rachel_kp, &genesis_block, &faucet_pubkeys).await?;
         holders.insert(Holder::Rachel, rachel);
 
-        let dao_kp = Keypair::random(&mut OsRng);
+        let dao_kp = Keypair::random(&mut rng);
         let dao = Wallet::new(dao_kp, &genesis_block, &faucet_pubkeys).await?;
         holders.insert(Holder::Dao, dao);
 

@@ -18,7 +18,7 @@
 
 use std::time::Instant;
 
-use darkfi::{tx::Transaction, Result};
+use darkfi::{tx::Transaction, zk::halo2::Field, Result};
 use darkfi_consensus_contract::{
     client::genesis_stake_v1::ConsensusGenesisStakeCallBuilder,
     model::ConsensusGenesisStakeParamsV1, ConsensusFunction,
@@ -26,6 +26,7 @@ use darkfi_consensus_contract::{
 use darkfi_money_contract::CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1;
 use darkfi_sdk::{
     crypto::{MerkleNode, CONSENSUS_CONTRACT_ID},
+    pasta::pallas,
     ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
@@ -54,7 +55,13 @@ impl TestHarness {
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
         }
-        .build()?;
+        .build_with_params(
+            pallas::Scalar::random(&mut OsRng),
+            pallas::Scalar::random(&mut OsRng),
+            pallas::Scalar::random(&mut OsRng),
+            pallas::Base::from(28),
+        )?;
+
         let (genesis_stake_params, genesis_stake_proofs) =
             (genesis_stake_call_debris.params, genesis_stake_call_debris.proofs);
 
