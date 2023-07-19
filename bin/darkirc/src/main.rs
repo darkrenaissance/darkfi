@@ -85,6 +85,13 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         return Ok(())
     }
 
+    if settings.gen_secret {
+        let secret_key = crypto_box::SecretKey::generate(&mut OsRng);
+        let encoded = bs58::encode(secret_key.to_bytes());
+        println!("{}", encoded.into_string());
+        return Ok(())
+    }
+
     ////////////////////
     // Initialize the base structures
     ////////////////////

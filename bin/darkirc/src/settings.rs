@@ -71,6 +71,10 @@ pub struct Args {
     #[structopt(long)]
     pub gen_keypair: bool,
 
+    /// Generate a new NaCl secret for an encrypted channel and exit
+    #[structopt(long)]
+    pub gen_secret: bool,
+
     /// Path to save keypair in
     #[structopt(short)]
     pub output: Option<String>,

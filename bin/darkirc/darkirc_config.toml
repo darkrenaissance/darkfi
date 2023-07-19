@@ -45,6 +45,8 @@ transport_mixing = false
 ## ====================
 ##
 ## You can create a shared secret with `darkirc --gen-secret`.
+## Never share this secret over unencrypted channels or with someone
+## who you do not want to be able to read all the channel messages.
 ## Use it like this example:
 #[channel."#foo"]
 #secret = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
