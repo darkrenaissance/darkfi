@@ -67,8 +67,8 @@ class DarkfiTable:
                         if random.random() < SLASHING_RATIO:
                             self.darkies.remove(self.darkies[i])
                             print('stakeholder {} slashed'.format(i))
-                            break
-                        self.darkies[i].update_stake(self.rewards[-1])
+                        else:
+                            self.darkies[i].update_stake(self.rewards[-1])
                         break
                 # resolve finalization
                 self.Sigma += self.rewards[-1]
@@ -93,7 +93,7 @@ class DarkfiTable:
                             break
                     self.darkies[darkie_winning_idx].resync_stake(resync_reward)
                     self.Sigma += resync_reward
-            rt_range.set_description('issuance {} DRK, acc: {}, stake = {}%, sr: {}%, reward:{}'.format(round(sum(self.rewards),2), round(acc,2), round(total_stake/self.Sigma*100 if self.Sigma>0 else 0,2), self.avg_stake_ratio()*100, self.rewards[-1]))
+            rt_range.set_description('epoch: {}, issuance {} DRK, acc: {}, stake = {}%, sr: {}%, reward:{}, apr: {}'.format(int(count/EPOCH_LENGTH), round(self.Sigma,2), round(acc,2), round(total_stake/self.Sigma*100 if self.Sigma>0 else 0,2), round(self.avg_stake_ratio()*100,2) , round(self.rewards[-1],2), round(self.avg_apr(),2)))
             #print('[2]stake: {}, sigma: {}, reward: {}'.format(total_stake, self.Sigma, self.rewards[-1]))
             assert(round(total_stake,1) <= round(self.Sigma,1))
             count+=1

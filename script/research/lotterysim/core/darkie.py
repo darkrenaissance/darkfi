@@ -27,13 +27,18 @@ class Darkie():
     def vesting_wrapped_initial_stake(self):
         #print('initial stake: {}, corresponding vesting: {}'.format(self.initial_stake[0], self.vesting[int((self.slot)/VESTING_PERIOD)]))
         # note index is previous slot since update_vesting is called after background execution.
-        return self.current_vesting() if self.slot>0 else self.initial_stake[-1]
+        #return self.current_vesting() if self.slot>0 else self.initial_stake[-1]
+        return (self.current_vesting() if self.slot>0 else self.initial_stake[-1]) + self.initial_stake[-1]
 
     def apr_scaled_to_runningtime(self):
         initial_stake = self.vesting_wrapped_initial_stake()
         #print('stake: {}, initial_stake: {}'.format(self.stake, initial_stake))
         assert self.stake >= initial_stake, 'stake: {}, initial_stake: {}, slot: {}, current: {}, previous: {} vesting'.format(self.stake, initial_stake, self.slot, self.current_vesting(), self.prev_vesting())
-        return Num(self.stake - initial_stake) / Num(initial_stake) *  Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot> 0 and initial_stake>0 else 0
+        #if self.slot%100==0:
+            #print('stake: {}, initial stake: {}'.format(self.stake, initial_stake))
+            #print(self.initial_stake)
+        apr = Num(self.stake - initial_stake) / Num(initial_stake) *  Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot> 0 and initial_stake>0 else 0
+        return apr
 
     def staked_tokens(self):
         '''
@@ -63,7 +68,7 @@ class Darkie():
             x = (Num(1) if hp else 1)  - (Num(tune_parameter) if hp else tune_parameter)
             c = (x.ln() if type(x)==Num else math.log(x))
             sigmas = [   c/((self.Sigma+EPSILON)**i) * ( ((L_HP if hp else L)/fact(i)) ) for i in range(1, k+1) ]
-            scaled_target = approx_target_in_zk(sigmas, Num(stake)) + (BASE_L_HP if hp else BASE_L)
+            scaled_target = approx_target_in_zk(sigmas, Num(stake)) + ((BASE_L_HP if hp else BASE_L) if self.slot < HEADSTART_AIRDROP else 0)
             return scaled_target
 
         if self.slot % EPOCH_LENGTH ==0 and self.slot > 0:
@@ -71,7 +76,8 @@ class Darkie():
             # staked ratio is added in strategy
             self.strategy.set_ratio(self.slot, apr)
             # epoch stake is added
-            self.initial_stake +=[self.stake]
+            if self.slot < HEADSTART_AIRDROP:
+                self.initial_stake +=[self.stake]
         #if self.slot == HEADSTART_AIRDROP:
         #    self.initial_stake += [self.stake]
         T = target(self.f, self.strategy.staked_value(self.stake))
