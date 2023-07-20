@@ -14,7 +14,7 @@ KP_SEARCH=-0.63
 KI_STEP=0.01
 KI_SEARCH=3.35
 
-RUNNING_TIME=1000
+RUNNING_TIME=5000
 NODES = 1000
 
 SHIFTING = 0.05
@@ -45,7 +45,7 @@ rand_running_time = args.rand_running_time
 debug = args.debug
 
 def experiment(controller_type=CONTROLLER_TYPE_DISCRETE, rkp=0, rki=0, distribution=[], hp=True):
-    dt = DarkfiTable(ERC20DRK, RUNNING_TIME, controller_type, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0, r_kp=rkp, r_ki=rki, r_kd=0)
+    dt = DarkfiTable(0, RUNNING_TIME, controller_type, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0, r_kp=rkp, r_ki=rki, r_kd=0)
     RND_NODES = random.randint(5, NODES) if randomize_nodes else NODES
     for idx in range(0,RND_NODES):
         darkie = Darkie(distribution[idx], strategy=random_strategy(EPOCH_LENGTH))
@@ -116,7 +116,8 @@ def crawler(crawl, range_multiplier, step=0.1):
             step*=10
     np.random.shuffle(crawl_range)
     crawl_range = tqdm(crawl_range)
-    distribution = [random.gauss(ERC20DRK/NODES, ERC20DRK/NODES*0.1) for i in range(NODES)]
+    #distribution =  [random.gauss(ERC20DRK/NODES, ERC20DRK/NODES*0.1) for i in range(NODES)]
+    distribution = [0 for i in range(NODES)]
     for i in crawl_range:
         kp = i if crawl==KP else highest_gain[0]
         ki = i if crawl==KI else highest_gain[1]

@@ -20,7 +20,8 @@ class Darkie():
     def apy_scaled_to_runningtime(self, rewards):
         avg_apy = 0
         for idx, reward in enumerate(rewards):
-            current_epoch_staked_tokens = Num(self.strategy.staked_tokens_ratio[idx-1]) * Num(self.initial_stake[idx-1])
+            init_stake = Num(self.initial_stake[idx-1]) if len(self.initial_stake)>=idx else Num(self.initial_stake[-1])
+            current_epoch_staked_tokens = Num(self.strategy.staked_tokens_ratio[idx-1]) * init_stake
             avg_apy += (Num(reward) / current_epoch_staked_tokens) if current_epoch_staked_tokens!=0 else 0
         return avg_apy * Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot  and self.initial_stake[0]>0 >0 else 0
 
@@ -37,7 +38,7 @@ class Darkie():
         #if self.slot%100==0:
             #print('stake: {}, initial stake: {}'.format(self.stake, initial_stake))
             #print(self.initial_stake)
-        apr = Num(self.stake - initial_stake) / Num(initial_stake) *  Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot> 0 and initial_stake>0 else 0
+        apr = Num(self.stake - initial_stake) / Num(initial_stake) *  Num(ONE_YEAR/(self.slot)) if self.slot> 0 and initial_stake>0 else 0
         return apr
 
     def staked_tokens(self):
@@ -60,7 +61,6 @@ class Darkie():
         self.feedback = (Num(feedback) if hp else feedback)
         self.f = (Num(f) if hp else f)
         self.slot = count
-
 
     def run(self, hp=True):
         k=N_TERM
