@@ -129,17 +129,18 @@ pub struct ZkCircuit {
 }
 
 impl ZkCircuit {
-    pub fn new(witnesses: Vec<Witness>, circuit_code: ZkBinary) -> Self {
+    pub fn new(witnesses: Vec<Witness>, circuit_code: &ZkBinary) -> Self {
         let constants = circuit_code.constants.iter().map(|x| x.1.clone()).collect();
         #[allow(clippy::map_clone)]
         let literals = circuit_code.literals.iter().map(|x| x.clone()).collect();
-        Self { constants, witnesses, literals, opcodes: circuit_code.opcodes }
+        Self { constants, witnesses, literals, opcodes: circuit_code.opcodes.clone() }
     }
 }
 
 impl Circuit<pallas::Base> for ZkCircuit {
     type Config = VmConfig;
     type FloorPlanner = floor_planner::V1;
+    type Params = ();
 
     fn without_witnesses(&self) -> Self {
         Self {
