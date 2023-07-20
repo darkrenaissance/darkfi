@@ -20,7 +20,7 @@ local number = token(l.NUMBER, l.integer)
 
 -- Keywords.
 local keyword = token(l.KEYWORD, word_match{
-  'constant', 'witness', 'circuit',
+  'k', 'constant', 'witness', 'circuit',
 })
 
 -- Constants.

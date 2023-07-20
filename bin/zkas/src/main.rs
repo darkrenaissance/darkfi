@@ -81,7 +81,7 @@ fn main() {
     // the initial AST, not caring much about the semantics, just enforcing
     // syntax and general structure.
     let parser = Parser::new(filename, source.chars(), tokens);
-    let (namespace, constants, witnesses, statements) = parser.parse();
+    let (namespace, k, constants, witnesses, statements) = parser.parse();
 
     // The analyzer goes through the initial AST provided by the parser and
     // converts return and variable types to their correct forms, and also
@@ -105,6 +105,7 @@ fn main() {
         filename,
         source.chars(),
         namespace,
+        k,
         analyzer.constants,
         analyzer.witnesses,
         analyzer.statements,

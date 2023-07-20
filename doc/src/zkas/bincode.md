@@ -18,6 +18,7 @@ The compiled binary blob has the following layout:
 ```
 MAGIC_BYTES
 BINARY_VERSION
+K
 NAMESPACE
 .constant
 CONSTANT_TYPE CONSTANT_NAME 
@@ -60,11 +61,16 @@ potential different formats in the future.
 
 > `0x02`
 
+### `K`
+
+This is a 32bit unsigned integer that represents the `k` parameter
+needed to know how many rows our circuit needs.
+
 ### `NAMESPACE`
 
-This sector after `MAGIC_BYTES` and `BINARY_VERSION` contains the
-reference namespace of the code. This is the namespace used in the
-source code, e.g.:
+This sector after `MAGIC_BYTES`, `BINARY_VERSION`, and `K` contains
+the reference namespace of the code. This is the namespace used in
+the source code, e.g.:
 
 ```
 constant "MyNamespace" { ... }
@@ -168,6 +174,8 @@ TBD
 | `LessThanStrict`     | Strictly compare if `Base` a is lesser than `Base` b            |
 | `LessThanLoose`      | Loosely compare if `Base` a is lesser than `Base` b             |
 | `BoolCheck`          | Enforce that a `Base` fits in a boolean value (either 0 or 1)   |
+| `CondSelect`         | Select either `a` or `b` based on if `cond` is 0 or 1           |
+| `ZeroCondSelect`     | Output `a` if `a` is zero, or `b` if a is not zero              |
 | `ConstrainEqualBase` | Constrain equality of two `Base` elements from the heap         |
 | `ConstrainEqualPoint`| Constrain equality of two `EcPoint` elements from the heap      |
 | `ConstrainInstance`  | Constrain a `Base` to a Circuit's Public Input.                 |
@@ -176,23 +184,25 @@ TBD
 
 | Opcode                | Function                                                | Return        |
 | --------------------- | ------------------------------------------------------- | ------------- |
-| `EcAdd`               | `ec_add(EcPoint a, EcPoint b)`                          | `(EcPoint c)` |
-| `EcMul`               | `ec_mul(EcPoint a, EcPoint c)`                          | `(EcPoint c)` |
-| `EcMulBase`           | `ec_mul_base(Base a, EcFixedPointBase b)`               | `(EcPoint c)` |
-| `EcMulShort`          | `ec_mul_short(Base a, EcFixedPointShort b)`             | `(EcPoint c)` |
-| `EcMulVarBase`        | `ec_mul_var_base(Base a, EcNiPoint)`                    | `(EcPoint c)` |
-| `EcGetX`              | `ec_get_x(EcPoint a)`                                   | `(Base x)`    |
-| `EcGetY`              | `ec_get_y(EcPoint a)`                                   | `(Base y)`    |
-| `PoseidonHash`        | `poseidon_hash(Base a, ..., Base n)`                    | `(Base h)`    |
-| `MerkleRoot`          | `merkle_root(Uint32 i, MerklePath p, Base a)`           | `(Base r)`    |
-| `BaseAdd`             | `base_add(Base a, Base b)`                              | `(Base c)`    |
-| `BaseMul`             | `base_mul(Base a, Base b)`                              | `(Base c)`    |
-| `BaseSub`             | `base_sub(Base a, Base b)`                              | `(Base c)`    |
-| `WitnessBase`         | `witness_base(123)`                                     | `(Base a)`    |
+| `EcAdd`               | `ec_add(EcPoint a, EcPoint b)`                          | `(EcPoint)`   |
+| `EcMul`               | `ec_mul(EcPoint a, EcPoint c)`                          | `(EcPoint)`   |
+| `EcMulBase`           | `ec_mul_base(Base a, EcFixedPointBase b)`               | `(EcPoint)`   |
+| `EcMulShort`          | `ec_mul_short(Base a, EcFixedPointShort b)`             | `(EcPoint)`   |
+| `EcMulVarBase`        | `ec_mul_var_base(Base a, EcNiPoint)`                    | `(EcPoint)`   |
+| `EcGetX`              | `ec_get_x(EcPoint a)`                                   | `(Base)`      |
+| `EcGetY`              | `ec_get_y(EcPoint a)`                                   | `(Base)`      |
+| `PoseidonHash`        | `poseidon_hash(Base a, ..., Base n)`                    | `(Base)`      |
+| `MerkleRoot`          | `merkle_root(Uint32 i, MerklePath p, Base a)`           | `(Base)`      |
+| `BaseAdd`             | `base_add(Base a, Base b)`                              | `(Base)`      |
+| `BaseMul`             | `base_mul(Base a, Base b)`                              | `(Base)`      |
+| `BaseSub`             | `base_sub(Base a, Base b)`                              | `(Base)`      |
+| `WitnessBase`         | `witness_base(123)`                                     | `(Base)`      |
 | `RangeCheck`          | `range_check(64, Base a)`                               | `()`          |
 | `LessThanStrict`      | `less_than_strict(Base a, Base b)`                      | `()`          |
 | `LessThanLoose`       | `less_than_loose(Base a, Base b)`                       | `()`          |
 | `BoolCheck`           | `bool_check(Base a)`                                    | `()`          |
+| `CondSelect`          | `cond_select(Base cond, Base a, Base b)`                | `(Base)`      |
+| `ZeroCondSelect`      | `zero_cond(Base a, Base b)`                             | `(Base)`      |
 | `ConstrainEqualBase`  | `constrain_equal_base(Base a, Base b)`                  | `()`          |
 | `ConstrainEqualPoint` | `constrain_equal_point(EcPoint a, EcPoint b)`           | `()`          |
 | `ConstrainInstance`   | `constrain_instance(Base a)`                            | `()`          |

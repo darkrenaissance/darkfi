@@ -33,6 +33,7 @@ pub const MAGIC_BYTES: [u8; 4] = [0x0b, 0x01, 0xb1, 0x35];
 
 pub struct Compiler {
     namespace: String,
+    k: u32,
     constants: Vec<Constant>,
     witnesses: Vec<Witness>,
     statements: Vec<Statement>,
@@ -47,6 +48,7 @@ impl Compiler {
         filename: &str,
         source: Chars,
         namespace: String,
+        k: u32,
         constants: Vec<Constant>,
         witnesses: Vec<Witness>,
         statements: Vec<Statement>,
@@ -58,7 +60,7 @@ impl Compiler {
         let lines: Vec<String> = source.as_str().lines().map(|x| x.to_string()).collect();
         let error = ErrorEmitter::new("Compiler", filename, lines);
 
-        Self { namespace, constants, witnesses, statements, literals, debug_info, error }
+        Self { namespace, k, constants, witnesses, statements, literals, debug_info, error }
     }
 
     pub fn compile(&self) -> Vec<u8> {
@@ -67,6 +69,9 @@ impl Compiler {
         // Write the magic bytes and version
         bincode.extend_from_slice(&MAGIC_BYTES);
         bincode.push(BINARY_VERSION);
+
+        // Write the circuit's k param
+        bincode.extend_from_slice(&serialize(&self.k));
 
         // Write the circuit's namespace
         bincode.extend_from_slice(&serialize(&self.namespace));

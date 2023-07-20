@@ -1,3 +1,5 @@
+k = 13;
+
 constant "DaoVoteMain" {
 	EcFixedPoint VALUE_COMMIT_RANDOM,
 	EcFixedPointShort VALUE_COMMIT_VALUE,

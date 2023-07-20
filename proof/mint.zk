@@ -1,3 +1,5 @@
+k = 13;
+
 constant "Mint" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,

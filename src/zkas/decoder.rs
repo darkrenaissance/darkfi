@@ -26,6 +26,7 @@ use crate::{Error::ZkasDecoderError as ZkasErr, Result};
 #[derive(Clone, Debug)]
 pub struct ZkBinary {
     pub namespace: String,
+    pub k: u32,
     pub constants: Vec<(VarType, String)>,
     pub literals: Vec<(LitType, String)>,
     pub witnesses: Vec<VarType>,
@@ -46,8 +47,11 @@ impl ZkBinary {
 
         let _binary_version = &bytes[4];
 
-        // After the binary version, we're supposed to have the witness namespace
-        let (namespace, _): (String, _) = deserialize_partial(&bytes[5..])?;
+        // Deserialize the k param
+        let (k, _): (u32, _) = deserialize_partial(&bytes[5..9])?;
+
+        // After the binary version and k, we're supposed to have the witness namespace
+        let (namespace, _): (String, _) = deserialize_partial(&bytes[9..])?;
 
         // Enforce a limit on the namespace string length
         if namespace.len() > 32 {
@@ -107,7 +111,7 @@ impl ZkBinary {
 
         // TODO: Debug info
 
-        Ok(Self { namespace, constants, literals, witnesses, opcodes })
+        Ok(Self { namespace, k, constants, literals, witnesses, opcodes })
     }
 
     fn parse_constants(bytes: &[u8]) -> Result<Vec<(VarType, String)>> {
