@@ -24,7 +24,7 @@ use log::{debug, error};
 
 use crate::{
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
-    zk::{VerifyingKey, ZkCircuit},
+    zk::{empty_witnesses, VerifyingKey, ZkCircuit},
     zkas::ZkBinary,
     Error, Result,
 };
@@ -210,9 +210,12 @@ impl ContractStateStore {
         // The first vec is the compiled zkas binary
         let zkbin = ZkBinary::decode(&zkbin).unwrap();
 
+        // Construct the circuit to be able to read the VerifyingKey
+        let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
+
         // The second one is the serialized VerifyingKey for it
         let mut vk_buf = Cursor::new(vkbin);
-        let vk = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut vk_buf).unwrap();
+        let vk = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut vk_buf, circuit).unwrap();
 
         Ok((zkbin, vk))
     }
@@ -319,9 +322,12 @@ impl ContractStateStoreOverlay {
         // The first vec is the compiled zkas binary
         let zkbin = ZkBinary::decode(&zkbin).unwrap();
 
+        // Construct the circuit to be able to read the VerifyingKey
+        let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
+
         // The second one is the serialized VerifyingKey for it
         let mut vk_buf = Cursor::new(vkbin);
-        let vk = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut vk_buf).unwrap();
+        let vk = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut vk_buf, circuit).unwrap();
 
         Ok((zkbin, vk))
     }

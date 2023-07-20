@@ -240,10 +240,10 @@ impl Faucetd {
 
         let k = 13;
         let mint_zkbin = ZkBinary::decode(&mint_zkbin)?;
-        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), mint_zkbin.clone());
+        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), &mint_zkbin);
 
         let burn_zkbin = ZkBinary::decode(&burn_zkbin)?;
-        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), burn_zkbin.clone());
+        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), &burn_zkbin);
 
         info!("Creating mint circuit proving key");
         let mint_provingkey = ProvingKey::build(k, &mint_circuit);

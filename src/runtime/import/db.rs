@@ -598,8 +598,7 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
 
     // We didn't find any existing bincode, so let's create a new VerifyingKey and write it all.
     info!(target: "runtime::db::zkas_db_set()", "Creating VerifyingKey for {} zkas circuit", zkbin.namespace);
-    let witnesses = empty_witnesses(&zkbin);
-    let circuit = ZkCircuit::new(witnesses, zkbin.clone());
+    let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
     let vk = VerifyingKey::build(13, &circuit);
     let mut vk_buf = vec![];
     if let Err(e) = vk.write(&mut vk_buf) {

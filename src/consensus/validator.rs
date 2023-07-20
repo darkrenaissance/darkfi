@@ -110,8 +110,7 @@ impl ValidatorState {
         debug!(target: "consensus::validator", "Generating leader proof keys with k: {}", constants::LEADER_PROOF_K);
         let bincode = include_bytes!("../../proof/lead.zk.bin");
         let zkbin = ZkBinary::decode(bincode)?;
-        let witnesses = empty_witnesses(&zkbin);
-        let circuit = ZkCircuit::new(witnesses, zkbin);
+        let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
 
         let lead_verifying_key = VerifyingKey::build(constants::LEADER_PROOF_K, &circuit);
         // We only need this proving key if we're going to participate in the consensus.

@@ -267,6 +267,7 @@ fn create_proposal_proof(
         slot.sigma1 * value_pallas + slot.sigma2 * value_pallas * value_pallas + HEADSTART;
 
     if y >= shifted_target {
+        error!("MU_Y: {:?}", mu_y);
         error!("Y: {:?}", y);
         error!("TARGET: {:?}", shifted_target);
         return Err(CoinIsNotSlotProducer)
@@ -351,7 +352,7 @@ fn create_proposal_proof(
         Witness::Base(Value::known(public_inputs.headstart)),
     ];
 
-    let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+    let circuit = ZkCircuit::new(prover_witnesses, &zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 
     Ok((proof, public_inputs))

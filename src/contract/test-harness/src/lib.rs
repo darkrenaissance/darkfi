@@ -255,7 +255,7 @@ impl TestHarness {
                 let (zkbin, _): (Vec<u8>, Vec<u8>) = deserialize(&zkas_bytes)?;
                 let zkbin = ZkBinary::decode(&zkbin)?;
                 let witnesses = empty_witnesses(&zkbin);
-                let circuit = ZkCircuit::new(witnesses, zkbin.clone());
+                let circuit = ZkCircuit::new(witnesses, &zkbin);
                 let pk = ProvingKey::build(13, &circuit);
                 proving_keys.insert($ns, (pk, zkbin));
             };

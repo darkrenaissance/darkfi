@@ -456,7 +456,7 @@ pub fn create_transfer_burn_proof(
         Witness::Base(Value::known(signature_secret.inner())),
     ];
 
-    let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+    let circuit = ZkCircuit::new(prover_witnesses, &zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 
     Ok((proof, public_inputs))
@@ -501,7 +501,7 @@ pub fn create_transfer_mint_proof(
         Witness::Scalar(Value::known(token_blind)),
     ];
 
-    let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+    let circuit = ZkCircuit::new(prover_witnesses, &zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 
     Ok((proof, public_inputs))

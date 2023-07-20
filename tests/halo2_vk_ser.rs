@@ -50,11 +50,11 @@ fn halo2_vk_ser() -> Result<()> {
     let verifier_witnesses = empty_witnesses(&zkbin);
 
     println!("Building vk1");
-    let circuit = ZkCircuit::new(verifier_witnesses.clone(), zkbin.clone());
+    let circuit = ZkCircuit::new(verifier_witnesses.clone(), &zkbin);
     let vk1 = VerifyingKey::build(13, &circuit);
 
     println!("Building vk2");
-    let circuit = ZkCircuit::new(verifier_witnesses.clone(), zkbin.clone());
+    let circuit = ZkCircuit::new(verifier_witnesses.clone(), &zkbin);
     let vk2 = VerifyingKey::build(13, &circuit);
 
     let mut buf1 = vec![];
@@ -79,7 +79,7 @@ fn halo2_vk_ser() -> Result<()> {
 
     // Now let's see if we can verify a proof with all four keys.
     println!("Creating pk");
-    let circuit = ZkCircuit::new(verifier_witnesses.clone(), zkbin.clone());
+    let circuit = ZkCircuit::new(verifier_witnesses.clone(), &zkbin);
     let pk = ProvingKey::build(13, &circuit);
 
     let value = 666_u64;
@@ -151,7 +151,7 @@ fn halo2_vk_ser() -> Result<()> {
     ];
 
     println!("Creating proof");
-    let circuit = ZkCircuit::new(prover_witnesses, zkbin);
+    let circuit = ZkCircuit::new(prover_witnesses, &zkbin);
     let proof = Proof::create(&pk, &[circuit], &public_inputs, &mut OsRng)?;
 
     println!("Verifying with vk1");

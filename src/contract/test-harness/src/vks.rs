@@ -112,7 +112,7 @@ fn read_or_gen_vks() -> Result<Vks> {
         let zkbin = ZkBinary::decode(bincode)?;
         debug!("Building VK for {}", zkbin.namespace);
         let witnesses = empty_witnesses(&zkbin);
-        let circuit = ZkCircuit::new(witnesses, zkbin.clone());
+        let circuit = ZkCircuit::new(witnesses, &zkbin);
         let vk = VerifyingKey::build(13, &circuit);
         let mut vk_buf = vec![];
         vk.write(&mut vk_buf)?;

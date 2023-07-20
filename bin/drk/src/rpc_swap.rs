@@ -124,8 +124,8 @@ impl Drk {
         let burn_zkbin = ZkBinary::decode(&burn_zkbin.1)?;
 
         let k = 13;
-        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), mint_zkbin.clone());
-        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), burn_zkbin.clone());
+        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), &mint_zkbin);
+        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), &burn_zkbin);
 
         // Since we're creating the first half, we generate the blinds.
         let value_blinds = [pallas::Scalar::random(&mut OsRng), pallas::Scalar::random(&mut OsRng)];
@@ -216,8 +216,8 @@ impl Drk {
         let burn_zkbin = ZkBinary::decode(&burn_zkbin.1)?;
 
         let k = 13;
-        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), mint_zkbin.clone());
-        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), burn_zkbin.clone());
+        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), &mint_zkbin);
+        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), &burn_zkbin);
 
         // TODO: Maybe some kind of verification at this point
 

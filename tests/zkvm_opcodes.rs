@@ -117,7 +117,7 @@ fn zkvm_opcodes() -> Result<()> {
         pallas::Base::ZERO,
     ];
 
-    let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+    let circuit = ZkCircuit::new(prover_witnesses, &zkbin);
 
     let mockprover = MockProver::run(13, &circuit, vec![public_inputs.clone()])?;
     mockprover.assert_satisfied();
@@ -126,7 +126,7 @@ fn zkvm_opcodes() -> Result<()> {
     let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
 
     let verifier_witnesses = empty_witnesses(&zkbin);
-    let circuit = ZkCircuit::new(verifier_witnesses, zkbin);
+    let circuit = ZkCircuit::new(verifier_witnesses, &zkbin);
     let verifying_key = VerifyingKey::build(13, &circuit);
     proof.verify(&verifying_key, &public_inputs)?;
 

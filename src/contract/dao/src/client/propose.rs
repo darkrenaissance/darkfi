@@ -154,7 +154,7 @@ impl DaoProposeCall {
                 sig_x,
                 sig_y,
             ];
-            let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin.clone());
+            let circuit = ZkCircuit::new(prover_witnesses, &burn_zkbin);
 
             let proving_key = &burn_pk;
             let input_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
@@ -235,7 +235,7 @@ impl DaoProposeCall {
             *total_funds_coords.x(),
             *total_funds_coords.y(),
         ];
-        let circuit = ZkCircuit::new(prover_witnesses, main_zkbin.clone());
+        let circuit = ZkCircuit::new(prover_witnesses, &main_zkbin);
 
         let main_proof = Proof::create(main_pk, &[circuit], &public_inputs, &mut OsRng)
             .expect("DAO::propose() proving error!");

@@ -46,7 +46,7 @@ impl ZkCircuit {
 
     fn verifier_build(&self, circuit_code: &PyCell<ZkBinary>) -> Self {
         let circuit_code = circuit_code.borrow().deref().0.clone();
-        let circuit = vm::ZkCircuit::new(empty_witnesses(&circuit_code), circuit_code.clone());
+        let circuit = vm::ZkCircuit::new(empty_witnesses(&circuit_code), &circuit_code);
         Self(circuit, self.1.clone())
     }
 
