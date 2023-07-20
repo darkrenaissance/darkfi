@@ -46,12 +46,13 @@ impl TestHarness {
         let wallet = self.holders.get(holder).unwrap();
 
         let (burn_pk, burn_zkbin) =
-            wallet.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
+            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
         let (mint_pk, mint_zkbin) =
-            wallet.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
+            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
 
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusUnstake).unwrap();
+
         let timer = Instant::now();
 
         // Building Consensus::Unstake params

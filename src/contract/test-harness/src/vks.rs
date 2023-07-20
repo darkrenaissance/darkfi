@@ -65,7 +65,7 @@ fn pks_path(typ: &str) -> Result<PathBuf> {
 pub type Vks = Vec<(Vec<u8>, String, Vec<u8>)>;
 pub type Pks = Vec<(Vec<u8>, String, Vec<u8>)>;
 
-fn read_or_gen_vks_and_pks() -> Result<(Pks, Vks)> {
+pub fn read_or_gen_vks_and_pks() -> Result<(Pks, Vks)> {
     let vks_path = pks_path("vks.bin")?;
     let pks_path = pks_path("pks.bin")?;
 
@@ -171,11 +171,8 @@ fn read_or_gen_vks_and_pks() -> Result<(Pks, Vks)> {
     Ok((pks, vks))
 }
 
-pub fn inject(sled_db: &sled::Db) -> Result<Pks> {
-    // Use pregenerated vks
-    let (pks, vks) = read_or_gen_vks_and_pks()?;
-
-    // Inject them into the db
+pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
+    // Inject vks into the db
     let money_zkas_tree_ptr = MONEY_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
     let money_zkas_tree = sled_db.open_tree(money_zkas_tree_ptr)?;
 
@@ -233,5 +230,5 @@ pub fn inject(sled_db: &sled::Db) -> Result<Pks> {
         }
     }
 
-    Ok(pks)
+    Ok(())
 }

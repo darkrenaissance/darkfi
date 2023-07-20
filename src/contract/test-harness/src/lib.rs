@@ -51,6 +51,7 @@ use rand::rngs::OsRng;
 mod benchmarks;
 use benchmarks::TxActionBenchmarks;
 pub mod vks;
+use vks::{read_or_gen_vks_and_pks, Vks};
 
 mod consensus_genesis_stake;
 mod consensus_proposal;
@@ -122,7 +123,6 @@ pub struct Wallet {
     pub keypair: Keypair,
     pub token_mint_authority: Keypair,
     pub validator: ValidatorPtr,
-    pub proving_keys: HashMap<String, (ProvingKey, ZkBinary)>,
     pub money_merkle_tree: MerkleTree,
     pub consensus_staked_merkle_tree: MerkleTree,
     pub consensus_unstaked_merkle_tree: MerkleTree,
@@ -141,21 +141,13 @@ impl Wallet {
         keypair: Keypair,
         genesis_block: &BlockInfo,
         faucet_pubkeys: &[PublicKey],
+        vks: &Vks,
     ) -> Result<Self> {
         let wallet = WalletDb::new(None, None)?;
         let sled_db = sled::Config::new().temporary(true).open()?;
 
         // Use pregenerated vks and get pregenerated pks
-        let pks = vks::inject(&sled_db)?;
-
-        let mut proving_keys = HashMap::new();
-        for (bincode, namespace, pk) in pks {
-            let mut reader = Cursor::new(pk);
-            let zkbin = ZkBinary::decode(&bincode)?;
-            let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
-            let _pk = ProvingKey::read(&mut reader, circuit)?;
-            proving_keys.insert(namespace, (_pk, zkbin));
-        }
+        vks::inject(&sled_db, vks)?;
 
         // Generate validator
         // NOTE: we are not using consensus constants here so we
@@ -186,7 +178,6 @@ impl Wallet {
 
         Ok(Self {
             keypair,
-            proving_keys,
             token_mint_authority,
             validator,
             money_merkle_tree,
@@ -205,6 +196,7 @@ impl Wallet {
 
 pub struct TestHarness {
     pub holders: HashMap<Holder, Wallet>,
+    pub proving_keys: HashMap<String, (ProvingKey, ZkBinary)>,
     pub tx_action_benchmarks: HashMap<TxAction, TxActionBenchmarks>,
     pub genesis_block: blake3::Hash,
 }
@@ -218,29 +210,41 @@ impl TestHarness {
         // Deterministic PRNG
         let mut rng = Pcg32::new(42);
 
+        // Build or read precompiled zk pks and vks
+        let (pks, vks) = read_or_gen_vks_and_pks()?;
+
+        let mut proving_keys = HashMap::new();
+        for (bincode, namespace, pk) in pks {
+            let mut reader = Cursor::new(pk);
+            let zkbin = ZkBinary::decode(&bincode)?;
+            let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
+            let _pk = ProvingKey::read(&mut reader, circuit)?;
+            proving_keys.insert(namespace, (_pk, zkbin));
+        }
+
         let faucet_kp = Keypair::random(&mut rng);
         let faucet_pubkeys = vec![faucet_kp.public];
-        let faucet = Wallet::new(faucet_kp, &genesis_block, &faucet_pubkeys).await?;
+        let faucet = Wallet::new(faucet_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
         holders.insert(Holder::Faucet, faucet);
 
         let alice_kp = Keypair::random(&mut rng);
-        let alice = Wallet::new(alice_kp, &genesis_block, &faucet_pubkeys).await?;
+        let alice = Wallet::new(alice_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
         holders.insert(Holder::Alice, alice);
 
         let bob_kp = Keypair::random(&mut rng);
-        let bob = Wallet::new(bob_kp, &genesis_block, &faucet_pubkeys).await?;
+        let bob = Wallet::new(bob_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
         holders.insert(Holder::Bob, bob);
 
         let charlie_kp = Keypair::random(&mut rng);
-        let charlie = Wallet::new(charlie_kp, &genesis_block, &faucet_pubkeys).await?;
+        let charlie = Wallet::new(charlie_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
         holders.insert(Holder::Charlie, charlie);
 
         let rachel_kp = Keypair::random(&mut rng);
-        let rachel = Wallet::new(rachel_kp, &genesis_block, &faucet_pubkeys).await?;
+        let rachel = Wallet::new(rachel_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
         holders.insert(Holder::Rachel, rachel);
 
         let dao_kp = Keypair::random(&mut rng);
-        let dao = Wallet::new(dao_kp, &genesis_block, &faucet_pubkeys).await?;
+        let dao = Wallet::new(dao_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
         holders.insert(Holder::Dao, dao);
 
         // Build benchmarks map
@@ -262,7 +266,12 @@ impl TestHarness {
         tx_action_benchmarks.insert(TxAction::DaoVote, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::DaoExec, TxActionBenchmarks::default());
 
-        Ok(Self { holders, tx_action_benchmarks, genesis_block: genesis_block.blockhash() })
+        Ok(Self {
+            holders,
+            proving_keys,
+            tx_action_benchmarks,
+            genesis_block: genesis_block.blockhash(),
+        })
     }
 
     pub async fn execute_erroneous_txs(

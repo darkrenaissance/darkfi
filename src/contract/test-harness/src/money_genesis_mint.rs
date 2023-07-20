@@ -40,10 +40,13 @@ impl TestHarness {
         amount: u64,
     ) -> Result<(Transaction, MoneyTokenMintParamsV1)> {
         let wallet = self.holders.get(holder).unwrap();
+
         let (mint_pk, mint_zkbin) =
-            wallet.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
+            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
+
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyGenesisMint).unwrap();
+
         let timer = Instant::now();
 
         // We're just going to be using a zero spend-hook and user-data

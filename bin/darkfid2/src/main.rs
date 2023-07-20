@@ -113,9 +113,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     }
 
     // NOTE: everything is dummy for now
+    // FIXME: The VKS should only ever have to be generated on initial run.
+    //        Do not use the precompiles for actual production code.
     // Initialize or open sled database
     let sled_db = sled::Config::new().temporary(true).open()?;
-    vks::inject(&sled_db)?;
+    let (_, vks) = vks::read_or_gen_vks_and_pks()?;
+    vks::inject(&sled_db, &vks)?;
 
     // Initialize validator configuration
     let genesis_block = BlockInfo::default();

@@ -47,12 +47,16 @@ impl TestHarness {
     ) -> Result<(Transaction, MoneyTransferParamsV1)> {
         let recipient = self.holders.get(holder).unwrap().keypair.public;
         let faucet = self.holders.get(&Holder::Faucet).unwrap();
+
         let (mint_pk, mint_zkbin) =
-            faucet.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
+            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
+
         let (burn_pk, burn_zkbin) =
-            faucet.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
+            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
+
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyAirdrop).unwrap();
+
         let timer = Instant::now();
 
         let builder = TransferCallBuilder {

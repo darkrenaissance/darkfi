@@ -48,9 +48,11 @@ impl TestHarness {
         let wallet = self.holders.get(voter).unwrap();
 
         let (dao_vote_burn_pk, dao_vote_burn_zkbin) =
-            wallet.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS.to_string()).unwrap();
+            self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS.to_string()).unwrap();
+
         let (dao_vote_main_pk, dao_vote_main_zkbin) =
-            wallet.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS.to_string()).unwrap();
+            self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS.to_string()).unwrap();
+
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoVote).unwrap();
         let timer = Instant::now();
 

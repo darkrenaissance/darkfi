@@ -46,9 +46,10 @@ impl TestHarness {
         let wallet = self.holders.get(holder).unwrap();
 
         let (burn_pk, burn_zkbin) =
-            wallet.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
+            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
+
         let (mint_pk, mint_zkbin) =
-            wallet.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
+            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
 
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusUnstakeRequest).unwrap();
@@ -115,8 +116,10 @@ impl TestHarness {
         slot: u64,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(holder).unwrap();
+
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusUnstakeRequest).unwrap();
+
         let timer = Instant::now();
 
         wallet.validator.read().await.add_transactions(&[tx.clone()], slot, true).await?;

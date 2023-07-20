@@ -46,10 +46,11 @@ impl TestHarness {
         let wallet = self.holders.get(holder).unwrap();
 
         let (proposal_pk, proposal_zkbin) =
-            wallet.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1.to_string()).unwrap();
+            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1.to_string()).unwrap();
 
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusProposal).unwrap();
+
         let timer = Instant::now();
 
         // Proposals always extend genesis block
@@ -104,8 +105,10 @@ impl TestHarness {
         slot: u64,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(holder).unwrap();
+
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusProposal).unwrap();
+
         let timer = Instant::now();
 
         wallet.validator.read().await.add_transactions(&[tx.clone()], slot, true).await?;

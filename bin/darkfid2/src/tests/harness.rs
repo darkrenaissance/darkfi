@@ -77,13 +77,16 @@ impl Harness {
         // Generate validators using pregenerated vks
         let sync_p2p = P2p::new(Settings::default()).await;
         let sled_db = sled::Config::new().temporary(true).open()?;
-        vks::inject(&sled_db)?;
+
+        let (_, vks) = vks::read_or_gen_vks_and_pks()?;
+        vks::inject(&sled_db, &vks)?;
+
         let validator = Validator::new(&sled_db, val_config.clone()).await?;
         let alice = Darkfid::new(sync_p2p, None, validator).await;
 
         let sync_p2p = P2p::new(Settings::default()).await;
         let sled_db = sled::Config::new().temporary(true).open()?;
-        vks::inject(&sled_db)?;
+        vks::inject(&sled_db, &vks)?;
         let validator = Validator::new(&sled_db, val_config.clone()).await?;
         let bob = Darkfid::new(sync_p2p, None, validator).await;
 
