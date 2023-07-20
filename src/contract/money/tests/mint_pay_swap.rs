@@ -120,7 +120,8 @@ async fn mint_pay_swap() -> Result<()> {
         info!(target: "money", "[{holder:?}] ==============================");
         info!(target: "money", "[{holder:?}] Executing Alice2Bob payment tx");
         info!(target: "money", "[{holder:?}] ==============================");
-        th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_slot, true).await?;
+        let write = holder == &Holder::Faucet;
+        th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_slot, write).await?;
     }
 
     // Alice should now have one OwnCoin with the change from the above transaction.
@@ -156,7 +157,8 @@ async fn mint_pay_swap() -> Result<()> {
         info!(target: "money", "[{holder:?}] ==============================");
         info!(target: "money", "[{holder:?}] Executing Bob2Alice payment tx");
         info!(target: "money", "[{holder:?}] ==============================");
-        th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_slot, true).await?;
+        let write = holder == &Holder::Faucet;
+        th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_slot, write).await?;
     }
 
     // Alice should now have two OwnCoins
@@ -201,7 +203,8 @@ async fn mint_pay_swap() -> Result<()> {
         info!(target: "money", "[{holder:?}] ==========================");
         info!(target: "money", "[{holder:?}] Executing AliceBob swap tx");
         info!(target: "money", "[{holder:?}] ==========================");
-        th.execute_otc_swap_tx(holder, &otc_swap_tx, &otc_swap_params, current_slot, true).await?;
+        let write = holder == &Holder::Faucet;
+        th.execute_otc_swap_tx(holder, &otc_swap_tx, &otc_swap_params, current_slot, write).await?;
     }
 
     // Alice should now have two OwnCoins with the same token ID (ALICE)
@@ -307,7 +310,8 @@ async fn mint_pay_swap() -> Result<()> {
         info!(target: "money", "[{holder:?}] ==========================");
         info!(target: "money", "[{holder:?}] Executing AliceBob swap tx");
         info!(target: "money", "[{holder:?}] ==========================");
-        th.execute_otc_swap_tx(holder, &otc_swap_tx, &otc_swap_params, current_slot, true).await?;
+        let write = holder == &Holder::Faucet;
+        th.execute_otc_swap_tx(holder, &otc_swap_tx, &otc_swap_params, current_slot, write).await?;
     }
 
     // Alice should now have Bob's BOB tokens
