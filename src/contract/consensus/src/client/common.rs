@@ -91,7 +91,7 @@ pub fn create_consensus_mint_proof(
         Witness::Scalar(Value::known(output.value_blind)),
     ];
 
-    let circuit = ZkCircuit::new(prover_witnesses, &zkbin);
+    let circuit = ZkCircuit::new(prover_witnesses, zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 
     Ok((proof, public_inputs))
@@ -172,7 +172,7 @@ pub fn create_consensus_burn_proof(
         Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
     ];
 
-    let circuit = ZkCircuit::new(prover_witnesses, &zkbin);
+    let circuit = ZkCircuit::new(prover_witnesses, zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 
     Ok((proof, public_inputs, input.secret))

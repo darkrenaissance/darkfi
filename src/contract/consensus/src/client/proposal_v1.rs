@@ -352,7 +352,7 @@ fn create_proposal_proof(
         Witness::Base(Value::known(public_inputs.headstart)),
     ];
 
-    let circuit = ZkCircuit::new(prover_witnesses, &zkbin);
+    let circuit = ZkCircuit::new(prover_witnesses, zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 
     Ok((proof, public_inputs))

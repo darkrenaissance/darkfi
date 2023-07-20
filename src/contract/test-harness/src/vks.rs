@@ -110,8 +110,8 @@ fn read_or_gen_vks_and_pks() -> Result<(Pks, Vks)> {
         drop(f);
     }
 
-    if pks.is_some() && vks.is_some() {
-        return Ok((pks.unwrap(), vks.unwrap()))
+    if let (Some(pks), Some(vks)) = (pks, vks) {
+        return Ok((pks, vks))
     }
 
     let bins = vec![

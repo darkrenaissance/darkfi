@@ -221,7 +221,7 @@ pub fn create_stake_burn_proof(
         Witness::Base(Value::known(signature_secret.inner())),
     ];
 
-    let circuit = ZkCircuit::new(prover_witnesses, &zkbin);
+    let circuit = ZkCircuit::new(prover_witnesses, zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 
     Ok((proof, public_inputs))

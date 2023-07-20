@@ -200,7 +200,7 @@ pub fn create_unstake_mint_proof(
         Witness::Scalar(Value::known(token_blind)),
     ];
 
-    let circuit = ZkCircuit::new(prover_witnesses, &zkbin);
+    let circuit = ZkCircuit::new(prover_witnesses, zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 
     Ok((proof, public_inputs))
