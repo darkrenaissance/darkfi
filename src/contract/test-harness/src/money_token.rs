@@ -43,12 +43,17 @@ impl TestHarness {
         spend_hook: Option<pallas::Base>,
         user_data: Option<pallas::Base>,
     ) -> Result<(Transaction, MoneyTokenMintParamsV1)> {
+        let wallet = self.holders.get(holder).unwrap();
+        let mint_authority = wallet.token_mint_authority;
+
         let rcpt = self.holders.get(recipient).unwrap().keypair.public;
-        let mint_authority = self.holders.get(holder).unwrap().token_mint_authority;
+
         let (mint_pk, mint_zkbin) =
-            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1).unwrap();
+            wallet.proving_keys.get(&MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1.to_string()).unwrap();
+
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTokenMint).unwrap();
+
         let timer = Instant::now();
 
         let builder = TokenMintCallBuilder {
@@ -106,9 +111,10 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
     ) -> Result<(Transaction, MoneyTokenFreezeParamsV1)> {
-        let mint_authority = self.holders.get(holder).unwrap().token_mint_authority;
+        let wallet = self.holders.get(holder).unwrap();
+        let mint_authority = wallet.token_mint_authority;
         let (frz_pk, frz_zkbin) =
-            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1).unwrap();
+            wallet.proving_keys.get(&MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1.to_string()).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTokenFreeze).unwrap();
         let timer = Instant::now();

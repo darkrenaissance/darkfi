@@ -44,8 +44,10 @@ impl TestHarness {
         staked_oc: &ConsensusOwnCoin,
     ) -> Result<(Transaction, ConsensusProposalParamsV1, SecretKey, SecretKey)> {
         let wallet = self.holders.get(holder).unwrap();
+
         let (proposal_pk, proposal_zkbin) =
-            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1).unwrap();
+            wallet.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1.to_string()).unwrap();
+
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusProposal).unwrap();
         let timer = Instant::now();

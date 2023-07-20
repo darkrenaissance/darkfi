@@ -45,14 +45,16 @@ impl TestHarness {
         dao: &DaoInfo,
         dao_bulla: &DaoBulla,
     ) -> Result<(Transaction, DaoProposeParams, DaoProposalInfo)> {
+        let wallet = self.holders.get(proposer).unwrap();
+
         let (dao_propose_burn_pk, dao_propose_burn_zkbin) =
-            self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS).unwrap();
+            wallet.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS.to_string()).unwrap();
         let (dao_propose_main_pk, dao_propose_main_zkbin) =
-            self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS).unwrap();
+            wallet.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS.to_string()).unwrap();
+
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoPropose).unwrap();
         let timer = Instant::now();
 
-        let wallet = self.holders.get(proposer).unwrap();
         let propose_owncoin: OwnCoin = wallet
             .unspent_money_coins
             .iter()

@@ -44,9 +44,12 @@ impl TestHarness {
         staked_oc: &ConsensusOwnCoin,
     ) -> Result<(Transaction, MoneyUnstakeParamsV1, SecretKey)> {
         let wallet = self.holders.get(holder).unwrap();
+
         let (burn_pk, burn_zkbin) =
-            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
-        let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
+            wallet.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
+        let (mint_pk, mint_zkbin) =
+            wallet.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
+
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusUnstake).unwrap();
         let timer = Instant::now();
@@ -74,7 +77,7 @@ impl TestHarness {
         // Building Money::Unstake params
         let money_unstake_call_debris = MoneyUnstakeCallBuilder {
             owncoin: staked_oc.clone(),
-            recipient: self.holders.get_mut(holder).unwrap().keypair.public,
+            recipient: self.holders.get(holder).unwrap().keypair.public,
             value_blind: consensus_unstake_value_blind,
             nullifier: consensus_unstake_params.input.nullifier,
             merkle_root: consensus_unstake_params.input.merkle_root,

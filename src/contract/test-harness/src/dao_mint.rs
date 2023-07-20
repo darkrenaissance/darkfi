@@ -37,8 +37,12 @@ impl TestHarness {
         dao_info: &DaoInfo,
         dao_kp: &Keypair,
     ) -> Result<(Transaction, DaoMintParams)> {
+        // We assume DAO Holder exists at least
+        let wallet = self.holders.get(&Holder::Dao).unwrap();
+
         let (dao_mint_pk, dao_mint_zkbin) =
-            self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_MINT_NS).unwrap();
+            wallet.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_MINT_NS.to_string()).unwrap();
+
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoMint).unwrap();
         let timer = Instant::now();
 

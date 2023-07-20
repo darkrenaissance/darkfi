@@ -16,11 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, time::Instant};
+use std::{collections::HashMap, io::Cursor, time::Instant};
 
 use darkfi::{
     blockchain::BlockInfo,
-    runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
     tx::Transaction,
     util::{
         pcg::Pcg32,
@@ -32,30 +31,20 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_dao_contract::{
-    model::{DaoBulla, DaoProposalBulla},
-    DAO_CONTRACT_ZKAS_DAO_EXEC_NS, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
-    DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
-    DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
-};
+use darkfi_dao_contract::model::{DaoBulla, DaoProposalBulla};
 use darkfi_money_contract::{
     client::{ConsensusNote, ConsensusOwnCoin, MoneyNote, OwnCoin},
     model::{ConsensusOutput, Output},
-    CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
-    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
-    MONEY_CONTRACT_ZKAS_MINT_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1,
-    MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::{
     blockchain::Slot,
     bridgetree,
     crypto::{
         pasta_prelude::Field, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey,
-        SecretKey, TokenId, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+        SecretKey, TokenId,
     },
     pasta::pallas,
 };
-use darkfi_serial::{deserialize, serialize};
 use log::{info, warn};
 use rand::rngs::OsRng;
 
@@ -85,8 +74,8 @@ pub fn init_logger() {
     // We check this error so we can execute same file tests in parallel,
     // otherwise second one fails to init logger here.
     if simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
-        //simplelog::LevelFilter::Debug,
+        //simplelog::LevelFilter::Info,
+        simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
@@ -133,6 +122,7 @@ pub struct Wallet {
     pub keypair: Keypair,
     pub token_mint_authority: Keypair,
     pub validator: ValidatorPtr,
+    pub proving_keys: HashMap<String, (ProvingKey, ZkBinary)>,
     pub money_merkle_tree: MerkleTree,
     pub consensus_staked_merkle_tree: MerkleTree,
     pub consensus_unstaked_merkle_tree: MerkleTree,
@@ -155,8 +145,17 @@ impl Wallet {
         let wallet = WalletDb::new(None, None)?;
         let sled_db = sled::Config::new().temporary(true).open()?;
 
-        // Use pregenerated vks
-        vks::inject(&sled_db)?;
+        // Use pregenerated vks and get pregenerated pks
+        let pks = vks::inject(&sled_db)?;
+
+        let mut proving_keys = HashMap::new();
+        for (bincode, namespace, pk) in pks {
+            let mut reader = Cursor::new(pk);
+            let zkbin = ZkBinary::decode(&bincode)?;
+            let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
+            let _pk = ProvingKey::read(&mut reader, circuit)?;
+            proving_keys.insert(namespace, (_pk, zkbin));
+        }
 
         // Generate validator
         // NOTE: we are not using consensus constants here so we
@@ -187,6 +186,7 @@ impl Wallet {
 
         Ok(Self {
             keypair,
+            proving_keys,
             token_mint_authority,
             validator,
             money_merkle_tree,
@@ -205,13 +205,12 @@ impl Wallet {
 
 pub struct TestHarness {
     pub holders: HashMap<Holder, Wallet>,
-    pub proving_keys: HashMap<&'static str, (ProvingKey, ZkBinary)>,
     pub tx_action_benchmarks: HashMap<TxAction, TxActionBenchmarks>,
     pub genesis_block: blake3::Hash,
 }
 
 impl TestHarness {
-    pub async fn new(contracts: &[String]) -> Result<Self> {
+    pub async fn new(_contracts: &[String]) -> Result<Self> {
         let mut holders = HashMap::new();
         let mut genesis_block = BlockInfo::default();
         genesis_block.header.timestamp = Timestamp(1689772567);
@@ -226,7 +225,7 @@ impl TestHarness {
 
         let alice_kp = Keypair::random(&mut rng);
         let alice = Wallet::new(alice_kp, &genesis_block, &faucet_pubkeys).await?;
-        // Alice is inserted at end of function
+        holders.insert(Holder::Alice, alice);
 
         let bob_kp = Keypair::random(&mut rng);
         let bob = Wallet::new(bob_kp, &genesis_block, &faucet_pubkeys).await?;
@@ -243,60 +242,6 @@ impl TestHarness {
         let dao_kp = Keypair::random(&mut rng);
         let dao = Wallet::new(dao_kp, &genesis_block, &faucet_pubkeys).await?;
         holders.insert(Holder::Dao, dao);
-
-        // Get the zkas circuits and build proving keys
-        let mut proving_keys = HashMap::new();
-        let alice_sled = alice.validator.read().await.blockchain.sled_db.clone();
-
-        macro_rules! mkpk {
-            ($db:expr, $ns:expr) => {
-                info!("Building ProvingKey for {}", $ns);
-                let zkas_bytes = $db.get(&serialize(&$ns))?.unwrap();
-                let (zkbin, _): (Vec<u8>, Vec<u8>) = deserialize(&zkas_bytes)?;
-                let zkbin = ZkBinary::decode(&zkbin)?;
-                let witnesses = empty_witnesses(&zkbin);
-                let circuit = ZkCircuit::new(witnesses, &zkbin);
-                let pk = ProvingKey::build(13, &circuit);
-                proving_keys.insert($ns, (pk, zkbin));
-            };
-        }
-
-        if contracts.contains(&"money".to_string()) {
-            let db_handle = alice.validator.read().await.blockchain.contracts.lookup(
-                &alice_sled,
-                &MONEY_CONTRACT_ID,
-                SMART_CONTRACT_ZKAS_DB_NAME,
-            )?;
-            mkpk!(db_handle, MONEY_CONTRACT_ZKAS_MINT_NS_V1);
-            mkpk!(db_handle, MONEY_CONTRACT_ZKAS_BURN_NS_V1);
-            mkpk!(db_handle, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1);
-            mkpk!(db_handle, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1);
-        }
-
-        if contracts.contains(&"consensus".to_string()) {
-            let db_handle = alice.validator.read().await.blockchain.contracts.lookup(
-                &alice_sled,
-                &CONSENSUS_CONTRACT_ID,
-                SMART_CONTRACT_ZKAS_DB_NAME,
-            )?;
-            mkpk!(db_handle, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1);
-            mkpk!(db_handle, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1);
-            mkpk!(db_handle, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1);
-        }
-
-        if contracts.contains(&"dao".to_string()) {
-            let db_handle = alice.validator.read().await.blockchain.contracts.lookup(
-                &alice_sled,
-                &DAO_CONTRACT_ID,
-                SMART_CONTRACT_ZKAS_DB_NAME,
-            )?;
-            mkpk!(db_handle, DAO_CONTRACT_ZKAS_DAO_EXEC_NS);
-            mkpk!(db_handle, DAO_CONTRACT_ZKAS_DAO_MINT_NS);
-            mkpk!(db_handle, DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS);
-            mkpk!(db_handle, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS);
-            mkpk!(db_handle, DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS);
-            mkpk!(db_handle, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS);
-        }
 
         // Build benchmarks map
         let mut tx_action_benchmarks = HashMap::new();
@@ -317,15 +262,7 @@ impl TestHarness {
         tx_action_benchmarks.insert(TxAction::DaoVote, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::DaoExec, TxActionBenchmarks::default());
 
-        // Alice jumps down the rabbit hole
-        holders.insert(Holder::Alice, alice);
-
-        Ok(Self {
-            holders,
-            proving_keys,
-            tx_action_benchmarks,
-            genesis_block: genesis_block.blockhash(),
-        })
+        Ok(Self { holders, tx_action_benchmarks, genesis_block: genesis_block.blockhash() })
     }
 
     pub async fn execute_erroneous_txs(

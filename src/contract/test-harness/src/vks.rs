@@ -25,7 +25,7 @@ use std::{
 
 use darkfi::{
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
-    zk::{empty_witnesses, VerifyingKey, ZkCircuit},
+    zk::{empty_witnesses, ProvingKey, VerifyingKey, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
@@ -48,23 +48,29 @@ use darkfi_serial::{deserialize, serialize};
 use log::debug;
 
 /// Update this if any circuits are changed
-const VKS_HASH: &str = "1a514858c589cf2b6f28930d7f6fbae9f7455661d68a7944b776a947811b3430";
+const VKS_HASH: &str = "afcbea36961a5b526dae2c448170953d9c16368211cc8c355f154caf1ac313d7";
+const PKS_HASH: &str = "6cf2bf9b2ffbc68c8f778971725de180862a040446db7d4f5bcc12e1e4552d7d";
 
-fn vks_path() -> Result<PathBuf> {
+fn pks_path(typ: &str) -> Result<PathBuf> {
     let output = Command::new("git").arg("rev-parse").arg("--show-toplevel").output()?.stdout;
     let mut path = PathBuf::from(String::from_utf8(output[..output.len() - 1].to_vec())?);
     path.push("src");
     path.push("contract");
     path.push("test-harness");
-    path.push("vks.bin");
+    path.push(typ);
     Ok(path)
 }
 
 /// (Bincode, Namespace, VK)
 pub type Vks = Vec<(Vec<u8>, String, Vec<u8>)>;
+pub type Pks = Vec<(Vec<u8>, String, Vec<u8>)>;
 
-fn read_or_gen_vks() -> Result<Vks> {
-    let vks_path = vks_path()?;
+fn read_or_gen_vks_and_pks() -> Result<(Pks, Vks)> {
+    let vks_path = pks_path("vks.bin")?;
+    let pks_path = pks_path("pks.bin")?;
+
+    let mut vks = None;
+    let mut pks = None;
 
     if vks_path.exists() {
         debug!("Found vks.bin");
@@ -75,14 +81,37 @@ fn read_or_gen_vks() -> Result<Vks> {
         let known_hash = blake3::Hash::from_hex(VKS_HASH)?;
         let found_hash = blake3::hash(&data);
 
-        debug!("Known hash: {}", known_hash);
-        debug!("Found hash: {}", found_hash);
+        debug!("Known VKS hash: {}", known_hash);
+        debug!("Found VKS hash: {}", found_hash);
 
         if known_hash == found_hash {
-            return Ok(deserialize(&data)?)
+            vks = Some(deserialize(&data)?)
         }
 
         drop(f);
+    }
+
+    if pks_path.exists() {
+        debug!("Found pks.bin");
+        let mut f = File::open(pks_path.clone())?;
+        let mut data = vec![];
+        f.read_to_end(&mut data)?;
+
+        let known_hash = blake3::Hash::from_hex(PKS_HASH)?;
+        let found_hash = blake3::hash(&data);
+
+        debug!("Known PKS hash: {}", known_hash);
+        debug!("Found PKS hash: {}", found_hash);
+
+        if known_hash == found_hash {
+            pks = Some(deserialize(&data)?)
+        }
+
+        drop(f);
+    }
+
+    if pks.is_some() && vks.is_some() {
+        return Ok((pks.unwrap(), vks.unwrap()))
     }
 
     let bins = vec![
@@ -107,6 +136,7 @@ fn read_or_gen_vks() -> Result<Vks> {
     ];
 
     let mut vks = vec![];
+    let mut pks = vec![];
 
     for bincode in bins.iter() {
         let zkbin = ZkBinary::decode(bincode)?;
@@ -116,7 +146,12 @@ fn read_or_gen_vks() -> Result<Vks> {
         let vk = VerifyingKey::build(13, &circuit);
         let mut vk_buf = vec![];
         vk.write(&mut vk_buf)?;
-        vks.push((bincode.to_vec(), zkbin.namespace, vk_buf))
+        vks.push((bincode.to_vec(), zkbin.namespace.clone(), vk_buf));
+
+        let pk = ProvingKey::build(13, &circuit);
+        let mut pk_buf = vec![];
+        pk.write(&mut pk_buf)?;
+        pks.push((bincode.to_vec(), zkbin.namespace, pk_buf));
     }
 
     debug!("Writing to {:?}", vks_path);
@@ -126,12 +161,19 @@ fn read_or_gen_vks() -> Result<Vks> {
     debug!("vks.bin {}", hash);
     f.write_all(&ser)?;
 
-    Ok(vks)
+    debug!("Writing to {:?}", pks_path);
+    let mut f = File::create(pks_path)?;
+    let ser = serialize(&pks);
+    let hash = blake3::hash(&ser);
+    debug!("pks.bin {}", hash);
+    f.write_all(&ser)?;
+
+    Ok((pks, vks))
 }
 
-pub fn inject(sled_db: &sled::Db) -> Result<()> {
+pub fn inject(sled_db: &sled::Db) -> Result<Pks> {
     // Use pregenerated vks
-    let vks = read_or_gen_vks()?;
+    let (pks, vks) = read_or_gen_vks_and_pks()?;
 
     // Inject them into the db
     let money_zkas_tree_ptr = MONEY_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
@@ -191,5 +233,5 @@ pub fn inject(sled_db: &sled::Db) -> Result<()> {
         }
     }
 
-    Ok(())
+    Ok(pks)
 }

@@ -44,8 +44,10 @@ impl TestHarness {
     ) -> Result<(Transaction, MoneyTransferParamsV1)> {
         let wallet0 = self.holders.get(holder0).unwrap();
         let wallet1 = self.holders.get(holder1).unwrap();
-        let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
-        let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
+        let (mint_pk, mint_zkbin) =
+            wallet0.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
+        let (burn_pk, burn_zkbin) =
+            wallet0.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyOtcSwap).unwrap();
         let timer = Instant::now();

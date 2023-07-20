@@ -51,10 +51,15 @@ impl TestHarness {
         yes_vote_blind: pallas::Scalar,
         all_vote_blind: pallas::Scalar,
     ) -> Result<(Transaction, MoneyTransferParamsV1, DaoExecParams)> {
-        let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
-        let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
+        let dao_wallet = self.holders.get(&Holder::Dao).unwrap();
+
+        let (mint_pk, mint_zkbin) =
+            dao_wallet.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
+        let (burn_pk, burn_zkbin) =
+            dao_wallet.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
         let (dao_exec_pk, dao_exec_zkbin) =
-            self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_EXEC_NS).unwrap();
+            dao_wallet.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string()).unwrap();
+
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoExec).unwrap();
         let timer = Instant::now();
 
@@ -69,7 +74,6 @@ impl TestHarness {
         let change_user_data = dao_bulla.inner();
         let change_user_data_blind = pallas::Base::random(&mut OsRng);
 
-        let dao_wallet = self.holders.get(&Holder::Dao).unwrap();
         let coins: Vec<OwnCoin> = dao_wallet
             .unspent_money_coins
             .iter()
