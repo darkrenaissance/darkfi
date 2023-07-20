@@ -117,6 +117,7 @@ mod tests {
     impl Circuit<pallas::Base> for SmallRangeCircuit {
         type Config = (SmallRangeCheckConfig, Column<Advice>);
         type FloorPlanner = floor_planner::V1;
+        type Params = ();
 
         fn without_witnesses(&self) -> Self {
             Self::default()

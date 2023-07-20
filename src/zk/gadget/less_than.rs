@@ -269,6 +269,7 @@ mod tests {
                 type Config =
                     (LessThanConfig<$window_size, $num_bits, $num_windows>, Column<Advice>);
                 type FloorPlanner = floor_planner::V1;
+                type Params = ();
 
                 fn without_witnesses(&self) -> Self {
                     Self { a: Value::unknown(), b: Value::unknown() }
