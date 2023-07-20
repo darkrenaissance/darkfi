@@ -361,7 +361,7 @@ impl TestHarness {
         output: &Output,
         secret_key: Option<SecretKey>,
     ) -> Result<OwnCoin> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let leaf_position = wallet.money_merkle_tree.mark().unwrap();
         let secret_key = match secret_key {
             Some(key) => key,

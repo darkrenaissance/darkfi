@@ -160,7 +160,7 @@ impl TestHarness {
         slot: u64,
         append: bool,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyOtcSwap).unwrap();
         let timer = Instant::now();

@@ -40,6 +40,7 @@ use rand::rngs::OsRng;
 use super::{Holder, TestHarness, TxAction};
 
 impl TestHarness {
+    #[allow(clippy::too_many_arguments)]
     pub fn dao_exec(
         &mut self,
         dao: &DaoInfo,
@@ -130,7 +131,7 @@ impl TestHarness {
             signature_secret: exec_signature_secret,
         };
 
-        let (exec_params, exec_proofs) = exec_builder.make(&dao_exec_zkbin, &dao_exec_pk)?;
+        let (exec_params, exec_proofs) = exec_builder.make(dao_exec_zkbin, dao_exec_pk)?;
         let mut data = vec![DaoFunction::Exec as u8];
         exec_params.encode(&mut data)?;
         let exec_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };

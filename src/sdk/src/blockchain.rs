@@ -49,6 +49,7 @@ pub struct Slot {
 }
 
 impl Slot {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         id: u64,
         previous_eta: pallas::Base,

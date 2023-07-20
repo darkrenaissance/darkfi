@@ -197,7 +197,7 @@ impl Validator {
                 &overlay,
                 &time_keeper,
                 block,
-                &previous,
+                previous,
                 expected_reward,
                 self.testing_mode,
             )

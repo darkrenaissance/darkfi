@@ -52,7 +52,7 @@ impl TestHarness {
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoPropose).unwrap();
         let timer = Instant::now();
 
-        let wallet = self.holders.get(&proposer).unwrap();
+        let wallet = self.holders.get(proposer).unwrap();
         let propose_owncoin: OwnCoin = wallet
             .unspent_money_coins
             .iter()
@@ -73,7 +73,7 @@ impl TestHarness {
         };
 
         let proposal = DaoProposalInfo {
-            dest: self.holders.get(&recipient).unwrap().keypair.public,
+            dest: self.holders.get(recipient).unwrap().keypair.public,
             amount,
             token_id: tx_token_id,
             blind: pallas::Base::random(&mut OsRng),
@@ -83,19 +83,19 @@ impl TestHarness {
             inputs: vec![input],
             proposal: proposal.clone(),
             dao: dao.clone(),
-            dao_leaf_position: *wallet.dao_leafs.get(&dao_bulla).unwrap(),
+            dao_leaf_position: *wallet.dao_leafs.get(dao_bulla).unwrap(),
             dao_merkle_path: wallet
                 .dao_merkle_tree
-                .witness(*wallet.dao_leafs.get(&dao_bulla).unwrap(), 0)
+                .witness(*wallet.dao_leafs.get(dao_bulla).unwrap(), 0)
                 .unwrap(),
             dao_merkle_root: wallet.dao_merkle_tree.root(0).unwrap(),
         };
 
         let (params, proofs) = call.make(
-            &dao_propose_burn_zkbin,
-            &dao_propose_burn_pk,
-            &dao_propose_main_zkbin,
-            &dao_propose_main_pk,
+            dao_propose_burn_zkbin,
+            dao_propose_burn_pk,
+            dao_propose_main_zkbin,
+            dao_propose_main_pk,
         )?;
 
         let mut data = vec![DaoFunction::Propose as u8];

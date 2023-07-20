@@ -55,7 +55,7 @@ impl TestHarness {
         let wallet = self.holders.get(voter).unwrap();
 
         let (_proposal_leaf_pos, money_merkle_tree) =
-            wallet.dao_prop_leafs.get(&proposal_bulla).unwrap();
+            wallet.dao_prop_leafs.get(proposal_bulla).unwrap();
 
         let vote_owncoin: OwnCoin = wallet
             .unspent_money_coins
@@ -83,10 +83,10 @@ impl TestHarness {
         };
 
         let (params, proofs) = call.make(
-            &dao_vote_burn_zkbin,
-            &dao_vote_burn_pk,
-            &dao_vote_main_zkbin,
-            &dao_vote_main_pk,
+            dao_vote_burn_zkbin,
+            dao_vote_burn_pk,
+            dao_vote_main_zkbin,
+            dao_vote_main_pk,
         )?;
 
         let mut data = vec![DaoFunction::Vote as u8];
