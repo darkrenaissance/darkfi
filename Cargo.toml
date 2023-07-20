@@ -83,9 +83,9 @@ x509-parser = {version = "0.15.0", features = ["validate", "verify"], optional =
 
 # Encoding
 bs58 = {version = "0.5.0", optional = true}
-serde_json = {version = "1.0.102", optional = true}
-serde = {version = "1.0.171", features = ["derive"], optional = true}
-semver = {version = "1.0.17", optional = true}
+serde_json = {version = "1.0.103", optional = true}
+serde = {version = "1.0.173", features = ["derive"], optional = true}
+semver = {version = "1.0.18", optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
 toml = {version = "0.7.6", optional = true}
@@ -129,7 +129,7 @@ sled = {version = "0.34.7", optional = true}
 sled-overlay = {version = "0.0.7", optional = true}
 
 [dev-dependencies]
-clap = {version = "4.3.11", features = ["derive"]}
+clap = {version = "4.3.17", features = ["derive"]}
 halo2_proofs = {version = "0.3.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
 halo2_gadgets = {version = "0.3.0", features = ["test-dev-graph", "test-dependencies"]}
 plotters = "0.3.5"
@@ -307,7 +307,7 @@ path = "example/zk-inclusion-proof.rs"
 required-features = ["zk"]
 
 [patch.crates-io]
-halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v3"}
-halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v3"}
+halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
+halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
 arti-client = {git="https://gitlab.torproject.org/tpo/core/arti", rev="77b0dc2edc93c9ad09b833b176e0f7066f017dd1"}
 tor-hscrypto = {git="https://gitlab.torproject.org/tpo/core/arti", rev="77b0dc2edc93c9ad09b833b176e0f7066f017dd1"}
