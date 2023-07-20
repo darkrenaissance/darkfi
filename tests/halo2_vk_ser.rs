@@ -71,11 +71,15 @@ fn halo2_vk_ser() -> Result<()> {
 
     println!("Reading vk3");
     let mut buf1_c = Cursor::new(buf1);
-    let vk3 = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut buf1_c)?;
+    // Construct the circuit to be able to read the VerifyingKey
+    let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
+    let vk3 = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut buf1_c, circuit)?;
 
     println!("Reading vk4");
     let mut buf2_c = Cursor::new(buf2);
-    let vk4 = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut buf2_c)?;
+    // Construct the circuit to be able to read the VerifyingKey
+    let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
+    let vk4 = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut buf2_c, circuit)?;
 
     // Now let's see if we can verify a proof with all four keys.
     println!("Creating pk");
