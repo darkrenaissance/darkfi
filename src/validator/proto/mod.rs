@@ -16,6 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/// Block broadcast protocol
+mod protocol_block;
+pub use protocol_block::ProtocolBlock;
+
 /// Transaction broadcast protocol
 mod protocol_tx;
 pub use protocol_tx::ProtocolTx;

@@ -28,7 +28,10 @@ use darkfi::{
     net::{settings::SettingsOpt, P2p, P2pPtr, SESSION_ALL},
     rpc::server::listen_and_serve,
     util::time::TimeKeeper,
-    validator::{proto::ProtocolTx, Validator, ValidatorConfig, ValidatorPtr},
+    validator::{
+        proto::{ProtocolBlock, ProtocolTx},
+        Validator, ValidatorConfig, ValidatorPtr,
+    },
     Result,
 };
 use darkfi_contract_test_harness::vks;
@@ -140,6 +143,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         info!("Registering sync network P2P protocols...");
         let p2p = P2p::new(args.sync_net.into()).await;
         let registry = p2p.protocol_registry();
+
+        let _validator = validator.clone();
+        registry
+            .register(SESSION_ALL, move |channel, p2p| {
+                let validator = _validator.clone();
+                async move { ProtocolBlock::init(channel, validator, p2p).await.unwrap() }
+            })
+            .await;
 
         let _validator = validator.clone();
         registry
