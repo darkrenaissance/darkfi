@@ -88,10 +88,10 @@ pub struct Validator {
 
 impl Validator {
     pub async fn new(db: &sled::Db, config: ValidatorConfig) -> Result<ValidatorPtr> {
-        info!(target: "validator", "Initializing Validator");
+        info!(target: "validator::new", "Initializing Validator");
         let testing_mode = config.testing_mode;
 
-        info!(target: "validator", "Initializing Blockchain");
+        info!(target: "validator::new", "Initializing Blockchain");
         let blockchain = Blockchain::new(db)?;
 
         // Create an overlay over whole blockchain so we can write stuff
@@ -102,7 +102,7 @@ impl Validator {
 
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
-            info!(target: "validator", "Appending genesis block");
+            info!(target: "validator::new", "Appending genesis block");
             verify_genesis_block(
                 &overlay,
                 &config.time_keeper,
@@ -115,13 +115,13 @@ impl Validator {
         // Write the changes to the actual chain db
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
-        info!(target: "validator", "Initializing Consensus");
+        info!(target: "validator::new", "Initializing Consensus");
         let consensus = Consensus::new(blockchain.clone(), config.time_keeper);
 
         // Create the actual state
         let state =
             Arc::new(RwLock::new(Self { blockchain, consensus, synced: false, testing_mode }));
-        info!(target: "validator", "Finished initializing validator");
+        info!(target: "validator::new", "Finished initializing validator");
 
         Ok(state)
     }
@@ -136,12 +136,12 @@ impl Validator {
         let tx_in_pending_txs_store = self.blockchain.pending_txs.contains(&tx_hash)?;
 
         if tx_in_txstore || tx_in_pending_txs_store {
-            info!(target: "validator", "append_tx(): We have already seen this tx");
+            info!(target: "validator::append_tx", "We have already seen this tx");
             return Err(TxVerifyFailed::AlreadySeenTx(tx_hash.to_string()).into())
         }
 
         // Verify state transition
-        info!(target: "validator", "append_tx(): Starting state transition validation");
+        info!(target: "validator::append_tx", "Starting state transition validation");
         // TODO: this should be over all forks overlays
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
@@ -156,7 +156,7 @@ impl Validator {
 
         // Add transaction to pending txs store
         self.blockchain.add_pending_txs(&[tx])?;
-        info!(target: "validator", "append_tx(): Appended tx to pending txs store");
+        info!(target: "validator::append_tx", "Appended tx to pending txs store");
 
         Ok(())
     }
@@ -175,7 +175,7 @@ impl Validator {
 
     /// Validate a set of [`BlockInfo`] in sequence and apply them if all are valid.
     pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
-        debug!(target: "validator", "Instantiating BlockchainOverlay");
+        debug!(target: "validator::add_blocks", "Instantiating BlockchainOverlay");
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
         // Retrieve last block
@@ -204,7 +204,7 @@ impl Validator {
             .await
             .is_err()
             {
-                error!(target: "validator", "Erroneous block found in set");
+                error!(target: "validator::add_blocks", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 return Err(Error::BlockIsInvalid(block.blockhash().to_string()))
             };
@@ -213,7 +213,7 @@ impl Validator {
             previous = block;
         }
 
-        debug!(target: "validator", "Applying overlay changes");
+        debug!(target: "validator::add_blocks", "Applying overlay changes");
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
         Ok(())
     }
@@ -228,7 +228,7 @@ impl Validator {
         verifying_slot: u64,
         write: bool,
     ) -> Result<()> {
-        debug!(target: "validator", "Instantiating BlockchainOverlay");
+        debug!(target: "validator::add_transactions", "Instantiating BlockchainOverlay");
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
         // Generate a time keeper using transaction verifying slot
@@ -245,18 +245,18 @@ impl Validator {
         let lock = overlay.lock().unwrap();
         let mut overlay = lock.overlay.lock().unwrap();
         if !erroneous_txs.is_empty() {
-            warn!(target: "validator", "Erroneous transactions found in set");
+            warn!(target: "validator::add_transactions", "Erroneous transactions found in set");
             overlay.purge_new_trees()?;
             return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
         }
 
         if !write {
-            debug!(target: "validator", "Skipping apply of state updates because write=false");
+            debug!(target: "validator::add_transactions", "Skipping apply of state updates because write=false");
             overlay.purge_new_trees()?;
             return Ok(())
         }
 
-        debug!(target: "validator", "Applying overlay changes");
+        debug!(target: "validator::add_transactions", "Applying overlay changes");
         overlay.apply()?;
         Ok(())
     }
@@ -264,7 +264,7 @@ impl Validator {
     /// Append to canonical state received slot.
     /// This should be only used for test purposes.
     pub async fn receive_test_slot(&mut self, slot: &Slot) -> Result<()> {
-        debug!(target: "validator", "receive_slot(): Appending slot to ledger");
+        debug!(target: "validator::receive_test_slot", "Appending slot to ledger");
         self.blockchain.slots.insert(&[slot.clone()])?;
 
         Ok(())
@@ -322,7 +322,7 @@ impl Validator {
             .await
             .is_err()
             {
-                error!(target: "validator", "Erroneous block found in set");
+                error!(target: "validator::validate_blockchain", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 return Err(Error::BlockIsInvalid(block.blockhash().to_string()))
             };
