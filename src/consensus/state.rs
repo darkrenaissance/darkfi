@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    blockchain::Slot,
+    blockchain::{PidOutput, PreviousSlot, Slot},
     crypto::MerkleTree,
     pasta::{group::ff::PrimeField, pallas},
 };
@@ -164,20 +164,10 @@ impl ConsensusState {
         sigma2: pallas::Base,
     ) {
         let id = self.time_keeper.current_slot();
-        let previous_eta = self.get_previous_eta();
-        let slot = Slot::new(
-            id,
-            previous_eta,
-            fork_hashes,
-            fork_previous_hashes,
-            0.0,
-            0.0,
-            0.0,
-            0,
-            0,
-            sigma1,
-            sigma2,
-        );
+        let previous =
+            PreviousSlot::new(0, fork_hashes, fork_previous_hashes, self.get_previous_eta(), 0.0);
+        let pid = PidOutput::new(0.0, 0.0, sigma1, sigma2);
+        let slot = Slot::new(id, previous, pid, 0, 0);
         info!(target: "consensus::state", "generate_slot: {:?}", slot);
         self.slots.push(slot);
     }

@@ -175,7 +175,7 @@ impl ConsensusProposalCallBuilder {
 
         info!("Building Consensus::ProposalV1 VRF proof");
         let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
-        vrf_input.extend_from_slice(&self.slot.previous_eta.to_repr());
+        vrf_input.extend_from_slice(&self.slot.previous.eta.to_repr());
         vrf_input.extend_from_slice(self.fork_previous_hash.as_bytes());
         vrf_input.extend_from_slice(&pallas::Base::from(self.slot.id).to_repr());
         let vrf_proof = VrfProof::prove(input.secret, &vrf_input, &mut OsRng);
@@ -264,7 +264,7 @@ fn create_proposal_proof(
     // Verify coin is the slot block producer
     let value_pallas = pallas::Base::from(input.note.value);
     let shifted_target =
-        slot.sigma1 * value_pallas + slot.sigma2 * value_pallas * value_pallas + HEADSTART;
+        slot.pid.sigma1 * value_pallas + slot.pid.sigma2 * value_pallas * value_pallas + HEADSTART;
 
     if y >= shifted_target {
         error!("MU_Y: {:?}", mu_y);
@@ -330,8 +330,8 @@ fn create_proposal_proof(
         y,
         mu_rho,
         rho,
-        sigma1: slot.sigma1,
-        sigma2: slot.sigma2,
+        sigma1: slot.pid.sigma1,
+        sigma2: slot.pid.sigma2,
         headstart: HEADSTART,
     };
 

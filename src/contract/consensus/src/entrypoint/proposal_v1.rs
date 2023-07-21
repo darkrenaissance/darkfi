@@ -78,7 +78,7 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
     let slot_fp = pallas::Base::from(slot.id);
 
     // Verify proposal extends a known fork
-    if !slot.fork_hashes.contains(&params.fork_hash) {
+    if !slot.previous.last_hashes.contains(&params.fork_hash) {
         msg!("[ConsensusProposalV1] Error: Proposal extends unknown fork {}", params.fork_hash);
         return Err(ConsensusError::ProposalExtendsUnknownFork.into())
     }
@@ -86,7 +86,7 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
     // TODO: Add fork rank check using params.fork_hash
 
     // Verify sequence is correct
-    if !slot.fork_previous_hashes.contains(&params.fork_previous_hash) {
+    if !slot.previous.second_to_last_hashes.contains(&params.fork_previous_hash) {
         let fork_prev = &params.fork_previous_hash;
         msg!("[ConsensusProposalV1] Error: Proposal extends unknown fork {}", fork_prev);
         return Err(ConsensusError::ProposalExtendsUnknownFork.into())
@@ -94,7 +94,7 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
 
     // Construct VRF input
     let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
-    vrf_input.extend_from_slice(&slot.previous_eta.to_repr());
+    vrf_input.extend_from_slice(&slot.previous.eta.to_repr());
     vrf_input.extend_from_slice(params.fork_previous_hash.as_bytes());
     vrf_input.extend_from_slice(&slot_fp.to_repr());
 
@@ -114,7 +114,7 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
     let mu_rho = poseidon_hash([MU_RHO_PREFIX, eta, slot_fp]);
 
     // Grab sigmas from slot
-    let (sigma1, sigma2) = (slot.sigma1, slot.sigma2);
+    let (sigma1, sigma2) = (slot.pid.sigma1, slot.pid.sigma2);
 
     zk_public_inputs.push((
         CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1.to_string(),

@@ -37,7 +37,7 @@ use darkfi_money_contract::{
     model::{ConsensusOutput, Output},
 };
 use darkfi_sdk::{
-    blockchain::Slot,
+    blockchain::{PidOutput, PreviousSlot, Slot},
     bridgetree,
     crypto::{
         pasta_prelude::Field, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey,
@@ -456,19 +456,15 @@ impl TestHarness {
         // using same consensus parameters
         let genesis_block = self.genesis_block;
         let genesis_slot = self.get_slot_by_slot(0).await?;
-        let slot = Slot::new(
-            id,
-            genesis_slot.previous_eta,
+        let previous = PreviousSlot::new(
+            0,
             vec![genesis_block],
             vec![genesis_block],
+            genesis_slot.previous.eta,
             0.0,
-            0.0,
-            0.0,
-            0,
-            0,
-            genesis_slot.sigma1,
-            genesis_slot.sigma2,
         );
+        let pid = PidOutput::new(0.0, 0.0, genesis_slot.pid.sigma1, genesis_slot.pid.sigma2);
+        let slot = Slot::new(id, previous, pid, 0, 0);
 
         // Store generated slot
         for wallet in self.holders.values() {

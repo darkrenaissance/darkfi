@@ -39,8 +39,11 @@ lazy_static! {
 /// alogn with the inverse probability `f` of becoming a
 /// block producer and the feedback error, corresponding
 /// to provided slot consensus state,
-pub fn slot_pid_output(previous_slot: &Slot) -> (f64, f64, pallas::Base, pallas::Base) {
-    let (f, error) = calculate_f(previous_slot);
+pub fn slot_pid_output(
+    previous_slot: &Slot,
+    previous_producers: u64,
+) -> (f64, f64, pallas::Base, pallas::Base) {
+    let (f, error) = calculate_f(previous_slot, previous_producers);
     let total_tokens =
         Float10::try_from(previous_slot.total_tokens + previous_slot.reward).unwrap();
     let (sigma1, sigma2) = calculate_sigmas(f.clone(), total_tokens);
@@ -52,22 +55,20 @@ pub fn slot_pid_output(previous_slot: &Slot) -> (f64, f64, pallas::Base, pallas:
 
 /// Calculate the inverse probability `f` of becoming a block producer (winning the lottery)
 /// having all the tokens, and the feedback error, represented as Float10.
-fn calculate_f(previous_slot: &Slot) -> (Float10, Float10) {
+fn calculate_f(previous_slot: &Slot, previous_producers: u64) -> (Float10, Float10) {
     // PID controller K values based on constants
     let k1 = KP.clone() + KI.clone() + KD.clone();
     let k2 = FLOAT10_NEG_ONE.clone() * KP.clone() + FLOAT10_NEG_TWO.clone() * KD.clone();
     let k3 = KD.clone();
 
     // Convert slot values to Float10
-    let previous_slot_f = Float10::try_from(previous_slot.f).unwrap();
-    let previous_slot_error = Float10::try_from(previous_slot.error).unwrap();
+    let previous_slot_f = Float10::try_from(previous_slot.pid.f).unwrap();
+    let previous_slot_error = Float10::try_from(previous_slot.pid.error).unwrap();
     let previous_slot_previous_slot_error =
-        Float10::try_from(previous_slot.previous_slot_error).unwrap();
+        Float10::try_from(previous_slot.previous.error).unwrap();
 
     // Calculate feedback error based on previous block producers.
-    // We know how many producers existed in previous slot by
-    // the len of its fork hashes.
-    let feedback = Float10::try_from(previous_slot.fork_hashes.len() as u64).unwrap();
+    let feedback = Float10::try_from(previous_producers).unwrap();
     let error = FLOAT10_ONE.clone() - feedback;
 
     // Calculate f
