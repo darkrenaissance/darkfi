@@ -47,23 +47,16 @@ pub struct GenesisMintCallDebris {
 pub struct GenesisMintRevealed {
     pub coin: Coin,
     pub value_commit: pallas::Point,
-    pub token_commit: pallas::Point,
+    pub token_commit: pallas::Base,
 }
 
 impl GenesisMintRevealed {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
         let valcom_coords = self.value_commit.to_affine().coordinates().unwrap();
-        let tokcom_coords = self.token_commit.to_affine().coordinates().unwrap();
 
         // NOTE: It's important to keep these in the same order
         // as the `constrain_instance` calls in the zkas code.
-        vec![
-            self.coin.inner(),
-            *valcom_coords.x(),
-            *valcom_coords.y(),
-            *tokcom_coords.x(),
-            *tokcom_coords.y(),
-        ]
+        vec![self.coin.inner(), *valcom_coords.x(), *valcom_coords.y(), self.token_commit]
     }
 }
 
@@ -104,12 +97,11 @@ impl GenesisMintCallBuilder {
             public_key: self.keypair.public,
         };
 
-        // We just create the pedersen commitment blinds here. We simply
-        // enforce that the clear input and the anon output have the same
-        // commitments. Not sure if this can be avoided, but also is it
-        // really necessary to avoid?
+        // We just create the commitment blinds here. We simply encofce
+        // that the clear input and the anon output have the same commitments.
+        // Not sure if this can be avoided, but also is it really necessary to avoid?
         let value_blind = pallas::Scalar::random(&mut OsRng);
-        let token_blind = pallas::Scalar::random(&mut OsRng);
+        let token_blind = pallas::Base::random(&mut OsRng);
 
         let c_input = ClearInput {
             value: input.value,

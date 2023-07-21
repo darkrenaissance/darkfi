@@ -31,9 +31,8 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        contract_id::MONEY_CONTRACT_ID,
-        pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
-        poseidon_hash, PublicKey, SecretKey, TokenId,
+        contract_id::MONEY_CONTRACT_ID, pedersen::pedersen_commitment_u64, poseidon_hash,
+        PublicKey, SecretKey, TokenId,
     },
     pasta::pallas,
     tx::ContractCall,
@@ -52,7 +51,7 @@ pub struct PartialSwapData {
     value_pair: (u64, u64),
     token_pair: (TokenId, TokenId),
     value_blinds: Vec<pallas::Scalar>,
-    token_blinds: Vec<pallas::Scalar>,
+    token_blinds: Vec<pallas::Base>,
 }
 
 impl fmt::Display for PartialSwapData {
@@ -129,7 +128,7 @@ impl Drk {
 
         // Since we're creating the first half, we generate the blinds.
         let value_blinds = [pallas::Scalar::random(&mut OsRng), pallas::Scalar::random(&mut OsRng)];
-        let token_blinds = [pallas::Scalar::random(&mut OsRng), pallas::Scalar::random(&mut OsRng)];
+        let token_blinds = [pallas::Base::random(&mut OsRng), pallas::Base::random(&mut OsRng)];
 
         // Now we should have everything we need to build the swap half
         eprintln!("Creating Mint and Burn circuit proving keys");
@@ -370,7 +369,7 @@ impl Drk {
             }
 
             let valcom = pedersen_commitment_u64(note.value, note.value_blind);
-            let tokcom = pedersen_commitment_base(note.token_id.inner(), note.token_blind);
+            let tokcom = poseidon_hash([note.token_id.inner(), note.token_blind]);
 
             if valcom != params.outputs[output_idx].value_commit {
                 eprintln!(

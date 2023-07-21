@@ -51,7 +51,7 @@ pub use nullifier::Nullifier;
 
 /// Pedersen commitment utilities
 pub mod pedersen;
-pub use pedersen::{pedersen_commitment_base, pedersen_commitment_u64, ValueBlind, ValueCommit};
+pub use pedersen::{pedersen_commitment_base, pedersen_commitment_u64};
 
 /// Schnorr signature traits
 pub mod schnorr;

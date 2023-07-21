@@ -18,8 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, ContractId,
-        MerkleNode, TokenId,
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode, TokenId,
     },
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -59,7 +58,6 @@ pub(crate) fn money_token_mint_get_metadata_v1(
     let token_id = TokenId::derive_public(params.input.signature_public);
 
     let value_coords = params.output.value_commit.to_affine().coordinates().unwrap();
-    let token_coords = params.output.token_commit.to_affine().coordinates().unwrap();
 
     zk_public_inputs.push((
         MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1.to_string(),
@@ -70,8 +68,7 @@ pub(crate) fn money_token_mint_get_metadata_v1(
             params.output.coin.inner(),
             *value_coords.x(),
             *value_coords.y(),
-            *token_coords.x(),
-            *token_coords.y(),
+            params.output.token_commit,
         ],
     ));
 
@@ -126,7 +123,7 @@ pub(crate) fn money_token_mint_process_instruction_v1(
         return Err(MoneyError::ValueMismatch.into())
     }
 
-    if pedersen_commitment_base(params.input.token_id.inner(), params.input.token_blind) !=
+    if poseidon_hash([params.input.token_id.inner(), params.input.token_blind]) !=
         params.output.token_commit
     {
         msg!("[MintV1] Error: Token commitment mismatch");

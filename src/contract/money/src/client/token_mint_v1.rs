@@ -23,8 +23,8 @@ use darkfi::{
 };
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_base,
-        pedersen_commitment_u64, poseidon_hash, Keypair, PublicKey, TokenId,
+        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Keypair,
+        PublicKey, TokenId,
     },
     pasta::pallas,
 };
@@ -49,14 +49,13 @@ pub struct TokenMintRevealed {
     pub token_id: TokenId,
     pub coin: Coin,
     pub value_commit: pallas::Point,
-    pub token_commit: pallas::Point,
+    pub token_commit: pallas::Base,
 }
 
 impl TokenMintRevealed {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
         let (sig_x, sig_y) = self.signature_public.xy();
         let valcom_coords = self.value_commit.to_affine().coordinates().unwrap();
-        let tokcom_coords = self.token_commit.to_affine().coordinates().unwrap();
 
         // NOTE: It's important to keep these in the same order
         // as the `constrain_instance` calls in the zkas code.
@@ -67,8 +66,7 @@ impl TokenMintRevealed {
             self.coin.inner(),
             *valcom_coords.x(),
             *valcom_coords.y(),
-            *tokcom_coords.x(),
-            *tokcom_coords.y(),
+            self.token_commit,
         ]
     }
 }
@@ -117,7 +115,7 @@ impl TokenMintCallBuilder {
         // commitments. Not sure if this can be avoided, but also is it
         // really necessary to avoid?
         let value_blind = pallas::Scalar::random(&mut OsRng);
-        let token_blind = pallas::Scalar::random(&mut OsRng);
+        let token_blind = pallas::Base::random(&mut OsRng);
 
         let c_input = ClearInput {
             value: input.value,
@@ -175,7 +173,7 @@ pub fn create_token_mint_proof(
     output: &TransactionBuilderOutputInfo,
     mint_authority: &Keypair,
     value_blind: pallas::Scalar,
-    token_blind: pallas::Scalar,
+    token_blind: pallas::Base,
     serial: pallas::Base,
     spend_hook: pallas::Base,
     user_data: pallas::Base,
@@ -183,7 +181,7 @@ pub fn create_token_mint_proof(
     let token_id = TokenId::derive(mint_authority.secret);
 
     let value_commit = pedersen_commitment_u64(output.value, value_blind);
-    let token_commit = pedersen_commitment_base(token_id.inner(), token_blind);
+    let token_commit = poseidon_hash([token_id.inner(), token_blind]);
 
     let (rcpt_x, rcpt_y) = output.public_key.xy();
 
@@ -214,7 +212,7 @@ pub fn create_token_mint_proof(
         Witness::Base(Value::known(spend_hook)),
         Witness::Base(Value::known(user_data)),
         Witness::Scalar(Value::known(value_blind)),
-        Witness::Scalar(Value::known(token_blind)),
+        Witness::Base(Value::known(token_blind)),
     ];
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin);

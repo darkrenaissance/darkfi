@@ -18,8 +18,8 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, ContractId, MerkleNode, PublicKey,
-        CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID,
+        pasta_prelude::*, poseidon_hash, ContractId, MerkleNode, PublicKey, CONSENSUS_CONTRACT_ID,
+        DARK_TOKEN_ID,
     },
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -54,7 +54,6 @@ pub(crate) fn money_unstake_get_metadata_v1(
 
     // Grab the pedersen commitment from the anonymous output
     let value_coords = params.output.value_commit.to_affine().coordinates().unwrap();
-    let token_coords = params.output.token_commit.to_affine().coordinates().unwrap();
 
     zk_public_inputs.push((
         MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
@@ -62,8 +61,7 @@ pub(crate) fn money_unstake_get_metadata_v1(
             params.output.coin.inner(),
             *value_coords.x(),
             *value_coords.y(),
-            *token_coords.x(),
-            *token_coords.y(),
+            params.output.token_commit,
         ],
     ));
 
@@ -128,8 +126,7 @@ pub(crate) fn money_unstake_process_instruction_v1(
     // Only native token can be minted here.
     // Since consensus coins don't have token commitments, we use zero as
     // the token blind for the token commitment of the newly minted token
-    if output.token_commit != pedersen_commitment_base(DARK_TOKEN_ID.inner(), pallas::Scalar::ZERO)
-    {
+    if output.token_commit != poseidon_hash([DARK_TOKEN_ID.inner(), pallas::Base::ZERO]) {
         msg!("[MoneyUnstakeV1] Error: Input used non-native token");
         return Err(MoneyError::StakeInputNonNativeToken.into())
     }

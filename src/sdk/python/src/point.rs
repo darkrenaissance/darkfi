@@ -23,7 +23,6 @@ use darkfi_sdk::{
             VALUE_COMMITMENT_V_BYTES,
         },
         util::mod_r_p,
-        ValueCommit,
     },
     pasta::{
         arithmetic::CurveExt,
@@ -55,7 +54,7 @@ impl Point {
 
     #[staticmethod]
     fn mul_short(value: &Base) -> Self {
-        let hasher = ValueCommit::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
+        let hasher = pallas::Point::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
         let v = hasher(&VALUE_COMMITMENT_V_BYTES);
         Self(v * mod_r_p(value.0))
     }
@@ -70,7 +69,7 @@ impl Point {
     // Why not a pycell?
     #[staticmethod]
     fn mul_r_generator(blind: &Scalar) -> Self {
-        let hasher = ValueCommit::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
+        let hasher = pallas::Point::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
         let r = hasher(&VALUE_COMMITMENT_R_BYTES);
         let r = Self(r);
         Self(r.0 * blind.0)

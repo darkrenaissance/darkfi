@@ -60,7 +60,7 @@ impl TestHarness {
         }
         .build_with_params(
             pallas::Scalar::random(&mut OsRng),
-            pallas::Scalar::random(&mut OsRng),
+            pallas::Base::random(&mut OsRng),
             pallas::Scalar::random(&mut OsRng),
             pallas::Base::from(28),
         )?;

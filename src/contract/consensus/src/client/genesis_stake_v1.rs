@@ -64,7 +64,7 @@ impl ConsensusGenesisStakeCallBuilder {
         // enforce that the clear input and the anon output have the same
         // commitments.
         let value_blind = pallas::Scalar::random(&mut OsRng);
-        let token_blind = pallas::Scalar::random(&mut OsRng);
+        let token_blind = pallas::Base::random(&mut OsRng);
         let reward_blind = pallas::Scalar::random(&mut OsRng);
 
         // FIXME: The coin's serial number here is arbitrary, and allows grinding attacks.
@@ -76,7 +76,7 @@ impl ConsensusGenesisStakeCallBuilder {
     pub fn build_with_params(
         &self,
         value_blind: pallas::Scalar,
-        token_blind: pallas::Scalar,
+        token_blind: pallas::Base,
         reward_blind: pallas::Scalar,
         serial: pallas::Base,
     ) -> Result<ConsensusGenesisStakeCallDebris> {

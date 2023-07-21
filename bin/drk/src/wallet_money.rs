@@ -319,7 +319,7 @@ impl Drk {
             let value_blind: pallas::Scalar = deserialize(&value_blind_bytes)?;
 
             let token_blind_bytes: Vec<u8> = serde_json::from_value(row[8].clone())?;
-            let token_blind: pallas::Scalar = deserialize(&token_blind_bytes)?;
+            let token_blind: pallas::Base = deserialize(&token_blind_bytes)?;
 
             let secret_bytes: Vec<u8> = serde_json::from_value(row[9].clone())?;
             let secret: SecretKey = deserialize(&secret_bytes)?;

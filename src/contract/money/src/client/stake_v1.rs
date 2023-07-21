@@ -27,8 +27,8 @@ use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, poseidon_hash,
-        MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey, DARK_TOKEN_ID,
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, MerkleNode, MerkleTree,
+        Nullifier, PublicKey, SecretKey, DARK_TOKEN_ID,
     },
     pasta::pallas,
 };
@@ -49,7 +49,7 @@ pub struct MoneyStakeCallDebris {
 
 pub struct MoneyStakeBurnRevealed {
     pub value_commit: pallas::Point,
-    pub token_commit: pallas::Point,
+    pub token_commit: pallas::Base,
     pub nullifier: Nullifier,
     pub merkle_root: MerkleNode,
     pub spend_hook: pallas::Base,
@@ -60,7 +60,6 @@ pub struct MoneyStakeBurnRevealed {
 impl MoneyStakeBurnRevealed {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
         let valcom_coords = self.value_commit.to_affine().coordinates().unwrap();
-        let tokcom_coords = self.token_commit.to_affine().coordinates().unwrap();
         let sigpub_coords = self.signature_public.inner().to_affine().coordinates().unwrap();
 
         // NOTE: It's important to keep these in the same order
@@ -69,8 +68,7 @@ impl MoneyStakeBurnRevealed {
             self.nullifier.inner(),
             *valcom_coords.x(),
             *valcom_coords.y(),
-            *tokcom_coords.x(),
-            *tokcom_coords.y(),
+            self.token_commit,
             self.merkle_root.inner(),
             self.user_data_enc,
             pallas::Base::ZERO, // We force spend_hook==0 here
@@ -117,7 +115,7 @@ impl MoneyStakeCallBuilder {
 
         // Create new random blinds and an ephemeral signature key
         let value_blind = pallas::Scalar::random(&mut OsRng);
-        let token_blind = pallas::Scalar::random(&mut OsRng);
+        let token_blind = pallas::Base::random(&mut OsRng);
         let signature_secret = SecretKey::random(&mut OsRng);
         let user_data_blind = pallas::Base::random(&mut OsRng);
 
@@ -158,7 +156,7 @@ pub fn create_stake_burn_proof(
     pk: &ProvingKey,
     input: &TransactionBuilderInputInfo,
     value_blind: pallas::Scalar,
-    token_blind: pallas::Scalar,
+    token_blind: pallas::Base,
     user_data_blind: pallas::Base,
     signature_secret: SecretKey,
 ) -> Result<(Proof, MoneyStakeBurnRevealed)> {
@@ -194,7 +192,7 @@ pub fn create_stake_burn_proof(
 
     let user_data_enc = poseidon_hash([input.note.user_data, user_data_blind]);
     let value_commit = pedersen_commitment_u64(input.note.value, value_blind);
-    let token_commit = pedersen_commitment_base(input.note.token_id.inner(), token_blind);
+    let token_commit = poseidon_hash([input.note.token_id.inner(), token_blind]);
 
     let public_inputs = MoneyStakeBurnRevealed {
         value_commit,
@@ -210,7 +208,7 @@ pub fn create_stake_burn_proof(
         Witness::Base(Value::known(pallas::Base::from(input.note.value))),
         Witness::Base(Value::known(input.note.token_id.inner())),
         Witness::Scalar(Value::known(value_blind)),
-        Witness::Scalar(Value::known(token_blind)),
+        Witness::Base(Value::known(token_blind)),
         Witness::Base(Value::known(input.note.serial)),
         Witness::Base(Value::known(input.note.spend_hook)),
         Witness::Base(Value::known(input.note.user_data)),

@@ -27,9 +27,8 @@ use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_base,
-        pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier,
-        PublicKey, SecretKey, TokenId,
+        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Keypair,
+        MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey, TokenId,
     },
     pasta::pallas,
 };
@@ -62,29 +61,22 @@ pub struct TransferCallDebris {
 pub struct TransferMintRevealed {
     pub coin: Coin,
     pub value_commit: pallas::Point,
-    pub token_commit: pallas::Point,
+    pub token_commit: pallas::Base,
 }
 
 impl TransferMintRevealed {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
         let valcom_coords = self.value_commit.to_affine().coordinates().unwrap();
-        let tokcom_coords = self.token_commit.to_affine().coordinates().unwrap();
 
         // NOTE: It's important to keep these in the same order
         // as the `constrain_instance` calls in the zkas code.
-        vec![
-            self.coin.inner(),
-            *valcom_coords.x(),
-            *valcom_coords.y(),
-            *tokcom_coords.x(),
-            *tokcom_coords.y(),
-        ]
+        vec![self.coin.inner(), *valcom_coords.x(), *valcom_coords.y(), self.token_commit]
     }
 }
 
 pub struct TransferBurnRevealed {
     pub value_commit: pallas::Point,
-    pub token_commit: pallas::Point,
+    pub token_commit: pallas::Base,
     pub nullifier: Nullifier,
     pub merkle_root: MerkleNode,
     pub spend_hook: pallas::Base,
@@ -95,7 +87,6 @@ pub struct TransferBurnRevealed {
 impl TransferBurnRevealed {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
         let valcom_coords = self.value_commit.to_affine().coordinates().unwrap();
-        let tokcom_coords = self.token_commit.to_affine().coordinates().unwrap();
         let sigpub_coords = self.signature_public.inner().to_affine().coordinates().unwrap();
 
         // NOTE: It's important to keep these in the same order
@@ -104,8 +95,7 @@ impl TransferBurnRevealed {
             self.nullifier.inner(),
             *valcom_coords.x(),
             *valcom_coords.y(),
-            *tokcom_coords.x(),
-            *tokcom_coords.y(),
+            self.token_commit,
             self.merkle_root.inner(),
             self.user_data_enc,
             self.spend_hook,
@@ -259,7 +249,7 @@ impl TransferCallBuilder {
         let mut params =
             MoneyTransferParamsV1 { clear_inputs: vec![], inputs: vec![], outputs: vec![] };
 
-        let token_blind = pallas::Scalar::random(&mut OsRng);
+        let token_blind = pallas::Base::random(&mut OsRng);
         for input in clear_inputs {
             let signature_public = PublicKey::from_secret(input.signature_secret);
             let value_blind = pallas::Scalar::random(&mut OsRng);
@@ -393,7 +383,7 @@ pub fn create_transfer_burn_proof(
     pk: &ProvingKey,
     input: &TransactionBuilderInputInfo,
     value_blind: pallas::Scalar,
-    token_blind: pallas::Scalar,
+    token_blind: pallas::Base,
     user_data_blind: pallas::Base,
     signature_secret: SecretKey,
 ) -> Result<(Proof, TransferBurnRevealed)> {
@@ -429,7 +419,7 @@ pub fn create_transfer_burn_proof(
 
     let user_data_enc = poseidon_hash([input.note.user_data, user_data_blind]);
     let value_commit = pedersen_commitment_u64(input.note.value, value_blind);
-    let token_commit = pedersen_commitment_base(input.note.token_id.inner(), token_blind);
+    let token_commit = poseidon_hash([input.note.token_id.inner(), token_blind]);
 
     let public_inputs = TransferBurnRevealed {
         value_commit,
@@ -445,7 +435,7 @@ pub fn create_transfer_burn_proof(
         Witness::Base(Value::known(pallas::Base::from(input.note.value))),
         Witness::Base(Value::known(input.note.token_id.inner())),
         Witness::Scalar(Value::known(value_blind)),
-        Witness::Scalar(Value::known(token_blind)),
+        Witness::Base(Value::known(token_blind)),
         Witness::Base(Value::known(input.note.serial)),
         Witness::Base(Value::known(input.note.spend_hook)),
         Witness::Base(Value::known(input.note.user_data)),
@@ -468,13 +458,13 @@ pub fn create_transfer_mint_proof(
     pk: &ProvingKey,
     output: &TransactionBuilderOutputInfo,
     value_blind: pallas::Scalar,
-    token_blind: pallas::Scalar,
+    token_blind: pallas::Base,
     serial: pallas::Base,
     spend_hook: pallas::Base,
     user_data: pallas::Base,
 ) -> Result<(Proof, TransferMintRevealed)> {
     let value_commit = pedersen_commitment_u64(output.value, value_blind);
-    let token_commit = pedersen_commitment_base(output.token_id.inner(), token_blind);
+    let token_commit = poseidon_hash([output.token_id.inner(), token_blind]);
     let (pub_x, pub_y) = output.public_key.xy();
 
     let coin = Coin::from(poseidon_hash([
@@ -498,7 +488,7 @@ pub fn create_transfer_mint_proof(
         Witness::Base(Value::known(spend_hook)),
         Witness::Base(Value::known(user_data)),
         Witness::Scalar(Value::known(value_blind)),
-        Witness::Scalar(Value::known(token_blind)),
+        Witness::Base(Value::known(token_blind)),
     ];
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin);

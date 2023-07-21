@@ -68,7 +68,7 @@ pub struct ClearInput {
     /// Blinding factor for `value`
     pub value_blind: pallas::Scalar,
     /// Blinding factor for `token_id`
-    pub token_blind: pallas::Scalar,
+    pub token_blind: pallas::Base,
     /// Public key for the signature
     pub signature_public: PublicKey,
 }
@@ -78,8 +78,8 @@ pub struct ClearInput {
 pub struct Input {
     /// Pedersen commitment for the input's value
     pub value_commit: pallas::Point,
-    /// Pedersen commitment for the input's token ID
-    pub token_commit: pallas::Point,
+    /// Commitment for the input's token ID
+    pub token_commit: pallas::Base,
     /// Revealed nullifier
     pub nullifier: Nullifier,
     /// Revealed Merkle root
@@ -116,8 +116,8 @@ pub struct ConsensusInput {
 pub struct Output {
     /// Pedersen commitment for the output's value
     pub value_commit: pallas::Point,
-    /// Pedersen commitment for the output's token ID
-    pub token_commit: pallas::Point,
+    /// Commitment for the output's token ID
+    pub token_commit: pallas::Base,
     /// Minted coin
     pub coin: Coin,
     /// AEAD encrypted note
@@ -192,7 +192,7 @@ pub struct MoneyTokenFreezeUpdateV1 {
 // ANCHOR: MoneyStakeParams
 pub struct MoneyStakeParamsV1 {
     /// Blinding factor for `token_id`
-    pub token_blind: pallas::Scalar,
+    pub token_blind: pallas::Base,
     /// Anonymous input
     pub input: Input,
 }
