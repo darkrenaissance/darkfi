@@ -6,8 +6,7 @@ jobs:
   test-units:
     strategy:
       matrix:
-        #os: [ubuntu-latest, macos-latest]
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -27,7 +26,7 @@ jobs:
       - name: Install dependencies (Linux)
         run: |
           sudo apt update
-          sudo apt -y install jq build-essential clang libclang-dev llvm-dev libudev-dev pkg-config libasound2-dev
+          sudo apt -y install build-essential clang libclang-dev llvm-dev libudev-dev pkg-config libasound2-dev
         if: matrix.os == 'ubuntu-latest'
 
       - name: Install dependencies (macOS)
@@ -67,7 +66,7 @@ jobs:
       - name: Install dependencies (Linux)
         run: |
           sudo apt update
-          sudo apt -y install jq build-essential clang libclang-dev llvm-dev libudev-dev pkg-config libasound2-dev
+          sudo apt -y install build-essential clang libclang-dev llvm-dev libasound2-dev
         if: matrix.os == 'ubuntu-latest'
 
       - name: Install dependencies (macOS)
