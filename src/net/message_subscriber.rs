@@ -215,7 +215,7 @@ impl MessageSubsystem {
     }
 
     /// Subscribes to a [`Message`]. Using the Message name, the method
-    /// returns the associated [`MessageDispatcher`] from the list of
+    /// returns the associated `MessageDispatcher` from the list of
     /// dispatchers and calls `subscribe()`.
     pub async fn subscribe<M: Message>(&self) -> Result<MessageSubscription<M>> {
         let dispatcher = self.dispatchers.lock().await.get(M::NAME).cloned();

@@ -20,7 +20,7 @@
 /// common network messages that are sent between nodes as described
 /// by the [`protocol`] submodule.
 ///
-/// Implements a type called [`Packet`] which is the base message type.
+/// Implements a type called `Packet` which is the base message type.
 /// Packets are converted into messages and passed to an event loop.
 pub mod message;
 pub use message::Message;
@@ -99,7 +99,7 @@ pub use protocol::{
 /// incoming connection, and an outbound session, which describes setting
 /// up an outbound connection. Also describes the sesd session, which is
 /// the type of connection used when a node connects to the network for
-/// the first time. Implements the [`Session`] trait which describes the
+/// the first time. Implements the `Session` trait which describes the
 /// common functions across all sessions.
 pub mod session;
 pub use session::SESSION_ALL;
