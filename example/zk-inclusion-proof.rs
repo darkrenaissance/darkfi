@@ -68,7 +68,7 @@ fn main() -> Result<()> {
     // ======
     // Bigger k = more rows, but slower circuit
     // Number of rows is 2^k
-    let k = 11;
+    let k = zkbin.k;
     println!("k = {}", k);
 
     // Witness values

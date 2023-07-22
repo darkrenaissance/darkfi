@@ -143,12 +143,12 @@ pub fn read_or_gen_vks_and_pks() -> Result<(Pks, Vks)> {
         debug!("Building VK for {}", zkbin.namespace);
         let witnesses = empty_witnesses(&zkbin);
         let circuit = ZkCircuit::new(witnesses, &zkbin);
-        let vk = VerifyingKey::build(13, &circuit);
+        let vk = VerifyingKey::build(zkbin.k, &circuit);
         let mut vk_buf = vec![];
         vk.write(&mut vk_buf)?;
         vks.push((bincode.to_vec(), zkbin.namespace.clone(), vk_buf));
 
-        let pk = ProvingKey::build(13, &circuit);
+        let pk = ProvingKey::build(zkbin.k, &circuit);
         let mut pk_buf = vec![];
         pk.write(&mut pk_buf)?;
         pks.push((bincode.to_vec(), zkbin.namespace, pk_buf));

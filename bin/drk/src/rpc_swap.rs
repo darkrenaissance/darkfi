@@ -122,7 +122,6 @@ impl Drk {
         let mint_zkbin = ZkBinary::decode(&mint_zkbin.1)?;
         let burn_zkbin = ZkBinary::decode(&burn_zkbin.1)?;
 
-        let k = 13;
         let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), &mint_zkbin);
         let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), &burn_zkbin);
 
@@ -132,6 +131,8 @@ impl Drk {
 
         // Now we should have everything we need to build the swap half
         eprintln!("Creating Mint and Burn circuit proving keys");
+        let mint_pk = ProvingKey::build(mint_zkbin.k, &mint_circuit);
+        let burn_pk = ProvingKey::build(burn_zkbin.k, &burn_circuit);
         let builder = SwapCallBuilder {
             pubkey: address,
             value_send,
@@ -146,9 +147,9 @@ impl Drk {
             coin: burn_coin,
             tree,
             mint_zkbin,
-            mint_pk: ProvingKey::build(k, &mint_circuit),
+            mint_pk,
             burn_zkbin,
-            burn_pk: ProvingKey::build(k, &burn_circuit),
+            burn_pk,
         };
 
         eprintln!("Building first half of the swap transaction");
@@ -214,7 +215,6 @@ impl Drk {
         let mint_zkbin = ZkBinary::decode(&mint_zkbin.1)?;
         let burn_zkbin = ZkBinary::decode(&burn_zkbin.1)?;
 
-        let k = 13;
         let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), &mint_zkbin);
         let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), &burn_zkbin);
 
@@ -222,6 +222,8 @@ impl Drk {
 
         // Now we should have everything we need to build the swap half
         eprintln!("Creating Mint and Burn circuit proving keys");
+        let mint_pk = ProvingKey::build(mint_zkbin.k, &mint_circuit);
+        let burn_pk = ProvingKey::build(burn_zkbin.k, &burn_circuit);
         let builder = SwapCallBuilder {
             pubkey: address,
             value_send: partial.value_pair.1,
@@ -236,9 +238,9 @@ impl Drk {
             coin: burn_coin,
             tree,
             mint_zkbin,
-            mint_pk: ProvingKey::build(k, &mint_circuit),
+            mint_pk,
             burn_zkbin,
-            burn_pk: ProvingKey::build(k, &burn_circuit),
+            burn_pk,
         };
 
         eprintln!("Building second half of the swap transaction");

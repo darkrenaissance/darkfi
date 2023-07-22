@@ -90,7 +90,7 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
         }
     };
 
-    // Disabled until cursor_remaining feature is available on master.
+    // TODO: Disabled until cursor_remaining feature is available on master.
     // Then enable #![feature(cursor_remaining)] in src/lib.rs
     /*if !buf_reader.is_empty() {
         error!(target: "runtime::db::db_init()", "Trailing bytes in argument stream");
@@ -177,7 +177,7 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
         return CALLER_ACCESS_DENIED
     }
 
-    // Disabled until cursor_remaining feature is available on master.
+    // TODO: Disabled until cursor_remaining feature is available on master.
     // Then enable #![feature(cursor_remaining)] in src/lib.rs
     /*if !buf_reader.is_empty() {
         error!(target: "runtime::db::db_lookup()", "Trailing bytes in argument stream");
@@ -249,7 +249,7 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
     };
 
     // Disabled until cursor_remaining feature is available on master.
-    // Then enable #![feature(cursor_remaining)] in src/lib.rs
+    // TODO: Then enable #![feature(cursor_remaining)] in src/lib.rs
     /*if !buf_reader.is_empty() {
         error!(target: "runtime::db::db_set()", "Trailing bytes in argument stream");
         return DB_DEL_FAILED
@@ -331,7 +331,7 @@ pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
         }
     };
 
-    // Disabled until cursor_remaining feature is available on master.
+    // TODO: Disabled until cursor_remaining feature is available on master.
     // Then enable #![feature(cursor_remaining)] in src/lib.rs
     /*if !buf_reader.is_empty() {
         error!(target: "runtime::db::db_del()", "Trailing bytes in argument stream");
@@ -407,7 +407,7 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
         }
     };
 
-    // Disabled until cursor_remaining feature is available on master.
+    // TODO: Disabled until cursor_remaining feature is available on master.
     // Then enable #![feature(cursor_remaining)] in src/lib.rs
     /*if !buf_reader.is_empty() {
         error!(target: "runtime::db::db_get()", "Trailing bytes in argument stream");
@@ -490,7 +490,7 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
         }
     };
 
-    // Disabled until cursor_remaining feature is available on master.
+    // TODO: Disabled until cursor_remaining feature is available on master.
     // Then enable #![feature(cursor_remaining)] in src/lib.rs
     /*if !buf_reader.is_empty() {
         error!(target: "runtime::db::db_contains_key()", "Trailing bytes in argument stream");
@@ -599,7 +599,7 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
     // We didn't find any existing bincode, so let's create a new VerifyingKey and write it all.
     info!(target: "runtime::db::zkas_db_set()", "Creating VerifyingKey for {} zkas circuit", zkbin.namespace);
     let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
-    let vk = VerifyingKey::build(13, &circuit);
+    let vk = VerifyingKey::build(zkbin.k, &circuit);
     let mut vk_buf = vec![];
     if let Err(e) = vk.write(&mut vk_buf) {
         error!(target: "runtime::db::zkas_db_set()", "Failed to serialize VerifyingKey: {}", e);

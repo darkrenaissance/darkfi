@@ -148,14 +148,14 @@ fn consensus_prop() -> Result<()> {
     ];
 
     let prover_circuit = ZkCircuit::new(prover_witnesses, &zkbin);
-    let mockprover = MockProver::run(13, &prover_circuit, vec![public_inputs.clone()])?;
+    let mockprover = MockProver::run(zkbin.k, &prover_circuit, vec![public_inputs.clone()])?;
     mockprover.assert_satisfied();
 
     let verifier_witnesses = empty_witnesses(&zkbin);
     let circuit = ZkCircuit::new(verifier_witnesses, &zkbin);
 
-    let proving_key = ProvingKey::build(13, &circuit);
-    let verifying_key = VerifyingKey::build(13, &circuit);
+    let proving_key = ProvingKey::build(zkbin.k, &circuit);
+    let verifying_key = VerifyingKey::build(zkbin.k, &circuit);
 
     let proof = Proof::create(&proving_key, &[prover_circuit], &public_inputs, &mut OsRng)?;
     proof.verify(&verifying_key, &public_inputs)?;

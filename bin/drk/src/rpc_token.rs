@@ -74,12 +74,12 @@ impl Drk {
             return Err(anyhow!("Token mint circuit not found"))
         };
 
-        let k = 13;
         let token_mint_zkbin = ZkBinary::decode(&token_mint_zkbin.1)?;
         let token_mint_circuit =
             ZkCircuit::new(empty_witnesses(&token_mint_zkbin), &token_mint_zkbin);
 
         eprintln!("Creating token mint circuit proving keys");
+        let token_mint_pk = ProvingKey::build(token_mint_zkbin.k, &token_mint_circuit);
         let mint_builder = TokenMintCallBuilder {
             mint_authority,
             recipient,
@@ -87,7 +87,7 @@ impl Drk {
             spend_hook,
             user_data,
             token_mint_zkbin,
-            token_mint_pk: ProvingKey::build(k, &token_mint_circuit),
+            token_mint_pk,
         };
 
         eprintln!("Building transaction parameters");
@@ -127,17 +127,14 @@ impl Drk {
             return Err(anyhow!("Token freeze circuit not found"))
         };
 
-        let k = 13;
         let token_freeze_zkbin = ZkBinary::decode(&token_freeze_zkbin.1)?;
         let token_freeze_circuit =
             ZkCircuit::new(empty_witnesses(&token_freeze_zkbin), &token_freeze_zkbin);
 
         eprintln!("Creating token freeze circuit proving keys");
-        let freeze_builder = TokenFreezeCallBuilder {
-            mint_authority,
-            token_freeze_zkbin,
-            token_freeze_pk: ProvingKey::build(k, &token_freeze_circuit),
-        };
+        let token_freeze_pk = ProvingKey::build(token_freeze_zkbin.k, &token_freeze_circuit);
+        let freeze_builder =
+            TokenFreezeCallBuilder { mint_authority, token_freeze_zkbin, token_freeze_pk };
 
         eprintln!("Building transaction parameters");
         let debris = freeze_builder.build()?;
