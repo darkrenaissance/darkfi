@@ -31,7 +31,6 @@ num-bigint = "0.4.3"
 num-traits = "0.2.16"
 pasta_curves = "0.5.1"
 rand_core = "0.6.4"
-sha2 = "0.10.7"
 
 # Misc
 lazy_static = "1.4.0"

@@ -1552,7 +1552,6 @@ dependencies = [
  "clap 4.3.19",
  "crypto_api_chachapoly",
  "darkfi-derive",
- "darkfi-derive-internal",
  "darkfi-sdk",
  "darkfi-serial",
  "dashu",
@@ -1721,7 +1720,6 @@ dependencies = [
  "pasta_curves",
  "rand 0.8.5",
  "rand_core 0.6.4",
- "sha2 0.10.7",
  "subtle",
  "thiserror",
 ]
