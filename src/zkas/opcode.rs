@@ -19,7 +19,7 @@
 use super::VarType;
 
 /// Opcodes supported by the zkas VM
-#[derive(Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum Opcode {
     /// Intermediate opcode for the compiler, should never appear in the result

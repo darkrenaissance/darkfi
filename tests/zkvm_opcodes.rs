@@ -125,7 +125,7 @@ fn zkvm_opcodes() -> Result<()> {
     let proving_key = ProvingKey::build(zkbin.k, &circuit);
     let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
 
-    let verifier_witnesses = empty_witnesses(&zkbin);
+    let verifier_witnesses = empty_witnesses(&zkbin)?;
     let circuit = ZkCircuit::new(verifier_witnesses, &zkbin);
     let verifying_key = VerifyingKey::build(zkbin.k, &circuit);
     proof.verify(&verifying_key, &public_inputs)?;

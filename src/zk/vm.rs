@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashSet;
+
 use darkfi_sdk::crypto::constants::{
     sinsemilla::{OrchardCommitDomains, OrchardHashDomains},
     util::gen_const_array,
@@ -121,7 +123,8 @@ pub struct VmConfig {
     chips: Vec<VmChip>,
     /// Instance column used for public inputs
     primary: Column<InstanceColumn>,
-    advices: Vec<Column<Advice>>,
+    /// Advice column used to witness values
+    witness: Column<Advice>,
 }
 
 impl VmConfig {
@@ -240,6 +243,22 @@ impl VmConfig {
     }
 }
 
+/// Configuration parameters for the circuit.
+/// Defines which chips we need to initialize and configure.
+#[derive(Default)]
+#[allow(dead_code)]
+pub struct ZkParams {
+    init_ecc: bool,
+    init_poseidon: bool,
+    init_sinsemilla: bool,
+    init_arithmetic: bool,
+    init_nativerange: bool,
+    init_lessthan: bool,
+    init_boolcheck: bool,
+    init_condselect: bool,
+    init_zerocond: bool,
+}
+
 #[derive(Clone)]
 pub struct ZkCircuit {
     constants: Vec<String>,
@@ -260,7 +279,7 @@ impl ZkCircuit {
 impl Circuit<pallas::Base> for ZkCircuit {
     type Config = VmConfig;
     type FloorPlanner = floor_planner::V1;
-    type Params = usize;
+    type Params = ZkParams;
 
     fn without_witnesses(&self) -> Self {
         Self {
@@ -276,22 +295,81 @@ impl Circuit<pallas::Base> for ZkCircuit {
     }
 
     fn params(&self) -> Self::Params {
-        10
+        // Gather all opcodes used in the circuit.
+        let mut opcodes = HashSet::new();
+        for (opcode, _) in &self.opcodes {
+            opcodes.insert(opcode);
+        }
+
+        // Conditions on which we enable the ECC chip
+        let init_ecc = !self.constants.is_empty() ||
+            opcodes.contains(&Opcode::EcAdd) ||
+            opcodes.contains(&Opcode::EcMul) ||
+            opcodes.contains(&Opcode::EcMulBase) ||
+            opcodes.contains(&Opcode::EcMulShort) ||
+            opcodes.contains(&Opcode::EcMulVarBase) ||
+            opcodes.contains(&Opcode::EcGetX) ||
+            opcodes.contains(&Opcode::EcGetY) ||
+            opcodes.contains(&Opcode::ConstrainEqualPoint) ||
+            self.witnesses.iter().any(|x| {
+                matches!(x, Witness::EcPoint(_)) ||
+                    matches!(x, Witness::EcNiPoint(_)) ||
+                    matches!(x, Witness::EcFixedPoint(_)) ||
+                    matches!(x, Witness::Scalar(_))
+            });
+
+        // Conditions on which we enable the Poseidon hash chip
+        let init_poseidon = opcodes.contains(&Opcode::PoseidonHash);
+
+        // Conditions on which we enable the Sinsemilla and Merkle chips
+        let init_sinsemilla = opcodes.contains(&Opcode::MerkleRoot);
+
+        // Conditions on which we enable the base field Arithmetic chip
+        let init_arithmetic = opcodes.contains(&Opcode::BaseAdd) ||
+            opcodes.contains(&Opcode::BaseSub) ||
+            opcodes.contains(&Opcode::BaseMul);
+
+        // Conditions on which we enable the native range check chips
+        // TODO: Separate 253 and 64.
+        let init_nativerange = opcodes.contains(&Opcode::RangeCheck) ||
+            opcodes.contains(&Opcode::LessThanLoose) ||
+            opcodes.contains(&Opcode::LessThanStrict);
+
+        // Conditions on which we enable the less than comparison chip
+        let init_lessthan =
+            opcodes.contains(&Opcode::LessThanLoose) || opcodes.contains(&Opcode::LessThanStrict);
+
+        // Conditions on which we enable the boolean check chip
+        let init_boolcheck = opcodes.contains(&Opcode::BoolCheck);
+
+        // Conditions on which we enable the conditional selection chip
+        let init_condselect = opcodes.contains(&Opcode::CondSelect);
+
+        // Conditions on which we enable the zero cond selection chip
+        let init_zerocond = opcodes.contains(&Opcode::ZeroCondSelect);
+
+        ZkParams {
+            init_ecc,
+            init_poseidon,
+            init_sinsemilla,
+            init_arithmetic,
+            init_nativerange,
+            init_lessthan,
+            init_boolcheck,
+            init_condselect,
+            init_zerocond,
+        }
     }
 
     fn configure_with_params(
         meta: &mut ConstraintSystem<pallas::Base>,
-        params: Self::Params,
+        _params: Self::Params,
     ) -> Self::Config {
-        //  Advice columns used in the circuit
+        // Advice columns used in the circuit
         let mut advices = vec![];
-        for _ in 0..params {
+        for _ in 0..10 {
             advices.push(meta.advice_column());
         }
-
-        // Fixed columns for the Sinsemilla generator lookup table
-        let table_idx = meta.lookup_table_column();
-        let lookup = (table_idx, meta.lookup_table_column(), meta.lookup_table_column());
 
         // Instance column used for public inputs
         let primary = meta.instance_column();
@@ -301,6 +379,10 @@ impl Circuit<pallas::Base> for ZkCircuit {
         for advice in advices.iter() {
             meta.enable_equality(*advice);
         }
+
+        // Fixed columns for the Sinsemilla generator lookup table
+        let table_idx = meta.lookup_table_column();
+        let lookup = (table_idx, meta.lookup_table_column(), meta.lookup_table_column());
 
         // Poseidon requires four advice columns, while ECC incomplete addition
         // requires six. We can reduce the proof size by sharing fixed columns
@@ -427,7 +509,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             VmChip::ZeroCond(zerocond_config),
         ];
 
-        VmConfig { primary, advices, chips }
+        VmConfig { primary, witness: advices[0], chips }
     }
 
     fn synthesize(
@@ -510,7 +592,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
         // This constant one is used for short multiplication
         let one = assign_free_advice(
             layouter.namespace(|| "Load constant one"),
-            config.advices[0],
+            config.witness,
             Value::known(pallas::Base::ONE),
         )?;
         layouter.assign_region(
@@ -612,7 +694,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Witnessing Base into circuit");
                     let base = assign_free_advice(
                         layouter.namespace(|| "Witness Base"),
-                        config.advices[0],
+                        config.witness,
                         *w,
                     )?;
 
@@ -908,7 +990,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let witness = assign_free_advice(
                         layouter.namespace(|| "Witness literal"),
-                        config.advices[0],
+                        config.witness,
                         Value::known(pallas::Base::from(lit)),
                     )?;
 

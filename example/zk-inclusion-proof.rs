@@ -116,7 +116,7 @@ fn main() -> Result<()> {
     // ========
 
     // Construct empty witnesses
-    let verifier_witnesses = empty_witnesses(&zkbin);
+    let verifier_witnesses = empty_witnesses(&zkbin)?;
 
     // Create the circuit
     let circuit = ZkCircuit::new(verifier_witnesses, &zkbin);

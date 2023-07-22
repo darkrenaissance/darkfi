@@ -151,7 +151,7 @@ fn consensus_prop() -> Result<()> {
     let mockprover = MockProver::run(zkbin.k, &prover_circuit, vec![public_inputs.clone()])?;
     mockprover.assert_satisfied();
 
-    let verifier_witnesses = empty_witnesses(&zkbin);
+    let verifier_witnesses = empty_witnesses(&zkbin)?;
     let circuit = ZkCircuit::new(verifier_witnesses, &zkbin);
 
     let proving_key = ProvingKey::build(zkbin.k, &circuit);

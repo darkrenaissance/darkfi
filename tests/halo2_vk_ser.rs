@@ -47,7 +47,7 @@ fn halo2_vk_ser() -> Result<()> {
     let bincode = include_bytes!("../proof/opcodes.zk.bin");
     let zkbin = ZkBinary::decode(bincode)?;
 
-    let verifier_witnesses = empty_witnesses(&zkbin);
+    let verifier_witnesses = empty_witnesses(&zkbin)?;
 
     println!("Building vk1");
     let circuit = ZkCircuit::new(verifier_witnesses.clone(), &zkbin);
@@ -72,13 +72,13 @@ fn halo2_vk_ser() -> Result<()> {
     println!("Reading vk3");
     let mut buf1_c = Cursor::new(buf1);
     // Construct the circuit to be able to read the VerifyingKey
-    let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
+    let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
     let vk3 = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut buf1_c, circuit)?;
 
     println!("Reading vk4");
     let mut buf2_c = Cursor::new(buf2);
     // Construct the circuit to be able to read the VerifyingKey
-    let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
+    let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
     let vk4 = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut buf2_c, circuit)?;
 
     // Now let's see if we can verify a proof with all four keys.
