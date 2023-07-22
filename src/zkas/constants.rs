@@ -16,43 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//! `src/zkas` is the library holding the zkas toolchain, consisting of a
-//! lexer, parser, static/semantic analyzers, a binary compiler, and a
-//! binary decoder.
+/// Maximum allowed k param (circuit rows = 2^k)
+pub const MAX_K: u32 = 16;
 
-/// Error emitter
-mod error;
-
-/// Constants
-pub mod constants;
-
-/// Language opcodes
-pub mod opcode;
-pub use opcode::Opcode;
-
-/// Language types
-pub mod types;
-pub use types::{LitType, VarType};
-
-/// Language AST
-pub mod ast;
-
-/// Lexer module
-pub mod lexer;
-pub use lexer::Lexer;
-
-/// Parser module
-pub mod parser;
-pub use parser::Parser;
-
-/// Analyzer module
-pub mod analyzer;
-pub use analyzer::Analyzer;
-
-/// Compiler module
-pub mod compiler;
-pub use compiler::Compiler;
-
-/// Decoder module
-pub mod decoder;
-pub use decoder::ZkBinary;
+/// Maximum allowed namespace length in bytes
+pub const MAX_NS_LEN: usize = 32;

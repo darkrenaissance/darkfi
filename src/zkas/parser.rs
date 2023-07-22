@@ -22,6 +22,7 @@ use itertools::Itertools;
 
 use super::{
     ast::{Arg, Constant, Literal, Statement, StatementType, Variable, Witness},
+    constants::{MAX_K, MAX_NS_LEN},
     error::ErrorEmitter,
     lexer::{Token, TokenType},
     LitType, Opcode, VarType,
@@ -152,6 +153,9 @@ impl Parser {
         }
 
         let declared_k = number.token.parse().unwrap();
+        if declared_k > MAX_K {
+            self.error.abort(&format!("k param is too high, max allowed is {}", MAX_K), 0, 0);
+        }
 
         while let Some(t) = iter.next() {
             // Sections "constant", "witness", and "circuit" are
@@ -229,7 +233,15 @@ impl Parser {
                                 $t[0].column,
                             );
                         }
+
                         namespace = Some($t[0].token.clone());
+                        if namespace.as_ref().unwrap().as_bytes().len() > MAX_NS_LEN {
+                            self.error.abort(
+                                &format!("Namespace too long, max {} bytes", MAX_NS_LEN),
+                                $t[0].line,
+                                $t[0].column,
+                            );
+                        }
                     }
                 };
             }
