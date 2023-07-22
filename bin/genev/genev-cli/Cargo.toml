@@ -13,11 +13,11 @@ darkfi = {path = "../../../", features = ["event-graph", "rpc", "bs58"]}
 darkfi-serial = {path = "../../../src/serial"}
 
 async-std = {version = "1.12.0", features = ["attributes"]}
-clap = {version = "4.3.17", features = ["derive"]}
+clap = {version = "4.3.19", features = ["derive"]}
 libsqlite3-sys = {version = "0.26.0", features = ["bundled-sqlcipher-vendored-openssl"]}
 log = "0.4.19"
 simplelog = "0.12.1"
-serde = {version = "1.0.173", features = ["derive"]}
+serde = {version = "1.0.174", features = ["derive"]}
 serde_json = "1.0.103"
 url = "2.4.0"
 

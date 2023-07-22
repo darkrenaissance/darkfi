@@ -9,7 +9,7 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
-async-trait = "0.1.71"
+async-trait = "0.1.72"
 blake3 = "1.4.1"
 chrono = "0.4.26"
 darkfi = {path = "../../", features = ["blockchain", "wallet", "rpc", "net", "zkas"]}
@@ -32,6 +32,6 @@ simplelog = "0.12.1"
 smol = "1.3.0"
 
 # Argument parsing
-serde = {version = "1.0.173", features = ["derive"]}
+serde = {version = "1.0.174", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"

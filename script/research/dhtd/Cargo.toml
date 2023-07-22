@@ -13,7 +13,7 @@ features = ["dht"]
 async-channel = "1.9.0"
 async-executor = "1.5.1"
 async-std = "1.12.0"
-async-trait = "0.1.71"
+async-trait = "0.1.72"
 blake3 = "1.4.1"
 ctrlc = { version = "3.4.0", features = ["termination"] }
 easy-parallel = "3.3.0"
@@ -24,8 +24,8 @@ simplelog = "0.12.1"
 url = "2.4.0"
 
 # Argument parsing
-serde = "1.0.173"
-serde_derive = "1.0.173"
+serde = "1.0.174"
+serde_derive = "1.0.174"
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 

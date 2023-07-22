@@ -14,7 +14,7 @@ darkfi-serial = {path = "../../src/serial"}
 
 # TLS
 async-rustls = "0.4.0"
-async-trait = "0.1.71"
+async-trait = "0.1.72"
 futures = "0.3.28"
 rustls-pemfile = "1.0.3"
 
@@ -23,7 +23,7 @@ crypto_box = {version = "0.9.0-rc.1", features = ["std", "chacha20"]}
 rand = "0.8.5"
 
 # Misc
-clap = {version = "4.3.17", features = ["derive"]}
+clap = {version = "4.3.19", features = ["derive"]}
 chrono = "0.4.26"
 log = "0.4.19"
 url = "2.4.0"
@@ -42,6 +42,6 @@ simplelog = "0.12.1"
 smol = "1.3.0"
 
 # Argument parsing
-serde = {version = "1.0.173", features = ["derive"]}
+serde = {version = "1.0.174", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
