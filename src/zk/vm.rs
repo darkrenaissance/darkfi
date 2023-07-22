@@ -126,9 +126,9 @@ pub struct VmConfig {
 
 impl VmConfig {
     fn ecc_chip(&self) -> EccChip<OrchardFixedBases> {
-        let Some(VmChip::Ecc(ecc_config)) = self.chips.iter().find(|&c| {
-            matches!(c, VmChip::Ecc(_))
-        }) else {
+        let Some(VmChip::Ecc(ecc_config)) =
+            self.chips.iter().find(|&c| matches!(c, VmChip::Ecc(_)))
+        else {
             unreachable!();
         };
 
@@ -138,9 +138,9 @@ impl VmConfig {
     fn merkle_chip_1(
         &self,
     ) -> MerkleChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
-        let Some(VmChip::Merkle((merkle_cfg1, _))) = self.chips.iter().find(|&c| {
-            matches!(c, VmChip::Merkle(_))
-        }) else {
+        let Some(VmChip::Merkle((merkle_cfg1, _))) =
+            self.chips.iter().find(|&c| matches!(c, VmChip::Merkle(_)))
+        else {
             unreachable!();
         };
 
@@ -150,9 +150,9 @@ impl VmConfig {
     fn merkle_chip_2(
         &self,
     ) -> MerkleChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
-        let Some(VmChip::Merkle((_, merkle_cfg2))) = self.chips.iter().find(|&c| {
-            matches!(c, VmChip::Merkle(_))
-        }) else {
+        let Some(VmChip::Merkle((_, merkle_cfg2))) =
+            self.chips.iter().find(|&c| matches!(c, VmChip::Merkle(_)))
+        else {
             unreachable!();
         };
 
@@ -160,9 +160,9 @@ impl VmConfig {
     }
 
     fn poseidon_chip(&self) -> PoseidonChip<pallas::Base, 3, 2> {
-        let Some(VmChip::Poseidon(poseidon_config)) = self.chips.iter().find(|&c| {
-            matches!(c, VmChip::Poseidon(_))
-        }) else {
+        let Some(VmChip::Poseidon(poseidon_config)) =
+            self.chips.iter().find(|&c| matches!(c, VmChip::Poseidon(_)))
+        else {
             unreachable!();
         };
 
@@ -170,9 +170,9 @@ impl VmConfig {
     }
 
     fn arithmetic_chip(&self) -> ArithChip<pallas::Base> {
-        let Some(VmChip::Arithmetic(arith_config)) = self.chips.iter().find(|&c| {
-            matches!(c, VmChip::Arithmetic(_))
-        }) else {
+        let Some(VmChip::Arithmetic(arith_config)) =
+            self.chips.iter().find(|&c| matches!(c, VmChip::Arithmetic(_)))
+        else {
             unreachable!();
         };
 
@@ -180,9 +180,9 @@ impl VmConfig {
     }
 
     fn condselect_chip(&self) -> ConditionalSelectChip<pallas::Base> {
-        let Some(VmChip::CondSelect(condselect_config)) = self.chips.iter().find(|&c| {
-            matches!(c, VmChip::CondSelect(_))
-        }) else {
+        let Some(VmChip::CondSelect(condselect_config)) =
+            self.chips.iter().find(|&c| matches!(c, VmChip::CondSelect(_)))
+        else {
             unreachable!();
         };
 
@@ -190,9 +190,9 @@ impl VmConfig {
     }
 
     fn zerocond_chip(&self) -> ZeroCondChip<pallas::Base> {
-        let Some(VmChip::ZeroCond(zerocond_config)) = self.chips.iter().find(|&c| {
-            matches!(c, VmChip::ZeroCond(_))
-        }) else {
+        let Some(VmChip::ZeroCond(zerocond_config)) =
+            self.chips.iter().find(|&c| matches!(c, VmChip::ZeroCond(_)))
+        else {
             unreachable!();
         };
 
@@ -200,9 +200,9 @@ impl VmConfig {
     }
 
     fn rangecheck64_chip(&self) -> NativeRangeCheckChip<3, 64, 22> {
-        let Some(VmChip::NativeRange64(range_config)) = self.chips.iter().find(|&c| {
-            matches!(c, VmChip::NativeRange64(_))
-        }) else {
+        let Some(VmChip::NativeRange64(range_config)) =
+            self.chips.iter().find(|&c| matches!(c, VmChip::NativeRange64(_)))
+        else {
             unreachable!();
         };
 
@@ -210,9 +210,9 @@ impl VmConfig {
     }
 
     fn rangecheck253_chip(&self) -> NativeRangeCheckChip<3, 253, 85> {
-        let Some(VmChip::NativeRange253(range_config)) = self.chips.iter().find(|&c| {
-            matches!(c, VmChip::NativeRange253(_))
-        }) else {
+        let Some(VmChip::NativeRange253(range_config)) =
+            self.chips.iter().find(|&c| matches!(c, VmChip::NativeRange253(_)))
+        else {
             unreachable!();
         };
 
@@ -220,9 +220,9 @@ impl VmConfig {
     }
 
     fn lessthan_chip(&self) -> LessThanChip<3, 253, 85> {
-        let Some(VmChip::LessThan(lessthan_config)) = self.chips.iter().find(|&c| {
-            matches!(c, VmChip::LessThan(_))
-        }) else {
+        let Some(VmChip::LessThan(lessthan_config)) =
+            self.chips.iter().find(|&c| matches!(c, VmChip::LessThan(_)))
+        else {
             unreachable!();
         };
 
@@ -230,9 +230,9 @@ impl VmConfig {
     }
 
     fn boolcheck_chip(&self) -> SmallRangeCheckChip {
-        let Some(VmChip::BoolCheck(boolcheck_config)) = self.chips.iter().find(|&c| {
-            matches!(c, VmChip::BoolCheck(_))
-        }) else {
+        let Some(VmChip::BoolCheck(boolcheck_config)) =
+            self.chips.iter().find(|&c| matches!(c, VmChip::BoolCheck(_)))
+        else {
             unreachable!();
         };
 
@@ -448,18 +448,18 @@ impl Circuit<pallas::Base> for ZkCircuit {
         let mut literals_offset = 0;
 
         // Load the Sinsemilla generator lookup table used by the whole circuit.
-        let Some(VmChip::Sinsemilla((sinsemilla_cfg1, _))) = config.chips.iter().find(|&c| {
-            matches!(c, VmChip::Sinsemilla(_))
-        }) else {
+        let Some(VmChip::Sinsemilla((sinsemilla_cfg1, _))) =
+            config.chips.iter().find(|&c| matches!(c, VmChip::Sinsemilla(_)))
+        else {
             unreachable!();
         };
         SinsemillaChip::load(sinsemilla_cfg1.clone(), &mut layouter)?;
 
         // Construct the 64-bit NativeRangeCheck chip
         let rangecheck64_chip = config.rangecheck64_chip();
-        let Some(VmChip::NativeRange64(rangecheck64_config)) = config.chips.iter().find(|&c| {
-            matches!(c, VmChip::NativeRange64(_))
-        }) else {
+        let Some(VmChip::NativeRange64(rangecheck64_config)) =
+            config.chips.iter().find(|&c| matches!(c, VmChip::NativeRange64(_)))
+        else {
             unreachable!();
         };
         NativeRangeCheckChip::<3, 64, 22>::load_k_table(
@@ -471,9 +471,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
         let rangecheck253_chip = config.rangecheck253_chip();
         let lessthan_chip = config.lessthan_chip();
 
-        let Some(VmChip::NativeRange253(rangecheck253_config)) = config.chips.iter().find(|&c| {
-            matches!(c, VmChip::NativeRange253(_))
-        }) else {
+        let Some(VmChip::NativeRange253(rangecheck253_config)) =
+            config.chips.iter().find(|&c| matches!(c, VmChip::NativeRange253(_)))
+        else {
             unreachable!();
         };
 
