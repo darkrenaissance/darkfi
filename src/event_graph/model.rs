@@ -39,7 +39,6 @@ use super::EventMsg;
 pub type EventId = blake3::Hash;
 
 const MAX_DEPTH: u32 = 300;
-const MAX_HEIGHT: u32 = 300;
 
 #[derive(SerialEncodable, SerialDecodable, Clone, Debug)]
 pub struct Event<T: Send + Sync> {
@@ -226,11 +225,10 @@ where
 
             self.event_map.insert(node_hash, node.clone());
 
-            self.events_queue.dispatch(&node.event).await.expect("error dispatching the event");
+            self.events_queue.dispatch(&node.event).await.ok();
 
             // clean up the tree from old eventnodes
             self.prune_chains();
-            self.update_root();
         }
     }
 
@@ -250,55 +248,6 @@ where
             if depth > MAX_DEPTH {
                 self.remove_node(leaf);
             }
-        }
-    }
-
-    fn update_root(&mut self) {
-        let head = self.find_head();
-        let leaves = self.find_leaves();
-
-        // find the common ancestor for each leaf and the head event
-        let mut ancestors = vec![];
-        for leaf in leaves {
-            if leaf == head {
-                continue
-            }
-
-            let ancestor = self.find_ancestor(leaf, head);
-            ancestors.push(ancestor);
-        }
-
-        // find the highest ancestor
-        let highest_ancestor = ancestors
-            .iter()
-            .max_by(|&a, &b| self.find_depth(*a, &head).cmp(&self.find_depth(*b, &head)));
-
-        // set the new root
-        if let Some(ancestor) = highest_ancestor {
-            // the ancestor must have at least height > MAX_HEIGHT
-            let ancestor_height = self.find_height(&self.current_root, ancestor).unwrap();
-            if ancestor_height < MAX_HEIGHT {
-                return
-            }
-
-            // removing the parents of the new root node
-            let mut root = self.event_map.get(&self.current_root).unwrap();
-            loop {
-                let root_hash = root.event.hash();
-
-                if &root_hash == ancestor {
-                    break
-                }
-
-                let root_childs = &root.children;
-                assert_eq!(root_childs.len(), 1);
-                let child = *root_childs.first().unwrap();
-
-                self.event_map.remove(&root_hash);
-                root = self.event_map.get(&child).unwrap();
-            }
-
-            self.current_root = *ancestor;
         }
     }
 
@@ -380,26 +329,6 @@ where
             }
         }
         depth
-    }
-
-    fn find_height(&self, node: &EventId, child_id: &EventId) -> Option<u32> {
-        let mut height = 0;
-
-        if node == child_id {
-            return Some(height)
-        }
-        height += 1;
-        let children = &self.event_map.get(node).unwrap().children;
-        if children.is_empty() {
-            return None
-        }
-
-        for child in children.iter() {
-            if let Some(h) = self.find_height(child, child_id) {
-                return Some(height + h)
-            }
-        }
-        None
     }
 
     fn find_ancestor(&self, mut node_a: EventId, mut node_b: EventId) -> EventId {
