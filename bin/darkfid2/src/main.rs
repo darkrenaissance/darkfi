@@ -17,7 +17,7 @@
  */
 
 use async_std::{stream::StreamExt, sync::Arc};
-use log::info;
+use log::{error, info};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -140,7 +140,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
 
     // Initialize syncing P2P network
     let sync_p2p = {
-        info!("Registering sync network P2P protocols...");
+        info!(target: "darkfid", "Registering sync network P2P protocols...");
         let p2p = P2p::new(args.sync_net.into()).await;
         let registry = p2p.protocol_registry();
 
@@ -173,7 +173,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     };
 
     // Initialize node
-    let darkfid = Darkfid::new(sync_p2p, consensus_p2p, validator).await;
+    let darkfid = Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator).await;
     let darkfid = Arc::new(darkfid);
     info!(target: "darkfid", "Node initialized successfully!");
 
@@ -182,8 +182,35 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let _ex = ex.clone();
     ex.spawn(listen_and_serve(args.rpc_listen, darkfid.clone(), _ex)).detach();
 
+    info!(target: "darkfid", "Starting sync P2P network");
+    sync_p2p.clone().start(ex.clone()).await?;
+    let _ex = ex.clone();
+    let _sync_p2p = sync_p2p.clone();
+    ex.spawn(async move {
+        if let Err(e) = _sync_p2p.run(_ex).await {
+            error!(target: "darkfid", "Failed starting sync P2P network: {}", e);
+        }
+    })
+    .detach();
+
     // Simulate that we have synced
     darkfid.validator.write().await.synced = true;
+
+    // Consensus protocol
+    if args.consensus && darkfid.validator.write().await.synced {
+        info!("Starting consensus P2P network");
+        consensus_p2p.clone().unwrap().start(ex.clone()).await?;
+        let _ex = ex.clone();
+        let _consensus_p2p = consensus_p2p.clone();
+        ex.spawn(async move {
+            if let Err(e) = _consensus_p2p.unwrap().run(_ex).await {
+                error!("Failed starting consensus P2P network: {}", e);
+            }
+        })
+        .detach();
+    } else {
+        info!("Not starting consensus P2P network");
+    }
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new()?;
