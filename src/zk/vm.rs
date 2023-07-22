@@ -66,57 +66,177 @@ use crate::zkas::{
     Opcode, ZkBinary,
 };
 
+/// Available chips/gadgets in the zkvm
+#[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
+enum VmChip {
+    /// ECC Chip
+    Ecc(EccConfig<OrchardFixedBases>),
+
+    /// Merkle tree chip (using Sinsemilla)
+    Merkle(
+        (
+            MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+            MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+        ),
+    ),
+
+    /// Sinsemilla chip
+    Sinsemilla(
+        (
+            SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+            SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+        ),
+    ),
+
+    /// Poseidon hash chip
+    Poseidon(PoseidonConfig<pallas::Base, 3, 2>),
+
+    /// Base field arithmetic chip
+    Arithmetic(ArithConfig),
+
+    /// 64 bit native range check
+    NativeRange64(NativeRangeCheckConfig<3, 64, 22>),
+
+    /// 253 bit native range check
+    NativeRange253(NativeRangeCheckConfig<3, 253, 85>),
+
+    /// 253 bit `a < b` check
+    LessThan(LessThanConfig<3, 253, 85>),
+
+    /// Boolean check
+    BoolCheck(SmallRangeCheckConfig),
+
+    /// Conditional selection
+    CondSelect(ConditionalSelectConfig<pallas::Base>),
+
+    /// Zero-Cond selection
+    ZeroCond(ZeroCondConfig<pallas::Base>),
+}
+
+/// zkvm configuration
 #[derive(Clone)]
 pub struct VmConfig {
+    /// Chips used in the circuit
+    chips: Vec<VmChip>,
+    /// Instance column used for public inputs
     primary: Column<InstanceColumn>,
     advices: [Column<Advice>; 10],
-    ecc_config: EccConfig<OrchardFixedBases>,
-    merkle_cfg1: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    merkle_cfg2: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    sinsemilla_cfg1: SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    _sinsemilla_cfg2: SinsemillaConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
-    poseidon_config: PoseidonConfig<pallas::Base, 3, 2>,
-    arith_config: ArithConfig,
-
-    native_64_range_check_config: NativeRangeCheckConfig<3, 64, 22>,
-    native_253_range_check_config: NativeRangeCheckConfig<3, 253, 85>,
-    lessthan_config: LessThanConfig<3, 253, 85>,
-    boolcheck_config: SmallRangeCheckConfig,
-    condselect_config: ConditionalSelectConfig<pallas::Base>,
-    zerocond_config: ZeroCondConfig<pallas::Base>,
 }
 
 impl VmConfig {
     fn ecc_chip(&self) -> EccChip<OrchardFixedBases> {
-        EccChip::construct(self.ecc_config.clone())
+        let Some(VmChip::Ecc(ecc_config)) = self.chips.iter().find(|&c| {
+            matches!(c, VmChip::Ecc(_))
+        }) else {
+            unreachable!();
+        };
+
+        EccChip::construct(ecc_config.clone())
     }
 
     fn merkle_chip_1(
         &self,
     ) -> MerkleChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
-        MerkleChip::construct(self.merkle_cfg1.clone())
+        let Some(VmChip::Merkle((merkle_cfg1, _))) = self.chips.iter().find(|&c| {
+            matches!(c, VmChip::Merkle(_))
+        }) else {
+            unreachable!();
+        };
+
+        MerkleChip::construct(merkle_cfg1.clone())
     }
 
     fn merkle_chip_2(
         &self,
     ) -> MerkleChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
-        MerkleChip::construct(self.merkle_cfg2.clone())
+        let Some(VmChip::Merkle((_, merkle_cfg2))) = self.chips.iter().find(|&c| {
+            matches!(c, VmChip::Merkle(_))
+        }) else {
+            unreachable!();
+        };
+
+        MerkleChip::construct(merkle_cfg2.clone())
     }
 
     fn poseidon_chip(&self) -> PoseidonChip<pallas::Base, 3, 2> {
-        PoseidonChip::construct(self.poseidon_config.clone())
+        let Some(VmChip::Poseidon(poseidon_config)) = self.chips.iter().find(|&c| {
+            matches!(c, VmChip::Poseidon(_))
+        }) else {
+            unreachable!();
+        };
+
+        PoseidonChip::construct(poseidon_config.clone())
     }
 
     fn arithmetic_chip(&self) -> ArithChip<pallas::Base> {
-        ArithChip::construct(self.arith_config.clone())
+        let Some(VmChip::Arithmetic(arith_config)) = self.chips.iter().find(|&c| {
+            matches!(c, VmChip::Arithmetic(_))
+        }) else {
+            unreachable!();
+        };
+
+        ArithChip::construct(arith_config.clone())
     }
 
     fn condselect_chip(&self) -> ConditionalSelectChip<pallas::Base> {
-        ConditionalSelectChip::construct(self.condselect_config.clone(), ())
+        let Some(VmChip::CondSelect(condselect_config)) = self.chips.iter().find(|&c| {
+            matches!(c, VmChip::CondSelect(_))
+        }) else {
+            unreachable!();
+        };
+
+        ConditionalSelectChip::construct(condselect_config.clone(), ())
     }
 
     fn zerocond_chip(&self) -> ZeroCondChip<pallas::Base> {
-        ZeroCondChip::construct(self.zerocond_config.clone())
+        let Some(VmChip::ZeroCond(zerocond_config)) = self.chips.iter().find(|&c| {
+            matches!(c, VmChip::ZeroCond(_))
+        }) else {
+            unreachable!();
+        };
+
+        ZeroCondChip::construct(zerocond_config.clone())
+    }
+
+    fn rangecheck64_chip(&self) -> NativeRangeCheckChip<3, 64, 22> {
+        let Some(VmChip::NativeRange64(range_config)) = self.chips.iter().find(|&c| {
+            matches!(c, VmChip::NativeRange64(_))
+        }) else {
+            unreachable!();
+        };
+
+        NativeRangeCheckChip::construct(range_config.clone())
+    }
+
+    fn rangecheck253_chip(&self) -> NativeRangeCheckChip<3, 253, 85> {
+        let Some(VmChip::NativeRange253(range_config)) = self.chips.iter().find(|&c| {
+            matches!(c, VmChip::NativeRange253(_))
+        }) else {
+            unreachable!();
+        };
+
+        NativeRangeCheckChip::construct(range_config.clone())
+    }
+
+    fn lessthan_chip(&self) -> LessThanChip<3, 253, 85> {
+        let Some(VmChip::LessThan(lessthan_config)) = self.chips.iter().find(|&c| {
+            matches!(c, VmChip::LessThan(_))
+        }) else {
+            unreachable!();
+        };
+
+        LessThanChip::construct(lessthan_config.clone())
+    }
+
+    fn boolcheck_chip(&self) -> SmallRangeCheckChip {
+        let Some(VmChip::BoolCheck(boolcheck_config)) = self.chips.iter().find(|&c| {
+            matches!(c, VmChip::BoolCheck(_))
+        }) else {
+            unreachable!();
+        };
+
+        SmallRangeCheckChip::construct(boolcheck_config.clone())
     }
 }
 
@@ -237,7 +357,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             (sinsemilla_cfg1, merkle_cfg1)
         };
 
-        let (_sinsemilla_cfg2, merkle_cfg2) = {
+        let (sinsemilla_cfg2, merkle_cfg2) = {
             let sinsemilla_cfg2 = SinsemillaChip::configure(
                 meta,
                 advices[5..].try_into().unwrap(),
@@ -285,23 +405,22 @@ impl Circuit<pallas::Base> for ZkCircuit {
         // Configuration for the zero_cond selection chip
         let zerocond_config = ZeroCondChip::configure(meta, advices[1..5].try_into().unwrap());
 
-        VmConfig {
-            primary,
-            advices,
-            ecc_config,
-            merkle_cfg1,
-            merkle_cfg2,
-            sinsemilla_cfg1,
-            _sinsemilla_cfg2,
-            poseidon_config,
-            arith_config,
-            native_64_range_check_config,
-            native_253_range_check_config,
-            lessthan_config,
-            boolcheck_config,
-            condselect_config,
-            zerocond_config,
-        }
+        // Later we'll use this for optimisation
+        let chips = vec![
+            VmChip::Ecc(ecc_config),
+            VmChip::Merkle((merkle_cfg1, merkle_cfg2)),
+            VmChip::Sinsemilla((sinsemilla_cfg1, sinsemilla_cfg2)),
+            VmChip::Poseidon(poseidon_config),
+            VmChip::Arithmetic(arith_config),
+            VmChip::NativeRange64(native_64_range_check_config),
+            VmChip::NativeRange253(native_253_range_check_config),
+            VmChip::LessThan(lessthan_config),
+            VmChip::BoolCheck(boolcheck_config),
+            VmChip::CondSelect(condselect_config),
+            VmChip::ZeroCond(zerocond_config),
+        ];
+
+        VmConfig { primary, advices, chips }
     }
 
     fn synthesize(
@@ -329,25 +448,38 @@ impl Circuit<pallas::Base> for ZkCircuit {
         let mut literals_offset = 0;
 
         // Load the Sinsemilla generator lookup table used by the whole circuit.
-        SinsemillaChip::load(config.sinsemilla_cfg1.clone(), &mut layouter)?;
+        let Some(VmChip::Sinsemilla((sinsemilla_cfg1, _))) = config.chips.iter().find(|&c| {
+            matches!(c, VmChip::Sinsemilla(_))
+        }) else {
+            unreachable!();
+        };
+        SinsemillaChip::load(sinsemilla_cfg1.clone(), &mut layouter)?;
 
-        // Construct the 64-bit NativeRangeCheck and LessThan chips
-        let rangecheck64_chip = NativeRangeCheckChip::<3, 64, 22>::construct(
-            config.native_64_range_check_config.clone(),
-        );
+        // Construct the 64-bit NativeRangeCheck chip
+        let rangecheck64_chip = config.rangecheck64_chip();
+        let Some(VmChip::NativeRange64(rangecheck64_config)) = config.chips.iter().find(|&c| {
+            matches!(c, VmChip::NativeRange64(_))
+        }) else {
+            unreachable!();
+        };
         NativeRangeCheckChip::<3, 64, 22>::load_k_table(
             &mut layouter,
-            config.native_64_range_check_config.k_values_table,
+            rangecheck64_config.k_values_table,
         )?;
 
         // Construct the 253-bit NativeRangeCheck and LessThan chips.
-        let rangecheck253_chip = NativeRangeCheckChip::<3, 253, 85>::construct(
-            config.native_253_range_check_config.clone(),
-        );
-        let lessthan_chip = LessThanChip::<3, 253, 85>::construct(config.lessthan_config.clone());
+        let rangecheck253_chip = config.rangecheck253_chip();
+        let lessthan_chip = config.lessthan_chip();
+
+        let Some(VmChip::NativeRange253(rangecheck253_config)) = config.chips.iter().find(|&c| {
+            matches!(c, VmChip::NativeRange253(_))
+        }) else {
+            unreachable!();
+        };
+
         NativeRangeCheckChip::<3, 253, 85>::load_k_table(
             &mut layouter,
-            config.native_253_range_check_config.k_values_table,
+            rangecheck253_config.k_values_table,
         )?;
 
         // Construct the ECC chip.
@@ -357,7 +489,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
         let arith_chip = config.arithmetic_chip();
 
         // Construct the boolean check chip.
-        let boolcheck_chip = SmallRangeCheckChip::construct(config.boolcheck_config.clone());
+        let boolcheck_chip = config.boolcheck_chip();
 
         // Construct the conditional selection chip
         let condselect_chip = config.condselect_chip();
