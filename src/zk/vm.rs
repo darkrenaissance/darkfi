@@ -125,118 +125,118 @@ pub struct VmConfig {
 }
 
 impl VmConfig {
-    fn ecc_chip(&self) -> EccChip<OrchardFixedBases> {
+    fn ecc_chip(&self) -> Option<EccChip<OrchardFixedBases>> {
         let Some(VmChip::Ecc(ecc_config)) =
             self.chips.iter().find(|&c| matches!(c, VmChip::Ecc(_)))
         else {
-            unreachable!();
+            return None
         };
 
-        EccChip::construct(ecc_config.clone())
+        Some(EccChip::construct(ecc_config.clone()))
     }
 
     fn merkle_chip_1(
         &self,
-    ) -> MerkleChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
+    ) -> Option<MerkleChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>> {
         let Some(VmChip::Merkle((merkle_cfg1, _))) =
             self.chips.iter().find(|&c| matches!(c, VmChip::Merkle(_)))
         else {
-            unreachable!();
+            return None
         };
 
-        MerkleChip::construct(merkle_cfg1.clone())
+        Some(MerkleChip::construct(merkle_cfg1.clone()))
     }
 
     fn merkle_chip_2(
         &self,
-    ) -> MerkleChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
+    ) -> Option<MerkleChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>> {
         let Some(VmChip::Merkle((_, merkle_cfg2))) =
             self.chips.iter().find(|&c| matches!(c, VmChip::Merkle(_)))
         else {
-            unreachable!();
+            return None
         };
 
-        MerkleChip::construct(merkle_cfg2.clone())
+        Some(MerkleChip::construct(merkle_cfg2.clone()))
     }
 
-    fn poseidon_chip(&self) -> PoseidonChip<pallas::Base, 3, 2> {
+    fn poseidon_chip(&self) -> Option<PoseidonChip<pallas::Base, 3, 2>> {
         let Some(VmChip::Poseidon(poseidon_config)) =
             self.chips.iter().find(|&c| matches!(c, VmChip::Poseidon(_)))
         else {
-            unreachable!();
+            return None
         };
 
-        PoseidonChip::construct(poseidon_config.clone())
+        Some(PoseidonChip::construct(poseidon_config.clone()))
     }
 
-    fn arithmetic_chip(&self) -> ArithChip<pallas::Base> {
+    fn arithmetic_chip(&self) -> Option<ArithChip<pallas::Base>> {
         let Some(VmChip::Arithmetic(arith_config)) =
             self.chips.iter().find(|&c| matches!(c, VmChip::Arithmetic(_)))
         else {
-            unreachable!();
+            return None
         };
 
-        ArithChip::construct(arith_config.clone())
+        Some(ArithChip::construct(arith_config.clone()))
     }
 
-    fn condselect_chip(&self) -> ConditionalSelectChip<pallas::Base> {
+    fn condselect_chip(&self) -> Option<ConditionalSelectChip<pallas::Base>> {
         let Some(VmChip::CondSelect(condselect_config)) =
             self.chips.iter().find(|&c| matches!(c, VmChip::CondSelect(_)))
         else {
-            unreachable!();
+            return None
         };
 
-        ConditionalSelectChip::construct(condselect_config.clone(), ())
+        Some(ConditionalSelectChip::construct(condselect_config.clone(), ()))
     }
 
-    fn zerocond_chip(&self) -> ZeroCondChip<pallas::Base> {
+    fn zerocond_chip(&self) -> Option<ZeroCondChip<pallas::Base>> {
         let Some(VmChip::ZeroCond(zerocond_config)) =
             self.chips.iter().find(|&c| matches!(c, VmChip::ZeroCond(_)))
         else {
-            unreachable!();
+            return None
         };
 
-        ZeroCondChip::construct(zerocond_config.clone())
+        Some(ZeroCondChip::construct(zerocond_config.clone()))
     }
 
-    fn rangecheck64_chip(&self) -> NativeRangeCheckChip<3, 64, 22> {
+    fn rangecheck64_chip(&self) -> Option<NativeRangeCheckChip<3, 64, 22>> {
         let Some(VmChip::NativeRange64(range_config)) =
             self.chips.iter().find(|&c| matches!(c, VmChip::NativeRange64(_)))
         else {
-            unreachable!();
+            return None
         };
 
-        NativeRangeCheckChip::construct(range_config.clone())
+        Some(NativeRangeCheckChip::construct(range_config.clone()))
     }
 
-    fn rangecheck253_chip(&self) -> NativeRangeCheckChip<3, 253, 85> {
+    fn rangecheck253_chip(&self) -> Option<NativeRangeCheckChip<3, 253, 85>> {
         let Some(VmChip::NativeRange253(range_config)) =
             self.chips.iter().find(|&c| matches!(c, VmChip::NativeRange253(_)))
         else {
-            unreachable!();
+            return None
         };
 
-        NativeRangeCheckChip::construct(range_config.clone())
+        Some(NativeRangeCheckChip::construct(range_config.clone()))
     }
 
-    fn lessthan_chip(&self) -> LessThanChip<3, 253, 85> {
+    fn lessthan_chip(&self) -> Option<LessThanChip<3, 253, 85>> {
         let Some(VmChip::LessThan(lessthan_config)) =
             self.chips.iter().find(|&c| matches!(c, VmChip::LessThan(_)))
         else {
-            unreachable!();
+            return None
         };
 
-        LessThanChip::construct(lessthan_config.clone())
+        Some(LessThanChip::construct(lessthan_config.clone()))
     }
 
-    fn boolcheck_chip(&self) -> SmallRangeCheckChip {
+    fn boolcheck_chip(&self) -> Option<SmallRangeCheckChip> {
         let Some(VmChip::BoolCheck(boolcheck_config)) =
             self.chips.iter().find(|&c| matches!(c, VmChip::BoolCheck(_)))
         else {
-            unreachable!();
+            return None
         };
 
-        SmallRangeCheckChip::construct(boolcheck_config.clone())
+        Some(SmallRangeCheckChip::construct(boolcheck_config.clone()))
     }
 }
 
@@ -448,39 +448,38 @@ impl Circuit<pallas::Base> for ZkCircuit {
         let mut literals_offset = 0;
 
         // Load the Sinsemilla generator lookup table used by the whole circuit.
-        let Some(VmChip::Sinsemilla((sinsemilla_cfg1, _))) =
+        if let Some(VmChip::Sinsemilla((sinsemilla_cfg1, _))) =
             config.chips.iter().find(|&c| matches!(c, VmChip::Sinsemilla(_)))
-        else {
-            unreachable!();
-        };
-        SinsemillaChip::load(sinsemilla_cfg1.clone(), &mut layouter)?;
+        {
+            trace!(target: "zk::vm", "Initializing Sinsemilla generator lookup table");
+            SinsemillaChip::load(sinsemilla_cfg1.clone(), &mut layouter)?;
+        }
 
         // Construct the 64-bit NativeRangeCheck chip
         let rangecheck64_chip = config.rangecheck64_chip();
-        let Some(VmChip::NativeRange64(rangecheck64_config)) =
+        if let Some(VmChip::NativeRange64(rangecheck64_config)) =
             config.chips.iter().find(|&c| matches!(c, VmChip::NativeRange64(_)))
-        else {
-            unreachable!();
-        };
-        NativeRangeCheckChip::<3, 64, 22>::load_k_table(
-            &mut layouter,
-            rangecheck64_config.k_values_table,
-        )?;
+        {
+            trace!(target: "zk::vm", "Initializing k table for 64bit NativeRangeCheck");
+            NativeRangeCheckChip::<3, 64, 22>::load_k_table(
+                &mut layouter,
+                rangecheck64_config.k_values_table,
+            )?;
+        }
 
         // Construct the 253-bit NativeRangeCheck and LessThan chips.
         let rangecheck253_chip = config.rangecheck253_chip();
         let lessthan_chip = config.lessthan_chip();
 
-        let Some(VmChip::NativeRange253(rangecheck253_config)) =
+        if let Some(VmChip::NativeRange253(rangecheck253_config)) =
             config.chips.iter().find(|&c| matches!(c, VmChip::NativeRange253(_)))
-        else {
-            unreachable!();
-        };
-
-        NativeRangeCheckChip::<3, 253, 85>::load_k_table(
-            &mut layouter,
-            rangecheck253_config.k_values_table,
-        )?;
+        {
+            trace!(target: "zk::vm", "Initializing k table for 253bit NativeRangeCheck");
+            NativeRangeCheckChip::<3, 253, 85>::load_k_table(
+                &mut layouter,
+                rangecheck253_config.k_values_table,
+            )?;
+        }
 
         // Construct the ECC chip.
         let ecc_chip = config.ecc_chip();
@@ -524,17 +523,18 @@ impl Circuit<pallas::Base> for ZkCircuit {
             match constant.as_str() {
                 "VALUE_COMMIT_VALUE" => {
                     let vcv = ValueCommitV;
-                    let vcv = FixedPointShort::from_inner(ecc_chip.clone(), vcv);
+                    let vcv = FixedPointShort::from_inner(ecc_chip.as_ref().unwrap().clone(), vcv);
                     heap.push(HeapVar::EcFixedPointShort(vcv));
                 }
                 "VALUE_COMMIT_RANDOM" => {
                     let vcr = OrchardFixedBasesFull::ValueCommitR;
-                    let vcr = FixedPoint::from_inner(ecc_chip.clone(), vcr);
+                    let vcr = FixedPoint::from_inner(ecc_chip.as_ref().unwrap().clone(), vcr);
                     heap.push(HeapVar::EcFixedPoint(vcr));
                 }
                 "NULLIFIER_K" => {
                     let nfk = NullifierK;
-                    let nfk = FixedPointBaseField::from_inner(ecc_chip.clone(), nfk);
+                    let nfk =
+                        FixedPointBaseField::from_inner(ecc_chip.as_ref().unwrap().clone(), nfk);
                     heap.push(HeapVar::EcFixedPointBase(nfk));
                 }
 
@@ -575,7 +575,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 Witness::EcPoint(w) => {
                     trace!(target: "zk::vm", "Witnessing EcPoint into circuit");
                     let point = Point::new(
-                        ecc_chip.clone(),
+                        ecc_chip.as_ref().unwrap().clone(),
                         layouter.namespace(|| "Witness EcPoint"),
                         w.as_ref().map(|cm| cm.to_affine()),
                     )?;
@@ -587,7 +587,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 Witness::EcNiPoint(w) => {
                     trace!(target: "zk::vm", "Witnessing EcNiPoint into circuit");
                     let point = NonIdentityPoint::new(
-                        ecc_chip.clone(),
+                        ecc_chip.as_ref().unwrap().clone(),
                         layouter.namespace(|| "Witness EcNiPoint"),
                         w.as_ref().map(|cm| cm.to_affine()),
                     )?;
@@ -674,7 +674,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         heap[args[1].1].clone().into();
 
                     let rhs = ScalarFixed::new(
-                        ecc_chip.clone(),
+                        ecc_chip.as_ref().unwrap().clone(),
                         layouter.namespace(|| "EcMul: ScalarFixed::new()"),
                         heap[args[0].1].clone().into(),
                     )?;
@@ -694,7 +694,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     let rhs: AssignedCell<Fp, Fp> = heap[args[0].1].clone().into();
                     let rhs = ScalarVar::from_base(
-                        ecc_chip.clone(),
+                        ecc_chip.as_ref().unwrap().clone(),
                         layouter.namespace(|| "EcMulVarBase::from_base()"),
                         &rhs,
                     )?;
@@ -728,7 +728,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         heap[args[1].1].clone().into();
 
                     let rhs = ScalarFixedShort::new(
-                        ecc_chip.clone(),
+                        ecc_chip.as_ref().unwrap().clone(),
                         layouter.namespace(|| "EcMulShort: ScalarFixedShort::new()"),
                         (heap[args[0].1].clone().into(), one.clone()),
                     )?;
@@ -786,7 +786,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                                 3,
                                 2,
                             >::init(
-                                config.poseidon_chip(),
+                                config.poseidon_chip().unwrap(),
                                 layouter.namespace(|| "PoseidonHash init"),
                             )?;
 
@@ -828,7 +828,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let leaf = heap[args[2].1].clone().into();
 
                     let merkle_inputs = MerklePath::construct(
-                        [config.merkle_chip_1(), config.merkle_chip_2()],
+                        [config.merkle_chip_1().unwrap(), config.merkle_chip_2().unwrap()],
                         OrchardHashDomains::MerkleCrh,
                         leaf_pos,
                         merkle_path,
@@ -848,7 +848,11 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let lhs = &heap[args[0].1].clone().into();
                     let rhs = &heap[args[1].1].clone().into();
 
-                    let sum = arith_chip.add(layouter.namespace(|| "BaseAdd()"), lhs, rhs)?;
+                    let sum = arith_chip.as_ref().unwrap().add(
+                        layouter.namespace(|| "BaseAdd()"),
+                        lhs,
+                        rhs,
+                    )?;
 
                     trace!(target: "zk::vm", "Pushing sum to heap address {}", heap.len());
                     heap.push(HeapVar::Base(sum));
@@ -861,7 +865,11 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let lhs = &heap[args[0].1].clone().into();
                     let rhs = &heap[args[1].1].clone().into();
 
-                    let product = arith_chip.mul(layouter.namespace(|| "BaseMul()"), lhs, rhs)?;
+                    let product = arith_chip.as_ref().unwrap().mul(
+                        layouter.namespace(|| "BaseMul()"),
+                        lhs,
+                        rhs,
+                    )?;
 
                     trace!(target: "zk::vm", "Pushing product to heap address {}", heap.len());
                     heap.push(HeapVar::Base(product));
@@ -874,8 +882,11 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let lhs = &heap[args[0].1].clone().into();
                     let rhs = &heap[args[1].1].clone().into();
 
-                    let difference =
-                        arith_chip.sub(layouter.namespace(|| "BaseSub()"), lhs, rhs)?;
+                    let difference = arith_chip.as_ref().unwrap().sub(
+                        layouter.namespace(|| "BaseSub()"),
+                        lhs,
+                        rhs,
+                    )?;
 
                     trace!(target: "zk::vm", "Pushing difference to heap address {}", heap.len());
                     heap.push(HeapVar::Base(difference));
@@ -893,6 +904,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         config.advices[0],
                         Value::known(pallas::Base::from(lit)),
                     )?;
+
                     layouter.assign_region(
                         || "constrain constant",
                         |mut region| {
@@ -915,14 +927,14 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     match lit {
                         64 => {
-                            rangecheck64_chip.copy_range_check(
+                            rangecheck64_chip.as_ref().unwrap().copy_range_check(
                                 layouter.namespace(|| "copy range check 64"),
                                 arg.into(),
                                 true,
                             )?;
                         }
                         253 => {
-                            rangecheck253_chip.copy_range_check(
+                            rangecheck253_chip.as_ref().unwrap().copy_range_check(
                                 layouter.namespace(|| "copy range check 253"),
                                 arg.into(),
                                 true,
@@ -942,7 +954,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let a = heap[args[0].1].clone().into();
                     let b = heap[args[1].1].clone().into();
 
-                    lessthan_chip.copy_less_than(
+                    lessthan_chip.as_ref().unwrap().copy_less_than(
                         layouter.namespace(|| "copy a<b check"),
                         a,
                         b,
@@ -958,7 +970,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let a = heap[args[0].1].clone().into();
                     let b = heap[args[1].1].clone().into();
 
-                    lessthan_chip.copy_less_than(
+                    lessthan_chip.as_ref().unwrap().copy_less_than(
                         layouter.namespace(|| "copy a<b check"),
                         a,
                         b,
@@ -974,6 +986,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let w = heap[args[0].1].clone().into();
 
                     boolcheck_chip
+                        .as_ref()
+                        .unwrap()
                         .small_range_check(layouter.namespace(|| "copy boolean check"), w)?;
                 }
 
@@ -985,12 +999,13 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let lhs: AssignedCell<Fp, Fp> = heap[args[1].1].clone().into();
                     let rhs: AssignedCell<Fp, Fp> = heap[args[2].1].clone().into();
 
-                    let out: AssignedCell<Fp, Fp> = condselect_chip.conditional_select(
-                        &mut layouter.namespace(|| "cond_select"),
-                        lhs,
-                        rhs,
-                        cond,
-                    )?;
+                    let out: AssignedCell<Fp, Fp> =
+                        condselect_chip.as_ref().unwrap().conditional_select(
+                            &mut layouter.namespace(|| "cond_select"),
+                            lhs,
+                            rhs,
+                            cond,
+                        )?;
 
                     trace!(target: "zk::vm", "Pushing assignment to heap address {}", heap.len());
                     heap.push(HeapVar::Base(out));
@@ -1003,8 +1018,11 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let lhs: AssignedCell<Fp, Fp> = heap[args[0].1].clone().into();
                     let rhs: AssignedCell<Fp, Fp> = heap[args[1].1].clone().into();
 
-                    let out: AssignedCell<Fp, Fp> =
-                        zerocond_chip.assign(layouter.namespace(|| "zero_cond"), lhs, rhs)?;
+                    let out: AssignedCell<Fp, Fp> = zerocond_chip.as_ref().unwrap().assign(
+                        layouter.namespace(|| "zero_cond"),
+                        lhs,
+                        rhs,
+                    )?;
 
                     trace!(target: "zk::vm", "Pushing assignment to heap address {}", heap.len());
                     heap.push(HeapVar::Base(out));
