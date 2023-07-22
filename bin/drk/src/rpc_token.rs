@@ -76,7 +76,7 @@ impl Drk {
 
         let token_mint_zkbin = ZkBinary::decode(&token_mint_zkbin.1)?;
         let token_mint_circuit =
-            ZkCircuit::new(empty_witnesses(&token_mint_zkbin), &token_mint_zkbin);
+            ZkCircuit::new(empty_witnesses(&token_mint_zkbin)?, &token_mint_zkbin);
 
         eprintln!("Creating token mint circuit proving keys");
         let token_mint_pk = ProvingKey::build(token_mint_zkbin.k, &token_mint_circuit);
@@ -129,7 +129,7 @@ impl Drk {
 
         let token_freeze_zkbin = ZkBinary::decode(&token_freeze_zkbin.1)?;
         let token_freeze_circuit =
-            ZkCircuit::new(empty_witnesses(&token_freeze_zkbin), &token_freeze_zkbin);
+            ZkCircuit::new(empty_witnesses(&token_freeze_zkbin)?, &token_freeze_zkbin);
 
         eprintln!("Creating token freeze circuit proving keys");
         let token_freeze_pk = ProvingKey::build(token_freeze_zkbin.k, &token_freeze_circuit);

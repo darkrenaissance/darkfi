@@ -141,7 +141,7 @@ pub fn read_or_gen_vks_and_pks() -> Result<(Pks, Vks)> {
     for bincode in bins.iter() {
         let zkbin = ZkBinary::decode(bincode)?;
         debug!("Building VK for {}", zkbin.namespace);
-        let witnesses = empty_witnesses(&zkbin);
+        let witnesses = empty_witnesses(&zkbin)?;
         let circuit = ZkCircuit::new(witnesses, &zkbin);
         let vk = VerifyingKey::build(zkbin.k, &circuit);
         let mut vk_buf = vec![];

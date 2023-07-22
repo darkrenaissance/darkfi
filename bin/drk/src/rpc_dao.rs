@@ -74,7 +74,7 @@ impl Drk {
         };
 
         let dao_mint_zkbin = ZkBinary::decode(&dao_mint_zkbin.1)?;
-        let dao_mint_circuit = ZkCircuit::new(empty_witnesses(&dao_mint_zkbin), &dao_mint_zkbin);
+        let dao_mint_circuit = ZkCircuit::new(empty_witnesses(&dao_mint_zkbin)?, &dao_mint_zkbin);
         eprintln!("Creating DAO Mint proving key");
         let dao_mint_pk = ProvingKey::build(dao_mint_zkbin.k, &dao_mint_circuit);
 
@@ -163,9 +163,9 @@ impl Drk {
         let propose_main_zkbin = ZkBinary::decode(&propose_main_zkbin.1)?;
 
         let propose_burn_circuit =
-            ZkCircuit::new(empty_witnesses(&propose_burn_zkbin), &propose_burn_zkbin);
+            ZkCircuit::new(empty_witnesses(&propose_burn_zkbin)?, &propose_burn_zkbin);
         let propose_main_circuit =
-            ZkCircuit::new(empty_witnesses(&propose_main_zkbin), &propose_main_zkbin);
+            ZkCircuit::new(empty_witnesses(&propose_main_zkbin)?, &propose_main_zkbin);
 
         eprintln!("Creating Propose Burn circuit proving key");
         let propose_burn_pk = ProvingKey::build(propose_burn_zkbin.k, &propose_burn_circuit);
@@ -347,9 +347,9 @@ impl Drk {
         let dao_vote_main_zkbin = ZkBinary::decode(&dao_vote_main_zkbin.1)?;
 
         let dao_vote_burn_circuit =
-            ZkCircuit::new(empty_witnesses(&dao_vote_burn_zkbin), &dao_vote_burn_zkbin);
+            ZkCircuit::new(empty_witnesses(&dao_vote_burn_zkbin)?, &dao_vote_burn_zkbin);
         let dao_vote_main_circuit =
-            ZkCircuit::new(empty_witnesses(&dao_vote_main_zkbin), &dao_vote_main_zkbin);
+            ZkCircuit::new(empty_witnesses(&dao_vote_main_zkbin)?, &dao_vote_main_zkbin);
 
         eprintln!("Creating DAO Vote Burn proving key");
         let dao_vote_burn_pk = ProvingKey::build(dao_vote_burn_zkbin.k, &dao_vote_burn_circuit);
@@ -414,8 +414,8 @@ impl Drk {
         };
         let mint_zkbin = ZkBinary::decode(&mint_zkbin.1)?;
         let burn_zkbin = ZkBinary::decode(&burn_zkbin.1)?;
-        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), &mint_zkbin);
-        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), &burn_zkbin);
+        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
+        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin)?, &burn_zkbin);
         eprintln!("Creating Money Mint circuit proving key");
         let mint_pk = ProvingKey::build(mint_zkbin.k, &mint_circuit);
         eprintln!("Creating Money Burn circuit proving key");
@@ -453,7 +453,7 @@ impl Drk {
             return Err(anyhow!("DAO Exec circuit not found"))
         };
         let exec_zkbin = ZkBinary::decode(&exec_zkbin.1)?;
-        let exec_circuit = ZkCircuit::new(empty_witnesses(&exec_zkbin), &exec_zkbin);
+        let exec_circuit = ZkCircuit::new(empty_witnesses(&exec_zkbin)?, &exec_zkbin);
         eprintln!("Creating DAO Exec circuit proving key");
         let exec_pk = ProvingKey::build(exec_zkbin.k, &exec_circuit);
 

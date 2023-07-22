@@ -211,7 +211,7 @@ impl ContractStateStore {
         let zkbin = ZkBinary::decode(&zkbin).unwrap();
 
         // Construct the circuit to be able to read the VerifyingKey
-        let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
+        let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);
 
         // The second one is the serialized VerifyingKey for it
         let mut vk_buf = Cursor::new(vkbin);
@@ -323,7 +323,7 @@ impl ContractStateStoreOverlay {
         let zkbin = ZkBinary::decode(&zkbin).unwrap();
 
         // Construct the circuit to be able to read the VerifyingKey
-        let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
+        let circuit = ZkCircuit::new(empty_witnesses(&zkbin).unwrap(), &zkbin);
 
         // The second one is the serialized VerifyingKey for it
         let mut vk_buf = Cursor::new(vkbin);

@@ -217,7 +217,7 @@ impl TestHarness {
         for (bincode, namespace, pk) in pks {
             let mut reader = Cursor::new(pk);
             let zkbin = ZkBinary::decode(&bincode)?;
-            let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
+            let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
             let _pk = ProvingKey::read(&mut reader, circuit)?;
             proving_keys.insert(namespace, (_pk, zkbin));
         }

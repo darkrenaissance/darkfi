@@ -26,7 +26,11 @@ use halo2_proofs::{
     pasta::pallas,
 };
 
-use crate::zkas::{decoder::ZkBinary, types::VarType};
+use crate::{
+    zkas::{decoder::ZkBinary, types::VarType},
+    Error::ZkasDecoderError,
+    Result,
+};
 
 /// These represent the witness types outside of the circuit
 #[allow(clippy::large_enum_variant)]
@@ -48,7 +52,7 @@ pub enum Literal {
 
 /// Helper function for verifiers to generate empty witnesses for
 /// a given decoded zkas binary
-pub fn empty_witnesses(zkbin: &ZkBinary) -> Vec<Witness> {
+pub fn empty_witnesses(zkbin: &ZkBinary) -> Result<Vec<Witness>> {
     let mut ret = Vec::with_capacity(zkbin.witnesses.len());
 
     for witness in &zkbin.witnesses {
@@ -61,11 +65,11 @@ pub fn empty_witnesses(zkbin: &ZkBinary) -> Vec<Witness> {
             VarType::MerklePath => ret.push(Witness::MerklePath(Value::unknown())),
             VarType::Uint32 => ret.push(Witness::Uint32(Value::unknown())),
             VarType::Uint64 => ret.push(Witness::Uint64(Value::unknown())),
-            _ => todo!("Handle this gracefully"),
+            x => return Err(ZkasDecoderError(format!("Unsupported witness type: {:?}", x))),
         }
     }
 
-    ret
+    Ok(ret)
 }
 
 /// These represent the witness types inside the circuit

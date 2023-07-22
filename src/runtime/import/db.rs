@@ -598,7 +598,16 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
 
     // We didn't find any existing bincode, so let's create a new VerifyingKey and write it all.
     info!(target: "runtime::db::zkas_db_set()", "Creating VerifyingKey for {} zkas circuit", zkbin.namespace);
-    let circuit = ZkCircuit::new(empty_witnesses(&zkbin), &zkbin);
+    let witnesses = match empty_witnesses(&zkbin) {
+        Ok(w) => w,
+        Err(e) => {
+            error!(target: "runtime::db::zkas_db_set()", "Failed to create empty witnesses: {}", e);
+            return DB_SET_FAILED
+        }
+    };
+
+    // Construct the circuit and build the VerifyingKey
+    let circuit = ZkCircuit::new(witnesses, &zkbin);
     let vk = VerifyingKey::build(zkbin.k, &circuit);
     let mut vk_buf = vec![];
     if let Err(e) = vk.write(&mut vk_buf) {
