@@ -193,11 +193,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     })
     .detach();
 
-    // Simulate that we have synced
-    darkfid.validator.write().await.synced = true;
-
     // Consensus protocol
-    if args.consensus && darkfid.validator.write().await.synced {
+    if args.consensus {
         info!("Starting consensus P2P network");
         consensus_p2p.clone().unwrap().start(ex.clone()).await?;
         let _ex = ex.clone();
@@ -211,6 +208,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     } else {
         info!("Not starting consensus P2P network");
     }
+
+    // Simulate that we have synced
+    darkfid.validator.write().await.synced = true;
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new()?;

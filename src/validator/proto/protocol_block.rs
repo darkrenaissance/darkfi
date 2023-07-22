@@ -51,7 +51,7 @@ impl ProtocolBlock {
     ) -> Result<ProtocolBasePtr> {
         debug!(
             target: "validator::protocol_block::init",
-            "Adding ProtocolTx to the protocol registry"
+            "Adding ProtocolBlock to the protocol registry"
         );
         let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<BlockInfo>().await;

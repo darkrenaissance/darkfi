@@ -16,19 +16,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_std::sync::Arc;
 use darkfi::Result;
 use darkfi_contract_test_harness::init_logger;
+use smol::Executor;
 
 mod harness;
 use harness::{Harness, HarnessConfig};
 
-#[async_std::test]
-async fn add_blocks() -> Result<()> {
+async fn sync_blocks_real(ex: Arc<Executor<'_>>) -> Result<()> {
     init_logger();
 
     // Initialize harness in testing mode
     let config = HarnessConfig { testing_node: true, alice_initial: 1000, bob_initial: 500 };
-    let th = Harness::new(config).await?;
+    let th = Harness::new(config, ex).await?;
 
     // Retrieve genesis block
     let previous = th.alice.validator.read().await.blockchain.last_block()?;
@@ -43,8 +44,25 @@ async fn add_blocks() -> Result<()> {
     th.add_blocks(&vec![block1, block2]).await?;
 
     // Validate chains
-    th.validate_chains().await?;
+    th.validate_chains(3).await?;
 
     // Thanks for reading
+    Ok(())
+}
+
+#[test]
+fn sync_blocks() -> Result<()> {
+    let ex = Arc::new(Executor::new());
+    let (signal, shutdown) = async_std::channel::unbounded::<()>();
+
+    easy_parallel::Parallel::new().each(0..4, |_| smol::block_on(ex.run(shutdown.recv()))).finish(
+        || {
+            smol::block_on(async {
+                sync_blocks_real(ex.clone()).await.unwrap();
+                drop(signal);
+            })
+        },
+    );
+
     Ok(())
 }

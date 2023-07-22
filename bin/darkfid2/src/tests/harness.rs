@@ -16,13 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_std::sync::Arc;
 use darkfi::{
     blockchain::{BlockInfo, Header},
-    net::{P2p, Settings},
+    net::{P2p, P2pPtr, Settings, SESSION_ALL},
     util::time::TimeKeeper,
     validator::{
         consensus::{next_block_reward, pid::slot_pid_output},
-        Validator, ValidatorConfig,
+        proto::{ProtocolBlock, ProtocolTx},
+        Validator, ValidatorConfig, ValidatorPtr,
     },
     Result,
 };
@@ -31,6 +33,8 @@ use darkfi_sdk::{
     blockchain::{PidOutput, PreviousSlot, Slot},
     pasta::{group::ff::Field, pallas},
 };
+use log::error;
+use url::Url;
 
 use crate::{utils::genesis_txs_total, Darkfid};
 
@@ -47,7 +51,7 @@ pub struct Harness {
 }
 
 impl Harness {
-    pub async fn new(config: HarnessConfig) -> Result<Self> {
+    pub async fn new(config: HarnessConfig, ex: Arc<smol::Executor<'_>>) -> Result<Self> {
         // Use test harness to generate genesis transactions
         let mut th = TestHarness::new(&["money".to_string(), "consensus".to_string()]).await?;
         let (genesis_stake_tx, _) = th.genesis_stake(&Holder::Alice, config.alice_initial)?;
@@ -75,25 +79,25 @@ impl Harness {
         );
 
         // Generate validators using pregenerated vks
-        let sync_p2p = P2p::new(Settings::default()).await;
-        let sled_db = sled::Config::new().temporary(true).open()?;
-
         let (_, vks) = vks::read_or_gen_vks_and_pks()?;
-        vks::inject(&sled_db, &vks)?;
+        let mut settings = Settings::default();
+        settings.localnet = true;
 
-        let validator = Validator::new(&sled_db, val_config.clone()).await?;
-        let alice = Darkfid::new(sync_p2p, None, validator).await;
+        // Alice
+        let alice_url = Url::parse("tcp+tls://127.0.0.1:18340")?;
+        settings.inbound_addrs = vec![alice_url.clone()];
+        let alice = generate_node(&vks, &val_config, &settings, &ex).await?;
 
-        let sync_p2p = P2p::new(Settings::default()).await;
-        let sled_db = sled::Config::new().temporary(true).open()?;
-        vks::inject(&sled_db, &vks)?;
-        let validator = Validator::new(&sled_db, val_config.clone()).await?;
-        let bob = Darkfid::new(sync_p2p, None, validator).await;
+        // Bob
+        let bob_url = Url::parse("tcp+tls://127.0.0.1:18341")?;
+        settings.inbound_addrs = vec![bob_url];
+        settings.peers = vec![alice_url];
+        let bob = generate_node(&vks, &val_config, &settings, &ex).await?;
 
         Ok(Self { config, alice, bob })
     }
 
-    pub async fn validate_chains(&self) -> Result<()> {
+    pub async fn validate_chains(&self, total_blocks: usize) -> Result<()> {
         let genesis_txs_total = self.config.alice_initial + self.config.bob_initial;
         let alice = &self.alice.validator.read().await;
         let bob = &self.bob.validator.read().await;
@@ -101,17 +105,21 @@ impl Harness {
         alice.validate_blockchain(genesis_txs_total, vec![]).await?;
         bob.validate_blockchain(genesis_txs_total, vec![]).await?;
 
-        assert_eq!(alice.blockchain.len(), bob.blockchain.len());
+        let alice_blockchain_len = alice.blockchain.len();
+        assert_eq!(alice_blockchain_len, bob.blockchain.len());
+        assert_eq!(alice_blockchain_len, total_blocks);
 
         Ok(())
     }
 
     pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
-        let alice = &self.alice.validator.read().await;
-        let bob = &self.bob.validator.read().await;
+        // We simply broadcast the block using Alice's sync P2P
+        for block in blocks {
+            self.alice.sync_p2p.broadcast(block).await;
+        }
 
-        alice.add_blocks(blocks).await?;
-        bob.add_blocks(blocks).await?;
+        // and then add it to her chain
+        self.alice.validator.read().await.add_blocks(blocks).await?;
 
         Ok(())
     }
@@ -165,4 +173,51 @@ impl Harness {
 
         Ok(block)
     }
+}
+
+async fn generate_node(
+    vks: &Vec<(Vec<u8>, String, Vec<u8>)>,
+    config: &ValidatorConfig,
+    settings: &Settings,
+    ex: &Arc<smol::Executor<'_>>,
+) -> Result<Darkfid> {
+    let sled_db = sled::Config::new().temporary(true).open()?;
+    vks::inject(&sled_db, &vks)?;
+    let validator = Validator::new(&sled_db, config.clone()).await?;
+    let sync_p2p = spawn_sync_p2p(&settings, &validator).await;
+    let node = Darkfid::new(sync_p2p.clone(), None, validator).await;
+    sync_p2p.clone().start(ex.clone()).await?;
+    let _ex = ex.clone();
+    ex.spawn(async move {
+        if let Err(e) = sync_p2p.run(_ex).await {
+            error!("Failed starting sync P2P network: {}", e);
+        }
+    })
+    .detach();
+    node.validator.write().await.synced = true;
+
+    Ok(node)
+}
+
+async fn spawn_sync_p2p(settings: &Settings, validator: &ValidatorPtr) -> P2pPtr {
+    let p2p = P2p::new(settings.clone()).await;
+    let registry = p2p.protocol_registry();
+
+    let _validator = validator.clone();
+    registry
+        .register(SESSION_ALL, move |channel, p2p| {
+            let validator = _validator.clone();
+            async move { ProtocolBlock::init(channel, validator, p2p).await.unwrap() }
+        })
+        .await;
+
+    let _validator = validator.clone();
+    registry
+        .register(SESSION_ALL, move |channel, p2p| {
+            let validator = _validator.clone();
+            async move { ProtocolTx::init(channel, validator, p2p).await.unwrap() }
+        })
+        .await;
+
+    p2p
 }
