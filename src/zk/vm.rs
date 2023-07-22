@@ -121,7 +121,7 @@ pub struct VmConfig {
     chips: Vec<VmChip>,
     /// Instance column used for public inputs
     primary: Column<InstanceColumn>,
-    advices: [Column<Advice>; 10],
+    advices: Vec<Column<Advice>>,
 }
 
 impl VmConfig {
@@ -260,7 +260,7 @@ impl ZkCircuit {
 impl Circuit<pallas::Base> for ZkCircuit {
     type Config = VmConfig;
     type FloorPlanner = floor_planner::V1;
-    type Params = ();
+    type Params = usize;
 
     fn without_witnesses(&self) -> Self {
         Self {
@@ -271,20 +271,23 @@ impl Circuit<pallas::Base> for ZkCircuit {
         }
     }
 
-    fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
+    fn configure(_meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
+        unreachable!();
+    }
+
+    fn params(&self) -> Self::Params {
+        10
+    }
+
+    fn configure_with_params(
+        meta: &mut ConstraintSystem<pallas::Base>,
+        params: Self::Params,
+    ) -> Self::Config {
         //  Advice columns used in the circuit
-        let advices = [
-            meta.advice_column(),
-            meta.advice_column(),
-            meta.advice_column(),
-            meta.advice_column(),
-            meta.advice_column(),
-            meta.advice_column(),
-            meta.advice_column(),
-            meta.advice_column(),
-            meta.advice_column(),
-            meta.advice_column(),
-        ];
+        let mut advices = vec![];
+        for _ in 0..params {
+            advices.push(meta.advice_column());
+        }
 
         // Fixed columns for the Sinsemilla generator lookup table
         let table_idx = meta.lookup_table_column();
@@ -325,8 +328,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
         // Configuration for curve point operations.
         // This uses 10 advice columns and spans the whole circuit.
-        let ecc_config =
-            EccChip::<OrchardFixedBases>::configure(meta, advices, lagrange_coeffs, range_check);
+        let ecc_config = EccChip::<OrchardFixedBases>::configure(
+            meta,
+            advices[0..10].try_into().unwrap(),
+            lagrange_coeffs,
+            range_check,
+        );
 
         // Configuration for the Poseidon hash
         let poseidon_config = PoseidonChip::configure::<poseidon::P128Pow5T3>(
