@@ -18,27 +18,29 @@ class Darkie():
         return Darkie(self.stake)
 
     def apy_scaled_to_runningtime(self, rewards):
+        '''
         avg_apy = 0
         for idx, reward in enumerate(rewards):
-            init_stake = Num(self.initial_stake[idx-1]) if len(self.initial_stake)>=idx else Num(self.initial_stake[-1])
-            current_epoch_staked_tokens = Num(self.strategy.staked_tokens_ratio[idx-1]) * init_stake
+            #init_stake = Num(self.initial_stake[idx-1]) if len(self.initial_stake)>=idx else Num(self.initial_stake[-1])
+            current_epoch_staked_tokens = Num(self.strategy.staked_tokens_ratio[idx-1]) * Num(self.initial_stake[idx-1])
             avg_apy += (Num(reward) / current_epoch_staked_tokens) if current_epoch_staked_tokens!=0 else 0
         return avg_apy * Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot  and self.initial_stake[0]>0 >0 else 0
+        '''
+        return -1
 
     def vesting_wrapped_initial_stake(self):
         #print('initial stake: {}, corresponding vesting: {}'.format(self.initial_stake[0], self.vesting[int((self.slot)/VESTING_PERIOD)]))
         # note index is previous slot since update_vesting is called after background execution.
-        #return self.current_vesting() if self.slot>0 else self.initial_stake[-1]
-        return (self.current_vesting() if self.slot>0 else self.initial_stake[-1]) + self.initial_stake[-1]
+        #returns  vesting stake plus initial stake gained from zero coin headstart during aridrop period
+        #return (self.current_vesting() if self.slot>0 else self.initial_stake[-1]) + self.initial_stake[-1]
+        vesting = self.current_vesting()
+        return vesting if vesting > 0 else  self.initial_stake[0]
 
     def apr_scaled_to_runningtime(self):
         initial_stake = self.vesting_wrapped_initial_stake()
         #print('stake: {}, initial_stake: {}'.format(self.stake, initial_stake))
         assert self.stake >= initial_stake, 'stake: {}, initial_stake: {}, slot: {}, current: {}, previous: {} vesting'.format(self.stake, initial_stake, self.slot, self.current_vesting(), self.prev_vesting())
-        #if self.slot%100==0:
-            #print('stake: {}, initial stake: {}'.format(self.stake, initial_stake))
-            #print(self.initial_stake)
-        apr = Num(self.stake - initial_stake) / Num(initial_stake) *  Num(ONE_YEAR/(self.slot)) if self.slot> 0 and initial_stake>0 else 0
+        apr = Num(self.stake - initial_stake) / Num(initial_stake) *  Num(ONE_YEAR/(self.slot)) if initial_stake > 0 and self.slot>0 else 0
         return apr
 
     def staked_tokens(self):
@@ -76,10 +78,7 @@ class Darkie():
             # staked ratio is added in strategy
             self.strategy.set_ratio(self.slot, apr)
             # epoch stake is added
-            if self.slot < HEADSTART_AIRDROP:
-                self.initial_stake +=[self.stake]
-        #if self.slot == HEADSTART_AIRDROP:
-        #    self.initial_stake += [self.stake]
+            self.initial_stake += [self.stake]
         T = target(self.f, self.strategy.staked_value(self.stake))
         won = lottery(T, hp)
         self.won_hist += [won]
