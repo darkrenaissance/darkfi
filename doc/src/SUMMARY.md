@@ -85,3 +85,5 @@
     - [Network Protocol](misc/event_graph/network_protocol.md)
   - [darkwiki](misc/darkwiki.md)
   - [dnetview](misc/dnetview.md)
+- [zero2darkfi](zero2dark/zero2darkfi.md)
+  - [smart contract](zero2darkfi/darkmap.md)
