@@ -17,31 +17,69 @@ class Darkie():
     def clone(self):
         return Darkie(self.stake)
 
+    """
+    calculate APY (with compound interest every epoch) every epoch scaled to runningtime
+    @param rewards: rewards at each epoch
+    @returns: apy
+    """
     def apy_scaled_to_runningtime(self, rewards):
-        '''
         avg_apy = 0
         for idx, reward in enumerate(rewards):
             #init_stake = Num(self.initial_stake[idx-1]) if len(self.initial_stake)>=idx else Num(self.initial_stake[-1])
             current_epoch_staked_tokens = Num(self.strategy.staked_tokens_ratio[idx-1]) * Num(self.initial_stake[idx-1])
             avg_apy += (Num(reward) / current_epoch_staked_tokens) if current_epoch_staked_tokens!=0 else 0
         return avg_apy * Num(ONE_YEAR/(self.slot/EPOCH_LENGTH)) if self.slot  and self.initial_stake[0]>0 >0 else 0
-        '''
-        return -1
 
-    def vesting_wrapped_initial_stake(self):
-        #print('initial stake: {}, corresponding vesting: {}'.format(self.initial_stake[0], self.vesting[int((self.slot)/VESTING_PERIOD)]))
-        # note index is previous slot since update_vesting is called after background execution.
-        #returns  vesting stake plus initial stake gained from zero coin headstart during aridrop period
-        #return (self.current_vesting() if self.slot>0 else self.initial_stake[-1]) + self.initial_stake[-1]
-        vesting = self.current_vesting()
-        return vesting if vesting > 0 else  self.initial_stake[0]
-
+    """
+    calculate APR every epoch scaled to running time
+    @returns: apr
+    """
     def apr_scaled_to_runningtime(self):
         initial_stake = self.vesting_wrapped_initial_stake()
-        #print('stake: {}, initial_stake: {}'.format(self.stake, initial_stake))
         assert self.stake >= initial_stake, 'stake: {}, initial_stake: {}, slot: {}, current: {}, previous: {} vesting'.format(self.stake, initial_stake, self.slot, self.current_vesting(), self.prev_vesting())
         apr = Num(self.stake - initial_stake) / Num(initial_stake) *  Num(ONE_YEAR/(self.slot)) if initial_stake > 0 and self.slot>0 else 0
         return apr
+
+
+    """
+    add vesting to initial stake
+    @returns: vesting plus initial stake
+    """
+    def vesting_wrapped_initial_stake(self):
+        #returns  vesting stake plus initial stake gained from zero coin headstart during aridrop period
+        vesting = self.current_vesting()
+        #return vesting if vesting > 0 else  self.initial_stake[0]
+        return vesting +  self.initial_stake[0]
+
+    """
+    update stake with vesting return every scheduled vesting period
+    """
+    def update_vesting(self):
+        self.stake += self.vesting_differential()
+
+    """
+    @returns: current epoch vesting
+    """
+    def current_vesting(self):
+        '''
+        current corresponding slot vesting
+        '''
+        vesting_idx = int(self.slot/VESTING_PERIOD)
+        return self.vesting[vesting_idx] if vesting_idx < len(self.vesting) else 0
+
+    """
+    @returns: previous epoch vesting
+    """
+    def prev_vesting(self):
+        '''
+        previous corresponding slot vesting
+        '''
+        prev_vesting_idx = int((self.slot-1)/VESTING_PERIOD)
+        return (self.vesting[prev_vesting_idx] if self.slot>0 else self.current_vesting()) if prev_vesting_idx < len(self.vesting) else  0
+
+    def vesting_differential(self):
+        vesting_value =  self.current_vesting() - self.prev_vesting()
+        return vesting_value
 
     def staked_tokens(self):
         '''
@@ -50,10 +88,11 @@ class Darkie():
         '''
         return Num(self.initial_stake[0])*self.staked_tokens_ratio()
 
-
+    """
+    @returns: average stakeholder's staked ratio from genesis until current slot
+    """
     def staked_tokens_ratio(self):
         staked_ratio = Num(sum(self.strategy.staked_tokens_ratio)/len(self.strategy.staked_tokens_ratio))
-        #print('type: {}, ratio: {}'.format(self.strategy.type, staked_ratio))
         assert staked_ratio <= 1 and staked_ratio >=0, 'staked_ratio: {}'.format(staked_ratio)
         return staked_ratio
 
@@ -64,6 +103,10 @@ class Darkie():
         self.f = (Num(f) if hp else f)
         self.slot = count
 
+    """
+    @param hp: high precision decimal option
+    play lottery if stakeholder won, update state
+    """
     def run(self, hp=True):
         k=N_TERM
         def target(tune_parameter, stake):
@@ -83,36 +126,17 @@ class Darkie():
         won = lottery(T, hp)
         self.won_hist += [won]
 
-    def update_vesting(self):
-        self.stake += self.vesting_differential()
-
-    def current_vesting(self):
-        '''
-        current corresponding slot vesting
-        '''
-        vesting_idx = int(self.slot/VESTING_PERIOD)
-        return self.vesting[vesting_idx] if vesting_idx < len(self.vesting) else 0
-
-    def prev_vesting(self):
-        '''
-        previous corresponding slot vesting
-        '''
-        prev_vesting_idx = int((self.slot-1)/VESTING_PERIOD)
-        return (self.vesting[prev_vesting_idx] if self.slot>0 else self.current_vesting()) if prev_vesting_idx < len(self.vesting) else  0
-
-    def vesting_differential(self):
-        vesting_value =  self.current_vesting() - self.prev_vesting()
-        return vesting_value
-
+    """
+    update stake upon winning lottery with single lead
+    """
     def update_stake(self, reward):
         if self.won_hist[-1]:
-            self.stake+=reward
-            #print('updating stake, stake: {}, last: {}'.format(self.stake, self.initial_stake[-1]))
+            self.stake += reward
 
+    """
+    update stake after fork finalization
+    """
     def resync_stake(self, reward):
-        '''
-        add resync stake
-        '''
         self.stake += reward
 
 
