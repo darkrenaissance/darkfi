@@ -16,14 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/// Block broadcast protocol
-mod protocol_block;
-pub use protocol_block::ProtocolBlock;
+// TODO: Handle ? with matches in these files. They should be robust.
 
-/// Validator blockchain sync protocol
-mod protocol_sync;
-pub use protocol_sync::{ProtocolSync, SyncRequest, SyncResponse};
-
-/// Transaction broadcast protocol
-mod protocol_tx;
-pub use protocol_tx::ProtocolTx;
+pub mod sync;
+pub use sync::sync_task;

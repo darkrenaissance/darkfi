@@ -19,12 +19,11 @@
 use async_std::sync::Arc;
 use darkfi::{
     blockchain::{BlockInfo, Header},
-    net::{P2p, P2pPtr, Settings, SESSION_ALL},
+    net::Settings,
     util::time::TimeKeeper,
     validator::{
         consensus::{next_block_reward, pid::slot_pid_output},
-        proto::{ProtocolBlock, ProtocolTx},
-        Validator, ValidatorConfig, ValidatorPtr,
+        Validator, ValidatorConfig,
     },
     Result,
 };
@@ -36,7 +35,11 @@ use darkfi_sdk::{
 use log::error;
 use url::Url;
 
-use crate::{utils::genesis_txs_total, Darkfid};
+use crate::{
+    task::sync::sync_task,
+    utils::{genesis_txs_total, spawn_sync_p2p},
+    Darkfid,
+};
 
 pub struct HarnessConfig {
     pub testing_node: bool,
@@ -46,12 +49,14 @@ pub struct HarnessConfig {
 
 pub struct Harness {
     pub config: HarnessConfig,
+    pub vks: Vec<(Vec<u8>, String, Vec<u8>)>,
+    pub validator_config: ValidatorConfig,
     pub alice: Darkfid,
     pub bob: Darkfid,
 }
 
 impl Harness {
-    pub async fn new(config: HarnessConfig, ex: Arc<smol::Executor<'_>>) -> Result<Self> {
+    pub async fn new(config: HarnessConfig, ex: &Arc<smol::Executor<'_>>) -> Result<Self> {
         // Use test harness to generate genesis transactions
         let mut th = TestHarness::new(&["money".to_string(), "consensus".to_string()]).await?;
         let (genesis_stake_tx, _) = th.genesis_stake(&Holder::Alice, config.alice_initial)?;
@@ -70,7 +75,7 @@ impl Harness {
         // NOTE: we are not using consensus constants here so we
         // don't get circular dependencies.
         let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
-        let val_config = ValidatorConfig::new(
+        let validator_config = ValidatorConfig::new(
             time_keeper,
             genesis_block,
             genesis_txs_total,
@@ -86,18 +91,18 @@ impl Harness {
         // Alice
         let alice_url = Url::parse("tcp+tls://127.0.0.1:18340")?;
         settings.inbound_addrs = vec![alice_url.clone()];
-        let alice = generate_node(&vks, &val_config, &settings, &ex).await?;
+        let alice = generate_node(&vks, &validator_config, &settings, ex).await?;
 
         // Bob
         let bob_url = Url::parse("tcp+tls://127.0.0.1:18341")?;
         settings.inbound_addrs = vec![bob_url];
         settings.peers = vec![alice_url];
-        let bob = generate_node(&vks, &val_config, &settings, &ex).await?;
+        let bob = generate_node(&vks, &validator_config, &settings, ex).await?;
 
-        Ok(Self { config, alice, bob })
+        Ok(Self { config, vks, validator_config, alice, bob })
     }
 
-    pub async fn validate_chains(&self, total_blocks: usize) -> Result<()> {
+    pub async fn validate_chains(&self, total_blocks: usize, total_slots: usize) -> Result<()> {
         let genesis_txs_total = self.config.alice_initial + self.config.bob_initial;
         let alice = &self.alice.validator.read().await;
         let bob = &self.bob.validator.read().await;
@@ -108,6 +113,10 @@ impl Harness {
         let alice_blockchain_len = alice.blockchain.len();
         assert_eq!(alice_blockchain_len, bob.blockchain.len());
         assert_eq!(alice_blockchain_len, total_blocks);
+
+        let alice_slots_len = alice.blockchain.slots.len();
+        assert_eq!(alice_slots_len, bob.blockchain.slots.len());
+        assert_eq!(alice_slots_len, total_slots);
 
         Ok(())
     }
@@ -175,7 +184,7 @@ impl Harness {
     }
 }
 
-async fn generate_node(
+pub async fn generate_node(
     vks: &Vec<(Vec<u8>, String, Vec<u8>)>,
     config: &ValidatorConfig,
     settings: &Settings,
@@ -194,30 +203,9 @@ async fn generate_node(
         }
     })
     .detach();
-    node.validator.write().await.synced = true;
+    // TODO: enable this when ready
+    //sync_p2p.wait_for_outbound(ex).await?;
+    sync_task(&node).await?;
 
     Ok(node)
-}
-
-async fn spawn_sync_p2p(settings: &Settings, validator: &ValidatorPtr) -> P2pPtr {
-    let p2p = P2p::new(settings.clone()).await;
-    let registry = p2p.protocol_registry();
-
-    let _validator = validator.clone();
-    registry
-        .register(SESSION_ALL, move |channel, p2p| {
-            let validator = _validator.clone();
-            async move { ProtocolBlock::init(channel, validator, p2p).await.unwrap() }
-        })
-        .await;
-
-    let _validator = validator.clone();
-    registry
-        .register(SESSION_ALL, move |channel, p2p| {
-            let validator = _validator.clone();
-            async move { ProtocolTx::init(channel, validator, p2p).await.unwrap() }
-        })
-        .await;
-
-    p2p
 }

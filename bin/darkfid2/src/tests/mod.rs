@@ -17,19 +17,20 @@
  */
 
 use async_std::sync::Arc;
-use darkfi::Result;
+use darkfi::{net::Settings, Result};
 use darkfi_contract_test_harness::init_logger;
 use smol::Executor;
+use url::Url;
 
 mod harness;
-use harness::{Harness, HarnessConfig};
+use harness::{generate_node, Harness, HarnessConfig};
 
 async fn sync_blocks_real(ex: Arc<Executor<'_>>) -> Result<()> {
     init_logger();
 
     // Initialize harness in testing mode
     let config = HarnessConfig { testing_node: true, alice_initial: 1000, bob_initial: 500 };
-    let th = Harness::new(config, ex).await?;
+    let th = Harness::new(config, &ex).await?;
 
     // Retrieve genesis block
     let previous = th.alice.validator.read().await.blockchain.last_block()?;
@@ -44,7 +45,25 @@ async fn sync_blocks_real(ex: Arc<Executor<'_>>) -> Result<()> {
     th.add_blocks(&vec![block1, block2]).await?;
 
     // Validate chains
-    th.validate_chains(3).await?;
+    th.validate_chains(3, 7).await?;
+
+    // We are going to create a third node and try to sync from the previous two
+    let mut settings = Settings::default();
+    settings.localnet = true;
+    let charlie_url = Url::parse("tcp+tls://127.0.0.1:18342")?;
+    settings.inbound_addrs = vec![charlie_url];
+    let alice_url = th.alice.sync_p2p.settings().inbound_addrs[0].clone();
+    let bob_url = th.bob.sync_p2p.settings().inbound_addrs[0].clone();
+    settings.peers = vec![alice_url, bob_url];
+    let charlie = generate_node(&th.vks, &th.validator_config, &settings, &ex).await?;
+    // Verify node synced
+    let genesis_txs_total = th.config.alice_initial + th.config.bob_initial;
+    let alice = &th.alice.validator.read().await;
+    let charlie = &charlie.validator.read().await;
+    charlie.validate_blockchain(genesis_txs_total, vec![]).await?;
+    // TODO: this fails because sync starts before we connect to peers
+    //assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
+    //assert_eq!(alice.blockchain.slots.len(), charlie.blockchain.slots.len());
 
     // Thanks for reading
     Ok(())

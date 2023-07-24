@@ -16,7 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{error::TxVerifyFailed, tx::Transaction, Result};
+use log::info;
+
+use darkfi::{
+    error::TxVerifyFailed,
+    net::{P2p, P2pPtr, Settings, SESSION_ALL},
+    tx::Transaction,
+    validator::{
+        proto::{ProtocolBlock, ProtocolSync, ProtocolTx},
+        ValidatorPtr,
+    },
+    Result,
+};
 use darkfi_consensus_contract::{
     model::ConsensusGenesisStakeParamsV1, ConsensusFunction::GenesisStakeV1,
 };
@@ -56,4 +67,37 @@ pub fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
     }
 
     Ok(total)
+}
+
+/// Auxiliary function to generate the sync P2P network and register all its protocols.
+pub async fn spawn_sync_p2p(settings: &Settings, validator: &ValidatorPtr) -> P2pPtr {
+    info!(target: "darkfid", "Registering sync network P2P protocols...");
+    let p2p = P2p::new(settings.clone()).await;
+    let registry = p2p.protocol_registry();
+
+    let _validator = validator.clone();
+    registry
+        .register(SESSION_ALL, move |channel, p2p| {
+            let validator = _validator.clone();
+            async move { ProtocolBlock::init(channel, validator, p2p).await.unwrap() }
+        })
+        .await;
+
+    let _validator = validator.clone();
+    registry
+        .register(SESSION_ALL, move |channel, _p2p| {
+            let validator = _validator.clone();
+            async move { ProtocolSync::init(channel, validator).await.unwrap() }
+        })
+        .await;
+
+    let _validator = validator.clone();
+    registry
+        .register(SESSION_ALL, move |channel, p2p| {
+            let validator = _validator.clone();
+            async move { ProtocolTx::init(channel, validator, p2p).await.unwrap() }
+        })
+        .await;
+
+    p2p
 }
