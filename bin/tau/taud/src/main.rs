@@ -63,7 +63,7 @@ mod task_info;
 mod util;
 
 use crate::{
-    error::TaudResult,
+    error::{TaudError, TaudResult},
     jsonrpc::JsonRpcInterface,
     settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
     task_info::{TaskEvent, TaskInfo},
@@ -93,26 +93,12 @@ fn get_workspaces(settings: &Args) -> Result<HashMap<String, ChaChaBox>> {
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct EncryptedTask {
-    nonce: Vec<u8>,
-    payload: Vec<u8>,
+    payload: String,
 }
 
 impl EventMsg for EncryptedTask {
     fn new() -> Self {
-        Self {
-            nonce: [
-                19, 40, 199, 87, 248, 23, 187, 11, 119, 237, 214, 65, 5, 206, 187, 33, 222, 107,
-                140, 84, 114, 61, 205, 40,
-            ]
-            .to_vec(),
-            payload: [
-                30, 66, 74, 74, 65, 78, 80, 120, 85, 66, 106, 119, 119, 81, 66, 55, 112, 80, 88,
-                85, 82, 97, 79, 108, 115, 83, 113, 78, 71, 116, 113, 4, 114, 111, 111, 116, 1, 0,
-                0, 0, 5, 116, 105, 116, 108, 101, 0, 4, 100, 101, 115, 99, 6, 100, 97, 114, 107,
-                102, 105, 0, 0, 0, 0, 42, 47, 14, 100, 0, 0, 0, 0, 4, 111, 112, 101, 110, 0, 0,
-            ]
-            .to_vec(),
-        }
+        Self { payload: String::from("root") }
     }
 }
 
@@ -125,17 +111,40 @@ fn encrypt_task(
 
     let nonce = ChaChaBox::generate_nonce(rng);
     let payload = &serialize(task)[..];
-    let payload = chacha_box.encrypt(&nonce, payload)?;
+    let mut payload = chacha_box.encrypt(&nonce, payload)?;
 
-    let nonce = nonce.to_vec();
-    Ok(EncryptedTask { nonce, payload })
+    let mut concat = vec![];
+    concat.append(&mut nonce.as_slice().to_vec());
+    concat.append(&mut payload);
+
+    let payload = bs58::encode(concat.clone()).into_string();
+
+    Ok(EncryptedTask { payload })
 }
 
-fn decrypt_task(encrypt_task: &EncryptedTask, chacha_box: &ChaChaBox) -> TaudResult<TaskInfo> {
+fn try_decrypt_task(encrypt_task: &EncryptedTask, chacha_box: &ChaChaBox) -> TaudResult<TaskInfo> {
     debug!("start decrypting task");
 
-    let nonce = encrypt_task.nonce.as_slice();
-    let decrypted_task = chacha_box.decrypt(nonce.into(), &encrypt_task.payload[..])?;
+    let bytes = match bs58::decode(&encrypt_task.payload).into_vec() {
+        Ok(v) => v,
+        Err(_) => return Err(TaudError::DecryptionError("Error decoding payload".to_string())),
+    };
+
+    if bytes.len() < 25 {
+        return Err(TaudError::DecryptionError("Invalid bytes length".to_string()))
+    }
+
+    // Try extracting the nonce
+    let nonce = match bytes[0..24].try_into() {
+        Ok(v) => v,
+        Err(_) => return Err(TaudError::DecryptionError("Invalid nonce".to_string())),
+    };
+
+    // Take the remaining ciphertext
+    let message = &bytes[24..];
+
+    // let nonce = encrypt_task.nonce.as_slice();
+    let decrypted_task = chacha_box.decrypt(nonce, message)?;
 
     let task = deserialize(&decrypted_task)?;
 
@@ -195,7 +204,7 @@ async fn on_receive_task(
     piped: bool,
 ) -> TaudResult<()> {
     for (workspace, chacha_box) in workspaces.iter() {
-        let task = decrypt_task(task, chacha_box);
+        let task = try_decrypt_task(task, chacha_box);
         if let Err(e) = task {
             debug!("unable to decrypt the task: {}", e);
             continue
@@ -323,6 +332,8 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     let view = Arc::new(Mutex::new(View::new(events_queue)));
     let model_clone = model.clone();
 
+    model.lock().await.load_tree(&datastore_path)?;
+
     ////////////////////
     // Buffers
     ////////////////////
@@ -362,7 +373,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         .spawn(start_sync_loop(
             broadcast_rcv,
             view,
-            model_clone,
+            model_clone.clone(),
             seen_ids,
             workspaces.clone(),
             datastore_path.clone(),
@@ -389,6 +400,8 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     let (signals_handler, signals_task) = SignalHandler::new()?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
+
+    model_clone.lock().await.save_tree(&datastore_path)?;
 
     p2p.stop().await;
 

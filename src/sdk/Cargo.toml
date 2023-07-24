@@ -13,7 +13,7 @@ doctest = false
 
 [dependencies]
 # Error handling
-thiserror = "1.0.43"
+thiserror = "1.0.44"
 
 # Serialization
 darkfi-serial = {version = "0.4.1", path = "../serial", features = ["derive", "crypto"]}
@@ -28,10 +28,9 @@ chacha20poly1305 = "0.10.1"
 halo2_gadgets = "0.3.0"
 bridgetree = "0.3.0"
 num-bigint = "0.4.3"
-num-traits = "0.2.15"
+num-traits = "0.2.16"
 pasta_curves = "0.5.1"
 rand_core = "0.6.4"
-sha2 = "0.10.7"
 
 # Misc
 lazy_static = "1.4.0"

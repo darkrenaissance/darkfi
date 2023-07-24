@@ -22,7 +22,7 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_sdk::{
-    blockchain::Slot,
+    blockchain::{PidOutput, PreviousSlot, Slot},
     pasta::{group::ff::Field, pallas},
 };
 
@@ -57,20 +57,20 @@ impl Harness {
 
         // Generate slot
         let previous_slot = previous.slots.last().unwrap();
-        let (f, error, sigma1, sigma2) = slot_pid_output(&previous_slot);
-        let slot = Slot::new(
-            previous_slot.id + 1,
-            pallas::Base::ZERO,
+        let id = previous_slot.id + 1;
+        let producers = 1;
+        let previous_slot_info = PreviousSlot::new(
+            producers,
             vec![previous_hash],
             vec![previous.header.previous.clone()],
-            f,
-            error,
-            previous_slot.error,
-            previous_slot.total_tokens + previous_slot.reward,
-            next_block_reward(),
-            sigma1,
-            sigma2,
+            pallas::Base::ZERO,
+            previous_slot.pid.error,
         );
+        let (f, error, sigma1, sigma2) = slot_pid_output(&previous_slot, producers);
+        let pid = PidOutput::new(f, error, sigma1, sigma2);
+        let total_tokens = previous_slot.total_tokens + previous_slot.reward;
+        let reward = next_block_reward();
+        let slot = Slot::new(id, previous_slot_info, pid, total_tokens, reward);
 
         // We increment timestamp so we don't have to use sleep
         let mut timestamp = previous.header.timestamp;
@@ -80,7 +80,7 @@ impl Harness {
         let header = Header::new(
             previous_hash,
             previous.header.epoch,
-            previous.header.slot + 1,
+            id,
             timestamp,
             previous.header.root.clone(),
         );

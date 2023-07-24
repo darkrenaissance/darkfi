@@ -135,6 +135,7 @@ mod tests {
     impl Circuit<Fp> for MyCircuit {
         type Config = (ZeroCondConfig<Fp>, [Column<Advice>; 5], Column<Instance>);
         type FloorPlanner = V1;
+        type Params = ();
 
         fn without_witnesses(&self) -> Self {
             Self::default()

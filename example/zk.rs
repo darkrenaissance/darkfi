@@ -47,7 +47,7 @@ fn main() -> Result<()> {
     // ======
     // Bigger k = more rows, but slower circuit
     // Number of rows is 2^k
-    let k = 13;
+    let k = zkbin.k;
 
     // Witness values
     let value = 42;
@@ -65,7 +65,7 @@ fn main() -> Result<()> {
     let public_inputs = vec![*value_coords.x(), *value_coords.y()];
 
     // Create the circuit
-    let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+    let circuit = ZkCircuit::new(prover_witnesses, &zkbin.clone());
 
     let now = std::time::Instant::now();
     let proving_key = ProvingKey::build(k, &circuit);
@@ -79,10 +79,10 @@ fn main() -> Result<()> {
     // ========
 
     // Construct empty witnesses
-    let verifier_witnesses = empty_witnesses(&zkbin);
+    let verifier_witnesses = empty_witnesses(&zkbin)?;
 
     // Create the circuit
-    let circuit = ZkCircuit::new(verifier_witnesses, zkbin);
+    let circuit = ZkCircuit::new(verifier_witnesses, &zkbin);
 
     let now = std::time::Instant::now();
     let verifying_key = VerifyingKey::build(k, &circuit);

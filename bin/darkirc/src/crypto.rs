@@ -31,13 +31,13 @@ use crate::{
 
 #[derive(serde::Serialize)]
 pub struct KeyPair {
-    pub private_key: String,
-    pub public_key: String,
+    pub public: String,
+    pub secret: String,
 }
 
 impl fmt::Display for KeyPair {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Public key: {}\nPrivate key: {}", self.public_key, self.private_key)
+        write!(f, "Public key: {}\nSecret key: {}", self.public, self.secret)
     }
 }
 
@@ -93,7 +93,7 @@ pub fn decrypt_target(
         }
 
         if let Some(salt_box) = &chan_info.salt_box {
-            let decrypted_target = try_decrypt(&salt_box, &privmsg.target);
+            let decrypted_target = try_decrypt(salt_box, &privmsg.target);
             if decrypted_target.is_none() {
                 continue
             }
@@ -111,7 +111,7 @@ pub fn decrypt_target(
         let cnt_info = configured_contacts.get(cnt_name).unwrap();
 
         if let Some(salt_box) = &cnt_info.salt_box {
-            let decrypted_target = try_decrypt(&salt_box, &privmsg.target);
+            let decrypted_target = try_decrypt(salt_box, &privmsg.target);
             if decrypted_target.is_none() {
                 continue
             }

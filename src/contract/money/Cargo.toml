@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 bs58 = "0.5.0"
 darkfi-sdk = { path = "../../sdk" }
 darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
-thiserror = "1.0.43"
+thiserror = "1.0.44"
 
 # The following dependencies are used for the client API and
 # probably shouldn't be in WASM
@@ -28,7 +28,6 @@ async-std = {version = "1.12.0", features = ["attributes"]}
 darkfi = {path = "../../../", features = ["tx", "blockchain"]}
 simplelog = "0.12.1"
 sled = "0.34.7"
-#sqlx = {version = "0.6.3", features = ["runtime-async-std-rustls", "sqlite"]}
 darkfi-contract-test-harness = {path = "../test-harness"}
 
 # We need to disable random using "custom" which makes the crate a noop

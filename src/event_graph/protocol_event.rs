@@ -63,7 +63,7 @@ pub struct Seen<T> {
     seen: Mutex<RingBuffer<T, SIZE_OF_SEEN_BUFFER>>,
 }
 
-impl<T: Eq + PartialEq + Clone> Seen<T> {
+impl<T: Send + Sync + Eq + PartialEq + Clone> Seen<T> {
     pub fn new() -> SeenPtr<T> {
         Arc::new(Self { seen: Mutex::new(RingBuffer::new()) })
     }

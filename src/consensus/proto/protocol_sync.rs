@@ -141,7 +141,7 @@ impl ProtocolSync {
 
     async fn handle_receive_block(self: Arc<Self>) -> Result<()> {
         debug!(target: "consensus::protocol_sync::handle_receive_block()", "START");
-        let _exclude_list = vec![self.channel.address()];
+        let _exclude_list = [self.channel.address()];
         loop {
             let info = match self.block_sub.receive().await {
                 Ok(v) => v,

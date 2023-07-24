@@ -27,8 +27,8 @@
 use darkfi::Result;
 use log::info;
 
-use darkfi_consensus_contract::model::{calculate_grace_period, EPOCH_LENGTH, REWARD};
-use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
+use darkfi_consensus_contract::model::{calculate_grace_period, EPOCH_LENGTH};
+use darkfi_contract_test_harness::{init_logger, Holder, TestHarness, TxAction};
 
 #[async_std::test]
 async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
@@ -46,21 +46,22 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     // Initialize harness
     let mut th = TestHarness::new(&["money".to_string(), "consensus".to_string()]).await?;
 
-    // Now Alice can craate a genesis stake transaction to mint
+    // Now Alice can create a genesis stake transaction to mint
     // some staked coins
     info!(target: "consensus", "[Alice] =========================");
     info!(target: "consensus", "[Alice] Building genesis stake tx");
     info!(target: "consensus", "[Alice] =========================");
     let (genesis_stake_tx, genesis_stake_params) =
-        th.genesis_stake(Holder::Alice, ALICE_INITIAL)?;
+        th.genesis_stake(&Holder::Alice, ALICE_INITIAL)?;
 
     // We are going to use alice genesis mint transaction to
     // test some malicious cases.
     info!(target: "consensus", "[Malicious] ===================================");
     info!(target: "consensus", "[Malicious] Checking duplicate genesis stake tx");
     info!(target: "consensus", "[Malicious] ===================================");
-    th.execute_erroneous_genesis_stake_txs(
-        Holder::Alice,
+    th.execute_erroneous_txs(
+        TxAction::ConsensusGenesisStake,
+        &Holder::Alice,
         &vec![genesis_stake_tx.clone(), genesis_stake_tx.clone()],
         current_slot,
         1,
@@ -70,44 +71,28 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     info!(target: "consensus", "[Malicious] =============================================");
     info!(target: "consensus", "[Malicious] Checking genesis stake tx not on genesis slot");
     info!(target: "consensus", "[Malicious] =============================================");
-    th.execute_erroneous_genesis_stake_txs(
-        Holder::Alice,
+    th.execute_erroneous_txs(
+        TxAction::ConsensusGenesisStake,
+        &Holder::Alice,
         &vec![genesis_stake_tx.clone()],
         current_slot + 1,
         1,
     )
     .await?;
-    info!(target: "consensus", "[Malicious] ===========================");
-    info!(target: "consensus", "[Malicious] Malicious test cases passed");
-    info!(target: "consensus", "[Malicious] ===========================");
 
-    info!(target: "consensus", "[Faucet] ================================");
-    info!(target: "consensus", "[Faucet] Executing Alice genesis stake tx");
-    info!(target: "consensus", "[Faucet] ================================");
-    th.execute_genesis_stake_tx(
-        Holder::Faucet,
-        &genesis_stake_tx,
-        &genesis_stake_params,
-        current_slot,
-    )
-    .await?;
-
-    info!(target: "consensus", "[Alice] ================================");
-    info!(target: "consensus", "[Alice] Executing Alice genesis stake tx");
-    info!(target: "consensus", "[Alice] ================================");
-    th.execute_genesis_stake_tx(
-        Holder::Alice,
-        &genesis_stake_tx,
-        &genesis_stake_params,
-        current_slot,
-    )
-    .await?;
+    for holder in &HOLDERS {
+        info!(target: "consensus", "[{holder:?}] ================================");
+        info!(target: "consensus", "[{holder:?}] Executing Alice genesis stake tx");
+        info!(target: "consensus", "[{holder:?}] ================================");
+        th.execute_genesis_stake_tx(holder, &genesis_stake_tx, &genesis_stake_params, current_slot)
+            .await?;
+    }
 
     th.assert_trees(&HOLDERS);
 
     // Gather new staked owncoin
     let alice_staked_oc =
-        th.gather_consensus_staked_owncoin(Holder::Alice, genesis_stake_params.output, None)?;
+        th.gather_consensus_staked_owncoin(&Holder::Alice, &genesis_stake_params.output, None)?;
 
     // Verify values match
     assert!(ALICE_INITIAL == alice_staked_oc.note.value);
@@ -120,110 +105,23 @@ async fn consensus_contract_genesis_stake_unstake() -> Result<()> {
     // With alice's current coin value she can become the slot proposer,
     // so she creates a proposal transaction to burn her staked coin,
     // reward herself and mint the new coin.
-    info!(target: "consensus", "[Alice] ====================");
-    info!(target: "consensus", "[Alice] Building proposal tx");
-    info!(target: "consensus", "[Alice] ====================");
-    let (proposal_tx, proposal_params, _proposal_signing_secret_key, proposal_output_secret_key) =
-        th.proposal(Holder::Alice, slot, alice_staked_oc.clone()).await?;
-
-    info!(target: "consensus", "[Faucet] ===========================");
-    info!(target: "consensus", "[Faucet] Executing Alice proposal tx");
-    info!(target: "consensus", "[Faucet] ===========================");
-    th.execute_proposal_tx(Holder::Faucet, &proposal_tx, &proposal_params, current_slot).await?;
-
-    info!(target: "consensus", "[Alice] ===========================");
-    info!(target: "consensus", "[Alice] Executing Alice proposal tx");
-    info!(target: "consensus", "[Alice] ===========================");
-    th.execute_proposal_tx(Holder::Alice, &proposal_tx, &proposal_params, current_slot).await?;
-
-    th.assert_trees(&HOLDERS);
-
-    // Gather new staked owncoin which includes the reward
-    let alice_rewarded_staked_oc = th.gather_consensus_staked_owncoin(
-        Holder::Alice,
-        proposal_params.output,
-        Some(proposal_output_secret_key),
-    )?;
-
-    // Verify values match
-    assert!((alice_staked_oc.note.value + REWARD) == alice_rewarded_staked_oc.note.value);
+    let alice_rewarded_staked_oc =
+        th.execute_proposal(&HOLDERS, &Holder::Alice, current_slot, slot, &alice_staked_oc).await?;
 
     // We progress after grace period
     current_slot += calculate_grace_period() * EPOCH_LENGTH;
     th.generate_slot(current_slot).await?;
 
     // Alice can request for her owncoin to get unstaked
-    info!(target: "consensus", "[Alice] ===========================");
-    info!(target: "consensus", "[Alice] Building unstake request tx");
-    info!(target: "consensus", "[Alice] ===========================");
-    let (
-        unstake_request_tx,
-        unstake_request_params,
-        unstake_request_output_secret_key,
-        _unstake_request_signature_secret_key,
-    ) = th.unstake_request(Holder::Alice, current_slot, alice_rewarded_staked_oc.clone()).await?;
-
-    info!(target: "consensus", "[Faucet] ==================================");
-    info!(target: "consensus", "[Faucet] Executing Alice unstake request tx");
-    info!(target: "consensus", "[Faucet] ==================================");
-    th.execute_unstake_request_tx(
-        Holder::Faucet,
-        &unstake_request_tx,
-        &unstake_request_params,
-        current_slot,
-    )
-    .await?;
-
-    info!(target: "consensus", "[Alice] ==================================");
-    info!(target: "consensus", "[Alice] Executing Alice unstake request tx");
-    info!(target: "consensus", "[Alice] ==================================");
-    th.execute_unstake_request_tx(
-        Holder::Alice,
-        &unstake_request_tx,
-        &unstake_request_params,
-        current_slot,
-    )
-    .await?;
-
-    th.assert_trees(&HOLDERS);
-
-    // Gather new unstake request owncoin
-    let alice_unstake_request_oc = th.gather_consensus_unstaked_owncoin(
-        Holder::Alice,
-        unstake_request_params.output,
-        Some(unstake_request_output_secret_key),
-    )?;
-
-    // Verify values match
-    assert!(alice_rewarded_staked_oc.note.value == alice_unstake_request_oc.note.value);
+    let alice_unstake_request_oc = th
+        .execute_unstake_request(&HOLDERS, &Holder::Alice, current_slot, &alice_rewarded_staked_oc)
+        .await?;
 
     // We progress after grace period
     current_slot += (calculate_grace_period() * EPOCH_LENGTH) + EPOCH_LENGTH;
 
     // Now Alice can unstake her owncoin
-    info!(target: "consensus", "[Alice] ===================");
-    info!(target: "consensus", "[Alice] Building unstake tx");
-    info!(target: "consensus", "[Alice] ===================");
-    let (unstake_tx, unstake_params, _unstake_secret_key) =
-        th.unstake(Holder::Alice, alice_unstake_request_oc.clone())?;
-
-    info!(target: "consensus", "[Faucet] ==========================");
-    info!(target: "consensus", "[Faucet] Executing Alice unstake tx");
-    info!(target: "consensus", "[Faucet] ==========================");
-    th.execute_unstake_tx(Holder::Faucet, &unstake_tx, &unstake_params, current_slot).await?;
-
-    info!(target: "consensus", "[Alice] ==========================");
-    info!(target: "consensus", "[Alice] Executing Alice unstake tx");
-    info!(target: "consensus", "[Alice] ==========================");
-    th.execute_unstake_tx(Holder::Alice, &unstake_tx, &unstake_params, current_slot).await?;
-
-    th.assert_trees(&HOLDERS);
-
-    // Gather new unstaked owncoin
-    let alice_unstaked_oc = th.gather_owncoin(Holder::Alice, unstake_params.output, None)?;
-
-    // Verify values match
-    assert!(alice_unstake_request_oc.note.value == alice_unstaked_oc.note.value);
+    th.execute_unstake(&HOLDERS, &Holder::Alice, current_slot, &alice_unstake_request_oc).await?;
 
     // Statistics
     th.statistics();

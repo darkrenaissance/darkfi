@@ -335,6 +335,8 @@ async fn main() -> Result<()> {
             TauSubcommand::Switch { workspace } => {
                 if tau.switch_ws(workspace.clone()).await? {
                     println!("You are now on \"{}\" workspace", workspace);
+                } else {
+                    println!("Workspace \"{}\" is not configured", workspace);
                 }
 
                 Ok(())

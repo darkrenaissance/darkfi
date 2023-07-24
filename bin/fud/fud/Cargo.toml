@@ -13,22 +13,22 @@ darkfi = {path = "../../../", features = ["dht", "rpc"]}
 darkfi-serial = {path = "../../../src/serial"}
 
 # Misc
-async-trait = "0.1.71"
+async-trait = "0.1.72"
 blake3 = "1.4.1"
 libsqlite3-sys = {version = "0.26.0", features = ["bundled-sqlcipher-vendored-openssl"]}
 log = "0.4.19"
-serde_json = "1.0.100"
+serde_json = "1.0.103"
 url = "2.4.0"
 
 # Daemon
 async-std = "1.12.0"
 easy-parallel = "3.3.0"
 signal-hook-async-std = "0.2.2"
-signal-hook = "0.3.15"
+signal-hook = "0.3.17"
 simplelog = "0.12.1"
 smol = "1.3.0"
 
 # Argument parsing
-serde = {version = "1.0.171", features = ["derive"]}
+serde = {version = "1.0.174", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"

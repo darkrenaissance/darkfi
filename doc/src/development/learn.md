@@ -124,14 +124,16 @@ sought after and rare.
 
 #### Cryptography Researcher
 
-Cryptography researchers create the mathematics or repurpose existing
-algorithms to craft the weapons or implements of change that the
-developers use.  They make use of advanced algebra to exploit the
-boundaries or hard limits set by the universe on reality to create
-cryptographic schemes that obey certain properties. They are in a
-sense reality-hackers. They hack reality to create systems that obey
-objective properties due to the underlying mathematics. Needless to
-say, the advanced cryptographer is a good mathematician.
+Cryptography researchers craft the weapons or implements of change
+that developers use.  They use advanced algebra to exploit the hard
+limits set by the universe on reality and craft cryptographic schemas
+that obey certain properties. They are in a sense reality-hackers. They
+hack reality to create systems that obey objective properties due to
+the underlying mathematics.
+
+Cryptography researchers create mathematics and repurpose existing
+algorithms in their schemas. Needless to say, the advanced cryptographer
+is a good mathematician.
 
 For cryptography, you will study ["Abstract Algebra"](https://agorism.dev/book/math/algebra/%28Dover%20Books%20on%20Mathematics%29%20Charles%20C%20Pinter%20-%20A%20Book%20of%20Abstract%20Algebra-Dover%20Publications%20%282010%29.pdf) by Pinter, and starting with simple cryptographic schemes
 gradually move towards learning more complex ones. You will prototype
@@ -172,15 +174,6 @@ and participating in crypto communities.
 2. Watch [Finematics videos](https://www.youtube.com/c/Finematics/videos).
 3. Begin the initial stage listed above.
 4. Follow the instructions on the Darkfi Book and run [ircd](Book https://darkrenaissance.github.io/darkfi/misc/ircd/ircd.html) to connect with the team.
-
-## Further Reading
-
-### Current Situation and Macro Overview
-
-* [Gensler Vows Action Against DeFi](https://thedefiant.io/gensler-sec-regulate-all-crypto/)
-* [Crypto Mega Theses](https://multicoin.capital/2019/04/24/multicoin-investment-thesis/)
-* [The Future of DeFi Must be No KYC](https://medium.com/@Austerity_Sucks/the-future-of-defi-must-be-no-kyc-7ff4578bd72e)
-* [Every single Bitcoin product banned in the UK as regulators crack down on crypto](https://www.mirror.co.uk/money/every-single-bitcoin-product-banned-22800240)
 
 ## Further Reading
 

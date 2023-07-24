@@ -249,6 +249,7 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
 #[cfg(test)]
 mod tests {
     use super::*;
+    use darkfi_sdk::crypto::pasta_prelude::PrimeField;
     use halo2_proofs::{
         circuit::{floor_planner, Value},
         dev::{CircuitLayout, MockProver},
@@ -268,6 +269,7 @@ mod tests {
                 type Config =
                     (LessThanConfig<$window_size, $num_bits, $num_windows>, Column<Advice>);
                 type FloorPlanner = floor_planner::V1;
+                type Params = ();
 
                 fn without_witnesses(&self) -> Self {
                     Self { a: Value::unknown(), b: Value::unknown() }
@@ -336,26 +338,20 @@ mod tests {
         test_circuit!(3, 64, 22);
         let k = 5;
 
-        let valid_a_vals = vec![pallas::Base::from(13), pallas::Base::zero(), pallas::Base::one()];
-        let valid_b_vals = vec![
-            pallas::Base::from(15),
-            pallas::Base::from(u64::MAX),
-            pallas::Base::from(rand::random::<u64>()),
+        let valid_pairs = [
+            (pallas::Base::from(13), pallas::Base::from(15)),
+            (pallas::Base::ZERO, pallas::Base::from(u64::MAX)),
+            (pallas::Base::ONE, pallas::Base::from(rand::random::<u64>())),
         ];
 
-        let invalid_a_vals = vec![
-            pallas::Base::from(14),
-            pallas::Base::from(u64::MAX),
-            pallas::Base::zero(),
-            pallas::Base::one(),
-            pallas::Base::from(u64::MAX),
-        ];
-        let invalid_b_vals = vec![
-            pallas::Base::from(11),
-            pallas::Base::zero(),
-            pallas::Base::zero(),
-            pallas::Base::one(),
-            pallas::Base::from(u64::MAX),
+        let invalid_pairs = [
+            (pallas::Base::from(14), pallas::Base::from(11)),
+            (pallas::Base::from(u64::MAX), pallas::Base::ZERO),
+            (pallas::Base::ZERO, pallas::Base::ZERO),
+            (pallas::Base::ONE, pallas::Base::ONE),
+            (pallas::Base::ONE, pallas::Base::ZERO),
+            (pallas::Base::from(u64::MAX), pallas::Base::from(u64::MAX)),
+            //FIXME: (pallas::Base::from(u64::MAX), pallas::Base::from(u64::MAX) + pallas::Base::ONE),
         ];
 
         use plotters::prelude::*;
@@ -367,26 +363,78 @@ mod tests {
             .into_drawing_area();
         CircuitLayout::default().render(k, &circuit, &root).unwrap();
 
-        for i in 0..valid_a_vals.len() {
-            let a = valid_a_vals[i];
-            let b = valid_b_vals[i];
-
+        for (a, b) in valid_pairs {
             println!("64 bit (valid) {:?} < {:?} check", a, b);
-
             let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
-
             let prover = MockProver::run(k, &circuit, vec![]).unwrap();
             prover.assert_satisfied();
         }
 
-        for i in 0..invalid_a_vals.len() {
-            let a = invalid_a_vals[i];
-            let b = invalid_b_vals[i];
-
+        for (a, b) in invalid_pairs {
             println!("64 bit (invalid) {:?} < {:?} check", a, b);
-
             let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            assert!(prover.verify().is_err())
+        }
+    }
 
+    #[test]
+    fn less_than_253() {
+        test_circuit!(3, 253, 85);
+        let k = 7;
+
+        const P_MINUS_1: pallas::Base = pallas::Base::from_raw([
+            0x992d30ed00000000,
+            0x224698fc094cf91b,
+            0x0000000000000000,
+            0x4000000000000000,
+        ]);
+
+        // 2^253 - 1. This is the maximum we can check.
+        const MAX_253: pallas::Base = pallas::Base::from_raw([
+            0xFFFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+            0xFFFFFFFFFFFFFFFF,
+            0x1FFFFFFFFFFFFFFF,
+        ]);
+
+        let valid_pairs = [
+            (pallas::Base::ZERO, pallas::Base::ONE),
+            (pallas::Base::from(u64::MAX), pallas::Base::from(u64::MAX) + pallas::Base::ONE),
+            (
+                pallas::Base::from_u128(u128::MAX),
+                pallas::Base::from_u128(u128::MAX) + pallas::Base::ONE,
+            ),
+            (MAX_253 - pallas::Base::from(2), MAX_253 - pallas::Base::ONE),
+            (MAX_253 - pallas::Base::ONE, MAX_253),
+            (MAX_253, MAX_253 + pallas::Base::ONE), // <-- Is this legit??
+        ];
+
+        let invalid_pairs = [
+            (pallas::Base::ZERO, pallas::Base::ZERO),
+            (pallas::Base::ONE, pallas::Base::ZERO),
+            (P_MINUS_1 - pallas::Base::ONE, P_MINUS_1),
+            (P_MINUS_1, P_MINUS_1),
+            (P_MINUS_1, pallas::Base::ZERO),
+            (MAX_253, MAX_253),
+            (MAX_253, pallas::Base::ZERO),
+            (MAX_253, pallas::Base::ONE),
+            (MAX_253 + pallas::Base::ONE, pallas::Base::ZERO),
+            (MAX_253 + pallas::Base::ONE, pallas::Base::ONE),
+            (MAX_253 + pallas::Base::ONE, MAX_253 + pallas::Base::ONE),
+            (MAX_253 + pallas::Base::ONE, MAX_253 + pallas::Base::from(2)),
+        ];
+
+        for (a, b) in valid_pairs {
+            println!("253 bit (valid) {:?} < {:?} check", a, b);
+            let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
+            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
+            prover.assert_satisfied();
+        }
+
+        for (a, b) in invalid_pairs {
+            println!("253 bit (invalid) {:?} < {:?} check", a, b);
+            let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
             let prover = MockProver::run(k, &circuit, vec![]).unwrap();
             assert!(prover.verify().is_err())
         }

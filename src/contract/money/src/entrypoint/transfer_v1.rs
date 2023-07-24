@@ -18,8 +18,8 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_base, pedersen_commitment_u64, ContractId,
-        MerkleNode, PublicKey, DARK_TOKEN_ID,
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode,
+        PublicKey, DARK_TOKEN_ID,
     },
     db::{db_contains_key, db_get, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -61,7 +61,6 @@ pub(crate) fn money_transfer_get_metadata_v1(
     // anonymous inputs
     for input in &params.inputs {
         let value_coords = input.value_commit.to_affine().coordinates().unwrap();
-        let token_coords = input.token_commit.to_affine().coordinates().unwrap();
         let (sig_x, sig_y) = input.signature_public.xy();
 
         // It is very important that these are in the same order as the
@@ -73,8 +72,7 @@ pub(crate) fn money_transfer_get_metadata_v1(
                 input.nullifier.inner(),
                 *value_coords.x(),
                 *value_coords.y(),
-                *token_coords.x(),
-                *token_coords.y(),
+                input.token_commit,
                 input.merkle_root.inner(),
                 input.user_data_enc,
                 input.spend_hook,
@@ -89,17 +87,10 @@ pub(crate) fn money_transfer_get_metadata_v1(
     // Grab the pedersen commitments from the anonymous outputs
     for output in &params.outputs {
         let value_coords = output.value_commit.to_affine().coordinates().unwrap();
-        let token_coords = output.token_commit.to_affine().coordinates().unwrap();
 
         zk_public_inputs.push((
             MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string(),
-            vec![
-                output.coin.inner(),
-                *value_coords.x(),
-                *value_coords.y(),
-                *token_coords.x(),
-                *token_coords.y(),
-            ],
+            vec![output.coin.inner(), *value_coords.x(), *value_coords.y(), output.token_commit],
         ));
     }
 
@@ -247,7 +238,7 @@ pub(crate) fn money_transfer_process_instruction_v1(
         params
             .clear_inputs
             .iter()
-            .any(|x| pedersen_commitment_base(x.token_id.inner(), x.token_blind) != tokcom);
+            .any(|x| poseidon_hash([x.token_id.inner(), x.token_blind]) != tokcom);
 
     if failed_tokcom {
         msg!("[TransferV1] Error: Token commitments do not match");

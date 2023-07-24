@@ -1,9 +1,14 @@
+# The k parameter defining the number of rows used in our circuit (2^k)
+k = 13;
+
+# The constants we define for our circuit
 constant "Mint_V1" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,
 	EcFixedPointBase NULLIFIER_K,
 }
 
+# The witness values we define for our circuit
 witness "Mint_V1" {
 	# X coordinate for public key
 	Base pub_x,
@@ -22,9 +27,10 @@ witness "Mint_V1" {
 	# Random blinding factor for the value commitment
 	Scalar value_blind,
 	# Random blinding factor for the token ID
-	Scalar token_blind,
+	Base token_blind,
 }
 
+# The definition of our circuit
 circuit "Mint_V1" {
 	# Poseidon hash of the coin
 	C = poseidon_hash(
@@ -47,14 +53,10 @@ circuit "Mint_V1" {
 	constrain_instance(ec_get_x(value_commit));
 	constrain_instance(ec_get_y(value_commit));
 
-	# Pedersen commitment for coin's token ID
-	tcv = ec_mul_base(token, NULLIFIER_K);
-	tcr = ec_mul(token_blind, VALUE_COMMIT_RANDOM);
-	token_commit = ec_add(tcv, tcr);
-	# Since token_commit is also a curve point, we'll do the same
-	# coordinate dance:
-	constrain_instance(ec_get_x(token_commit));
-	constrain_instance(ec_get_y(token_commit));
+	# Commitment for coin's token ID. We do a poseidon hash since it's
+	# cheaper than EC operations and doesn't need the homomorphic prop.
+	token_commit = poseidon_hash(token, token_blind);
+	constrain_instance(token_commit);
 
 	# At this point we've enforced all of our public inputs.
 }

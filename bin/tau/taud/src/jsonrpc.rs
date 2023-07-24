@@ -326,6 +326,7 @@ impl JsonRpcInterface {
             *s = ws
         } else {
             warn!("Workspace \"{}\" is not configured", ws);
+            return Ok(json!(false))
         }
 
         Ok(json!(true))

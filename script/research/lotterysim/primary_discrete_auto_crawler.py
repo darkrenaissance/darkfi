@@ -39,7 +39,7 @@ highest_gain = (KP_SEARCH, KI_SEARCH, KD_SEARCH)
 
 parser = ArgumentParser()
 parser.add_argument('-p', '--high-precision', action='store_false', default=False)
-parser.add_argument('-r', '--randomizenodes', action='store_true', default=True)
+parser.add_argument('-r', '--randomizenodes', action='store_false', default=True)
 parser.add_argument('-t', '--rand-running-time', action='store_true', default=True)
 parser.add_argument('-d', '--debug', action='store_false')
 args = parser.parse_args()
@@ -49,7 +49,7 @@ rand_running_time = args.rand_running_time
 debug = args.debug
 
 def experiment(controller_type=CONTROLLER_TYPE_DISCRETE, rkp=0, rki=0, rkd=0, distribution=[], hp=True):
-    dt = DarkfiTable(ERC20DRK, RUNNING_TIME, controller_type, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0.03840000000000491, r_kp=rkp, r_ki=rki, r_kd=rkd)
+    dt = DarkfiTable(ERC20DRK, RUNNING_TIME, controller_type, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0.038400000000004f91, r_kp=rkp, r_ki=rki, r_kd=rkd)
     RND_NODES = random.randint(5, NODES) if randomize_nodes else NODES
     for idx in range(0,RND_NODES):
         darkie = Darkie(distribution[idx], strategy=random_strategy(EPOCH_LENGTH))

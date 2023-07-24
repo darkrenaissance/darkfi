@@ -60,6 +60,26 @@ pub struct ConsensusGenesisStakeCallBuilder {
 
 impl ConsensusGenesisStakeCallBuilder {
     pub fn build(&self) -> Result<ConsensusGenesisStakeCallDebris> {
+        // We just create the pedersen commitment blinds here. We simply
+        // enforce that the clear input and the anon output have the same
+        // commitments.
+        let value_blind = pallas::Scalar::random(&mut OsRng);
+        let token_blind = pallas::Base::random(&mut OsRng);
+        let reward_blind = pallas::Scalar::random(&mut OsRng);
+
+        // FIXME: The coin's serial number here is arbitrary, and allows grinding attacks.
+        let serial = pallas::Base::random(&mut OsRng);
+
+        self.build_with_params(value_blind, token_blind, reward_blind, serial)
+    }
+
+    pub fn build_with_params(
+        &self,
+        value_blind: pallas::Scalar,
+        token_blind: pallas::Base,
+        reward_blind: pallas::Scalar,
+        serial: pallas::Base,
+    ) -> Result<ConsensusGenesisStakeCallDebris> {
         debug!("Building Consensus::GenesisStakeV1 contract call");
         let value = self.amount;
         assert!(value != 0);
@@ -70,16 +90,6 @@ impl ConsensusGenesisStakeCallBuilder {
 
         // With genesis, our epoch is 0.
         let epoch = 0;
-
-        // We just create the pedersen commitment blinds here. We simply
-        // enforce that the clear input and the anon output have the same
-        // commitments.
-        let value_blind = pallas::Scalar::random(&mut OsRng);
-        let token_blind = pallas::Scalar::random(&mut OsRng);
-        let reward_blind = pallas::Scalar::random(&mut OsRng);
-
-        // FIXME: The coin's serial number here is arbitrary, and allows grinding attacks.
-        let serial = pallas::Base::random(&mut OsRng);
 
         // Parameters for the clear input
         let c_input = ClearInput {

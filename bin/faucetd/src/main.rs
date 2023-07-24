@@ -238,17 +238,16 @@ impl Faucetd {
         let (mint_zkbin, _): (Vec<u8>, Vec<u8>) = deserialize(&mint_zkbytes)?;
         let (burn_zkbin, _): (Vec<u8>, Vec<u8>) = deserialize(&burn_zkbytes)?;
 
-        let k = 13;
         let mint_zkbin = ZkBinary::decode(&mint_zkbin)?;
-        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), mint_zkbin.clone());
+        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
 
         let burn_zkbin = ZkBinary::decode(&burn_zkbin)?;
-        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), burn_zkbin.clone());
+        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin)?, &burn_zkbin);
 
         info!("Creating mint circuit proving key");
-        let mint_provingkey = ProvingKey::build(k, &mint_circuit);
+        let mint_provingkey = ProvingKey::build(mint_zkbin.k, &mint_circuit);
         info!("Creating burn circuit proving key");
-        let burn_provingkey = ProvingKey::build(k, &burn_circuit);
+        let burn_provingkey = ProvingKey::build(burn_zkbin.k, &burn_circuit);
 
         {
             let provingkeys = vec![

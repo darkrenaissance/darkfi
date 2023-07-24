@@ -236,6 +236,9 @@ pub enum Error {
     #[error("Public inputs are invalid")]
     InvalidPublicInputsError,
 
+    #[error("Coin is not the slot block producer")]
+    CoinIsNotSlotProducer,
+
     #[error("Error during leader proof verification")]
     LeaderProofVerification,
 
@@ -313,9 +316,6 @@ pub enum Error {
 
     #[error("Block {0} already in database")]
     BlockAlreadyExists(String),
-
-    #[error("Didn't provide blocks' previous")]
-    BlockPreviousMissing(),
 
     #[error("Block {0} not found in database")]
     BlockNotFound(String),
@@ -496,6 +496,9 @@ impl Error {
 /// Transaction verification errors
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum TxVerifyFailed {
+    #[error("Transaction {0} already exists")]
+    AlreadySeenTx(String),
+
     #[error("Invalid transaction signature")]
     InvalidSignature,
 

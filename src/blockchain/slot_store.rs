@@ -49,12 +49,12 @@ pub fn validate_slot(
     }
 
     // Check previous block hash (2)
-    if !slot.fork_hashes.contains(previous_block_hash) {
+    if !slot.previous.last_hashes.contains(previous_block_hash) {
         return error
     }
 
     // Check previous block sequence (3)
-    if !slot.fork_previous_hashes.contains(previous_block_sequence) {
+    if !slot.previous.second_to_last_hashes.contains(previous_block_sequence) {
         return error
     }
 
@@ -64,12 +64,14 @@ pub fn validate_slot(
     }
 
     // Check previous slot error (5)
-    if slot.previous_slot_error != previous.error {
+    if slot.previous.error != previous.pid.error {
         return error
     }
 
     // Check PID output for this slot (6)
-    if (slot.f, slot.error, slot.sigma1, slot.sigma2) != slot_pid_output(previous) {
+    if (slot.pid.f, slot.pid.error, slot.pid.sigma1, slot.pid.sigma2) !=
+        slot_pid_output(previous, slot.previous.producers)
+    {
         return error
     }
 

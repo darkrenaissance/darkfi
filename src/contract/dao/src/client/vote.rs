@@ -36,7 +36,7 @@ use darkfi::{
 };
 
 use super::{DaoInfo, DaoProposalInfo};
-use crate::model::{DaoVoteParams, DaoVoteParamsInput};
+use crate::model::{DaoProposalBulla, DaoVoteParams, DaoVoteParamsInput};
 
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct DaoVoteNote {
@@ -157,7 +157,7 @@ impl DaoVoteCall {
                 sig_y,
             ];
 
-            let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin.clone());
+            let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin);
             debug!(target: "dao", "input_proof Proof::create()");
             let input_proof = Proof::create(burn_pk, &[circuit], &public_inputs, &mut OsRng)
                 .expect("DAO::vote() proving error!");
@@ -196,14 +196,14 @@ impl DaoVoteCall {
             self.dao.bulla_blind,
         ]);
 
-        let proposal_bulla = poseidon_hash::<6>([
+        let proposal_bulla = DaoProposalBulla::from(poseidon_hash::<6>([
             proposal_dest_x,
             proposal_dest_y,
             proposal_amount,
             self.proposal.token_id.inner(),
             dao_bulla,
             self.proposal.blind,
-        ]);
+        ]));
 
         let vote_option = self.vote_option as u64;
         assert!(vote_option == 0 || vote_option == 1);
@@ -243,7 +243,7 @@ impl DaoVoteCall {
 
         let public_inputs = vec![
             token_commit,
-            proposal_bulla,
+            proposal_bulla.inner(),
             // this should be a value commit??
             *yes_vote_commit_coords.x(),
             *yes_vote_commit_coords.y(),
@@ -251,7 +251,7 @@ impl DaoVoteCall {
             *all_vote_commit_coords.y(),
         ];
 
-        let circuit = ZkCircuit::new(prover_witnesses, main_zkbin.clone());
+        let circuit = ZkCircuit::new(prover_witnesses, main_zkbin);
 
         debug!(target: "dao", "main_proof = Proof::create()");
         let main_proof = Proof::create(main_pk, &[circuit], &public_inputs, &mut OsRng)

@@ -31,9 +31,8 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        contract_id::MONEY_CONTRACT_ID,
-        pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
-        poseidon_hash, PublicKey, SecretKey, TokenId,
+        contract_id::MONEY_CONTRACT_ID, pedersen::pedersen_commitment_u64, poseidon_hash,
+        PublicKey, SecretKey, TokenId,
     },
     pasta::pallas,
     tx::ContractCall,
@@ -52,7 +51,7 @@ pub struct PartialSwapData {
     value_pair: (u64, u64),
     token_pair: (TokenId, TokenId),
     value_blinds: Vec<pallas::Scalar>,
-    token_blinds: Vec<pallas::Scalar>,
+    token_blinds: Vec<pallas::Base>,
 }
 
 impl fmt::Display for PartialSwapData {
@@ -123,16 +122,17 @@ impl Drk {
         let mint_zkbin = ZkBinary::decode(&mint_zkbin.1)?;
         let burn_zkbin = ZkBinary::decode(&burn_zkbin.1)?;
 
-        let k = 13;
-        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), mint_zkbin.clone());
-        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), burn_zkbin.clone());
+        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
+        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin)?, &burn_zkbin);
 
         // Since we're creating the first half, we generate the blinds.
         let value_blinds = [pallas::Scalar::random(&mut OsRng), pallas::Scalar::random(&mut OsRng)];
-        let token_blinds = [pallas::Scalar::random(&mut OsRng), pallas::Scalar::random(&mut OsRng)];
+        let token_blinds = [pallas::Base::random(&mut OsRng), pallas::Base::random(&mut OsRng)];
 
         // Now we should have everything we need to build the swap half
         eprintln!("Creating Mint and Burn circuit proving keys");
+        let mint_pk = ProvingKey::build(mint_zkbin.k, &mint_circuit);
+        let burn_pk = ProvingKey::build(burn_zkbin.k, &burn_circuit);
         let builder = SwapCallBuilder {
             pubkey: address,
             value_send,
@@ -147,9 +147,9 @@ impl Drk {
             coin: burn_coin,
             tree,
             mint_zkbin,
-            mint_pk: ProvingKey::build(k, &mint_circuit),
+            mint_pk,
             burn_zkbin,
-            burn_pk: ProvingKey::build(k, &burn_circuit),
+            burn_pk,
         };
 
         eprintln!("Building first half of the swap transaction");
@@ -215,14 +215,15 @@ impl Drk {
         let mint_zkbin = ZkBinary::decode(&mint_zkbin.1)?;
         let burn_zkbin = ZkBinary::decode(&burn_zkbin.1)?;
 
-        let k = 13;
-        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), mint_zkbin.clone());
-        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), burn_zkbin.clone());
+        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
+        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin)?, &burn_zkbin);
 
         // TODO: Maybe some kind of verification at this point
 
         // Now we should have everything we need to build the swap half
         eprintln!("Creating Mint and Burn circuit proving keys");
+        let mint_pk = ProvingKey::build(mint_zkbin.k, &mint_circuit);
+        let burn_pk = ProvingKey::build(burn_zkbin.k, &burn_circuit);
         let builder = SwapCallBuilder {
             pubkey: address,
             value_send: partial.value_pair.1,
@@ -237,9 +238,9 @@ impl Drk {
             coin: burn_coin,
             tree,
             mint_zkbin,
-            mint_pk: ProvingKey::build(k, &mint_circuit),
+            mint_pk,
             burn_zkbin,
-            burn_pk: ProvingKey::build(k, &burn_circuit),
+            burn_pk,
         };
 
         eprintln!("Building second half of the swap transaction");
@@ -370,7 +371,7 @@ impl Drk {
             }
 
             let valcom = pedersen_commitment_u64(note.value, note.value_blind);
-            let tokcom = pedersen_commitment_base(note.token_id.inner(), note.token_blind);
+            let tokcom = poseidon_hash([note.token_id.inner(), note.token_blind]);
 
             if valcom != params.outputs[output_idx].value_commit {
                 eprintln!(

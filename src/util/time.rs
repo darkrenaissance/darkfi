@@ -50,6 +50,16 @@ impl TimeKeeper {
         Self { genesis_ts, epoch_length, slot_time, verifying_slot }
     }
 
+    /// Generate a Timekeeper for current slot
+    pub fn current(&self) -> Self {
+        Self {
+            genesis_ts: self.genesis_ts,
+            epoch_length: self.epoch_length,
+            slot_time: self.slot_time,
+            verifying_slot: self.current_slot(),
+        }
+    }
+
     /// Calculates current epoch.
     pub fn current_epoch(&self) -> u64 {
         self.slot_epoch(self.current_slot())

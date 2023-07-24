@@ -9,21 +9,34 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
+# Darkfi
 darkfi = {path = "../../", features = ["async-runtime", "util"]}
+darkfi-consensus-contract = {path = "../../src/contract/consensus"}
+darkfi-money-contract = {path = "../../src/contract/money"}
 darkfi-contract-test-harness = {path = "../../src/contract/test-harness"}
 darkfi-sdk = {path = "../../src/sdk"}
+darkfi-serial = {path = "../../src/serial"}
+
+# Misc
+blake3 = "1.4.1"
+bs58 = "0.5.0"
 log = "0.4.19"
 sled = "0.34.7"
+
+# JSON-RPC
+async-trait = "0.1.72"
+serde_json = "1.0.103"
+url = "2.4.0"
 
 # Daemon
 async-std = "1.12.0"
 easy-parallel = "3.3.0"
 signal-hook-async-std = "0.2.2"
-signal-hook = "0.3.15"
+signal-hook = "0.3.17"
 simplelog = "0.12.1"
 smol = "1.3.0"
 
 # Argument parsing
-serde = {version = "1.0.171", features = ["derive"]}
+serde = {version = "1.0.174", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"

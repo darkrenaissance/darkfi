@@ -23,7 +23,10 @@ use std::{
 };
 
 use anyhow::Result;
-use darkfi::consensus::lead_coin::LeadCoin;
+use darkfi::{
+    consensus::lead_coin::LeadCoin,
+    validator::consensus::float_10::{fbig2base, Float10},
+};
 use darkfi_sdk::{crypto::pasta_prelude::PrimeField, pasta::pallas};
 
 /// Generate a string represenation of a `pallas::Base` constant
@@ -51,6 +54,13 @@ fn main() -> Result<()> {
     source.push_str(&to_constant("MU_Y_PREFIX", pallas::Base::from(22), true));
     source.push_str(&to_constant("MU_RHO_PREFIX", pallas::Base::from(5), true));
     source.push_str(&to_constant("HEADSTART", LeadCoin::headstart(), true));
+
+    // P
+    const P: &str = "28948022309329048855892746252171976963363056481941560715954676764349967630337";
+    let p = Float10::try_from(P).unwrap();
+    let one = Float10::try_from("1").unwrap();
+    source.push_str(&to_constant("P", fbig2base(p.clone()), false));
+    source.push_str(&to_constant("P_MINUS_1", fbig2base(p - one), false));
 
     let mut cmd = Command::new("rustfmt");
     cmd.stdin(Stdio::piped()).stdout(Stdio::piped());

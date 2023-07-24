@@ -23,6 +23,9 @@
 /// Error emitter
 mod error;
 
+/// Constants
+pub mod constants;
+
 /// Language opcodes
 pub mod opcode;
 pub use opcode::Opcode;

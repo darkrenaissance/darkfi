@@ -8,6 +8,7 @@ if exists("b:current_syntax")
 endif
 
 syn keyword zkasKeyword 
+    \ k
     \ constant
     \ witness
     \ circuit

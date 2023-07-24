@@ -13,7 +13,7 @@ blake3 = "1.4.1"
 darkfi-sdk = { path = "../../sdk" }
 darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
 darkfi-money-contract = { path = "../money", features = ["no-entrypoint"] }
-thiserror = "1.0.43"
+thiserror = "1.0.44"
 
 # The following dependencies are used for the client API and
 # probably shouldn't be in WASM

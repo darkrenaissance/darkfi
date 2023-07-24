@@ -21,15 +21,17 @@ use std::time::Instant;
 use darkfi::{tx::Transaction, Result};
 use darkfi_consensus_contract::{client::stake_v1::ConsensusStakeCallBuilder, ConsensusFunction};
 use darkfi_money_contract::{
-    client::{stake_v1::MoneyStakeCallBuilder, OwnCoin},
+    client::{stake_v1::MoneyStakeCallBuilder, ConsensusOwnCoin, OwnCoin},
     model::ConsensusStakeParamsV1,
     MoneyFunction, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{MerkleNode, SecretKey, CONSENSUS_CONTRACT_ID, MONEY_CONTRACT_ID},
+    pasta::pallas,
     ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
+use log::info;
 use rand::rngs::OsRng;
 
 use super::{Holder, TestHarness, TxAction};
@@ -37,16 +39,22 @@ use super::{Holder, TestHarness, TxAction};
 impl TestHarness {
     pub async fn stake(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         slot: u64,
-        owncoin: OwnCoin,
+        owncoin: &OwnCoin,
+        serial: pallas::Base,
     ) -> Result<(Transaction, ConsensusStakeParamsV1, SecretKey)> {
-        let wallet = self.holders.get(&holder).unwrap();
+        let wallet = self.holders.get(holder).unwrap();
+
         let (mint_pk, mint_zkbin) =
-            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
-        let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
+            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
+
+        let (burn_pk, burn_zkbin) =
+            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
+
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusStake).unwrap();
+
         let epoch = wallet.validator.read().await.consensus.time_keeper.slot_epoch(slot);
         let timer = Instant::now();
 
@@ -73,14 +81,14 @@ impl TestHarness {
 
         // Building Consensus::Stake params
         let consensus_stake_call_debris = ConsensusStakeCallBuilder {
-            coin: owncoin,
+            coin: owncoin.clone(),
             epoch,
             value_blind: money_stake_value_blind,
             money_input: money_stake_params.input.clone(),
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
         }
-        .build()?;
+        .build_with_params(serial)?;
 
         let (consensus_stake_params, consensus_stake_proofs, consensus_stake_secret_key) = (
             consensus_stake_call_debris.params,
@@ -118,14 +126,16 @@ impl TestHarness {
 
     pub async fn execute_stake_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         params: &ConsensusStakeParamsV1,
         slot: u64,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
+
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusStake).unwrap();
+
         let timer = Instant::now();
 
         wallet.validator.read().await.add_transactions(&[tx.clone()], slot, true).await?;
@@ -133,5 +143,42 @@ impl TestHarness {
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
+    }
+
+    // Execute a stake transaction and gather the coin
+    pub async fn execute_stake(
+        &mut self,
+        holders: &[Holder],
+        holder: &Holder,
+        current_slot: u64,
+        oc: &OwnCoin,
+        serial: u64,
+    ) -> Result<ConsensusOwnCoin> {
+        info!(target: "consensus", "[{holder:?}] =================");
+        info!(target: "consensus", "[{holder:?}] Building stake tx");
+        info!(target: "consensus", "[{holder:?}] =================");
+        let (stake_tx, stake_params, stake_secret_key) =
+            self.stake(holder, current_slot, oc, pallas::Base::from(serial)).await?;
+
+        for h in holders {
+            info!(target: "consensus", "[{h:?}] =============================");
+            info!(target: "consensus", "[{h:?}] Executing {holder:?} stake tx");
+            info!(target: "consensus", "[{h:?}] =============================");
+            self.execute_stake_tx(h, &stake_tx, &stake_params, current_slot).await?;
+        }
+
+        self.assert_trees(holders);
+
+        // Gather new staked owncoin
+        let staked_oc = self.gather_consensus_staked_owncoin(
+            holder,
+            &stake_params.output,
+            Some(stake_secret_key),
+        )?;
+
+        // Verify values match
+        assert!(oc.note.value == staked_oc.note.value);
+
+        Ok(staked_oc)
     }
 }

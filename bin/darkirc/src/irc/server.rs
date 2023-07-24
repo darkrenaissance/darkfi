@@ -278,7 +278,7 @@ impl IrcServer {
         let listener = TcpListener::bind(listenaddr).await?;
 
         let acceptor = match self.settings.irc_listen.scheme() {
-            "tls" => {
+            "tcp+tls" => {
                 // openssl genpkey -algorithm ED25519 > example.com.key
                 // openssl req -new -out example.com.csr -key example.com.key
                 // openssl x509 -req -days 700 -in example.com.csr -signkey example.com.key -out example.com.crt

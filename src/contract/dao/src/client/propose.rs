@@ -34,7 +34,7 @@ use darkfi::{
     Result,
 };
 
-use crate::model::{DaoProposeParams, DaoProposeParamsInput};
+use crate::model::{DaoProposalBulla, DaoProposeParams, DaoProposeParamsInput};
 
 use super::DaoInfo;
 
@@ -154,7 +154,7 @@ impl DaoProposeCall {
                 sig_x,
                 sig_y,
             ];
-            let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin.clone());
+            let circuit = ZkCircuit::new(prover_witnesses, burn_zkbin);
 
             let proving_key = &burn_pk;
             let input_proof = Proof::create(proving_key, &[circuit], &public_inputs, &mut OsRng)
@@ -195,14 +195,14 @@ impl DaoProposeCall {
 
         let dao_leaf_position: u64 = self.dao_leaf_position.into();
 
-        let proposal_bulla = poseidon_hash::<6>([
+        let proposal_bulla = DaoProposalBulla::from(poseidon_hash::<6>([
             proposal_dest_x,
             proposal_dest_y,
             proposal_amount,
             self.proposal.token_id.inner(),
             dao_bulla,
             self.proposal.blind,
-        ]);
+        ]));
 
         let prover_witnesses = vec![
             // Proposers total number of gov tokens
@@ -231,11 +231,11 @@ impl DaoProposeCall {
         let public_inputs = vec![
             token_commit,
             self.dao_merkle_root.inner(),
-            proposal_bulla,
+            proposal_bulla.inner(),
             *total_funds_coords.x(),
             *total_funds_coords.y(),
         ];
-        let circuit = ZkCircuit::new(prover_witnesses, main_zkbin.clone());
+        let circuit = ZkCircuit::new(prover_witnesses, main_zkbin);
 
         let main_proof = Proof::create(main_pk, &[circuit], &public_inputs, &mut OsRng)
             .expect("DAO::propose() proving error!");

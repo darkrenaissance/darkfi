@@ -35,7 +35,7 @@ use darkfi::{
 use crate::{
     crypto::{decrypt_privmsg, decrypt_target, encrypt_privmsg},
     settings,
-    settings::RPL,
+    settings::{Nick, UserMode, RPL},
     ChannelInfo, PrivMsgEvent,
 };
 
@@ -152,15 +152,29 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                 return Ok(())
             }
 
+            let mut encrypted = false;
             if let Some(salt_box) = &chan_info.salt_box {
                 decrypt_privmsg(salt_box, &mut msg);
+                encrypted = true;
                 debug!("[P2P] Decrypted received message: {:?}", msg);
             }
 
-            // add the nickname to the channel's names
-            if !chan_info.names.contains(&msg.nick) {
-                chan_info.names.push(msg.nick.clone());
-            }
+            // Add the nickname to the channel's names
+            let mut nick: Nick = msg.nick.clone().into();
+            let _mode_change = if chan_info.names.contains(&nick) {
+                let mut n = chan_info.names.get(&nick).unwrap().clone();
+                let mode_change = if encrypted {
+                    n.set_mode(UserMode::Voice)
+                } else {
+                    n.unset_mode(UserMode::Voice)
+                };
+                chan_info.names.insert(n);
+                mode_change
+            } else {
+                let mode_change = if encrypted { nick.set_mode(UserMode::Voice) } else { None };
+                chan_info.names.insert(nick);
+                mode_change
+            };
 
             self.reply(&msg.to_string()).await?;
         } else if self.irc_config.is_cap_end && self.irc_config.is_nick_init {
@@ -223,11 +237,11 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             _ => warn!("[CLIENT {}] Unimplemented `{}` command", self.address, command),
         }
 
-        self.registre().await?;
+        self.register().await?;
         Ok(())
     }
 
-    async fn registre(&mut self) -> Result<()> {
+    async fn register(&mut self) -> Result<()> {
         if !self.irc_config.is_pass_init && self.irc_config.password.is_empty() {
             self.irc_config.is_pass_init = true
         }
@@ -453,7 +467,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                     self.irc_config.nickname,
                     RPL::NameReply as u32,
                     chan,
-                    chan_info.names.join(" ")
+                    chan_info.names()
                 );
 
                 self.reply(&names_reply).await?;

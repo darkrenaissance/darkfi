@@ -37,7 +37,7 @@ struct VariantParts {
 }
 
 /// Calculates the discriminant that will be assigned by the compiler.
-/// See: https://doc.rust-lang.org/reference/items/enumerations.html#assigning-discriminant-values
+/// See: <https://doc.rust-lang.org/reference/items/enumerations.html#assigning-discriminant-values>
 fn discriminant_map(variants: &Punctuated<Variant, Comma>) -> HashMap<Ident, TokenStream> {
     let mut map = HashMap::new();
 

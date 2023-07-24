@@ -38,17 +38,23 @@ impl TestHarness {
     pub fn transfer(
         &mut self,
         amount: u64,
-        holder: Holder,
-        recipient: Holder,
+        holder: &Holder,
+        recipient: &Holder,
         owncoins: &[OwnCoin],
         token_id: TokenId,
     ) -> Result<(Transaction, MoneyTransferParamsV1, Vec<OwnCoin>)> {
-        let wallet = self.holders.get(&holder).unwrap();
-        let rcpt = self.holders.get(&recipient).unwrap().keypair.public;
-        let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
-        let (burn_pk, burn_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
+        let wallet = self.holders.get(holder).unwrap();
+        let rcpt = self.holders.get(recipient).unwrap().keypair.public;
+
+        let (mint_pk, mint_zkbin) =
+            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
+
+        let (burn_pk, burn_zkbin) =
+            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
+
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
+
         let timer = Instant::now();
 
         // We're just going to be using a zero spend-hook and user-data
@@ -105,13 +111,13 @@ impl TestHarness {
 
     pub async fn execute_transfer_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         params: &MoneyTransferParamsV1,
         slot: u64,
         append: bool,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
         let timer = Instant::now();
@@ -129,13 +135,13 @@ impl TestHarness {
 
     pub async fn execute_multiple_transfer_txs(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         txs: &[Transaction],
         txs_params: &Vec<MoneyTransferParamsV1>,
         slot: u64,
         append: bool,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
         let timer = Instant::now();
@@ -155,43 +161,16 @@ impl TestHarness {
 
     pub async fn verify_transfer_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         slot: u64,
     ) -> Result<()> {
-        let wallet = self.holders.get(&holder).unwrap();
+        let wallet = self.holders.get(holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
         let timer = Instant::now();
 
         wallet.validator.read().await.add_transactions(&[tx.clone()], slot, false).await?;
-        tx_action_benchmark.verify_times.push(timer.elapsed());
-
-        Ok(())
-    }
-
-    pub async fn execute_erroneous_transfer_tx(
-        &mut self,
-        holder: Holder,
-        txs: &[Transaction],
-        slot: u64,
-        erroneous: usize,
-    ) -> Result<()> {
-        let wallet = self.holders.get(&holder).unwrap();
-        let tx_action_benchmark =
-            self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
-        let timer = Instant::now();
-
-        let erroneous_txs = wallet
-            .validator
-            .read()
-            .await
-            .add_transactions(txs, slot, false)
-            .await
-            .err()
-            .unwrap()
-            .retrieve_erroneous_txs()?;
-        assert_eq!(erroneous_txs.len(), erroneous);
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())

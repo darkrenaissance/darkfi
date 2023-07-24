@@ -18,7 +18,7 @@
 
 use std::time::Instant;
 
-use darkfi::{tx::Transaction, Result};
+use darkfi::{tx::Transaction, zk::halo2::Field, Result};
 use darkfi_consensus_contract::{
     client::genesis_stake_v1::ConsensusGenesisStakeCallBuilder,
     model::ConsensusGenesisStakeParamsV1, ConsensusFunction,
@@ -26,6 +26,7 @@ use darkfi_consensus_contract::{
 use darkfi_money_contract::CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1;
 use darkfi_sdk::{
     crypto::{MerkleNode, CONSENSUS_CONTRACT_ID},
+    pasta::pallas,
     ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
@@ -36,14 +37,17 @@ use super::{Holder, TestHarness, TxAction};
 impl TestHarness {
     pub fn genesis_stake(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         amount: u64,
     ) -> Result<(Transaction, ConsensusGenesisStakeParamsV1)> {
-        let wallet = self.holders.get(&holder).unwrap();
+        let wallet = self.holders.get(holder).unwrap();
+
         let (mint_pk, mint_zkbin) =
-            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
+            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
+
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusGenesisStake).unwrap();
+
         let timer = Instant::now();
 
         // Building Consensus::GenesisStake params
@@ -54,7 +58,13 @@ impl TestHarness {
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
         }
-        .build()?;
+        .build_with_params(
+            pallas::Scalar::random(&mut OsRng),
+            pallas::Base::random(&mut OsRng),
+            pallas::Scalar::random(&mut OsRng),
+            pallas::Base::from(28),
+        )?;
+
         let (genesis_stake_params, genesis_stake_proofs) =
             (genesis_stake_call_debris.params, genesis_stake_call_debris.proofs);
 
@@ -82,45 +92,20 @@ impl TestHarness {
 
     pub async fn execute_genesis_stake_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         params: &ConsensusGenesisStakeParamsV1,
         slot: u64,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
+
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusGenesisStake).unwrap();
+
         let timer = Instant::now();
 
         wallet.validator.read().await.add_transactions(&[tx.clone()], slot, true).await?;
         wallet.consensus_staked_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
-        tx_action_benchmark.verify_times.push(timer.elapsed());
-
-        Ok(())
-    }
-
-    pub async fn execute_erroneous_genesis_stake_txs(
-        &mut self,
-        holder: Holder,
-        txs: &[Transaction],
-        slot: u64,
-        erroneous: usize,
-    ) -> Result<()> {
-        let wallet = self.holders.get(&holder).unwrap();
-        let tx_action_benchmark =
-            self.tx_action_benchmarks.get_mut(&TxAction::ConsensusGenesisStake).unwrap();
-        let timer = Instant::now();
-
-        let erroneous_txs = wallet
-            .validator
-            .read()
-            .await
-            .add_transactions(txs, slot, false)
-            .await
-            .err()
-            .unwrap()
-            .retrieve_erroneous_txs()?;
-        assert_eq!(erroneous_txs.len(), erroneous);
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())

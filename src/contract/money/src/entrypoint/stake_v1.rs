@@ -17,10 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{
-        pasta_prelude::*, pedersen_commitment_base, ContractId, CONSENSUS_CONTRACT_ID,
-        DARK_TOKEN_ID,
-    },
+    crypto::{pasta_prelude::*, poseidon_hash, ContractId, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID},
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     msg,
@@ -54,7 +51,6 @@ pub(crate) fn money_stake_get_metadata_v1(
     // Grab the pedersen commitments and signature pubkeys from the
     // anonymous input
     let value_coords = input.value_commit.to_affine().coordinates().unwrap();
-    let token_coords = input.token_commit.to_affine().coordinates().unwrap();
     let (sig_x, sig_y) = input.signature_public.xy();
 
     // It is very important that these are in the same order as the
@@ -66,8 +62,7 @@ pub(crate) fn money_stake_get_metadata_v1(
             input.nullifier.inner(),
             *value_coords.x(),
             *value_coords.y(),
-            *token_coords.x(),
-            *token_coords.y(),
+            input.token_commit,
             input.merkle_root.inner(),
             input.user_data_enc,
             pallas::Base::ZERO, // We enforce spend_hook==0
@@ -112,7 +107,7 @@ pub(crate) fn money_stake_process_instruction_v1(
     }
 
     // Only native token can be staked
-    if input.token_commit != pedersen_commitment_base(DARK_TOKEN_ID.inner(), params.token_blind) {
+    if input.token_commit != poseidon_hash([DARK_TOKEN_ID.inner(), params.token_blind]) {
         msg!("[MoneyStakeV1] Error: Input used non-native token");
         return Err(MoneyError::StakeInputNonNativeToken.into())
     }

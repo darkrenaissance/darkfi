@@ -61,6 +61,15 @@ pub struct ConsensusUnstakeCallBuilder {
 
 impl ConsensusUnstakeCallBuilder {
     pub fn build(&self) -> Result<ConsensusUnstakeCallDebris> {
+        let input_value_blind = pallas::Scalar::random(&mut OsRng);
+
+        self.build_with_params(input_value_blind)
+    }
+
+    pub fn build_with_params(
+        &self,
+        input_value_blind: pallas::Scalar,
+    ) -> Result<ConsensusUnstakeCallDebris> {
         info!("Building Consensus::UnstakeV1 contract call");
         assert!(self.owncoin.note.value != 0);
 
@@ -72,7 +81,7 @@ impl ConsensusUnstakeCallBuilder {
             merkle_path,
             secret: self.owncoin.secret,
             note: self.owncoin.note.clone(),
-            value_blind: pallas::Scalar::random(&mut OsRng),
+            value_blind: input_value_blind,
         };
 
         info!("Building Consensus::UnstakeV1 Burn ZK proof");

@@ -87,7 +87,7 @@ pub(crate) fn create_token_freeze_proof(
 
     let prover_witnesses = vec![Witness::Base(Value::known(mint_authority.secret.inner()))];
 
-    let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+    let circuit = ZkCircuit::new(prover_witnesses, zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 
     Ok((proof, public_inputs))

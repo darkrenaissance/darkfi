@@ -69,19 +69,26 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     ////////////////////
     if settings.gen_keypair {
         let secret_key = crypto_box::SecretKey::generate(&mut OsRng);
-        let pub_key = secret_key.public_key();
-        let prv_encoded = bs58::encode(secret_key.to_bytes()).into_string();
-        let pub_encoded = bs58::encode(pub_key.as_bytes()).into_string();
+        let public_key = secret_key.public_key();
+        let secret = bs58::encode(secret_key.to_bytes()).into_string();
+        let public = bs58::encode(public_key.as_bytes()).into_string();
 
-        let kp = KeyPair { private_key: prv_encoded, public_key: pub_encoded };
+        let kp = KeyPair { secret, public };
 
         if settings.output.is_some() {
             let datastore = expand_path(&settings.output.unwrap())?;
             save_json_file(&datastore, &kp)?;
         } else {
-            println!("Generated KeyPair:\n{}", kp);
+            println!("Generated keypair:\n{}", kp);
         }
 
+        return Ok(())
+    }
+
+    if settings.gen_secret {
+        let secret_key = crypto_box::SecretKey::generate(&mut OsRng);
+        let encoded = bs58::encode(secret_key.to_bytes());
+        println!("{}", encoded.into_string());
         return Ok(())
     }
 

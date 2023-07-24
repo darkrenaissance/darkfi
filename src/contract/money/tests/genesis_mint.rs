@@ -26,7 +26,7 @@
 //! with detection of erroneous transactions.
 
 use darkfi::Result;
-use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
+use darkfi_contract_test_harness::{init_logger, Holder, TestHarness, TxAction};
 use darkfi_sdk::crypto::DARK_TOKEN_ID;
 use log::info;
 
@@ -60,15 +60,16 @@ async fn genesis_mint() -> Result<()> {
     info!(target: "money", "[Alice] ========================");
     info!(target: "money", "[Alice] Building genesis mint tx");
     info!(target: "money", "[Alice] ========================");
-    let (genesis_mint_tx, genesis_mint_params) = th.genesis_mint(Holder::Alice, ALICE_INITIAL)?;
+    let (genesis_mint_tx, genesis_mint_params) = th.genesis_mint(&Holder::Alice, ALICE_INITIAL)?;
 
     // We are going to use alice genesis mint transaction to
     // test some malicious cases.
     info!(target: "money", "[Malicious] ==================================");
     info!(target: "money", "[Malicious] Checking duplicate genesis mint tx");
     info!(target: "money", "[Malicious] ==================================");
-    th.execute_erroneous_genesis_mint_tx(
-        Holder::Alice,
+    th.execute_erroneous_txs(
+        TxAction::MoneyGenesisMint,
+        &Holder::Alice,
         &vec![genesis_mint_tx.clone(), genesis_mint_tx.clone()],
         current_slot,
         1,
@@ -78,78 +79,46 @@ async fn genesis_mint() -> Result<()> {
     info!(target: "money", "[Malicious] ============================================");
     info!(target: "money", "[Malicious] Checking genesis mint tx not on genesis slot");
     info!(target: "money", "[Malicious] ============================================");
-    th.execute_erroneous_genesis_mint_tx(
-        Holder::Alice,
+    th.execute_erroneous_txs(
+        TxAction::MoneyGenesisMint,
+        &Holder::Alice,
         &vec![genesis_mint_tx.clone()],
         current_slot + 1,
         1,
     )
     .await?;
-    info!(target: "money", "[Malicious] ===========================");
-    info!(target: "money", "[Malicious] Malicious test cases passed");
-    info!(target: "money", "[Malicious] ===========================");
 
-    info!(target: "money", "[Faucet] ===============================");
-    info!(target: "money", "[Faucet] Executing Alice genesis mint tx");
-    info!(target: "money", "[Faucet] ===============================");
-    th.execute_genesis_mint_tx(
-        Holder::Faucet,
-        &genesis_mint_tx,
-        &genesis_mint_params,
-        current_slot,
-    )
-    .await?;
-
-    info!(target: "money", "[Alice] ===============================");
-    info!(target: "money", "[Alice] Executing Alice genesis mint tx");
-    info!(target: "money", "[Alice] ===============================");
-    th.execute_genesis_mint_tx(Holder::Alice, &genesis_mint_tx, &genesis_mint_params, current_slot)
-        .await?;
-
-    info!(target: "money", "[Bob] ===============================");
-    info!(target: "money", "[Bob] Executing Alice genesis mint tx");
-    info!(target: "money", "[Bob] ===============================");
-    th.execute_genesis_mint_tx(Holder::Bob, &genesis_mint_tx, &genesis_mint_params, current_slot)
-        .await?;
+    for holder in &HOLDERS {
+        info!(target: "money", "[{holder:?}] ================================");
+        info!(target: "money", "[{holder:?}] Executing Alice genesis mint tx");
+        info!(target: "money", "[{holder:?}] ================================");
+        th.execute_genesis_mint_tx(holder, &genesis_mint_tx, &genesis_mint_params, current_slot)
+            .await?;
+    }
 
     th.assert_trees(&HOLDERS);
 
     // Alice gathers her new owncoin
-    let alice_oc = th.gather_owncoin(Holder::Alice, genesis_mint_params.output, None)?;
+    let alice_oc = th.gather_owncoin(&Holder::Alice, &genesis_mint_params.output, None)?;
     alice_owncoins.push(alice_oc);
 
     info!(target: "money", "[Bob] ========================");
     info!(target: "money", "[Bob] Building genesis mint tx");
     info!(target: "money", "[Bob] ========================");
-    let (genesis_mint_tx, genesis_mint_params) = th.genesis_mint(Holder::Bob, BOB_INITIAL)?;
+    let (genesis_mint_tx, genesis_mint_params) = th.genesis_mint(&Holder::Bob, BOB_INITIAL)?;
 
-    info!(target: "money", "[Faucet] ===============================");
-    info!(target: "money", "[Faucet] Executing Bob genesis mint tx");
-    info!(target: "money", "[Faucet] ===============================");
-    th.execute_genesis_mint_tx(
-        Holder::Faucet,
-        &genesis_mint_tx,
-        &genesis_mint_params,
-        current_slot,
-    )
-    .await?;
-
-    info!(target: "money", "[Alice] ===============================");
-    info!(target: "money", "[Alice] Executing Bob genesis mint tx");
-    info!(target: "money", "[Alice] ===============================");
-    th.execute_genesis_mint_tx(Holder::Alice, &genesis_mint_tx, &genesis_mint_params, current_slot)
-        .await?;
-
-    info!(target: "money", "[Bob] ===============================");
-    info!(target: "money", "[Bob] Executing Bob genesis mint tx");
-    info!(target: "money", "[Bob] ===============================");
-    th.execute_genesis_mint_tx(Holder::Bob, &genesis_mint_tx, &genesis_mint_params, current_slot)
-        .await?;
+    for holder in &HOLDERS {
+        info!(target: "money", "[{holder:?}] =============================");
+        info!(target: "money", "[{holder:?}] Executing Bob genesis mint tx");
+        info!(target: "money", "[{holder:?}] =============================");
+        th.execute_genesis_mint_tx(holder, &genesis_mint_tx, &genesis_mint_params, current_slot)
+            .await?;
+    }
 
     th.assert_trees(&HOLDERS);
 
     // Bob gathers his new owncoin
-    let bob_oc = th.gather_owncoin(Holder::Bob, genesis_mint_params.output, None)?;
+    let bob_oc = th.gather_owncoin(&Holder::Bob, &genesis_mint_params.output, None)?;
     bob_owncoins.push(bob_oc);
 
     // Now Alice can send a little bit of funds to Bob
@@ -157,7 +126,7 @@ async fn genesis_mint() -> Result<()> {
     info!(target: "money", "[Alice] Building Money::Transfer params for a payment to Bob");
     info!(target: "money", "[Alice] ====================================================");
     let (transfer_tx, transfer_params, spent_coins) =
-        th.transfer(ALICE_SEND, Holder::Alice, Holder::Bob, &alice_owncoins, *DARK_TOKEN_ID)?;
+        th.transfer(ALICE_SEND, &Holder::Alice, &Holder::Bob, &alice_owncoins, *DARK_TOKEN_ID)?;
 
     // Validating transfer params
     assert!(transfer_params.inputs.len() == 1);
@@ -166,31 +135,21 @@ async fn genesis_mint() -> Result<()> {
     alice_owncoins.retain(|x| x != &spent_coins[0]);
     assert!(alice_owncoins.is_empty());
 
-    info!(target: "money", "[Faucet] ==============================");
-    info!(target: "money", "[Faucet] Executing Alice2Bob payment tx");
-    info!(target: "money", "[Faucet] ==============================");
-    th.execute_transfer_tx(Holder::Faucet, &transfer_tx, &transfer_params, current_slot, true)
-        .await?;
-
-    info!(target: "money", "[Alice] ==============================");
-    info!(target: "money", "[Alice] Executing Alice2Bob payment tx");
-    info!(target: "money", "[Alice] ==============================");
-    th.execute_transfer_tx(Holder::Alice, &transfer_tx, &transfer_params, current_slot, true)
-        .await?;
-
-    info!(target: "money", "[Bob] ==============================");
-    info!(target: "money", "[Bob] Executing Alice2Bob payment tx");
-    info!(target: "money", "[Bob] ==============================");
-    th.execute_transfer_tx(Holder::Bob, &transfer_tx, &transfer_params, current_slot, true).await?;
+    for holder in &HOLDERS {
+        info!(target: "money", "[{holder:?}] ==============================");
+        info!(target: "money", "[{holder:?}] Executing Alice2Bob payment tx");
+        info!(target: "money", "[{holder:?}] ==============================");
+        th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_slot, true).await?;
+    }
 
     th.assert_trees(&HOLDERS);
 
     // Alice should now have one OwnCoin with the change from the above transaction.
-    let alice_oc = th.gather_owncoin(Holder::Alice, transfer_params.outputs[0].clone(), None)?;
+    let alice_oc = th.gather_owncoin(&Holder::Alice, &transfer_params.outputs[0], None)?;
     alice_owncoins.push(alice_oc);
 
     // Bob should have his old one, and this new one.
-    let bob_oc = th.gather_owncoin(Holder::Bob, transfer_params.outputs[1].clone(), None)?;
+    let bob_oc = th.gather_owncoin(&Holder::Bob, &transfer_params.outputs[1], None)?;
     bob_owncoins.push(bob_oc);
 
     assert!(alice_owncoins.len() == 1);
@@ -201,7 +160,7 @@ async fn genesis_mint() -> Result<()> {
     info!(target: "money", "[Bob] Building Money::Transfer params for a payment to Alice");
     info!(target: "money", "[Bob] ======================================================");
     let (transfer_tx, transfer_params, spent_coins) =
-        th.transfer(BOB_SEND, Holder::Bob, Holder::Alice, &bob_owncoins, *DARK_TOKEN_ID)?;
+        th.transfer(BOB_SEND, &Holder::Bob, &Holder::Alice, &bob_owncoins, *DARK_TOKEN_ID)?;
 
     // Validating transfer params
     assert!(transfer_params.inputs.len() == 1);
@@ -210,31 +169,21 @@ async fn genesis_mint() -> Result<()> {
     bob_owncoins.retain(|x| x != &spent_coins[0]);
     assert!(bob_owncoins.len() == 1);
 
-    info!(target: "money", "[Faucet] ==============================");
-    info!(target: "money", "[Faucet] Executing Bob2Alice payment tx");
-    info!(target: "money", "[Faucet] ==============================");
-    th.execute_transfer_tx(Holder::Faucet, &transfer_tx, &transfer_params, current_slot, true)
-        .await?;
-
-    info!(target: "money", "[Alice] ==============================");
-    info!(target: "money", "[Alice] Executing Bob2Alice payment tx");
-    info!(target: "money", "[Alice] ==============================");
-    th.execute_transfer_tx(Holder::Alice, &transfer_tx, &transfer_params, current_slot, true)
-        .await?;
-
-    info!(target: "money", "[Bob] ==================+===========");
-    info!(target: "money", "[Bob] Executing Bob2Alice payment tx");
-    info!(target: "money", "[Bob] ==================+===========");
-    th.execute_transfer_tx(Holder::Bob, &transfer_tx, &transfer_params, current_slot, true).await?;
+    for holder in &HOLDERS {
+        info!(target: "money", "[{holder:?}] ==============================");
+        info!(target: "money", "[{holder:?}] Executing Bob2Alice payment tx");
+        info!(target: "money", "[{holder:?}] ==============================");
+        th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_slot, true).await?;
+    }
 
     th.assert_trees(&HOLDERS);
 
     // Alice should now have two OwnCoins
-    let alice_oc = th.gather_owncoin(Holder::Alice, transfer_params.outputs[1].clone(), None)?;
+    let alice_oc = th.gather_owncoin(&Holder::Alice, &transfer_params.outputs[1], None)?;
     alice_owncoins.push(alice_oc);
 
     // Bob should have two with the change from the above tx
-    let bob_oc = th.gather_owncoin(Holder::Bob, transfer_params.outputs[0].clone(), None)?;
+    let bob_oc = th.gather_owncoin(&Holder::Bob, &transfer_params.outputs[0], None)?;
     bob_owncoins.push(bob_oc);
 
     // Validating transaction outcomes

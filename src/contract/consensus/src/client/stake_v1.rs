@@ -60,12 +60,17 @@ pub struct ConsensusStakeCallBuilder {
 
 impl ConsensusStakeCallBuilder {
     pub fn build(&self) -> Result<ConsensusStakeCallDebris> {
+        let serial = pallas::Base::random(&mut OsRng);
+
+        self.build_with_params(serial)
+    }
+
+    pub fn build_with_params(&self, serial: pallas::Base) -> Result<ConsensusStakeCallDebris> {
         debug!("Building Consensus::StakeV1 contract call");
         assert!(self.coin.note.value != 0);
         assert!(self.coin.note.token_id == *DARK_TOKEN_ID);
 
         debug!("Building anonymous output");
-        let serial = pallas::Base::random(&mut OsRng);
         let public_key = PublicKey::from_secret(self.coin.secret);
 
         let output = ConsensusMintOutputInfo {

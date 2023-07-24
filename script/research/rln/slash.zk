@@ -1,3 +1,5 @@
+k = 13;
+
 constant "RlnSlash" {}
 
 witness "RlnSlash" {

@@ -20,7 +20,7 @@ use async_std::sync::Arc;
 use crypto_box::ChaChaBox;
 use log::{info, warn};
 use serde::{self, Deserialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use toml::Value;
@@ -71,6 +71,10 @@ pub struct Args {
     #[structopt(long)]
     pub gen_keypair: bool,
 
+    /// Generate a new NaCl secret for an encrypted channel and exit
+    #[structopt(long)]
+    pub gen_secret: bool,
+
     /// Path to save keypair in
     #[structopt(short)]
     pub output: Option<String>,
@@ -115,6 +119,86 @@ impl ContactInfo {
     }
 }
 
+/// Defined user modes
+#[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
+pub enum UserMode {
+    None,
+    Op,
+    Voice,
+    HalfOp,
+    Admin,
+    Owner,
+}
+
+impl std::fmt::Display for UserMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        match self {
+            Self::None => write!(f, ""),
+            Self::Op => write!(f, "@"),
+            Self::Voice => write!(f, "+"),
+            Self::HalfOp => write!(f, "%"),
+            Self::Admin => write!(f, "&"),
+            Self::Owner => write!(f, "~"),
+        }
+    }
+}
+
+/// This struct holds info about a specific nickname within a channel.
+/// We usually use it to implement modes.
+#[derive(Debug, Clone, Eq)]
+pub struct Nick {
+    name: String,
+    mode: UserMode,
+}
+
+impl Nick {
+    pub fn new(name: String) -> Self {
+        Self { name, mode: UserMode::None }
+    }
+
+    pub fn set_mode(&mut self, mode: UserMode) -> Option<String> {
+        if self.mode == mode {
+            return None
+        }
+
+        self.mode = mode;
+        Some(format!("+{}", mode))
+    }
+
+    pub fn unset_mode(&mut self, mode: UserMode) -> Option<String> {
+        if self.mode != mode {
+            return None
+        }
+
+        self.mode = mode;
+        Some(format!("-{}", mode))
+    }
+}
+
+impl PartialEq for Nick {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl From<String> for Nick {
+    fn from(name: String) -> Self {
+        Self { name, mode: UserMode::None }
+    }
+}
+
+impl std::hash::Hash for Nick {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        state.write(&self.name.clone().into_bytes());
+    }
+}
+
+impl std::fmt::Display for Nick {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}{}", self.mode, self.name)
+    }
+}
+
 /// This struct holds information about preconfigured channels.
 /// In the TOML configuration file, we can configure channels as such:
 /// ```toml
@@ -137,12 +221,16 @@ pub struct ChannelInfo {
     /// Flag indicates whether the user has joined the channel or not
     pub joined: bool,
     /// All nicknames which are visible on the channel
-    pub names: Vec<String>,
+    pub names: HashSet<Nick>,
 }
 
 impl ChannelInfo {
     pub fn new() -> Result<Self> {
-        Ok(Self { topic: None, salt_box: None, joined: false, names: vec![] })
+        Ok(Self { topic: None, salt_box: None, joined: false, names: HashSet::new() })
+    }
+
+    pub fn names(&self) -> String {
+        self.names.iter().map(|n| n.to_string()).collect::<Vec<String>>().join(" ")
     }
 }
 
@@ -204,7 +292,7 @@ pub fn parse_configured_channels(data: &str) -> Result<HashMap<String, ChannelIn
 ///
 /// ```toml
 /// [contact."nick"]
-/// contact_pubkey = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
+/// public_key = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
 /// ```
 pub fn parse_configured_contacts(data: &str) -> Result<HashMap<String, ContactInfo>> {
     let mut ret = HashMap::new();
@@ -229,15 +317,15 @@ pub fn parse_configured_contacts(data: &str) -> Result<HashMap<String, ContactIn
     let contacts = map["contact"].as_table().unwrap();
 
     // Our secret key for NaCl boxes.
-    let found_priv = match parse_priv_key(data) {
+    let found_secret = match parse_secret_key(data) {
         Ok(v) => v,
         Err(_) => {
-            info!("Did not find private key in config, skipping contact configuration.");
+            info!("Did not find secret key in config, skipping contact configuration.");
             return Ok(ret)
         }
     };
 
-    let bytes: [u8; 32] = match bs58::decode(found_priv).into_vec() {
+    let bytes: [u8; 32] = match bs58::decode(found_secret).into_vec() {
         Ok(v) => {
             if v.len() != 32 {
                 warn!("Decoded base58 secret key string is not 32 bytes");
@@ -275,12 +363,12 @@ pub fn parse_configured_contacts(data: &str) -> Result<HashMap<String, ContactIn
         }
 
         // Build the NaCl box
-        if !table.contains_key("contact_pubkey") || !table["contact_pubkey"].is_str() {
-            warn!("Contact {} doesn't have `contact_pubkey` set or is not a string.", cnt.0);
+        if !table.contains_key("public_key") || !table["public_key"].is_str() {
+            warn!("Contact {} doesn't have `public_key` set or is not a valid string.", cnt.0);
             continue
         }
 
-        let pub_str = table["contact_pubkey"].as_str().unwrap();
+        let pub_str = table["public_key"].as_str().unwrap();
         let bytes: [u8; 32] = match bs58::decode(pub_str).into_vec() {
             Ok(v) => {
                 if v.len() != 32 {
@@ -299,7 +387,7 @@ pub fn parse_configured_contacts(data: &str) -> Result<HashMap<String, ContactIn
         let public = crypto_box::PublicKey::from(bytes);
         contact_info.salt_box = Some(Arc::new(ChaChaBox::new(&public, &secret)));
         ret.insert(cnt.0.to_string(), contact_info);
-        info!("Instantiated NaCl box for contact {}", cnt.0);
+        info!("Instantiated NaCl box for contact \"{}\"", cnt.0);
     }
 
     Ok(ret)
@@ -312,28 +400,28 @@ fn salt_box_from_shared_secret(s: &str) -> Result<ChaChaBox> {
     Ok(ChaChaBox::new(&public, &secret))
 }
 
-fn parse_priv_key(data: &str) -> Result<String> {
-    let mut pk = String::new();
+fn parse_secret_key(data: &str) -> Result<String> {
+    let mut sk = String::new();
 
     let map = match toml::from_str(data)? {
         Value::Table(m) => m,
-        _ => return Ok(pk),
+        _ => return Ok(sk),
     };
 
-    if !map.contains_key("private_key") {
-        return Ok(pk)
+    if !map.contains_key("secret_key") {
+        return Ok(sk)
     }
 
-    if !map["private_key"].is_table() {
-        return Ok(pk)
+    if !map["secret_key"].is_table() {
+        return Ok(sk)
     }
 
-    let private_keys = map["private_key"].as_table().unwrap();
+    let secret_keys = map["secret_key"].as_table().unwrap();
 
-    for prv_key in private_keys {
-        pk = prv_key.0.into();
+    for key in secret_keys {
+        sk = key.0.into();
     }
 
     info!("Found secret key in config, noted it down.");
-    Ok(pk)
+    Ok(sk)
 }

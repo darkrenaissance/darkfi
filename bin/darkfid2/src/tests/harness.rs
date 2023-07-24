@@ -16,70 +16,110 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_std::sync::Arc;
 use darkfi::{
     blockchain::{BlockInfo, Header},
+    net::{P2p, P2pPtr, Settings, SESSION_ALL},
     util::time::TimeKeeper,
     validator::{
         consensus::{next_block_reward, pid::slot_pid_output},
-        Validator, ValidatorConfig,
+        proto::{ProtocolBlock, ProtocolTx},
+        Validator, ValidatorConfig, ValidatorPtr,
     },
     Result,
 };
-use darkfi_contract_test_harness::vks;
+use darkfi_contract_test_harness::{vks, Holder, TestHarness};
 use darkfi_sdk::{
-    blockchain::Slot,
+    blockchain::{PidOutput, PreviousSlot, Slot},
     pasta::{group::ff::Field, pallas},
 };
+use log::error;
+use url::Url;
 
-use crate::Darkfid;
+use crate::{utils::genesis_txs_total, Darkfid};
+
+pub struct HarnessConfig {
+    pub testing_node: bool,
+    pub alice_initial: u64,
+    pub bob_initial: u64,
+}
 
 pub struct Harness {
+    pub config: HarnessConfig,
     pub alice: Darkfid,
     pub bob: Darkfid,
 }
 
 impl Harness {
-    pub async fn new(testing_node: bool) -> Result<Self> {
+    pub async fn new(config: HarnessConfig, ex: Arc<smol::Executor<'_>>) -> Result<Self> {
+        // Use test harness to generate genesis transactions
+        let mut th = TestHarness::new(&["money".to_string(), "consensus".to_string()]).await?;
+        let (genesis_stake_tx, _) = th.genesis_stake(&Holder::Alice, config.alice_initial)?;
+        let (genesis_mint_tx, _) = th.genesis_mint(&Holder::Bob, config.bob_initial)?;
+
         // Generate default genesis block
-        let genesis_block = BlockInfo::default();
+        let mut genesis_block = BlockInfo::default();
+
+        // Append genesis transactions and calculate their total
+        genesis_block.txs.push(genesis_stake_tx);
+        genesis_block.txs.push(genesis_mint_tx);
+        let genesis_txs_total = genesis_txs_total(&genesis_block.txs)?;
+        genesis_block.slots[0].total_tokens = genesis_txs_total;
 
         // Generate validators configuration
         // NOTE: we are not using consensus constants here so we
         // don't get circular dependencies.
         let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
-        let config = ValidatorConfig::new(time_keeper, genesis_block, vec![], testing_node);
+        let val_config = ValidatorConfig::new(
+            time_keeper,
+            genesis_block,
+            genesis_txs_total,
+            vec![],
+            config.testing_node,
+        );
 
         // Generate validators using pregenerated vks
-        let sled_db = sled::Config::new().temporary(true).open()?;
-        vks::inject(&sled_db)?;
-        let validator = Validator::new(&sled_db, config.clone()).await?;
-        let alice = Darkfid::new(validator).await;
-        let sled_db = sled::Config::new().temporary(true).open()?;
-        vks::inject(&sled_db)?;
-        let validator = Validator::new(&sled_db, config.clone()).await?;
-        let bob = Darkfid::new(validator).await;
+        let (_, vks) = vks::read_or_gen_vks_and_pks()?;
+        let mut settings = Settings::default();
+        settings.localnet = true;
 
-        Ok(Self { alice, bob })
+        // Alice
+        let alice_url = Url::parse("tcp+tls://127.0.0.1:18340")?;
+        settings.inbound_addrs = vec![alice_url.clone()];
+        let alice = generate_node(&vks, &val_config, &settings, &ex).await?;
+
+        // Bob
+        let bob_url = Url::parse("tcp+tls://127.0.0.1:18341")?;
+        settings.inbound_addrs = vec![bob_url];
+        settings.peers = vec![alice_url];
+        let bob = generate_node(&vks, &val_config, &settings, &ex).await?;
+
+        Ok(Self { config, alice, bob })
     }
 
-    pub async fn validate_chains(&self) -> Result<()> {
-        let alice = &self.alice._validator.read().await;
-        let bob = &self.bob._validator.read().await;
+    pub async fn validate_chains(&self, total_blocks: usize) -> Result<()> {
+        let genesis_txs_total = self.config.alice_initial + self.config.bob_initial;
+        let alice = &self.alice.validator.read().await;
+        let bob = &self.bob.validator.read().await;
 
-        alice.validate_blockchain().await?;
-        bob.validate_blockchain().await?;
+        alice.validate_blockchain(genesis_txs_total, vec![]).await?;
+        bob.validate_blockchain(genesis_txs_total, vec![]).await?;
 
-        assert_eq!(alice.blockchain.len(), bob.blockchain.len());
+        let alice_blockchain_len = alice.blockchain.len();
+        assert_eq!(alice_blockchain_len, bob.blockchain.len());
+        assert_eq!(alice_blockchain_len, total_blocks);
 
         Ok(())
     }
 
     pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
-        let alice = &self.alice._validator.read().await;
-        let bob = &self.bob._validator.read().await;
+        // We simply broadcast the block using Alice's sync P2P
+        for block in blocks {
+            self.alice.sync_p2p.broadcast(block).await;
+        }
 
-        alice.add_blocks(blocks).await?;
-        bob.add_blocks(blocks).await?;
+        // and then add it to her chain
+        self.alice.validator.read().await.add_blocks(blocks).await?;
 
         Ok(())
     }
@@ -94,41 +134,26 @@ impl Harness {
         // Generate empty slots
         let mut slots = Vec::with_capacity(slots_count);
         let mut previous_slot = previous.slots.last().unwrap().clone();
-        for _ in 0..slots_count - 1 {
-            let (f, error, sigma1, sigma2) = slot_pid_output(&previous_slot);
-            let slot = Slot::new(
-                previous_slot.id + 1,
-                pallas::Base::ZERO,
+        for i in 0..slots_count {
+            let id = previous_slot.id + 1;
+            // First slot in the sequence has (at least) 1 previous slot producer
+            let producers = if i == 0 { 1 } else { 0 };
+            let previous = PreviousSlot::new(
+                producers,
                 vec![previous_hash],
                 vec![previous.header.previous.clone()],
-                f,
-                error,
-                previous_slot.error,
-                previous_slot.total_tokens + previous_slot.reward,
-                0,
-                sigma1,
-                sigma2,
+                pallas::Base::ZERO,
+                previous_slot.pid.error,
             );
+            let (f, error, sigma1, sigma2) = slot_pid_output(&previous_slot, producers);
+            let pid = PidOutput::new(f, error, sigma1, sigma2);
+            let total_tokens = previous_slot.total_tokens + previous_slot.reward;
+            // Only last slot in the sequence has a reward
+            let reward = if i == slots_count - 1 { next_block_reward() } else { 0 };
+            let slot = Slot::new(id, previous, pid, total_tokens, reward);
             slots.push(slot.clone());
             previous_slot = slot;
         }
-
-        // Generate slot
-        let (f, error, sigma1, sigma2) = slot_pid_output(&previous_slot);
-        let slot = Slot::new(
-            previous_slot.id + 1,
-            pallas::Base::ZERO,
-            vec![previous_hash],
-            vec![previous.header.previous.clone()],
-            f,
-            error,
-            previous_slot.error,
-            previous_slot.total_tokens + previous_slot.reward,
-            next_block_reward(),
-            sigma1,
-            sigma2,
-        );
-        slots.push(slot);
 
         // We increment timestamp so we don't have to use sleep
         let mut timestamp = previous.header.timestamp;
@@ -138,7 +163,7 @@ impl Harness {
         let header = Header::new(
             previous_hash,
             previous.header.epoch,
-            previous_slot.id + 1,
+            slots.last().unwrap().id,
             timestamp,
             previous.header.root.clone(),
         );
@@ -148,4 +173,51 @@ impl Harness {
 
         Ok(block)
     }
+}
+
+async fn generate_node(
+    vks: &Vec<(Vec<u8>, String, Vec<u8>)>,
+    config: &ValidatorConfig,
+    settings: &Settings,
+    ex: &Arc<smol::Executor<'_>>,
+) -> Result<Darkfid> {
+    let sled_db = sled::Config::new().temporary(true).open()?;
+    vks::inject(&sled_db, &vks)?;
+    let validator = Validator::new(&sled_db, config.clone()).await?;
+    let sync_p2p = spawn_sync_p2p(&settings, &validator).await;
+    let node = Darkfid::new(sync_p2p.clone(), None, validator).await;
+    sync_p2p.clone().start(ex.clone()).await?;
+    let _ex = ex.clone();
+    ex.spawn(async move {
+        if let Err(e) = sync_p2p.run(_ex).await {
+            error!("Failed starting sync P2P network: {}", e);
+        }
+    })
+    .detach();
+    node.validator.write().await.synced = true;
+
+    Ok(node)
+}
+
+async fn spawn_sync_p2p(settings: &Settings, validator: &ValidatorPtr) -> P2pPtr {
+    let p2p = P2p::new(settings.clone()).await;
+    let registry = p2p.protocol_registry();
+
+    let _validator = validator.clone();
+    registry
+        .register(SESSION_ALL, move |channel, p2p| {
+            let validator = _validator.clone();
+            async move { ProtocolBlock::init(channel, validator, p2p).await.unwrap() }
+        })
+        .await;
+
+    let _validator = validator.clone();
+    registry
+        .register(SESSION_ALL, move |channel, p2p| {
+            let validator = _validator.clone();
+            async move { ProtocolTx::init(channel, validator, p2p).await.unwrap() }
+        })
+        .await;
+
+    p2p
 }

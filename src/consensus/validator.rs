@@ -110,8 +110,7 @@ impl ValidatorState {
         debug!(target: "consensus::validator", "Generating leader proof keys with k: {}", constants::LEADER_PROOF_K);
         let bincode = include_bytes!("../../proof/lead.zk.bin");
         let zkbin = ZkBinary::decode(bincode)?;
-        let witnesses = empty_witnesses(&zkbin);
-        let circuit = ZkCircuit::new(witnesses, zkbin);
+        let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
 
         let lead_verifying_key = VerifyingKey::build(constants::LEADER_PROOF_K, &circuit);
         // We only need this proving key if we're going to participate in the consensus.
@@ -610,20 +609,20 @@ impl ValidatorState {
             let slot = self.consensus.get_slot(current)?;
             // sigma1
             let prop_sigma1 = lf.public_inputs[constants::PI_SIGMA1_INDEX];
-            if slot.sigma1 != prop_sigma1 {
+            if slot.pid.sigma1 != prop_sigma1 {
                 error!(
                     target: "consensus::validator",
                     "receive_proposal(): Failed to verify public value sigma1: {:?}, to proposed: {:?}",
-                    slot.sigma1, prop_sigma1
+                    slot.pid.sigma1, prop_sigma1
                 );
             }
             // sigma2
             let prop_sigma2 = lf.public_inputs[constants::PI_SIGMA2_INDEX];
-            if slot.sigma2 != prop_sigma2 {
+            if slot.pid.sigma2 != prop_sigma2 {
                 error!(
                     target: "consensus::validator",
                     "receive_proposal(): Failed to verify public value sigma2: {:?}, to proposed: {:?}",
-                    slot.sigma2, prop_sigma2
+                    slot.pid.sigma2, prop_sigma2
                 );
             }
         }

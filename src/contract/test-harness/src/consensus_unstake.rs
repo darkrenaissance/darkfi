@@ -23,7 +23,7 @@ use darkfi_consensus_contract::{
     client::unstake_v1::ConsensusUnstakeCallBuilder, ConsensusFunction,
 };
 use darkfi_money_contract::{
-    client::{unstake_v1::MoneyUnstakeCallBuilder, ConsensusOwnCoin},
+    client::{unstake_v1::MoneyUnstakeCallBuilder, ConsensusOwnCoin, OwnCoin},
     model::MoneyUnstakeParamsV1,
     MoneyFunction, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
@@ -32,6 +32,7 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
+use log::info;
 use rand::rngs::OsRng;
 
 use super::{Holder, TestHarness, TxAction};
@@ -39,15 +40,19 @@ use super::{Holder, TestHarness, TxAction};
 impl TestHarness {
     pub fn unstake(
         &mut self,
-        holder: Holder,
-        staked_oc: ConsensusOwnCoin,
+        holder: &Holder,
+        staked_oc: &ConsensusOwnCoin,
     ) -> Result<(Transaction, MoneyUnstakeParamsV1, SecretKey)> {
-        let wallet = self.holders.get(&holder).unwrap();
+        let wallet = self.holders.get(holder).unwrap();
+
         let (burn_pk, burn_zkbin) =
-            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1).unwrap();
-        let (mint_pk, mint_zkbin) = self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1).unwrap();
+            self.proving_keys.get(&CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
+        let (mint_pk, mint_zkbin) =
+            self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
+
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusUnstake).unwrap();
+
         let timer = Instant::now();
 
         // Building Consensus::Unstake params
@@ -72,8 +77,8 @@ impl TestHarness {
 
         // Building Money::Unstake params
         let money_unstake_call_debris = MoneyUnstakeCallBuilder {
-            owncoin: staked_oc,
-            recipient: self.holders.get_mut(&holder).unwrap().keypair.public,
+            owncoin: staked_oc.clone(),
+            recipient: self.holders.get(holder).unwrap().keypair.public,
             value_blind: consensus_unstake_value_blind,
             nullifier: consensus_unstake_params.input.nullifier,
             merkle_root: consensus_unstake_params.input.merkle_root,
@@ -115,12 +120,12 @@ impl TestHarness {
 
     pub async fn execute_unstake_tx(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         tx: &Transaction,
         params: &MoneyUnstakeParamsV1,
         slot: u64,
     ) -> Result<()> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusUnstake).unwrap();
         let timer = Instant::now();
@@ -130,5 +135,36 @@ impl TestHarness {
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())
+    }
+
+    // Execute an unstake transaction and gather unstaked coin
+    pub async fn execute_unstake(
+        &mut self,
+        holders: &[Holder],
+        holder: &Holder,
+        current_slot: u64,
+        unstake_request_oc: &ConsensusOwnCoin,
+    ) -> Result<OwnCoin> {
+        info!(target: "consensus", "[{holder:?}] ===================");
+        info!(target: "consensus", "[{holder:?}] Building unstake tx");
+        info!(target: "consensus", "[{holder:?}] ===================");
+        let (unstake_tx, unstake_params, _) = self.unstake(holder, unstake_request_oc)?;
+
+        for h in holders {
+            info!(target: "consensus", "[{h:?}] ===============================");
+            info!(target: "consensus", "[{h:?}] Executing {holder:?} unstake tx");
+            info!(target: "consensus", "[{h:?}] ===============================");
+            self.execute_unstake_tx(h, &unstake_tx, &unstake_params, current_slot).await?;
+        }
+
+        self.assert_trees(holders);
+
+        // Gather new unstaked owncoin
+        let unstaked_oc = self.gather_owncoin(holder, &unstake_params.output, None)?;
+
+        // Verify values match
+        assert!(unstake_request_oc.note.value == unstaked_oc.note.value);
+
+        Ok(unstaked_oc)
     }
 }

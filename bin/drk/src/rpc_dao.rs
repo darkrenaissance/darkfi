@@ -26,12 +26,13 @@ use darkfi_dao_contract::{
     client as dao_client,
     client::{DaoInfo, DaoProposalInfo, DaoVoteCall, DaoVoteInput},
     model::DaoBlindAggregateVote,
-    money_client, DaoFunction, DAO_CONTRACT_ZKAS_DAO_EXEC_NS, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
+    DaoFunction, DAO_CONTRACT_ZKAS_DAO_EXEC_NS, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
     DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
     DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 use darkfi_money_contract::{
-    client::OwnCoin, MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    client::{transfer_v1::TransferCallBuilder, OwnCoin},
+    MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
@@ -73,11 +74,9 @@ impl Drk {
         };
 
         let dao_mint_zkbin = ZkBinary::decode(&dao_mint_zkbin.1)?;
-        let k = 13;
-        let dao_mint_circuit =
-            ZkCircuit::new(empty_witnesses(&dao_mint_zkbin), dao_mint_zkbin.clone());
+        let dao_mint_circuit = ZkCircuit::new(empty_witnesses(&dao_mint_zkbin)?, &dao_mint_zkbin);
         eprintln!("Creating DAO Mint proving key");
-        let dao_mint_pk = ProvingKey::build(k, &dao_mint_circuit);
+        let dao_mint_pk = ProvingKey::build(dao_mint_zkbin.k, &dao_mint_circuit);
 
         let (params, proofs) =
             dao_client::make_mint_call(&dao_info, &dao.secret_key, &dao_mint_zkbin, &dao_mint_pk)?;
@@ -163,16 +162,15 @@ impl Drk {
         let propose_burn_zkbin = ZkBinary::decode(&propose_burn_zkbin.1)?;
         let propose_main_zkbin = ZkBinary::decode(&propose_main_zkbin.1)?;
 
-        let k = 13;
         let propose_burn_circuit =
-            ZkCircuit::new(empty_witnesses(&propose_burn_zkbin), propose_burn_zkbin.clone());
+            ZkCircuit::new(empty_witnesses(&propose_burn_zkbin)?, &propose_burn_zkbin);
         let propose_main_circuit =
-            ZkCircuit::new(empty_witnesses(&propose_main_zkbin), propose_main_zkbin.clone());
+            ZkCircuit::new(empty_witnesses(&propose_main_zkbin)?, &propose_main_zkbin);
 
         eprintln!("Creating Propose Burn circuit proving key");
-        let propose_burn_pk = ProvingKey::build(k, &propose_burn_circuit);
+        let propose_burn_pk = ProvingKey::build(propose_burn_zkbin.k, &propose_burn_circuit);
         eprintln!("Creating Propose Main circuit proving key");
-        let propose_main_pk = ProvingKey::build(k, &propose_main_circuit);
+        let propose_main_pk = ProvingKey::build(propose_main_zkbin.k, &propose_main_circuit);
 
         // Now create the parameters for the proposal tx
         let signature_secret = SecretKey::random(&mut OsRng);
@@ -348,16 +346,15 @@ impl Drk {
         let dao_vote_burn_zkbin = ZkBinary::decode(&dao_vote_burn_zkbin.1)?;
         let dao_vote_main_zkbin = ZkBinary::decode(&dao_vote_main_zkbin.1)?;
 
-        let k = 13;
         let dao_vote_burn_circuit =
-            ZkCircuit::new(empty_witnesses(&dao_vote_burn_zkbin), dao_vote_burn_zkbin.clone());
+            ZkCircuit::new(empty_witnesses(&dao_vote_burn_zkbin)?, &dao_vote_burn_zkbin);
         let dao_vote_main_circuit =
-            ZkCircuit::new(empty_witnesses(&dao_vote_main_zkbin), dao_vote_main_zkbin.clone());
+            ZkCircuit::new(empty_witnesses(&dao_vote_main_zkbin)?, &dao_vote_main_zkbin);
 
         eprintln!("Creating DAO Vote Burn proving key");
-        let dao_vote_burn_pk = ProvingKey::build(k, &dao_vote_burn_circuit);
+        let dao_vote_burn_pk = ProvingKey::build(dao_vote_burn_zkbin.k, &dao_vote_burn_circuit);
         eprintln!("Creating DAO Vote Main proving key");
-        let dao_vote_main_pk = ProvingKey::build(k, &dao_vote_main_circuit);
+        let dao_vote_main_pk = ProvingKey::build(dao_vote_main_zkbin.k, &dao_vote_main_circuit);
 
         let (params, proofs) = call.make(
             &dao_vote_burn_zkbin,
@@ -395,76 +392,16 @@ impl Drk {
             return Err(anyhow!("Not enough balance in DAO treasury to execute proposal"))
         }
 
-        // Used to export user_data from this coin so it can be accessed by DAO::exec()
-        let user_data_blind = pallas::Base::random(&mut OsRng);
+        // FIXME: This assumes we aren't sending to a protocol.
+        let rcpt_spend_hook = pallas::Base::ZERO;
+        let rcpt_user_data = pallas::Base::ZERO;
+        let rcpt_user_data_blind = pallas::Base::random(&mut OsRng);
 
-        let user_serial = pallas::Base::random(&mut OsRng);
-        let dao_serial = pallas::Base::random(&mut OsRng);
-
-        // TODO: FIXME: Clean this up and create an API
-        let exec_signature_secret = SecretKey::random(&mut OsRng);
-        let mut xfer_signature_secrets = vec![];
-        let mut xfer_inputs = vec![];
-
-        let mut input_coins = vec![];
-        let mut input_amount = 0;
-        for coin in coins {
-            input_amount += coin.note.value;
-            input_coins.push(coin);
-            if input_amount >= proposal.amount {
-                break
-            }
-        }
+        let change_spend_hook = DAO_CONTRACT_ID.inner();
+        let change_user_data = dao_bulla.inner();
+        let change_user_data_blind = pallas::Base::random(&mut OsRng);
 
         let money_merkle_tree = self.get_money_tree().await?;
-
-        let mut input_value_blind = pallas::Scalar::from(0);
-        for coin in &input_coins {
-            let value_blind = pallas::Scalar::random(&mut OsRng);
-            let sig_secret = SecretKey::random(&mut OsRng);
-            xfer_signature_secrets.push(sig_secret);
-
-            xfer_inputs.push(money_client::TransferInput {
-                leaf_position: coin.leaf_position,
-                merkle_path: money_merkle_tree.witness(coin.leaf_position, 0).unwrap(),
-                secret: dao.secret_key,
-                note: coin.note.clone(),
-                user_data_blind,
-                value_blind,
-                signature_secret: sig_secret,
-            });
-
-            input_value_blind += value_blind;
-        }
-
-        let input_sum = input_coins.iter().map(|x| x.note.value).sum::<u64>();
-
-        let xfer_outputs = vec![
-            // Proposal send
-            money_client::TransferOutput {
-                value: proposal.amount,
-                token_id: proposal.token_id,
-                public: proposal.recipient,
-                serial: user_serial,
-                spend_hook: pallas::Base::zero(),
-                user_data: pallas::Base::zero(),
-            },
-            // Change
-            money_client::TransferOutput {
-                value: input_sum - proposal.amount,
-                token_id: proposal.token_id,
-                public: PublicKey::from_secret(dao.secret_key),
-                serial: dao_serial,
-                spend_hook: DAO_CONTRACT_ID.inner(),
-                user_data: dao_bulla.inner(),
-            },
-        ];
-
-        let xfer_call = money_client::TransferCall {
-            clear_inputs: vec![],
-            inputs: xfer_inputs,
-            outputs: xfer_outputs,
-        };
 
         let zkas_bins = self.lookup_zkas(&MONEY_CONTRACT_ID).await?;
         let Some(mint_zkbin) = zkas_bins.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_MINT_NS_V1)
@@ -477,19 +414,37 @@ impl Drk {
         };
         let mint_zkbin = ZkBinary::decode(&mint_zkbin.1)?;
         let burn_zkbin = ZkBinary::decode(&burn_zkbin.1)?;
-        let k = 13;
-        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), mint_zkbin.clone());
-        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), burn_zkbin.clone());
+        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
+        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin)?, &burn_zkbin);
         eprintln!("Creating Money Mint circuit proving key");
-        let mint_pk = ProvingKey::build(k, &mint_circuit);
+        let mint_pk = ProvingKey::build(mint_zkbin.k, &mint_circuit);
         eprintln!("Creating Money Burn circuit proving key");
-        let burn_pk = ProvingKey::build(k, &burn_circuit);
+        let burn_pk = ProvingKey::build(burn_zkbin.k, &burn_circuit);
 
-        let (xfer_params, xfer_proofs) =
-            xfer_call.make(&mint_zkbin, &mint_pk, &burn_zkbin, &burn_pk)?;
+        let xfer_builder = TransferCallBuilder {
+            keypair: dao.keypair(),
+            recipient: proposal.recipient,
+            value: proposal.amount,
+            token_id: proposal.token_id,
+            rcpt_spend_hook,
+            rcpt_user_data,
+            rcpt_user_data_blind,
+            change_spend_hook,
+            change_user_data,
+            change_user_data_blind,
+            coins,
+            tree: money_merkle_tree,
+            mint_zkbin: mint_zkbin.clone(),
+            mint_pk: mint_pk.clone(),
+            burn_zkbin: burn_zkbin.clone(),
+            burn_pk: burn_pk.clone(),
+            clear_input: false,
+        };
+
+        let xfer_debris = xfer_builder.build()?;
 
         let mut data = vec![MoneyFunction::TransferV1 as u8];
-        xfer_params.encode(&mut data)?;
+        xfer_debris.params.encode(&mut data)?;
         let xfer_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
         let zkas_bins = self.lookup_zkas(&DAO_CONTRACT_ID).await?;
@@ -498,9 +453,9 @@ impl Drk {
             return Err(anyhow!("DAO Exec circuit not found"))
         };
         let exec_zkbin = ZkBinary::decode(&exec_zkbin.1)?;
-        let exec_circuit = ZkCircuit::new(empty_witnesses(&exec_zkbin), exec_zkbin.clone());
+        let exec_circuit = ZkCircuit::new(empty_witnesses(&exec_zkbin)?, &exec_zkbin);
         eprintln!("Creating DAO Exec circuit proving key");
-        let exec_pk = ProvingKey::build(k, &exec_circuit);
+        let exec_pk = ProvingKey::build(exec_zkbin.k, &exec_circuit);
 
         // Count votes
         let mut total_yes_vote_value = 0;
@@ -546,6 +501,22 @@ impl Drk {
             bulla_blind: dao.bulla_blind,
         };
 
+        // We need to extract stuff from the inputs and outputs that we'll also
+        // use in the DAO::Exec call. This DAO API needs to be better.
+        let mut input_value = 0;
+        let mut input_value_blind = pallas::Scalar::ZERO;
+        for (input, blind) in xfer_debris.spent_coins.iter().zip(xfer_debris.input_value_blinds) {
+            input_value += input.note.value;
+            input_value_blind += blind;
+        }
+
+        // First output is change, second output is recipient.
+        let dao_serial = xfer_debris.minted_coins[0].note.serial;
+        let user_serial = xfer_debris.minted_coins[1].note.serial;
+
+        // TODO: FIXME: This is not checked anywhere!
+        let exec_signature_secret = SecretKey::random(&mut OsRng);
+
         let dao_exec_call = dao_client::DaoExecCall {
             proposal: prop_t,
             dao: dao_t,
@@ -555,8 +526,8 @@ impl Drk {
             all_vote_blind: total_all_vote_blind,
             user_serial,
             dao_serial,
-            input_value: input_sum, // <-- FIXME
-            input_value_blind,      // <-- FIXME
+            input_value,
+            input_value_blind,
             hook_dao_exec: DAO_CONTRACT_ID.inner(),
             signature_secret: exec_signature_secret,
         };
@@ -569,11 +540,11 @@ impl Drk {
 
         let mut tx = Transaction {
             calls: vec![xfer_call, exec_call],
-            proofs: vec![xfer_proofs, exec_proofs],
+            proofs: vec![xfer_debris.proofs, exec_proofs],
             signatures: vec![],
         };
 
-        let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_signature_secrets)?;
+        let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_debris.signature_secrets)?;
         let exec_sigs = tx.create_sigs(&mut OsRng, &[exec_signature_secret])?;
         tx.signatures = vec![xfer_sigs, exec_sigs];
 

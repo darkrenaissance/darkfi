@@ -18,6 +18,7 @@
 
 use darkfi_sdk::{blockchain::Slot, pasta::pallas};
 use lazy_static::lazy_static;
+use log::debug;
 
 use super::float_10::{
     fbig2base, Float10, FLOAT10_NEG_ONE, FLOAT10_NEG_TWO, FLOAT10_ONE, FLOAT10_TWO, FLOAT10_ZERO,
@@ -33,48 +34,52 @@ lazy_static! {
     static ref MAX_F: Float10 = Float10::try_from("0.99").unwrap();
     static ref MIN_F: Float10 = Float10::try_from("0.01").unwrap();
     static ref EPSILON: Float10 = Float10::try_from("1").unwrap();
+    // PID controller K values based on constants
+    static ref K1: Float10 = KP.clone() + KI.clone() + KD.clone();
+    static ref K2: Float10 = FLOAT10_NEG_ONE.clone() * KP.clone() + FLOAT10_NEG_TWO.clone() * KD.clone();
+    static ref K3: Float10 = KD.clone();
 }
 
 /// Return 2-term target approximation sigma coefficients,
 /// alogn with the inverse probability `f` of becoming a
 /// block producer and the feedback error, corresponding
 /// to provided slot consensus state,
-pub fn slot_pid_output(previous_slot: &Slot) -> (f64, f64, pallas::Base, pallas::Base) {
-    let (f, error) = calculate_f(previous_slot);
+pub fn slot_pid_output(
+    previous_slot: &Slot,
+    previous_producers: u64,
+) -> (f64, f64, pallas::Base, pallas::Base) {
+    let (f, error) = calculate_f(previous_slot, previous_producers);
     let total_tokens =
         Float10::try_from(previous_slot.total_tokens + previous_slot.reward).unwrap();
     let (sigma1, sigma2) = calculate_sigmas(f.clone(), total_tokens);
-
-    // TODO: log values
 
     (f.to_f64(), error.to_f64(), sigma1, sigma2)
 }
 
 /// Calculate the inverse probability `f` of becoming a block producer (winning the lottery)
 /// having all the tokens, and the feedback error, represented as Float10.
-fn calculate_f(previous_slot: &Slot) -> (Float10, Float10) {
-    // PID controller K values based on constants
-    let k1 = KP.clone() + KI.clone() + KD.clone();
-    let k2 = FLOAT10_NEG_ONE.clone() * KP.clone() + FLOAT10_NEG_TWO.clone() * KD.clone();
-    let k3 = KD.clone();
-
+fn calculate_f(previous_slot: &Slot, previous_producers: u64) -> (Float10, Float10) {
     // Convert slot values to Float10
-    let previous_slot_f = Float10::try_from(previous_slot.f).unwrap();
-    let previous_slot_error = Float10::try_from(previous_slot.error).unwrap();
+    let previous_slot_f = Float10::try_from(previous_slot.pid.f).unwrap();
+    debug!(target: "validator::consensus::pid::calculate_f", "Previous slot f: {previous_slot_f}");
+    let previous_slot_error = Float10::try_from(previous_slot.pid.error).unwrap();
+    debug!(target: "validator::consensus::pid::calculate_f", "Previous slot error: {previous_slot_error}");
     let previous_slot_previous_slot_error =
-        Float10::try_from(previous_slot.previous_slot_error).unwrap();
+        Float10::try_from(previous_slot.previous.error).unwrap();
+    debug!(target: "validator::consensus::pid::calculate_f", "Previous slot previous slot error: {previous_slot_previous_slot_error}");
 
     // Calculate feedback error based on previous block producers.
-    // We know how many producers existed in previous slot by
-    // the len of its fork hashes.
-    let feedback = Float10::try_from(previous_slot.fork_hashes.len() as u64).unwrap();
+    let feedback = Float10::try_from(previous_producers).unwrap();
+    debug!(target: "validator::consensus::pid::calculate_f", "Feedback: {feedback}");
     let error = FLOAT10_ONE.clone() - feedback;
+    debug!(target: "validator::consensus::pid::calculate_f", "Error: {error}");
 
     // Calculate f
     let mut f = previous_slot_f +
-        k1 * error.clone() +
-        k2 * previous_slot_error +
-        k3 * previous_slot_previous_slot_error;
+        K1.clone() * error.clone() +
+        K2.clone() * previous_slot_error +
+        K3.clone() * previous_slot_previous_slot_error;
+    debug!(target: "validator::consensus::pid::calculate_f", "Ounbounded f: {f}");
 
     // Boundaries control
     if f <= *FLOAT10_ZERO {
@@ -82,6 +87,7 @@ fn calculate_f(previous_slot: &Slot) -> (Float10, Float10) {
     } else if f >= *FLOAT10_ONE {
         f = MAX_F.clone()
     }
+    debug!(target: "validator::consensus::pid::calculate_f", "Bounded f: {f}");
 
     (f, error)
 }
@@ -93,15 +99,18 @@ fn calculate_sigmas(f: Float10, total_tokens: Float10) -> (pallas::Base, pallas:
     let x = FLOAT10_ONE.clone() - f;
     let c = x.ln();
     let neg_c = FLOAT10_NEG_ONE.clone() * c;
+    debug!(target: "validator::consensus::pid::calculate_sigmas", "neg_c: {neg_c}");
 
     // Calculate sigma 1
     let sigma1_fbig = neg_c.clone() / (total_tokens.clone() + EPSILON.clone()) * FIELD_P.clone();
     let sigma1 = fbig2base(sigma1_fbig);
+    debug!(target: "validator::consensus::pid::calculate_sigmas", "Sigma 1: {sigma1:?}");
 
     // Calculate sigma 2
     let sigma2_fbig = (neg_c / (total_tokens + EPSILON.clone())).powf(FLOAT10_TWO.clone()) *
         (FIELD_P.clone() / FLOAT10_TWO.clone());
     let sigma2 = fbig2base(sigma2_fbig);
+    debug!(target: "validator::consensus::pid::calculate_sigmas", "Sigma 2: {sigma2:?}");
 
     (sigma1, sigma2)
 }

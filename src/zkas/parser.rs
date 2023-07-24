@@ -22,6 +22,7 @@ use itertools::Itertools;
 
 use super::{
     ast::{Arg, Constant, Literal, Statement, StatementType, Variable, Witness},
+    constants::{MAX_K, MAX_NS_LEN},
     error::ErrorEmitter,
     lexer::{Token, TokenType},
     LitType, Opcode, VarType,
@@ -29,7 +30,7 @@ use super::{
 
 /// zkas language builtin keywords.
 /// These can not be used anywhere except where they are expected.
-const KEYWORDS: [&str; 3] = ["constant", "witness", "circuit"];
+const KEYWORDS: [&str; 4] = ["k", "constant", "witness", "circuit"];
 
 /// Forbidden namespaces
 const NOPE_NS: [&str; 4] = [".constant", ".literal", ".witness", ".circuit"];
@@ -101,7 +102,7 @@ impl Parser {
         Self { tokens, error }
     }
 
-    pub fn parse(&self) -> (String, Vec<Constant>, Vec<Witness>, Vec<Statement>) {
+    pub fn parse(&self) -> (String, u32, Vec<Constant>, Vec<Witness>, Vec<Statement>) {
         // We use these to keep state while parsing.
         let mut namespace = None;
         let (mut declaring_constant, mut declared_constant) = (false, false);
@@ -130,6 +131,32 @@ impl Parser {
         }
 
         let mut iter = self.tokens.iter();
+
+        // The first thing that has to be declared in the source
+        // code is the constant "k" which defines 2^k rows that
+        // the circuit needs to successfully execute.
+        let Some((k, equal, number, semicolon)) = iter.next_tuple() else {
+            self.error.abort("Source file does not start with k=n;", 0, 0);
+            unreachable!();
+        };
+
+        if k.token_type != TokenType::Symbol ||
+            equal.token_type != TokenType::Assign ||
+            number.token_type != TokenType::Number ||
+            semicolon.token_type != TokenType::Semicolon
+        {
+            self.error.abort("Source file does not start with k=n;", 0, 0);
+        }
+
+        if k.token != "k" {
+            self.error.abort("Source file does not start with k=n;", 0, 0);
+        }
+
+        let declared_k = number.token.parse().unwrap();
+        if declared_k > MAX_K {
+            self.error.abort(&format!("k param is too high, max allowed is {}", MAX_K), 0, 0);
+        }
+
         while let Some(t) = iter.next() {
             // Sections "constant", "witness", and "circuit" are
             // the sections we must be declaring in our source code.
@@ -206,7 +233,15 @@ impl Parser {
                                 $t[0].column,
                             );
                         }
+
                         namespace = Some($t[0].token.clone());
+                        if namespace.as_ref().unwrap().as_bytes().len() > MAX_NS_LEN {
+                            self.error.abort(
+                                &format!("Namespace too long, max {} bytes", MAX_NS_LEN),
+                                $t[0].line,
+                                $t[0].column,
+                            );
+                        }
                     }
                 };
             }
@@ -350,7 +385,7 @@ impl Parser {
             self.error.abort("Circuit section is empty.", 0, 0);
         }
 
-        (ns, constants, witnesses, statements)
+        (ns, declared_k, constants, witnesses, statements)
     }
 
     /// Routine checks on section structure

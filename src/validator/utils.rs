@@ -39,7 +39,7 @@ pub fn deploy_native_contracts(
     time_keeper: &TimeKeeper,
     faucet_pubkeys: &Vec<PublicKey>,
 ) -> Result<()> {
-    info!(target: "validator", "Deploying native WASM contracts");
+    info!(target: "validator::utils::deploy_native_contracts", "Deploying native WASM contracts");
 
     // The faucet pubkeys are pubkeys which are allowed to create clear inputs
     // in the Money contract.
@@ -73,16 +73,16 @@ pub fn deploy_native_contracts(
     ];
 
     for nc in native_contracts {
-        info!(target: "validator", "Deploying {} with ContractID {}", nc.0, nc.1);
+        info!(target: "validator::utils::deploy_native_contracts", "Deploying {} with ContractID {}", nc.0, nc.1);
 
         let mut runtime = Runtime::new(&nc.2[..], overlay.clone(), nc.1, time_keeper.clone())?;
 
         runtime.deploy(&nc.3)?;
 
-        info!(target: "validator", "Successfully deployed {}", nc.0);
+        info!(target: "validator::utils::deploy_native_contracts", "Successfully deployed {}", nc.0);
     }
 
-    info!(target: "validator", "Finished deployment of native WASM contracts");
+    info!(target: "validator::utils::deploy_native_contracts", "Finished deployment of native WASM contracts");
 
     Ok(())
 }

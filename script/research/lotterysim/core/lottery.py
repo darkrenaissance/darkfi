@@ -5,6 +5,7 @@ from datetime import timedelta
 from core.darkie import *
 from pid.cascade import *
 from tqdm import tqdm
+import random
 
 class DarkfiTable:
     def __init__(self, airdrop, running_time, controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, dt=1, kc=0, ti=0, td=0, ts=0, debug=False, r_kp=0, r_ki=0, r_kd=0):
@@ -24,6 +25,15 @@ class DarkfiTable:
     def add_darkie(self, darkie):
         self.darkies+=[darkie]
 
+    """
+    for every slot under given running time, set f based off prior on-chain public \
+    values, set sigmas, f, update vesting, stake for every stakeholder, resolve \
+    forks.
+    @param rand_running_time: randomization running time state
+    @param debug: debug option
+    @param hp: high precision option
+    @returns: acc, avg_apy, avg_reward, stake_ratio, avg_apr
+    """
     def background(self, rand_running_time=True, debug=False, hp=True):
         self.debug=debug
         self.start_time=time.time()
@@ -31,45 +41,48 @@ class DarkfiTable:
         # random running time
         rand_running_time = random.randint(1,self.running_time) if rand_running_time else self.running_time
         self.running_time = rand_running_time
-        #if rand_running_time and debug:
-            #print("random running time: {}".format(self.running_time))
-            #print('running time: {}'.format(self.running_time))
-
         rt_range = tqdm(np.arange(0,self.running_time, 1))
+        merge_length = 0
+        # loop through slots
         for count in rt_range:
-        #while count < self.running_time:
-            winners=0
+            merge_length = 0
+            # calculate probability of winning owning 100% of stake
             f = self.secondary_pid.pid_clipped(float(feedback), debug)
-
+            # calculate reward value every epoch
             if count%EPOCH_LENGTH == 0:
                 acc = self.secondary_pid.acc()
-                #staked_ratio = self.avg_stake_ratio()
                 reward = self.primary_pid.pid_clipped(acc, debug)
                 self.rewards += [reward]
-
-            rt_range.set_description('issuance {} DRK, acc: {}'.format(round(sum(self.rewards),2), round(acc,2)))
             #note! thread overhead is 10X slower than sequential node execution!
+            total_stake = 0
             for i in range(len(self.darkies)):
                 self.darkies[i].set_sigma_feedback(self.Sigma, feedback, f, count, hp)
                 self.darkies[i].update_vesting()
                 self.darkies[i].run(hp)
-
-            #print('reward: {}'.format(rewards[-1]))
+                total_stake += self.darkies[i].stake
+            # count number of leads per slot
+            winners=0
+            # count secondary controller feedback
             for i in range(len(self.darkies)):
                 winners += self.darkies[i].won_hist[-1]
-                ###
             self.winners +=[winners]
             feedback = winners
+            ################
+            # resolve fork #
+            ################
             if self.winners[-1]==1:
                 for i in range(len(self.darkies)):
                     if self.darkies[i].won_hist[-1]:
-                        self.darkies[i].update_stake(self.rewards[-1])
+                        if random.random() < len(self.darkies)**-1:
+                            self.darkies.remove(self.darkies[i])
+                            print('stakeholder {} slashed'.format(i))
+                        else:
+                            self.darkies[i].update_stake(self.rewards[-1])
                         break
                 # resolve finalization
-                if count >= ERC20DRK:
-                    self.Sigma += 1
+                self.Sigma += self.rewards[-1]
                 # resync nodes
-                merge_length = 0
+
                 for i in reversed(self.winners[:-1]):
                     if i !=1:
                         merge_length+=1
@@ -88,24 +101,44 @@ class DarkfiTable:
                             darkie_winning_idx = darkie_idx
                             break
                     self.darkies[darkie_winning_idx].resync_stake(resync_reward)
+                    self.Sigma += resync_reward
+            #################
+            # fork resolved #
+            #################
+            rt_range.set_description('epoch: {}, fork: {} issuance {} DRK, acc: {}%, stake = {}%, sr: {}%, reward:{}, apr: {}%'.format(int(count/EPOCH_LENGTH), merge_length, round(self.Sigma,2), round(acc*100, 2), round(total_stake/self.Sigma*100 if self.Sigma>0 else 0,2), round(self.avg_stake_ratio()*100,2) , round(self.rewards[-1],2), round(self.avg_apr()*100,2)))
+            assert round(total_stake,1) <= round(self.Sigma,1), 'stake: {}, sigma: {}'.format(total_stake, self.Sigma)
             count+=1
         self.end_time=time.time()
         avg_reward = sum(self.rewards)/len(self.rewards)
         stake_ratio = self.avg_stake_ratio()
         avg_apy = self.avg_apy()
         avg_apr = self.avg_apr()
-        #print('apy: {}, staked_ratio: {}'.format(avg_apy, stake_ratio))
         return self.secondary_pid.acc_percentage(), avg_apy, avg_reward, stake_ratio, avg_apr
 
+    """
+    average APY (with compound interest added every epoch) ,
+    scaled to running time for all nodes
+    @returns: average APY for all nodes
+    """
     def avg_apy(self):
         return Num(sum([darkie.apy_scaled_to_runningtime(self.rewards) for darkie in self.darkies])/len(self.darkies))
 
+    """
+    average APR scaled to running time for all nodes
+    @returns: average APR for all nodes
+    """
     def avg_apr(self):
         return Num(sum([darkie.apr_scaled_to_runningtime() for darkie in self.darkies])/len(self.darkies))
 
+    """
+    returns: average stake ratio for all nodes
+    """
     def avg_stake_ratio(self):
-        return sum([darkie.staked_tokens_ratio() for darkie in self.darkies])/len(self.darkies)
+        return sum([darkie.staked_tokens_ratio() for darkie in self.darkies]) / len(self.darkies)
 
+    """
+    write lottery reward log
+    """
     def write(self):
         elapsed=self.end_time-self.start_time
         for id, darkie in enumerate(self.darkies):

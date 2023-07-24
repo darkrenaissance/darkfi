@@ -1,3 +1,5 @@
+k = 13;
+
 constant "Opcodes" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,
