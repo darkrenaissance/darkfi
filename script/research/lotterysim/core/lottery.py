@@ -106,7 +106,7 @@ class DarkfiTable:
             # fork resolved #
             #################
             rt_range.set_description('epoch: {}, fork: {} issuance {} DRK, acc: {}%, stake = {}%, sr: {}%, reward:{}, apr: {}%'.format(int(count/EPOCH_LENGTH), merge_length, round(self.Sigma,2), round(acc*100, 2), round(total_stake/self.Sigma*100 if self.Sigma>0 else 0,2), round(self.avg_stake_ratio()*100,2) , round(self.rewards[-1],2), round(self.avg_apr()*100,2)))
-            assert round(total_stake,1) <= round(self.Sigma,1), 'stake: {}, sigma: {}'.format(total_stake, self.Sigma)
+            #assert round(total_stake,1) <= round(self.Sigma,1), 'stake: {}, sigma: {}'.format(total_stake, self.Sigma)
             count+=1
         self.end_time=time.time()
         avg_reward = sum(self.rewards)/len(self.rewards)

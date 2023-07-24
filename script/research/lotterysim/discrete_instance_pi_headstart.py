@@ -10,8 +10,7 @@ from draw import draw
 os.system("rm log/*_feedback.hist; rm log/*_output.hist; rm log/darkie*.log")
 
 RUNNING_TIME = int(input("running time:"))
-NODES=1000
-PREMINT = 2.1*10**7
+
 
 if __name__ == "__main__":
     mu = PREMINT/NODES
