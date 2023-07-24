@@ -71,6 +71,10 @@ struct Args {
     /// Participate in the consensus protocol
     consensus: bool,
 
+    #[structopt(long)]
+    /// Skip syncing process and start node right away
+    skip_sync: bool,
+
     /// Syncing network settings
     #[structopt(flatten)]
     sync_net: SettingsOpt,
@@ -189,12 +193,11 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     }
 
     // Sync blockchain
-    info!("Waiting for sync P2P outbound connections");
-    // TODO: we have to wait here because sync task can start
-    // before P2P, so it will seem as we are not connected
-    // to other nodes, therefore not sync.
-    //sync_p2p.wait_for_outbound(ex).await?;
-    sync_task(&darkfid).await?;
+    if !args.skip_sync {
+        sync_task(&darkfid).await?;
+    } else {
+        darkfid.validator.write().await.synced = true;
+    }
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new()?;

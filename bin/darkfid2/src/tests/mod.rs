@@ -55,15 +55,14 @@ async fn sync_blocks_real(ex: Arc<Executor<'_>>) -> Result<()> {
     let alice_url = th.alice.sync_p2p.settings().inbound_addrs[0].clone();
     let bob_url = th.bob.sync_p2p.settings().inbound_addrs[0].clone();
     settings.peers = vec![alice_url, bob_url];
-    let charlie = generate_node(&th.vks, &th.validator_config, &settings, &ex).await?;
+    let charlie = generate_node(&th.vks, &th.validator_config, &settings, &ex, false).await?;
     // Verify node synced
     let genesis_txs_total = th.config.alice_initial + th.config.bob_initial;
     let alice = &th.alice.validator.read().await;
     let charlie = &charlie.validator.read().await;
     charlie.validate_blockchain(genesis_txs_total, vec![]).await?;
-    // TODO: this fails because sync starts before we connect to peers
-    //assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
-    //assert_eq!(alice.blockchain.slots.len(), charlie.blockchain.slots.len());
+    assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
+    assert_eq!(alice.blockchain.slots.len(), charlie.blockchain.slots.len());
 
     // Thanks for reading
     Ok(())

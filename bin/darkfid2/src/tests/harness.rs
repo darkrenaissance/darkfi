@@ -91,13 +91,13 @@ impl Harness {
         // Alice
         let alice_url = Url::parse("tcp+tls://127.0.0.1:18340")?;
         settings.inbound_addrs = vec![alice_url.clone()];
-        let alice = generate_node(&vks, &validator_config, &settings, ex).await?;
+        let alice = generate_node(&vks, &validator_config, &settings, ex, true).await?;
 
         // Bob
         let bob_url = Url::parse("tcp+tls://127.0.0.1:18341")?;
         settings.inbound_addrs = vec![bob_url];
         settings.peers = vec![alice_url];
-        let bob = generate_node(&vks, &validator_config, &settings, ex).await?;
+        let bob = generate_node(&vks, &validator_config, &settings, ex, false).await?;
 
         Ok(Self { config, vks, validator_config, alice, bob })
     }
@@ -189,6 +189,7 @@ pub async fn generate_node(
     config: &ValidatorConfig,
     settings: &Settings,
     ex: &Arc<smol::Executor<'_>>,
+    skip_sync: bool,
 ) -> Result<Darkfid> {
     let sled_db = sled::Config::new().temporary(true).open()?;
     vks::inject(&sled_db, &vks)?;
@@ -203,9 +204,11 @@ pub async fn generate_node(
         }
     })
     .detach();
-    // TODO: enable this when ready
-    //sync_p2p.wait_for_outbound(ex).await?;
-    sync_task(&node).await?;
+    if !skip_sync {
+        sync_task(&node).await?;
+    } else {
+        node.validator.write().await.synced = true;
+    }
 
     Ok(node)
 }

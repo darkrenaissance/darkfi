@@ -12,6 +12,9 @@ rpc_listen = "tcp://127.0.0.1:18340"
 # Participate in the consensus protocol
 consensus = false
 
+# Skip syncing process and start node right away
+skip_sync = false
+
 # Enable testing mode for local testing
 testing_mode = false
 
