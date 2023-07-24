@@ -1,9 +1,41 @@
-## Hello Darkmap
+## Darkmap
 
-In this part, we will walk through a simple Darkfi contract.
+An immutable name registry. The important feature is that names can be
+immutable.
+From an end user perspective, they provide a dpath and get a value back.
 
-First, pull down the Darkmap repository, we'd use this example to understand how
-to write a simple yet powerful Darkfi contract!
+For example:
+```
+provide: darkrenaissance::darkfi::v0_4_1
+get:     0766e910aae7af482885d0a5b05ccb61ae7c1af4 (which is the commit for Darkfi v0.4.1, https://github.com/darkrenaissance/darkfi/commit/0766e910aae7af482885d0a5b05ccb61ae7c1af4)
+```
+
+Syntax:
+```
+  Colon means the key is locked to particular value.
+  For example, the key v0_4_1 is locked to 0766e910aae7af482885d0a5b05ccb61ae7c1af4
+  in the name registry that darkrenaissance:darkfi points to.
+  It's helpful to know a tag always means the same commit.
+	              v
+darkrenaissance:darkfi:v0_4_1
+
+
+  Dot means the key is not locked to a value. 
+  It can be locked to a value later or be changed to a different value.
+  For example, master (HEAD) currently maps to 85c53aa7b086652ed6d2428bf748f841485ee0e2,
+  It's helpful because HEAD needs to change.
+	              v
+darkrenaissance:darkfi.master
+```
+
+Beyond the usual things one can do with a name registry e.g. naming website,
+an immutable name provides strong security.
+If the contract and blockchain are secure, the name doesn't change, not even the owner.
+
+Being deployed on Darkfi also means there is no trace you own a name because gas payment
+is anonymous.
+
+## Contract implementation
 
 > Note: This book assumes basic familiarity with smart contracts and blockchain. 
 > It's good if you are familiar with Rust. You'd still be able to follow along
@@ -13,7 +45,17 @@ to write a simple yet powerful Darkfi contract!
 git clone https://github.com/darkrenaissance/darkmap
 ```
 
-In Darkfi, a contract is deployed as a wasm module. Rust has one of the best wasm support, so Darkmap is implemented in Rust.
+### Tool: wasm contract
+
+In Darkfi, a contract is deployed as a wasm module. 
+Rust has one of the best wasm support, so Darkmap is implemented in Rust.
+In theory, any language that compiles to wasm can be used make a contract e.g. Zig.
+
+### Tool: zkvm and zkas
+
+You can make a ZK scheme where:
+* a user computes a ZK proof locally and submit along the transaction
+* the contract grants access to certain features only when it receives a valid proof
 
 ## entrypoint.rs
 
@@ -85,3 +127,12 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
 	* db_lookup
 	* zkas_db_set
 
+
+## Outline of book
+
+* What is the problem?
+* What are the tools?
+	* zkbincode
+	* wasm crate
+	* transaction builder
+	* test facility
