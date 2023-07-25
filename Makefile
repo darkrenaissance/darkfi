@@ -2,9 +2,9 @@
 
 # Install prefix
 PREFIX = $(HOME)/.cargo
-
+RUST_VER = +nightly-2023-06-21
 # Cargo binary
-CARGO = cargo +nightly
+CARGO = cargo $(RUST_VER)
 
 # Optional compile target
 #RUST_TARGET = x86_64-unknown-linux-musl

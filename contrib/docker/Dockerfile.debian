@@ -1,8 +1,8 @@
-# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:debian -f ./contrib/docker/Dockerfile.debian
+# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:debian -f ./contrib/docker/Dockerfile.debian --build-arg DONT_EXEC_TESTS=1
 #   optionally with: --build-arg OS_VER=bullseye-slim --build-arg RUST_VER=nightly
 
-ARG RUST_VER=1.70         # nightly
-ARG OS_VER=bookworm-slim  # (12); bullseye-slim (11); buster-slim (10)
+ARG RUST_VER=nightly-2023-06-21  # nightly 1.72
+ARG OS_VER=bookworm-slim         # (12); bullseye-slim (11); buster-slim (10)
 
 FROM debian:${OS_VER} as rust_builder
 
@@ -10,7 +10,7 @@ ARG RUST_VER
 
 RUN apt-get update && apt-get install -y build-essential cmake jq wget \
   pkg-config clang libclang-dev llvm-dev libudev-dev libfreetype6-dev libasound2-dev \
-  libexpat1-dev curl gcc make libssl-dev fonts-lato libfontconfig-dev python3-dev
+  libexpat1-dev curl gcc make libssl-dev fonts-lato libfontconfig-dev python3-dev libsqlite3-dev
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 
@@ -23,6 +23,9 @@ RUN cargo search whatever  # creates .cargo cache
 # 2. stage
 FROM rust_builder as builder
 
+ARG DONT_EXEC_TESTS
+ARG RUST_VER
+
 WORKDIR /opt/darkfi
 
 COPY . /opt/darkfi
@@ -33,16 +36,19 @@ RUN cargo update
 
 RUN rm -rf ./target/ zkas proof/*.bin
 
-RUN bash -c 'make -j test &&  make -j all'
+RUN bash -c "if [ -z \"$DONT_EXEC_TESTS\" ]; then make -j test; fi"
+
+RUN bash -c 'make -j all'
 
 # 3. stage
 FROM debian:${OS_VER}
 
-RUN apt-get -y update && apt-get install -y openssl fonts-lato libout123-0 libmpg123-0 \
+RUN apt-get -y update && apt-get install -y openssl fonts-lato libout123-0 libmpg123-0 libasound2 libsqlite3-0 \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/darkfi
 
 COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
-   /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/faucetd \
-   /opt/darkfi/zkas /opt/darkfi/vanityaddr  ./
+   /opt/darkfi/darkirc /opt/darkfi/faucetd \
+   /opt/darkfi/zkas /opt/darkfi/vanityaddr \
+   /opt/darkfi/tau /opt/darkfi/taud   ./

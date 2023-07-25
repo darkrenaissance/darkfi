@@ -1,8 +1,8 @@
-# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:fedora -f ./contrib/docker/Dockerfile.fedora
+# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:fedora -f ./contrib/docker/Dockerfile.fedora --build-arg DONT_EXEC_TESTS=1
 #   optionally with: --build-arg OS_VER=fedora:37 --build-arg RUST_VER=nightly
 
-ARG RUST_VER=1.70     # stable nightly beta 1.67
-ARG OS_VER=fedora:38  # fedora:37
+ARG RUST_VER=nightly-2023-06-21  # stable nightly beta 1.72
+ARG OS_VER=fedora:38             # fedora:37
 
 FROM ${OS_VER} as rust_builder
 
@@ -12,7 +12,7 @@ RUN dnf -y install gcc gcc-c++ kernel-headers cmake jq wget \
   pkg-config clang clang-libs llvm-libs \
   openssl-devel findutils fontconfig-devel \
   lato-fonts alsa-lib-devel python3-devel \
-  perl-FindBin perl-File-Compare
+  perl-FindBin perl-File-Compare perl-lib sqlite-devel
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 
@@ -25,6 +25,9 @@ RUN cargo search whatever  # creates .cargo cache
 # 2. stage
 FROM rust_builder as builder
 
+ARG DONT_EXEC_TESTS
+ARG RUST_VER
+
 WORKDIR /opt/darkfi
 
 COPY . /opt/darkfi
@@ -35,17 +38,20 @@ RUN make clean
 
 RUN rm -rf ./target/ zkas proof/*.bin
 
-RUN bash -c 'make -j test && make -j all'
+RUN bash -c "if [ -z \"$DONT_EXEC_TESTS\" ]; then make -j test; fi"
+
+RUN bash -c 'make -j all'
 
 # 3. stage
 FROM ${OS_VER}
 
-RUN dnf -y install openssl lato-fonts \
+RUN dnf -y install openssl lato-fonts alsa-lib\
   && dnf clean all \
   && rm -rf /var/cache/dnf
 
 WORKDIR /opt/darkfi
 
 COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
-   /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/faucetd \
-   /opt/darkfi/zkas /opt/darkfi/vanityaddr  ./
+   /opt/darkfi/darkirc /opt/darkfi/faucetd \
+   /opt/darkfi/zkas /opt/darkfi/vanityaddr \
+   /opt/darkfi/tau /opt/darkfi/taud   ./
