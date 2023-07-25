@@ -23,7 +23,7 @@ use darkfi::{
     net::{P2p, P2pPtr, Settings, SESSION_ALL},
     tx::Transaction,
     validator::{
-        proto::{ProtocolBlock, ProtocolSync, ProtocolTx},
+        proto::{ProtocolBlock, ProtocolProposal, ProtocolSync, ProtocolTx},
         ValidatorPtr,
     },
     Result,
@@ -96,6 +96,23 @@ pub async fn spawn_sync_p2p(settings: &Settings, validator: &ValidatorPtr) -> P2
         .register(SESSION_ALL, move |channel, p2p| {
             let validator = _validator.clone();
             async move { ProtocolTx::init(channel, validator, p2p).await.unwrap() }
+        })
+        .await;
+
+    p2p
+}
+
+/// Auxiliary function to generate the consensus P2P network and register all its protocols.
+pub async fn spawn_consensus_p2p(settings: &Settings, validator: &ValidatorPtr) -> P2pPtr {
+    info!(target: "darkfid", "Registering consensus network P2P protocols...");
+    let p2p = P2p::new(settings.clone()).await;
+    let registry = p2p.protocol_registry();
+
+    let _validator = validator.clone();
+    registry
+        .register(SESSION_ALL, move |channel, p2p| {
+            let validator = _validator.clone();
+            async move { ProtocolProposal::init(channel, validator, p2p).await.unwrap() }
         })
         .await;
 

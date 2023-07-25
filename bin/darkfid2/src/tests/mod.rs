@@ -48,14 +48,15 @@ async fn sync_blocks_real(ex: Arc<Executor<'_>>) -> Result<()> {
     th.validate_chains(3, 7).await?;
 
     // We are going to create a third node and try to sync from the previous two
-    let mut settings = Settings::default();
-    settings.localnet = true;
+    let mut sync_settings = Settings::default();
+    sync_settings.localnet = true;
     let charlie_url = Url::parse("tcp+tls://127.0.0.1:18342")?;
-    settings.inbound_addrs = vec![charlie_url];
+    sync_settings.inbound_addrs = vec![charlie_url];
     let alice_url = th.alice.sync_p2p.settings().inbound_addrs[0].clone();
     let bob_url = th.bob.sync_p2p.settings().inbound_addrs[0].clone();
-    settings.peers = vec![alice_url, bob_url];
-    let charlie = generate_node(&th.vks, &th.validator_config, &settings, &ex, false).await?;
+    sync_settings.peers = vec![alice_url, bob_url];
+    let charlie =
+        generate_node(&th.vks, &th.validator_config, &sync_settings, None, &ex, false).await?;
     // Verify node synced
     let genesis_txs_total = th.config.alice_initial + th.config.bob_initial;
     let alice = &th.alice.validator.read().await;

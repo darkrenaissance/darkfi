@@ -20,6 +20,10 @@
 mod protocol_block;
 pub use protocol_block::ProtocolBlock;
 
+/// Block proposal broadcast protocol
+mod protocol_proposal;
+pub use protocol_proposal::ProtocolProposal;
+
 /// Validator blockchain sync protocol
 mod protocol_sync;
 pub use protocol_sync::{ProtocolSync, SyncRequest, SyncResponse};

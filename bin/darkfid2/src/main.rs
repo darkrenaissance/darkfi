@@ -25,7 +25,7 @@ use darkfi::{
     async_daemonize,
     blockchain::BlockInfo,
     cli_desc,
-    net::{settings::SettingsOpt, P2p, P2pPtr},
+    net::{settings::SettingsOpt, P2pPtr},
     rpc::server::listen_and_serve,
     util::time::TimeKeeper,
     validator::{Validator, ValidatorConfig, ValidatorPtr},
@@ -50,7 +50,7 @@ use task::sync::sync_task;
 
 /// Utility functions
 mod utils;
-use utils::{genesis_txs_total, spawn_sync_p2p};
+use utils::{genesis_txs_total, spawn_consensus_p2p, spawn_sync_p2p};
 
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
@@ -147,12 +147,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let sync_p2p = spawn_sync_p2p(&args.sync_net.into(), &validator).await;
 
     // Initialize consensus P2P network
-    let consensus_p2p = {
-        if !args.consensus {
-            None
-        } else {
-            Some(P2p::new(args.consensus_net.into()).await)
-        }
+    let consensus_p2p = if args.consensus {
+        Some(spawn_consensus_p2p(&args.consensus_net.into(), &validator).await)
+    } else {
+        None
     };
 
     // Initialize node

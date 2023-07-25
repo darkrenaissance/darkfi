@@ -37,7 +37,7 @@ use url::Url;
 
 use crate::{
     task::sync::sync_task,
-    utils::{genesis_txs_total, spawn_sync_p2p},
+    utils::{genesis_txs_total, spawn_consensus_p2p, spawn_sync_p2p},
     Darkfid,
 };
 
@@ -85,19 +85,42 @@ impl Harness {
 
         // Generate validators using pregenerated vks
         let (_, vks) = vks::read_or_gen_vks_and_pks()?;
-        let mut settings = Settings::default();
-        settings.localnet = true;
+        let mut sync_settings = Settings::default();
+        sync_settings.localnet = true;
+        let mut consensus_settings = Settings::default();
+        consensus_settings.localnet = true;
 
         // Alice
         let alice_url = Url::parse("tcp+tls://127.0.0.1:18340")?;
-        settings.inbound_addrs = vec![alice_url.clone()];
-        let alice = generate_node(&vks, &validator_config, &settings, ex, true).await?;
+        sync_settings.inbound_addrs = vec![alice_url.clone()];
+        let alice_consensus_url = Url::parse("tcp+tls://127.0.0.1:18350")?;
+        consensus_settings.inbound_addrs = vec![alice_consensus_url.clone()];
+        let alice = generate_node(
+            &vks,
+            &validator_config,
+            &sync_settings,
+            Some(&consensus_settings),
+            ex,
+            true,
+        )
+        .await?;
 
         // Bob
         let bob_url = Url::parse("tcp+tls://127.0.0.1:18341")?;
-        settings.inbound_addrs = vec![bob_url];
-        settings.peers = vec![alice_url];
-        let bob = generate_node(&vks, &validator_config, &settings, ex, false).await?;
+        sync_settings.inbound_addrs = vec![bob_url];
+        sync_settings.peers = vec![alice_url];
+        let bob_consensus_url = Url::parse("tcp+tls://127.0.0.1:18351")?;
+        consensus_settings.inbound_addrs = vec![bob_consensus_url];
+        consensus_settings.peers = vec![alice_consensus_url];
+        let bob = generate_node(
+            &vks,
+            &validator_config,
+            &sync_settings,
+            Some(&consensus_settings),
+            ex,
+            false,
+        )
+        .await?;
 
         Ok(Self { config, vks, validator_config, alice, bob })
     }
@@ -187,15 +210,24 @@ impl Harness {
 pub async fn generate_node(
     vks: &Vec<(Vec<u8>, String, Vec<u8>)>,
     config: &ValidatorConfig,
-    settings: &Settings,
+    sync_settings: &Settings,
+    consensus_settings: Option<&Settings>,
     ex: &Arc<smol::Executor<'_>>,
     skip_sync: bool,
 ) -> Result<Darkfid> {
     let sled_db = sled::Config::new().temporary(true).open()?;
     vks::inject(&sled_db, &vks)?;
+
     let validator = Validator::new(&sled_db, config.clone()).await?;
-    let sync_p2p = spawn_sync_p2p(&settings, &validator).await;
-    let node = Darkfid::new(sync_p2p.clone(), None, validator).await;
+
+    let sync_p2p = spawn_sync_p2p(&sync_settings, &validator).await;
+    let consensus_p2p = if let Some(settings) = consensus_settings {
+        Some(spawn_consensus_p2p(settings, &validator).await)
+    } else {
+        None
+    };
+    let node = Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator).await;
+
     sync_p2p.clone().start(ex.clone()).await?;
     let _ex = ex.clone();
     ex.spawn(async move {
@@ -204,6 +236,18 @@ pub async fn generate_node(
         }
     })
     .detach();
+
+    if consensus_settings.is_some() {
+        consensus_p2p.clone().unwrap().start(ex.clone()).await?;
+        let _ex = ex.clone();
+        ex.spawn(async move {
+            if let Err(e) = consensus_p2p.unwrap().run(_ex).await {
+                error!("Failed starting consensus P2P network: {}", e);
+            }
+        })
+        .detach();
+    }
+
     if !skip_sync {
         sync_task(&node).await?;
     } else {
