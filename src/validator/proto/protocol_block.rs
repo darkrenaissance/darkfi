@@ -92,6 +92,9 @@ impl ProtocolBlock {
                 continue
             }
 
+            // TODO: consensus participants should skip this
+            // as they already have the blocks added
+
             let block_copy = (*block).clone();
 
             match self.validator.write().await.append_block(&block_copy).await {

@@ -125,7 +125,7 @@ libsqlite3-sys = {version = "0.26.0", features = ["bundled-sqlcipher-vendored-op
 
 # Blockchain store
 sled = {version = "0.34.7", optional = true}
-sled-overlay = {version = "0.0.7", optional = true}
+sled-overlay = {version = "0.0.8", optional = true}
 
 [dev-dependencies]
 clap = {version = "4.3.19", features = ["derive"]}
