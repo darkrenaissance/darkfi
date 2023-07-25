@@ -21,7 +21,7 @@ use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 
 use crate::{tx::Transaction, Error, Result};
 
-use super::{parse_record, validate_slot, Header, SledDbOverlayPtr};
+use super::{parse_record, parse_u64_key_record, validate_slot, Header, SledDbOverlayPtr};
 
 /// Block version number
 pub const BLOCK_VERSION: u8 = 1;
@@ -405,7 +405,7 @@ impl BlockOrderStore {
         let mut order = vec![];
 
         for record in self.0.iter() {
-            order.push(parse_record(record.unwrap())?);
+            order.push(parse_u64_key_record(record.unwrap())?);
         }
 
         Ok(order)
@@ -421,7 +421,7 @@ impl BlockOrderStore {
         let mut counter = 0;
         while counter <= n {
             if let Some(found) = self.0.get_gt(key.to_be_bytes())? {
-                let (number, hash) = parse_record(found)?;
+                let (number, hash) = parse_u64_key_record(found)?;
                 key = number;
                 ret.push(hash);
                 counter += 1;
@@ -440,7 +440,7 @@ impl BlockOrderStore {
             Some(s) => s,
             None => return Err(Error::BlockNumberNotFound(0)),
         };
-        let (number, hash) = parse_record(found)?;
+        let (number, hash) = parse_u64_key_record(found)?;
 
         Ok((number, hash))
     }
@@ -449,7 +449,7 @@ impl BlockOrderStore {
     /// implementation for `Vec<u8>`.
     pub fn get_last(&self) -> Result<(u64, blake3::Hash)> {
         let found = self.0.last()?.unwrap();
-        let (number, hash) = parse_record(found)?;
+        let (number, hash) = parse_u64_key_record(found)?;
 
         Ok((number, hash))
     }
@@ -519,7 +519,7 @@ impl BlockOrderStoreOverlay {
     /// implementation for `Vec<u8>`.
     pub fn get_last(&self) -> Result<(u64, blake3::Hash)> {
         let found = self.0.lock().unwrap().last(SLED_BLOCK_ORDER_TREE)?.unwrap();
-        let (number, hash) = parse_record(found)?;
+        let (number, hash) = parse_u64_key_record(found)?;
 
         Ok((number, hash))
     }

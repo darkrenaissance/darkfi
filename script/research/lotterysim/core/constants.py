@@ -9,7 +9,9 @@ CONTROLLER_TYPE_DISCRETE=0
 # takahashi controller enum
 CONTROLLER_TYPE_TAKAHASHI=1
 # initial distribution of tokens (random value for sake of experimentation)
-ERC20DRK=2.1*10**7
+ERC20DRK = 2.1*10**7
+# initial distribution
+PREMINT = ERC20DRK
 # group base/order
 L = 28948022309329048855892746252171976963363056481941560715954676764349967630337.0
 # secondary finalization controller minimal clipped value
@@ -40,12 +42,14 @@ SECONDARY_LEAD_TARGET = 1 #number of lead per slot
 EPSILON = 1
 # window of accuracy calculation
 ACC_WINDOW = int(EPOCH_LENGTH)
-# headstart value
-BASE_L = 0.0001*L
 # headstart airdrop period
-HEADSTART_AIRDROP = 288
+HEADSTART_AIRDROP = 0
 # threshold of randomly slashing stakeholder
 SLASHING_RATIO = 0.0001
+# number of nodes
+NODES=1000
+# headstart value
+BASE_L = NODES**-1*L*0.01
 # decimal high precision.
 L_HP = Num(L)
 F_MIN_HP = Num(F_MIN)

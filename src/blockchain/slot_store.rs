@@ -22,7 +22,7 @@ use darkfi_serial::{deserialize, serialize};
 
 use crate::{validator::consensus::pid::slot_pid_output, Error, Result};
 
-use super::{parse_record, SledDbOverlayPtr};
+use super::{parse_u64_key_record, SledDbOverlayPtr};
 
 /// A slot is considered valid when the following rules apply:
 ///     1. Id increments previous slot id
@@ -152,7 +152,7 @@ impl SlotStore {
         let mut slots = vec![];
 
         for slot in self.0.iter() {
-            let (_, slot): ([u8; 8], Slot) = parse_record(slot.unwrap())?;
+            let (_, slot): (u64, Slot) = parse_u64_key_record(slot.unwrap())?;
             slots.push(slot);
         }
 
@@ -169,7 +169,7 @@ impl SlotStore {
         let mut counter = 0;
         while counter <= n {
             if let Some(found) = self.0.get_gt(key.to_be_bytes())? {
-                let (id, slot) = parse_record(found)?;
+                let (id, slot) = parse_u64_key_record(found)?;
                 key = id;
                 ret.push(slot);
                 counter += 1;

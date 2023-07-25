@@ -25,13 +25,10 @@ use darkfi::{
     async_daemonize,
     blockchain::BlockInfo,
     cli_desc,
-    net::{settings::SettingsOpt, P2p, P2pPtr, SESSION_ALL},
+    net::{settings::SettingsOpt, P2pPtr},
     rpc::server::listen_and_serve,
     util::time::TimeKeeper,
-    validator::{
-        proto::{ProtocolBlock, ProtocolTx},
-        Validator, ValidatorConfig, ValidatorPtr,
-    },
+    validator::{Validator, ValidatorConfig, ValidatorPtr},
     Result,
 };
 use darkfi_contract_test_harness::vks;
@@ -47,9 +44,13 @@ mod rpc;
 mod rpc_blockchain;
 mod rpc_tx;
 
+/// Validator async tasks
+mod task;
+use task::sync::sync_task;
+
 /// Utility functions
 mod utils;
-use utils::genesis_txs_total;
+use utils::{genesis_txs_total, spawn_consensus_p2p, spawn_sync_p2p};
 
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
@@ -69,6 +70,10 @@ struct Args {
     #[structopt(long)]
     /// Participate in the consensus protocol
     consensus: bool,
+
+    #[structopt(long)]
+    /// Skip syncing process and start node right away
+    skip_sync: bool,
 
     /// Syncing network settings
     #[structopt(flatten)]
@@ -139,41 +144,17 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let validator = Validator::new(&sled_db, config).await?;
 
     // Initialize syncing P2P network
-    let sync_p2p = {
-        info!(target: "darkfid", "Registering sync network P2P protocols...");
-        let p2p = P2p::new(args.sync_net.into()).await;
-        let registry = p2p.protocol_registry();
-
-        let _validator = validator.clone();
-        registry
-            .register(SESSION_ALL, move |channel, p2p| {
-                let validator = _validator.clone();
-                async move { ProtocolBlock::init(channel, validator, p2p).await.unwrap() }
-            })
-            .await;
-
-        let _validator = validator.clone();
-        registry
-            .register(SESSION_ALL, move |channel, p2p| {
-                let validator = _validator.clone();
-                async move { ProtocolTx::init(channel, validator, p2p).await.unwrap() }
-            })
-            .await;
-
-        p2p
-    };
+    let sync_p2p = spawn_sync_p2p(&args.sync_net.into(), &validator).await;
 
     // Initialize consensus P2P network
-    let consensus_p2p = {
-        if !args.consensus {
-            None
-        } else {
-            Some(P2p::new(args.consensus_net.into()).await)
-        }
+    let consensus_p2p = if args.consensus {
+        Some(spawn_consensus_p2p(&args.consensus_net.into(), &validator).await)
+    } else {
+        None
     };
 
     // Initialize node
-    let darkfid = Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator).await;
+    let darkfid = Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator.clone()).await;
     let darkfid = Arc::new(darkfid);
     info!(target: "darkfid", "Node initialized successfully!");
 
@@ -209,8 +190,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         info!("Not starting consensus P2P network");
     }
 
-    // Simulate that we have synced
-    darkfid.validator.write().await.synced = true;
+    // Sync blockchain
+    if !args.skip_sync {
+        sync_task(&darkfid).await?;
+    } else {
+        darkfid.validator.write().await.synced = true;
+    }
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new()?;
@@ -218,11 +203,11 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     info!(target: "darkfid", "Caught termination signal, cleaning up and exiting...");
 
     info!(target: "darkfid", "Stopping syncing P2P network...");
-    darkfid.sync_p2p.stop().await;
+    sync_p2p.stop().await;
 
     if args.consensus {
         info!(target: "darkfid", "Stopping consensus P2P network...");
-        darkfid.consensus_p2p.clone().unwrap().stop().await;
+        consensus_p2p.unwrap().stop().await;
     }
 
     info!(target: "darkfid", "Flushing sled database...");

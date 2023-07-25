@@ -37,7 +37,15 @@ class Darkie():
     def apr_scaled_to_runningtime(self):
         initial_stake = self.vesting_wrapped_initial_stake()
         assert self.stake >= initial_stake, 'stake: {}, initial_stake: {}, slot: {}, current: {}, previous: {} vesting'.format(self.stake, initial_stake, self.slot, self.current_vesting(), self.prev_vesting())
-        apr = Num(self.stake - initial_stake) / Num(initial_stake) *  Num(ONE_YEAR/(self.slot)) if initial_stake > 0 and self.slot>0 else 0
+        apr_scaled = Num(self.stake - initial_stake) / Num(initial_stake) if initial_stake>0 else 0
+        if self.slot <= HEADSTART_AIRDROP:
+            # during this phase, it's only called at end of epoch
+            apr_period = EPOCH_LENGTH
+        else:
+            apr_period = self.slot-HEADSTART_AIRDROP
+        apr = apr_scaled * Num(ONE_YEAR/apr_period) if initial_stake > 0 and self.slot>0 else 0
+        #if apr>0 and self.stake-initial_stake>0:
+            #print("apr: {}, stake: {}, initial_stake: {}".format(apr, self.stake, initial_stake))
         return apr
 
 
@@ -48,8 +56,11 @@ class Darkie():
     def vesting_wrapped_initial_stake(self):
         #returns  vesting stake plus initial stake gained from zero coin headstart during aridrop period
         vesting = self.current_vesting()
-        #return vesting if vesting > 0 else  self.initial_stake[0]
-        return vesting +  self.initial_stake[0]
+        if self.slot <= HEADSTART_AIRDROP:
+            initial_stake = self.initial_stake[-1]
+        else:
+            initial_stake = self.initial_stake[int(HEADSTART_AIRDROP/EPOCH_LENGTH)]
+        return vesting + initial_stake
 
     """
     update stake with vesting return every scheduled vesting period
@@ -113,7 +124,8 @@ class Darkie():
             x = (Num(1) if hp else 1)  - (Num(tune_parameter) if hp else tune_parameter)
             c = (x.ln() if type(x)==Num else math.log(x))
             sigmas = [   c/((self.Sigma+EPSILON)**i) * ( ((L_HP if hp else L)/fact(i)) ) for i in range(1, k+1) ]
-            scaled_target = approx_target_in_zk(sigmas, Num(stake)) + ((BASE_L_HP if hp else BASE_L) if self.slot < HEADSTART_AIRDROP else 0)
+            headstart = (BASE_L_HP if hp else BASE_L) if self.slot < HEADSTART_AIRDROP else 0
+            scaled_target = approx_target_in_zk(sigmas, Num(stake)) + headstart
             return scaled_target
 
         if self.slot % EPOCH_LENGTH ==0 and self.slot > 0:

@@ -80,7 +80,7 @@ following commands (there is an assumption that `irc_listen` in the
 `ircd` config file is set to `127.0.0.1:6667`):
 
 ```
-/server add darkfi localhost/6667 -autoconnect
+/server add darkfi localhost/6667 -notls -autoconnect
 /save
 /quit
 ```

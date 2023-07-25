@@ -22,7 +22,7 @@ use darkfi_serial::{deserialize, serialize};
 
 use crate::{tx::Transaction, Error, Result};
 
-use super::{parse_record, SledDbOverlayPtr};
+use super::{parse_record, parse_u64_key_record, SledDbOverlayPtr};
 
 const SLED_TX_TREE: &[u8] = b"_transactions";
 const SLED_PENDING_TX_TREE: &[u8] = b"_pending_transactions";
@@ -320,7 +320,7 @@ impl PendingTxOrderStore {
         let mut txs = vec![];
 
         for tx in self.0.iter() {
-            txs.push(parse_record(tx.unwrap())?);
+            txs.push(parse_u64_key_record(tx.unwrap())?);
         }
 
         Ok(txs)

@@ -19,12 +19,11 @@
 use async_std::sync::Arc;
 use darkfi::{
     blockchain::{BlockInfo, Header},
-    net::{P2p, P2pPtr, Settings, SESSION_ALL},
+    net::Settings,
     util::time::TimeKeeper,
     validator::{
         consensus::{next_block_reward, pid::slot_pid_output},
-        proto::{ProtocolBlock, ProtocolTx},
-        Validator, ValidatorConfig, ValidatorPtr,
+        Validator, ValidatorConfig,
     },
     Result,
 };
@@ -36,7 +35,11 @@ use darkfi_sdk::{
 use log::error;
 use url::Url;
 
-use crate::{utils::genesis_txs_total, Darkfid};
+use crate::{
+    task::sync::sync_task,
+    utils::{genesis_txs_total, spawn_consensus_p2p, spawn_sync_p2p},
+    Darkfid,
+};
 
 pub struct HarnessConfig {
     pub testing_node: bool,
@@ -46,12 +49,14 @@ pub struct HarnessConfig {
 
 pub struct Harness {
     pub config: HarnessConfig,
+    pub vks: Vec<(Vec<u8>, String, Vec<u8>)>,
+    pub validator_config: ValidatorConfig,
     pub alice: Darkfid,
     pub bob: Darkfid,
 }
 
 impl Harness {
-    pub async fn new(config: HarnessConfig, ex: Arc<smol::Executor<'_>>) -> Result<Self> {
+    pub async fn new(config: HarnessConfig, ex: &Arc<smol::Executor<'_>>) -> Result<Self> {
         // Use test harness to generate genesis transactions
         let mut th = TestHarness::new(&["money".to_string(), "consensus".to_string()]).await?;
         let (genesis_stake_tx, _) = th.genesis_stake(&Holder::Alice, config.alice_initial)?;
@@ -70,7 +75,7 @@ impl Harness {
         // NOTE: we are not using consensus constants here so we
         // don't get circular dependencies.
         let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
-        let val_config = ValidatorConfig::new(
+        let validator_config = ValidatorConfig::new(
             time_keeper,
             genesis_block,
             genesis_txs_total,
@@ -80,24 +85,47 @@ impl Harness {
 
         // Generate validators using pregenerated vks
         let (_, vks) = vks::read_or_gen_vks_and_pks()?;
-        let mut settings = Settings::default();
-        settings.localnet = true;
+        let mut sync_settings = Settings::default();
+        sync_settings.localnet = true;
+        let mut consensus_settings = Settings::default();
+        consensus_settings.localnet = true;
 
         // Alice
         let alice_url = Url::parse("tcp+tls://127.0.0.1:18340")?;
-        settings.inbound_addrs = vec![alice_url.clone()];
-        let alice = generate_node(&vks, &val_config, &settings, &ex).await?;
+        sync_settings.inbound_addrs = vec![alice_url.clone()];
+        let alice_consensus_url = Url::parse("tcp+tls://127.0.0.1:18350")?;
+        consensus_settings.inbound_addrs = vec![alice_consensus_url.clone()];
+        let alice = generate_node(
+            &vks,
+            &validator_config,
+            &sync_settings,
+            Some(&consensus_settings),
+            ex,
+            true,
+        )
+        .await?;
 
         // Bob
         let bob_url = Url::parse("tcp+tls://127.0.0.1:18341")?;
-        settings.inbound_addrs = vec![bob_url];
-        settings.peers = vec![alice_url];
-        let bob = generate_node(&vks, &val_config, &settings, &ex).await?;
+        sync_settings.inbound_addrs = vec![bob_url];
+        sync_settings.peers = vec![alice_url];
+        let bob_consensus_url = Url::parse("tcp+tls://127.0.0.1:18351")?;
+        consensus_settings.inbound_addrs = vec![bob_consensus_url];
+        consensus_settings.peers = vec![alice_consensus_url];
+        let bob = generate_node(
+            &vks,
+            &validator_config,
+            &sync_settings,
+            Some(&consensus_settings),
+            ex,
+            false,
+        )
+        .await?;
 
-        Ok(Self { config, alice, bob })
+        Ok(Self { config, vks, validator_config, alice, bob })
     }
 
-    pub async fn validate_chains(&self, total_blocks: usize) -> Result<()> {
+    pub async fn validate_chains(&self, total_blocks: usize, total_slots: usize) -> Result<()> {
         let genesis_txs_total = self.config.alice_initial + self.config.bob_initial;
         let alice = &self.alice.validator.read().await;
         let bob = &self.bob.validator.read().await;
@@ -108,6 +136,10 @@ impl Harness {
         let alice_blockchain_len = alice.blockchain.len();
         assert_eq!(alice_blockchain_len, bob.blockchain.len());
         assert_eq!(alice_blockchain_len, total_blocks);
+
+        let alice_slots_len = alice.blockchain.slots.len();
+        assert_eq!(alice_slots_len, bob.blockchain.slots.len());
+        assert_eq!(alice_slots_len, total_slots);
 
         Ok(())
     }
@@ -175,17 +207,27 @@ impl Harness {
     }
 }
 
-async fn generate_node(
+pub async fn generate_node(
     vks: &Vec<(Vec<u8>, String, Vec<u8>)>,
     config: &ValidatorConfig,
-    settings: &Settings,
+    sync_settings: &Settings,
+    consensus_settings: Option<&Settings>,
     ex: &Arc<smol::Executor<'_>>,
+    skip_sync: bool,
 ) -> Result<Darkfid> {
     let sled_db = sled::Config::new().temporary(true).open()?;
     vks::inject(&sled_db, &vks)?;
+
     let validator = Validator::new(&sled_db, config.clone()).await?;
-    let sync_p2p = spawn_sync_p2p(&settings, &validator).await;
-    let node = Darkfid::new(sync_p2p.clone(), None, validator).await;
+
+    let sync_p2p = spawn_sync_p2p(&sync_settings, &validator).await;
+    let consensus_p2p = if let Some(settings) = consensus_settings {
+        Some(spawn_consensus_p2p(settings, &validator).await)
+    } else {
+        None
+    };
+    let node = Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator).await;
+
     sync_p2p.clone().start(ex.clone()).await?;
     let _ex = ex.clone();
     ex.spawn(async move {
@@ -194,30 +236,23 @@ async fn generate_node(
         }
     })
     .detach();
-    node.validator.write().await.synced = true;
+
+    if consensus_settings.is_some() {
+        consensus_p2p.clone().unwrap().start(ex.clone()).await?;
+        let _ex = ex.clone();
+        ex.spawn(async move {
+            if let Err(e) = consensus_p2p.unwrap().run(_ex).await {
+                error!("Failed starting consensus P2P network: {}", e);
+            }
+        })
+        .detach();
+    }
+
+    if !skip_sync {
+        sync_task(&node).await?;
+    } else {
+        node.validator.write().await.synced = true;
+    }
 
     Ok(node)
-}
-
-async fn spawn_sync_p2p(settings: &Settings, validator: &ValidatorPtr) -> P2pPtr {
-    let p2p = P2p::new(settings.clone()).await;
-    let registry = p2p.protocol_registry();
-
-    let _validator = validator.clone();
-    registry
-        .register(SESSION_ALL, move |channel, p2p| {
-            let validator = _validator.clone();
-            async move { ProtocolBlock::init(channel, validator, p2p).await.unwrap() }
-        })
-        .await;
-
-    let _validator = validator.clone();
-    registry
-        .register(SESSION_ALL, move |channel, p2p| {
-            let validator = _validator.clone();
-            async move { ProtocolTx::init(channel, validator, p2p).await.unwrap() }
-        })
-        .await;
-
-    p2p
 }

@@ -33,6 +33,8 @@ use crate::{
     Result,
 };
 
+impl_p2p_message!(Transaction, "tx");
+
 pub struct ProtocolTx {
     tx_sub: MessageSubscription<Transaction>,
     jobsman: ProtocolJobsManagerPtr,
@@ -40,8 +42,6 @@ pub struct ProtocolTx {
     p2p: P2pPtr,
     channel_address: Url,
 }
-
-impl_p2p_message!(Transaction, "tx");
 
 impl ProtocolTx {
     pub async fn init(
