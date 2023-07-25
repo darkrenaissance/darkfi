@@ -87,3 +87,4 @@
   - [dnetview](misc/dnetview.md)
 - [zero2darkfi](zero2dark/zero2darkfi.md)
   - [smart contract](zero2darkfi/darkmap.md)
+  - [terminology](zero2darkfi/terminology.md)
