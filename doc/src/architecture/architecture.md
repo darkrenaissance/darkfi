@@ -161,7 +161,7 @@ for clients to get the knowledge they need to build transactions and
 chain contract calls with each other.
 
 
-Testing environment: `Zkrunner`
+Testing Environment:
 
 There is a tool called Zkrunner that takes the zkas circuit and the
 private inputs, then generates a proof and verify it. 
@@ -225,6 +225,12 @@ the phone and then the user can use any IRC client they prefer.
 
 TBD
 
+### p2p (anon) git
+
+The motivation is to move off of centralised platforms like Github. 
+Additionally, it would ideally have the capability keep contributor
+information private.
+
 ### P2P
 
 The P2P library needs a complete test suite in order to more easily
@@ -253,3 +259,8 @@ is doing.
 All the zkVM opcodes need to be benchmarked for their performance
 and we need to see how many columns and rows they use so we're able
 to properly price them for verification fees.
+
+### Documentation
+
+* Create beginner level tutorial to introduce contract developement and tools.
+* Create a list of outstanding work before mainnet.
