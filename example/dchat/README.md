@@ -2,14 +2,14 @@
 
 A demo chat program to document DarkFi net
 code. Tutorial can be found in the [DarkFi
-book](https://darkrenaissance.github.io/darkfi/learn/writing-a-p2p-app.html).
+book](https://darkrenaissance.github.io/darkfi/learn/dchat/dchat.html).
 
 ## Usage
 
 Spin up a seed node:
 
 ```shell
-cd example/dchat-seed
+cd example/dchat
 cargo run
 ```
 
