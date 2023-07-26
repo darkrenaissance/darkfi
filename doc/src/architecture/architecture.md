@@ -149,13 +149,27 @@ just external. (See `ElGamalEncryptedNote` in `darkfi-sdk`). The
 cryptography also has to be verified for correctness, as this was
 just a proof of concept.
 
-### Smart Contract Client API
+### Smart Contract
+
+
+Client API:
 
 The native contracts should have a unified and "standard" API so
 they're all the same. Perhaps it is also possible to define some
 way for contracts to expose an ABI so it becomes simpler and easier
 for clients to get the knowledge they need to build transactions and
 chain contract calls with each other.
+
+
+Testing environment: `Zkrunner`
+
+There is a tool called Zkrunner that takes the zkas circuit and the
+private inputs, then generates a proof and verify it. 
+
+It's like an interactive environment for zkas circuit developer.
+Without Zkrunner, the developer needs to manually program, and feed
+the private and pulibc inputs and drive the verification.
+It needs some code cleanup and documentation on how to use it.
 
 ### Passive APR/APY
 
