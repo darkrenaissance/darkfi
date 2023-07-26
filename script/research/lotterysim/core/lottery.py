@@ -8,7 +8,7 @@ from tqdm import tqdm
 import random
 
 class DarkfiTable:
-    def __init__(self, airdrop, running_time, controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, dt=1, kc=0, ti=0, td=0, ts=0, debug=False, r_kp=0, r_ki=0, r_kd=0):
+    def __init__(self, airdrop, running_time, controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, dt=1, kc=0, ti=0, td=0, ts=0, debug=False, r_kp=0, r_ki=0, r_kd=0, fee_kp=0, fee_ki=0, fee_kd=0):
         self.Sigma=airdrop
         self.darkies = []
         self.running_time=running_time
@@ -18,9 +18,11 @@ class DarkfiTable:
         print('secondary min/max : {}/{}'.format(self.secondary_pid.clip_min, self.secondary_pid.clip_max))
         self.primary_pid = PrimaryDiscretePID(kp=r_kp, ki=r_ki, kd=r_kd) if controller_type==CONTROLLER_TYPE_DISCRETE else PrimaryTakahashiPID(kc=kc, ti=ti, td=td, ts=ts)
         print('primary min/max : {}/{}'.format(self.primary_pid.clip_min, self.primary_pid.clip_max))
+        self.basefee_pid = FeePID(kp=fee_kp, ki=fee_ki, kd=fee_kd) if controller_type==CONTROLLER_TYPE_DISCRETE else SecondaryTakahashiPID(kc=fee_kc, ti=fee_ti, td=fee_td, ts=fee_ts)
         self.debug=debug
         self.rewards = []
         self.winners = []
+        self.computational_cost = [0]
 
     def add_darkie(self, darkie):
         self.darkies+=[darkie]
@@ -67,6 +69,7 @@ class DarkfiTable:
                 winners += self.darkies[i].won_hist[-1]
             self.winners +=[winners]
             feedback = winners
+            darkie_lead_idx = -1
             ################
             # resolve fork #
             ################
@@ -78,7 +81,33 @@ class DarkfiTable:
                             print('stakeholder {} slashed'.format(i))
                         else:
                             self.darkies[i].update_stake(self.rewards[-1])
+                            darkie_lead_idx=i
                         break
+                ###############
+                # tip auction #
+                ###############
+                if darkie_lead_idx>=0:
+                    txs = []
+                    for darkie in self.darkies:
+                        txs += [darkie.tx()]
+                    ret, actual_cc = DarkfiTable.auction(txs)
+                    tips = ret[0]
+                    idxs = ret[1]
+                    basefee = self.basefee_pid.pid_clipped(self.computational_cost[-1], debug)
+                    assert basefee<=1
+                    for idx in idxs:
+                        fee = txs[idx].cc()+basefee
+                        self.darkies[idx].pay_fee(fee)
+                        #print("charging darkie[{}]: {} DRK per tx of length: {}, burning: {}".format(idx, fee, len(txs[idx]), basefee))
+                    self.darkies[darkie_lead_idx].pay_fee(-1*tips)
+                    #print('reward miner: {} DRK'.format(tips))
+                    self.computational_cost += [actual_cc]
+                    # subtract base fee from total stake
+                    self.Sigma -= basefee*len(txs)
+                ###################
+                # end tip auction #
+                ###################
+
                 # resolve finalization
                 self.Sigma += self.rewards[-1]
                 # resync nodes
@@ -100,9 +129,10 @@ class DarkfiTable:
                         if self.darkies[darkie_idx].won_hist[resync_slot_id]:
                             darkie_winning_idx = darkie_idx
                             break
-                    if self.darkie_winning_idx>=0:
-                        self.darkies[darkie_winning_idx].resync_stake(resync_reward)
-                        self.Sigma += resync_reward
+                    self.darkies[darkie_winning_idx].resync_stake(resync_reward)
+                    self.Sigma += resync_reward
+                    if darkie_winning_idx>=0:
+                        pass
                     else:
                         # single lead got slashed
                         pass
@@ -153,3 +183,33 @@ class DarkfiTable:
         with open('log/rewards.log', 'w+') as f:
             buff = ','.join([str(i) for i in self.rewards])
             f.write(buff)
+
+    """
+    tip auction
+
+    @return total tip for miner, and list of indices of darkies included.
+    """
+    def auction(txs):
+        #print("len(txs): {}".format(len(txs)))
+        W = MAX_BLOCK_CC
+        n = len(txs)
+        K = [[[0,[]] for x in range(W + 1)] for x in range(n + 1)]
+        for i in range(n + 1):
+            for w in range(W + 1):
+                if i == 0 or w == 0:
+                    K[i][w] = [0,[]]
+                elif len(txs[i-1]) <= w:
+                    if txs[i-1].cc() + K[i-1][w-len(txs[i-1])][0] > K[i-1][w][0]:
+                        K[i][w] = [txs[i-1].cc() + K[i-1][w-len(txs[i-1])][0], K[i-1][w-len(txs[i-1])][1] + [i-1]]
+                    else:
+                        K[i][w] = K[i-1][w]
+                else:
+                    K[i][w] = K[i-1][w]
+        tip = K[n][W][0]
+        actual_cc = W
+        for w in reversed(range(W+1)):
+            if K[n][w][0] == tip:
+                actual_cc = w
+            else:
+                break
+        return K[n][W], actual_cc

@@ -31,3 +31,8 @@ class SecondaryDiscretePID(LeadPID):
 class SecondaryTakahashiPID(LeadPID):
     def __init__(self, kc, ti, td, ts):
         LeadPID.__init__(self, CONTROLLER_TYPE_TAKAHASHI, Kc=kc, Ti=ti, Td=td, Ts=ts)
+
+
+class FeePID(BasePID):
+    def __init__(self, kp=0, ki=0, kd=0, dt=1, Kc=0, Ti=0, Td=0, Ts=0, debug=False):
+        BasePID.__init__(self, MAX_BLOCK_SIZE, FEE_MIN, FEE_MAX,  CONTROLLER_TYPE_DISCRETE, kp=kp, ki=ki, kd=kd, dt=dt, Kc=Kc, Ti=Ti, Td=Td, Ts=Ts, debug=debug)

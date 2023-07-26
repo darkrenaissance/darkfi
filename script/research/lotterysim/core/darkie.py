@@ -36,7 +36,7 @@ class Darkie():
     """
     def apr_scaled_to_runningtime(self):
         initial_stake = self.vesting_wrapped_initial_stake()
-        assert self.stake >= initial_stake, 'stake: {}, initial_stake: {}, slot: {}, current: {}, previous: {} vesting'.format(self.stake, initial_stake, self.slot, self.current_vesting(), self.prev_vesting())
+        #assert self.stake >= initial_stake, 'stake: {}, initial_stake: {}, slot: {}, current: {}, previous: {} vesting'.format(self.stake, initial_stake, self.slot, self.current_vesting(), self.prev_vesting())
         apr_scaled = Num(self.stake - initial_stake) / Num(initial_stake) if initial_stake>0 else 0
         if self.slot <= HEADSTART_AIRDROP:
             # during this phase, it's only called at end of epoch
@@ -160,3 +160,37 @@ class Darkie():
             buf+='\r\n'
             buf += 'apr: {}'.format(self.apr_scaled_to_runningtime())
             f.write(buf)
+
+    """
+    anonymous contract assumed to be random stream from uniform distribution,
+    naive emulation of smart contract based transactions with certain computational cost.
+
+    @returns: transaction emulated as series of random floats between 0,1
+    """
+    def tx(self):
+        return Tx(random.randint(0, MAX_BLOCK_SIZE))
+
+    """
+    deduct tip paid to miner plus burned base fee or computational cost.
+    """
+    def pay_fee(self, fee):
+        self.stake -= fee
+
+class Tx(object):
+    def __init__(self, size):
+        self.tx = [random.random() for _ in range(size)]
+        self.len = size
+
+    """
+    anonymous contract assumed to be of random streams from uniform distribution,
+    it's circuit execution cost it thus random.
+    naive emulation of transaction smart contract computational cost (aka tip) as a avg of txs sum,
+    which is random function
+
+    @returns: transaction computational cost
+    """
+    def cc(self):
+        return sum(self.tx) if len(self.tx)>0 else 0
+
+    def __len__(self):
+        return len(self.tx)

@@ -38,6 +38,16 @@ TARGET_APR = Num(0.12)
 PRIMARY_REWARD_TARGET = 0.35 # staked ratio
 # secondary controller assumes certain frequency of leaders per slot
 SECONDARY_LEAD_TARGET = 1 #number of lead per slot
+# maximum transaction size
+MAX_BLOCK_SIZE = 1000
+# maximum transaction computational cost
+MAX_BLOCK_CC = 100
+# fee controller computational capacity target
+FEE_TARGET = MAX_BLOCK_CC
+# max fee base value
+FEE_MAX = 1
+# min fee base value
+FEE_MIN = 0.0001
 # negligible value added to denominator to avoid invalid division by zero
 EPSILON = 1
 # window of accuracy calculation
