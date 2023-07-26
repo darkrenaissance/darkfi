@@ -94,14 +94,18 @@ class DarkfiTable:
                     resync_reward = self.rewards[resync_reward_id]
                     # resyncing depends on the random branch chosen,
                     # it's simulated by choosing first wining node
-                    darkie_winning_idx = 0
+                    darkie_winning_idx = -1
                     random.shuffle(self.darkies)
                     for darkie_idx in range(len(self.darkies)):
                         if self.darkies[darkie_idx].won_hist[resync_slot_id]:
                             darkie_winning_idx = darkie_idx
                             break
-                    self.darkies[darkie_winning_idx].resync_stake(resync_reward)
-                    self.Sigma += resync_reward
+                    if self.darkie_winning_idx>=0:
+                        self.darkies[darkie_winning_idx].resync_stake(resync_reward)
+                        self.Sigma += resync_reward
+                    else:
+                        # single lead got slashed
+                        pass
             #################
             # fork resolved #
             #################
