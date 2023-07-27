@@ -121,12 +121,42 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     pub async fn update_config(&mut self, new_config: IrcConfig) {
         info!("[CLIENT {}] Updating config...", self.address);
 
+        let old_config = self.irc_config.clone();
+        let mut _chans_to_replay = HashSet::new();
+        let mut _contacts_to_replay = HashSet::new();
+
+        for (name, new_info) in new_config.channels.iter() {
+            let Some(old_info) = old_config.channels.get(name) else {
+                // New channel wasn't in old config, replay it
+                _chans_to_replay.insert(name);
+                continue
+            };
+
+            // TODO: Maybe if the salt_box changed, replay it, although
+            // kinda hard to do since there's no Eq/PartialEq on there,
+            // and we probably shouldn't keep the secret key laying around.
+
+            // We got some secret key for this channel, replay it
+            if old_info.salt_box.is_none() && new_info.salt_box.is_some() {
+                _chans_to_replay.insert(name);
+                continue
+            }
+        }
+
+        for (name, _new_info) in new_config.contacts.iter() {
+            let Some(_old_info) = old_config.contacts.get(name) else {
+                // New contact wasn't in old config, replay it
+                _contacts_to_replay.insert(name);
+                continue
+            };
+        }
+
         self.irc_config.channels.extend(new_config.channels);
         self.irc_config.contacts.extend(new_config.contacts);
         self.irc_config.pass = new_config.pass;
 
         if self.on_receive_join(self.irc_config.channels.keys().cloned().collect()).await.is_err() {
-            warn!("Error to join updated channels");
+            warn!("Error joining updated channels");
         } else {
             info!("[CLIENT {}] Config updated", self.address);
         }
