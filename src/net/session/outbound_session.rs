@@ -279,9 +279,8 @@ impl OutboundSession {
             }
         }
 
-        // At this point we failed to connect. We'll drop this peer now.
-        // TODO: We could potentially implement a quarantine zone for this.
-        self.p2p().hosts().remove(&addr).await;
+        // At this point we failed to connect. We'll quarantine this peer now.
+        self.p2p().hosts().quarantine(&addr).await;
 
         dnet!(self,
             let info = &mut self.slot_info.lock().await[slot_number];

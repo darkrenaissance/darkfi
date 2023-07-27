@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use async_std::sync::{Arc, RwLock};
 use log::debug;
@@ -32,18 +32,29 @@ pub type HostsPtr = Arc<Hosts>;
 pub struct Hosts {
     /// Set of stored addresses
     addrs: RwLock<HashSet<Url>>,
+
+    /// Set of stored addresses that are quarantined.
+    /// We quarantine peers we've been unable to connect to, but we keep them
+    /// around so we can potentially try them again, up to n tries. This should
+    /// be helpful in order to self-heal the p2p connections in case we have an
+    /// Internet interrupt (goblins unplugging cables)
+    quarantine: RwLock<HashMap<Url, usize>>,
+
     /// Pointer to configured P2P settings
     settings: SettingsPtr,
 }
 
 impl Hosts {
-    /// Create a new hosts list. Also initializes private IP ranges used
-    /// for filtering.
+    /// Create a new hosts list>
     pub fn new(settings: SettingsPtr) -> HostsPtr {
-        Arc::new(Self { addrs: RwLock::new(HashSet::new()), settings })
+        Arc::new(Self {
+            addrs: RwLock::new(HashSet::new()),
+            quarantine: RwLock::new(HashMap::new()),
+            settings,
+        })
     }
 
-    /// Append given addrs to the known set. Filtering should be done externally.
+    /// Append given addrs to the known set.
     pub async fn store(&self, addrs: &[Url]) {
         debug!(target: "net::hosts::store()", "hosts::store() [START]");
 
@@ -51,7 +62,13 @@ impl Hosts {
 
         if !filtered_addrs.is_empty() {
             let mut addrs_map = self.addrs.write().await;
+            let mut quarantine = self.quarantine.write().await;
             for addr in filtered_addrs {
+                // We assume this was called for a valid peer, and/or we managed
+                // to successfully connect. So we'll also remove them from the
+                // quarantine zone if they're there.
+                quarantine.remove(&addr);
+
                 debug!(target: "net::hosts::store()", "Inserting {}", addr);
                 addrs_map.insert(addr);
             }
@@ -149,8 +166,30 @@ impl Hosts {
         ret
     }
 
-    pub async fn remove(&self, url: &Url) -> bool {
-        self.addrs.write().await.remove(url)
+    pub async fn remove(&self, url: &Url) {
+        debug!(target: "net::hosts::remove()", "Removing peer {}", url);
+        self.addrs.write().await.remove(url);
+        self.quarantine.write().await.remove(url);
+    }
+
+    /// Quarantine a peer. If they've been quarantined for 50 times, forget them.
+    pub async fn quarantine(&self, url: &Url) {
+        debug!(target: "net::hosts::remove()", "Quarantining peer {}", url);
+        // Remove from main hosts set
+        self.addrs.write().await.remove(url);
+
+        let mut q = self.quarantine.write().await;
+        if let Some(retries) = q.get_mut(url) {
+            *retries += 1;
+            debug!(target: "net::hosts::quarantine()", "Peer {} quarantined {} times", url, retries);
+            if *retries == 50 {
+                debug!(target: "net::hosts::quarantine()", "Deleting peer {}", url);
+                q.remove(url);
+            }
+        } else {
+            debug!(target: "net::hosts::remove()", "Added peer {} to quarantine", url);
+            q.insert(url.clone(), 0);
+        }
     }
 
     /// Check if the host list is empty.
@@ -184,6 +223,15 @@ impl Hosts {
         for addr in self.addrs.read().await.iter() {
             if schemes.contains(&addr.scheme().to_string()) {
                 ret.push(addr.clone());
+            }
+        }
+
+        // If we didn't find any, pick some from the quarantine zone
+        if ret.is_empty() {
+            for addr in self.quarantine.read().await.keys() {
+                if schemes.contains(&addr.scheme().to_string()) {
+                    ret.push(addr.clone());
+                }
             }
         }
 
