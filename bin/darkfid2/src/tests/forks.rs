@@ -46,8 +46,8 @@ fn forks() -> Result<()> {
     // Add another dummy record to cloned fork
     fork_clone.overlay.lock().unwrap().order.insert(&[1], &[record1])?;
 
-    // Verify blockchain and original fork don't contain the record
-    assert_eq!(blockchain.order.get(&[0], false)?, [None]);
+    // Verify blockchain and original fork don't contain the second record
+    assert_eq!(blockchain.order.get(&[0, 1], false)?, [None, None]);
     assert_eq!(fork.overlay.lock().unwrap().order.get(&[0, 1], false)?, [Some(record0), None]);
     assert_eq!(
         fork_clone.overlay.lock().unwrap().order.get(&[0, 1], true)?,
