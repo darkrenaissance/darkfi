@@ -126,6 +126,8 @@ class Darkie():
             sigmas = [   c/((self.Sigma+EPSILON)**i) * ( ((L_HP if hp else L)/fact(i)) ) for i in range(1, k+1) ]
             headstart = (BASE_L_HP if hp else BASE_L) if self.slot < HEADSTART_AIRDROP else 0
             scaled_target = approx_target_in_zk(sigmas, Num(stake)) + headstart
+            if stake>0:
+                assert scaled_target>0
             return scaled_target
 
         if self.slot % EPOCH_LENGTH ==0 and self.slot > 0:
@@ -135,9 +137,9 @@ class Darkie():
             # epoch stake is added
             self.initial_stake += [self.stake]
         T = target(self.f, self.strategy.staked_value(self.stake))
-        won = lottery(T, hp)
+        won, y = lottery(T, hp)
         self.won_hist += [won]
-
+        return y, T
     """
     update stake upon winning lottery with single lead
     """

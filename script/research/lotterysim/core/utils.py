@@ -45,4 +45,4 @@ def lottery(T, hp=False, log=False):
         with open("/tmp/sim_lottery_history.log", "a+") as f:
             f.write(lottery_line)
     won = y < T if y is not None and T is not None else False
-    return won
+    return won, y

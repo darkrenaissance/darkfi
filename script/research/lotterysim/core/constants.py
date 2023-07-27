@@ -3,11 +3,11 @@ from decimal import Decimal as Num
 # number approximation terms
 N_TERM = 2
 # analogue controller enum
-CONTROLLER_TYPE_ANALOGUE=-1
+CONTROLLER_TYPE_ANALOGUE = -1
 # discrete controller enum
-CONTROLLER_TYPE_DISCRETE=0
+CONTROLLER_TYPE_DISCRETE = 0
 # takahashi controller enum
-CONTROLLER_TYPE_TAKAHASHI=1
+CONTROLLER_TYPE_TAKAHASHI = 1
 # initial distribution of tokens (random value for sake of experimentation)
 ERC20DRK = 2.1*10**7
 # initial distribution
@@ -41,7 +41,7 @@ SECONDARY_LEAD_TARGET = 1 #number of lead per slot
 # maximum transaction size
 MAX_BLOCK_SIZE = 1000
 # maximum transaction computational cost
-MAX_BLOCK_CC = 100
+MAX_BLOCK_CC = 10
 # fee controller computational capacity target
 FEE_TARGET = MAX_BLOCK_CC
 # max fee base value
@@ -57,7 +57,7 @@ HEADSTART_AIRDROP = 0
 # threshold of randomly slashing stakeholder
 SLASHING_RATIO = 0.0001
 # number of nodes
-NODES=1000
+NODES = 1000
 # headstart value
 BASE_L = NODES**-1*L*0.01
 # decimal high precision.

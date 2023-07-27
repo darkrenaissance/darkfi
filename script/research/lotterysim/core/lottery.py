@@ -21,7 +21,7 @@ class DarkfiTable:
         self.basefee_pid = FeePID(kp=fee_kp, ki=fee_ki, kd=fee_kd) if controller_type==CONTROLLER_TYPE_DISCRETE else SecondaryTakahashiPID(kc=fee_kc, ti=fee_ti, td=fee_td, ts=fee_ts)
         self.debug=debug
         self.rewards = []
-        self.winners = []
+        self.winners = [1]
         self.computational_cost = [0]
 
     def add_darkie(self, darkie):
@@ -39,115 +39,116 @@ class DarkfiTable:
     def background(self, rand_running_time=True, debug=False, hp=True):
         self.debug=debug
         self.start_time=time.time()
-        feedback=0 # number leads in previous slot
         # random running time
         rand_running_time = random.randint(1,self.running_time) if rand_running_time else self.running_time
         self.running_time = rand_running_time
         rt_range = tqdm(np.arange(0,self.running_time, 1))
-        merge_length = 0
+
         # loop through slots
-        for count in rt_range:
-            merge_length = 0
+        for slot in rt_range:
             # calculate probability of winning owning 100% of stake
-            f = self.secondary_pid.pid_clipped(float(feedback), debug)
+            f = self.secondary_pid.pid_clipped(float(self.winners[-1]), debug)
             # calculate reward value every epoch
-            if count%EPOCH_LENGTH == 0:
+            if slot%EPOCH_LENGTH == 0:
                 acc = self.secondary_pid.acc()
                 reward = self.primary_pid.pid_clipped(acc, debug)
                 self.rewards += [reward]
             #note! thread overhead is 10X slower than sequential node execution!
             total_stake = 0
+            Ys = []
+            Ts = []
             for i in range(len(self.darkies)):
-                self.darkies[i].set_sigma_feedback(self.Sigma, feedback, f, count, hp)
+                self.darkies[i].set_sigma_feedback(self.Sigma, self.winners[-1], f, slot, hp)
                 self.darkies[i].update_vesting()
-                self.darkies[i].run(hp)
+                y, T = self.darkies[i].run(hp)
+                Ys+=[y]
+                Ts+=[T]
                 total_stake += self.darkies[i].stake
-            # count number of leads per slot
-            winners=0
-            # count secondary controller feedback
-            for i in range(len(self.darkies)):
-                winners += self.darkies[i].won_hist[-1]
-            self.winners +=[winners]
-            feedback = winners
-            darkie_lead_idx = -1
-            ################
-            # resolve fork #
-            ################
+            # slot secondary controller feedback
+            self.winners += [sum([self.darkies[i].won_hist[-1] for i in range(len(self.darkies))])]
             if self.winners[-1]==1:
-                for i in range(len(self.darkies)):
-                    if self.darkies[i].won_hist[-1]:
-                        if random.random() < len(self.darkies)**-1:
-                            self.darkies.remove(self.darkies[i])
-                            print('stakeholder {} slashed'.format(i))
-                        else:
-                            self.darkies[i].update_stake(self.rewards[-1])
-                            darkie_lead_idx=i
-                        break
-                ###############
-                # tip auction #
-                ###############
-                if darkie_lead_idx>=0:
-                    txs = []
-                    for darkie in self.darkies:
-                        txs += [darkie.tx()]
-                    ret, actual_cc = DarkfiTable.auction(txs)
-                    tips = ret[0]
-                    idxs = ret[1]
-                    basefee = self.basefee_pid.pid_clipped(self.computational_cost[-1], debug)
-                    assert basefee<=1
-                    for idx in idxs:
-                        fee = txs[idx].cc()+basefee
-                        self.darkies[idx].pay_fee(fee)
-                        #print("charging darkie[{}]: {} DRK per tx of length: {}, burning: {}".format(idx, fee, len(txs[idx]), basefee))
-                    self.darkies[darkie_lead_idx].pay_fee(-1*tips)
-                    #print('reward miner: {} DRK'.format(tips))
-                    self.computational_cost += [actual_cc]
-                    # subtract base fee from total stake
-                    self.Sigma -= basefee*len(txs)
-                ###################
-                # end tip auction #
-                ###################
+                is_slashed = self.reward_slash_lead(debug)
+                if is_slashed==False:
+                    self.resolve_fork(slot, debug)
 
-                # resolve finalization
-                self.Sigma += self.rewards[-1]
-                # resync nodes
-
-                for i in reversed(self.winners[:-1]):
-                    if i !=1:
-                        merge_length+=1
-                    else:
-                        break
-                for i in range(merge_length):
-                    resync_slot_id = count-(i+1)
-                    resync_reward_id = int((resync_slot_id)/EPOCH_LENGTH)
-                    resync_reward = self.rewards[resync_reward_id]
-                    # resyncing depends on the random branch chosen,
-                    # it's simulated by choosing first wining node
-                    darkie_winning_idx = -1
-                    random.shuffle(self.darkies)
-                    for darkie_idx in range(len(self.darkies)):
-                        if self.darkies[darkie_idx].won_hist[resync_slot_id]:
-                            darkie_winning_idx = darkie_idx
-                            break
-                    self.darkies[darkie_winning_idx].resync_stake(resync_reward)
-                    self.Sigma += resync_reward
-                    if darkie_winning_idx>=0:
-                        pass
-                    else:
-                        # single lead got slashed
-                        pass
-            #################
-            # fork resolved #
-            #################
-            rt_range.set_description('epoch: {}, fork: {} issuance {} DRK, acc: {}%, stake = {}%, sr: {}%, reward:{}, apr: {}%'.format(int(count/EPOCH_LENGTH), merge_length, round(self.Sigma,2), round(acc*100, 2), round(total_stake/self.Sigma*100 if self.Sigma>0 else 0,2), round(self.avg_stake_ratio()*100,2) , round(self.rewards[-1],2), round(self.avg_apr()*100,2)))
+            rt_range.set_description('epoch: {}, fork: {}, winners: {}, issuance {} DRK, acc: {}%, stake: {}%, sr: {}%, reward:{}, apr: {}%, avg(y): {}, avg(T): {}'.format(int(slot/EPOCH_LENGTH), self.merge_length(), self.winners[-1], round(self.Sigma,2), round(acc*100, 2), round(total_stake/self.Sigma*100 if self.Sigma>0 else 0,2), round(self.avg_stake_ratio()*100,2) , round(self.rewards[-1],2), round(self.avg_apr()*100,2), sum(Ys)/len(Ys), sum(Ts)/len(Ts) ))
             #assert round(total_stake,1) <= round(self.Sigma,1), 'stake: {}, sigma: {}'.format(total_stake, self.Sigma)
-            count+=1
+            slot+=1
         self.end_time=time.time()
         avg_reward = sum(self.rewards)/len(self.rewards)
         stake_ratio = self.avg_stake_ratio()
         avg_apy = self.avg_apy()
         avg_apr = self.avg_apr()
         return self.secondary_pid.acc_percentage(), avg_apy, avg_reward, stake_ratio, avg_apr
+
+    """
+    reward single lead, or slash lead with probability len(self.darkies)**-1
+
+    @returns: True if slashed False otherwise
+    """
+    def reward_slash_lead(self, debug=False):
+        # reward the single lead
+        for i in range(len(self.darkies)):
+            if self.darkies[i].won_hist[-1]:
+                if random.random() < len(self.darkies)**-1:
+                    self.darkies.remove(self.darkies[i])
+                    print('stakeholder {} slashed'.format(i))
+                    return True
+                else:
+                    self.darkies[i].update_stake(self.rewards[-1])
+                    self.Sigma += self.rewards[-1]
+                    self.tx_fees(i, debug)
+                break
+        return False
+
+    """
+    resolve fork, for slots with multiple leads, shuffle nodes, and reward first winner.
+    """
+    def resolve_fork(self, slot, debug=False):
+        # resolve fork
+        for i in range(self.merge_length()):
+            resync_slot_id = slot-(i+1)
+            resync_reward_id = int((resync_slot_id)/EPOCH_LENGTH)
+            resync_reward = self.rewards[resync_reward_id]
+            # resyncing depends on the random branch chosen,
+            # it's simulated by choosing first wining node
+            darkie_winning_idx = -1
+            random.shuffle(self.darkies)
+            for darkie_idx in range(len(self.darkies)):
+                if self.darkies[darkie_idx].won_hist[resync_slot_id]:
+                    self.darkies[darkie_idx].resync_stake(resync_reward)
+                    self.Sigma += resync_reward
+
+    def merge_length(self):
+        merge_length = 0
+        for i in reversed(self.winners[:-1]):
+            if i !=1:
+                merge_length+=1
+            else:
+                break
+        return merge_length
+
+    """
+    simulate general purpose transactions made by stakeholders,
+    deduct basefee, tip from senders pay miners tipss.
+    """
+    def tx_fees(self, darkie_lead_idx, debug=False):
+        txs = []
+        for darkie in self.darkies:
+            txs += [darkie.tx()]
+        ret, actual_cc = DarkfiTable.auction(txs)
+        tips = ret[0]
+        idxs = ret[1]
+        basefee = self.basefee_pid.pid_clipped(self.computational_cost[-1], debug)
+        assert basefee<=1
+        for idx in idxs:
+            fee = txs[idx].cc()+basefee
+            self.darkies[idx].pay_fee(fee)
+            #print("charging darkie[{}]: {} DRK per tx of length: {}, burning: {}".format(idx, fee, len(txs[idx]), basefee))
+        self.darkies[darkie_lead_idx].pay_fee(-1*tips)
+        self.computational_cost += [actual_cc]
+        # subtract base fee from total stake
+        self.Sigma -= basefee*len(txs)
 
     """
     average APY (with compound interest added every epoch) ,
@@ -190,7 +191,6 @@ class DarkfiTable:
     @return total tip for miner, and list of indices of darkies included.
     """
     def auction(txs):
-        #print("len(txs): {}".format(len(txs)))
         W = MAX_BLOCK_CC
         n = len(txs)
         K = [[[0,[]] for x in range(W + 1)] for x in range(n + 1)]
