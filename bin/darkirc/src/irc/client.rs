@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::net::SocketAddr;
+use std::{collections::HashSet, net::SocketAddr};
 
 use async_std::sync::{Arc, Mutex};
 use futures::{
@@ -50,6 +50,9 @@ pub struct IrcClient<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     // irc config
     irc_config: IrcConfig,
 
+    /// Joined channels, mapped here for better SIGHUP UX.
+    channels_joined: HashSet<String>,
+
     server_notifier: smol::channel::Sender<(NotifierMsg, u64)>,
     subscription: Subscription<ClientSubMsg>,
 
@@ -71,6 +74,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             read_stream,
             address,
             irc_config,
+            channels_joined: HashSet::new(),
             subscription,
             server_notifier,
             missed_events,
@@ -137,22 +141,29 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         decrypt_target(
             &mut contact,
             &mut msg,
-            self.irc_config.channels.clone(),
-            self.irc_config.contacts.clone(),
+            &self.irc_config.channels,
+            &self.irc_config.contacts,
         );
 
+        // The message is a channel message
         if msg.target.starts_with('#') {
             // Try to potentially decrypt the incoming message.
             if !self.irc_config.channels.contains_key(&msg.target) {
                 return Ok(())
             }
 
-            let chan_info = self.irc_config.channels.get_mut(&msg.target).unwrap();
-            if !chan_info.joined {
+            // Skip everything if we're not joined in the channel
+            if self.channels_joined.contains(&msg.target) {
                 return Ok(())
             }
 
+            let chan_info = self.irc_config.channels.get_mut(&msg.target).unwrap();
+
+            // We use this flag to mark if the message has been encrypted or not.
+            // Depending on it, we set a specific usermode to the nickname in the
+            // channel so in UI we can tell who is sending encrypted messages.
             let mut encrypted = false;
+
             if let Some(salt_box) = &chan_info.salt_box {
                 decrypt_privmsg(salt_box, &mut msg);
                 encrypted = true;
@@ -177,7 +188,11 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             };
 
             self.reply(&msg.to_string()).await?;
-        } else if self.irc_config.is_cap_end && self.irc_config.is_nick_init {
+            return Ok(())
+        }
+
+        // The message is not a channel message, handle accordingly.
+        if self.irc_config.is_cap_end && self.irc_config.is_nick_init {
             if !self.irc_config.contacts.contains_key(&contact) {
                 return Ok(())
             }
@@ -191,6 +206,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             }
 
             self.reply(&msg.to_string()).await?;
+            return Ok(())
         }
 
         Ok(())
@@ -242,7 +258,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
     }
 
     async fn register(&mut self) -> Result<()> {
-        if !self.irc_config.is_pass_init && self.irc_config.password.is_empty() {
+        if !self.irc_config.is_pass_init && self.irc_config.pass.is_empty() {
             self.irc_config.is_pass_init = true
         }
 
@@ -305,22 +321,17 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         }
 
         self.irc_config.is_nick_init = true;
-        let old_nick = std::mem::replace(&mut self.irc_config.nickname, nickname.to_string());
+        let old_nick = std::mem::replace(&mut self.irc_config.nick, nickname.to_string());
 
-        let nick_reply =
-            format!(":{}!anon@dark.fi NICK {}\r\n", old_nick, self.irc_config.nickname);
+        let nick_reply = format!(":{}!anon@dark.fi NICK {}\r\n", old_nick, self.irc_config.nick);
         self.reply(&nick_reply).await
     }
 
     async fn on_receive_part(&mut self, channels: Vec<String>) -> Result<()> {
         for chan in channels.iter() {
-            let part_reply =
-                format!(":{}!anon@dark.fi PART {}\r\n", self.irc_config.nickname, chan);
+            let part_reply = format!(":{}!anon@dark.fi PART {}\r\n", self.irc_config.nick, chan);
             self.reply(&part_reply).await?;
-            if self.irc_config.channels.contains_key(chan) {
-                let chan_info = self.irc_config.channels.get_mut(chan).unwrap();
-                chan_info.joined = false;
-            }
+            self.channels_joined.remove(chan);
         }
         Ok(())
     }
@@ -499,11 +510,11 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                 return Ok(())
             }
 
-            let channel_info = self.irc_config.channels.get(target).unwrap();
-
-            if !channel_info.joined {
+            if !self.channels_joined.contains(target) {
                 return Ok(())
             }
+
+            let channel_info = self.irc_config.channels.get(target).unwrap();
 
             if let Some(salt_box) = &channel_info.salt_box {
                 encrypt_privmsg(salt_box, &mut privmsg);

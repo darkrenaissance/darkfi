@@ -218,15 +218,13 @@ pub struct ChannelInfo {
     pub topic: Option<String>,
     /// Optional NaCl box for the channel, used for {en,de}cryption.
     pub salt_box: Option<Arc<ChaChaBox>>,
-    /// Flag indicates whether the user has joined the channel or not
-    pub joined: bool,
     /// All nicknames which are visible on the channel
     pub names: HashSet<Nick>,
 }
 
 impl ChannelInfo {
     pub fn new() -> Result<Self> {
-        Ok(Self { topic: None, salt_box: None, joined: false, names: HashSet::new() })
+        Ok(Self { topic: None, salt_box: None, names: HashSet::new() })
     }
 
     pub fn names(&self) -> String {

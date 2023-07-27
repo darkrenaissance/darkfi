@@ -83,14 +83,11 @@ pub fn encrypt(salt_box: &ChaChaBox, plaintext: &[u8]) -> String {
 pub fn decrypt_target(
     contact: &mut String,
     privmsg: &mut PrivMsgEvent,
-    configured_chans: HashMap<String, ChannelInfo>,
-    configured_contacts: HashMap<String, ContactInfo>,
+    configured_chans: &HashMap<String, ChannelInfo>,
+    configured_contacts: &HashMap<String, ContactInfo>,
 ) {
     for chan_name in configured_chans.keys() {
         let chan_info = configured_chans.get(chan_name).unwrap();
-        if !chan_info.joined {
-            continue
-        }
 
         if let Some(salt_box) = &chan_info.salt_box {
             let decrypted_target = try_decrypt(salt_box, &privmsg.target);
