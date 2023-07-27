@@ -542,7 +542,7 @@ impl BlockchainOverlay {
     }
 
     /// Auxiliary function to create a full clone using SledDbOverlay::clone,
-    /// and creating new pointers of underlying overlays.
+    /// generating new pointers for the underlying overlays.
     pub fn full_clone(&self) -> Result<BlockchainOverlayPtr> {
         let overlay = Arc::new(Mutex::new(self.overlay.lock().unwrap().clone()));
         let headers = HeaderStoreOverlay::new(&overlay)?;

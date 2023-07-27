@@ -97,8 +97,8 @@ impl Fork {
     }
 
     /// Auxiliary function to create a full clone using BlockchainOverlay::full_clone.
-    /// Changes to this clone don't affect original record, since underlying overlay
-    /// is cloned and pointers have been updated to the new one.
+    /// Changes to this copy don't affect original fork overlay records, since underlying
+    /// overlay pointer have been updated to the cloned one.
     pub fn full_clone(&self) -> Result<Self> {
         let overlay = self.overlay.lock().unwrap().full_clone()?;
         let proposals = self.proposals.clone();
