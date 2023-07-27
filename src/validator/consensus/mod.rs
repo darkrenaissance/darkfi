@@ -95,6 +95,16 @@ impl Fork {
         let overlay = BlockchainOverlay::new(blockchain)?;
         Ok(Self { overlay, proposals: vec![] })
     }
+
+    /// Auxiliary function to create a full clone using BlockchainOverlay::full_clone.
+    /// Changes to this clone don't affect original record, since underlying overlay
+    /// is cloned and pointers have been updated to the new one.
+    pub fn full_clone(&self) -> Result<Self> {
+        let overlay = self.overlay.lock().unwrap().full_clone()?;
+        let proposals = self.proposals.clone();
+
+        Ok(Self { overlay, proposals })
+    }
 }
 
 /// Block producer reward.

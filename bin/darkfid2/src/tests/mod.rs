@@ -25,6 +25,8 @@ use url::Url;
 mod harness;
 use harness::{generate_node, Harness, HarnessConfig};
 
+mod forks;
+
 async fn sync_blocks_real(ex: Arc<Executor<'_>>) -> Result<()> {
     init_logger();
 
