@@ -183,7 +183,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
             }
 
             // Skip everything if we're not joined in the channel
-            if self.channels_joined.contains(&msg.target) {
+            if !self.channels_joined.contains(&msg.target) {
                 return Ok(())
             }
 
