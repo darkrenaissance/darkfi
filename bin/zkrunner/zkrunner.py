@@ -124,20 +124,8 @@ IGNORED_OPCODES = {
 
 if __name__ == "__main__":
 
-    ##### Your Inputs #####
-
-    bincode_path = "opcodes.no-nipoint.zk.bin"
-    witnesses = [
-        Base.from_u64(3),
-        Scalar.from_u64(4),
-        Base.from_u64(5),
-        Base.from_u64(6),
-        Base.from_u64(7),
-        Base.from_u64(8),
-        10,
-        [Base.from_u64(42)] * 32,
-        Base.from_u64(1),
-    ]
+    # TODO: relative path to your zkas binary
+    bincode_path = "set_v1.zk.bin"
 
     ##### Setup #####
 
@@ -147,6 +135,29 @@ if __name__ == "__main__":
     constant_count = bincode_data_['constant_count']
     literals = bincode_data_['literals']
     K = bincode_data_['k']
+
+    ##### TODO: Your Inputs #####
+
+    # TODO: list of witnesses, in the same order as in the zkas circuit witness section
+    witnesses = [
+        Base.from_u64(42),
+        Base.from_u64(1),
+        Base.from_u64(1),
+        Base.from_u64(1),
+        Base.from_u64(1),
+    ]
+
+    zkcircuit = ZkCircuit(zkbin)
+
+    # TODO: call the corresponding witness_* prefixed method to assign the witness
+    # to the circuit
+    zkcircuit.witness_base(witnesses[0])
+    zkcircuit.witness_base(witnesses[1])
+    zkcircuit.witness_base(witnesses[2])
+    zkcircuit.witness_base(witnesses[3])
+    zkcircuit.witness_base(witnesses[4])
+
+    zkcircuit = zkcircuit.build(zkbin)
 
     # Verbosity
     parser = argparse.ArgumentParser()
@@ -159,24 +170,12 @@ if __name__ == "__main__":
 
     pubins = get_pubins(statements, witnesses, constant_count, literals)
 
-    zkcircuit = ZkCircuit(zkbin)
-    zkcircuit.witness_base(witnesses[0])
-    zkcircuit.witness_scalar(witnesses[1])
-    zkcircuit.witness_base(witnesses[2])
-    zkcircuit.witness_base(witnesses[3])
-    zkcircuit.witness_base(witnesses[4])
-    zkcircuit.witness_base(witnesses[5])
-    zkcircuit.witness_u32(witnesses[6])
-    zkcircuit.witness_merkle_path(witnesses[7])
-    zkcircuit.witness_base(witnesses[8])
-    zkcircuit = zkcircuit.build(zkbin)
-
-    print("Making proving key.....")
+    vprint("Making proving key.....")
     start = time()
     proving_key = ProvingKey.build(K, zkcircuit)
     print(f"Time for making proving key: {time() - start}")
 
-    print("Proving.....")
+    vprint("Proving.....")
     start = time()
     proof = Proof.create(proving_key, [zkcircuit], pubins)
     print(f"Time for proving: {time() - start}")
@@ -185,12 +184,13 @@ if __name__ == "__main__":
 
     zkcircuit_v = zkcircuit.verifier_build(zkbin)
 
-    print(f"Making verifying key.....")
+    vprint(f"Making verifying key.....")
     start = time()
     verifying_key = VerifyingKey.build(K, zkcircuit_v)
     print(f"Time for making verifying key: {time() - start}")
 
-    print("Verifying.....")
+    vprint("Verifying.....")
     start = time()
+    vprint(f"PUBLIC INPUTS: {pubins}")
     proof.verify(verifying_key, pubins)
     print(f"Time for verifying {time() - start}")
