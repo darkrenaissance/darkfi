@@ -30,11 +30,8 @@ pub mod consensus;
 #[cfg(feature = "blockchain")]
 pub mod validator;
 
-#[cfg(feature = "dht")]
-pub mod dht;
-
-#[cfg(feature = "dht")]
-pub mod dht2;
+#[cfg(feature = "geode")]
+pub mod geode;
 
 #[cfg(feature = "event-graph")]
 pub mod event_graph;

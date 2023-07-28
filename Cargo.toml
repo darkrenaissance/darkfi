@@ -32,9 +32,6 @@ members = [
     #"bin/dnetview",
     "bin/tau/taud",
     "bin/tau/tau-cli",
-    #"bin/darkwiki/darkwikid",
-    #"bin/darkwiki/darkwiki-cli",
-    #"bin/dhtd/dhtd",
     "bin/vanityaddr",
     "bin/lilith",
     "bin/zktool",
@@ -171,20 +168,10 @@ blockchain = [
     "wasm-runtime",
 ]
 
-dht = [
-    "blake3",
-    "chrono",
-    "rand",
-
-    "async-runtime",
-    "darkfi-serial",
-    "darkfi-serial/collections",
-    "darkfi-serial/hash",
-    "net",
-]
-
 geode = [
+    "async-std",
     "blake3",
+    "log",
 ]
 
 event-graph = [
