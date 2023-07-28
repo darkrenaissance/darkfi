@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from argparse import ArgumentParser
 from darkfi_sdk_py.affine import Affine
 from darkfi_sdk_py.base import Base
@@ -13,22 +11,17 @@ from darkfi_sdk_py.zk_circuit import ZkCircuit
 from pprint import pprint
 from sys import getsizeof
 from time import time
+import argparse
 
 
 def heap_add(heap, element):
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> heap")
-    pprint(heap)
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> to add")
-    pprint(element)
     heap.append(element)
+    vprint(f"HEAP: {heap}")
 
 
 def pubins_add(pubins, element):
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> pubins")
-    pprint(pubins)
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> to add")
-    pprint(element)
     pubins.append(element)
+    vprint(f"PUBLIC INPUTS: {pubins}")
 
 
 def get_pubins(statements, witnesses, constant_count, literals):
@@ -36,8 +29,7 @@ def get_pubins(statements, witnesses, constant_count, literals):
     heap = [None] * constant_count + witnesses
     pubins = []
     for stmt in statements:
-        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Statement")
-        print(stmt)
+        vprint(f"STATEMENT: {stmt}")
         opcode, args = stmt[0], stmt[1]
         if opcode == 'BaseAdd':
             a = heap[args[0][1]]
@@ -104,13 +96,9 @@ def get_pubins(statements, witnesses, constant_count, literals):
             res = thn if cnd == Base.from_u64(1) else els
             heap_add(heap, res)
         elif opcode in IGNORED_OPCODES:
-            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Ignored opcode")
-            pprint(opcode)
+            vprint(f"IGNORE: {opcode}")
         else:
-            print(
-                ">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Missing implementation for opcode"
-            )
-            pprint(opcode)
+            vprint(f"NO IMPLEMENTATION: {opcode}")
     return pubins
 
 
@@ -124,7 +112,8 @@ def bincode_data(bincode):
             "witnesses": zkbin.witnesses(),
             "constant_count": zkbin.constant_count(),
             "statements": zkbin.opcodes(),
-            "literals": zkbin.literals()
+            "literals": zkbin.literals(),
+            "k": zkbin.k()
         }
 
 
@@ -132,18 +121,12 @@ IGNORED_OPCODES = {
     'Noop', 'RangeCheck', 'LessThanStrict', 'LessThanLoose', 'BoolCheck',
     'ConstrainEqualBase', 'ConstrainEqualPoint', 'DebugPrint'
 }
-K = 13
 
 if __name__ == "__main__":
 
-    ##### Script inputs #####
+    ##### Your Inputs #####
 
     bincode_path = "opcodes.no-nipoint.zk.bin"
-    # bincode_path = "../../example/simple.zk.bin" # You must change the witnesses as well
-    bincode_data_ = bincode_data(bincode_path)
-    zkbin, statements, constant_count, literals = bincode_data_[
-        'zkbin'], bincode_data_['statements'], bincode_data_[
-            'constant_count'], bincode_data_['literals']
     witnesses = [
         Base.from_u64(3),
         Scalar.from_u64(4),
@@ -156,12 +139,26 @@ if __name__ == "__main__":
         Base.from_u64(1),
     ]
 
+    ##### Setup #####
+
+    bincode_data_ = bincode_data(bincode_path)
+    zkbin = bincode_data_['zkbin']
+    statements = bincode_data_['statements']
+    constant_count = bincode_data_['constant_count']
+    literals = bincode_data_['literals']
+    K = bincode_data_['k']
+
+    # Verbosity
+    parser = argparse.ArgumentParser()
+    verbose = parser.add_argument(
+        '--verbose', action='store_true', help='verbose switch')
+    args = parser.parse_args()
+    vprint = print if args.verbose else lambda *a, **k: None
+
     ##### Proving #####
 
-    print("Making public inputs based off of witnesses......")
     pubins = get_pubins(statements, witnesses, constant_count, literals)
 
-    print("Witnessing each witness into prover's circuit.....")
     zkcircuit = ZkCircuit(zkbin)
     zkcircuit.witness_base(witnesses[0])
     zkcircuit.witness_scalar(witnesses[1])
