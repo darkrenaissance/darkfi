@@ -47,7 +47,7 @@ FEE_TARGET = MAX_BLOCK_CC
 # max fee base value
 FEE_MAX = 1
 # min fee base value
-FEE_MIN = 0.0001
+FEE_MIN = 0.00001
 # negligible value added to denominator to avoid invalid division by zero
 EPSILON = 1
 # window of accuracy calculation
@@ -68,3 +68,4 @@ EPSILON_HP = Num(EPSILON)
 REWARD_MIN_HP = Num(REWARD_MIN)
 REWARD_MAX_HP = Num(REWARD_MAX)
 BASE_L_HP = Num(BASE_L)
+CC_DIFF_EPSILON=0.0001

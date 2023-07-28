@@ -18,11 +18,14 @@ class DarkfiTable:
         print('secondary min/max : {}/{}'.format(self.secondary_pid.clip_min, self.secondary_pid.clip_max))
         self.primary_pid = PrimaryDiscretePID(kp=r_kp, ki=r_ki, kd=r_kd) if controller_type==CONTROLLER_TYPE_DISCRETE else PrimaryTakahashiPID(kc=kc, ti=ti, td=td, ts=ts)
         print('primary min/max : {}/{}'.format(self.primary_pid.clip_min, self.primary_pid.clip_max))
-        self.basefee_pid = FeePID(kp=fee_kp, ki=fee_ki, kd=fee_kd) if controller_type==CONTROLLER_TYPE_DISCRETE else SecondaryTakahashiPID(kc=fee_kc, ti=fee_ti, td=fee_td, ts=fee_ts)
+        self.basefee_pid = FeePID(kp=fee_kp, ki=fee_ki, kd=fee_kd)
         self.debug=debug
         self.rewards = []
         self.winners = [1]
         self.computational_cost = [0]
+        self.base_fee = []
+        self.tips_avg = []
+        self.cc_diff = []
 
     def add_darkie(self, darkie):
         self.darkies+=[darkie]
@@ -70,8 +73,12 @@ class DarkfiTable:
                 is_slashed = self.reward_slash_lead(debug)
                 if is_slashed==False:
                     self.resolve_fork(slot, debug)
-
-            rt_range.set_description('epoch: {}, fork: {}, winners: {}, issuance {} DRK, acc: {}%, stake: {}%, sr: {}%, reward:{}, apr: {}%, avg(y): {}, avg(T): {}'.format(int(slot/EPOCH_LENGTH), self.merge_length(), self.winners[-1], round(self.Sigma,2), round(acc*100, 2), round(total_stake/self.Sigma*100 if self.Sigma>0 else 0,2), round(self.avg_stake_ratio()*100,2) , round(self.rewards[-1],2), round(self.avg_apr()*100,2), sum(Ys)/len(Ys), sum(Ts)/len(Ts) ))
+            avg_y = sum(Ys)/len(Ys)
+            avg_t = sum(Ts)/len(Ts)
+            avg_tip = self.tips_avg[-1] if len(self.tips_avg)>0 else 0
+            base_fee = self.base_fee[-1] if len(self.base_fee)>0 else 0
+            cc_diff = self.cc_diff[-1] if len(self.cc_diff)>0 else 0
+            rt_range.set_description('epoch: {}, fork: {}, winners: {}, issuance {} DRK, f: {}, acc: {}%, stake: {}%, sr: {}%, reward:{}, apr: {}%, basefee: {}, avg(fee): {}, cc_diff: {}, avg(y): {}, avg(T): {}'.format(int(slot/EPOCH_LENGTH), self.merge_length(), self.winners[-1], round(self.Sigma,2), round(f, 5), round(acc*100, 2), round(total_stake/self.Sigma*100 if self.Sigma>0 else 0,2), round(self.avg_stake_ratio()*100,2) , round(self.rewards[-1],2), round(self.avg_apr()*100,2), round(base_fee, 4),  round(avg_tip, 2), round(cc_diff, 2), round(float(avg_y), 2), round(float(avg_t), 2)))
             #assert round(total_stake,1) <= round(self.Sigma,1), 'stake: {}, sigma: {}'.format(total_stake, self.Sigma)
             slot+=1
         self.end_time=time.time()
@@ -79,7 +86,8 @@ class DarkfiTable:
         stake_ratio = self.avg_stake_ratio()
         avg_apy = self.avg_apy()
         avg_apr = self.avg_apr()
-        return self.secondary_pid.acc_percentage(), avg_apy, avg_reward, stake_ratio, avg_apr
+        cc_diff_avg = sum([0 if math.fabs(i)<CC_DIFF_EPSILON else 1 for i in self.cc_diff])/len(self.cc_diff) if len(self.cc_diff)>0 else 0
+        return self.secondary_pid.acc_percentage(), cc_diff_avg, avg_apy, avg_reward, stake_ratio, avg_apr
 
     """
     reward single lead, or slash lead with probability len(self.darkies)**-1
@@ -137,16 +145,19 @@ class DarkfiTable:
         for darkie in self.darkies:
             txs += [darkie.tx()]
         ret, actual_cc = DarkfiTable.auction(txs)
+        self.computational_cost += [actual_cc]
+        self.cc_diff += [MAX_BLOCK_CC - actual_cc]
         tips = ret[0]
         idxs = ret[1]
+        self.tips_avg += [tips/len(idxs) if len(idxs)>0 else 0]
         basefee = self.basefee_pid.pid_clipped(self.computational_cost[-1], debug)
-        assert basefee<=1
+        self.base_fee+=[basefee]
         for idx in idxs:
             fee = txs[idx].cc()+basefee
             self.darkies[idx].pay_fee(fee)
             #print("charging darkie[{}]: {} DRK per tx of length: {}, burning: {}".format(idx, fee, len(txs[idx]), basefee))
         self.darkies[darkie_lead_idx].pay_fee(-1*tips)
-        self.computational_cost += [actual_cc]
+
         # subtract base fee from total stake
         self.Sigma -= basefee*len(txs)
 

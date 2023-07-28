@@ -13,6 +13,7 @@ class Darkie():
         self.strategy = strategy
         self.slot = 0
         self.won_hist = [] # winning history boolean
+        self.fees = []
 
     def clone(self):
         return Darkie(self.stake)
@@ -176,7 +177,12 @@ class Darkie():
     deduct tip paid to miner plus burned base fee or computational cost.
     """
     def pay_fee(self, fee):
+        if fee>0:
+            self.fees += [fee]
         self.stake -= fee
+
+    def last_fee(self):
+        return self.fees[-1] if len(self.fees)>0 else 0
 
 class Tx(object):
     def __init__(self, size):
