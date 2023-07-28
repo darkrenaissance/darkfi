@@ -66,82 +66,42 @@ darkrenaissance:darkfi.master
 > But you would still be able to follow along even if you aren't, by inferring from the context.
 
 ```
-# Repository
-git clone https://github.com/darkrenaissance/darkmap
+# Build the zkas compiler
+cd $HOME && git clone https://github.com/darkrenaissance/darkfi darkfi-master
+cd darkfi && make zkas
+PATH="$PATH:$PWD"
+
+cd $HOME && git clone https://github.com/darkrenaissance/darkmap
+cd darkmap && make
 ```
 
-### Tool 1: wasm contract
+## Tool 1: zkas, zkvm
+
+We want a way for someone to control an account. You could use public key 
+crytography. But in here, we will use zk to accomplish the same thing.
+
+In Darkfi, circuits are programmed in `zkas` (ZK ASsembly) and later run in zkvm to generate proofs.
+
+There is one circuit that Darkmap uses, which is the set circuit for gating the `set` function. Let's see what it does and
+start reading `<darkmap>/proof/set_v1.zk`.
+
+## Tool 2: zkrunner, darkfi-sdk-py
+
+We mentioned zkas circuits are "run inside" zkvm. How?
+
+There is a developer facing cli `zkrunner`. The cli allows you to interact with zkvm in Python.
+
+Let's see how to run the `set_v1.zk` by reading `<darkfi>/bin/zkrunner/README.md`.
+
+## Tool 3: wasm contract
 
 In Darkfi, a contract is deployed as a wasm module. 
 Rust has one of the best wasm support, so Darkmap is implemented in Rust.
 In theory, any language that compiles to wasm can be used make a contract e.g. Zig.
 
-### Tool 2: zk proofs
+Let's read `<darkmap>/src/entrypoints.rs`.
 
-You can make a ZK scheme where:
-* a user computes a ZK proof locally and submit along the transaction.
-* the contract grants access to change a key-value mapping that user **owns** when received a valid proof.
-
-## wasm contract: `entrypoint.rs`
-
-There is a macro defining 4 entrypoints the contract runtime calls.
-They are called in order:
-1. init
-1. metadata
-1. exec
-1. apply
-
-```
-darkfi_sdk::define_contract!(
-    init:     init_contract,
-    exec:     process_instruction,
-    apply:    process_update,
-    metadata: get_metadata
-);
-```
-
-## Init
-
-Init is responsible for 2 tasks:
-1. from the zkas binary, compute and store the corresponding verifying key 
-2. initialize any number of databases (e.g. for the contract's business logic)
-
-```
-fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
-    
-    // The way to load zkas binary as native contracts, it will probably be different regular contracts
-    let set_v1_bincode = include_bytes!("../proof/set_v1.zk.bin");
-
-    // Compute and store verifying key if it's not already stored
-    zkas_db_set(&set_v1_bincode[..])?;
-
-    // Check if a db is already initialized
-    if db_lookup(cid, MAP_CONTRACT_ENTRIES_TREE).is_err() {
-	// db for business logic
-        db_init(cid, MAP_CONTRACT_ENTRIES_TREE)?;
-    }
-
-    Ok(())
-}
-```
-
-### Under the hood
-
-```
-// https://github.com/darkrenaissance/darkfi/blob/85c53aa7b086652ed6d2428bf748f841485ee0e2/src/runtime/import/db.rs#L522
-
-/// Only `deploy()` can call this. Given a zkas circuit, create a VerifyingKey and insert
-/// them both into the db.
-pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
-```
-
-## Metadata
-
-## Exec
-
-## Apply
-
-## Others
+## Notes
 
 * Where are the states stored?
 	* There is no memory, there is calldata
@@ -149,13 +109,12 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
 	* db_init
 	* db_lookup
 	* zkas_db_set
-
-
-## Outline of book
-
-* What is the problem?
 * What are the tools?
-	* zkbincode
-	* wasm crate
-	* transaction builder
+	* zkas
+        * zkvm
+        	* the runtime imports
+	* wasm
+	* client
+		* transaction builder
 	* test facility
+
