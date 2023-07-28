@@ -64,6 +64,10 @@ impl ZkBinary {
             })
             .collect()
     }
+
+    fn k(&self) -> u32 {
+	self.0.k
+    }
 }
 
 pub fn create_module(py: pyo3::Python<'_>) -> pyo3::PyResult<&PyModule> {
