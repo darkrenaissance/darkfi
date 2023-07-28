@@ -24,8 +24,8 @@ members = [
     "bin/darkfid2",
     "bin/drk",
     "bin/faucetd",
-    "bin/fud/fu",
-    "bin/fud/fud",
+    #"bin/fud/fu",
+    #"bin/fud/fud",
     "bin/genev/genevd",
     "bin/genev/genev-cli",
     "bin/darkirc",
@@ -34,7 +34,7 @@ members = [
     "bin/tau/tau-cli",
     #"bin/darkwiki/darkwikid",
     #"bin/darkwiki/darkwiki-cli",
-    "bin/dhtd/dhtd",
+    #"bin/dhtd/dhtd",
     "bin/vanityaddr",
     "bin/lilith",
     "bin/zktool",
@@ -181,6 +181,10 @@ dht = [
     "darkfi-serial/collections",
     "darkfi-serial/hash",
     "net",
+]
+
+geode = [
+    "blake3",
 ]
 
 event-graph = [

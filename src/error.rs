@@ -460,20 +460,15 @@ pub enum Error {
     #[error("clock out of sync with peers: {0}")]
     ClockOutOfSync(String),
 
-    // ==============
-    // DHT errors
-    // ==============
-    #[error("Chunk not found")]
-    DhtChunkNotFound,
+    // ================
+    // DHT/Geode errors
+    // ================
+    #[error("Geode needs garbage collection")]
+    GeodeNeedsGc,
 
-    #[error("File metadata not found")]
-    DhtFileMetadataNotFound,
-
-    // FIXME: This is out of context, be specific when writing errors.
-    #[error("Did not find key")]
-    UnknownKey,
-
+    // =========
     // Catch-all
+    // =========
     #[error("{0}")]
     Custom(String),
 }
