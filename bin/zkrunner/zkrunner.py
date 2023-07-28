@@ -178,6 +178,7 @@ if __name__ == "__main__":
     vprint("Proving.....")
     start = time()
     proof = Proof.create(proving_key, [zkcircuit], pubins)
+    # TODO: consider persisting the proof for making a transaction
     print(f"Time for proving: {time() - start}")
 
     ##### Verifiying #####
