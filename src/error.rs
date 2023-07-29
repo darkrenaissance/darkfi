@@ -466,6 +466,9 @@ pub enum Error {
     #[error("Geode needs garbage collection")]
     GeodeNeedsGc,
 
+    #[error("Geode file not found")]
+    GeodeFileNotFound,
+
     #[error("Geode chunk not found")]
     GeodeChunkNotFound,
 

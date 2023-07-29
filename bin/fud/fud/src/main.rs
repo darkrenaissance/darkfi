@@ -146,7 +146,6 @@ impl Fud {
             }
         };
 
-        // TODO: Broadcast file_hash and chunk_hashes as FudFilePut {};
         let fud_file = FudFilePut { file_hash, chunk_hashes };
         self.p2p.broadcast(&fud_file).await;
 
