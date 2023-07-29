@@ -396,4 +396,30 @@ impl Geode {
 
         Ok(chunked_file)
     }
+
+    /// Fetch a single chunk from Geode. Returns a `PathBuf` pointing to the chunk
+    /// if it is found.
+    pub async fn get_chunk(&self, chunk_hash: &blake3::Hash) -> Result<PathBuf> {
+        info!(target: "geode::get_chunk()", "[Geode] Getting chunk {}", chunk_hash);
+        let mut chunk_path = self.chunks_path.clone();
+        chunk_path.push(chunk_hash.to_hex().as_str());
+
+        if !chunk_path.exists().await || !chunk_path.is_file().await {
+            // TODO: We should be aggressive here and remove the non-file.
+            return Err(Error::GeodeChunkNotFound)
+        }
+
+        // Perform chunk consistency check
+        let mut buf = [0u8; MAX_CHUNK_SIZE];
+        let mut chunk_fd = File::open(&chunk_path).await?;
+        let bytes_read = chunk_fd.read(&mut buf).await?;
+        let chunk_slice = &buf[..bytes_read];
+        let hashed_chunk = blake3::hash(chunk_slice);
+        if &hashed_chunk != chunk_hash {
+            // The chunk is corrupted
+            return Err(Error::GeodeNeedsGc)
+        }
+
+        Ok(chunk_path)
+    }
 }

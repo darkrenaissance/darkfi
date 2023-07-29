@@ -18,15 +18,16 @@
 
 use std::collections::HashSet;
 
-use async_std::sync::Arc;
+use async_std::{fs::File, io::ReadExt, sync::Arc};
 use async_trait::async_trait;
 use darkfi::{
+    geode::MAX_CHUNK_SIZE,
     impl_p2p_message,
     net::{
         ChannelPtr, Message, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
-    Result,
+    Error, Result,
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::{debug, error};
@@ -67,13 +68,29 @@ pub struct FudChunkRoute {
 }
 impl_p2p_message!(FudChunkRoute, "FudChunkRoute");
 
+/// Message representing a chunk request from the network
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct FudChunkRequest {
+    pub chunk_hash: blake3::Hash,
+}
+impl_p2p_message!(FudChunkRequest, "FudChunkRequest");
+
+/// Message representing a chunk reply from the network
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct FudChunkReply {
+    // TODO: Perhaps this could be a chunk-sized array, but then we need padding?
+    pub chunk: Vec<u8>,
+}
+impl_p2p_message!(FudChunkReply, "FudChunkReply");
+
 /// P2P protocol implementation for fud.
 pub struct ProtocolFud {
-    channel_address: Url,
+    channel: ChannelPtr,
     file_put_sub: MessageSubscription<FudFilePut>,
     chunk_put_sub: MessageSubscription<FudChunkPut>,
     file_route_sub: MessageSubscription<FudFileRoute>,
     chunk_route_sub: MessageSubscription<FudChunkRoute>,
+    chunk_request_sub: MessageSubscription<FudChunkRequest>,
     fud: Arc<Fud>,
     p2p: P2pPtr,
     jobsman: ProtocolJobsManagerPtr,
@@ -91,18 +108,21 @@ impl ProtocolFud {
         msg_subsystem.add_dispatch::<FudChunkPut>().await;
         msg_subsystem.add_dispatch::<FudFileRoute>().await;
         msg_subsystem.add_dispatch::<FudChunkRoute>().await;
+        msg_subsystem.add_dispatch::<FudChunkRequest>().await;
 
         let file_put_sub = channel.subscribe_msg::<FudFilePut>().await?;
         let chunk_put_sub = channel.subscribe_msg::<FudChunkPut>().await?;
         let file_route_sub = channel.subscribe_msg::<FudFileRoute>().await?;
         let chunk_route_sub = channel.subscribe_msg::<FudChunkRoute>().await?;
+        let chunk_request_sub = channel.subscribe_msg::<FudChunkRequest>().await?;
 
         Ok(Arc::new(Self {
-            channel_address: channel.address().clone(),
+            channel: channel.clone(),
             file_put_sub,
             chunk_put_sub,
             file_route_sub,
             chunk_route_sub,
+            chunk_request_sub,
             fud,
             p2p,
             jobsman: ProtocolJobsManager::new("ProtocolFud", channel.clone()),
@@ -129,11 +149,11 @@ impl ProtocolFud {
             let file_route = metadata_lock.get_mut(&fud_file.file_hash);
             match file_route {
                 Some(peers) => {
-                    peers.insert(self.channel_address.clone());
+                    peers.insert(self.channel.address().clone());
                 }
                 None => {
                     let mut peers = HashSet::new();
-                    peers.insert(self.channel_address.clone());
+                    peers.insert(self.channel.address().clone());
                     metadata_lock.insert(fud_file.file_hash, peers);
                 }
             }
@@ -144,11 +164,11 @@ impl ProtocolFud {
                 let chunk_route = chunks_lock.get_mut(chunk);
                 match chunk_route {
                     Some(peers) => {
-                        peers.insert(self.channel_address.clone());
+                        peers.insert(self.channel.address().clone());
                     }
                     None => {
                         let mut peers = HashSet::new();
-                        peers.insert(self.channel_address.clone());
+                        peers.insert(self.channel.address().clone());
                         chunks_lock.insert(*chunk, peers);
                     }
                 }
@@ -159,10 +179,10 @@ impl ProtocolFud {
             let route = FudFileRoute {
                 file_hash: fud_file.file_hash,
                 chunk_hashes: fud_file.chunk_hashes.clone(),
-                peer: self.channel_address.clone(),
+                peer: self.channel.address().clone(),
             };
 
-            self.p2p.broadcast_with_exclude(&route, &[self.channel_address.clone()]).await;
+            self.p2p.broadcast_with_exclude(&route, &[self.channel.address().clone()]).await;
         }
     }
 
@@ -186,11 +206,11 @@ impl ProtocolFud {
             let chunk_route = chunks_lock.get_mut(&fud_chunk.chunk_hash);
             match chunk_route {
                 Some(peers) => {
-                    peers.insert(self.channel_address.clone());
+                    peers.insert(self.channel.address().clone());
                 }
                 None => {
                     let mut peers = HashSet::new();
-                    peers.insert(self.channel_address.clone());
+                    peers.insert(self.channel.address().clone());
                     chunks_lock.insert(fud_chunk.chunk_hash, peers);
                 }
             }
@@ -199,10 +219,10 @@ impl ProtocolFud {
             // Relay this knowledge of the new route
             let route = FudChunkRoute {
                 chunk_hash: fud_chunk.chunk_hash,
-                peer: self.channel_address.clone(),
+                peer: self.channel.address().clone(),
             };
 
-            self.p2p.broadcast_with_exclude(&route, &[self.channel_address.clone()]).await;
+            self.p2p.broadcast_with_exclude(&route, &[self.channel.address().clone()]).await;
         }
     }
 
@@ -262,7 +282,7 @@ impl ProtocolFud {
             self.p2p
                 .broadcast_with_exclude(
                     &route,
-                    &[self.channel_address.clone(), fud_file.peer.clone()],
+                    &[self.channel.address().clone(), fud_file.peer.clone()],
                 )
                 .await;
         }
@@ -305,9 +325,52 @@ impl ProtocolFud {
             self.p2p
                 .broadcast_with_exclude(
                     &route,
-                    &[self.channel_address.clone(), fud_chunk.peer.clone()],
+                    &[self.channel.address().clone(), fud_chunk.peer.clone()],
                 )
                 .await;
+        }
+    }
+
+    async fn handle_fud_chunk_request(self: Arc<Self>) -> Result<()> {
+        debug!(target: "fud::ProtocolFud::handle_fud_chunk_request()", "START");
+
+        loop {
+            let chunk_request = match self.chunk_request_sub.receive().await {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(
+                        target: "fud::ProtocolFud::handle_fud_chunk_request()",
+                        "recv fail: {}", e,
+                    );
+                    continue
+                }
+            };
+
+            let chunk_path = match self.fud.geode.get_chunk(&chunk_request.chunk_hash).await {
+                Ok(v) => v,
+                Err(Error::GeodeNeedsGc) => {
+                    // TODO: Run GC
+                    continue
+                }
+
+                Err(Error::GeodeChunkNotFound) => {
+                    // TODO: Maybe reply with NotFound so peer can be removed
+                    continue
+                }
+
+                Err(_e) => continue,
+            };
+
+            let mut buf = [0u8; MAX_CHUNK_SIZE];
+            let mut chunk_fd = File::open(&chunk_path).await.unwrap();
+            let bytes_read = chunk_fd.read(&mut buf).await.unwrap();
+            let chunk_slice = &buf[..bytes_read];
+
+            let reply = FudChunkReply { chunk: chunk_slice.to_vec() };
+            match self.channel.send(&reply).await {
+                Ok(()) => continue,
+                Err(_e) => continue,
+            }
         }
     }
 }
@@ -321,6 +384,7 @@ impl ProtocolBase for ProtocolFud {
         self.jobsman.clone().spawn(self.clone().handle_fud_chunk_put(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_fud_file_route(), executor.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_fud_chunk_route(), executor.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_fud_chunk_request(), executor.clone()).await;
         debug!(target: "fud::ProtocolFud::start()", "END");
         Ok(())
     }
