@@ -96,34 +96,50 @@ We mentioned ZKAS circuits are "run inside" ZKVM. How?
 
 There is a developer facing CLI zkrunner. The CLI allows you to interact with ZKVM in Python.
 
-Let's see how to run the set_v1.zk by reading <darkfi>/bin/zkrunner/README.md.
+Let's see how to run the set_v1.zk by reading `<darkfi>/bin/zkrunner/README.md`.
 
 ### Outcome
 
 Good job! Now you have you learned how to prove and run using a ZKAS circuit.
 
-## Tool 3: wasm contract
+## Tool 2: WASM contract
 
 In Darkfi, a contract is deployed as a wasm module. 
-Rust has one of the best wasm support, so Darkmap is implemented in Rust.
-In theory, any language that compiles to wasm can be used make a contract e.g. Zig.
+Rust has one of the best wasm support along with C and C++, so Darkmap is implemented in Rust.
+In theory, any language that compiles to wasm can be used make a contract.
 
-Let's read `<darkmap>/src/entrypoints.rs`.
+Let's learn about the contract by reading `<darkmap>/src/entrypoints.rs`.
+
+## Deploying, testing and client
+
+FIXME: perhaps more detailed explanation
+
+## Deploying 
+
+Currently, the infrastructure for deploying non-native contracts is being worked on. 
+So Darkmap was tested by modifiying the darkfi validator to deploy it as native contract.
+
+If you like to try it out, take a look at the [pull request draft](https://github.com/darkrenaissance/darkfi/pull/170/files#diff-1592d061816d5a4da17e089758e15df75ae1ab963b2288e6d84b8f29b06f7d4f).
+
+In particular:
+* `src/consensus/validator.rs`
+* `sdk/src/crpyto/*`
+
+## Testing and client implementation
+
+For now, the best place to learn is learn from the darkmap pull request draft or `src/contract/money`.
 
 ## Notes
 
 * Where are the states stored?
-	* There is no memory, there is calldata
-* What are the runtime functions you can call?
-	* db_init
-	* db_lookup
-	* zkas_db_set
+* What are the host-provided functions you can call from within the contract?
+	* https://github.com/darkrenaissance/darkfi/tree/98a78098bc1db02e5c1c571be5bcfd6359809a99/src/runtime/import
 * What are the tools?
 	* zkas
         * zkvm
-        	* the runtime imports
+        * the host-provided imports
 	* wasm
 	* client
-		* transaction builder
-	* test facility
+	* transaction builder
+	* testing libraries and functions
 
