@@ -1,0 +1,74 @@
+# Intro:
+# 
+# This is the source of ZK circuit. 
+# It has 3 sections: constant, witness and circuit.
+# constant and witness describe the data the ZK statements are constraining.
+
+# 2 ** k is the maximum nubmer of rows in the circuit.
+k = 11;
+
+# Section to declare constants used in the circuit.
+# "Set_V1" is the namepsace of circuit. 
+# It is the namespace for storing verifying key onchain.
+constant "Set_V1" {} 
+
+# Witness is the inputs to the circuit, both public and private.
+witness "Set_V1" {
+        # An instance of `Base` is a field element, which is a member of
+        # the finite field F_p where
+        # p = 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001
+        #
+        # Private input a user generates locally.
+	Base secret,
+
+	# Whether to lock the name.
+	Base lock,
+
+        # Whether to set in the canonical root name registry.
+	Base root,
+
+	# The name.
+	Base key,
+
+	# The value the name resolves to or
+        # the next sub name registry (i.e. an account).
+	Base value,
+}
+
+circuit "Set_V1" {
+	# var = statement(var_or_witness1, var_or_witness2, ...);
+	account = poseidon_hash(secret);
+
+	# `constrain_instance` requires the value be provided as public input.
+	constrain_instance(account);
+	constrain_instance(lock);
+	constrain_instance(root);
+	constrain_instance(key);
+	constrain_instance(value);
+
+	# Check whether `lock` and `root` are of {0, 1}.
+	bool_check(lock);
+	bool_check(root);
+}
+
+
+# The mental model for what this circuit does.
+# 
+# # Prove
+# 
+# The prove API is essentially: prove(proving_key, witness) -> proof
+# 
+# The prover provides the circuit, and generates the proving key. The proving key essentially
+# encodes the circuit but does not include information for the witness, so it is
+# the same across different witnesses (and therefore proofs) but unique per circuit.
+# 
+# # Verify
+# 
+# The verifying API is essentially: verify(verifying_key, proof, public_inputs) -> {T, F}
+# 
+# The verifier provides the circuit, and generates the verifying key. The verifying key similarly
+# encodes only the circuit, and not the public inputs or the proof. The verifying key is the same
+# across different proofs but unique per circuit.
+# 
+# For more info, you can try this zk intro:
+# https:#learn.0xparc.org/materials/circom/learning-group-1/circom-1
