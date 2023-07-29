@@ -149,8 +149,8 @@ if __name__ == "__main__":
 
     zkcircuit = ZkCircuit(zkbin)
 
-    # TODO: call the corresponding witness_* prefixed method to assign the witness
-    # to the circuit
+    # TODO: call the corresponding witness_* prefixed methods to assign the witness
+    # to the circuit. For a complete list, `rgrep witness_ <darkfi>/src/sdk/python`
     zkcircuit.witness_base(witnesses[0])
     zkcircuit.witness_base(witnesses[1])
     zkcircuit.witness_base(witnesses[2])

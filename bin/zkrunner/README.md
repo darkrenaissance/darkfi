@@ -27,7 +27,7 @@ Follow the guide in src/sdk/python/README.md to install the Python bindings and 
 cd <darkmap>
 zkas proof/set_v1.zk
 ```
-* Open up `zkrunner.py`, provide the path to zkas binary code, witness and assign accordingly.
+* Open up `zkrunner.py`, read over the TODOs and comments, provide the path to zkas binary code, witness and assign accordingly.
 * After installing Python bindings in your Python installation, simply run `python zkrunner.py [--verbose]`.
 
 # Notes
