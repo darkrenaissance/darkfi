@@ -9,8 +9,8 @@ homepage = "https://dark.fi"
 repository = "https://github.com/darkrenaissance/darkfi"
 
 [dependencies]
-darkfi = {path = "../../../", features = ["dht", "rpc"]}
-darkfi-serial = {path = "../../../src/serial"}
+darkfi = {path = "../../../", features = ["geode", "rpc"]}
+darkfi-serial = {path = "../../../src/serial", features = ["hash"]}
 
 # Misc
 async-trait = "0.1.72"

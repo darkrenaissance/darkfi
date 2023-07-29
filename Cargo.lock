@@ -2170,24 +2170,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dhtd"
-version = "0.4.1"
-dependencies = [
- "async-std",
- "async-trait",
- "blake3",
- "darkfi",
- "darkfi-serial",
- "easy-parallel",
- "libsqlite3-sys",
- "log",
- "rand 0.8.5",
- "simplelog",
- "smol",
- "url",
-]
-
-[[package]]
 name = "digest"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2769,20 +2751,6 @@ checksum = "04412b8935272e3a9bae6f48c7bfff74c2911f60525404edfdd28e49884c3bfb"
 dependencies = [
  "libc",
  "winapi",
-]
-
-[[package]]
-name = "fu"
-version = "0.4.1"
-dependencies = [
- "async-std",
- "clap 4.3.19",
- "darkfi",
- "libsqlite3-sys",
- "log",
- "serde_json",
- "simplelog",
- "url",
 ]
 
 [[package]]

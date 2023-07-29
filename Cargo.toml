@@ -25,7 +25,7 @@ members = [
     "bin/drk",
     "bin/faucetd",
     #"bin/fud/fu",
-    #"bin/fud/fud",
+    "bin/fud/fud",
     "bin/genev/genevd",
     "bin/genev/genev-cli",
     "bin/darkirc",
@@ -171,7 +171,6 @@ blockchain = [
 geode = [
     "async-std",
     "blake3",
-    "log",
 ]
 
 event-graph = [

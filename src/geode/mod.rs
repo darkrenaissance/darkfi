@@ -64,6 +64,7 @@ use async_std::{
     path::PathBuf,
     stream::StreamExt,
 };
+use futures::AsyncRead;
 use log::{debug, info, warn};
 
 use crate::{Error, Result};
@@ -122,10 +123,7 @@ impl Geode {
         fs::create_dir_all(&files_path).await?;
         fs::create_dir_all(&chunks_path).await?;
 
-        // Instantiate Self and perform initial garbage collection.
-        let self_ = Self { files_path, chunks_path };
-        self_.garbage_collect().await?;
-        Ok(self_)
+        Ok(Self { files_path, chunks_path })
     }
 
     /// Attempt to read chunk hashes from a given file path and return
@@ -262,16 +260,14 @@ impl Geode {
     /// file name, and the file's chunks, respectively.
     pub async fn insert(
         &self,
-        stream: impl AsRef<[u8]>,
+        mut stream: impl AsyncRead + Unpin,
     ) -> Result<(blake3::Hash, Vec<blake3::Hash>)> {
         info!(target: "geode::insert()", "[Geode] Inserting file...");
         let mut file_hasher = blake3::Hasher::new();
         let mut chunk_hashes = vec![];
-
-        let mut cursor = Cursor::new(&stream);
         let mut buf = [0u8; MAX_CHUNK_SIZE];
 
-        while let Ok(bytes_read) = cursor.read(&mut buf).await {
+        while let Ok(bytes_read) = stream.read(&mut buf).await {
             if bytes_read == 0 {
                 break
             }
