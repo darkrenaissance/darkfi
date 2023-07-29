@@ -4,8 +4,14 @@
 The Python SDK provides APIs such as creating a circuit, assigning the witness to the circuit and more.
 
 `zkrunner` uses the Python SDK to create a developement environment for zkas developer where:
-* the zkas developer provides the witness and assigns it accordingly
-* zkrunner 1) sets up the circuit, 2) creates the proof, 3) creates the public inputs (from the witness) and 4) verifies the proof
+* the ZKAS developer provides the ZKAS binary code
+* the ZKAS developer provides the witness and assigns it accordingly
+* zkrunner:
+	* sets up the circuit from the binary
+	* generates both proving and verifying key
+	* creates the proof from the witness and proving key
+	* creates the public inputs from the witness
+	* verifies the proof using the public inputs and verifying key
 * zkrunner times each step as a basic performance benchmark
 
 This is so developers have an easier time to test their zkas circuit.
@@ -16,6 +22,11 @@ Follow the guide in src/sdk/python/README.md to install the Python bindings and 
 
 # Getting Started
 
+* Compile the ZKAS source to ZKAS binary
+```
+cd <darkmap>
+zkas proof/set_v1.zk
+```
 * Open up `zkrunner.py`, provide the path to zkas binary code, witness and assign accordingly.
 * After installing Python bindings in your Python installation, simply run `python zkrunner.py [--verbose]`.
 
