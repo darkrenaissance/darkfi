@@ -39,7 +39,7 @@ PRIMARY_REWARD_TARGET = 0.35 # staked ratio
 # secondary controller assumes certain frequency of leaders per slot
 SECONDARY_LEAD_TARGET = 1 #number of lead per slot
 # maximum transaction size
-MAX_BLOCK_SIZE = 1000
+MAX_BLOCK_SIZE = 100
 # maximum transaction computational cost
 MAX_BLOCK_CC = 10
 # fee controller computational capacity target

@@ -72,6 +72,7 @@ class SigmoidStrategy(Strategy):
     def set_ratio(self, slot, apr):
         if slot%self.epoch_len==0:
                 apr_ratio = apr/self.target_apy
+                apr_ratio = max(apr_ratio, 0)
                 sr = Num(2/(1+math.pow(math.e, -4*apr_ratio))-1)
                 if sr>1:
                     sr = 1
@@ -90,3 +91,107 @@ def random_strategy(epoch_length=EPOCH_LENGTH):
         return LogarithmicStrategy(epoch_length)
     else:
         return SigmoidStrategy(epoch_length)
+
+
+class Tip(object):
+    def __init__(self):
+        self.type = 'tip'
+
+    def get_tip(self, last_reward, apr, size, last_tip):
+        return 0
+
+class ZeroTip(Tip):
+
+    def __init__(self):
+        super().__init__()
+        self.type = 'zero'
+
+    def get_tip(self, last_reward, apr, size, last_tip):
+        return 0
+
+class TenthOfReward(Tip):
+    def __init__(self):
+        super().__init__()
+        self.type = '10th'
+
+    def get_tip(self, last_reward, apr, size, last_tip):
+        return last_reward/10
+
+class HundredthOfReward(Tip):
+    def __init__(self):
+        super().__init__()
+        self.type = '100th'
+
+    def get_tip(self, last_reward, apr, size, last_tip):
+        return last_reward/100
+
+class MilthOfReward(Tip):
+    def __init__(self):
+        super().__init__()
+        self.type = '1000th'
+
+    def get_tip(self, last_reward, apr, size, last_tip):
+        return last_reward/1000
+
+class RewardApr(Tip):
+    def __init__(self):
+        super().__init__()
+        self.type = 'reward_apr'
+
+    def get_tip(self, last_reward, apr, size, last_tip):
+        apr_relu = max(apr, 0)
+        return last_reward*apr_relu
+
+class TenthRewardApr(Tip):
+    def __init__(self):
+        super().__init__()
+        self.type = 'reward_apr'
+
+    def get_tip(self, last_reward, apr, size, last_tip):
+        apr_relu = max(apr, 0)
+        return last_reward*apr_relu/10
+
+
+class TenthCCApr(Tip):
+    def __init__(self):
+        super().__init__()
+        self.type = "cc_apr_10"
+
+    def get_tip(self, last_reward, apr, size, last_tip):
+        return size/MAX_BLOCK_SIZE/10
+
+class HundredthCCApr(Tip):
+    def __init__(self):
+        super().__init__()
+        self.type = "cc_apr_100"
+
+    def get_tip(self, last_reward, apr, size, last_tip):
+        return size/MAX_BLOCK_SIZE/100
+
+class MilthCCApr(Tip):
+    def __init__(self):
+        super().__init__()
+        self.type = "cc_apr_1000"
+
+    def get_tip(self, last_reward, apr, size, last_tip):
+        return size/MAX_BLOCK_SIZE/1000
+
+class Conservative(Tip):
+    def __init__(self):
+        super().__init__()
+        self.type = "cc_apr_1000"
+
+    def get_tip(self, last_reward, apr, size, last_tip):
+        return last_tip
+
+class Generous(Tip):
+    def __init__(self):
+        super().__init__()
+        self.type = "cc_apr_1000"
+
+    def get_tip(self, last_reward, apr, size, last_tip):
+        return last_tip*2
+
+
+def random_tip_strategy():
+    return random.choice([ZeroTip(), TenthOfReward(), HundredthOfReward(), MilthOfReward(), RewardApr(), TenthRewardApr(), TenthCCApr(), HundredthCCApr(), MilthCCApr(), Conservative(), Generous()])

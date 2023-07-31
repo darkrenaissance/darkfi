@@ -143,7 +143,8 @@ class DarkfiTable:
     def tx_fees(self, darkie_lead_idx, debug=False):
         txs = []
         for darkie in self.darkies:
-            txs += [darkie.tx()]
+            # make sure tip is covered by darkie stake
+            txs += [darkie.tx(self.rewards[-1])]
         ret, actual_cc = DarkfiTable.auction(txs)
         self.computational_cost += [actual_cc]
         self.cc_diff += [MAX_BLOCK_CC - actual_cc]
@@ -209,9 +210,9 @@ class DarkfiTable:
             for w in range(W + 1):
                 if i == 0 or w == 0:
                     K[i][w] = [0,[]]
-                elif len(txs[i-1]) <= w:
-                    if txs[i-1].cc() + K[i-1][w-len(txs[i-1])][0] > K[i-1][w][0]:
-                        K[i][w] = [txs[i-1].cc() + K[i-1][w-len(txs[i-1])][0], K[i-1][w-len(txs[i-1])][1] + [i-1]]
+                elif txs[i-1].cc() <= w:
+                    if txs[i-1].tip + K[i-1][w-txs[i-1].cc()][0] > K[i-1][w][0]:
+                        K[i][w] = [txs[i-1].tip + K[i-1][w-txs[i-1].cc()][0], K[i-1][w-txs[i-1].cc()][1] + [i-1]]
                     else:
                         K[i][w] = K[i-1][w]
                 else:
