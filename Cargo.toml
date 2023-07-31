@@ -169,8 +169,9 @@ blockchain = [
 ]
 
 geode = [
-    "async-std",
     "blake3",
+
+    "async-runtime",
 ]
 
 event-graph = [
