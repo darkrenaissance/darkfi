@@ -102,7 +102,7 @@ where
         let tree = self.event_map.clone();
         let ser_tree = serialize(&tree);
 
-        save_json_file(&path, &ser_tree)?;
+        save_json_file(&path, &ser_tree, false)?;
 
         info!("Tree is saved to disk");
 

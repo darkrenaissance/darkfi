@@ -112,7 +112,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
 
         if settings.output.is_some() {
             let datastore = expand_path(&settings.output.unwrap())?;
-            save_json_file(&datastore, &kp)?;
+            save_json_file(&datastore, &kp, false)?;
         } else {
             println!("Generated keypair:\n{}", kp);
         }
