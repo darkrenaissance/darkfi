@@ -66,7 +66,7 @@ impl ZkBinary {
     }
 
     fn k(&self) -> u32 {
-	self.0.k
+        self.0.k
     }
 }
 
