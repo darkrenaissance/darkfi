@@ -472,6 +472,12 @@ pub enum Error {
     #[error("Geode chunk not found")]
     GeodeChunkNotFound,
 
+    #[error("Geode file route not found")]
+    GeodeFileRouteNotFound,
+
+    #[error("Geode chunk route not found")]
+    GeodeChunkRouteNotFound,
+
     // =========
     // Catch-all
     // =========

@@ -326,9 +326,29 @@ impl Geode {
         Ok((file_hash, chunk_hashes))
     }
 
+    /// Create and insert file metadata into Geode given a list of hashes.
+    /// Always overwrites any existing file.
+    pub async fn insert_file(
+        &self,
+        file_hash: &blake3::Hash,
+        chunk_hashes: &[blake3::Hash],
+    ) -> Result<()> {
+        info!(target: "geode::insert_file()", "[Geode] Inserting file metadata");
+
+        let mut file_path = self.files_path.clone();
+        file_path.push(file_hash.to_hex().as_str());
+        let mut file_fd = File::create(&file_path).await?;
+
+        for ch in chunk_hashes {
+            file_fd.write(format!("{}\n", ch.to_hex().as_str()).as_bytes()).await?;
+        }
+
+        Ok(())
+    }
+
     /// Create and insert a single chunk into Geode given a stream.
     /// Always overwrites any existing chunk. Returns the chunk hash once inserted.
-    pub async fn insert_chunk(&mut self, stream: impl AsRef<[u8]>) -> Result<blake3::Hash> {
+    pub async fn insert_chunk(&self, stream: impl AsRef<[u8]>) -> Result<blake3::Hash> {
         info!(target: "geode::insert_chunk()", "[Geode] Inserting single chunk");
 
         let mut cursor = Cursor::new(&stream);
