@@ -52,7 +52,8 @@ use darkfi::{
 /// P2P protocols
 mod proto;
 use proto::{
-    FudChunkReply, FudChunkRequest, FudFilePut, FudFileReply, FudFileRequest, ProtocolFud,
+    FudChunkPut, FudChunkReply, FudChunkRequest, FudFilePut, FudFileReply, FudFileRequest,
+    ProtocolFud,
 };
 
 const CONFIG_FILE: &str = "fud_config.toml";
@@ -183,7 +184,36 @@ impl Fud {
 
         let chunked_file = match self.geode.get(&file_hash).await {
             Ok(v) => v,
-            Err(e) => todo!(), // fetch file
+            Err(Error::GeodeNeedsGc) => todo!(),
+            Err(Error::GeodeFileNotFound) => {
+                info!("Requested file {} not found in Geode, triggering fetch", file_hash);
+                self.file_fetch_tx.send((file_hash, Ok(()))).await.unwrap();
+                info!("Waiting for background file fetch task...");
+                let (i_file_hash, status) = self.file_fetch_rx.recv().await.unwrap();
+                match status {
+                    Ok(()) => {
+                        let ch_file = self.geode.get(&file_hash).await.unwrap();
+
+                        let m = FudFilePut {
+                            file_hash: i_file_hash,
+                            chunk_hashes: ch_file.iter().map(|(h, _)| *h).collect(),
+                        };
+
+                        self.p2p.broadcast(&m).await;
+
+                        ch_file
+                    }
+
+                    Err(Error::GeodeFileRouteNotFound) => {
+                        // TODO: Return FileNotFound error
+                        return JsonError::new(ErrorCode::InternalError, None, id).into()
+                    }
+
+                    Err(e) => panic!("{}", e),
+                }
+            }
+
+            Err(e) => panic!("{}", e),
         };
 
         if chunked_file.is_complete() {
@@ -205,16 +235,23 @@ impl Fud {
 
         for chunk in missing_chunks {
             self.chunk_fetch_tx.send((chunk, Ok(()))).await.unwrap();
-            let (_, result) = self.chunk_fetch_rx.recv().await.unwrap();
-            match result {
-                Ok(()) => continue,
-                Err(e) => todo!(),
+            let (i_chunk_hash, status) = self.chunk_fetch_rx.recv().await.unwrap();
+
+            match status {
+                Ok(()) => {
+                    let m = FudChunkPut { chunk_hash: i_chunk_hash };
+                    self.p2p.broadcast(&m).await;
+                    break
+                }
+                Err(Error::GeodeChunkRouteNotFound) => continue,
+
+                Err(e) => panic!("{}", e),
             }
         }
 
         let chunked_file = match self.geode.get(&file_hash).await {
             Ok(v) => v,
-            Err(e) => todo!(),
+            Err(e) => panic!("{}", e),
         };
 
         if !chunked_file.is_complete() {
@@ -481,7 +518,10 @@ async fn fetch_chunk_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) {
 
         if !found {
             warn!("Did not manage to fetch {} chunk", chunk_hash);
-            fud.chunk_fetch_tx.send((chunk_hash, Err(Error::GeodeChunkNotFound))).await.unwrap();
+            fud.chunk_fetch_tx
+                .send((chunk_hash, Err(Error::GeodeChunkRouteNotFound)))
+                .await
+                .unwrap();
             continue
         }
 
