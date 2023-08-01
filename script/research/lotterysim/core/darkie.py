@@ -68,7 +68,9 @@ class Darkie():
     update stake with vesting return every scheduled vesting period
     """
     def update_vesting(self):
-        self.stake += self.vesting_differential()
+        diff = self.vesting_differential()
+        self.stake += diff
+        return diff
 
     """
     @returns: current epoch vesting

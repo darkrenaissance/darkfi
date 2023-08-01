@@ -35,13 +35,13 @@ VESTING_PERIOD = ONE_MONTH
 # stakeholder assumes  APR target
 TARGET_APR = Num(0.12)
 # primary controller assumes accuracy target
-PRIMARY_REWARD_TARGET = 0.35 # staked ratio
+PRIMARY_REWARD_TARGET = 0.33 # staked ratio
 # secondary controller assumes certain frequency of leaders per slot
 SECONDARY_LEAD_TARGET = 1 #number of lead per slot
 # maximum transaction size
-MAX_BLOCK_SIZE = 100
+MAX_BLOCK_SIZE = 1000
 # maximum transaction computational cost
-MAX_BLOCK_CC = 10
+MAX_BLOCK_CC = 100
 # fee controller computational capacity target
 FEE_TARGET = MAX_BLOCK_CC
 # max fee base value
@@ -51,11 +51,11 @@ FEE_MIN = 0.00001
 # negligible value added to denominator to avoid invalid division by zero
 EPSILON = 1
 # window of accuracy calculation
-ACC_WINDOW = int(EPOCH_LENGTH)
+ACC_WINDOW = int(EPOCH_LENGTH)*10
 # headstart airdrop period
 HEADSTART_AIRDROP = 0
 # threshold of randomly slashing stakeholder
-SLASHING_RATIO = 0.0001
+SLASHING_RATIO = 0.001
 # number of nodes
 NODES = 1000
 # headstart value

@@ -12,7 +12,7 @@ class Strategy(object):
         self.epoch_len = epoch_len
         self.airdrop_period=HEADSTART_AIRDROP
         self.staked_tokens_ratio = [1]
-        self.target_apy = TARGET_APR
+        self.target = TARGET_APR
         self.annual_return = [0]
         self.type = 'base'
 
@@ -39,7 +39,7 @@ class LinearStrategy(Strategy):
 
     def set_ratio(self, slot, apr):
         if slot%self.epoch_len==0:
-                sr = Num(apr)/Num(self.target_apy)
+                sr = Num(apr)/Num(self.target)
                 if sr>1:
                     sr = 1
                 elif sr<0:
@@ -54,7 +54,7 @@ class LogarithmicStrategy(Strategy):
 
     def set_ratio(self, slot, apr):
         if slot%self.epoch_len==0:
-                apr_ratio = math.fabs(apr/self.target_apy)
+                apr_ratio = math.fabs(apr/self.target)
                 fn = lambda x: (math.log(x, 10)+1)/2 * 0.95 + 0.05
                 sr = Num(fn(apr_ratio) if apr_ratio != 0 else 0)
                 if sr>1:
@@ -71,7 +71,7 @@ class SigmoidStrategy(Strategy):
 
     def set_ratio(self, slot, apr):
         if slot%self.epoch_len==0:
-                apr_ratio = apr/self.target_apy
+                apr_ratio = apr/self.target
                 apr_ratio = max(apr_ratio, 0)
                 sr = Num(2/(1+math.pow(math.e, -4*apr_ratio))-1)
                 if sr>1:

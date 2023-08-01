@@ -62,7 +62,8 @@ class DarkfiTable:
             Ts = []
             for i in range(len(self.darkies)):
                 self.darkies[i].set_sigma_feedback(self.Sigma, self.winners[-1], f, slot, hp)
-                self.darkies[i].update_vesting()
+                diff = self.darkies[i].update_vesting()
+                self.Sigma += diff
                 y, T = self.darkies[i].run(hp)
                 Ys+=[y]
                 Ts+=[T]
@@ -78,7 +79,7 @@ class DarkfiTable:
             avg_tip = self.tips_avg[-1] if len(self.tips_avg)>0 else 0
             base_fee = self.base_fee[-1] if len(self.base_fee)>0 else 0
             cc_diff = self.cc_diff[-1] if len(self.cc_diff)>0 else 0
-            rt_range.set_description('epoch: {}, fork: {}, winners: {}, issuance {} DRK, f: {}, acc: {}%, stake: {}%, sr: {}%, reward:{}, apr: {}%, basefee: {}, avg(fee): {}, cc_diff: {}, avg(y): {}, avg(T): {}'.format(int(slot/EPOCH_LENGTH), self.merge_length(), self.winners[-1], round(self.Sigma,2), round(f, 5), round(acc*100, 2), round(total_stake/self.Sigma*100 if self.Sigma>0 else 0,2), round(self.avg_stake_ratio()*100,2) , round(self.rewards[-1],2), round(self.avg_apr()*100,2), round(base_fee, 4),  round(avg_tip, 2), round(cc_diff, 2), round(float(avg_y), 2), round(float(avg_t), 2)))
+            rt_range.set_description('epoch: {}, fork: {}, winners: {}, issuance {} DRK, f: {}, acc: {}%, stake: {}%, sr: {}%, reward:{}, apr: {}%, basefee: {}, avg(fee): {}, cc_diff: {}, avg(y): {}, avg(T): {}'.format(int(slot/EPOCH_LENGTH), self.merge_length(), self.winners[-1], round(self.Sigma,2), round(f, 5), round(self.secondary_pid.acc()*100, 2), round(total_stake/self.Sigma*100 if self.Sigma>0 else 0,2), round(self.avg_stake_ratio()*100,2) , round(self.rewards[-1],2), round(self.avg_apr()*100,2), round(base_fee, 5),  round(avg_tip, 2), round(cc_diff, 5), round(float(avg_y), 2), round(float(avg_t), 2)))
             #assert round(total_stake,1) <= round(self.Sigma,1), 'stake: {}, sigma: {}'.format(total_stake, self.Sigma)
             slot+=1
         self.end_time=time.time()
@@ -153,14 +154,15 @@ class DarkfiTable:
         self.tips_avg += [tips/len(idxs) if len(idxs)>0 else 0]
         basefee = self.basefee_pid.pid_clipped(self.computational_cost[-1], debug)
         self.base_fee+=[basefee]
+        assert tips == sum(txs[idx].tip for idx in idxs), 'tips: {}, sum(tips): {}'.format(tips, sum(tx.tip for tx in txs))
         for idx in idxs:
-            fee = txs[idx].cc()+basefee
+            fee = txs[idx].tip+basefee
             self.darkies[idx].pay_fee(fee)
             #print("charging darkie[{}]: {} DRK per tx of length: {}, burning: {}".format(idx, fee, len(txs[idx]), basefee))
         self.darkies[darkie_lead_idx].pay_fee(-1*tips)
 
         # subtract base fee from total stake
-        self.Sigma -= basefee*len(txs)
+        self.Sigma -= basefee*len(idxs)
 
     """
     average APY (with compound interest added every epoch) ,
