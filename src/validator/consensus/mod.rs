@@ -124,7 +124,7 @@ impl Consensus {
         }
 
         // Check if proposal extends any existing forks
-        let (mut fork, index) = self.find_extended_fork_overlay(&proposal).await?;
+        let (mut fork, index) = self.find_extended_fork(&proposal).await?;
 
         // Grab overlay last block
         let previous = fork.overlay.lock().unwrap().last_block()?;
@@ -166,7 +166,7 @@ impl Consensus {
 
     /// Given a proposal, find the index of the fork chain it extends, along with the specific
     /// extended proposal index.
-    fn find_extended_fork(&self, proposal: &Proposal) -> Result<(usize, usize)> {
+    fn find_extended_fork_index(&self, proposal: &Proposal) -> Result<(usize, usize)> {
         for (f_index, fork) in self.forks.iter().enumerate() {
             // Traverse fork proposals sequence in reverse
             for (p_index, p_hash) in fork.proposals.iter().enumerate().rev() {
@@ -184,12 +184,9 @@ impl Consensus {
     /// we re-apply the proposals up to the extending one. If proposal extends canonical,
     /// a new fork is created. Additionally, we return the fork index if a new fork
     /// was not created, so caller can replace the fork.
-    async fn find_extended_fork_overlay(
-        &self,
-        proposal: &Proposal,
-    ) -> Result<(Fork, Option<usize>)> {
+    async fn find_extended_fork(&self, proposal: &Proposal) -> Result<(Fork, Option<usize>)> {
         // Check if proposal extends any fork
-        let found = self.find_extended_fork(proposal);
+        let found = self.find_extended_fork_index(proposal);
         if found.is_err() {
             // Check if we extend canonical
             let (last_slot, last_block) = self.blockchain.last()?;
