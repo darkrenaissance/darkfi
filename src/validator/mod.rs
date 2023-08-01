@@ -116,7 +116,7 @@ impl Validator {
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
         info!(target: "validator::new", "Initializing Consensus");
-        let consensus = Consensus::new(blockchain.clone(), config.time_keeper);
+        let consensus = Consensus::new(blockchain.clone(), config.time_keeper, testing_mode);
 
         // Create the actual state
         let state =

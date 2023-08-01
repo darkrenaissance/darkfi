@@ -91,6 +91,15 @@ impl ProtocolProposal {
                 continue
             }
 
+            // Check if node started participating in consensus.
+            if !self.validator.read().await.consensus.participating {
+                debug!(
+                    target: "validator::protocol_proposal::handle_receive_proposal",
+                    "Node is not participating in consensus, skipping..."
+                );
+                continue
+            }
+
             let proposal_copy = (*proposal).clone();
 
             match self.validator.write().await.consensus.append_proposal(&proposal_copy).await {

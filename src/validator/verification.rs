@@ -123,6 +123,7 @@ pub async fn verify_block(
     // Validate proposal transaction if not in testing mode
     if !testing_mode {
         verify_proposal_transaction(overlay, time_keeper, &block.producer.proposal).await?;
+        verify_producer_signature(&block)?;
     }
 
     // Verify transactions
@@ -137,6 +138,16 @@ pub async fn verify_block(
     overlay.lock().unwrap().add_block(block)?;
 
     debug!(target: "validator::verification::verify_block", "Block {} verified successfully", block_hash);
+    Ok(())
+}
+
+/// Validate block proposer signature, using the proposal transaction signature as signing key
+/// over blocks header, transactions and slots.
+pub fn verify_producer_signature(_block: &BlockInfo) -> Result<()> {
+    // TODO:
+    // Grab public key from proposal transaction metadata on verify_proposal_transaction
+    // and pass it here to verify the signature
+
     Ok(())
 }
 
