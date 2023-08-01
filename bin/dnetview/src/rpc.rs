@@ -47,7 +47,7 @@ impl RpcConnect {
     // --> {"jsonrpc": "2.0", "method": "get_info", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}
     pub async fn get_info(&self) -> DnetViewResult<Value> {
-        let req = JsonRequest::new("get_info", json!([]));
+        let req = JsonRequest::new("dnet_info", json!([]));
         match self.rpc_client.request(req).await {
             Ok(req) => Ok(req),
             Err(e) => Err(DnetViewError::Darkfi(e)),

@@ -24,7 +24,7 @@ use serde_json::Value;
 use smol::Executor;
 use url::Url;
 
-use darkfi::util::{async_util, ringbuffer::RingBuffer, time::NanoTimestamp};
+use darkfi::util::{async_util};
 
 use crate::{
     config::{DnvConfig, Node, NodeType},
@@ -164,17 +164,19 @@ impl DataParser {
         reply: &serde_json::Map<String, Value>,
         node_name: String,
     ) -> DnetViewResult<()> {
-        let addr = &reply.get("external_addr");
-        let inbound = &reply["session_inbound"];
-        let _manual = &reply["session_manual"];
-        let outbound = &reply["session_outbound"];
-        let state = &reply["state"];
+        //let addr = &reply.get("addr");
+        let inbound = &reply["inbound"];
+        //let _manual = &reply["session_manual"];
+        let outbound = &reply["outbound"];
+        let state = String::new();
 
         let mut sessions: Vec<SessionInfo> = Vec::new();
 
         let node_id = make_node_id(&node_name)?;
 
-        let ext_addr = self.parse_external_addr(addr).await?;
+        //let ext_addr = self.parse_external_addr(addr).await?;
+        let ext_addr = None;
+
         let in_session = self.parse_inbound(inbound, &node_id).await?;
         let out_session = self.parse_outbound(outbound, &node_id).await?;
         //let man_session = self.parse_manual(manual, &node_id).await?;
@@ -186,7 +188,8 @@ impl DataParser {
         let node = NodeInfo::new(
             node_id,
             node_name,
-            state.as_str().unwrap().to_string(),
+            state,
+            //state.as_str().unwrap().to_string(),
             sessions.clone(),
             ext_addr,
             false,
@@ -295,7 +298,7 @@ impl DataParser {
         Ok(())
     }
 
-    async fn parse_external_addr(&self, addr: &Option<&Value>) -> DnetViewResult<Option<String>> {
+    async fn _parse_external_addr(&self, addr: &Option<&Value>) -> DnetViewResult<Option<String>> {
         match addr {
             Some(addr) => match addr.as_str() {
                 Some(addr) => Ok(Some(addr.to_string())),
@@ -369,18 +372,8 @@ impl DataParser {
                             let state = "state".to_string();
                             let parent = parent.clone();
 
-                            let mut msg_log: Vec<(NanoTimestamp, String, String)> = Vec::new();
-                            let log_buffer: RingBuffer<(NanoTimestamp, String, String)> =
-                                serde_json::from_value(info2.unwrap().get("log").unwrap().clone())
-                                    .unwrap();
-
-                            debug!(target: "dnetview", "Inbound log: {:?}", log_buffer);
-
-                            for (time, txt1, txt2) in log_buffer.iter() {
-                                let msg: (NanoTimestamp, String, String) =
-                                    (*time, txt1.to_string(), txt2.to_string());
-                                msg_log.push(msg);
-                            }
+                            // Empty message log for now.
+                            let msg_log = Vec::new();
 
                             let is_empty = false;
                             let last_msg = info2
@@ -438,7 +431,9 @@ impl DataParser {
                     Ok(session_info)
                 }
             }
-            None => Err(DnetViewError::ValueIsNotObject),
+            None => {
+                Err(DnetViewError::ValueIsNotObject)
+            }
         }
     }
 
@@ -548,17 +543,8 @@ impl DataParser {
                             let state = state.as_str().unwrap().to_string();
                             let parent = parent.clone();
 
-                            let mut msg_log: Vec<(NanoTimestamp, String, String)> = Vec::new();
-                            let log_buffer: RingBuffer<(NanoTimestamp, String, String)> =
-                                serde_json::from_value(channel["log"].clone()).unwrap();
-
-                            debug!(target: "dnetview", "Outbound log: {:?}", log_buffer);
-
-                            for (time, txt1, txt2) in log_buffer.iter() {
-                                let msg: (NanoTimestamp, String, String) =
-                                    (*time, txt1.to_string(), txt2.to_string());
-                                msg_log.push(msg);
-                            }
+                            // Empty message log for now.
+                            let msg_log = Vec::new();
 
                             let is_empty = false;
                             let last_msg = channel["last_msg"].as_str().unwrap().to_string();
