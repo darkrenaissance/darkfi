@@ -24,7 +24,7 @@ use serde_json::Value;
 use smol::Executor;
 use url::Url;
 
-use darkfi::util::{async_util};
+use darkfi::util::async_util;
 
 use crate::{
     config::{DnvConfig, Node, NodeType},
@@ -431,9 +431,7 @@ impl DataParser {
                     Ok(session_info)
                 }
             }
-            None => {
-                Err(DnetViewError::ValueIsNotObject)
-            }
+            None => Err(DnetViewError::ValueIsNotObject),
         }
     }
 
