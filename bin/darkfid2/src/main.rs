@@ -197,6 +197,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         darkfid.validator.write().await.synced = true;
     }
 
+    // Clean node pending transactions
+    darkfid.validator.write().await.purge_pending_txs().await?;
+
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new()?;
     signals_handler.wait_termination(signals_task).await?;

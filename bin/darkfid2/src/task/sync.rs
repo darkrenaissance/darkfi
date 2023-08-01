@@ -66,7 +66,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
 
         // Verify and store retrieved blocks
         debug!(target: "darkfid::task::sync_task", "Processing received blocks");
-        node.validator.read().await.add_blocks(&response.blocks).await?;
+        node.validator.write().await.add_blocks(&response.blocks).await?;
 
         let last_received = node.validator.read().await.blockchain.last()?;
         info!(target: "darkfid::task::sync_task", "Last received block: {:?} - {:?}", last_received.0, last_received.1);

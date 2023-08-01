@@ -82,18 +82,19 @@ impl From<Proposal> for BlockInfo {
     }
 }
 
-/// This struct represents a sequence of block proposals, along with a blockchain
-/// overlay, containing all pending to-write records.
+/// This struct represents a forked blockchain state, using an overlay over original
+/// blockchain, containing all pending to-write records. Additionally, each fork
+/// keeps a vector of valid pending transactions hashes, in order of receival.
 #[derive(Clone)]
 pub struct Fork {
     pub overlay: BlockchainOverlayPtr,
-    pub proposals: Vec<Proposal>,
+    pub mempool: Vec<blake3::Hash>,
 }
 
 impl Fork {
     pub fn new(blockchain: &Blockchain) -> Result<Self> {
         let overlay = BlockchainOverlay::new(blockchain)?;
-        Ok(Self { overlay, proposals: vec![] })
+        Ok(Self { overlay, mempool: vec![] })
     }
 
     /// Auxiliary function to create a full clone using BlockchainOverlay::full_clone.
@@ -101,9 +102,9 @@ impl Fork {
     /// overlay pointer have been updated to the cloned one.
     pub fn full_clone(&self) -> Result<Self> {
         let overlay = self.overlay.lock().unwrap().full_clone()?;
-        let proposals = self.proposals.clone();
+        let mempool = self.mempool.clone();
 
-        Ok(Self { overlay, proposals })
+        Ok(Self { overlay, mempool })
     }
 }
 

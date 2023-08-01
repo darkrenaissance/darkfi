@@ -142,21 +142,99 @@ impl Validator {
 
         // Verify state transition
         info!(target: "validator::append_tx", "Starting state transition validation");
-        // TODO: this should be over all forks overlays
-        let overlay = BlockchainOverlay::new(&self.blockchain)?;
+        let tx_vec = [tx];
+        let mut valid = false;
 
         // Generate a time keeper for current slot
         let time_keeper = self.consensus.time_keeper.current();
 
-        // Verify transaction
-        let erroneous_txs = verify_transactions(&overlay, &time_keeper, &[tx.clone()]).await?;
-        if !erroneous_txs.is_empty() {
+        // If node participates in consensus and holds any forks, iterate over them
+        // to verify transaction validity in their overlays
+        for fork in self.consensus.forks.iter_mut() {
+            // Verify transaction
+            let erroneous_txs = verify_transactions(&fork.overlay, &time_keeper, &tx_vec).await?;
+            if !erroneous_txs.is_empty() {
+                continue
+            }
+            valid = true;
+
+            // Store transaction hash in forks' mempool
+            fork.mempool.push(tx_hash);
+        }
+
+        // Verify transaction against canonical state
+        let overlay = BlockchainOverlay::new(&self.blockchain)?;
+        let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec).await?;
+        if erroneous_txs.is_empty() {
+            valid = true
+        }
+
+        // Return error if transaction is not valid for canonical or any fork
+        if !valid {
             return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
         }
 
         // Add transaction to pending txs store
-        self.blockchain.add_pending_txs(&[tx])?;
+        self.blockchain.add_pending_txs(&tx_vec)?;
         info!(target: "validator::append_tx", "Appended tx to pending txs store");
+
+        Ok(())
+    }
+
+    /// The node removes invalid transactions from the pending txs store.
+    pub async fn purge_pending_txs(&mut self) -> Result<()> {
+        info!(target: "validator::purge_pending_txs", "Removing invalid transactions from pending transactions store...");
+
+        // Check if any pending transactions exist
+        let pending_txs = self.blockchain.get_pending_txs()?;
+        if pending_txs.is_empty() {
+            info!(target: "validator::purge_pending_txs", "No pending transactions found");
+            return Ok(())
+        }
+
+        // Generate a time keeper for current slot
+        let time_keeper = self.consensus.time_keeper.current();
+
+        let mut removed_txs = vec![];
+        for tx in pending_txs {
+            let tx_hash = &blake3::hash(&serialize(&tx));
+            let tx_vec = [tx.clone()];
+            let mut valid = false;
+
+            // If node participates in consensus and holds any forks, iterate over them
+            // to verify transaction validity in their overlays
+            for fork in self.consensus.forks.iter_mut() {
+                // Verify transaction
+                let erroneous_txs =
+                    verify_transactions(&fork.overlay, &time_keeper, &tx_vec).await?;
+                if erroneous_txs.is_empty() {
+                    valid = true;
+                    continue
+                }
+
+                // Remove erroneous transaction from forks' mempool
+                fork.mempool.retain(|x| x != tx_hash);
+            }
+
+            // Verify transaction against canonical state
+            let overlay = BlockchainOverlay::new(&self.blockchain)?;
+            let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec).await?;
+            if erroneous_txs.is_empty() {
+                valid = true
+            }
+
+            // Remove pending transaction if it's not valid for canonical or any fork
+            if !valid {
+                removed_txs.push(tx)
+            }
+        }
+
+        if removed_txs.is_empty() {
+            info!(target: "validator::purge_pending_txs", "No erroneous transactions found");
+            return Ok(())
+        }
+        info!(target: "validator::purge_pending_txs", "Removing {} erroneous transactions...", removed_txs.len());
+        self.blockchain.remove_pending_txs(&removed_txs)?;
 
         Ok(())
     }
@@ -190,7 +268,7 @@ impl Validator {
     // ==========================
 
     /// Validate a set of [`BlockInfo`] in sequence and apply them if all are valid.
-    pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
+    pub async fn add_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
         debug!(target: "validator::add_blocks", "Instantiating BlockchainOverlay");
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
@@ -199,6 +277,9 @@ impl Validator {
 
         // Create a time keeper to validate each block
         let mut time_keeper = self.consensus.time_keeper.clone();
+
+        // Keep track of all blocks transactions to remove them from pending txs store
+        let mut removed_txs = vec![];
 
         // Validate and insert each block
         for block in blocks {
@@ -225,12 +306,22 @@ impl Validator {
                 return Err(Error::BlockIsInvalid(block.blockhash().to_string()))
             };
 
+            // Store block transactions
+            for tx in &block.txs {
+                removed_txs.push(tx.clone());
+            }
+
             // Use last inserted block as next iteration previous
             previous = block;
         }
 
         debug!(target: "validator::add_blocks", "Applying overlay changes");
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
+
+        // Purge pending erroneous txs since canonical state has been changed
+        self.blockchain.remove_pending_txs(&removed_txs)?;
+        self.purge_pending_txs().await?;
+
         Ok(())
     }
 

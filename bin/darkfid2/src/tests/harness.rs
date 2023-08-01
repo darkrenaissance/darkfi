@@ -151,7 +151,7 @@ impl Harness {
         }
 
         // and then add it to her chain
-        self.alice.validator.read().await.add_blocks(blocks).await?;
+        self.alice.validator.write().await.add_blocks(blocks).await?;
 
         Ok(())
     }
@@ -253,6 +253,8 @@ pub async fn generate_node(
     } else {
         node.validator.write().await.synced = true;
     }
+
+    node.validator.write().await.purge_pending_txs().await?;
 
     Ok(node)
 }
