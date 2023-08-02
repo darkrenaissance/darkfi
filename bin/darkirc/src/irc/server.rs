@@ -92,6 +92,7 @@ impl IrcServer {
                 self.model.clone(),
                 self.seen.clone(),
                 msg_recv,
+                self.missed_events.clone(),
                 self.clients_subscriptions.clone(),
             ))
             .detach();
@@ -139,6 +140,7 @@ impl IrcServer {
         model: ModelPtr<PrivMsgEvent>,
         seen: SeenPtr<EventId>,
         recv: smol::channel::Receiver<(NotifierMsg, u64)>,
+        missed_events: Arc<Mutex<Vec<Event<PrivMsgEvent>>>>,
         clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     ) -> Result<()> {
         loop {
@@ -176,6 +178,8 @@ impl IrcServer {
                     if !seen.push(&event.hash()).await {
                         continue
                     }
+
+                    missed_events.lock().await.push(event.clone());
 
                     p2p.broadcast(&event).await;
                 }
