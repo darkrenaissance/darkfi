@@ -257,16 +257,22 @@ where
                 break
             }
 
+            if event_id == self.current_root {
+                break
+            }
+
             let node = self.event_map.get(&event_id).unwrap().clone();
             self.event_map.remove(&event_id);
 
             let parent = self.event_map.get_mut(&node.parent.unwrap()).unwrap();
+
+            if parent.children.is_empty() {
+                event_id = parent.event.hash();
+                continue
+            }
             let index = parent.children.iter().position(|&n| n == event_id).unwrap();
             parent.children.remove(index);
 
-            if !parent.children.is_empty() {
-                break
-            }
             event_id = parent.event.hash();
         }
     }
@@ -331,35 +337,46 @@ where
         depth
     }
 
+    // Find common ancestor between two events
     fn find_ancestor(&self, mut node_a: EventId, mut node_b: EventId) -> EventId {
         // node_a is a child of node_b
         let is_child = node_b == self.event_map.get(&node_a).unwrap().parent.unwrap();
-
         if is_child {
             return node_b
         }
 
-        while node_a != node_b {
+        loop {
             let node_a_parent = self.event_map.get(&node_a).unwrap().parent.unwrap();
-            let node_b_parent = self.event_map.get(&node_b).unwrap().parent.unwrap();
-
-            if node_a_parent == self.current_root || node_b_parent == self.current_root {
-                return self.current_root
-            }
-
             node_a = node_a_parent;
+            if self.event_map.get(&node_a).unwrap().children.len() > 1 {
+                break
+            }
+        }
+
+        loop {
+            let node_b_parent = self.event_map.get(&node_b).unwrap().parent.unwrap();
             node_b = node_b_parent;
+            if node_b == node_a {
+                break
+            }
+        }
+
+        if node_a == self.current_root || node_b == self.current_root {
+            return self.current_root
         }
 
         node_a
     }
 
+    // Find the length between two events
     fn diff_depth(&self, node_a: EventId, node_b: EventId) -> u32 {
         let ancestor = self.find_ancestor(node_a, node_b);
         let node_a_depth = self.find_depth(node_a, &ancestor);
         let node_b_depth = self.find_depth(node_b, &ancestor);
 
-        (node_b_depth + 1) - node_a_depth
+        let diff = (node_b_depth + 1).abs_diff(node_a_depth);
+
+        diff
     }
 
     fn _debug(&self) {
