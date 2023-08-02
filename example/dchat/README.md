@@ -36,12 +36,7 @@ Now run `lilith`:
 ## Step 2: Using dchat
 
 ```shell
-<<<<<<< HEAD
-cd example/dchat
-cargo run
-=======
 make BINS="dchat"
->>>>>>> ac3d1d7d271 (dchat: update README with lilith usage)
 ```
 
 Run dchat as an inbound node:

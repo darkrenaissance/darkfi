@@ -80,7 +80,7 @@ This allows us to coordinate more effectively.
 
 \* once we have proper syncing implemented in ircd, these will become less relevant and not needed.
 
-Another option is to run your ircd inside a persistant tmux session, and never miss messages.
+Another option is to run your ircd inside a persistent tmux session, and never miss messages.
 
 ## Code coverage
 
