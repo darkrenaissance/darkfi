@@ -16,14 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{
-    util::async_util::sleep,
-    validator::proto::{SyncRequest, SyncResponse},
-    Result,
-};
+use darkfi::{util::async_util::sleep, Result};
 use log::{debug, info, warn};
 
-use crate::Darkfid;
+use crate::{
+    proto::{SyncRequest, SyncResponse},
+    Darkfid,
+};
 
 /// async task used for block syncing
 pub async fn sync_task(node: &Darkfid) -> Result<()> {

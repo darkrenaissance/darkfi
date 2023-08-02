@@ -37,9 +37,6 @@ use consensus::{next_block_reward, Consensus};
 pub mod verification;
 use verification::{verify_block, verify_genesis_block, verify_transactions};
 
-/// P2P net protocols
-pub mod proto;
-
 /// Helper utilities
 pub mod utils;
 use utils::deploy_native_contracts;
@@ -128,8 +125,8 @@ impl Validator {
 
     /// The node retrieves a transaction, validates its state transition,
     /// and appends it to the pending txs store.
-    pub async fn append_tx(&mut self, tx: Transaction) -> Result<()> {
-        let tx_hash = blake3::hash(&serialize(&tx));
+    pub async fn append_tx(&mut self, tx: &Transaction) -> Result<()> {
+        let tx_hash = blake3::hash(&serialize(tx));
 
         // Check if we have already seen this tx
         let tx_in_txstore = self.blockchain.transactions.contains(&tx_hash)?;
@@ -142,7 +139,7 @@ impl Validator {
 
         // Verify state transition
         info!(target: "validator::append_tx", "Starting state transition validation");
-        let tx_vec = [tx];
+        let tx_vec = [tx.clone()];
         let mut valid = false;
 
         // Generate a time keeper for current slot

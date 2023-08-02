@@ -120,7 +120,7 @@ impl Darkfid {
             // Consensus participants can directly perform
             // the state transition check and append to their
             // pending transactions store.
-            if self.validator.write().await.append_tx(tx.clone()).await.is_err() {
+            if self.validator.write().await.append_tx(&tx).await.is_err() {
                 error!(target: "darkfid::rpc::tx_broadcast", "Failed to append transaction to mempool");
                 return server_error(RpcError::TxSimulationFail, id, None)
             }

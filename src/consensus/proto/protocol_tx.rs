@@ -24,13 +24,16 @@ use url::Url;
 
 use crate::{
     consensus::ValidatorStatePtr,
+    impl_p2p_message,
     net::{
-        ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
+        ChannelPtr, Message, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
     tx::Transaction,
     Result,
 };
+
+impl_p2p_message!(Transaction, "tx");
 
 pub struct ProtocolTx {
     tx_sub: MessageSubscription<Transaction>,

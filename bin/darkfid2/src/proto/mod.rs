@@ -18,7 +18,7 @@
 
 /// Block broadcast protocol
 mod protocol_block;
-pub use protocol_block::ProtocolBlock;
+pub use protocol_block::{BlockInfoMessage, ProtocolBlock};
 
 /// Block proposal broadcast protocol
 mod protocol_proposal;

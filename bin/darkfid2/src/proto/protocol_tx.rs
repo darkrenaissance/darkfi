@@ -22,60 +22,68 @@ use log::debug;
 use smol::Executor;
 use url::Url;
 
-use crate::{
-    blockchain::BlockInfo,
+use darkfi::{
     impl_p2p_message,
     net::{
         ChannelPtr, Message, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
+    tx::Transaction,
     validator::ValidatorPtr,
     Result,
 };
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-impl_p2p_message!(BlockInfo, "block");
+/// Auxiliary [`Transaction`] wrapper structure used for messaging.
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+struct TransactionMessage(Transaction);
 
-pub struct ProtocolBlock {
-    block_sub: MessageSubscription<BlockInfo>,
+impl_p2p_message!(TransactionMessage, "tx");
+
+pub struct ProtocolTx {
+    tx_sub: MessageSubscription<TransactionMessage>,
     jobsman: ProtocolJobsManagerPtr,
     validator: ValidatorPtr,
     p2p: P2pPtr,
     channel_address: Url,
 }
 
-impl ProtocolBlock {
+impl ProtocolTx {
     pub async fn init(
         channel: ChannelPtr,
         validator: ValidatorPtr,
         p2p: P2pPtr,
     ) -> Result<ProtocolBasePtr> {
         debug!(
-            target: "validator::protocol_block::init",
-            "Adding ProtocolBlock to the protocol registry"
+            target: "validator::protocol_tx::init",
+            "Adding ProtocolTx to the protocol registry"
         );
         let msg_subsystem = channel.message_subsystem();
-        msg_subsystem.add_dispatch::<BlockInfo>().await;
+        msg_subsystem.add_dispatch::<TransactionMessage>().await;
 
-        let block_sub = channel.subscribe_msg::<BlockInfo>().await?;
+        let tx_sub = channel.subscribe_msg::<TransactionMessage>().await?;
 
         Ok(Arc::new(Self {
-            block_sub,
-            jobsman: ProtocolJobsManager::new("BlockProtocol", channel.clone()),
+            tx_sub,
+            jobsman: ProtocolJobsManager::new("TxProtocol", channel.clone()),
             validator,
             p2p,
             channel_address: channel.address().clone(),
         }))
     }
 
-    async fn handle_receive_block(self: Arc<Self>) -> Result<()> {
-        debug!(target: "consensus::protocol_block::handle_receive_block", "START");
+    async fn handle_receive_tx(self: Arc<Self>) -> Result<()> {
+        debug!(
+            target: "validator::protocol_tx::handle_receive_tx",
+            "START"
+        );
         let exclude_list = vec![self.channel_address.clone()];
         loop {
-            let block = match self.block_sub.receive().await {
+            let tx = match self.tx_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
                     debug!(
-                        target: "validator::protocol_block::handle_receive_block",
+                        target: "validator::protocol_tx::handle_receive_tx",
                         "recv fail: {}",
                         e
                     );
@@ -86,51 +94,40 @@ impl ProtocolBlock {
             // Check if node has finished syncing its blockchain
             if !self.validator.read().await.synced {
                 debug!(
-                    target: "validator::protocol_block::handle_receive_block",
+                    target: "validator::protocol_tx::handle_receive_tx",
                     "Node still syncing blockchain, skipping..."
                 );
                 continue
             }
 
-            // Check if node started participating in consensus.
-            // Consensus-mode enabled nodes have already performed these steps,
-            // during proposal finalization. They still listen to this sub,
-            // in case they go out of sync and become a none-consensus node.
-            if self.validator.read().await.consensus.participating {
-                debug!(
-                    target: "validator::protocol_block::handle_receive_block",
-                    "Node is participating in consensus, skipping..."
-                );
-                continue
-            }
+            let tx_copy = (*tx).clone();
 
-            let block_copy = (*block).clone();
-
-            match self.validator.write().await.append_block(&block_copy).await {
-                Ok(()) => self.p2p.broadcast_with_exclude(&block_copy, &exclude_list).await,
+            // Nodes use unconfirmed_txs vector as seen_txs pool.
+            match self.validator.write().await.append_tx(&tx_copy.0).await {
+                Ok(()) => self.p2p.broadcast_with_exclude(&tx_copy, &exclude_list).await,
                 Err(e) => {
                     debug!(
-                        target: "validator::protocol_block::handle_receive_block",
-                        "append_block fail: {}",
+                        target: "validator::protocol_tx::handle_receive_tx",
+                        "append_tx fail: {}",
                         e
                     );
                 }
-            };
+            }
         }
     }
 }
 
 #[async_trait]
-impl ProtocolBase for ProtocolBlock {
+impl ProtocolBase for ProtocolTx {
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "validator::protocol_block::start", "START");
+        debug!(target: "validator::protocol_tx::start", "START");
         self.jobsman.clone().start(executor.clone());
-        self.jobsman.clone().spawn(self.clone().handle_receive_block(), executor.clone()).await;
-        debug!(target: "validator::protocol_block::start", "END");
+        self.jobsman.clone().spawn(self.clone().handle_receive_tx(), executor.clone()).await;
+        debug!(target: "validator::protocol_tx::start", "END");
         Ok(())
     }
 
     fn name(&self) -> &'static str {
-        "ProtocolBlock"
+        "ProtocolTx"
     }
 }

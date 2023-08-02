@@ -22,7 +22,7 @@ use log::debug;
 use smol::Executor;
 use url::Url;
 
-use crate::{
+use darkfi::{
     impl_p2p_message,
     net::{
         ChannelPtr, Message, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
@@ -31,11 +31,16 @@ use crate::{
     validator::{consensus::Proposal, ValidatorPtr},
     Result,
 };
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-impl_p2p_message!(Proposal, "proposal");
+/// Auxiliary [`Proposal`] wrapper structure used for messaging.
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+struct ProposalMessage(Proposal);
+
+impl_p2p_message!(ProposalMessage, "proposal");
 
 pub struct ProtocolProposal {
-    proposal_sub: MessageSubscription<Proposal>,
+    proposal_sub: MessageSubscription<ProposalMessage>,
     jobsman: ProtocolJobsManagerPtr,
     validator: ValidatorPtr,
     p2p: P2pPtr,
@@ -53,9 +58,9 @@ impl ProtocolProposal {
             "Adding ProtocolProposal to the protocol registry"
         );
         let msg_subsystem = channel.message_subsystem();
-        msg_subsystem.add_dispatch::<Proposal>().await;
+        msg_subsystem.add_dispatch::<ProposalMessage>().await;
 
-        let proposal_sub = channel.subscribe_msg::<Proposal>().await?;
+        let proposal_sub = channel.subscribe_msg::<ProposalMessage>().await?;
 
         Ok(Arc::new(Self {
             proposal_sub,
@@ -102,7 +107,7 @@ impl ProtocolProposal {
 
             let proposal_copy = (*proposal).clone();
 
-            match self.validator.write().await.consensus.append_proposal(&proposal_copy).await {
+            match self.validator.write().await.consensus.append_proposal(&proposal_copy.0).await {
                 Ok(()) => self.p2p.broadcast_with_exclude(&proposal_copy, &exclude_list).await,
                 Err(e) => {
                     debug!(

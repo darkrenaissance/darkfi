@@ -48,6 +48,9 @@ mod rpc_tx;
 mod task;
 use task::sync::sync_task;
 
+/// P2P net protocols
+mod proto;
+
 /// Utility functions
 mod utils;
 use utils::{genesis_txs_total, spawn_consensus_p2p, spawn_sync_p2p};

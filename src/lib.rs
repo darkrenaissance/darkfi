@@ -72,7 +72,7 @@ macro_rules! cli_desc {
             "{} {}-{}\n{}\n{}",
             env!("CARGO_PKG_NAME").to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
-            "@GIT_REV@", // Only noobs will change this
+            "459170ff096", // Only noobs will change this
             env!("CARGO_PKG_DESCRIPTION").to_string(),
             darkfi::ANSI_LOGO,
         );

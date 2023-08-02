@@ -22,10 +22,7 @@ use darkfi::{
     error::TxVerifyFailed,
     net::{P2p, P2pPtr, Settings, SESSION_ALL},
     tx::Transaction,
-    validator::{
-        proto::{ProtocolBlock, ProtocolProposal, ProtocolSync, ProtocolTx},
-        ValidatorPtr,
-    },
+    validator::ValidatorPtr,
     Result,
 };
 use darkfi_consensus_contract::{
@@ -34,6 +31,8 @@ use darkfi_consensus_contract::{
 use darkfi_money_contract::{model::MoneyTokenMintParamsV1, MoneyFunction::GenesisMintV1};
 use darkfi_sdk::crypto::{CONSENSUS_CONTRACT_ID, MONEY_CONTRACT_ID};
 use darkfi_serial::deserialize;
+
+use crate::proto::{ProtocolBlock, ProtocolProposal, ProtocolSync, ProtocolTx};
 
 /// Auxiliary function to calculate the total amount of minted tokens in provided
 /// genesis transactions set. This includes both staked and normal tokens.

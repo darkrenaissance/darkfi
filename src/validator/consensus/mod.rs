@@ -70,9 +70,8 @@ impl Consensus {
     ///     1. Node has not started current slot finalization
     ///     2. Proposal refers to current slot
     ///     3. Proposal hash matches the actual block one
-    ///     4. Header hash matches the actual one
-    ///     5. Block transactions don't exceed set limit
-    ///     6. Block is valid
+    ///     4. Block transactions don't exceed set limit
+    ///     5. Block is valid
     /// Additional validity rules can be applied.
     pub async fn append_proposal(&mut self, proposal: &Proposal) -> Result<()> {
         // Generate a time keeper for current slot
@@ -100,16 +99,6 @@ impl Consensus {
                 proposal.hash, proposal_hash
             );
             return Err(Error::ProposalHashesMissmatchError)
-        }
-
-        // Check if proposal header matches actual one
-        let proposal_header = hdr.headerhash();
-        if proposal.header != proposal_header {
-            warn!(
-                target: "validator::consensus::append_proposal", "Received proposal contains mismatched headers: {} - {}",
-                proposal.header, proposal_header
-            );
-            return Err(Error::ProposalHeadersMissmatchError)
         }
 
         // TODO: verify if this should happen here or not.
@@ -257,8 +246,6 @@ impl Consensus {
 pub struct Proposal {
     /// Block hash
     pub hash: blake3::Hash,
-    /// Block header hash
-    pub header: blake3::Hash,
     /// Block data
     pub block: BlockInfo,
 }
@@ -266,8 +253,7 @@ pub struct Proposal {
 impl Proposal {
     pub fn new(block: BlockInfo) -> Self {
         let hash = block.blockhash();
-        let header = block.header.headerhash();
-        Self { hash, header, block }
+        Self { hash, block }
     }
 }
 
