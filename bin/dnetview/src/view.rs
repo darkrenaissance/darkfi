@@ -353,12 +353,8 @@ impl<'a> View {
                     let text = self.parse_msg_list(connect.id.clone())?;
                     f.render_stateful_widget(text, slice[1], &mut self.msg_list.state);
                 }
-                Some(SelectableObject::Lilith(lilith)) => {
+                Some(SelectableObject::Lilith(_lilith)) => {
                     lines.push(Spans::from(Span::styled("Type: Lilith", style)));
-                    lines.push(Spans::from(Span::styled("URLs:", style)));
-                    for url in &lilith.urls {
-                        lines.push(Spans::from(Span::styled(format!("   {}", url), style)));
-                    }
                 }
                 Some(SelectableObject::Network(network)) => {
                     lines.push(Spans::from(Span::styled("URLs:", style)));

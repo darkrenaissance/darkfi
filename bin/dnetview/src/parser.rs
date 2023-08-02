@@ -209,7 +209,6 @@ impl DataParser {
         reply: serde_json::Map<String, Value>,
         name: String,
     ) -> DnetViewResult<()> {
-        let urls: Vec<String> = serde_json::from_value(reply.get("urls").unwrap().clone()).unwrap();
         let spawns: Vec<serde_json::Map<String, Value>> =
             serde_json::from_value(reply.get("spawns").unwrap().clone()).unwrap();
 
@@ -225,7 +224,7 @@ impl DataParser {
             networks.push(network);
         }
         let id = make_node_id(&name)?;
-        let lilith = LilithInfo::new(id.clone(), name, urls, networks);
+        let lilith = LilithInfo::new(id.clone(), name, networks);
         let lilith_obj = SelectableObject::Lilith(lilith.clone());
 
         self.model.selectables.lock().await.insert(id, lilith_obj);

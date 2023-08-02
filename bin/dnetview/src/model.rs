@@ -140,13 +140,12 @@ impl ConnectInfo {
 pub struct LilithInfo {
     pub id: String,
     pub name: String,
-    pub urls: Vec<String>,
     pub networks: Vec<NetworkInfo>,
 }
 
 impl LilithInfo {
-    pub fn new(id: String, name: String, urls: Vec<String>, networks: Vec<NetworkInfo>) -> Self {
-        Self { id, name, urls, networks }
+    pub fn new(id: String, name: String, networks: Vec<NetworkInfo>) -> Self {
+        Self { id, name, networks }
     }
 }
 
