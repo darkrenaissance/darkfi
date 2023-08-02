@@ -32,12 +32,12 @@ impl Tau {
     }
 
     /// Add a new task.
-    pub async fn add(&self, task: BaseTask) -> Result<bool> {
+    pub async fn add(&self, task: BaseTask) -> Result<u32> {
         let req = JsonRequest::new("add", json!([task]));
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);
-        let reply: bool = from_value(rep)?;
+        let reply: u32 = from_value(rep)?;
         Ok(reply)
     }
 

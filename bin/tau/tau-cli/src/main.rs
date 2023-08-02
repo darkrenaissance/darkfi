@@ -221,8 +221,10 @@ async fn main() -> Result<()> {
                 }
 
                 let title = task.clone().title;
-                if tau.add(task).await? {
-                    println!("Created task \"{}\"", title);
+
+                let task_id = tau.add(task).await?;
+                if task_id > 0 {
+                    println!("Created task {} \"{}\"", task_id, title);
                 }
                 Ok(())
             }
