@@ -77,7 +77,7 @@ impl Consensus {
         // Generate a time keeper for current slot
         let time_keeper = self.time_keeper.current();
 
-        // Node have already checked for finalization in this slot
+        // Node have already checked for finalization in this slot (1)
         if time_keeper.verifying_slot <= self.checked_finalization {
             warn!(target: "validator::consensus::append_proposal", "Proposal received after finalization sync period.");
             return Err(Error::ProposalAfterFinalizationError)
@@ -86,12 +86,12 @@ impl Consensus {
         // Proposal validations
         let hdr = &proposal.block.header;
 
-        // Ignore proposal if not for current slot
+        // Ignore proposal if not for current slot (2)
         if hdr.slot != time_keeper.verifying_slot {
             return Err(Error::ProposalNotForCurrentSlotError)
         }
 
-        // Check if proposal hash matches actual one
+        // Check if proposal hash matches actual one (3)
         let proposal_hash = proposal.block.blockhash();
         if proposal.hash != proposal_hash {
             warn!(
@@ -102,7 +102,7 @@ impl Consensus {
         }
 
         // TODO: verify if this should happen here or not.
-        // Check that proposal transactions don't exceed limit
+        // Check that proposal transactions don't exceed limit (4)
         if proposal.block.txs.len() > TXS_CAP {
             warn!(
                 target: "validator::consensus::append_proposal", "Received proposal transactions exceed configured cap: {} - {}",
@@ -121,7 +121,7 @@ impl Consensus {
         // Retrieve expected reward
         let expected_reward = next_block_reward();
 
-        // Verify proposal block
+        // Verify proposal block (5)
         if verify_block(
             &fork.overlay,
             &time_keeper,
