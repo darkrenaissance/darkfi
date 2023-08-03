@@ -18,7 +18,7 @@
 
 use darkfi::Result;
 
-use crate::model::{ConnectInfo, Session};
+use crate::model::{Session, SlotInfo};
 
 pub fn make_node_id(node_name: &String) -> Result<String> {
     let mut id = hex::encode(node_name);
@@ -118,6 +118,6 @@ pub fn make_empty_id(node_id: &str, session: &Session, count: u64) -> Result<Str
     Ok(id)
 }
 
-pub fn is_empty_session(connects: &[ConnectInfo]) -> bool {
+pub fn is_empty_session(connects: &[SlotInfo]) -> bool {
     return connects.iter().all(|conn| conn.is_empty)
 }

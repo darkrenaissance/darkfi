@@ -30,8 +30,7 @@ use crate::{
     config::{DnvConfig, Node, NodeType},
     error::{DnetViewError, DnetViewResult},
     model::{
-        ConnectInfo, LilithInfo, Model, NetworkInfo, NodeInfo, SelectableObject, Session,
-        SessionInfo,
+        LilithInfo, Model, NetworkInfo, NodeInfo, SelectableObject, Session, SessionInfo, SlotInfo,
     },
     rpc::RpcConnect,
     util::{is_empty_session, make_connect_id, make_empty_id, make_node_id, make_session_id},
@@ -87,13 +86,14 @@ impl DataParser {
             // Retrieve node info, based on its type
             let response = match &node.node_type {
                 NodeType::LILITH => client.lilith_spawns().await,
-                NodeType::NORMAL => client.get_info().await,
+                NodeType::NORMAL => client.dnet_info().await,
                 NodeType::CONSENSUS => client.get_consensus_info().await,
             };
 
             // Parse response
             match response {
                 Ok(reply) => {
+                    debug!("dnetview:: reply {:?}", reply);
                     if reply.as_object().is_none() || reply.as_object().unwrap().is_empty() {
                         return Err(DnetViewError::EmptyRpcReply)
                     }
@@ -117,86 +117,80 @@ impl DataParser {
         }
     }
 
-    async fn parse_offline(&self, node_name: String) -> DnetViewResult<()> {
+    // If poll times out, inititalize data structures with empty values.
+    async fn parse_offline(&self, name: String) -> DnetViewResult<()> {
         let name = "Offline".to_string();
         let session_type = Session::Offline;
-        let node_id = make_node_id(&node_name)?;
-        let session_id = make_session_id(&node_id, &session_type)?;
-        let mut connects: Vec<ConnectInfo> = Vec::new();
-        let mut sessions: Vec<SessionInfo> = Vec::new();
 
-        // initialize with empty values
-        let id = make_empty_id(&node_id, &session_type, 0)?;
+        let mut slots: Vec<SlotInfo> = Vec::new();
+        let mut info: Vec<SessionInfo> = Vec::new();
+        let hosts = Vec::new();
+
+        // Initialize with empty values
+        let node_id = make_node_id(&name)?;
+        let dnet_id = make_empty_id(&node_id, &session_type, 0)?;
         let addr = "Null".to_string();
         let state = "Null".to_string();
-        let parent = node_id.clone();
-        let msg_log = Vec::new();
+        let random_id = "Null".to_string();
+        let remote_id = "Null".to_string();
+        let log = Vec::new();
         let is_empty = true;
-        let last_msg = "Null".to_string();
-        let last_status = "Null".to_string();
-        let remote_node_id = "Null".to_string();
-        let connect_info = ConnectInfo::new(
-            id,
-            addr,
-            state.clone(),
-            parent.clone(),
-            msg_log,
+
+        let slot = SlotInfo::new(
+            dnet_id.clone(),
+            node_id.clone(),
+            addr.clone(),
+            random_id,
+            remote_id,
+            log,
             is_empty,
-            last_msg,
-            last_status,
-            remote_node_id,
         );
-        connects.push(connect_info.clone());
+        slots.push(slot.clone());
 
-        let accept_addr = None;
-        let session_info =
-            SessionInfo::new(session_id, name, is_empty, parent, connects, accept_addr, None);
-        sessions.push(session_info);
+        let session_info = SessionInfo::new(
+            dnet_id,
+            node_id.clone(),
+            name.clone(),
+            addr.clone(),
+            state,
+            slots,
+            is_empty,
+        );
+        info.push(session_info);
 
-        let node = NodeInfo::new(node_id, node_name, state, sessions.clone(), None, true);
+        let node = NodeInfo::new(node_id.clone(), name.clone(), hosts, info.clone(), is_empty);
 
-        self.update_selectables(sessions, node).await?;
+        self.update_selectables(info, node).await?;
         Ok(())
     }
 
     async fn parse_data(
         &self,
         reply: &serde_json::Map<String, Value>,
-        node_name: String,
+        name: String,
     ) -> DnetViewResult<()> {
-        //let addr = &reply.get("addr");
+        let hosts = &reply["hosts"];
         let inbound = &reply["inbound"];
-        //let _manual = &reply["session_manual"];
         let outbound = &reply["outbound"];
-        let state = String::new();
 
-        let mut sessions: Vec<SessionInfo> = Vec::new();
+        let dnet_id = make_node_id(&name)?;
 
-        let node_id = make_node_id(&node_name)?;
+        let mut info: Vec<SessionInfo> = Vec::new();
 
-        //let ext_addr = self.parse_external_addr(addr).await?;
-        let ext_addr = None;
+        let inbound = self.parse_inbound(inbound, &dnet_id).await?;
+        let outbound = self.parse_outbound(outbound, &dnet_id).await?;
 
-        let in_session = self.parse_inbound(inbound, &node_id).await?;
-        let out_session = self.parse_outbound(outbound, &node_id).await?;
-        //let man_session = self.parse_manual(manual, &node_id).await?;
+        // TODO
+        // let hosts = self.parse_hosts(hosts)...
+        let hosts = Vec::new();
 
-        sessions.push(in_session.clone());
-        sessions.push(out_session.clone());
-        //sessions.push(man_session.clone());
+        info.push(inbound.clone());
+        info.push(outbound.clone());
 
-        let node = NodeInfo::new(
-            node_id,
-            node_name,
-            state,
-            //state.as_str().unwrap().to_string(),
-            sessions.clone(),
-            ext_addr,
-            false,
-        );
+        let node = NodeInfo::new(dnet_id, name, hosts, info.clone(), false);
 
-        self.update_selectables(sessions.clone(), node).await?;
-        self.update_msgs(sessions).await?;
+        self.update_selectables(info.clone(), node).await?;
+        self.update_msgs(info.clone()).await?;
 
         //debug!("IDS: {:?}", self.model.ids.lock().await);
         //debug!("INFOS: {:?}", self.model.nodes.lock().await);
@@ -238,22 +232,22 @@ impl DataParser {
 
     async fn update_msgs(&self, sessions: Vec<SessionInfo>) -> DnetViewResult<()> {
         for session in sessions {
-            for connection in session.children {
-                if !self.model.msg_map.lock().await.contains_key(&connection.id) {
+            for connection in session.info {
+                if !self.model.msg_map.lock().await.contains_key(&connection.dnet_id) {
                     // we don't have this ID: it is a new node
                     self.model
                         .msg_map
                         .lock()
                         .await
-                        .insert(connection.id, connection.msg_log.clone());
+                        .insert(connection.dnet_id, connection.log.clone());
                 } else {
                     // we have this id: append the msg values
-                    match self.model.msg_map.lock().await.entry(connection.id) {
+                    match self.model.msg_map.lock().await.entry(connection.dnet_id) {
                         Entry::Vacant(e) => {
-                            e.insert(connection.msg_log);
+                            e.insert(connection.log);
                         }
                         Entry::Occupied(mut e) => {
-                            for msg in connection.msg_log {
+                            for msg in connection.log {
                                 e.get_mut().push(msg);
                             }
                         }
@@ -271,10 +265,10 @@ impl DataParser {
     ) -> DnetViewResult<()> {
         if node.is_offline {
             let node_obj = SelectableObject::Node(node.clone());
-            self.model.selectables.lock().await.insert(node.id.clone(), node_obj.clone());
+            self.model.selectables.lock().await.insert(node.dnet_id.clone(), node_obj.clone());
         } else {
             let node_obj = SelectableObject::Node(node.clone());
-            self.model.selectables.lock().await.insert(node.id.clone(), node_obj.clone());
+            self.model.selectables.lock().await.insert(node.dnet_id.clone(), node_obj.clone());
             for session in sessions {
                 if !session.is_empty {
                     let session_obj = SelectableObject::Session(session.clone());
@@ -282,14 +276,14 @@ impl DataParser {
                         .selectables
                         .lock()
                         .await
-                        .insert(session.clone().id, session_obj.clone());
-                    for connect in session.children {
+                        .insert(session.clone().dnet_id, session_obj.clone());
+                    for connect in session.info {
                         let connect_obj = SelectableObject::Connect(connect.clone());
                         self.model
                             .selectables
                             .lock()
                             .await
-                            .insert(connect.clone().id, connect_obj.clone());
+                            .insert(connect.clone().dnet_id, connect_obj.clone());
                     }
                 }
             }
@@ -314,124 +308,158 @@ impl DataParser {
     ) -> DnetViewResult<SessionInfo> {
         let name = "Inbound".to_string();
         let session_type = Session::Inbound;
-        let parent = node_id.to_string();
-        let id = make_session_id(&parent, &session_type)?;
-        let mut connects: Vec<ConnectInfo> = Vec::new();
-        let connections = &inbound["connected"];
+        let dnet_id = make_session_id(node_id, &session_type)?;
+        let mut info: Vec<SlotInfo> = Vec::new();
+
+        // TODO: fixme
         let mut connect_count = 0;
-        let mut accept_vec = Vec::new();
 
-        match connections.as_object() {
-            Some(connect) => {
-                match connect.is_empty() {
-                    true => {
-                        connect_count += 1;
-                        // channel is empty. initialize with empty values
-                        let id = make_empty_id(node_id, &session_type, connect_count)?;
-                        let addr = "Null".to_string();
-                        let state = "Null".to_string();
-                        let parent = parent.clone();
-                        let msg_log = Vec::new();
-                        let is_empty = true;
-                        let last_msg = "Null".to_string();
-                        let last_status = "Null".to_string();
-                        let remote_node_id = "Null".to_string();
-                        let connect_info = ConnectInfo::new(
-                            id,
-                            addr,
-                            state,
-                            parent,
-                            msg_log,
-                            is_empty,
-                            last_msg,
-                            last_status,
-                            remote_node_id,
-                        );
-                        connects.push(connect_info);
-                    }
-                    false => {
-                        // channel is not empty. initialize with whole values
-                        for k in connect.keys() {
-                            let node = connect.get(k);
-                            let addr = k.to_string();
-                            let info = node.unwrap().as_array();
-                            // get the accept address
-                            let accept_addr = info.unwrap().get(0);
-                            let acc_addr = accept_addr
-                                .unwrap()
-                                .get("accept_addr")
-                                .unwrap()
-                                .as_str()
-                                .unwrap()
-                                .to_string();
-                            accept_vec.push(acc_addr);
-                            let info2 = info.unwrap().get(1);
-                            let id = info2.unwrap().get("random_id").unwrap().as_u64().unwrap();
-                            let id = make_connect_id(&id)?;
-                            let state = "state".to_string();
-                            let parent = parent.clone();
+        // this will return true rn
+        if inbound.is_null() {
+            let dnet_id = make_empty_id(node_id, &session_type, connect_count)?;
+            let addr = "Null".to_string();
+            //let state = "Null".to_string();
+            let node_id = node_id.clone();
+            let log = Vec::new();
+            let is_empty = true;
+            //let last_msg = "Null".to_string();
+            //let last_status = "Null".to_string();
+            let remote_id = "Null".to_string();
+            let random_id = "Null".to_string();
 
-                            // Empty message log for now.
-                            let msg_log = Vec::new();
+            let node_id = node_id.to_string();
 
-                            let is_empty = false;
-                            let last_msg = info2
-                                .unwrap()
-                                .get("last_msg")
-                                .unwrap()
-                                .as_str()
-                                .unwrap()
-                                .to_string();
-                            let last_status = info2
-                                .unwrap()
-                                .get("last_status")
-                                .unwrap()
-                                .as_str()
-                                .unwrap()
-                                .to_string();
-                            let remote_node_id = info2
-                                .unwrap()
-                                .get("remote_node_id")
-                                .unwrap()
-                                .as_str()
-                                .unwrap()
-                                .to_string();
-                            let r_node_id: String = match remote_node_id.is_empty() {
-                                true => "no remote id".to_string(),
-                                false => remote_node_id,
-                            };
-                            let connect_info = ConnectInfo::new(
-                                id,
-                                addr,
-                                state,
-                                parent,
-                                msg_log,
-                                is_empty,
-                                last_msg,
-                                last_status,
-                                r_node_id,
-                            );
-                            connects.push(connect_info.clone());
-                        }
-                    }
-                }
-                let is_empty = is_empty_session(&connects);
-
-                // TODO: clean this up
-                if accept_vec.is_empty() {
-                    let accept_addr = None;
-                    let session_info =
-                        SessionInfo::new(id, name, is_empty, parent, connects, accept_addr, None);
-                    Ok(session_info)
-                } else {
-                    let accept_addr = Some(accept_vec[0].clone());
-                    let session_info =
-                        SessionInfo::new(id, name, is_empty, parent, connects, accept_addr, None);
-                    Ok(session_info)
-                }
-            }
-            None => Err(DnetViewError::ValueIsNotObject),
+            let slot = SlotInfo::new(
+                dnet_id, node_id, addr, random_id, remote_id, log,
+                is_empty,
+                //state,
+                //last_msg,
+                //last_status,
+            );
+            info.push(slot);
         }
+
+        let is_empty = is_empty_session(&info);
+
+        let addr = String::new();
+        let state = String::new();
+        let session_info =
+            SessionInfo::new(dnet_id, node_id.clone(), name, addr, state, info, is_empty);
+        Ok(session_info)
+
+        //return Err(DnetViewError::ValueIsNotObject)
+        //let connections = &inbound["connected"];
+
+        //match connections.as_object() {
+        //    Some(connect) => {
+        //        match connect.is_empty() {
+        //            true => {
+        //                connect_count += 1;
+        //                // channel is empty. initialize with empty values
+        //                let id = make_empty_id(node_id, &session_type, connect_count)?;
+        //                let addr = "Null".to_string();
+        //                let state = "Null".to_string();
+        //                let node_id = node_id.clone();
+        //                let log = Vec::new();
+        //                let is_empty = true;
+        //                let last_msg = "Null".to_string();
+        //                let last_status = "Null".to_string();
+        //                let remote_id = "Null".to_string();
+        //                let slot = SlotInfo::new(
+        //                    id,
+        //                    addr,
+        //                    state,
+        //                    node_id,
+        //                    log,
+        //                    is_empty,
+        //                    last_msg,
+        //                    last_status,
+        //                    remote_id,
+        //                );
+        //                info.push(slot);
+        //            }
+        //            false => {
+        //                // channel is not empty. initialize with whole values
+        //                for k in connect.keys() {
+        //                    let node = connect.get(k);
+        //                    let addr = k.to_string();
+        //                    let info = node.unwrap().as_array();
+        //                    // get the accept address
+        //                    let accept_addr = info.unwrap().get(0);
+        //                    let acc_addr = accept_addr
+        //                        .unwrap()
+        //                        .get("accept_addr")
+        //                        .unwrap()
+        //                        .as_str()
+        //                        .unwrap()
+        //                        .to_string();
+        //                    accept_vec.push(acc_addr);
+        //                    let info2 = info.unwrap().get(1);
+        //                    let id = info2.unwrap().get("random_id").unwrap().as_u64().unwrap();
+        //                    let id = make_connect_id(&id)?;
+        //                    let state = "state".to_string();
+        //                    let node_id = node_id.clone();
+
+        //                    // Empty message log for now.
+        //                    let log = Vec::new();
+
+        //                    let is_empty = false;
+        //                    let last_msg = info2
+        //                        .unwrap()
+        //                        .get("last_msg")
+        //                        .unwrap()
+        //                        .as_str()
+        //                        .unwrap()
+        //                        .to_string();
+        //                    let last_status = info2
+        //                        .unwrap()
+        //                        .get("last_status")
+        //                        .unwrap()
+        //                        .as_str()
+        //                        .unwrap()
+        //                        .to_string();
+        //                    let remote_id = info2
+        //                        .unwrap()
+        //                        .get("remote_id")
+        //                        .unwrap()
+        //                        .as_str()
+        //                        .unwrap()
+        //                        .to_string();
+        //                    let r_node_id: String = match remote_id.is_empty() {
+        //                        true => "no remote id".to_string(),
+        //                        false => remote_id,
+        //                    };
+        //                    let slot = SlotInfo::new(
+        //                        id,
+        //                        addr,
+        //                        state,
+        //                        node_id,
+        //                        log,
+        //                        is_empty,
+        //                        last_msg,
+        //                        last_status,
+        //                        r_node_id,
+        //                    );
+        //                    info.push(slot.clone());
+        //                }
+        //            }
+        //        }
+
+        //        // TODO: clean this up
+        //        if accept_vec.is_empty() {
+        //            let accept_addr = None;
+        //            let session_info =
+        //                SessionInfo::new(id, name, is_empty, node_id, info, accept_addr, None);
+        //            Ok(session_info)
+        //        } else {
+        //            let accept_addr = Some(accept_vec[0].clone());
+        //            let session_info =
+        //                SessionInfo::new(id, name, is_empty, node_id, info, accept_addr, None);
+        //            Ok(session_info)
+        //        }
+        //    }
+        //    None => Err(DnetViewError::ValueIsNotObject),
+        //}
     }
 
     // TODO: placeholder for now
@@ -442,44 +470,39 @@ impl DataParser {
     ) -> DnetViewResult<SessionInfo> {
         let name = "Manual".to_string();
         let session_type = Session::Manual;
-        let mut connects: Vec<ConnectInfo> = Vec::new();
-        let parent = node_id.to_string();
+        let mut info: Vec<SlotInfo> = Vec::new();
 
-        let session_id = make_session_id(&parent, &session_type)?;
+        //let dnet_id = make_session_id(&node_id, &session_type)?;
         //let id: u64 = 0;
-        let connect_id = make_empty_id(node_id, &session_type, 0)?;
+        let dnet_id = make_empty_id(node_id, &session_type, 0)?;
         //let connect_id = make_connect_id(&id)?;
         let addr = "Null".to_string();
         let state = "Null".to_string();
-        let msg_log = Vec::new();
+        let log = Vec::new();
         let is_empty = true;
         let msg = "Null".to_string();
         let status = "Null".to_string();
-        let remote_node_id = "Null".to_string();
-        let connect_info = ConnectInfo::new(
-            connect_id.clone(),
-            addr,
-            state,
-            parent,
-            msg_log,
+        let remote_id = "Null".to_string();
+        let random_id = "Null".to_string();
+
+        let node_id = node_id.to_string();
+
+        let slot = SlotInfo::new(
+            dnet_id.clone(),
+            node_id.clone(),
+            addr.clone(),
+            random_id,
+            remote_id,
+            log,
             is_empty,
-            msg,
-            status,
-            remote_node_id,
+            //state,
+            //msg,
+            //status,
         );
-        connects.push(connect_info);
-        let parent = connect_id;
-        let is_empty = is_empty_session(&connects);
-        let accept_addr = None;
-        let session_info = SessionInfo::new(
-            session_id,
-            name,
-            is_empty,
-            parent,
-            connects.clone(),
-            accept_addr,
-            None,
-        );
+        info.push(slot);
+        //let node_id = connect_id;
+        let is_empty = is_empty_session(&info);
+        let session_info = SessionInfo::new(dnet_id, node_id, name, addr, state, info, is_empty);
 
         Ok(session_info)
     }
@@ -491,106 +514,139 @@ impl DataParser {
     ) -> DnetViewResult<SessionInfo> {
         let name = "Outbound".to_string();
         let session_type = Session::Outbound;
-        let parent = node_id.to_string();
-        let id = make_session_id(&parent, &session_type)?;
-        let mut connects: Vec<ConnectInfo> = Vec::new();
-        let slots = &outbound["slots"];
+        let dnet_id = make_session_id(node_id, &session_type)?;
+        let node_id = node_id.to_string();
+        let mut info: Vec<SlotInfo> = Vec::new();
+
+        // TODO: fixme
         let mut slot_count = 0;
 
-        let hosts = &outbound["hosts"];
-
-        match slots.as_array() {
-            Some(slots) => {
-                for slot in slots {
-                    slot_count += 1;
-                    match slot["channel"].is_null() {
-                        true => {
-                            // TODO: this is not actually empty
-                            let id = make_empty_id(node_id, &session_type, slot_count)?;
-                            let addr = "Null".to_string();
-                            let state = &slot["state"];
-                            let state = state.as_str().unwrap().to_string();
-                            let parent = parent.clone();
-                            let msg_log = Vec::new();
-                            let is_empty = false;
-                            let last_msg = "Null".to_string();
-                            let last_status = "Null".to_string();
-                            let remote_node_id = "Null".to_string();
-                            let connect_info = ConnectInfo::new(
-                                id,
-                                addr,
-                                state,
-                                parent,
-                                msg_log,
-                                is_empty,
-                                last_msg,
-                                last_status,
-                                remote_node_id,
-                            );
-                            connects.push(connect_info.clone());
-                        }
-                        false => {
-                            // channel is not empty. initialize with whole values
-                            let channel = &slot["channel"];
-                            let id = channel["random_id"].as_u64().unwrap();
-                            let id = make_connect_id(&id)?;
-                            let addr = &slot["addr"];
-                            let addr = addr.as_str().unwrap().to_string();
-                            let state = &slot["state"];
-                            let state = state.as_str().unwrap().to_string();
-                            let parent = parent.clone();
-
-                            // Empty message log for now.
-                            let msg_log = Vec::new();
-
-                            let is_empty = false;
-                            let last_msg = channel["last_msg"].as_str().unwrap().to_string();
-                            let last_status = channel["last_status"].as_str().unwrap().to_string();
-                            let remote_node_id =
-                                channel["remote_node_id"].as_str().unwrap().to_string();
-                            let r_node_id: String = match remote_node_id.is_empty() {
-                                true => "no remote id".to_string(),
-                                false => remote_node_id,
-                            };
-                            let connect_info = ConnectInfo::new(
-                                id,
-                                addr,
-                                state,
-                                parent,
-                                msg_log,
-                                is_empty,
-                                last_msg,
-                                last_status,
-                                r_node_id,
-                            );
-                            connects.push(connect_info.clone());
-                        }
-                    }
-                }
-
-                let is_empty = is_empty_session(&connects);
-
-                let accept_addr = None;
-
-                match hosts.as_array() {
-                    Some(hosts) => {
-                        let hosts: Vec<String> =
-                            hosts.iter().map(|addr| addr.as_str().unwrap().to_string()).collect();
-                        let session_info = SessionInfo::new(
-                            id,
-                            name,
-                            is_empty,
-                            parent,
-                            connects,
-                            accept_addr,
-                            Some(hosts),
-                        );
-                        Ok(session_info)
-                    }
-                    None => Err(DnetViewError::ValueIsNotObject),
-                }
-            }
-            None => Err(DnetViewError::ValueIsNotObject),
+        // this will return true rn
+        if outbound.is_null() {
+            let dnet_id = make_empty_id(&node_id, &session_type, slot_count)?;
+            let addr = "Null".to_string();
+            //let state = &slot["state"];
+            //let state = state.as_str().unwrap().to_string();
+            let node_id = node_id.clone();
+            let log = Vec::new();
+            let is_empty = false;
+            //let last_msg = "Null".to_string();
+            //let last_status = "Null".to_string();
+            let random_id = "Null".to_string();
+            let remote_id = "Null".to_string();
+            let slot = SlotInfo::new(
+                dnet_id, node_id, addr, random_id, remote_id, log,
+                is_empty,
+                //state,
+                //last_msg,
+                //last_status,
+            );
+            info.push(slot.clone());
         }
+
+        let state = String::new();
+        let addr = String::new();
+        let is_empty = true;
+        let session_info = SessionInfo::new(dnet_id, node_id, name, addr, state, info, is_empty);
+        Ok(session_info)
+
+        //return Err(DnetViewError::ValueIsNotObject)
+        //let slots = &outbound["slots"];
+
+        //let hosts = &outbound["hosts"];
+
+        //match slots.as_array() {
+        //    Some(slots) => {
+        //        for slot in slots {
+        //            slot_count += 1;
+        //            match slot["channel"].is_null() {
+        //                true => {
+        //                    // TODO: this is not actually empty
+        //                    let id = make_empty_id(node_id, &session_type, slot_count)?;
+        //                    let addr = "Null".to_string();
+        //                    let state = &slot["state"];
+        //                    let state = state.as_str().unwrap().to_string();
+        //                    let node_id = node_id.clone();
+        //                    let log = Vec::new();
+        //                    let is_empty = false;
+        //                    let last_msg = "Null".to_string();
+        //                    let last_status = "Null".to_string();
+        //                    let remote_id = "Null".to_string();
+        //                    let slot = SlotInfo::new(
+        //                        id,
+        //                        addr,
+        //                        state,
+        //                        node_id,
+        //                        log,
+        //                        is_empty,
+        //                        last_msg,
+        //                        last_status,
+        //                        remote_id,
+        //                    );
+        //                    info.push(slot.clone());
+        //                }
+        //                false => {
+        //                    // channel is not empty. initialize with whole values
+        //                    let channel = &slot["channel"];
+        //                    let id = channel["random_id"].as_u64().unwrap();
+        //                    let id = make_connect_id(&id)?;
+        //                    let addr = &slot["addr"];
+        //                    let addr = addr.as_str().unwrap().to_string();
+        //                    let state = &slot["state"];
+        //                    let state = state.as_str().unwrap().to_string();
+        //                    let node_id = node_id.clone();
+
+        //                    // Empty message log for now.
+        //                    let log = Vec::new();
+
+        //                    let is_empty = false;
+        //                    let last_msg = channel["last_msg"].as_str().unwrap().to_string();
+        //                    let last_status = channel["last_status"].as_str().unwrap().to_string();
+        //                    let remote_id =
+        //                        channel["remote_id"].as_str().unwrap().to_string();
+        //                    let r_node_id: String = match remote_id.is_empty() {
+        //                        true => "no remote id".to_string(),
+        //                        false => remote_id,
+        //                    };
+        //                    let slot = SlotInfo::new(
+        //                        id,
+        //                        addr,
+        //                        state,
+        //                        node_id,
+        //                        log,
+        //                        is_empty,
+        //                        last_msg,
+        //                        last_status,
+        //                        r_node_id,
+        //                    );
+        //                    info.push(slot.clone());
+        //                }
+        //            }
+        //        }
+
+        //        let is_empty = is_empty_session(&info);
+
+        //        let accept_addr = None;
+
+        //        match hosts.as_array() {
+        //            Some(hosts) => {
+        //                let hosts: Vec<String> =
+        //                    hosts.iter().map(|addr| addr.as_str().unwrap().to_string()).collect();
+        //                let session_info = SessionInfo::new(
+        //                    id,
+        //                    name,
+        //                    is_empty,
+        //                    node_id,
+        //                    info,
+        //                    accept_addr,
+        //                    Some(hosts),
+        //                );
+        //                Ok(session_info)
+        //            }
+        //            None => Err(DnetViewError::ValueIsNotObject),
+        //        }
+        //    }
+        //    None => Err(DnetViewError::ValueIsNotObject),
+        //}
     }
 }
