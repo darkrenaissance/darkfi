@@ -113,7 +113,7 @@ impl Consensus {
         }
 
         // Check if proposal extends any existing forks
-        let (mut fork, index) = self.find_extended_fork(&proposal).await?;
+        let (mut fork, index) = self.find_extended_fork(proposal).await?;
 
         // Grab overlay last block
         let previous = fork.overlay.lock().unwrap().last_block()?;

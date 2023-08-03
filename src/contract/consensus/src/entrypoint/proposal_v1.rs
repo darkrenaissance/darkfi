@@ -94,7 +94,7 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
 
     // Construct VRF input
     let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
-    vrf_input.extend_from_slice(&slot.previous.eta.to_repr());
+    vrf_input.extend_from_slice(&slot.last_eta.to_repr());
     vrf_input.extend_from_slice(params.fork_previous_hash.as_bytes());
     vrf_input.extend_from_slice(&slot_fp.to_repr());
 

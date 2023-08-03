@@ -175,7 +175,6 @@ impl Harness {
                 producers,
                 vec![previous_hash],
                 vec![previous.header.previous.clone()],
-                pallas::Base::ZERO,
                 previous_slot.pid.error,
             );
             let (f, error, sigma1, sigma2) = slot_pid_output(&previous_slot, producers);
@@ -183,7 +182,7 @@ impl Harness {
             let total_tokens = previous_slot.total_tokens + previous_slot.reward;
             // Only last slot in the sequence has a reward
             let reward = if i == slots_count - 1 { next_block_reward() } else { 0 };
-            let slot = Slot::new(id, previous, pid, total_tokens, reward);
+            let slot = Slot::new(id, previous, pid, pallas::Base::ZERO, total_tokens, reward);
             slots.push(slot.clone());
             previous_slot = slot;
         }

@@ -164,10 +164,9 @@ impl ConsensusState {
         sigma2: pallas::Base,
     ) {
         let id = self.time_keeper.current_slot();
-        let previous =
-            PreviousSlot::new(0, fork_hashes, fork_previous_hashes, self.get_previous_eta(), 0.0);
+        let previous = PreviousSlot::new(0, fork_hashes, fork_previous_hashes, 0.0);
         let pid = PidOutput::new(0.0, 0.0, sigma1, sigma2);
-        let slot = Slot::new(id, previous, pid, 0, 0);
+        let slot = Slot::new(id, previous, pid, self.get_last_eta(), 0, 0);
         info!(target: "consensus::state", "generate_slot: {:?}", slot);
         self.slots.push(slot);
     }
@@ -438,7 +437,7 @@ impl ConsensusState {
             let first_winning = coin.is_leader(
                 sigma1,
                 sigma2,
-                self.get_previous_eta(),
+                self.get_last_eta(),
                 pallas::Base::from(self.time_keeper.current_slot()),
             );
 
@@ -549,7 +548,7 @@ impl ConsensusState {
 
     /// Utility function to extract leader selection lottery randomness(eta),
     /// defined as the hash of the last block, converted to pallas base.
-    pub fn get_previous_eta(&self) -> pallas::Base {
+    pub fn get_last_eta(&self) -> pallas::Base {
         let (_, hash) = self.blockchain.last().unwrap();
         let mut bytes: [u8; 32] = *hash.as_bytes();
         // Read first 254 bits

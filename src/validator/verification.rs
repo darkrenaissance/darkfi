@@ -123,7 +123,7 @@ pub async fn verify_block(
     // Validate proposal transaction if not in testing mode
     if !testing_mode {
         verify_proposal_transaction(overlay, time_keeper, &block.producer.proposal).await?;
-        verify_producer_signature(&block)?;
+        verify_producer_signature(block)?;
     }
 
     // Verify transactions
