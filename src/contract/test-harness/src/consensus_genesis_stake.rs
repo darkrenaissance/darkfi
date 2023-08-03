@@ -62,7 +62,7 @@ impl TestHarness {
             pallas::Scalar::random(&mut OsRng),
             pallas::Base::random(&mut OsRng),
             pallas::Scalar::random(&mut OsRng),
-            pallas::Base::from(28),
+            pallas::Base::from(138),
         )?;
 
         let (genesis_stake_params, genesis_stake_proofs) =
