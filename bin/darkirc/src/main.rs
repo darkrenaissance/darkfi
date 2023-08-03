@@ -57,6 +57,41 @@ use crate::{
     settings::{Args, ChannelInfo, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
 
+async fn parse_signals(
+    sighup_sub: SubscriberPtr<Args>,
+    client_sub: SubscriberPtr<ClientSubMsg>,
+) -> Result<()> {
+    debug!("Started signal parsing handler");
+    let subscription = sighup_sub.subscribe().await;
+    loop {
+        let args = subscription.receive().await;
+        let new_config = IrcConfig::new(&args)?;
+        client_sub.notify(ClientSubMsg::Config(new_config)).await;
+    }
+}
+
+async fn reset_root(model: ModelPtr<PrivMsgEvent>) {
+    loop {
+        let now = Utc::now();
+
+        // clocks are valid, safe to unwrap
+        let next_midnight = (now + Duration::days(1)).date_naive().and_hms_opt(0, 0, 0).unwrap();
+
+        let duration = next_midnight.signed_duration_since(now.naive_utc()).to_std().unwrap();
+
+        // make sure the root is the same as everyone else's at
+        // startup by passing today's date 00:00 AM UTC as
+        // timestamp to root_event
+        let now_datetime = now.date_naive().and_hms_opt(0, 0, 0).unwrap();
+        let timestamp = now_datetime.timestamp() as u64;
+
+        model.lock().await.reset_root(Timestamp(timestamp));
+
+        sleep(duration.as_secs()).await;
+        info!("Resetting root");
+    }
+}
+
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     // Signal handling for config reload and graceful termination.
@@ -77,7 +112,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
 
         if settings.output.is_some() {
             let datastore = expand_path(&settings.output.unwrap())?;
-            save_json_file(&datastore, &kp)?;
+            save_json_file(&datastore, &kp, false)?;
         } else {
             println!("Generated keypair:\n{}", kp);
         }
@@ -167,39 +202,4 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     // stop p2p
     p2p2.stop().await;
     Ok(())
-}
-
-async fn parse_signals(
-    sighup_sub: SubscriberPtr<Args>,
-    client_sub: SubscriberPtr<ClientSubMsg>,
-) -> Result<()> {
-    debug!("Started signal parsing handler");
-    let subscription = sighup_sub.subscribe().await;
-    loop {
-        let args = subscription.receive().await;
-        let new_config = IrcConfig::new(&args)?;
-        client_sub.notify(ClientSubMsg::Config(new_config)).await;
-    }
-}
-
-async fn reset_root(model: ModelPtr<PrivMsgEvent>) {
-    loop {
-        let now = Utc::now();
-
-        // clocks are valid, safe to unwrap
-        let next_midnight = (now + Duration::days(1)).date_naive().and_hms_opt(0, 0, 0).unwrap();
-
-        let duration = next_midnight.signed_duration_since(now.naive_utc()).to_std().unwrap();
-
-        // make sure the root is the same as everyone else's at
-        // startup by passing today's date 00:00 AM UTC as
-        // timestamp to root_event
-        let now_datetime = now.date_naive().and_hms_opt(0, 0, 0).unwrap();
-        let timestamp = now_datetime.timestamp() as u64;
-
-        model.lock().await.reset_root(Timestamp(timestamp));
-
-        sleep(duration.as_secs()).await;
-        info!("Resetting root");
-    }
 }

@@ -17,7 +17,7 @@
  */
 
 use halo2_proofs::{
-    circuit::{AssignedCell, Layouter, Value},
+    circuit::{AssignedCell, Layouter},
     pasta::group::ff::WithSmallOrderMulGroup,
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector},
     poly::Rotation,
@@ -100,11 +100,13 @@ impl<F: WithSmallOrderMulGroup<3> + Ord> ZeroCondChip<F> {
                 let b = b.copy_advice(|| "copy b", &mut region, self.config.b, 0)?;
                 is_zero_chip.assign(&mut region, 0, a.value().copied())?;
 
-                let output = if a.value().copied().to_field() == Value::known(F::ZERO.into()) {
-                    a.value().copied()
-                } else {
-                    b.value().copied()
-                };
+                let output = a.value().copied().to_field().zip(b.value().copied()).map(|(a, b)| {
+                    if a == F::ZERO.into() {
+                        F::ZERO
+                    } else {
+                        b
+                    }
+                });
 
                 let cell = region.assign_advice(|| "output", self.config.output, 0, || output)?;
                 Ok(cell)
@@ -120,7 +122,7 @@ mod tests {
     use super::*;
     use crate::zk::assign_free_advice;
     use halo2_proofs::{
-        circuit::floor_planner::V1,
+        circuit::{SimpleFloorPlanner, Value},
         dev::MockProver,
         pasta::Fp,
         plonk::{Circuit, Instance},
@@ -134,7 +136,7 @@ mod tests {
 
     impl Circuit<Fp> for MyCircuit {
         type Config = (ZeroCondConfig<Fp>, [Column<Advice>; 5], Column<Instance>);
-        type FloorPlanner = V1;
+        type FloorPlanner = SimpleFloorPlanner;
         type Params = ();
 
         fn without_witnesses(&self) -> Self {
@@ -178,21 +180,19 @@ mod tests {
     }
 
     #[test]
-    fn zero_cond() -> crate::Result<()> {
+    fn zero_cond() {
         let a = Fp::from(0);
         let b = Fp::from(69);
         let p_circuit = MyCircuit { a: Value::known(a), b: Value::known(b) };
         let public_inputs = vec![a];
-        let prover = MockProver::run(3, &p_circuit, vec![public_inputs])?;
+        let prover = MockProver::run(3, &p_circuit, vec![public_inputs]).unwrap();
         prover.assert_satisfied();
 
         let a = Fp::from(12);
         let b = Fp::from(42);
         let p_circuit = MyCircuit { a: Value::known(a), b: Value::known(b) };
         let public_inputs = vec![b];
-        let prover = MockProver::run(3, &p_circuit, vec![public_inputs])?;
+        let prover = MockProver::run(3, &p_circuit, vec![public_inputs]).unwrap();
         prover.assert_satisfied();
-
-        Ok(())
     }
 }

@@ -13,6 +13,8 @@ class Darkie():
         self.strategy = strategy
         self.slot = 0
         self.won_hist = [] # winning history boolean
+        self.fees = []
+        self.tips = [0]
 
     def clone(self):
         return Darkie(self.stake)
@@ -36,7 +38,7 @@ class Darkie():
     """
     def apr_scaled_to_runningtime(self):
         initial_stake = self.vesting_wrapped_initial_stake()
-        assert self.stake >= initial_stake, 'stake: {}, initial_stake: {}, slot: {}, current: {}, previous: {} vesting'.format(self.stake, initial_stake, self.slot, self.current_vesting(), self.prev_vesting())
+        #assert self.stake >= initial_stake, 'stake: {}, initial_stake: {}, slot: {}, current: {}, previous: {} vesting'.format(self.stake, initial_stake, self.slot, self.current_vesting(), self.prev_vesting())
         apr_scaled = Num(self.stake - initial_stake) / Num(initial_stake) if initial_stake>0 else 0
         if self.slot <= HEADSTART_AIRDROP:
             # during this phase, it's only called at end of epoch
@@ -66,7 +68,9 @@ class Darkie():
     update stake with vesting return every scheduled vesting period
     """
     def update_vesting(self):
-        self.stake += self.vesting_differential()
+        diff = self.vesting_differential()
+        self.stake += diff
+        return diff
 
     """
     @returns: current epoch vesting
@@ -126,6 +130,8 @@ class Darkie():
             sigmas = [   c/((self.Sigma+EPSILON)**i) * ( ((L_HP if hp else L)/fact(i)) ) for i in range(1, k+1) ]
             headstart = (BASE_L_HP if hp else BASE_L) if self.slot < HEADSTART_AIRDROP else 0
             scaled_target = approx_target_in_zk(sigmas, Num(stake)) + headstart
+            if stake>0:
+                assert scaled_target>0
             return scaled_target
 
         if self.slot % EPOCH_LENGTH ==0 and self.slot > 0:
@@ -135,9 +141,9 @@ class Darkie():
             # epoch stake is added
             self.initial_stake += [self.stake]
         T = target(self.f, self.strategy.staked_value(self.stake))
-        won = lottery(T, hp)
+        won, y = lottery(T, hp)
         self.won_hist += [won]
-
+        return y, T
     """
     update stake upon winning lottery with single lead
     """
@@ -160,3 +166,52 @@ class Darkie():
             buf+='\r\n'
             buf += 'apr: {}'.format(self.apr_scaled_to_runningtime())
             f.write(buf)
+
+    """
+    anonymous contract assumed to be random stream from uniform distribution,
+    naive emulation of smart contract based transactions with certain computational cost.
+
+    @returns: transaction emulated as series of random floats between 0,1
+    """
+    def tx(self, last_reward):
+        tx_size = random.randint(0, MAX_BLOCK_SIZE)
+        tip = self.tx_tip(tx_size, last_reward)
+        if self.stake < tip:
+            return Tx(tx_size, 0)
+        return Tx(tx_size, tip)
+
+    def tx_tip(self, tx_size, last_reward):
+        tip = random_tip_strategy()
+        apr = self.apr_scaled_to_runningtime()
+        return tip.get_tip(float(last_reward), float(apr), tx_size, self.tips[-1])
+
+    """
+    deduct tip paid to miner plus burned base fee or computational cost.
+    """
+    def pay_fee(self, fee):
+        if fee>0:
+            self.fees += [fee]
+        self.stake -= fee
+
+    def last_fee(self):
+        return self.fees[-1] if len(self.fees)>0 else 0
+
+class Tx(object):
+    def __init__(self, size, tip):
+        self.tx = [random.random() for _ in range(size)]
+        self.len = size
+        self.tip = tip
+
+    """
+    anonymous contract assumed to be of random streams from uniform distribution,
+    it's circuit execution cost it thus random.
+    naive emulation of transaction smart contract computational cost as a avg of txs sum,
+    which is random function
+
+    @returns: transaction computational cost
+    """
+    def cc(self):
+        return int(sum(self.tx) if len(self.tx)>0 else 0)
+
+    def __len__(self):
+        return len(self.tx)

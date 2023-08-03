@@ -98,7 +98,7 @@ impl MonthTasks {
 
     pub fn save(&self, dataset_path: &Path) -> TaudResult<()> {
         debug!(target: "tau", "MonthTasks::save()");
-        save_json_file::<Self>(&Self::get_path(&self.created_at, dataset_path), self)
+        save_json_file::<Self>(&Self::get_path(&self.created_at, dataset_path), self, true)
             .map_err(TaudError::Darkfi)
     }
 

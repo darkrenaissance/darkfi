@@ -48,6 +48,9 @@ mod rpc_tx;
 mod task;
 use task::sync::sync_task;
 
+/// P2P net protocols
+mod proto;
+
 /// Utility functions
 mod utils;
 use utils::{genesis_txs_total, spawn_consensus_p2p, spawn_sync_p2p};
@@ -196,6 +199,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     } else {
         darkfid.validator.write().await.synced = true;
     }
+
+    // Clean node pending transactions
+    darkfid.validator.write().await.purge_pending_txs().await?;
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new()?;

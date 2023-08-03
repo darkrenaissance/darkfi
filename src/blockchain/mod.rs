@@ -540,6 +540,30 @@ impl BlockchainOverlay {
 
         Ok(())
     }
+
+    /// Auxiliary function to create a full clone using SledDbOverlay::clone,
+    /// generating new pointers for the underlying overlays.
+    pub fn full_clone(&self) -> Result<BlockchainOverlayPtr> {
+        let overlay = Arc::new(Mutex::new(self.overlay.lock().unwrap().clone()));
+        let headers = HeaderStoreOverlay::new(&overlay)?;
+        let blocks = BlockStoreOverlay::new(&overlay)?;
+        let order = BlockOrderStoreOverlay::new(&overlay)?;
+        let slots = SlotStoreOverlay::new(&overlay)?;
+        let transactions = TxStoreOverlay::new(&overlay)?;
+        let contracts = ContractStateStoreOverlay::new(&overlay)?;
+        let wasm_bincode = WasmStoreOverlay::new(&overlay)?;
+
+        Ok(Arc::new(Mutex::new(Self {
+            overlay,
+            headers,
+            blocks,
+            order,
+            slots,
+            transactions,
+            contracts,
+            wasm_bincode,
+        })))
+    }
 }
 
 /// Parse a sled record with a u64 keyin the form of a tuple (`key`, `value`).

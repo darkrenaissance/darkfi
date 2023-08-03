@@ -48,8 +48,14 @@ pub fn load_json_file<T: DeserializeOwned>(path: &Path) -> Result<T> {
     Ok(value)
 }
 
-pub fn save_json_file<T: Serialize>(path: &Path, value: &T) -> Result<()> {
+pub fn save_json_file<T: Serialize>(path: &Path, value: &T, pretty: bool) -> Result<()> {
     let file = File::create(path)?;
-    serde_json::to_writer_pretty(file, value)?;
+
+    if pretty {
+        serde_json::to_writer_pretty(file, value)?;
+    } else {
+        serde_json::to_writer(file, value)?;
+    }
+
     Ok(())
 }

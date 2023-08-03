@@ -21,9 +21,7 @@ use async_trait::async_trait;
 use log::{debug, error};
 use smol::Executor;
 
-use darkfi_serial::{SerialDecodable, SerialEncodable};
-
-use crate::{
+use darkfi::{
     blockchain::BlockInfo,
     impl_p2p_message,
     net::{
@@ -33,6 +31,7 @@ use crate::{
     validator::ValidatorPtr,
     Result,
 };
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 // Constant defining how many blocks we send during syncing.
 const BATCH: u64 = 10;

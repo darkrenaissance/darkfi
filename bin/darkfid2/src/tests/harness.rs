@@ -36,6 +36,7 @@ use log::error;
 use url::Url;
 
 use crate::{
+    proto::BlockInfoMessage,
     task::sync::sync_task,
     utils::{genesis_txs_total, spawn_consensus_p2p, spawn_sync_p2p},
     Darkfid,
@@ -147,11 +148,11 @@ impl Harness {
     pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
         // We simply broadcast the block using Alice's sync P2P
         for block in blocks {
-            self.alice.sync_p2p.broadcast(block).await;
+            self.alice.sync_p2p.broadcast(&BlockInfoMessage::from(block)).await;
         }
 
         // and then add it to her chain
-        self.alice.validator.read().await.add_blocks(blocks).await?;
+        self.alice.validator.write().await.add_blocks(blocks).await?;
 
         Ok(())
     }
@@ -253,6 +254,8 @@ pub async fn generate_node(
     } else {
         node.validator.write().await.synced = true;
     }
+
+    node.validator.write().await.purge_pending_txs().await?;
 
     Ok(node)
 }

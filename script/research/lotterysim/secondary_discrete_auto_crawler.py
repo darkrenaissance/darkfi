@@ -3,13 +3,13 @@ from core.lottery import DarkfiTable
 from core.utils import *
 from core.darkie import Darkie
 from tqdm import tqdm
-from core.strategy import SigmoidStrategy
+from core.strategy import *
 import os
 
 AVG_LEN = 5
 
 KP_STEP=0.01
-KP_SEARCH= -0.01
+KP_SEARCH=-0.01
 
 KI_STEP=0.01
 KI_SEARCH=-0.036
@@ -17,11 +17,10 @@ KI_SEARCH=-0.036
 KD_STEP=0.01
 KD_SEARCH=0.0384
 
-EPSILON=0.0001
-RUNNING_TIME=10000
+RUNNING_TIME=1000
 NODES = 1000
 
-highest_acc = 0
+highest_acc = 0.2
 
 KP='kp'
 KI='ki'
@@ -45,12 +44,12 @@ rand_running_time = args.rand_running_time
 debug = args.debug
 
 def experiment(controller_type=CONTROLLER_TYPE_DISCRETE, kp=0, ki=0, kd=0, distribution=[], hp=True):
-    dt = DarkfiTable(ERC20DRK, RUNNING_TIME, controller_type, kp=kp, ki=ki, kd=kd)
     RND_NODES = random.randint(5, NODES) if randomize_nodes else NODES
+    dt = DarkfiTable(sum([distribution[i] for i in range(RND_NODES)]), RUNNING_TIME, controller_type, kp=kp, ki=ki, kd=kd)
     for idx in range(0,RND_NODES):
-        darkie = Darkie(distribution[idx], strategy=SigmoidStrategy(EPOCH_LENGTH))
+        darkie = Darkie(distribution[idx], strategy=random_strategy(EPOCH_LENGTH))
         dt.add_darkie(darkie)
-    acc, apy, reward, stake_ratio, apr = dt.background(rand_running_time, hp)
+    acc, cc_acc, apy, reward, stake_ratio, apr = dt.background(rand_running_time, hp)
     return acc
 
 def multi_trial_exp(kp, ki, kd, distribution = [], hp=True):

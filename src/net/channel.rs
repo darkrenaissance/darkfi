@@ -224,7 +224,7 @@ impl Channel {
         // Catch failure and stop channel, return a net error
         if let Err(e) = self.send_message(message).await {
             error!(
-                target: "net::channel::send()", "[P2P]Channel send error for [{}]: {}",
+                target: "net::channel::send()", "[P2P] Channel send error for [{}]: {}",
                 self.address(), e
             );
             self.stop().await;
@@ -306,7 +306,7 @@ impl Channel {
                     if Self::is_eof_error(&err) {
                         info!(
                             target: "net::channel::main_receive_loop()",
-                            "[net] Channel inbound connection {} disconnected",
+                            "[P2P] Channel inbound connection {} disconnected",
                             self.address(),
                         );
                     } else {

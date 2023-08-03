@@ -30,11 +30,8 @@ pub mod consensus;
 #[cfg(feature = "blockchain")]
 pub mod validator;
 
-#[cfg(feature = "dht")]
-pub mod dht;
-
-#[cfg(feature = "dht")]
-pub mod dht2;
+#[cfg(feature = "geode")]
+pub mod geode;
 
 #[cfg(feature = "event-graph")]
 pub mod event_graph;
@@ -72,9 +69,10 @@ pub const ANSI_LOGO: &str = include_str!("../contrib/darkfi.ansi");
 macro_rules! cli_desc {
     () => {{
         let desc = format!(
-            "{} {}\n{}\n{}",
+            "{} {}-{}\n{}\n{}",
             env!("CARGO_PKG_NAME").to_string(),
             env!("CARGO_PKG_VERSION").to_string(),
+            "@GIT_REV@", // Only noobs will change this
             env!("CARGO_PKG_DESCRIPTION").to_string(),
             darkfi::ANSI_LOGO,
         );

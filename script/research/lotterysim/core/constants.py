@@ -3,11 +3,11 @@ from decimal import Decimal as Num
 # number approximation terms
 N_TERM = 2
 # analogue controller enum
-CONTROLLER_TYPE_ANALOGUE=-1
+CONTROLLER_TYPE_ANALOGUE = -1
 # discrete controller enum
-CONTROLLER_TYPE_DISCRETE=0
+CONTROLLER_TYPE_DISCRETE = 0
 # takahashi controller enum
-CONTROLLER_TYPE_TAKAHASHI=1
+CONTROLLER_TYPE_TAKAHASHI = 1
 # initial distribution of tokens (random value for sake of experimentation)
 ERC20DRK = 2.1*10**7
 # initial distribution
@@ -35,19 +35,29 @@ VESTING_PERIOD = ONE_MONTH
 # stakeholder assumes  APR target
 TARGET_APR = Num(0.12)
 # primary controller assumes accuracy target
-PRIMARY_REWARD_TARGET = 0.35 # staked ratio
+PRIMARY_REWARD_TARGET = 0.33 # staked ratio
 # secondary controller assumes certain frequency of leaders per slot
 SECONDARY_LEAD_TARGET = 1 #number of lead per slot
+# maximum transaction size
+MAX_BLOCK_SIZE = 100
+# maximum transaction computational cost
+MAX_BLOCK_CC = 10
+# fee controller computational capacity target
+FEE_TARGET = MAX_BLOCK_CC
+# max fee base value
+FEE_MAX = 1
+# min fee base value
+FEE_MIN = 0.00001
 # negligible value added to denominator to avoid invalid division by zero
 EPSILON = 1
 # window of accuracy calculation
-ACC_WINDOW = int(EPOCH_LENGTH)
+ACC_WINDOW = int(EPOCH_LENGTH)*10
 # headstart airdrop period
 HEADSTART_AIRDROP = 0
 # threshold of randomly slashing stakeholder
-SLASHING_RATIO = 0.0001
+SLASHING_RATIO = 0.001
 # number of nodes
-NODES=1000
+NODES = 1000
 # headstart value
 BASE_L = NODES**-1*L*0.01
 # decimal high precision.
@@ -58,3 +68,4 @@ EPSILON_HP = Num(EPSILON)
 REWARD_MIN_HP = Num(REWARD_MIN)
 REWARD_MAX_HP = Num(REWARD_MAX)
 BASE_L_HP = Num(BASE_L)
+CC_DIFF_EPSILON=0.0001

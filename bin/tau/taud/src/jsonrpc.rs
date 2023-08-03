@@ -178,8 +178,8 @@ impl JsonRpcInterface {
         new_task.set_assign(&task.assign);
         new_task.set_tags(&task.tags);
 
-        self.notify_queue_sender.send(new_task).await.map_err(Error::from)?;
-        Ok(json!(true))
+        self.notify_queue_sender.send(new_task.clone()).await.map_err(Error::from)?;
+        Ok(json!(new_task.id))
     }
 
     // RPCAPI:
