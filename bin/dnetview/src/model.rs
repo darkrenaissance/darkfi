@@ -86,8 +86,8 @@ pub struct SessionInfo {
     pub dnet_id: String,
     pub node_id: String,
     pub addr: String,
-    pub state: String,
-    pub info: Vec<SlotInfo>,
+    pub state: Option<String>,
+    pub info: SlotInfo,
     pub is_empty: bool,
 }
 
@@ -96,8 +96,8 @@ impl SessionInfo {
         dnet_id: String,
         node_id: String,
         addr: String,
-        state: String,
-        info: Vec<SlotInfo>,
+        state: Option<String>,
+        info: SlotInfo,
         is_empty: bool,
     ) -> Self {
         Self { dnet_id, node_id, addr, state, info, is_empty }

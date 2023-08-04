@@ -98,11 +98,11 @@ impl<'a> View {
                                 if !self.ordered_list.iter().any(|i| i == &inbound.dnet_id) {
                                     self.ordered_list.push(inbound.dnet_id.clone());
                                 }
-                                for info in &inbound.info {
-                                    if !self.ordered_list.iter().any(|i| i == &info.dnet_id) {
-                                        self.ordered_list.push(info.dnet_id.clone());
-                                    }
+                                //for info in &inbound.info {
+                                if !self.ordered_list.iter().any(|i| i == &inbound.info.dnet_id) {
+                                    self.ordered_list.push(inbound.info.dnet_id.clone());
                                 }
+                                //}
                             }
                         }
                         for outbound in &node.outbound {
@@ -110,11 +110,11 @@ impl<'a> View {
                                 if !self.ordered_list.iter().any(|i| i == &outbound.dnet_id) {
                                     self.ordered_list.push(outbound.dnet_id.clone());
                                 }
-                                for info in &outbound.info {
-                                    if !self.ordered_list.iter().any(|i| i == &info.dnet_id) {
-                                        self.ordered_list.push(info.dnet_id.clone());
-                                    }
+                                //for info in &outbound.info {
+                                if !self.ordered_list.iter().any(|i| i == &outbound.info.dnet_id) {
+                                    self.ordered_list.push(outbound.info.dnet_id.clone());
                                 }
+                                //}
                             }
                         }
                     }
@@ -221,37 +221,36 @@ impl<'a> View {
                                 let lines = vec![Spans::from(name)];
                                 let names = ListItem::new(lines);
                                 nodes.push(names);
-                                for info in &inbound.info {
-                                    let mut infos = Vec::new();
-                                    match info.addr.as_str() {
-                                        "Null" => {
-                                            let style = Style::default()
-                                                .fg(Color::Blue)
-                                                .add_modifier(Modifier::ITALIC);
-                                            let name = Span::styled(
-                                                format!("        {} ", info.addr),
+                                //for info in &inbound.info {
+                                let mut infos = Vec::new();
+                                match inbound.info.addr.as_str() {
+                                    "Null" => {
+                                        let style = Style::default()
+                                            .fg(Color::Blue)
+                                            .add_modifier(Modifier::ITALIC);
+                                        let name = Span::styled(
+                                            format!("        {} ", inbound.info.addr),
+                                            style,
+                                        );
+                                        infos.push(name);
+                                    }
+                                    addr => {
+                                        let name = Span::styled(format!("        {}", addr), style);
+                                        infos.push(name);
+                                        if !inbound.info.remote_id.is_empty() {
+                                            let remote_id = Span::styled(
+                                                format!("({})", inbound.info.remote_id),
                                                 style,
                                             );
-                                            infos.push(name);
-                                        }
-                                        addr => {
-                                            let name =
-                                                Span::styled(format!("        {}", addr), style);
-                                            infos.push(name);
-                                            if !info.remote_id.is_empty() {
-                                                let remote_id = Span::styled(
-                                                    format!("({})", info.remote_id),
-                                                    style,
-                                                );
-                                                infos.push(remote_id)
-                                            }
+                                            infos.push(remote_id)
                                         }
                                     }
-
-                                    let lines = vec![Spans::from(infos)];
-                                    let names = ListItem::new(lines);
-                                    nodes.push(names);
                                 }
+
+                                let lines = vec![Spans::from(infos)];
+                                let names = ListItem::new(lines);
+                                nodes.push(names);
+                                //}
                             }
                         }
 
@@ -261,37 +260,36 @@ impl<'a> View {
                                 let lines = vec![Spans::from(name)];
                                 let names = ListItem::new(lines);
                                 nodes.push(names);
-                                for info in &outbound.info {
-                                    let mut infos = Vec::new();
-                                    match info.addr.as_str() {
-                                        "Null" => {
-                                            let style = Style::default()
-                                                .fg(Color::Blue)
-                                                .add_modifier(Modifier::ITALIC);
-                                            let name = Span::styled(
-                                                format!("        {} ", info.addr),
+                                //for info in &outbound.info {
+                                let mut infos = Vec::new();
+                                match outbound.info.addr.as_str() {
+                                    "Null" => {
+                                        let style = Style::default()
+                                            .fg(Color::Blue)
+                                            .add_modifier(Modifier::ITALIC);
+                                        let name = Span::styled(
+                                            format!("        {} ", outbound.info.addr),
+                                            style,
+                                        );
+                                        infos.push(name);
+                                    }
+                                    addr => {
+                                        let name = Span::styled(format!("        {}", addr), style);
+                                        infos.push(name);
+                                        if !outbound.info.remote_id.is_empty() {
+                                            let remote_id = Span::styled(
+                                                format!("({})", outbound.info.remote_id),
                                                 style,
                                             );
-                                            infos.push(name);
-                                        }
-                                        addr => {
-                                            let name =
-                                                Span::styled(format!("        {}", addr), style);
-                                            infos.push(name);
-                                            if !info.remote_id.is_empty() {
-                                                let remote_id = Span::styled(
-                                                    format!("({})", info.remote_id),
-                                                    style,
-                                                );
-                                                infos.push(remote_id)
-                                            }
+                                            infos.push(remote_id)
                                         }
                                     }
-
-                                    let lines = vec![Spans::from(infos)];
-                                    let names = ListItem::new(lines);
-                                    nodes.push(names);
                                 }
+
+                                let lines = vec![Spans::from(infos)];
+                                let names = ListItem::new(lines);
+                                nodes.push(names);
+                                //}
                             }
                         }
                     }
@@ -381,11 +379,22 @@ impl<'a> View {
                     let addr = Span::styled(format!("Addr: {}", session.addr), style);
                     lines.push(Spans::from(addr));
 
-                    // TODO: this will be an option
-                    let addr = Span::styled(format!("State: {}", session.state), style);
-                    lines.push(Spans::from(addr));
+                    if session.state.is_some() {
+                        let addr = Span::styled(
+                            format!("State: {}", session.state.as_ref().unwrap()),
+                            style,
+                        );
+                        lines.push(Spans::from(addr));
+                    }
                 }
                 Some(SelectableObject::Connect(connect)) => {
+                    // TODO: this renders in the top right and overwrites the msg log
+                    //let addr = Span::styled(format!("Addr: {}", connect.addr), style);
+                    //let random_id = Span::styled(format!("Random id: {}", connect.random_id), style);
+                    //let remote_id = Span::styled(format!("Remote id: {}", connect.remote_id), style);
+                    //lines.push(Spans::from(addr));
+                    //lines.push(Spans::from(random_id));
+                    //lines.push(Spans::from(remote_id));
                     //debug!(target: "dnetview", "render_info()::SelectableObject::Connect");
                     let text = self.parse_msg_list(connect.dnet_id.clone())?;
                     f.render_stateful_widget(text, slice[1], &mut self.msg_list.state);

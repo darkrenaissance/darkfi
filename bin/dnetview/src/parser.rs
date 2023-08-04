@@ -33,7 +33,7 @@ use crate::{
         LilithInfo, Model, NetworkInfo, NodeInfo, SelectableObject, Session, SessionInfo, SlotInfo,
     },
     rpc::RpcConnect,
-    util::{is_empty_session, make_empty_id, make_info_id, make_node_id, make_session_id},
+    util::{make_empty_id, make_info_id, make_node_id, make_session_id},
 };
 
 pub struct DataParser {
@@ -123,14 +123,13 @@ impl DataParser {
         let name = "Offline".to_string();
         let session_type = Session::Offline;
 
-        let mut slots: Vec<SlotInfo> = Vec::new();
         let mut sessions: Vec<SessionInfo> = Vec::new();
         let hosts = Vec::new();
 
         let node_id = make_node_id(&node_name)?;
         let dnet_id = make_empty_id(&node_id, &session_type, 0)?;
         let addr = "Null".to_string();
-        let state = "Null".to_string();
+        let state = None;
         let random_id = 0;
         let remote_id = "Null".to_string();
         let log = Vec::new();
@@ -145,7 +144,6 @@ impl DataParser {
             log,
             is_empty,
         );
-        slots.push(slot.clone());
 
         let session_info = SessionInfo::new(
             dnet_id,
@@ -153,7 +151,7 @@ impl DataParser {
             //name.clone(),
             addr.clone(),
             state,
-            slots,
+            slot,
             is_empty,
         );
         sessions.push(session_info);
@@ -233,40 +231,44 @@ impl DataParser {
         outbounds: Vec<SessionInfo>,
     ) -> DnetViewResult<()> {
         for inbound in inbounds {
-            for info in inbound.info {
-                if !self.model.msg_map.lock().await.contains_key(&info.dnet_id) {
-                    // we don't have this ID: it is a new node
-                    self.model.msg_map.lock().await.insert(info.dnet_id, info.log.clone());
-                } else {
-                    // we have this id: append the msg values
-                    match self.model.msg_map.lock().await.entry(info.dnet_id) {
-                        Entry::Vacant(e) => {
-                            e.insert(info.log);
-                        }
-                        Entry::Occupied(mut e) => {
-                            for msg in info.log {
-                                e.get_mut().push(msg);
-                            }
+            if !self.model.msg_map.lock().await.contains_key(&inbound.info.dnet_id) {
+                // we don't have this ID: it is a new node
+                self.model
+                    .msg_map
+                    .lock()
+                    .await
+                    .insert(inbound.info.dnet_id, inbound.info.log.clone());
+            } else {
+                // we have this id: append the msg values
+                match self.model.msg_map.lock().await.entry(inbound.info.dnet_id) {
+                    Entry::Vacant(e) => {
+                        e.insert(inbound.info.log);
+                    }
+                    Entry::Occupied(mut e) => {
+                        for msg in inbound.info.log {
+                            e.get_mut().push(msg);
                         }
                     }
                 }
             }
         }
         for outbound in outbounds {
-            for info in outbound.info {
-                if !self.model.msg_map.lock().await.contains_key(&info.dnet_id) {
-                    // we don't have this ID: it is a new node
-                    self.model.msg_map.lock().await.insert(info.dnet_id, info.log.clone());
-                } else {
-                    // we have this id: append the msg values
-                    match self.model.msg_map.lock().await.entry(info.dnet_id) {
-                        Entry::Vacant(e) => {
-                            e.insert(info.log);
-                        }
-                        Entry::Occupied(mut e) => {
-                            for msg in info.log {
-                                e.get_mut().push(msg);
-                            }
+            if !self.model.msg_map.lock().await.contains_key(&outbound.info.dnet_id) {
+                // we don't have this ID: it is a new node
+                self.model
+                    .msg_map
+                    .lock()
+                    .await
+                    .insert(outbound.info.dnet_id, outbound.info.log.clone());
+            } else {
+                // we have this id: append the msg values
+                match self.model.msg_map.lock().await.entry(outbound.info.dnet_id) {
+                    Entry::Vacant(e) => {
+                        e.insert(outbound.info.log);
+                    }
+                    Entry::Occupied(mut e) => {
+                        for msg in outbound.info.log {
+                            e.get_mut().push(msg);
                         }
                     }
                 }
@@ -291,14 +293,12 @@ impl DataParser {
                         .lock()
                         .await
                         .insert(inbound.clone().dnet_id, inbound_obj.clone());
-                    for info in inbound.info {
-                        let info_obj = SelectableObject::Connect(info.clone());
-                        self.model
-                            .selectables
-                            .lock()
-                            .await
-                            .insert(info.clone().dnet_id, info_obj.clone());
-                    }
+                    let info_obj = SelectableObject::Connect(inbound.info.clone());
+                    self.model
+                        .selectables
+                        .lock()
+                        .await
+                        .insert(inbound.info.clone().dnet_id, info_obj.clone());
                 }
             }
             for outbound in node.outbound {
@@ -309,14 +309,12 @@ impl DataParser {
                         .lock()
                         .await
                         .insert(outbound.clone().dnet_id, outbound_obj.clone());
-                    for info in outbound.info {
-                        let info_obj = SelectableObject::Connect(info.clone());
-                        self.model
-                            .selectables
-                            .lock()
-                            .await
-                            .insert(info.clone().dnet_id, info_obj.clone());
-                    }
+                    let info_obj = SelectableObject::Connect(outbound.info.clone());
+                    self.model
+                        .selectables
+                        .lock()
+                        .await
+                        .insert(outbound.info.clone().dnet_id, info_obj.clone());
                 }
             }
         }
@@ -330,7 +328,6 @@ impl DataParser {
         prefix: Session,
     ) -> DnetViewResult<Vec<SessionInfo>> {
         let session_id = make_session_id(&node_id, &prefix)?;
-        let mut slots: Vec<SlotInfo> = Vec::new();
         let mut session_info: Vec<SessionInfo> = Vec::new();
 
         // TODO: improve this ugly hack.
@@ -357,33 +354,31 @@ impl DataParser {
                 log,
                 is_empty,
             );
-            slots.push(slot);
-            // Check whether the session is empty.
-            let is_empty = is_empty_session(&slots);
+            let is_empty = true;
 
             let addr = "Null".to_string();
-            let state = "Null".to_string();
-            let session = SessionInfo::new(
-                session_id.clone(),
-                node_id.clone(),
-                addr,
-                state,
-                slots.clone(),
-                is_empty,
-            );
+            let state = None;
+            let session =
+                SessionInfo::new(session_id.clone(), node_id.clone(), addr, state, slot, is_empty);
             session_info.push(session);
 
             return Ok(session_info)
         }
 
         let sessions = reply.as_array().unwrap();
+        debug!(target: "dnetview", "parse_outbound() len session{:?}", sessions.len());
 
         for session in sessions {
             match session.as_object() {
                 Some(obj) => {
                     debug!(target: "dnetview", "parse_outbound() obj {:?}", session);
                     let addr = obj.get("addr").unwrap().as_str().unwrap().to_string();
-                    let state = obj.get("state").unwrap().as_str().unwrap().to_string();
+
+                    let state: Option<String> = match obj.get("state") {
+                        Some(state) => Some(state.as_str().unwrap().to_string()),
+                        None => None,
+                    };
+
                     let info: serde_json::Map<String, Value> =
                         serde_json::from_value(obj.get("info").unwrap().clone()).unwrap();
 
@@ -408,14 +403,13 @@ impl DataParser {
                         log,
                         is_empty,
                     );
-                    slots.push(slot);
 
                     let session = SessionInfo::new(
                         session_id.clone(),
                         node_id.clone(),
                         addr.clone(),
                         state,
-                        slots.clone(),
+                        slot,
                         is_empty,
                     );
                     session_info.push(session);
@@ -440,17 +434,15 @@ impl DataParser {
                         log,
                         is_empty,
                     );
-                    slots.push(slot);
-                    // Check whether the session is empty.
-                    let is_empty = is_empty_session(&slots);
+                    let is_empty = true;
 
-                    let state = "Null".to_string();
+                    let state = None;
                     let session = SessionInfo::new(
                         session_id.clone(),
                         node_id.clone(),
                         addr.clone(),
                         state,
-                        slots.clone(),
+                        slot,
                         is_empty,
                     );
                     session_info.push(session);
