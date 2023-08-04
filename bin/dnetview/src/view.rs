@@ -235,11 +235,16 @@ impl<'a> View {
                                             infos.push(name);
                                         }
                                         addr => {
-                                            let name = Span::styled(
-                                                format!("        {} ({})", addr, info.remote_id),
-                                                style,
-                                            );
+                                            let name =
+                                                Span::styled(format!("        {}", addr), style);
                                             infos.push(name);
+                                            if !info.remote_id.is_empty() {
+                                                let remote_id = Span::styled(
+                                                    format!("({})", info.remote_id),
+                                                    style,
+                                                );
+                                                infos.push(remote_id)
+                                            }
                                         }
                                     }
 
@@ -270,11 +275,16 @@ impl<'a> View {
                                             infos.push(name);
                                         }
                                         addr => {
-                                            let name = Span::styled(
-                                                format!("        {} ({})", addr, info.remote_id),
-                                                style,
-                                            );
+                                            let name =
+                                                Span::styled(format!("        {}", addr), style);
                                             infos.push(name);
+                                            if !info.remote_id.is_empty() {
+                                                let remote_id = Span::styled(
+                                                    format!("({})", info.remote_id),
+                                                    style,
+                                                );
+                                                infos.push(remote_id)
+                                            }
                                         }
                                     }
 
