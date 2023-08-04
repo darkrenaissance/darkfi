@@ -33,7 +33,7 @@ use crate::{
         LilithInfo, Model, NetworkInfo, NodeInfo, SelectableObject, Session, SessionInfo, SlotInfo,
     },
     rpc::RpcConnect,
-    util::{is_empty_session, make_connect_id, make_empty_id, make_node_id, make_session_id},
+    util::{is_empty_session, make_empty_id, make_info_id, make_node_id, make_session_id},
 };
 
 pub struct DataParser {
@@ -118,19 +118,19 @@ impl DataParser {
     }
 
     // If poll times out, inititalize data structures with empty values.
-    async fn parse_offline(&self, name: String) -> DnetViewResult<()> {
+    async fn parse_offline(&self, node_name: String) -> DnetViewResult<()> {
         let name = "Offline".to_string();
         let session_type = Session::Offline;
 
         let mut slots: Vec<SlotInfo> = Vec::new();
-        let mut info: Vec<SessionInfo> = Vec::new();
+        let mut sessions: Vec<SessionInfo> = Vec::new();
         let hosts = Vec::new();
 
-        let node_id = make_node_id(&name)?;
+        let node_id = make_node_id(&node_name)?;
         let dnet_id = make_empty_id(&node_id, &session_type, 0)?;
         let addr = "Null".to_string();
         let state = "Null".to_string();
-        let random_id = "Null".to_string();
+        let random_id = 0;
         let remote_id = "Null".to_string();
         let log = Vec::new();
         let is_empty = true;
@@ -155,11 +155,19 @@ impl DataParser {
             slots,
             is_empty,
         );
-        info.push(session_info);
+        sessions.push(session_info);
 
-        let node = NodeInfo::new(node_id.clone(), name.clone(), hosts, info.clone(), is_empty);
+        // TODO: clean this up
+        let node = NodeInfo::new(
+            node_id.clone(),
+            name.clone(),
+            hosts,
+            sessions.clone(),
+            sessions.clone(),
+            is_empty,
+        );
 
-        self.update_selectables(info, node).await?;
+        self.update_selectables(node).await?;
         Ok(())
     }
 
@@ -178,14 +186,10 @@ impl DataParser {
         let inbound = self.parse_inbound(inbound, &dnet_id).await?;
         let outbound = self.parse_outbound(outbound, &dnet_id).await?;
 
-        let mut info: Vec<SessionInfo> = Vec::new();
-        info.push(inbound.clone());
-        info.push(outbound.clone());
+        let node = NodeInfo::new(dnet_id, name, hosts, inbound.clone(), outbound.clone(), false);
 
-        let node = NodeInfo::new(dnet_id, name, hosts, info.clone(), false);
-
-        self.update_selectables(info.clone(), node).await?;
-        self.update_msgs(info.clone()).await?;
+        self.update_selectables(node).await?;
+        self.update_msgs(inbound.clone(), outbound.clone()).await?;
 
         Ok(())
     }
@@ -222,24 +226,24 @@ impl DataParser {
         Ok(())
     }
 
-    async fn update_msgs(&self, sessions: Vec<SessionInfo>) -> DnetViewResult<()> {
-        for session in sessions {
-            for connection in session.info {
-                if !self.model.msg_map.lock().await.contains_key(&connection.dnet_id) {
+    async fn update_msgs(
+        &self,
+        inbounds: Vec<SessionInfo>,
+        outbounds: Vec<SessionInfo>,
+    ) -> DnetViewResult<()> {
+        for inbound in inbounds {
+            for info in inbound.info {
+                if !self.model.msg_map.lock().await.contains_key(&info.dnet_id) {
                     // we don't have this ID: it is a new node
-                    self.model
-                        .msg_map
-                        .lock()
-                        .await
-                        .insert(connection.dnet_id, connection.log.clone());
+                    self.model.msg_map.lock().await.insert(info.dnet_id, info.log.clone());
                 } else {
                     // we have this id: append the msg values
-                    match self.model.msg_map.lock().await.entry(connection.dnet_id) {
+                    match self.model.msg_map.lock().await.entry(info.dnet_id) {
                         Entry::Vacant(e) => {
-                            e.insert(connection.log);
+                            e.insert(info.log);
                         }
                         Entry::Occupied(mut e) => {
-                            for msg in connection.log {
+                            for msg in info.log {
                                 e.get_mut().push(msg);
                             }
                         }
@@ -247,35 +251,70 @@ impl DataParser {
                 }
             }
         }
+        for outbound in outbounds {
+            for info in outbound.info {
+                if !self.model.msg_map.lock().await.contains_key(&info.dnet_id) {
+                    // we don't have this ID: it is a new node
+                    self.model.msg_map.lock().await.insert(info.dnet_id, info.log.clone());
+                } else {
+                    // we have this id: append the msg values
+                    match self.model.msg_map.lock().await.entry(info.dnet_id) {
+                        Entry::Vacant(e) => {
+                            e.insert(info.log);
+                        }
+                        Entry::Occupied(mut e) => {
+                            for msg in info.log {
+                                e.get_mut().push(msg);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         Ok(())
     }
 
-    async fn update_selectables(
-        &self,
-        sessions: Vec<SessionInfo>,
-        node: NodeInfo,
-    ) -> DnetViewResult<()> {
+    async fn update_selectables(&self, node: NodeInfo) -> DnetViewResult<()> {
         if node.is_offline {
             let node_obj = SelectableObject::Node(node.clone());
             self.model.selectables.lock().await.insert(node.dnet_id.clone(), node_obj.clone());
         } else {
             let node_obj = SelectableObject::Node(node.clone());
             self.model.selectables.lock().await.insert(node.dnet_id.clone(), node_obj.clone());
-            for session in sessions {
-                if !session.is_empty {
-                    let session_obj = SelectableObject::Session(session.clone());
+            for inbound in node.inbound {
+                if !inbound.is_empty {
+                    let inbound_obj = SelectableObject::Session(inbound.clone());
                     self.model
                         .selectables
                         .lock()
                         .await
-                        .insert(session.clone().dnet_id, session_obj.clone());
-                    for connect in session.info {
-                        let connect_obj = SelectableObject::Connect(connect.clone());
+                        .insert(inbound.clone().dnet_id, inbound_obj.clone());
+                    for info in inbound.info {
+                        let info_obj = SelectableObject::Connect(info.clone());
                         self.model
                             .selectables
                             .lock()
                             .await
-                            .insert(connect.clone().dnet_id, connect_obj.clone());
+                            .insert(info.clone().dnet_id, info_obj.clone());
+                    }
+                }
+            }
+            for outbound in node.outbound {
+                if !outbound.is_empty {
+                    let outbound_obj = SelectableObject::Session(outbound.clone());
+                    self.model
+                        .selectables
+                        .lock()
+                        .await
+                        .insert(outbound.clone().dnet_id, outbound_obj.clone());
+                    for info in outbound.info {
+                        let info_obj = SelectableObject::Connect(info.clone());
+                        self.model
+                            .selectables
+                            .lock()
+                            .await
+                            .insert(info.clone().dnet_id, info_obj.clone());
                     }
                 }
             }
@@ -283,35 +322,43 @@ impl DataParser {
         Ok(())
     }
 
-    async fn _parse_external_addr(&self, addr: &Option<&Value>) -> DnetViewResult<Option<String>> {
-        match addr {
-            Some(addr) => match addr.as_str() {
-                Some(addr) => Ok(Some(addr.to_string())),
-                None => Ok(None),
-            },
-            None => Err(DnetViewError::NoExternalAddr),
-        }
-    }
+    //async fn _parse_external_addr(&self, addr: &Option<&Value>) -> DnetViewResult<Option<String>> {
+    //    match addr {
+    //        Some(addr) => match addr.as_str() {
+    //            Some(addr) => Ok(Some(addr.to_string())),
+    //            None => Ok(None),
+    //        },
+    //        None => Err(DnetViewError::NoExternalAddr),
+    //    }
+    //}
 
-    async fn parse_inbound(&self, reply: &Value, node_id: &String) -> DnetViewResult<SessionInfo> {
+    async fn parse_inbound(
+        &self,
+        reply: &Value,
+        node_id: &String,
+    ) -> DnetViewResult<Vec<SessionInfo>> {
         let name = "Inbound".to_string();
         let session_type = Session::Inbound;
-        let dnet_id = make_session_id(node_id, &session_type)?;
-        let mut info: Vec<SlotInfo> = Vec::new();
+        let session_id = make_session_id(node_id, &session_type)?;
+        let mut slots: Vec<SlotInfo> = Vec::new();
+        let mut sessions: Vec<SessionInfo> = Vec::new();
 
         // TODO: improve this ugly hack.
-        let slot_count = 0;
+        let mut slot_count = 0;
 
         // Dnetview is not enabled.
+        // TODO: print warning on view
         if reply.is_null() {
+            slot_count += 1;
             let dnet_id = make_empty_id(node_id, &session_type, slot_count)?;
             let node_id = node_id.to_string();
             let addr = "Null".to_string();
-            let random_id = "Null".to_string();
+            let random_id = 0;
             let remote_id = "Null".to_string();
             let log = Vec::new();
             let is_empty = true;
 
+            // info_id
             let slot = SlotInfo::new(
                 dnet_id.clone(),
                 node_id.clone(),
@@ -321,47 +368,51 @@ impl DataParser {
                 log,
                 is_empty,
             );
-            info.push(slot);
+            slots.push(slot);
             // Check whether the session is empty.
-            let is_empty = is_empty_session(&info);
+            // TODO
+            // let is_empty = is_empty_session(&slot);
+            let is_empty = true;
 
             let addr = "Null".to_string();
             let state = "Null".to_string();
             let session = SessionInfo::new(
-                dnet_id.clone(),
+                session_id.clone(),
                 node_id.clone(),
-                name,
+                name.clone(),
                 addr,
                 state,
-                info,
+                slots.clone(),
                 is_empty,
             );
-
-            return Ok(session)
+            sessions.push(session);
         }
 
         match reply.get("inbound") {
             Some(session) => {
                 let inbound: Vec<serde_json::Map<String, Value>> =
                     serde_json::from_value(session.clone()).unwrap();
-                for slot in inbound {
-                    let addr = slot.get("addr").unwrap().as_str().unwrap().to_string();
-                    let slot_info: serde_json::Map<String, Value> =
-                        serde_json::from_value(slot.get("info").unwrap().clone()).unwrap();
+                for session in inbound {
+                    let addr = session.get("addr").unwrap().as_str().unwrap().to_string();
+                    let info: serde_json::Map<String, Value> =
+                        serde_json::from_value(session.get("info").unwrap().clone()).unwrap();
 
-                    let slot_addr = slot_info.get("addr").unwrap().as_str().unwrap().to_string();
-                    let random_id =
-                        slot_info.get("random_id").unwrap().as_str().unwrap().to_string();
-                    let remote_id =
-                        slot_info.get("remote_id").unwrap().as_str().unwrap().to_string();
+                    let slot_addr = info.get("addr").unwrap().as_str().unwrap().to_string();
+                    let random_id = info.get("random_id").unwrap().as_u64().unwrap();
+                    let remote_id = info.get("remote_id").unwrap().as_str().unwrap().to_string();
+                    let info_id = make_info_id(&random_id)?;
 
                     let log: Vec<(NanoTimestamp, String, String)> =
-                        serde_json::from_value(slot_info.get("log").unwrap().clone()).unwrap();
+                        serde_json::from_value(info.get("log").unwrap().clone()).unwrap();
+
+                    // ...
                     let node_id = node_id.to_string();
                     let is_empty = false;
+                    // TODO: make this an option
+                    let state = String::new();
 
                     let slot = SlotInfo::new(
-                        dnet_id.clone(),
+                        info_id.clone(),
                         node_id.clone(),
                         slot_addr,
                         random_id,
@@ -369,80 +420,88 @@ impl DataParser {
                         log,
                         is_empty,
                     );
-                    info.push(slot);
-                }
+                    slots.push(slot);
 
-                // TODO: fixme
-                let addr = String::new();
-                // TODO: this should be an option
-                let state = String::new();
-                let node_id = node_id.to_string();
-                let is_empty = false;
-                let session =
-                    SessionInfo::new(dnet_id, node_id.clone(), name, addr, state, info, is_empty);
-                Ok(session)
+                    let session = SessionInfo::new(
+                        session_id.clone(),
+                        node_id.clone(),
+                        name.clone(),
+                        addr,
+                        state,
+                        slots.clone(),
+                        is_empty,
+                    );
+                    sessions.push(session);
+                }
             }
             None => {
                 // Empty data. Initialize empty values.
                 // TODO: clean up empty info boilerplate.
-                let dnet_id = make_empty_id(node_id, &session_type, slot_count)?;
+                slot_count += 1;
+                let info_id = make_empty_id(node_id, &session_type, slot_count)?;
                 let node_id = node_id.to_string();
                 let addr = "Null".to_string();
-                let random_id = "Null".to_string();
+                let random_id = 0;
                 let remote_id = "Null".to_string();
                 let log = Vec::new();
                 let is_empty = true;
 
                 let slot = SlotInfo::new(
-                    dnet_id.clone(),
+                    info_id.clone(),
                     node_id.clone(),
-                    addr,
+                    addr.clone(),
                     random_id,
                     remote_id,
                     log,
                     is_empty,
                 );
-                info.push(slot);
+                slots.push(slot);
                 // Check whether the session is empty.
-                let is_empty = is_empty_session(&info);
+                let is_empty = is_empty_session(&slots);
 
-                let addr = "Null".to_string();
                 let state = "Null".to_string();
                 let session = SessionInfo::new(
-                    dnet_id.clone(),
+                    session_id.clone(),
                     node_id.clone(),
                     name,
                     addr,
                     state,
-                    info,
+                    slots,
                     is_empty,
                 );
-                return Ok(session)
+                sessions.push(session);
             }
         }
+        Ok(sessions)
     }
 
-    async fn parse_outbound(&self, reply: &Value, node_id: &String) -> DnetViewResult<SessionInfo> {
+    async fn parse_outbound(
+        &self,
+        reply: &Value,
+        node_id: &String,
+    ) -> DnetViewResult<Vec<SessionInfo>> {
         let name = "Outbound".to_string();
         let session_type = Session::Outbound;
-        let dnet_id = make_session_id(node_id, &session_type)?;
-        let mut info: Vec<SlotInfo> = Vec::new();
+        let session_id = make_session_id(node_id, &session_type)?;
+        let mut slots: Vec<SlotInfo> = Vec::new();
+        let mut sessions: Vec<SessionInfo> = Vec::new();
 
         // TODO: improve this ugly hack.
         let mut slot_count = 0;
 
         // Dnetview is not enabled.
         if reply.is_null() {
-            let dnet_id = make_empty_id(&node_id, &session_type, slot_count)?;
+            slot_count += 1;
+            let info_id = make_empty_id(&node_id, &session_type, slot_count)?;
             let node_id = node_id.to_string();
             let addr = "Null".to_string();
-            let random_id = "Null".to_string();
+            let random_id = 0;
             let remote_id = "Null".to_string();
             let log = Vec::new();
             let is_empty = false;
 
             let slot = SlotInfo::new(
-                dnet_id.clone(),
+                info_id.clone(),
                 node_id.clone(),
                 addr,
                 random_id,
@@ -450,32 +509,48 @@ impl DataParser {
                 log,
                 is_empty,
             );
-            info.push(slot);
+            slots.push(slot);
+            // Check whether the session is empty.
+            let is_empty = is_empty_session(&slots);
+
+            let addr = "Null".to_string();
+            let state = "Null".to_string();
+            let session = SessionInfo::new(
+                session_id.clone(),
+                node_id.clone(),
+                name.clone(),
+                addr,
+                state,
+                slots.clone(),
+                is_empty,
+            );
+            sessions.push(session);
         }
 
         match reply.get("outbound") {
             Some(session) => {
-                let inbound: Vec<serde_json::Map<String, Value>> =
+                let outbound: Vec<serde_json::Map<String, Value>> =
                     serde_json::from_value(session.clone()).unwrap();
-                for slot in inbound {
-                    let addr = slot.get("addr").unwrap().as_str().unwrap().to_string();
-                    let state = slot.get("state").unwrap().as_str().unwrap().to_string();
-                    let slot_info: serde_json::Map<String, Value> =
-                        serde_json::from_value(slot.get("info").unwrap().clone()).unwrap();
+                for session in outbound {
+                    let addr = session.get("addr").unwrap().as_str().unwrap().to_string();
+                    let state = session.get("state").unwrap().as_str().unwrap().to_string();
+                    let info: serde_json::Map<String, Value> =
+                        serde_json::from_value(session.get("info").unwrap().clone()).unwrap();
 
-                    let slot_addr = slot_info.get("addr").unwrap().as_str().unwrap().to_string();
-                    let random_id =
-                        slot_info.get("random_id").unwrap().as_str().unwrap().to_string();
-                    let remote_id =
-                        slot_info.get("remote_id").unwrap().as_str().unwrap().to_string();
+                    let slot_addr = info.get("addr").unwrap().as_str().unwrap().to_string();
+                    let random_id = info.get("random_id").unwrap().as_u64().unwrap();
+                    let remote_id = info.get("remote_id").unwrap().as_str().unwrap().to_string();
+                    let info_id = make_info_id(&random_id)?;
 
                     let log: Vec<(NanoTimestamp, String, String)> =
-                        serde_json::from_value(slot_info.get("log").unwrap().clone()).unwrap();
+                        serde_json::from_value(info.get("log").unwrap().clone()).unwrap();
+
+                    // ...
                     let node_id = node_id.to_string();
                     let is_empty = false;
 
                     let slot = SlotInfo::new(
-                        dnet_id.clone(),
+                        info_id.clone(),
                         node_id.clone(),
                         slot_addr,
                         random_id,
@@ -483,57 +558,59 @@ impl DataParser {
                         log,
                         is_empty,
                     );
-                    info.push(slot);
-                }
+                    slots.push(slot);
 
-                // TODO: fixme
-                let addr = String::new();
-                // TODO: this should be an option
-                let state = String::new();
-                let node_id = node_id.to_string();
-                let is_empty = false;
-                let session =
-                    SessionInfo::new(dnet_id, node_id.clone(), name, addr, state, info, is_empty);
-                Ok(session)
+                    let session = SessionInfo::new(
+                        session_id.clone(),
+                        node_id.clone(),
+                        name.clone(),
+                        addr.clone(),
+                        state,
+                        slots.clone(),
+                        is_empty,
+                    );
+                    sessions.push(session);
+                }
             }
             None => {
                 // Empty data. Initialize empty values.
                 // TODO: clean up empty info boilerplate.
-                let dnet_id = make_empty_id(node_id, &session_type, slot_count)?;
+                slot_count += 1;
+                let info_id = make_empty_id(node_id, &session_type, slot_count)?;
                 let node_id = node_id.to_string();
                 let addr = "Null".to_string();
-                let random_id = "Null".to_string();
+                let random_id = 0;
                 let remote_id = "Null".to_string();
                 let log = Vec::new();
                 let is_empty = true;
 
                 let slot = SlotInfo::new(
-                    dnet_id.clone(),
+                    info_id.clone(),
                     node_id.clone(),
-                    addr,
+                    addr.clone(),
                     random_id,
                     remote_id,
                     log,
                     is_empty,
                 );
-                info.push(slot);
+                slots.push(slot);
                 // Check whether the session is empty.
-                let is_empty = is_empty_session(&info);
+                let is_empty = is_empty_session(&slots);
 
-                let addr = "Null".to_string();
                 let state = "Null".to_string();
                 let session = SessionInfo::new(
-                    dnet_id.clone(),
+                    session_id.clone(),
                     node_id.clone(),
                     name,
-                    addr,
+                    addr.clone(),
                     state,
-                    info,
+                    slots,
                     is_empty,
                 );
-                return Ok(session)
+                sessions.push(session);
             }
         }
+        Ok(sessions)
     }
 
     async fn parse_hosts(&self, hosts: &Value) -> DnetViewResult<Vec<String>> {

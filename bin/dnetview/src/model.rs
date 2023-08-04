@@ -63,7 +63,8 @@ pub struct NodeInfo {
     pub dnet_id: String,
     pub name: String,
     pub hosts: Vec<String>,
-    pub info: Vec<SessionInfo>,
+    pub inbound: Vec<SessionInfo>,
+    pub outbound: Vec<SessionInfo>,
     pub is_offline: bool,
 }
 
@@ -72,10 +73,11 @@ impl NodeInfo {
         dnet_id: String,
         name: String,
         hosts: Vec<String>,
-        info: Vec<SessionInfo>,
+        inbound: Vec<SessionInfo>,
+        outbound: Vec<SessionInfo>,
         is_offline: bool,
     ) -> Self {
-        Self { dnet_id, name, hosts, info, is_offline }
+        Self { dnet_id, name, hosts, inbound, outbound, is_offline }
     }
 }
 
@@ -109,7 +111,7 @@ pub struct SlotInfo {
     pub dnet_id: String,
     pub node_id: String,
     pub addr: String,
-    pub random_id: String,
+    pub random_id: u64,
     pub remote_id: String,
     pub log: Vec<(NanoTimestamp, String, String)>,
     pub is_empty: bool,
@@ -121,7 +123,7 @@ impl SlotInfo {
         dnet_id: String,
         node_id: String,
         addr: String,
-        random_id: String,
+        random_id: u64,
         remote_id: String,
         log: Vec<(NanoTimestamp, String, String)>,
         is_empty: bool,

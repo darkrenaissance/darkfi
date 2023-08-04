@@ -17,6 +17,7 @@
  */
 
 use std::collections::HashMap;
+//use log::debug;
 
 use tui::{
     backend::Backend,
@@ -92,14 +93,26 @@ impl<'a> View {
                         self.ordered_list.push(node.dnet_id.clone());
                     }
                     if !node.is_offline {
-                        for session in &node.info {
-                            if !session.is_empty {
-                                if !self.ordered_list.iter().any(|i| i == &session.dnet_id) {
-                                    self.ordered_list.push(session.dnet_id.clone());
+                        for inbound in &node.inbound {
+                            if !inbound.is_empty {
+                                if !self.ordered_list.iter().any(|i| i == &inbound.dnet_id) {
+                                    self.ordered_list.push(inbound.dnet_id.clone());
                                 }
-                                for connection in &session.info {
-                                    if !self.ordered_list.iter().any(|i| i == &connection.dnet_id) {
-                                        self.ordered_list.push(connection.dnet_id.clone());
+                                for info in &inbound.info {
+                                    if !self.ordered_list.iter().any(|i| i == &info.dnet_id) {
+                                        self.ordered_list.push(info.dnet_id.clone());
+                                    }
+                                }
+                            }
+                        }
+                        for outbound in &node.outbound {
+                            if !outbound.is_empty {
+                                if !self.ordered_list.iter().any(|i| i == &outbound.dnet_id) {
+                                    self.ordered_list.push(outbound.dnet_id.clone());
+                                }
+                                for info in &outbound.info {
+                                    if !self.ordered_list.iter().any(|i| i == &info.dnet_id) {
+                                        self.ordered_list.push(info.dnet_id.clone());
                                     }
                                 }
                             }
@@ -201,38 +214,71 @@ impl<'a> View {
                         let lines = vec![Spans::from(name_span)];
                         let names = ListItem::new(lines);
                         nodes.push(names);
-                        for session in &node.info {
-                            if !session.is_empty {
-                                let name = Span::styled(format!("    {}", session.name), style);
+
+                        for inbound in &node.inbound {
+                            if !inbound.is_empty {
+                                let name = Span::styled(format!("    {}", inbound.name), style);
                                 let lines = vec![Spans::from(name)];
                                 let names = ListItem::new(lines);
                                 nodes.push(names);
-                                for connection in &session.info {
-                                    let mut info = Vec::new();
-                                    match connection.addr.as_str() {
+                                for info in &inbound.info {
+                                    let mut infos = Vec::new();
+                                    match info.addr.as_str() {
                                         "Null" => {
                                             let style = Style::default()
                                                 .fg(Color::Blue)
                                                 .add_modifier(Modifier::ITALIC);
                                             let name = Span::styled(
-                                                format!("        {} ", connection.addr),
+                                                format!("        {} ", info.addr),
                                                 style,
                                             );
-                                            info.push(name);
+                                            infos.push(name);
                                         }
                                         addr => {
                                             let name = Span::styled(
-                                                format!(
-                                                    "        {} ({})",
-                                                    addr, connection.remote_id
-                                                ),
+                                                format!("        {} ({})", addr, info.remote_id),
                                                 style,
                                             );
-                                            info.push(name);
+                                            infos.push(name);
                                         }
                                     }
 
-                                    let lines = vec![Spans::from(info)];
+                                    let lines = vec![Spans::from(infos)];
+                                    let names = ListItem::new(lines);
+                                    nodes.push(names);
+                                }
+                            }
+                        }
+
+                        for outbound in &node.outbound {
+                            if !outbound.is_empty {
+                                let name = Span::styled(format!("    {}", outbound.name), style);
+                                let lines = vec![Spans::from(name)];
+                                let names = ListItem::new(lines);
+                                nodes.push(names);
+                                for info in &outbound.info {
+                                    let mut infos = Vec::new();
+                                    match info.addr.as_str() {
+                                        "Null" => {
+                                            let style = Style::default()
+                                                .fg(Color::Blue)
+                                                .add_modifier(Modifier::ITALIC);
+                                            let name = Span::styled(
+                                                format!("        {} ", info.addr),
+                                                style,
+                                            );
+                                            infos.push(name);
+                                        }
+                                        addr => {
+                                            let name = Span::styled(
+                                                format!("        {} ({})", addr, info.remote_id),
+                                                style,
+                                            );
+                                            infos.push(name);
+                                        }
+                                    }
+
+                                    let lines = vec![Spans::from(infos)];
                                     let names = ListItem::new(lines);
                                     nodes.push(names);
                                 }
@@ -263,12 +309,12 @@ impl<'a> View {
         Ok(())
     }
 
-    fn parse_msg_list(&self, connect_id: String) -> DnetViewResult<List<'a>> {
+    fn parse_msg_list(&self, info_id: String) -> DnetViewResult<List<'a>> {
         let send_style = Style::default().fg(Color::LightCyan);
         let recv_style = Style::default().fg(Color::DarkGray);
         let mut texts = Vec::new();
         let mut lines = Vec::new();
-        let log = self.msg_list.msg_map.get(&connect_id);
+        let log = self.msg_list.msg_map.get(&info_id);
         match log {
             Some(values) => {
                 for (i, (t, k, v)) in values.iter().enumerate() {
@@ -315,38 +361,19 @@ impl<'a> View {
                 Some(SelectableObject::Node(node)) => {
                     //debug!(target: "dnetview", "render_info()::SelectableObject::Node");
                     lines.push(Spans::from(Span::styled("Type: Normal", style)));
-                    //match &node.external_addr {
-                    //    Some(addr) => {
-                    //        let node_info = Span::styled(format!("External addr: {}", addr), style);
-                    //        lines.push(Spans::from(node_info));
-                    //    }
-                    //    None => {
-                    //        let node_info = Span::styled("External addr: Null".to_string(), style);
-                    //        lines.push(Spans::from(node_info));
-                    //    }
-                    //}
-                    //lines.push(Spans::from(Span::styled(
-                    //    format!("P2P state: {}", node.state),
-                    //    style,
-                    //)));
+                    lines.push(Spans::from(Span::styled("Hosts:", style)));
+                    for host in &node.hosts {
+                        lines.push(Spans::from(Span::styled(format!("   {}", host), style)));
+                    }
                 }
                 Some(SelectableObject::Session(session)) => {
                     //debug!(target: "dnetview", "render_info()::SelectableObject::Session");
-                    //if session.addr.is_some() {
-                    //    let accept_addr = Span::styled(
-                    //        format!("Accept addr: {}", session.addr.as_ref().unwrap()),
-                    //        style,
-                    //    );
-                    //    lines.push(Spans::from(accept_addr));
-                    //}
-                    //if session.hosts.is_some() {
-                    //    let hosts = Span::styled("Hosts:".to_string(), style);
-                    //    lines.push(Spans::from(hosts));
-                    //    for host in session.hosts.as_ref().unwrap() {
-                    //        let host = Span::styled(format!("      {}", host), style);
-                    //        lines.push(Spans::from(host));
-                    //    }
-                    //}
+                    let addr = Span::styled(format!("Addr: {}", session.addr), style);
+                    lines.push(Spans::from(addr));
+
+                    // TODO: this will be an option
+                    let addr = Span::styled(format!("State: {}", session.state), style);
+                    lines.push(Spans::from(addr));
                 }
                 Some(SelectableObject::Connect(connect)) => {
                     //debug!(target: "dnetview", "render_info()::SelectableObject::Connect");

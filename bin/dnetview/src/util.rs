@@ -49,9 +49,9 @@ pub fn make_session_id(node_id: &str, session: &Session) -> Result<String> {
     Ok(id)
 }
 
-pub fn make_connect_id(id: &u64) -> Result<String> {
+pub fn make_info_id(id: &u64) -> Result<String> {
     let mut id = hex::encode(id.to_ne_bytes());
-    id.insert_str(0, "CONNECT");
+    id.insert_str(0, "INFO");
     Ok(id)
 }
 
@@ -118,6 +118,7 @@ pub fn make_empty_id(node_id: &str, session: &Session, count: u64) -> Result<Str
     Ok(id)
 }
 
+// TODO: Rename to is empty slot.
 pub fn is_empty_session(connects: &[SlotInfo]) -> bool {
     return connects.iter().all(|conn| conn.is_empty)
 }
