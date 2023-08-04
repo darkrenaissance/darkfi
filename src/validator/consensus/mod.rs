@@ -16,13 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_sdk::blockchain::{PidOutput, PreviousSlot, Slot};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::{error, warn};
 
 use crate::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr},
     util::time::TimeKeeper,
-    validator::verify_block,
+    validator::{consensus::pid::slot_pid_output, verify_block},
     Error, Result,
 };
 
@@ -64,6 +65,45 @@ impl Consensus {
         }
     }
 
+    /// Generate current hot/live slot for all current forks.
+    pub fn generate_slot(&mut self) -> Result<()> {
+        // Grab current slot id
+        let id = self.time_keeper.current_slot();
+
+        // If no forks exist, create a new one as a basis to extend
+        if self.forks.is_empty() {
+            self.forks.push(Fork::new(&self.blockchain)?);
+        }
+
+        // Grab previous slot information
+        let (producers, last_hashes, second_to_last_hashes) = self.previous_slot_info(id - 1)?;
+
+        for fork in self.forks.iter_mut() {
+            fork.generate_slot(id, producers, &last_hashes, &second_to_last_hashes)?;
+        }
+
+        Ok(())
+    }
+
+    /// Retrieve previous slot producers, last proposal hashes,
+    /// and their second to last hashes, from all current forks.
+    fn previous_slot_info(&self, slot: u64) -> Result<(u64, Vec<blake3::Hash>, Vec<blake3::Hash>)> {
+        let mut producers = 0;
+        let mut last_hashes = vec![];
+        let mut second_to_last_hashes = vec![];
+
+        for fork in &self.forks {
+            let last_proposal = fork.last_proposal()?;
+            if last_proposal.block.header.slot == slot {
+                producers += 1;
+            }
+            last_hashes.push(last_proposal.hash);
+            second_to_last_hashes.push(last_proposal.block.header.previous);
+        }
+
+        Ok((producers, last_hashes, second_to_last_hashes))
+    }
+
     /// Given a proposal, the node verifys it and finds which fork it extends.
     /// If the proposal extends the canonical blockchain, a new fork chain is created.
     /// A proposal is considered valid when the following rules apply:
@@ -71,7 +111,9 @@ impl Consensus {
     ///     2. Proposal refers to current slot
     ///     3. Proposal hash matches the actual block one
     ///     4. Block transactions don't exceed set limit
-    ///     5. Block is valid
+    ///     5. If proposal extends a known fork, verify block slots
+    ///        correspond to the fork hot/live ones
+    ///     6. Block is valid
     /// Additional validity rules can be applied.
     pub async fn append_proposal(&mut self, proposal: &Proposal) -> Result<()> {
         // Generate a time keeper for current slot
@@ -115,13 +157,28 @@ impl Consensus {
         // Check if proposal extends any existing forks
         let (mut fork, index) = self.find_extended_fork(proposal).await?;
 
+        // Verify block slots correspond to the forks' hot/live ones (5)
+        if !fork.slots.is_empty() && fork.slots != proposal.block.slots {
+            return Err(Error::ProposalContainsUnknownSlots)
+        }
+
+        // Insert last block slot so transactions can be validated against.
+        // Rest (empty) slots will be inserted along with the block.
+        // Since this fork uses an overlay clone, original overlay is not affected.
+        fork.overlay.lock().unwrap().slots.insert(&[proposal
+            .block
+            .slots
+            .last()
+            .unwrap()
+            .clone()])?;
+
         // Grab overlay last block
         let previous = fork.overlay.lock().unwrap().last_block()?;
 
         // Retrieve expected reward
         let expected_reward = next_block_reward();
 
-        // Verify proposal block (5)
+        // Verify proposal block (6)
         if verify_block(
             &fork.overlay,
             &time_keeper,
@@ -141,6 +198,7 @@ impl Consensus {
         // If a fork index was found, replace forks with the mutated one,
         // otherwise push the new fork.
         fork.proposals.push(proposal.hash);
+        fork.slots = vec![];
         match index {
             Some(i) => {
                 self.forks[i] = fork;
@@ -273,6 +331,8 @@ pub struct Fork {
     pub overlay: BlockchainOverlayPtr,
     /// Fork proposal hashes sequence
     pub proposals: Vec<blake3::Hash>,
+    /// Hot/live slots
+    pub slots: Vec<Slot>,
     /// Valid pending transaction hashes
     pub mempool: Vec<blake3::Hash>,
 }
@@ -280,7 +340,57 @@ pub struct Fork {
 impl Fork {
     pub fn new(blockchain: &Blockchain) -> Result<Self> {
         let overlay = BlockchainOverlay::new(blockchain)?;
-        Ok(Self { overlay, proposals: vec![], mempool: vec![] })
+        Ok(Self { overlay, proposals: vec![], slots: vec![], mempool: vec![] })
+    }
+
+    /// Auxiliary function to retrieve last proposal
+    pub fn last_proposal(&self) -> Result<Proposal> {
+        let block = if self.proposals.is_empty() {
+            self.overlay.lock().unwrap().last_block()?
+        } else {
+            self.overlay.lock().unwrap().get_blocks_by_hash(&[*self.proposals.last().unwrap()])?[0]
+                .clone()
+        };
+
+        Ok(Proposal::new(block))
+    }
+
+    /// Generate current hot/live slot
+    pub fn generate_slot(
+        &mut self,
+        id: u64,
+        producers: u64,
+        last_hashes: &[blake3::Hash],
+        second_to_last_hashes: &[blake3::Hash],
+    ) -> Result<()> {
+        // Grab last known fork slot
+        let previous_slot = if self.slots.is_empty() {
+            self.overlay.lock().unwrap().slots.get_last()?
+        } else {
+            self.slots.last().unwrap().clone()
+        };
+
+        // Generate previous slot information
+        let previous = PreviousSlot::new(
+            producers,
+            last_hashes.to_vec(),
+            second_to_last_hashes.to_vec(),
+            previous_slot.pid.error,
+        );
+
+        // Generate PID controller output
+        let (f, error, sigma1, sigma2) = slot_pid_output(&previous_slot, producers);
+        let pid = PidOutput::new(f, error, sigma1, sigma2);
+
+        // Each slot starts as an empty slot(not reward) when generated, carrying
+        // last eta
+        let last_eta = previous_slot.last_eta;
+        let total_tokens = previous_slot.total_tokens + previous_slot.reward;
+        let reward = 0;
+        let slot = Slot::new(id, previous, pid, last_eta, total_tokens, reward);
+        self.slots.push(slot);
+
+        Ok(())
     }
 
     /// Auxiliary function to create a full clone using BlockchainOverlay::full_clone.
@@ -289,9 +399,10 @@ impl Fork {
     pub fn full_clone(&self) -> Result<Self> {
         let overlay = self.overlay.lock().unwrap().full_clone()?;
         let proposals = self.proposals.clone();
+        let slots = self.slots.clone();
         let mempool = self.mempool.clone();
 
-        Ok(Self { overlay, proposals, mempool })
+        Ok(Self { overlay, proposals, slots, mempool })
     }
 }
 

@@ -260,4 +260,12 @@ impl SlotStoreOverlay {
 
         Ok(ret)
     }
+
+    /// Fetch the last slot from the overlay, based on the `Ord`
+    /// implementation for `Vec<u8>`.
+    pub fn get_last(&self) -> Result<Slot> {
+        let found = self.0.lock().unwrap().last(SLED_SLOT_TREE)?.unwrap();
+        let slot = deserialize(&found.1)?;
+        Ok(slot)
+    }
 }

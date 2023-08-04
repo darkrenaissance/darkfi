@@ -172,8 +172,7 @@ impl ProtocolSync {
                 let lock = self.state.read().await;
                 let current = lock.consensus.time_keeper.current_slot();
                 let participating = lock.consensus.participating;
-                if participating.is_some() {
-                    let slot = participating.unwrap();
+                if let Some(slot) = participating {
                     if current >= slot {
                         debug!(
                             target: "consensus::protocol_sync::handle_receive_block()",
@@ -308,8 +307,7 @@ impl ProtocolSync {
                 let lock = self.state.read().await;
                 let current = lock.consensus.time_keeper.current_slot();
                 let participating = lock.consensus.participating;
-                if participating.is_some() {
-                    let slot = participating.unwrap();
+                if let Some(slot) = participating {
                     if current >= slot {
                         debug!(
                             target: "consensus::protocol_sync::handle_receive_slot()",
