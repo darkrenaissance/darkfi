@@ -217,7 +217,7 @@ impl<'a> View {
 
                         for inbound in &node.inbound {
                             if !inbound.is_empty {
-                                let name = Span::styled(format!("    {}", inbound.name), style);
+                                let name = Span::styled(format!("    Inbound"), style);
                                 let lines = vec![Spans::from(name)];
                                 let names = ListItem::new(lines);
                                 nodes.push(names);
@@ -252,7 +252,7 @@ impl<'a> View {
 
                         for outbound in &node.outbound {
                             if !outbound.is_empty {
-                                let name = Span::styled(format!("    {}", outbound.name), style);
+                                let name = Span::styled(format!("    Outbound"), style);
                                 let lines = vec![Spans::from(name)];
                                 let names = ListItem::new(lines);
                                 nodes.push(names);

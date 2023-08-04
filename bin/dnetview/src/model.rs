@@ -85,7 +85,6 @@ impl NodeInfo {
 pub struct SessionInfo {
     pub dnet_id: String,
     pub node_id: String,
-    pub name: String,
     pub addr: String,
     pub state: String,
     pub info: Vec<SlotInfo>,
@@ -96,13 +95,12 @@ impl SessionInfo {
     pub fn new(
         dnet_id: String,
         node_id: String,
-        name: String,
         addr: String,
         state: String,
         info: Vec<SlotInfo>,
         is_empty: bool,
     ) -> Self {
-        Self { dnet_id, node_id, name, addr, state, info, is_empty }
+        Self { dnet_id, node_id, addr, state, info, is_empty }
     }
 }
 
