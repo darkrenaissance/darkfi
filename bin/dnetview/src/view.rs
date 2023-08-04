@@ -89,7 +89,8 @@ impl<'a> View {
             match obj {
                 SelectableObject::Node(node) => {
                     if !self.ordered_list.iter().any(|i| i == &node.dnet_id) {
-                        self.ordered_list.push(node.dnet_id.clone()); }
+                        self.ordered_list.push(node.dnet_id.clone());
+                    }
                     if !node.is_offline {
                         for session in &node.info {
                             if !session.is_empty {

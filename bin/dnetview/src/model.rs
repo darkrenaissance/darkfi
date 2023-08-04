@@ -126,15 +126,7 @@ impl SlotInfo {
         log: Vec<(NanoTimestamp, String, String)>,
         is_empty: bool,
     ) -> Self {
-        Self {
-            dnet_id,
-            addr,
-            random_id,
-            remote_id,
-            log,
-            node_id,
-            is_empty,
-        }
+        Self { dnet_id, addr, random_id, remote_id, log, node_id, is_empty }
     }
 }
 
