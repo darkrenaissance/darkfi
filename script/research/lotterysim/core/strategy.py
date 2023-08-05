@@ -140,6 +140,7 @@ class RewardApr(Tip):
 
     def get_tip(self, last_reward, apr, size, last_tip):
         apr_relu = max(apr, 0)
+        apr_relu = min(apr_relu, 1)
         return last_reward*apr_relu
 
 class TenthRewardApr(Tip):
@@ -149,6 +150,7 @@ class TenthRewardApr(Tip):
 
     def get_tip(self, last_reward, apr, size, last_tip):
         apr_relu = max(apr, 0)
+        apr_relu = min(apr_relu, 1)
         return last_reward*apr_relu/10
 
 
@@ -194,4 +196,4 @@ class Generous(Tip):
 
 
 def random_tip_strategy():
-    return random.choice([ZeroTip(),  HundredthOfReward(), MilthOfReward(), RewardApr(), TenthCCApr(), HundredthCCApr(), MilthCCApr(), Conservative(), Generous()])
+    return random.choice([ZeroTip(),  MilthOfReward(), MilthCCApr(), Conservative(), Generous()])

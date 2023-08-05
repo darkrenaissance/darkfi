@@ -25,7 +25,7 @@ REWARD_MAX = 1000
 # slot length in seconds
 SLOT = 90
 # epoch length in slots
-EPOCH_LENGTH = 10
+EPOCH_LENGTH = 100
 # one month in slots
 ONE_MONTH = 60*60*24*30/SLOT
 # one year in slots
@@ -53,9 +53,9 @@ EPSILON = 1
 # window of accuracy calculation
 ACC_WINDOW = int(EPOCH_LENGTH)*10
 # headstart airdrop period
-HEADSTART_AIRDROP = 500
+HEADSTART_AIRDROP = ONE_MONTH
 # threshold of randomly slashing stakeholder
-SLASHING_RATIO = 0.001
+SLASHING_RATIO = 0.00001
 # number of nodes
 NODES = 1000
 # headstart value
@@ -69,4 +69,4 @@ REWARD_MIN_HP = Num(REWARD_MIN)
 REWARD_MAX_HP = Num(REWARD_MAX)
 BASE_L_HP = Num(BASE_L)
 CC_DIFF_EPSILON=0.0001
-MIL_SLOT = 500
+MIL_SLOT = 1000

@@ -48,7 +48,6 @@ class DarkfiTable:
         rand_running_time = random.randint(1,self.running_time) if rand_running_time else self.running_time
         self.running_time = rand_running_time
         rt_range = tqdm(np.arange(0,self.running_time, 1))
-
         # loop through slots
         for slot in rt_range:
             # calculate probability of winning owning 100% of stake
@@ -85,6 +84,12 @@ class DarkfiTable:
             rt_range.set_description('epoch: {}, fork: {}, winners: {}, issuance {} DRK, f: {}, acc: {}%, stake: {}%, sr: {}%, reward:{}, apr: {}%, basefee: {}, avg(fee): {}, cc_diff: {}, avg(y): {}, avg(T): {}'.format(int(slot/EPOCH_LENGTH), self.merge_length(), self.winners[-1], round(self.Sigma,2), round(f, 5), round(self.secondary_pid.acc()*100, 2), round(total_stake/self.Sigma*100 if self.Sigma>0 else 0,2), round(self.avg_stake_ratio()*100,2) , round(self.rewards[-1],2), round(self.avg_apr()*100,2), round(base_fee, 5),  round(avg_tip, 2), round(cc_diff, 5), round(float(avg_y), 2), round(float(avg_t), 2)))
             #assert round(total_stake,1) <= round(self.Sigma,1), 'stake: {}, sigma: {}'.format(total_stake, self.Sigma)
             slot+=1
+            step = int(self.running_time/100)
+            if slot%step == 0 and slot>0:
+                self.end_time=time.time()
+                self.write()
+                self.start_time=time.time()
+
         self.end_time=time.time()
         avg_reward = sum(self.rewards)/len(self.rewards)
         stake_ratio = self.avg_stake_ratio()
