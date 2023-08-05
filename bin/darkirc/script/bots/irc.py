@@ -18,6 +18,7 @@ class IRC:
 
         # Perform user authentication
         self.irc.send(bytes("CAP LS 302\n", "UTF-8"))
+        self.irc.send(bytes("CAP REQ :no-history\n", "UTF-8"))
         self.irc.send(bytes("NICK " + botnick + "\n", "UTF-8"))
         self.irc.send(bytes("USER " + botnick + " 0 * :" + botnick + "\n", "UTF-8"))
         
