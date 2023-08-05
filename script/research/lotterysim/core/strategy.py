@@ -20,7 +20,7 @@ class Strategy(object):
         return
 
     def staked_value(self, stake):
-        return Num(self.staked_tokens_ratio[-1])*Num(stake)
+        return (self.staked_tokens_ratio[-1])*(stake)
 
 class Hodler(Strategy):
     def __init__(self, epoch_len):
@@ -39,7 +39,7 @@ class LinearStrategy(Strategy):
 
     def set_ratio(self, slot, apr):
         if slot%self.epoch_len==0:
-                sr = Num(apr)/Num(self.target)
+                sr = (apr)/(self.target)
                 if sr>1:
                     sr = 1
                 elif sr<0:
@@ -56,7 +56,7 @@ class LogarithmicStrategy(Strategy):
         if slot%self.epoch_len==0:
                 apr_ratio = math.fabs(apr/self.target)
                 fn = lambda x: (math.log(x, 10)+1)/2 * 0.95 + 0.05
-                sr = Num(fn(apr_ratio) if apr_ratio != 0 else 0)
+                sr = (fn(apr_ratio) if apr_ratio != 0 else 0)
                 if sr>1:
                     sr = 1
                 elif sr<0:
@@ -73,7 +73,7 @@ class SigmoidStrategy(Strategy):
         if slot%self.epoch_len==0:
                 apr_ratio = apr/self.target
                 apr_ratio = max(apr_ratio, 0)
-                sr = Num(2/(1+math.pow(math.e, -4*apr_ratio))-1)
+                sr = (2/(1+math.pow(math.e, -4*apr_ratio))-1)
                 if sr>1:
                     sr = 1
                 elif sr<0:
@@ -194,4 +194,4 @@ class Generous(Tip):
 
 
 def random_tip_strategy():
-    return random.choice([ZeroTip(), TenthOfReward(), HundredthOfReward(), MilthOfReward(), RewardApr(), TenthRewardApr(), TenthCCApr(), HundredthCCApr(), MilthCCApr(), Conservative(), Generous()])
+    return random.choice([ZeroTip(),  HundredthOfReward(), MilthOfReward(), RewardApr(), TenthCCApr(), HundredthCCApr(), MilthCCApr(), Conservative(), Generous()])

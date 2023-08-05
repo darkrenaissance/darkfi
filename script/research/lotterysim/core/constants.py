@@ -9,7 +9,7 @@ CONTROLLER_TYPE_DISCRETE = 0
 # takahashi controller enum
 CONTROLLER_TYPE_TAKAHASHI = 1
 # initial distribution of tokens (random value for sake of experimentation)
-ERC20DRK = 2.1*10**7
+ERC20DRK = 0
 # initial distribution
 PREMINT = ERC20DRK
 # group base/order
@@ -25,15 +25,15 @@ REWARD_MAX = 1000
 # slot length in seconds
 SLOT = 90
 # epoch length in slots
-EPOCH_LENGTH = Num(10)
+EPOCH_LENGTH = 10
 # one month in slots
-ONE_MONTH = Num(60*60*24*30/SLOT)
+ONE_MONTH = 60*60*24*30/SLOT
 # one year in slots
-ONE_YEAR = Num(365.25*24*60*60/SLOT)
+ONE_YEAR = 365.25*24*60*60/SLOT
 # vesting issuance period
 VESTING_PERIOD = ONE_MONTH
 # stakeholder assumes  APR target
-TARGET_APR = Num(0.12)
+TARGET_APR = 0.12
 # primary controller assumes accuracy target
 PRIMARY_REWARD_TARGET = 0.33 # staked ratio
 # secondary controller assumes certain frequency of leaders per slot
@@ -53,13 +53,13 @@ EPSILON = 1
 # window of accuracy calculation
 ACC_WINDOW = int(EPOCH_LENGTH)*10
 # headstart airdrop period
-HEADSTART_AIRDROP = 0
+HEADSTART_AIRDROP = 500
 # threshold of randomly slashing stakeholder
 SLASHING_RATIO = 0.001
 # number of nodes
 NODES = 1000
 # headstart value
-BASE_L = NODES**-1*L*0.01
+BASE_L = NODES**-1*L
 # decimal high precision.
 L_HP = Num(L)
 F_MIN_HP = Num(F_MIN)
@@ -69,3 +69,4 @@ REWARD_MIN_HP = Num(REWARD_MIN)
 REWARD_MAX_HP = Num(REWARD_MAX)
 BASE_L_HP = Num(BASE_L)
 CC_DIFF_EPSILON=0.0001
+MIL_SLOT = 500
