@@ -67,7 +67,7 @@ struct EventNode<T: Send + Sync> {
 pub type ModelPtr<T> = Arc<Mutex<Model<T>>>;
 
 pub struct Model<T: Send + Sync + Debug> {
-    // This is periodically updated so we discard old nodes
+    // This is up to the application to reset or keep
     current_root: EventId,
     orphans: HashMap<EventId, Event<T>>,
     event_map: HashMap<EventId, EventNode<T>>,
