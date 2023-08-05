@@ -17,6 +17,7 @@ class Darkie():
         self.tips = [0]
         self.idx=idx
         self.aprs = [] #milinial aprs. every 1k slots ~ 1day
+        self.slashed = False
 
     def clone(self):
         return Darkie(self.stake)
@@ -176,6 +177,7 @@ class Darkie():
             buf += '\r\n'
             buf += 'mil-aprs: {}'.format(','.join([str(apr) for apr in self.aprs]))
             buf += '\r\n'
+            buf += 'slashed: {}'.format(str(self.slashed))
             f.write(buf)
 
     """
@@ -206,6 +208,9 @@ class Darkie():
 
     def last_fee(self):
         return self.fees[-1] if len(self.fees)>0 else 0
+
+    def set_slashed(self):
+        self.slashed = True
 
 class Tx(object):
     def __init__(self, size, tip, idx):

@@ -33,9 +33,9 @@ ONE_YEAR = 365.25*24*60*60/SLOT
 # vesting issuance period
 VESTING_PERIOD = ONE_MONTH
 # stakeholder assumes  APR target
-TARGET_APR = 0.12
+TARGET_APR = 0.15
 # primary controller assumes accuracy target
-PRIMARY_REWARD_TARGET = 0.33 # staked ratio
+PRIMARY_REWARD_TARGET = 0.35 # staked ratio
 # secondary controller assumes certain frequency of leaders per slot
 SECONDARY_LEAD_TARGET = 1 #number of lead per slot
 # maximum transaction size
@@ -55,7 +55,7 @@ ACC_WINDOW = int(EPOCH_LENGTH)*10
 # headstart airdrop period
 HEADSTART_AIRDROP = ONE_MONTH
 # threshold of randomly slashing stakeholder
-SLASHING_RATIO = 0.00001
+SLASHING_RATIO = 0.000005
 # number of nodes
 NODES = 1000
 # headstart value

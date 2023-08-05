@@ -28,6 +28,10 @@ class Hodler(Strategy):
         self.type = 'hodler'
 
     def set_ratio(self, slot, apr):
+        if slot < HEADSTART_AIRDROP:
+            self.staked_tokens_ratio += [1]
+            self.annual_return +=[apr]
+            return
         if slot%self.epoch_len==0:
             self.staked_tokens_ratio += [1]
             self.annual_return +=[apr]
@@ -38,6 +42,10 @@ class LinearStrategy(Strategy):
         self.type = 'linear'
 
     def set_ratio(self, slot, apr):
+        if slot < HEADSTART_AIRDROP:
+            self.staked_tokens_ratio += [1]
+            self.annual_return +=[apr]
+            return
         if slot%self.epoch_len==0:
                 sr = (apr)/(self.target)
                 if sr>1:
@@ -53,6 +61,10 @@ class LogarithmicStrategy(Strategy):
         self.type = 'logarithmic'
 
     def set_ratio(self, slot, apr):
+        if slot < HEADSTART_AIRDROP:
+            self.staked_tokens_ratio += [1]
+            self.annual_return +=[apr]
+            return
         if slot%self.epoch_len==0:
                 apr_ratio = math.fabs(apr/self.target)
                 fn = lambda x: (math.log(x, 10)+1)/2 * 0.95 + 0.05
@@ -70,6 +82,10 @@ class SigmoidStrategy(Strategy):
         self.type = 'sigmoid'
 
     def set_ratio(self, slot, apr):
+        if slot < HEADSTART_AIRDROP:
+            self.staked_tokens_ratio += [1]
+            self.annual_return +=[apr]
+            return
         if slot%self.epoch_len==0:
                 apr_ratio = apr/self.target
                 apr_ratio = max(apr_ratio, 0)
@@ -196,4 +212,4 @@ class Generous(Tip):
 
 
 def random_tip_strategy():
-    return random.choice([ZeroTip(),  MilthOfReward(), MilthCCApr(), Conservative(), Generous()])
+    return random.choice([ZeroTip(), RewardApr(), TenthReward(), HundredthOfReward(), TenthRewardApr(), MilthOfReward(), TenthCCApr(), HundredthCCApr(), MilthCCApr(), Conservative(), Generous()])
