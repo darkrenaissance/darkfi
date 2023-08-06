@@ -25,7 +25,7 @@ use log::info;
 use simplelog::*;
 use smol::Executor;
 use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
-use tui::{
+use ratatui::{
     backend::{Backend, TermionBackend},
     Terminal,
 };

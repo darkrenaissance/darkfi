@@ -19,11 +19,11 @@
 use log::debug;
 use std::collections::HashMap;
 
-use tui::{
+use ratatui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Span, Spans},
+    text::{Span, Line},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
@@ -162,7 +162,7 @@ impl<'a> View {
             .constraints(cnstrnts)
             .split(f.size());
 
-        self.render_left(f, slice.clone())?;
+        self.render_left(f, slice[0])?;
         if self.ordered_list.is_empty() {
             // we have not received any data
             Ok(())
@@ -172,7 +172,7 @@ impl<'a> View {
                 Some(i) => match self.ordered_list.get(i) {
                     Some(i) => {
                         let id = i.clone();
-                        self.render_right(f, slice, id)?;
+                        self.render_right(f, slice[1], id)?;
                         Ok(())
                     }
                     None => Err(DnetViewError::NoIdAtIndex),
@@ -186,7 +186,7 @@ impl<'a> View {
     fn render_left<B: Backend>(
         &mut self,
         f: &mut Frame<'_, B>,
-        slice: Vec<Rect>,
+        slice: Rect,
     ) -> DnetViewResult<()> {
         let style = Style::default();
         let mut nodes = Vec::new();
@@ -201,7 +201,7 @@ impl<'a> View {
                         name.push_str(&node.name);
                         name.push_str("(Offline)");
                         let name_span = Span::styled(name, style);
-                        let lines = vec![Spans::from(name_span)];
+                        let lines = vec![Line::from(name_span)];
                         let names = ListItem::new(lines);
                         nodes.push(names);
                     } else {
@@ -213,18 +213,18 @@ impl<'a> View {
                             name.push_str(&node.name);
                             name.push_str("(dnetview is not enabled)");
                             let name_span = Span::styled(name, style);
-                            let lines = vec![Spans::from(name_span)];
+                            let lines = vec![Line::from(name_span)];
                             let names = ListItem::new(lines);
                             nodes.push(names);
                         } else {
                             let name_span = Span::raw(&node.name);
-                            let lines = vec![Spans::from(name_span)];
+                            let lines = vec![Line::from(name_span)];
                             let names = ListItem::new(lines);
                             nodes.push(names);
 
                             if !node.inbound.is_empty() {
                                 let name = Span::styled(format!("    Inbound"), style);
-                                let lines = vec![Spans::from(name)];
+                                let lines = vec![Line::from(name)];
                                 let names = ListItem::new(lines);
                                 nodes.push(names);
 
@@ -254,7 +254,7 @@ impl<'a> View {
                                             }
                                         }
                                     }
-                                    let lines = vec![Spans::from(infos)];
+                                    let lines = vec![Line::from(infos)];
                                     let names = ListItem::new(lines);
                                     nodes.push(names);
                                 }
@@ -262,7 +262,7 @@ impl<'a> View {
 
                             if !&node.outbound.is_empty() {
                                 let name = Span::styled(format!("    Outbound"), style);
-                                let lines = vec![Spans::from(name)];
+                                let lines = vec![Line::from(name)];
                                 let names = ListItem::new(lines);
                                 nodes.push(names);
 
@@ -292,7 +292,7 @@ impl<'a> View {
                                             }
                                         }
                                     }
-                                    let lines = vec![Spans::from(infos)];
+                                    let lines = vec![Line::from(infos)];
                                     let names = ListItem::new(lines);
                                     nodes.push(names);
                                 }
@@ -302,12 +302,12 @@ impl<'a> View {
                 }
                 SelectableObject::Lilith(lilith) => {
                     let name_span = Span::raw(&lilith.name);
-                    let lines = vec![Spans::from(name_span)];
+                    let lines = vec![Line::from(name_span)];
                     let names = ListItem::new(lines);
                     nodes.push(names);
                     for network in &lilith.networks {
                         let name = Span::styled(format!("    {}", network.name), style);
-                        let lines = vec![Spans::from(name)];
+                        let lines = vec![Line::from(name)];
                         let names = ListItem::new(lines);
                         nodes.push(names);
                     }
@@ -318,7 +318,7 @@ impl<'a> View {
         let nodes =
             List::new(nodes).block(Block::default().borders(Borders::ALL)).highlight_symbol(">> ");
 
-        f.render_stateful_widget(nodes, slice[0], &mut self.id_menu.state);
+        f.render_stateful_widget(nodes, slice, &mut self.id_menu.state);
 
         Ok(())
     }
@@ -358,7 +358,7 @@ impl<'a> View {
     fn render_right<B: Backend>(
         &mut self,
         f: &mut Frame<'_, B>,
-        slice: Vec<Rect>,
+        slice: Rect,
         selected: String,
     ) -> DnetViewResult<()> {
         debug!(target: "dnetview", "render_right() selected ID: {}", selected.clone());
@@ -373,39 +373,39 @@ impl<'a> View {
 
             match info {
                 Some(SelectableObject::Node(node)) => {
-                    lines.push(Spans::from(Span::styled("Type: Normal", style)));
-                    lines.push(Spans::from(Span::styled("Hosts:", style)));
+                    lines.push(Line::from(Span::styled("Type: Normal", style)));
+                    lines.push(Line::from(Span::styled("Hosts:", style)));
                     for host in &node.hosts {
-                        lines.push(Spans::from(Span::styled(format!("   {}", host), style)));
+                        lines.push(Line::from(Span::styled(format!("   {}", host), style)));
                     }
                 }
                 Some(SelectableObject::Session(session)) => {
                     let addr = Span::styled(format!("Addr: {}", session.addr), style);
-                    lines.push(Spans::from(addr));
+                    lines.push(Line::from(addr));
 
                     if session.state.is_some() {
                         let addr = Span::styled(
                             format!("State: {}", session.state.as_ref().unwrap()),
                             style,
                         );
-                        lines.push(Spans::from(addr));
+                        lines.push(Line::from(addr));
                     }
                 }
                 Some(SelectableObject::Slot(slot)) => {
                     let text = self.parse_msg_list(slot.dnet_id.clone())?;
-                    f.render_stateful_widget(text, slice[1], &mut self.msg_list.state);
+                    f.render_stateful_widget(text, slice, &mut self.msg_list.state);
                 }
                 Some(SelectableObject::Lilith(_lilith)) => {
-                    lines.push(Spans::from(Span::styled("Type: Lilith", style)));
+                    lines.push(Line::from(Span::styled("Type: Lilith", style)));
                 }
                 Some(SelectableObject::Network(network)) => {
-                    lines.push(Spans::from(Span::styled("URLs:", style)));
+                    lines.push(Line::from(Span::styled("URLs:", style)));
                     for url in &network.urls {
-                        lines.push(Spans::from(Span::styled(format!("   {}", url), style)));
+                        lines.push(Line::from(Span::styled(format!("   {}", url), style)));
                     }
-                    lines.push(Spans::from(Span::styled("Hosts:", style)));
+                    lines.push(Line::from(Span::styled("Hosts:", style)));
                     for node in &network.nodes {
-                        lines.push(Spans::from(Span::styled(format!("   {}", node), style)));
+                        lines.push(Line::from(Span::styled(format!("   {}", node), style)));
                     }
                 }
                 None => return Err(DnetViewError::NotSelectableObject),
@@ -416,7 +416,7 @@ impl<'a> View {
             .block(Block::default().borders(Borders::ALL))
             .style(Style::default());
 
-        f.render_widget(graph, slice[1]);
+        f.render_widget(graph, slice);
 
         Ok(())
     }
