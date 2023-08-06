@@ -21,14 +21,14 @@ use std::{fs::File, io, io::Read};
 use async_std::sync::Arc;
 use clap::Parser;
 use easy_parallel::Parallel;
-use log::info;
-use simplelog::*;
-use smol::Executor;
-use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
+use log::{debug, info};
 use ratatui::{
     backend::{Backend, TermionBackend},
     Terminal,
 };
+use simplelog::*;
+use smol::Executor;
+use termion::{async_stdin, event::Key, input::TermRead, raw::IntoRawMode};
 
 use darkfi::util::{
     async_util,
@@ -76,11 +76,7 @@ impl DnetView {
             self.view.update(
                 self.model.msg_map.lock().await.clone(),
                 self.model.selectables.lock().await.clone(),
-                //self.model.selectables2.lock().await.clone(),
             );
-
-            //debug!(target: "dnetview::render_view()", "ID MENU: {:?}", self.view.id_menu.ids);
-            //debug!(target: "dnetview::render_view()", "SELECTABLES ID LIST: {:?}", self.model.selectables.lock().await.keys());
 
             let mut err: Option<DnetViewError> = None;
 
@@ -127,7 +123,6 @@ impl DnetView {
 
 #[async_std::main]
 async fn main() -> DnetViewResult<()> {
-    //debug!(target: "dnetview", "main() START");
     let args = Args::parse();
 
     let log_level = get_log_level(args.verbose);

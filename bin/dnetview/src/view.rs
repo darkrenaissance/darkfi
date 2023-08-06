@@ -23,7 +23,7 @@ use ratatui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Span, Line},
+    text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
@@ -71,6 +71,7 @@ impl<'a> View {
         self.make_ordered_list();
     }
 
+    // We copy the values into a string to initialize List as a StatefulObject.
     fn update_id_menu(&mut self, selectables: HashMap<String, SelectableObject>) {
         for id in selectables.keys() {
             if !self.id_menu.ids.iter().any(|i| i == id) {
@@ -79,6 +80,7 @@ impl<'a> View {
         }
     }
 
+    // We first add every selectable object into a hashmap to avoid duplicates.
     fn update_selectable(&mut self, selectables: HashMap<String, SelectableObject>) {
         for (id, obj) in selectables {
             self.selectables.insert(id, obj);
@@ -183,11 +185,7 @@ impl<'a> View {
         }
     }
 
-    fn render_left<B: Backend>(
-        &mut self,
-        f: &mut Frame<'_, B>,
-        slice: Rect,
-    ) -> DnetViewResult<()> {
+    fn render_left<B: Backend>(&mut self, f: &mut Frame<'_, B>, slice: Rect) -> DnetViewResult<()> {
         let style = Style::default();
         let mut nodes = Vec::new();
 
@@ -206,9 +204,8 @@ impl<'a> View {
                         nodes.push(names);
                     } else {
                         if !node.dnet_enabled {
-                            let style = Style::default()
-                                .fg(Color::LightBlue)
-                                .add_modifier(Modifier::BOLD);
+                            let style =
+                                Style::default().fg(Color::LightBlue).add_modifier(Modifier::BOLD);
                             let mut name = String::new();
                             name.push_str(&node.name);
                             name.push_str("(dnetview is not enabled)");

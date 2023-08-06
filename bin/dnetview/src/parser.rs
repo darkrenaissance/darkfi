@@ -74,7 +74,7 @@ impl DataParser {
                 }
             }
             self.parse_offline(node.name.clone()).await?;
-            async_util::sleep(2000).await;
+            async_util::sleep(2).await;
         }
     }
 
@@ -114,14 +114,13 @@ impl DataParser {
             }
 
             // Sleep until next poll
-            async_util::sleep(2000).await;
+            async_util::sleep(2).await;
         }
     }
 
     // If poll times out, inititalize data structures with empty values.
     async fn parse_offline(&self, node_name: String) -> DnetViewResult<()> {
         debug!(target: "dnetview", "parse_offline() START");
-        //let name = "Offline".to_string();
         let sort = Session::Offline;
 
         let mut sessions: Vec<SessionInfo> = Vec::new();
@@ -190,7 +189,6 @@ impl DataParser {
                 true
             }
         };
-        debug!("dnet_enabled? {}", dnet_enabled);
 
         let hosts = self.parse_hosts(hosts).await?;
         let inbound = self.parse_session(inbound, &node_id, Session::Inbound).await?;
@@ -439,9 +437,7 @@ impl DataParser {
                         );
                         session_info.push(session);
                     }
-                    None => {
-                        return Err(DnetViewError::ValueIsNotObject)
-                    }
+                    None => return Err(DnetViewError::ValueIsNotObject),
                 }
             }
         }
