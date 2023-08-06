@@ -31,6 +31,7 @@ pub enum Session {
     Outbound,
     //Manual,
     Offline,
+    Null,
 }
 
 #[derive(Debug, PartialEq, Clone, Serialize, Deserialize, Eq)]
@@ -66,6 +67,7 @@ pub struct NodeInfo {
     pub inbound: Vec<SessionInfo>,
     pub outbound: Vec<SessionInfo>,
     pub is_offline: bool,
+    pub dnet_enabled: bool,
 }
 
 impl NodeInfo {
@@ -76,8 +78,9 @@ impl NodeInfo {
         inbound: Vec<SessionInfo>,
         outbound: Vec<SessionInfo>,
         is_offline: bool,
+        dnet_enabled: bool,
     ) -> Self {
-        Self { dnet_id, name, hosts, inbound, outbound, is_offline }
+        Self { dnet_id, name, hosts, inbound, outbound, is_offline, dnet_enabled }
     }
 }
 

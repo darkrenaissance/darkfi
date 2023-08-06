@@ -32,6 +32,12 @@ pub fn make_network_id(node_name: &String) -> Result<String> {
     Ok(id)
 }
 
+pub fn make_null_id(node_name: &String) -> Result<String> {
+    let mut id = hex::encode(node_name);
+    id.insert_str(0, "NULL");
+    Ok(id)
+}
+
 pub fn make_session_id(node_id: &str, session: &Session) -> Result<String> {
     let mut num = 0_u64;
 
@@ -40,6 +46,7 @@ pub fn make_session_id(node_id: &str, session: &Session) -> Result<String> {
         Session::Outbound => vec!['o', 'u', 't'],
         //Session::Manual => vec!['m', 'a', 'n'],
         Session::Offline => vec!['o', 'f', 'f'],
+        Session::Null => vec!['n', 'u', 'l', 'l'],
     };
 
     for i in session_chars {
@@ -117,6 +124,19 @@ pub fn make_empty_id(node_id: &str, session: &Session, count: u64) -> Result<Str
             num += count;
             let mut id = hex::encode(num.to_ne_bytes());
             id.insert_str(0, "EMPTYOFF");
+            id
+        }
+        Session::Null => {
+            let session_chars = vec!['n', 'u', 'l', 'l'];
+            for i in session_chars {
+                num += i as u64
+            }
+            for i in node_id.chars() {
+                num += i as u64
+            }
+            num += count;
+            let mut id = hex::encode(num.to_ne_bytes());
+            id.insert_str(0, "NULL");
             id
         }
     };

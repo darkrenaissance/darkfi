@@ -33,7 +33,9 @@ use crate::{
         LilithInfo, Model, NetworkInfo, NodeInfo, SelectableObject, Session, SessionInfo, SlotInfo,
     },
     rpc::RpcConnect,
-    util::{make_empty_id, make_info_id, make_network_id, make_node_id, make_session_id},
+    util::{
+        make_empty_id, make_info_id, make_network_id, make_node_id, make_null_id, make_session_id,
+    },
 };
 
 pub struct DataParser {
@@ -119,7 +121,7 @@ impl DataParser {
     // If poll times out, inititalize data structures with empty values.
     async fn parse_offline(&self, node_name: String) -> DnetViewResult<()> {
         debug!(target: "dnetview", "parse_offline() START");
-        let name = "Offline".to_string();
+        //let name = "Offline".to_string();
         let sort = Session::Offline;
 
         let mut sessions: Vec<SessionInfo> = Vec::new();
@@ -158,11 +160,12 @@ impl DataParser {
         // TODO: clean this up
         let node = NodeInfo::new(
             node_id.clone(),
-            name.clone(),
+            node_name.clone(),
             hosts,
             sessions.clone(),
             sessions.clone(),
             is_empty,
+            true,
         );
 
         self.update_selectables(node).await?;
@@ -180,11 +183,28 @@ impl DataParser {
 
         let node_id = make_node_id(&name)?;
 
+        let dnet_enabled: bool = {
+            if hosts.is_null() && inbound.is_null() && outbound.is_null() {
+                false
+            } else {
+                true
+            }
+        };
+        debug!("dnet_enabled? {}", dnet_enabled);
+
         let hosts = self.parse_hosts(hosts).await?;
         let inbound = self.parse_session(inbound, &node_id, Session::Inbound).await?;
         let outbound = self.parse_session(outbound, &node_id, Session::Outbound).await?;
 
-        let node = NodeInfo::new(node_id, name, hosts, inbound.clone(), outbound.clone(), false);
+        let node = NodeInfo::new(
+            node_id,
+            name,
+            hosts,
+            inbound.clone(),
+            outbound.clone(),
+            false,
+            dnet_enabled,
+        );
 
         self.update_selectables(node).await?;
         self.update_msgs(inbound.clone(), outbound.clone()).await?;
@@ -329,13 +349,10 @@ impl DataParser {
         let session_id = make_session_id(&node_id, &sort)?;
         let mut session_info: Vec<SessionInfo> = Vec::new();
 
-        // TODO: improve this ugly hack.
-        let mut slot_count = 0;
-
         // Dnetview is not enabled.
         if reply.is_null() {
-            slot_count += 1;
-            let info_id = make_empty_id(&node_id, &sort, slot_count)?;
+            let sort2 = Session::Null;
+            let info_id = make_null_id(&node_id)?;
             let node_id = node_id.to_string();
             let addr = "Null".to_string();
             let random_id = 0;
@@ -357,12 +374,13 @@ impl DataParser {
             let addr = "Null".to_string();
             let state = None;
             let session = SessionInfo::new(
-                session_id.clone(),
+                // ..
+                info_id.clone(),
                 node_id.clone(),
                 addr,
                 state,
                 slot,
-                sort.clone(),
+                sort2.clone(),
                 is_empty,
             );
             session_info.push(session);
@@ -377,7 +395,6 @@ impl DataParser {
             if !session.is_null() {
                 match session.as_object() {
                     Some(obj) => {
-                        debug!(target: "dnetview", "parse_outbound() OBJ {:?}", obj);
                         let addr = obj.get("addr").unwrap().as_str().unwrap().to_string();
 
                         let state: Option<String> = match obj.get("state") {
@@ -423,38 +440,7 @@ impl DataParser {
                         session_info.push(session);
                     }
                     None => {
-                        // TODO: clean up empty info boilerplate.
-                        slot_count += 1;
-                        let info_id = make_empty_id(node_id, &sort, slot_count)?;
-                        let node_id = node_id.to_string();
-                        let addr = "Null".to_string();
-                        let random_id = 0;
-                        let remote_id = "Null".to_string();
-                        let log = Vec::new();
-                        let is_empty = true;
-
-                        let slot = SlotInfo::new(
-                            info_id.clone(),
-                            node_id.clone(),
-                            addr.clone(),
-                            random_id,
-                            remote_id,
-                            log,
-                            is_empty,
-                        );
-                        let is_empty = true;
-
-                        let state = None;
-                        let session = SessionInfo::new(
-                            session_id.clone(),
-                            node_id.clone(),
-                            addr.clone(),
-                            state,
-                            slot.clone(),
-                            sort.clone(),
-                            is_empty,
-                        );
-                        session_info.push(session);
+                        return Err(DnetViewError::ValueIsNotObject)
                     }
                 }
             }
