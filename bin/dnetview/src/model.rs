@@ -29,7 +29,7 @@ type MsgMap = Mutex<HashMap<String, MsgLog>>;
 pub enum Session {
     Inbound,
     Outbound,
-    Manual,
+    //Manual,
     Offline,
 }
 
@@ -39,7 +39,7 @@ pub enum SelectableObject {
     Lilith(LilithInfo),
     Network(NetworkInfo),
     Session(SessionInfo),
-    Connect(SlotInfo),
+    Slot(SlotInfo),
 }
 
 #[derive(Debug)]
@@ -88,6 +88,7 @@ pub struct SessionInfo {
     pub addr: String,
     pub state: Option<String>,
     pub info: SlotInfo,
+    pub sort: Session,
     pub is_empty: bool,
 }
 
@@ -98,9 +99,10 @@ impl SessionInfo {
         addr: String,
         state: Option<String>,
         info: SlotInfo,
+        sort: Session,
         is_empty: bool,
     ) -> Self {
-        Self { dnet_id, node_id, addr, state, info, is_empty }
+        Self { dnet_id, node_id, addr, state, info, sort, is_empty }
     }
 }
 

@@ -16,8 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use log::debug;
 use std::collections::HashMap;
-//use log::debug;
 
 use tui::{
     backend::Backend,
@@ -85,6 +85,9 @@ impl<'a> View {
         }
     }
 
+    // The order of the ordered_list created here must match the order
+    // of the Vec<ListItem> created in render_left().
+    // This is used to render_right() correctly.
     fn make_ordered_list(&mut self) {
         for obj in self.selectables.values() {
             match obj {
@@ -98,11 +101,9 @@ impl<'a> View {
                                 if !self.ordered_list.iter().any(|i| i == &inbound.dnet_id) {
                                     self.ordered_list.push(inbound.dnet_id.clone());
                                 }
-                                //for info in &inbound.info {
                                 if !self.ordered_list.iter().any(|i| i == &inbound.info.dnet_id) {
                                     self.ordered_list.push(inbound.info.dnet_id.clone());
                                 }
-                                //}
                             }
                         }
                         for outbound in &node.outbound {
@@ -110,11 +111,9 @@ impl<'a> View {
                                 if !self.ordered_list.iter().any(|i| i == &outbound.dnet_id) {
                                     self.ordered_list.push(outbound.dnet_id.clone());
                                 }
-                                //for info in &outbound.info {
                                 if !self.ordered_list.iter().any(|i| i == &outbound.info.dnet_id) {
                                     self.ordered_list.push(outbound.info.dnet_id.clone());
                                 }
-                                //}
                             }
                         }
                     }
@@ -132,12 +131,10 @@ impl<'a> View {
                 _ => (),
             }
         }
-        //debug!(target: "dnetview", "render_ids()::ordered_list: {:?}", self.ordered_list);
     }
 
-    // TODO: this function is dynamically resizing the msgs index
-    // according to what set of msgs is selected.
-    // it's ugly. would prefer something more simple
+    // TODO: this function displays msgs according to what id is
+    // selected.  It's ugly, would prefer something more simple.
     fn update_msg_index(&mut self) {
         if let Some(sel) = self.id_menu.state.selected() {
             if let Some(ord) = self.ordered_list.get(sel) {
@@ -165,31 +162,28 @@ impl<'a> View {
             .constraints(cnstrnts)
             .split(f.size());
 
-        self.render_ids(f, slice.clone())?;
+        self.render_left(f, slice.clone())?;
         if self.ordered_list.is_empty() {
             // we have not received any data
             Ok(())
         } else {
             // get the id at the current index
             match self.id_menu.state.selected() {
-                Some(i) => {
-                    //debug!(target: "dnetview", "render()::selected index: {}", i);
-                    match self.ordered_list.get(i) {
-                        Some(i) => {
-                            let id = i.clone();
-                            self.render_info(f, slice, id)?;
-                            Ok(())
-                        }
-                        None => Err(DnetViewError::NoIdAtIndex),
+                Some(i) => match self.ordered_list.get(i) {
+                    Some(i) => {
+                        let id = i.clone();
+                        self.render_right(f, slice, id)?;
+                        Ok(())
                     }
-                }
+                    None => Err(DnetViewError::NoIdAtIndex),
+                },
                 // nothing is selected right now
                 None => Ok(()),
             }
         }
     }
 
-    fn render_ids<B: Backend>(
+    fn render_left<B: Backend>(
         &mut self,
         f: &mut Frame<'_, B>,
         slice: Vec<Rect>,
@@ -215,13 +209,13 @@ impl<'a> View {
                         let names = ListItem::new(lines);
                         nodes.push(names);
 
-                        for inbound in &node.inbound {
-                            if !inbound.is_empty {
-                                let name = Span::styled(format!("    Inbound"), style);
-                                let lines = vec![Spans::from(name)];
-                                let names = ListItem::new(lines);
-                                nodes.push(names);
-                                //for info in &inbound.info {
+                        if !node.inbound.is_empty() {
+                            let name = Span::styled(format!("    Inbound"), style);
+                            let lines = vec![Spans::from(name)];
+                            let names = ListItem::new(lines);
+                            nodes.push(names);
+
+                            for inbound in &node.inbound {
                                 let mut infos = Vec::new();
                                 match inbound.info.addr.as_str() {
                                     "Null" => {
@@ -246,21 +240,19 @@ impl<'a> View {
                                         }
                                     }
                                 }
-
                                 let lines = vec![Spans::from(infos)];
                                 let names = ListItem::new(lines);
                                 nodes.push(names);
-                                //}
                             }
                         }
 
-                        for outbound in &node.outbound {
-                            if !outbound.is_empty {
-                                let name = Span::styled(format!("    Outbound"), style);
-                                let lines = vec![Spans::from(name)];
-                                let names = ListItem::new(lines);
-                                nodes.push(names);
-                                //for info in &outbound.info {
+                        if !&node.outbound.is_empty() {
+                            let name = Span::styled(format!("    Outbound"), style);
+                            let lines = vec![Spans::from(name)];
+                            let names = ListItem::new(lines);
+                            nodes.push(names);
+
+                            for outbound in &node.outbound {
                                 let mut infos = Vec::new();
                                 match outbound.info.addr.as_str() {
                                     "Null" => {
@@ -285,11 +277,9 @@ impl<'a> View {
                                         }
                                     }
                                 }
-
                                 let lines = vec![Spans::from(infos)];
                                 let names = ListItem::new(lines);
                                 nodes.push(names);
-                                //}
                             }
                         }
                     }
@@ -349,12 +339,13 @@ impl<'a> View {
         Ok(msg_list)
     }
 
-    fn render_info<B: Backend>(
+    fn render_right<B: Backend>(
         &mut self,
         f: &mut Frame<'_, B>,
         slice: Vec<Rect>,
         selected: String,
     ) -> DnetViewResult<()> {
+        debug!(target: "dnetview", "render_right() selected ID: {}", selected.clone());
         let style = Style::default();
         let mut lines = Vec::new();
 
@@ -363,11 +354,9 @@ impl<'a> View {
             return Ok(())
         } else {
             let info = self.selectables.get(&selected);
-            //debug!(target: "dnetview", "render_info()::selected {}", selected);
 
             match info {
                 Some(SelectableObject::Node(node)) => {
-                    //debug!(target: "dnetview", "render_info()::SelectableObject::Node");
                     lines.push(Spans::from(Span::styled("Type: Normal", style)));
                     lines.push(Spans::from(Span::styled("Hosts:", style)));
                     for host in &node.hosts {
@@ -375,7 +364,6 @@ impl<'a> View {
                     }
                 }
                 Some(SelectableObject::Session(session)) => {
-                    //debug!(target: "dnetview", "render_info()::SelectableObject::Session");
                     let addr = Span::styled(format!("Addr: {}", session.addr), style);
                     lines.push(Spans::from(addr));
 
@@ -387,16 +375,8 @@ impl<'a> View {
                         lines.push(Spans::from(addr));
                     }
                 }
-                Some(SelectableObject::Connect(connect)) => {
-                    // TODO: this renders in the top right and overwrites the msg log
-                    //let addr = Span::styled(format!("Addr: {}", connect.addr), style);
-                    //let random_id = Span::styled(format!("Random id: {}", connect.random_id), style);
-                    //let remote_id = Span::styled(format!("Remote id: {}", connect.remote_id), style);
-                    //lines.push(Spans::from(addr));
-                    //lines.push(Spans::from(random_id));
-                    //lines.push(Spans::from(remote_id));
-                    //debug!(target: "dnetview", "render_info()::SelectableObject::Connect");
-                    let text = self.parse_msg_list(connect.dnet_id.clone())?;
+                Some(SelectableObject::Slot(slot)) => {
+                    let text = self.parse_msg_list(slot.dnet_id.clone())?;
                     f.render_stateful_widget(text, slice[1], &mut self.msg_list.state);
                 }
                 Some(SelectableObject::Lilith(_lilith)) => {

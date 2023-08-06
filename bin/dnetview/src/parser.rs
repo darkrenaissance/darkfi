@@ -33,7 +33,7 @@ use crate::{
         LilithInfo, Model, NetworkInfo, NodeInfo, SelectableObject, Session, SessionInfo, SlotInfo,
     },
     rpc::RpcConnect,
-    util::{make_empty_id, make_info_id, make_node_id, make_session_id},
+    util::{make_empty_id, make_info_id, make_network_id, make_node_id, make_session_id},
 };
 
 pub struct DataParser {
@@ -93,7 +93,6 @@ impl DataParser {
             // Parse response
             match response {
                 Ok(reply) => {
-                    debug!("dnetview:: poll() reply {:?}", reply);
                     if reply.as_object().is_none() || reply.as_object().unwrap().is_empty() {
                         return Err(DnetViewError::EmptyRpcReply)
                     }
@@ -121,13 +120,13 @@ impl DataParser {
     async fn parse_offline(&self, node_name: String) -> DnetViewResult<()> {
         debug!(target: "dnetview", "parse_offline() START");
         let name = "Offline".to_string();
-        let session_type = Session::Offline;
+        let sort = Session::Offline;
 
         let mut sessions: Vec<SessionInfo> = Vec::new();
         let hosts = Vec::new();
 
         let node_id = make_node_id(&node_name)?;
-        let dnet_id = make_empty_id(&node_id, &session_type, 0)?;
+        let dnet_id = make_empty_id(&node_id, &sort, 0)?;
         let addr = "Null".to_string();
         let state = None;
         let random_id = 0;
@@ -148,10 +147,10 @@ impl DataParser {
         let session_info = SessionInfo::new(
             dnet_id,
             node_id.clone(),
-            //name.clone(),
             addr.clone(),
             state,
             slot,
+            sort.clone(),
             is_empty,
         );
         sessions.push(session_info);
@@ -204,7 +203,7 @@ impl DataParser {
         let mut networks = vec![];
         for spawn in spawns {
             let name = spawn.get("name").unwrap().as_str().unwrap().to_string();
-            let id = make_node_id(&name)?;
+            let id = make_network_id(&name)?;
             let urls: Vec<String> =
                 serde_json::from_value(spawn.get("urls").unwrap().clone()).unwrap();
             let nodes: Vec<String> =
@@ -293,7 +292,7 @@ impl DataParser {
                         .lock()
                         .await
                         .insert(inbound.clone().dnet_id, inbound_obj.clone());
-                    let info_obj = SelectableObject::Connect(inbound.info.clone());
+                    let info_obj = SelectableObject::Slot(inbound.info.clone());
                     self.model
                         .selectables
                         .lock()
@@ -309,7 +308,7 @@ impl DataParser {
                         .lock()
                         .await
                         .insert(outbound.clone().dnet_id, outbound_obj.clone());
-                    let info_obj = SelectableObject::Connect(outbound.info.clone());
+                    let info_obj = SelectableObject::Slot(outbound.info.clone());
                     self.model
                         .selectables
                         .lock()
@@ -325,9 +324,9 @@ impl DataParser {
         &self,
         reply: &Value,
         node_id: &String,
-        prefix: Session,
+        sort: Session,
     ) -> DnetViewResult<Vec<SessionInfo>> {
-        let session_id = make_session_id(&node_id, &prefix)?;
+        let session_id = make_session_id(&node_id, &sort)?;
         let mut session_info: Vec<SessionInfo> = Vec::new();
 
         // TODO: improve this ugly hack.
@@ -335,15 +334,14 @@ impl DataParser {
 
         // Dnetview is not enabled.
         if reply.is_null() {
-            debug!(target: "dnetview", "parse_outbound() reply.is_null() == True");
             slot_count += 1;
-            let info_id = make_empty_id(&node_id, &prefix, slot_count)?;
+            let info_id = make_empty_id(&node_id, &sort, slot_count)?;
             let node_id = node_id.to_string();
             let addr = "Null".to_string();
             let random_id = 0;
             let remote_id = "Null".to_string();
             let log = Vec::new();
-            let is_empty = false;
+            let is_empty = true;
 
             let slot = SlotInfo::new(
                 info_id.clone(),
@@ -358,94 +356,106 @@ impl DataParser {
 
             let addr = "Null".to_string();
             let state = None;
-            let session =
-                SessionInfo::new(session_id.clone(), node_id.clone(), addr, state, slot, is_empty);
+            let session = SessionInfo::new(
+                session_id.clone(),
+                node_id.clone(),
+                addr,
+                state,
+                slot,
+                sort.clone(),
+                is_empty,
+            );
             session_info.push(session);
 
             return Ok(session_info)
         }
 
         let sessions = reply.as_array().unwrap();
-        debug!(target: "dnetview", "parse_outbound() len session{:?}", sessions.len());
 
         for session in sessions {
-            match session.as_object() {
-                Some(obj) => {
-                    debug!(target: "dnetview", "parse_outbound() obj {:?}", session);
-                    let addr = obj.get("addr").unwrap().as_str().unwrap().to_string();
+            // TODO: display empty sessions?
+            if !session.is_null() {
+                match session.as_object() {
+                    Some(obj) => {
+                        debug!(target: "dnetview", "parse_outbound() OBJ {:?}", obj);
+                        let addr = obj.get("addr").unwrap().as_str().unwrap().to_string();
 
-                    let state: Option<String> = match obj.get("state") {
-                        Some(state) => Some(state.as_str().unwrap().to_string()),
-                        None => None,
-                    };
+                        let state: Option<String> = match obj.get("state") {
+                            Some(state) => Some(state.as_str().unwrap().to_string()),
+                            None => None,
+                        };
 
-                    let info: serde_json::Map<String, Value> =
-                        serde_json::from_value(obj.get("info").unwrap().clone()).unwrap();
+                        let info: serde_json::Map<String, Value> =
+                            serde_json::from_value(obj.get("info").unwrap().clone()).unwrap();
 
-                    let slot_addr = info.get("addr").unwrap().as_str().unwrap().to_string();
-                    let random_id = info.get("random_id").unwrap().as_u64().unwrap();
-                    let remote_id = info.get("remote_id").unwrap().as_str().unwrap().to_string();
-                    let info_id = make_info_id(&random_id)?;
+                        let slot_addr = info.get("addr").unwrap().as_str().unwrap().to_string();
+                        let random_id = info.get("random_id").unwrap().as_u64().unwrap();
+                        let remote_id =
+                            info.get("remote_id").unwrap().as_str().unwrap().to_string();
+                        let info_id = make_info_id(&random_id)?;
 
-                    let log: Vec<(NanoTimestamp, String, String)> =
-                        serde_json::from_value(info.get("log").unwrap().clone()).unwrap();
+                        let log: Vec<(NanoTimestamp, String, String)> =
+                            serde_json::from_value(info.get("log").unwrap().clone()).unwrap();
 
-                    // ...
-                    let node_id = node_id.to_string();
-                    let is_empty = false;
+                        // ...
+                        let node_id = node_id.to_string();
+                        let is_empty = false;
 
-                    let slot = SlotInfo::new(
-                        info_id.clone(),
-                        node_id.clone(),
-                        slot_addr,
-                        random_id,
-                        remote_id,
-                        log,
-                        is_empty,
-                    );
+                        let slot = SlotInfo::new(
+                            info_id.clone(),
+                            node_id.clone(),
+                            slot_addr,
+                            random_id,
+                            remote_id,
+                            log,
+                            is_empty,
+                        );
 
-                    let session = SessionInfo::new(
-                        session_id.clone(),
-                        node_id.clone(),
-                        addr.clone(),
-                        state,
-                        slot,
-                        is_empty,
-                    );
-                    session_info.push(session);
-                }
-                None => {
-                    // TODO: clean up empty info boilerplate.
-                    slot_count += 1;
-                    let info_id = make_empty_id(node_id, &prefix, slot_count)?;
-                    let node_id = node_id.to_string();
-                    let addr = "Null".to_string();
-                    let random_id = 0;
-                    let remote_id = "Null".to_string();
-                    let log = Vec::new();
-                    let is_empty = true;
+                        let session = SessionInfo::new(
+                            session_id.clone(),
+                            node_id.clone(),
+                            addr.clone(),
+                            state,
+                            slot.clone(),
+                            sort.clone(),
+                            is_empty,
+                        );
+                        session_info.push(session);
+                    }
+                    None => {
+                        // TODO: clean up empty info boilerplate.
+                        slot_count += 1;
+                        let info_id = make_empty_id(node_id, &sort, slot_count)?;
+                        let node_id = node_id.to_string();
+                        let addr = "Null".to_string();
+                        let random_id = 0;
+                        let remote_id = "Null".to_string();
+                        let log = Vec::new();
+                        let is_empty = true;
 
-                    let slot = SlotInfo::new(
-                        info_id.clone(),
-                        node_id.clone(),
-                        addr.clone(),
-                        random_id,
-                        remote_id,
-                        log,
-                        is_empty,
-                    );
-                    let is_empty = true;
+                        let slot = SlotInfo::new(
+                            info_id.clone(),
+                            node_id.clone(),
+                            addr.clone(),
+                            random_id,
+                            remote_id,
+                            log,
+                            is_empty,
+                        );
+                        let is_empty = true;
 
-                    let state = None;
-                    let session = SessionInfo::new(
-                        session_id.clone(),
-                        node_id.clone(),
-                        addr.clone(),
-                        state,
-                        slot,
-                        is_empty,
-                    );
-                    session_info.push(session);
+                        let state = None;
+                        let session = SessionInfo::new(
+                            session_id.clone(),
+                            node_id.clone(),
+                            addr.clone(),
+                            state,
+                            slot.clone(),
+                            sort.clone(),
+                            is_empty,
+                        );
+                        session_info.push(session);
+                    }
                 }
             }
         }
@@ -470,7 +480,6 @@ impl DataParser {
                     let h = Vec::new();
                     return Ok(h)
                 }
-                debug!("dnetview::parse_hosts() hosts returns None and !is_null() {}", hosts);
                 Err(DnetViewError::ValueIsNotObject)
             }
         }
