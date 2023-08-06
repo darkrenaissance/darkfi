@@ -95,7 +95,7 @@ impl<'a> View {
                     if !self.ordered_list.iter().any(|i| i == &node.dnet_id) {
                         self.ordered_list.push(node.dnet_id.clone());
                     }
-                    if !node.is_offline {
+                    if !node.is_offline && node.dnet_enabled {
                         for inbound in &node.inbound {
                             if !inbound.is_empty {
                                 if !self.ordered_list.iter().any(|i| i == &inbound.dnet_id) {

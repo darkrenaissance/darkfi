@@ -298,7 +298,7 @@ impl DataParser {
     }
 
     async fn update_selectables(&self, node: NodeInfo) -> DnetViewResult<()> {
-        if node.is_offline {
+        if node.is_offline && !node.dnet_enabled {
             let node_obj = SelectableObject::Node(node.clone());
             self.model.selectables.lock().await.insert(node.dnet_id.clone(), node_obj.clone());
         } else {
