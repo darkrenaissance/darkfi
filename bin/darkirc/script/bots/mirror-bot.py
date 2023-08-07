@@ -21,7 +21,7 @@ botnick = args.nickname
 ## Server 1
 darkirc_server = args.server_from
 darkirc_port = args.port_from
-darkirc_channels = args.darkircls
+darkirc_channels = args.channels
 
 darkirc = irc.IRC()
 darkirc.connect(darkirc_server, darkirc_port, darkirc_channels, botnick)
