@@ -190,8 +190,8 @@ impl ValidatorState {
 
         // Here we initialize various subscribers that can export live consensus/blockchain data.
         let mut subscribers = HashMap::new();
-        let block_subscriber = MethodSubscriber::new("blockchain.subscribe_err_txs".into());
-        let err_txs_subscriber = MethodSubscriber::new("blockchain.subscribe_blocks".into());
+        let block_subscriber = MethodSubscriber::new("blockchain.subscribe_blocks".into());
+        let err_txs_subscriber = MethodSubscriber::new("blockchain.subscribe_err_txs".into());
         subscribers.insert("blocks", block_subscriber);
         subscribers.insert("err_txs", err_txs_subscriber);
 

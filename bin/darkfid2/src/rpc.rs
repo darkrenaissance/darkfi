@@ -66,6 +66,15 @@ impl RequestHandler for Darkfid {
             Some("blockchain.lookup_zkas") => {
                 return self.blockchain_lookup_zkas(req.id, params).await
             }
+            Some("blockchain.subscribe_blocks") => {
+                return self.blockchain_subscribe_blocks(req.id, params).await
+            }
+            Some("blockchain.subscribe_txs") => {
+                return self.blockchain_subscribe_txs(req.id, params).await
+            }
+            Some("blockchain.subscribe_proposals") => {
+                return self.blockchain_subscribe_proposals(req.id, params).await
+            }
 
             // ===================
             // Transaction methods

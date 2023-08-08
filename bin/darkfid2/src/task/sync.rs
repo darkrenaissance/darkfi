@@ -43,6 +43,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
     let msg_subsystem = channel.message_subsystem();
     msg_subsystem.add_dispatch::<SyncResponse>().await;
     let block_response_sub = channel.subscribe_msg::<SyncResponse>().await?;
+    let notif_sub = node.subscribers.get("blocks").unwrap();
 
     // TODO: make this parallel and use a head selection method,
     // for example use a manual known head and only connect to nodes
@@ -66,6 +67,11 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
         // Verify and store retrieved blocks
         debug!(target: "darkfid::task::sync_task", "Processing received blocks");
         node.validator.write().await.add_blocks(&response.blocks).await?;
+
+        // Notify subscriber
+        for block in &response.blocks {
+            notif_sub.notify(block).await;
+        }
 
         let last_received = node.validator.read().await.blockchain.last()?;
         info!(target: "darkfid::task::sync_task", "Last received block: {:?} - {:?}", last_received.0, last_received.1);

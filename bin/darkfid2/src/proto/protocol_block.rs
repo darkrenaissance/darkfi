@@ -29,6 +29,7 @@ use darkfi::{
         ChannelPtr, Message, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
+    rpc::jsonrpc::MethodSubscriber,
     validator::ValidatorPtr,
     Result,
 };
@@ -52,6 +53,7 @@ pub struct ProtocolBlock {
     validator: ValidatorPtr,
     p2p: P2pPtr,
     channel_address: Url,
+    subscriber: MethodSubscriber,
 }
 
 impl ProtocolBlock {
@@ -59,6 +61,7 @@ impl ProtocolBlock {
         channel: ChannelPtr,
         validator: ValidatorPtr,
         p2p: P2pPtr,
+        subscriber: MethodSubscriber,
     ) -> Result<ProtocolBasePtr> {
         debug!(
             target: "validator::protocol_block::init",
@@ -75,6 +78,7 @@ impl ProtocolBlock {
             validator,
             p2p,
             channel_address: channel.address().clone(),
+            subscriber,
         }))
     }
 
@@ -118,7 +122,10 @@ impl ProtocolBlock {
             let block_copy = (*block).clone();
 
             match self.validator.write().await.append_block(&block_copy.0).await {
-                Ok(()) => self.p2p.broadcast_with_exclude(&block_copy, &exclude_list).await,
+                Ok(()) => {
+                    self.p2p.broadcast_with_exclude(&block_copy, &exclude_list).await;
+                    self.subscriber.notify(&block_copy).await;
+                }
                 Err(e) => {
                     debug!(
                         target: "validator::protocol_block::handle_receive_block",

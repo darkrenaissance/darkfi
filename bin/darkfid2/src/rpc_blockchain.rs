@@ -26,7 +26,7 @@ use serde_json::{json, Value};
 use darkfi::{
     rpc::jsonrpc::{
         ErrorCode::{InternalError, InvalidParams, ParseError},
-        JsonError, JsonResponse, JsonResult,
+        JsonError, JsonResponse, JsonResult, JsonSubscriber,
     },
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
 };
@@ -136,6 +136,63 @@ impl Darkfid {
         };
 
         JsonResponse::new(json!(last_slot.0), id).into()
+    }
+
+    // RPCAPI:
+    // Initializes a subscription to new incoming blocks.
+    // Once a subscription is established, `darkfid` will send JSON-RPC notifications of
+    // new incoming blocks to the subscriber.
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_blocks", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_blocks", "params": [`blockinfo`]}
+    pub async fn blockchain_subscribe_blocks(&self, id: Value, params: &[Value]) -> JsonResult {
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let blocks_subscriber = self.subscribers.get("blocks").unwrap().clone();
+
+        JsonSubscriber::new(blocks_subscriber).into()
+    }
+
+    // RPCAPI:
+    // Initializes a subscription to new incoming transactions.
+    // Once a subscription is established, `darkfid` will send JSON-RPC notifications of
+    // new incoming transactions to the subscriber.
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_txs", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_txs", "params": [`tx_hash`]}
+    pub async fn blockchain_subscribe_txs(&self, id: Value, params: &[Value]) -> JsonResult {
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let txs_subscriber = self.subscribers.get("txs").unwrap().clone();
+
+        JsonSubscriber::new(txs_subscriber).into()
+    }
+
+    // RPCAPI:
+    // Initializes a subscription to new incoming proposals, asuming node participates
+    // in consensus. Once a subscription is established, `darkfid` will send JSON-RPC
+    // notifications of new incoming proposals to the subscriber.
+    //
+    // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_proposals", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_proposals", "params": [`blockinfo`]}
+    pub async fn blockchain_subscribe_proposals(&self, id: Value, params: &[Value]) -> JsonResult {
+        if !params.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        // Since proposals subscriber is only active if we participate to consensus,
+        // we have to check if it actually exists in the subscribers map.
+        let proposals_subscriber = self.subscribers.get("proposals");
+        if proposals_subscriber.is_none() {
+            error!(target: "darkfid::rpc::blockchain_subscribe_proposals", "Proposals subscriber not found");
+            return JsonError::new(InternalError, None, id).into()
+        }
+
+        JsonSubscriber::new(proposals_subscriber.unwrap().clone()).into()
     }
 
     // RPCAPI:

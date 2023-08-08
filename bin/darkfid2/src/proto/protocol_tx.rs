@@ -28,6 +28,7 @@ use darkfi::{
         ChannelPtr, Message, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
+    rpc::jsonrpc::MethodSubscriber,
     tx::Transaction,
     validator::ValidatorPtr,
     Result,
@@ -46,6 +47,7 @@ pub struct ProtocolTx {
     validator: ValidatorPtr,
     p2p: P2pPtr,
     channel_address: Url,
+    subscriber: MethodSubscriber,
 }
 
 impl ProtocolTx {
@@ -53,6 +55,7 @@ impl ProtocolTx {
         channel: ChannelPtr,
         validator: ValidatorPtr,
         p2p: P2pPtr,
+        subscriber: MethodSubscriber,
     ) -> Result<ProtocolBasePtr> {
         debug!(
             target: "validator::protocol_tx::init",
@@ -69,6 +72,7 @@ impl ProtocolTx {
             validator,
             p2p,
             channel_address: channel.address().clone(),
+            subscriber,
         }))
     }
 
@@ -104,7 +108,10 @@ impl ProtocolTx {
 
             // Nodes use unconfirmed_txs vector as seen_txs pool.
             match self.validator.write().await.append_tx(&tx_copy.0).await {
-                Ok(()) => self.p2p.broadcast_with_exclude(&tx_copy, &exclude_list).await,
+                Ok(()) => {
+                    self.p2p.broadcast_with_exclude(&tx_copy, &exclude_list).await;
+                    self.subscriber.notify(&tx_copy).await;
+                }
                 Err(e) => {
                     debug!(
                         target: "validator::protocol_tx::handle_receive_tx",

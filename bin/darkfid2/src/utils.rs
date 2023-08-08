@@ -16,11 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashMap;
+
 use log::info;
 
 use darkfi::{
     error::TxVerifyFailed,
     net::{P2p, P2pPtr, Settings, SESSION_ALL},
+    rpc::jsonrpc::MethodSubscriber,
     tx::Transaction,
     validator::ValidatorPtr,
     Result,
@@ -69,16 +72,22 @@ pub fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
 }
 
 /// Auxiliary function to generate the sync P2P network and register all its protocols.
-pub async fn spawn_sync_p2p(settings: &Settings, validator: &ValidatorPtr) -> P2pPtr {
+pub async fn spawn_sync_p2p(
+    settings: &Settings,
+    validator: &ValidatorPtr,
+    subscribers: &HashMap<&'static str, MethodSubscriber>,
+) -> P2pPtr {
     info!(target: "darkfid", "Registering sync network P2P protocols...");
     let p2p = P2p::new(settings.clone()).await;
     let registry = p2p.protocol_registry();
 
     let _validator = validator.clone();
+    let _subscriber = subscribers.get("blocks").unwrap().clone();
     registry
         .register(SESSION_ALL, move |channel, p2p| {
             let validator = _validator.clone();
-            async move { ProtocolBlock::init(channel, validator, p2p).await.unwrap() }
+            let subscriber = _subscriber.clone();
+            async move { ProtocolBlock::init(channel, validator, p2p, subscriber).await.unwrap() }
         })
         .await;
 
@@ -91,10 +100,12 @@ pub async fn spawn_sync_p2p(settings: &Settings, validator: &ValidatorPtr) -> P2
         .await;
 
     let _validator = validator.clone();
+    let _subscriber = subscribers.get("txs").unwrap().clone();
     registry
         .register(SESSION_ALL, move |channel, p2p| {
             let validator = _validator.clone();
-            async move { ProtocolTx::init(channel, validator, p2p).await.unwrap() }
+            let subscriber = _subscriber.clone();
+            async move { ProtocolTx::init(channel, validator, p2p, subscriber).await.unwrap() }
         })
         .await;
 
@@ -102,16 +113,22 @@ pub async fn spawn_sync_p2p(settings: &Settings, validator: &ValidatorPtr) -> P2
 }
 
 /// Auxiliary function to generate the consensus P2P network and register all its protocols.
-pub async fn spawn_consensus_p2p(settings: &Settings, validator: &ValidatorPtr) -> P2pPtr {
+pub async fn spawn_consensus_p2p(
+    settings: &Settings,
+    validator: &ValidatorPtr,
+    subscribers: &HashMap<&'static str, MethodSubscriber>,
+) -> P2pPtr {
     info!(target: "darkfid", "Registering consensus network P2P protocols...");
     let p2p = P2p::new(settings.clone()).await;
     let registry = p2p.protocol_registry();
 
     let _validator = validator.clone();
+    let _subscriber = subscribers.get("proposals").unwrap().clone();
     registry
         .register(SESSION_ALL, move |channel, p2p| {
             let validator = _validator.clone();
-            async move { ProtocolProposal::init(channel, validator, p2p).await.unwrap() }
+            let subscriber = _subscriber.clone();
+            async move { ProtocolProposal::init(channel, validator, p2p, subscriber).await.unwrap() }
         })
         .await;
 

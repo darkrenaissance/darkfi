@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashMap;
+
 use async_std::{stream::StreamExt, sync::Arc};
 use log::{error, info};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
@@ -26,7 +28,7 @@ use darkfi::{
     blockchain::BlockInfo,
     cli_desc,
     net::{settings::SettingsOpt, P2pPtr},
-    rpc::server::listen_and_serve,
+    rpc::{jsonrpc::MethodSubscriber, server::listen_and_serve},
     util::time::TimeKeeper,
     validator::{Validator, ValidatorConfig, ValidatorPtr},
     Result,
@@ -99,10 +101,16 @@ struct Args {
     verbose: u8,
 }
 
+/// Daemon structure
 pub struct Darkfid {
+    /// Syncing P2P network pointer
     sync_p2p: P2pPtr,
+    /// Optional consensus P2P network pointer
     consensus_p2p: Option<P2pPtr>,
+    /// Validator(node) pointer
     validator: ValidatorPtr,
+    /// A map of various subscribers exporting live info from the blockchain
+    subscribers: HashMap<&'static str, MethodSubscriber>,
 }
 
 impl Darkfid {
@@ -110,8 +118,9 @@ impl Darkfid {
         sync_p2p: P2pPtr,
         consensus_p2p: Option<P2pPtr>,
         validator: ValidatorPtr,
+        subscribers: HashMap<&'static str, MethodSubscriber>,
     ) -> Self {
-        Self { sync_p2p, consensus_p2p, validator }
+        Self { sync_p2p, consensus_p2p, validator, subscribers }
     }
 }
 
@@ -146,18 +155,28 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     // Initialize validator
     let validator = Validator::new(&sled_db, config).await?;
 
+    // Here we initialize various subscribers that can export live blockchain/consensus data.
+    let mut subscribers = HashMap::new();
+    subscribers.insert("blocks", MethodSubscriber::new("blockchain.subscribe_blocks".into()));
+    subscribers.insert("txs", MethodSubscriber::new("blockchain.subscribe_txs".into()));
+    if args.consensus {
+        subscribers
+            .insert("proposals", MethodSubscriber::new("blockchain.subscribe_proposals".into()));
+    }
+
     // Initialize syncing P2P network
-    let sync_p2p = spawn_sync_p2p(&args.sync_net.into(), &validator).await;
+    let sync_p2p = spawn_sync_p2p(&args.sync_net.into(), &validator, &subscribers).await;
 
     // Initialize consensus P2P network
     let consensus_p2p = if args.consensus {
-        Some(spawn_consensus_p2p(&args.consensus_net.into(), &validator).await)
+        Some(spawn_consensus_p2p(&args.consensus_net.into(), &validator, &subscribers).await)
     } else {
         None
     };
 
     // Initialize node
-    let darkfid = Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator.clone()).await;
+    let darkfid =
+        Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator.clone(), subscribers).await;
     let darkfid = Arc::new(darkfid);
     info!(target: "darkfid", "Node initialized successfully!");
 
