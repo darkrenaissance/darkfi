@@ -20,11 +20,12 @@
 use std::fmt;
 
 use async_std::sync::Arc;
+use darkfi_serial::{serialize, Encodable};
 use rand::{rngs::OsRng, Rng};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::{json, Value};
 
-use crate::system::SubscriberPtr;
+use crate::system::{Subscriber, SubscriberPtr};
 
 /// JSON-RPC error codes.
 /// The error codes from and including -32768 to -32000 are reserved for pre-defined errors.
@@ -142,32 +143,55 @@ pub struct JsonNotification {
 }
 
 impl JsonNotification {
-    pub fn new(method: &str, parameters: Value) -> Self {
-        Self { jsonrpc: json!("2.0"), method: json!(method), params: parameters }
+    pub fn new(method: Value, params: Value) -> Self {
+        Self { jsonrpc: json!("2.0"), method, params }
     }
 }
 
-/// A JSON-RPC subscriber for notifications
+/// A method specific JSON-RPC subscriber for notifications
 #[derive(Clone)]
-pub struct JsonSubscriber {
-    /// JSON-RPC version
-    pub jsonrpc: Value,
+pub struct MethodSubscriber {
+    /// Notification method
+    pub method: Value,
     /// Notification subscriber
     pub subscriber: SubscriberPtr<JsonNotification>,
 }
 
-impl JsonSubscriber {
-    pub fn new(subscriber: SubscriberPtr<JsonNotification>) -> Self {
-        Self { jsonrpc: json!("2.0"), subscriber }
+impl MethodSubscriber {
+    pub fn new(method: Value) -> Self {
+        let subscriber = Subscriber::new();
+        Self { method, subscriber }
+    }
+
+    /// Auxiliary function to format provided message and notify the subscriber.
+    pub async fn notify<T: Encodable>(&self, message: &T) {
+        let params = json!([bs58::encode(&serialize(message)).into_string()]);
+        let notif = JsonNotification::new(self.method.clone(), params);
+        self.subscriber.notify(notif).await;
     }
 }
 
-impl fmt::Debug for JsonSubscriber {
+impl fmt::Debug for MethodSubscriber {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("JsonSubscriber")
-            .field("jsonrpc", &self.jsonrpc)
+        f.debug_struct("MethodSubscriber")
+            .field("method", &self.method)
             .field("pointer", &Arc::as_ptr(&self.subscriber))
             .finish()
+    }
+}
+
+/// A JSON-RPC subscriber for notifications
+#[derive(Clone, Debug)]
+pub struct JsonSubscriber {
+    /// JSON-RPC version
+    pub jsonrpc: Value,
+    /// Method subscriber
+    pub subscriber: MethodSubscriber,
+}
+
+impl JsonSubscriber {
+    pub fn new(subscriber: MethodSubscriber) -> Self {
+        Self { jsonrpc: json!("2.0"), subscriber }
     }
 }
 

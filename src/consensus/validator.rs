@@ -32,13 +32,11 @@ use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
 use halo2_proofs::arithmetic::Field;
 use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
-use serde_json::json;
 
 use crate::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr},
-    rpc::jsonrpc::JsonNotification,
+    rpc::jsonrpc::MethodSubscriber,
     runtime::vm_runtime::Runtime,
-    system::{Subscriber, SubscriberPtr},
     tx::Transaction,
     util::time::{TimeKeeper, Timestamp},
     wallet::WalletPtr,
@@ -72,10 +70,7 @@ pub struct ValidatorState {
     /// Canonical (finalized) blockchain
     pub blockchain: Blockchain,
     /// A map of various subscribers exporting live info from the blockchain
-    /// TODO: Instead of JsonNotification, it can be an enum of internal objects,
-    ///       and then we don't have to deal with json in this module but only
-    //        externally.
-    pub subscribers: HashMap<&'static str, SubscriberPtr<JsonNotification>>,
+    pub subscribers: HashMap<&'static str, MethodSubscriber>,
     /// Wallet interface
     pub wallet: WalletPtr,
     /// Flag signalling node has finished initial sync
@@ -195,8 +190,8 @@ impl ValidatorState {
 
         // Here we initialize various subscribers that can export live consensus/blockchain data.
         let mut subscribers = HashMap::new();
-        let block_subscriber = Subscriber::new();
-        let err_txs_subscriber = Subscriber::new();
+        let block_subscriber = MethodSubscriber::new("blockchain.subscribe_err_txs".into());
+        let err_txs_subscriber = MethodSubscriber::new("blockchain.subscribe_blocks".into());
         subscribers.insert("blocks", block_subscriber);
         subscribers.insert("err_txs", err_txs_subscriber);
 
@@ -340,14 +335,11 @@ impl ValidatorState {
         info!(target: "consensus::validator", "purge_pending_txs(): Removing {} erroneous transactions...", erroneous_txs.len());
         self.blockchain.remove_pending_txs(&erroneous_txs)?;
 
-        // TODO: Don't hardcode this:
         let err_txs_subscriber = self.subscribers.get("err_txs").unwrap();
         for err_tx in erroneous_txs {
             let tx_hash = blake3::hash(&serialize(&err_tx)).to_hex().as_str().to_string();
-            let params = json!([bs58::encode(&serialize(&tx_hash)).into_string()]);
-            let notif = JsonNotification::new("blockchain.subscribe_err_txs", params);
             info!(target: "consensus::validator", "purge_pending_txs(): Sending notification about erroneous transaction");
-            err_txs_subscriber.notify(notif).await;
+            err_txs_subscriber.notify(&tx_hash).await;
         }
 
         Ok(())
@@ -816,11 +808,8 @@ impl ValidatorState {
                 return Err(e)
             }
 
-            // TODO: Don't hardcode this:
-            let params = json!([bs58::encode(&serialize(proposal)).into_string()]);
-            let notif = JsonNotification::new("blockchain.subscribe_blocks", params);
             info!(target: "consensus::validator", "consensus: Sending notification about finalized block");
-            blocks_subscriber.notify(notif).await;
+            blocks_subscriber.notify(proposal).await;
         }
 
         // Setting leaders history to last proposal leaders count
@@ -925,12 +914,9 @@ impl ValidatorState {
         info!(target: "consensus::validator", "receive_finalized_block(): Executing state transitions");
         self.receive_blocks(&[block.clone()]).await?;
 
-        // TODO: Don't hardcode this:
         let blocks_subscriber = self.subscribers.get("blocks").unwrap();
-        let params = json!([bs58::encode(&serialize(&block)).into_string()]);
-        let notif = JsonNotification::new("blockchain.subscribe_blocks", params);
         info!(target: "consensus::validator", "consensus: Sending notification about finalized block");
-        blocks_subscriber.notify(notif).await;
+        blocks_subscriber.notify(&block).await;
 
         info!(target: "consensus::validator", "receive_finalized_block(): Removing block transactions from pending txs store");
         self.blockchain.remove_pending_txs(&block.txs)?;
@@ -975,13 +961,10 @@ impl ValidatorState {
         info!(target: "consensus::validator", "receive_sync_blocks(): Executing state transitions");
         self.receive_blocks(&new_blocks[..]).await?;
 
-        // TODO: Don't hardcode this:
         let blocks_subscriber = self.subscribers.get("blocks").unwrap();
         for block in new_blocks {
-            let params = json!([bs58::encode(&serialize(&block)).into_string()]);
-            let notif = JsonNotification::new("blockchain.subscribe_blocks", params);
             info!(target: "consensus::validator", "consensus: Sending notification about finalized block");
-            blocks_subscriber.notify(notif).await;
+            blocks_subscriber.notify(&block).await;
         }
 
         Ok(())

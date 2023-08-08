@@ -147,7 +147,6 @@ async-runtime = [
 
 blockchain = [
     "blake3",
-    "bs58", # <-- TODO: remove after we get rid of json for notifications
     "crypto_api_chachapoly",
     "dashu",
     "halo2_proofs",
@@ -213,6 +212,7 @@ net = [
 ]
 
 rpc = [
+    "bs58",
     "rand",
     "serde",
     "serde_json",
