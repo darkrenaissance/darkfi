@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::debug;
+//use log::debug;
 use std::collections::HashMap;
 
 use ratatui::{
@@ -358,7 +358,7 @@ impl<'a> View {
         slice: Rect,
         selected: String,
     ) -> DnetViewResult<()> {
-        debug!(target: "dnetview", "render_right() selected ID: {}", selected.clone());
+        //debug!(target: "dnetview", "render_right() selected ID: {}", selected.clone());
         let style = Style::default();
         let mut lines = Vec::new();
 
