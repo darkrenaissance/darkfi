@@ -53,6 +53,16 @@ impl RpcConnect {
             Err(e) => Err(DnetViewError::Darkfi(e)),
         }
     }
+    
+    // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
+    pub async fn dnet_enable(&self, params: bool) -> DnetViewResult<Value> {
+        let req = JsonRequest::new("dnet_switch", json!([params]));
+        match self.rpc_client.request(req).await {
+            Ok(req) => Ok(req),
+            Err(e) => Err(DnetViewError::Darkfi(e)),
+        }
+    }
 
     // --> {"jsonrpc": "2.0", "method": "get_consensus_info", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": {"nodeID": [], "nodeinfo" [], "id": 42}

@@ -65,6 +65,10 @@ impl DataParser {
             // On any failure, sleep and retry.
             match RpcConnect::new(Url::parse(&node.rpc_url)?, node.name.clone()).await {
                 Ok(client) => {
+                    // We start by enabling dnet
+                    if let Err(e) = client.dnet_enable(true).await {
+                        error!("dnet_enable error: {:?}", e);
+                    }
                     if let Err(e) = self.poll(&node, client).await {
                         error!("Poll execution error: {:?}", e);
                     }
