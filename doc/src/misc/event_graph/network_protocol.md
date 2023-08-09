@@ -36,7 +36,7 @@ Event object data. This is either sent when a new event is created, or in respon
 | timestamp 	| `u64`                | Event timestamp    		|
 | action    	| `T`                  | Event specific data      	|
 
-## getheads
+## syncevent
 
 This message is sent at fixed intervals when connecting to the network.
 It uses this message to synchronize with the current network state.
