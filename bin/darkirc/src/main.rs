@@ -120,6 +120,23 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         return Ok(())
     }
 
+    if settings.secret.is_some() {
+        let secret = settings.secret.clone().unwrap();
+        let bytes: [u8; 32] = bs58::decode(secret).into_vec()?.try_into().unwrap();
+        let secret = crypto_box::SecretKey::from(bytes);
+        let pubkey = secret.public_key();
+        let pub_encoded = bs58::encode(pubkey.as_bytes()).into_string();
+
+        if settings.output.is_some() {
+            let datastore = expand_path(&settings.output.unwrap())?;
+            save_json_file(&datastore, &pub_encoded, false)?;
+        } else {
+            println!("Public key recoverd: {}", pub_encoded);
+        }
+
+        return Ok(())
+    }
+
     if settings.gen_secret {
         let secret_key = crypto_box::SecretKey::generate(&mut OsRng);
         let encoded = bs58::encode(secret_key.to_bytes());
