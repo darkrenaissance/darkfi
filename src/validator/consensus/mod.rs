@@ -16,14 +16,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::blockchain::{PidOutput, PreviousSlot, Slot};
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_sdk::{
+    blockchain::{PidOutput, PreviousSlot, Slot},
+    crypto::{schnorr::SchnorrSecret, MerkleNode, MerkleTree, SecretKey},
+    pasta::{group::ff::PrimeField, pallas},
+};
+use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use log::{error, warn};
+use rand::rngs::OsRng;
 
 use crate::{
-    blockchain::{BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr},
-    util::time::TimeKeeper,
-    validator::{consensus::pid::slot_pid_output, verify_block},
+    blockchain::{
+        BlockInfo, BlockProducer, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header,
+    },
+    tx::Transaction,
+    util::time::{TimeKeeper, Timestamp},
+    validator::{consensus::pid::slot_pid_output, verify_block, verify_transactions},
     Error, Result,
 };
 
@@ -102,6 +110,70 @@ impl Consensus {
         }
 
         Ok((producers, last_hashes, second_to_last_hashes))
+    }
+
+    /// Generate a block proposal for the current hot/live(last) slot,
+    /// containing all pending transactions. Proposal extends the longest fork
+    /// chain the node is holding. This should only be called after
+    /// generate_slot(). Proposal is signed using provided secret key, which
+    /// must also have signed the provided proposal transaction.
+    pub async fn generate_proposal(
+        &self,
+        secret_key: SecretKey,
+        proposal_tx: Transaction,
+    ) -> Result<Proposal> {
+        // Generate a time keeper for current slot
+        let time_keeper = self.time_keeper.current();
+
+        // Retrieve longest known fork
+        let mut fork_index = 0;
+        let mut max_fork_length = 0;
+        for (index, fork) in self.forks.iter().enumerate() {
+            if fork.proposals.len() > max_fork_length {
+                fork_index = index;
+                max_fork_length = fork.proposals.len();
+            }
+        }
+        let fork = &self.forks[fork_index];
+
+        // Grab forks' unproposed transactions and their root
+        let unproposed_txs = fork.unproposed_txs(&self.blockchain, &time_keeper).await?;
+        let mut tree = MerkleTree::new(100);
+        // The following is pretty weird, so something better should be done.
+        for tx in &unproposed_txs {
+            let mut hash = [0_u8; 32];
+            hash[0..31].copy_from_slice(&blake3::hash(&serialize(tx)).as_bytes()[0..31]);
+            tree.append(MerkleNode::from(pallas::Base::from_repr(hash).unwrap()));
+        }
+        let root = tree.root(0).unwrap();
+
+        // Grab forks' last block proposal(previous)
+        let previous = fork.last_proposal()?;
+
+        // Generate the new header
+        let slot = fork.slots.last().unwrap();
+        // TODO: verify if header timestamp should be blockchain or system timestamp
+        let header = Header::new(
+            previous.block.blockhash(),
+            time_keeper.slot_epoch(slot.id),
+            slot.id,
+            Timestamp::current_time(),
+            root,
+        );
+
+        // TODO: sign more stuff?
+        // Sign block header using provided secret key
+        let signature =
+            SecretKey::from(secret_key).sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
+
+        // Generate block producer info
+        let block_producer = BlockProducer::new(signature, proposal_tx, slot.last_eta);
+
+        // Generate the block and its proposal
+        let block = BlockInfo::new(header, unproposed_txs, block_producer, fork.slots.clone());
+        let proposal = Proposal::new(block);
+
+        Ok(proposal)
     }
 
     /// Given a proposal, the node verifys it and finds which fork it extends.
@@ -339,8 +411,10 @@ pub struct Fork {
 
 impl Fork {
     pub fn new(blockchain: &Blockchain) -> Result<Self> {
+        let mempool =
+            blockchain.get_pending_txs()?.iter().map(|tx| blake3::hash(&serialize(tx))).collect();
         let overlay = BlockchainOverlay::new(blockchain)?;
-        Ok(Self { overlay, proposals: vec![], slots: vec![], mempool: vec![] })
+        Ok(Self { overlay, proposals: vec![], slots: vec![], mempool })
     }
 
     /// Auxiliary function to retrieve last proposal
@@ -353,6 +427,64 @@ impl Fork {
         };
 
         Ok(Proposal::new(block))
+    }
+
+    /// Utility function to extract leader selection lottery randomness(eta),
+    /// defined as the hash of the last block, converted to pallas base.
+    fn get_last_eta(&self) -> Result<pallas::Base> {
+        // Retrieve last block(or proposal) hash
+        let hash = if self.proposals.is_empty() {
+            self.overlay.lock().unwrap().last_block()?.blockhash()
+        } else {
+            self.proposals.last().unwrap().clone()
+        };
+
+        // Read first 240 bits
+        let mut bytes: [u8; 32] = *hash.as_bytes();
+        bytes[30] = 0;
+        bytes[31] = 0;
+
+        Ok(pallas::Base::from_repr(bytes).unwrap())
+    }
+
+    /// Auxiliary function to retrieve unproposed valid transactions.
+    pub async fn unproposed_txs(
+        &self,
+        blockchain: &Blockchain,
+        time_keeper: &TimeKeeper,
+    ) -> Result<Vec<Transaction>> {
+        // Retrieve all mempool transactions
+        let mut unproposed_txs: Vec<Transaction> = blockchain
+            .pending_txs
+            .get(&self.mempool, true)?
+            .iter()
+            .map(|x| x.clone().unwrap())
+            .collect();
+
+        // Iterate over fork proposals to find already proposed transactions
+        // and remove them from the unproposed_txs vector.
+        let proposals = self.overlay.lock().unwrap().get_blocks_by_hash(&self.proposals)?;
+        for proposal in proposals {
+            for tx in &proposal.txs {
+                unproposed_txs.retain(|x| x != tx);
+            }
+        }
+
+        // Check if transactions exceed configured cap
+        if unproposed_txs.len() > TXS_CAP {
+            unproposed_txs = unproposed_txs[0..TXS_CAP].to_vec()
+        }
+
+        // Clone forks' overlay
+        let overlay = self.overlay.lock().unwrap().full_clone()?;
+
+        // Verify transactions
+        let erroneous_txs = verify_transactions(&overlay, &time_keeper, &unproposed_txs).await?;
+        if !erroneous_txs.is_empty() {
+            unproposed_txs.retain(|x| !erroneous_txs.contains(x));
+        }
+
+        Ok(unproposed_txs)
     }
 
     /// Generate current hot/live slot
@@ -384,7 +516,7 @@ impl Fork {
 
         // Each slot starts as an empty slot(not reward) when generated, carrying
         // last eta
-        let last_eta = previous_slot.last_eta;
+        let last_eta = self.get_last_eta()?;
         let total_tokens = previous_slot.total_tokens + previous_slot.reward;
         let reward = 0;
         let slot = Slot::new(id, previous, pid, last_eta, total_tokens, reward);

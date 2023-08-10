@@ -148,8 +148,11 @@ impl Validator {
         // If node participates in consensus and holds any forks, iterate over them
         // to verify transaction validity in their overlays
         for fork in self.consensus.forks.iter_mut() {
+            // Clone forks' overlay
+            let overlay = fork.overlay.lock().unwrap().full_clone()?;
+
             // Verify transaction
-            let erroneous_txs = verify_transactions(&fork.overlay, &time_keeper, &tx_vec).await?;
+            let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec).await?;
             if !erroneous_txs.is_empty() {
                 continue
             }
@@ -201,9 +204,11 @@ impl Validator {
             // If node participates in consensus and holds any forks, iterate over them
             // to verify transaction validity in their overlays
             for fork in self.consensus.forks.iter_mut() {
+                // Clone forks' overlay
+                let overlay = fork.overlay.lock().unwrap().full_clone()?;
+
                 // Verify transaction
-                let erroneous_txs =
-                    verify_transactions(&fork.overlay, &time_keeper, &tx_vec).await?;
+                let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec).await?;
                 if erroneous_txs.is_empty() {
                     valid = true;
                     continue

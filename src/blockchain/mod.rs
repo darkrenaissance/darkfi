@@ -29,7 +29,8 @@ use crate::{tx::Transaction, validator::consensus::next_block_reward, Error, Res
 /// Block related definitions and storage implementations
 pub mod block_store;
 pub use block_store::{
-    Block, BlockInfo, BlockOrderStore, BlockOrderStoreOverlay, BlockStore, BlockStoreOverlay,
+    Block, BlockInfo, BlockOrderStore, BlockOrderStoreOverlay, BlockProducer, BlockStore,
+    BlockStoreOverlay,
 };
 
 /// Header definition and storage implementation
