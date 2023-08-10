@@ -374,9 +374,7 @@ where
         let node_a_depth = self.find_depth(node_a, &ancestor);
         let node_b_depth = self.find_depth(node_b, &ancestor);
 
-        let diff = (node_b_depth + 1).abs_diff(node_a_depth);
-
-        diff
+        (node_b_depth + 1).abs_diff(node_a_depth)
     }
 
     fn _debug(&self) {
