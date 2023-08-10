@@ -53,7 +53,7 @@ impl RpcConnect {
             Err(e) => Err(DnetViewError::Darkfi(e)),
         }
     }
-    
+
     // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
     pub async fn dnet_enable(&self, params: bool) -> DnetViewResult<Value> {
