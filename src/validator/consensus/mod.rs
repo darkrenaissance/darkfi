@@ -22,7 +22,7 @@ use darkfi_sdk::{
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
-use log::{error, warn};
+use log::{error, info, warn};
 use rand::rngs::OsRng;
 
 use crate::{
@@ -163,8 +163,7 @@ impl Consensus {
 
         // TODO: sign more stuff?
         // Sign block header using provided secret key
-        let signature =
-            SecretKey::from(secret_key).sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
+        let signature = secret_key.sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
 
         // Generate block producer info
         let block_producer = BlockProducer::new(signature, proposal_tx, slot.last_eta);
@@ -369,6 +368,65 @@ impl Consensus {
 
         Ok((fork, None))
     }
+
+    /// Node checks if any of the forks can be finalized.
+    /// Consensus finalization logic:
+    /// - If the node has observed the creation of a fork and no other forks exists at same or greater height,
+    ///   all proposals in that fork can be finalized (append to canonical blockchain).
+    /// When a fork can be finalized, blocks(proposals) should be appended to canonical,
+    /// and forks should be removed.
+    pub async fn forks_finalization(&mut self) -> Result<Vec<BlockInfo>> {
+        let slot = self.time_keeper.current_slot();
+        info!(target: "validator::consensus::forks_finalization", "Started finalization check for slot: {}", slot);
+        // Set last slot finalization check occured to current slot
+        self.checked_finalization = slot;
+
+        // First we find longest fork without any other forks at same height
+        let mut fork_index = -1;
+        let mut max_length = 0;
+        for (index, fork) in self.forks.iter().enumerate() {
+            let length = fork.proposals.len();
+            // Check if less than max
+            if length < max_length {
+                continue
+            }
+            // Check if same length as max
+            if length == max_length {
+                // Setting fork_index so we know we have multiple
+                // forks at same length.
+                fork_index = -2;
+                continue
+            }
+            // Set fork as max
+            fork_index = index as i64;
+            max_length = length;
+        }
+
+        // Check if we found any fork to finalize
+        match fork_index {
+            -2 => {
+                info!(target: "validator::consensus::forks_finalization", "Eligible forks with same height exist, nothing to finalize.");
+                return Ok(vec![])
+            }
+            -1 => {
+                info!(target: "validator::consensus::forks_finalization", "Nothing to finalize.");
+            }
+            _ => {
+                info!(target: "validator::consensus::forks_finalization", "Fork {} can be finalized!", fork_index)
+            }
+        }
+
+        if max_length == 0 {
+            return Ok(vec![])
+        }
+
+        // Starting finalization
+        let fork = &self.forks[fork_index as usize];
+        let finalized = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
+        info!(target: "validator::consensus::forks_finalization", "Finalized blocks: {}", finalized.len());
+
+        Ok(finalized)
+    }
 }
 
 /// This struct represents a block proposal, used for consensus.
@@ -436,7 +494,7 @@ impl Fork {
         let hash = if self.proposals.is_empty() {
             self.overlay.lock().unwrap().last_block()?.blockhash()
         } else {
-            self.proposals.last().unwrap().clone()
+            *self.proposals.last().unwrap()
         };
 
         // Read first 240 bits
@@ -479,7 +537,7 @@ impl Fork {
         let overlay = self.overlay.lock().unwrap().full_clone()?;
 
         // Verify transactions
-        let erroneous_txs = verify_transactions(&overlay, &time_keeper, &unproposed_txs).await?;
+        let erroneous_txs = verify_transactions(&overlay, time_keeper, &unproposed_txs).await?;
         if !erroneous_txs.is_empty() {
             unproposed_txs.retain(|x| !erroneous_txs.contains(x));
         }
