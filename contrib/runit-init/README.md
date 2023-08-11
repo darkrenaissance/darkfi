@@ -14,16 +14,6 @@ Create the service dirs:
 ```
 `~/.local/sv/` will contain our services which we symlink into `~/.local/sv/` to activate.
 
-In your `~/.bashrc` or `~/.zshrc`, add this line:
-```bash
-    $ export SVDIR=~/.local/sv/
-```
-
-Then as root, make sure you add this to `/root/.(bash|zsh)rc`:
-```bash
-    # unset SVDIR
-```
-
 Now follow these guides:
 
 * [Per-User Services](https://docs.voidlinux.org/config/services/user-services.html)
@@ -37,8 +27,8 @@ Leave this window open so we can view the daemon logs.
 
 Finally make sure your user level service is running:
 ```bash
-    # sv status runsvdir-narodnik
-    run: runsvdir-narodnik: (pid 25140) 483s
+    # sv status runsvdir-USER
+    run: runsvdir-USER: (pid 25140) 483s
 ```
 
 # Copy Services
@@ -58,7 +48,7 @@ Activate them by symlinking them into `~/.local/service/`. We need the full path
 
 Now check they are working fine:
 ```bash
-    $ sv status darkirc
+    $ SVDIR=~/.local/sv/ sv status darkirc
 ```
 
 You should also view the log output in the window we opened earlier.
