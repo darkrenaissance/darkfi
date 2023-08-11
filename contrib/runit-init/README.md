@@ -12,7 +12,7 @@ Create the service dirs:
     $ mkdir ~/.local/service/
     $ mkdir ~/.local/sv/
 ```
-`~/.local/sv/` will contain our services which we symlink into `~/.local/sv/` to activate.
+`~/.local/sv/` will contain our services which we symlink into `~/.local/service/` to activate.
 
 Now follow these guides:
 
