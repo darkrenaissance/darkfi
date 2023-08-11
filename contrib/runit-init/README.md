@@ -1,5 +1,10 @@
 Startup services for runit.
 
+# Make DarkFi Binaries Available
+
+Compile `ircd`, `taud`, and `darkirc`. Make sure they are findable in your path.
+You can copy the binaries to `~/.local/bin/`.
+
 # Configure Per-User Services and Logging
 
 Create the service dirs:
