@@ -302,6 +302,8 @@ impl OutboundSession {
     /// (exists) or connecting (pending). If no address was found, we'll attempt
     /// to do peer discovery and try to fill the slot again.
     async fn load_address(&self, slot_number: usize, transports: &[String]) -> Result<Url> {
+        // TODO: At some point we're able to lose all known peers. We need to reseed at that point.
+
         loop {
             let p2p = self.p2p();
             let retry_sleep = p2p.settings().outbound_connect_timeout;

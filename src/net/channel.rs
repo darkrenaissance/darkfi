@@ -312,7 +312,7 @@ impl Channel {
                     } else {
                         error!(
                             target: "net::channel::main_receive_loop()",
-                            "Read error on channel {}: {}",
+                            "[P2P] Read error on channel {}: {}",
                             self.address(), err,
                         );
                     }
