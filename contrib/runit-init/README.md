@@ -16,7 +16,7 @@ In your `~/.bashrc` or `~/.zshrc`, add this line:
 
 Then as root, make sure you add this to `/root/.(bash|zsh)rc`:
 ```bash
-    unset SVDIR
+    # unset SVDIR
 ```
 
 Now follow these guides:
