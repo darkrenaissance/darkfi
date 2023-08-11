@@ -1,5 +1,4 @@
 #!/bin/sh
-DARKFI_DIR="/home/narodnik/src/darkfi/"
 ping -c 1 -W 1 9.9.9.9 > /dev/null 2>&1 || exit
-exec $DARKFI_DIR/taud 2>&1
+exec taud 2>&1
 
