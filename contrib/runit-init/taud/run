@@ -1,0 +1,4 @@
+#!/bin/sh
+DARKFI_DIR="/home/narodnik/src/darkfi/"
+exec $DARKFI_DIR/taud 2>&1
+
