@@ -125,7 +125,7 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String) -> Result<()> {
             for cell in row.iter() {
                 print!("{}\t", cell.get_content());
             }
-            print!("\n");
+            println!();
         }
     }
 
