@@ -186,12 +186,9 @@ async fn main() -> Result<()> {
         } else {
             vec![]
         };
-
     for id in task_ids {
         tasks.push(tau.get_task_by_id(id).await?);
     }
-
-    tasks.sort_by(|a, b| a.id.partial_cmp(&b.id).unwrap());
 
     if ids_clone.len() == 1 && args.command.is_none() {
         let tsk = tasks[0].clone();
