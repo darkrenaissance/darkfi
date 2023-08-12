@@ -18,11 +18,23 @@
 
 use darkfi::Result;
 
-use crate::model::{ConnectInfo, Session};
+use crate::model::{Session, SlotInfo};
 
 pub fn make_node_id(node_name: &String) -> Result<String> {
     let mut id = hex::encode(node_name);
     id.insert_str(0, "NODE");
+    Ok(id)
+}
+
+pub fn make_network_id(node_name: &String) -> Result<String> {
+    let mut id = hex::encode(node_name);
+    id.insert_str(0, "NETWORK");
+    Ok(id)
+}
+
+pub fn make_null_id(node_name: &String) -> Result<String> {
+    let mut id = hex::encode(node_name);
+    id.insert_str(0, "NULL");
     Ok(id)
 }
 
@@ -32,8 +44,9 @@ pub fn make_session_id(node_id: &str, session: &Session) -> Result<String> {
     let session_chars = match session {
         Session::Inbound => vec!['i', 'n'],
         Session::Outbound => vec!['o', 'u', 't'],
-        Session::Manual => vec!['m', 'a', 'n'],
+        //Session::Manual => vec!['m', 'a', 'n'],
         Session::Offline => vec!['o', 'f', 'f'],
+        Session::Null => vec!['n', 'u', 'l', 'l'],
     };
 
     for i in session_chars {
@@ -49,9 +62,9 @@ pub fn make_session_id(node_id: &str, session: &Session) -> Result<String> {
     Ok(id)
 }
 
-pub fn make_connect_id(id: &u64) -> Result<String> {
+pub fn make_info_id(id: &u64) -> Result<String> {
     let mut id = hex::encode(id.to_ne_bytes());
-    id.insert_str(0, "CONNECT");
+    id.insert_str(0, "INFO");
     Ok(id)
 }
 
@@ -87,19 +100,19 @@ pub fn make_empty_id(node_id: &str, session: &Session, count: u64) -> Result<Str
             id.insert_str(0, "EMPTYOUT");
             id
         }
-        Session::Manual => {
-            let session_chars = vec!['m', 'a', 'n'];
-            for i in session_chars {
-                num += i as u64
-            }
-            for i in node_id.chars() {
-                num += i as u64
-            }
-            num += count;
-            let mut id = hex::encode(num.to_ne_bytes());
-            id.insert_str(0, "EMPTYMAN");
-            id
-        }
+        //Session::Manual => {
+        //    let session_chars = vec!['m', 'a', 'n'];
+        //    for i in session_chars {
+        //        num += i as u64
+        //    }
+        //    for i in node_id.chars() {
+        //        num += i as u64
+        //    }
+        //    num += count;
+        //    let mut id = hex::encode(num.to_ne_bytes());
+        //    id.insert_str(0, "EMPTYMAN");
+        //    id
+        //}
         Session::Offline => {
             let session_chars = vec!['o', 'f', 'f'];
             for i in session_chars {
@@ -113,11 +126,25 @@ pub fn make_empty_id(node_id: &str, session: &Session, count: u64) -> Result<Str
             id.insert_str(0, "EMPTYOFF");
             id
         }
+        Session::Null => {
+            let session_chars = vec!['n', 'u', 'l', 'l'];
+            for i in session_chars {
+                num += i as u64
+            }
+            for i in node_id.chars() {
+                num += i as u64
+            }
+            num += count;
+            let mut id = hex::encode(num.to_ne_bytes());
+            id.insert_str(0, "NULL");
+            id
+        }
     };
 
     Ok(id)
 }
 
-pub fn is_empty_session(connects: &[ConnectInfo]) -> bool {
+// TODO: Rename to is empty slot.
+pub fn is_empty_session(connects: &[SlotInfo]) -> bool {
     return connects.iter().all(|conn| conn.is_empty)
 }

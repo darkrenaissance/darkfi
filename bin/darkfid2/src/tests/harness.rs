@@ -16,10 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashMap;
+
 use async_std::sync::Arc;
 use darkfi::{
     blockchain::{BlockInfo, Header},
     net::Settings,
+    rpc::jsonrpc::MethodSubscriber,
     util::time::TimeKeeper,
     validator::{
         consensus::{next_block_reward, pid::slot_pid_output},
@@ -175,7 +178,6 @@ impl Harness {
                 producers,
                 vec![previous_hash],
                 vec![previous.header.previous.clone()],
-                pallas::Base::ZERO,
                 previous_slot.pid.error,
             );
             let (f, error, sigma1, sigma2) = slot_pid_output(&previous_slot, producers);
@@ -183,7 +185,7 @@ impl Harness {
             let total_tokens = previous_slot.total_tokens + previous_slot.reward;
             // Only last slot in the sequence has a reward
             let reward = if i == slots_count - 1 { next_block_reward() } else { 0 };
-            let slot = Slot::new(id, previous, pid, total_tokens, reward);
+            let slot = Slot::new(id, previous, pid, pallas::Base::ZERO, total_tokens, reward);
             slots.push(slot.clone());
             previous_slot = slot;
         }
@@ -208,6 +210,7 @@ impl Harness {
     }
 }
 
+// Note: This function should mirror darkfid::main
 pub async fn generate_node(
     vks: &Vec<(Vec<u8>, String, Vec<u8>)>,
     config: &ValidatorConfig,
@@ -221,13 +224,21 @@ pub async fn generate_node(
 
     let validator = Validator::new(&sled_db, config.clone()).await?;
 
-    let sync_p2p = spawn_sync_p2p(&sync_settings, &validator).await;
+    let mut subscribers = HashMap::new();
+    subscribers.insert("blocks", MethodSubscriber::new("blockchain.subscribe_blocks".into()));
+    subscribers.insert("txs", MethodSubscriber::new("blockchain.subscribe_txs".into()));
+    if consensus_settings.is_some() {
+        subscribers
+            .insert("proposals", MethodSubscriber::new("blockchain.subscribe_proposals".into()));
+    }
+
+    let sync_p2p = spawn_sync_p2p(&sync_settings, &validator, &subscribers).await;
     let consensus_p2p = if let Some(settings) = consensus_settings {
-        Some(spawn_consensus_p2p(settings, &validator).await)
+        Some(spawn_consensus_p2p(settings, &validator, &subscribers).await)
     } else {
         None
     };
-    let node = Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator).await;
+    let node = Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator, subscribers).await;
 
     sync_p2p.clone().start(ex.clone()).await?;
     let _ex = ex.clone();

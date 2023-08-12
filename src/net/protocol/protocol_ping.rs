@@ -108,7 +108,7 @@ impl ProtocolPing {
                     // so close the connection.
                     warn!(
                         target: "net::protocol_ping::run_ping_pong()",
-                        "Ping-Pong protocol timed out for {}", self.channel.address(),
+                        "[P2P] Ping-Pong protocol timed out for {}", self.channel.address(),
                     );
                     self.channel.stop().await;
                     return Err(Error::ChannelStopped)

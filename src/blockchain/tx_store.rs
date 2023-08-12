@@ -235,6 +235,34 @@ impl PendingTxStore {
         Ok(self.0.contains_key(tx_hash.as_bytes())?)
     }
 
+    /// Fetch given tx hashes from the pending tx store.
+    /// The resulting vector contains `Option`, which is `Some` if the tx
+    /// was found in the pending tx store, and otherwise it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one block was not found.
+    pub fn get(
+        &self,
+        tx_hashes: &[blake3::Hash],
+        strict: bool,
+    ) -> Result<Vec<Option<Transaction>>> {
+        let mut ret = Vec::with_capacity(tx_hashes.len());
+
+        for tx_hash in tx_hashes {
+            if let Some(found) = self.0.get(tx_hash.as_bytes())? {
+                let tx = deserialize(&found)?;
+                ret.push(Some(tx));
+            } else {
+                if strict {
+                    let s = tx_hash.to_hex().as_str().to_string();
+                    return Err(Error::TransactionNotFound(s))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
+    }
+
     /// Retrieve all transactions from the pending tx store in the form of
     /// a HashMap with key the transaction hash and value the transaction
     /// itself.

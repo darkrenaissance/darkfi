@@ -185,6 +185,20 @@ impl P2p {
         Ok(())
     }
 
+    /// Reseed the P2P network.
+    pub async fn reseed(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
+        debug!(target: "net::p2p::reseed()", "P2P::reseed() [BEGIN]");
+        info!(target: "net::p2p::reseed()", "[P2P] Reseeding P2P subsystem");
+
+        // Start seed session
+        let seed = SeedSyncSession::new(Arc::downgrade(&self));
+        // This will block until all seed queries have finished
+        seed.start(ex.clone()).await?;
+
+        debug!(target: "net::p2p::reseed()", "P2P::reseed() [END]");
+        Ok(())
+    }
+
     /// Runs the network. Starts inbound, outbound, and manual sessions.
     /// Waits for a stop signal and stops the network if received.
     pub async fn run(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
@@ -266,7 +280,7 @@ impl P2p {
         }
 
         if futures.is_empty() {
-            warn!(target: "net::p2p::broadcast()", "P2P: No connected channels found for broadcast");
+            warn!(target: "net::p2p::broadcast()", "[P2P] No connected channels found for broadcast");
             return
         }
 

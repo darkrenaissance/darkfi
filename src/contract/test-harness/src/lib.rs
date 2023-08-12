@@ -456,15 +456,9 @@ impl TestHarness {
         // using same consensus parameters
         let genesis_block = self.genesis_block;
         let genesis_slot = self.get_slot_by_slot(0).await?;
-        let previous = PreviousSlot::new(
-            0,
-            vec![genesis_block],
-            vec![genesis_block],
-            genesis_slot.previous.eta,
-            0.0,
-        );
+        let previous = PreviousSlot::new(0, vec![genesis_block], vec![genesis_block], 0.0);
         let pid = PidOutput::new(0.0, 0.0, genesis_slot.pid.sigma1, genesis_slot.pid.sigma2);
-        let slot = Slot::new(id, previous, pid, 0, 0);
+        let slot = Slot::new(id, previous, pid, genesis_slot.last_eta, 0, 0);
 
         // Store generated slot
         for wallet in self.holders.values() {

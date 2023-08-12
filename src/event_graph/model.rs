@@ -67,7 +67,7 @@ struct EventNode<T: Send + Sync> {
 pub type ModelPtr<T> = Arc<Mutex<Model<T>>>;
 
 pub struct Model<T: Send + Sync + Debug> {
-    // This is periodically updated so we discard old nodes
+    // This is up to the application to reset or keep
     current_root: EventId,
     orphans: HashMap<EventId, Event<T>>,
     event_map: HashMap<EventId, EventNode<T>>,
@@ -374,9 +374,7 @@ where
         let node_a_depth = self.find_depth(node_a, &ancestor);
         let node_b_depth = self.find_depth(node_b, &ancestor);
 
-        let diff = (node_b_depth + 1).abs_diff(node_a_depth);
-
-        diff
+        (node_b_depth + 1).abs_diff(node_a_depth)
     }
 
     fn _debug(&self) {

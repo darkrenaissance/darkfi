@@ -16,7 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{blockchain::Slot, crypto::schnorr::Signature};
+use darkfi_sdk::{
+    blockchain::Slot,
+    crypto::schnorr::Signature,
+    pasta::{group::ff::Field, pallas},
+};
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 
 use crate::{tx::Transaction, Error, Result};
@@ -148,7 +152,14 @@ impl BlockInfo {
             // All slots exluding the last one must have reward value set to 0.
             // Slots must already be in correct order (sorted by id).
             for slot in &self.slots[..self.slots.len() - 1] {
-                validate_slot(slot, previous_slot, &previous_hash, &previous.header.previous, 0)?;
+                validate_slot(
+                    slot,
+                    previous_slot,
+                    &previous_hash,
+                    &previous.header.previous,
+                    &previous.producer.eta,
+                    0,
+                )?;
                 previous_slot = slot;
             }
         }
@@ -158,6 +169,7 @@ impl BlockInfo {
             previous_slot,
             &previous_hash,
             &previous.header.previous,
+            &previous.producer.eta,
             expected_reward,
         )?;
 
@@ -537,11 +549,13 @@ pub struct BlockProducer {
     pub signature: Signature,
     /// Proposal transaction
     pub proposal: Transaction,
+    /// Block producer ETA
+    pub eta: pallas::Base,
 }
 
 impl BlockProducer {
-    pub fn new(signature: Signature, proposal: Transaction) -> Self {
-        Self { signature, proposal }
+    pub fn new(signature: Signature, proposal: Transaction, eta: pallas::Base) -> Self {
+        Self { signature, proposal, eta }
     }
 }
 
@@ -549,6 +563,7 @@ impl Default for BlockProducer {
     fn default() -> Self {
         let signature = Signature::dummy();
         let proposal = Transaction::default();
-        Self { signature, proposal }
+        let eta = pallas::Base::ZERO;
+        Self { signature, proposal, eta }
     }
 }

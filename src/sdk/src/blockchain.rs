@@ -31,8 +31,6 @@ pub struct PreviousSlot {
     /// Existing forks second to last proposal/block hashes,
     /// as observed by the validator
     pub second_to_last_hashes: Vec<blake3::Hash>,
-    /// Slot eta
-    pub eta: pallas::Base,
     /// Feedback error
     pub error: f64,
 }
@@ -42,17 +40,16 @@ impl PreviousSlot {
         producers: u64,
         last_hashes: Vec<blake3::Hash>,
         second_to_last_hashes: Vec<blake3::Hash>,
-        eta: pallas::Base,
         error: f64,
     ) -> Self {
-        Self { producers, last_hashes, second_to_last_hashes, eta, error }
+        Self { producers, last_hashes, second_to_last_hashes, error }
     }
 }
 
 impl Default for PreviousSlot {
     /// Represents the genesis slot previous slot on current timestamp
     fn default() -> Self {
-        Self::new(0, vec![], vec![], pallas::Base::ZERO, 0.0)
+        Self::new(0, vec![], vec![], 0.0)
     }
 }
 
@@ -91,6 +88,8 @@ pub struct Slot {
     pub previous: PreviousSlot,
     /// Slot PID output
     pub pid: PidOutput,
+    /// Last block/proposal eta
+    pub last_eta: pallas::Base,
     /// Total tokens up until this slot
     pub total_tokens: u64,
     /// Slot reward
@@ -102,16 +101,17 @@ impl Slot {
         id: u64,
         previous: PreviousSlot,
         pid: PidOutput,
+        last_eta: pallas::Base,
         total_tokens: u64,
         reward: u64,
     ) -> Self {
-        Self { id, previous, pid, total_tokens, reward }
+        Self { id, previous, pid, last_eta, total_tokens, reward }
     }
 }
 
 impl Default for Slot {
     /// Represents the genesis slot on current timestamp
     fn default() -> Self {
-        Self::new(0, PreviousSlot::default(), PidOutput::default(), 0, 0)
+        Self::new(0, PreviousSlot::default(), PidOutput::default(), pallas::Base::ZERO, 0, 0)
     }
 }

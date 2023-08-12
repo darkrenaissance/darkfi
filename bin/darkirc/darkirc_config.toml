@@ -1,6 +1,9 @@
 ## This is the darkirc configuration file.
 ## Review it carefully.
 
+## JSON-RPC listen URL
+#rpc_listen="tcp://127.0.0.1:26660"
+
 ## IRC listen URL
 #irc_listen="tcp://127.0.0.1:6667"
 

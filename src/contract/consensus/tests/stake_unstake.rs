@@ -60,7 +60,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
 
     // Now Alice can stake her owncoin
     let alice_staked_oc =
-        th.execute_stake(&HOLDERS, &Holder::Alice, current_slot, &alice_oc, 86).await?;
+        th.execute_stake(&HOLDERS, &Holder::Alice, current_slot, &alice_oc, 489).await?;
 
     // We progress after grace period
     current_slot += (calculate_grace_period() * EPOCH_LENGTH) + EPOCH_LENGTH;
@@ -91,14 +91,14 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
 
     // Now Alice can stake her unstaked owncoin again to try some mallicious cases
     let alice_staked_oc =
-        th.execute_stake(&HOLDERS, &Holder::Alice, current_slot, &alice_unstaked_oc, 262).await?;
+        th.execute_stake(&HOLDERS, &Holder::Alice, current_slot, &alice_unstaked_oc, 15).await?;
 
     // Alice tries to stake her coin again
     info!(target: "consensus", "[Malicious] ===========================");
     info!(target: "consensus", "[Malicious] Checking staking coin again");
     info!(target: "consensus", "[Malicious] ===========================");
     let (stake_tx, _, _) =
-        th.stake(&Holder::Alice, current_slot, &alice_unstaked_oc, pallas::Base::from(262)).await?;
+        th.stake(&Holder::Alice, current_slot, &alice_unstaked_oc, pallas::Base::from(15)).await?;
     th.execute_erroneous_txs(
         TxAction::ConsensusStake,
         &Holder::Alice,
@@ -186,7 +186,7 @@ async fn consensus_contract_stake_unstake() -> Result<()> {
 
     // Now Alice can stake her unstaked owncoin again
     let alice_staked_oc =
-        th.execute_stake(&HOLDERS, &Holder::Alice, current_slot, &alice_unstaked_oc, 70).await?;
+        th.execute_stake(&HOLDERS, &Holder::Alice, current_slot, &alice_unstaked_oc, 65).await?;
 
     // We progress after grace period
     current_slot += (calculate_grace_period() * EPOCH_LENGTH) + EPOCH_LENGTH;

@@ -175,7 +175,7 @@ impl ConsensusProposalCallBuilder {
 
         info!("Building Consensus::ProposalV1 VRF proof");
         let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
-        vrf_input.extend_from_slice(&self.slot.previous.eta.to_repr());
+        vrf_input.extend_from_slice(&self.slot.last_eta.to_repr());
         vrf_input.extend_from_slice(self.fork_previous_hash.as_bytes());
         vrf_input.extend_from_slice(&pallas::Base::from(self.slot.id).to_repr());
         let vrf_proof = VrfProof::prove(input.secret, &vrf_input, &mut OsRng);

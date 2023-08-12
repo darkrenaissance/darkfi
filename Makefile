@@ -11,9 +11,6 @@ CARGO = cargo $(RUST_VER)
 # Uncomment this if the above is uncommented
 #TARGET_PRFX = --target=
 
-# Git revision, embedded in src/lib.rs
-GIT_REV = $(shell git rev-parse --short HEAD)
-
 # Binaries to be built
 BINS = darkfid faucetd drk darkirc vanityaddr tau taud
 
@@ -38,10 +35,7 @@ BINDEPS = \
 
 all: $(BINS)
 
-rev:
-	@grep -q "$(GIT_REV)" src/lib.rs || sed -e 's/@GIT_REV@/$(GIT_REV)/' -i src/lib.rs
-
-zkas: rev $(ZKASDEPS)
+zkas: $(ZKASDEPS)
 	$(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) --all-features --release --package $@
 	cp -f target/$(RUST_TARGET)/release/$@ $@
 
@@ -107,5 +101,5 @@ uninstall:
 		rm -f $(DESTDIR)$(PREFIX)/bin/$$i; \
 	done;
 
-.PHONY: all rev check fix fmt clippy test test-no-run cleanbin clean \
+.PHONY: all check fix fmt clippy test test-no-run cleanbin clean \
 	install uninstall contracts coverage

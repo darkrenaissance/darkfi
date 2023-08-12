@@ -2,7 +2,7 @@ from core.utils import *
 from core.strategy import *
 
 class Darkie():
-    def __init__(self, airdrop, initial_stake=None, vesting=[], hp=False, commit=True, epoch_len=EPOCH_LENGTH, strategy=random_strategy(EPOCH_LENGTH)):
+    def __init__(self, airdrop, initial_stake=None, vesting=[], hp=False, commit=True, epoch_len=EPOCH_LENGTH, strategy=random_strategy(EPOCH_LENGTH), idx=0):
         self.vesting = vesting
         self.stake = (Num(airdrop) if hp else airdrop)
         self.initial_stake = [self.stake]
@@ -15,6 +15,8 @@ class Darkie():
         self.won_hist = [] # winning history boolean
         self.fees = []
         self.tips = [0]
+        self.idx=idx
+        self.aprs = [] #milinial aprs. every 1k slots ~ 1day
 
     def clone(self):
         return Darkie(self.stake)
@@ -39,13 +41,15 @@ class Darkie():
     def apr_scaled_to_runningtime(self):
         initial_stake = self.vesting_wrapped_initial_stake()
         #assert self.stake >= initial_stake, 'stake: {}, initial_stake: {}, slot: {}, current: {}, previous: {} vesting'.format(self.stake, initial_stake, self.slot, self.current_vesting(), self.prev_vesting())
-        apr_scaled = Num(self.stake - initial_stake) / Num(initial_stake) if initial_stake>0 else 0
-        if self.slot <= HEADSTART_AIRDROP:
+        if self.slot < HEADSTART_AIRDROP:
             # during this phase, it's only called at end of epoch
-            apr_period = EPOCH_LENGTH
+            apr_period = self.slot%EPOCH_LENGTH
+        elif self.slot > MIL_SLOT:
+            apr_period = self.slot - int(self.slot/MIL_SLOT)*MIL_SLOT
         else:
             apr_period = self.slot-HEADSTART_AIRDROP
-        apr = apr_scaled * Num(ONE_YEAR/apr_period) if initial_stake > 0 and self.slot>0 else 0
+        apr_scaled = ((self.stake - initial_stake) / initial_stake) / apr_period if initial_stake>0  and apr_period>0 else 0
+        apr = apr_scaled * ONE_YEAR if initial_stake > 0 and apr_period>0 and self.slot>0 else 0
         #if apr>0 and self.stake-initial_stake>0:
             #print("apr: {}, stake: {}, initial_stake: {}".format(apr, self.stake, initial_stake))
         return apr
@@ -58,10 +62,12 @@ class Darkie():
     def vesting_wrapped_initial_stake(self):
         #returns  vesting stake plus initial stake gained from zero coin headstart during aridrop period
         vesting = self.current_vesting()
-        if self.slot <= HEADSTART_AIRDROP:
+        if self.slot < HEADSTART_AIRDROP:
             initial_stake = self.initial_stake[-1]
+        elif self.slot > MIL_SLOT:
+            initial_stake = self.initial_stake[int(int(self.slot/MIL_SLOT) * MIL_SLOT/EPOCH_LENGTH)-1]
         else:
-            initial_stake = self.initial_stake[int(HEADSTART_AIRDROP/EPOCH_LENGTH)]
+            initial_stake = self.initial_stake[int(HEADSTART_AIRDROP/EPOCH_LENGTH)-1]
         return vesting + initial_stake
 
     """
@@ -134,8 +140,10 @@ class Darkie():
                 assert scaled_target>0
             return scaled_target
 
+        apr = self.apr_scaled_to_runningtime()
+        if (self.slot+1) % MIL_SLOT == 0:
+            self.aprs += [apr]
         if self.slot % EPOCH_LENGTH ==0 and self.slot > 0:
-            apr = self.apr_scaled_to_runningtime()
             # staked ratio is added in strategy
             self.strategy.set_ratio(self.slot, apr)
             # epoch stake is added
@@ -165,6 +173,9 @@ class Darkie():
             buf += '(apr,staked ratio,{}):'.format(self.strategy.type)+','.join(['('+str(apr)+','+str(sr)+')' for sr, apr in zip(self.strategy.staked_tokens_ratio, self.strategy.annual_return)])
             buf+='\r\n'
             buf += 'apr: {}'.format(self.apr_scaled_to_runningtime())
+            buf += '\r\n'
+            buf += 'mil-aprs: {}'.format(','.join([str(apr) for apr in self.aprs]))
+            buf += '\r\n'
             f.write(buf)
 
     """
@@ -177,8 +188,8 @@ class Darkie():
         tx_size = random.randint(0, MAX_BLOCK_SIZE)
         tip = self.tx_tip(tx_size, last_reward)
         if self.stake < tip:
-            return Tx(tx_size, 0)
-        return Tx(tx_size, tip)
+            return Tx(tx_size, 0, self.idx)
+        return Tx(tx_size, tip, self.idx)
 
     def tx_tip(self, tx_size, last_reward):
         tip = random_tip_strategy()
@@ -197,10 +208,11 @@ class Darkie():
         return self.fees[-1] if len(self.fees)>0 else 0
 
 class Tx(object):
-    def __init__(self, size, tip):
+    def __init__(self, size, tip, idx):
         self.tx = [random.random() for _ in range(size)]
         self.len = size
         self.tip = tip
+        self.idx=idx
 
     """
     anonymous contract assumed to be of random streams from uniform distribution,

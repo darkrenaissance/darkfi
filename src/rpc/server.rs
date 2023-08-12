@@ -76,7 +76,8 @@ async fn accept(
         let reply = rh.handle_request(r).await;
         match reply {
             JsonResult::Subscriber(sub) => {
-                let subscription = sub.subscriber.subscribe().await;
+                // Subscribe to the inner method subscriber
+                let subscription = sub.subscriber.subscriber.subscribe().await;
                 loop {
                     // Listen subscription for notifications
                     let notification = subscription.receive().await;

@@ -63,14 +63,13 @@ impl Harness {
             producers,
             vec![previous_hash],
             vec![previous.header.previous.clone()],
-            pallas::Base::ZERO,
             previous_slot.pid.error,
         );
         let (f, error, sigma1, sigma2) = slot_pid_output(&previous_slot, producers);
         let pid = PidOutput::new(f, error, sigma1, sigma2);
         let total_tokens = previous_slot.total_tokens + previous_slot.reward;
         let reward = next_block_reward();
-        let slot = Slot::new(id, previous_slot_info, pid, total_tokens, reward);
+        let slot = Slot::new(id, previous_slot_info, pid, pallas::Base::ZERO, total_tokens, reward);
 
         // We increment timestamp so we don't have to use sleep
         let mut timestamp = previous.header.timestamp;

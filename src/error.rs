@@ -260,6 +260,9 @@ pub enum Error {
     #[error("Proposal contains missmatched hashes")]
     ProposalHashesMissmatchError,
 
+    #[error("Proposal contains unknown slots")]
+    ProposalContainsUnknownSlots,
+
     #[error("Proposal contains missmatched headers")]
     ProposalHeadersMissmatchError,
 
