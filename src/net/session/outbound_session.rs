@@ -30,7 +30,7 @@ use std::collections::HashSet;
 
 use async_std::sync::{Arc, Mutex, Weak};
 use async_trait::async_trait;
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use smol::Executor;
 use url::Url;
 
@@ -230,7 +230,7 @@ impl OutboundSession {
         );
 
         // Find an address to connect to. We also do peer discovery here if needed.
-        let addr = self.load_address(slot_number, transports).await?;
+        let addr = self.load_address(slot_number, transports, ex.clone()).await?;
         info!(
             target: "net::outbound_session::try_connect()",
             "[P2P] Connecting outbound slot #{} [{}]",
@@ -301,9 +301,12 @@ impl OutboundSession {
     /// our own inbound address, then checks whether it is already connected
     /// (exists) or connecting (pending). If no address was found, we'll attempt
     /// to do peer discovery and try to fill the slot again.
-    async fn load_address(&self, slot_number: usize, transports: &[String]) -> Result<Url> {
-        // TODO: At some point we're able to lose all known peers. We need to reseed at that point.
-
+    async fn load_address(
+        &self,
+        slot_number: usize,
+        transports: &[String],
+        ex: Arc<Executor<'_>>,
+    ) -> Result<Url> {
         loop {
             let p2p = self.p2p();
             let retry_sleep = p2p.settings().outbound_connect_timeout;
@@ -383,7 +386,7 @@ impl OutboundSession {
             // inside peer_discovery, it will block here in the slot sessions, while
             // other slots can keep trying to find hosts. This is also why we sleep
             // in the beginning of this loop if peer discovery is currently active.
-            self.peer_discovery(slot_number).await;
+            self.peer_discovery(slot_number, ex.clone()).await;
         }
     }
 
@@ -394,7 +397,7 @@ impl OutboundSession {
     /// This function will also sleep `Settings::outbound_connect_timeout` seconds
     /// after broadcasting in order to let the P2P stack receive and work through
     /// the addresses it is expecting.
-    async fn peer_discovery(&self, slot_number: usize) {
+    async fn peer_discovery(&self, slot_number: usize, ex: Arc<Executor<'_>>) {
         let p2p = self.p2p();
 
         if *p2p.peer_discovery_running.lock().await {
@@ -413,14 +416,29 @@ impl OutboundSession {
         );
         *p2p.peer_discovery_running.lock().await = true;
 
-        // Broadcast the GetAddrs message to all active channels
-        let get_addrs = GetAddrsMessage { max: p2p.settings().outbound_connections as u32 };
-        info!(
-            target: "net::outbound_session::peer_discovery()",
-            "[P2P] Outbound #{}: Broadcasting GetAddrs across active channels",
-            slot_number,
-        );
-        p2p.broadcast(&get_addrs).await;
+        // Broadcast the GetAddrs message to all active channels.
+        // If we have no active channels, we will perform a SeedSyncSession instead.
+        if p2p.random_channel().await.is_some() {
+            let get_addrs = GetAddrsMessage { max: p2p.settings().outbound_connections as u32 };
+            info!(
+                target: "net::outbound_session::peer_discovery()",
+                "[P2P] Outbound #{}: Broadcasting GetAddrs across active channels",
+                slot_number,
+            );
+            p2p.broadcast(&get_addrs).await;
+        } else {
+            warn!(
+                target: "net::outbound_session::peer_discovery()",
+                "[P2P] No connected channels found for peer discovery. Reseeding.",
+            );
+
+            if let Err(e) = p2p.clone().reseed(ex.clone()).await {
+                error!(
+                    target: "net::outbound_session::peer_discovery()",
+                    "[P2P] Network reseed failed: {}", e,
+                );
+            }
+        }
 
         // Now sleep to let the GetAddrs propagate, and hopefully
         // in the meantime we'll get some peers.
