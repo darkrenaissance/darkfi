@@ -17,5 +17,5 @@ crate-type = ["cdylib"]
 darkfi = { path = "../../../", features = ["zk", "zkas"] }
 darkfi-sdk = { path = "../" }
 halo2_gadgets = "0.3.0"
-pyo3 = "0.19.1"
+pyo3 = "0.19.2"
 rand = "0.8.5"
