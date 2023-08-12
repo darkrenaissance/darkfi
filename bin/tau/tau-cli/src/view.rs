@@ -117,8 +117,18 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String) -> Result<()> {
             .build(),
     );
 
-    ws_table.printstd();
-    table.printstd();
+    if unsafe { libc::isatty(libc::STDOUT_FILENO) } == 1 {
+        ws_table.printstd();
+        table.printstd();
+    } else {
+        for row in table.row_iter() {
+            for cell in row.iter() {
+                print!("{}\t", cell.get_content());
+            }
+            print!("\n");
+        }
+    }
+
     Ok(())
 }
 

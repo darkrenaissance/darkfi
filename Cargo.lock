@@ -5946,6 +5946,7 @@ dependencies = [
  "clap 4.3.21",
  "colored",
  "darkfi",
+ "libc",
  "libsqlite3-sys",
  "log",
  "prettytable-rs",
