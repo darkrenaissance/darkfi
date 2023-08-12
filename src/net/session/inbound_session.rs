@@ -27,7 +27,7 @@ use std::collections::HashMap;
 
 use async_std::sync::{Arc, Mutex, Weak};
 use async_trait::async_trait;
-use log::{error, info};
+use log::{debug, error, info};
 use smol::Executor;
 use url::Url;
 
@@ -174,17 +174,26 @@ impl InboundSession {
         channel: ChannelPtr,
         ex: Arc<Executor<'_>>,
     ) -> Result<()> {
-        info!(target: "net::inbound_session", "[P2P] Connected Inbound #{} [{}]", index, channel.address());
-        self.register_channel(channel.clone(), ex.clone()).await?;
+        info!(
+            target: "net::inbound_session::setup_channel",
+            "[P2P] Connected Inbound #{} [{}]", index, channel.address(),
+        );
 
+        let stop_sub = channel.subscribe_stop().await?;
+
+        self.register_channel(channel.clone(), ex.clone()).await?;
         let addr = channel.address().clone();
 
         self.connect_infos.lock().await[index]
             .insert(addr.clone(), InboundInfo { addr: Some(addr.clone()), channel: None });
 
-        let stop_sub = channel.subscribe_stop().await?;
         stop_sub.receive().await;
+        debug!(
+            target: "net::inbound_session::setup_channel()",
+            "Received stop_sub, removing channel from P2P",
+        );
 
+        self.p2p().remove(channel).await;
         self.connect_infos.lock().await[index].remove(&addr);
 
         Ok(())
