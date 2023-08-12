@@ -280,7 +280,7 @@ impl P2p {
         }
 
         if futures.is_empty() {
-            warn!(target: "net::p2p::broadcast()", "P2P: No connected channels found for broadcast");
+            warn!(target: "net::p2p::broadcast()", "[P2P] No connected channels found for broadcast");
             return
         }
 
