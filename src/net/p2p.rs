@@ -275,7 +275,10 @@ impl P2p {
             }
 
             futures.push(channel.send(message).map_err(|e| {
-                format!("P2P: Broadcasting message to {} failed: {}", channel.address(), e)
+                (
+                    format!("[P2P] Broadcasting message to {} failed: {}", channel.address(), e),
+                    channel.clone(),
+                )
             }));
         }
 
@@ -285,10 +288,9 @@ impl P2p {
         }
 
         while let Some(entry) = futures.next().await {
-            // TODO: Here we can close the channels.
-            // See message_subscriber::_trigger_all on how to do it.
-            if let Err(e) = entry {
+            if let Err((e, chan)) = entry {
                 error!(target: "net::p2p::broadcast()", "{}", e);
+                self.remove(chan).await;
             }
         }
     }
