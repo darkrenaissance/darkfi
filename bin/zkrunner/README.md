@@ -1,35 +1,34 @@
-# What is this?
+zkrunner
+========
 
-`zkrunner` is a simple Python script that calls into the Darkfi Python SDK.
-The Python SDK provides APIs such as creating a circuit, assigning the witness to the circuit and more.
+`zkrunner` is a simple Python script using the DarkFi SDK Python
+bindings providing a CLI for prototyping zkas proofs.
 
-`zkrunner` uses the Python SDK to create a developement environment for zkas developer where:
-* the ZKAS developer provides the ZKAS binary code
-* the ZKAS developer provides the witness and assigns it accordingly
-* zkrunner:
-	* sets up the circuit from the binary
-	* generates both proving and verifying key
-	* creates the proof from the witness and proving key
-	* creates the public inputs from the witness
-	* verifies the proof using the public inputs and verifying key
-* zkrunner times each step as a basic performance benchmark
+## Usage
 
-This is so developers have an easier time to test their zkas circuit.
+Refer to the [README.md of the python bindings](../../src/sdk/python/README.md)
+to see how to install and use them. They're necessary for zkrunner to
+work properly.
 
-# Installation
+Help text:
 
-Follow the guide in src/sdk/python/README.md to install the Python bindings and virtual environment.
-
-# Getting Started
-
-* Compile the ZKAS source to ZKAS binary
 ```
-cd <darkmap>
-zkas proof/set_v1.zk
+$ zkrunner.py -h
 ```
-* Open up `zkrunner.py`, read over the TODOs and comments, provide the path to zkas binary code, witness and assign accordingly.
-* After installing Python bindings in your Python installation, simply run `python zkrunner.py [--verbose]`.
 
-# Notes
+Running a demo:
 
-* "witness" and "witnesses" are used interchangablely.
+```
+$ witness_gen.py > witness.json
+$ zkrunner.py -w witness.json opcodes.zk
+```
+
+The program expects a path to a `witness.json` file containing the
+information about witnesses and public inputs for the proof, and a
+path to a zkas circuit source code (does not have to be compiled).
+
+Once executed, zkrunner will attempt to create and verify the proof.
+
+## Creating witnesses
+
+Refer to the `witness_gen.py` file.
