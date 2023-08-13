@@ -20,6 +20,7 @@ Python tool to prototype zkVM proofs given zkas source code and necessary
 witness values in JSON format.
 """
 import json
+import sys
 from darkfi_sdk.pasta import Fp, Fq, Ep
 from darkfi_sdk.zkas import (MockProver, ZkBinary, ZkCircuit, ProvingKey,
                              Proof, VerifyingKey)
@@ -31,8 +32,11 @@ def main(witness_file, source_file, mock=False):
     # Refer to the `witness_gen.py` file to see what the format of this
     # file should be.
     print("Decoding witnesses...")
-    with open(witness_file, "r", encoding="utf-8") as json_file:
-        witness_data = json.load(json_file)
+    if witness_file == "-":
+        witness_data = json.load(sys.stdin)
+    else:
+        with open(witness_file, "r", encoding="utf-8") as json_file:
+            witness_data = json.load(json_file)
 
     # Then we attempt to compile the given zkas code and create a
     # zkVM circuit. This compiling logic happens in the Python bindings'
