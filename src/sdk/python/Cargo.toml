@@ -11,6 +11,7 @@ repository = "https://github.com/darkrenaissance/darkfi"
 [lib]
 name = "darkfi_sdk"
 crate-type = ["cdylib"]
+doc = false
 
 [dependencies]
 darkfi = {path = "../../../", features = ["zk", "zkas"]}
