@@ -16,71 +16,35 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/// Pallas point in affine space
-mod affine;
-/// Pallas base field element
-mod base;
-/// Pallas point in projective space
-mod point;
-/// Pallas scalar field element
-mod scalar;
+/// Pallas and Vesta curves
+mod pasta;
 
-/// ZK proof creation
-mod proof;
-/// Proving key creation
-mod proving_key;
-/// Verifying key creation
-mod verifying_key;
-/// zkas ZkBinary wrappers
-mod zk_binary;
-/// zkvm wrappers
-mod zk_circuit;
+/// Merkle tree utilities
+mod merkle;
+
+/// Cryptographic utilities
+mod crypto;
+
+/// zkas definitions
+mod zkas;
 
 #[pyo3::prelude::pymodule]
-fn darkfi_sdk_py(py: pyo3::Python<'_>, m: &pyo3::types::PyModule) -> pyo3::PyResult<()> {
-    let submodule = affine::create_module(py)?;
-    pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk_py.affine'] = submodule");
+fn darkfi_sdk(py: pyo3::Python<'_>, m: &pyo3::types::PyModule) -> pyo3::PyResult<()> {
+    let submodule = pasta::create_module(py)?;
+    pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk.pasta'] = submodule");
     m.add_submodule(submodule)?;
 
-    let submodule = base::create_module(py)?;
-    pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk_py.base'] = submodule");
+    let submodule = merkle::create_module(py)?;
+    pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk.merkle'] = submodule");
     m.add_submodule(submodule)?;
 
-    let submodule = scalar::create_module(py)?;
-    pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk_py.scalar'] = submodule");
-    m.add_submodule(scalar::create_module(py)?)?;
+    let submodule = crypto::create_module(py)?;
+    pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk.crypto'] = submodule");
+    m.add_submodule(submodule)?;
 
-    let submodule = point::create_module(py)?;
-    pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk_py.point'] = submodule");
-    m.add_submodule(point::create_module(py)?)?;
-
-    let submodule = proof::create_module(py)?;
-    pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk_py.proof'] = submodule");
-    m.add_submodule(proof::create_module(py)?)?;
-
-    let submodule = proving_key::create_module(py)?;
-    pyo3::py_run!(
-        py,
-        submodule,
-        "import sys; sys.modules['darkfi_sdk_py.proving_key'] = submodule"
-    );
-    m.add_submodule(proving_key::create_module(py)?)?;
-
-    let submodule = verifying_key::create_module(py)?;
-    pyo3::py_run!(
-        py,
-        submodule,
-        "import sys; sys.modules['darkfi_sdk_py.verifying_key'] = submodule"
-    );
-    m.add_submodule(verifying_key::create_module(py)?)?;
-
-    let submodule = zk_binary::create_module(py)?;
-    pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk_py.zk_binary'] = submodule");
-    m.add_submodule(zk_binary::create_module(py)?)?;
-
-    let submodule = zk_circuit::create_module(py)?;
-    pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk_py.zk_circuit'] = submodule");
-    m.add_submodule(zk_circuit::create_module(py)?)?;
+    let submodule = zkas::create_module(py)?;
+    pyo3::py_run!(py, submodule, "import sys; sys.modules['darkfi_sdk.zkas'] = submodule");
+    m.add_submodule(submodule)?;
 
     Ok(())
 }

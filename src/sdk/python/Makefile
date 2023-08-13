@@ -9,5 +9,4 @@ all:
 dev:
 	$(MATURIN) develop --release
 
-
 .PHONY: all

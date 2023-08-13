@@ -22,14 +22,14 @@ $ source venv/bin/activate
 
 ```
 $ python
->>> import darkfi_sdk_py
->>> from darkfi_sdk_py.base import Base
->>> a = Base.from_u64(42)
->>> b = Base.from_u64(69)
->>> a + b == Base.from_u64(111)
+>>> import darkfi_sdk
+>>> from darkfi_sdk.pasta import Fp
+>>> a = Fp.from_u64(42)
+>>> b = Fp.from_u64(69)
+>>> a + b == Fp.from_u64(111)
 ```
 
-### Randomness
+## Randomness
 
 Note that the `random` methods take randomness 
 from the OS on the Rust side.

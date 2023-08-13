@@ -3,14 +3,13 @@ requires = ["maturin>=1.0,<2.0"]
 build-backend = "maturin"
 
 [project]
-name = "darkfi-sdk-py"
-requires-python = ">=3.8"
+name = "darkfi-sdk"
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-
 
 [tool.maturin]
 features = ["pyo3/extension-module"]
