@@ -35,7 +35,7 @@ pub mod halo2 {
     pub use halo2_proofs::{
         arithmetic::Field,
         circuit::{AssignedCell, Layouter, Value},
-        plonk,
+        dev, plonk,
         plonk::{Advice, Assigned, Column},
     };
 }
