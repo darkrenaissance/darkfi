@@ -20,7 +20,7 @@ use std::ops::Deref;
 
 use darkfi::{
     zk::{self, empty_witnesses, halo2::Value},
-    zkas::decoder,
+    zkas::{self, decoder},
 };
 use darkfi_sdk::{crypto::MerkleNode, pasta::pallas};
 use pyo3::{pyclass, pymethods, types::PyModule, PyCell, PyResult, Python};
@@ -35,8 +35,31 @@ pub struct ZkBinary(decoder::ZkBinary);
 #[pymethods]
 impl ZkBinary {
     #[new]
-    fn new(bytes: Vec<u8>) -> Self {
-        Self::decode(bytes)
+    fn new(filename: String, source_code: String) -> Self {
+        let source = source_code.replace('\t', "    ").replace("\r\n", "\n");
+        let lexer = zkas::Lexer::new(&filename, source.chars());
+        let tokens = lexer.lex();
+        let parser = zkas::Parser::new(&filename, source.chars(), tokens);
+        let (namespace, k, constants, witnesses, statements) = parser.parse();
+        let mut analyzer =
+            zkas::Analyzer::new(&filename, source.chars(), constants, witnesses, statements);
+        analyzer.analyze_types();
+
+        let compiler = zkas::Compiler::new(
+            &filename,
+            source.chars(),
+            namespace,
+            k,
+            analyzer.constants,
+            analyzer.witnesses,
+            analyzer.statements,
+            analyzer.literals,
+            true,
+        );
+
+        let bincode = compiler.compile();
+
+        Self::decode(bincode)
     }
 
     #[staticmethod]
