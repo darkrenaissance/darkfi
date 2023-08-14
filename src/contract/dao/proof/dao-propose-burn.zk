@@ -1,4 +1,5 @@
 k = 13;
+field = "pallas";
 
 constant "DaoProposeInput" {
 	EcFixedPointBase NULLIFIER_K,

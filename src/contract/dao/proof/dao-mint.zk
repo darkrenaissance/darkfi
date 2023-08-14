@@ -1,4 +1,5 @@
 k = 13;
+field = "pallas";
 
 constant "DaoMint" {
 	EcFixedPoint VALUE_COMMIT_RANDOM,

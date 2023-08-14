@@ -9,6 +9,7 @@ endif
 
 syn keyword zkasKeyword 
     \ k
+    \ field
     \ constant
     \ witness
     \ circuit

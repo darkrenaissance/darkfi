@@ -1,4 +1,5 @@
 k = 13;
+field = "pallas";
 
 constant "ConsensusMint_V1" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,

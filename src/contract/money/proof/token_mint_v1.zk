@@ -1,6 +1,6 @@
 # Circuit used to mint arbitrary coins given a mint authority secret.
-
 k = 13;
+field = "pallas";
 
 constant "TokenMint_V1" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,

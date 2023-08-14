@@ -1,5 +1,6 @@
 # The k parameter defining the number of rows used in our circuit (2^k)
 k = 13;
+field = "pallas";
 
 # The constants we define for our circuit
 constant "Mint_V1" {

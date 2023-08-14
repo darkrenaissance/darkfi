@@ -1,4 +1,5 @@
 k = 13;
+field = "pallas";
 
 constant "TokenFreeze_V1" {
 	EcFixedPointBase NULLIFIER_K,

@@ -24,6 +24,7 @@
   <definitions>
     <context id="keywords" style-ref="keyword">
       <keyword>k</keyword>
+      <keyword>field</keyword>
       <keyword>constant</keyword>
       <keyword>witness</keyword>
       <keyword>circuit</keyword>

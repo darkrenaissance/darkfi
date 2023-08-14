@@ -1,4 +1,5 @@
 k = 13;
+field = "pallas";
 
 constant "Burn" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,

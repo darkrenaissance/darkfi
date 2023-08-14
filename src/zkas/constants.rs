@@ -21,3 +21,6 @@ pub const MAX_K: u32 = 16;
 
 /// Maximum allowed namespace length in bytes
 pub const MAX_NS_LEN: usize = 32;
+
+/// Allowed fields for proofs
+pub const ALLOWED_FIELDS: [&str; 1] = ["pallas"];

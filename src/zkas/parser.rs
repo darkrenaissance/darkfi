@@ -22,7 +22,7 @@ use itertools::Itertools;
 
 use super::{
     ast::{Arg, Constant, Literal, Statement, StatementType, Variable, Witness},
-    constants::{MAX_K, MAX_NS_LEN},
+    constants::{ALLOWED_FIELDS, MAX_K, MAX_NS_LEN},
     error::ErrorEmitter,
     lexer::{Token, TokenType},
     LitType, Opcode, VarType,
@@ -30,7 +30,7 @@ use super::{
 
 /// zkas language builtin keywords.
 /// These can not be used anywhere except where they are expected.
-const KEYWORDS: [&str; 4] = ["k", "constant", "witness", "circuit"];
+const KEYWORDS: [&str; 5] = ["k", "field", "constant", "witness", "circuit"];
 
 /// Forbidden namespaces
 const NOPE_NS: [&str; 4] = [".constant", ".literal", ".witness", ".circuit"];
@@ -145,16 +145,57 @@ impl Parser {
             number.token_type != TokenType::Number ||
             semicolon.token_type != TokenType::Semicolon
         {
-            self.error.abort("Source file does not start with k=n;", 0, 0);
+            self.error.abort("Source file does not start with k=n;", k.line, k.column);
         }
 
         if k.token != "k" {
-            self.error.abort("Source file does not start with k=n;", 0, 0);
+            self.error.abort("Source file does not start with k=n;", k.line, k.column);
         }
 
         let declared_k = number.token.parse().unwrap();
         if declared_k > MAX_K {
-            self.error.abort(&format!("k param is too high, max allowed is {}", MAX_K), 0, 0);
+            self.error.abort(
+                &format!("k param is too high, max allowed is {}", MAX_K),
+                number.line,
+                number.column,
+            );
+        }
+
+        // Then we declare the field we're working in.
+        let Some((field, equal, field_name, semicolon)) = iter.next_tuple() else {
+            self.error.abort("Source file does not declare field after k", k.line, k.column);
+            unreachable!();
+        };
+
+        if field.token_type != TokenType::Symbol ||
+            equal.token_type != TokenType::Assign ||
+            field_name.token_type != TokenType::String ||
+            semicolon.token_type != TokenType::Semicolon
+        {
+            self.error.abort(
+                "Source file does not declare field after k",
+                field.line,
+                field.column,
+            );
+        }
+
+        if field.token != "field" {
+            self.error.abort(
+                "Source file does not declare field after k",
+                field.line,
+                field.column,
+            );
+        }
+
+        if !ALLOWED_FIELDS.contains(&field_name.token.as_str()) {
+            self.error.abort(
+                &format!(
+                    "Declared field \"{}\" is not supported. Use any of: {:?}",
+                    field_name.token, ALLOWED_FIELDS
+                ),
+                field_name.line,
+                field_name.column,
+            );
         }
 
         while let Some(t) = iter.next() {

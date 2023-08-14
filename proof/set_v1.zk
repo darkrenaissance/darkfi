@@ -6,6 +6,7 @@
 
 # 2 ** k is the maximum nubmer of rows in the circuit.
 k = 11;
+field = "pallas";
 
 # Section to declare constants used in the circuit.
 # "Set_V1" is the namepsace of circuit. 

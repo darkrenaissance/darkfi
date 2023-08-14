@@ -1,4 +1,5 @@
 k = 13;
+field = "pallas";
 
 constant "Simple" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
