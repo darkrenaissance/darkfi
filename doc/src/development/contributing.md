@@ -46,4 +46,7 @@ or need to be maintained:
   at each step to see where problems go wrong.
 * **Events System:** We need to fix IRCD, we will need to implement the 
   [events](https://darkrenaissance.github.io/darkfi/misc/event_graph/event_graph.html) system.
+* **p2p Network:** this is a good place to start reviewing the code and suggesting improvements.
+  For example maintaining network resiliency. You can also look at apps like darkirc, and the event graph subsystem,
+  and see how to make them more reliable. See also the task manager tau.
 
