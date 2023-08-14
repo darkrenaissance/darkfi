@@ -232,7 +232,7 @@ impl VmConfig {
         Some(LessThanChip::construct(lessthan_config.clone()))
     }
 
-    fn boolcheck_chip(&self) -> Option<SmallRangeCheckChip> {
+    fn boolcheck_chip(&self) -> Option<SmallRangeCheckChip<pallas::Base>> {
         let Some(VmChip::BoolCheck(boolcheck_config)) =
             self.chips.iter().find(|&c| matches!(c, VmChip::BoolCheck(_)))
         else {
