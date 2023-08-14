@@ -132,10 +132,6 @@ macro_rules! impl_elem {
                     CompareOp::Ge => Ok(self.0 >= other.0),
                 }
             }
-
-            fn to_json(&self) -> PyResult<String> {
-                self.__str__()
-            }
         }
     };
 }
