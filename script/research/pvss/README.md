@@ -1,6 +1,13 @@
 Publicly Verifiable Secret Sharing
 ==================================
 
+## `dleq.sage`
+
+A quick overview of the DLEQ sigma protocol, both interactive and
+non-interactive.
+
+## `pvss.sage`
+
 This is an implementation of the paper found at
 <https://www.win.tue.nl/~berry/papers/crypto99.pdf>.
 
