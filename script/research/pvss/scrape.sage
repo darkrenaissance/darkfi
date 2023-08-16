@@ -1,9 +1,10 @@
 # Scrape PVSS
 # https://eprint.iacr.org/2017/216.pdf
+from random import sample
 from hashlib import sha256
 
-t = 3  # Threshold
-n = 5  # Participants
+t = 3   # Threshold
+n = 10  # Participants
 assert t <= n
 
 # Pallas
@@ -96,6 +97,7 @@ for i in range(n):
 # ============
 # Verification
 # ============
+# Check the DLEQ proof:
 e = sha256()
 e.update(str(a1).encode())
 for i in range(n):
@@ -108,3 +110,53 @@ assert e_prover == e_verifier
 for i in range(n):
     assert a1 == g*z[i] + v[i]*e_verifier
     assert a2[i] == pk[i]*z[i] + enc_shares[i]*e_verifier
+
+# Reed Solomon check:
+# We can sample a polynomial with random coefficients of degree n-t-1
+RS.<σ> = PolynomialRing(Fq)
+σ_coeff = [Fq.random_element() for _ in range(n-t)]
+v_poly = RS(σ_coeff)
+assert v_poly.degree() == n-t-1
+
+# Then perform the following:
+v_p = Ep(0)
+for i in range(n):
+    c_perp = v_poly(Fq(i))
+    for j in range(n):
+        if i != j:
+            c_perp *= (Fq(i) - Fq(j)).inverse()
+    v_p += v[i] * c_perp
+
+assert v_p == Ep(0)
+
+# At this point we accept the proof and shares as valid.
+
+# ==============
+# Reconstruction
+# ==============
+# Parties decrypt their shares, ~s_i = ^s_i * 1/sk_i = h * s_i
+dec_shares = []
+for i in range(n):
+    share = enc_shares[i] * sk[i].inverse()
+    dec_shares.append(share)
+
+# See pvss.sage for DLEQ reconstruction proofs.
+# The proof is: DLEQ(h, pk_i, dec_shares_i, enc_shares_i), showing that
+# the decrypted share dec_share_i corresponds to enc_shares_i.
+
+def lambda_func(i, t, indices):
+    lambda_i = Fq(1)
+    for j in indices:
+        if j != i:
+            lambda_i *= Fq(j+1) / (Fq(i+1) - Fq(j+1))
+    return lambda_i
+
+# Pooling the shares. Sample a set of t shares and reconstruct secret.
+sample_indices = sorted(sample(range(n), t))
+sampled_shares = [dec_shares[i] for i in sample_indices]
+pooled = Ep(0)
+
+for idx, share in zip(sample_indices, sampled_shares):
+    pooled += share * lambda_func(idx, t, sample_indices)
+
+assert h*s == h*poly(0) == pooled

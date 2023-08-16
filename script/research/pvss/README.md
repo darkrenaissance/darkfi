@@ -25,3 +25,15 @@ These proofs can be verified by anyone.
 
 The participants are able to decrypt their own shares, sample a set of
 threshold `t` shares and reconstruct the secret value.
+
+## `reed_solomon.sage`
+
+Reed Solomon check in the context of elliptic curves, used in
+`scrape.sage`.
+
+## `scrape.sage`
+
+Implementation of <https://eprint.iacr.org/2017/216.pdf>.
+This is similar to Schoenmaker's PVSS (`pvss.sage`) but it requires
+only a linear number of exponentiations for sharing, verifying, and
+reconstruction, whereas the previous scheme has quadratic complexity.
