@@ -133,16 +133,18 @@ R2_x1 = hash2(F2(0), F2(0), F2(0), R1_accum0)
 R2_u0 = (R2_u0_E, R2_u0_s, R2_u0_W, R2_x0, R2_x1)
 
 # This should be extended to all the witness values for the calcs above
-R1_witness = (F1(0), R1_z0, R1_z0, R2_accum1, R2_u0, commit2())
+R1_witness = (F1(0), R1_z0, R1_z0, R2_accum0, R2_u0, commit2())
 # This is weird since R2_u0_s is not in F1, but s is always 1 so it works
 R1_w1 = commit1(R1_witness)
+
+R2_accum1 = R2_accum0
 
 # Now we do the actual calc!
 R1_z1 = 5*R1_z0
 
 # Remember we said hash values are in both F1 and F2? Now we use that
 R1_x0 = F1(R2_x1)
-R1_x1 = hash1(F1(1), R1_z0, R1_z1, R2_accum1)
+R1_x1 = hash1(F1(1), R1_z0, R1_z1, R2_accum0)
 
 R1_u1_E = commit1()
 R1_u1_s = F1(1)
