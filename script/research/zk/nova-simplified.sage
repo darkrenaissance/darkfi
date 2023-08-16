@@ -36,6 +36,7 @@ u1 = hash((1, z0, z1, ()))
 U1 = ()
 # ZK proof
 assert u1 == hash((1, z0, z1, ()))
+assert z1 == F(z0, ω0)
 
 i = 1
 ω1 = ()
@@ -44,6 +45,7 @@ z2 = F(z1, ω1)
 u2 = hash((i+1, z0, z2, U2))
 assert u1 == hash((i, z0, z1, U1))
 assert U2 == fold(U1, u1)
+assert z2 == F(z1, ω1)
 assert u2 == hash((i+1, z0, z2, U2))
 
 i = 2
@@ -53,7 +55,15 @@ z3 = F(z2, ω2)
 u3 = hash((i+1, z0, z3, U3))
 assert u2 == hash((i, z0, z2, U2))
 assert U3 == fold(U2, u2)
+assert z3 == F(z2, ω2)
 assert u3 == hash((i+1, z0, z3, U3))
+
+# By folding proofs, we simultaneously verify all the asserts
+# when verifying U3 with u3.
+
+# Although there is no connection between u2 in i=1, and u2 in i=2,
+# by including the satisfying accumulator U2, and proving U3 = fold(U2, u2),
+# we guarantee the recursive nature of the circuit.
 
 # We've now made a proof of what 5^4 is
 assert z0 == 5
