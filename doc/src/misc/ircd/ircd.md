@@ -28,7 +28,7 @@ you have all the necessary dependencies.
 
 ```shell
 % git clone https://github.com/darkrenaissance/darkfi 
-% cd darkfi
+% cd darkfi && git checkout v0.4.1
 % make BINS=ircd
 % sudo make install BINS=ircd
 ```
