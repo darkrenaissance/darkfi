@@ -338,7 +338,7 @@ where
     }
 
     // Find common ancestor between two events
-    fn find_ancestor(&self, mut node_a: EventId, mut node_b: EventId) -> EventId {
+    fn find_ancestor(&self, mut node_a: EventId, node_b: EventId) -> EventId {
         // node_a is a child of node_b
         let is_child = node_b == self.event_map.get(&node_a).unwrap().parent.unwrap();
         if is_child {
@@ -348,24 +348,20 @@ where
         loop {
             let node_a_parent = self.event_map.get(&node_a).unwrap().parent.unwrap();
             node_a = node_a_parent;
+            if node_a == self.current_root {
+                return self.current_root
+            }
             if self.event_map.get(&node_a).unwrap().children.len() > 1 {
-                break
+                let offsprings = self
+                    .get_offspring(&node_a)
+                    .iter()
+                    .map(|event| event.hash())
+                    .collect::<Vec<EventId>>();
+                if offsprings.contains(&node_b) {
+                    return node_a
+                }
             }
         }
-
-        loop {
-            let node_b_parent = self.event_map.get(&node_b).unwrap().parent.unwrap();
-            node_b = node_b_parent;
-            if node_b == node_a {
-                break
-            }
-        }
-
-        if node_a == self.current_root || node_b == self.current_root {
-            return self.current_root
-        }
-
-        node_a
     }
 
     // Find the length between two events
