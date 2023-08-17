@@ -147,6 +147,38 @@ where
         info!("reset current root to: {:?}", self.current_root);
     }
 
+    pub fn remove_old_events(&mut self, timestamp: Timestamp) -> crate::Result<()> {
+        let tree = self.event_map.clone();
+        let mut is_tree_changed = false;
+        for (event_hash, node) in tree {
+            if node.event.timestamp < timestamp {
+                if self.event_map.remove(&event_hash).is_none() {
+                    continue
+                }
+                is_tree_changed = true;
+                let parent = self.event_map.get_mut(&self.current_root).unwrap();
+                if parent.children.contains(&event_hash) {
+                    let index = parent.children.iter().position(|&n| n == event_hash).unwrap();
+                    parent.children.remove(index);
+                }
+            }
+        }
+        if is_tree_changed {
+            let binding = self.event_map.clone();
+            let min_hash = binding.iter().min_by_key(|entry| entry.1.event.timestamp.0).unwrap().0;
+
+            println!("min hash: {}", min_hash);
+
+            self.event_map.get_mut(min_hash).unwrap().parent = Some(self.current_root);
+            self.event_map.get_mut(min_hash).unwrap().event.previous_event_hash = self.current_root;
+
+            let parent = self.event_map.get_mut(&self.current_root).unwrap();
+            parent.children.push(*min_hash);
+        }
+
+        Ok(())
+    }
+
     pub fn get_head_hash(&self) -> EventId {
         self.find_head()
     }
@@ -419,6 +451,50 @@ mod tests {
 
     fn create_message(previous_event_hash: EventId, timestamp: Timestamp) -> Event<PrivMsgEvent> {
         Event { previous_event_hash, action: PrivMsgEvent::new(), timestamp }
+    }
+
+    #[async_std::test]
+    async fn test_remove_old_events() {
+        let events_queue = EventsQueue::new();
+        let mut model = Model::new(events_queue);
+        let root_id = model.current_root;
+
+        // event_node 1
+        // Fill this node with 10 events
+        // These are considered old events from 10 days ago
+        let mut event_node_1_ids = vec![];
+        let mut id1 = root_id;
+        let timestamp = Timestamp::current_time().0 - 864000; // 864000 is 10 days in seconds
+        for i in 0..10 {
+            let node = create_message(id1, Timestamp(timestamp + i));
+            id1 = node.hash();
+            model.add(node).await;
+            event_node_1_ids.push(id1);
+        }
+        sleep(1).await;
+
+        // event_node 2
+        // Fill this node with 10 events
+        // These are considered new events at current time
+        let timestamp = Timestamp::current_time().0;
+        for i in 0..150 {
+            let node = create_message(id1, Timestamp(timestamp + i));
+            id1 = node.hash();
+            model.add(node).await;
+        }
+        sleep(1).await;
+
+        // every event older than one week gets removed
+        let ts = Timestamp::current_time().0 - 604800; // one week in seconds
+        let _ = model.remove_old_events(Timestamp(ts));
+
+        // ensure the 10 events from event_node 1 are not in the tree anymore
+        for event in event_node_1_ids {
+            assert!(!model.event_map.contains_key(&event));
+        }
+
+        // event_node 2 events (150) + root event = 151 events
+        assert_eq!(model.event_map.len(), 151_usize);
     }
 
     #[async_std::test]
