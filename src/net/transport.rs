@@ -39,6 +39,10 @@ pub(crate) mod tor;
 /// Nym transport
 pub(crate) mod nym;
 
+#[cfg(feature = "p2p-transport-unix")]
+/// Unix socket transport
+pub(crate) mod unix;
+
 /// Dialer variants
 #[derive(Debug, Clone)]
 pub enum DialerVariant {
@@ -65,6 +69,10 @@ pub enum DialerVariant {
     #[cfg(feature = "p2p-transport-nym")]
     /// Nym with TLS
     NymTls(nym::NymDialer),
+
+    #[cfg(feature = "p2p-transport-unix")]
+    /// Unix socket
+    Unix(unix::UnixDialer),
 }
 
 /// Listener variants
@@ -77,6 +85,10 @@ pub enum ListenerVariant {
     #[cfg(feature = "p2p-transport-tcp")]
     /// TCP with TLS
     TcpTls(tcp::TcpListener),
+
+    #[cfg(feature = "p2p-transport-unix")]
+    /// Unix socket
+    Unix(unix::UnixListener),
 }
 
 /// A dialer that is able to transparently operate over arbitrary transports.
@@ -87,18 +99,34 @@ pub struct Dialer {
     variant: DialerVariant,
 }
 
-impl Dialer {
-    /// Instantiate a new [`Dialer`] with the given [`Url`].
-    /// Must contain a scheme, host string, and a port.
-    pub async fn new(endpoint: Url) -> Result<Self> {
-        if endpoint.host_str().is_none() || endpoint.port().is_none() {
+macro_rules! enforce_hostport {
+    ($endpoint:ident) => {
+        if $endpoint.host_str().is_none() || $endpoint.port().is_none() {
+            return Err(Error::InvalidDialerScheme)
+        }
+    };
+}
+
+macro_rules! enforce_abspath {
+    ($endpoint:ident) => {
+        if $endpoint.host_str().is_some() || $endpoint.port().is_some() {
             return Err(Error::InvalidDialerScheme)
         }
 
+        if $endpoint.to_file_path().is_err() {
+            return Err(Error::InvalidDialerScheme)
+        }
+    };
+}
+
+impl Dialer {
+    /// Instantiate a new [`Dialer`] with the given [`Url`].
+    pub async fn new(endpoint: Url) -> Result<Self> {
         match endpoint.scheme().to_lowercase().as_str() {
             #[cfg(feature = "p2p-transport-tcp")]
             "tcp" => {
                 // Build a TCP dialer
+                enforce_hostport!(endpoint);
                 let variant = tcp::TcpDialer::new(None).await?;
                 let variant = DialerVariant::Tcp(variant);
                 Ok(Self { endpoint, variant })
@@ -107,6 +135,7 @@ impl Dialer {
             #[cfg(feature = "p2p-transport-tcp")]
             "tcp+tls" => {
                 // Build a TCP dialer wrapped with TLS
+                enforce_hostport!(endpoint);
                 let variant = tcp::TcpDialer::new(None).await?;
                 let variant = DialerVariant::TcpTls(variant);
                 Ok(Self { endpoint, variant })
@@ -115,6 +144,7 @@ impl Dialer {
             #[cfg(feature = "p2p-transport-tor")]
             "tor" => {
                 // Build a Tor dialer
+                enforce_hostport!(endpoint);
                 let variant = tor::TorDialer::new().await?;
                 let variant = DialerVariant::Tor(variant);
                 Ok(Self { endpoint, variant })
@@ -123,6 +153,7 @@ impl Dialer {
             #[cfg(feature = "p2p-transport-tor")]
             "tor+tls" => {
                 // Build a Tor dialer wrapped with TLS
+                enforce_hostport!(endpoint);
                 let variant = tor::TorDialer::new().await?;
                 let variant = DialerVariant::TorTls(variant);
                 Ok(Self { endpoint, variant })
@@ -131,6 +162,7 @@ impl Dialer {
             #[cfg(feature = "p2p-transport-nym")]
             "nym" => {
                 // Build a Nym dialer
+                enforce_hostport!(endpoint);
                 let variant = nym::NymDialer::new().await?;
                 let variant = DialerVariant::Nym(variant);
                 Ok(Self { endpoint, variant })
@@ -139,8 +171,18 @@ impl Dialer {
             #[cfg(feature = "p2p-transport-nym")]
             "nym+tls" => {
                 // Build a Nym dialer wrapped with TLS
+                enforce_hostport!(endpoint);
                 let variant = nym::NymDialer::new().await?;
                 let variant = DialerVariant::NymTls(variant);
+                Ok(Self { endpoint, variant })
+            }
+
+            #[cfg(feature = "p2p-transport-unix")]
+            "unix" => {
+                enforce_abspath!(endpoint);
+                // Build a Unix socket dialer
+                let variant = unix::UnixDialer::new().await?;
+                let variant = DialerVariant::Unix(variant);
                 Ok(Self { endpoint, variant })
             }
 
@@ -195,6 +237,13 @@ impl Dialer {
             DialerVariant::NymTls(_dialer) => {
                 todo!();
             }
+
+            #[cfg(feature = "p2p-transport-unix")]
+            DialerVariant::Unix(dialer) => {
+                let path = self.endpoint.to_file_path()?;
+                let stream = dialer.do_dial(path).await?;
+                Ok(Box::new(stream))
+            }
         }
     }
 
@@ -216,14 +265,11 @@ impl Listener {
     /// Instantiate a new [`Listener`] with the given [`Url`].
     /// Must contain a scheme, host string, and a port.
     pub async fn new(endpoint: Url) -> Result<Self> {
-        if endpoint.host_str().is_none() || endpoint.port().is_none() {
-            return Err(Error::InvalidListenerScheme)
-        }
-
         match endpoint.scheme().to_lowercase().as_str() {
             #[cfg(feature = "p2p-transport-tcp")]
             "tcp" => {
                 // Build a TCP listener
+                enforce_hostport!(endpoint);
                 let variant = tcp::TcpListener::new(1024).await?;
                 let variant = ListenerVariant::Tcp(variant);
                 Ok(Self { endpoint, variant })
@@ -232,8 +278,17 @@ impl Listener {
             #[cfg(feature = "p2p-transport-tcp")]
             "tcp+tls" => {
                 // Build a TCP listener wrapped with TLS
+                enforce_hostport!(endpoint);
                 let variant = tcp::TcpListener::new(1024).await?;
                 let variant = ListenerVariant::TcpTls(variant);
+                Ok(Self { endpoint, variant })
+            }
+
+            #[cfg(feature = "p2p-transport-unix")]
+            "unix" => {
+                enforce_abspath!(endpoint);
+                let variant = unix::UnixListener::new().await?;
+                let variant = ListenerVariant::Unix(variant);
                 Ok(Self { endpoint, variant })
             }
 
@@ -260,6 +315,13 @@ impl Listener {
                 let l = tlsupgrade.upgrade_listener_tcp_tls(l).await?;
                 Ok(Box::new(l))
             }
+
+            #[cfg(feature = "p2p-transport-unix")]
+            ListenerVariant::Unix(listener) => {
+                let path = self.endpoint.to_file_path()?;
+                let l = listener.do_listen(&path.into()).await?;
+                Ok(Box::new(l))
+            }
         }
     }
 
@@ -282,6 +344,9 @@ impl PtStream for arti_client::DataStream {}
 
 #[cfg(feature = "p2p-transport-tor")]
 impl PtStream for async_rustls::TlsStream<arti_client::DataStream> {}
+
+#[cfg(feature = "p2p-transport-unix")]
+impl PtStream for async_std::os::unix::net::UnixStream {}
 
 /// Wrapper trait for async listeners
 #[async_trait]

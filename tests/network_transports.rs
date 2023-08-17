@@ -66,3 +66,29 @@ async fn tcp_tls_transport() {
 
     assert_eq!(buf, payload);
 }
+
+#[async_std::test]
+async fn unix_transport() {
+    let tmpdir = std::env::temp_dir();
+    let url = Url::parse(&format!(
+        "unix://{}/darkfi_unix_plain.sock",
+        tmpdir.as_os_str().to_str().unwrap()
+    ))
+    .unwrap();
+    let listener = Listener::new(url.clone()).await.unwrap().listen().await.unwrap();
+    task::spawn(async move {
+        let (stream, _) = listener.next().await.unwrap();
+        let (mut reader, mut writer) = smol::io::split(stream);
+        io::copy(&mut reader, &mut writer).await.unwrap();
+    });
+
+    let payload = b"ohai unix";
+
+    let dialer = Dialer::new(url).await.unwrap();
+    let mut client = dialer.dial(None).await.unwrap();
+    client.write_all(payload).await.unwrap();
+    let mut buf = vec![0u8; 9];
+    client.read_exact(&mut buf).await.unwrap();
+
+    assert_eq!(buf, payload);
+}

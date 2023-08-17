@@ -133,6 +133,7 @@ prettytable-rs = "0.10.0"
 
 # -----BEGIN LIBRARY FEATURES-----
 [features]
+p2p-transport-unix = []
 p2p-transport-tcp = []
 p2p-transport-tor = ["arti-client", "tor-hscrypto"]
 p2p-transport-nym = []
