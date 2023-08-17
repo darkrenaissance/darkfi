@@ -71,8 +71,8 @@ impl TcpDialer {
         debug!(target: "net::tcp::do_dial", "Dialing {} with TCP...", socket_addr);
         let socket = self.create_socket(socket_addr).await?;
 
-        let connection = if timeout.is_some() {
-            socket.connect_timeout(&socket_addr.into(), timeout.unwrap())
+        let connection = if let Some(timeout) = timeout {
+            socket.connect_timeout(&socket_addr.into(), timeout)
         } else {
             socket.connect(&socket_addr.into())
         };

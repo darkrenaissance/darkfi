@@ -54,9 +54,9 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
     // Subscribe to stop events
     let stop_sub = channel.clone().subscribe_stop().await;
 
-    if stop_sub.is_ok() {
+    if let Ok(stop_sub) = stop_sub {
         // Wait for a stop event
-        stop_sub.unwrap().receive().await;
+        stop_sub.receive().await;
     }
 
     debug!(

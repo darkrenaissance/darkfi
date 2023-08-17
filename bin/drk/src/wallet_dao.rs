@@ -533,8 +533,8 @@ impl Drk {
     /// List DAO(s) imported in the wallet. If an ID is given, just print the
     /// metadata for that specific one, if found.
     pub async fn dao_list(&self, dao_id: Option<u64>) -> Result<()> {
-        if dao_id.is_some() {
-            return self.dao_list_single(dao_id.unwrap()).await
+        if let Some(dao_id) = dao_id {
+            return self.dao_list_single(dao_id).await
         }
 
         let daos = self.get_daos().await?;

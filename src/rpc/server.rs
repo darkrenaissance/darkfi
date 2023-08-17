@@ -49,7 +49,7 @@ async fn accept(
         let mut buf = vec![0; 1024 * 8192];
 
         let n = match stream.read(&mut buf).await {
-            Ok(n) if n == 0 => {
+            Ok(0) => {
                 debug!(target: "rpc::server", "Closed connection for {}", peer_addr);
                 break
             }

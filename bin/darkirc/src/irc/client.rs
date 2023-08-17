@@ -90,8 +90,8 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
                 // Process msg from View or other client connnected to the same irc server
                 msg = self.subscription.receive().fuse() => {
                     match msg {
-                        ClientSubMsg::Privmsg(mut m) => {
-                            if let Err(e) = self.process_msg(&mut m).await {
+                        ClientSubMsg::Privmsg(m) => {
+                            if let Err(e) = self.process_msg(&m).await {
                                 error!("[CLIENT {}] Process msg: {}",  self.address, e);
                                 break
                             }
@@ -162,7 +162,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         }
     }
 
-    pub async fn process_msg(&mut self, msg: &mut PrivMsgEvent) -> Result<()> {
+    pub async fn process_msg(&mut self, msg: &PrivMsgEvent) -> Result<()> {
         debug!("[CLIENT {}] msg from View: {:?}", self.address, msg.to_string());
 
         let mut msg = msg.clone();
@@ -608,8 +608,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         hash_vec.sort_by(|a, b| a.timestamp.0.cmp(&b.timestamp.0));
 
         for event in hash_vec {
-            let mut action = event.action.clone();
-            if let Err(e) = self.process_msg(&mut action).await {
+            if let Err(e) = self.process_msg(&event.action).await {
                 error!("[CLIENT {}] Process msg: {}", self.address, e);
                 continue
             }

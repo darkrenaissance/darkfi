@@ -380,9 +380,7 @@ impl Geode {
             Ok(v) => v,
             Err(e) => match e {
                 // If the file is not found, return according error.
-                Error::Io(err) if err == std::io::ErrorKind::NotFound => {
-                    return Err(Error::GeodeFileNotFound)
-                }
+                Error::Io(std::io::ErrorKind::NotFound) => return Err(Error::GeodeFileNotFound),
                 // Anything else should tell the client to do garbage collection
                 _ => return Err(Error::GeodeNeedsGc),
             },
