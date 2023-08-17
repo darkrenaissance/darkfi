@@ -35,6 +35,7 @@ const EPOCH: u32 = 2208988800; // 1900
 
 /// JSON-RPC request to a network peer (randomly selected), to
 /// retrieve their current system clock.
+// TODO: This needs executor passed for rpc client
 async fn peer_request(peers: &[Url]) -> Result<Option<Timestamp>> {
     // Select peer, None if vector is empty.
     let peer = peers.choose(&mut OsRng);
@@ -42,7 +43,7 @@ async fn peer_request(peers: &[Url]) -> Result<Option<Timestamp>> {
         None => Ok(None),
         Some(p) => {
             // Create RPC client
-            let rpc_client = RpcClient::new(p.clone()).await?;
+            let rpc_client = RpcClient::new(p.clone(), None).await?;
 
             // Execute request
             let req = JsonRequest::new("clock", json!([]));

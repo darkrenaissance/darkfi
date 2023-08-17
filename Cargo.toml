@@ -208,6 +208,7 @@ net = [
     "p2p-transport-tcp",
     "p2p-transport-tor",
     "p2p-transport-nym",
+    "p2p-transport-unix",
 ]
 
 rpc = [
@@ -294,6 +295,16 @@ required-features = ["zk"]
 name = "zk-inclusion-proof"
 path = "example/zk-inclusion-proof.rs"
 required-features = ["zk"]
+
+[[example]]
+name = "rpc-server"
+path = "example/rpc/server.rs"
+required-features = ["async-runtime", "rpc"]
+
+[[example]]
+name = "rpc-client"
+path = "example/rpc/client.rs"
+required-features = ["async-runtime", "rpc"]
 
 [patch.crates-io]
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}

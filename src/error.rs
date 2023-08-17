@@ -227,6 +227,10 @@ pub enum Error {
     #[error("JSON-RPC error: {0}")]
     JsonRpcError(String),
 
+    #[cfg(feature = "rpc")]
+    #[error(transparent)]
+    RpcServerError(RpcError),
+
     #[error("Unexpected JSON-RPC data received: {0}")]
     UnexpectedJsonRpc(String),
 
@@ -551,6 +555,33 @@ pub enum ClientFailed {
 
     #[error("Verify error: {0}")]
     VerifyError(String),
+}
+
+#[cfg(feature = "rpc")]
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum RpcError {
+    #[error("Connection closed: {0}")]
+    ConnectionClosed(String),
+
+    #[error("Invalid JSON: {0}")]
+    InvalidJson(String),
+
+    #[error("IO Error: {0}")]
+    IoError(std::io::ErrorKind),
+}
+
+#[cfg(feature = "rpc")]
+impl From<std::io::Error> for RpcError {
+    fn from(err: std::io::Error) -> Self {
+        Self::IoError(err.kind())
+    }
+}
+
+#[cfg(feature = "rpc")]
+impl From<RpcError> for Error {
+    fn from(err: RpcError) -> Self {
+        Self::RpcServerError(err)
+    }
 }
 
 impl From<Error> for ClientFailed {

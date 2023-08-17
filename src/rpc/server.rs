@@ -17,14 +17,17 @@
  */
 
 //! JSON-RPC server-side implementation.
-use async_std::sync::Arc;
+use std::time::Duration;
+
+use async_std::{io::timeout, sync::Arc};
 use async_trait::async_trait;
 use futures::{AsyncReadExt, AsyncWriteExt};
-use log::{debug, error, info, warn};
+use log::{debug, error, info};
 use url::Url;
 
 use super::jsonrpc::{JsonRequest, JsonResult};
 use crate::{
+    error::RpcError,
     net::transport::{Listener, PtListener, PtStream},
     Result,
 };
@@ -37,43 +40,59 @@ pub trait RequestHandler: Sync + Send {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult;
 }
 
+const INIT_BUF_SIZE: usize = 1024; // 1K
+const MAX_BUF_SIZE: usize = 1024 * 8192; // 8M
+const READ_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Internal read function called from `accept` that reads from the active stream.
+async fn read_from_stream(stream: &mut Box<dyn PtStream>, buf: &mut Vec<u8>) -> Result<usize> {
+    debug!(target: "rpc::server", "Reading from stream...");
+    let mut total_read = 0;
+
+    while total_read < MAX_BUF_SIZE {
+        buf.resize(total_read + INIT_BUF_SIZE, 0);
+
+        match timeout(READ_TIMEOUT, stream.read(&mut buf[total_read..])).await {
+            Ok(0) if total_read == 0 => {
+                return Err(RpcError::ConnectionClosed("Connection closed".to_string()).into())
+            }
+            Ok(0) => break, // Finished reading
+            Ok(n) => {
+                total_read += n;
+                if buf[total_read - 1] == b'\n' {
+                    break
+                }
+            }
+            Err(e) => return Err(RpcError::IoError(e.kind()).into()),
+        }
+    }
+
+    // Truncate buffer to actual data size
+    buf.truncate(total_read);
+    debug!(target: "rpc::server", "Finished reading {} bytes", total_read);
+    Ok(total_read)
+}
+
 /// Internal accept function that runs inside a loop for accepting incoming
 /// JSON-RPC requests and passing them to the [`RequestHandler`].
 async fn accept(
     mut stream: Box<dyn PtStream>,
-    peer_addr: Url,
+    addr: Url,
     rh: Arc<impl RequestHandler + 'static>,
 ) -> Result<()> {
+    let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
     loop {
-        // FIXME: Nasty size. 8M
-        let mut buf = vec![0; 1024 * 8192];
+        buf.clear();
 
-        let n = match stream.read(&mut buf).await {
-            Ok(0) => {
-                debug!(target: "rpc::server", "Closed connection for {}", peer_addr);
-                break
-            }
-            Ok(n) => n,
-            Err(e) => {
-                error!(target: "rpc::server", "JSON-RPC server failed reading from {} socket: {}", peer_addr, e);
-                debug!(target: "rpc::server", "Closed connection for {}", peer_addr);
-                break
-            }
-        };
+        let _ = read_from_stream(&mut stream, &mut buf).await?;
 
-        let r: JsonRequest = match serde_json::from_slice(&buf[0..n]) {
-            Ok(r) => {
-                debug!(target: "rpc::server", "{} --> {}", peer_addr, String::from_utf8_lossy(&buf));
-                r
-            }
-            Err(e) => {
-                warn!(target: "rpc::server", "JSON-RPC server received invalid JSON from {}: {}", peer_addr, e);
-                debug!(target: "rpc::server", "Closed connection for {}", peer_addr);
-                break
-            }
-        };
+        let r: JsonRequest =
+            serde_json::from_slice(&buf).map_err(|e| RpcError::InvalidJson(e.to_string()))?;
+
+        debug!(target: "rpc::server", "{} --> {}", addr, String::from_utf8_lossy(&buf));
 
         let reply = rh.handle_request(r).await;
+
         match reply {
             JsonResult::Subscriber(sub) => {
                 // Subscribe to the inner method subscriber
@@ -84,30 +103,58 @@ async fn accept(
 
                     // Push notification
                     let j = serde_json::to_string(&notification).unwrap();
-                    debug!(target: "rpc::server", "{} <-- {}", peer_addr, j);
+                    debug!(target: "rpc::server", "{} <-- {}", addr, j);
 
                     if let Err(e) = stream.write_all(j.as_bytes()).await {
-                        error!(target: "rpc::server", "JSON-RPC server failed writing to {} socket: {}", peer_addr, e);
-                        debug!(target: "rpc::server", "Closed connection for {}", peer_addr);
+                        error!(target: "rpc::server", "[RPC] Server failed writing to {} socket: {}", addr, e);
+                        debug!(target: "rpc::server", "Closed connection for {}", addr);
+                        break
+                    }
+
+                    if let Err(e) = stream.write_all(&[b'\n']).await {
+                        error!(target: "rpc::server", "[RPC] Server failed writing to {} socket: {}", addr, e);
+                        debug!(target: "rpc::server", "Closed connection for {}", addr);
                         break
                     }
                 }
                 subscription.unsubscribe().await;
             }
             _ => {
-                let j = serde_json::to_string(&reply).unwrap();
-                debug!(target: "rpc::server", "{} <-- {}", peer_addr, j);
+                let j = serde_json::to_string(&reply)
+                    .map_err(|e| RpcError::InvalidJson(e.to_string()))?;
+
+                debug!(target: "rpc::server", "{} <-- {}", addr, j);
 
                 if let Err(e) = stream.write_all(j.as_bytes()).await {
-                    error!(target: "rpc::server", "JSON-RPC server failed writing to {} socket: {}", peer_addr, e);
-                    debug!(target: "rpc::server", "Closed connection for {}", peer_addr);
-                    break
+                    error!(
+                        target: "rpc::server", "[RPC] Server failed writing to {} socket: {}",
+                        addr, e
+                    );
+                    return close_conn(
+                        &addr,
+                        RpcError::ConnectionClosed("Socket write error".to_string()),
+                    )
+                }
+
+                if let Err(e) = stream.write_all(&[b'\n']).await {
+                    error!(
+                        target: "rpc::server", "[RPC] Server failed writing to {} socket: {}",
+                        addr, e
+                    );
+                    return close_conn(
+                        &addr,
+                        RpcError::ConnectionClosed("Socket write error".to_string()),
+                    )
                 }
             }
         }
     }
+}
 
-    Ok(())
+/// Helper function for connection closing
+fn close_conn(peer_addr: &Url, reason: RpcError) -> Result<()> {
+    debug!(target: "rpc::server", "Closed connection for {}", peer_addr);
+    Err(reason.into())
 }
 
 /// Wrapper function around [`accept()`] to take the incoming connection and
@@ -118,12 +165,12 @@ async fn run_accept_loop(
     ex: Arc<smol::Executor<'_>>,
 ) -> Result<()> {
     while let Ok((stream, peer_addr)) = listener.next().await {
-        info!(target: "rpc::server", "JSON-RPC server accepted connection from {}", peer_addr);
+        info!(target: "rpc::server", "[RPC] Server accepted connection from {}", peer_addr);
         // Detaching requests handling
         let _rh = rh.clone();
         ex.spawn(async move {
             if let Err(e) = accept(stream, peer_addr.clone(), _rh).await {
-                error!(target: "rpc::server", "JSON-RPC server error on handling request of {}: {}", peer_addr, e);
+                error!(target: "rpc::server", "[RPC] Server error on handling request of {}: {}", peer_addr, e);
             }
         }).detach();
     }
