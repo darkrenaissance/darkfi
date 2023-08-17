@@ -337,7 +337,7 @@ impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "get_ws", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "workspace", "id": 1}
     async fn get_ws(&self, params: &[Value]) -> TaudResult<Value> {
-        debug!(target: "tau", "JsonRpc::switch_ws() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::get_ws() params {:?}", params);
         let ws = self.workspace.lock().await.clone();
         Ok(json!(ws))
     }
