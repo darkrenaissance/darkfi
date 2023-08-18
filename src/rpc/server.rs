@@ -73,9 +73,9 @@ async fn read_from_stream(stream: &mut Box<dyn PtStream>, buf: &mut Vec<u8>) -> 
     Ok(total_read)
 }
 
-/// Internal accept function that runs inside a loop for accepting incoming
+/// Accept function that should run inside a loop for accepting incoming
 /// JSON-RPC requests and passing them to the [`RequestHandler`].
-async fn accept(
+pub async fn accept(
     mut stream: Box<dyn PtStream>,
     addr: Url,
     rh: Arc<impl RequestHandler + 'static>,
