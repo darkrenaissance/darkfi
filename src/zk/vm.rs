@@ -270,8 +270,7 @@ pub struct ZkCircuit {
 impl ZkCircuit {
     pub fn new(witnesses: Vec<Witness>, circuit_code: &ZkBinary) -> Self {
         let constants = circuit_code.constants.iter().map(|x| x.1.clone()).collect();
-        #[allow(clippy::map_clone)]
-        let literals = circuit_code.literals.iter().map(|x| x.clone()).collect();
+        let literals = circuit_code.literals.clone();
         Self { constants, witnesses, literals, opcodes: circuit_code.opcodes.clone() }
     }
 }
