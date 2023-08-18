@@ -32,6 +32,7 @@ use super::jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult};
 use crate::{
     error::RpcError,
     net::transport::{Dialer, PtStream},
+    system::SubscriberPtr,
     Error, Result,
 };
 
@@ -222,5 +223,50 @@ impl RpcClient {
         let rep = self.request(value).await?;
         self.stop_signal.send(()).await?;
         Ok(rep)
+    }
+
+    /// Listen instantiated client for notifications.
+    /// NOTE: Subscriber listeners must perform response handling.
+    pub async fn subscribe(&self, req: JsonRequest, sub: SubscriberPtr<JsonResult>) -> Result<()> {
+        // Perform initial request.
+        debug!(target: "rpc::client", "--> {}", serde_json::to_string(&req)?);
+
+        // If the connection is closed, the sender will get an error for
+        // sending to a closed channel.
+        if let Err(e) = self.send.send((json!(req), false)).await {
+            error!(target: "rpc::client", "[RPC] Client unable to send to {}: {}", self.endpoint, e);
+            return Err(Error::NetworkOperationFailed)
+        }
+
+        loop {
+            // If the connection is closed, the receiver will get an error
+            // for waiting on a closed channel.
+            let notification = self.recv.recv().await;
+            if let Err(e) = notification {
+                error!(target: "rpc::client", "[RPC] Client unable to recv from {}: {}", self.endpoint, e);
+                break
+            }
+
+            // Notify subscribed channels
+            let notification = notification.unwrap();
+            debug!(target: "rpc::client", "<-- {}", serde_json::to_string(&notification)?);
+            sub.notify(notification.clone()).await;
+
+            // Stop listening on error
+            match notification {
+                JsonResult::Notification(_) => {}
+                _ => break,
+            }
+
+            // Triggering next consume
+            // TODO: FIXME: This should not be required
+            if let Err(e) = self.send.send((json!(req), false)).await {
+                error!(target: "rpc::client", "[RPC] Client unable to send to {}: {}", self.endpoint, e);
+                break
+            }
+        }
+
+        sub.notify(JsonError::new(ErrorCode::InternalError, None, req.id).into()).await;
+        Err(Error::NetworkOperationFailed)
     }
 }
