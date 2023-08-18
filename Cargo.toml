@@ -54,8 +54,8 @@ members = [
 [dependencies]
 # Hard dependencies
 libc = "0.2.147"
-log = "0.4.19"
-thiserror = "1.0.44"
+log = "0.4.20"
+thiserror = "1.0.47"
 
 # async-runtime
 async-std = {version = "1.12.0", features = ["attributes"], optional = true}
@@ -79,7 +79,7 @@ x509-parser = {version = "0.15.1", features = ["validate", "verify"], optional =
 
 # Encoding
 bs58 = {version = "0.5.0", optional = true}
-serde_json = {version = "1.0.104", optional = true}
+serde_json = {version = "1.0.105", optional = true}
 serde = {version = "1.0.183", features = ["derive"], optional = true}
 semver = {version = "1.0.18", optional = true}
 structopt = {version= "0.3.26", optional = true}
@@ -124,7 +124,7 @@ sled = {version = "0.34.7", optional = true}
 sled-overlay = {version = "0.0.8", optional = true}
 
 [dev-dependencies]
-clap = {version = "4.3.21", features = ["derive"]}
+clap = {version = "4.3.22", features = ["derive"]}
 halo2_proofs = {version = "0.3.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
 halo2_gadgets = {version = "0.3.0", features = ["test-dev-graph", "test-dependencies"]}
 plotters = "0.3.5"

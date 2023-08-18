@@ -16,7 +16,7 @@ darkfi = {path = "../../../", features = ["dht"]}
 darkfi-serial = {path = "../../../src/serial", features = ["derive", "crypto"]}
 easy-parallel = "3.3.0"
 libsqlite3-sys = {version = "0.26.0", features = ["bundled-sqlcipher-vendored-openssl"]}
-log = "0.4.19"
+log = "0.4.20"
 rand = "0.8.5"
 simplelog = "0.12.1"
 smol = "1.3.0"

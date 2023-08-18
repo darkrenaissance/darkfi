@@ -13,7 +13,7 @@ doctest = false
 
 [dependencies]
 # Error handling
-thiserror = "1.0.44"
+thiserror = "1.0.47"
 
 # Serialization
 darkfi-serial = {version = "0.4.1", path = "../serial", features = ["derive", "crypto"]}
