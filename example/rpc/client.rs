@@ -26,7 +26,8 @@ use darkfi::{
 };
 
 async fn realmain(ex: Arc<Executor<'_>>) -> Result<()> {
-    let endpoint = Url::parse("tcp://127.0.0.1:55422").unwrap();
+    //let endpoint = Url::parse("tcp://127.0.0.1:55422").unwrap();
+    let endpoint = Url::parse("unix:///tmp/rpc.sock").unwrap();
 
     let client = RpcClient::new(endpoint, Some(ex)).await?;
 

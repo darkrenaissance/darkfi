@@ -66,7 +66,8 @@ impl RequestHandler for RpcSrv {
 
 async fn realmain(ex: Arc<Executor<'_>>) -> Result<()> {
     let rpcsrv = Arc::new(RpcSrv { stop_sub: smol::channel::unbounded::<()>() });
-    let rpc_listen = Url::parse("tcp://127.0.0.1:55422").unwrap();
+    //let rpc_listen = Url::parse("tcp://127.0.0.1:55422").unwrap();
+    let rpc_listen = Url::parse("unix:///tmp/rpc.sock").unwrap();
 
     let _ex = ex.clone();
     ex.spawn(listen_and_serve(rpc_listen, rpcsrv.clone(), _ex)).detach();
