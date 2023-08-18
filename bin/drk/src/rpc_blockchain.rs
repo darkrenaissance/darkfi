@@ -60,7 +60,7 @@ impl Drk {
         let subscriber = Subscriber::new();
         let subscription = subscriber.clone().subscribe().await;
 
-        let rpc_client = RpcClient::new(endpoint).await?;
+        let rpc_client = RpcClient::new(endpoint, None).await?;
 
         let req = JsonRequest::new("blockchain.subscribe_blocks", json!([]));
         task::spawn(async move { rpc_client.subscribe(req, subscriber).await.unwrap() });
@@ -305,7 +305,7 @@ impl Drk {
         let subscriber = Subscriber::new();
         let subscription = subscriber.clone().subscribe().await;
 
-        let rpc_client = RpcClient::new(endpoint).await?;
+        let rpc_client = RpcClient::new(endpoint, None).await?;
 
         let req = JsonRequest::new("blockchain.subscribe_err_txs", json!([]));
         task::spawn(async move { rpc_client.subscribe(req, subscriber).await.unwrap() });

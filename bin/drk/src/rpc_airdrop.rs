@@ -37,7 +37,7 @@ impl Drk {
         amount: f64,
         address: PublicKey,
     ) -> Result<String> {
-        let rpc_client = RpcClient::new(faucet_endpoint).await?;
+        let rpc_client = RpcClient::new(faucet_endpoint, None).await?;
 
         // First we request a VDF challenge from the faucet
         let params = json!([format!("{}", address)]);

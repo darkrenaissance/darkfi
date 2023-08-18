@@ -33,7 +33,7 @@ pub struct RpcConnect {
 
 impl RpcConnect {
     pub async fn new(url: Url, name: String) -> Result<Self> {
-        let rpc_client = RpcClient::new(url).await?;
+        let rpc_client = RpcClient::new(url, None).await?;
         Ok(Self { name, rpc_client })
     }
 

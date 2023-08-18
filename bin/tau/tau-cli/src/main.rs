@@ -168,7 +168,7 @@ async fn main() -> Result<()> {
     let log_config = get_log_config(args.verbose);
     TermLogger::init(log_level, log_config, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    let rpc_client = RpcClient::new(args.endpoint).await?;
+    let rpc_client = RpcClient::new(args.endpoint, None).await?;
     let tau = Tau { rpc_client };
 
     let mut filters = args.filters.clone();
