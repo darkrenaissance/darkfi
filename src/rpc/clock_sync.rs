@@ -20,11 +20,8 @@
 use std::{net::UdpSocket, time::Duration};
 
 use log::debug;
-use rand::{prelude::SliceRandom, rngs::OsRng};
-use serde_json::json;
 use url::Url;
 
-use super::{client::RpcClient, jsonrpc::JsonRequest};
 use crate::{util::time::Timestamp, Error, Result};
 
 /// Clock sync parameters
@@ -32,30 +29,6 @@ const RETRIES: u8 = 10;
 /// TODO: Loop through set of ntps, get their average response concurrenyly.
 const NTP_ADDRESS: &str = "pool.ntp.org:123";
 const EPOCH: u32 = 2208988800; // 1900
-
-/// JSON-RPC request to a network peer (randomly selected), to
-/// retrieve their current system clock.
-// TODO: This needs executor passed for rpc client
-async fn peer_request(peers: &[Url]) -> Result<Option<Timestamp>> {
-    // Select peer, None if vector is empty.
-    let peer = peers.choose(&mut OsRng);
-    match peer {
-        None => Ok(None),
-        Some(p) => {
-            // Create RPC client
-            let rpc_client = RpcClient::new(p.clone(), None).await?;
-
-            // Execute request
-            let req = JsonRequest::new("clock", json!([]));
-            let rep = rpc_client.oneshot_request(req).await?;
-
-            // Parse response
-            let timestamp: Timestamp = serde_json::from_value(rep)?;
-
-            Ok(Some(timestamp))
-        }
-    }
-}
 
 /// Raw NTP request execution
 pub async fn ntp_request() -> Result<Timestamp> {
@@ -102,11 +75,12 @@ pub async fn check_clock(peers: &[Url]) -> Result<()> {
     Ok(())
 }
 
-async fn clock_check(peers: &[Url]) -> Result<()> {
+async fn clock_check(_peers: &[Url]) -> Result<()> {
     // Start elapsed time counter to cover for all requests and processing time
     let requests_start = Timestamp::current_time();
     // Poll one of the peers for their current UTC timestamp
-    let peer_time = peer_request(peers).await?;
+    //let peer_time = peer_request(peers).await?;
+    let peer_time = Some(Timestamp::current_time());
 
     // Start elapsed time counter to cover for NTP request and processing time
     let ntp_request_start = Timestamp::current_time();
