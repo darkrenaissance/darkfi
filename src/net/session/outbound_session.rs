@@ -36,10 +36,10 @@ use url::Url;
 
 use super::{
     super::{
-        channel::{ChannelInfo, ChannelPtr},
+        channel::ChannelPtr,
         connector::Connector,
         message::GetAddrsMessage,
-        p2p::{DnetInfo, P2p, P2pPtr},
+        p2p::{P2p, P2pPtr},
     },
     Session, SessionBitFlag, SESSION_OUTBOUND,
 };
@@ -52,7 +52,7 @@ use crate::{
 pub type OutboundSessionPtr = Arc<OutboundSession>;
 
 /// Connection state
-#[derive(Eq, PartialEq, Copy, Clone)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum OutboundState {
     Open,
     Pending,
@@ -73,31 +73,6 @@ impl std::fmt::Display for OutboundState {
     }
 }
 
-/// dnet info for an outbound connection
-#[derive(Clone)]
-pub struct OutboundInfo {
-    /// Remote address
-    pub addr: Option<Url>,
-    /// Channel info
-    pub channel: Option<ChannelInfo>,
-    /// Connection state
-    pub state: OutboundState,
-}
-
-impl OutboundInfo {
-    async fn dnet_info(&self, p2p: P2pPtr) -> Option<Self> {
-        let addr = self.addr.clone()?;
-        let chan = p2p.channels().lock().await.get(&addr).cloned()?;
-        Some(Self { addr: Some(addr), channel: Some(chan.dnet_info().await), state: self.state })
-    }
-}
-
-impl Default for OutboundInfo {
-    fn default() -> Self {
-        Self { addr: None, channel: None, state: OutboundState::Open }
-    }
-}
-
 /// Defines outbound connections session.
 pub struct OutboundSession {
     /// Weak pointer to parent p2p object
@@ -108,8 +83,6 @@ pub struct OutboundSession {
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
     /// Flag to toggle channel_subscriber notifications
     notify: Mutex<bool>,
-    /// Channel debug info, corresponds to `connect_slots`
-    slot_info: Mutex<Vec<OutboundInfo>>,
 }
 
 impl OutboundSession {
@@ -120,7 +93,6 @@ impl OutboundSession {
             connect_slots: Mutex::new(vec![]),
             channel_subscriber: Subscriber::new(),
             notify: Mutex::new(false),
-            slot_info: Mutex::new(vec![]),
         })
     }
 
@@ -130,9 +102,6 @@ impl OutboundSession {
         info!(target: "net::outbound_session", "[P2P] Starting {} outbound connection slots.", n_slots);
         // Activate mutex lock on connection slots.
         let mut connect_slots = self.connect_slots.lock().await;
-
-        // Create dnet stub
-        self.slot_info.lock().await.resize(n_slots, Default::default());
 
         for i in 0..n_slots {
             let task = StoppableTask::new();
@@ -249,11 +218,6 @@ impl OutboundSession {
                 // Remove pending lock since register_channel will add the channel to p2p
                 self.p2p().remove_pending(&addr).await;
 
-                dnet!(self,
-                    let info = &mut self.slot_info.lock().await[slot_number];
-                    info.state = OutboundState::Connected;
-                );
-
                 // Notify that channel processing has been finished
                 if *self.notify.lock().await {
                     self.channel_subscriber.notify(Ok(channel)).await;
@@ -275,12 +239,6 @@ impl OutboundSession {
 
         // At this point we failed to connect. We'll quarantine this peer now.
         self.p2p().hosts().quarantine(&addr).await;
-
-        dnet!(self,
-            let info = &mut self.slot_info.lock().await[slot_number];
-            info.addr = None;
-            info.state = OutboundState::Open;
-        );
 
         // Notify that channel processing failed
         if *self.notify.lock().await {
@@ -358,12 +316,6 @@ impl OutboundSession {
                 if !p2p.add_pending(host).await {
                     continue
                 }
-
-                dnet!(self,
-                    let info = &mut self.slot_info.lock().await[slot_number];
-                    info.addr = Some(host.clone());
-                    info.state = OutboundState::Pending;
-                );
 
                 return Ok(host.clone())
             }
@@ -456,12 +408,6 @@ impl OutboundSession {
     }
 }
 
-/// Dnet information for the outbound session
-pub struct OutboundDnet {
-    /// Slot information
-    pub slots: Vec<Option<OutboundInfo>>,
-}
-
 #[async_trait]
 impl Session for OutboundSession {
     fn p2p(&self) -> P2pPtr {
@@ -470,17 +416,5 @@ impl Session for OutboundSession {
 
     fn type_id(&self) -> SessionBitFlag {
         SESSION_OUTBOUND
-    }
-
-    async fn dnet_info(&self) -> DnetInfo {
-        // We fetch channel infos for all outbound slots.
-        // If a slot is not connected, it will be `None`.
-        let mut slots = vec![];
-
-        for slot in self.slot_info.lock().await.iter() {
-            slots.push(slot.dnet_info(self.p2p()).await);
-        }
-
-        DnetInfo::Outbound(OutboundDnet { slots })
     }
 }

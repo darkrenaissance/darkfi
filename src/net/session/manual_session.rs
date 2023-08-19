@@ -39,7 +39,7 @@ use super::{
     super::{
         channel::ChannelPtr,
         connector::Connector,
-        p2p::{DnetInfo, P2p, P2pPtr},
+        p2p::{P2p, P2pPtr},
     },
     Session, SessionBitFlag, SESSION_MANUAL,
 };
@@ -211,9 +211,5 @@ impl Session for ManualSession {
 
     fn type_id(&self) -> SessionBitFlag {
         SESSION_MANUAL
-    }
-
-    async fn dnet_info(&self) -> DnetInfo {
-        todo!()
     }
 }

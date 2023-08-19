@@ -47,7 +47,7 @@ use url::Url;
 use super::{
     super::{
         connector::Connector,
-        p2p::{DnetInfo, P2p, P2pPtr},
+        p2p::{P2p, P2pPtr},
     },
     Session, SessionBitFlag, SESSION_SEED,
 };
@@ -176,9 +176,5 @@ impl Session for SeedSyncSession {
 
     fn type_id(&self) -> SessionBitFlag {
         SESSION_SEED
-    }
-
-    async fn dnet_info(&self) -> DnetInfo {
-        todo!()
     }
 }

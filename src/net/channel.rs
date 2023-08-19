@@ -37,7 +37,7 @@ use super::{
 };
 use crate::{
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
-    util::{ringbuffer::RingBuffer, time::NanoTimestamp},
+    util::time::NanoTimestamp,
     Error, Result,
 };
 
@@ -45,24 +45,26 @@ use crate::{
 pub type ChannelPtr = Arc<Channel>;
 
 /// Channel debug info
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ChannelInfo {
     pub addr: Url,
-    pub random_id: u32,
+    pub random_id: usize,
     pub remote_node_id: String,
-    pub log: RingBuffer<(NanoTimestamp, String, String), 512>,
+    pub time: NanoTimestamp,
+    pub op: String,
+    pub cmd: String,
 }
 
 impl ChannelInfo {
     fn new(addr: Url) -> Self {
-        Self { addr, random_id: OsRng.gen(), remote_node_id: String::new(), log: RingBuffer::new() }
-    }
-
-    /// Get available debug info, resets the ringbuffer when called.
-    fn dnet_info(&mut self) -> Self {
-        let info = self.clone();
-        self.log = RingBuffer::new();
-        info
+        Self {
+            addr,
+            random_id: OsRng.gen(),
+            remote_node_id: String::new(),
+            time: NanoTimestamp::current_time(),
+            op: String::new(),
+            cmd: String::new(),
+        }
     }
 }
 
@@ -85,7 +87,7 @@ pub struct Channel {
     /// Weak pointer to respective session
     session: SessionWeakPtr,
     /// Channel debug info
-    info: Mutex<Option<ChannelInfo>>,
+    info: Mutex<ChannelInfo>,
 }
 
 impl std::fmt::Debug for Channel {
@@ -110,11 +112,7 @@ impl Channel {
         let message_subsystem = MessageSubsystem::new();
         Self::setup_dispatchers(&message_subsystem).await;
 
-        let info = if *session.upgrade().unwrap().p2p().dnet_enabled.lock().await {
-            Mutex::new(Some(ChannelInfo::new(address.clone())))
-        } else {
-            Mutex::new(None)
-        };
+        let info = Mutex::new(ChannelInfo::new(address.clone()));
 
         Arc::new(Self {
             reader,
@@ -137,26 +135,6 @@ impl Channel {
         subsystem.add_dispatch::<message::PongMessage>().await;
         subsystem.add_dispatch::<message::GetAddrsMessage>().await;
         subsystem.add_dispatch::<message::AddrsMessage>().await;
-    }
-
-    /// Fetch dnet info for the channel, if enabled.
-    /// Returns the [`Channel::address`] and [`ChannelInfo`].
-    pub(crate) async fn dnet_info(&self) -> ChannelInfo {
-        // We're unwrapping here because if we get None it means
-        // there's a bug somehwere where we initialized dnet but
-        // ChannelInfo was not created.
-        self.info.lock().await.as_mut().unwrap().dnet_info()
-    }
-
-    pub(crate) async fn dnet_enable(&self) {
-        let mut info = self.info.lock().await;
-        if info.is_none() {
-            *info = Some(ChannelInfo::new(self.address.clone()));
-        }
-    }
-
-    pub(crate) async fn dnet_disable(&self) {
-        *self.info.lock().await = None;
     }
 
     /// Starts the channel. Runs a receive loop to start receiving messages
@@ -247,11 +225,11 @@ impl Channel {
         let packet = Packet { command: M::NAME.to_string(), payload: serialize(message) };
 
         dnet!(self,
-            let time = NanoTimestamp::current_time();
-            match self.info.lock().await.as_mut() {
-                Some(info) => info.log.push((time, "send".into(), packet.command.clone())),
-                None => unreachable!(),
-            }
+            let mut info = self.info.lock().await;
+            info.time = NanoTimestamp::current_time();
+            info.op = "send".to_string();
+            info.cmd = packet.command.clone();
+            self.p2p().dnet_sub().notify(info.clone()).await;
         );
 
         let stream = &mut *self.writer.lock().await;

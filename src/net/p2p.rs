@@ -29,15 +29,13 @@ use smol::Executor;
 use url::Url;
 
 use super::{
-    channel::ChannelPtr,
+    channel::{ChannelInfo, ChannelPtr},
     hosts::{Hosts, HostsPtr},
     message::Message,
     protocol::{protocol_registry::ProtocolRegistry, register_default_protocols},
     session::{
-        inbound_session::InboundDnet,
-        outbound_session::{OutboundDnet, OutboundState},
         InboundSession, InboundSessionPtr, ManualSession, ManualSessionPtr, OutboundSession,
-        OutboundSessionPtr, SeedSyncSession, Session,
+        OutboundSessionPtr, SeedSyncSession,
     },
     settings::{Settings, SettingsPtr},
 };
@@ -53,48 +51,6 @@ pub type ConnectedChannels = Mutex<HashMap<Url, ChannelPtr>>;
 /// Atomic pointer to the p2p interface
 pub type P2pPtr = Arc<P2p>;
 
-/// Representations of the p2p state
-enum P2pState {
-    /// The P2P object has been created but not yet started
-    Open,
-    /// We are performing the initial seed session
-    Start,
-    /// Seed session finished, but not yet running
-    Started,
-    /// P2P is running and the network is active
-    Run,
-    /// The P2P network has been stopped
-    Stopped,
-}
-
-/// Types of DnetInfo (used with sessions)
-pub enum DnetInfo {
-    /// Hosts info
-    Hosts(Vec<Url>),
-    /// Outbound Session Info
-    Outbound(OutboundDnet),
-    /// Inbound Session Info
-    Inbound(InboundDnet),
-    // Manual Session Info
-    //Manual(ManualDnet),
-}
-
-impl std::fmt::Display for P2pState {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Open => "open",
-                Self::Start => "start",
-                Self::Started => "started",
-                Self::Run => "run",
-                Self::Stopped => "stopped",
-            }
-        )
-    }
-}
-
 /// Toplevel peer-to-peer networking interface
 pub struct P2p {
     /// Channels pending connection
@@ -109,8 +65,6 @@ pub struct P2p {
     hosts: HostsPtr,
     /// Protocol registry
     protocol_registry: ProtocolRegistry,
-    /// The state of the interface
-    state: Mutex<P2pState>,
     /// P2P network settings
     settings: SettingsPtr,
     /// Boolean lock marking if peer discovery is active
@@ -125,6 +79,8 @@ pub struct P2p {
 
     /// Enable network debugging
     pub dnet_enabled: Mutex<bool>,
+    /// The subscriber for which we can give dnet info over
+    dnet_sub: SubscriberPtr<ChannelInfo>,
 }
 
 impl P2p {
@@ -146,7 +102,6 @@ impl P2p {
             stop_subscriber: Subscriber::new(),
             hosts: Hosts::new(settings.clone()),
             protocol_registry: ProtocolRegistry::new(),
-            state: Mutex::new(P2pState::Open),
             settings,
             peer_discovery_running: Mutex::new(false),
 
@@ -155,6 +110,7 @@ impl P2p {
             session_outbound: Mutex::new(None),
 
             dnet_enabled: Mutex::new(false),
+            dnet_sub: Subscriber::new(),
         });
 
         let parent = Arc::downgrade(&self_);
@@ -172,14 +128,11 @@ impl P2p {
     pub async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::p2p::start()", "P2P::start() [BEGIN]");
         info!(target: "net::p2p::start()", "[P2P] Seeding P2P subsystem");
-        *self.state.lock().await = P2pState::Start;
 
         // Start seed session
         let seed = SeedSyncSession::new(Arc::downgrade(&self));
         // This will block until all seed queries have finished
         seed.start(ex.clone()).await?;
-
-        *self.state.lock().await = P2pState::Started;
 
         debug!(target: "net::p2p::start()", "P2P::start() [END]");
         Ok(())
@@ -204,7 +157,6 @@ impl P2p {
     pub async fn run(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::p2p::run()", "P2P::run() [BEGIN]");
         info!(target: "net::p2p::run()", "[P2P] Running P2P subsystem");
-        *self.state.lock().await = P2pState::Run;
 
         // First attempt any set manual connections
         let manual = self.session_manual().await;
@@ -232,8 +184,6 @@ impl P2p {
         manual.stop().await;
         inbound.stop().await;
         outbound.stop().await;
-
-        *self.state.lock().await = P2pState::Stopped;
 
         debug!(target: "net::p2p::run()", "P2P::run() [END]");
         Ok(())
@@ -358,11 +308,6 @@ impl P2p {
 
     /// Enable network debugging
     pub async fn dnet_enable(&self) {
-        // Enable log for all connected channels if not enabled already
-        for channel in self.channels().lock().await.values() {
-            channel.dnet_enable().await;
-        }
-
         *self.dnet_enabled.lock().await = true;
         warn!("[P2P] Network debugging enabled!");
     }
@@ -370,101 +315,12 @@ impl P2p {
     /// Disable network debugging
     pub async fn dnet_disable(&self) {
         *self.dnet_enabled.lock().await = false;
-
-        // Clear out any held data
-        for channel in self.channels().lock().await.values() {
-            channel.dnet_disable().await;
-        }
-
         warn!("[P2P] Network debugging disabled!");
     }
 
-    /// Gather session dnet info and return it in a vec.
-    /// Returns an empty vec if dnet is disabled.
-    pub async fn dnet_info(&self) -> Vec<DnetInfo> {
-        let mut ret = vec![];
-
-        if *self.dnet_enabled.lock().await {
-            ret.push(self.session_inbound().await.dnet_info().await);
-            ret.push(self.session_outbound().await.dnet_info().await);
-            ret.push(DnetInfo::Hosts(self.hosts.load_all().await));
-        }
-
-        ret
-    }
-
-    /// Maps DnetInfo into a JSON struct usable by clients
-    pub fn map_dnet_info(dnet_info: Vec<DnetInfo>) -> serde_json::Value {
-        let mut map = serde_json::Map::new();
-        map.insert("inbound".into(), serde_json::Value::Null);
-        map.insert("outbound".into(), serde_json::Value::Null);
-        map.insert("hosts".into(), serde_json::Value::Null);
-
-        // We assume there will be one of each
-        for info in dnet_info {
-            match info {
-                DnetInfo::Hosts(hosts) => map["hosts"] = serde_json::json!(hosts),
-
-                DnetInfo::Outbound(outbound_info) => {
-                    let mut slot_info = vec![];
-                    for slot in outbound_info.slots {
-                        let Some(slot) = slot else {
-                            slot_info.push(serde_json::Value::Null);
-                            continue
-                        };
-
-                        let obj = if slot.state != OutboundState::Open {
-                            serde_json::json!({
-                                "addr": slot.addr.unwrap().to_string(),
-                                "state": slot.state.to_string(),
-                                "info": {
-                                    "addr": slot.channel.as_ref().unwrap().addr.to_string(),
-                                    "random_id": slot.channel.as_ref().unwrap().random_id,
-                                    "remote_id": slot.channel.as_ref().unwrap().remote_node_id,
-                                    "log": slot.channel.as_ref().unwrap().log.to_vec(),
-                                }
-                            })
-                        } else {
-                            serde_json::json!({
-                                "addr": serde_json::Value::Null,
-                                "state": slot.state.to_string(),
-                                "info": serde_json::Value::Null,
-                            })
-                        };
-
-                        slot_info.push(obj);
-                    }
-
-                    map["outbound"] = serde_json::json!(slot_info);
-                }
-
-                DnetInfo::Inbound(inbound_info) => {
-                    let mut slot_info = vec![];
-                    for slot in inbound_info.slots {
-                        let Some(slot) = slot else {
-                            slot_info.push(serde_json::Value::Null);
-                            continue
-                        };
-
-                        let obj = serde_json::json!({
-                            "addr": slot.addr.unwrap().to_string(),
-                            "info": {
-                                "addr": slot.channel.as_ref().unwrap().addr.to_string(),
-                                "random_id": slot.channel.as_ref().unwrap().random_id,
-                                "remote_id": slot.channel.as_ref().unwrap().remote_node_id,
-                                "log": slot.channel.as_ref().unwrap().log.to_vec(),
-                            }
-                        });
-
-                        slot_info.push(obj);
-                    }
-
-                    map["inbound"] = serde_json::json!(slot_info);
-                }
-            }
-        }
-
-        serde_json::json!(map)
+    /// Return a reference to the dnet subscriber
+    pub fn dnet_sub(&self) -> SubscriberPtr<ChannelInfo> {
+        self.dnet_sub.clone()
     }
 }
 

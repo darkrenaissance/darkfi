@@ -139,7 +139,7 @@ pub struct SettingsOpt {
     #[structopt(skip)]
     pub node_id: String,
 
-    /// Preferred transports for outbound connections    
+    /// Preferred transports for outbound connections
     #[serde(default)]
     #[structopt(long = "transports")]
     pub allowed_transports: Vec<String>,
