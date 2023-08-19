@@ -65,7 +65,7 @@ fn main() -> Result<()> {
     let public_inputs = vec![*value_coords.x(), *value_coords.y()];
 
     // Create the circuit
-    let circuit = ZkCircuit::new(prover_witnesses, &zkbin.clone());
+    let mut circuit = ZkCircuit::new(prover_witnesses, &zkbin.clone());
     circuit.enable_trace();
 
     let now = std::time::Instant::now();

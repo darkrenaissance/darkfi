@@ -282,7 +282,7 @@ impl ZkCircuit {
         }
     }
 
-    pub fn enable_trace(&self) {
+    pub fn enable_trace(&mut self) {
         self.tracer.init();
     }
 }
