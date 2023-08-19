@@ -18,7 +18,7 @@ def vesting_instance(vesting, running_time):
         darkies = []
         id = 0
         for name, distrib in vesting.items():
-            darkies += [Darkie(distrib[0] , vesting=distrib, strategy=random_strategy(EPOCH_LENGTH))]
+            darkies += [Darkie(distrib[0] , vesting=distrib, strategy=random_strategy(EPOCH_LENGTH), idx=id)]
             id+=1
             total_vesting+=distrib[-1]
         airdrop = 0
