@@ -3,7 +3,7 @@ import config
 
 def percent_change(start, end):
     difference = end - start
-    change = (difference / start) * 100
+    change = (difference / start) * 100 if start!=0 else 0
     return change
 
 #def slot_number_at_target(count, supply, target_reached):
@@ -24,7 +24,7 @@ def percent_change(start, end):
 #    days = count / slots_per_day
 #    months = count / slots_per_month
 #    years = count / slots_per_year
-#    
+#
 #    print("Target supply of", str(target), "DRK was achieved after: ",
 #          str(count), "slots", str(days), "(D)", str(months), "(M)",
 #          str(years), "(Y)")
