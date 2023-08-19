@@ -23,8 +23,7 @@ use log::warn;
 use rand::{rngs::OsRng, Rng};
 
 pub type SubscriberPtr<T> = Arc<Subscriber<T>>;
-
-pub type SubscriptionId = u64;
+pub type SubscriptionId = usize;
 
 #[derive(Debug)]
 pub struct Subscription<T> {
@@ -58,7 +57,7 @@ impl<T: Clone> Subscription<T> {
 /// Simple broadcast (publish-subscribe) class
 #[derive(Debug)]
 pub struct Subscriber<T> {
-    subs: Mutex<HashMap<u64, smol::channel::Sender<T>>>,
+    subs: Mutex<HashMap<SubscriptionId, smol::channel::Sender<T>>>,
 }
 
 impl<T: Clone> Subscriber<T> {
@@ -73,9 +72,14 @@ impl<T: Clone> Subscriber<T> {
     pub async fn subscribe(self: Arc<Self>) -> Subscription<T> {
         let (sender, recvr) = smol::channel::unbounded();
 
-        let sub_id = Self::random_id();
+        // Poor-man's do/while
+        let mut subs = self.subs.lock().await;
+        let mut sub_id = Self::random_id();
+        while subs.contains_key(&sub_id) {
+            sub_id = Self::random_id();
+        }
 
-        self.subs.lock().await.insert(sub_id, sender);
+        subs.insert(sub_id, sender);
 
         Subscription { id: sub_id, recv_queue: recvr, parent: self.clone() }
     }
