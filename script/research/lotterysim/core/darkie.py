@@ -40,8 +40,10 @@ class Darkie():
     @returns: apr
     """
     def apr_scaled_to_runningtime(self):
-        initial_stake = self.vesting_wrapped_initial_stake()
-        #assert self.stake >= initial_stake, 'stake: {}, initial_stake: {}, slot: {}, current: {}, previous: {} vesting'.format(self.stake, initial_stake, self.slot, self.current_vesting(), self.prev_vesting())
+        #initial_stake = self.vesting_wrapped_initial_stake()
+        initial_stake = self.initial_stake[-1]
+        # note the following will not hold if fee is enabled.
+        #assert self.stake >= initial_stake or math.fabs(initial_stake - self.stake) < EPSILON , 'stake: {}, initial_stake: {}, slot: {}, current: {}, previous: {} vesting'.format(self.stake, initial_stake, self.slot, self.current_vesting(), self.prev_vesting())
         if self.slot < HEADSTART_AIRDROP:
             # during this phase, it's only called at end of epoch
             apr_period = self.slot%EPOCH_LENGTH
@@ -51,8 +53,8 @@ class Darkie():
             apr_period = self.slot-HEADSTART_AIRDROP
         apr_scaled = ((self.stake - initial_stake) / initial_stake) / apr_period if initial_stake>0  and apr_period>0 else 0
         apr = apr_scaled * ONE_YEAR if initial_stake > 0 and apr_period>0 and self.slot>0 else 0
-        #if apr>0 and self.stake-initial_stake>0:
-            #print("apr: {}, stake: {}, initial_stake: {}".format(apr, self.stake, initial_stake))
+        if self.slot < HEADSTART_AIRDROP:
+            assert apr>=0, 'apr: {}, apr_scaled: {}, initial_stake: {}, stake: {}, apr_period: {}'.format(apr, apr_scaled, initial_stake, self.stake, apr_period)
         return apr
 
 
@@ -60,6 +62,7 @@ class Darkie():
     add vesting to initial stake
     @returns: vesting plus initial stake
     """
+    '''
     def vesting_wrapped_initial_stake(self):
         #returns  vesting stake plus initial stake gained from zero coin headstart during aridrop period
         vesting = self.current_vesting()
@@ -70,7 +73,8 @@ class Darkie():
         else:
             initial_stake = self.initial_stake[int(HEADSTART_AIRDROP/EPOCH_LENGTH)-1]
         return vesting + initial_stake
-
+        #return initial_stake
+    '''
     """
     update stake with vesting return every scheduled vesting period
     """
@@ -158,12 +162,14 @@ class Darkie():
     """
     def update_stake(self, reward):
         if self.won_hist[-1]:
+            assert reward>=0
             self.stake += reward
 
     """
     update stake after fork finalization
     """
     def resync_stake(self, reward):
+        assert reward>=0
         self.stake += reward
 
 

@@ -10,14 +10,14 @@ from draw import draw
 os.system("rm log/*_feedback.hist; rm log/*_output.hist")
 
 RUNNING_TIME = int(input("running time:"))
-NODES=100
+NODES=1000
 
 if __name__ == "__main__":
     egalitarian = ERC20DRK/NODES
     darkies = []
 
     for id in range(int(NODES)):
-        darkie = Darkie(random.gauss(egalitarian, egalitarian*0.1), strategy=random_strategy())
+        darkie = Darkie(random.gauss(egalitarian, egalitarian*0.1), strategy=random_strategy(), idx=id)
         darkies += [darkie]
 
     #TODO try rpid with 0mint
@@ -32,7 +32,7 @@ if __name__ == "__main__":
     dt = DarkfiTable(airdrop, RUNNING_TIME, CONTROLLER_TYPE_DISCRETE, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0,  r_kp=-0.63, r_ki=3.35, r_kd=0)
     for darkie in darkies:
         dt.add_darkie(darkie)
-    acc, avg_apy, avg_reward, stake_ratio, avg_apr = dt.background(rand_running_time=False)
+    acc, cc_diff_avg, avg_apy, avg_reward, stake_ratio, avg_apr = dt.background(rand_running_time=False)
     sum_zero_stake = sum([darkie.stake for darkie in darkies[NODES:]])
     print('acc: {}, avg(apr): {}, avg(reward): {}, stake_ratio: {}'.format(acc, avg_apr, avg_reward, stake_ratio))
     print('total stake of 0mint: {}, ratio: {}'.format(sum_zero_stake, sum_zero_stake/ERC20DRK))

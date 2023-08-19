@@ -125,22 +125,6 @@ class ZeroTip(Tip):
     def get_tip(self, last_reward, apr, size, last_tip):
         return 0
 
-class TenthOfReward(Tip):
-    def __init__(self):
-        super().__init__()
-        self.type = '10th'
-
-    def get_tip(self, last_reward, apr, size, last_tip):
-        return last_reward/10
-
-class HundredthOfReward(Tip):
-    def __init__(self):
-        super().__init__()
-        self.type = '100th'
-
-    def get_tip(self, last_reward, apr, size, last_tip):
-        return last_reward/100
-
 class MilthOfReward(Tip):
     def __init__(self):
         super().__init__()
@@ -158,33 +142,6 @@ class RewardApr(Tip):
         apr_relu = max(apr, 0)
         apr_relu = min(apr_relu, 1)
         return last_reward*apr_relu
-
-class TenthRewardApr(Tip):
-    def __init__(self):
-        super().__init__()
-        self.type = 'reward_apr'
-
-    def get_tip(self, last_reward, apr, size, last_tip):
-        apr_relu = max(apr, 0)
-        apr_relu = min(apr_relu, 1)
-        return last_reward*apr_relu/10
-
-
-class TenthCCApr(Tip):
-    def __init__(self):
-        super().__init__()
-        self.type = "cc_apr_10"
-
-    def get_tip(self, last_reward, apr, size, last_tip):
-        return size/MAX_BLOCK_SIZE/10
-
-class HundredthCCApr(Tip):
-    def __init__(self):
-        super().__init__()
-        self.type = "cc_apr_100"
-
-    def get_tip(self, last_reward, apr, size, last_tip):
-        return size/MAX_BLOCK_SIZE/100
 
 class MilthCCApr(Tip):
     def __init__(self):
@@ -212,4 +169,4 @@ class Generous(Tip):
 
 
 def random_tip_strategy():
-    return random.choice([ZeroTip(), RewardApr(), TenthReward(), HundredthOfReward(), TenthRewardApr(), MilthOfReward(), TenthCCApr(), HundredthCCApr(), MilthCCApr(), Conservative(), Generous()])
+    return random.choice([ZeroTip(), RewardApr(),   MilthOfReward(),  MilthCCApr(), Conservative(), Generous()])

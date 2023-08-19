@@ -1,7 +1,7 @@
 from decimal import Decimal as Num
 
 # number approximation terms
-N_TERM = 2
+N_TERM = 5
 # analogue controller enum
 CONTROLLER_TYPE_ANALOGUE = -1
 # discrete controller enum
@@ -9,7 +9,7 @@ CONTROLLER_TYPE_DISCRETE = 0
 # takahashi controller enum
 CONTROLLER_TYPE_TAKAHASHI = 1
 # initial distribution of tokens (random value for sake of experimentation)
-ERC20DRK = 0
+ERC20DRK = 10000
 # initial distribution
 PREMINT = ERC20DRK
 # group base/order
@@ -25,7 +25,7 @@ REWARD_MAX = 1000
 # slot length in seconds
 SLOT = 90
 # epoch length in slots
-EPOCH_LENGTH = 100
+EPOCH_LENGTH = 10
 # one month in slots
 ONE_MONTH = 60*60*24*30/SLOT
 # one year in slots
@@ -53,7 +53,7 @@ EPSILON = 1
 # window of accuracy calculation
 ACC_WINDOW = int(EPOCH_LENGTH)*10
 # headstart airdrop period
-HEADSTART_AIRDROP = ONE_MONTH
+HEADSTART_AIRDROP = 0
 # threshold of randomly slashing stakeholder
 SLASHING_RATIO = 0.000005
 # number of nodes

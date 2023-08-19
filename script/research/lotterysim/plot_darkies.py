@@ -10,7 +10,7 @@ for darkie in glob.glob('log/darkie[0-9]*.log'):
         buf = f.read()
         lines = buf.split('\n')
         apr = float(lines[2].split(':')[1].strip())
-        aprs = [float(item) for item in lines[3].split(':')[1].split(',')]
+        aprs = [float(item) if item != ' ' else 0 for item in lines[3].split(':')[1].split(',')]
         initial_stake = [float(item) for item in lines[0].split(':')[1].split(',')]
         idx +=1
         darkies += [(initial_stake, apr, aprs, idx)]
