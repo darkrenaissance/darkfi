@@ -31,6 +31,9 @@ pub mod gadget;
 pub mod proof;
 pub use proof::{Proof, ProvingKey, VerifyingKey};
 
+/// Trace computation of intermediate values in circuit
+mod tracer;
+
 pub mod halo2 {
     pub use halo2_proofs::{
         arithmetic::Field,

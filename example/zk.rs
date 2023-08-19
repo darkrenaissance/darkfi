@@ -66,13 +66,23 @@ fn main() -> Result<()> {
 
     // Create the circuit
     let circuit = ZkCircuit::new(prover_witnesses, &zkbin.clone());
+    circuit.enable_trace();
 
     let now = std::time::Instant::now();
     let proving_key = ProvingKey::build(k, &circuit);
     println!("ProvingKey built [{} s]", now.elapsed().as_secs_f64());
     let now = std::time::Instant::now();
-    let proof = Proof::create(&proving_key, &[circuit], &public_inputs, &mut OsRng)?;
+    let circuits = [circuit];
+    let proof = Proof::create(&proving_key, &circuits, &public_inputs, &mut OsRng)?;
     println!("Proof created [{} s]", now.elapsed().as_secs_f64());
+
+    println!("Debug trace:");
+    let opvalue_binding = circuits[0].tracer.opvalues.borrow();
+    let opvalues = opvalue_binding.as_ref().unwrap();
+    for (i, (opcode, opvalue)) in zkbin.opcodes.iter().zip(opvalues.iter()).enumerate() {
+        let opcode = opcode.0;
+        println!("  {}: {:?} {:?}", i, opcode, opvalue);
+    }
 
     // ========
     // Verifier

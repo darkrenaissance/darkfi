@@ -62,6 +62,7 @@ use super::{
         small_range_check::{SmallRangeCheckChip, SmallRangeCheckConfig},
         zero_cond::{ZeroCondChip, ZeroCondConfig},
     },
+    tracer::ZkTracer,
 };
 use crate::zkas::{
     types::{HeapType, LitType},
@@ -265,13 +266,24 @@ pub struct ZkCircuit {
     witnesses: Vec<Witness>,
     literals: Vec<(LitType, String)>,
     opcodes: Vec<(Opcode, Vec<(HeapType, usize)>)>,
+    pub tracer: ZkTracer,
 }
 
 impl ZkCircuit {
     pub fn new(witnesses: Vec<Witness>, circuit_code: &ZkBinary) -> Self {
         let constants = circuit_code.constants.iter().map(|x| x.1.clone()).collect();
         let literals = circuit_code.literals.clone();
-        Self { constants, witnesses, literals, opcodes: circuit_code.opcodes.clone() }
+        Self {
+            constants,
+            witnesses,
+            literals,
+            opcodes: circuit_code.opcodes.clone(),
+            tracer: ZkTracer::new(true),
+        }
+    }
+
+    pub fn enable_trace(&self) {
+        self.tracer.init();
     }
 }
 
@@ -286,6 +298,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
             witnesses: self.witnesses.clone(),
             literals: self.literals.clone(),
             opcodes: self.opcodes.clone(),
+            tracer: ZkTracer::new(false),
         }
     }
 
@@ -734,6 +747,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
         // =============================
         // And now, work through opcodes
         // =============================
+        self.tracer.clear();
         // TODO: Copy constraints
         // ANCHOR: opcode_begin
         for opcode in &self.opcodes {
@@ -751,6 +765,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let ret = lhs.add(layouter.namespace(|| "EcAdd()"), &rhs)?;
 
                     trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
+                    self.tracer.push_ecpoint(&ret);
                     heap.push(HeapVar::EcPoint(ret));
                 }
                 // ANCHOR_END: opcode_begin
@@ -770,6 +785,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMul()"), rhs)?;
 
                     trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
+                    self.tracer.push_ecpoint(&ret);
                     heap.push(HeapVar::EcPoint(ret));
                 }
 
@@ -790,6 +806,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMulVarBase()"), rhs)?;
 
                     trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
+                    self.tracer.push_ecpoint(&ret);
                     heap.push(HeapVar::EcPoint(ret));
                 }
 
@@ -805,6 +822,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let ret = lhs.mul(layouter.namespace(|| "EcMulBase()"), rhs)?;
 
                     trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
+                    self.tracer.push_ecpoint(&ret);
                     heap.push(HeapVar::EcPoint(ret));
                 }
 
@@ -824,6 +842,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMulShort()"), rhs)?;
 
                     trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
+                    self.tracer.push_ecpoint(&ret);
                     heap.push(HeapVar::EcPoint(ret));
                 }
 
@@ -837,6 +856,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let ret = point.inner().x();
 
                     trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
+                    self.tracer.push_base(&ret);
                     heap.push(HeapVar::Base(ret));
                 }
 
@@ -850,6 +870,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let ret = point.inner().y();
 
                     trace!(target: "zk::vm", "Pushing result to heap address {}", heap.len());
+                    self.tracer.push_base(&ret);
                     heap.push(HeapVar::Base(ret));
                 }
 
@@ -886,6 +907,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                             let $cell: AssignedCell<Fp, Fp> = $output.into();
 
                             trace!(target: "zk::vm", "Pushing hash to heap address {}", heap.len());
+                            self.tracer.push_base(&$cell);
                             heap.push(HeapVar::Base($cell));
                         };
                     }
@@ -926,6 +948,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         .calculate_root(layouter.namespace(|| "MerkleRoot()"), leaf)?;
 
                     trace!(target: "zk::vm", "Pushing merkle root to heap address {}", heap.len());
+                    self.tracer.push_base(&root);
                     heap.push(HeapVar::Base(root));
                 }
 
@@ -943,6 +966,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     )?;
 
                     trace!(target: "zk::vm", "Pushing sum to heap address {}", heap.len());
+                    self.tracer.push_base(&sum);
                     heap.push(HeapVar::Base(sum));
                 }
 
@@ -960,6 +984,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     )?;
 
                     trace!(target: "zk::vm", "Pushing product to heap address {}", heap.len());
+                    self.tracer.push_base(&product);
                     heap.push(HeapVar::Base(product));
                 }
 
@@ -977,6 +1002,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     )?;
 
                     trace!(target: "zk::vm", "Pushing difference to heap address {}", heap.len());
+                    self.tracer.push_base(&difference);
                     heap.push(HeapVar::Base(difference));
                 }
 
@@ -1001,6 +1027,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     )?;
 
                     trace!(target: "zk::vm", "Pushing assignment to heap address {}", heap.len());
+                    self.tracer.push_base(&witness);
                     heap.push(HeapVar::Base(witness));
                 }
 
@@ -1033,6 +1060,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                             return Err(plonk::Error::Synthesis)
                         }
                     }
+                    self.tracer.push_void();
                 }
 
                 Opcode::LessThanStrict => {
@@ -1049,6 +1077,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         0,
                         true,
                     )?;
+                    self.tracer.push_void();
                 }
 
                 Opcode::LessThanLoose => {
@@ -1065,6 +1094,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         0,
                         false,
                     )?;
+                    self.tracer.push_void();
                 }
 
                 Opcode::BoolCheck => {
@@ -1077,6 +1107,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         .as_ref()
                         .unwrap()
                         .small_range_check(layouter.namespace(|| "copy boolean check"), w)?;
+                    self.tracer.push_void();
                 }
 
                 Opcode::CondSelect => {
@@ -1096,6 +1127,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         )?;
 
                     trace!(target: "zk::vm", "Pushing assignment to heap address {}", heap.len());
+                    self.tracer.push_base(&out);
                     heap.push(HeapVar::Base(out));
                 }
 
@@ -1113,6 +1145,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     )?;
 
                     trace!(target: "zk::vm", "Pushing assignment to heap address {}", heap.len());
+                    self.tracer.push_base(&out);
                     heap.push(HeapVar::Base(out));
                 }
 
@@ -1127,6 +1160,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         || "constrain witnessed base equality",
                         |mut region| region.constrain_equal(lhs.cell(), rhs.cell()),
                     )?;
+                    self.tracer.push_void();
                 }
 
                 Opcode::ConstrainEqualPoint => {
@@ -1143,6 +1177,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         layouter.namespace(|| "constrain ec point equality"),
                         &rhs,
                     )?;
+                    self.tracer.push_void();
                 }
 
                 Opcode::ConstrainInstance => {
@@ -1158,6 +1193,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     )?;
 
                     public_inputs_offset += 1;
+                    self.tracer.push_void();
                 }
 
                 Opcode::DebugPrint => {
@@ -1166,6 +1202,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
 
                     println!("[ZKVM DEBUG] HEAP INDEX: {}", args[0].1);
                     println!("[ZKVM DEBUG] {:#?}", heap[args[0].1]);
+                    self.tracer.push_void();
                 }
 
                 Opcode::Noop => {
@@ -1174,6 +1211,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                 }
             }
         }
+        self.tracer.assert_correct(self.opcodes.len());
 
         trace!(target: "zk::vm", "Exiting synthesize() successfully");
         Ok(())
