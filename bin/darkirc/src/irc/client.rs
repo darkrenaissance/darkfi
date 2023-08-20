@@ -53,7 +53,7 @@ pub struct IrcClient<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> {
     /// Joined channels, mapped here for better SIGHUP UX.
     channels_joined: HashSet<String>,
 
-    server_notifier: smol::channel::Sender<(NotifierMsg, u64)>,
+    server_notifier: smol::channel::Sender<(NotifierMsg, usize)>,
     subscription: Subscription<ClientSubMsg>,
 
     missed_events: Arc<Mutex<Vec<Event<PrivMsgEvent>>>>,
@@ -65,7 +65,7 @@ impl<C: AsyncRead + AsyncWrite + Send + Unpin + 'static> IrcClient<C> {
         read_stream: BufReader<ReadHalf<C>>,
         address: SocketAddr,
         irc_config: IrcConfig,
-        server_notifier: smol::channel::Sender<(NotifierMsg, u64)>,
+        server_notifier: smol::channel::Sender<(NotifierMsg, usize)>,
         subscription: Subscription<ClientSubMsg>,
         missed_events: Arc<Mutex<Vec<Event<PrivMsgEvent>>>>,
     ) -> Self {

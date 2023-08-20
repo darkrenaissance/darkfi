@@ -139,7 +139,7 @@ impl IrcServer {
         p2p: P2pPtr,
         model: ModelPtr<PrivMsgEvent>,
         seen: SeenPtr<EventId>,
-        recv: smol::channel::Receiver<(NotifierMsg, u64)>,
+        recv: smol::channel::Receiver<(NotifierMsg, usize)>,
         missed_events: Arc<Mutex<Vec<Event<PrivMsgEvent>>>>,
         clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     ) -> Result<()> {
@@ -199,7 +199,7 @@ impl IrcServer {
     /// Start listening to new connections from irc clients
     pub async fn listen(
         &self,
-        notifier: smol::channel::Sender<(NotifierMsg, u64)>,
+        notifier: smol::channel::Sender<(NotifierMsg, usize)>,
         executor: Arc<smol::Executor<'_>>,
     ) -> Result<()> {
         let (listener, acceptor) = self.setup_listener().await?;
@@ -243,7 +243,7 @@ impl IrcServer {
         &self,
         stream: C,
         peer_addr: SocketAddr,
-        notifier: smol::channel::Sender<(NotifierMsg, u64)>,
+        notifier: smol::channel::Sender<(NotifierMsg, usize)>,
         executor: Arc<smol::Executor<'_>>,
     ) -> Result<()> {
         let (reader, writer) = stream.split();

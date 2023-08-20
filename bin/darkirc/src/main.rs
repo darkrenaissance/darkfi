@@ -16,17 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashMap;
+
 use async_std::{
     stream::StreamExt,
     sync::{Arc, Mutex},
     task,
 };
-
 use chrono::{Duration, Utc};
 use irc::ClientSubMsg;
 use log::{debug, info};
 use rand::rngs::OsRng;
 use structopt_toml::StructOptToml;
+use tinyjson::JsonValue;
 
 use darkfi::{
     async_daemonize,
@@ -112,7 +114,11 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
 
         if settings.output.is_some() {
             let datastore = expand_path(&settings.output.unwrap())?;
-            save_json_file(&datastore, &kp, false)?;
+            let kp_enc = JsonValue::Object(HashMap::from([
+                ("public".to_string(), JsonValue::String(kp.public)),
+                ("secret".to_string(), JsonValue::String(kp.secret)),
+            ]));
+            save_json_file(&datastore, &kp_enc, false)?;
         } else {
             println!("Generated keypair:\n{}", kp);
         }
@@ -129,7 +135,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
 
         if settings.output.is_some() {
             let datastore = expand_path(&settings.output.unwrap())?;
-            save_json_file(&datastore, &pub_encoded, false)?;
+            save_json_file(&datastore, &JsonValue::String(pub_encoded), false)?;
         } else {
             println!("Public key recoverd: {}", pub_encoded);
         }
