@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::{HashMap, HashSet},
-    ffi::OsString,
-};
+use std::collections::{HashMap, HashSet};
 
 use async_std::{
     channel,
@@ -29,9 +26,9 @@ use async_std::{
 };
 use async_trait::async_trait;
 use log::{debug, error, info, warn};
-use serde_json::{json, Value};
 use smol::Executor;
 use structopt_toml::{structopt::StructOpt, StructOptToml};
+use tinyjson::JsonValue;
 use url::Url;
 
 use darkfi::{
@@ -107,20 +104,14 @@ pub struct Fud {
 #[async_trait]
 impl RequestHandler for Fud {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        if !req.params.is_array() {
-            return JsonError::new(ErrorCode::InvalidParams, None, req.id).into()
-        }
-
-        let params = req.params.as_array().unwrap();
-
         match req.method.as_str() {
-            Some("put") => return self.put(req.id, params).await,
-            Some("get") => return self.get(req.id, params).await,
+            "ping" => return self.pong(req.id, req.params).await,
 
-            Some("ping") => return self.pong(req.id, params).await,
-            Some("dnet_switch") => return self.dnet_switch(req.id, params).await,
-            Some("dnet_info") => return self.dnet_info(req.id, params).await,
-            Some(_) | None => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+            "put" => return self.put(req.id, req.params).await,
+            "get" => return self.get(req.id, req.params).await,
+
+            "dnet_switch" => return self.dnet_switch(req.id, req.params).await,
+            _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
 }
@@ -132,12 +123,14 @@ impl Fud {
     //
     // --> {"jsonrpc": "2.0", "method": "put", "params": ["/foo.txt"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result: "df4...3db7", "id": 42}
-    async fn put(&self, id: Value, params: &[Value]) -> JsonResult {
+    async fn put(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        let path = match expand_path(params[0].as_str().unwrap()) {
+        let path = params[0].get::<String>().unwrap();
+        let path = match expand_path(path.as_str()) {
             Ok(v) => v,
             Err(_) => return JsonError::new(ErrorCode::InvalidParams, None, id).into(),
         };
@@ -163,7 +156,7 @@ impl Fud {
         let fud_file = FudFilePut { file_hash, chunk_hashes };
         self.p2p.broadcast(&fud_file).await;
 
-        JsonResponse::new(json!(file_hash.to_hex().as_str()), id).into()
+        JsonResponse::new(JsonValue::String(file_hash.to_hex().to_string()), id).into()
     }
 
     // RPCAPI:
@@ -172,12 +165,13 @@ impl Fud {
     //
     // --> {"jsonrpc": "2.0", "method": "get", "params": ["1211...abfd"], "id": 42}
     // <-- {"jsonrpc": "2.0", "result: ["~/.local/share/fud/chunks/fab1...2314", ...], "id": 42}
-    async fn get(&self, id: Value, params: &[Value]) -> JsonResult {
+    async fn get(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        let file_hash = match blake3::Hash::from_hex(params[0].as_str().unwrap()) {
+        let file_hash = match blake3::Hash::from_hex(params[0].get::<String>().unwrap()) {
             Ok(v) => v,
             Err(_) => return JsonError::new(ErrorCode::InvalidParams, None, id).into(),
         };
@@ -217,12 +211,16 @@ impl Fud {
         };
 
         if chunked_file.is_complete() {
-            let chunks: Vec<OsString> = chunked_file
+            let chunks: Vec<JsonValue> = chunked_file
                 .iter()
-                .map(|(_, path)| path.as_ref().unwrap().clone().into_os_string())
+                .map(|(_, path)| {
+                    JsonValue::String(
+                        path.as_ref().unwrap().clone().into_os_string().into_string().unwrap(),
+                    )
+                })
                 .collect();
 
-            return JsonResponse::new(json!(chunks), id).into()
+            return JsonResponse::new(JsonValue::Array(chunks), id).into()
         }
 
         // Fetch any missing chunks
@@ -259,21 +257,16 @@ impl Fud {
             // Return JsonError missing chunks
         }
 
-        let chunks: Vec<OsString> = chunked_file
+        let chunks: Vec<JsonValue> = chunked_file
             .iter()
-            .map(|(_, path)| path.as_ref().unwrap().clone().into_os_string())
+            .map(|(_, path)| {
+                JsonValue::String(
+                    path.as_ref().unwrap().clone().into_os_string().into_string().unwrap(),
+                )
+            })
             .collect();
 
-        JsonResponse::new(json!(chunks), id).into()
-    }
-
-    // RPCAPI:
-    // Replies to a ping method.
-    //
-    // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
-    async fn pong(&self, id: Value, _params: &[Value]) -> JsonResult {
-        JsonResponse::new(json!("pong"), id).into()
+        JsonResponse::new(JsonValue::Array(chunks), id).into()
     }
 
     // RPCAPI:
@@ -283,27 +276,21 @@ impl Fud {
     //
     // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn dnet_switch(&self, id: Value, params: &[Value]) -> JsonResult {
-        if params.len() != 1 && params[0].as_bool().is_none() {
+    async fn dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 1 || !params[0].is_bool() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        if params[0].as_bool().unwrap() {
+        let switch = params[0].get::<bool>().unwrap();
+
+        if *switch {
             self.p2p.dnet_enable().await;
         } else {
             self.p2p.dnet_disable().await;
         }
 
-        JsonResponse::new(json!(true), id).into()
-    }
-
-    // RPCAPI:
-    // Retrieves P2P network information.
-    // --> {"jsonrpc": "2.0", "method": "dnet_info", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
-    async fn dnet_info(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let dnet_info = self.p2p.dnet_info().await;
-        JsonResponse::new(P2p::map_dnet_info(dnet_info), id).into()
+        JsonResponse::new(JsonValue::Boolean(true), id).into()
     }
 }
 
