@@ -45,10 +45,7 @@ use darkfi::{
     net::P2pPtr,
     rpc::{
         clock_sync::check_clock,
-        jsonrpc::{
-            ErrorCode::{InvalidParams, MethodNotFound},
-            JsonError, JsonRequest, JsonResult,
-        },
+        jsonrpc::{ErrorCode::MethodNotFound, JsonError, JsonRequest, JsonResult},
         server::{listen_and_serve, RequestHandler},
     },
     util::path::expand_path,
@@ -203,66 +200,56 @@ mod rpc_wallet;
 #[async_trait]
 impl RequestHandler for Darkfid {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        if !req.params.is_array() {
-            return JsonError::new(InvalidParams, None, req.id).into()
-        }
-
-        let params = req.params.as_array().unwrap();
-
         match req.method.as_str() {
             // =====================
             // Miscellaneous methods
             // =====================
-            Some("ping") => return self.misc_pong(req.id, params).await,
-            Some("clock") => return self.misc_clock(req.id, params).await,
-            Some("sync_dnet_switch") => return self.misc_sync_dnet_switch(req.id, params).await,
-            Some("sync_dnet_info") => return self.misc_sync_dnet_info(req.id, params).await,
-            Some("consensus_dnet_switch") => {
-                return self.misc_consensus_dnet_switch(req.id, params).await
-            }
-            Some("consensus_dnet_info") => {
-                return self.misc_consensus_dnet_info(req.id, params).await
+            "ping" => return self.pong(req.id, req.params).await,
+            "clock" => return self.misc_clock(req.id, req.params).await,
+            "sync_dnet_switch" => return self.misc_sync_dnet_switch(req.id, req.params).await,
+            "consensus_dnet_switch" => {
+                return self.misc_consensus_dnet_switch(req.id, req.params).await
             }
 
             // ==================
             // Blockchain methods
             // ==================
-            Some("blockchain.get_slot") => return self.blockchain_get_slot(req.id, params).await,
-            Some("blockchain.get_tx") => return self.blockchain_get_tx(req.id, params).await,
-            Some("blockchain.last_known_slot") => {
-                return self.blockchain_last_known_slot(req.id, params).await
+            "blockchain.get_slot" => return self.blockchain_get_slot(req.id, req.params).await,
+            "blockchain.get_tx" => return self.blockchain_get_tx(req.id, req.params).await,
+            "blockchain.last_known_slot" => {
+                return self.blockchain_last_known_slot(req.id, req.params).await
             }
-            Some("blockchain.subscribe_blocks") => {
-                return self.blockchain_subscribe_blocks(req.id, params).await
+            "blockchain.subscribe_blocks" => {
+                return self.blockchain_subscribe_blocks(req.id, req.params).await
             }
-            Some("blockchain.subscribe_err_txs") => {
-                return self.blockchain_subscribe_err_txs(req.id, params).await
+            "blockchain.subscribe_err_txs" => {
+                return self.blockchain_subscribe_err_txs(req.id, req.params).await
             }
-            Some("blockchain.lookup_zkas") => {
-                return self.blockchain_lookup_zkas(req.id, params).await
+            "blockchain.lookup_zkas" => {
+                return self.blockchain_lookup_zkas(req.id, req.params).await
             }
 
             // ===================
             // Transaction methods
             // ===================
-            Some("tx.simulate") => return self.tx_simulate(req.id, params).await,
-            Some("tx.broadcast") => return self.tx_broadcast(req.id, params).await,
+            "tx.simulate" => return self.tx_simulate(req.id, req.params).await,
+            "tx.broadcast" => return self.tx_broadcast(req.id, req.params).await,
 
             // ==============
             // Wallet methods
             // ==============
-            Some("wallet.exec_sql") => return self.wallet_exec_sql(req.id, params).await,
-            Some("wallet.query_row_single") => {
-                return self.wallet_query_row_single(req.id, params).await
+            "wallet.exec_sql" => return self.wallet_exec_sql(req.id, req.params).await,
+            "wallet.query_row_single" => {
+                return self.wallet_query_row_single(req.id, req.params).await
             }
-            Some("wallet.query_row_multi") => {
-                return self.wallet_query_row_multi(req.id, params).await
+            "wallet.query_row_multi" => {
+                return self.wallet_query_row_multi(req.id, req.params).await
             }
 
             // ==============
             // Invalid method
             // ==============
-            Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
+            _ => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
 }

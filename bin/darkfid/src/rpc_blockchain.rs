@@ -21,14 +21,15 @@ use std::str::FromStr;
 use darkfi_sdk::crypto::ContractId;
 use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
-use serde_json::{json, Value};
+use tinyjson::JsonValue;
 
 use darkfi::{
     rpc::jsonrpc::{
         ErrorCode::{InternalError, InvalidParams, ParseError},
-        JsonError, JsonResponse, JsonResult, JsonSubscriber,
+        JsonError, JsonResponse, JsonResult,
     },
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
+    util::encoding::base64,
 };
 
 use super::Darkfid;
@@ -40,20 +41,25 @@ impl Darkfid {
     // Returns a readable block upon success.
     //
     // **Params:**
-    // * `array[0]`: `u64` slot ID
+    // * `array[0]`: `u64` slot ID (as string)
     //
     // **Returns:**
     // * [`BlockInfo`](https://darkrenaissance.github.io/darkfi/development/darkfi/consensus/block/struct.BlockInfo.html)
-    //   struct as a JSON object
+    //   struct serialized into base64.
     //
-    // --> {"jsonrpc": "2.0", "method": "blockchain.get_slot", "params": [0], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
-    pub async fn blockchain_get_slot(&self, id: Value, params: &[Value]) -> JsonResult {
-        if params.len() != 1 || !params[0].is_u64() {
+    // --> {"jsonrpc": "2.0", "method": "blockchain.get_slot", "params": ["0"], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "ABCD...", "id": 1}
+    pub async fn blockchain_get_slot(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let slot = params[0].as_u64().unwrap();
+        let slot = match u64::from_str_radix(params[0].get::<String>().unwrap(), 10) {
+            Ok(v) => v,
+            Err(_) => return JsonError::new(ParseError, None, id).into(),
+        };
+
         let validator_state = self.validator_state.read().await;
 
         let blocks = match validator_state.blockchain.get_blocks_by_slot(&[slot]) {
@@ -71,7 +77,8 @@ impl Darkfid {
             return server_error(RpcError::UnknownSlot, id, None)
         }
 
-        JsonResponse::new(json!(serialize(&blocks[0])), id).into()
+        let block = base64::encode(&serialize(&blocks[0]));
+        JsonResponse::new(JsonValue::String(block), id).into()
     }
 
     // RPCAPI:
@@ -87,21 +94,16 @@ impl Darkfid {
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_tx", "params": ["TxHash"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
-    pub async fn blockchain_get_tx(&self, id: Value, params: &[Value]) -> JsonResult {
-        if params.len() != 1 {
+    pub async fn blockchain_get_tx(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let tx_hash_str = if let Some(tx_hash_str) = params[0].as_str() {
-            tx_hash_str
-        } else {
-            return JsonError::new(InvalidParams, None, id).into()
-        };
-
-        let tx_hash = if let Ok(tx_hash) = blake3::Hash::from_hex(tx_hash_str) {
-            tx_hash
-        } else {
-            return JsonError::new(ParseError, None, id).into()
+        let tx_hash = params[0].get::<String>().unwrap();
+        let tx_hash = match blake3::Hash::from_hex(tx_hash) {
+            Ok(v) => v,
+            Err(_) => return JsonError::new(ParseError, None, id).into(),
         };
 
         let validator_state = self.validator_state.read().await;
@@ -116,12 +118,14 @@ impl Darkfid {
                 return JsonError::new(InternalError, None, id).into()
             }
         };
+
         // This would be an logic error somewhere
         assert_eq!(txs.len(), 1);
         // and strict was used during .get()
         let tx = txs[0].as_ref().unwrap();
 
-        JsonResponse::new(json!(serialize(tx)), id).into()
+        let tx_enc = base64::encode(&serialize(tx));
+        JsonResponse::new(JsonValue::String(tx_enc), id).into()
     }
 
     // RPCAPI:
@@ -131,11 +135,12 @@ impl Darkfid {
     // * `None`
     //
     // **Returns:**
-    // * `u64` ID of the last known slot
+    // * `u64` ID of the last known slot, as string
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.last_known_slot", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": 1234, "id": 1}
-    pub async fn blockchain_last_known_slot(&self, id: Value, params: &[Value]) -> JsonResult {
+    // <-- {"jsonrpc": "2.0", "result": "1234", "id": 1}
+    pub async fn blockchain_last_known_slot(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -145,7 +150,7 @@ impl Darkfid {
             return JsonError::new(InternalError, None, id).into()
         };
 
-        JsonResponse::new(json!(last_slot.0), id).into()
+        JsonResponse::new(JsonValue::String(last_slot.0.to_string()), id).into()
     }
 
     // RPCAPI:
@@ -155,15 +160,13 @@ impl Darkfid {
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_blocks", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_blocks", "params": [`blockinfo`]}
-    pub async fn blockchain_subscribe_blocks(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn blockchain_subscribe_blocks(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let blocks_subscriber =
-            self.validator_state.read().await.subscribers.get("blocks").unwrap().clone();
-
-        JsonSubscriber::new(blocks_subscriber).into()
+        self.validator_state.read().await.subscribers.get("blocks").unwrap().clone().into()
     }
 
     // RPCAPI:
@@ -173,15 +176,13 @@ impl Darkfid {
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_err_txs", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_err_txs", "params": [`tx_hash`]}
-    pub async fn blockchain_subscribe_err_txs(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn blockchain_subscribe_err_txs(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let err_txs_subscriber =
-            self.validator_state.read().await.subscribers.get("err_txs").unwrap().clone();
-
-        JsonSubscriber::new(err_txs_subscriber).into()
+        self.validator_state.read().await.subscribers.get("err_txs").unwrap().clone().into()
     }
 
     // RPCAPI:
@@ -192,18 +193,20 @@ impl Darkfid {
     // * `array[0]`: base58-encoded contract ID string
     //
     // **Returns:**
-    // * `array[n]`: Pairs of: `zkas_namespace` string, serialized
+    // * `array[n]`: Pairs of: `zkas_namespace` string, serialized and base64-encoded
     //   [`ZkBinary`](https://darkrenaissance.github.io/darkfi/development/darkfi/zkas/decoder/struct.ZkBinary.html)
     //   object
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.lookup_zkas", "params": ["6Ef42L1KLZXBoxBuCDto7coi9DA2D2SRtegNqNU4sd74"], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": [["Foo", [...]], ["Bar", [...]]], "id": 1}
-    pub async fn blockchain_lookup_zkas(&self, id: Value, params: &[Value]) -> JsonResult {
+    // <-- {"jsonrpc": "2.0", "result": [["Foo", "ABCD..."], ["Bar", "EFGH..."]], "id": 1}
+    pub async fn blockchain_lookup_zkas(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let contract_id = match ContractId::from_str(params[0].as_str().unwrap()) {
+        let contract_id = params[0].get::<String>().unwrap();
+        let contract_id = match ContractId::from_str(contract_id) {
             Ok(v) => v,
             Err(e) => {
                 error!("[RPC] blockchain.lookup_zkas: Error decoding string to ContractId: {}", e);
@@ -225,7 +228,7 @@ impl Darkfid {
             return server_error(RpcError::ContractZkasDbNotFound, id, None)
         };
 
-        let mut ret: Vec<(String, Vec<u8>)> = vec![];
+        let mut ret = vec![];
 
         for i in zkas_db.iter() {
             debug!("Iterating over zkas db");
@@ -238,15 +241,13 @@ impl Darkfid {
                 return JsonError::new(InternalError, None, id).into()
             };
 
-            let Ok((zkas_bincode, _)): Result<(Vec<u8>, Vec<u8>), std::io::Error> =
-                deserialize(&zkas_bytes)
-            else {
-                return JsonError::new(InternalError, None, id).into()
-            };
-
-            ret.push((zkas_ns, zkas_bincode.to_vec()));
+            let zkas_bincode = base64::encode(&zkas_bytes);
+            ret.push(JsonValue::Array(vec![
+                JsonValue::String(zkas_ns),
+                JsonValue::String(zkas_bincode),
+            ]));
         }
 
-        JsonResponse::new(json!(ret), id).into()
+        JsonResponse::new(JsonValue::Array(ret), id).into()
     }
 }
