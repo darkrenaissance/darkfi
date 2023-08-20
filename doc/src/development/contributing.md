@@ -42,8 +42,7 @@ or need to be maintained:
 * **Tests:** Throughout the project there are either broken or commented out unit tests, they need to be fixed.
 * **Cleanup:** General code cleanup. for example flattening headers and improving things like in 
   [this commit](https://github.com/darkrenaissance/darkfi/commit/9cd9c3113eed1b5f0bcad2ee449ef926d0908d55).
-* **ZK Debugger:** The ZKVM needs a debugger so we can interactively inspect values 
-  at each step to see where problems go wrong.
+* **Python bindings:** Help ensure coverage and cleanup the Python bindings in `src/sdk/python/`.
 * **Events System:** We need to fix IRCD, we will need to implement the 
   [events](https://darkrenaissance.github.io/darkfi/misc/event_graph/event_graph.html) system.
 * **p2p Network:** this is a good place to start reviewing the code and suggesting improvements.
