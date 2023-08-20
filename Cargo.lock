@@ -1607,7 +1607,6 @@ dependencies = [
  "rustls-pemfile",
  "semver 1.0.18",
  "serde",
- "serde_json",
  "simplelog",
  "sled",
  "sled-overlay",
@@ -1616,6 +1615,7 @@ dependencies = [
  "structopt",
  "structopt-toml",
  "thiserror",
+ "tinyjson",
  "toml 0.7.6",
  "tor-hscrypto",
  "url",
@@ -1796,7 +1796,6 @@ dependencies = [
  "easy-parallel",
  "log",
  "serde",
- "serde_json",
  "signal-hook",
  "signal-hook-async-std",
  "simplelog",
@@ -1804,6 +1803,7 @@ dependencies = [
  "smol",
  "structopt",
  "structopt-toml",
+ "tinyjson",
  "url",
 ]
 
@@ -1824,7 +1824,6 @@ dependencies = [
  "easy-parallel",
  "log",
  "serde",
- "serde_json",
  "signal-hook",
  "signal-hook-async-std",
  "simplelog",
@@ -1832,6 +1831,7 @@ dependencies = [
  "smol",
  "structopt",
  "structopt-toml",
+ "tinyjson",
  "url",
 ]
 
@@ -1855,13 +1855,13 @@ dependencies = [
  "rand 0.8.5",
  "rustls-pemfile",
  "serde",
- "serde_json",
  "signal-hook",
  "signal-hook-async-std",
  "simplelog",
  "smol",
  "structopt",
  "structopt-toml",
+ "tinyjson",
  "toml 0.7.6",
  "url",
 ]
@@ -2666,7 +2666,6 @@ dependencies = [
  "rand 0.8.5",
  "rusqlite",
  "serde",
- "serde_json",
  "signal-hook",
  "signal-hook-async-std",
  "simplelog",
@@ -2674,6 +2673,7 @@ dependencies = [
  "smol",
  "structopt",
  "structopt-toml",
+ "tinyjson",
  "url",
 ]
 
@@ -2860,13 +2860,13 @@ dependencies = [
  "libsqlite3-sys",
  "log",
  "serde",
- "serde_json",
  "signal-hook",
  "signal-hook-async-std",
  "simplelog",
  "smol",
  "structopt",
  "structopt-toml",
+ "tinyjson",
  "url",
 ]
 
@@ -3008,11 +3008,11 @@ dependencies = [
  "clap 4.3.22",
  "darkfi",
  "darkfi-serial",
+ "genevd",
  "libsqlite3-sys",
  "log",
- "serde",
- "serde_json",
  "simplelog",
+ "tinyjson",
  "url",
 ]
 
@@ -3028,13 +3028,13 @@ dependencies = [
  "libsqlite3-sys",
  "log",
  "serde",
- "serde_json",
  "signal-hook",
  "signal-hook-async-std",
  "simplelog",
  "smol",
  "structopt",
  "structopt-toml",
+ "tinyjson",
  "url",
 ]
 
@@ -3598,13 +3598,13 @@ dependencies = [
  "log",
  "semver 1.0.18",
  "serde",
- "serde_json",
  "signal-hook",
  "signal-hook-async-std",
  "simplelog",
  "smol",
  "structopt",
  "structopt-toml",
+ "tinyjson",
  "toml 0.7.6",
  "url",
 ]
@@ -5978,7 +5978,6 @@ dependencies = [
  "log",
  "rand 0.8.5",
  "serde",
- "serde_json",
  "signal-hook",
  "signal-hook-async-std",
  "simplelog",
@@ -5986,6 +5985,7 @@ dependencies = [
  "structopt",
  "structopt-toml",
  "thiserror",
+ "tinyjson",
  "toml 0.7.6",
  "url",
 ]
@@ -6134,6 +6134,12 @@ checksum = "eb71511c991639bb078fd5bf97757e03914361c48100d52878b8e52b46fb92cd"
 dependencies = [
  "time-core",
 ]
+
+[[package]]
+name = "tinyjson"
+version = "2.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ab95735ea2c8fd51154d01e39cf13912a78071c2d89abc49a7ef102a7dd725a"
 
 [[package]]
 name = "tinystr"

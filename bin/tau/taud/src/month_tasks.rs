@@ -17,13 +17,14 @@
  */
 
 use std::{
+    collections::HashMap,
     fs, io,
     path::{Path, PathBuf},
 };
 
 use chrono::{TimeZone, Utc};
 use log::debug;
-use serde::{Deserialize, Serialize};
+use tinyjson::JsonValue;
 
 use darkfi::util::{
     file::{load_json_file, save_json_file},
@@ -35,11 +36,52 @@ use crate::{
     task_info::TaskInfo,
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MonthTasks {
     created_at: Timestamp,
     active_tks: Vec<String>,
     deactive_tks: Vec<String>,
+}
+
+impl From<MonthTasks> for JsonValue {
+    fn from(mt: MonthTasks) -> JsonValue {
+        let active_tks: Vec<JsonValue> =
+            mt.active_tks.iter().map(|x| JsonValue::String(x.clone())).collect();
+
+        let deactive_tks: Vec<JsonValue> =
+            mt.deactive_tks.iter().map(|x| JsonValue::String(x.clone())).collect();
+
+        JsonValue::Object(HashMap::from([
+            ("created_at".to_string(), JsonValue::String(mt.created_at.0.to_string())),
+            ("active_tks".to_string(), JsonValue::Array(active_tks)),
+            ("deactive_tks".to_string(), JsonValue::Array(deactive_tks)),
+        ]))
+    }
+}
+
+impl From<JsonValue> for MonthTasks {
+    fn from(value: JsonValue) -> MonthTasks {
+        let created_at = {
+            let u64_str = value["created_at"].get::<String>().unwrap();
+            Timestamp(u64::from_str_radix(u64_str, 10).unwrap())
+        };
+
+        let active_tks: Vec<String> = value["active_tks"]
+            .get::<Vec<JsonValue>>()
+            .unwrap()
+            .iter()
+            .map(|x| x.get::<String>().unwrap().clone())
+            .collect();
+
+        let deactive_tks: Vec<String> = value["deactive_tks"]
+            .get::<Vec<JsonValue>>()
+            .unwrap()
+            .iter()
+            .map(|x| x.get::<String>().unwrap().clone())
+            .collect();
+
+        MonthTasks { created_at, active_tks, deactive_tks }
+    }
 }
 
 impl MonthTasks {
@@ -98,7 +140,8 @@ impl MonthTasks {
 
     pub fn save(&self, dataset_path: &Path) -> TaudResult<()> {
         debug!(target: "tau", "MonthTasks::save()");
-        save_json_file::<Self>(&Self::get_path(&self.created_at, dataset_path), self, true)
+        let mt: JsonValue = self.clone().into();
+        save_json_file(&Self::get_path(&self.created_at, dataset_path), &mt, true)
             .map_err(TaudError::Darkfi)
     }
 
@@ -129,8 +172,8 @@ impl MonthTasks {
         // if a date is given we load that date's month tasks
         // if not, we load tasks from all months
         match date {
-            Some(date) => match load_json_file::<Self>(&Self::get_path(date, dataset_path)) {
-                Ok(mt) => Ok(mt),
+            Some(date) => match load_json_file(&Self::get_path(date, dataset_path)) {
+                Ok(mt) => Ok(mt.into()),
                 Err(_) => Self::create(date, dataset_path),
             },
             None => {
@@ -142,7 +185,8 @@ impl MonthTasks {
                 let mut loaded_mt = Self::new(&[], &[]);
 
                 for path in path_all {
-                    let mt = load_json_file::<Self>(&path)?;
+                    let mt = load_json_file(&path)?;
+                    let mt: MonthTasks = mt.into();
                     loaded_mt.created_at = mt.created_at;
                     for tks in mt.active_tks {
                         if !loaded_mt.active_tks.contains(&tks) {

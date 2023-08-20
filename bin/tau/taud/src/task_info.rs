@@ -20,7 +20,7 @@ use std::path::{Path, PathBuf};
 
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::debug;
-use serde::{Deserialize, Serialize};
+use tinyjson::JsonValue;
 
 use darkfi::{
     event_graph::gen_id,
@@ -36,7 +36,7 @@ use crate::{
     util::find_free_id,
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq, Eq)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable, PartialEq, Eq)]
 pub struct TaskEvent {
     pub action: String,
     pub author: String,
@@ -50,11 +50,59 @@ impl TaskEvent {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, SerialDecodable, SerialEncodable, PartialEq, Eq)]
+impl From<TaskEvent> for JsonValue {
+    fn from(task_event: TaskEvent) -> JsonValue {
+        JsonValue::Object(HashMap::from([
+            ("action".to_string(), JsonValue::String(task_event.action.clone())),
+            ("author".to_string(), JsonValue::String(task_event.author.clone())),
+            ("content".to_string(), JsonValue::String(task_event.content.clone())),
+            ("timestamp".to_string(), JsonValue::String(task_event.timestamp.0.to_string())),
+        ]))
+    }
+}
+
+impl From<&JsonValue> for TaskEvent {
+    fn from(value: &JsonValue) -> TaskEvent {
+        let map = value.get::<HashMap<String, JsonValue>>().unwrap();
+        TaskEvent {
+            action: map["action"].get().unwrap().clone(),
+            author: map["author"].get().unwrap().clone(),
+            content: map["content"].get().unwrap().clone(),
+            timestamp: Timestamp(
+                u64::from_str_radix(map["timestamp"].get::<String>().unwrap(), 10).unwrap(),
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Debug, SerialDecodable, SerialEncodable, PartialEq, Eq)]
 pub struct Comment {
     content: String,
     author: String,
     timestamp: Timestamp,
+}
+
+impl From<Comment> for JsonValue {
+    fn from(comment: Comment) -> JsonValue {
+        JsonValue::Object(HashMap::from([
+            ("content".to_string(), JsonValue::String(comment.content.clone())),
+            ("author".to_string(), JsonValue::String(comment.author.clone())),
+            ("timestamp".to_string(), JsonValue::String(comment.timestamp.0.to_string())),
+        ]))
+    }
+}
+
+impl From<JsonValue> for Comment {
+    fn from(value: JsonValue) -> Comment {
+        let map = value.get::<HashMap<String, JsonValue>>().unwrap();
+        Comment {
+            content: map["content"].get().unwrap().clone(),
+            author: map["author"].get().unwrap().clone(),
+            timestamp: Timestamp(
+                u64::from_str_radix(map["timestamp"].get::<String>().unwrap(), 10).unwrap(),
+            ),
+        }
+    }
 }
 
 impl Comment {
@@ -67,34 +115,129 @@ impl Comment {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, SerialEncodable, SerialDecodable)]
-pub struct TaskEvents(pub Vec<TaskEvent>);
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, SerialEncodable, SerialDecodable)]
-pub struct TaskComments(Vec<Comment>);
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, SerialEncodable, SerialDecodable)]
-pub struct TaskProjects(Vec<String>);
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, SerialEncodable, SerialDecodable)]
-pub struct TaskAssigns(Vec<String>);
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, SerialEncodable, SerialDecodable)]
-pub struct TaskTags(Vec<String>);
-
-#[derive(Clone, Debug, Serialize, Deserialize, SerialEncodable, SerialDecodable, PartialEq)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable, PartialEq)]
 pub struct TaskInfo {
     pub(crate) ref_id: String,
     pub(crate) workspace: String,
     pub(crate) id: u32,
     pub(crate) title: String,
-    tags: TaskTags,
+    tags: Vec<String>,
     desc: String,
     pub(crate) owner: String,
-    assign: TaskAssigns,
-    project: TaskProjects,
+    assign: Vec<String>,
+    project: Vec<String>,
     due: Option<Timestamp>,
     rank: Option<f32>,
     created_at: Timestamp,
     state: String,
-    pub(crate) events: TaskEvents,
-    comments: TaskComments,
+    pub(crate) events: Vec<TaskEvent>,
+    comments: Vec<Comment>,
+}
+
+impl From<&TaskInfo> for JsonValue {
+    fn from(task: &TaskInfo) -> JsonValue {
+        let ref_id = JsonValue::String(task.ref_id.clone());
+        let workspace = JsonValue::String(task.workspace.clone());
+        let id = JsonValue::Number(task.id.into());
+        let title = JsonValue::String(task.title.clone());
+        let tags: Vec<JsonValue> = task.tags.iter().map(|x| JsonValue::String(x.clone())).collect();
+        let desc = JsonValue::String(task.desc.clone());
+        let owner = JsonValue::String(task.owner.clone());
+
+        let assign: Vec<JsonValue> =
+            task.assign.iter().map(|x| JsonValue::String(x.clone())).collect();
+
+        let project: Vec<JsonValue> =
+            task.project.iter().map(|x| JsonValue::String(x.clone())).collect();
+
+        let due = if let Some(ts) = task.due {
+            JsonValue::String(ts.0.to_string())
+        } else {
+            JsonValue::Null
+        };
+
+        let rank = if let Some(rank) = task.rank {
+            JsonValue::Number(rank.into())
+        } else {
+            JsonValue::Null
+        };
+
+        let created_at = JsonValue::String(task.created_at.0.to_string());
+        let state = JsonValue::String(task.state.clone());
+        let events: Vec<JsonValue> = task.events.iter().map(|x| x.clone().into()).collect();
+        let comments: Vec<JsonValue> = task.comments.iter().map(|x| x.clone().into()).collect();
+
+        JsonValue::Object(HashMap::from([
+            ("ref_id".to_string(), ref_id),
+            ("workspace".to_string(), workspace),
+            ("id".to_string(), id),
+            ("title".to_string(), title),
+            ("tags".to_string(), JsonValue::Array(tags)),
+            ("desc".to_string(), desc),
+            ("owner".to_string(), owner),
+            ("assign".to_string(), JsonValue::Array(assign)),
+            ("project".to_string(), JsonValue::Array(project)),
+            ("due".to_string(), due),
+            ("rank".to_string(), rank),
+            ("created_at".to_string(), created_at),
+            ("state".to_string(), state),
+            ("events".to_string(), JsonValue::Array(events)),
+            ("comments".to_string(), JsonValue::Array(comments)),
+        ]))
+    }
+}
+
+impl From<JsonValue> for TaskInfo {
+    fn from(value: JsonValue) -> TaskInfo {
+        let tags = value["tags"].get::<Vec<JsonValue>>().unwrap();
+        let assign = value["assign"].get::<Vec<JsonValue>>().unwrap();
+        let project = value["project"].get::<Vec<JsonValue>>().unwrap();
+        let events = value["events"].get::<Vec<JsonValue>>().unwrap();
+        let comments = value["comments"].get::<Vec<JsonValue>>().unwrap();
+
+        let due = {
+            if value["due"].is_null() {
+                None
+            } else {
+                let u64_str = value["due"].get::<String>().unwrap();
+                Some(Timestamp(u64::from_str_radix(u64_str, 10).unwrap()))
+            }
+        };
+
+        let rank = {
+            if value["rank"].is_null() {
+                None
+            } else {
+                Some(*value["rank"].get::<f64>().unwrap() as f32)
+            }
+        };
+
+        let created_at = {
+            let u64_str = value["created_at"].get::<String>().unwrap();
+            Timestamp(u64::from_str_radix(u64_str, 10).unwrap())
+        };
+
+        let events: Vec<TaskEvent> = events.iter().map(|x| x.into()).collect();
+        let comments: Vec<Comment> = comments.iter().map(|x| (*x).into()).collect();
+
+        TaskInfo {
+            ref_id: value["ref_id"].get::<String>().unwrap().clone(),
+            workspace: value["workspace"].get::<String>().unwrap().clone(),
+            id: *value["id"].get::<f64>().unwrap() as u32,
+            title: value["title"].get::<String>().unwrap().clone(),
+            tags: tags.iter().map(|x| x.get::<String>().unwrap().clone()).collect(),
+            desc: value["desc"].get::<String>().unwrap().clone(),
+            owner: value["owner"].get::<String>().unwrap().clone(),
+            assign: assign.iter().map(|x| x.get::<String>().unwrap().clone()).collect(),
+            project: project.iter().map(|x| x.get::<String>().unwrap().clone()).collect(),
+            due,
+            rank,
+            created_at,
+            state: value["state"].get::<String>().unwrap().clone(),
+            events,
+            comments,
+        }
+    }
 }
 
 impl TaskInfo {
@@ -133,27 +276,27 @@ impl TaskInfo {
             title: title.into(),
             desc: desc.into(),
             owner: owner.into(),
-            tags: TaskTags(vec![]),
-            assign: TaskAssigns(vec![]),
-            project: TaskProjects(vec![]),
+            tags: vec![],
+            assign: vec![],
+            project: vec![],
             due,
             rank,
             created_at,
             state: "open".into(),
-            comments: TaskComments(vec![]),
-            events: TaskEvents(vec![]),
+            comments: vec![],
+            events: vec![],
         })
     }
 
     pub fn load(ref_id: &str, dataset_path: &Path) -> TaudResult<Self> {
         debug!(target: "tau", "TaskInfo::load()");
-        let task = load_json_file::<Self>(&Self::get_path(ref_id, dataset_path))?;
-        Ok(task)
+        let task = load_json_file(&Self::get_path(ref_id, dataset_path))?;
+        Ok(task.into())
     }
 
     pub fn save(&self, dataset_path: &Path) -> TaudResult<()> {
         debug!(target: "tau", "TaskInfo::save()");
-        save_json_file::<Self>(&Self::get_path(&self.ref_id, dataset_path), self, true)
+        save_json_file(&Self::get_path(&self.ref_id, dataset_path), &self.into(), true)
             .map_err(TaudError::Darkfi)?;
 
         if self.get_state() == "stop" {
@@ -207,29 +350,29 @@ impl TaskInfo {
     pub fn set_tags(&mut self, tags: &[String]) {
         debug!(target: "tau", "TaskInfo::set_tags()");
         for tag in tags.iter() {
-            if tag.starts_with('+') && !self.tags.0.contains(tag) {
-                self.tags.0.push(tag.to_string());
+            if tag.starts_with('+') && !self.tags.contains(tag) {
+                self.tags.push(tag.to_string());
             }
             if tag.starts_with('-') {
                 let t = tag.replace('-', "+");
-                self.tags.0.retain(|tag| tag != &t);
+                self.tags.retain(|tag| tag != &t);
             }
         }
     }
 
     pub fn set_assign(&mut self, assigns: &[String]) {
         debug!(target: "tau", "TaskInfo::set_assign()");
-        self.assign = TaskAssigns(assigns.to_owned());
+        self.assign = assigns.to_owned();
     }
 
     pub fn set_project(&mut self, projects: &[String]) {
         debug!(target: "tau", "TaskInfo::set_project()");
-        self.project = TaskProjects(projects.to_owned());
+        self.project = projects.to_owned();
     }
 
     pub fn set_comment(&mut self, c: Comment) {
         debug!(target: "tau", "TaskInfo::set_comment()");
-        self.comments.0.push(c);
+        self.comments.push(c);
     }
 
     pub fn set_rank(&mut self, r: Option<f32>) {
