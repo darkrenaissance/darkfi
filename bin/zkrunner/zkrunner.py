@@ -25,8 +25,22 @@ from darkfi_sdk.pasta import Fp, Fq, Ep
 from darkfi_sdk.zkas import (MockProver, ZkBinary, ZkCircuit, ProvingKey,
                              Proof, VerifyingKey)
 
+def eprint(fstr, *args):
+    print("error: " + fstr, *args, file=sys.stderr)
 
-def main(witness_file, source_file, mock=False):
+def show_trace(opcodes, trace):
+    print(f"{'Line':<4} {'Opcode':<22} {'Type':<10} {'Values'}")
+    for i, (opcode, (optype, args)) in enumerate(zip(opcodes, trace)):
+        if args:
+            args = ", ".join([str(arg) for arg in args])
+            args = f"[{args}]"
+        else:
+            args = ""
+        opcode = str(opcode)
+        optype = str(optype)
+        print(f"{i:<4} {opcode:<22} {optype:<10} {args}")
+
+def main(witness_file, source_file, mock=False, trace=False):
     """main zkrunner logic"""
     # We will first attempt to decode the witnesses from the JSON file.
     # Refer to the `witness_gen.py` file to see what the format of this
@@ -96,11 +110,17 @@ def main(witness_file, source_file, mock=False):
             circuit.witness_uint64(value)
 
         else:
-            raise ValueError(f"Invalid Witness type for witness {witness}")
+            eprint(f"Invalid Witness type for witness {witness}")
+            return -1
 
     # circuit.prover_build() will actually construct the circuit
     # with the values witnessed above.
     circuit = circuit.prover_build()
+    if trace:
+        if mock:
+            eprint(f"Debug trace can only be enabled with --prove")
+            return -2
+        circuit.enable_trace()
 
     # Instances are our public inputs for the proof and they're also
     # part of the JSON file.
@@ -114,6 +134,9 @@ def main(witness_file, source_file, mock=False):
         print("Proving knowledge of witnesses...")
         proof = Proof.create(proving_key, [circuit], instances)
 
+        if trace:
+            show_trace(zkbin.opcodes(), circuit.opvalues())
+
         print("Verifying ZK proof...")
         proof.verify(verifying_key, instances)
 
@@ -121,11 +144,12 @@ def main(witness_file, source_file, mock=False):
     else:
         print("Running MockProver...")
         proof = MockProver.run(zkbin.k(), circuit, instances)
+
         print("Verifying MockProver...")
         proof.verify()
 
     print("Proof verified successfully!")
-
+    return 0
 
 if __name__ == "__main__":
     from argparse import ArgumentParser
@@ -151,6 +175,13 @@ if __name__ == "__main__":
         action="store_true",
         help="Actually create a real proof instead of using MockProver",
     )
+    parser.add_argument(
+        "--trace",
+        action="store_true",
+        help="Enable debug trace (only works with --prove enabled)",
+    )
 
     args = parser.parse_args()
-    main(args.witness, args.SOURCE, mock=not args.prove)
+    sys.exit(main(args.witness, args.SOURCE, mock=not args.prove,
+                  trace=args.trace))
+

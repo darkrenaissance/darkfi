@@ -29,6 +29,16 @@ use rand::rngs::OsRng;
 use super::pasta::{Ep, Fp, Fq};
 
 #[pyclass]
+pub struct ZkOpcode(zkas::Opcode);
+
+#[pymethods]
+impl ZkOpcode {
+    fn __str__(&self) -> PyResult<String> {
+        Ok(self.0.name().to_string())
+    }
+}
+
+#[pyclass]
 /// Decoded zkas bincode
 pub struct ZkBinary(decoder::ZkBinary);
 
@@ -70,6 +80,29 @@ impl ZkBinary {
 
     fn k(&self) -> u32 {
         self.0.k
+    }
+
+    fn opcodes(&self) -> Vec<ZkOpcode> {
+        return self.0.opcodes.iter().map(|op| ZkOpcode(op.0)).collect()
+    }
+}
+
+#[pyclass]
+enum DebugOpValue {
+    EcPoint,
+    Base,
+    Void,
+}
+
+#[pymethods]
+impl DebugOpValue {
+    fn __str__(&self) -> PyResult<String> {
+        let name = match self {
+            DebugOpValue::EcPoint => "EcPoint",
+            DebugOpValue::Base => "Base",
+            DebugOpValue::Void => "Void",
+        };
+        Ok(name.to_string())
     }
 }
 
@@ -136,6 +169,26 @@ impl ZkCircuit {
     fn witness_uint64(&mut self, w: u64) {
         self.1.push(zk::vm::Witness::Uint64(Value::known(w)));
     }
+
+    fn enable_trace(&mut self) {
+        self.0.enable_trace();
+    }
+
+    fn opvalues(&self) -> Vec<(DebugOpValue, Vec<Fp>)> {
+        let opvalue_binding = self.0.tracer.opvalues.borrow();
+        let opvalues = opvalue_binding.as_ref().unwrap();
+        let mut result = Vec::new();
+        for opvalue in opvalues {
+            match opvalue {
+                zk::DebugOpValue::EcPoint(x, y) => {
+                    result.push((DebugOpValue::EcPoint, vec![Fp(*x), Fp(*y)]))
+                }
+                zk::DebugOpValue::Base(v) => result.push((DebugOpValue::Base, vec![Fp(*v)])),
+                zk::DebugOpValue::Void => result.push((DebugOpValue::Void, vec![])),
+            }
+        }
+        result
+    }
 }
 
 #[pyclass]
@@ -181,13 +234,50 @@ impl Proof {
         instances: Vec<&PyCell<Fp>>,
     ) -> Self {
         let pk = pk.borrow().deref().0.clone();
-        let circuits: Vec<zk::vm::ZkCircuit> =
-            circuits.iter().map(|c| c.borrow().deref().0.clone()).collect();
+
+        // Ugh this is so annoying. The halo2 API expects &[] of values.
+        // We carefully unpack the current Vec, then replace its contents back again.
+        // I've left the old code below to see what we did before.
+        //
+        //   let circuits: Vec<zk::vm::ZkCircuit> =
+        //       circuits.iter().map(|c| c.borrow().deref().0.clone()).collect();
+        //
+        // The alternative is to make your own container as documented here:
+        // https://pyo3.rs/v0.19.2/class/protocols.html?highlight=__getitem__#mapping--sequence-types
+        let zkbin = decoder::ZkBinary {
+            namespace: "".to_string(),
+            k: 0,
+            constants: Vec::new(),
+            literals: Vec::new(),
+            witnesses: Vec::new(),
+            opcodes: Vec::new(),
+        };
+        let empty_circuit = zk::vm::ZkCircuit::new(Vec::new(), &zkbin);
+        let curr_circuits: Vec<ZkCircuit> = circuits
+            .iter()
+            .map(|c| c.replace(ZkCircuit(empty_circuit.clone(), Vec::new(), zkbin.clone())))
+            .collect();
+
+        let mut ucircuits = Vec::new();
+        let mut other_stuff = Vec::new();
+        for circ in curr_circuits.into_iter() {
+            ucircuits.push(circ.0);
+            other_stuff.push((circ.1, circ.2));
+        }
+        //////////////
+
         let instances: Vec<pallas::Base> = instances.iter().map(|i| i.borrow().deref().0).collect();
 
         let proof =
-            zk::proof::Proof::create(&pk, circuits.as_slice(), instances.as_slice(), &mut OsRng)
+            zk::proof::Proof::create(&pk, ucircuits.as_slice(), instances.as_slice(), &mut OsRng)
                 .unwrap();
+
+        // Now replace the "stuff" back again
+        for (old_circ, (circ, stuff)) in
+            circuits.iter().zip(ucircuits.into_iter().zip(other_stuff.into_iter()))
+        {
+            old_circ.replace(ZkCircuit(circ, stuff.0, stuff.1));
+        }
         Self(proof)
     }
 

@@ -156,6 +156,35 @@ impl Opcode {
         }
     }
 
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Noop => "noop",
+            Self::EcAdd => "ec_add",
+            Self::EcMul => "ec_mul",
+            Self::EcMulBase => "ec_mul_base",
+            Self::EcMulShort => "ec_mul_short",
+            Self::EcMulVarBase => "ec_mul_var_base",
+            Self::EcGetX => "ec_get_x",
+            Self::EcGetY => "ec_get_y",
+            Self::PoseidonHash => "poseidon_hash",
+            Self::MerkleRoot => "merkle_root",
+            Self::BaseAdd => "base_add",
+            Self::BaseMul => "base_mul",
+            Self::BaseSub => "base_sub",
+            Self::WitnessBase => "witness_base",
+            Self::RangeCheck => "range_check",
+            Self::LessThanStrict => "less_than_strict",
+            Self::LessThanLoose => "less_than_loose",
+            Self::BoolCheck => "bool_check",
+            Self::CondSelect => "cond_select",
+            Self::ZeroCondSelect => "zero_cond",
+            Self::ConstrainEqualBase => "constrain_equal_base",
+            Self::ConstrainEqualPoint => "constrain_equal_point",
+            Self::ConstrainInstance => "constrain_instance",
+            Self::DebugPrint => "debug",
+        }
+    }
+
     /// Return a tuple of vectors of types that are accepted by a specific opcode.
     /// `r.0` is the return type(s), and `r.1` is the argument type(s).
     pub fn arg_types(&self) -> (Vec<VarType>, Vec<VarType>) {

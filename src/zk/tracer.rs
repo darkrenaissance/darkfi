@@ -1,7 +1,4 @@
-use std::{
-    cell::RefCell,
-    ops::{Deref, DerefMut},
-};
+use std::cell::RefCell;
 
 use darkfi_sdk::{crypto::constants::OrchardFixedBases, pasta::pallas};
 use halo2_gadgets::ecc as ecc_gadget;
