@@ -19,8 +19,8 @@ darkfi-money-contract = {path = "../../src/contract/money", features = ["no-entr
 log = "0.4.20"
 rand = "0.8.5"
 rusqlite = "0.29.0"
-serde_json = "1.0.105"
 sled = "0.34.7"
+tinyjson = "2.5.1"
 url = "2.4.0"
 
 # Daemon

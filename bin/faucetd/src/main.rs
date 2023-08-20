@@ -45,8 +45,8 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Encodable};
 use log::{debug, error, info};
 use rand::rngs::OsRng;
-use serde_json::{json, Value};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use tinyjson::JsonValue;
 use url::Url;
 
 use darkfi::{
@@ -187,16 +187,10 @@ pub struct Faucetd {
 #[async_trait]
 impl RequestHandler for Faucetd {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        if !req.params.is_array() {
-            return JsonError::new(InvalidParams, None, req.id).into()
-        }
-
-        let params = req.params.as_array().unwrap();
-
         match req.method.as_str() {
-            Some("challenge") => return self.challenge(req.id, params).await,
-            Some("airdrop") => return self.airdrop(req.id, params).await,
-            Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
+            "challenge" => return self.challenge(req.id, req.params).await,
+            "airdrop" => return self.airdrop(req.id, req.params).await,
+            _ => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
 }
@@ -378,9 +372,10 @@ impl Faucetd {
     //
     // --> {"jsonrpc": "2.0", "method": "challenge", "params": ["1DarkFi..."], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["0x123...", 10000], "id": 1}
-    async fn challenge(&self, id: Value, params: &[Value]) -> JsonResult {
+    async fn challenge(&self, id: u16, params: JsonValue) -> JsonResult {
         const N_STEPS: u64 = 2_000_000;
 
+        let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -390,7 +385,8 @@ impl Faucetd {
             return JsonError::new(InternalError, None, id).into()
         }
 
-        let pubkey = match PublicKey::from_str(params[0].as_str().unwrap()) {
+        let pubkey = params[0].get::<String>().unwrap();
+        let pubkey = match PublicKey::from_str(&pubkey) {
             Ok(v) => v,
             Err(e) => {
                 error!("challenge(): Failed parsing PublicKey from String: {}", e);
@@ -416,7 +412,9 @@ impl Faucetd {
         map.insert(pubkey.to_bytes(), (c.clone(), N_STEPS));
         drop(map);
 
-        JsonResponse::new(json!([c.to_str_radix(16), N_STEPS]), id).into()
+        let chall = JsonValue::from(c.to_str_radix(16));
+        let steps = JsonValue::from(N_STEPS as f64);
+        JsonResponse::new(JsonValue::Array(vec![chall, steps]), id).into()
     }
 
     // RPCAPI:
@@ -433,10 +431,12 @@ impl Faucetd {
     //
     // --> {"jsonrpc": "2.0", "method": "airdrop", "params": ["1DarkFi...", 1.42, "0x123..."], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID", "id": 1}
-    async fn airdrop(&self, id: Value, params: &[Value]) -> JsonResult {
+    async fn airdrop(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+
         if params.len() != 3 ||
             !params[0].is_string() ||
-            !params[1].is_f64() ||
+            !params[1].is_number() ||
             !params[2].is_string()
         {
             return JsonError::new(InvalidParams, None, id).into()
@@ -448,7 +448,8 @@ impl Faucetd {
         }
 
         // Decode public key
-        let pubkey = match PublicKey::from_str(params[0].as_str().unwrap()) {
+        let pubkey = params[0].get::<String>().unwrap();
+        let pubkey = match PublicKey::from_str(pubkey) {
             Ok(v) => v,
             Err(e) => {
                 error!("airdrop(): Failed parsing PublicKey from String: {}", e);
@@ -457,7 +458,7 @@ impl Faucetd {
         };
 
         // Decode requested airdrop amount
-        let amount = params[1].as_f64().unwrap().to_string();
+        let amount = params[1].get::<f64>().unwrap().to_string();
         let amount = match decode_base10(&amount, 8, true) {
             Ok(v) => v,
             Err(_) => {
@@ -471,7 +472,7 @@ impl Faucetd {
         }
 
         // Decode VDF witness
-        let witness = params[2].as_str().unwrap();
+        let witness = params[2].get::<String>().unwrap();
         let Ok(witness) = BigUint::from_str_radix(witness, 16) else {
             error!("airdrop(): Failed parsing VDF witness from string");
             return server_error(RpcError::ParseError, id)
@@ -586,7 +587,7 @@ impl Faucetd {
         drop(map);
 
         let tx_hash = blake3::hash(&serialize(&tx)).to_hex().as_str().to_string();
-        JsonResponse::new(json!(tx_hash), id).into()
+        JsonResponse::new(JsonValue::String(tx_hash), id).into()
     }
 }
 

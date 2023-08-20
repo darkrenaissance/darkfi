@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use serde_json::Value;
-
 use darkfi::rpc::jsonrpc::{ErrorCode::ServerError, JsonError, JsonResult};
 
 pub enum RpcError {
@@ -30,7 +28,7 @@ pub enum RpcError {
     VdfVerifyFailed = -32113,
 }
 
-fn to_tuple(e: RpcError) -> (i64, String) {
+fn to_tuple(e: RpcError) -> (i32, String) {
     let msg = match e {
         RpcError::AmountExceedsLimit => "Amount requested is higher than the faucet limit",
         RpcError::TimeLimitReached => "Timeout not expired, try again later",
@@ -41,10 +39,10 @@ fn to_tuple(e: RpcError) -> (i64, String) {
         RpcError::VdfVerifyFailed => "VDF verification failed",
     };
 
-    (e as i64, msg.to_string())
+    (e as i32, msg.to_string())
 }
 
-pub fn server_error(e: RpcError, id: Value) -> JsonResult {
+pub fn server_error(e: RpcError, id: u16) -> JsonResult {
     let (code, msg) = to_tuple(e);
     JsonError::new(ServerError(code), Some(msg), id).into()
 }
