@@ -95,7 +95,6 @@ darkfi-serial = {path = "src/serial", optional = true}
 darkfi-derive = {path = "src/serial/derive", optional = true}
 itertools = {version = "0.11.0", optional = true}
 lazy_static = {version = "1.4.0", optional = true}
-# TODO: Test without serde
 url = {version = "2.4.0", features = ["serde"], optional = true}
 
 # Misc
@@ -296,16 +295,6 @@ required-features = ["zk"]
 name = "zk-inclusion-proof"
 path = "example/zk-inclusion-proof.rs"
 required-features = ["zk"]
-
-[[example]]
-name = "rpc-server"
-path = "example/rpc/server.rs"
-required-features = ["async-runtime", "rpc"]
-
-[[example]]
-name = "rpc-client"
-path = "example/rpc/client.rs"
-required-features = ["async-runtime", "rpc"]
 
 [patch.crates-io]
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
