@@ -11,7 +11,7 @@
   - [Atomic Swap](testnet/atomic-swap.md)
   - [DAO](testnet/dao.md)
 - [Development](development/development.md)
-  - [Contributing](development/contributing.md)
+  - [Contribute](development/contribute.md)
   - [Learn](development/learn.md)
   - [API Rustdoc](development/rustdoc.md)
   - [Seminars](development/seminars.md)
