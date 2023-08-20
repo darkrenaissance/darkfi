@@ -18,10 +18,9 @@
 
 use async_trait::async_trait;
 use log::debug;
-use serde_json::{json, Value};
+use tinyjson::JsonValue;
 
 use darkfi::{
-    net,
     rpc::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         server::RequestHandler,
@@ -34,80 +33,62 @@ use crate::Darkfid;
 #[async_trait]
 impl RequestHandler for Darkfid {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        if req.params.as_array().is_none() {
-            return JsonError::new(ErrorCode::InvalidRequest, None, req.id).into()
-        }
-
-        let params = req.params.as_array().unwrap();
-
-        debug!(target: "darkfid::rpc", "--> {}", serde_json::to_string(&req).unwrap());
+        debug!(target: "darkfid::rpc", "--> {}", req.stringify().unwrap());
 
         match req.method.as_str() {
             // =====================
             // Miscellaneous methods
             // =====================
-            Some("ping") => return self.pong(req.id, params).await,
-            Some("clock") => return self.clock(req.id, params).await,
-            Some("sync_dnet_switch") => return self.sync_dnet_switch(req.id, params).await,
-            Some("sync_dnet_info") => return self.sync_dnet_info(req.id, params).await,
-            Some("consensus_dnet_switch") => {
-                return self.consensus_dnet_switch(req.id, params).await
-            }
-            Some("consensus_dnet_info") => return self.consensus_dnet_info(req.id, params).await,
+            "ping" => return self.pong(req.id, req.params).await,
+            "clock" => return self.clock(req.id, req.params).await,
+            "sync_dnet_switch" => return self.sync_dnet_switch(req.id, req.params).await,
+            "consensus_dnet_switch" => return self.consensus_dnet_switch(req.id, req.params).await,
 
             // ==================
             // Blockchain methods
             // ==================
-            Some("blockchain.get_slot") => return self.blockchain_get_slot(req.id, params).await,
-            Some("blockchain.get_tx") => return self.blockchain_get_tx(req.id, params).await,
-            Some("blockchain.last_known_slot") => {
-                return self.blockchain_last_known_slot(req.id, params).await
+            "blockchain.get_slot" => return self.blockchain_get_slot(req.id, req.params).await,
+            "blockchain.get_tx" => return self.blockchain_get_tx(req.id, req.params).await,
+            "blockchain.last_known_slot" => {
+                return self.blockchain_last_known_slot(req.id, req.params).await
             }
-            Some("blockchain.lookup_zkas") => {
-                return self.blockchain_lookup_zkas(req.id, params).await
+            "blockchain.lookup_zkas" => {
+                return self.blockchain_lookup_zkas(req.id, req.params).await
             }
-            Some("blockchain.subscribe_blocks") => {
-                return self.blockchain_subscribe_blocks(req.id, params).await
+            "blockchain.subscribe_blocks" => {
+                return self.blockchain_subscribe_blocks(req.id, req.params).await
             }
-            Some("blockchain.subscribe_txs") => {
-                return self.blockchain_subscribe_txs(req.id, params).await
+            "blockchain.subscribe_txs" => {
+                return self.blockchain_subscribe_txs(req.id, req.params).await
             }
-            Some("blockchain.subscribe_proposals") => {
-                return self.blockchain_subscribe_proposals(req.id, params).await
+            "blockchain.subscribe_proposals" => {
+                return self.blockchain_subscribe_proposals(req.id, req.params).await
             }
 
             // ===================
             // Transaction methods
             // ===================
-            Some("tx.simulate") => return self.tx_simulate(req.id, params).await,
-            Some("tx.broadcast") => return self.tx_broadcast(req.id, params).await,
-            Some("tx.pending") => return self.tx_pending(req.id, params).await,
-            Some("tx.clean_pending") => return self.tx_pending(req.id, params).await,
+            "tx.simulate" => return self.tx_simulate(req.id, req.params).await,
+            "tx.broadcast" => return self.tx_broadcast(req.id, req.params).await,
+            "tx.pending" => return self.tx_pending(req.id, req.params).await,
+            "tx.clean_pending" => return self.tx_pending(req.id, req.params).await,
 
             // ==============
             // Invalid method
             // ==============
-            Some(_) | None => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+            _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
 }
 
 impl Darkfid {
     // RPCAPI:
-    // Replies to a ping method.
-    // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
-    async fn pong(&self, id: Value, _params: &[Value]) -> JsonResult {
-        JsonResponse::new(json!("pong"), id).into()
-    }
-
-    // RPCAPI:
-    // Returns current system clock in `Timestamp` format.
+    // Returns current system clock as `u64` (String) timestamp.
     //
     // --> {"jsonrpc": "2.0", "method": "clock", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
-    async fn clock(&self, id: Value, _params: &[Value]) -> JsonResult {
-        JsonResponse::new(json!(Timestamp::current_time()), id).into()
+    // <-- {"jsonrpc": "2.0", "result": "1234", "id": 1}
+    async fn clock(&self, id: u16, _params: JsonValue) -> JsonResult {
+        JsonResponse::new(JsonValue::String(Timestamp::current_time().0.to_string()), id).into()
     }
 
     // RPCAPI:
@@ -117,28 +98,21 @@ impl Darkfid {
     //
     // --> {"jsonrpc": "2.0", "method": "sync_dnet_switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn sync_dnet_switch(&self, id: Value, params: &[Value]) -> JsonResult {
-        if params.len() != 1 && params[0].as_bool().is_none() {
+    async fn sync_dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 1 || !params[0].is_bool() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        if params[0].as_bool().unwrap() {
+        let switch = params[0].get::<bool>().unwrap();
+
+        if *switch {
             self.sync_p2p.dnet_enable().await;
         } else {
             self.sync_p2p.dnet_disable().await;
         }
 
-        JsonResponse::new(json!(true), id).into()
-    }
-
-    // RPCAPI:
-    // Retrieves sync P2P network information.
-    //
-    // --> {"jsonrpc": "2.0", "method": "sync_dnet_info", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
-    async fn sync_dnet_info(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let dnet_info = self.sync_p2p.dnet_info().await;
-        JsonResponse::new(net::P2p::map_dnet_info(dnet_info), id).into()
+        JsonResponse::new(JsonValue::Boolean(true), id).into()
     }
 
     // RPCAPI:
@@ -148,33 +122,21 @@ impl Darkfid {
     //
     // --> {"jsonrpc": "2.0", "method": "consensus_dnet_switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn consensus_dnet_switch(&self, id: Value, params: &[Value]) -> JsonResult {
-        if params.len() != 1 && params[0].as_bool().is_none() {
+    async fn consensus_dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 1 || !params[0].is_bool() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
         if self.consensus_p2p.is_some() {
-            if params[0].as_bool().unwrap() {
+            let switch = params[0].get::<bool>().unwrap();
+            if *switch {
                 self.consensus_p2p.clone().unwrap().dnet_enable().await;
             } else {
                 self.consensus_p2p.clone().unwrap().dnet_disable().await;
             }
         }
 
-        JsonResponse::new(json!(true), id).into()
-    }
-
-    // RPCAPI:
-    // Retrieves consensus P2P network information.
-    //
-    // --> {"jsonrpc": "2.0", "method": "consensus_dnet_info", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
-    async fn consensus_dnet_info(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let dnet_info = if self.consensus_p2p.is_some() {
-            self.consensus_p2p.clone().unwrap().dnet_info().await
-        } else {
-            vec![]
-        };
-        JsonResponse::new(net::P2p::map_dnet_info(dnet_info), id).into()
+        JsonResponse::new(JsonValue::Boolean(true), id).into()
     }
 }

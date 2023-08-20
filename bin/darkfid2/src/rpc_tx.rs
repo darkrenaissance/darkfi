@@ -18,7 +18,7 @@
 
 use darkfi_serial::deserialize;
 use log::error;
-use serde_json::{json, Value};
+use tinyjson::JsonValue;
 
 use darkfi::{
     rpc::jsonrpc::{
@@ -26,6 +26,7 @@ use darkfi::{
         JsonError, JsonResponse, JsonResult,
     },
     tx::Transaction,
+    util::encoding::base64,
 };
 
 use super::Darkfid;
@@ -37,9 +38,10 @@ impl Darkfid {
     // Returns `true` if the transaction is valid, otherwise, a corresponding
     // error.
     //
-    // --> {"jsonrpc": "2.0", "method": "tx.simulate", "params": ["base58encodedTX"], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "tx.simulate", "params": ["base64encodedTX"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    pub async fn tx_simulate(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn tx_simulate(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -50,10 +52,11 @@ impl Darkfid {
         }
 
         // Try to deserialize the transaction
-        let tx_bytes = match bs58::decode(params[0].as_str().unwrap().trim()).into_vec() {
-            Ok(v) => v,
-            Err(e) => {
-                error!(target: "darkfid::rpc::tx_simulate", "Failed decoding base58 transaction: {}", e);
+        let tx_enc = params[0].get::<String>().unwrap().trim();
+        let tx_bytes = match base64::decode(tx_enc) {
+            Some(v) => v,
+            None => {
+                error!(target: "darkfid::rpc::tx_simulate", "Failed decoding base64 transaction");
                 return server_error(RpcError::ParseError, id, None)
             }
         };
@@ -78,7 +81,7 @@ impl Darkfid {
             return server_error(RpcError::TxSimulationFail, id, None)
         };
 
-        JsonResponse::new(json!(true), id).into()
+        JsonResponse::new(JsonValue::Boolean(true), id).into()
     }
 
     // RPCAPI:
@@ -87,9 +90,10 @@ impl Darkfid {
     // if the transaction is actually valid, and in turn it will return an
     // error if this is the case. Otherwise, a transaction ID will be returned.
     //
-    // --> {"jsonrpc": "2.0", "method": "tx.broadcast", "params": ["base58encodedTX"], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "tx.broadcast", "params": ["base64encodedTX"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID...", "id": 1}
-    pub async fn tx_broadcast(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn tx_broadcast(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -100,10 +104,11 @@ impl Darkfid {
         }
 
         // Try to deserialize the transaction
-        let tx_bytes = match bs58::decode(params[0].as_str().unwrap().trim()).into_vec() {
-            Ok(v) => v,
-            Err(e) => {
-                error!(target: "darkfid::rpc::tx_broadcast", "Failed decoding base58 transaction: {}", e);
+        let tx_enc = params[0].get::<String>().unwrap().trim();
+        let tx_bytes = match base64::decode(tx_enc) {
+            Some(v) => v,
+            None => {
+                error!(target: "darkfid::rpc::tx_broadcast", "Failed decoding base64 transaction");
                 return server_error(RpcError::ParseError, id, None)
             }
         };
@@ -145,16 +150,17 @@ impl Darkfid {
         }
 
         let tx_hash = tx.hash().to_string();
-        JsonResponse::new(json!(tx_hash), id).into()
+        JsonResponse::new(JsonValue::String(tx_hash), id).into()
     }
 
     // RPCAPI:
     // Queries the node pending transactions store to retrieve all transactions.
-    // Returns a vector of serialized `Transaction` objects.
+    // Returns a vector of hex-encoded transaction hashes.
     //
     // --> {"jsonrpc": "2.0", "method": "tx.pending", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "[TxHash,...]", "id": 1}
-    pub async fn tx_pending(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn tx_pending(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -171,17 +177,21 @@ impl Darkfid {
                 return JsonError::new(InternalError, None, id).into()
             }
         };
-        let pending_txs: Vec<String> = pending_txs.iter().map(|x| x.hash().to_string()).collect();
-        JsonResponse::new(json!(pending_txs), id).into()
+
+        let pending_txs: Vec<JsonValue> =
+            pending_txs.iter().map(|x| JsonValue::String(x.hash().to_string())).collect();
+
+        JsonResponse::new(JsonValue::Array(pending_txs), id).into()
     }
 
     // RPCAPI:
     // Queries the node pending transactions store to remove all transactions.
-    // Returns a vector of serialized `Transaction` objects.
+    // Returns a vector of hex-encoded transaction hashes.
     //
     // --> {"jsonrpc": "2.0", "method": "tx.clean_pending", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "[TxHash,...]", "id": 1}
-    pub async fn tx_clean_pending(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn tx_clean_pending(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -204,7 +214,9 @@ impl Darkfid {
             return JsonError::new(InternalError, None, id).into()
         };
 
-        let pending_txs: Vec<String> = pending_txs.iter().map(|x| x.hash().to_string()).collect();
-        JsonResponse::new(json!(pending_txs), id).into()
+        let pending_txs: Vec<JsonValue> =
+            pending_txs.iter().map(|x| JsonValue::String(x.hash().to_string())).collect();
+
+        JsonResponse::new(JsonValue::Array(pending_txs), id).into()
     }
 }

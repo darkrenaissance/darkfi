@@ -90,10 +90,10 @@ impl Darkfid {
     //
     // **Returns:**
     // * Serialized [`Transaction`](https://darkrenaissance.github.io/darkfi/development/darkfi/tx/struct.Transaction.html)
-    //   object
+    //   object encoded with base64
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_tx", "params": ["TxHash"], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "ABCD...", "id": 1}
     pub async fn blockchain_get_tx(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {

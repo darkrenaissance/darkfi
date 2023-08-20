@@ -28,7 +28,7 @@ use darkfi::{
     blockchain::BlockInfo,
     cli_desc,
     net::{settings::SettingsOpt, P2pPtr},
-    rpc::{jsonrpc::MethodSubscriber, server::listen_and_serve},
+    rpc::{jsonrpc::JsonSubscriber, server::listen_and_serve},
     util::time::TimeKeeper,
     validator::{Validator, ValidatorConfig, ValidatorPtr},
     Result,
@@ -110,7 +110,7 @@ pub struct Darkfid {
     /// Validator(node) pointer
     validator: ValidatorPtr,
     /// A map of various subscribers exporting live info from the blockchain
-    subscribers: HashMap<&'static str, MethodSubscriber>,
+    subscribers: HashMap<&'static str, JsonSubscriber>,
 }
 
 impl Darkfid {
@@ -118,7 +118,7 @@ impl Darkfid {
         sync_p2p: P2pPtr,
         consensus_p2p: Option<P2pPtr>,
         validator: ValidatorPtr,
-        subscribers: HashMap<&'static str, MethodSubscriber>,
+        subscribers: HashMap<&'static str, JsonSubscriber>,
     ) -> Self {
         Self { sync_p2p, consensus_p2p, validator, subscribers }
     }
@@ -157,11 +157,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
 
     // Here we initialize various subscribers that can export live blockchain/consensus data.
     let mut subscribers = HashMap::new();
-    subscribers.insert("blocks", MethodSubscriber::new("blockchain.subscribe_blocks".into()));
-    subscribers.insert("txs", MethodSubscriber::new("blockchain.subscribe_txs".into()));
+    subscribers.insert("blocks", JsonSubscriber::new("blockchain.subscribe_blocks"));
+    subscribers.insert("txs", JsonSubscriber::new("blockchain.subscribe_txs"));
     if args.consensus {
-        subscribers
-            .insert("proposals", MethodSubscriber::new("blockchain.subscribe_proposals".into()));
+        subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
     }
 
     // Initialize syncing P2P network

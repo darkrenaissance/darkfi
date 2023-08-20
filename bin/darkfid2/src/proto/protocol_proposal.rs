@@ -28,7 +28,7 @@ use darkfi::{
         ChannelPtr, Message, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
-    rpc::jsonrpc::MethodSubscriber,
+    rpc::jsonrpc::JsonSubscriber,
     validator::{consensus::Proposal, ValidatorPtr},
     Result,
 };
@@ -46,7 +46,7 @@ pub struct ProtocolProposal {
     validator: ValidatorPtr,
     p2p: P2pPtr,
     channel_address: Url,
-    subscriber: MethodSubscriber,
+    subscriber: JsonSubscriber,
 }
 
 impl ProtocolProposal {
@@ -54,7 +54,7 @@ impl ProtocolProposal {
         channel: ChannelPtr,
         validator: ValidatorPtr,
         p2p: P2pPtr,
-        subscriber: MethodSubscriber,
+        subscriber: JsonSubscriber,
     ) -> Result<ProtocolBasePtr> {
         debug!(
             target: "validator::protocol_proposal::init",
@@ -114,7 +114,7 @@ impl ProtocolProposal {
             match self.validator.write().await.consensus.append_proposal(&proposal_copy.0).await {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&proposal_copy, &exclude_list).await;
-                    self.subscriber.notify(&proposal_copy).await;
+                    self.subscriber.notify(&[proposal_copy]).await;
                 }
                 Err(e) => {
                     debug!(

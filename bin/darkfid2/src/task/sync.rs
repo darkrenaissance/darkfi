@@ -70,7 +70,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
 
         // Notify subscriber
         for block in &response.blocks {
-            notif_sub.notify(block).await;
+            notif_sub.notify(&[block.clone()]).await;
         }
 
         let last_received = node.validator.read().await.blockchain.last()?;

@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use serde_json::Value;
-
 use darkfi::rpc::jsonrpc::{ErrorCode::ServerError, JsonError, JsonResult};
 
 /// Custom RPC errors available for darkfid.
@@ -38,7 +36,7 @@ pub enum RpcError {
     ContractZkasDbNotFound = -32200,
 }
 
-fn to_tuple(e: RpcError) -> (i64, String) {
+fn to_tuple(e: RpcError) -> (i32, String) {
     let msg = match e {
         // Transaction-related errors
         RpcError::TxSimulationFail => "Failed simulating transaction state change",
@@ -52,10 +50,10 @@ fn to_tuple(e: RpcError) -> (i64, String) {
         RpcError::ContractZkasDbNotFound => "zkas database not found for given contract",
     };
 
-    (e as i64, msg.to_string())
+    (e as i32, msg.to_string())
 }
 
-pub fn server_error(e: RpcError, id: Value, msg: Option<&str>) -> JsonResult {
+pub fn server_error(e: RpcError, id: u16, msg: Option<&str>) -> JsonResult {
     let (code, default_msg) = to_tuple(e);
 
     if let Some(message) = msg {

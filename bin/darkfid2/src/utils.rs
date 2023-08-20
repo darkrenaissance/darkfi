@@ -23,7 +23,7 @@ use log::info;
 use darkfi::{
     error::TxVerifyFailed,
     net::{P2p, P2pPtr, Settings, SESSION_ALL},
-    rpc::jsonrpc::MethodSubscriber,
+    rpc::jsonrpc::JsonSubscriber,
     tx::Transaction,
     validator::ValidatorPtr,
     Result,
@@ -75,7 +75,7 @@ pub fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
 pub async fn spawn_sync_p2p(
     settings: &Settings,
     validator: &ValidatorPtr,
-    subscribers: &HashMap<&'static str, MethodSubscriber>,
+    subscribers: &HashMap<&'static str, JsonSubscriber>,
 ) -> P2pPtr {
     info!(target: "darkfid", "Registering sync network P2P protocols...");
     let p2p = P2p::new(settings.clone()).await;
@@ -116,7 +116,7 @@ pub async fn spawn_sync_p2p(
 pub async fn spawn_consensus_p2p(
     settings: &Settings,
     validator: &ValidatorPtr,
-    subscribers: &HashMap<&'static str, MethodSubscriber>,
+    subscribers: &HashMap<&'static str, JsonSubscriber>,
 ) -> P2pPtr {
     info!(target: "darkfid", "Registering consensus network P2P protocols...");
     let p2p = P2p::new(settings.clone()).await;
