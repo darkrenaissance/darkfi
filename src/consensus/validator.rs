@@ -35,7 +35,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr},
-    rpc::jsonrpc::MethodSubscriber,
+    rpc::jsonrpc::JsonSubscriber,
     runtime::vm_runtime::Runtime,
     tx::Transaction,
     util::time::{TimeKeeper, Timestamp},
@@ -70,7 +70,7 @@ pub struct ValidatorState {
     /// Canonical (finalized) blockchain
     pub blockchain: Blockchain,
     /// A map of various subscribers exporting live info from the blockchain
-    pub subscribers: HashMap<&'static str, MethodSubscriber>,
+    pub subscribers: HashMap<&'static str, JsonSubscriber>,
     /// Wallet interface
     pub wallet: WalletPtr,
     /// Flag signalling node has finished initial sync
@@ -190,8 +190,8 @@ impl ValidatorState {
 
         // Here we initialize various subscribers that can export live consensus/blockchain data.
         let mut subscribers = HashMap::new();
-        let block_subscriber = MethodSubscriber::new("blockchain.subscribe_blocks".into());
-        let err_txs_subscriber = MethodSubscriber::new("blockchain.subscribe_err_txs".into());
+        let block_subscriber = JsonSubscriber::new("blockchain.subscribe_blocks");
+        let err_txs_subscriber = JsonSubscriber::new("blockchain.subscribe_err_txs");
         subscribers.insert("blocks", block_subscriber);
         subscribers.insert("err_txs", err_txs_subscriber);
 
@@ -339,7 +339,7 @@ impl ValidatorState {
         for err_tx in erroneous_txs {
             let tx_hash = blake3::hash(&serialize(&err_tx)).to_hex().as_str().to_string();
             info!(target: "consensus::validator", "purge_pending_txs(): Sending notification about erroneous transaction");
-            err_txs_subscriber.notify(&tx_hash).await;
+            err_txs_subscriber.notify(&[tx_hash]).await;
         }
 
         Ok(())
@@ -809,7 +809,7 @@ impl ValidatorState {
             }
 
             info!(target: "consensus::validator", "consensus: Sending notification about finalized block");
-            blocks_subscriber.notify(proposal).await;
+            blocks_subscriber.notify(&[proposal.clone()]).await;
         }
 
         // Setting leaders history to last proposal leaders count
@@ -916,7 +916,7 @@ impl ValidatorState {
 
         let blocks_subscriber = self.subscribers.get("blocks").unwrap();
         info!(target: "consensus::validator", "consensus: Sending notification about finalized block");
-        blocks_subscriber.notify(&block).await;
+        blocks_subscriber.notify(&[block.clone()]).await;
 
         info!(target: "consensus::validator", "receive_finalized_block(): Removing block transactions from pending txs store");
         self.blockchain.remove_pending_txs(&block.txs)?;
@@ -964,7 +964,7 @@ impl ValidatorState {
         let blocks_subscriber = self.subscribers.get("blocks").unwrap();
         for block in new_blocks {
             info!(target: "consensus::validator", "consensus: Sending notification about finalized block");
-            blocks_subscriber.notify(&block).await;
+            blocks_subscriber.notify(&[block]).await;
         }
 
         Ok(())

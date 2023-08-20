@@ -19,7 +19,6 @@
 use std::{fmt, time::UNIX_EPOCH};
 
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use serde::{Deserialize, Serialize};
 
 use crate::Result;
 
@@ -129,18 +128,7 @@ impl TimeKeeper {
 }
 
 /// Wrapper struct to represent system timestamps.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Serialize,
-    Deserialize,
-    SerialEncodable,
-    SerialDecodable,
-    PartialEq,
-    PartialOrd,
-    Eq,
-)]
+#[derive(Clone, Copy, Debug, SerialEncodable, SerialDecodable, PartialEq, PartialOrd, Eq)]
 pub struct Timestamp(pub u64);
 
 impl Timestamp {
@@ -167,18 +155,7 @@ impl std::fmt::Display for Timestamp {
     }
 }
 
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Serialize,
-    Deserialize,
-    SerialEncodable,
-    SerialDecodable,
-    PartialEq,
-    PartialOrd,
-    Eq,
-)]
+#[derive(Clone, Copy, Debug, SerialEncodable, SerialDecodable, PartialEq, PartialOrd, Eq)]
 pub struct NanoTimestamp(pub u128);
 
 impl NanoTimestamp {

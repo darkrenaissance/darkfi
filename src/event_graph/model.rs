@@ -24,10 +24,12 @@ use darkfi_serial::{
     deserialize, serialize, Decodable, Encodable, SerialDecodable, SerialEncodable,
 };
 use log::{error, info};
+use tinyjson::JsonValue;
 
 use crate::{
     event_graph::events_queue::EventsQueuePtr,
     util::{
+        encoding::base64,
         file::{load_json_file, save_json_file},
         time::Timestamp,
     },
@@ -100,9 +102,9 @@ where
     pub fn save_tree(&self, path: &Path) -> crate::Result<()> {
         let path = path.join("tree");
         let tree = self.event_map.clone();
-        let ser_tree = serialize(&tree);
+        let ser_tree = base64::encode(&serialize(&tree));
 
-        save_json_file(&path, &ser_tree, false)?;
+        save_json_file(&path, &JsonValue::String(ser_tree), false)?;
 
         info!("Tree is saved to disk");
 
@@ -115,8 +117,10 @@ where
             return Ok(())
         }
 
-        let loaded_tree = load_json_file::<Vec<u8>>(&path)?;
-        let dser_tree: HashMap<blake3::Hash, EventNode<T>> = deserialize(&loaded_tree)?;
+        let loaded_tree_obj = load_json_file(&path)?;
+        let loaded_tree_obj: &String = loaded_tree_obj.get::<String>().unwrap();
+        let loaded_tree_bytes = base64::decode(loaded_tree_obj.as_str()).unwrap();
+        let dser_tree: HashMap<blake3::Hash, EventNode<T>> = deserialize(&loaded_tree_bytes)?;
         self.event_map = dser_tree;
 
         info!("Tree is loaded from disk");

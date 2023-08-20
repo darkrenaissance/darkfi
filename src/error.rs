@@ -90,6 +90,14 @@ pub enum Error {
     #[error("serde_json error: {0}")]
     SerdeJsonError(String),
 
+    #[cfg(feature = "tinyjson")]
+    #[error("JSON parse error: {0}")]
+    JsonParseError(String),
+
+    #[cfg(feature = "tinyjson")]
+    #[error("JSON generate error: {0}")]
+    JsonGenerateError(String),
+
     #[cfg(feature = "toml")]
     #[error(transparent)]
     TomlDeserializeError(#[from] toml::de::Error),
@@ -224,8 +232,8 @@ pub enum Error {
     #[error("Unsupported chain")]
     UnsupportedChain,
 
-    #[error("JSON-RPC error: {0}")]
-    JsonRpcError(String),
+    #[error("JSON-RPC error: {0:?}")]
+    JsonRpcError((i32, String)),
 
     #[cfg(feature = "rpc")]
     #[error(transparent)]
@@ -695,6 +703,20 @@ impl From<async_rustls::rustls::client::InvalidDnsNameError> for Error {
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
         Self::SerdeJsonError(err.to_string())
+    }
+}
+
+#[cfg(feature = "tinyjson")]
+impl From<tinyjson::JsonParseError> for Error {
+    fn from(err: tinyjson::JsonParseError) -> Self {
+        Self::JsonParseError(err.to_string())
+    }
+}
+
+#[cfg(feature = "tinyjson")]
+impl From<tinyjson::JsonGenerateError> for Error {
+    fn from(err: tinyjson::JsonGenerateError) -> Self {
+        Self::JsonGenerateError(err.to_string())
     }
 }
 

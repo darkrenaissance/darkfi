@@ -18,8 +18,8 @@
 
 use async_std::{net::TcpListener, sync::Arc, task};
 use async_trait::async_trait;
-use serde_json::{json, Value};
 use smol::channel::{Receiver, Sender};
+use tinyjson::JsonValue;
 use url::Url;
 
 use darkfi::{
@@ -37,25 +37,34 @@ struct RpcSrv {
 }
 
 impl RpcSrv {
-    async fn pong(&self, id: Value, _params: &[Value]) -> JsonResult {
-        JsonResponse::new(json!("pong"), id).into()
+    async fn pong(&self, id: JsonValue, _params: JsonValue) -> JsonResult {
+        JsonResponse::new(JsonValue::String("pong".to_string()), id).into()
     }
 
-    async fn kill(&self, id: Value, _params: &[Value]) -> JsonResult {
+    async fn kill(&self, id: JsonValue, _params: JsonValue) -> JsonResult {
         self.stop_sub.0.send(()).await.unwrap();
-        JsonResponse::new(json!("bye"), id).into()
+        JsonResponse::new(JsonValue::String("bye".to_string()), id).into()
     }
 }
 
 #[async_trait]
 impl RequestHandler for RpcSrv {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        let params = req.params.as_array().unwrap();
+        assert!(req.params.is_array());
+        let method = String::try_from(req.method).unwrap();
+        let params = req.params;
 
-        match req.method.as_str() {
-            Some("ping") => return self.pong(req.id, params).await,
-            Some("kill") => return self.kill(req.id, params).await,
-            Some(_) | None => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+        match method.as_str() {
+            "ping" => return self.pong(req.id, params).await,
+            "kill" => return self.kill(req.id, params).await,
+            _ => {
+                return JsonError::new(
+                    ErrorCode::MethodNotFound,
+                    None,
+                    *req.id.get::<f64>().unwrap() as u16,
+                )
+                .into()
+            }
         }
     }
 }
@@ -81,17 +90,17 @@ async fn jsonrpc_reqrep() -> Result<()> {
     });
 
     let client = RpcClient::new(endpoint, None).await?;
-    let req = JsonRequest::new("ping", json!([]));
+    let req = JsonRequest::new("ping", JsonValue::from(vec![]));
     let rep = client.request(req).await?;
 
-    let rep = rep.as_str().unwrap();
-    assert_eq!(rep, "pong");
+    let rep = String::try_from(rep).unwrap();
+    assert_eq!(&rep, "pong");
 
-    let req = JsonRequest::new("kill", json!([]));
+    let req = JsonRequest::new("kill", JsonValue::from(vec![]));
     let rep = client.request(req).await?;
 
-    let rep = rep.as_str().unwrap();
-    assert_eq!(rep, "bye");
+    let rep = String::try_from(rep).unwrap();
+    assert_eq!(&rep, "bye");
 
     Ok(())
 }

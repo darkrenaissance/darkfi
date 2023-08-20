@@ -79,8 +79,8 @@ x509-parser = {version = "0.15.1", features = ["validate", "verify"], optional =
 
 # Encoding
 bs58 = {version = "0.5.0", optional = true}
-serde_json = {version = "1.0.105", optional = true}
 serde = {version = "1.0.183", features = ["derive"], optional = true}
+tinyjson = {version = "2.5.1", optional = true}
 semver = {version = "1.0.18", optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
@@ -175,6 +175,7 @@ geode = [
 event-graph = [
     "blake3",
     "rand",
+    "tinyjson",
 
     "async-runtime",
     "darkfi-serial",
@@ -184,19 +185,17 @@ event-graph = [
 ]
 
 net = [
-    "ed25519-compact",
     "async-rustls",
-    "structopt",
-    "structopt-toml",
+    "ed25519-compact",
     "rand",
     "rcgen",
     "rustls-pemfile",
-    "x509-parser",
     "semver",
-    "serde",
-    "serde_json",
     "socket2",
+    "structopt",
+    "structopt-toml",
     "url",
+    "x509-parser",
 
     "async-runtime",
     "darkfi-serial",
@@ -212,14 +211,11 @@ net = [
 ]
 
 rpc = [
-    "bs58",
     "rand",
-    "serde",
-    "serde_json",
+    "tinyjson",
     "url",
 
     "async-runtime",
-    "darkfi-serial",
     "net",
 ]
 
@@ -240,9 +236,9 @@ tx = [
 
 util = [
     "rand",
-    "simplelog",
     "serde",
-    "serde_json",
+    "simplelog",
+    "tinyjson",
     "toml",
 
     "darkfi-serial",

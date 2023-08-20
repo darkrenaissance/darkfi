@@ -16,61 +16,29 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//! JSON-RPC server-side implementation.
-use std::time::Duration;
-
-use async_std::{io::timeout, sync::Arc};
+use async_std::sync::Arc;
 use async_trait::async_trait;
-use futures::{AsyncReadExt, AsyncWriteExt};
 use log::{debug, error, info};
+use tinyjson::JsonValue;
 use url::Url;
 
-use super::jsonrpc::{JsonRequest, JsonResult};
+use super::{
+    common::{read_from_stream, write_to_stream, INIT_BUF_SIZE},
+    jsonrpc::*,
+};
 use crate::{
-    error::RpcError,
     net::transport::{Listener, PtListener, PtStream},
     Result,
 };
 
 /// Asynchronous trait implementing a handler for incoming JSON-RPC requests.
-/// Can be used by matching on methods and branching out to functions that
-/// handle respective methods.
 #[async_trait]
 pub trait RequestHandler: Sync + Send {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult;
-}
 
-const INIT_BUF_SIZE: usize = 1024; // 1K
-const MAX_BUF_SIZE: usize = 1024 * 8192; // 8M
-const READ_TIMEOUT: Duration = Duration::from_secs(30);
-
-/// Internal read function called from `accept` that reads from the active stream.
-async fn read_from_stream(stream: &mut Box<dyn PtStream>, buf: &mut Vec<u8>) -> Result<usize> {
-    debug!(target: "rpc::server", "Reading from stream...");
-    let mut total_read = 0;
-
-    while total_read < MAX_BUF_SIZE {
-        buf.resize(total_read + INIT_BUF_SIZE, 0);
-
-        match timeout(READ_TIMEOUT, stream.read(&mut buf[total_read..])).await {
-            Ok(0) if total_read == 0 => {
-                return Err(RpcError::ConnectionClosed("Connection closed".to_string()).into())
-            }
-            Ok(0) => break, // Finished reading
-            Ok(n) => {
-                total_read += n;
-                if buf[total_read - 1] == b'\n' {
-                    break
-                }
-            }
-            Err(e) => return Err(RpcError::IoError(e.kind()).into()),
-        }
+    async fn pong(&self, id: u16, _params: JsonValue) -> JsonResult {
+        JsonResponse::new(JsonValue::String("pong".to_string()), id).into()
     }
-
-    // Truncate buffer to actual data size
-    buf.truncate(total_read);
-    debug!(target: "rpc::server", "Finished reading {} bytes", total_read);
-    Ok(total_read)
 }
 
 /// Accept function that should run inside a loop for accepting incoming
@@ -80,81 +48,49 @@ pub async fn accept(
     addr: Url,
     rh: Arc<impl RequestHandler + 'static>,
 ) -> Result<()> {
-    let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
     loop {
-        buf.clear();
+        let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
+        let _ = read_from_stream(&mut stream, &mut buf, false).await?;
+        let val: JsonValue = String::from_utf8(buf)?.parse()?;
+        let req = JsonRequest::try_from(&val)?;
 
-        let _ = read_from_stream(&mut stream, &mut buf).await?;
+        debug!(target: "rpc::server", "{} --> {}", addr, val.stringify()?);
 
-        let r: JsonRequest =
-            serde_json::from_slice(&buf).map_err(|e| RpcError::InvalidJson(e.to_string()))?;
+        let rep = rh.handle_request(req).await;
 
-        debug!(target: "rpc::server", "{} --> {}", addr, String::from_utf8_lossy(&buf));
-
-        let reply = rh.handle_request(r).await;
-
-        match reply {
-            JsonResult::Subscriber(sub) => {
+        match rep {
+            JsonResult::Subscriber(subscriber) => {
                 // Subscribe to the inner method subscriber
-                let subscription = sub.subscriber.subscriber.subscribe().await;
+                let subscription = subscriber.sub.subscribe().await;
                 loop {
-                    // Listen subscription for notifications
+                    // Listen for notifications
                     let notification = subscription.receive().await;
 
                     // Push notification
-                    let j = serde_json::to_string(&notification).unwrap();
-                    debug!(target: "rpc::server", "{} <-- {}", addr, j);
-
-                    if let Err(e) = stream.write_all(j.as_bytes()).await {
-                        error!(target: "rpc::server", "[RPC] Server failed writing to {} socket: {}", addr, e);
-                        debug!(target: "rpc::server", "Closed connection for {}", addr);
-                        break
-                    }
-
-                    if let Err(e) = stream.write_all(&[b'\n']).await {
-                        error!(target: "rpc::server", "[RPC] Server failed writing to {} socket: {}", addr, e);
-                        debug!(target: "rpc::server", "Closed connection for {}", addr);
-                        break
+                    debug!(target: "rpc::server", "{} <-- {}", addr, notification.stringify()?);
+                    let notification = JsonResult::Notification(notification);
+                    if let Err(e) = write_to_stream(&mut stream, &notification).await {
+                        subscription.unsubscribe().await;
+                        return Err(e)
                     }
                 }
-                subscription.unsubscribe().await;
             }
-            _ => {
-                let j = serde_json::to_string(&reply)
-                    .map_err(|e| RpcError::InvalidJson(e.to_string()))?;
 
-                debug!(target: "rpc::server", "{} <-- {}", addr, j);
+            JsonResult::Request(_) | JsonResult::Notification(_) => {
+                unreachable!("Should never happen")
+            }
 
-                if let Err(e) = stream.write_all(j.as_bytes()).await {
-                    error!(
-                        target: "rpc::server", "[RPC] Server failed writing to {} socket: {}",
-                        addr, e
-                    );
-                    return close_conn(
-                        &addr,
-                        RpcError::ConnectionClosed("Socket write error".to_string()),
-                    )
-                }
+            JsonResult::Response(ref v) => {
+                debug!(target: "rpc::server", "{} <-- {}", addr, v.stringify()?);
+                write_to_stream(&mut stream, &rep).await?;
+            }
 
-                if let Err(e) = stream.write_all(&[b'\n']).await {
-                    error!(
-                        target: "rpc::server", "[RPC] Server failed writing to {} socket: {}",
-                        addr, e
-                    );
-                    return close_conn(
-                        &addr,
-                        RpcError::ConnectionClosed("Socket write error".to_string()),
-                    )
-                }
+            JsonResult::Error(ref v) => {
+                debug!(target: "rpc::server", "{} <-- {}", addr, v.stringify()?);
+                write_to_stream(&mut stream, &rep).await?;
             }
         }
     }
-}
-
-/// Helper function for connection closing
-fn close_conn(peer_addr: &Url, reason: RpcError) -> Result<()> {
-    debug!(target: "rpc::server", "Closed connection for {}", peer_addr);
-    Err(reason.into())
 }
 
 /// Wrapper function around [`accept()`] to take the incoming connection and
@@ -165,30 +101,40 @@ async fn run_accept_loop(
     ex: Arc<smol::Executor<'_>>,
 ) -> Result<()> {
     while let Ok((stream, peer_addr)) = listener.next().await {
-        info!(target: "rpc::server", "[RPC] Server accepted connection from {}", peer_addr);
+        info!(target: "rpc::server", "[RPC] Server accepted conn from {}", peer_addr);
         // Detaching requests handling
-        let _rh = rh.clone();
+        let rh_ = rh.clone();
         ex.spawn(async move {
-            if let Err(e) = accept(stream, peer_addr.clone(), _rh).await {
-                error!(target: "rpc::server", "[RPC] Server error on handling request of {}: {}", peer_addr, e);
+            if let Err(e) = accept(stream, peer_addr.clone(), rh_).await {
+                if e.to_string().as_str() == "Connection closed cleanly" {
+                    info!(
+                        target: "rpc::server",
+                        "[RPC] Closed connection from {}",
+                        peer_addr,
+                    );
+                } else {
+                    error!(
+                        target: "rpc::server",
+                        "[RPC] Server error on handling request from {}: {}",
+                        peer_addr, e,
+                    );
+                }
             }
-        }).detach();
+        })
+        .detach();
     }
 
-    Ok(())
+    // NOTE: This is here now to catch some code path. Will be handled properly.
+    panic!("RPC server listener stopped/crashed");
 }
 
-/// Start a JSON-RPC server bound to the given accept URL and use the given
-/// [`RequestHandler`] to handle incoming requests.
+/// Start a JSON-RPC server bound to the given accept URL and use the
+/// given [`RequestHandler`] to handle incoming requests.
 pub async fn listen_and_serve(
     accept_url: Url,
     rh: Arc<impl RequestHandler + 'static>,
     ex: Arc<smol::Executor<'_>>,
 ) -> Result<()> {
-    debug!(target: "rpc::server", "Trying to bind listener on {}", accept_url);
-
     let listener = Listener::new(accept_url).await?.listen().await?;
-    run_accept_loop(listener, rh, ex.clone()).await?;
-
-    Ok(())
+    run_accept_loop(listener, rh, ex.clone()).await
 }
