@@ -27,10 +27,10 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use log::{debug, error, info, warn};
 use semver::Version;
-use serde_json::json;
 use smol::Executor;
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
+use tinyjson::JsonValue;
 use toml::Value;
 use url::Url;
 
@@ -38,10 +38,7 @@ use darkfi::{
     async_daemonize, cli_desc,
     net::{self, connector::Connector, protocol::ProtocolVersion, session::Session, P2p, P2pPtr},
     rpc::{
-        jsonrpc::{
-            ErrorCode::{InvalidParams, MethodNotFound},
-            JsonError, JsonRequest, JsonResponse, JsonResult,
-        },
+        jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
     },
     util::{
@@ -93,21 +90,27 @@ struct Spawn {
 }
 
 impl Spawn {
-    async fn addresses(&self) -> Vec<String> {
-        self.p2p.hosts().load_all().await.iter().map(|addr| addr.to_string()).collect()
+    async fn addresses(&self) -> Vec<JsonValue> {
+        self.p2p
+            .hosts()
+            .load_all()
+            .await
+            .iter()
+            .map(|addr| JsonValue::String(addr.to_string()))
+            .collect()
     }
 
-    async fn info(&self) -> serde_json::Value {
+    async fn info(&self) -> JsonValue {
         let mut addr_vec = vec![];
         for addr in &self.p2p.settings().inbound_addrs {
-            addr_vec.push(addr.as_ref().to_string());
+            addr_vec.push(JsonValue::String(addr.as_ref().to_string()));
         }
 
-        json!({
-            "name": self.name.clone(),
-            "urls": addr_vec,
-            "hosts": self.addresses().await,
-        })
+        JsonValue::Object(HashMap::from([
+            ("name".to_string(), JsonValue::String(self.name.clone())),
+            ("urls".to_string(), JsonValue::Array(addr_vec)),
+            ("hosts".to_string(), JsonValue::Array(self.addresses().await)),
+        ]))
     }
 }
 
@@ -200,24 +203,17 @@ impl Lilith {
     }
 
     // RPCAPI:
-    // Replies to a ping method.
-    // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result", "pong", "id: 42}
-    async fn pong(&self, id: serde_json::Value, _params: &[serde_json::Value]) -> JsonResult {
-        JsonResponse::new(json!("pong"), id).into()
-    }
-
-    // RPCAPI:
     // Returns all spawned networks names with their node addresses.
     // --> {"jsonrpc": "2.0", "method": "spawns", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": {"spawns": spawns_info}, "id": 42}
-    async fn spawns(&self, id: serde_json::Value, _params: &[serde_json::Value]) -> JsonResult {
+    async fn spawns(&self, id: u16, _params: JsonValue) -> JsonResult {
         let mut spawns = vec![];
         for spawn in &self.networks {
             spawns.push(spawn.info().await);
         }
 
-        let json = json!({ "spawns": spawns });
+        let json =
+            JsonValue::Object(HashMap::from([("spawns".to_string(), JsonValue::Array(spawns))]));
 
         JsonResponse::new(json, id).into()
     }
@@ -226,16 +222,10 @@ impl Lilith {
 #[async_trait]
 impl RequestHandler for Lilith {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        if !req.params.is_array() {
-            return JsonError::new(InvalidParams, None, req.id).into()
-        }
-
-        let params = req.params.as_array().unwrap();
-
         match req.method.as_str() {
-            Some("spawns") => return self.spawns(req.id, params).await,
-            Some("ping") => return self.pong(req.id, params).await,
-            Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
+            "ping" => return self.pong(req.id, req.params).await,
+            "spawns" => return self.spawns(req.id, req.params).await,
+            _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
 }
