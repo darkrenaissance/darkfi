@@ -384,9 +384,11 @@ impl P2p {
     pub async fn dnet_info(&self) -> Vec<DnetInfo> {
         let mut ret = vec![];
 
-        ret.push(self.session_inbound().await.dnet_info().await);
-        ret.push(self.session_outbound().await.dnet_info().await);
-        ret.push(DnetInfo::Hosts(self.hosts.load_all().await));
+        if *self.dnet_enabled.lock().await {
+            ret.push(self.session_inbound().await.dnet_info().await);
+            ret.push(self.session_outbound().await.dnet_info().await);
+            ret.push(DnetInfo::Hosts(self.hosts.load_all().await));
+        }
 
         ret
     }
