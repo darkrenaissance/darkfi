@@ -17,28 +17,18 @@
  */
 
 use clap::{Parser, Subcommand};
-
-use darkfi_serial::{SerialDecodable, SerialEncodable};
-use serde::Serialize;
-use simplelog::{ColorChoice, TermLogger, TerminalMode};
-use url::Url;
-
 use darkfi::{
     rpc::client::RpcClient,
     util::cli::{get_log_config, get_log_level},
     Result,
 };
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
+use url::Url;
 
-use crate::rpc::Gen;
+use genevd::GenEvent;
 
 mod rpc;
-
-#[derive(SerialEncodable, SerialDecodable, Debug, Serialize)]
-pub struct BaseEvent {
-    pub nick: String,
-    pub title: String,
-    pub text: String,
-}
+use rpc::Gen;
 
 #[derive(Parser)]
 #[clap(name = "genev", version)]
@@ -76,13 +66,15 @@ async fn main() -> Result<()> {
     match args.command {
         Some(subcmd) => match subcmd {
             SubCmd::Add { values } => {
-                let event = BaseEvent {
+                let event = GenEvent {
                     nick: values[0].clone(),
                     title: values[1].clone(),
                     text: values[2..].join(" "),
                 };
+
                 return gen.add(event).await
             }
+
             SubCmd::List => {
                 let events = gen.list().await?;
                 for event in events {

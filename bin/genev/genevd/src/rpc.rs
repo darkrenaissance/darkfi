@@ -19,7 +19,7 @@
 use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use log::debug;
-use serde_json::{json, Value};
+use tinyjson::JsonValue;
 
 use darkfi::{
     event_graph::{
@@ -31,10 +31,10 @@ use darkfi::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         server::RequestHandler,
     },
-    util::time::Timestamp,
+    util::{encoding::base64, time::Timestamp},
 };
-
-use crate::genevent::GenEvent;
+use darkfi_serial::deserialize;
+use genevd::GenEvent;
 
 pub struct JsonRpcInterface {
     _nickname: String,
@@ -47,17 +47,13 @@ pub struct JsonRpcInterface {
 #[async_trait]
 impl RequestHandler for JsonRpcInterface {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        if !req.params.is_array() {
-            return JsonError::new(ErrorCode::InvalidParams, None, req.id).into()
-        }
-
         match req.method.as_str() {
-            Some("add") => self.add(req.id, req.params).await,
-            Some("list") => self.list(req.id, req.params).await,
-            Some("ping") => self.pong(req.id, req.params).await,
-            Some("dnet_switch") => self.dnet_switch(req.id, req.params).await,
-            Some("dnet_info") => self.dnet_info(req.id, req.params).await,
-            Some(_) | None => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+            "add" => self.add(req.id, req.params).await,
+            "list" => self.list(req.id, req.params).await,
+
+            "ping" => self.pong(req.id, req.params).await,
+            "dnet_switch" => self.dnet_switch(req.id, req.params).await,
+            _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
 }
@@ -74,55 +70,42 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
-    // Replies to a ping method.
-    // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
-    async fn pong(&self, id: Value, _params: Value) -> JsonResult {
-        JsonResponse::new(json!("pong"), id).into()
-    }
-
-    // RPCAPI:
     // Activate or deactivate dnet in the P2P stack.
     // By sending `true`, dnet will be activated, and by sending `false` dnet
     // will be deactivated. Returns `true` on success.
     //
     // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn dnet_switch(&self, id: Value, params: Value) -> JsonResult {
-        let params = params.as_array().unwrap();
-
-        if params.len() != 1 && params[0].as_bool().is_none() {
+    async fn dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 1 || !params[0].is_bool() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        if params[0].as_bool().unwrap() {
+        let switch = params[0].get::<bool>().unwrap();
+
+        if *switch {
             self.p2p.dnet_enable().await;
         } else {
             self.p2p.dnet_disable().await;
         }
 
-        JsonResponse::new(json!(true), id).into()
-    }
-
-    // RPCAPI:
-    // Retrieves P2P network information.
-    // --> {"jsonrpc": "2.0", "method": "dnet_info", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
-    async fn dnet_info(&self, id: Value, _params: Value) -> JsonResult {
-        let dnet_info = self.p2p.dnet_info().await;
-        JsonResponse::new(net::P2p::map_dnet_info(dnet_info), id).into()
+        JsonResponse::new(JsonValue::Boolean(true), id).into()
     }
 
     // RPCAPI:
     // Add a new event
     // --> {"jsonrpc": "2.0", "method": "add", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [nickname, ...], "id": 1}
-    async fn add(&self, id: Value, params: Value) -> JsonResult {
-        let genevent = GenEvent {
-            nick: params[0].get("nick").unwrap().to_string(),
-            title: params[0].get("title").unwrap().to_string(),
-            text: params[0].get("text").unwrap().to_string(),
-        };
+    async fn add(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 1 || !params[0].is_string() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        let b64 = params[0].get::<String>().unwrap();
+        let dec = base64::decode(&b64).unwrap();
+        let genevent: GenEvent = deserialize(&dec).unwrap();
 
         let event = Event {
             previous_event_hash: self.model.lock().await.get_head_hash(),
@@ -131,13 +114,13 @@ impl JsonRpcInterface {
         };
 
         if !self.seen.push(&event.hash()).await {
-            let json = json!(false);
+            let json = JsonValue::Boolean(false);
             return JsonResponse::new(json, id).into()
         }
 
         self.p2p.broadcast(&event).await;
 
-        let json = json!(true);
+        let json = JsonValue::Boolean(true);
         JsonResponse::new(json, id).into()
     }
 
@@ -145,13 +128,13 @@ impl JsonRpcInterface {
     // List events
     // --> {"jsonrpc": "2.0", "method": "list", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [task_id, ...], "id": 1}
-    async fn list(&self, id: Value, _params: Value) -> JsonResult {
+    async fn list(&self, id: u16, _params: JsonValue) -> JsonResult {
         debug!("fetching all events");
         let msd = self.missed_events.lock().await.clone();
 
         let ser = darkfi_serial::serialize(&msd);
+        let enc = JsonValue::String(base64::encode(&ser));
 
-        let json = json!(ser);
-        JsonResponse::new(json, id).into()
+        JsonResponse::new(enc, id).into()
     }
 }

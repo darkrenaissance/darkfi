@@ -20,10 +20,6 @@ use async_std::{
     stream::StreamExt,
     sync::{Arc, Mutex},
 };
-
-use log::info;
-use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
-
 use darkfi::{
     async_daemonize, cli_desc,
     event_graph::{
@@ -36,14 +32,13 @@ use darkfi::{
     rpc::server::listen_and_serve,
     Result,
 };
-
-mod genevent;
-mod rpc;
-
-use genevent::GenEvent;
+use genevd::GenEvent;
+use log::info;
+use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
-use crate::rpc::JsonRpcInterface;
+mod rpc;
+use rpc::JsonRpcInterface;
 
 const CONFIG_FILE: &str = "genev_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../../genev_config.toml");
