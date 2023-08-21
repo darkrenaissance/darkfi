@@ -195,7 +195,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
 
     // New p2p
     let p2p = net::P2p::new(net_settings.into()).await;
-    let p2p2 = p2p.clone();
 
     // Register the protocol_event
     let registry = p2p.protocol_registry();
@@ -208,20 +207,19 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         })
         .await;
 
-    // Here we initialize the subscribers for dnetview streamed notifications
-    let json_subscriber = JsonSubscriber::new("dnet.subscribe_events");
-    let json_subscriber2 = json_subscriber.clone();
-    // Grab events from dnet subsystem
-    let dnet_subscriber = p2p.dnet_subscribe().await;
-    // Now join events coming from dnet_subscriber into json_subscriber
+    // ==============
+    // p2p dnet setup
+    // ==============
+    let json_sub = JsonSubscriber::new("dnet.subscribe_events");
+    let json_sub_ = json_sub.clone();
+    let p2p_ = p2p.clone();
     executor
         .spawn(async move {
-            println!("here!!!!");
+            let dnet_sub = p2p_.dnet_sub().subscribe().await;
             loop {
-                let event = dnet_subscriber.receive().await;
-                println!("event received!");
-                // Convert event to JSON
-                json_subscriber2.notify(&[event]).await;
+                let event = dnet_sub.receive().await;
+                debug!("Got dnet event: {:?}", event);
+                json_sub_.notify(vec![event.into()]).await;
             }
         })
         .detach();
@@ -229,12 +227,14 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     ////////////////////
     // RPC interface setup
     ////////////////////
+
     let rpc_listen_addr = settings.rpc_listen.clone();
     let rpc_interface = Arc::new(JsonRpcInterface {
         addr: rpc_listen_addr.clone(),
         p2p: p2p.clone(),
-        dnet_subscriber: json_subscriber,
+        dnet_sub: json_sub,
     });
+
     let _ex = executor.clone();
     executor
         .spawn(async move { listen_and_serve(rpc_listen_addr, rpc_interface, _ex).await })
@@ -277,6 +277,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     model_clone.lock().await.save_tree(&datastore_path)?;
 
     // stop p2p
-    p2p2.stop().await;
+    p2p.stop().await;
     Ok(())
 }

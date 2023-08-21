@@ -32,7 +32,7 @@ use darkfi::{
 pub struct JsonRpcInterface {
     pub addr: Url,
     pub p2p: net::P2pPtr,
-    pub dnet_subscriber: JsonSubscriber,
+    pub dnet_sub: JsonSubscriber,
 }
 
 #[async_trait]
@@ -87,6 +87,6 @@ impl JsonRpcInterface {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        self.dnet_subscriber.clone().into()
+        self.dnet_sub.clone().into()
     }
 }
