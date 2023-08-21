@@ -460,11 +460,11 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
             Lilith::periodic_purge(name.clone(), network.p2p.clone(), ex.clone()),
             |res| async move {
                 match res {
-                    Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                     Err(e) => error!(target: "lilith", "Failed starting periodic task for \"{}\": {}", name, e),
                 }
             },
-            Error::P2PNetworkStopped,
+            Error::DetachedTaskStopped,
             ex.clone(),
         );
         periodic_tasks.insert(network.name.clone(), task);

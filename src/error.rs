@@ -468,6 +468,9 @@ pub enum Error {
     #[error("System clock went backwards")]
     BackwardsTime(std::time::SystemTimeError),
 
+    #[error("Detached task stopped")]
+    DetachedTaskStopped,
+
     // ==============================================
     // Wrappers for other error types in this library
     // ==============================================

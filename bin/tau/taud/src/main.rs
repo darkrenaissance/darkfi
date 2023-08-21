@@ -52,6 +52,7 @@ use darkfi::{
     },
     net::{self, P2pPtr},
     rpc::server::listen_and_serve,
+    system::StoppableTask,
     util::{path::expand_path, time::Timestamp},
     Error, Result,
 };
@@ -361,7 +362,19 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
 
     p2p.clone().start(executor.clone()).await?;
 
-    executor.spawn(p2p.clone().run(executor.clone())).detach();
+    info!(target: "taud", "Starting sync P2P network");
+    p2p.clone().start(executor.clone()).await?;
+    StoppableTask::new().start(
+        p2p.clone().run(executor.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "taud", "Failed starting sync P2P network: {}", e),
+            }
+        },
+        Error::P2PNetworkStopped,
+        executor.clone(),
+    );
 
     ////////////////////
     // Listner
@@ -369,8 +382,10 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     let seen_ids = Seen::new();
     let missed_events = Arc::new(Mutex::new(vec![]));
 
-    executor
-        .spawn(start_sync_loop(
+    info!(target: "taud", "Starting sync loop task");
+    let sync_loop_task = StoppableTask::new();
+    sync_loop_task.clone().start(
+        start_sync_loop(
             broadcast_rcv,
             view,
             model_clone.clone(),
@@ -380,8 +395,16 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
             missed_events,
             settings.piped,
             p2p.clone(),
-        ))
-        .detach();
+        ),
+        |res| async {
+            match res {
+                Ok(()) | Err(TaudError::Darkfi(Error::DetachedTaskStopped)) => { /* Do nothing */ }
+                Err(e) => error!(target: "taud", "Failed starting sync loop task: {}", e),
+            }
+        },
+        TaudError::Darkfi(Error::DetachedTaskStopped),
+        executor.clone(),
+    );
 
     //
     // RPC interface
@@ -393,13 +416,29 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         workspaces.clone(),
         p2p.clone(),
     ));
-    let _ex = executor.clone();
-    executor.spawn(listen_and_serve(settings.rpc_listen.clone(), rpc_interface, _ex)).detach();
+    let rpc_task = StoppableTask::new();
+    rpc_task.clone().start(
+        listen_and_serve(settings.rpc_listen, rpc_interface, executor.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "taud", "Failed starting sync JSON-RPC server: {}", e),
+            }
+        },
+        Error::RPCServerStopped,
+        executor.clone(),
+    );
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new()?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
+
+    info!(target: "taud", "Stopping JSON-RPC server...");
+    rpc_task.stop().await;
+
+    info!(target: "taud", "Stopping sync loop task...");
+    sync_loop_task.stop().await;
 
     model_clone.lock().await.save_tree(&datastore_path)?;
 

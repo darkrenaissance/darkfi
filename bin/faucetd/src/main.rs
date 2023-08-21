@@ -740,11 +740,11 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         ),
         |res| async {
             match res {
-                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
                 Err(e) => error!(target: "faucetd", "Failed starting airdrop prune task: {}", e),
             }
         },
-        Error::P2PNetworkStopped,
+        Error::DetachedTaskStopped,
         ex.clone(),
     );
 
