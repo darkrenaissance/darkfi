@@ -71,6 +71,7 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
     },
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
+    system::StoppableTask,
     tx::Transaction,
     util::{async_util::sleep, parse::decode_base10, path::expand_path},
     wallet::{WalletDb, WalletPtr},
@@ -591,7 +592,11 @@ impl Faucetd {
     }
 }
 
-async fn prune_airdrop_maps(rate_map: AirdropMap, challenge_map: ChallengeMap, timeout: i64) {
+async fn prune_airdrop_maps(
+    rate_map: AirdropMap,
+    challenge_map: ChallengeMap,
+    timeout: i64,
+) -> Result<()> {
     loop {
         sleep(timeout as u64).await;
         debug!("Pruning airdrop maps");
@@ -726,34 +731,57 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let faucetd = Arc::new(faucetd);
 
     // Task to periodically clean up the airdrop rate/challenge hashmaps
-    ex.spawn(prune_airdrop_maps(
-        faucetd.airdrop_map.clone(),
-        faucetd.challenge_map.clone(),
-        airdrop_timeout,
-    ))
-    .detach();
+    let airdrop_task = StoppableTask::new();
+    airdrop_task.clone().start(
+        prune_airdrop_maps(
+            faucetd.airdrop_map.clone(),
+            faucetd.challenge_map.clone(),
+            airdrop_timeout,
+        ),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "faucetd", "Failed starting airdrop prune task: {}", e),
+            }
+        },
+        Error::P2PNetworkStopped,
+        ex.clone(),
+    );
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");
-    let _ex = ex.clone();
-    ex.spawn(listen_and_serve(args.rpc_listen, faucetd.clone(), _ex)).detach();
+    let rpc_task = StoppableTask::new();
+    rpc_task.clone().start(
+        listen_and_serve(args.rpc_listen, faucetd.clone(), ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "faucetd", "Failed starting sync JSON-RPC server: {}", e),
+            }
+        },
+        Error::RPCServerStopped,
+        ex.clone(),
+    );
 
     info!("Starting sync P2P network");
     sync_p2p.clone().start(ex.clone()).await?;
-    let _ex = ex.clone();
-    let _sync_p2p = sync_p2p.clone();
-    ex.spawn(async move {
-        if let Err(e) = _sync_p2p.run(_ex).await {
-            error!("Failed starting sync P2P network: {}", e);
-        }
-    })
-    .detach();
+    StoppableTask::new().start(
+        sync_p2p.clone().run(ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "faucetd", "Failed starting sync P2P network: {}", e),
+            }
+        },
+        Error::P2PNetworkStopped,
+        ex.clone(),
+    );
 
     // TODO: I think this is not needed anymore
     //info!("Waiting for sync P2P outbound connections");
     //sync_p2p.clone().wait_for_outbound(ex).await?;
 
-    match block_sync_task(sync_p2p, state.clone()).await {
+    match block_sync_task(sync_p2p.clone(), state.clone()).await {
         Ok(()) => *faucetd.synced.lock().await = true,
         Err(e) => error!("Failed syncing blockchain: {}", e),
     }
@@ -762,6 +790,15 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let (signals_handler, signals_task) = SignalHandler::new()?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
+
+    info!(target: "faucetd", "Stopping JSON-RPC server...");
+    rpc_task.stop().await;
+
+    info!(target: "faucetd", "Stopping airdrop prune task...");
+    airdrop_task.stop().await;
+
+    info!(target: "faucetd", "Stopping syncing P2P network...");
+    sync_p2p.stop().await;
 
     info!("Flushing database...");
     let flushed_bytes = sled_db.flush_async().await?;
