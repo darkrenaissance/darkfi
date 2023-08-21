@@ -49,7 +49,7 @@ pub type ChannelPtr = Arc<Channel>;
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ChannelInfo {
     pub address: Url,
-    pub random_id: usize,
+    pub random_id: u32,
 }
 
 impl ChannelInfo {
