@@ -320,9 +320,11 @@ impl P2p {
     }
 
     /// Return a reference to the dnet subscriber
-    pub async fn dnet_subscribe(&self) -> Subscription<DnetEvent> {
-        self.dnet_sub.clone().subscribe().await
+    pub fn dnet_sub(&self) -> SubscriberPtr<DnetEvent> {
+        self.dnet_sub.clone()
     }
+
+    /// Send a dnet notification over the subscriber
     pub async fn dnet_notify(&self, event: DnetEvent) {
         self.dnet_sub.notify(event).await;
     }
