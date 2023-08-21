@@ -482,7 +482,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
             }
         },
         Error::RPCServerStopped,
-        ex.clone(),
+        ex,
     );
 
     // Signal handling for graceful termination.

@@ -229,7 +229,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
                 }
             },
             Error::P2PNetworkStopped,
-            ex.clone(),
+            ex,
         );
     } else {
         info!("Not starting consensus P2P network");

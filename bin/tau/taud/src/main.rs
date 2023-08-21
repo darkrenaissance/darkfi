@@ -362,7 +362,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
 
     p2p.clone().start(executor.clone()).await?;
 
-    info!(target: "taud", "Starting sync P2P network");
+    info!(target: "taud", "Starting P2P network");
     p2p.clone().start(executor.clone()).await?;
     StoppableTask::new().start(
         p2p.clone().run(executor.clone()),
@@ -426,7 +426,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
             }
         },
         Error::RPCServerStopped,
-        executor.clone(),
+        executor,
     );
 
     // Signal handling for graceful termination.

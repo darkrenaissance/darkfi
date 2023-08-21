@@ -774,7 +774,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
             }
         },
         Error::P2PNetworkStopped,
-        ex.clone(),
+        ex,
     );
 
     // TODO: I think this is not needed anymore
