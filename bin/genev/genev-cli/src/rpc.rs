@@ -40,7 +40,7 @@ impl Gen {
     pub async fn add(&self, event: GenEvent) -> Result<()> {
         let event = JsonValue::String(base64::encode(&serialize(&event)));
 
-        let req = JsonRequest::new("add", JsonValue::from(vec![event]));
+        let req = JsonRequest::new("add", vec![event]);
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);
@@ -49,7 +49,7 @@ impl Gen {
 
     /// Get current open tasks ids.
     pub async fn list(&self) -> Result<Vec<Event<GenEvent>>> {
-        let req = JsonRequest::new("list", JsonValue::from(vec![]));
+        let req = JsonRequest::new("list", vec![]);
         let rep = self.rpc_client.request(req).await?;
 
         debug!("reply: {:?}", rep);

@@ -20,6 +20,7 @@ use async_std::sync::Arc;
 use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
+use tinyjson::JsonValue;
 use url::Url;
 
 use darkfi::{
@@ -30,10 +31,11 @@ use darkfi::{
     },
     rpc::jsonrpc::JsonSubscriber,
     tx::Transaction,
+    util::encoding::base64,
     validator::ValidatorPtr,
     Result,
 };
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 
 /// Auxiliary [`Transaction`] wrapper structure used for messaging.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -110,7 +112,8 @@ impl ProtocolTx {
             match self.validator.write().await.append_tx(&tx_copy.0).await {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&tx_copy, &exclude_list).await;
-                    self.subscriber.notify(&[tx_copy]).await;
+                    let encoded_tx = JsonValue::String(base64::encode(&serialize(&tx_copy)));
+                    self.subscriber.notify(vec![encoded_tx]).await;
                 }
                 Err(e) => {
                     debug!(

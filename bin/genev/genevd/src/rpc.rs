@@ -104,7 +104,7 @@ impl JsonRpcInterface {
         }
 
         let b64 = params[0].get::<String>().unwrap();
-        let dec = base64::decode(&b64).unwrap();
+        let dec = base64::decode(b64).unwrap();
         let genevent: GenEvent = deserialize(&dec).unwrap();
 
         let event = Event {

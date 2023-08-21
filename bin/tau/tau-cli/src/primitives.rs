@@ -34,8 +34,6 @@ pub struct BaseTask {
 
 impl From<BaseTask> for TaskInfo {
     fn from(value: BaseTask) -> Self {
-        let due = if let Some(vd) = value.due { Some(Timestamp(vd)) } else { None };
-
         Self {
             ref_id: String::default(),
             workspace: String::default(),
@@ -46,7 +44,7 @@ impl From<BaseTask> for TaskInfo {
             owner: String::default(),
             assign: value.assign,
             project: value.project,
-            due,
+            due: value.due.map(Timestamp),
             rank: value.rank,
             created_at: Timestamp(u64::default()),
             state: String::default(),

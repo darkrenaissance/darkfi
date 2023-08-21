@@ -235,9 +235,9 @@ async fn main() -> Result<()> {
                 }
                 let base_task = task_from_cli(values)?;
                 for task in tasks.clone() {
-                    let res = tau.update(task.id.into(), base_task.clone()).await?;
+                    let res = tau.update(task.id, base_task.clone()).await?;
                     if res {
-                        let tsk = tau.get_task_by_id(task.id.into()).await?;
+                        let tsk = tau.get_task_by_id(task.id).await?;
                         print_task_info(tsk)?;
                     }
                 }
@@ -251,7 +251,7 @@ async fn main() -> Result<()> {
                 }
                 let state = State::Start;
                 for task in tasks {
-                    if tau.set_state(task.id.into(), &state).await? {
+                    if tau.set_state(task.id, &state).await? {
                         println!("Started task: {:?}", task.id);
                     }
                 }
@@ -265,7 +265,7 @@ async fn main() -> Result<()> {
                 }
                 let state = State::Open;
                 for task in tasks {
-                    if tau.set_state(task.id.into(), &state).await? {
+                    if tau.set_state(task.id, &state).await? {
                         println!("Opened task: {:?}", task.id);
                     }
                 }
@@ -279,7 +279,7 @@ async fn main() -> Result<()> {
                 }
                 let state = State::Pause;
                 for task in tasks {
-                    if tau.set_state(task.id.into(), &state).await? {
+                    if tau.set_state(task.id, &state).await? {
                         println!("Paused task: {:?}", task.id);
                     }
                 }
@@ -293,7 +293,7 @@ async fn main() -> Result<()> {
                 }
                 let state = State::Stop;
                 for task in tasks {
-                    if tau.set_state(task.id.into(), &state).await? {
+                    if tau.set_state(task.id, &state).await? {
                         println!("Stopped task: {}", task.id);
                     }
                 }
@@ -317,9 +317,9 @@ async fn main() -> Result<()> {
                         exit(1)
                     }
 
-                    let res = tau.set_comment(task.id.into(), comment.unwrap().trim()).await?;
+                    let res = tau.set_comment(task.id, comment.unwrap().trim()).await?;
                     if res {
-                        let tsk = tau.get_task_by_id(task.id.into()).await?;
+                        let tsk = tau.get_task_by_id(task.id).await?;
                         print_task_info(tsk)?;
                     }
                 }
@@ -328,7 +328,7 @@ async fn main() -> Result<()> {
 
             TauSubcommand::Info => {
                 for task in tasks {
-                    let task = tau.get_task_by_id(task.id.into()).await?;
+                    let task = tau.get_task_by_id(task.id).await?;
                     print_task_info(task)?;
                 }
                 Ok(())

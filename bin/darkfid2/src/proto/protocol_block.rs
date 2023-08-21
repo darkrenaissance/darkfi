@@ -20,6 +20,7 @@ use async_std::sync::Arc;
 use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
+use tinyjson::JsonValue;
 use url::Url;
 
 use darkfi::{
@@ -30,10 +31,11 @@ use darkfi::{
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
     rpc::jsonrpc::JsonSubscriber,
+    util::encoding::base64,
     validator::ValidatorPtr,
     Result,
 };
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 
 /// Auxiliary [`BlockInfo`] wrapper structure used for messaging.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -124,7 +126,8 @@ impl ProtocolBlock {
             match self.validator.write().await.append_block(&block_copy.0).await {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&block_copy, &exclude_list).await;
-                    self.subscriber.notify(&[block_copy]).await;
+                    let encoded_block = JsonValue::String(base64::encode(&serialize(&block_copy)));
+                    self.subscriber.notify(vec![encoded_block]).await;
                 }
                 Err(e) => {
                     debug!(

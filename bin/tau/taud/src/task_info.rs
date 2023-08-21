@@ -136,9 +136,7 @@ impl From<&JsonValue> for TaskEvent {
             action: map["action"].get::<String>().unwrap().clone(),
             author: map["author"].get::<String>().unwrap().clone(),
             content: map["content"].get::<String>().unwrap().clone(),
-            timestamp: Timestamp(
-                u64::from_str_radix(map["timestamp"].get::<String>().unwrap(), 10).unwrap(),
-            ),
+            timestamp: Timestamp(map["timestamp"].get::<String>().unwrap().parse::<u64>().unwrap()),
         }
     }
 }
@@ -172,9 +170,7 @@ impl From<JsonValue> for Comment {
         Comment {
             content: map["content"].get::<String>().unwrap().clone(),
             author: map["author"].get::<String>().unwrap().clone(),
-            timestamp: Timestamp(
-                u64::from_str_radix(map["timestamp"].get::<String>().unwrap(), 10).unwrap(),
-            ),
+            timestamp: Timestamp(map["timestamp"].get::<String>().unwrap().parse::<u64>().unwrap()),
         }
     }
 }
@@ -274,7 +270,7 @@ impl From<JsonValue> for TaskInfo {
                 None
             } else {
                 let u64_str = value["due"].get::<String>().unwrap();
-                Some(Timestamp(u64::from_str_radix(u64_str, 10).unwrap()))
+                Some(Timestamp(u64_str.parse::<u64>().unwrap()))
             }
         };
 
@@ -288,7 +284,7 @@ impl From<JsonValue> for TaskInfo {
 
         let created_at = {
             let u64_str = value["created_at"].get::<String>().unwrap();
-            Timestamp(u64::from_str_radix(u64_str, 10).unwrap())
+            Timestamp(u64_str.parse::<u64>().unwrap())
         };
 
         let events: Vec<TaskEvent> = events.iter().map(|x| x.into()).collect();

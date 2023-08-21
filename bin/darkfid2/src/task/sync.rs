@@ -16,8 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{util::async_util::sleep, Result};
+use darkfi::{
+    util::{async_util::sleep, encoding::base64},
+    Result,
+};
+use darkfi_serial::serialize;
 use log::{debug, info, warn};
+use tinyjson::JsonValue;
 
 use crate::{
     proto::{SyncRequest, SyncResponse},
@@ -70,7 +75,8 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
 
         // Notify subscriber
         for block in &response.blocks {
-            notif_sub.notify(&[block.clone()]).await;
+            let encoded_block = JsonValue::String(base64::encode(&serialize(block)));
+            notif_sub.notify(vec![encoded_block]).await;
         }
 
         let last_received = node.validator.read().await.blockchain.last()?;

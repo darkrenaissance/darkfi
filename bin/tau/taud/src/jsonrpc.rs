@@ -142,7 +142,7 @@ impl JsonRpcInterface {
 
         let due = match &params[5] {
             JsonValue::Null => None,
-            JsonValue::String(u64_str) => match u64::from_str_radix(&u64_str, 10) {
+            JsonValue::String(u64_str) => match u64_str.parse::<u64>() {
                 Ok(v) => Some(Timestamp(v)),
                 Err(e) => return Err(TaudError::InvalidData(e.to_string())),
             },
@@ -199,8 +199,8 @@ impl JsonRpcInterface {
 
         let mut new_task: TaskInfo = TaskInfo::new(
             self.workspace.lock().await.clone(),
-            &params[0].get::<String>().unwrap(),
-            &params[2].get::<String>().unwrap(),
+            params[0].get::<String>().unwrap(),
+            params[2].get::<String>().unwrap(),
             &self.nickname,
             due,
             rank,
@@ -278,8 +278,8 @@ impl JsonRpcInterface {
             self.load_task_by_id(*params[0].get::<f64>().unwrap() as u32, ws)?;
 
         if states.contains(&state.as_str()) {
-            task.set_state(&state);
-            set_event(&mut task, "state", &self.nickname, &state);
+            task.set_state(state);
+            set_event(&mut task, "state", &self.nickname, state);
         }
 
         self.notify_queue_sender.send(task).await.map_err(Error::from)?;
@@ -305,8 +305,8 @@ impl JsonRpcInterface {
         let ws = self.workspace.lock().await.clone();
         let mut task: TaskInfo = self.load_task_by_id(id, ws)?;
 
-        task.set_comment(Comment::new(&comment_content, &self.nickname));
-        set_event(&mut task, "comment", &self.nickname, &comment_content);
+        task.set_comment(Comment::new(comment_content, &self.nickname));
+        set_event(&mut task, "comment", &self.nickname, comment_content);
 
         self.notify_queue_sender.send(task).await.map_err(Error::from)?;
 
@@ -345,7 +345,7 @@ impl JsonRpcInterface {
         }
 
         let month = match params[0].get::<String>() {
-            Some(u64_str) => match u64::from_str_radix(u64_str, 10) {
+            Some(u64_str) => match u64_str.parse::<u64>() {
                 Ok(v) => Some(Timestamp(v)),
                 //Err(e) => return Err(TaudError::InvalidData(e.to_string())),
                 Err(_) => None,
@@ -496,16 +496,16 @@ impl JsonRpcInterface {
         if fields.contains_key("title") {
             let title = fields["title"].get::<String>().unwrap();
             if !title.is_empty() {
-                task.set_title(&title);
-                set_event(&mut task, "title", &self.nickname, &title);
+                task.set_title(title);
+                set_event(&mut task, "title", &self.nickname, title);
             }
         }
 
         if fields.contains_key("desc") {
             let desc = fields["desc"].get::<String>().unwrap();
             if !desc.is_empty() {
-                task.set_desc(&desc);
-                set_event(&mut task, "desc", &self.nickname, &desc);
+                task.set_desc(desc);
+                set_event(&mut task, "desc", &self.nickname, desc);
             }
         }
 
@@ -538,7 +538,7 @@ impl JsonRpcInterface {
                 match &fields["due"] {
                     JsonValue::Null => None,
                     JsonValue::String(ts_str) => {
-                        Some(Some(Timestamp(u64::from_str_radix(&ts_str, 10).unwrap())))
+                        Some(Some(Timestamp(ts_str.parse::<u64>().unwrap())))
                     }
                     _ => unreachable!(),
                 }

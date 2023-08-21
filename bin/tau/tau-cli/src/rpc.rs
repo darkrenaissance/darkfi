@@ -32,18 +32,13 @@ impl Tau {
 
     /// Add a new task.
     pub async fn add(&self, task: BaseTask) -> Result<u32> {
-        let mut params = vec![];
-        params.push(JsonValue::String(task.title.clone()));
-        params.push(JsonValue::Array(
-            task.tags.iter().map(|x| JsonValue::String(x.clone())).collect(),
-        ));
-        params.push(JsonValue::String(task.desc.unwrap_or("".to_string())));
-        params.push(JsonValue::Array(
-            task.assign.iter().map(|x| JsonValue::String(x.clone())).collect(),
-        ));
-        params.push(JsonValue::Array(
-            task.project.iter().map(|x| JsonValue::String(x.clone())).collect(),
-        ));
+        let mut params = vec![
+            JsonValue::String(task.title.clone()),
+            JsonValue::Array(task.tags.iter().map(|x| JsonValue::String(x.clone())).collect()),
+            JsonValue::String(task.desc.unwrap_or("".to_string())),
+            JsonValue::Array(task.assign.iter().map(|x| JsonValue::String(x.clone())).collect()),
+            JsonValue::Array(task.project.iter().map(|x| JsonValue::String(x.clone())).collect()),
+        ];
 
         let due = if let Some(num) = task.due {
             JsonValue::String(num.to_string())
@@ -80,18 +75,13 @@ impl Tau {
 
     /// Update existing task given it's ID and some params.
     pub async fn update(&self, id: u32, task: BaseTask) -> Result<bool> {
-        let mut params = vec![];
-        params.push(JsonValue::String(task.title.clone()));
-        params.push(JsonValue::Array(
-            task.tags.iter().map(|x| JsonValue::String(x.clone())).collect(),
-        ));
-        params.push(JsonValue::String(task.desc.unwrap_or("".to_string())));
-        params.push(JsonValue::Array(
-            task.assign.iter().map(|x| JsonValue::String(x.clone())).collect(),
-        ));
-        params.push(JsonValue::Array(
-            task.project.iter().map(|x| JsonValue::String(x.clone())).collect(),
-        ));
+        let mut params = vec![
+            JsonValue::String(task.title.clone()),
+            JsonValue::Array(task.tags.iter().map(|x| JsonValue::String(x.clone())).collect()),
+            JsonValue::String(task.desc.unwrap_or("".to_string())),
+            JsonValue::Array(task.assign.iter().map(|x| JsonValue::String(x.clone())).collect()),
+            JsonValue::Array(task.project.iter().map(|x| JsonValue::String(x.clone())).collect()),
+        ];
 
         let due = if let Some(num) = task.due {
             JsonValue::String(num.to_string())

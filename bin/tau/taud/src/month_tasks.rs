@@ -63,7 +63,7 @@ impl From<JsonValue> for MonthTasks {
     fn from(value: JsonValue) -> MonthTasks {
         let created_at = {
             let u64_str = value["created_at"].get::<String>().unwrap();
-            Timestamp(u64::from_str_radix(u64_str, 10).unwrap())
+            Timestamp(u64_str.parse::<u64>().unwrap())
         };
 
         let active_tks: Vec<String> = value["active_tks"]

@@ -20,6 +20,7 @@ use async_std::sync::Arc;
 use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
+use tinyjson::JsonValue;
 use url::Url;
 
 use darkfi::{
@@ -29,10 +30,11 @@ use darkfi::{
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
     rpc::jsonrpc::JsonSubscriber,
+    util::encoding::base64,
     validator::{consensus::Proposal, ValidatorPtr},
     Result,
 };
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 
 /// Auxiliary [`Proposal`] wrapper structure used for messaging.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -114,7 +116,8 @@ impl ProtocolProposal {
             match self.validator.write().await.consensus.append_proposal(&proposal_copy.0).await {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&proposal_copy, &exclude_list).await;
-                    self.subscriber.notify(&[proposal_copy]).await;
+                    let enc_prop = JsonValue::String(base64::encode(&serialize(&proposal_copy)));
+                    self.subscriber.notify(vec![enc_prop]).await;
                 }
                 Err(e) => {
                     debug!(

@@ -386,7 +386,7 @@ impl Faucetd {
         }
 
         let pubkey = params[0].get::<String>().unwrap();
-        let pubkey = match PublicKey::from_str(&pubkey) {
+        let pubkey = match PublicKey::from_str(pubkey) {
             Ok(v) => v,
             Err(e) => {
                 error!("challenge(): Failed parsing PublicKey from String: {}", e);
