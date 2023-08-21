@@ -201,7 +201,7 @@ from all channels without needing to flick through them.
 Nodes have knowledge of their peers, including the IP addresses of connected hosts.
 
 DarkFi supports the use of pluggable transports, including Tor and Nym, to provide network-level privacy. As long as there
-are live seed nodes configured to support a Tor or Nym connection, users can connect to `darkirc` and benefit from the
+are live seed nodes configured to support a Tor or Nym connection, users can connect to `ircd` and benefit from the
 protections offered by these protocols.
 
 Other approaches include connecting via a cloud server or VPN. Research the risks involved in these methods before connecting.
