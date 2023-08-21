@@ -41,12 +41,13 @@ use darkfi::{
         jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
     },
+    system::StoppableTask,
     util::{
         async_util::sleep,
         file::{load_file, save_file},
         path::{expand_path, get_config_path},
     },
-    Result,
+    Error, Result,
 };
 
 const CONFIG_FILE: &str = "lilith_config.toml";
@@ -393,14 +394,17 @@ async fn spawn_net(
     info!("Starting seed network node for \"{}\" on {:?}", name, addrs_str);
     p2p.clone().start(ex.clone()).await?;
     let name_ = name.clone();
-    let p2p_ = p2p.clone();
-    let ex_ = ex.clone();
-    ex.spawn(async move {
-        if let Err(e) = p2p_.run(ex_).await {
-            error!("Failed starting P2P network seed for \"{}\": {}", name_, e);
-        }
-    })
-    .detach();
+    StoppableTask::new().start(
+        p2p.clone().run(ex.clone()),
+        |res| async move {
+            match res {
+                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                Err(e) => error!("Failed starting P2P network seed for \"{}\": {}", name_, e),
+            }
+        },
+        Error::P2PNetworkStopped,
+        ex,
+    );
 
     let spawn = Spawn { name, p2p };
     Ok(spawn)
@@ -455,8 +459,18 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // JSON-RPC server
     info!("Starting JSON-RPC server on {}", args.rpc_listen);
-    let _ex = ex.clone();
-    ex.spawn(listen_and_serve(args.rpc_listen, lilith.clone(), _ex)).detach();
+    let rpc_task = StoppableTask::new();
+    rpc_task.clone().start(
+        listen_and_serve(args.rpc_listen, lilith.clone(), ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "lilith", "Failed starting sync JSON-RPC server: {}", e),
+            }
+        },
+        Error::RPCServerStopped,
+        ex.clone(),
+    );
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new()?;
@@ -465,6 +479,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // Save in-memory hosts to tsv file
     save_hosts(&expand_path(&args.hosts_file)?, &lilith.networks).await;
+
+    info!(target: "lilith", "Stopping JSON-RPC server...");
+    rpc_task.stop().await;
 
     // Cleanly stop p2p networks
     for spawn in &lilith.networks {
