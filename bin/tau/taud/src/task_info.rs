@@ -191,21 +191,21 @@ impl Comment {
 
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable, PartialEq)]
 pub struct TaskInfo {
-    pub(crate) ref_id: String,
-    pub(crate) workspace: String,
-    pub(crate) id: u32,
-    pub(crate) title: String,
-    tags: Vec<String>,
-    desc: String,
-    pub(crate) owner: String,
-    assign: Vec<String>,
-    project: Vec<String>,
-    due: Option<Timestamp>,
-    rank: Option<f32>,
-    created_at: Timestamp,
-    state: String,
-    pub(crate) events: Vec<TaskEvent>,
-    comments: Vec<Comment>,
+    pub ref_id: String,
+    pub workspace: String,
+    pub id: u32,
+    pub title: String,
+    pub tags: Vec<String>,
+    pub desc: String,
+    pub owner: String,
+    pub assign: Vec<String>,
+    pub project: Vec<String>,
+    pub due: Option<Timestamp>,
+    pub rank: Option<f32>,
+    pub created_at: Timestamp,
+    pub state: String,
+    pub events: Vec<TaskEvent>,
+    pub comments: Vec<Comment>,
 }
 
 impl From<&TaskInfo> for JsonValue {

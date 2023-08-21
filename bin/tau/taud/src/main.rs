@@ -56,19 +56,18 @@ use darkfi::{
     Error, Result,
 };
 
-mod error;
 mod jsonrpc;
-mod month_tasks;
 mod settings;
-mod task_info;
-mod util;
 
-use crate::{
+use taud::{
     error::{TaudError, TaudResult},
-    jsonrpc::JsonRpcInterface,
-    settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
     task_info::{TaskEvent, TaskInfo},
     util::pipe_write,
+};
+
+use crate::{
+    jsonrpc::JsonRpcInterface,
+    settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
 };
 
 fn get_workspaces(settings: &Args) -> Result<HashMap<String, ChaChaBox>> {

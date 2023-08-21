@@ -8,6 +8,14 @@ license = "AGPL-3.0-only"
 homepage = "https://dark.fi"
 repository = "https://github.com/darkrenaissance/darkfi"
 
+[lib]
+name = "taud"
+path = "src/lib.rs"
+
+[[bin]]
+name = "taud"
+path = "src/main.rs"
+
 [dependencies]
 darkfi = { path = "../../../", features = ["event-graph", "rpc", "bs58"]}
 darkfi-serial = { path = "../../../src/serial" }
