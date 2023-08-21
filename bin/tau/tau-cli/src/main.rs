@@ -42,7 +42,7 @@ use primitives::{task_from_cli, State, TaskEvent};
 use util::{due_as_timestamp, prompt_text};
 use view::{print_task_info, print_task_list};
 
-use crate::primitives::TaskInfo;
+use taud::task_info::TaskInfo;
 
 const DEFAULT_PATH: &str = "~/tau_exported_tasks";
 
@@ -375,7 +375,7 @@ async fn main() -> Result<()> {
                     Some(date) => {
                         let ts =
                             to_naivedate(date.clone())?.and_hms_opt(12, 0, 0).unwrap().timestamp();
-                        let tasks = tau.get_stop_tasks(Some(ts)).await?;
+                        let tasks = tau.get_stop_tasks(Some(ts.try_into().unwrap())).await?;
                         drawdown(date, tasks, assignee)?;
                     }
                     None => {

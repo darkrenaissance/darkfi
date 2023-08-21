@@ -5952,10 +5952,11 @@ dependencies = [
  "log",
  "prettytable-rs",
  "serde",
- "serde_json",
  "simplelog",
+ "taud",
  "term_grid",
  "textwrap 0.16.0",
+ "tinyjson",
  "url",
 ]
 

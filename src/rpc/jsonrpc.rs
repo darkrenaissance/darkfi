@@ -155,9 +155,13 @@ pub struct JsonRequest {
 impl JsonRequest {
     /// Create a new [`JsonRequest`] object with the given method and parameters.
     /// The request ID is chosen randomly.
-    pub fn new(method: &str, params: JsonValue) -> Self {
-        assert!(params.is_array());
-        Self { jsonrpc: "2.0", id: OsRng::gen(&mut OsRng), method: method.to_string(), params }
+    pub fn new(method: &str, params: Vec<JsonValue>) -> Self {
+        Self {
+            jsonrpc: "2.0",
+            id: OsRng::gen(&mut OsRng),
+            method: method.to_string(),
+            params: JsonValue::Array(params),
+        }
     }
 
     /// Convert the object into a JSON string

@@ -16,7 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashMap,
+    fmt,
+    path::{Path, PathBuf},
+    str::FromStr,
+};
 
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::debug;
@@ -28,6 +33,7 @@ use darkfi::{
         file::{load_json_file, save_json_file},
         time::Timestamp,
     },
+    Error,
 };
 
 use crate::{
@@ -36,12 +42,74 @@ use crate::{
     util::find_free_id,
 };
 
+pub enum State {
+    Open,
+    Start,
+    Pause,
+    Stop,
+}
+
+impl State {
+    pub const fn is_start(&self) -> bool {
+        matches!(*self, Self::Start)
+    }
+    pub const fn is_pause(&self) -> bool {
+        matches!(*self, Self::Pause)
+    }
+    pub const fn is_stop(&self) -> bool {
+        matches!(*self, Self::Stop)
+    }
+}
+
+impl fmt::Display for State {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            State::Open => write!(f, "open"),
+            State::Start => write!(f, "start"),
+            State::Stop => write!(f, "stop"),
+            State::Pause => write!(f, "pause"),
+        }
+    }
+}
+
+impl FromStr for State {
+    type Err = Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        let result = match s.to_lowercase().as_str() {
+            "open" => State::Open,
+            "stop" => State::Stop,
+            "start" => State::Start,
+            "pause" => State::Pause,
+            _ => return Err(Error::ParseFailed("unable to parse state")),
+        };
+        Ok(result)
+    }
+}
+
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable, PartialEq, Eq)]
 pub struct TaskEvent {
     pub action: String,
     pub author: String,
     pub content: String,
     pub timestamp: Timestamp,
+}
+
+impl std::fmt::Display for TaskEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "action: {}, timestamp: {}", self.action, self.timestamp)
+    }
+}
+
+impl Default for TaskEvent {
+    fn default() -> Self {
+        Self {
+            action: State::Open.to_string(),
+            author: "".to_string(),
+            content: "".to_string(),
+            timestamp: Timestamp::current_time(),
+        }
+    }
 }
 
 impl TaskEvent {
@@ -65,9 +133,9 @@ impl From<&JsonValue> for TaskEvent {
     fn from(value: &JsonValue) -> TaskEvent {
         let map = value.get::<HashMap<String, JsonValue>>().unwrap();
         TaskEvent {
-            action: map["action"].get().unwrap().clone(),
-            author: map["author"].get().unwrap().clone(),
-            content: map["content"].get().unwrap().clone(),
+            action: map["action"].get::<String>().unwrap().clone(),
+            author: map["author"].get::<String>().unwrap().clone(),
+            content: map["content"].get::<String>().unwrap().clone(),
             timestamp: Timestamp(
                 u64::from_str_radix(map["timestamp"].get::<String>().unwrap(), 10).unwrap(),
             ),
@@ -80,6 +148,12 @@ pub struct Comment {
     content: String,
     author: String,
     timestamp: Timestamp,
+}
+
+impl std::fmt::Display for Comment {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{} author: {}, content: {} ", self.timestamp, self.author, self.content)
+    }
 }
 
 impl From<Comment> for JsonValue {
@@ -96,8 +170,8 @@ impl From<JsonValue> for Comment {
     fn from(value: JsonValue) -> Comment {
         let map = value.get::<HashMap<String, JsonValue>>().unwrap();
         Comment {
-            content: map["content"].get().unwrap().clone(),
-            author: map["author"].get().unwrap().clone(),
+            content: map["content"].get::<String>().unwrap().clone(),
+            author: map["author"].get::<String>().unwrap().clone(),
             timestamp: Timestamp(
                 u64::from_str_radix(map["timestamp"].get::<String>().unwrap(), 10).unwrap(),
             ),
@@ -218,7 +292,7 @@ impl From<JsonValue> for TaskInfo {
         };
 
         let events: Vec<TaskEvent> = events.iter().map(|x| x.into()).collect();
-        let comments: Vec<Comment> = comments.iter().map(|x| (*x).into()).collect();
+        let comments: Vec<Comment> = comments.iter().map(|x| (*x).clone().into()).collect();
 
         TaskInfo {
             ref_id: value["ref_id"].get::<String>().unwrap().clone(),

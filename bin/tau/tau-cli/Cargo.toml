@@ -10,7 +10,8 @@ repository = "https://github.com/darkrenaissance/darkfi"
 
 [dependencies]
 libc = "0.2.147"
-darkfi = { path = "../../../", features = ["rpc"]}
+darkfi = {path = "../../../", features = ["rpc"]}
+taud = {path = "../taud"}
 
 # Async
 async-std = {version = "1.12.0", features = ["attributes"]}
@@ -29,4 +30,4 @@ url = "2.4.0"
 # Encoding and parsing
 clap = {version = "4.3.22", features = ["derive"]}
 serde = {version = "1.0.183", features = ["derive"]}
-serde_json = "1.0.105"
+tinyjson = "2.5.1"

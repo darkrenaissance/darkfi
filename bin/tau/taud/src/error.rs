@@ -60,7 +60,7 @@ pub fn to_json_result(res: TaudResult<JsonValue>, id: u16) -> JsonResult {
             TaudError::InvalidId => {
                 JsonError::new(ErrorCode::InvalidParams, Some("invalid task id".into()), id).into()
             }
-            TaudError::InvalidData(e) | TaudError::SerdeJsonError(e) => {
+            TaudError::InvalidData(e) | TaudError::JsonError(e) => {
                 JsonError::new(ErrorCode::InvalidParams, Some(e), id).into()
             }
             TaudError::InvalidDueTime => {

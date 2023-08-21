@@ -23,7 +23,6 @@ use std::{
 
 use chrono::{Datelike, Local, TimeZone, Utc};
 use log::error;
-use serde_json::Value;
 
 use darkfi::Result;
 
@@ -38,7 +37,8 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
         // Filter by state.
         _ if filter.contains("state:") => {
             let kv: Vec<&str> = filter.split(':').collect();
-            if let Some(state) = Value::from(kv[1]).as_str() {
+            //if let Some(state) = Value::from(kv[1]).as_str() {
+            if let Some(state) = Some(kv[1]) {
                 match state {
                     "open" => tasks.retain(|task| task.state == State::Open.to_string()),
                     "start" => tasks.retain(|task| task.state == State::Start.to_string()),
@@ -59,7 +59,8 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
         _ if filter.contains("month:") => {
             let kv: Vec<&str> = filter.split(':').collect();
             if kv.len() == 2 {
-                if let Some(value) = Value::from(kv[1]).as_str() {
+                //if let Some(value) = Value::from(kv[1]).as_str() {
+                if let Some(value) = Some(kv[1]) {
                     if value.len() != 4 || value.parse::<u32>().is_err() {
                         error!(
                             "Please provide month date as \"MMYY\" (e.g. 0922 for September 2022)"
@@ -71,7 +72,7 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
 
                     let year = year + (Utc::now().year() / 100) * 100;
                     tasks.retain(|task| {
-                        let date = task.created_at;
+                        let date = task.created_at.0;
                         let task_date = Utc.timestamp_nanos(date.try_into().unwrap()).date_naive();
                         task_date.month() == month && task_date.year() == year
                     })
@@ -89,7 +90,8 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
         _ if filter.contains("project:") => {
             let kv: Vec<&str> = filter.split(':').collect();
             if kv.len() == 2 {
-                if let Some(value) = Value::from(kv[1]).as_str() {
+                // OLD: if let Some(value) = Value::from(kv[1]).as_str() {
+                if let Some(value) = Some(kv[1]) {
                     if value.is_empty() {
                         tasks.retain(|task| task.project.is_empty())
                     } else {
@@ -128,7 +130,9 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
             };
 
             if kv.len() == 2 {
-                if let Some(value) = Value::from(kv[1]).as_str() {
+                // OLD: let Value::from(kv[1]).as_str();
+                let value = Some(kv[1]);
+                if let Some(value) = value {
                     if value.is_empty() {
                         tasks.retain(|task| task.due.is_none())
                     } else {
@@ -140,7 +144,7 @@ pub fn apply_filter(tasks: &mut Vec<TaskInfo>, filter: &str) {
                         };
 
                         tasks.retain(|task| {
-                            let date = task.due.unwrap_or(0);
+                            let date = if let Some(due) = task.due { due.0 } else { 0 };
                             let task_date =
                                 Utc.timestamp_nanos(date.try_into().unwrap()).date_naive();
 
@@ -181,25 +185,25 @@ pub fn no_filter_warn() {
     }
 }
 
-pub fn get_ids(filters: &mut Vec<String>) -> Result<Vec<u64>> {
+pub fn get_ids(filters: &mut Vec<String>) -> Result<Vec<u32>> {
     let mut vec_ids = vec![];
     let mut matching_id = String::new();
     if let Some(index) = filters.iter().position(|t| {
-        t.parse::<u64>().is_ok() || !t.contains(':') && (t.contains(',') || t.contains('-'))
+        t.parse::<u32>().is_ok() || !t.contains(':') && (t.contains(',') || t.contains('-'))
     }) {
         matching_id.push_str(&filters.remove(index));
     }
 
     match matching_id {
-        _ if matching_id.parse::<u64>().is_ok() => {
-            let id = matching_id.parse::<u64>().unwrap();
+        _ if matching_id.parse::<u32>().is_ok() => {
+            let id = matching_id.parse::<u32>().unwrap();
             vec_ids.push(id)
         }
         _ if !matching_id.contains(':') &&
             (matching_id.contains(',') || matching_id.contains('-')) =>
         {
             let num = matching_id.replace(&[',', '-'][..], "");
-            if num.parse::<u64>().is_err() {
+            if num.parse::<u32>().is_err() {
                 error!("Invalid ID number");
                 exit(1)
             }
@@ -209,17 +213,17 @@ pub fn get_ids(filters: &mut Vec<String>) -> Result<Vec<u64>> {
                     if id.contains('-') {
                         let range: Vec<&str> = id.split('-').collect();
                         let range =
-                            range[0].parse::<u64>().unwrap()..=range[1].parse::<u64>().unwrap();
+                            range[0].parse::<u32>().unwrap()..=range[1].parse::<u32>().unwrap();
                         for rid in range {
                             vec_ids.push(rid)
                         }
                     } else {
-                        vec_ids.push(id.parse::<u64>().unwrap())
+                        vec_ids.push(id.parse::<u32>().unwrap())
                     }
                 }
             } else if matching_id.contains('-') {
                 let range: Vec<&str> = matching_id.split('-').collect();
-                let range = range[0].parse::<u64>().unwrap()..=range[1].parse::<u64>().unwrap();
+                let range = range[0].parse::<u32>().unwrap()..=range[1].parse::<u32>().unwrap();
                 for rid in range {
                     vec_ids.push(rid)
                 }

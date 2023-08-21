@@ -39,6 +39,7 @@ use futures::{select, FutureExt};
 use log::{debug, error, info};
 use rand::rngs::OsRng;
 use structopt_toml::StructOptToml;
+use tinyjson::JsonValue;
 
 use darkfi::{
     async_daemonize,
@@ -218,31 +219,31 @@ async fn on_receive_task(
             // otherwise it's a modification.
             match TaskInfo::load(&task.ref_id, datastore_path) {
                 Ok(loaded_task) => {
-                    let loaded_events = loaded_task.events.0;
-                    let mut events = task.events.0.clone();
+                    let loaded_events = loaded_task.events;
+                    let mut events = task.events.clone();
                     events.retain(|ev| !loaded_events.contains(ev));
 
                     let file = "/tmp/tau_pipe";
                     let mut pipe_write = pipe_write(file)?;
                     let mut task_clone = task.clone();
-                    task_clone.events.0 = events;
+                    task_clone.events = events;
 
-                    let json = serde_json::to_string(&task_clone).unwrap();
-                    pipe_write.write_all(json.as_bytes())?;
+                    let json: JsonValue = (&task_clone).into();
+                    pipe_write.write_all(json.stringify().unwrap().as_bytes())?;
                 }
                 Err(_) => {
                     let file = "/tmp/tau_pipe";
                     let mut pipe_write = pipe_write(file)?;
                     let mut task_clone = task.clone();
 
-                    task_clone.events.0.push(TaskEvent::new(
+                    task_clone.events.push(TaskEvent::new(
                         "add_task".to_string(),
                         task_clone.owner.clone(),
                         "".to_string(),
                     ));
 
-                    let json = serde_json::to_string(&task_clone).unwrap();
-                    pipe_write.write_all(json.as_bytes())?;
+                    let json: JsonValue = (&task_clone).into();
+                    pipe_write.write_all(json.stringify().unwrap().as_bytes())?;
                 }
             }
         }
