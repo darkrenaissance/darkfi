@@ -27,11 +27,13 @@ use darkfi::{
     dht2::{Dht, MAX_CHUNK_SIZE},
     net::{self, P2p},
     util::async_util::{msleep, sleep},
-    Result,
+    system::StoppableTask,
+    Error, Result,
 };
 use rand::{rngs::OsRng, RngCore};
 use smol::Executor;
 use url::Url;
+use log::error;
 
 use super::{proto::ProtocolDht, Dhtd};
 
@@ -79,12 +81,17 @@ async fn dht_remote_get_insert_real(ex: Arc<Executor<'_>>) -> Result<()> {
             .await;
 
         p2p.clone().start(ex.clone()).await?;
-        let _p2p = p2p.clone();
-        let _ex = ex.clone();
-        ex.spawn(async move {
-            assert!(_p2p.run(_ex).await.is_ok());
-        })
-        .detach();
+        StoppableTask::new().start(
+            p2p.run(ex.clone()),
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                    Err(e) => error!("Failed starting P2P network: {}", e),
+                }
+            },
+            Error::P2PNetworkStopped,
+            ex,
+        );
 
         dhtds.push(dhtd);
 
