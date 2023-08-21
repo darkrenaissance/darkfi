@@ -19,14 +19,12 @@
 //! JSON-RPC 2.0 object definitions
 use std::collections::HashMap;
 
-use darkfi_serial::{serialize, Encodable};
 use rand::{rngs::OsRng, Rng};
 use tinyjson::JsonValue;
 
 use crate::{
     error::RpcError,
     system::{Subscriber, SubscriberPtr},
-    util::encoding::base64,
     Result,
 };
 
@@ -488,16 +486,8 @@ impl JsonSubscriber {
         Self { method, sub }
     }
 
-    /// Send a notification to the subscriber with the given params.
-    /// All the params will be serialized and then encoded with base64 encoding.
-    pub async fn notify<T: Encodable>(&self, raw_params: &[T]) {
-        let mut params = vec![];
-
-        // Serialize and encode all params
-        for raw_param in raw_params {
-            params.push(JsonValue::String(base64::encode(&serialize(raw_param))));
-        }
-
+    /// Send a notification to the subscriber with the given JSON object
+    pub async fn notify(&self, params: Vec<JsonValue>) {
         let notification = JsonNotification::new(self.method, JsonValue::Array(params));
         self.sub.notify(notification).await;
     }
