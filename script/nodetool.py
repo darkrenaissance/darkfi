@@ -12,7 +12,8 @@ class JsonRpc:
         await self.writer.wait_closed()
 
     async def _make_request(self, method, params):
-        ident = random.randint(0, 2**32)
+        ident = random.randint(0, 2**16)
+        print(ident)
         request = {
             "jsonrpc": "2.0",
             "method": method,
@@ -27,23 +28,31 @@ class JsonRpc:
         data = await self.reader.readline()
         message = data.decode()
         response = json.loads(message)
-        return response["result"]
+        print(response)
+        return "hello"
+        #return response["result"]
 
     async def ping(self):
         return await self._make_request("ping", [])
 
     async def dnet_switch(self, state):
-        return await self._make_request("dnet_switch", [state])
+        return await self._make_request("dnet.switch", [state])
 
-    async def dnet_info(self):
-        return await self._make_request("dnet_info", [])
+    async def dnet_subscribe_events(self):
+        return await self._make_request("dnet.subscribe_events", [])
+
+    #async def dnet_info(self):
+    #    return await self._make_request("dnet_info", [])
 
 async def main(argv):
     rpc = JsonRpc()
     await rpc.start("localhost", 26660)
     await rpc.dnet_switch(True)
+    await rpc.dnet_subscribe_events()
 
-    print(await rpc.dnet_info())
+    while True:
+        data = await rpc.reader.readline()
+        #print(await rpc.dnet_info())
 
     await rpc.dnet_switch(False)
     await rpc.stop()

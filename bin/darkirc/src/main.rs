@@ -40,7 +40,7 @@ use darkfi::{
         view::View,
     },
     net,
-    rpc::server::listen_and_serve,
+    rpc::{jsonrpc::JsonSubscriber, server::listen_and_serve},
     system::{Subscriber, SubscriberPtr},
     util::{async_util::sleep, file::save_json_file, path::expand_path, time::Timestamp},
     Result,
@@ -208,23 +208,46 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         })
         .await;
 
-    // Start
-    p2p.clone().start(executor.clone()).await?;
-
-    // Run
-    let executor_cloned = executor.clone();
-    executor_cloned.spawn(p2p.clone().run(executor.clone())).detach();
+    // Here we initialize the subscribers for dnetview streamed notifications
+    let json_subscriber = JsonSubscriber::new("dnet.subscribe_events");
+    let json_subscriber2 = json_subscriber.clone();
+    // Grab events from dnet subsystem
+    let dnet_subscriber = p2p.dnet_subscribe().await;
+    // Now join events coming from dnet_subscriber into json_subscriber
+    executor
+        .spawn(async move {
+            println!("here!!!!");
+            loop {
+                let event = dnet_subscriber.receive().await;
+                println!("event received!");
+                // Convert event to JSON
+                json_subscriber2.notify(&[event]).await;
+            }
+        })
+        .detach();
 
     ////////////////////
     // RPC interface setup
     ////////////////////
     let rpc_listen_addr = settings.rpc_listen.clone();
-    let rpc_interface =
-        Arc::new(JsonRpcInterface { addr: rpc_listen_addr.clone(), p2p: p2p.clone() });
+    let rpc_interface = Arc::new(JsonRpcInterface {
+        addr: rpc_listen_addr.clone(),
+        p2p: p2p.clone(),
+        dnet_subscriber: json_subscriber,
+    });
     let _ex = executor.clone();
     executor
         .spawn(async move { listen_and_serve(rpc_listen_addr, rpc_interface, _ex).await })
         .detach();
+
+    ////////////////////
+    // Start P2P network
+    ////////////////////
+    p2p.clone().start(executor.clone()).await?;
+
+    // Run
+    let executor_cloned = executor.clone();
+    executor_cloned.spawn(p2p.clone().run(executor.clone())).detach();
 
     ////////////////////
     // IRC server

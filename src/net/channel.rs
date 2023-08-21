@@ -17,7 +17,7 @@
  */
 
 use async_std::sync::{Arc, Mutex};
-use darkfi_serial::serialize;
+use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 use futures::{
     io::{ReadHalf, WriteHalf},
     AsyncReadExt,
@@ -28,10 +28,11 @@ use smol::Executor;
 use url::Url;
 
 use super::{
+    dnet::{dnet, DnetEvent, MessageInfo},
     message,
     message::Packet,
     message_subscriber::{MessageSubscription, MessageSubsystem},
-    p2p::{dnet, P2pPtr},
+    p2p::P2pPtr,
     session::{Session, SessionBitFlag, SessionWeakPtr},
     transport::PtStream,
 };
@@ -45,26 +46,15 @@ use crate::{
 pub type ChannelPtr = Arc<Channel>;
 
 /// Channel debug info
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ChannelInfo {
-    pub addr: Url,
+    pub address: Url,
     pub random_id: usize,
-    pub remote_node_id: String,
-    pub time: NanoTimestamp,
-    pub op: String,
-    pub cmd: String,
 }
 
 impl ChannelInfo {
-    fn new(addr: Url) -> Self {
-        Self {
-            addr,
-            random_id: OsRng.gen(),
-            remote_node_id: String::new(),
-            time: NanoTimestamp::current_time(),
-            op: String::new(),
-            cmd: String::new(),
-        }
+    fn new(address: Url) -> Self {
+        Self { address, random_id: OsRng.gen() }
     }
 }
 
@@ -74,8 +64,6 @@ pub struct Channel {
     reader: Mutex<ReadHalf<Box<dyn PtStream>>>,
     /// The writing half of the transport stream
     writer: Mutex<WriteHalf<Box<dyn PtStream>>>,
-    /// Socket address
-    address: Url,
     /// The message subsystem instance for this channel
     message_subsystem: MessageSubsystem,
     /// Subscriber listening for stop signal for closing this channel
@@ -87,12 +75,12 @@ pub struct Channel {
     /// Weak pointer to respective session
     session: SessionWeakPtr,
     /// Channel debug info
-    info: Mutex<ChannelInfo>,
+    info: ChannelInfo,
 }
 
 impl std::fmt::Debug for Channel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.address)
+        write!(f, "{}", self.address())
     }
 }
 
@@ -112,12 +100,11 @@ impl Channel {
         let message_subsystem = MessageSubsystem::new();
         Self::setup_dispatchers(&message_subsystem).await;
 
-        let info = Mutex::new(ChannelInfo::new(address.clone()));
+        let info = ChannelInfo::new(address.clone());
 
         Arc::new(Self {
             reader,
             writer,
-            address,
             message_subsystem,
             stop_subscriber: Subscriber::new(),
             receive_task: StoppableTask::new(),
@@ -225,11 +212,12 @@ impl Channel {
         let packet = Packet { command: M::NAME.to_string(), payload: serialize(message) };
 
         dnet!(self,
-            let mut info = self.info.lock().await;
-            info.time = NanoTimestamp::current_time();
-            info.op = "send".to_string();
-            info.cmd = packet.command.clone();
-            self.p2p().dnet_sub().notify(info.clone()).await;
+            let event = DnetEvent::SendMessage(MessageInfo {
+                chan: self.info.clone(),
+                cmd: packet.command.clone(),
+                time: NanoTimestamp::current_time(),
+            });
+            self.p2p().dnet_notify(event).await;
         );
 
         let stream = &mut *self.writer.lock().await;
@@ -311,7 +299,7 @@ impl Channel {
 
     /// Returns the local socket address
     pub fn address(&self) -> &Url {
-        &self.address
+        &self.info.address
     }
 
     /// Returns the inner [`MessageSubsystem`] reference

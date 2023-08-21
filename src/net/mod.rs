@@ -70,7 +70,6 @@ pub use channel::ChannelPtr;
 /// The channel store is a hashmap of channel addresses that we can use
 /// to add and remove channels or check whether a channel is already in
 /// the store.
-#[macro_use]
 pub mod p2p;
 pub use p2p::{P2p, P2pPtr};
 
@@ -117,3 +116,8 @@ pub mod connector;
 /// behaviour and is controlled by clients of this API.
 pub mod settings;
 pub use settings::Settings;
+
+/// Optional events based debug-notify subsystem. Off by default. Enabled in P2P instance,
+/// and then call `p2p.dnet_sub()` to start receiving events.
+#[macro_use]
+pub mod dnet;

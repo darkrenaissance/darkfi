@@ -29,7 +29,8 @@ use smol::Executor;
 use url::Url;
 
 use super::{
-    channel::{ChannelInfo, ChannelPtr},
+    channel::ChannelPtr,
+    dnet::DnetEvent,
     hosts::{Hosts, HostsPtr},
     message::Message,
     protocol::{protocol_registry::ProtocolRegistry, register_default_protocols},
@@ -80,7 +81,7 @@ pub struct P2p {
     /// Enable network debugging
     pub dnet_enabled: Mutex<bool>,
     /// The subscriber for which we can give dnet info over
-    dnet_sub: SubscriberPtr<ChannelInfo>,
+    dnet_sub: SubscriberPtr<DnetEvent>,
 }
 
 impl P2p {
@@ -319,18 +320,10 @@ impl P2p {
     }
 
     /// Return a reference to the dnet subscriber
-    pub fn dnet_sub(&self) -> SubscriberPtr<ChannelInfo> {
-        self.dnet_sub.clone()
+    pub async fn dnet_subscribe(&self) -> Subscription<DnetEvent> {
+        self.dnet_sub.clone().subscribe().await
+    }
+    pub async fn dnet_notify(&self, event: DnetEvent) {
+        self.dnet_sub.notify(event).await;
     }
 }
-
-macro_rules! dnet {
-    ($self:expr, $($code:tt)*) => {
-        {
-            if *$self.p2p().dnet_enabled.lock().await {
-                $($code)*
-            }
-        }
-    };
-}
-pub(crate) use dnet;

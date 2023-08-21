@@ -24,7 +24,7 @@ use url::Url;
 use darkfi::{
     net,
     rpc::{
-        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
+        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult, JsonSubscriber},
         server::RequestHandler,
     },
 };
@@ -32,6 +32,7 @@ use darkfi::{
 pub struct JsonRpcInterface {
     pub addr: Url,
     pub p2p: net::P2pPtr,
+    pub dnet_subscriber: JsonSubscriber,
 }
 
 #[async_trait]
@@ -41,7 +42,8 @@ impl RequestHandler for JsonRpcInterface {
 
         match req.method.as_str() {
             "ping" => self.pong(req.id, req.params).await,
-            "dnet_switch" => self.dnet_switch(req.id, req.params).await,
+            "dnet.switch" => self.dnet_switch(req.id, req.params).await,
+            "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
@@ -53,11 +55,11 @@ impl JsonRpcInterface {
     // By sending `true`, dnet will be activated, and by sending `false` dnet
     // will be deactivated. Returns `true` on success.
     //
-    // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
+    // --> {"jsonrpc": "2.0", "method": "dnet.switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
     async fn dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        if params.len() != 1 || params[0].is_bool() {
+        if params.len() != 1 || !params[0].is_bool() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
@@ -70,5 +72,21 @@ impl JsonRpcInterface {
         }
 
         JsonResponse::new(JsonValue::Boolean(true), id).into()
+    }
+
+    // RPCAPI:
+    // Initializes a subscription to p2p dnet events.
+    // Once a subscription is established, `darkirc` will send JSON-RPC notifications of
+    // new network events to the subscriber.
+    //
+    // --> {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [`event`]}
+    pub async fn dnet_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if !params.is_empty() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        self.dnet_subscriber.clone().into()
     }
 }
