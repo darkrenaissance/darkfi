@@ -37,11 +37,11 @@ struct RpcSrv {
 }
 
 impl RpcSrv {
-    async fn pong(&self, id: JsonValue, _params: JsonValue) -> JsonResult {
+    async fn pong(&self, id: u16, _params: JsonValue) -> JsonResult {
         JsonResponse::new(JsonValue::String("pong".to_string()), id).into()
     }
 
-    async fn kill(&self, id: JsonValue, _params: JsonValue) -> JsonResult {
+    async fn kill(&self, id: u16, _params: JsonValue) -> JsonResult {
         self.stop_sub.0.send(()).await.unwrap();
         JsonResponse::new(JsonValue::String("bye".to_string()), id).into()
     }
@@ -57,14 +57,7 @@ impl RequestHandler for RpcSrv {
         match method.as_str() {
             "ping" => return self.pong(req.id, params).await,
             "kill" => return self.kill(req.id, params).await,
-            _ => {
-                return JsonError::new(
-                    ErrorCode::MethodNotFound,
-                    None,
-                    *req.id.get::<f64>().unwrap() as u16,
-                )
-                .into()
-            }
+            _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
 }
@@ -90,13 +83,13 @@ async fn jsonrpc_reqrep() -> Result<()> {
     });
 
     let client = RpcClient::new(endpoint, None).await?;
-    let req = JsonRequest::new("ping", JsonValue::from(vec![]));
+    let req = JsonRequest::new("ping", vec![]);
     let rep = client.request(req).await?;
 
     let rep = String::try_from(rep).unwrap();
     assert_eq!(&rep, "pong");
 
-    let req = JsonRequest::new("kill", JsonValue::from(vec![]));
+    let req = JsonRequest::new("kill", vec![]);
     let rep = client.request(req).await?;
 
     let rep = String::try_from(rep).unwrap();

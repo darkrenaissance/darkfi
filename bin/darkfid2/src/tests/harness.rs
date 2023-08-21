@@ -22,7 +22,7 @@ use async_std::sync::Arc;
 use darkfi::{
     blockchain::{BlockInfo, Header},
     net::Settings,
-    rpc::jsonrpc::MethodSubscriber,
+    rpc::jsonrpc::JsonSubscriber,
     util::time::TimeKeeper,
     validator::{
         consensus::{next_block_reward, pid::slot_pid_output},
@@ -225,11 +225,10 @@ pub async fn generate_node(
     let validator = Validator::new(&sled_db, config.clone()).await?;
 
     let mut subscribers = HashMap::new();
-    subscribers.insert("blocks", MethodSubscriber::new("blockchain.subscribe_blocks".into()));
-    subscribers.insert("txs", MethodSubscriber::new("blockchain.subscribe_txs".into()));
+    subscribers.insert("blocks", JsonSubscriber::new("blockchain.subscribe_blocks"));
+    subscribers.insert("txs", JsonSubscriber::new("blockchain.subscribe_txs"));
     if consensus_settings.is_some() {
-        subscribers
-            .insert("proposals", MethodSubscriber::new("blockchain.subscribe_proposals".into()));
+        subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
     }
 
     let sync_p2p = spawn_sync_p2p(&sync_settings, &validator, &subscribers).await;
