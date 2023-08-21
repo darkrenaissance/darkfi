@@ -35,7 +35,7 @@ class JsonRpc:
             "jsonrpc": "2.0",
             "method": method,
             "params": params,
-            "id": ident
+            "id": ident,
         }
 
         message = json.dumps(request) + "\n"
@@ -43,11 +43,24 @@ class JsonRpc:
         await self.writer.drain()
 
         data = await self.reader.readline()
-        message = data.decode()
+        message = data.decode().strip()
         response = json.loads(message)
         print(response)
-        return "hello"
-        #return response["result"]
+        return response
+
+    async def _subscribe(self, method, params):
+        ident = random.randint(0, 2**16)
+        request = {
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+            "id": ident,
+        }
+
+        message = json.dumps(request) + "\n"
+        self.writer.write(message.encode())
+        await self.writer.drain()
+        print("Subscribed")
 
     async def ping(self):
         return await self._make_request("ping", [])
@@ -56,10 +69,7 @@ class JsonRpc:
         return await self._make_request("dnet.switch", [state])
 
     async def dnet_subscribe_events(self):
-        return await self._make_request("dnet.subscribe_events", [])
-
-    #async def dnet_info(self):
-    #    return await self._make_request("dnet_info", [])
+        return await self._subscribe("dnet.subscribe_events", [])
 
 
 async def main(argv):
@@ -70,7 +80,8 @@ async def main(argv):
 
     while True:
         data = await rpc.reader.readline()
-        #print(await rpc.dnet_info())
+        data = json.loads(data.decode().strip())
+        print(data)
 
     await rpc.dnet_switch(False)
     await rpc.stop()
