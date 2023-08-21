@@ -16,13 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fs::create_dir_all};
 
 use async_std::{
     stream::StreamExt,
     sync::{Arc, Mutex},
     task,
 };
+
 use chrono::{Duration, Utc};
 use irc::ClientSubMsg;
 use log::{debug, info};
@@ -72,7 +73,8 @@ async fn parse_signals(
     }
 }
 
-async fn reset_root(model: ModelPtr<PrivMsgEvent>) {
+// Removes events older than one week ,then sleeps untill next midnight
+async fn remove_old_events(model: ModelPtr<PrivMsgEvent>) -> Result<()> {
     loop {
         let now = Utc::now();
 
@@ -81,21 +83,24 @@ async fn reset_root(model: ModelPtr<PrivMsgEvent>) {
 
         let duration = next_midnight.signed_duration_since(now.naive_utc()).to_std().unwrap();
 
-        // make sure the root is the same as everyone else's at
-        // startup by passing today's date 00:00 AM UTC as
-        // timestamp to root_event
-        let now_datetime = now.date_naive().and_hms_opt(0, 0, 0).unwrap();
-        let timestamp = now_datetime.timestamp() as u64;
+        let week_old_datetime =
+            (now - Duration::weeks(1)).date_naive().and_hms_opt(0, 0, 0).unwrap();
+        let timestamp = week_old_datetime.timestamp() as u64;
 
-        model.lock().await.reset_root(Timestamp(timestamp));
+        model.lock().await.remove_old_events(Timestamp(timestamp))?;
+        info!("Removing old events");
 
-        sleep(duration.as_secs()).await;
-        info!("Resetting root");
+        sleep(duration.as_secs() + 1).await;
     }
 }
 
 async_daemonize!(realmain);
 async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
+    let datastore_path = expand_path(&settings.datastore)?;
+
+    // mkdir datastore_path if not exists
+    create_dir_all(datastore_path.clone())?;
+
     // Signal handling for config reload and graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new()?;
     let client_sub = Subscriber::new();
@@ -155,9 +160,28 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     ////////////////////
     let events_queue = EventsQueue::<PrivMsgEvent>::new();
     let model = Arc::new(Mutex::new(Model::new(events_queue.clone())));
-    let view = Arc::new(Mutex::new(View::new(events_queue)));
+    let view = Arc::new(Mutex::new(View::new(events_queue.clone())));
     let model_clone = model.clone();
     let model_clone2 = model.clone();
+
+    {
+        // Temporarly load model and check if the loaded head is not
+        // older than one week (already removed from other node's tree)
+        let now = Utc::now();
+
+        let now_datetime = (now - Duration::weeks(1)).date_naive().and_hms_opt(0, 0, 0).unwrap();
+        let timestamp = Timestamp(now_datetime.timestamp() as u64);
+
+        let mut loaded_model = Model::new(events_queue.clone());
+        loaded_model.load_tree(&datastore_path)?;
+
+        if loaded_model
+            .get_event(&loaded_model.get_head_hash())
+            .is_some_and(|event| event.timestamp >= timestamp)
+        {
+            model.lock().await.load_tree(&datastore_path)?;
+        }
+    }
 
     ////////////////////
     // P2p setup
@@ -207,20 +231,27 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     ////////////////////
 
     // New irc server
-    let irc_server =
-        IrcServer::new(settings.clone(), p2p.clone(), model_clone, view.clone(), client_sub)
-            .await?;
+    let irc_server = IrcServer::new(
+        settings.clone(),
+        p2p.clone(),
+        model_clone.clone(),
+        view.clone(),
+        client_sub,
+    )
+    .await?;
 
     // Start the irc server and detach it
     let executor_cloned = executor.clone();
     executor.spawn(async move { irc_server.start(executor_cloned).await }).detach();
 
     // Reset root task
-    executor.spawn(async move { reset_root(model_clone2).await }).detach();
+    executor.spawn(async move { remove_old_events(model_clone2).await }).detach();
 
     // Wait for termination signal
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
+
+    model_clone.lock().await.save_tree(&datastore_path)?;
 
     // stop p2p
     p2p2.stop().await;

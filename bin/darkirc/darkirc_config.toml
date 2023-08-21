@@ -13,8 +13,18 @@
 ## TLS secret key path if IRC acceptor uses TLS (optional)
 #irc_tls_secret = "/etc/letsencrypt/ircd/privkey.pem"
 
+## Sets Datastore Path
+#datastore = "~/.darkirc"
+
 ## List of channels to autojoin for new client connections
-autojoin = ["#dev", "#memes", "#philosophy", "#markets", "#math", "#random"]
+autojoin = [
+    "#dev",
+    "#memes",
+    "#philosophy",
+    "#markets",
+    "#math",
+    "#random",
+]
 
 ## Daemon specific password (optional, but once you configure it,
 ## it is required from the client side)
@@ -26,7 +36,7 @@ autojoin = ["#dev", "#memes", "#philosophy", "#markets", "#math", "#random"]
 #inbound = ["tcp+tls://0.0.0.0:26661", "tcp+tls://[::]:26661"]
 
 ## Connection slots
-outbound_connections=8
+outbound_connections = 8
 
 ## Addresses we want to advertise to peers (optional)
 ## These should be reachable externally
