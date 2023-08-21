@@ -42,6 +42,7 @@ use darkfi::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         server::{listen_and_serve, RequestHandler},
     },
+    system::StoppableTask,
     util::path::expand_path,
     Error, Result,
 };
@@ -297,7 +298,7 @@ impl Fud {
 /// Background task that receives file fetch requests and tries to
 /// fetch objects from the network using the routing table.
 /// TODO: This can be optimised a lot for connection reuse, etc.
-async fn fetch_file_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) {
+async fn fetch_file_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<()> {
     info!("Started background file fetch task");
     loop {
         let (file_hash, _) = fud.file_fetch_rx.recv().await.unwrap();
@@ -401,7 +402,7 @@ async fn fetch_file_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) {
 /// Background task that receives chunk fetch requests and tries to
 /// fetch objects from the network using the routing table.
 /// TODO: This can be optimised a lot for connection reuse, etc.
-async fn fetch_chunk_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) {
+async fn fetch_chunk_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<()> {
     info!("Started background chunk fetch task");
     loop {
         let (chunk_hash, _) = fud.chunk_fetch_rx.recv().await.unwrap();
@@ -545,28 +546,84 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         chunk_fetch_tx,
         chunk_fetch_rx,
     });
-    let _fud = fud.clone();
-    ex.spawn(fetch_file_task(fud.clone(), ex.clone())).detach();
-    ex.spawn(fetch_chunk_task(fud.clone(), ex.clone())).detach();
 
-    info!("Starting JSON-RPC server on {}", args.rpc_listen);
-    let _ex = ex.clone();
-    ex.spawn(listen_and_serve(args.rpc_listen, fud, _ex)).detach();
+    info!(target: "fud", "Starting fetch file task");
+    let file_task = StoppableTask::new();
+    file_task.clone().start(
+        fetch_file_task(fud.clone(), ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "fud", "Failed starting fetch file task: {}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
+
+    info!(target: "fud", "Starting fetch chunk task");
+    let chunk_task = StoppableTask::new();
+    chunk_task.clone().start(
+        fetch_chunk_task(fud.clone(), ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "fud", "Failed starting fetch chunk task: {}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
+
+    info!(target: "fud", "Starting JSON-RPC server on {}", args.rpc_listen);
+    let rpc_task = StoppableTask::new();
+    rpc_task.clone().start(
+        listen_and_serve(args.rpc_listen, fud.clone(), ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "fud", "Failed starting sync JSON-RPC server: {}", e),
+            }
+        },
+        Error::RPCServerStopped,
+        ex.clone(),
+    );
 
     info!("Starting P2P protocols");
+    let fud_ = fud.clone();
     let registry = p2p.protocol_registry();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
-            let _fud = _fud.clone();
-            async move { ProtocolFud::init(_fud, channel, p2p).await.unwrap() }
+            let fud_ = fud_.clone();
+            async move { ProtocolFud::init(fud_, channel, p2p).await.unwrap() }
         })
         .await;
     p2p.clone().start(ex.clone()).await?;
+    StoppableTask::new().start(
+        p2p.clone().run(ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "fud", "Failed starting P2P network: {}", e),
+            }
+        },
+        Error::P2PNetworkStopped,
+        ex,
+    );
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new()?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
+
+    info!(target: "fud", "Stopping fetch file task...");
+    file_task.stop().await;
+
+    info!(target: "fud", "Stopping fetch chunk task...");
+    chunk_task.stop().await;
+
+    info!(target: "fud", "Stopping JSON-RPC server...");
+    rpc_task.stop().await;
 
     info!("Stopping P2P network");
     p2p.stop().await;
