@@ -139,7 +139,7 @@ struct Lilith {
 impl Lilith {
     /// Internal task to run a periodic purge of unreachable hosts
     /// for a specific P2P network.
-    async fn periodic_purge(name: String, p2p: P2pPtr, ex: Arc<Executor<'_>>) {
+    async fn periodic_purge(name: String, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
         info!(target: "lilith", "Starting periodic host purge task for \"{}\"", name);
         loop {
             // We'll pick up to 10 hosts every minute and try to connect to
@@ -452,9 +452,22 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // Set up main daemon and background tasks
     let lilith = Arc::new(Lilith { networks });
+    let mut periodic_tasks = HashMap::new();
     for network in &lilith.networks {
         let name = network.name.clone();
-        ex.spawn(Lilith::periodic_purge(name, network.p2p.clone(), ex.clone())).detach();
+        let task = StoppableTask::new();
+        task.clone().start(
+            Lilith::periodic_purge(name.clone(), network.p2p.clone(), ex.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "lilith", "Failed starting periodic task for \"{}\": {}", name, e),
+                }
+            },
+            Error::P2PNetworkStopped,
+            ex.clone(),
+        );
+        periodic_tasks.insert(network.name.clone(), task);
     }
 
     // JSON-RPC server
@@ -485,6 +498,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // Cleanly stop p2p networks
     for spawn in &lilith.networks {
+        info!(target: "lilith", "Stopping \"{}\" periodic task", spawn.name);
+        periodic_tasks.get(&spawn.name).unwrap().stop().await;
         info!(target: "lilith", "Stopping \"{}\" P2P", spawn.name);
         spawn.p2p.stop().await;
     }
