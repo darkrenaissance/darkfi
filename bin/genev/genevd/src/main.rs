@@ -130,7 +130,7 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
         |res| async {
             match res {
                 Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "genevd", "Failed starting sync P2P network: {}", e),
+                Err(e) => error!(target: "genevd", "Failed starting P2P network: {}", e),
             }
         },
         Error::P2PNetworkStopped,
@@ -173,7 +173,7 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
         |res| async {
             match res {
                 Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "genevd", "Failed starting sync JSON-RPC server: {}", e),
+                Err(e) => error!(target: "genevd", "Failed starting JSON-RPC server: {}", e),
             }
         },
         Error::RPCServerStopped,

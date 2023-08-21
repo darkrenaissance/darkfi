@@ -478,7 +478,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         |res| async {
             match res {
                 Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "lilith", "Failed starting sync JSON-RPC server: {}", e),
+                Err(e) => error!(target: "lilith", "Failed starting JSON-RPC server: {}", e),
             }
         },
         Error::RPCServerStopped,
