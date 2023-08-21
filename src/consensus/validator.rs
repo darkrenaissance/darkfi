@@ -335,11 +335,11 @@ impl ValidatorState {
         info!(target: "consensus::validator", "purge_pending_txs(): Removing {} erroneous transactions...", erroneous_txs.len());
         self.blockchain.remove_pending_txs(&erroneous_txs)?;
 
-        let err_txs_subscriber = self.subscribers.get("err_txs").unwrap();
+        let _err_txs_subscriber = self.subscribers.get("err_txs").unwrap();
         for err_tx in erroneous_txs {
-            let tx_hash = blake3::hash(&serialize(&err_tx)).to_hex().as_str().to_string();
+            let _tx_hash = blake3::hash(&serialize(&err_tx)).to_hex().as_str().to_string();
             info!(target: "consensus::validator", "purge_pending_txs(): Sending notification about erroneous transaction");
-            err_txs_subscriber.notify(&[tx_hash]).await;
+            // TODO: err_txs_subscriber.notify(&[tx_hash]).await;
         }
 
         Ok(())
@@ -780,7 +780,7 @@ impl ValidatorState {
         };
         */
 
-        let blocks_subscriber = self.subscribers.get("blocks").unwrap().clone();
+        let _blocks_subscriber = self.subscribers.get("blocks").unwrap().clone();
 
         // Validating state transitions
         for proposal in &finalized {
@@ -809,7 +809,7 @@ impl ValidatorState {
             }
 
             info!(target: "consensus::validator", "consensus: Sending notification about finalized block");
-            blocks_subscriber.notify(&[proposal.clone()]).await;
+            // TODO: blocks_subscriber.notify(&[proposal.clone()]).await;
         }
 
         // Setting leaders history to last proposal leaders count
@@ -914,9 +914,9 @@ impl ValidatorState {
         info!(target: "consensus::validator", "receive_finalized_block(): Executing state transitions");
         self.receive_blocks(&[block.clone()]).await?;
 
-        let blocks_subscriber = self.subscribers.get("blocks").unwrap();
+        let _blocks_subscriber = self.subscribers.get("blocks").unwrap();
         info!(target: "consensus::validator", "consensus: Sending notification about finalized block");
-        blocks_subscriber.notify(&[block.clone()]).await;
+        // TODO: blocks_subscriber.notify(&[block.clone()]).await;
 
         info!(target: "consensus::validator", "receive_finalized_block(): Removing block transactions from pending txs store");
         self.blockchain.remove_pending_txs(&block.txs)?;
@@ -961,10 +961,10 @@ impl ValidatorState {
         info!(target: "consensus::validator", "receive_sync_blocks(): Executing state transitions");
         self.receive_blocks(&new_blocks[..]).await?;
 
-        let blocks_subscriber = self.subscribers.get("blocks").unwrap();
-        for block in new_blocks {
+        let _blocks_subscriber = self.subscribers.get("blocks").unwrap();
+        for _block in new_blocks {
             info!(target: "consensus::validator", "consensus: Sending notification about finalized block");
-            blocks_subscriber.notify(&[block]).await;
+            // TODO: blocks_subscriber.notify(&[block]).await;
         }
 
         Ok(())
