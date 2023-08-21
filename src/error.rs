@@ -305,6 +305,9 @@ pub enum Error {
     #[error("Erroneous transactions detected")]
     ErroneousTxsDetected,
 
+    #[error("Proposal task stopped")]
+    ProposalTaskStopped,
+
     // ===============
     // Database errors
     // ===============

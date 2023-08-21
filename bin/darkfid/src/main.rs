@@ -48,6 +48,7 @@ use darkfi::{
         jsonrpc::{ErrorCode::MethodNotFound, JsonError, JsonRequest, JsonResult},
         server::{listen_and_serve, RequestHandler},
     },
+    system::StoppableTask,
     util::path::expand_path,
     wallet::{WalletDb, WalletPtr},
     Error, Result,
@@ -430,19 +431,32 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");
-    let _ex = ex.clone();
-    ex.spawn(listen_and_serve(args.rpc_listen, darkfid.clone(), _ex)).detach();
+    let rpc_task = StoppableTask::new();
+    rpc_task.clone().start(
+        listen_and_serve(args.rpc_listen, darkfid.clone(), ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "darkfid", "Failed starting sync JSON-RPC server: {}", e),
+            }
+        },
+        Error::RPCServerStopped,
+        ex.clone(),
+    );
 
     info!("Starting sync P2P network");
     sync_p2p.clone().unwrap().start(ex.clone()).await?;
-    let _ex = ex.clone();
-    let _sync_p2p = sync_p2p.clone();
-    ex.spawn(async move {
-        if let Err(e) = _sync_p2p.unwrap().run(_ex).await {
-            error!("Failed starting sync P2P network: {}", e);
-        }
-    })
-    .detach();
+    StoppableTask::new().start(
+        sync_p2p.clone().unwrap().run(ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "darkfid", "Failed starting sync P2P network: {}", e),
+            }
+        },
+        Error::P2PNetworkStopped,
+        ex.clone(),
+    );
 
     // TODO: I think this is not necessary anymore
     //info!("Waiting for sync P2P outbound connections");
@@ -454,35 +468,65 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     }
 
     // Consensus protocol
-    if args.consensus && *darkfid.synced.lock().await {
+    let proposal_task = if args.consensus && *darkfid.synced.lock().await {
         info!("Starting consensus P2P network");
-        consensus_p2p.clone().unwrap().start(ex.clone()).await?;
-        let _ex = ex.clone();
-        let _consensus_p2p = consensus_p2p.clone();
-        ex.spawn(async move {
-            if let Err(e) = _consensus_p2p.unwrap().run(_ex).await {
-                error!("Failed starting consensus P2P network: {}", e);
-            }
-        })
-        .detach();
+        let consensus_p2p = consensus_p2p.clone().unwrap();
+        consensus_p2p.clone().start(ex.clone()).await?;
+        StoppableTask::new().start(
+            consensus_p2p.clone().run(ex.clone()),
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                    Err(e) => {
+                        error!(target: "darkfid", "Failed starting consensus P2P network: {}", e)
+                    }
+                }
+            },
+            Error::P2PNetworkStopped,
+            ex.clone(),
+        );
 
         // TODO: I think this is not necessary anymore
         //info!("Waiting for consensus P2P outbound connections");
         //consensus_p2p.clone().unwrap().wait_for_outbound(ex.clone()).await?;
 
         info!("Starting consensus protocol task");
-        let _ex = ex.clone();
-        ex.spawn(proposal_task(consensus_p2p.unwrap(), sync_p2p.unwrap(), state, _ex)).detach();
+        let task = StoppableTask::new();
+        task.clone().start(
+            proposal_task(consensus_p2p.clone(), sync_p2p.clone().unwrap(), state, ex.clone()),
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::ProposalTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid", "Failed starting proposal task: {}", e),
+                }
+            },
+            Error::ProposalTaskStopped,
+            ex.clone(),
+        );
+        Some(task)
     } else {
         info!("Not starting consensus P2P network");
-    }
+        None
+    };
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new()?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 
-    // TODO: STOP P2P NETS
+    info!(target: "darkfid", "Stopping JSON-RPC server...");
+    rpc_task.stop().await;
+
+    info!(target: "darkfid", "Stopping syncing P2P network...");
+    sync_p2p.clone().unwrap().stop().await;
+
+    if let Some(task) = proposal_task {
+        info!(target: "darkfid", "Stopping proposal task...");
+        task.stop().await;
+
+        info!(target: "darkfid", "Stopping consensus P2P network...");
+        consensus_p2p.unwrap().stop().await;
+    }
 
     info!("Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;
