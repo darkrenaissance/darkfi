@@ -23,12 +23,13 @@ use darkfi::{
     blockchain::{BlockInfo, Header},
     net::Settings,
     rpc::jsonrpc::JsonSubscriber,
+    system::StoppableTask,
     util::time::TimeKeeper,
     validator::{
         consensus::{next_block_reward, pid::slot_pid_output},
         Validator, ValidatorConfig,
     },
-    Result,
+    Error, Result,
 };
 use darkfi_contract_test_harness::{vks, Holder, TestHarness};
 use darkfi_sdk::{
@@ -240,23 +241,34 @@ pub async fn generate_node(
     let node = Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator, subscribers).await;
 
     sync_p2p.clone().start(ex.clone()).await?;
-    let _ex = ex.clone();
-    ex.spawn(async move {
-        if let Err(e) = sync_p2p.run(_ex).await {
-            error!("Failed starting sync P2P network: {}", e);
-        }
-    })
-    .detach();
+    StoppableTask::new().start(
+        sync_p2p.run(ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                Err(e) => error!("Failed starting sync P2P network: {}", e),
+            }
+        },
+        Error::P2PNetworkStopped,
+        ex.clone(),
+    );
 
     if consensus_settings.is_some() {
-        consensus_p2p.clone().unwrap().start(ex.clone()).await?;
-        let _ex = ex.clone();
-        ex.spawn(async move {
-            if let Err(e) = consensus_p2p.unwrap().run(_ex).await {
-                error!("Failed starting consensus P2P network: {}", e);
-            }
-        })
-        .detach();
+        let consensus_p2p = consensus_p2p.unwrap();
+        consensus_p2p.clone().start(ex.clone()).await?;
+        StoppableTask::new().start(
+            consensus_p2p.run(ex.clone()),
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                    Err(e) => {
+                        error!("Failed starting consensus P2P network: {}", e)
+                    }
+                }
+            },
+            Error::P2PNetworkStopped,
+            ex.clone(),
+        );
     }
 
     if !skip_sync {

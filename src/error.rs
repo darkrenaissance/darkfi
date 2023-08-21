@@ -180,6 +180,9 @@ pub enum Error {
     #[error("Node is not connected to other nodes.")]
     NetworkNotConnected,
 
+    #[error("P2P network stopped")]
+    P2PNetworkStopped,
+
     // =============
     // Crypto errors
     // =============
@@ -238,6 +241,9 @@ pub enum Error {
     #[cfg(feature = "rpc")]
     #[error(transparent)]
     RpcServerError(RpcError),
+
+    #[error("JSON-RPC server stopped")]
+    RPCServerStopped,
 
     #[error("Unexpected JSON-RPC data received: {0}")]
     UnexpectedJsonRpc(String),

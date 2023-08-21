@@ -29,9 +29,10 @@ use darkfi::{
     cli_desc,
     net::{settings::SettingsOpt, P2pPtr},
     rpc::{jsonrpc::JsonSubscriber, server::listen_and_serve},
+    system::StoppableTask,
     util::time::TimeKeeper,
     validator::{Validator, ValidatorConfig, ValidatorPtr},
-    Result,
+    Error, Result,
 };
 use darkfi_contract_test_harness::vks;
 
@@ -181,32 +182,55 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
 
     // JSON-RPC server
     info!(target: "darkfid", "Starting JSON-RPC server");
-    let _ex = ex.clone();
-    ex.spawn(listen_and_serve(args.rpc_listen, darkfid.clone(), _ex)).detach();
+    // Here we create a task variable so we can manually close the
+    // task later. P2P tasks don't need this since it has its own
+    // stop() function to shut down, also terminating the task we
+    // created for it.
+    let rpc_task = StoppableTask::new();
+    rpc_task.clone().start(
+        listen_and_serve(args.rpc_listen, darkfid.clone(), ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "darkfid", "Failed starting sync JSON-RPC server: {}", e),
+            }
+        },
+        Error::RPCServerStopped,
+        ex.clone(),
+    );
 
     info!(target: "darkfid", "Starting sync P2P network");
     sync_p2p.clone().start(ex.clone()).await?;
-    let _ex = ex.clone();
-    let _sync_p2p = sync_p2p.clone();
-    ex.spawn(async move {
-        if let Err(e) = _sync_p2p.run(_ex).await {
-            error!(target: "darkfid", "Failed starting sync P2P network: {}", e);
-        }
-    })
-    .detach();
+    StoppableTask::new().start(
+        sync_p2p.clone().run(ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "darkfid", "Failed starting sync P2P network: {}", e),
+            }
+        },
+        Error::P2PNetworkStopped,
+        ex.clone(),
+    );
 
     // Consensus protocol
     if args.consensus {
         info!("Starting consensus P2P network");
-        consensus_p2p.clone().unwrap().start(ex.clone()).await?;
-        let _ex = ex.clone();
-        let _consensus_p2p = consensus_p2p.clone();
-        ex.spawn(async move {
-            if let Err(e) = _consensus_p2p.unwrap().run(_ex).await {
-                error!("Failed starting consensus P2P network: {}", e);
-            }
-        })
-        .detach();
+        let consensus_p2p = consensus_p2p.clone().unwrap();
+        consensus_p2p.clone().start(ex.clone()).await?;
+        StoppableTask::new().start(
+            consensus_p2p.run(ex.clone()),
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                    Err(e) => {
+                        error!(target: "darkfid", "Failed starting consensus P2P network: {}", e)
+                    }
+                }
+            },
+            Error::P2PNetworkStopped,
+            ex.clone(),
+        );
     } else {
         info!("Not starting consensus P2P network");
     }
@@ -225,6 +249,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let (signals_handler, signals_task) = SignalHandler::new()?;
     signals_handler.wait_termination(signals_task).await?;
     info!(target: "darkfid", "Caught termination signal, cleaning up and exiting...");
+
+    info!(target: "darkfid", "Stopping JSON-RPC server...");
+    rpc_task.stop().await;
 
     info!(target: "darkfid", "Stopping syncing P2P network...");
     sync_p2p.stop().await;
