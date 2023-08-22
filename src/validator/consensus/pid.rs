@@ -114,3 +114,31 @@ fn calculate_sigmas(f: Float10, total_tokens: Float10) -> (pallas::Base, pallas:
 
     (sigma1, sigma2)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::calculate_f;
+    use super::Slot;
+    // use super::Float10;
+    use super::MIN_F;
+    use super::MAX_F;
+
+    #[test]
+    fn f_is_bounded() {
+        // Method: calculate_f takes a slot previous_slot as an argument. 
+        // This slot's f value is summed with other low numbers to produce f.
+        // By setting the previous_slot's f to a very large value, we can check
+        // that calculate_f is properly bounding the result of the sum.
+        let mut slot = Slot::default();
+        slot.pid.f = -1_000_000.0;
+        let (f,_) = calculate_f(&slot, 0);
+        assert!(f >= *MIN_F);
+        assert!(f <= *MAX_F);
+
+        let mut slot = Slot::default();
+        slot.pid.f = 1_000_000.0;
+        let (f,_) = calculate_f(&slot, 0);
+        assert!(f >= *MIN_F);
+        assert!(f <= *MAX_F);
+    }
+}
