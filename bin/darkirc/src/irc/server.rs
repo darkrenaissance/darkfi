@@ -33,7 +33,7 @@ use darkfi::{
         view::ViewPtr,
     },
     net::P2pPtr,
-    system::SubscriberPtr,
+    system::{StoppableTask, SubscriberPtr},
     util::{path::expand_path, time::Timestamp},
     Error, Result,
 };
@@ -85,31 +85,45 @@ impl IrcServer {
         let (msg_notifier, msg_recv) = smol::channel::unbounded();
 
         // Listen to msgs from clients
-        executor
-            .clone()
-            .spawn(Self::listen_to_msgs(
+        StoppableTask::new().start(
+            Self::listen_to_msgs(
                 self.p2p.clone(),
                 self.model.clone(),
                 self.seen.clone(),
                 msg_recv,
                 self.missed_events.clone(),
                 self.clients_subscriptions.clone(),
-            ))
-            .detach();
+            ),
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkirc::irc::server::start", "Failed starting listen to msgs: {}", e),
+                }
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
 
         // Listen to msgs from View
-        executor
-            .clone()
-            .spawn(Self::listen_to_view(
+        StoppableTask::new().start(
+            Self::listen_to_view(
                 self.view.clone(),
                 self.seen.clone(),
                 self.missed_events.clone(),
                 self.clients_subscriptions.clone(),
-            ))
-            .detach();
+            ),
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkirc::irc::server::start", "Failed starting listen to view: {}", e),
+                }
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
 
         // Start listening for new connections
-        self.listen(msg_notifier, executor.clone()).await?;
+        self.listen(msg_notifier, executor).await?;
 
         Ok(())
     }
@@ -267,11 +281,18 @@ impl IrcServer {
         );
 
         // Start listening and detach
-        executor
-            .spawn(async move {
-                client.listen().await;
-            })
-            .detach();
+        StoppableTask::new().start(
+            // Weird hack to prevent lifetimes hell
+            async move {client.listen().await; Ok(())},
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkirc::irc::server::process_connection", "Failed starting client listen: {}", e),
+                }
+            },
+            Error::DetachedTaskStopped,
+            executor,
+        );
 
         Ok(())
     }

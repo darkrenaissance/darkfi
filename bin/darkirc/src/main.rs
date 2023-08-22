@@ -26,7 +26,7 @@ use async_std::{
 
 use chrono::{Duration, Utc};
 use irc::ClientSubMsg;
-use log::{debug, info};
+use log::{debug, error, info};
 use rand::rngs::OsRng;
 use structopt_toml::StructOptToml;
 use tinyjson::JsonValue;
@@ -41,9 +41,9 @@ use darkfi::{
     },
     net,
     rpc::{jsonrpc::JsonSubscriber, server::listen_and_serve},
-    system::{Subscriber, SubscriberPtr},
+    system::{StoppableTask, Subscriber, SubscriberPtr},
     util::{async_util::sleep, file::save_json_file, path::expand_path, time::Timestamp},
-    Result,
+    Error, Result,
 };
 
 pub mod crypto;
@@ -227,33 +227,47 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     ////////////////////
     // RPC interface setup
     ////////////////////
-
     let rpc_listen_addr = settings.rpc_listen.clone();
+    info!(target: "darkirc", "Starting JSON-RPC server on {}", rpc_listen_addr);
     let rpc_interface = Arc::new(JsonRpcInterface {
         addr: rpc_listen_addr.clone(),
         p2p: p2p.clone(),
         dnet_sub: json_sub,
     });
-
-    let _ex = executor.clone();
-    executor
-        .spawn(async move { listen_and_serve(rpc_listen_addr, rpc_interface, _ex).await })
-        .detach();
+    let rpc_task = StoppableTask::new();
+    rpc_task.clone().start(
+        listen_and_serve(rpc_listen_addr, rpc_interface, executor.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "darkirc", "Failed starting JSON-RPC server: {}", e),
+            }
+        },
+        Error::RPCServerStopped,
+        executor.clone(),
+    );
 
     ////////////////////
     // Start P2P network
     ////////////////////
+    info!(target: "darkirc", "Starting P2P network");
     p2p.clone().start(executor.clone()).await?;
-
-    // Run
-    let executor_cloned = executor.clone();
-    executor_cloned.spawn(p2p.clone().run(executor.clone())).detach();
+    StoppableTask::new().start(
+        p2p.clone().run(executor.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "darkirc", "Failed starting P2P network: {}", e),
+            }
+        },
+        Error::P2PNetworkStopped,
+        executor.clone(),
+    );
 
     ////////////////////
     // IRC server
     ////////////////////
-
-    // New irc server
+    info!(target: "darkirc", "Starting IRC server");
     let irc_server = IrcServer::new(
         settings.clone(),
         p2p.clone(),
@@ -262,13 +276,37 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         client_sub,
     )
     .await?;
-
-    // Start the irc server and detach it
-    let executor_cloned = executor.clone();
-    executor.spawn(async move { irc_server.start(executor_cloned).await }).detach();
+    let irc_server_task = StoppableTask::new();
+    let executor_ = executor.clone();
+    irc_server_task.clone().start(
+        // Weird hack to prevent lifetimes hell
+        async move { irc_server.start(executor_).await },
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "darkirc", "Failed starting IRC server: {}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        executor.clone(),
+    );
 
     // Reset root task
-    executor.spawn(async move { remove_old_events(model_clone2).await }).detach();
+    info!(target: "darkirc", "Starting remove old events task");
+    let remove_old_events_task = StoppableTask::new();
+    remove_old_events_task.clone().start(
+        remove_old_events(model_clone2),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => {
+                    error!(target: "darkirc", "Failed starting remove old events task: {}", e)
+                }
+            }
+        },
+        Error::DetachedTaskStopped,
+        executor,
+    );
 
     // Wait for termination signal
     signals_handler.wait_termination(signals_task).await?;
@@ -276,7 +314,17 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
 
     model_clone.lock().await.save_tree(&datastore_path)?;
 
-    // stop p2p
+    info!(target: "darkirc", "Stopping JSON-RPC server...");
+    rpc_task.stop().await;
+
+    info!(target: "darkirc", "Stopping P2P network");
     p2p.stop().await;
+
+    info!(target: "darkirc", "Stopping IRC server...");
+    irc_server_task.stop().await;
+
+    info!(target: "darkirc", "Stopping remove old events task...");
+    remove_old_events_task.stop().await;
+
     Ok(())
 }
