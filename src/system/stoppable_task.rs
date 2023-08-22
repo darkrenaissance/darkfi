@@ -34,7 +34,7 @@ pub struct StoppableTask {
 
 impl StoppableTask {
     pub fn new() -> Arc<Self> {
-        let (stop_send, stop_recv) = channel::unbounded();
+        let (stop_send, stop_recv) = channel::bounded(1);
         Arc::new(Self { stop_send, stop_recv })
     }
 
