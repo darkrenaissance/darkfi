@@ -388,7 +388,7 @@ dependencies = [
  "polling",
  "rustix 0.37.23",
  "slab",
- "socket2 0.4.9",
+ "socket2",
  "waker-fn",
 ]
 
@@ -1408,7 +1408,6 @@ version = "0.4.1"
 dependencies = [
  "arti-client",
  "async-rustls",
- "async-std",
  "async-trait",
  "blake3",
  "bs58",
@@ -1442,7 +1441,6 @@ dependencies = [
  "sled",
  "sled-overlay",
  "smol",
- "socket2 0.5.3",
  "structopt",
  "structopt-toml",
  "thiserror",
@@ -1617,7 +1615,6 @@ dependencies = [
 name = "darkfid"
 version = "0.4.1"
 dependencies = [
- "async-std",
  "async-trait",
  "blake3",
  "bs58",
@@ -1642,7 +1639,6 @@ dependencies = [
 name = "darkfid2"
 version = "0.4.1"
 dependencies = [
- "async-std",
  "async-trait",
  "blake3",
  "bs58",
@@ -1671,7 +1667,6 @@ name = "darkirc"
 version = "0.4.1"
 dependencies = [
  "async-rustls",
- "async-std",
  "async-trait",
  "bs58",
  "chrono",
@@ -2410,7 +2405,6 @@ checksum = "6999dc1837253364c2ebb0704ba97994bd874e8f195d665c50b7548f6ea92764"
 name = "faucetd"
 version = "0.4.1"
 dependencies = [
- "async-std",
  "async-trait",
  "blake3",
  "chrono",
@@ -2608,7 +2602,6 @@ dependencies = [
 name = "fud"
 version = "0.4.1"
 dependencies = [
- "async-std",
  "async-trait",
  "blake3",
  "darkfi",
@@ -2761,7 +2754,6 @@ dependencies = [
 name = "genev"
 version = "0.4.1"
 dependencies = [
- "async-std",
  "clap 4.3.23",
  "darkfi",
  "darkfi-serial",
@@ -2769,6 +2761,7 @@ dependencies = [
  "libsqlite3-sys",
  "log",
  "simplelog",
+ "smol",
  "tinyjson",
  "url",
 ]
@@ -2777,7 +2770,6 @@ dependencies = [
 name = "genevd"
 version = "0.4.1"
 dependencies = [
- "async-std",
  "async-trait",
  "darkfi",
  "darkfi-serial",
@@ -3281,7 +3273,6 @@ dependencies = [
 name = "lilith"
 version = "0.4.1"
 dependencies = [
- "async-std",
  "async-trait",
  "darkfi",
  "easy-parallel",
@@ -5175,16 +5166,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "socket2"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2538b18701741680e0322a2302176d3253a35388e2e62f172f64f4f16605f877"
-dependencies = [
- "libc",
- "windows-sys 0.48.0",
-]
-
-[[package]]
 name = "spin"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5410,7 +5391,6 @@ checksum = "9d0e916b1148c8e263850e1ebcbd046f333e0683c724876bb0da63ea4373dc8a"
 name = "tau"
 version = "0.4.1"
 dependencies = [
- "async-std",
  "chrono",
  "clap 4.3.23",
  "colored",
@@ -5421,6 +5401,7 @@ dependencies = [
  "prettytable-rs",
  "serde",
  "simplelog",
+ "smol",
  "taud",
  "term_grid",
  "textwrap 0.16.0",
@@ -5432,7 +5413,6 @@ dependencies = [
 name = "taud"
 version = "0.4.1"
 dependencies = [
- "async-std",
  "async-trait",
  "bs58",
  "chrono",
