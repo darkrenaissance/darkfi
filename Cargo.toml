@@ -22,7 +22,7 @@ members = [
     "bin/zkas",
     "bin/darkfid",
     "bin/darkfid2",
-    "bin/drk",
+    #"bin/drk",
     "bin/faucetd",
     #"bin/fud/fu",
     "bin/fud/fud",
