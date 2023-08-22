@@ -217,7 +217,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     let dnet_task = StoppableTask::new();
     dnet_task.clone().start(
         async move {
-            let dnet_sub = p2p_.dnet_sub().subscribe().await;
+            let dnet_sub = p2p_.dnet_subscribe().await;
             loop {
                 let event = dnet_sub.receive().await;
                 debug!("Got dnet event: {:?}", event);

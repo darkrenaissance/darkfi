@@ -81,7 +81,7 @@ pub struct P2p {
     /// Enable network debugging
     pub dnet_enabled: Mutex<bool>,
     /// The subscriber for which we can give dnet info over
-    dnet_sub: SubscriberPtr<DnetEvent>,
+    dnet_subscriber: SubscriberPtr<DnetEvent>,
 }
 
 impl P2p {
@@ -111,7 +111,7 @@ impl P2p {
             session_outbound: Mutex::new(None),
 
             dnet_enabled: Mutex::new(false),
-            dnet_sub: Subscriber::new(),
+            dnet_subscriber: Subscriber::new(),
         });
 
         let parent = Arc::downgrade(&self_);
@@ -319,13 +319,13 @@ impl P2p {
         warn!("[P2P] Network debugging disabled!");
     }
 
-    /// Return a reference to the dnet subscriber
-    pub fn dnet_sub(&self) -> SubscriberPtr<DnetEvent> {
-        self.dnet_sub.clone()
+    /// Subscribe to dnet events
+    pub async fn dnet_subscribe(&self) -> Subscription<DnetEvent> {
+        self.dnet_subscriber.clone().subscribe().await
     }
 
     /// Send a dnet notification over the subscriber
     pub async fn dnet_notify(&self, event: DnetEvent) {
-        self.dnet_sub.notify(event).await;
+        self.dnet_subscriber.notify(event).await;
     }
 }

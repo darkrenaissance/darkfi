@@ -38,6 +38,7 @@ use super::{
     super::{
         channel::ChannelPtr,
         connector::Connector,
+        dnet::{self, dnet, DnetEvent},
         message::GetAddrsMessage,
         p2p::{P2p, P2pPtr},
     },
@@ -103,7 +104,7 @@ impl OutboundSession {
         // Activate mutex lock on connection slots.
         let mut connect_slots = self.connect_slots.lock().await;
 
-        for i in 0..n_slots {
+        for i in 0..n_slots as u32 {
             let task = StoppableTask::new();
 
             task.clone().start(
@@ -132,7 +133,7 @@ impl OutboundSession {
     /// Creates a connector object and tries to connect using it.
     pub async fn channel_connect_loop(
         self: Arc<Self>,
-        slot_number: usize,
+        slot: u32,
         ex: Arc<Executor<'_>>,
     ) -> Result<()> {
         let parent = Arc::downgrade(&self);
@@ -153,19 +154,24 @@ impl OutboundSession {
         // signal and then exit. Once it exits, we'll run `try_connect` again
         // and attempt to fill the slot with another peer.
         loop {
-            match self.try_connect(slot_number, &connector, transports, ex.clone()).await {
+            match self.try_connect(slot, &connector, transports, ex.clone()).await {
                 Ok(()) => {
                     info!(
                         target: "net::outbound_session",
                         "[P2P] Outbound slot #{} disconnected",
-                        slot_number
+                        slot
                     );
                 }
                 Err(e) => {
                     error!(
                         target: "net::outbound_session",
                         "[P2P] Outbound slot #{} connection failed: {}",
-                        slot_number, e,
+                        slot, e,
+                    );
+
+                    dnet!(self,
+                        let event = DnetEvent::OutboundDisconnected(slot);
+                        self.p2p().dnet_notify(event).await;
                     );
                 }
             }
@@ -181,7 +187,7 @@ impl OutboundSession {
     /// main connect loop (parent of this function) will iterate again.
     async fn try_connect(
         &self,
-        slot_number: usize,
+        slot: u32,
         connector: &Connector,
         transports: &[String],
         ex: Arc<Executor<'_>>,
@@ -189,15 +195,15 @@ impl OutboundSession {
         debug!(
             target: "net::outbound_session::try_connect()",
             "[P2P] Finding a host to connect to for outbound slot #{}",
-            slot_number,
+            slot,
         );
 
         // Find an address to connect to. We also do peer discovery here if needed.
-        let addr = self.load_address(slot_number, transports, ex.clone()).await?;
+        let addr = self.load_address(slot, transports, ex.clone()).await?;
         info!(
             target: "net::outbound_session::try_connect()",
             "[P2P] Connecting outbound slot #{} [{}]",
-            slot_number, addr,
+            slot, addr,
         );
 
         match connector.connect(&addr).await {
@@ -205,7 +211,16 @@ impl OutboundSession {
                 info!(
                     target: "net::outbound_session::try_connect()",
                     "[P2P] Outbound slot #{} connected [{}]",
-                    slot_number, url
+                    slot, url
+                );
+
+                dnet!(self,
+                    let event = DnetEvent::OutboundConnected(dnet::OutboundConnect {
+                        slot,
+                        addr: addr.clone(),
+                        channel_id: channel.info.id
+                    });
+                    self.p2p().dnet_notify(event).await;
                 );
 
                 let stop_sub =
@@ -232,7 +247,7 @@ impl OutboundSession {
                 error!(
                     target: "net::outbound_session::try_connect()",
                     "[P2P] Unable to connect outbound slot #{} [{}]: {}",
-                    slot_number, addr, e
+                    slot, addr, e
                 );
             }
         }
@@ -255,7 +270,7 @@ impl OutboundSession {
     /// to do peer discovery and try to fill the slot again.
     async fn load_address(
         &self,
-        slot_number: usize,
+        slot: u32,
         transports: &[String],
         ex: Arc<Executor<'_>>,
     ) -> Result<Url> {
@@ -267,7 +282,7 @@ impl OutboundSession {
                 debug!(
                     target: "net::outbound_session::load_address()",
                     "[P2P] #{} Peer discovery active, waiting {} seconds...",
-                    slot_number, retry_sleep,
+                    slot, retry_sleep,
                 );
                 sleep(retry_sleep).await;
             }
@@ -324,7 +339,7 @@ impl OutboundSession {
             info!(
                 target: "net::outbound_session::load_address()",
                 "[P2P] Outbound #{}: No peers found. Starting peer discovery...",
-                slot_number,
+                slot,
             );
             // NOTE: A design decision here is to do a sleep inside peer_discovery()
             // so that there's a certain period (outbound_connect_timeout) of time
@@ -332,7 +347,7 @@ impl OutboundSession {
             // inside peer_discovery, it will block here in the slot sessions, while
             // other slots can keep trying to find hosts. This is also why we sleep
             // in the beginning of this loop if peer discovery is currently active.
-            self.peer_discovery(slot_number, ex.clone()).await;
+            self.peer_discovery(slot, ex.clone()).await;
         }
     }
 
@@ -343,14 +358,14 @@ impl OutboundSession {
     /// This function will also sleep `Settings::outbound_connect_timeout` seconds
     /// after broadcasting in order to let the P2P stack receive and work through
     /// the addresses it is expecting.
-    async fn peer_discovery(&self, slot_number: usize, ex: Arc<Executor<'_>>) {
+    async fn peer_discovery(&self, slot: u32, ex: Arc<Executor<'_>>) {
         let p2p = self.p2p();
 
         if *p2p.peer_discovery_running.lock().await {
             info!(
                 target: "net::outbound_session::peer_discovery()",
                 "[P2P] Outbound #{}: Peer discovery already active",
-                slot_number,
+                slot,
             );
             return
         }
@@ -358,7 +373,7 @@ impl OutboundSession {
         info!(
             target: "net::outbound_session::peer_discovery()",
             "[P2P] Outbound #{}: Started peer discovery",
-            slot_number,
+            slot,
         );
         *p2p.peer_discovery_running.lock().await = true;
 
@@ -369,7 +384,7 @@ impl OutboundSession {
             info!(
                 target: "net::outbound_session::peer_discovery()",
                 "[P2P] Outbound #{}: Broadcasting GetAddrs across active channels",
-                slot_number,
+                slot,
             );
             p2p.broadcast(&get_addrs).await;
         } else {
@@ -391,7 +406,7 @@ impl OutboundSession {
         debug!(
             target: "net::outbound_session::peer_discovery()",
             "[P2P] Outbound #{}: Sleeping {} seconds",
-            slot_number, p2p.settings().outbound_connect_timeout,
+            slot, p2p.settings().outbound_connect_timeout,
         );
         sleep(p2p.settings().outbound_connect_timeout).await;
         *p2p.peer_discovery_running.lock().await = false;

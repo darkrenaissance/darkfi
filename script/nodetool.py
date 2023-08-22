@@ -74,13 +74,20 @@ class JsonRpc:
 
 async def main(argv):
     rpc = JsonRpc()
-    await rpc.start("localhost", 26660)
+    while True:
+        try:
+            await rpc.start("localhost", 26660)
+            break
+        except OSError:
+            pass
     await rpc.dnet_switch(True)
     await rpc.dnet_subscribe_events()
 
     while True:
         data = await rpc.reader.readline()
         data = json.loads(data.decode().strip())
+        if data["params"][0]["event"] in ["send", "recv"]:
+            continue
         print(data)
 
     await rpc.dnet_switch(False)

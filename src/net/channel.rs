@@ -28,7 +28,7 @@ use smol::Executor;
 use url::Url;
 
 use super::{
-    dnet::{dnet, DnetEvent, MessageInfo},
+    dnet::{self, dnet, DnetEvent},
     message,
     message::Packet,
     message_subscriber::{MessageSubscription, MessageSubsystem},
@@ -48,13 +48,13 @@ pub type ChannelPtr = Arc<Channel>;
 /// Channel debug info
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ChannelInfo {
-    pub address: Url,
-    pub random_id: u32,
+    pub addr: Url,
+    pub id: u32,
 }
 
 impl ChannelInfo {
-    fn new(address: Url) -> Self {
-        Self { address, random_id: OsRng.gen() }
+    fn new(addr: Url) -> Self {
+        Self { addr, id: OsRng.gen() }
     }
 }
 
@@ -75,7 +75,7 @@ pub struct Channel {
     /// Weak pointer to respective session
     session: SessionWeakPtr,
     /// Channel debug info
-    info: ChannelInfo,
+    pub info: ChannelInfo,
 }
 
 impl std::fmt::Debug for Channel {
@@ -88,11 +88,7 @@ impl Channel {
     /// Sets up a new channel. Creates a reader and writer [`PtStream`] and
     /// summons the message subscriber subsystem. Performs a network handshake
     /// on the subsystem dispatchers.
-    pub async fn new(
-        stream: Box<dyn PtStream>,
-        address: Url,
-        session: SessionWeakPtr,
-    ) -> Arc<Self> {
+    pub async fn new(stream: Box<dyn PtStream>, addr: Url, session: SessionWeakPtr) -> Arc<Self> {
         let (reader, writer) = stream.split();
         let reader = Mutex::new(reader);
         let writer = Mutex::new(writer);
@@ -100,7 +96,7 @@ impl Channel {
         let message_subsystem = MessageSubsystem::new();
         Self::setup_dispatchers(&message_subsystem).await;
 
-        let info = ChannelInfo::new(address.clone());
+        let info = ChannelInfo::new(addr.clone());
 
         Arc::new(Self {
             reader,
@@ -212,7 +208,7 @@ impl Channel {
         let packet = Packet { command: M::NAME.to_string(), payload: serialize(message) };
 
         dnet!(self,
-            let event = DnetEvent::SendMessage(MessageInfo {
+            let event = DnetEvent::SendMessage(dnet::MessageInfo {
                 chan: self.info.clone(),
                 cmd: packet.command.clone(),
                 time: NanoTimestamp::current_time(),
@@ -292,6 +288,15 @@ impl Channel {
                 }
             };
 
+            dnet!(self,
+                let event = DnetEvent::RecvMessage(dnet::MessageInfo {
+                    chan: self.info.clone(),
+                    cmd: packet.command.clone(),
+                    time: NanoTimestamp::current_time(),
+                });
+                self.p2p().dnet_notify(event).await;
+            );
+
             // Send result to our subscribers
             self.message_subsystem.notify(&packet.command, &packet.payload).await;
         }
@@ -299,7 +304,7 @@ impl Channel {
 
     /// Returns the local socket address
     pub fn address(&self) -> &Url {
-        &self.info.address
+        &self.info.addr
     }
 
     /// Returns the inner [`MessageSubsystem`] reference

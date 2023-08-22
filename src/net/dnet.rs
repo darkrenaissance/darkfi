@@ -18,7 +18,7 @@
 
 use super::channel::ChannelInfo;
 use crate::util::time::NanoTimestamp;
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use url::Url;
 
 macro_rules! dnet {
     ($self:expr, $($code:tt)*) => {
@@ -31,14 +31,25 @@ macro_rules! dnet {
 }
 pub(crate) use dnet;
 
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug)]
 pub struct MessageInfo {
     pub chan: ChannelInfo,
     pub cmd: String,
     pub time: NanoTimestamp,
 }
 
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Debug)]
+pub struct OutboundConnect {
+    pub slot: u32,
+    pub addr: Url,
+    pub channel_id: u32,
+}
+
+#[derive(Clone, Debug)]
 pub enum DnetEvent {
     SendMessage(MessageInfo),
+    RecvMessage(MessageInfo),
+    //OutboundConnecting(OutboundConnect),
+    OutboundConnected(OutboundConnect),
+    OutboundDisconnected(u32),
 }
