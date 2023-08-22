@@ -16,22 +16,25 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Arc;
+use std::sync::Arc;
 
-use futures::{Future, FutureExt};
-use smol::Executor;
+use smol::{
+    channel,
+    future::{self, Future},
+    Executor,
+};
 
 pub type StoppableTaskPtr = Arc<StoppableTask>;
 
 #[derive(Debug)]
 pub struct StoppableTask {
-    stop_send: smol::channel::Sender<()>,
-    stop_recv: smol::channel::Receiver<()>,
+    stop_send: channel::Sender<()>,
+    stop_recv: channel::Receiver<()>,
 }
 
 impl StoppableTask {
     pub fn new() -> Arc<Self> {
-        let (stop_send, stop_recv) = smol::channel::unbounded();
+        let (stop_send, stop_recv) = channel::unbounded();
         Arc::new(Self { stop_send, stop_recv })
     }
 
@@ -54,11 +57,12 @@ impl StoppableTask {
     {
         executor
             .spawn(async move {
-                let result = futures::select! {
-                    _ = self.stop_recv.recv().fuse() => Err(stop_value),
-                    result = main.fuse() => result
+                let stop_fut = async {
+                    let _ = self.stop_recv.recv().await;
+                    Err(stop_value)
                 };
 
+                let result = future::or(main, stop_fut).await;
                 stop_handler(result).await;
             })
             .detach();

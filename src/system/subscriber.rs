@@ -16,11 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use async_std::sync::{Arc, Mutex};
 use log::warn;
 use rand::{rngs::OsRng, Rng};
+use smol::lock::Mutex;
 
 pub type SubscriberPtr<T> = Arc<Subscriber<T>>;
 pub type SubscriptionId = usize;
@@ -43,12 +43,12 @@ impl<T: Clone> Subscription<T> {
         match message_result {
             Ok(message_result) => message_result,
             Err(err) => {
-                panic!("MessageSubscription::receive() recv_queue failed! {}", err);
+                panic!("Subscription::receive() recv_queue failed! {}", err);
             }
         }
     }
 
-    // Must be called manually since async Drop is not possible in Rust
+    /// Must be called manually since async Drop is not possible in Rust
     pub async fn unsubscribe(&self) {
         self.parent.clone().unsubscribe(self.id).await
     }

@@ -16,8 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/// Implementation of async background task spawning which are stoppable
+/// using channel signalling.
 pub mod stoppable_task;
-pub mod subscriber;
-
 pub use stoppable_task::{StoppableTask, StoppableTaskPtr};
+
+/// Simple broadcast (publish-subscribe) class
+pub mod subscriber;
 pub use subscriber::{Subscriber, SubscriberPtr, Subscription};
