@@ -257,10 +257,10 @@ mod tests {
         ];
 
         for &(input, answer) in EXAMPLES.iter() {
-            let res = encode(&input);
+            let res = encode(input);
             assert_eq!(answer, res);
 
-            let res = decode(&answer).unwrap();
+            let res = decode(answer).unwrap();
             assert_eq!(input, res);
         }
     }

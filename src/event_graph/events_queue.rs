@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Arc;
+use std::sync::Arc;
+
 use darkfi_serial::{Decodable, Encodable};
 
 use crate::{event_graph::model::Event, Error, Result};

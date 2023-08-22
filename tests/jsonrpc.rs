@@ -16,9 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::{net::TcpListener, sync::Arc, task};
+use std::sync::Arc;
+
 use async_trait::async_trait;
-use smol::channel::{Receiver, Sender};
+use smol::{
+    channel::{Receiver, Sender},
+    net::TcpListener,
+    Executor,
+};
 use tinyjson::JsonValue;
 use url::Url;
 
@@ -51,49 +56,56 @@ impl RpcSrv {
 impl RequestHandler for RpcSrv {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         assert!(req.params.is_array());
-        let method = String::try_from(req.method).unwrap();
-        let params = req.params;
 
-        match method.as_str() {
-            "ping" => return self.pong(req.id, params).await,
-            "kill" => return self.kill(req.id, params).await,
+        match req.method.as_str() {
+            "ping" => return self.pong(req.id, req.params).await,
+            "kill" => return self.kill(req.id, req.params).await,
             _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
 }
 
-#[async_std::test]
-async fn jsonrpc_reqrep() -> Result<()> {
-    // Find an available port
-    let listener = TcpListener::bind("127.0.0.1:0").await?;
-    let sockaddr = listener.local_addr()?;
-    let endpoint = Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?;
-    drop(listener);
+#[test]
+fn jsonrpc_reqrep() -> Result<()> {
+    let executor = Arc::new(Executor::new());
+    let executor_ = executor.clone();
 
-    let rpcsrv = Arc::new(RpcSrv { stop_sub: smol::channel::unbounded() });
-    let listener = Listener::new(endpoint.clone()).await?.listen().await?;
+    smol::block_on(executor.run(async {
+        // Find an available port
+        let listener = TcpListener::bind("127.0.0.1:0").await?;
+        let sockaddr = listener.local_addr()?;
+        let endpoint = Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?;
+        drop(listener);
 
-    task::spawn(async move {
-        while let Ok((stream, peer_addr)) = listener.next().await {
-            let _rh = rpcsrv.clone();
-            task::spawn(async move {
-                let _ = accept(stream, peer_addr.clone(), _rh).await;
-            });
-        }
-    });
+        let rpcsrv = Arc::new(RpcSrv { stop_sub: smol::channel::unbounded() });
+        let listener = Listener::new(endpoint.clone()).await?.listen().await?;
 
-    let client = RpcClient::new(endpoint, None).await?;
-    let req = JsonRequest::new("ping", vec![]);
-    let rep = client.request(req).await?;
+        executor
+            .spawn(async move {
+                while let Ok((stream, peer_addr)) = listener.next().await {
+                    let _rh = rpcsrv.clone();
+                    executor_
+                        .spawn(async move {
+                            let _ = accept(stream, peer_addr.clone(), _rh).await;
+                        })
+                        .detach();
+                }
+            })
+            .detach();
 
-    let rep = String::try_from(rep).unwrap();
-    assert_eq!(&rep, "pong");
+        let client = RpcClient::new(endpoint, executor.clone()).await?;
+        let req = JsonRequest::new("ping", vec![]);
+        let rep = client.request(req).await?;
 
-    let req = JsonRequest::new("kill", vec![]);
-    let rep = client.request(req).await?;
+        let rep = String::try_from(rep).unwrap();
+        assert_eq!(&rep, "pong");
 
-    let rep = String::try_from(rep).unwrap();
-    assert_eq!(&rep, "bye");
+        let req = JsonRequest::new("kill", vec![]);
+        let rep = client.request(req).await?;
 
-    Ok(())
+        let rep = String::try_from(rep).unwrap();
+        assert_eq!(&rep, "bye");
+
+        Ok(())
+    }))
 }

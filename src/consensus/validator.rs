@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, io::Cursor};
+use std::{collections::HashMap, io::Cursor, sync::Arc};
 
-use async_std::sync::{Arc, RwLock};
 use darkfi_sdk::{
     blockchain::Slot,
     crypto::{
@@ -32,6 +31,7 @@ use darkfi_serial::{serialize, Decodable, Encodable, WriteExt};
 use halo2_proofs::arithmetic::Field;
 use log::{debug, error, info, warn};
 use rand::rngs::OsRng;
+use smol::lock::RwLock;
 
 use crate::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr},

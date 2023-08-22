@@ -133,8 +133,8 @@ pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
 ///
 /// Example usage:
 /// ```
-/// use async_std::{stream::StreamExt, sync::Arc};
-//  use darkfi::{async_daemonize, cli_desc, Result};
+/// use darkfi::{async_daemonize, cli_desc, Result};
+/// use smol::stream::StreamExt;
 /// use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 ///
 /// const CONFIG_FILE: &str = "daemond_config.toml";
@@ -228,7 +228,9 @@ macro_rules! async_daemonize {
         }
 
         impl SignalHandler {
-            fn new() -> Result<(Self, async_std::task::JoinHandle<Result<()>>)> {
+            fn new(
+                ex: std::sync::Arc<smol::Executor<'static>>,
+            ) -> Result<(Self, smol::Task<Result<()>>)> {
                 let (term_tx, term_rx) = smol::channel::bounded::<()>(1);
                 let signals = signal_hook_async_std::Signals::new([
                     signal_hook::consts::SIGHUP,
@@ -238,17 +240,13 @@ macro_rules! async_daemonize {
                 ])?;
                 let handle = signals.handle();
                 let sighup_sub = darkfi::system::Subscriber::new();
-                let signals_task =
-                    async_std::task::spawn(handle_signals(signals, term_tx, sighup_sub.clone()));
+                let signals_task = ex.spawn(handle_signals(signals, term_tx, sighup_sub.clone()));
 
                 Ok((Self { term_rx, handle, sighup_sub }, signals_task))
             }
 
             /// Handler waits for termination signal
-            async fn wait_termination(
-                &self,
-                signals_task: async_std::task::JoinHandle<Result<()>>,
-            ) -> Result<()> {
+            async fn wait_termination(&self, signals_task: smol::Task<Result<()>>) -> Result<()> {
                 self.term_rx.recv().await?;
                 print!("\r");
                 self.handle.close();

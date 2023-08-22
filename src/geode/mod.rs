@@ -56,16 +56,16 @@
 //! chunks to be specific to a single file and therefore when we do garbage
 //! collection, we keep chunks and files independent of each other.
 
-use std::collections::HashSet;
+use std::{collections::HashSet, path::PathBuf};
 
-use async_std::{
-    fs::{self, File, OpenOptions},
-    io::{prelude::*, BufReader, Cursor, SeekFrom},
-    path::PathBuf,
-    stream::StreamExt,
-};
 use futures::AsyncRead;
 use log::{debug, info, warn};
+use smol::{
+    fs,
+    fs::{File, OpenOptions},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, Cursor, SeekFrom},
+    stream::StreamExt,
+};
 
 use crate::{Error, Result};
 
@@ -159,7 +159,7 @@ impl Geode {
             let chunk_path = entry.path();
 
             // Skip if we're not a plain file
-            if !chunk_path.is_file().await {
+            if !chunk_path.is_file() {
                 continue
             }
 
@@ -220,7 +220,7 @@ impl Geode {
             let path = entry.path();
 
             // Skip if we're not a plain file
-            if !path.is_file().await {
+            if !path.is_file() {
                 continue
             }
 
@@ -394,7 +394,7 @@ impl Geode {
             let mut c_path = self.chunks_path.clone();
             c_path.push(chunk_hash.to_hex().as_str());
 
-            if !c_path.exists().await || !c_path.is_file().await {
+            if !c_path.exists() || !c_path.is_file() {
                 // TODO: We should be aggressive here and remove the non-file.
                 continue
             }
@@ -424,7 +424,7 @@ impl Geode {
         let mut chunk_path = self.chunks_path.clone();
         chunk_path.push(chunk_hash.to_hex().as_str());
 
-        if !chunk_path.exists().await || !chunk_path.is_file().await {
+        if !chunk_path.exists() || !chunk_path.is_file() {
             // TODO: We should be aggressive here and remove the non-file.
             return Err(Error::GeodeChunkNotFound)
         }

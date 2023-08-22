@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Arc;
+use std::sync::Arc;
+
 use futures::{select, FutureExt};
 use log::{debug, error};
 use smol::channel::{Receiver, Sender};
@@ -43,7 +44,7 @@ pub struct RpcClient {
 
 impl RpcClient {
     /// Instantiate a new JSON-RPC client that will connect to the given endpoint
-    pub async fn new(endpoint: Url, ex: Option<Arc<smol::Executor<'_>>>) -> Result<Self> {
+    pub async fn new(endpoint: Url, ex: Arc<smol::Executor<'_>>) -> Result<Self> {
         let (sender, receiver, stop_signal) = Self::open_channels(endpoint.clone(), ex).await?;
         Ok(Self { sender, receiver, stop_signal, endpoint })
     }
@@ -51,7 +52,7 @@ impl RpcClient {
     /// Instantiate async channels for a new [`RpcClient`]
     async fn open_channels(
         endpoint: Url,
-        ex: Option<Arc<smol::Executor<'_>>>,
+        ex: Arc<smol::Executor<'_>>,
     ) -> Result<(Sender<(JsonRequest, bool)>, Receiver<JsonResult>, Sender<()>)> {
         let (data_send, data_recv) = smol::channel::unbounded();
         let (result_send, result_recv) = smol::channel::unbounded();
@@ -61,14 +62,9 @@ impl RpcClient {
         // TODO: Could add a timeout here:
         let stream = dialer.dial(None).await?;
 
-        // By passing in an executor we can avoid the global executor provided
-        // by these crates. Production usage should actually give an exexutor
-        // to `RpcClient::new()`.
-        if let Some(ex) = ex {
-            ex.spawn(Self::reqrep_loop(stream, result_send, data_recv, stop_recv)).detach();
-        } else {
-            smol::spawn(Self::reqrep_loop(stream, result_send, data_recv, stop_recv)).detach();
-        }
+        // TODO: StoppableTask, see also above there's the stop_{send,recv}. Remove them
+        //       and replace with using StoppableTask.
+        ex.spawn(Self::reqrep_loop(stream, result_send, data_recv, stop_recv)).detach();
 
         Ok((data_send, result_recv, stop_send))
     }

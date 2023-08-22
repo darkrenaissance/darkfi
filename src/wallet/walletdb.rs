@@ -16,11 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{any::Any, path::PathBuf};
+use std::{any::Any, path::PathBuf, sync::Arc};
 
-use async_std::sync::{Arc, Mutex};
 use log::{debug, info};
 use rusqlite::Connection;
+use smol::lock::Mutex;
 
 use crate::Result;
 
@@ -162,48 +162,51 @@ impl WalletDb {
 mod tests {
     use super::*;
 
-    #[async_std::test]
-    async fn test_mem_wallet() {
-        let wallet = WalletDb::new(None, Some("foobar")).unwrap();
-        wallet.exec_sql("CREATE TABLE mista ( numba INTEGER );").await.unwrap();
-        wallet.exec_sql("INSERT INTO mista ( numba ) VALUES ( 42 );").await.unwrap();
+    #[test]
+    fn test_mem_wallet() {
+        smol::block_on(async {
+            let wallet = WalletDb::new(None, Some("foobar")).unwrap();
+            wallet.exec_sql("CREATE TABLE mista ( numba INTEGER );").await.unwrap();
+            wallet.exec_sql("INSERT INTO mista ( numba ) VALUES ( 42 );").await.unwrap();
 
-        let conn = wallet.conn.lock().await;
-        let mut stmt = conn.prepare("SELECT numba FROM mista").unwrap();
-        let numba: u64 = stmt.query_row((), |row| Ok(row.get("numba").unwrap())).unwrap();
-        stmt.finalize().unwrap();
-        assert!(numba == 42);
+            let conn = wallet.conn.lock().await;
+            let mut stmt = conn.prepare("SELECT numba FROM mista").unwrap();
+            let numba: u64 = stmt.query_row((), |row| Ok(row.get("numba").unwrap())).unwrap();
+            stmt.finalize().unwrap();
+            assert!(numba == 42);
+        });
     }
 
-    #[async_std::test]
-    async fn test_query_single() {
-        let wallet = WalletDb::new(None, None).unwrap();
-        wallet
-            .exec_sql("CREATE TABLE mista ( why INTEGER, are TEXT, you INTEGER, gae BLOB );")
-            .await
-            .unwrap();
+    #[test]
+    fn test_query_single() {
+        smol::block_on(async {
+            let wallet = WalletDb::new(None, None).unwrap();
+            wallet
+                .exec_sql("CREATE TABLE mista ( why INTEGER, are TEXT, you INTEGER, gae BLOB );")
+                .await
+                .unwrap();
 
-        let why = 42;
-        let are = "are".to_string();
-        let you = 69;
-        let gae = vec![42u8; 32];
+            let why = 42;
+            let are = "are".to_string();
+            let you = 69;
+            let gae = vec![42u8; 32];
 
-        let query_str =
-            format!("INSERT INTO mista ( why, are, you, gae ) VALUES (?1, ?2, ?3, ?4);");
+            let query_str = "INSERT INTO mista ( why, are, you, gae ) VALUES (?1, ?2, ?3, ?4);";
 
-        let wallet_conn = wallet.conn.lock().await;
-        let mut stmt = wallet_conn.prepare(&query_str).unwrap();
-        stmt.execute(rusqlite::params![why, are, you, gae]).unwrap();
-        stmt.finalize().unwrap();
-        drop(wallet_conn);
+            let wallet_conn = wallet.conn.lock().await;
+            let mut stmt = wallet_conn.prepare(query_str).unwrap();
+            stmt.execute(rusqlite::params![why, are, you, gae]).unwrap();
+            stmt.finalize().unwrap();
+            drop(wallet_conn);
 
-        let ret =
-            wallet.query_single("mista", vec!["why", "are", "you", "gae"], None).await.unwrap();
-        assert!(ret.len() == 4);
+            let ret =
+                wallet.query_single("mista", vec!["why", "are", "you", "gae"], None).await.unwrap();
+            assert!(ret.len() == 4);
 
-        assert!(ret[0].inner::<i64>().unwrap() == &why);
-        assert!(ret[1].inner::<String>().unwrap() == &are);
-        assert!(ret[2].inner::<i64>().unwrap() == &you);
-        assert!(ret[3].inner::<Vec<u8>>().unwrap() == &gae);
+            assert!(ret[0].inner::<i64>().unwrap() == &why);
+            assert!(ret[1].inner::<String>().unwrap() == &are);
+            assert!(ret[2].inner::<i64>().unwrap() == &you);
+            assert!(ret[3].inner::<Vec<u8>>().unwrap() == &gae);
+        });
     }
 }

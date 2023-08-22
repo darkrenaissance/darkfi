@@ -16,10 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::{Arc, RwLock};
+use std::sync::Arc;
+
 use darkfi_sdk::{blockchain::Slot, crypto::PublicKey};
 use darkfi_serial::serialize;
 use log::{debug, error, info, warn};
+use smol::lock::RwLock;
 
 use crate::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay},

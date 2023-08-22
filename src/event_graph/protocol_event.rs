@@ -16,12 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 
-use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use log::debug;
+use smol::lock::Mutex;
 
 use super::EventMsg;
 use crate::{

@@ -319,7 +319,7 @@ impl Listener {
             #[cfg(feature = "p2p-transport-unix")]
             ListenerVariant::Unix(listener) => {
                 let path = self.endpoint.to_file_path()?;
-                let l = listener.do_listen(&path.into()).await?;
+                let l = listener.do_listen(&path).await?;
                 Ok(Box::new(l))
             }
         }

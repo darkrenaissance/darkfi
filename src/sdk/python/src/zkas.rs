@@ -273,8 +273,7 @@ impl Proof {
                 .unwrap();
 
         // Now replace the "stuff" back again
-        for (old_circ, (circ, stuff)) in
-            circuits.iter().zip(ucircuits.into_iter().zip(other_stuff.into_iter()))
+        for (old_circ, (circ, stuff)) in circuits.iter().zip(ucircuits.into_iter().zip(other_stuff))
         {
             old_circ.replace(ZkCircuit(circ, stuff.0, stuff.1));
         }

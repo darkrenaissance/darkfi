@@ -18,10 +18,10 @@
 
 use std::time::Duration;
 
-use async_std::io::{timeout, ReadExt, WriteExt};
+use smol::io::{AsyncReadExt, AsyncWriteExt};
 
 use super::jsonrpc::*;
-use crate::{error::RpcError, net::transport::PtStream, Result};
+use crate::{error::RpcError, net::transport::PtStream, system::io_timeout, Result};
 
 pub(super) const INIT_BUF_SIZE: usize = 4096; // 4K
 pub(super) const MAX_BUF_SIZE: usize = 1024 * 8192; // 8M
@@ -40,7 +40,7 @@ pub(super) async fn read_from_stream(
 
         // Lame we have to duplicate this code, but it is what it is.
         if with_timeout {
-            match timeout(READ_TIMEOUT, stream.read(&mut buf[total_read..])).await {
+            match io_timeout(READ_TIMEOUT, stream.read(&mut buf[total_read..])).await {
                 Ok(0) if total_read == 0 => {
                     return Err(
                         RpcError::ConnectionClosed("Connection closed cleanly".to_string()).into()

@@ -16,14 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cmp::Ordering, collections::HashMap, fmt::Debug, path::Path};
+use std::{cmp::Ordering, collections::HashMap, fmt::Debug, path::Path, sync::Arc};
 
-use async_std::sync::{Arc, Mutex};
-use blake3;
 use darkfi_serial::{
     deserialize, serialize, Decodable, Encodable, SerialDecodable, SerialEncodable,
 };
 use log::{error, info};
+use smol::lock::Mutex;
 use tinyjson::JsonValue;
 
 use crate::{
@@ -457,188 +456,196 @@ mod tests {
         Event { previous_event_hash, action: PrivMsgEvent::new(), timestamp }
     }
 
-    #[async_std::test]
-    async fn test_remove_old_events() {
-        let events_queue = EventsQueue::new();
-        let mut model = Model::new(events_queue);
-        let root_id = model.current_root;
+    #[test]
+    fn test_remove_old_events() {
+        smol::block_on(async {
+            let events_queue = EventsQueue::new();
+            let mut model = Model::new(events_queue);
+            let root_id = model.current_root;
 
-        // event_node 1
-        // Fill this node with 10 events
-        // These are considered old events from 10 days ago
-        let mut event_node_1_ids = vec![];
-        let mut id1 = root_id;
-        let timestamp = Timestamp::current_time().0 - 864000; // 864000 is 10 days in seconds
-        for i in 0..10 {
-            let node = create_message(id1, Timestamp(timestamp + i));
-            id1 = node.hash();
-            model.add(node).await;
-            event_node_1_ids.push(id1);
-        }
-        sleep(1).await;
+            // event_node 1
+            // Fill this node with 10 events
+            // These are considered old events from 10 days ago
+            let mut event_node_1_ids = vec![];
+            let mut id1 = root_id;
+            let timestamp = Timestamp::current_time().0 - 864000; // 864000 is 10 days in seconds
+            for i in 0..10 {
+                let node = create_message(id1, Timestamp(timestamp + i));
+                id1 = node.hash();
+                model.add(node).await;
+                event_node_1_ids.push(id1);
+            }
+            sleep(1).await;
 
-        // event_node 2
-        // Fill this node with 10 events
-        // These are considered new events at current time
-        let timestamp = Timestamp::current_time().0;
-        for i in 0..150 {
-            let node = create_message(id1, Timestamp(timestamp + i));
-            id1 = node.hash();
-            model.add(node).await;
-        }
-        sleep(1).await;
+            // event_node 2
+            // Fill this node with 10 events
+            // These are considered new events at current time
+            let timestamp = Timestamp::current_time().0;
+            for i in 0..150 {
+                let node = create_message(id1, Timestamp(timestamp + i));
+                id1 = node.hash();
+                model.add(node).await;
+            }
+            sleep(1).await;
 
-        // every event older than one week gets removed
-        let ts = Timestamp::current_time().0 - 604800; // one week in seconds
-        let _ = model.remove_old_events(Timestamp(ts));
+            // every event older than one week gets removed
+            let ts = Timestamp::current_time().0 - 604800; // one week in seconds
+            let _ = model.remove_old_events(Timestamp(ts));
 
-        // ensure the 10 events from event_node 1 are not in the tree anymore
-        for event in event_node_1_ids {
-            assert!(!model.event_map.contains_key(&event));
-        }
+            // ensure the 10 events from event_node 1 are not in the tree anymore
+            for event in event_node_1_ids {
+                assert!(!model.event_map.contains_key(&event));
+            }
 
-        // event_node 2 events (150) + root event = 151 events
-        assert_eq!(model.event_map.len(), 151_usize);
+            // event_node 2 events (150) + root event = 151 events
+            assert_eq!(model.event_map.len(), 151_usize);
+        });
     }
 
-    #[async_std::test]
-    async fn test_prune_chains() {
-        let events_queue = EventsQueue::new();
-        let mut model = Model::new(events_queue);
-        let root_id = model.current_root;
+    #[test]
+    fn test_prune_chains() {
+        smol::block_on(async {
+            let events_queue = EventsQueue::new();
+            let mut model = Model::new(events_queue);
+            let root_id = model.current_root;
 
-        // event_node 1
-        // Fill this node with 10 events
-        let mut event_node_1_ids = vec![];
-        let mut id1 = root_id;
-        for _ in 0..10 {
-            let node = create_message(id1, Timestamp::current_time());
-            id1 = node.hash();
-            model.add(node).await;
-            event_node_1_ids.push(id1);
-        }
+            // event_node 1
+            // Fill this node with 10 events
+            let mut event_node_1_ids = vec![];
+            let mut id1 = root_id;
+            for _ in 0..10 {
+                let node = create_message(id1, Timestamp::current_time());
+                id1 = node.hash();
+                model.add(node).await;
+                event_node_1_ids.push(id1);
+            }
 
-        sleep(1).await;
+            sleep(1).await;
 
-        // event_node 2
-        // Start from the root_id and fill the node with (MAX_DEPTH + 10) events.
-        // All the events from event_node_1 should get removed from the tree
-        let mut id2 = root_id;
-        for _ in 0..(MAX_DEPTH + 10) {
-            let node = create_message(id2, Timestamp::current_time());
-            id2 = node.hash();
-            model.add(node).await;
-        }
+            // event_node 2
+            // Start from the root_id and fill the node with (MAX_DEPTH + 10) events.
+            // All the events from event_node_1 should get removed from the tree
+            let mut id2 = root_id;
+            for _ in 0..(MAX_DEPTH + 10) {
+                let node = create_message(id2, Timestamp::current_time());
+                id2 = node.hash();
+                model.add(node).await;
+            }
 
-        assert_eq!(model.find_head(), id2);
+            assert_eq!(model.find_head(), id2);
 
-        // Ensure events from node 1 are removed in favor of node 2's longer chain
-        for id in event_node_1_ids {
-            assert!(!model.event_map.contains_key(&id));
-        }
+            // Ensure events from node 1 are removed in favor of node 2's longer chain
+            for id in event_node_1_ids {
+                assert!(!model.event_map.contains_key(&id));
+            }
 
-        // node1: (10 leaves) + node2: (MAX_DEPTH + 10) events + root event = (MAX_DEPTH + 11)
-        //  these ^^^^^^^^^^^ are pruned
-        assert_eq!(model.event_map.len(), (MAX_DEPTH + 11) as usize);
+            // node1: (10 leaves) + node2: (MAX_DEPTH + 10) events + root event = (MAX_DEPTH + 11)
+            //  these ^^^^^^^^^^^ are pruned
+            assert_eq!(model.event_map.len(), (MAX_DEPTH + 11) as usize);
+        });
     }
 
-    #[async_std::test]
-    async fn test_diff_depth() {
-        let events_queue = EventsQueue::new();
-        let mut model = Model::new(events_queue);
-        let root_id = model.current_root;
+    #[test]
+    fn test_diff_depth() {
+        smol::block_on(async {
+            let events_queue = EventsQueue::new();
+            let mut model = Model::new(events_queue);
+            let root_id = model.current_root;
 
-        // event_node 1
-        // Fill this node with (MAX_DEPTH / 2) events
-        let mut id1 = root_id;
-        for _ in 0..(MAX_DEPTH / 2) {
-            let node = create_message(id1, Timestamp::current_time());
-            id1 = node.hash();
-            model.add(node).await;
-        }
+            // event_node 1
+            // Fill this node with (MAX_DEPTH / 2) events
+            let mut id1 = root_id;
+            for _ in 0..(MAX_DEPTH / 2) {
+                let node = create_message(id1, Timestamp::current_time());
+                id1 = node.hash();
+                model.add(node).await;
+            }
 
-        sleep(1).await;
+            sleep(1).await;
 
-        // event_node 2
-        // Start from the root_id and fill the node with (MAX_DEPTH + 10) events
-        // all the events must be added since the depth between id1
-        // and the last head is less than MAX_DEPTH
-        let mut id2 = root_id;
-        for _ in 0..(MAX_DEPTH + 10) {
-            let node = create_message(id2, Timestamp::current_time());
-            id2 = node.hash();
-            model.add(node).await;
-        }
+            // event_node 2
+            // Start from the root_id and fill the node with (MAX_DEPTH + 10) events
+            // all the events must be added since the depth between id1
+            // and the last head is less than MAX_DEPTH
+            let mut id2 = root_id;
+            for _ in 0..(MAX_DEPTH + 10) {
+                let node = create_message(id2, Timestamp::current_time());
+                id2 = node.hash();
+                model.add(node).await;
+            }
 
-        assert_eq!(model.find_head(), id2);
+            assert_eq!(model.find_head(), id2);
 
-        sleep(1).await;
+            sleep(1).await;
 
-        // event_node 3
-        // This will start as new chain, but no events will be added
-        // since the last event's depth is MAX_DEPTH + 10
-        let mut id3 = root_id;
-        for _ in 0..30 {
-            let node = create_message(id3, Timestamp::current_time());
-            id3 = node.hash();
-            model.add(node).await;
+            // event_node 3
+            // This will start as new chain, but no events will be added
+            // since the last event's depth is MAX_DEPTH + 10
+            let mut id3 = root_id;
+            for _ in 0..30 {
+                let node = create_message(id3, Timestamp::current_time());
+                id3 = node.hash();
+                model.add(node).await;
 
-            // ensure events are not added
-            assert!(!model.event_map.contains_key(&id3));
-        }
+                // ensure events are not added
+                assert!(!model.event_map.contains_key(&id3));
+            }
 
-        sleep(1).await;
+            sleep(1).await;
 
-        assert_eq!(model.find_head(), id2);
+            assert_eq!(model.find_head(), id2);
 
-        // Add more events to the event_node 1
-        // At the end this chain must overtake the event_node 2
-        for _ in (MAX_DEPTH / 2)..(MAX_DEPTH + 15) {
-            let node = create_message(id1, Timestamp::current_time());
-            id1 = node.hash();
-            model.add(node).await;
-        }
+            // Add more events to the event_node 1
+            // At the end this chain must overtake the event_node 2
+            for _ in (MAX_DEPTH / 2)..(MAX_DEPTH + 15) {
+                let node = create_message(id1, Timestamp::current_time());
+                id1 = node.hash();
+                model.add(node).await;
+            }
 
-        assert_eq!(model.find_head(), id1);
+            assert_eq!(model.find_head(), id1);
+        });
     }
 
-    #[async_std::test]
-    async fn save_load_model() -> Result<()> {
-        // Setup directories
-        let path = "/tmp/test_model";
-        remove_dir_all(path).ok();
-        let path = PathBuf::from(path);
-        create_dir_all(&path)?;
+    #[test]
+    fn save_load_model() -> Result<()> {
+        smol::block_on(async {
+            // Setup directories
+            let path = "/tmp/test_model";
+            remove_dir_all(path).ok();
+            let path = PathBuf::from(path);
+            create_dir_all(&path)?;
 
-        // First model
-        let events_queue = EventsQueue::<PrivMsgEvent>::new();
-        let mut model1 = Model::new(events_queue);
-        let root_id = model1.current_root;
+            // First model
+            let events_queue = EventsQueue::<PrivMsgEvent>::new();
+            let mut model1 = Model::new(events_queue);
+            let root_id = model1.current_root;
 
-        // Create an event
-        let event = create_message(root_id, Timestamp::current_time());
-        // Add event to first model
-        model1.add(event).await;
+            // Create an event
+            let event = create_message(root_id, Timestamp::current_time());
+            // Add event to first model
+            model1.add(event).await;
 
-        // Save first model
-        model1.save_tree(&path)?;
+            // Save first model
+            model1.save_tree(&path)?;
 
-        // Second model
-        let events_queue = EventsQueue::<PrivMsgEvent>::new();
-        let mut model2 = Model::new(events_queue);
+            // Second model
+            let events_queue = EventsQueue::<PrivMsgEvent>::new();
+            let mut model2 = Model::new(events_queue);
 
-        // Load into second model
-        model2.load_tree(&path)?;
+            // Load into second model
+            model2.load_tree(&path)?;
 
-        // Test equality
-        let res = model1.event_map.len() == model2.event_map.len() &&
-            model1.event_map.keys().all(|k| model2.event_map.contains_key(k));
+            // Test equality
+            let res = model1.event_map.len() == model2.event_map.len() &&
+                model1.event_map.keys().all(|k| model2.event_map.contains_key(k));
 
-        assert!(res);
+            assert!(res);
 
-        remove_dir_all(path).ok();
+            remove_dir_all(path).ok();
 
-        Ok(())
+            Ok(())
+        })
     }
 
     #[test]

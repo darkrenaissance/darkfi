@@ -55,54 +55,56 @@ mod tests {
         }
     }
 
-    #[async_std::test]
-    async fn event_graph_integration() {
-        // Base structures
-        let events_queue = EventsQueue::<TestEvent>::new();
-        let mut model = Model::new(events_queue.clone());
-        let _view = View::new(events_queue);
+    #[test]
+    fn event_graph_integration() {
+        smol::block_on(async {
+            // Base structures
+            let events_queue = EventsQueue::<TestEvent>::new();
+            let mut model = Model::new(events_queue.clone());
+            let _view = View::new(events_queue);
 
-        // Buffers
-        let _seen_event: SeenPtr<EventId> = Seen::new();
-        let seen_inv: SeenPtr<EventId> = Seen::new();
+            // Buffers
+            let _seen_event: SeenPtr<EventId> = Seen::new();
+            let seen_inv: SeenPtr<EventId> = Seen::new();
 
-        let seen_ids = Seen::new();
-        // Keeps track of the events we received, but haven't read yet
-        let mut unread_msgs = vec![];
+            let seen_ids = Seen::new();
+            // Keeps track of the events we received, but haven't read yet
+            let mut unread_msgs = vec![];
 
-        let test_event0 =
-            TestEvent { nick: "brawndo".to_string(), msg: "Electrolytes".to_string() };
-        let _test_event1 =
-            TestEvent { nick: "camacho".to_string(), msg: "Shieeeeeeeet".to_string() };
+            let test_event0 =
+                TestEvent { nick: "brawndo".to_string(), msg: "Electrolytes".to_string() };
+            let _test_event1 =
+                TestEvent { nick: "camacho".to_string(), msg: "Shieeeeeeeet".to_string() };
 
-        // We create an event and broadcast it
-        let head_hash = model.get_head_hash();
-        let event0 = Event {
-            previous_event_hash: head_hash,
-            action: test_event0,
-            timestamp: Timestamp::current_time(),
-        };
+            // We create an event and broadcast it
+            let head_hash = model.get_head_hash();
+            let event0 = Event {
+                previous_event_hash: head_hash,
+                action: test_event0,
+                timestamp: Timestamp::current_time(),
+            };
 
-        // Simulate receiving the event
-        assert!(seen_ids.push(&event0.hash()).await);
-        // Simulate receiving the event again
-        assert!(!seen_ids.push(&event0.hash()).await);
+            // Simulate receiving the event
+            assert!(seen_ids.push(&event0.hash()).await);
+            // Simulate receiving the event again
+            assert!(!seen_ids.push(&event0.hash()).await);
 
-        // Add the event into the model
-        model.add(event0.clone()).await;
+            // Add the event into the model
+            model.add(event0.clone()).await;
 
-        // Send inventory
-        let inv0 = Inv { invs: vec![InvItem { hash: event0.hash() }] };
-        // Simulate recieving the inventory
-        assert!(seen_inv.push(&inv0.invs[0].hash).await);
-        // Simulate recieving the inventory again
-        assert!(!seen_inv.push(&inv0.invs[0].hash).await);
+            // Send inventory
+            let inv0 = Inv { invs: vec![InvItem { hash: event0.hash() }] };
+            // Simulate recieving the inventory
+            assert!(seen_inv.push(&inv0.invs[0].hash).await);
+            // Simulate recieving the inventory again
+            assert!(!seen_inv.push(&inv0.invs[0].hash).await);
 
-        // TODO: getdata (self.send_getdata(vec![inv_item.hash]).await?)
+            // TODO: getdata (self.send_getdata(vec![inv_item.hash]).await?)
 
-        // Add the event to the unread msgs vec
-        unread_msgs.push(event0);
+            // Add the event to the unread msgs vec
+            unread_msgs.push(event0);
 
-        // TODO: Simulate network behaviour, etc.
+            // TODO: Simulate network behaviour, etc.
+        });
     }
 }

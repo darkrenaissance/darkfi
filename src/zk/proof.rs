@@ -17,10 +17,10 @@
  */
 use std::{io, io::Cursor};
 
+use darkfi_sdk::pasta::{pallas, vesta};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::{
     helpers::SerdeFormat,
-    pasta::{pallas, vesta},
     plonk,
     plonk::{Circuit, SingleVerifier},
     poly::commitment::Params,
