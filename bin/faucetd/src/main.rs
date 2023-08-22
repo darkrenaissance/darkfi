@@ -71,9 +71,9 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
     },
     runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
-    system::StoppableTask,
+    system::{sleep, StoppableTask},
     tx::Transaction,
-    util::{async_util::sleep, parse::decode_base10, path::expand_path},
+    util::{parse::decode_base10, path::expand_path},
     wallet::{WalletDb, WalletPtr},
     zk::{proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses},
     zkas::ZkBinary,
@@ -627,7 +627,7 @@ async fn prune_airdrop_maps(
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // Initialize or load wallet
     let wallet = WalletDb::new(Some(expand_path(&args.wallet_path)?), Some(&args.wallet_pass))?;
 
@@ -696,7 +696,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         ..Default::default()
     };
 
-    let sync_p2p = net::P2p::new(network_settings).await;
+    let sync_p2p = net::P2p::new(network_settings, ex.clone()).await;
     let registry = sync_p2p.protocol_registry();
 
     info!(target: "faucetd", "Registering block sync P2P protocols...");
@@ -764,9 +764,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     );
 
     info!(target: "faucetd", "Starting sync P2P network");
-    sync_p2p.clone().start(ex.clone()).await?;
+    sync_p2p.clone().start().await?;
     StoppableTask::new().start(
-        sync_p2p.clone().run(ex.clone()),
+        sync_p2p.clone().run(),
         |res| async {
             match res {
                 Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }

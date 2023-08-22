@@ -61,7 +61,7 @@ pub struct Harness {
 }
 
 impl Harness {
-    pub async fn new(config: HarnessConfig, ex: &Arc<smol::Executor<'_>>) -> Result<Self> {
+    pub async fn new(config: HarnessConfig, ex: &Arc<smol::Executor<'static>>) -> Result<Self> {
         // Use test harness to generate genesis transactions
         let mut th = TestHarness::new(&["money".to_string(), "consensus".to_string()]).await?;
         let (genesis_stake_tx, _) = th.genesis_stake(&Holder::Alice, config.alice_initial)?;
@@ -217,7 +217,7 @@ pub async fn generate_node(
     config: &ValidatorConfig,
     sync_settings: &Settings,
     consensus_settings: Option<&Settings>,
-    ex: &Arc<smol::Executor<'_>>,
+    ex: &Arc<smol::Executor<'static>>,
     skip_sync: bool,
 ) -> Result<Darkfid> {
     let sled_db = sled::Config::new().temporary(true).open()?;
@@ -232,17 +232,17 @@ pub async fn generate_node(
         subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
     }
 
-    let sync_p2p = spawn_sync_p2p(&sync_settings, &validator, &subscribers).await;
+    let sync_p2p = spawn_sync_p2p(&sync_settings, &validator, &subscribers, ex.clone()).await;
     let consensus_p2p = if let Some(settings) = consensus_settings {
-        Some(spawn_consensus_p2p(settings, &validator, &subscribers).await)
+        Some(spawn_consensus_p2p(settings, &validator, &subscribers, ex.clone()).await)
     } else {
         None
     };
     let node = Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator, subscribers).await;
 
-    sync_p2p.clone().start(ex.clone()).await?;
+    sync_p2p.clone().start().await?;
     StoppableTask::new().start(
-        sync_p2p.run(ex.clone()),
+        sync_p2p.run(),
         |res| async {
             match res {
                 Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
@@ -255,9 +255,9 @@ pub async fn generate_node(
 
     if consensus_settings.is_some() {
         let consensus_p2p = consensus_p2p.unwrap();
-        consensus_p2p.clone().start(ex.clone()).await?;
+        consensus_p2p.clone().start().await?;
         StoppableTask::new().start(
-            consensus_p2p.run(ex.clone()),
+            consensus_p2p.run(),
             |res| async {
                 match res {
                     Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }

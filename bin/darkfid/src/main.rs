@@ -267,7 +267,7 @@ impl Darkfid {
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     if args.consensus && args.clock_sync {
         // We verify that if peer/seed nodes are configured, their rpc config also exists
         if ((!args.consensus_p2p_peer.is_empty() && args.consensus_peer_rpc.is_empty()) ||
@@ -359,7 +359,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
             ..Default::default()
         };
 
-        let p2p = net::P2p::new(sync_network_settings).await;
+        let p2p = net::P2p::new(sync_network_settings, ex.clone()).await;
         let registry = p2p.protocol_registry();
 
         let _state = state.clone();
@@ -401,7 +401,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
                 localnet: args.localnet,
                 ..Default::default()
             };
-            let p2p = net::P2p::new(consensus_network_settings).await;
+            let p2p = net::P2p::new(consensus_network_settings, ex.clone()).await;
             let registry = p2p.protocol_registry();
 
             let _state = state.clone();
@@ -445,9 +445,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     );
 
     info!("Starting sync P2P network");
-    sync_p2p.clone().unwrap().start(ex.clone()).await?;
+    sync_p2p.clone().unwrap().start().await?;
     StoppableTask::new().start(
-        sync_p2p.clone().unwrap().run(ex.clone()),
+        sync_p2p.clone().unwrap().run(),
         |res| async {
             match res {
                 Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
@@ -471,9 +471,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let proposal_task = if args.consensus && *darkfid.synced.lock().await {
         info!("Starting consensus P2P network");
         let consensus_p2p = consensus_p2p.clone().unwrap();
-        consensus_p2p.clone().start(ex.clone()).await?;
+        consensus_p2p.clone().start().await?;
         StoppableTask::new().start(
-            consensus_p2p.clone().run(ex.clone()),
+            consensus_p2p.clone().run(),
             |res| async {
                 match res {
                     Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }

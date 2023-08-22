@@ -27,7 +27,7 @@ use harness::{generate_node, Harness, HarnessConfig};
 
 mod forks;
 
-async fn sync_blocks_real(ex: Arc<Executor<'_>>) -> Result<()> {
+async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     init_logger();
 
     // Initialize harness in testing mode

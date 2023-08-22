@@ -41,8 +41,8 @@ use darkfi::{
     },
     net,
     rpc::{jsonrpc::JsonSubscriber, server::listen_and_serve},
-    system::{StoppableTask, Subscriber, SubscriberPtr},
-    util::{async_util::sleep, file::save_json_file, path::expand_path, time::Timestamp},
+    system::{sleep, StoppableTask, Subscriber, SubscriberPtr},
+    util::{file::save_json_file, path::expand_path, time::Timestamp},
     Error, Result,
 };
 
@@ -95,7 +95,7 @@ async fn remove_old_events(model: ModelPtr<PrivMsgEvent>) -> Result<()> {
 }
 
 async_daemonize!(realmain);
-async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
+async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Result<()> {
     let datastore_path = expand_path(&settings.datastore)?;
 
     // mkdir datastore_path if not exists
@@ -194,7 +194,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     let net_settings = settings.net.clone();
 
     // New p2p
-    let p2p = net::P2p::new(net_settings.into()).await;
+    let p2p = net::P2p::new(net_settings.into(), executor.clone()).await;
 
     // Register the protocol_event
     let registry = p2p.protocol_registry();
@@ -263,9 +263,9 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     // Start P2P network
     ////////////////////
     info!(target: "darkirc", "Starting P2P network");
-    p2p.clone().start(executor.clone()).await?;
+    p2p.clone().start().await?;
     StoppableTask::new().start(
-        p2p.clone().run(executor.clone()),
+        p2p.clone().run(),
         |res| async {
             match res {
                 Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }

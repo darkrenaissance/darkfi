@@ -519,7 +519,7 @@ async fn fetch_chunk_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     // The working directory for this daemon and geode.
     let basedir = expand_path(&args.base_dir)?;
 
@@ -531,7 +531,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
     let geode = Geode::new(&basedir.into()).await?;
 
     info!("Instantiating P2P network");
-    let p2p = P2p::new(args.net.into()).await;
+    let p2p = P2p::new(args.net.into(), ex.clone()).await;
 
     // Daemon instantiation
     let (file_fetch_tx, file_fetch_rx) = smol::channel::unbounded();
@@ -598,9 +598,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
             async move { ProtocolFud::init(fud_, channel, p2p).await.unwrap() }
         })
         .await;
-    p2p.clone().start(ex.clone()).await?;
+    p2p.clone().start().await?;
     StoppableTask::new().start(
-        p2p.clone().run(ex.clone()),
+        p2p.clone().run(),
         |res| async {
             match res {
                 Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }

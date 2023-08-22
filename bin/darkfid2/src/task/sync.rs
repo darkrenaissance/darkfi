@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{
-    util::{async_util::sleep, encoding::base64},
-    Result,
-};
+use darkfi::{system::sleep, util::encoding::base64, Result};
 use darkfi_serial::serialize;
 use log::{debug, info, warn};
 use tinyjson::JsonValue;

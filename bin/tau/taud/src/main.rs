@@ -253,7 +253,7 @@ async fn on_receive_task(
 }
 
 async_daemonize!(realmain);
-async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
+async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Result<()> {
     let datastore_path = expand_path(&settings.datastore)?;
 
     let nickname =
@@ -348,7 +348,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     //
     let net_settings = settings.net.clone();
 
-    let p2p = net::P2p::new(net_settings.into()).await;
+    let p2p = net::P2p::new(net_settings.into(), executor.clone()).await;
     let registry = p2p.protocol_registry();
 
     registry
@@ -360,12 +360,10 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         })
         .await;
 
-    p2p.clone().start(executor.clone()).await?;
-
     info!(target: "taud", "Starting P2P network");
-    p2p.clone().start(executor.clone()).await?;
+    p2p.clone().start().await?;
     StoppableTask::new().start(
-        p2p.clone().run(executor.clone()),
+        p2p.clone().run(),
         |res| async {
             match res {
                 Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }

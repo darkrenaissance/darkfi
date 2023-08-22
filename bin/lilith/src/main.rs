@@ -41,9 +41,8 @@ use darkfi::{
         jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
     },
-    system::StoppableTask,
+    system::{sleep, StoppableTask},
     util::{
-        async_util::sleep,
         file::{load_file, save_file},
         path::{expand_path, get_config_path},
     },
@@ -352,7 +351,7 @@ async fn spawn_net(
     info: &NetInfo,
     accept_addrs: &[Url],
     saved_hosts: &HashSet<Url>,
-    ex: Arc<Executor<'_>>,
+    ex: Arc<Executor<'static>>,
 ) -> Result<Spawn> {
     let mut listen_urls = vec![];
 
@@ -384,7 +383,7 @@ async fn spawn_net(
     };
 
     // Create P2P instance
-    let p2p = P2p::new(settings).await;
+    let p2p = P2p::new(settings, ex.clone()).await;
 
     // Fill db with cached hosts
     let hosts: Vec<Url> = saved_hosts.iter().cloned().collect();
@@ -392,10 +391,10 @@ async fn spawn_net(
 
     let addrs_str: Vec<&str> = listen_urls.iter().map(|x| x.as_str()).collect();
     info!(target: "lilith", "Starting seed network node for \"{}\" on {:?}", name, addrs_str);
-    p2p.clone().start(ex.clone()).await?;
+    p2p.clone().start().await?;
     let name_ = name.clone();
     StoppableTask::new().start(
-        p2p.clone().run(ex.clone()),
+        p2p.clone().run(),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
@@ -411,7 +410,7 @@ async fn spawn_net(
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     // Pick up network settings from the TOML config
     let cfg_path = get_config_path(args.config, CONFIG_FILE)?;
     let toml_contents = std::fs::read_to_string(cfg_path)?;

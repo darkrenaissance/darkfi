@@ -126,7 +126,7 @@ impl Darkfid {
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid", "Initializing DarkFi node...");
 
     if args.testing_mode {
@@ -165,11 +165,15 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     }
 
     // Initialize syncing P2P network
-    let sync_p2p = spawn_sync_p2p(&args.sync_net.into(), &validator, &subscribers).await;
+    let sync_p2p =
+        spawn_sync_p2p(&args.sync_net.into(), &validator, &subscribers, ex.clone()).await;
 
     // Initialize consensus P2P network
     let consensus_p2p = if args.consensus {
-        Some(spawn_consensus_p2p(&args.consensus_net.into(), &validator, &subscribers).await)
+        Some(
+            spawn_consensus_p2p(&args.consensus_net.into(), &validator, &subscribers, ex.clone())
+                .await,
+        )
     } else {
         None
     };
@@ -200,9 +204,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     );
 
     info!(target: "darkfid", "Starting sync P2P network");
-    sync_p2p.clone().start(ex.clone()).await?;
+    sync_p2p.clone().start().await?;
     StoppableTask::new().start(
-        sync_p2p.clone().run(ex.clone()),
+        sync_p2p.clone().run(),
         |res| async {
             match res {
                 Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
@@ -217,9 +221,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     if args.consensus {
         info!("Starting consensus P2P network");
         let consensus_p2p = consensus_p2p.clone().unwrap();
-        consensus_p2p.clone().start(ex.clone()).await?;
+        consensus_p2p.clone().start().await?;
         StoppableTask::new().start(
-            consensus_p2p.run(ex.clone()),
+            consensus_p2p.run(),
             |res| async {
                 match res {
                     Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }

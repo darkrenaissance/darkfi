@@ -16,9 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use log::info;
+use smol::Executor;
 
 use darkfi::{
     error::TxVerifyFailed,
@@ -76,9 +77,10 @@ pub async fn spawn_sync_p2p(
     settings: &Settings,
     validator: &ValidatorPtr,
     subscribers: &HashMap<&'static str, JsonSubscriber>,
+    executor: Arc<Executor<'static>>,
 ) -> P2pPtr {
     info!(target: "darkfid", "Registering sync network P2P protocols...");
-    let p2p = P2p::new(settings.clone()).await;
+    let p2p = P2p::new(settings.clone(), executor.clone()).await;
     let registry = p2p.protocol_registry();
 
     let _validator = validator.clone();
@@ -117,9 +119,10 @@ pub async fn spawn_consensus_p2p(
     settings: &Settings,
     validator: &ValidatorPtr,
     subscribers: &HashMap<&'static str, JsonSubscriber>,
+    executor: Arc<Executor<'static>>,
 ) -> P2pPtr {
     info!(target: "darkfid", "Registering consensus network P2P protocols...");
-    let p2p = P2p::new(settings.clone()).await;
+    let p2p = P2p::new(settings.clone(), executor.clone()).await;
     let registry = p2p.protocol_registry();
 
     let _validator = validator.clone();
