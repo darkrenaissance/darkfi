@@ -29,7 +29,7 @@ members = [
     "bin/genev/genevd",
     "bin/genev/genev-cli",
     "bin/darkirc",
-    "bin/dnetview",
+    #"bin/dnetview",
     "bin/tau/taud",
     "bin/tau/tau-cli",
     "bin/vanityaddr",
@@ -48,7 +48,7 @@ members = [
     "src/contract/consensus",
     "src/contract/deployooor",
 
-    "example/dchat",
+    #"example/dchat",
 ]
 
 [dependencies]
