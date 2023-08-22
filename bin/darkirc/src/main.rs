@@ -210,19 +210,31 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     // ==============
     // p2p dnet setup
     // ==============
+    info!(target: "darkirc", "Starting dnet subs task");
     let json_sub = JsonSubscriber::new("dnet.subscribe_events");
     let json_sub_ = json_sub.clone();
     let p2p_ = p2p.clone();
-    executor
-        .spawn(async move {
+    let dnet_task = StoppableTask::new();
+    dnet_task.clone().start(
+        async move {
             let dnet_sub = p2p_.dnet_sub().subscribe().await;
             loop {
                 let event = dnet_sub.receive().await;
                 debug!("Got dnet event: {:?}", event);
                 json_sub_.notify(vec![event.into()]).await;
             }
-        })
-        .detach();
+        },
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => {
+                    error!(target: "darkirc", "Failed starting remove old events task: {}", e)
+                }
+            }
+        },
+        Error::DetachedTaskStopped,
+        executor.clone(),
+    );
 
     ////////////////////
     // RPC interface setup
@@ -313,6 +325,9 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     info!("Caught termination signal, cleaning up and exiting...");
 
     model_clone.lock().await.save_tree(&datastore_path)?;
+
+    info!(target: "darkirc", "Stopping dnet subs task...");
+    dnet_task.stop().await;
 
     info!(target: "darkirc", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
