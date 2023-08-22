@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::sync::Arc;
+
 use clap::{Parser, Subcommand};
 use darkfi::{
     rpc::client::RpcClient,
@@ -23,6 +25,7 @@ use darkfi::{
     Result,
 };
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
+use smol::Executor;
 use url::Url;
 
 use genevd::GenEvent;
@@ -52,44 +55,47 @@ enum SubCmd {
     List,
 }
 
-#[async_std::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let args = Args::parse();
 
     let log_level = get_log_level(args.verbose);
     let log_config = get_log_config(args.verbose);
     TermLogger::init(log_level, log_config, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    let rpc_client = RpcClient::new(args.endpoint, None).await?;
-    let gen = Gen { rpc_client };
+    let executor = Arc::new(Executor::new());
 
-    match args.command {
-        Some(subcmd) => match subcmd {
-            SubCmd::Add { values } => {
-                let event = GenEvent {
-                    nick: values[0].clone(),
-                    title: values[1].clone(),
-                    text: values[2..].join(" "),
-                };
+    smol::block_on(executor.run(async {
+        let rpc_client = RpcClient::new(args.endpoint, executor.clone()).await?;
+        let gen = Gen { rpc_client };
 
-                return gen.add(event).await
-            }
+        match args.command {
+            Some(subcmd) => match subcmd {
+                SubCmd::Add { values } => {
+                    let event = GenEvent {
+                        nick: values[0].clone(),
+                        title: values[1].clone(),
+                        text: values[2..].join(" "),
+                    };
 
-            SubCmd::List => {
-                let events = gen.list().await?;
-                for event in events {
-                    println!("=============================");
-                    println!(
-                        "- nickname: {}, title: {}, text: {}",
-                        event.action.nick, event.action.title, event.action.text
-                    );
+                    return gen.add(event).await
                 }
-            }
-        },
-        None => println!("none"),
-    }
 
-    gen.close_connection().await?;
+                SubCmd::List => {
+                    let events = gen.list().await?;
+                    for event in events {
+                        println!("=============================");
+                        println!(
+                            "- nickname: {}, title: {}, text: {}",
+                            event.action.nick, event.action.title, event.action.text
+                        );
+                    }
+                }
+            },
+            None => println!("none"),
+        }
 
-    Ok(())
+        gen.close_connection().await?;
+
+        Ok(())
+    }))
 }

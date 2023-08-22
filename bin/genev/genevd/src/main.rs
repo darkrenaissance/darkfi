@@ -16,10 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::{
-    stream::StreamExt,
-    sync::{Arc, Mutex},
-};
+use std::sync::Arc;
+
 use darkfi::{
     async_daemonize, cli_desc,
     event_graph::{
@@ -35,6 +33,7 @@ use darkfi::{
 };
 use genevd::GenEvent;
 use log::{error, info};
+use smol::{lock::Mutex, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -174,11 +173,11 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'static>>) -> Result<
             }
         },
         Error::RPCServerStopped,
-        executor,
+        executor.clone(),
     );
 
     // Signal handling for graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new()?;
+    let (signals_handler, signals_task) = SignalHandler::new(executor)?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 

@@ -18,10 +18,10 @@
 
 use std::{collections::HashMap, fs::create_dir_all, path::PathBuf, sync::Arc};
 
-use async_std::sync::Mutex;
 use async_trait::async_trait;
 use crypto_box::ChaChaBox;
 use log::{debug, warn};
+use smol::lock::Mutex;
 use tinyjson::JsonValue;
 
 use darkfi::{

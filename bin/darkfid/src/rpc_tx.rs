@@ -50,7 +50,7 @@ impl Darkfid {
 
         // Try to deserialize the transaction
         let tx_enc = params[0].get::<String>().unwrap();
-        let tx_bytes = match base64::decode(&tx_enc.trim()) {
+        let tx_bytes = match base64::decode(tx_enc.trim()) {
             Some(v) => v,
             None => {
                 error!("[RPC] tx.simulate: Failed decoding base64 transaction");
@@ -106,7 +106,7 @@ impl Darkfid {
 
         // Try to deserialize the transaction
         let tx_enc = params[0].get::<String>().unwrap();
-        let tx_bytes = match base64::decode(&tx_enc.trim()) {
+        let tx_bytes = match base64::decode(tx_enc.trim()) {
             Some(v) => v,
             None => {
                 error!("[RPC] tx.broadcast: Failed decoding base64 transaction");

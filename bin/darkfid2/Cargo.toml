@@ -29,7 +29,6 @@ tinyjson = "2.5.1"
 url = "2.4.0"
 
 # Daemon
-async-std = "1.12.0"
 easy-parallel = "3.3.0"
 signal-hook-async-std = "0.2.2"
 signal-hook = "0.3.17"

@@ -16,17 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::{HashMap, HashSet};
-
-use async_std::{
-    channel,
-    fs::File,
-    stream::StreamExt,
-    sync::{Arc, RwLock},
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
 };
+
 use async_trait::async_trait;
 use log::{debug, error, info, warn};
-use smol::Executor;
+use smol::{channel, fs::File, lock::RwLock, stream::StreamExt, Executor};
 use structopt_toml::{structopt::StructOpt, StructOptToml};
 use tinyjson::JsonValue;
 use url::Url;
@@ -528,7 +525,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let chunks_router = Arc::new(RwLock::new(HashMap::new()));
 
     info!("Instantiating Geode instance");
-    let geode = Geode::new(&basedir.into()).await?;
+    let geode = Geode::new(&basedir).await?;
 
     info!("Instantiating P2P network");
     let p2p = P2p::new(args.net.into(), ex.clone()).await;
@@ -608,11 +605,11 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             }
         },
         Error::P2PNetworkStopped,
-        ex,
+        ex.clone(),
     );
 
     // Signal handling for graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new()?;
+    let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 

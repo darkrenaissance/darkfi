@@ -16,12 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, path::Path, str::FromStr};
+use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc};
 
-use async_std::{
-    stream::StreamExt,
-    sync::{Arc, Mutex, RwLock},
-};
 use async_trait::async_trait;
 use chrono::Utc;
 use darkfi_money_contract::{
@@ -45,6 +41,10 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Encodable};
 use log::{debug, error, info};
 use rand::rngs::OsRng;
+use smol::{
+    lock::{Mutex, RwLock},
+    stream::StreamExt,
+};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use tinyjson::JsonValue;
 use url::Url;
@@ -774,7 +774,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             }
         },
         Error::P2PNetworkStopped,
-        ex,
+        ex.clone(),
     );
 
     // TODO: I think this is not needed anymore
@@ -787,7 +787,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     }
 
     // Signal handling for graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new()?;
+    let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
     info!(target: "faucetd", "Caught termination signal, cleaning up and exiting...");
 

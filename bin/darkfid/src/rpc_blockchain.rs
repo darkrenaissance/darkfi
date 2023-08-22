@@ -55,7 +55,7 @@ impl Darkfid {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let slot = match u64::from_str_radix(params[0].get::<String>().unwrap(), 10) {
+        let slot = match params[0].get::<String>().unwrap().parse::<u64>() {
             Ok(v) => v,
             Err(_) => return JsonError::new(ParseError, None, id).into(),
         };

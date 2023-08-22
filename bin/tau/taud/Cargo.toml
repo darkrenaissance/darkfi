@@ -37,7 +37,6 @@ toml = "0.7.6"
 url = "2.4.0"
 
 # Daemon
-async-std = {version = "1.12.0", features = ["attributes"]}
 easy-parallel = "3.3.0"
 signal-hook-async-std = "0.2.2"
 signal-hook = "0.3.17"

@@ -16,9 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use log::debug;
+use smol::lock::Mutex;
 use tinyjson::JsonValue;
 
 use darkfi::{

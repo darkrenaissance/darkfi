@@ -16,15 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{path::Path, str::FromStr};
+use std::{path::Path, str::FromStr, sync::Arc};
 
-use async_std::{
-    stream::StreamExt,
-    sync::{Arc, Mutex},
-};
 use async_trait::async_trait;
 use darkfi_sdk::crypto::PublicKey;
 use log::{error, info};
+use smol::{lock::Mutex, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -501,7 +498,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
             },
             Error::ProposalTaskStopped,
-            ex,
+            ex.clone(),
         );
         Some(task)
     } else {
@@ -510,7 +507,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     };
 
     // Signal handling for graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new()?;
+    let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 

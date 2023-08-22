@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Arc;
+use std::sync::Arc;
+
 use darkfi::{net::Settings, Result};
 use darkfi_contract_test_harness::init_logger;
 use smol::Executor;
@@ -74,7 +75,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
 #[test]
 fn sync_blocks() -> Result<()> {
     let ex = Arc::new(Executor::new());
-    let (signal, shutdown) = async_std::channel::unbounded::<()>();
+    let (signal, shutdown) = smol::channel::unbounded::<()>();
 
     easy_parallel::Parallel::new().each(0..4, |_| smol::block_on(ex.run(shutdown.recv()))).finish(
         || {

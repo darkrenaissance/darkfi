@@ -20,14 +20,14 @@ use std::{
     collections::{HashMap, HashSet},
     path::Path,
     process::exit,
+    sync::Arc,
 };
 
-use async_std::{stream::StreamExt, sync::Arc};
 use async_trait::async_trait;
 use futures::future::join_all;
 use log::{debug, error, info, warn};
 use semver::Version;
-use smol::Executor;
+use smol::{stream::StreamExt, Executor};
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use tinyjson::JsonValue;
@@ -481,11 +481,11 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             }
         },
         Error::RPCServerStopped,
-        ex,
+        ex.clone(),
     );
 
     // Signal handling for graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new()?;
+    let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
     info!(target: "lilith", "Caught termination signal, cleaning up and exiting...");
 

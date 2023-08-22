@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::Arc};
 
-use async_std::{fs::File, io::ReadExt, sync::Arc};
 use async_trait::async_trait;
 use darkfi::{
     geode::MAX_CHUNK_SIZE,
@@ -31,7 +30,7 @@ use darkfi::{
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use log::{debug, error};
-use smol::Executor;
+use smol::{fs::File, io::AsyncReadExt, Executor};
 use url::Url;
 
 use super::Fud;

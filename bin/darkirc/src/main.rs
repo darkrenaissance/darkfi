@@ -16,18 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, fs::create_dir_all};
-
-use async_std::{
-    stream::StreamExt,
-    sync::{Arc, Mutex},
-    task,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use chrono::{Duration, Utc};
 use irc::ClientSubMsg;
 use log::{debug, error, info};
 use rand::rngs::OsRng;
+use smol::{fs::create_dir_all, lock::Mutex, stream::StreamExt};
 use structopt_toml::StructOptToml;
 use tinyjson::JsonValue;
 
@@ -99,12 +94,12 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     let datastore_path = expand_path(&settings.datastore)?;
 
     // mkdir datastore_path if not exists
-    create_dir_all(datastore_path.clone())?;
+    create_dir_all(datastore_path.clone()).await?;
 
     // Signal handling for config reload and graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new()?;
+    let (signals_handler, signals_task) = SignalHandler::new(executor.clone())?;
     let client_sub = Subscriber::new();
-    task::spawn(parse_signals(signals_handler.sighup_sub.clone(), client_sub.clone()));
+    executor.spawn(parse_signals(signals_handler.sighup_sub.clone(), client_sub.clone())).detach();
 
     ////////////////////
     // Generate new keypair and exit

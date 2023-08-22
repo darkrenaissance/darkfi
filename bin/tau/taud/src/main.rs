@@ -16,11 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::{
-    stream::StreamExt,
-    sync::{Arc, Mutex},
-};
-use libc::mkfifo;
 use std::{
     collections::HashMap,
     env,
@@ -28,6 +23,7 @@ use std::{
     fs::{create_dir_all, remove_dir_all},
     io::{stdin, Write},
     path::Path,
+    sync::Arc,
 };
 
 use crypto_box::{
@@ -36,8 +32,10 @@ use crypto_box::{
 };
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use futures::{select, FutureExt};
+use libc::mkfifo;
 use log::{debug, error, info};
 use rand::rngs::OsRng;
+use smol::{lock::Mutex, stream::StreamExt};
 use structopt_toml::StructOptToml;
 use tinyjson::JsonValue;
 
@@ -424,11 +422,11 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             }
         },
         Error::RPCServerStopped,
-        executor,
+        executor.clone(),
     );
 
     // Signal handling for graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new()?;
+    let (signals_handler, signals_task) = SignalHandler::new(executor)?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 

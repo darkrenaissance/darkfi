@@ -16,11 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Arc;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
+
 use crypto_box::ChaChaBox;
 use log::{info, warn};
 use serde::{self, Deserialize};
-use std::collections::{HashMap, HashSet};
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use toml::Value;

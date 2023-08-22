@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use async_std::sync::Arc;
 use darkfi::{
     blockchain::{BlockInfo, Header},
     net::Settings,

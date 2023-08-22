@@ -16,15 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fs::File, net::SocketAddr};
+use std::{fs::File, sync::Arc};
 
 use async_rustls::{rustls, TlsAcceptor};
-use async_std::{
-    net::TcpListener,
-    sync::{Arc, Mutex},
-};
-use futures::{io::BufReader, AsyncRead, AsyncReadExt, AsyncWrite};
 use log::{error, info};
+use smol::{
+    io::{self, AsyncRead, AsyncWrite, BufReader},
+    lock::Mutex,
+    net::{SocketAddr, TcpListener},
+};
 
 use darkfi::{
     event_graph::{
@@ -260,7 +260,7 @@ impl IrcServer {
         notifier: smol::channel::Sender<(NotifierMsg, usize)>,
         executor: Arc<smol::Executor<'_>>,
     ) -> Result<()> {
-        let (reader, writer) = stream.split();
+        let (reader, writer) = io::split(stream);
         let reader = BufReader::new(reader);
 
         // Subscription for the new client

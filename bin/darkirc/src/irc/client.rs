@@ -16,20 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, net::SocketAddr};
-
-use async_std::sync::{Arc, Mutex};
-use futures::{
-    io::{BufReader, ReadHalf, WriteHalf},
-    AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, FutureExt,
-};
-
-use log::{debug, error, info, warn};
+use std::{collections::HashSet, sync::Arc};
 
 use darkfi::{
     event_graph::{model::Event, EventMsg},
     system::Subscription,
     Error, Result,
+};
+use futures::FutureExt;
+use log::{debug, error, info, warn};
+use smol::{
+    io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader, ReadHalf, WriteHalf},
+    lock::Mutex,
+    net::SocketAddr,
 };
 
 use crate::{

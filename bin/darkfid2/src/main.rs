@@ -16,10 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use async_std::{stream::StreamExt, sync::Arc};
 use log::{error, info};
+use smol::stream::StreamExt;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -233,7 +233,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
             },
             Error::P2PNetworkStopped,
-            ex,
+            ex.clone(),
         );
     } else {
         info!("Not starting consensus P2P network");
@@ -250,7 +250,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     darkfid.validator.write().await.purge_pending_txs().await?;
 
     // Signal handling for graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new()?;
+    let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
     info!(target: "darkfid", "Caught termination signal, cleaning up and exiting...");
 
