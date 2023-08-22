@@ -19,7 +19,7 @@
 use std::time::Duration;
 
 use async_trait::async_trait;
-use futures::{AsyncRead, AsyncWrite};
+use smol::io::{AsyncRead, AsyncWrite};
 use url::Url;
 
 use crate::{Error, Result};
@@ -270,7 +270,7 @@ impl Listener {
             "tcp" => {
                 // Build a TCP listener
                 enforce_hostport!(endpoint);
-                let variant = tcp::TcpListener::new(1024).await?;
+                let variant = tcp::TcpListener::new().await?;
                 let variant = ListenerVariant::Tcp(variant);
                 Ok(Self { endpoint, variant })
             }
@@ -279,7 +279,7 @@ impl Listener {
             "tcp+tls" => {
                 // Build a TCP listener wrapped with TLS
                 enforce_hostport!(endpoint);
-                let variant = tcp::TcpListener::new(1024).await?;
+                let variant = tcp::TcpListener::new().await?;
                 let variant = ListenerVariant::TcpTls(variant);
                 Ok(Self { endpoint, variant })
             }
@@ -334,10 +334,10 @@ impl Listener {
 pub trait PtStream: AsyncRead + AsyncWrite + Unpin + Send {}
 
 #[cfg(feature = "p2p-transport-tcp")]
-impl PtStream for async_std::net::TcpStream {}
+impl PtStream for smol::net::TcpStream {}
 
 #[cfg(feature = "p2p-transport-tcp")]
-impl PtStream for async_rustls::TlsStream<async_std::net::TcpStream> {}
+impl PtStream for async_rustls::TlsStream<smol::net::TcpStream> {}
 
 #[cfg(feature = "p2p-transport-tor")]
 impl PtStream for arti_client::DataStream {}
@@ -346,7 +346,7 @@ impl PtStream for arti_client::DataStream {}
 impl PtStream for async_rustls::TlsStream<arti_client::DataStream> {}
 
 #[cfg(feature = "p2p-transport-unix")]
-impl PtStream for async_std::os::unix::net::UnixStream {}
+impl PtStream for smol::net::unix::UnixStream {}
 
 /// Wrapper trait for async listeners
 #[async_trait]

@@ -16,15 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
 use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
-use futures::{
-    io::{ReadHalf, WriteHalf},
-    AsyncReadExt,
-};
 use log::{debug, error, info};
 use rand::{rngs::OsRng, Rng};
-use smol::Executor;
+use smol::{
+    io::{self, ReadHalf, WriteHalf},
+    lock::Mutex,
+    Executor,
+};
 use url::Url;
 
 use super::{
@@ -89,7 +90,7 @@ impl Channel {
     /// summons the message subscriber subsystem. Performs a network handshake
     /// on the subsystem dispatchers.
     pub async fn new(stream: Box<dyn PtStream>, addr: Url, session: SessionWeakPtr) -> Arc<Self> {
-        let (reader, writer) = stream.split();
+        let (reader, writer) = io::split(stream);
         let reader = Mutex::new(reader);
         let writer = Mutex::new(writer);
 

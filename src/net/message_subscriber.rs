@@ -16,13 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{any::Any, collections::HashMap, io::Cursor};
+use std::{any::Any, collections::HashMap, io::Cursor, sync::Arc};
 
-use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use futures::stream::{FuturesUnordered, StreamExt};
 use log::{debug, warn};
 use rand::{rngs::OsRng, Rng};
+use smol::lock::Mutex;
 
 use super::message::Message;
 use crate::{Error, Result};
@@ -277,39 +277,41 @@ mod tests {
     use super::*;
     use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
 
-    #[async_std::test]
-    async fn message_subscriber_test() {
+    #[test]
+    fn message_subscriber_test() {
         #[derive(SerialEncodable, SerialDecodable)]
         struct MyVersionMessage(pub u32);
         crate::impl_p2p_message!(MyVersionMessage, "verver");
 
-        let subsystem = MessageSubsystem::new();
-        subsystem.add_dispatch::<MyVersionMessage>().await;
+        smol::block_on(async {
+            let subsystem = MessageSubsystem::new();
+            subsystem.add_dispatch::<MyVersionMessage>().await;
 
-        // Subscribe:
-        // 1. Get dispatcher
-        // 2. Cast to specific type
-        // 3. Do sub, return sub
-        let sub = subsystem.subscribe::<MyVersionMessage>().await.unwrap();
+            // Subscribe:
+            // 1. Get dispatcher
+            // 2. Cast to specific type
+            // 3. Do sub, return sub
+            let sub = subsystem.subscribe::<MyVersionMessage>().await.unwrap();
 
-        // Receive message and publish:
-        // 1. Based on string, lookup relevant dispatcher interface
-        // 2. Publish data there
-        let msg = MyVersionMessage(110);
-        let payload = serialize(&msg);
-        subsystem.notify("verver", &payload).await;
+            // Receive message and publish:
+            // 1. Based on string, lookup relevant dispatcher interface
+            // 2. Publish data there
+            let msg = MyVersionMessage(110);
+            let payload = serialize(&msg);
+            subsystem.notify("verver", &payload).await;
 
-        // Receive:
-        // 1. Do a get easy
-        let msg2 = sub.receive().await.unwrap();
-        assert_eq!(msg.0, msg2.0);
+            // Receive:
+            // 1. Do a get easy
+            let msg2 = sub.receive().await.unwrap();
+            assert_eq!(msg.0, msg2.0);
 
-        // Trigger an error
-        subsystem.trigger_error(Error::ChannelStopped).await;
+            // Trigger an error
+            subsystem.trigger_error(Error::ChannelStopped).await;
 
-        let msg2 = sub.receive().await;
-        assert!(msg2.is_err());
+            let msg2 = sub.receive().await;
+            assert!(msg2.is_err());
 
-        sub.unsubscribe().await;
+            sub.unsubscribe().await;
+        });
     }
 }

@@ -28,11 +28,11 @@ use darkfi::{
     Result,
 };
 
-async fn start(executor: Arc<Executor<'_>>, options: ProgramOptions) -> Result<()> {
-    let p2p = net::P2p::new(options.network_settings).await;
+async fn start(executor: Arc<Executor<'static>>, options: ProgramOptions) -> Result<()> {
+    let p2p = net::P2p::new(options.network_settings, executor.clone()).await;
 
-    p2p.clone().start(executor.clone()).await?;
-    p2p.run(executor).await?;
+    p2p.clone().start().await?;
+    p2p.run().await?;
 
     Ok(())
 }

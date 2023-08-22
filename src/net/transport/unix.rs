@@ -15,13 +15,15 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use async_std::{
-    fs,
-    os::unix::net::{UnixListener as AsyncStdUnixListener, UnixStream},
-    path::{Path, PathBuf},
-};
+
+use std::path::{Path, PathBuf};
+
 use async_trait::async_trait;
 use log::debug;
+use smol::{
+    fs,
+    net::unix::{UnixListener as SmolUnixListener, UnixStream},
+};
 use url::Url;
 
 use super::{PtListener, PtStream};
@@ -59,16 +61,16 @@ impl UnixListener {
     }
 
     /// Internal listen function
-    pub(crate) async fn do_listen(&self, path: &PathBuf) -> Result<AsyncStdUnixListener> {
+    pub(crate) async fn do_listen(&self, path: &PathBuf) -> Result<SmolUnixListener> {
         // This rm is a bit aggressive, but c'est la vie.
         let _ = fs::remove_file(path).await;
-        let listener = AsyncStdUnixListener::bind(path).await?;
+        let listener = SmolUnixListener::bind(path)?;
         Ok(listener)
     }
 }
 
 #[async_trait]
-impl PtListener for AsyncStdUnixListener {
+impl PtListener for SmolUnixListener {
     async fn next(&self) -> Result<(Box<dyn PtStream>, Url)> {
         let (stream, _peer_addr) = match self.accept().await {
             Ok((s, a)) => (s, a),

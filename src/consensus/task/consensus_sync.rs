@@ -24,7 +24,7 @@ use crate::{
         Float10, ValidatorStatePtr,
     },
     net::P2pPtr,
-    util::async_util::sleep,
+    system::sleep,
     Result,
 };
 

@@ -16,9 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::{Duration, Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
-use async_std::{future::timeout, sync::Arc};
 use async_trait::async_trait;
 use log::{debug, error, warn};
 use rand::{rngs::OsRng, Rng};
@@ -35,7 +37,10 @@ use super::{
     protocol_base::{ProtocolBase, ProtocolBasePtr},
     protocol_jobs_manager::{ProtocolJobsManager, ProtocolJobsManagerPtr},
 };
-use crate::{util::async_util::sleep, Error, Result};
+use crate::{
+    system::{sleep, timeout::timeout},
+    Error, Result,
+};
 
 /// Defines ping and pong messages
 pub struct ProtocolPing {

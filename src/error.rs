@@ -127,8 +127,9 @@ pub enum Error {
     #[error("Connection failed")]
     ConnectFailed,
 
-    #[error("Timeout Error")]
-    TimeoutError,
+    #[cfg(feature = "system")]
+    #[error(transparent)]
+    TimeoutError(#[from] crate::system::timeout::TimeoutError),
 
     #[error("Connection timed out")]
     ConnectTimeout,
@@ -613,13 +614,6 @@ impl From<Error> for ClientFailed {
 impl From<std::io::Error> for ClientFailed {
     fn from(err: std::io::Error) -> Self {
         Self::Io(err.kind())
-    }
-}
-
-#[cfg(feature = "async-std")]
-impl From<async_std::future::TimeoutError> for Error {
-    fn from(_err: async_std::future::TimeoutError) -> Self {
-        Self::TimeoutError
     }
 }
 

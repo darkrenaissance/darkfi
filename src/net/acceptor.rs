@@ -16,9 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
 use log::error;
-use smol::Executor;
+use smol::{lock::Mutex, Executor};
 use url::Url;
 
 use super::{

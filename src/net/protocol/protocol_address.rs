@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Arc;
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
@@ -34,7 +35,7 @@ use super::{
     protocol_base::{ProtocolBase, ProtocolBasePtr},
     protocol_jobs_manager::{ProtocolJobsManager, ProtocolJobsManagerPtr},
 };
-use crate::{util::async_util::sleep, Result};
+use crate::{system::sleep, Result};
 
 /// Defines address and get-address messages
 pub struct ProtocolAddress {

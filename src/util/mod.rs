@@ -16,10 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#[cfg(feature = "async-runtime")]
-/// async utility functions
-pub mod async_util;
-
 /// Command-line interface utilities
 pub mod cli;
 

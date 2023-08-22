@@ -16,10 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::{Arc, Mutex};
-use futures::Future;
+use std::sync::Arc;
+
 use log::{debug, trace};
-use smol::{Executor, Task};
+use smol::{future::Future, lock::Mutex, Executor, Task};
 
 use super::super::channel::ChannelPtr;
 use crate::Result;

@@ -16,16 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::{HashMap, HashSet};
-
-use async_std::{
-    stream::StreamExt,
-    sync::{Arc, Mutex},
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
 };
+
 use futures::{stream::FuturesUnordered, TryFutureExt};
 use log::{debug, error, info, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng};
-use smol::Executor;
+use smol::{lock::Mutex, stream::StreamExt, Executor};
 use url::Url;
 
 use super::{
@@ -54,6 +53,8 @@ pub type P2pPtr = Arc<P2p>;
 
 /// Toplevel peer-to-peer networking interface
 pub struct P2p {
+    /// Global multithreaded executor reference
+    executor: Arc<Executor<'static>>,
     /// Channels pending connection
     pending: PendingChannels,
     /// Connected channels
@@ -93,10 +94,11 @@ impl P2p {
     ///
     /// Creates a weak pointer to self that is used by all sessions to access the
     /// p2p parent class.
-    pub async fn new(settings: Settings) -> P2pPtr {
+    pub async fn new(settings: Settings, executor: Arc<Executor<'static>>) -> P2pPtr {
         let settings = Arc::new(settings);
 
         let self_ = Arc::new(Self {
+            executor,
             pending: Mutex::new(HashSet::new()),
             channels: Mutex::new(HashMap::new()),
             channel_subscriber: Subscriber::new(),
@@ -126,28 +128,28 @@ impl P2p {
     }
 
     /// Invoke startup and seeding sequence. Call from constructing thread.
-    pub async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn start(self: Arc<Self>) -> Result<()> {
         debug!(target: "net::p2p::start()", "P2P::start() [BEGIN]");
         info!(target: "net::p2p::start()", "[P2P] Seeding P2P subsystem");
 
         // Start seed session
         let seed = SeedSyncSession::new(Arc::downgrade(&self));
         // This will block until all seed queries have finished
-        seed.start(ex.clone()).await?;
+        seed.start().await?;
 
         debug!(target: "net::p2p::start()", "P2P::start() [END]");
         Ok(())
     }
 
     /// Reseed the P2P network.
-    pub async fn reseed(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn reseed(self: Arc<Self>) -> Result<()> {
         debug!(target: "net::p2p::reseed()", "P2P::reseed() [BEGIN]");
         info!(target: "net::p2p::reseed()", "[P2P] Reseeding P2P subsystem");
 
         // Start seed session
         let seed = SeedSyncSession::new(Arc::downgrade(&self));
         // This will block until all seed queries have finished
-        seed.start(ex.clone()).await?;
+        seed.start().await?;
 
         debug!(target: "net::p2p::reseed()", "P2P::reseed() [END]");
         Ok(())
@@ -155,23 +157,23 @@ impl P2p {
 
     /// Runs the network. Starts inbound, outbound, and manual sessions.
     /// Waits for a stop signal and stops the network if received.
-    pub async fn run(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn run(self: Arc<Self>) -> Result<()> {
         debug!(target: "net::p2p::run()", "P2P::run() [BEGIN]");
         info!(target: "net::p2p::run()", "[P2P] Running P2P subsystem");
 
         // First attempt any set manual connections
         let manual = self.session_manual().await;
         for peer in &self.settings.peers {
-            manual.clone().connect(peer.clone(), ex.clone()).await;
+            manual.clone().connect(peer.clone()).await;
         }
 
         // Start the inbound session
         let inbound = self.session_inbound().await;
-        inbound.clone().start(ex.clone()).await?;
+        inbound.clone().start().await?;
 
         // Start the outbound session
         let outbound = self.session_outbound().await;
-        outbound.clone().start(ex.clone()).await?;
+        outbound.clone().start().await?;
 
         info!(target: "net::p2p::run()", "[P2P] P2P subsystem started");
 
@@ -285,6 +287,11 @@ impl P2p {
     /// Return an atomic pointer to the list of hosts
     pub fn hosts(&self) -> HostsPtr {
         self.hosts.clone()
+    }
+
+    /// Reference the global executor
+    pub(super) fn executor(&self) -> Arc<Executor<'static>> {
+        self.executor.clone()
     }
 
     /// Return a reference to the internal protocol registry

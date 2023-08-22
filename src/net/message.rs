@@ -17,8 +17,8 @@
  */
 
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt};
-use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use log::trace;
+use smol::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use url::Url;
 
 use crate::{Error, Result};

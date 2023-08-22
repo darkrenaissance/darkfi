@@ -16,17 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{io, time::Duration};
+use std::time::Duration;
 
 use async_rustls::{TlsAcceptor, TlsStream};
-use async_std::net::{SocketAddr, TcpListener as AsyncStdTcpListener, TcpStream};
 use async_trait::async_trait;
 use log::debug;
-use socket2::{Domain, Socket, TcpKeepalive, Type};
+use smol::net::{SocketAddr, TcpListener as SmolTcpListener, TcpStream};
 use url::Url;
 
 use super::{PtListener, PtStream};
-use crate::Result;
+use crate::{system::io_timeout, Result};
 
 /// TCP Dialer implementation
 #[derive(Debug, Clone)]
@@ -41,97 +40,48 @@ impl TcpDialer {
         Ok(Self { ttl })
     }
 
-    /// Internal helper function to create a TCP socket.
-    async fn create_socket(&self, socket_addr: SocketAddr) -> io::Result<Socket> {
-        let domain = if socket_addr.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
-        let socket = Socket::new(domain, Type::STREAM, Some(socket2::Protocol::TCP))?;
-
-        if socket_addr.is_ipv6() {
-            socket.set_only_v6(true)?;
-        }
-
-        if let Some(ttl) = self.ttl {
-            socket.set_ttl(ttl)?;
-        }
-
-        socket.set_nodelay(true)?;
-        let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(20));
-        socket.set_tcp_keepalive(&keepalive)?;
-        socket.set_reuse_port(true)?;
-
-        Ok(socket)
-    }
-
     /// Internal dial function
     pub(crate) async fn do_dial(
         &self,
         socket_addr: SocketAddr,
-        timeout: Option<Duration>,
+        conn_timeout: Option<Duration>,
     ) -> Result<TcpStream> {
         debug!(target: "net::tcp::do_dial", "Dialing {} with TCP...", socket_addr);
-        let socket = self.create_socket(socket_addr).await?;
-
-        let connection = if let Some(timeout) = timeout {
-            socket.connect_timeout(&socket_addr.into(), timeout)
+        let stream = if let Some(conn_timeout) = conn_timeout {
+            io_timeout(conn_timeout, TcpStream::connect(socket_addr)).await?
         } else {
-            socket.connect(&socket_addr.into())
+            TcpStream::connect(socket_addr).await?
         };
 
-        match connection {
-            Ok(()) => {}
-            Err(err) if err.raw_os_error() == Some(libc::EINPROGRESS) => {}
-            Err(err) if err.kind() == io::ErrorKind::WouldBlock => {}
-            Err(err) => return Err(err.into()),
+        if let Some(ttl) = self.ttl {
+            stream.set_ttl(ttl)?;
         }
 
-        socket.set_nonblocking(true)?;
-        let stream = TcpStream::from(std::net::TcpStream::from(socket));
+        stream.set_nodelay(true)?;
+
         Ok(stream)
     }
 }
 
 /// TCP Listener implementation
 #[derive(Debug, Clone)]
-pub struct TcpListener {
-    /// Size of the listen backlog for listen sockets
-    backlog: i32,
-}
+pub struct TcpListener;
 
 impl TcpListener {
     /// Instantiate a new [`TcpListener`] with given backlog size.
-    pub async fn new(backlog: i32) -> Result<Self> {
-        Ok(Self { backlog })
-    }
-
-    /// Internal helper function to create a TCP socket.
-    async fn create_socket(&self, socket_addr: SocketAddr) -> io::Result<Socket> {
-        let domain = if socket_addr.is_ipv4() { Domain::IPV4 } else { Domain::IPV6 };
-        let socket = Socket::new(domain, Type::STREAM, Some(socket2::Protocol::TCP))?;
-
-        if socket_addr.is_ipv6() {
-            socket.set_only_v6(true)?;
-        }
-
-        socket.set_nodelay(true)?;
-        let keepalive = TcpKeepalive::new().with_time(Duration::from_secs(20));
-        socket.set_tcp_keepalive(&keepalive)?;
-        socket.set_reuse_port(true)?;
-
-        Ok(socket)
+    pub async fn new() -> Result<Self> {
+        Ok(Self {})
     }
 
     /// Internal listen function
-    pub(crate) async fn do_listen(&self, socket_addr: SocketAddr) -> Result<AsyncStdTcpListener> {
-        let socket = self.create_socket(socket_addr).await?;
-        socket.bind(&socket_addr.into())?;
-        socket.listen(self.backlog)?;
-        socket.set_nonblocking(true)?;
-        Ok(AsyncStdTcpListener::from(std::net::TcpListener::from(socket)))
+    pub(crate) async fn do_listen(&self, socket_addr: SocketAddr) -> Result<SmolTcpListener> {
+        let listener = SmolTcpListener::bind(socket_addr).await?;
+        Ok(listener)
     }
 }
 
 #[async_trait]
-impl PtListener for AsyncStdTcpListener {
+impl PtListener for SmolTcpListener {
     async fn next(&self) -> Result<(Box<dyn PtStream>, Url)> {
         let (stream, peer_addr) = match self.accept().await {
             Ok((s, a)) => (s, a),
@@ -144,7 +94,7 @@ impl PtListener for AsyncStdTcpListener {
 }
 
 #[async_trait]
-impl PtListener for (TlsAcceptor, AsyncStdTcpListener) {
+impl PtListener for (TlsAcceptor, SmolTcpListener) {
     async fn next(&self) -> Result<(Box<dyn PtStream>, Url)> {
         let (stream, peer_addr) = match self.1.accept().await {
             Ok((s, a)) => (s, a),

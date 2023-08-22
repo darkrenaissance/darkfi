@@ -23,10 +23,11 @@
 //! an acceptor pointer, and a stoppable task pointer. Using a weak pointer
 //! to P2P allows us to avoid circular dependencies.
 
-use async_std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Weak};
+
 use async_trait::async_trait;
 use log::{debug, error, info};
-use smol::Executor;
+use smol::{lock::Mutex, Executor};
 use url::Url;
 
 use super::{
@@ -60,11 +61,13 @@ impl InboundSession {
     /// Starts the inbound session. Begins by accepting connections and fails
     /// if the addresses are not configured. Then runs the channel subscription
     /// loop.
-    pub async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn start(self: Arc<Self>) -> Result<()> {
         if self.p2p().settings().inbound_addrs.is_empty() {
             info!(target: "net::inbound_session", "[P2P] Not configured for inbound connections.");
             return Ok(())
         }
+
+        let ex = self.p2p().executor();
 
         // Activate mutex lock on accept tasks.
         let mut accept_tasks = self.accept_tasks.lock().await;

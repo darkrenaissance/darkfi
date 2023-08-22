@@ -37,7 +37,8 @@
 //! function. This runs the version exchange protocol, stores the channel in the
 //! p2p list of channels, and subscribes to a stop signal.
 
-use async_std::sync::{Arc, Weak};
+use std::sync::{Arc, Weak};
+
 use async_trait::async_trait;
 use futures::future::join_all;
 use log::{debug, info, warn};
@@ -68,7 +69,7 @@ impl SeedSyncSession {
 
     /// Start the seed sync session. Creates a new task for every seed
     /// connection and starts the seed on each task.
-    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn start(self: Arc<Self>) -> Result<()> {
         debug!(target: "net::session::seedsync_session", "SeedSyncSession::start() [START]");
         let settings = self.p2p().settings();
 
@@ -82,6 +83,7 @@ impl SeedSyncSession {
         }
 
         // Gather tasks so we can execute concurrently
+        let executor = self.p2p().executor();
         let mut tasks = Vec::with_capacity(settings.seeds.len());
         for (i, seed) in settings.seeds.iter().enumerate() {
             let ex_ = executor.clone();

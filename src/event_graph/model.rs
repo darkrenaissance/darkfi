@@ -428,7 +428,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::{event_graph::events_queue::EventsQueue, util::async_util::sleep, Result};
+    use crate::{event_graph::events_queue::EventsQueue, system::sleep, Result};
 
     #[derive(SerialEncodable, SerialDecodable, Clone, Debug)]
     pub struct PrivMsgEvent {

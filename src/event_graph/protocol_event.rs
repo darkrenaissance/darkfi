@@ -28,7 +28,8 @@ use crate::{
     event_graph::model::{Event, EventId, ModelPtr},
     impl_p2p_message, net,
     net::Message,
-    util::{async_util::sleep, ringbuffer::RingBuffer},
+    system::sleep,
+    util::ringbuffer::RingBuffer,
     Result,
 };
 

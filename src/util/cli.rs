@@ -118,7 +118,6 @@ pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
 ///
 /// The Cargo.toml dependencies needed for this are:
 /// ```text
-/// async-std = "1.12.0"
 /// darkfi = { path = "../../", features = ["util"] }
 /// easy-parallel = "3.2.0"
 /// signal-hook-async-std = "0.2.2"
@@ -159,7 +158,7 @@ pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
 /// }
 ///
 /// async_daemonize!(realmain);
-/// async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
+/// async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 ///     println!("Hello, world!");
 ///     Ok(())
 /// }
@@ -201,7 +200,7 @@ macro_rules! async_daemonize {
 
             // https://docs.rs/smol/latest/smol/struct.Executor.html#examples
             let n_threads = std::thread::available_parallelism().unwrap().get();
-            let ex = async_std::sync::Arc::new(smol::Executor::new());
+            let ex = std::sync::Arc::new(smol::Executor::new());
             let (signal, shutdown) = smol::channel::unbounded::<()>();
             let (_, result) = easy_parallel::Parallel::new()
                 // Run four executor threads

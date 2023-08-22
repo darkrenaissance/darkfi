@@ -23,7 +23,8 @@ use super::consensus_sync_task;
 use crate::{
     consensus::{constants, ValidatorStatePtr},
     net::P2pPtr,
-    util::{async_util::sleep, time::Timestamp},
+    system::sleep,
+    util::time::Timestamp,
     Result,
 };
 

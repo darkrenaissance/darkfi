@@ -16,11 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
-use async_std::sync::{Arc, RwLock};
 use log::debug;
 use rand::{prelude::IteratorRandom, rngs::OsRng};
+use smol::lock::RwLock;
 use url::Url;
 
 use super::settings::SettingsPtr;
@@ -243,77 +246,81 @@ impl Hosts {
 mod tests {
     use super::{super::settings::Settings, *};
 
-    #[async_std::test]
-    async fn test_store_localnet() {
-        let mut settings = Settings::default();
-        settings.localnet = true;
-        settings.external_addrs = vec![
-            Url::parse("tcp://foo.bar:123").unwrap(),
-            Url::parse("tcp://lol.cat:321").unwrap(),
-        ];
+    #[test]
+    fn test_store_localnet() {
+        smol::block_on(async {
+            let mut settings = Settings::default();
+            settings.localnet = true;
+            settings.external_addrs = vec![
+                Url::parse("tcp://foo.bar:123").unwrap(),
+                Url::parse("tcp://lol.cat:321").unwrap(),
+            ];
 
-        let hosts = Hosts::new(Arc::new(settings.clone()));
-        hosts.store(&settings.external_addrs).await;
-        for i in settings.external_addrs {
-            assert!(hosts.contains(&i).await);
-        }
+            let hosts = Hosts::new(Arc::new(settings.clone()));
+            hosts.store(&settings.external_addrs).await;
+            for i in settings.external_addrs {
+                assert!(hosts.contains(&i).await);
+            }
 
-        let local_hosts = vec![
-            Url::parse("tcp://localhost:3921").unwrap(),
-            Url::parse("tcp://127.0.0.1:23957").unwrap(),
-            Url::parse("tcp://[::1]:21481").unwrap(),
-            Url::parse("tcp://192.168.10.65:311").unwrap(),
-            Url::parse("tcp://0.0.0.0:2312").unwrap(),
-            Url::parse("tcp://255.255.255.255:2131").unwrap(),
-        ];
-        hosts.store(&local_hosts).await;
-        for i in local_hosts {
-            assert!(hosts.contains(&i).await);
-        }
+            let local_hosts = vec![
+                Url::parse("tcp://localhost:3921").unwrap(),
+                Url::parse("tcp://127.0.0.1:23957").unwrap(),
+                Url::parse("tcp://[::1]:21481").unwrap(),
+                Url::parse("tcp://192.168.10.65:311").unwrap(),
+                Url::parse("tcp://0.0.0.0:2312").unwrap(),
+                Url::parse("tcp://255.255.255.255:2131").unwrap(),
+            ];
+            hosts.store(&local_hosts).await;
+            for i in local_hosts {
+                assert!(hosts.contains(&i).await);
+            }
 
-        let remote_hosts = vec![
-            Url::parse("tcp://dark.fi:80").unwrap(),
-            Url::parse("tcp://top.kek:111").unwrap(),
-            Url::parse("tcp://http.cat:401").unwrap(),
-        ];
-        hosts.store(&remote_hosts).await;
-        for i in remote_hosts {
-            assert!(hosts.contains(&i).await);
-        }
+            let remote_hosts = vec![
+                Url::parse("tcp://dark.fi:80").unwrap(),
+                Url::parse("tcp://top.kek:111").unwrap(),
+                Url::parse("tcp://http.cat:401").unwrap(),
+            ];
+            hosts.store(&remote_hosts).await;
+            for i in remote_hosts {
+                assert!(hosts.contains(&i).await);
+            }
+        });
     }
 
-    #[async_std::test]
-    async fn test_store() {
-        let mut settings = Settings::default();
-        settings.localnet = false;
-        settings.external_addrs = vec![
-            Url::parse("tcp://foo.bar:123").unwrap(),
-            Url::parse("tcp://lol.cat:321").unwrap(),
-        ];
+    #[test]
+    fn test_store() {
+        smol::block_on(async {
+            let mut settings = Settings::default();
+            settings.localnet = false;
+            settings.external_addrs = vec![
+                Url::parse("tcp://foo.bar:123").unwrap(),
+                Url::parse("tcp://lol.cat:321").unwrap(),
+            ];
 
-        let hosts = Hosts::new(Arc::new(settings.clone()));
-        hosts.store(&settings.external_addrs).await;
-        assert!(hosts.is_empty().await);
+            let hosts = Hosts::new(Arc::new(settings.clone()));
+            hosts.store(&settings.external_addrs).await;
+            assert!(hosts.is_empty().await);
 
-        let local_hosts = vec![
-            Url::parse("tcp://localhost:3921").unwrap(),
-            Url::parse("tcp://127.0.0.1:23957").unwrap(),
-            Url::parse("tor://[::1]:21481").unwrap(),
-            Url::parse("tcp://192.168.10.65:311").unwrap(),
-            Url::parse("tcp+tls://0.0.0.0:2312").unwrap(),
-            Url::parse("tcp://255.255.255.255:2131").unwrap(),
-        ];
-        hosts.store(&local_hosts).await;
-        assert!(hosts.is_empty().await);
+            let local_hosts = vec![
+                Url::parse("tcp://localhost:3921").unwrap(),
+                Url::parse("tcp://127.0.0.1:23957").unwrap(),
+                Url::parse("tor://[::1]:21481").unwrap(),
+                Url::parse("tcp://192.168.10.65:311").unwrap(),
+                Url::parse("tcp+tls://0.0.0.0:2312").unwrap(),
+                Url::parse("tcp://255.255.255.255:2131").unwrap(),
+            ];
+            hosts.store(&local_hosts).await;
+            assert!(hosts.is_empty().await);
 
-        let remote_hosts = vec![
-            Url::parse("tcp://dark.fi:80").unwrap(),
-            Url::parse("tcp://http.cat:401").unwrap(),
-            Url::parse("tcp://foo.bar:111").unwrap(),
-        ];
-        hosts.store(&remote_hosts).await;
-        assert!(hosts.contains(&remote_hosts[0]).await);
-        assert!(hosts.contains(&remote_hosts[1]).await);
-        assert!(!hosts.contains(&remote_hosts[2]).await);
+            let remote_hosts = vec![
+                Url::parse("tcp://dark.fi:80").unwrap(),
+                Url::parse("tcp://http.cat:401").unwrap(),
+                Url::parse("tcp://foo.bar:111").unwrap(),
+            ];
+            hosts.store(&remote_hosts).await;
+            assert!(hosts.contains(&remote_hosts[0]).await);
+            assert!(hosts.contains(&remote_hosts[1]).await);
+            assert!(!hosts.contains(&remote_hosts[2]).await);
+        });
     }
 }

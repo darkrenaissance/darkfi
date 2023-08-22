@@ -16,9 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_serial::{SerialDecodable, SerialEncodable};
+use url::Url;
+
 use super::channel::ChannelInfo;
 use crate::util::time::NanoTimestamp;
-use url::Url;
 
 macro_rules! dnetev {
     ($self:expr, $event_name:ident, $($code:tt)*) => {

@@ -16,6 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::time::Duration;
+
+use smol::Timer;
+
 /// Implementation of async background task spawning which are stoppable
 /// using channel signalling.
 pub mod stoppable_task;
@@ -28,3 +32,13 @@ pub use subscriber::{Subscriber, SubscriberPtr, Subscription};
 /// Async timeout implementations
 pub mod timeout;
 pub use timeout::io_timeout;
+
+/// Sleep for any number of seconds.
+pub async fn sleep(seconds: u64) {
+    Timer::after(Duration::from_secs(seconds)).await;
+}
+
+/// Sleep for any number of milliseconds.
+pub async fn msleep(millis: u64) {
+    Timer::after(Duration::from_millis(millis)).await;
+}

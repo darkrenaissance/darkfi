@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
-use async_std::{future::timeout, sync::Arc};
 use futures::future::join_all;
 use log::{debug, error};
 use smol::Executor;
@@ -30,7 +29,7 @@ use super::super::{
     message_subscriber::MessageSubscription,
     settings::SettingsPtr,
 };
-use crate::{Error, Result};
+use crate::{system::timeout::timeout, Error, Result};
 
 /// Implements the protocol version handshake sent out by nodes at
 /// the beginning of a connection.

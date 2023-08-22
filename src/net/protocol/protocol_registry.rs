@@ -16,17 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Mutex;
-use futures::{future::BoxFuture, Future};
 use log::debug;
+use smol::{
+    future::{Boxed, Future},
+    lock::Mutex,
+};
 
 use super::{
     super::{channel::ChannelPtr, p2p::P2pPtr, session::SessionBitFlag},
     protocol_base::ProtocolBasePtr,
 };
 
-type Constructor =
-    Box<dyn Fn(ChannelPtr, P2pPtr) -> BoxFuture<'static, ProtocolBasePtr> + Send + Sync>;
+type Constructor = Box<dyn Fn(ChannelPtr, P2pPtr) -> Boxed<ProtocolBasePtr> + Send + Sync>;
 
 #[derive(Default)]
 pub struct ProtocolRegistry {
@@ -45,9 +46,8 @@ impl ProtocolRegistry {
         C: 'static + Fn(ChannelPtr, P2pPtr) -> F + Send + Sync,
         F: 'static + Future<Output = ProtocolBasePtr> + Send,
     {
-        let constructor = move |channel, p2p| {
-            Box::pin(constructor(channel, p2p)) as BoxFuture<'static, ProtocolBasePtr>
-        };
+        let constructor =
+            move |channel, p2p| Box::pin(constructor(channel, p2p)) as Boxed<ProtocolBasePtr>;
 
         self.constructors.lock().await.push((session_flags, Box::new(constructor)));
     }

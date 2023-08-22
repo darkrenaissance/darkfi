@@ -29,10 +29,11 @@
 //! and insures that no other part of the program uses the slots at the
 //! same time.
 
-use async_std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Weak};
+
 use async_trait::async_trait;
 use log::{info, warn};
-use smol::Executor;
+use smol::lock::Mutex;
 use url::Url;
 
 use super::{
@@ -44,8 +45,7 @@ use super::{
     Session, SessionBitFlag, SESSION_MANUAL,
 };
 use crate::{
-    system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr},
-    util::async_util::sleep,
+    system::{sleep, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr},
     Error, Result,
 };
 
@@ -82,11 +82,12 @@ impl ManualSession {
     }
 
     /// Connect the manual session to the given address
-    pub async fn connect(self: Arc<Self>, addr: Url, ex: Arc<Executor<'_>>) {
+    pub async fn connect(self: Arc<Self>, addr: Url) {
+        let ex = self.p2p().executor();
         let task = StoppableTask::new();
 
         task.clone().start(
-            self.clone().channel_connect_loop(addr, ex.clone()),
+            self.clone().channel_connect_loop(addr),
             // Ignore stop handler
             |_| async {},
             Error::NetworkServiceStopped,
@@ -97,11 +98,8 @@ impl ManualSession {
     }
 
     /// Creates a connector object and tries to connect using it
-    pub async fn channel_connect_loop(
-        self: Arc<Self>,
-        addr: Url,
-        ex: Arc<Executor<'_>>,
-    ) -> Result<()> {
+    pub async fn channel_connect_loop(self: Arc<Self>, addr: Url) -> Result<()> {
+        let ex = self.p2p().executor();
         let parent = Arc::downgrade(&self);
         let settings = self.p2p().settings();
         let connector = Connector::new(settings.clone(), Arc::new(parent));
