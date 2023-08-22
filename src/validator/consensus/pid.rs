@@ -79,7 +79,7 @@ fn calculate_f(previous_slot: &Slot, previous_producers: u64) -> (Float10, Float
         K1.clone() * error.clone() +
         K2.clone() * previous_slot_error +
         K3.clone() * previous_slot_previous_slot_error;
-    debug!(target: "validator::consensus::pid::calculate_f", "Ounbounded f: {f}");
+    debug!(target: "validator::consensus::pid::calculate_f", "Unbounded f: {f}");
 
     // Boundaries control
     if f <= *FLOAT10_ZERO {

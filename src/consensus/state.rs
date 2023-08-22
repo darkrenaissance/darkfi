@@ -375,7 +375,7 @@ impl ConsensusState {
         self.err_history.push(err);
         ret
     }
-    /// the probability inverse of winnig lottery having all the stake
+    /// the probability inverse of winning lottery having all the stake
     /// returns f
     fn win_inv_prob_with_full_stake(&mut self) -> Float10 {
         let mut f = self.discrete_pid();
