@@ -28,7 +28,7 @@ use smol::Executor;
 use url::Url;
 
 use super::{
-    dnet::{self, dnet, DnetEvent},
+    dnet::{self, dnetev, DnetEvent},
     message,
     message::Packet,
     message_subscriber::{MessageSubscription, MessageSubsystem},
@@ -207,14 +207,11 @@ impl Channel {
     async fn send_message<M: message::Message>(&self, message: &M) -> Result<()> {
         let packet = Packet { command: M::NAME.to_string(), payload: serialize(message) };
 
-        dnet!(self,
-            let event = DnetEvent::SendMessage(dnet::MessageInfo {
-                chan: self.info.clone(),
-                cmd: packet.command.clone(),
-                time: NanoTimestamp::current_time(),
-            });
-            self.p2p().dnet_notify(event).await;
-        );
+        dnetev!(self, SendMessage, {
+            chan: self.info.clone(),
+            cmd: packet.command.clone(),
+            time: NanoTimestamp::current_time(),
+        });
 
         let stream = &mut *self.writer.lock().await;
         let _ = message::send_packet(stream, packet).await?;
@@ -288,14 +285,11 @@ impl Channel {
                 }
             };
 
-            dnet!(self,
-                let event = DnetEvent::RecvMessage(dnet::MessageInfo {
-                    chan: self.info.clone(),
-                    cmd: packet.command.clone(),
-                    time: NanoTimestamp::current_time(),
-                });
-                self.p2p().dnet_notify(event).await;
-            );
+            dnetev!(self, RecvMessage, {
+                chan: self.info.clone(),
+                cmd: packet.command.clone(),
+                time: NanoTimestamp::current_time(),
+            });
 
             // Send result to our subscribers
             self.message_subsystem.notify(&packet.command, &packet.payload).await;

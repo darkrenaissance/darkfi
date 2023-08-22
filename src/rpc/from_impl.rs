@@ -41,20 +41,34 @@ impl From<net::dnet::MessageInfo> for JsonValue {
     fn from(info: net::dnet::MessageInfo) -> JsonValue {
         json_map([
             ("chan", info.chan.into()),
-            ("cmd", JsonStr(info.cmd.clone())),
+            ("cmd", JsonStr(info.cmd)),
             ("time", JsonStr(info.time.0.to_string())),
         ])
     }
 }
 
 #[cfg(feature = "net")]
-impl From<net::dnet::OutboundConnect> for JsonValue {
-    fn from(info: net::dnet::OutboundConnect) -> JsonValue {
+impl From<net::dnet::OutboundConnecting> for JsonValue {
+    fn from(info: net::dnet::OutboundConnecting) -> JsonValue {
+        json_map([("slot", JsonNum(info.slot.into())), ("addr", JsonStr(info.addr.to_string()))])
+    }
+}
+
+#[cfg(feature = "net")]
+impl From<net::dnet::OutboundConnected> for JsonValue {
+    fn from(info: net::dnet::OutboundConnected) -> JsonValue {
         json_map([
             ("slot", JsonNum(info.slot.into())),
             ("addr", JsonStr(info.addr.to_string())),
             ("channel_id", JsonNum(info.channel_id.into())),
         ])
+    }
+}
+
+#[cfg(feature = "net")]
+impl From<net::dnet::OutboundDisconnected> for JsonValue {
+    fn from(info: net::dnet::OutboundDisconnected) -> JsonValue {
+        json_map([("slot", JsonNum(info.slot.into())), ("err", JsonStr(info.err))])
     }
 }
 
@@ -68,13 +82,15 @@ impl From<net::dnet::DnetEvent> for JsonValue {
             net::dnet::DnetEvent::RecvMessage(info) => {
                 json_map([("event", json_str("recv")), ("info", info.into())])
             }
+            net::dnet::DnetEvent::OutboundConnecting(info) => {
+                json_map([("event", json_str("outbound_connecting")), ("info", info.into())])
+            }
             net::dnet::DnetEvent::OutboundConnected(info) => {
                 json_map([("event", json_str("outbound_connected")), ("info", info.into())])
             }
-            net::dnet::DnetEvent::OutboundDisconnected(slot) => json_map([
-                ("event", json_str("outbound_disconnected")),
-                ("slot", JsonNum(slot.into())),
-            ]),
+            net::dnet::DnetEvent::OutboundDisconnected(info) => {
+                json_map([("event", json_str("outbound_disconnected")), ("info", info.into())])
+            }
         }
     }
 }

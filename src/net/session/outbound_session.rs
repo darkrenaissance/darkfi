@@ -38,7 +38,7 @@ use super::{
     super::{
         channel::ChannelPtr,
         connector::Connector,
-        dnet::{self, dnet, DnetEvent},
+        dnet::{self, dnetev, DnetEvent},
         message::GetAddrsMessage,
         p2p::{P2p, P2pPtr},
     },
@@ -169,10 +169,10 @@ impl OutboundSession {
                         slot, e,
                     );
 
-                    dnet!(self,
-                        let event = DnetEvent::OutboundDisconnected(slot);
-                        self.p2p().dnet_notify(event).await;
-                    );
+                    dnetev!(self, OutboundDisconnected, {
+                        slot,
+                        err: e.to_string()
+                    });
                 }
             }
         }
@@ -206,6 +206,11 @@ impl OutboundSession {
             slot, addr,
         );
 
+        dnetev!(self, OutboundConnecting, {
+            slot,
+            addr: addr.clone(),
+        });
+
         match connector.connect(&addr).await {
             Ok((url, channel)) => {
                 info!(
@@ -214,14 +219,11 @@ impl OutboundSession {
                     slot, url
                 );
 
-                dnet!(self,
-                    let event = DnetEvent::OutboundConnected(dnet::OutboundConnect {
-                        slot,
-                        addr: addr.clone(),
-                        channel_id: channel.info.id
-                    });
-                    self.p2p().dnet_notify(event).await;
-                );
+                dnetev!(self, OutboundConnected, {
+                    slot,
+                    addr: addr.clone(),
+                    channel_id: channel.info.id
+                });
 
                 let stop_sub =
                     channel.subscribe_stop().await.expect("Channel should not be stopped");

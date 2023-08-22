@@ -20,16 +20,17 @@ use super::channel::ChannelInfo;
 use crate::util::time::NanoTimestamp;
 use url::Url;
 
-macro_rules! dnet {
-    ($self:expr, $($code:tt)*) => {
+macro_rules! dnetev {
+    ($self:expr, $event_name:ident, $($code:tt)*) => {
         {
             if *$self.p2p().dnet_enabled.lock().await {
-                $($code)*
+                let event = DnetEvent::$event_name(dnet::$event_name $($code)*);
+                $self.p2p().dnet_notify(event).await;
             }
         }
     };
 }
-pub(crate) use dnet;
+pub(crate) use dnetev;
 
 #[derive(Clone, Debug)]
 pub struct MessageInfo {
@@ -38,18 +39,34 @@ pub struct MessageInfo {
     pub time: NanoTimestamp,
 }
 
+// Needed by the macro
+pub type SendMessage = MessageInfo;
+pub type RecvMessage = MessageInfo;
+
 #[derive(Clone, Debug)]
-pub struct OutboundConnect {
+pub struct OutboundConnecting {
+    pub slot: u32,
+    pub addr: Url,
+}
+
+#[derive(Clone, Debug)]
+pub struct OutboundConnected {
     pub slot: u32,
     pub addr: Url,
     pub channel_id: u32,
 }
 
 #[derive(Clone, Debug)]
+pub struct OutboundDisconnected {
+    pub slot: u32,
+    pub err: String,
+}
+
+#[derive(Clone, Debug)]
 pub enum DnetEvent {
     SendMessage(MessageInfo),
     RecvMessage(MessageInfo),
-    //OutboundConnecting(OutboundConnect),
-    OutboundConnected(OutboundConnect),
-    OutboundDisconnected(u32),
+    OutboundConnecting(OutboundConnecting),
+    OutboundConnected(OutboundConnected),
+    OutboundDisconnected(OutboundDisconnected),
 }
