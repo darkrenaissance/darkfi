@@ -40,7 +40,7 @@ pub struct Args {
     pub rpc_listen: Url,
 
     /// Sets Datastore Path
-    #[structopt(long, default_value = "~/.tau")]
+    #[structopt(long, default_value = "~/.local/darkfi/tau")]
     pub datastore: String,
 
     #[structopt(flatten)]

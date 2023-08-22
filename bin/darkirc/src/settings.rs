@@ -54,7 +54,7 @@ pub struct Args {
     pub config: Option<String>,
 
     /// Sets Datastore Path
-    #[structopt(long, default_value = "~/.darkirc")]
+    #[structopt(long, default_value = "~/.local/darkfi/darkirc")]
     pub datastore: String,
 
     /// JSON-RPC listen URL
