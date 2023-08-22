@@ -18,8 +18,6 @@
 
 use std::{borrow::Borrow, collections::HashMap, hash::Hash, iter::Peekable, str::Chars};
 
-use itertools::Itertools;
-
 use super::{
     ast::{Arg, Constant, Literal, Statement, StatementType, Variable, Witness},
     constants::{ALLOWED_FIELDS, MAX_K, MAX_NS_LEN},
@@ -135,7 +133,7 @@ impl Parser {
         // The first thing that has to be declared in the source
         // code is the constant "k" which defines 2^k rows that
         // the circuit needs to successfully execute.
-        let Some((k, equal, number, semicolon)) = iter.next_tuple() else {
+        let Some((k, equal, number, semicolon)) = NextTuple4::next_tuple(&mut iter) else {
             self.error.abort("Source file does not start with k=n;", 0, 0);
             unreachable!();
         };
@@ -162,7 +160,7 @@ impl Parser {
         }
 
         // Then we declare the field we're working in.
-        let Some((field, equal, field_name, semicolon)) = iter.next_tuple() else {
+        let Some((field, equal, field_name, semicolon)) = NextTuple4::next_tuple(&mut iter) else {
             self.error.abort("Source file does not declare field after k", k.line, k.column);
             unreachable!();
         };
@@ -299,7 +297,7 @@ impl Parser {
                 let mut constants_map = IndexMap::new();
                 // This is everything between the braces: { ... }
                 let mut constant_inner = constant_tokens[2..constant_tokens.len() - 1].iter();
-                while let Some((typ, name, comma)) = constant_inner.next_tuple() {
+                while let Some((typ, name, comma)) = NextTuple3::next_tuple(&mut constant_inner) {
                     if comma.token_type != TokenType::Comma {
                         self.error.abort("Separator is not a comma.", comma.line, comma.column);
                     }
@@ -340,7 +338,7 @@ impl Parser {
                 let mut witnesses_map = IndexMap::new();
                 // This is everything between the braces: { ... }
                 let mut witness_inner = witness_tokens[2..witness_tokens.len() - 1].iter();
-                while let Some((typ, name, comma)) = witness_inner.next_tuple() {
+                while let Some((typ, name, comma)) = NextTuple3::next_tuple(&mut witness_inner) {
                     if comma.token_type != TokenType::Comma {
                         self.error.abort("Separator is not a comma.", comma.line, comma.column);
                     }
@@ -1001,5 +999,32 @@ impl Parser {
         }
 
         ret
+    }
+}
+
+trait NextTuple3<I>: Iterator<Item = I> {
+    fn next_tuple(&mut self) -> Option<(I, I, I)>;
+}
+
+impl<I: Iterator<Item = T>, T> NextTuple3<T> for I {
+    fn next_tuple(&mut self) -> Option<(T, T, T)> {
+        let a = self.next()?;
+        let b = self.next()?;
+        let c = self.next()?;
+        Some((a, b, c))
+    }
+}
+
+trait NextTuple4<I>: Iterator<Item = I> {
+    fn next_tuple(&mut self) -> Option<(I, I, I, I)>;
+}
+
+impl<I: Iterator<Item = T>, T> NextTuple4<T> for I {
+    fn next_tuple(&mut self) -> Option<(T, T, T, T)> {
+        let a = self.next()?;
+        let b = self.next()?;
+        let c = self.next()?;
+        let d = self.next()?;
+        Some((a, b, c, d))
     }
 }

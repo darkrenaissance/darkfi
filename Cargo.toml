@@ -92,7 +92,6 @@ dashu = {version = "0.3.1", optional = true}
 chrono = {version = "0.4.26", optional = true}
 darkfi-serial = {path = "src/serial", optional = true}
 darkfi-derive = {path = "src/serial/derive", optional = true}
-itertools = {version = "0.11.0", optional = true}
 lazy_static = {version = "1.4.0", optional = true}
 url = {version = "2.4.0", features = ["serde"], optional = true}
 
@@ -276,8 +275,6 @@ zk = [
 ]
 
 zkas = [
-    "itertools",
-
     "darkfi-serial",
 ]
 # -----END LIBRARY FEATURES-----
