@@ -24,3 +24,7 @@ pub use stoppable_task::{StoppableTask, StoppableTaskPtr};
 /// Simple broadcast (publish-subscribe) class
 pub mod subscriber;
 pub use subscriber::{Subscriber, SubscriberPtr, Subscription};
+
+/// Async timeout implementations
+pub mod timeout;
+pub use timeout::io_timeout;
