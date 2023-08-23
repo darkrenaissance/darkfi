@@ -26,17 +26,23 @@ The outbound session is responsible to ensure the hosts pool is populated, eithe
 through currently connected nodes or using the seed session.
 It performs this algorithm:
 
-1. Start $N$ slots, each set with `status = ACTIVE`
-2. If no addresses matching our filters are in the hosts pool then:
+1. Start $N$ slots, and set each slot with `status = ACTIVE`
+
+Then each slot performs this algorithm:
+
+1. If no addresses matching our filters are in the hosts pool then:
     1. Check the other slots are all `ACTIVE`, otherwise let `status = SLEEP` and
        wait for a wakeup signal.
-    2. If we have connections available in `p2p` then let `status = DISCOVERY`
+    2. If we there are channels opened in `p2p` then let `status = DISCOVERY`
        otherwise let `status = SEED`.
-    3. If `status ≟ DISCOVERY` and the hosts pool is still empty then
-       let `status = SEED`.
-    4. If the hosts pool is still empty, then let `status = SLEEP` and set a wakeup timer.
-    4. Once finished, send the wakeup signal to the other slots and repeat the process.
+    3. If `status ≟ DISCOVERY` and no hosts are found then let `status = SEED`.
+    5. In either case when `status ≟ DISCOVERY` or `status = SEED` and we manage to find
+       new hosts, then wakeup the other sleeping slots.
+    4. If there are still no hosts found, then let `status = SLEEP`.
 
 The slots are able to communicate to each other through pipes to signal status changes
 such as wakeup requests.
+
+Sleeping slots are woken up periodically by the session. They can be forcefully woken up
+by calling `session.wakeup()`.
 
