@@ -31,8 +31,8 @@ It performs this algorithm:
 Then each slot performs this algorithm:
 
 1. If no addresses matching our filters are in the hosts pool then:
-    1. Check the other slots are all `ACTIVE`, otherwise let `status = SLEEP` and
-       wait for a wakeup signal.
+    1. If there is another slot where `status ≟ DISCOVERY` or `status ≟ SEED` then
+       let `status = SLEEP` and wait for a wakeup signal.
     2. If we there are channels opened in `p2p` then let `status = DISCOVERY`
        otherwise let `status = SEED`.
     3. If `status ≟ DISCOVERY` and no hosts are found then let `status = SEED`.
