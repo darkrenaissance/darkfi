@@ -71,15 +71,6 @@ pub fn spawn_config(path: &Path, contents: &[u8]) -> Result<()> {
     Ok(())
 }
 
-// Log levels in Rust are:
-//
-//   Error (highest)
-//   Warn     |
-//   Info     |
-//   Debug   \|/
-//   Trace (lowest)
-//
-
 pub fn get_log_level(verbosity_level: u8) -> simplelog::LevelFilter {
     match verbosity_level {
         0 => simplelog::LevelFilter::Info,
@@ -89,12 +80,15 @@ pub fn get_log_level(verbosity_level: u8) -> simplelog::LevelFilter {
     }
 }
 
-pub fn get_log_config() -> simplelog::Config {
-    let mut cfgbuilder = ConfigBuilder::new();
-
+pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
     match env::var("LOG_TARGETS") {
         Ok(x) => {
             let targets: Vec<String> = x.split(',').map(|x| x.to_string()).collect();
+            let mut cfgbuilder = ConfigBuilder::new();
+            match verbosity_level {
+                0 => cfgbuilder.set_target_level(simplelog::LevelFilter::Debug),
+                _ => cfgbuilder.set_target_level(simplelog::LevelFilter::Error),
+            };
 
             for i in targets {
                 if i.starts_with('!') {
@@ -103,18 +97,18 @@ pub fn get_log_config() -> simplelog::Config {
                     cfgbuilder.add_filter_allow(i);
                 }
             }
+
+            cfgbuilder.build()
         }
-        Err(_) => {}
+        Err(_) => {
+            let mut cfgbuilder = ConfigBuilder::new();
+            match verbosity_level {
+                0 => cfgbuilder.set_target_level(simplelog::LevelFilter::Debug),
+                _ => cfgbuilder.set_target_level(simplelog::LevelFilter::Error),
+            };
+            cfgbuilder.build()
+        }
     }
-    // Show the level label [ERROR] for all levels
-    cfgbuilder.set_max_level(simplelog::LevelFilter::Error);
-    // The target: "foo" label
-    cfgbuilder.set_target_level(simplelog::LevelFilter::Error);
-    // Module such as net::p2p
-    //cfgbuilder.set_module_level(simplelog::LevelFilter::Trace);
-    // Filename and line number of the current log
-    cfgbuilder.set_location_level(simplelog::LevelFilter::Error);
-    cfgbuilder.build()
 }
 
 /// This macro is used for a standard way of daemonizing darkfi binaries
@@ -180,7 +174,7 @@ macro_rules! async_daemonize {
             let args = Args::from_args_with_toml(&std::fs::read_to_string(cfg_path)?).unwrap();
 
             let log_level = darkfi::util::cli::get_log_level(args.verbose);
-            let log_config = darkfi::util::cli::get_log_config();
+            let log_config = darkfi::util::cli::get_log_config(args.verbose);
 
             // Setup terminal logger
             let term_logger = simplelog::TermLogger::new(
