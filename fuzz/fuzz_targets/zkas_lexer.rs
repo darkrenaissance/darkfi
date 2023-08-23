@@ -17,15 +17,17 @@
  */
 
 #![no_main]
-extern crate darkfi_serial;
-use darkfi_serial::{deserialize, serialize};
-
 use libfuzzer_sys::fuzz_target;
 
+use darkfi::zkas::Lexer;
+
+// Run with: ZKAS_SILENT=1 cargo fuzz run zkas-lexer
+
 fuzz_target!(|data: &[u8]| {
-    if let Ok(s) = std::str::from_utf8(data) {
-        let ser = serialize(&s);
-        let des: String = deserialize(&ser).unwrap();
-        assert_eq!(s, des);
+    if let Ok(source) = std::str::from_utf8(data) {
+        let filename = "fuzz0r";
+        let source = source.replace('\t', "    ").replace("\r\n", "\n");
+        let lexer = Lexer::new(filename, source.chars());
+        let _ = lexer.lex();
     }
 });

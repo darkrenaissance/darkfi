@@ -55,6 +55,10 @@ impl ErrorEmitter {
     }
 
     pub fn emit(&self, typ: &str, msg: &str) {
+        if let Ok(_) = std::env::var("ZKAS_SILENT") {
+            return
+        }
+
         let stderr = io::stderr();
         let mut handle = stderr.lock();
 

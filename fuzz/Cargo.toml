@@ -12,6 +12,7 @@ libfuzzer-sys = "0.4"
 
 [dependencies.darkfi]
 path = ".."
+features = ["zkas"]
 
 [dependencies.darkfi-serial]
 path = "../src/serial"
@@ -27,5 +28,11 @@ debug = 1
 [[bin]]
 name = "serial"
 path = "fuzz_targets/serial.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "zkas-lexer"
+path = "fuzz_targets/zkas_lexer.rs"
 test = false
 doc = false
