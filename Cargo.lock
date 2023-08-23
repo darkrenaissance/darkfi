@@ -298,16 +298,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-attributes"
-version = "1.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3203e79f4dd9bdda415ed03cf14dae5a2bf775c683a00f94e9cd1faf0f596e5"
-dependencies = [
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "async-channel"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -447,7 +437,6 @@ version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62565bb4402e926b29953c785397c6dc0391b7b446e45008b0049eb43cec6f5d"
 dependencies = [
- "async-attributes",
  "async-channel",
  "async-global-executor",
  "async-io",
@@ -1423,7 +1412,6 @@ dependencies = [
  "futures",
  "halo2_gadgets",
  "halo2_proofs",
- "itertools",
  "lazy_static",
  "libc",
  "libsqlite3-sys",
@@ -1458,7 +1446,6 @@ dependencies = [
 name = "darkfi-consensus-contract"
 version = "0.4.1"
 dependencies = [
- "async-std",
  "blake3",
  "bs58",
  "chacha20poly1305",
@@ -1473,6 +1460,7 @@ dependencies = [
  "rand 0.8.5",
  "simplelog",
  "sled",
+ "smol",
  "thiserror",
 ]
 
@@ -1499,7 +1487,6 @@ dependencies = [
 name = "darkfi-dao-contract"
 version = "0.4.1"
 dependencies = [
- "async-std",
  "bs58",
  "chacha20poly1305",
  "darkfi",
@@ -1513,6 +1500,7 @@ dependencies = [
  "rand 0.8.5",
  "simplelog",
  "sled",
+ "smol",
  "thiserror",
 ]
 
@@ -1549,7 +1537,6 @@ dependencies = [
 name = "darkfi-money-contract"
 version = "0.4.1"
 dependencies = [
- "async-std",
  "bs58",
  "chacha20poly1305",
  "darkfi",
@@ -1562,6 +1549,7 @@ dependencies = [
  "rand 0.8.5",
  "simplelog",
  "sled",
+ "smol",
  "thiserror",
 ]
 
