@@ -1,4 +1,4 @@
-# Understanding protocols
+# Understanding Protocols
 
 We now need to implement a custom protocol which defines how our chat
 program interacts with the p2p network.
