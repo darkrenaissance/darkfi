@@ -202,14 +202,6 @@ impl P2p {
         self.stop_subscriber.notify(()).await
     }
 
-    /// Add a channel to the set of connected channels
-    pub async fn store(&self, channel: ChannelPtr) {
-        // TODO: Check the code path for this, and potentially also insert the remote
-        // into the hosts list?
-        self.channels.lock().await.insert(channel.address().clone(), channel.clone());
-        self.channel_subscriber.notify(Ok(channel)).await;
-    }
-
     /// Broadcasts a message concurrently across all active channels.
     pub async fn broadcast<M: Message>(&self, message: &M) {
         self.broadcast_with_exclude(message, &[]).await
@@ -253,18 +245,26 @@ impl P2p {
         self.channels.lock().await.contains_key(addr)
     }
 
+    /// Add a channel to the set of connected channels
+    pub(crate) async fn store(&self, channel: ChannelPtr) {
+        // TODO: Check the code path for this, and potentially also insert the remote
+        // into the hosts list?
+        self.channels.lock().await.insert(channel.address().clone(), channel.clone());
+        self.channel_subscriber.notify(Ok(channel)).await;
+    }
+
     /// Remove a channel from the set of connected channels
-    pub async fn remove(&self, channel: ChannelPtr) {
+    pub(crate) async fn remove(&self, channel: ChannelPtr) {
         self.channels.lock().await.remove(channel.address());
     }
 
     /// Add an address to the list of pending channels.
-    pub async fn add_pending(&self, addr: &Url) -> bool {
+    pub(crate) async fn add_pending(&self, addr: &Url) -> bool {
         self.pending.lock().await.insert(addr.clone())
     }
 
     /// Remove a channel from the list of pending channels.
-    pub async fn remove_pending(&self, addr: &Url) {
+    pub(crate) async fn remove_pending(&self, addr: &Url) {
         self.pending.lock().await.remove(addr);
     }
 

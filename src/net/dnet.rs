@@ -40,7 +40,7 @@ pub struct MessageInfo {
     pub time: NanoTimestamp,
 }
 
-// Needed by the macro
+// Needed by the dnetev!() macro
 pub type SendMessage = MessageInfo;
 pub type RecvMessage = MessageInfo;
 
