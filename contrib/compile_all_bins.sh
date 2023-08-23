@@ -11,4 +11,6 @@ for i in $dirs; do
 	bins="$bins $(grep '^name = ' "$i/Cargo.toml" | cut -d' ' -f3 | tr -d '"')"
 done
 
+bins="$(echo "$bins" | tr ' ' '\n' | sort -u | tr '\n' ' ')"
+
 make CARGO="$CARGO" BINS="$bins"
