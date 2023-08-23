@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{io, io::Write, process};
+use std::io::{self, Error, ErrorKind, Write};
 
 pub(super) struct ErrorEmitter {
     namespace: String,
@@ -43,10 +43,10 @@ impl ErrorEmitter {
         format!("{}\n{}\n{}\n", err_msg, dbg_msg, caret)
     }
 
-    pub fn abort(&self, msg: &str, ln: usize, col: usize) {
+    pub fn abort(&self, msg: &str, ln: usize, col: usize) -> Error {
         let m = self.fmt(msg.to_string(), ln, col);
         self.emit("error", &m);
-        process::exit(1);
+        Error::new(ErrorKind::Other, m)
     }
 
     pub fn warn(&self, msg: &str, ln: usize, col: usize) {

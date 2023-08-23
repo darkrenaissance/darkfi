@@ -48,12 +48,12 @@ impl ZkBinary {
     fn new(filename: String, source_code: String) -> Self {
         let source = source_code.replace('\t', "    ").replace("\r\n", "\n");
         let lexer = zkas::Lexer::new(&filename, source.chars());
-        let tokens = lexer.lex();
+        let tokens = lexer.lex().unwrap();
         let parser = zkas::Parser::new(&filename, source.chars(), tokens);
-        let (namespace, k, constants, witnesses, statements) = parser.parse();
+        let (namespace, k, constants, witnesses, statements) = parser.parse().unwrap();
         let mut analyzer =
             zkas::Analyzer::new(&filename, source.chars(), constants, witnesses, statements);
-        analyzer.analyze_types();
+        analyzer.analyze_types().unwrap();
 
         let compiler = zkas::Compiler::new(
             &filename,
@@ -67,7 +67,7 @@ impl ZkBinary {
             true,
         );
 
-        let bincode = compiler.compile();
+        let bincode = compiler.compile().unwrap();
 
         Self::decode(bincode)
     }

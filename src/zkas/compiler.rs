@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::str::Chars;
+use std::{io::Result, str::Chars};
 
 use darkfi_serial::{serialize, VarInt};
 
@@ -63,7 +63,7 @@ impl Compiler {
         Self { namespace, k, constants, witnesses, statements, literals, debug_info, error }
     }
 
-    pub fn compile(&self) -> Vec<u8> {
+    pub fn compile(&self) -> Result<Vec<u8>> {
         let mut bincode = vec![];
 
         // Write the magic bytes and version
@@ -127,11 +127,11 @@ impl Compiler {
                             continue
                         }
 
-                        self.error.abort(
+                        return Err(self.error.abort(
                             &format!("Failed finding a heap reference for `{}`", arg.name),
                             arg.line,
                             arg.column,
-                        );
+                        ))
                     }
                     Arg::Lit(lit) => {
                         if let Some(found) = Compiler::lookup_literal(&self.literals, &lit.name) {
@@ -140,11 +140,11 @@ impl Compiler {
                             continue
                         }
 
-                        self.error.abort(
+                        return Err(self.error.abort(
                             &format!("Failed finding literal `{}`", lit.name),
                             lit.line,
                             lit.column,
-                        );
+                        ))
                     }
                     _ => unreachable!(),
                 };
@@ -153,12 +153,12 @@ impl Compiler {
 
         // If we're not doing debug info, we're done here and can return.
         if !self.debug_info {
-            return bincode
+            return Ok(bincode)
         }
 
         // TODO: Otherwise, we proceed appending debug info.
 
-        bincode
+        Ok(bincode)
     }
 
     fn lookup_heap(heap: &[&str], name: &str) -> Option<usize> {

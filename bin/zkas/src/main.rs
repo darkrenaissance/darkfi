@@ -94,22 +94,30 @@ fn main() -> ExitCode {
     // The lexer goes over the input file and separates its content into
     // tokens that get fed into a parser.
     let lexer = Lexer::new(filename, source.chars());
-    let tokens = lexer.lex();
+    let tokens = match lexer.lex() {
+        Ok(v) => v,
+        Err(_) => return ExitCode::FAILURE,
+    };
 
     // The parser goes over the tokens provided by the lexer and builds
     // the initial AST, not caring much about the semantics, just enforcing
     // syntax and general structure.
     let parser = Parser::new(filename, source.chars(), tokens);
-    let (namespace, k, constants, witnesses, statements) = parser.parse();
+    let (namespace, k, constants, witnesses, statements) = match parser.parse() {
+        Ok(v) => v,
+        Err(_) => return ExitCode::FAILURE,
+    };
 
     // The analyzer goes through the initial AST provided by the parser and
     // converts return and variable types to their correct forms, and also
     // checks that the semantics of the ZK script are correct.
     let mut analyzer = Analyzer::new(filename, source.chars(), constants, witnesses, statements);
-    analyzer.analyze_types();
+    if analyzer.analyze_types().is_err() {
+        return ExitCode::FAILURE
+    }
 
-    if iflag {
-        analyzer.analyze_semantic();
+    if iflag && analyzer.analyze_semantic().is_err() {
+        return ExitCode::FAILURE
     }
 
     if pflag {
@@ -132,7 +140,10 @@ fn main() -> ExitCode {
         !sflag,
     );
 
-    let bincode = compiler.compile();
+    let bincode = match compiler.compile() {
+        Ok(v) => v,
+        Err(_) => return ExitCode::FAILURE,
+    };
     // ANCHOR_END: zkas
 
     let output = if output.is_empty() { format!("{}.bin", filename) } else { output };
