@@ -11,7 +11,7 @@ features = ["dht"]
 
 [dependencies]
 async-channel = "1.9.0"
-async-executor = "1.5.1"
+async-executor = "1.5.2"
 async-std = "1.12.0"
 async-trait = "0.1.73"
 blake3 = "1.4.1"
@@ -24,8 +24,8 @@ simplelog = "0.12.1"
 url = "2.4.0"
 
 # Argument parsing
-serde = "1.0.183"
-serde_derive = "1.0.183"
+serde = "1.0.185"
+serde_derive = "1.0.185"
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
 

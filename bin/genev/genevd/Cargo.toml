@@ -35,6 +35,6 @@ simplelog = "0.12.1"
 smol = "1.3.0"
 
 # Argument parsing
-serde = {version = "1.0.183", features = ["derive"]}
+serde = {version = "1.0.185", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"

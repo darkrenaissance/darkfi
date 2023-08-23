@@ -25,7 +25,7 @@ simplelog = "0.12.1"
 url = "2.4.0"
 
 serde_json = "1.0.105"
-serde = {version = "1.0.183", features = ["derive"]}
+serde = {version = "1.0.185", features = ["derive"]}
 toml = "0.7.6"
 libsqlite3-sys = {version = "0.26.0", features = ["bundled-sqlcipher-vendored-openssl"]}
 # ANCHOR_END: dependencies

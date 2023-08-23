@@ -26,6 +26,6 @@ textwrap = "0.16.0"
 url = "2.4.0"
 
 # Encoding and parsing
-clap = {version = "4.3.22", features = ["derive"]}
-serde = {version = "1.0.183", features = ["derive"]}
+clap = {version = "4.3.24", features = ["derive"]}
+serde = {version = "1.0.185", features = ["derive"]}
 tinyjson = "2.5.1"
