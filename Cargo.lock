@@ -197,6 +197,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 
 [[package]]
+name = "arg"
+version = "1.0.0"
+source = "git+https://github.com/parazyd/arg#bad0beb83e9df6d9037aa68d4624c77708c8c957"
+
+[[package]]
 name = "arrayref"
 version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7204,6 +7209,6 @@ dependencies = [
 name = "zkas"
 version = "0.4.1"
 dependencies = [
- "clap 4.3.23",
+ "arg",
  "darkfi",
 ]

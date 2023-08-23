@@ -19,52 +19,71 @@
 use std::{
     fs::{read_to_string, File},
     io::Write,
-    process::exit,
+    process::ExitCode,
 };
 
-use clap::Parser as ClapParser;
+use arg::Args;
 
 use darkfi::{
-    cli_desc,
     zkas::{Analyzer, Compiler, Lexer, Parser, ZkBinary},
+    ANSI_LOGO,
 };
 
-#[derive(clap::Parser)]
-#[clap(name = "zkas", about = cli_desc!(), version)]
-struct Args {
-    /// Place the output into `<FILE>`
-    #[clap(short = 'o', value_name = "FILE")]
-    output: Option<String>,
+const ABOUT: &str =
+    concat!("zkas ", env!("CARGO_PKG_VERSION"), '\n', env!("CARGO_PKG_DESCRIPTION"));
 
-    /// Strip debug symbols
-    #[clap(short = 's')]
-    strip: bool,
+const USAGE: &str = r#"
+Usage: zkas [OPTIONS] <INPUT>
 
-    /// Preprocess only; do not compile
-    #[clap(short = 'E')]
-    evaluate: bool,
+Arguments:
+  <INPUT>    ZK script to compile
 
-    /// Interactive semantic analysis
-    #[clap(short = 'i')]
-    interactive: bool,
+Options:
+  -o <FILE>  Place the output into <FILE>
+  -s         Strip debug symbols
+  -p         Preprocess only; do not compile
+  -i         Interactive semantic analysis
+  -e         Examine decoded bytecode
+  -h         Print this help
+"#;
 
-    /// Examine decoded bytecode
-    #[clap(short = 'e')]
-    examine: bool,
-
-    /// ZK script to compile
-    input: String,
+fn usage() {
+    print!("{}{}\n{}", ANSI_LOGO, ABOUT, USAGE);
 }
 
-fn main() {
-    let args = Args::parse();
+fn main() -> ExitCode {
+    let argv;
+    let mut pflag = false;
+    let mut iflag = false;
+    let mut eflag = false;
+    let mut sflag = false;
+    let mut hflag = false;
+    let mut output = String::new();
 
-    let filename = args.input.as_str();
+    {
+        let mut args = Args::new().with_cb(|args, flag| match flag {
+            'p' => pflag = true,
+            'i' => iflag = true,
+            'e' => eflag = true,
+            's' => sflag = true,
+            'o' => output = args.eargf().to_string(),
+            _ => hflag = true,
+        });
+
+        argv = args.parse();
+    }
+
+    if hflag || argv.is_empty() {
+        usage();
+        return ExitCode::FAILURE
+    }
+
+    let filename = argv[0].as_str();
     let source = match read_to_string(filename) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("Error: Failed reading from \"{}\". {}", filename, e);
-            exit(1);
+            return ExitCode::FAILURE
         }
     };
 
@@ -89,16 +108,16 @@ fn main() {
     let mut analyzer = Analyzer::new(filename, source.chars(), constants, witnesses, statements);
     analyzer.analyze_types();
 
-    if args.interactive {
+    if iflag {
         analyzer.analyze_semantic();
     }
 
-    if args.evaluate {
+    if pflag {
         println!("{:#?}", analyzer.constants);
         println!("{:#?}", analyzer.witnesses);
         println!("{:#?}", analyzer.statements);
         println!("{:#?}", analyzer.heap);
-        exit(0);
+        return ExitCode::SUCCESS
     }
 
     let compiler = Compiler::new(
@@ -110,34 +129,33 @@ fn main() {
         analyzer.witnesses,
         analyzer.statements,
         analyzer.literals,
-        !args.strip,
+        !sflag,
     );
 
     let bincode = compiler.compile();
     // ANCHOR_END: zkas
 
-    let output = match args.output {
-        Some(o) => o,
-        None => format!("{}.bin", args.input),
-    };
+    let output = if output.is_empty() { format!("{}.bin", filename) } else { output };
 
     let mut file = match File::create(&output) {
         Ok(v) => v,
         Err(e) => {
             eprintln!("Error: Failed to create \"{}\". {}", output, e);
-            exit(1);
+            return ExitCode::FAILURE
         }
     };
 
     if let Err(e) = file.write_all(&bincode) {
         eprintln!("Error: Failed to write bincode to \"{}\". {}", output, e);
-        exit(1);
+        return ExitCode::FAILURE
     };
 
     println!("Wrote output to {}", &output);
 
-    if args.examine {
+    if eflag {
         let zkbin = ZkBinary::decode(&bincode).unwrap();
         println!("{:#?}", zkbin);
     }
+
+    ExitCode::SUCCESS
 }
