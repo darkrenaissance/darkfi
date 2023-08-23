@@ -246,6 +246,7 @@ util = [
 
 wallet = [
     "rusqlite",
+    "smol",
 
     "darkfi-serial",
     "util",
