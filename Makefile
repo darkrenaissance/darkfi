@@ -65,7 +65,7 @@ clippy: contracts $(PROOFS_BIN)
 	$(CARGO) clippy --release --all-features --all
 
 rustdoc: contracts $(PROOFS_BIN)
-	$(CARGO) doc --release --all-features --workspace --document-private-items
+	$(CARGO) doc --release --all-features --workspace --document-private-items --no-deps
 
 test: $(PROOFS_BIN) contracts
 	$(CARGO) test --release --all-features --all
