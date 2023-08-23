@@ -107,7 +107,7 @@ async fn run_accept_loop(
         let rh_ = rh.clone();
         ex.spawn(async move {
             if let Err(e) = accept(stream, peer_addr.clone(), rh_).await {
-                if e.to_string().as_str() == "Connection closed cleanly" {
+                if e.to_string().as_str() == "Connection closed: Connection closed cleanly" {
                     info!(
                         target: "rpc::server",
                         "[RPC] Closed connection from {}",
