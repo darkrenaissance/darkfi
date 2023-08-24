@@ -16,10 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
 use darkfi_sdk::{
     crypto::MerkleNode,
     pasta::{arithmetic::CurveAffine, group::Curve, pallas},
 };
+use smol::io::{AsyncRead, AsyncWrite};
 
 use crate::{
     zk::{proof::VerifyingKey, Proof},

@@ -16,7 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
+use smol::io::{AsyncRead, AsyncWrite};
 
 use crate::consensus::{EncryptedTxRcpt, TransferStx};
 

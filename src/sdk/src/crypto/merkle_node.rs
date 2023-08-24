@@ -19,6 +19,11 @@
 use core::{fmt, str::FromStr};
 use std::{io, iter};
 
+#[cfg(feature = "async")]
+use async_trait::async_trait;
+#[cfg(feature = "async")]
+use futures_lite::{AsyncRead, AsyncWrite};
+
 use bridgetree::{BridgeTree, Hashable, Level};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_gadgets::sinsemilla::primitives::HashDomain;

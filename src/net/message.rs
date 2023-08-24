@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt};
+use async_trait::async_trait;
+use darkfi_serial::{
+    AsyncDecodable, AsyncEncodable, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt,
+};
 use log::trace;
 use smol::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use url::Url;
@@ -96,7 +99,7 @@ pub struct Packet {
 
 /// Reads and decodes an inbound payload from the given async stream.
 /// Returns decoded [`Packet`].
-pub async fn read_packet<R: AsyncRead + Unpin + Sized>(stream: &mut R) -> Result<Packet> {
+pub async fn read_packet<R: AsyncRead + Unpin + Send + Sized>(stream: &mut R) -> Result<Packet> {
     // Packets should have a 4 byte header of magic digits.
     // This is used for network debugging.
     let mut magic = [0u8; 4];
@@ -127,7 +130,7 @@ pub async fn read_packet<R: AsyncRead + Unpin + Sized>(stream: &mut R) -> Result
 
 /// Sends an outbound packet by writing data to the given async stream.
 /// Returns the total written bytes.
-pub async fn send_packet<W: AsyncWrite + Unpin + Sized>(
+pub async fn send_packet<W: AsyncWrite + Unpin + Send + Sized>(
     stream: &mut W,
     packet: Packet,
 ) -> Result<usize> {

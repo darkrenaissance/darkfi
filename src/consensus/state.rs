@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
 use darkfi_sdk::{
     blockchain::{PidOutput, PreviousSlot, Slot},
     crypto::MerkleTree,
@@ -24,6 +25,7 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use log::info;
 use rand::{thread_rng, Rng};
+use smol::io::{AsyncRead, AsyncWrite};
 
 use super::{
     constants,

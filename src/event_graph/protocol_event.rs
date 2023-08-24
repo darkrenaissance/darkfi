@@ -21,7 +21,10 @@ use std::{fmt::Debug, sync::Arc};
 use async_trait::async_trait;
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use log::debug;
-use smol::lock::Mutex;
+use smol::{
+    io::{AsyncRead, AsyncWrite},
+    lock::Mutex,
+};
 
 use super::EventMsg;
 use crate::{

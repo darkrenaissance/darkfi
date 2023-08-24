@@ -16,6 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#[cfg(feature = "async")]
+use async_trait::async_trait;
+#[cfg(feature = "async")]
+use futures_lite::{AsyncRead, AsyncWrite};
+
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use lazy_static::lazy_static;
 use pasta_curves::{group::ff::PrimeField, pallas};

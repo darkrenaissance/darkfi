@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
 use crypto_api_chachapoly::ChachaPolyIetf;
 use darkfi_sdk::{
     crypto::{
@@ -27,6 +28,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
+use smol::io::{AsyncRead, AsyncWrite};
 
 use crate::Error;
 

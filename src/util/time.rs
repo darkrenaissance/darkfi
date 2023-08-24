@@ -18,7 +18,9 @@
 
 use std::{fmt, time::UNIX_EPOCH};
 
+use async_trait::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
+use smol::io::{AsyncRead, AsyncWrite};
 
 use crate::Result;
 

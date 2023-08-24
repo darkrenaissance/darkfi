@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
 use darkfi_sdk::{
     crypto::{
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
@@ -29,6 +30,7 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::{arithmetic::Field, circuit::Value};
 use log::info;
 use rand::rngs::OsRng;
+use smol::io::{AsyncRead, AsyncWrite};
 
 use super::constants::EPOCH_LENGTH;
 use crate::{

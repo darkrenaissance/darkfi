@@ -16,12 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use async_trait::async_trait;
 use darkfi_sdk::{
     blockchain::Slot,
     crypto::schnorr::Signature,
     pasta::{group::ff::Field, pallas},
 };
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
+use smol::io::{AsyncRead, AsyncWrite};
 
 use crate::{tx::Transaction, Error, Result};
 

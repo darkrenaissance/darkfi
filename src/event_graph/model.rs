@@ -18,11 +18,15 @@
 
 use std::{cmp::Ordering, collections::HashMap, fmt::Debug, path::Path, sync::Arc};
 
+use async_trait::async_trait;
 use darkfi_serial::{
     deserialize, serialize, Decodable, Encodable, SerialDecodable, SerialEncodable,
 };
 use log::{error, info};
-use smol::lock::Mutex;
+use smol::{
+    io::{AsyncRead, AsyncWrite},
+    lock::Mutex,
+};
 use tinyjson::JsonValue;
 
 use crate::{
