@@ -30,6 +30,7 @@
   - [Bridge](architecture/bridge.md)
   - [Tooling](architecture/tooling.md)
   - [P2P Network](architecture/p2p-network.md)
+  - [Servies](architecture/services.md)
 - [Smart Contracts](architecture/sc/sc.md)
   - [Transaction lifetime](architecture/sc/tx-lifetime.md)
 - [zkas](zkas/index.md)
