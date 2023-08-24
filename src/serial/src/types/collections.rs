@@ -19,13 +19,20 @@
 //! Serialization of collections
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
-    io::{Error, Read, Write},
+    io::{Read, Result, Write},
 };
+
+#[cfg(feature = "async")]
+use crate::{AsyncDecodable, AsyncEncodable};
+#[cfg(feature = "async")]
+use async_trait::async_trait;
+#[cfg(feature = "async")]
+use futures_lite::{AsyncRead, AsyncWrite};
 
 use crate::{Decodable, Encodable, VarInt};
 
 impl<T: Encodable> Encodable for HashSet<T> {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += VarInt(self.len() as u64).encode(&mut s)?;
         for c in self.iter() {
@@ -35,8 +42,21 @@ impl<T: Encodable> Encodable for HashSet<T> {
     }
 }
 
+#[cfg(feature = "async")]
+#[async_trait]
+impl<T: AsyncEncodable + Sync> AsyncEncodable for HashSet<T> {
+    async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> Result<usize> {
+        let mut len = 0;
+        len += VarInt(self.len() as u64).encode_async(s).await?;
+        for c in self.iter() {
+            len += c.encode_async(s).await?;
+        }
+        Ok(len)
+    }
+}
+
 impl<T: Decodable + std::cmp::Eq + std::hash::Hash> Decodable for HashSet<T> {
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
+    fn decode<D: Read>(mut d: D) -> Result<Self> {
         let len = VarInt::decode(&mut d)?.0;
         let mut ret = HashSet::new();
         for _ in 0..len {
@@ -47,8 +67,22 @@ impl<T: Decodable + std::cmp::Eq + std::hash::Hash> Decodable for HashSet<T> {
     }
 }
 
+#[cfg(feature = "async")]
+#[async_trait]
+impl<T: AsyncDecodable + Send + std::cmp::Eq + std::hash::Hash> AsyncDecodable for HashSet<T> {
+    async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> Result<Self> {
+        let len = VarInt::decode_async(d).await?.0;
+        let mut ret = HashSet::new();
+        for _ in 0..len {
+            let entry: T = AsyncDecodable::decode_async(d).await?;
+            ret.insert(entry);
+        }
+        Ok(ret)
+    }
+}
+
 impl<T: Encodable, U: Encodable> Encodable for BTreeMap<T, U> {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += VarInt(self.len() as u64).encode(&mut s)?;
         for c in self.iter() {
@@ -59,8 +93,22 @@ impl<T: Encodable, U: Encodable> Encodable for BTreeMap<T, U> {
     }
 }
 
+#[cfg(feature = "async")]
+#[async_trait]
+impl<T: AsyncEncodable + Sync, U: AsyncEncodable + Sync> AsyncEncodable for BTreeMap<T, U> {
+    async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> Result<usize> {
+        let mut len = 0;
+        len += VarInt(self.len() as u64).encode_async(s).await?;
+        for c in self.iter() {
+            len += c.0.encode_async(s).await?;
+            len += c.1.encode_async(s).await?;
+        }
+        Ok(len)
+    }
+}
+
 impl<T: Decodable + std::cmp::Ord, U: Decodable> Decodable for BTreeMap<T, U> {
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
+    fn decode<D: Read>(mut d: D) -> Result<Self> {
         let len = VarInt::decode(&mut d)?.0;
         let mut ret = BTreeMap::new();
         for _ in 0..len {
@@ -72,8 +120,25 @@ impl<T: Decodable + std::cmp::Ord, U: Decodable> Decodable for BTreeMap<T, U> {
     }
 }
 
+#[cfg(feature = "async")]
+#[async_trait]
+impl<T: AsyncDecodable + Send + std::cmp::Ord, U: AsyncDecodable + Send> AsyncDecodable
+    for BTreeMap<T, U>
+{
+    async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> Result<Self> {
+        let len = VarInt::decode_async(d).await?.0;
+        let mut ret = BTreeMap::new();
+        for _ in 0..len {
+            let key: T = AsyncDecodable::decode_async(d).await?;
+            let entry: U = AsyncDecodable::decode_async(d).await?;
+            ret.insert(key, entry);
+        }
+        Ok(ret)
+    }
+}
+
 impl<T: Encodable> Encodable for BTreeSet<T> {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += VarInt(self.len() as u64).encode(&mut s)?;
         for c in self.iter() {
@@ -83,8 +148,21 @@ impl<T: Encodable> Encodable for BTreeSet<T> {
     }
 }
 
+#[cfg(feature = "async")]
+#[async_trait]
+impl<T: AsyncEncodable + Sync> AsyncEncodable for BTreeSet<T> {
+    async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> Result<usize> {
+        let mut len = 0;
+        len += VarInt(self.len() as u64).encode_async(s).await?;
+        for c in self.iter() {
+            len += c.encode_async(s).await?;
+        }
+        Ok(len)
+    }
+}
+
 impl<T: Decodable + std::cmp::Ord> Decodable for BTreeSet<T> {
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
+    fn decode<D: Read>(mut d: D) -> Result<Self> {
         let len = VarInt::decode(&mut d)?.0;
         let mut ret = BTreeSet::new();
         for _ in 0..len {
@@ -95,8 +173,48 @@ impl<T: Decodable + std::cmp::Ord> Decodable for BTreeSet<T> {
     }
 }
 
+#[cfg(feature = "async")]
+#[async_trait]
+impl<T: AsyncDecodable + Send + std::cmp::Ord> AsyncDecodable for BTreeSet<T> {
+    async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> Result<Self> {
+        let len = VarInt::decode_async(d).await?.0;
+        let mut ret = BTreeSet::new();
+        for _ in 0..len {
+            let key: T = AsyncDecodable::decode_async(d).await?;
+            ret.insert(key);
+        }
+        Ok(ret)
+    }
+}
+
+impl<T: Encodable, U: Encodable> Encodable for HashMap<T, U> {
+    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
+        let mut len = 0;
+        len += VarInt(self.len() as u64).encode(&mut s)?;
+        for c in self.iter() {
+            len += c.0.encode(&mut s)?;
+            len += c.1.encode(&mut s)?;
+        }
+        Ok(len)
+    }
+}
+
+#[cfg(feature = "async")]
+#[async_trait]
+impl<T: AsyncEncodable + Sync, U: AsyncEncodable + Sync> AsyncEncodable for HashMap<T, U> {
+    async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> Result<usize> {
+        let mut len = 0;
+        len += VarInt(self.len() as u64).encode_async(s).await?;
+        for c in self.iter() {
+            len += c.0.encode_async(s).await?;
+            len += c.1.encode_async(s).await?;
+        }
+        Ok(len)
+    }
+}
+
 impl<T: Decodable + std::cmp::Eq + std::hash::Hash, U: Decodable> Decodable for HashMap<T, U> {
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
+    fn decode<D: Read>(mut d: D) -> Result<Self> {
         let len = VarInt::decode(&mut d)?.0;
         let mut ret = HashMap::new();
         for _ in 0..len {
@@ -108,14 +226,19 @@ impl<T: Decodable + std::cmp::Eq + std::hash::Hash, U: Decodable> Decodable for 
     }
 }
 
-impl<T: Encodable, U: Encodable> Encodable for HashMap<T, U> {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
-        let mut len = 0;
-        len += VarInt(self.len() as u64).encode(&mut s)?;
-        for c in self.iter() {
-            len += c.0.encode(&mut s)?;
-            len += c.1.encode(&mut s)?;
+#[cfg(feature = "async")]
+#[async_trait]
+impl<T: AsyncDecodable + Send + std::cmp::Eq + std::hash::Hash, U: AsyncDecodable + Send>
+    AsyncDecodable for HashMap<T, U>
+{
+    async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> Result<Self> {
+        let len = VarInt::decode_async(d).await?.0;
+        let mut ret = HashMap::new();
+        for _ in 0..len {
+            let key: T = AsyncDecodable::decode_async(d).await?;
+            let entry: U = AsyncDecodable::decode_async(d).await?;
+            ret.insert(key, entry);
         }
-        Ok(len)
+        Ok(ret)
     }
 }

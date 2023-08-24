@@ -16,23 +16,52 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::{Error, Read, Write};
+use std::io::{Read, Result, Write};
+
+#[cfg(feature = "async")]
+use crate::{
+    async_lib::{AsyncReadExt, AsyncWriteExt},
+    AsyncDecodable, AsyncEncodable,
+};
+#[cfg(feature = "async")]
+use async_trait::async_trait;
+#[cfg(feature = "async")]
+use futures_lite::{AsyncRead, AsyncWrite};
 
 use crate::{Decodable, Encodable, ReadExt, WriteExt};
 
 #[cfg(feature = "blake3")]
 impl Encodable for blake3::Hash {
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
         s.write_slice(self.as_bytes())?;
         Ok(32)
     }
 }
 
+#[cfg(all(feature = "blake3", feature = "async"))]
+#[async_trait]
+impl AsyncEncodable for blake3::Hash {
+    async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> Result<usize> {
+        s.write_slice_async(self.as_bytes()).await?;
+        Ok(blake3::OUT_LEN)
+    }
+}
+
 #[cfg(feature = "blake3")]
 impl Decodable for blake3::Hash {
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
+    fn decode<D: Read>(mut d: D) -> Result<Self> {
         let mut bytes = [0u8; 32];
         d.read_slice(&mut bytes)?;
+        Ok(bytes.into())
+    }
+}
+
+#[cfg(all(feature = "blake3", feature = "async"))]
+#[async_trait]
+impl AsyncDecodable for blake3::Hash {
+    async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> Result<Self> {
+        let mut bytes = [0u8; blake3::OUT_LEN];
+        d.read_slice_async(&mut bytes).await?;
         Ok(bytes.into())
     }
 }

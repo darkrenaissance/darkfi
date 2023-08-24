@@ -16,51 +16,99 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::{Error, ErrorKind, Read, Write};
+use std::io::{Error, ErrorKind, Read, Result, Write};
+
+#[cfg(feature = "async")]
+use crate::{AsyncDecodable, AsyncEncodable};
+#[cfg(feature = "async")]
+use async_trait::async_trait;
+#[cfg(feature = "async")]
+use futures_lite::{AsyncRead, AsyncWrite};
 
 use crate::{Decodable, Encodable};
 
 impl Encodable for semver::Prerelease {
-    #[inline]
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
         self.as_str().encode(&mut s)
     }
 }
 
+#[cfg(feature = "async")]
+#[async_trait]
+impl AsyncEncodable for semver::Prerelease {
+    async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> Result<usize> {
+        self.as_str().encode_async(s).await
+    }
+}
+
 impl Decodable for semver::Prerelease {
-    #[inline]
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
+    fn decode<D: Read>(mut d: D) -> Result<Self> {
         let s: String = Decodable::decode(&mut d)?;
 
         match Self::new(&s) {
             Ok(v) => Ok(v),
-            Err(_e) => Err(Error::new(ErrorKind::Other, "Failed parsing semver Prerelase")),
+            Err(_) => Err(Error::new(ErrorKind::Other, "Failed deserializing semver::Prerelase")),
+        }
+    }
+}
+
+#[cfg(feature = "async")]
+#[async_trait]
+impl AsyncDecodable for semver::Prerelease {
+    async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> Result<Self> {
+        let s: String = AsyncDecodable::decode_async(d).await?;
+
+        match Self::new(&s) {
+            Ok(v) => Ok(v),
+            Err(_) => Err(Error::new(ErrorKind::Other, "Failed deserializing semver::Prerelease")),
         }
     }
 }
 
 impl Encodable for semver::BuildMetadata {
-    #[inline]
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
         self.as_str().encode(&mut s)
     }
 }
 
+#[cfg(feature = "async")]
+#[async_trait]
+impl AsyncEncodable for semver::BuildMetadata {
+    async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> Result<usize> {
+        self.as_str().encode_async(s).await
+    }
+}
+
 impl Decodable for semver::BuildMetadata {
-    #[inline]
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
+    fn decode<D: Read>(mut d: D) -> Result<Self> {
         let s: String = Decodable::decode(&mut d)?;
 
         match Self::new(&s) {
             Ok(v) => Ok(v),
-            Err(_e) => Err(Error::new(ErrorKind::Other, "Failed parsing semver BuildMetadata")),
+            Err(_) => {
+                Err(Error::new(ErrorKind::Other, "Failed deserializing semver::BuildMetadata"))
+            }
+        }
+    }
+}
+
+#[cfg(feature = "async")]
+#[async_trait]
+impl AsyncDecodable for semver::BuildMetadata {
+    async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> Result<Self> {
+        let s: String = AsyncDecodable::decode_async(d).await?;
+
+        match Self::new(&s) {
+            Ok(v) => Ok(v),
+            Err(_) => {
+                Err(Error::new(ErrorKind::Other, "Failed deserializing semver::BuildMetadata"))
+            }
         }
     }
 }
 
 impl Encodable for semver::Version {
-    #[inline]
-    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
         let mut len = 0;
         len += self.major.encode(&mut s)?;
         len += self.minor.encode(&mut s)?;
@@ -71,14 +119,39 @@ impl Encodable for semver::Version {
     }
 }
 
+#[cfg(feature = "async")]
+#[async_trait]
+impl AsyncEncodable for semver::Version {
+    async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> Result<usize> {
+        let mut len = 0;
+        len += self.major.encode_async(s).await?;
+        len += self.minor.encode_async(s).await?;
+        len += self.patch.encode_async(s).await?;
+        len += self.pre.encode_async(s).await?;
+        len += self.build.encode_async(s).await?;
+        Ok(len)
+    }
+}
+
 impl Decodable for semver::Version {
-    #[inline]
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
+    fn decode<D: Read>(mut d: D) -> Result<Self> {
         let major: u64 = Decodable::decode(&mut d)?;
         let minor: u64 = Decodable::decode(&mut d)?;
         let patch: u64 = Decodable::decode(&mut d)?;
         let pre: semver::Prerelease = Decodable::decode(&mut d)?;
         let build: semver::BuildMetadata = Decodable::decode(&mut d)?;
+        Ok(Self { major, minor, patch, pre, build })
+    }
+}
+#[cfg(feature = "async")]
+#[async_trait]
+impl AsyncDecodable for semver::Version {
+    async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> Result<Self> {
+        let major: u64 = AsyncDecodable::decode_async(d).await?;
+        let minor: u64 = AsyncDecodable::decode_async(d).await?;
+        let patch: u64 = AsyncDecodable::decode_async(d).await?;
+        let pre: semver::Prerelease = AsyncDecodable::decode_async(d).await?;
+        let build: semver::BuildMetadata = AsyncDecodable::decode_async(d).await?;
         Ok(Self { major, minor, patch, pre, build })
     }
 }
