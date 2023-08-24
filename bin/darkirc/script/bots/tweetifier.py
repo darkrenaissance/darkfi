@@ -31,7 +31,7 @@ while True:
             else:
                 tweetId = str(parsed_url.path).split("/")[-1]
             print(f"tweet id: {tweetId}")
-            if not (parsed_url.netloc.lower() in ['twitter.com','t.co'] and parsed_url.scheme == 'https'):
+            if not (parsed_url.netloc.lower() in ['twitter.com','t.co', 'x.com'] and parsed_url.scheme == 'https'):
                 continue
             app = Twitter()
             try:
