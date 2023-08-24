@@ -18,9 +18,13 @@
 
 extern crate proc_macro;
 use proc_macro::TokenStream;
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream as TokenStream2};
 use proc_macro_crate::{crate_name, FoundCrate};
+use quote::quote;
 use syn::{Ident, ItemEnum, ItemStruct, ItemUnion};
+
+#[cfg(feature = "async")]
+use darkfi_derive_internal::{async_enum_de, async_enum_ser, async_struct_de, async_struct_ser};
 
 use darkfi_derive_internal::{enum_de, enum_ser, struct_de, struct_ser};
 
@@ -35,10 +39,29 @@ pub fn darkfi_serialize(input: TokenStream) -> TokenStream {
 
     let cratename = Ident::new(&found_crate, Span::call_site());
 
-    let res = if let Ok(input) = syn::parse::<ItemStruct>(input.clone()) {
-        struct_ser(&input, cratename)
+    let res: syn::Result<TokenStream2> = if let Ok(input) = syn::parse::<ItemStruct>(input.clone())
+    {
+        let sync_tokens = struct_ser(&input, cratename.clone()).unwrap();
+        #[cfg(feature = "async")]
+        let async_tokens = async_struct_ser(&input, cratename).unwrap();
+        #[cfg(not(feature = "async"))]
+        let async_tokens = quote! {};
+
+        Ok(quote! {
+            #sync_tokens
+            #async_tokens
+        })
     } else if let Ok(input) = syn::parse::<ItemEnum>(input.clone()) {
-        enum_ser(&input, cratename)
+        let sync_tokens = enum_ser(&input, cratename.clone()).unwrap();
+        #[cfg(feature = "async")]
+        let async_tokens = async_enum_ser(&input, cratename).unwrap();
+        #[cfg(not(feature = "async"))]
+        let async_tokens = quote! {};
+
+        Ok(quote! {
+            #sync_tokens
+            #async_tokens
+        })
     } else if let Ok(_input) = syn::parse::<ItemUnion>(input) {
         todo!()
     } else {
@@ -63,10 +86,29 @@ pub fn darkfi_deserialize(input: TokenStream) -> TokenStream {
 
     let cratename = Ident::new(&found_crate, Span::call_site());
 
-    let res = if let Ok(input) = syn::parse::<ItemStruct>(input.clone()) {
-        struct_de(&input, cratename)
+    let res: syn::Result<TokenStream2> = if let Ok(input) = syn::parse::<ItemStruct>(input.clone())
+    {
+        let sync_tokens = struct_de(&input, cratename.clone()).unwrap();
+        #[cfg(feature = "async")]
+        let async_tokens = async_struct_de(&input, cratename).unwrap();
+        #[cfg(not(feature = "async"))]
+        let async_tokens = quote! {};
+
+        Ok(quote! {
+            #sync_tokens
+            #async_tokens
+        })
     } else if let Ok(input) = syn::parse::<ItemEnum>(input.clone()) {
-        enum_de(&input, cratename)
+        let sync_tokens = enum_de(&input, cratename.clone()).unwrap();
+        #[cfg(feature = "async")]
+        let async_tokens = async_enum_de(&input, cratename).unwrap();
+        #[cfg(not(feature = "async"))]
+        let async_tokens = quote! {};
+
+        Ok(quote! {
+            #sync_tokens
+            #async_tokens
+        })
     } else if let Ok(_input) = syn::parse::<ItemUnion>(input) {
         todo!()
     } else {
