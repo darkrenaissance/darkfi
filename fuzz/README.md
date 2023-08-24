@@ -29,10 +29,11 @@ that an empty input causes a panic.
 
 * Identify your fuzz target (`cargo fuzz list` or whatever you used
 for `cargo fuzz run TARGET`
-* `ls artifacts/TARGET/crash-*`
-* `cat` the crash file and check that it matches the error message from
-the fuzzer
-* Choose a `NAME` for the crash file, e.g. `corpus_emptyfile`
+* Examine the fuzzing artifacts: `ls artifacts/TARGET/`
+* `cat` the file and check that it matches the error message from
+the fuzzer. The filename's prefix will match the kind of error
+encountered: `oom` (out-of-memory), `crash`, etc.
+* Choose a `NAME` for the crash file, e.g. `corpus-crash-emptyfile`
 * `cp artifacts/TARGET/CRASH-FILE corpus/TARGET/NAME`
 
 Then add the new `corpus/TARGET/NAME` file to git.
