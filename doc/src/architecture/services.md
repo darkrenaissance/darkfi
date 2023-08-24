@@ -56,10 +56,13 @@ impl P2p {
 
     pub async fn start(self: Arc<Self>) -> Result<()> {
         // ...
+        self.session_outbound().await.start().await;
         Ok(())
     }
 
     pub async fn stop(&self) {
+        self.session_outbound().await.stop().await;
+        // ...
     }
 }
 ```
