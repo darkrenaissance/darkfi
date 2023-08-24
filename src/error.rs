@@ -16,20 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// assert_err!(your_func(), Err(Error::UrlParsingFailed(_)));
-// assert_err!(your_func(), Err(Error::CanonicalizationFailed(_)));
-// assert_err!(your_func(), Err(Error::FileOpenFailed(er)) if er.kind() == ErrorKind::NotFound);
-#[macro_export]
-macro_rules! assert_err {
-    ($expression:expr, $($pattern:tt)+) => {
-        match $expression {
-            $($pattern)+ => (),
-            ref e => panic!("expected `{}` but got `{:?}`", stringify!($($pattern)+), e),
-        }
-    }
-}
-pub use assert_err;
-
 // Hello developer. Please add your error to the according subsection
 // that is commented, or make a new subsection. Keep it clean.
 

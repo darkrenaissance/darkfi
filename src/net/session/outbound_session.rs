@@ -33,7 +33,7 @@ use std::{
 
 use async_trait::async_trait;
 use log::{debug, error, info, warn};
-use smol::{lock::Mutex, Executor};
+use smol::lock::Mutex;
 use url::Url;
 
 use super::{
@@ -148,23 +148,23 @@ impl Slot {
 
     async fn start(self: Arc<Self>) {
         // TODO: way too many clones, look into making this implicit. See implicit-clone crate
+        let ex = self.p2p().executor();
+
         self.process.clone().start(
-            self.clone()._run(),
+            async move {
+                self.run().await;
+                Ok(())
+            },
             // Ignore stop handler
             |_| async {},
             Error::NetworkServiceStopped,
-            self.p2p().executor(),
+            ex,
         );
     }
     async fn stop(self: Arc<Self>) {
         self.process.stop().await
     }
 
-    // TODO: need to fix StoppableTask so it accepts arbitrary function signatures
-    async fn _run(self: Arc<Self>) -> Result<()> {
-        self.run().await;
-        Ok(())
-    }
     async fn run(self: Arc<Self>) {
         assert_eq!(*self.state.lock().await, SlotState::Inactive);
         // This is the main outbound connection loop where we try to establish
@@ -262,6 +262,11 @@ impl Slot {
                     "[P2P] Outbound slot #{} disconnected: {}",
                     self.slot, err
                 );
+
+                dnetev!(self, OutboundDisconnected, {
+                    slot: self.slot,
+                    err: err.to_string()
+                });
                 continue
             }
             // Wait for channel to close
