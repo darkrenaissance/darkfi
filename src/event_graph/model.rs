@@ -79,6 +79,7 @@ impl<T> Model<T>
 where
     T: Send + Sync + Encodable + Decodable + Clone + EventMsg + Debug,
 {
+    /// Creates a new model with a hardcoded root event.
     pub fn new(events_queue: EventsQueuePtr<T>) -> Self {
         let root_node = EventNode {
             parent: None,
@@ -98,6 +99,7 @@ where
         Self { current_root: root_node_id, orphans: HashMap::new(), event_map, events_queue }
     }
 
+    /// Save tree to disk.
     pub fn save_tree(&self, path: &Path) -> crate::Result<()> {
         let path = path.join("tree");
         let tree = self.event_map.clone();
@@ -110,6 +112,7 @@ where
         Ok(())
     }
 
+    /// Load tree from disk.
     pub fn load_tree(&mut self, path: &Path) -> crate::Result<()> {
         let path = path.join("tree");
         if !path.exists() {
@@ -150,6 +153,10 @@ where
         info!("reset current root to: {:?}", self.current_root);
     }
 
+    /// Loops through all events, checks if the event is older than the
+    /// given timestamp, if older then it gets removed from the tree,
+    /// and reorganizes the resulted tree so the oldest event(s) is
+    /// child(ren) of root.
     pub fn remove_old_events(&mut self, timestamp: Timestamp) -> crate::Result<()> {
         let tree = self.event_map.clone();
         let mut is_tree_changed = false;
@@ -186,6 +193,7 @@ where
         self.find_head()
     }
 
+    /// Add an Event to the tree.
     pub async fn add(&mut self, event: Event<T>) {
         self.orphans.insert(event.hash(), event);
         self.reorganize().await;
@@ -195,6 +203,7 @@ where
         !self.event_map.contains_key(&event.previous_event_hash)
     }
 
+    /// Return a vector of childless events other than the current root.
     pub fn find_leaves(&self) -> Vec<EventId> {
         // collect the leaves in the tree
         let mut leaves = vec![];
@@ -209,10 +218,12 @@ where
         leaves
     }
 
+    /// Return an Event from the tree given its EventID.
     pub fn get_event(&self, event: &EventId) -> Option<Event<T>> {
         self.event_map.get(event).map(|en| en.event.clone())
     }
 
+    /// Return all the offsprings (including branches if any) of a given EventID.
     pub fn get_offspring(&self, event: &EventId) -> Vec<Event<T>> {
         let mut offspring = vec![];
         let mut event = *event;
@@ -262,11 +273,13 @@ where
 
             self.events_queue.dispatch(&node.event).await.ok();
 
-            // clean up the tree from old eventnodes
+            // clean up the tree from old EventNodes
             self.prune_chains();
         }
     }
 
+    /// Checks if EventNodes (branches) are too deep relative to the
+    /// current head, and prune those branches if they are.
     fn prune_chains(&mut self) {
         let head = self.find_head();
         let leaves = self.find_leaves();
@@ -286,6 +299,7 @@ where
         }
     }
 
+    /// Removes an EventNode given its leaf
     fn remove_node(&mut self, mut event_id: EventId) {
         loop {
             if !self.event_map.contains_key(&event_id) {
@@ -312,15 +326,18 @@ where
         }
     }
 
-    // find_head
-    // -> recursively call itself
-    // -> + 1 for every recursion, return self if no children
-    // -> select max from returned values
-    // Gets the lead node with the maximal number of events counting from root
+    /// Gets the lead node with the maximal number of events counting from root
     fn find_head(&self) -> EventId {
         self.find_longest_chain(&self.current_root, 0).0
     }
 
+    /// -> recursively call itself
+    ///
+    /// -> + 1 for every recursion, return self if no children
+    ///
+    /// -> select max from returned values
+    ///
+    /// return the farthest EventID from the given one and the length as a tuple.
     fn find_longest_chain(&self, parent_node: &EventId, i: u32) -> (EventId, u32) {
         let children = &self.event_map.get(parent_node).unwrap().children;
         if children.is_empty() {
@@ -372,7 +389,7 @@ where
         depth
     }
 
-    // Find common ancestor between two events
+    /// Find common ancestor between two events.
     fn find_ancestor(&self, mut node_a: EventId, node_b: EventId) -> EventId {
         // node_a is a child of node_b
         let is_child = node_b == self.event_map.get(&node_a).unwrap().parent.unwrap();
@@ -399,7 +416,7 @@ where
         }
     }
 
-    // Find the length between two events
+    /// Find the length between two events.
     fn diff_depth(&self, node_a: EventId, node_b: EventId) -> u32 {
         let ancestor = self.find_ancestor(node_a, node_b);
         let node_a_depth = self.find_depth(node_a, &ancestor);
