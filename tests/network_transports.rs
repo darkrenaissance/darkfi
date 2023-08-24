@@ -16,10 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use smol::{
-    io::{self, AsyncReadExt, AsyncWriteExt},
-    LocalExecutor,
-};
+use darkfi_serial::{AsyncDecodable, AsyncEncodable};
+use smol::{io, LocalExecutor};
 use url::Url;
 
 use darkfi::net::transport::{Dialer, Listener};
@@ -39,13 +37,13 @@ fn tcp_transport() {
             })
             .detach();
 
-        let payload = b"ohai tcp";
+        let payload = "ohai tcp";
 
         let dialer = Dialer::new(url).await.unwrap();
         let mut client = dialer.dial(None).await.unwrap();
-        client.write_all(payload).await.unwrap();
-        let mut buf = vec![0u8; 8];
-        client.read_exact(&mut buf).await.unwrap();
+        payload.encode_async(&mut client).await.unwrap();
+
+        let buf: String = AsyncDecodable::decode_async(&mut client).await.unwrap();
 
         assert_eq!(buf, payload);
     }));
@@ -66,13 +64,13 @@ fn tcp_tls_transport() {
             })
             .detach();
 
-        let payload = b"ohai tls";
+        let payload = "ohai tls";
 
         let dialer = Dialer::new(url).await.unwrap();
         let mut client = dialer.dial(None).await.unwrap();
-        client.write_all(payload).await.unwrap();
-        let mut buf = vec![0u8; 8];
-        client.read_exact(&mut buf).await.unwrap();
+        payload.encode_async(&mut client).await.unwrap();
+
+        let buf: String = AsyncDecodable::decode_async(&mut client).await.unwrap();
 
         assert_eq!(buf, payload);
     }));
@@ -99,13 +97,13 @@ fn unix_transport() {
             })
             .detach();
 
-        let payload = b"ohai unix";
+        let payload = "ohai unix";
 
         let dialer = Dialer::new(url).await.unwrap();
         let mut client = dialer.dial(None).await.unwrap();
-        client.write_all(payload).await.unwrap();
-        let mut buf = vec![0u8; 9];
-        client.read_exact(&mut buf).await.unwrap();
+        payload.encode_async(&mut client).await.unwrap();
+
+        let buf: String = AsyncDecodable::decode_async(&mut client).await.unwrap();
 
         assert_eq!(buf, payload);
     }));
