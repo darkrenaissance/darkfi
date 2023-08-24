@@ -40,6 +40,7 @@ use super::{
     settings::{Settings, SettingsPtr},
 };
 use crate::{
+    error::assert_err,
     system::{
         sleep_forever, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription,
     },
@@ -186,7 +187,7 @@ impl P2p {
 
     async fn handle_stop(self: Arc<Self>, result: Result<()>) {
         assert!(result.is_err());
-        //assert_eq!(result.unwrap_err(), Error::NetworkServiceStopped);
+        assert_err!(result, Err(Error::NetworkServiceStopped));
         info!(target: "net::p2p::handle_stop()", "[P2P] Received stop signal. Shutting down.");
         // Stop the sessions
         self.session_manual().await.stop().await;
