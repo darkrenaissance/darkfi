@@ -318,11 +318,6 @@ impl OutboundSession {
                     continue
                 }
 
-                // Check if we already have this configured as a manual peer
-                if p2p.settings().peers.contains(host) {
-                    continue
-                }
-
                 // Obtain a lock on this address to prevent duplicate connection
                 if !p2p.add_pending(host).await {
                     continue
