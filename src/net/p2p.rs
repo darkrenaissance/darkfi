@@ -145,12 +145,7 @@ impl P2p {
 
         // Start the outbound session
         let outbound = self.session_outbound().await;
-        if let Err(err) = outbound.clone().start().await {
-            error!(target: "net::p2p::start()", "Failed to start outbound session!: {}", err);
-            manual.stop().await;
-            inbound.stop().await;
-            return Err(err)
-        }
+        outbound.clone().start().await;
 
         info!(target: "net::p2p::start()", "[P2P] P2P subsystem started");
         Ok(())

@@ -81,7 +81,7 @@ impl OutboundSession {
     }
 
     /// Start the outbound session. Runs the channel connect loop.
-    pub(crate) async fn start(self: Arc<Self>) -> Result<()> {
+    pub(crate) async fn start(self: Arc<Self>) {
         let n_slots = self.p2p().settings().outbound_connections;
         info!(target: "net::outbound_session", "[P2P] Starting {} outbound connection slots.", n_slots);
         // Activate mutex lock on connection slots.
@@ -94,8 +94,6 @@ impl OutboundSession {
             slot.clone().start().await;
             slots.push(slot);
         }
-
-        Ok(())
     }
 
     /// Stops the outbound session.

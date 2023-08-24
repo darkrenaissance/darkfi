@@ -119,7 +119,7 @@ impl InboundSession {
 
         // Start listener
         let result = acceptor.clone().start(accept_addr, ex).await;
-        if let Err(e) = result.clone() {
+        if let Err(e) = &result {
             error!(target: "net::inbound_session", "[P2P] Error starting listener #{}: {}", index, e);
             acceptor.stop().await;
         } else {
