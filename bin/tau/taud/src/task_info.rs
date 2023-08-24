@@ -23,7 +23,7 @@ use std::{
     str::FromStr,
 };
 
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use log::debug;
 use tinyjson::JsonValue;
 

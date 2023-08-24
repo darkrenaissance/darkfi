@@ -30,7 +30,7 @@ use crypto_box::{
     aead::{Aead, AeadCore},
     ChaChaBox, SecretKey,
 };
-use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, deserialize, serialize, SerialDecodable, SerialEncodable};
 use futures::{select, FutureExt};
 use libc::mkfifo;
 use log::{debug, error, info};
@@ -360,17 +360,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     info!(target: "taud", "Starting P2P network");
     p2p.clone().start().await?;
-    StoppableTask::new().start(
-        p2p.clone().run(),
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "taud", "Failed starting P2P network: {}", e),
-            }
-        },
-        Error::P2PNetworkStopped,
-        executor.clone(),
-    );
 
     ////////////////////
     // Listner
