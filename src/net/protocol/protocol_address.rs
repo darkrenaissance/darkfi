@@ -113,7 +113,7 @@ impl ProtocolAddress {
                 "Received GetAddrs({}) message from {}", get_addrs_msg.max, self.channel.address(),
             );
 
-            let addrs = self.hosts.get_n_random(get_addrs_msg.max).await;
+            let addrs = self.hosts.fetch_n_random(get_addrs_msg.max).await;
             debug!(
                 target: "net::protocol_address::handle_receive_get_addrs()",
                 "Sending {} addresses to {}", addrs.len(), self.channel.address(),

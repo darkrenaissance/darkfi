@@ -206,12 +206,12 @@ impl Hosts {
     }
 
     /// Return all known hosts
-    pub async fn load_all(&self) -> Vec<Url> {
+    pub async fn fetch_all(&self) -> Vec<Url> {
         self.addrs.read().await.iter().cloned().collect()
     }
 
     /// Get up to n random hosts from the hosts set.
-    pub async fn get_n_random(&self, n: u32) -> Vec<Url> {
+    pub async fn fetch_n_random(&self, n: u32) -> Vec<Url> {
         let n = n as usize;
         let addrs = self.addrs.read().await;
         let urls = addrs.iter().choose_multiple(&mut OsRng, n.min(addrs.len()));
@@ -220,7 +220,7 @@ impl Hosts {
     }
 
     /// Get all peers that match the given transport schemes from the hosts set.
-    pub async fn load_with_schemes(&self, schemes: &[String]) -> Vec<Url> {
+    pub async fn fetch_with_schemes(&self, schemes: &[String]) -> Vec<Url> {
         let mut ret = vec![];
 
         for addr in self.addrs.read().await.iter() {
