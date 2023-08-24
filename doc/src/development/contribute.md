@@ -49,3 +49,42 @@ or need to be maintained:
   For example maintaining network resiliency. You can also look at apps like darkirc, and the event graph subsystem,
   and see how to make them more reliable. See also the task manager tau.
 
+## Fuzz testing
+
+Fuzz testing is a method to find important bugs in software. It becomes more 
+powerful as more computing power is allocated to it. 
+
+You can help to test DarkFi by running our fuzz tests on your machine. No
+specialized hardware is required. 
+
+As fuzz testing benefits from additional CPU power, a good method for running
+the fuzzer is to let it run overnight or when you are otherwise not using
+your device.
+
+### Set-up
+After running the normal commands to set-up DarkFi as described in the README, run the following commands.
+
+```
+# Install cargo fuzz
+cargo install cargo-fuzz
+```
+
+Run the following from the DarkFi repo folder:
+
+```
+cd fuzz/
+cargo fuzz list
+```
+
+This will list the available fuzzing targets. Choose one and run it with:
+
+### Run
+```
+# format: cargo fuzz run TARGET
+# e.g.
+cargo fuzz run serial
+```
+
+This process will run infinitely until a crash occurs or until it is cancelled by the user.
+
+If you are able to trigger a crash, get in touch with the DarkFi team via irc.
