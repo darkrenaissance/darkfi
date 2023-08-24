@@ -26,6 +26,9 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
+#[cfg(feature = "client")]
+use darkfi_serial::async_trait;
+
 /// A `DaoBulla` represented in the state
 #[derive(Debug, Copy, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct DaoBulla(pallas::Base);

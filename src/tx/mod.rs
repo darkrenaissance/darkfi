@@ -18,7 +18,6 @@
 
 use std::collections::HashMap;
 
-use async_trait::async_trait;
 use darkfi_sdk::{
     crypto::{
         schnorr::{SchnorrPublic, SchnorrSecret, Signature},
@@ -27,10 +26,9 @@ use darkfi_sdk::{
     pasta::pallas,
     tx::ContractCall,
 };
-use darkfi_serial::{serialize, Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, serialize, Encodable, SerialDecodable, SerialEncodable};
 use log::{debug, error};
 use rand::{CryptoRng, RngCore};
-use smol::io::{AsyncRead, AsyncWrite};
 
 use crate::{
     error::TxVerifyFailed,

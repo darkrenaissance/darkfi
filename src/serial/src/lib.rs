@@ -28,7 +28,8 @@ pub use darkfi_derive::{SerialDecodable, SerialEncodable};
 mod async_lib;
 #[cfg(feature = "async")]
 pub use async_lib::{
-    deserialize_async, deserialize_async_partial, serialize_async, AsyncDecodable, AsyncEncodable,
+    async_trait, deserialize_async, deserialize_async_partial, serialize_async, AsyncDecodable,
+    AsyncEncodable, AsyncRead, AsyncWrite,
 };
 
 mod endian;

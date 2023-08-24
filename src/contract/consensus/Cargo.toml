@@ -43,8 +43,10 @@ default = []
 no-entrypoint = []
 client = [
     "darkfi",
+    "darkfi-serial/async",
     "darkfi-money-contract/client",
     "darkfi-money-contract/no-entrypoint",
+
     "rand",
     "chacha20poly1305",
     "log",

@@ -19,11 +19,6 @@
 use core::{fmt, str::FromStr};
 use std::{io, iter};
 
-#[cfg(feature = "async")]
-use async_trait::async_trait;
-#[cfg(feature = "async")]
-use futures_lite::{AsyncRead, AsyncWrite};
-
 use bridgetree::{BridgeTree, Hashable, Level};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_gadgets::sinsemilla::primitives::HashDomain;
@@ -33,6 +28,9 @@ use pasta_curves::{
     pallas,
 };
 use subtle::{Choice, ConditionallySelectable};
+
+#[cfg(feature = "async")]
+use darkfi_serial::async_trait;
 
 use crate::crypto::constants::{
     sinsemilla::{i2lebsp_k, L_ORCHARD_MERKLE, MERKLE_CRH_PERSONALIZATION},

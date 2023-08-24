@@ -16,10 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_trait::async_trait;
 use darkfi_sdk::crypto::{MerkleNode, MerkleTree};
-use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
-use smol::io::{AsyncRead, AsyncWrite};
+use darkfi_serial::{async_trait, deserialize, serialize, SerialDecodable, SerialEncodable};
 
 use crate::{util::time::Timestamp, Error, Result};
 

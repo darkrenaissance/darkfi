@@ -12,7 +12,7 @@ darkfi-serial = {path = "../../../src/serial", features = ["derive", "crypto"]}
 darkfi-dao-contract = {path = "../dao", features = ["client", "no-entrypoint"]}
 darkfi-money-contract = {path = "../money", features = ["client", "no-entrypoint"]}
 darkfi-consensus-contract = {path = "../consensus", features = ["client", "no-entrypoint"]}
-darkfi-deployooor-contract = {path = "../deployooor", features = ["no-entrypoint"]}
+darkfi-deployooor-contract = {path = "../deployooor", features = ["client", "no-entrypoint"]}
 
 blake3 = "1.4.1"
 bs58 = "0.5.0"

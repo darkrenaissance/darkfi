@@ -63,7 +63,7 @@ fn consensus_contract_genesis_stake_unstake() -> Result<()> {
         th.execute_erroneous_txs(
             TxAction::ConsensusGenesisStake,
             &Holder::Alice,
-            &vec![genesis_stake_tx.clone(), genesis_stake_tx.clone()],
+            &[genesis_stake_tx.clone(), genesis_stake_tx.clone()],
             current_slot,
             1,
         )
@@ -75,7 +75,7 @@ fn consensus_contract_genesis_stake_unstake() -> Result<()> {
         th.execute_erroneous_txs(
             TxAction::ConsensusGenesisStake,
             &Holder::Alice,
-            &vec![genesis_stake_tx.clone()],
+            &[genesis_stake_tx.clone()],
             current_slot + 1,
             1,
         )

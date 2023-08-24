@@ -111,7 +111,7 @@ fn consensus_contract_stake_unstake() -> Result<()> {
         th.execute_erroneous_txs(
             TxAction::ConsensusStake,
             &Holder::Alice,
-            &vec![stake_tx],
+            &[stake_tx],
             current_slot,
             1,
         )
@@ -129,7 +129,7 @@ fn consensus_contract_stake_unstake() -> Result<()> {
         th.execute_erroneous_txs(
             TxAction::ConsensusProposal,
             &Holder::Alice,
-            &vec![proposal_tx],
+            &[proposal_tx],
             current_slot,
             1,
         )
@@ -144,7 +144,7 @@ fn consensus_contract_stake_unstake() -> Result<()> {
         th.execute_erroneous_txs(
             TxAction::ConsensusUnstakeRequest,
             &Holder::Alice,
-            &vec![unstake_request_tx],
+            &[unstake_request_tx],
             current_slot,
             1,
         )
@@ -166,7 +166,7 @@ fn consensus_contract_stake_unstake() -> Result<()> {
         th.execute_erroneous_txs(
             TxAction::ConsensusUnstakeRequest,
             &Holder::Alice,
-            &vec![unstake_request_tx],
+            &[unstake_request_tx],
             current_slot,
             1,
         )
@@ -187,7 +187,7 @@ fn consensus_contract_stake_unstake() -> Result<()> {
         th.execute_erroneous_txs(
             TxAction::ConsensusUnstake,
             &Holder::Alice,
-            &vec![unstake_tx],
+            &[unstake_tx],
             current_slot,
             1,
         )
@@ -217,7 +217,7 @@ fn consensus_contract_stake_unstake() -> Result<()> {
         th.execute_erroneous_txs(
             TxAction::ConsensusProposal,
             &Holder::Alice,
-            &vec![proposal_tx],
+            &[proposal_tx],
             current_slot,
             1,
         )

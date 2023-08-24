@@ -23,6 +23,9 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
+#[cfg(feature = "client")]
+use darkfi_serial::async_trait;
+
 /// Parameters for `Consensus::GenesisStake`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 // ANCHOR: ConsensusGenesisStakeParams

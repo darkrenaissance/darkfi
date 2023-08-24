@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_trait::async_trait;
 use darkfi_serial::{
-    AsyncDecodable, AsyncEncodable, Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt,
+    async_trait, AsyncDecodable, AsyncEncodable, Decodable, Encodable, SerialDecodable,
+    SerialEncodable, VarInt,
 };
 use log::trace;
 use smol::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};

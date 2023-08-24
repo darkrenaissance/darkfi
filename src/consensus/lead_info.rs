@@ -16,14 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_trait::async_trait;
 use darkfi_sdk::{
     crypto::{schnorr::Signature, Keypair, PublicKey},
     pasta::pallas,
 };
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use log::error;
-use smol::io::{AsyncRead, AsyncWrite};
 
 use crate::{
     zk::proof::{Proof, VerifyingKey},

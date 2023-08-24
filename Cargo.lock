@@ -1513,6 +1513,7 @@ dependencies = [
 name = "darkfi-deployooor-contract"
 version = "0.4.1"
 dependencies = [
+ "async-trait",
  "darkfi-sdk",
  "darkfi-serial",
  "getrandom 0.2.10",
@@ -1563,14 +1564,12 @@ dependencies = [
 name = "darkfi-sdk"
 version = "0.4.1"
 dependencies = [
- "async-trait",
  "blake2b_simd",
  "blake3",
  "bridgetree",
  "bs58",
  "chacha20poly1305",
  "darkfi-serial",
- "futures-lite",
  "halo2_gadgets",
  "halo2_proofs",
  "lazy_static",

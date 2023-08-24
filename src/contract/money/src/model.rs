@@ -26,6 +26,9 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
+#[cfg(feature = "client")]
+use darkfi_serial::async_trait;
+
 /// A `Coin` represented in the Money state
 #[derive(Debug, Clone, Copy, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Coin(pallas::Base);

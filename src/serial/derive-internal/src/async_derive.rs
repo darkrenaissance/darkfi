@@ -157,7 +157,7 @@ pub fn async_enum_ser(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenSt
     Ok(quote! {
     #[async_trait]
     impl #impl_generics #cratename::AsyncEncodable for #enum_ident #ty_generics #where_clause {
-        async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> ::std::io::Result<usize> {
+        async fn encode_async<S: #cratename::AsyncWrite + Unpin + Send>(&self, s: &mut S) -> ::std::io::Result<usize> {
             let variant_idx: u8 = match self {
                 #all_variants_idx_body
             };
@@ -255,7 +255,7 @@ pub fn async_enum_de(input: &ItemEnum, cratename: Ident) -> syn::Result<TokenStr
     Ok(quote! {
     #[async_trait]
     impl #impl_generics #cratename::AsyncDecodable for #name #ty_generics #where_clause {
-        async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> ::std::io::Result<Self> {
+        async fn decode_async<D: #cratename::AsyncRead + Unpin + Send>(d: &mut D) -> ::std::io::Result<Self> {
             let variant_tag: u8 = #cratename::AsyncDecodable::decode_async(d).await?;
 
             let mut return_value =
@@ -322,7 +322,7 @@ pub fn async_struct_ser(input: &ItemStruct, cratename: Ident) -> syn::Result<Tok
     Ok(quote! {
     #[async_trait]
     impl #impl_generics #cratename::AsyncEncodable for #name #ty_generics #where_clause {
-        async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> ::std::io::Result<usize> {
+        async fn encode_async<S: #cratename::AsyncWrite + Unpin + Send>(&self, s: &mut S) -> ::std::io::Result<usize> {
             let mut len = 0;
             #body
             Ok(len)
@@ -392,7 +392,7 @@ pub fn async_struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<Toke
         Ok(quote! {
         #[async_trait]
         impl #impl_generics #cratename::AsyncDecodable for #name #ty_generics #where_clause {
-            async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> ::std::io::Result<Self> {
+            async fn decode_async<D: #cratename::AsyncRead + Unpin + Send>(d: &mut D) -> ::std::io::Result<Self> {
                 let mut return_value = #return_value;
                 return_value.#method_ident();
                 Ok(return_value)
@@ -403,7 +403,7 @@ pub fn async_struct_de(input: &ItemStruct, cratename: Ident) -> syn::Result<Toke
         Ok(quote! {
         #[async_trait]
         impl #impl_generics #cratename::AsyncDecodable for #name #ty_generics #where_clause {
-            async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> ::std::io::Result<Self> {
+            async fn decode_async<D: #cratename::AsyncRead + Unpin + Send>(d: &mut D) -> ::std::io::Result<Self> {
                 Ok(#return_value)
             }
         }

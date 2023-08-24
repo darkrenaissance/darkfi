@@ -17,9 +17,8 @@
  */
 use std::{io, io::Cursor};
 
-use async_trait::async_trait;
 use darkfi_sdk::pasta::{pallas, vesta};
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use halo2_proofs::{
     helpers::SerdeFormat,
     plonk,
@@ -28,7 +27,6 @@ use halo2_proofs::{
     transcript::{Blake2bRead, Blake2bWrite},
 };
 use rand::RngCore;
-use smol::io::{AsyncRead, AsyncWrite};
 
 #[derive(Clone, Debug)]
 pub struct VerifyingKey {

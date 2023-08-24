@@ -55,7 +55,7 @@ impl ErrorEmitter {
     }
 
     pub fn emit(&self, typ: &str, msg: &str) {
-        if let Ok(_) = std::env::var("ZKAS_SILENT") {
+        if std::env::var("ZKAS_SILENT").is_ok() {
             return
         }
 

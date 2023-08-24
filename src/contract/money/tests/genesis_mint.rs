@@ -72,7 +72,7 @@ fn genesis_mint() -> Result<()> {
         th.execute_erroneous_txs(
             TxAction::MoneyGenesisMint,
             &Holder::Alice,
-            &vec![genesis_mint_tx.clone(), genesis_mint_tx.clone()],
+            &[genesis_mint_tx.clone(), genesis_mint_tx.clone()],
             current_slot,
             1,
         )
@@ -84,7 +84,7 @@ fn genesis_mint() -> Result<()> {
         th.execute_erroneous_txs(
             TxAction::MoneyGenesisMint,
             &Holder::Alice,
-            &vec![genesis_mint_tx.clone()],
+            &[genesis_mint_tx.clone()],
             current_slot + 1,
             1,
         )

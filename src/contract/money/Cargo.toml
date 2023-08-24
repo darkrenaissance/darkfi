@@ -16,8 +16,8 @@ thiserror = "1.0.47"
 
 # The following dependencies are used for the client API and
 # probably shouldn't be in WASM
-chacha20poly1305 = { version = "0.10.1", optional = true }
 darkfi = { path = "../../../", features = ["zk", "rpc", "blockchain"], optional = true }
+chacha20poly1305 = { version = "0.10.1", optional = true }
 halo2_proofs = { version = "0.3.0", optional = true }
 log = { version = "0.4.20", optional = true }
 rand = { version = "0.8.5", optional = true }
@@ -40,6 +40,8 @@ default = []
 no-entrypoint = []
 client = [
     "darkfi",
+    "darkfi-serial/async",
+
     "rand",
     "chacha20poly1305",
     "log",

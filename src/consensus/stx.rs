@@ -16,18 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_trait::async_trait;
 use darkfi_sdk::{
     crypto::MerkleNode,
     pasta::{arithmetic::CurveAffine, group::Curve, pallas},
 };
-use smol::io::{AsyncRead, AsyncWrite};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
 use crate::{
     zk::{proof::VerifyingKey, Proof},
     Error, Result,
 };
-use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 #[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
 pub struct TransferStx {

@@ -18,12 +18,11 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
-use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
 use log::{debug, error, info};
 use rand::{rngs::OsRng, Rng};
 use smol::{
-    io::{self, AsyncRead, AsyncWrite, ReadHalf, WriteHalf},
+    io::{self, ReadHalf, WriteHalf},
     lock::Mutex,
     Executor,
 };

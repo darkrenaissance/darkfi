@@ -21,11 +21,11 @@ use std::{
     io::{Error, ErrorKind, Result},
 };
 
-use async_trait::async_trait;
+pub use async_trait::async_trait;
 use futures_lite::{
-    io::Cursor, AsyncRead, AsyncReadExt as FutAsyncReadExt, AsyncWrite,
-    AsyncWriteExt as FutAsyncWriteExt,
+    io::Cursor, AsyncReadExt as FutAsyncReadExt, AsyncWriteExt as FutAsyncWriteExt,
 };
+pub use futures_lite::{AsyncRead, AsyncWrite};
 
 use crate::{endian, VarInt};
 

@@ -17,10 +17,7 @@
  */
 
 #[cfg(feature = "async")]
-use async_trait::async_trait;
-#[cfg(feature = "async")]
-use futures_lite::{AsyncRead, AsyncWrite};
-
+use darkfi_serial::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{

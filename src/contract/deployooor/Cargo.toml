@@ -13,6 +13,8 @@ darkfi-sdk = { path = "../../sdk" }
 darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
 thiserror = "1.0.47"
 
+async-trait = { version = "0.1.73", optional = true }
+
 # We need to disable random using "custom" which makes the crate a noop
 # so the wasm32-unknown-unknown target is enabled.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -21,3 +23,7 @@ getrandom = { version = "0.2.8", features = ["custom"] }
 [features]
 default = []
 no-entrypoint = []
+client = [
+    "darkfi-sdk/async",
+    "darkfi-serial/async",
+]
