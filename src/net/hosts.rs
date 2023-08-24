@@ -185,7 +185,7 @@ impl Hosts {
         if let Some(retries) = q.get_mut(url) {
             *retries += 1;
             debug!(target: "net::hosts::quarantine()", "Peer {} quarantined {} times", url, retries);
-            if *retries == 50 {
+            if *retries == self.settings.hosts_quarantine_limit {
                 debug!(target: "net::hosts::quarantine()", "Deleting peer {}", url);
                 q.remove(url);
             }

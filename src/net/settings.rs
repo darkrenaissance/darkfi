@@ -59,6 +59,8 @@ pub struct Settings {
     pub channel_heartbeat_interval: u64,
     /// Allow localnet hosts
     pub localnet: bool,
+    /// Delete a peer from hosts if they've been quarantined N times
+    pub hosts_quarantine_limit: usize,
 }
 
 impl Default for Settings {
@@ -81,6 +83,7 @@ impl Default for Settings {
             channel_handshake_timeout: 10,
             channel_heartbeat_interval: 10,
             localnet: false,
+            hosts_quarantine_limit: 50,
         }
     }
 }
@@ -152,6 +155,9 @@ pub struct SettingsOpt {
     #[serde(default)]
     #[structopt(long)]
     pub localnet: bool,
+
+    #[structopt(skip)]
+    pub hosts_quarantine_limit: Option<usize>,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -174,6 +180,7 @@ impl From<SettingsOpt> for Settings {
             channel_handshake_timeout: opt.channel_handshake_timeout.unwrap_or(10),
             channel_heartbeat_interval: opt.channel_heartbeat_interval.unwrap_or(10),
             localnet: opt.localnet,
+            hosts_quarantine_limit: opt.hosts_quarantine_limit.unwrap_or(15),
         }
     }
 }
