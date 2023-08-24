@@ -220,6 +220,7 @@ impl Hosts {
     }
 
     /// Get all peers that match the given transport schemes from the hosts set.
+    /// TODO: add a limit: usize argument
     pub async fn fetch_with_schemes(&self, schemes: &[String]) -> Vec<Url> {
         let mut ret = vec![];
 
