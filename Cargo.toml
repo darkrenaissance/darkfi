@@ -29,7 +29,6 @@ members = [
     "bin/genev/genevd",
     "bin/genev/genev-cli",
     "bin/darkirc",
-    #"bin/dnetview",
     "bin/tau/taud",
     "bin/tau/tau-cli",
     "bin/vanityaddr",
