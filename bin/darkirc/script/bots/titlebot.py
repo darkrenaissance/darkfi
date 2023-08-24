@@ -27,7 +27,7 @@ while True:
 
         for i in url:
             parsed_url = urlparse(i)
-            if parsed_url.netloc.lower() in ['twitter.com','t.co'] or parsed_url.scheme != 'https':
+            if parsed_url.netloc.lower() in ['twitter.com','t.co', 'x.com'] or parsed_url.scheme != 'https':
                 continue
             try:
                 reqs = requests.get(i)
