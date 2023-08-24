@@ -41,7 +41,7 @@ mod tests {
         EventMsg,
     };
     use crate::util::time::Timestamp;
-    use darkfi_serial::{SerialDecodable, SerialEncodable};
+    use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
     #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
     struct TestEvent {

@@ -250,12 +250,14 @@ mod tests {
     #[test]
     fn test_store_localnet() {
         smol::block_on(async {
-            let mut settings = Settings::default();
-            settings.localnet = true;
-            settings.external_addrs = vec![
-                Url::parse("tcp://foo.bar:123").unwrap(),
-                Url::parse("tcp://lol.cat:321").unwrap(),
-            ];
+            let settings = Settings {
+                localnet: true,
+                external_addrs: vec![
+                    Url::parse("tcp://foo.bar:123").unwrap(),
+                    Url::parse("tcp://lol.cat:321").unwrap(),
+                ],
+                ..Default::default()
+            };
 
             let hosts = Hosts::new(Arc::new(settings.clone()));
             hosts.store(&settings.external_addrs).await;
@@ -291,12 +293,14 @@ mod tests {
     #[test]
     fn test_store() {
         smol::block_on(async {
-            let mut settings = Settings::default();
-            settings.localnet = false;
-            settings.external_addrs = vec![
-                Url::parse("tcp://foo.bar:123").unwrap(),
-                Url::parse("tcp://lol.cat:321").unwrap(),
-            ];
+            let settings = Settings {
+                localnet: true,
+                external_addrs: vec![
+                    Url::parse("tcp://foo.bar:123").unwrap(),
+                    Url::parse("tcp://lol.cat:321").unwrap(),
+                ],
+                ..Default::default()
+            };
 
             let hosts = Hosts::new(Arc::new(settings.clone()));
             hosts.store(&settings.external_addrs).await;
