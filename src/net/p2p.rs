@@ -40,8 +40,10 @@ use super::{
     settings::{Settings, SettingsPtr},
 };
 use crate::{
-    system::{Subscriber, SubscriberPtr, Subscription},
-    Result,
+    system::{
+        sleep_forever, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription,
+    },
+    Error, Result,
 };
 
 /// Set of channels that are awaiting connection
@@ -61,8 +63,6 @@ pub struct P2p {
     channels: ConnectedChannels,
     /// Subscriber for notifications of new channels
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
-    /// Subscriber for stop notifications
-    stop_subscriber: SubscriberPtr<()>,
     /// Known hosts (peers)
     hosts: HostsPtr,
     /// Protocol registry
@@ -78,6 +78,9 @@ pub struct P2p {
     session_inbound: Mutex<Option<Arc<InboundSession>>>,
     /// Reference to configured [`OutboundSession`]
     session_outbound: Mutex<Option<Arc<OutboundSession>>>,
+
+    /// Main process that starts and stops all the sessions
+    process: StoppableTaskPtr,
 
     /// Enable network debugging
     pub dnet_enabled: Mutex<bool>,
@@ -102,7 +105,6 @@ impl P2p {
             pending: Mutex::new(HashSet::new()),
             channels: Mutex::new(HashMap::new()),
             channel_subscriber: Subscriber::new(),
-            stop_subscriber: Subscriber::new(),
             hosts: Hosts::new(settings.clone()),
             protocol_registry: ProtocolRegistry::new(),
             settings,
@@ -111,6 +113,8 @@ impl P2p {
             session_manual: Mutex::new(None),
             session_inbound: Mutex::new(None),
             session_outbound: Mutex::new(None),
+
+            process: StoppableTask::new(),
 
             dnet_enabled: Mutex::new(false),
             dnet_subscriber: Subscriber::new(),
@@ -129,35 +133,24 @@ impl P2p {
 
     /// Invoke startup and seeding sequence. Call from constructing thread.
     pub async fn start(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::p2p::start()", "P2P::start() [BEGIN]");
-        info!(target: "net::p2p::start()", "[P2P] Seeding P2P subsystem");
-
-        // Start seed session
-        let seed = SeedSyncSession::new(Arc::downgrade(&self));
-        // This will block until all seed queries have finished
-        seed.start().await?;
-
-        debug!(target: "net::p2p::start()", "P2P::start() [END]");
+        let self_ = self.clone();
+        self.process.clone().start(
+            self.clone()._run(),
+            |result| self_.handle_stop(result),
+            Error::NetworkServiceStopped,
+            self.executor(),
+        );
         Ok(())
     }
 
-    /// Reseed the P2P network.
-    pub async fn reseed(self: Arc<Self>) -> Result<()> {
-        debug!(target: "net::p2p::reseed()", "P2P::reseed() [BEGIN]");
-        info!(target: "net::p2p::reseed()", "[P2P] Reseeding P2P subsystem");
-
-        // Start seed session
-        let seed = SeedSyncSession::new(Arc::downgrade(&self));
-        // This will block until all seed queries have finished
-        seed.start().await?;
-
-        debug!(target: "net::p2p::reseed()", "P2P::reseed() [END]");
+    // TODO: fix this, see outbound session also
+    async fn _run(self: Arc<Self>) -> Result<()> {
+        self.run().await;
         Ok(())
     }
-
     /// Runs the network. Starts inbound, outbound, and manual sessions.
     /// Waits for a stop signal and stops the network if received.
-    pub async fn run(self: Arc<Self>) -> Result<()> {
+    async fn run(self: Arc<Self>) {
         debug!(target: "net::p2p::run()", "P2P::run() [BEGIN]");
         info!(target: "net::p2p::run()", "[P2P] Running P2P subsystem");
 
@@ -169,37 +162,55 @@ impl P2p {
 
         // Start the inbound session
         let inbound = self.session_inbound().await;
-        inbound.clone().start().await?;
+        if let Err(err) = inbound.clone().start().await {
+            error!(target: "net::p2p::run()", "Failed to start inbound session!: {}", err);
+            manual.stop().await;
+            return
+        }
 
         // Start the outbound session
         let outbound = self.session_outbound().await;
-        outbound.clone().start().await?;
+        if let Err(err) = outbound.clone().start().await {
+            error!(target: "net::p2p::run()", "Failed to start outbound session!: {}", err);
+            manual.stop().await;
+            inbound.stop().await;
+            return
+        }
 
         info!(target: "net::p2p::run()", "[P2P] P2P subsystem started");
 
         // Wait for stop signal
-        let stop_sub = self.subscribe_stop().await;
-        stop_sub.receive().await;
-
-        info!(target: "net::p2p::run()", "[P2P] Received P2P subsystem stop signal. Shutting down.");
-
-        // Stop the sessions
-        manual.stop().await;
-        inbound.stop().await;
-        outbound.stop().await;
-
-        debug!(target: "net::p2p::run()", "P2P::run() [END]");
-        Ok(())
+        sleep_forever().await;
+        unreachable!();
     }
 
-    /// Subscribe to a stop signal.
-    pub async fn subscribe_stop(&self) -> Subscription<()> {
-        self.stop_subscriber.clone().subscribe().await
+    async fn handle_stop(self: Arc<Self>, result: Result<()>) {
+        assert!(result.is_err());
+        //assert_eq!(result.unwrap_err(), Error::NetworkServiceStopped);
+        info!(target: "net::p2p::handle_stop()", "[P2P] Received stop signal. Shutting down.");
+        // Stop the sessions
+        self.session_manual().await.stop().await;
+        self.session_inbound().await.stop().await;
+        self.session_outbound().await.stop().await;
+    }
+
+    /// Reseed the P2P network.
+    pub async fn seed(self: Arc<Self>) -> Result<()> {
+        debug!(target: "net::p2p::seed()", "P2P::seed() [BEGIN]");
+        info!(target: "net::p2p::seed()", "[P2P] Seeding P2P subsystem");
+
+        // Start seed session
+        let seed = SeedSyncSession::new(Arc::downgrade(&self));
+        // This will block until all seed queries have finished
+        seed.start().await?;
+
+        debug!(target: "net::p2p::seed()", "P2P::seed() [END]");
+        Ok(())
     }
 
     /// Stop the running P2P subsystem
     pub async fn stop(&self) {
-        self.stop_subscriber.notify(()).await
+        self.process.stop().await;
     }
 
     /// Broadcasts a message concurrently across all active channels.
@@ -246,7 +257,7 @@ impl P2p {
     }
 
     /// Add a channel to the set of connected channels
-    pub(crate) async fn store(&self, channel: ChannelPtr) {
+    pub(super) async fn store(&self, channel: ChannelPtr) {
         // TODO: Check the code path for this, and potentially also insert the remote
         // into the hosts list?
         self.channels.lock().await.insert(channel.address().clone(), channel.clone());
@@ -254,17 +265,17 @@ impl P2p {
     }
 
     /// Remove a channel from the set of connected channels
-    pub(crate) async fn remove(&self, channel: ChannelPtr) {
+    pub(super) async fn remove(&self, channel: ChannelPtr) {
         self.channels.lock().await.remove(channel.address());
     }
 
     /// Add an address to the list of pending channels.
-    pub(crate) async fn add_pending(&self, addr: &Url) -> bool {
+    pub(super) async fn add_pending(&self, addr: &Url) -> bool {
         self.pending.lock().await.insert(addr.clone())
     }
 
     /// Remove a channel from the list of pending channels.
-    pub(crate) async fn remove_pending(&self, addr: &Url) {
+    pub(super) async fn remove_pending(&self, addr: &Url) {
         self.pending.lock().await.remove(addr);
     }
 
@@ -290,7 +301,7 @@ impl P2p {
     }
 
     /// Reference the global executor
-    pub(super) fn executor(&self) -> Arc<Executor<'static>> {
+    pub fn executor(&self) -> Arc<Executor<'static>> {
         self.executor.clone()
     }
 

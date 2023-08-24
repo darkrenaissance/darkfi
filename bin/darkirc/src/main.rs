@@ -259,17 +259,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     ////////////////////
     info!(target: "darkirc", "Starting P2P network");
     p2p.clone().start().await?;
-    StoppableTask::new().start(
-        p2p.clone().run(),
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "darkirc", "Failed starting P2P network: {}", e),
-            }
-        },
-        Error::P2PNetworkStopped,
-        executor.clone(),
-    );
 
     ////////////////////
     // IRC server

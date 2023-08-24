@@ -38,6 +38,12 @@ pub async fn sleep(seconds: u64) {
     Timer::after(Duration::from_secs(seconds)).await;
 }
 
+pub async fn sleep_forever() {
+    loop {
+        sleep(100000000).await
+    }
+}
+
 /// Sleep for any number of milliseconds.
 pub async fn msleep(millis: u64) {
     Timer::after(Duration::from_millis(millis)).await;

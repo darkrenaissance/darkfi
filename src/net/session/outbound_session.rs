@@ -131,7 +131,7 @@ pub enum SlotState {
 
 pub struct Slot {
     slot: u32,
-    process: Mutex<StoppableTaskPtr>,
+    process: StoppableTaskPtr,
     state: Mutex<SlotState>,
     session: Weak<OutboundSession>,
 }
@@ -140,7 +140,7 @@ impl Slot {
     pub fn new(session: Weak<OutboundSession>, slot: u32) -> Arc<Slot> {
         Arc::new(Self {
             slot,
-            process: Mutex::new(StoppableTask::new()),
+            process: StoppableTask::new(),
             state: Mutex::new(SlotState::Inactive),
             session,
         })
@@ -148,7 +148,7 @@ impl Slot {
 
     async fn start(self: Arc<Self>) {
         // TODO: way too many clones, look into making this implicit. See implicit-clone crate
-        self.process.lock().await.clone().start(
+        self.process.clone().start(
             self.clone()._run(),
             // Ignore stop handler
             |_| async {},
@@ -157,7 +157,7 @@ impl Slot {
         );
     }
     async fn stop(self: Arc<Self>) {
-        self.process.lock().await.stop().await
+        self.process.stop().await
     }
 
     // TODO: need to fix StoppableTask so it accepts arbitrary function signatures
@@ -455,7 +455,7 @@ impl Slot {
                 "[P2P] No connected channels found for peer discovery. Reseeding.",
             );
 
-            if let Err(e) = p2p.clone().reseed().await {
+            if let Err(e) = p2p.clone().seed().await {
                 error!(
                     target: "net::outbound_session::peer_discovery()",
                     "[P2P] Network reseed failed: {}", e,
