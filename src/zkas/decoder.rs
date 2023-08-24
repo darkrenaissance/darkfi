@@ -20,7 +20,7 @@ use darkfi_serial::{deserialize_partial, VarInt};
 
 use super::{
     compiler::MAGIC_BYTES,
-    constants::{MAX_K, MAX_NS_LEN},
+    constants::{MAX_K, MAX_NS_LEN, MIN_BIN_SIZE},
     types::HeapType,
     LitType, Opcode, VarType,
 };
@@ -45,6 +45,11 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 
 impl ZkBinary {
     pub fn decode(bytes: &[u8]) -> Result<Self> {
+        // Ensure that bytes is a certain minimum length. Otherwise the code
+        // below will panic due to an index out of bounds error.
+        if bytes.len() < MIN_BIN_SIZE {
+            return Err(ZkasErr("Not enough bytes".to_string()))
+        }
         let magic_bytes = &bytes[0..4];
         if magic_bytes != MAGIC_BYTES {
             return Err(ZkasErr("Magic bytes are incorrect".to_string()))

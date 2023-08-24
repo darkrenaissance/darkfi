@@ -22,5 +22,11 @@ pub const MAX_K: u32 = 16;
 /// Maximum allowed namespace length in bytes
 pub const MAX_NS_LEN: usize = 32;
 
+/// Minimum size allowed for a syntactically valid ZkBinary
+/// MAGIC_BYTES.length = 4;
+/// `k = ##;` = 6 (because the current upper-limit for k is a two-digit number
+/// Therefore 4 + 6 = 10 is the minimum size
+pub const MIN_BIN_SIZE: usize = 10;
+
 /// Allowed fields for proofs
 pub const ALLOWED_FIELDS: [&str; 1] = ["pallas"];
