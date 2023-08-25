@@ -16,9 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
-use smol::Timer;
+use smol::{Executor, Timer};
+
+/// Condition variable which allows a task to block until woken up
+pub mod condvar;
+pub use condvar::CondVar;
 
 /// Implementation of async background task spawning which are stoppable
 /// using channel signalling.
@@ -32,6 +36,8 @@ pub use subscriber::{Subscriber, SubscriberPtr, Subscription};
 /// Async timeout implementations
 pub mod timeout;
 pub use timeout::io_timeout;
+
+pub type ExecutorPtr = Arc<Executor<'static>>;
 
 /// Sleep for any number of seconds.
 pub async fn sleep(seconds: u64) {
