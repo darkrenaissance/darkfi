@@ -66,6 +66,7 @@ pin-project-lite = {version = "0.2.12", optional = true}
 async-rustls = {version = "0.4.0", features = ["dangerous_configuration"], optional = true}
 
 # Pluggable Transports
+socket2 = {version = "0.5.3", features = ["all"], optional = true}
 arti-client = {version = "0.10.0", default-features = false, features = ["async-std", "rustls", "onion-service-client"], optional = true}
 tor-hscrypto = {version = "0.3.1", optional = true}
 
@@ -192,6 +193,7 @@ net = [
     "rustls-pemfile",
     "semver",
     "smol",
+    "socket2",
     "structopt",
     "structopt-toml",
     "url",

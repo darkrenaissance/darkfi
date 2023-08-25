@@ -270,7 +270,7 @@ impl Listener {
             "tcp" => {
                 // Build a TCP listener
                 enforce_hostport!(endpoint);
-                let variant = tcp::TcpListener::new().await?;
+                let variant = tcp::TcpListener::new(1024).await?;
                 let variant = ListenerVariant::Tcp(variant);
                 Ok(Self { endpoint, variant })
             }
@@ -279,7 +279,7 @@ impl Listener {
             "tcp+tls" => {
                 // Build a TCP listener wrapped with TLS
                 enforce_hostport!(endpoint);
-                let variant = tcp::TcpListener::new().await?;
+                let variant = tcp::TcpListener::new(1024).await?;
                 let variant = ListenerVariant::TcpTls(variant);
                 Ok(Self { endpoint, variant })
             }
