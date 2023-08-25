@@ -121,17 +121,6 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'static>>) -> Result<
     // Run
     info!(target: "genevd", "Starting P2P network");
     p2p.clone().start().await?;
-    StoppableTask::new().start(
-        p2p.clone().run(),
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "genevd", "Failed starting P2P network: {}", e),
-            }
-        },
-        Error::P2PNetworkStopped,
-        executor.clone(),
-    );
 
     ////////////////////
     // Listner
