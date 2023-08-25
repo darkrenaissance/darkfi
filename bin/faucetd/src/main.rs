@@ -765,17 +765,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     info!(target: "faucetd", "Starting sync P2P network");
     sync_p2p.clone().start().await?;
-    StoppableTask::new().start(
-        sync_p2p.clone().run(),
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "faucetd", "Failed starting sync P2P network: {}", e),
-            }
-        },
-        Error::P2PNetworkStopped,
-        ex.clone(),
-    );
 
     // TODO: I think this is not needed anymore
     //info!("Waiting for sync P2P outbound connections");
