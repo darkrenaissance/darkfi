@@ -84,12 +84,10 @@ impl<Parent> LazyWeak<Parent> {
         assert!(self.0.get().is_none());
         let parent = Arc::downgrade(&parent);
         self.0.set(parent).unwrap();
-        assert!(self.0.get().is_some());
     }
 
     /// Access the `Arc<Parent>` pointer
     pub fn upgrade(&self) -> Arc<Parent> {
-        assert!(self.0.get().is_some());
         self.0.get().unwrap().upgrade().unwrap()
     }
 }

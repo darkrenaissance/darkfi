@@ -57,8 +57,6 @@ pub struct ManualSession {
     connect_slots: Mutex<Vec<StoppableTaskPtr>>,
     /// Subscriber used to signal channels processing
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
-    /// Flag to toggle channel_subscriber notifications
-    notify: Mutex<bool>,
 }
 
 impl ManualSession {
@@ -68,7 +66,6 @@ impl ManualSession {
             p2p: LazyWeak::new(),
             connect_slots: Mutex::new(Vec::new()),
             channel_subscriber: Subscriber::new(),
-            notify: Mutex::new(false),
         })
     }
 
@@ -137,9 +134,7 @@ impl ManualSession {
                     self.p2p().remove_pending(&addr).await;
 
                     // Notify that channel processing has finished
-                    if *self.notify.lock().await {
-                        self.channel_subscriber.notify(Ok(channel)).await;
-                    }
+                    self.channel_subscriber.notify(Ok(channel)).await;
 
                     // Wait for channel to close
                     stop_sub.receive().await;
@@ -162,9 +157,7 @@ impl ManualSession {
             // Wait and try again.
             // TODO: Should we notify about the failure now, or after all attempts
             // have failed?
-            if *self.notify.lock().await {
-                self.channel_subscriber.notify(Err(Error::ConnectFailed)).await;
-            }
+            self.channel_subscriber.notify(Err(Error::ConnectFailed)).await;
 
             remaining = if attempts == 0 { 1 } else { remaining - 1 };
             if remaining == 0 {
@@ -188,16 +181,6 @@ impl ManualSession {
         self.p2p().remove_pending(&addr).await;
 
         Ok(())
-    }
-
-    /// Enable channel_subscriber notifications.
-    pub async fn enable_notify(self: Arc<Self>) {
-        *self.notify.lock().await = true;
-    }
-
-    /// Disable channel_subscriber notifications.
-    pub async fn disable_notify(self: Arc<Self>) {
-        *self.notify.lock().await = false;
     }
 }
 

@@ -61,6 +61,10 @@ pub struct Settings {
     pub localnet: bool,
     /// Delete a peer from hosts if they've been quarantined N times
     pub hosts_quarantine_limit: usize,
+    /// Cooling off time for peer discovery when unsuccessful
+    pub outbound_peer_discovery_cooloff_time: u64,
+    /// Time between peer discovery attempts
+    pub outbound_peer_discovery_attempt_time: u64,
 }
 
 impl Default for Settings {
@@ -84,6 +88,8 @@ impl Default for Settings {
             channel_heartbeat_interval: 10,
             localnet: false,
             hosts_quarantine_limit: 50,
+            outbound_peer_discovery_cooloff_time: 30,
+            outbound_peer_discovery_attempt_time: 5,
         }
     }
 }
@@ -158,6 +164,12 @@ pub struct SettingsOpt {
 
     #[structopt(skip)]
     pub hosts_quarantine_limit: Option<usize>,
+
+    #[structopt(skip)]
+    pub outbound_peer_discovery_cooloff_time: Option<u64>,
+
+    #[structopt(skip)]
+    pub outbound_peer_discovery_attempt_time: Option<u64>,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -181,6 +193,12 @@ impl From<SettingsOpt> for Settings {
             channel_heartbeat_interval: opt.channel_heartbeat_interval.unwrap_or(10),
             localnet: opt.localnet,
             hosts_quarantine_limit: opt.hosts_quarantine_limit.unwrap_or(15),
+            outbound_peer_discovery_cooloff_time: opt
+                .outbound_peer_discovery_cooloff_time
+                .unwrap_or(30),
+            outbound_peer_discovery_attempt_time: opt
+                .outbound_peer_discovery_attempt_time
+                .unwrap_or(5),
         }
     }
 }

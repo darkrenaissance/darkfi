@@ -26,7 +26,10 @@
 //! and insures that no other part of the program uses the slots at the
 //! same time.
 
-use std::sync::{Arc, Weak};
+use std::{
+    sync::{Arc, Weak},
+    time::{Duration, Instant},
+};
 
 use async_trait::async_trait;
 use log::{debug, error, info, warn};
@@ -46,7 +49,8 @@ use super::{
 };
 use crate::{
     system::{
-        sleep, CondVar, LazyWeak, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr,
+        sleep, timeout::timeout, CondVar, LazyWeak, StoppableTask, StoppableTaskPtr, Subscriber,
+        SubscriberPtr,
     },
     Error, Result,
 };
@@ -188,6 +192,10 @@ impl Slot {
             let addr = if let Some(addr) = self.fetch_address_with_lock(transports).await {
                 addr
             } else {
+                dnetev!(self, OutboundSlotSleeping, {
+                    slot: self.slot,
+                });
+
                 self.wakeup_self.reset();
                 // Peer discovery
                 self.session().wakeup_peer_discovery();
@@ -195,6 +203,17 @@ impl Slot {
                 self.wakeup_self.wait().await;
                 continue
             };
+
+            info!(
+                target: "net::outbound_session::try_connect()",
+                "[P2P] Connecting outbound slot #{} [{}]",
+                self.slot, addr,
+            );
+
+            dnetev!(self, OutboundSlotConnecting, {
+                slot: self.slot,
+                addr: addr.clone(),
+            });
 
             let (addr_final, channel) = match self.try_connect(addr.clone()).await {
                 Ok(connect_info) => connect_info,
@@ -205,7 +224,7 @@ impl Slot {
                         self.slot, err,
                     );
 
-                    dnetev!(self, OutboundDisconnected, {
+                    dnetev!(self, OutboundSlotDisconnected, {
                         slot: self.slot,
                         err: err.to_string()
                     });
@@ -213,16 +232,28 @@ impl Slot {
                 }
             };
 
+            info!(
+                target: "net::outbound_session::try_connect()",
+                "[P2P] Outbound slot #{} connected [{}]",
+                self.slot, addr_final
+            );
+
+            dnetev!(self, OutboundSlotConnected, {
+                slot: self.slot,
+                addr: addr_final.clone(),
+                channel_id: channel.info.id
+            });
+
             let stop_sub = channel.subscribe_stop().await.expect("Channel should not be stopped");
             // Setup new channel
-            if let Err(err) = self.setup_channel(addr, addr_final, channel.clone()).await {
+            if let Err(err) = self.setup_channel(addr, channel.clone()).await {
                 info!(
                     target: "net::outbound_session",
                     "[P2P] Outbound slot #{} disconnected: {}",
                     self.slot, err
                 );
 
-                dnetev!(self, OutboundDisconnected, {
+                dnetev!(self, OutboundSlotDisconnected, {
                     slot: self.slot,
                     err: err.to_string()
                 });
@@ -241,17 +272,6 @@ impl Slot {
     /// channel. In case of any failures, a network error is returned and the
     /// main connect loop (parent of this function) will iterate again.
     async fn try_connect(&self, addr: Url) -> Result<(Url, ChannelPtr)> {
-        info!(
-            target: "net::outbound_session::try_connect()",
-            "[P2P] Connecting outbound slot #{} [{}]",
-            self.slot, addr,
-        );
-
-        dnetev!(self, OutboundConnecting, {
-            slot: self.slot,
-            addr: addr.clone(),
-        });
-
         let parent = Arc::downgrade(&self.session());
         let connector = Connector::new(self.p2p().settings(), Arc::new(parent));
 
@@ -276,19 +296,7 @@ impl Slot {
         }
     }
 
-    async fn setup_channel(&self, addr: Url, addr_final: Url, channel: ChannelPtr) -> Result<()> {
-        info!(
-            target: "net::outbound_session::try_connect()",
-            "[P2P] Outbound slot #{} connected [{}]",
-            self.slot, addr_final
-        );
-
-        dnetev!(self, OutboundConnected, {
-            slot: self.slot,
-            addr: addr_final.clone(),
-            channel_id: channel.info.id
-        });
-
+    async fn setup_channel(&self, addr: Url, channel: ChannelPtr) -> Result<()> {
         // Register the new channel
         self.session().register_channel(channel.clone(), self.p2p().executor()).await?;
 
@@ -418,42 +426,132 @@ impl PeerDiscovery {
     /// after broadcasting in order to let the P2P stack receive and work through
     /// the addresses it is expecting.
     async fn run(self: Arc<Self>) {
+        let mut current_attempt = 0;
         loop {
+            dnetev!(self, OutboundPeerDiscovery, {
+                attempt: current_attempt,
+                state: "wait",
+            });
+
             // wait to be woken up by notify()
-            self.wakeup_self.wait().await;
+            let sleep_was_instant = self.wait().await;
 
             let p2p = self.p2p();
 
-            // Broadcast the GetAddrs message to all active channels.
-            // If we have no active channels, we will perform a SeedSyncSession instead.
-            if p2p.is_connected().await {
+            if sleep_was_instant {
+                // Try again
+                current_attempt += 1;
+            } else {
+                // reset back to start
+                current_attempt = 1;
+            }
+
+            if current_attempt >= 4 {
                 info!(
                     target: "net::outbound_session::peer_discovery()",
-                    "[P2P] Outbound: Broadcasting GetAddrs across active channels",
+                    "[P2P] Sleeping and trying again..."
                 );
+
+                dnetev!(self, OutboundPeerDiscovery, {
+                    attempt: current_attempt,
+                    state: "sleep",
+                });
+
+                sleep(p2p.settings().outbound_peer_discovery_cooloff_time).await;
+                current_attempt = 1;
+            }
+
+            // First 2 times try sending GetAddr to the network.
+            // 3rd time do a seed sync.
+            if p2p.is_connected().await && current_attempt <= 2 {
+                // Broadcast the GetAddrs message to all active channels.
+                // If we have no active channels, we will perform a SeedSyncSession instead.
+
+                info!(
+                    target: "net::outbound_session::peer_discovery()",
+                    "[P2P] Requesting addrs from active channels. Attempt: {}",
+                    current_attempt
+                );
+
+                dnetev!(self, OutboundPeerDiscovery, {
+                    attempt: current_attempt,
+                    state: "getaddr",
+                });
 
                 let get_addrs = GetAddrsMessage { max: p2p.settings().outbound_connections as u32 };
                 p2p.broadcast(&get_addrs).await;
-                // Temporary workaround. Sleep until the nodes respond back and
-                // we process the addr messages.
-                sleep(p2p.settings().outbound_connect_timeout).await;
+
+                // Wait for a hosts store update event
+                let store_sub = self.p2p().hosts().subscribe_store().await.unwrap();
+
+                let result = timeout(
+                    Duration::from_secs(p2p.settings().outbound_peer_discovery_attempt_time),
+                    store_sub.receive(),
+                )
+                .await;
+
+                match result {
+                    Ok(addrs_len) => {
+                        info!(
+                            target: "net::outbound_session::peer_discovery()",
+                            "[P2P] Discovered {} addrs", addrs_len
+                        );
+                    }
+                    Err(_) => {
+                        warn!(
+                            target: "net::outbound_session::peer_discovery()",
+                            "[P2P] Peer discovery waiting for addrs timed out."
+                        );
+                        // TODO: Just do seed next time
+                    }
+                }
+
+                // TODO: check every subscribe() call has a corresponding unsubscribe()
+                store_sub.unsubscribe().await;
             } else {
-                warn!(
+                info!(
                     target: "net::outbound_session::peer_discovery()",
-                    "[P2P] No connected channels found for peer discovery. Reseeding.",
+                    "[P2P] Seeding hosts. Attempt: {}",
+                    current_attempt
                 );
 
-                if let Err(e) = p2p.clone().seed().await {
-                    error!(
-                        target: "net::outbound_session::peer_discovery()",
-                        "[P2P] Network reseed failed: {}", e,
-                    );
+                dnetev!(self, OutboundPeerDiscovery, {
+                    attempt: current_attempt,
+                    state: "seed",
+                });
+
+                match p2p.clone().seed().await {
+                    Ok(()) => {
+                        info!(
+                            target: "net::outbound_session::peer_discovery()",
+                            "[P2P] Seeding hosts successful."
+                        );
+                    }
+                    Err(err) => {
+                        error!(
+                            target: "net::outbound_session::peer_discovery()",
+                            "[P2P] Network reseed failed: {}", err,
+                        );
+                    }
                 }
             }
 
-            self.session().wakeup_slots().await;
             self.wakeup_self.reset();
+            self.session().wakeup_slots().await;
+
+            // Give some time for new connections to be established
+            sleep(p2p.settings().outbound_peer_discovery_attempt_time).await;
         }
+    }
+
+    async fn wait(&self) -> bool {
+        let wakeup_start = Instant::now();
+        self.wakeup_self.wait().await;
+        let wakeup_end = Instant::now();
+
+        let epsilon = Duration::from_millis(200);
+        let sleep_was_instant = wakeup_end - wakeup_start <= epsilon;
+        sleep_was_instant
     }
 
     fn notify(&self) {

@@ -27,6 +27,10 @@ use smol::lock::RwLock;
 use url::Url;
 
 use super::settings::SettingsPtr;
+use crate::{
+    system::{Subscriber, SubscriberPtr, Subscription},
+    Result,
+};
 
 /// Atomic pointer to hosts object
 pub type HostsPtr = Arc<Hosts>;
@@ -43,6 +47,9 @@ pub struct Hosts {
     /// Internet interrupt (goblins unplugging cables)
     quarantine: RwLock<HashMap<Url, usize>>,
 
+    /// Subscriber listening for store updates
+    store_subscriber: SubscriberPtr<usize>,
+
     /// Pointer to configured P2P settings
     settings: SettingsPtr,
 }
@@ -53,6 +60,7 @@ impl Hosts {
         Arc::new(Self {
             addrs: RwLock::new(HashSet::new()),
             quarantine: RwLock::new(HashMap::new()),
+            store_subscriber: Subscriber::new(),
             settings,
         })
     }
@@ -62,6 +70,7 @@ impl Hosts {
         debug!(target: "net::hosts::store()", "hosts::store() [START]");
 
         let filtered_addrs = self.filter_addresses(addrs).await;
+        let filtered_addrs_len = filtered_addrs.len();
 
         if !filtered_addrs.is_empty() {
             let mut addrs_map = self.addrs.write().await;
@@ -77,7 +86,13 @@ impl Hosts {
             }
         }
 
+        self.store_subscriber.notify(filtered_addrs_len).await;
         debug!(target: "net::hosts::store()", "hosts::store() [END]");
+    }
+
+    pub async fn subscribe_store(&self) -> Result<Subscription<usize>> {
+        let sub = self.store_subscriber.clone().subscribe().await;
+        Ok(sub)
     }
 
     /// Filter given addresses based on certain rulesets and validity.

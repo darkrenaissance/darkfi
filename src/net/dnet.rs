@@ -45,29 +45,42 @@ pub type SendMessage = MessageInfo;
 pub type RecvMessage = MessageInfo;
 
 #[derive(Clone, Debug)]
-pub struct OutboundConnecting {
+pub struct OutboundSlotSleeping {
+    pub slot: u32,
+}
+
+#[derive(Clone, Debug)]
+pub struct OutboundSlotConnecting {
     pub slot: u32,
     pub addr: Url,
 }
 
 #[derive(Clone, Debug)]
-pub struct OutboundConnected {
+pub struct OutboundSlotConnected {
     pub slot: u32,
     pub addr: Url,
     pub channel_id: u32,
 }
 
 #[derive(Clone, Debug)]
-pub struct OutboundDisconnected {
+pub struct OutboundSlotDisconnected {
     pub slot: u32,
     pub err: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct OutboundPeerDiscovery {
+    pub attempt: u32,
+    pub state: &'static str,
 }
 
 #[derive(Clone, Debug)]
 pub enum DnetEvent {
     SendMessage(MessageInfo),
     RecvMessage(MessageInfo),
-    OutboundConnecting(OutboundConnecting),
-    OutboundConnected(OutboundConnected),
-    OutboundDisconnected(OutboundDisconnected),
+    OutboundSlotSleeping(OutboundSlotSleeping),
+    OutboundSlotConnecting(OutboundSlotConnecting),
+    OutboundSlotConnected(OutboundSlotConnected),
+    OutboundSlotDisconnected(OutboundSlotDisconnected),
+    OutboundPeerDiscovery(OutboundPeerDiscovery),
 }

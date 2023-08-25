@@ -48,15 +48,22 @@ impl From<net::dnet::MessageInfo> for JsonValue {
 }
 
 #[cfg(feature = "net")]
-impl From<net::dnet::OutboundConnecting> for JsonValue {
-    fn from(info: net::dnet::OutboundConnecting) -> JsonValue {
+impl From<net::dnet::OutboundSlotSleeping> for JsonValue {
+    fn from(info: net::dnet::OutboundSlotSleeping) -> JsonValue {
+        json_map([("slot", JsonNum(info.slot.into()))])
+    }
+}
+
+#[cfg(feature = "net")]
+impl From<net::dnet::OutboundSlotConnecting> for JsonValue {
+    fn from(info: net::dnet::OutboundSlotConnecting) -> JsonValue {
         json_map([("slot", JsonNum(info.slot.into())), ("addr", JsonStr(info.addr.to_string()))])
     }
 }
 
 #[cfg(feature = "net")]
-impl From<net::dnet::OutboundConnected> for JsonValue {
-    fn from(info: net::dnet::OutboundConnected) -> JsonValue {
+impl From<net::dnet::OutboundSlotConnected> for JsonValue {
+    fn from(info: net::dnet::OutboundSlotConnected) -> JsonValue {
         json_map([
             ("slot", JsonNum(info.slot.into())),
             ("addr", JsonStr(info.addr.to_string())),
@@ -66,9 +73,19 @@ impl From<net::dnet::OutboundConnected> for JsonValue {
 }
 
 #[cfg(feature = "net")]
-impl From<net::dnet::OutboundDisconnected> for JsonValue {
-    fn from(info: net::dnet::OutboundDisconnected) -> JsonValue {
+impl From<net::dnet::OutboundSlotDisconnected> for JsonValue {
+    fn from(info: net::dnet::OutboundSlotDisconnected) -> JsonValue {
         json_map([("slot", JsonNum(info.slot.into())), ("err", JsonStr(info.err))])
+    }
+}
+
+#[cfg(feature = "net")]
+impl From<net::dnet::OutboundPeerDiscovery> for JsonValue {
+    fn from(info: net::dnet::OutboundPeerDiscovery) -> JsonValue {
+        json_map([
+            ("attempt", JsonNum(info.attempt.into())),
+            ("state", JsonStr(info.state.to_string())),
+        ])
     }
 }
 
@@ -82,14 +99,20 @@ impl From<net::dnet::DnetEvent> for JsonValue {
             net::dnet::DnetEvent::RecvMessage(info) => {
                 json_map([("event", json_str("recv")), ("info", info.into())])
             }
-            net::dnet::DnetEvent::OutboundConnecting(info) => {
-                json_map([("event", json_str("outbound_connecting")), ("info", info.into())])
+            net::dnet::DnetEvent::OutboundSlotSleeping(info) => {
+                json_map([("event", json_str("outbound_slot_sleeping")), ("info", info.into())])
             }
-            net::dnet::DnetEvent::OutboundConnected(info) => {
-                json_map([("event", json_str("outbound_connected")), ("info", info.into())])
+            net::dnet::DnetEvent::OutboundSlotConnecting(info) => {
+                json_map([("event", json_str("outbound_slot_connecting")), ("info", info.into())])
             }
-            net::dnet::DnetEvent::OutboundDisconnected(info) => {
-                json_map([("event", json_str("outbound_disconnected")), ("info", info.into())])
+            net::dnet::DnetEvent::OutboundSlotConnected(info) => {
+                json_map([("event", json_str("outbound_slot_connected")), ("info", info.into())])
+            }
+            net::dnet::DnetEvent::OutboundSlotDisconnected(info) => {
+                json_map([("event", json_str("outbound_slot_disconnected")), ("info", info.into())])
+            }
+            net::dnet::DnetEvent::OutboundPeerDiscovery(info) => {
+                json_map([("event", json_str("outbound_peer_discovery")), ("info", info.into())])
             }
         }
     }
