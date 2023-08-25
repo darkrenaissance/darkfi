@@ -32,7 +32,6 @@ async fn start(executor: Arc<Executor<'static>>, options: ProgramOptions) -> Res
     let p2p = net::P2p::new(options.network_settings, executor.clone()).await;
 
     p2p.clone().start().await?;
-    p2p.run().await?;
 
     Ok(())
 }
