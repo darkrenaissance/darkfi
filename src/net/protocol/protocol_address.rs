@@ -149,18 +149,13 @@ impl ProtocolBase for ProtocolAddress {
 
         let type_id = self.channel.session_type_id();
 
-        let mut jobsman_started = false;
+        self.jobsman.clone().start(ex.clone());
 
         // If it's an outbound session + has an extern_addr, send our address.
         if type_id == SESSION_OUTBOUND && !self.settings.external_addrs.is_empty() {
-            self.jobsman.clone().start(ex.clone());
-            jobsman_started = true;
             self.jobsman.clone().spawn(self.clone().send_my_addrs(), ex.clone()).await;
         }
 
-        if !jobsman_started {
-            self.jobsman.clone().start(ex.clone());
-        }
         self.jobsman.clone().spawn(self.clone().handle_receive_addrs(), ex.clone()).await;
         self.jobsman.spawn(self.clone().handle_receive_get_addrs(), ex).await;
 
