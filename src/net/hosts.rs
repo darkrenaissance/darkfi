@@ -294,7 +294,7 @@ mod tests {
     fn test_store() {
         smol::block_on(async {
             let settings = Settings {
-                localnet: true,
+                localnet: false,
                 external_addrs: vec![
                     Url::parse("tcp://foo.bar:123").unwrap(),
                     Url::parse("tcp://lol.cat:321").unwrap(),
