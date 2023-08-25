@@ -229,8 +229,6 @@ impl Slot {
                         err: err.to_string()
                     });
 
-                    self.p2p().remove_pending(&addr).await;
-
                     continue
                 }
             };
@@ -290,6 +288,9 @@ impl Slot {
 
                 // At this point we failed to connect. We'll quarantine this peer now.
                 self.p2p().hosts().quarantine(&addr).await;
+
+                // Remove connection from pending
+                self.p2p().remove_pending(&addr).await;
 
                 // Notify that channel processing failed
                 self.session().channel_subscriber.notify(Err(Error::ConnectFailed)).await;
