@@ -158,7 +158,7 @@ impl Lilith {
                     let session_out = p2p_.session_outbound().await;
                     let session_weak = Arc::downgrade(&p2p_.session_outbound().await);
 
-                    let connector = Connector::new(p2p_.settings(), Arc::new(session_weak));
+                    let connector = Connector::new(p2p_.settings(), session_weak);
                     debug!(target: "lilith", "Connecting to {}", host);
                     match connector.connect(host).await {
                         Ok((_url, channel)) => {

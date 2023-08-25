@@ -319,7 +319,7 @@ async fn fetch_file_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<(
             let session_weak = Arc::downgrade(&fud.p2p.session_outbound().await);
 
             info!("Connecting to {} to fetch {}", peer, file_hash);
-            let connector = Connector::new(fud.p2p.settings(), Arc::new(session_weak));
+            let connector = Connector::new(fud.p2p.settings(), session_weak);
             match connector.connect(peer).await {
                 Ok((url, channel)) => {
                     let proto_ver = ProtocolVersion::new(
@@ -426,7 +426,7 @@ async fn fetch_chunk_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<
             let session_weak = Arc::downgrade(&fud.p2p.session_outbound().await);
 
             info!("Connecting to {} to fetch {}", peer, chunk_hash);
-            let connector = Connector::new(fud.p2p.settings(), Arc::new(session_weak));
+            let connector = Connector::new(fud.p2p.settings(), session_weak);
             match connector.connect(peer).await {
                 Ok((url, channel)) => {
                     let proto_ver = ProtocolVersion::new(

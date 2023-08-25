@@ -144,7 +144,7 @@ impl Darkfid {
         }
 
         self.sync_p2p.broadcast(&tx).await;
-        if self.sync_p2p.channels().lock().await.is_empty() {
+        if self.sync_p2p.channels().await.lock().await.is_empty() {
             error!(target: "darkfid::rpc::tx_broadcast", "Failed broadcasting tx, no connected channels");
             return server_error(RpcError::TxBroadcastFail, id, None)
         }

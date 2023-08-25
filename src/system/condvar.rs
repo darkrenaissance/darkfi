@@ -72,6 +72,12 @@ impl CondVar {
     }
 }
 
+impl Default for CondVar {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct CondVarWait<'a> {
     state: &'a Mutex<CondVarState>,
 }

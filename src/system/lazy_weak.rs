@@ -91,3 +91,9 @@ impl<Parent> LazyWeak<Parent> {
         self.0.get().unwrap().upgrade().unwrap()
     }
 }
+
+impl<Parent> Default for LazyWeak<Parent> {
+    fn default() -> Self {
+        Self::new()
+    }
+}

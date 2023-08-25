@@ -574,8 +574,7 @@ impl PeerDiscovery {
         let wakeup_end = Instant::now();
 
         let epsilon = Duration::from_millis(200);
-        let sleep_was_instant = wakeup_end - wakeup_start <= epsilon;
-        sleep_was_instant
+        wakeup_end - wakeup_start <= epsilon
     }
 
     fn notify(&self) {
