@@ -596,17 +596,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         })
         .await;
     p2p.clone().start().await?;
-    StoppableTask::new().start(
-        p2p.clone().run(),
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "fud", "Failed starting P2P network: {}", e),
-            }
-        },
-        Error::P2PNetworkStopped,
-        ex.clone(),
-    );
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
