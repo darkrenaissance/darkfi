@@ -32,7 +32,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use log::{debug, error, info, warn};
+use log::{debug, error, info, trace, warn};
 use rand::{prelude::SliceRandom, rngs::OsRng};
 use smol::lock::Mutex;
 use url::Url;
@@ -228,6 +228,9 @@ impl Slot {
                         slot: self.slot,
                         err: err.to_string()
                     });
+
+                    self.p2p().remove_pending(&addr).await;
+
                     continue
                 }
             };
@@ -355,19 +358,39 @@ impl Slot {
         for host in hosts.iter() {
             // Check if we already have this connection established
             if p2p.exists(host).await {
+                trace!(
+                    target: "net::outbound_session::fetch_address_with_lock()",
+                    "Host '{}' exists so skipping",
+                    host
+                );
                 continue
             }
 
             // Check if we already have this configured as a manual peer
             if p2p.settings().peers.contains(host) {
+                trace!(
+                    target: "net::outbound_session::fetch_address_with_lock()",
+                    "Host '{}' configured as manual peer so skipping",
+                    host
+                );
                 continue
             }
 
             // Obtain a lock on this address to prevent duplicate connection
             if !p2p.add_pending(host).await {
+                trace!(
+                    target: "net::outbound_session::fetch_address_with_lock()",
+                    "Host '{}' pending so skipping",
+                    host
+                );
                 continue
             }
 
+            trace!(
+                target: "net::outbound_session::fetch_address_with_lock()",
+                "Found valid host '{}",
+                host
+            );
             return Some(host.clone())
         }
 
