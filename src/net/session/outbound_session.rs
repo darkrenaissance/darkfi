@@ -45,38 +45,18 @@ use super::{
     Session, SessionBitFlag, SESSION_OUTBOUND,
 };
 use crate::{
-    system::{sleep, CondVar, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr},
+    system::{
+        sleep, CondVar, LazyWeak, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr,
+    },
     Error, Result,
 };
-
-use std::sync::OnceLock;
-
-pub struct LazyWeak<Parent>(OnceLock<Weak<Parent>>);
-
-impl<Parent> LazyWeak<Parent> {
-    fn new() -> Self {
-        Self(OnceLock::new())
-    }
-
-    pub fn init(&self, parent: Arc<Parent>) {
-        assert!(self.0.get().is_none());
-        let parent = Arc::downgrade(&parent);
-        self.0.set(parent).unwrap();
-        assert!(self.0.get().is_some());
-    }
-
-    pub fn upgrade(&self) -> Arc<Parent> {
-        assert!(self.0.get().is_some());
-        self.0.get().unwrap().upgrade().unwrap()
-    }
-}
 
 pub type OutboundSessionPtr = Arc<OutboundSession>;
 
 /// Defines outbound connections session.
 pub struct OutboundSession {
     /// Weak pointer to parent p2p object
-    p2p: Weak<P2p>,
+    pub(in crate::net) p2p: LazyWeak<P2p>,
     /// Subscriber used to signal channels processing
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
 
@@ -88,9 +68,9 @@ pub struct OutboundSession {
 
 impl OutboundSession {
     /// Create a new outbound session.
-    pub(crate) async fn new(p2p: Weak<P2p>) -> OutboundSessionPtr {
+    pub(crate) fn new() -> OutboundSessionPtr {
         let self_ = Arc::new(Self {
-            p2p,
+            p2p: LazyWeak::new(),
             channel_subscriber: Subscriber::new(),
             slots: Mutex::new(Vec::new()),
             peer_discovery: PeerDiscovery::new(),
@@ -142,7 +122,7 @@ impl OutboundSession {
 #[async_trait]
 impl Session for OutboundSession {
     fn p2p(&self) -> P2pPtr {
-        self.p2p.upgrade().unwrap()
+        self.p2p.upgrade()
     }
 
     fn type_id(&self) -> SessionBitFlag {

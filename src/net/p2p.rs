@@ -71,11 +71,11 @@ pub struct P2p {
     pub peer_discovery_running: Mutex<bool>,
 
     /// Reference to configured [`ManualSession`]
-    session_manual: Mutex<Option<Arc<ManualSession>>>,
+    session_manual: ManualSessionPtr,
     /// Reference to configured [`InboundSession`]
-    session_inbound: Mutex<Option<Arc<InboundSession>>>,
+    session_inbound: InboundSessionPtr,
     /// Reference to configured [`OutboundSession`]
-    session_outbound: Mutex<Option<Arc<OutboundSession>>>,
+    session_outbound: OutboundSessionPtr,
 
     /// Enable network debugging
     pub dnet_enabled: Mutex<bool>,
@@ -105,19 +105,17 @@ impl P2p {
             settings,
             peer_discovery_running: Mutex::new(false),
 
-            session_manual: Mutex::new(None),
-            session_inbound: Mutex::new(None),
-            session_outbound: Mutex::new(None),
+            session_manual: ManualSession::new(),
+            session_inbound: InboundSession::new(),
+            session_outbound: OutboundSession::new(),
 
             dnet_enabled: Mutex::new(false),
             dnet_subscriber: Subscriber::new(),
         });
 
-        let parent = Arc::downgrade(&self_);
-
-        *self_.session_manual.lock().await = Some(ManualSession::new(parent.clone()));
-        *self_.session_inbound.lock().await = Some(InboundSession::new(parent.clone()));
-        *self_.session_outbound.lock().await = Some(OutboundSession::new(parent).await);
+        self_.session_manual.p2p.init(self_.clone());
+        self_.session_inbound.p2p.init(self_.clone());
+        self_.session_outbound.p2p.init(self_.clone());
 
         register_default_protocols(self_.clone()).await;
 
@@ -274,17 +272,17 @@ impl P2p {
 
     /// Get pointer to manual session
     pub async fn session_manual(&self) -> ManualSessionPtr {
-        self.session_manual.lock().await.as_ref().unwrap().clone()
+        self.session_manual.clone()
     }
 
     /// Get pointer to inbound session
     pub async fn session_inbound(&self) -> InboundSessionPtr {
-        self.session_inbound.lock().await.as_ref().unwrap().clone()
+        self.session_inbound.clone()
     }
 
     /// Get pointer to outbound session
     pub async fn session_outbound(&self) -> OutboundSessionPtr {
-        self.session_outbound.lock().await.as_ref().unwrap().clone()
+        self.session_outbound.clone()
     }
 
     /// Enable network debugging

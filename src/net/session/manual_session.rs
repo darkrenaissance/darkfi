@@ -29,7 +29,7 @@
 //! and insures that no other part of the program uses the slots at the
 //! same time.
 
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use log::{info, warn};
@@ -45,7 +45,7 @@ use super::{
     Session, SessionBitFlag, SESSION_MANUAL,
 };
 use crate::{
-    system::{sleep, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr},
+    system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr},
     Error, Result,
 };
 
@@ -53,7 +53,7 @@ pub type ManualSessionPtr = Arc<ManualSession>;
 
 /// Defines manual connections session.
 pub struct ManualSession {
-    p2p: Weak<P2p>,
+    pub(in crate::net) p2p: LazyWeak<P2p>,
     connect_slots: Mutex<Vec<StoppableTaskPtr>>,
     /// Subscriber used to signal channels processing
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
@@ -63,9 +63,9 @@ pub struct ManualSession {
 
 impl ManualSession {
     /// Create a new manual session.
-    pub fn new(p2p: Weak<P2p>) -> ManualSessionPtr {
+    pub fn new() -> ManualSessionPtr {
         Arc::new(Self {
-            p2p,
+            p2p: LazyWeak::new(),
             connect_slots: Mutex::new(Vec::new()),
             channel_subscriber: Subscriber::new(),
             notify: Mutex::new(false),
@@ -204,7 +204,7 @@ impl ManualSession {
 #[async_trait]
 impl Session for ManualSession {
     fn p2p(&self) -> P2pPtr {
-        self.p2p.upgrade().unwrap()
+        self.p2p.upgrade()
     }
 
     fn type_id(&self) -> SessionBitFlag {
