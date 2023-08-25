@@ -37,7 +37,10 @@
 //! function. This runs the version exchange protocol, stores the channel in the
 //! p2p list of channels, and subscribes to a stop signal.
 
-use std::sync::{Arc, Weak};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, Weak,
+};
 
 use async_trait::async_trait;
 use futures::future::join_all;
@@ -52,7 +55,7 @@ use super::{
     },
     Session, SessionBitFlag, SESSION_SEED,
 };
-use crate::Result;
+use crate::{Error, Result};
 
 pub type SeedSyncSessionPtr = Arc<SeedSyncSession>;
 
@@ -86,11 +89,12 @@ impl SeedSyncSession {
         let executor = self.p2p().executor();
         let mut tasks = Vec::with_capacity(settings.seeds.len());
 
-        let mut failed = 0;
+        let failed = Arc::new(AtomicUsize::new(0));
 
         for (i, seed) in settings.seeds.iter().enumerate() {
             let ex_ = executor.clone();
             let self_ = self.clone();
+            let failed_ = failed.clone();
 
             tasks.push(async move {
                 if let Err(e) = self_.clone().start_seed(i, seed.clone(), ex_.clone()).await {
@@ -98,7 +102,7 @@ impl SeedSyncSession {
                         target: "net::session::seedsync_session",
                         "[P2P] Seed #{} connection failed: {}", i, e,
                     );
-                    failed += 1;
+                    failed_.fetch_add(1, Ordering::SeqCst);
                 }
             });
         }
@@ -106,8 +110,8 @@ impl SeedSyncSession {
         // Poll concurrently
         join_all(tasks).await;
 
-        if failed == settings.seeds.len() {
-            error!(target: "net::session::seedsync_session", "[P2P] Failed to connect to any seed");
+        if failed.load(Ordering::SeqCst) == settings.seeds.len() {
+            return Err(Error::ConnectFailed)
         }
 
         // Seed process complete
