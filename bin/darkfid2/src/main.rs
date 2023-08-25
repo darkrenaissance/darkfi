@@ -205,36 +205,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     info!(target: "darkfid", "Starting sync P2P network");
     sync_p2p.clone().start().await?;
-    StoppableTask::new().start(
-        sync_p2p.clone().run(),
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "darkfid", "Failed starting sync P2P network: {}", e),
-            }
-        },
-        Error::P2PNetworkStopped,
-        ex.clone(),
-    );
 
     // Consensus protocol
     if args.consensus {
         info!("Starting consensus P2P network");
         let consensus_p2p = consensus_p2p.clone().unwrap();
         consensus_p2p.clone().start().await?;
-        StoppableTask::new().start(
-            consensus_p2p.run(),
-            |res| async {
-                match res {
-                    Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
-                    Err(e) => {
-                        error!(target: "darkfid", "Failed starting consensus P2P network: {}", e)
-                    }
-                }
-            },
-            Error::P2PNetworkStopped,
-            ex.clone(),
-        );
     } else {
         info!("Not starting consensus P2P network");
     }

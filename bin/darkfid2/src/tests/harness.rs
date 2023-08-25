@@ -22,20 +22,18 @@ use darkfi::{
     blockchain::{BlockInfo, Header},
     net::Settings,
     rpc::jsonrpc::JsonSubscriber,
-    system::StoppableTask,
     util::time::TimeKeeper,
     validator::{
         consensus::{next_block_reward, pid::slot_pid_output},
         Validator, ValidatorConfig,
     },
-    Error, Result,
+    Result,
 };
 use darkfi_contract_test_harness::{vks, Holder, TestHarness};
 use darkfi_sdk::{
     blockchain::{PidOutput, PreviousSlot, Slot},
     pasta::{group::ff::Field, pallas},
 };
-use log::error;
 use url::Url;
 
 use crate::{
@@ -240,34 +238,10 @@ pub async fn generate_node(
     let node = Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator, subscribers).await;
 
     sync_p2p.clone().start().await?;
-    StoppableTask::new().start(
-        sync_p2p.run(),
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
-                Err(e) => error!("Failed starting sync P2P network: {}", e),
-            }
-        },
-        Error::P2PNetworkStopped,
-        ex.clone(),
-    );
 
     if consensus_settings.is_some() {
         let consensus_p2p = consensus_p2p.unwrap();
         consensus_p2p.clone().start().await?;
-        StoppableTask::new().start(
-            consensus_p2p.run(),
-            |res| async {
-                match res {
-                    Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
-                    Err(e) => {
-                        error!("Failed starting consensus P2P network: {}", e)
-                    }
-                }
-            },
-            Error::P2PNetworkStopped,
-            ex.clone(),
-        );
     }
 
     if !skip_sync {
