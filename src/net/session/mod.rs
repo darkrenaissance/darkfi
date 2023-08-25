@@ -42,7 +42,7 @@ pub const SESSION_MANUAL: SessionBitFlag = 0b0100;
 pub const SESSION_SEED: SessionBitFlag = 0b1000;
 pub const SESSION_ALL: SessionBitFlag = 0b1111;
 
-pub type SessionWeakPtr = Arc<Weak<dyn Session + Send + Sync + 'static>>;
+pub type SessionWeakPtr = Weak<dyn Session + Send + Sync + 'static>;
 
 /// Removes channel from the list of connected channels when a stop signal
 /// is received.

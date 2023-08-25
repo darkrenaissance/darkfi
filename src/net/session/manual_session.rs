@@ -99,7 +99,7 @@ impl ManualSession {
         let ex = self.p2p().executor();
         let parent = Arc::downgrade(&self);
         let settings = self.p2p().settings();
-        let connector = Connector::new(settings.clone(), Arc::new(parent));
+        let connector = Connector::new(settings.clone(), parent);
 
         let attempts = settings.manual_attempt_limit;
         let mut remaining = attempts;

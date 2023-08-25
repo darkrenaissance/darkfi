@@ -44,11 +44,11 @@ pub struct Acceptor {
 
 impl Acceptor {
     /// Create new Acceptor object.
-    pub fn new(session: Mutex<Option<SessionWeakPtr>>) -> AcceptorPtr {
+    pub fn new() -> AcceptorPtr {
         Arc::new(Self {
             channel_subscriber: Subscriber::new(),
             task: StoppableTask::new(),
-            session,
+            session: Mutex::new(None),
         })
     }
 

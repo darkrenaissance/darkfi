@@ -274,7 +274,7 @@ impl Slot {
     /// main connect loop (parent of this function) will iterate again.
     async fn try_connect(&self, addr: Url) -> Result<(Url, ChannelPtr)> {
         let parent = Arc::downgrade(&self.session());
-        let connector = Connector::new(self.p2p().settings(), Arc::new(parent));
+        let connector = Connector::new(self.p2p().settings(), parent);
 
         match connector.connect(&addr).await {
             Ok((addr_final, channel)) => Ok((addr_final, channel)),

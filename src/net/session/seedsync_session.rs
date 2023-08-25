@@ -125,7 +125,7 @@ impl SeedSyncSession {
 
         let settings = self.p2p.upgrade().unwrap().settings();
         let parent = Arc::downgrade(&self);
-        let connector = Connector::new(settings.clone(), Arc::new(parent));
+        let connector = Connector::new(settings.clone(), parent);
 
         match connector.connect(&seed).await {
             Ok((url, ch)) => {
