@@ -35,7 +35,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     info!(target: "consensus::consensus_sync", "Starting consensus state sync...");
     let current_slot = state.read().await.consensus.time_keeper.current_slot();
     // Loop through connected channels
-    let channels_map = p2p.channels().lock().await;
+    let channels_map = p2p.channels().await.lock().await;
     let values = channels_map.values();
     // Using len here because is_empty() uses unstable library feature
     // called 'exact_size_is_empty'.
