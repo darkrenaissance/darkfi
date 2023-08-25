@@ -93,7 +93,7 @@ impl Spawn {
     async fn addresses(&self) -> Vec<JsonValue> {
         self.p2p
             .hosts()
-            .load_all()
+            .fetch_all()
             .await
             .iter()
             .map(|addr| JsonValue::String(addr.to_string()))
@@ -145,7 +145,7 @@ impl Lilith {
             // them. If we can't reach them, we'll remove them from our set.
             sleep(60).await;
             debug!(target: "lilith", "[{}] Picking random hosts from db", name);
-            let lottery_winners = p2p.clone().hosts().get_n_random(10).await;
+            let lottery_winners = p2p.clone().hosts().fetch_n_random(10).await;
             let win_str: Vec<&str> = lottery_winners.iter().map(|x| x.as_str()).collect();
             debug!(target: "lilith", "[{}] Got: {:?}", name, win_str);
 
@@ -268,7 +268,7 @@ async fn save_hosts(path: &Path, networks: &[Spawn]) {
     let mut tsv = String::new();
 
     for spawn in networks {
-        for host in spawn.p2p.hosts().load_all().await {
+        for host in spawn.p2p.hosts().fetch_all().await {
             tsv.push_str(&format!("{}\t{}\n", spawn.name, host.as_str()));
         }
     }
@@ -392,18 +392,6 @@ async fn spawn_net(
     let addrs_str: Vec<&str> = listen_urls.iter().map(|x| x.as_str()).collect();
     info!(target: "lilith", "Starting seed network node for \"{}\" on {:?}", name, addrs_str);
     p2p.clone().start().await?;
-    let name_ = name.clone();
-    StoppableTask::new().start(
-        p2p.clone().run(),
-        |res| async move {
-            match res {
-                Ok(()) | Err(Error::P2PNetworkStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "lilith", "Failed starting P2P network seed for \"{}\": {}", name_, e),
-            }
-        },
-        Error::P2PNetworkStopped,
-        ex,
-    );
 
     let spawn = Spawn { name, p2p };
     Ok(spawn)
