@@ -595,6 +595,7 @@ impl Decodable for Cow<'static, str> {
 #[cfg(test)]
 mod tests {
     use super::{endian::*, *};
+    use futures_lite::AsyncWriteExt;
 
     #[test]
     fn serialize_int_test() {
