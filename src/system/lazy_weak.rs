@@ -27,7 +27,7 @@ use std::sync::{Arc, OnceLock, Weak};
 ///     fn new() -> Arc<Self> {
 ///         let self_ = Arc::new(Self {
 ///             child: Mutex::new(None)
-///         };
+///         });
 ///         let parent = Arc::downgrade(&self_);
 ///         *self_.child.lock().await = Some(Child::new(parent));
 ///         self_
@@ -54,7 +54,7 @@ use std::sync::{Arc, OnceLock, Weak};
 ///     fn new() -> Arc<Self> {
 ///         let self_ = Arc::new(Self {
 ///             child: Child::new()
-///         };
+///         });
 ///         self_.child.parent.init(self_.clone());
 ///         self_
 ///     }
