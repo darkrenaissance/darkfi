@@ -94,18 +94,31 @@ async def main(argv):
         if ev in ["send", "recv"]:
             continue
         info = params["info"]
-        if ev.startswith("outbound_slot"):
-            slot = info["slot"]
 
-            t = time.localtime()
-            current_time = time.strftime("%H:%M:%S", t)
-            ev = ev[len("outbound_slot_"):]
-            print(f"{current_time}  slot {slot}: {ev}")
-        else:
-            assert ev == "outbound_peer_discovery"
-            attempt = info["attempt"]
-            state = info["state"]
-            print(f"{current_time}  peer_discovery: {state} (attempt {attempt})")
+        t = time.localtime()
+        current_time = time.strftime("%H:%M:%S", t)
+
+        match ev:
+            case "outbound_slot_sleeping":
+                slot = info["slot"]
+                print(f"{current_time}  slot {slot}: sleeping")
+            case "outbound_slot_connecting":
+                slot = info["slot"]
+                addr = info["addr"]
+                print(f"{current_time}  slot {slot}: connecting   addr={addr}")
+            case "outbound_slot_connected":
+                slot = info["slot"]
+                addr = info["addr"]
+                channel_id = info["channel_id"]
+                print(f"{current_time}  slot {slot}: connected    addr={addr}")
+            case "outbound_slot_disconnected":
+                slot = info["slot"]
+                err = info["err"]
+                print(f"{current_time}  slot {slot}: disconnected err='{err}'")
+            case "outbound_peer_discovery":
+                attempt = info["attempt"]
+                state = info["state"]
+                print(f"{current_time}  peer_discovery: {state} (attempt {attempt})")
         #print(data)
 
     await rpc.dnet_switch(False)
