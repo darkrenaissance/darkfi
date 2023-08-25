@@ -85,6 +85,9 @@ impl SeedSyncSession {
         // Gather tasks so we can execute concurrently
         let executor = self.p2p().executor();
         let mut tasks = Vec::with_capacity(settings.seeds.len());
+
+        let mut failed = 0;
+
         for (i, seed) in settings.seeds.iter().enumerate() {
             let ex_ = executor.clone();
             let self_ = self.clone();
@@ -95,12 +98,17 @@ impl SeedSyncSession {
                         target: "net::session::seedsync_session",
                         "[P2P] Seed #{} connection failed: {}", i, e,
                     );
+                    failed += 1;
                 }
             });
         }
 
         // Poll concurrently
         join_all(tasks).await;
+
+        if failed == settings.seeds.len() {
+            error!(target: "net::session::seedsync_session", "[P2P] Failed to connect to any seed");
+        }
 
         // Seed process complete
         if self.p2p().hosts().is_empty().await {
