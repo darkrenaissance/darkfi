@@ -94,11 +94,18 @@ async def main(argv):
         if ev in ["send", "recv"]:
             continue
         info = params["info"]
-        slot = info["slot"]
+        if ev.startswith("outbound_slot"):
+            slot = info["slot"]
 
-        t = time.localtime()
-        current_time = time.strftime("%H:%M:%S", t)
-        print(f"{current_time}  slot {slot}: {ev}")
+            t = time.localtime()
+            current_time = time.strftime("%H:%M:%S", t)
+            ev = ev[len("outbound_slot_"):]
+            print(f"{current_time}  slot {slot}: {ev}")
+        else:
+            assert ev == "outbound_peer_discovery"
+            attempt = info["attempt"]
+            state = info["state"]
+            print(f"{current_time}  peer_discovery: {state} (attempt {attempt})")
         #print(data)
 
     await rpc.dnet_switch(False)
