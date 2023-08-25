@@ -26,13 +26,11 @@
 //! and insures that no other part of the program uses the slots at the
 //! same time.
 
-use std::{
-    collections::HashSet,
-    sync::{Arc, Weak},
-};
+use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
 use log::{debug, error, info, warn};
+use rand::{prelude::SliceRandom, rngs::OsRng};
 use smol::lock::Mutex;
 use url::Url;
 
@@ -363,7 +361,7 @@ impl Slot {
         // TODO: REMOVE !!!!!
 
         // Collect hosts
-        let mut hosts = HashSet::new();
+        let mut hosts = vec![];
 
         // If transport mixing is enabled, then for example we're allowed to
         // use tor:// to connect to tcp:// and tor+tls:// to connect to tcp+tls://.
@@ -375,7 +373,7 @@ impl Slot {
                     let mut a_to_b = p2p.hosts().fetch_with_schemes(&[$b.to_string()]).await;
                     for addr in a_to_b.iter_mut() {
                         addr.set_scheme($a).unwrap();
-                        hosts.insert(addr.clone());
+                        hosts.push(addr.clone());
                     }
                 }
             };
@@ -387,14 +385,15 @@ impl Slot {
 
         // And now the actual requested transports
         for addr in p2p.hosts().fetch_with_schemes(transports).await {
-            hosts.insert(addr);
+            hosts.push(addr);
         }
 
-        // TODO: randomize hosts list. Do not try to connect in a deterministic order.
+        // Randomize hosts list. Do not try to connect in a deterministic order.
         // This is healthier for multiple slots to not compete for the same addrs.
+        hosts.shuffle(&mut OsRng);
 
         // Try to find an unused host in the set.
-        for host in &hosts {
+        for host in hosts.iter() {
             // Check if we already have this connection established
             if p2p.exists(host).await {
                 continue
