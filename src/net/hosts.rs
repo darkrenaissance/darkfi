@@ -101,17 +101,17 @@ impl Hosts {
         let mut ret = vec![];
         let localnet = self.settings.localnet;
 
-        for _addr in addrs {
+        for addr_ in addrs {
             // Validate that the format is `scheme://host_str:port`
-            if _addr.host_str().is_none() ||
-                _addr.port().is_none() ||
-                _addr.cannot_be_a_base() ||
-                _addr.path_segments().is_some()
+            if addr_.host_str().is_none() ||
+                addr_.port().is_none() ||
+                addr_.cannot_be_a_base() ||
+                addr_.path_segments().is_some()
             {
                 continue
             }
 
-            let host_str = _addr.host_str().unwrap();
+            let host_str = addr_.host_str().unwrap();
 
             if !localnet {
                 // Our own addresses should never enter the hosts set.
@@ -129,7 +129,7 @@ impl Hosts {
 
             // We do this hack in order to parse IPs properly.
             // https://github.com/whatwg/url/issues/749
-            let addr = Url::parse(&_addr.as_str().replace(_addr.scheme(), "http")).unwrap();
+            let addr = Url::parse(&addr_.as_str().replace(addr_.scheme(), "http")).unwrap();
 
             // Filter non-global ranges if we're not allowing localnet.
             // Should never be allowed in production, so we don't really care
@@ -156,7 +156,7 @@ impl Hosts {
                 }
             }
 
-            match _addr.scheme() {
+            match addr_.scheme() {
                 // Validate that the address is an actual onion.
                 #[cfg(feature = "p2p-transport-tor")]
                 "tor" | "tor+tls" => {
@@ -178,7 +178,7 @@ impl Hosts {
                 _ => continue,
             }
 
-            ret.push(_addr.clone());
+            ret.push(addr_.clone());
         }
 
         ret
