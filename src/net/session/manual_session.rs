@@ -66,7 +66,7 @@ impl ManualSession {
     pub fn new(p2p: Weak<P2p>) -> ManualSessionPtr {
         Arc::new(Self {
             p2p,
-            connect_slots: Mutex::new(vec![]),
+            connect_slots: Mutex::new(Vec::new()),
             channel_subscriber: Subscriber::new(),
             notify: Mutex::new(false),
         })

@@ -14,7 +14,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-import asyncio, json, random, sys
+import asyncio, json, random, sys, time
 
 
 class JsonRpc:
@@ -85,10 +85,21 @@ async def main(argv):
 
     while True:
         data = await rpc.reader.readline()
-        data = json.loads(data.decode().strip())
-        if data["params"][0]["event"] in ["send", "recv"]:
+        #with open("rpclog", "a") as f:
+        #    f.write(data.decode())
+        data = json.loads(data)
+
+        params = data["params"][0]
+        ev = params["event"]
+        if ev in ["send", "recv"]:
             continue
-        print(data)
+        info = params["info"]
+        slot = info["slot"]
+
+        t = time.localtime()
+        current_time = time.strftime("%H:%M:%S", t)
+        print(f"{current_time}  slot {slot}: {ev}")
+        #print(data)
 
     await rpc.dnet_switch(False)
     await rpc.stop()

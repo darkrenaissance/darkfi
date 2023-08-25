@@ -24,7 +24,7 @@ use std::{
 use futures::{stream::FuturesUnordered, TryFutureExt};
 use log::{debug, error, info, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng};
-use smol::{lock::Mutex, stream::StreamExt, Executor};
+use smol::{lock::Mutex, stream::StreamExt};
 use url::Url;
 
 use super::{
@@ -40,7 +40,7 @@ use super::{
     settings::{Settings, SettingsPtr},
 };
 use crate::{
-    system::{Subscriber, SubscriberPtr, Subscription},
+    system::{ExecutorPtr, Subscriber, SubscriberPtr, Subscription},
     Result,
 };
 
@@ -54,7 +54,7 @@ pub type P2pPtr = Arc<P2p>;
 /// Toplevel peer-to-peer networking interface
 pub struct P2p {
     /// Global multithreaded executor reference
-    executor: Arc<Executor<'static>>,
+    executor: ExecutorPtr,
     /// Channels pending connection
     pending: PendingChannels,
     /// Connected channels
@@ -92,7 +92,7 @@ impl P2p {
     ///
     /// Creates a weak pointer to self that is used by all sessions to access the
     /// p2p parent class.
-    pub async fn new(settings: Settings, executor: Arc<Executor<'static>>) -> P2pPtr {
+    pub async fn new(settings: Settings, executor: ExecutorPtr) -> P2pPtr {
         let settings = Arc::new(settings);
 
         let self_ = Arc::new(Self {
@@ -117,7 +117,7 @@ impl P2p {
 
         *self_.session_manual.lock().await = Some(ManualSession::new(parent.clone()));
         *self_.session_inbound.lock().await = Some(InboundSession::new(parent.clone()));
-        *self_.session_outbound.lock().await = Some(OutboundSession::new(parent));
+        *self_.session_outbound.lock().await = Some(OutboundSession::new(parent).await);
 
         register_default_protocols(self_.clone()).await;
 
@@ -130,22 +130,20 @@ impl P2p {
         info!(target: "net::p2p::start()", "[P2P] Starting P2P subsystem");
 
         // First attempt any set manual connections
-        let manual = self.session_manual().await;
         for peer in &self.settings.peers {
-            manual.clone().connect(peer.clone()).await;
+            self.session_manual().await.connect(peer.clone()).await;
         }
 
         // Start the inbound session
         let inbound = self.session_inbound().await;
-        if let Err(err) = inbound.clone().start().await {
+        if let Err(err) = inbound.start().await {
             error!(target: "net::p2p::start()", "Failed to start inbound session!: {}", err);
-            manual.stop().await;
+            self.session_manual().await.stop().await;
             return Err(err)
         }
 
         // Start the outbound session
-        let outbound = self.session_outbound().await;
-        outbound.clone().start().await;
+        self.session_outbound().await.start().await;
 
         info!(target: "net::p2p::start()", "[P2P] P2P subsystem started");
         Ok(())
@@ -240,14 +238,18 @@ impl P2p {
     }
 
     /// Return reference to connected channels map
-    pub fn channels(&self) -> &ConnectedChannels {
+    pub async fn channels(&self) -> &ConnectedChannels {
         &self.channels
     }
 
     /// Retrieve a random connected channel from the
     pub async fn random_channel(&self) -> Option<ChannelPtr> {
-        let channels = self.channels().lock().await;
+        let channels = self.channels().await.lock().await;
         channels.values().choose(&mut OsRng).cloned()
+    }
+
+    pub async fn is_connected(&self) -> bool {
+        !self.channels().await.lock().await.is_empty()
     }
 
     /// Return an atomic pointer to the set network settings
@@ -261,7 +263,7 @@ impl P2p {
     }
 
     /// Reference the global executor
-    pub fn executor(&self) -> Arc<Executor<'static>> {
+    pub fn executor(&self) -> ExecutorPtr {
         self.executor.clone()
     }
 
