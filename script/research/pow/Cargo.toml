@@ -1,0 +1,14 @@
+[package]
+name = "pow"
+version = "0.1.0"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+randomx = {git = "https://github.com/darkrenaissance/RandomX"}
+darkfi-serial = {path = "../../../src/serial"}
+darkfi-sdk = {path = "../../../src/sdk", features = ["async"]}
+darkfi = {path = "../../../", features = ["util"]}
+
+blake3 = "1.4.1"
