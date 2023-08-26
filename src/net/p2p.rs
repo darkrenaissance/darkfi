@@ -236,18 +236,18 @@ impl P2p {
     }
 
     /// Return reference to connected channels map
-    pub async fn channels(&self) -> &ConnectedChannels {
+    pub fn channels(&self) -> &ConnectedChannels {
         &self.channels
     }
 
     /// Retrieve a random connected channel from the
     pub async fn random_channel(&self) -> Option<ChannelPtr> {
-        let channels = self.channels().await.lock().await;
+        let channels = self.channels().lock().await;
         channels.values().choose(&mut OsRng).cloned()
     }
 
     pub async fn is_connected(&self) -> bool {
-        !self.channels().await.lock().await.is_empty()
+        !self.channels().lock().await.is_empty()
     }
 
     /// Return an atomic pointer to the set network settings

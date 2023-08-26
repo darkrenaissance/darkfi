@@ -31,7 +31,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
     info!(target: "darkfid::task::sync_task", "Starting blockchain sync...");
     // Block until at least node is connected to at least one peer
     loop {
-        if !node.sync_p2p.channels().await.lock().await.is_empty() {
+        if !node.sync_p2p.channels().lock().await.is_empty() {
             break
         }
         warn!(target: "darkfid::task::sync_task", "Node is not connected to other nodes, waiting to retry...");
