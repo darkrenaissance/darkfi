@@ -110,7 +110,7 @@ impl JsonRpcInterface {
         let genevent: GenEvent = deserialize(&dec).unwrap();
 
         let event = Event {
-            previous_event_hash: self.model.lock().await.get_head_hash(),
+            previous_event_hash: self.model.lock().await.get_head_hash().unwrap(),
             action: genevent,
             timestamp: Timestamp::current_time(),
         };

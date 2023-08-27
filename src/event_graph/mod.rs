@@ -40,7 +40,7 @@ mod tests {
         view::View,
         EventMsg,
     };
-    use crate::util::time::Timestamp;
+    use crate::{util::time::Timestamp, Result};
     use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
     #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -56,7 +56,7 @@ mod tests {
     }
 
     #[test]
-    fn event_graph_integration() {
+    fn event_graph_integration() -> Result<()> {
         smol::block_on(async {
             // Base structures
             let events_queue = EventsQueue::<TestEvent>::new();
@@ -77,7 +77,7 @@ mod tests {
                 TestEvent { nick: "camacho".to_string(), msg: "Shieeeeeeeet".to_string() };
 
             // We create an event and broadcast it
-            let head_hash = model.get_head_hash();
+            let head_hash = model.get_head_hash()?;
             let event0 = Event {
                 previous_event_hash: head_hash,
                 action: test_event0,
@@ -90,7 +90,7 @@ mod tests {
             assert!(!seen_ids.push(&event0.hash()).await);
 
             // Add the event into the model
-            model.add(event0.clone()).await;
+            model.add(event0.clone()).await?;
 
             // Send inventory
             let inv0 = Inv { invs: vec![InvItem { hash: event0.hash() }] };
@@ -105,6 +105,8 @@ mod tests {
             unread_msgs.push(event0);
 
             // TODO: Simulate network behaviour, etc.
-        });
+
+            Ok(())
+        })
     }
 }

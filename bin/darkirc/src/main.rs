@@ -171,7 +171,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         loaded_model.load_tree(&datastore_path)?;
 
         if loaded_model
-            .get_event(&loaded_model.get_head_hash())
+            .get_event(&loaded_model.get_head_hash()?)
             .is_some_and(|event| event.timestamp >= timestamp)
         {
             model.lock().await.load_tree(&datastore_path)?;

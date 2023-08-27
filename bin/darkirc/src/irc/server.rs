@@ -178,7 +178,7 @@ impl IrcServer {
                     }
 
                     let event = Event {
-                        previous_event_hash: model.lock().await.get_head_hash(),
+                        previous_event_hash: model.lock().await.get_head_hash()?,
                         action: msg.clone(),
                         timestamp: Timestamp::current_time(),
                     };

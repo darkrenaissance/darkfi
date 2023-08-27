@@ -216,7 +216,7 @@ where
                     continue
                 }
 
-                let children = model.get_offspring(leaf);
+                let children = model.get_offspring(leaf)?;
 
                 for child in children {
                     self.channel.send(&child).await?;
@@ -238,7 +238,7 @@ where
     async fn new_event(&self, event: &Event<T>) -> Result<()> {
         debug!(target: "event_graph", "ProtocolEvent::new_event()");
         let mut model = self.model.lock().await;
-        model.add(event.clone()).await;
+        model.add(event.clone()).await?;
 
         Ok(())
     }

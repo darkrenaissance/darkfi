@@ -172,7 +172,7 @@ async fn start_sync_loop(
                     let encrypted_task = encrypt_task(&tk, chacha_box, &mut OsRng)?;
                     info!(target: "tau", "Send the task: ref: {}", tk.ref_id);
                     let event = Event {
-                        previous_event_hash: model.lock().await.get_head_hash(),
+                        previous_event_hash: model.lock().await.get_head_hash().map_err(Error::from)?,
                         action: encrypted_task,
                         timestamp: Timestamp::current_time(),
                     };
