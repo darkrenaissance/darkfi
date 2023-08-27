@@ -2,10 +2,10 @@
 ## Review it carefully.
 
 ## JSON-RPC listen URL
-#rpc_listen="tcp://127.0.0.1:26660"
+#rpc_listen = "tcp://127.0.0.1:26660"
 
 ## IRC listen URL
-#irc_listen="tcp://127.0.0.1:6667"
+#irc_listen = "tcp://127.0.0.1:6667"
 
 ## TLS certificate path if IRC acceptor uses TLS (optional)
 #irc_tls_cert = "/etc/letsencrypt/ircd/fullchain.pem"
@@ -14,7 +14,7 @@
 #irc_tls_secret = "/etc/letsencrypt/ircd/privkey.pem"
 
 ## Sets Datastore Path
-#datastore = "~/.darkirc"
+#datastore = "~/.local/darkfi/darkirc"
 
 ## List of channels to autojoin for new client connections
 autojoin = [
@@ -28,7 +28,7 @@ autojoin = [
 
 ## Daemon specific password (optional, but once you configure it,
 ## it is required from the client side)
-#password="CHANGE_ME"
+#password = "CHANGE_ME"
 
 # P2P network settings
 [net]
