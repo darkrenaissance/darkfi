@@ -428,6 +428,12 @@ pub enum Error {
     ContractExecError(u64),
 
     // ====================
+    // Event Graph errors
+    // ====================
+    #[error("Event is not found in tree: {0}")]
+    EventNotFound(String),
+
+    // ====================
     // Miscellaneous errors
     // ====================
     #[error("IO error: {0}")]
