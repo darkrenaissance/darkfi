@@ -2,10 +2,10 @@
 #rpc_listen="tcp://127.0.0.1:23330"
 
 ## Sets Datastore Path
-#datastore="~/.tau"
+#datastore = "~/.local/darkfi/tau"
 
 ## Current display name
-#nickname="NICKNAME"
+#nickname = "NICKNAME"
 
 ## Workspaces
 workspaces = ["darkfi-dev:2bCqQTd8BJgeUzH7JQELZxjQuWS8aCmXZ9C6w7ktNS1v"]
@@ -16,7 +16,7 @@ workspaces = ["darkfi-dev:2bCqQTd8BJgeUzH7JQELZxjQuWS8aCmXZ9C6w7ktNS1v"]
 #inbound = ["tcp+tls://127.0.0.1:23331"]
 
 ## Connection slots
-outbound_connections=8
+outbound_connections = 8
 
 ## Addresses we want to advertise to peers
 ## These should be reachable externally
@@ -26,7 +26,7 @@ outbound_connections=8
 #peers = ["tcp+tls://127.0.0.1:23331"]
 
 ## Seed nodes to connect to
-seeds=[
+seeds = [
     "tcp+tls://lilith0.dark.fi:5362",
     "tcp+tls://lilith1.dark.fi:5362",
 ]
