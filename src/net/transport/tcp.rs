@@ -159,13 +159,12 @@ impl PtListener for (TlsAcceptor, SmolTcpListener) {
             Err(e) => return Err(e.into()),
         };
 
-        let stream = self.0.accept(stream).await;
+        let stream = match self.0.accept(stream).await {
+            Ok(v) => v,
+            Err(e) => return Err(e.into()),
+        };
 
         let url = Url::parse(&format!("tcp+tls://{}", peer_addr))?;
-
-        if let Err(e) = stream {
-            return Err(e.into())
-        }
 
         Ok((Box::new(TlsStream::Server(stream.unwrap())), url))
     }
