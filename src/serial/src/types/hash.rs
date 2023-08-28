@@ -48,7 +48,7 @@ impl Encodable for blake2b_simd::Hash {
 impl AsyncEncodable for blake2b_simd::Hash {
     async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> Result<usize> {
         // The hash can be of variable output length.
-        // We'll support 32 and 64 bytes, otherwise panic.
+        // We'll support 16, 32 and 64 bytes, otherwise panic.
         // This means we need 1 byte to tell the length.
         let len = self.as_bytes().len();
         if len != 16 && len != 32 && len != 64 {
