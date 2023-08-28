@@ -92,14 +92,15 @@ impl Acceptor {
                 }
 
                 // As per accept(2) recommendation:
-                Err(e) if e.raw_os_error().unwrap() == libc::EAGAIN => continue,
-                Err(e) if e.raw_os_error().unwrap() == libc::EWOULDBLOCK => continue,
-                Err(e) if e.raw_os_error().unwrap() == libc::ECONNABORTED => continue,
-                Err(e) if e.raw_os_error().unwrap() == libc::EPROTO => continue,
-                // TODO: Should EINTR actually break out? Check if StoppableTask does this.
-                Err(e) if e.raw_os_error().unwrap() == libc::EINTR => continue,
-
                 Err(e) => {
+                    if let Some(os_err) = e.raw_os_error() {
+                        // TODO: Should EINTR actually break out? Check if StoppableTask does this.
+                        // TODO: Investigate why libc::EWOULDBLOCK is not considered reachable
+                        match os_err {
+                            libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR => continue,
+                            _ => {/* Do nothing */}
+                        }
+                    }
                     error!(
                         target: "net::acceptor::run_accept_loop()",
                         "[P2P] Acceptor failed listening: {}", e,
