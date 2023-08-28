@@ -87,6 +87,7 @@ impl Block {
         buf[..HASH_LEN].copy_from_slice(tx.hash()?.as_bytes());
         let leaf = pallas::Base::from_uniform_bytes(&buf);
         self.header.txtree.append(leaf.into());
+        self.transactions.push(tx.clone());
         Ok(())
     }
 }
