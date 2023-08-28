@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 use log::error;
-use smol::{lock::Mutex, Executor};
+use smol::Executor;
 use url::Url;
 
 use super::{
@@ -39,16 +39,16 @@ pub type AcceptorPtr = Arc<Acceptor>;
 pub struct Acceptor {
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
     task: StoppableTaskPtr,
-    pub session: Mutex<Option<SessionWeakPtr>>,
+    session: SessionWeakPtr,
 }
 
 impl Acceptor {
     /// Create new Acceptor object.
-    pub fn new() -> AcceptorPtr {
+    pub fn new(session: SessionWeakPtr) -> AcceptorPtr {
         Arc::new(Self {
             channel_subscriber: Subscriber::new(),
             task: StoppableTask::new(),
-            session: Mutex::new(None),
+            session,
         })
     }
 
@@ -86,7 +86,7 @@ impl Acceptor {
         loop {
             match listener.next().await {
                 Ok((stream, url)) => {
-                    let session = self.session.lock().await.clone().unwrap();
+                    let session = self.session.clone();
                     let channel = Channel::new(stream, url, session).await;
                     self.channel_subscriber.notify(Ok(channel)).await;
                 }

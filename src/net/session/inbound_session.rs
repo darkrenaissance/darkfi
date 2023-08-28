@@ -117,9 +117,8 @@ impl InboundSession {
     ) -> Result<()> {
         info!(target: "net::inbound_session", "[P2P] Starting Inbound session #{} on {}", index, accept_addr);
         // Generate a new acceptor for this inbound session
-        let acceptor = Acceptor::new();
         let parent = Arc::downgrade(&self);
-        *acceptor.session.lock().await = Some(parent);
+        let acceptor = Acceptor::new(parent);
 
         // Start listener
         let result = acceptor.clone().start(accept_addr, ex).await;
