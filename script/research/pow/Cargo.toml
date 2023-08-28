@@ -12,3 +12,4 @@ darkfi-sdk = {path = "../../../src/sdk", features = ["async"]}
 darkfi = {path = "../../../", features = ["util"]}
 
 blake2b_simd = "1.0.1"
+rand = "0.8.5"
