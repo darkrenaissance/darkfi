@@ -11,5 +11,9 @@ darkfi-serial = {path = "../../../src/serial"}
 darkfi-sdk = {path = "../../../src/sdk", features = ["async"]}
 darkfi = {path = "../../../", features = ["util"]}
 
-blake2b_simd = "1.0.1"
 rand = "0.8.5"
+blake2b_simd = "1.0.1"
+num-bigint = "0.4.4"
+
+[patch.crates-io]
+blake2b_simd = {git = "https://github.com/parazyd/blake2_simd", branch = "impl-common"}
