@@ -19,16 +19,16 @@
 use std::sync::Arc;
 
 use log::error;
-use smol::{lock::Mutex, Executor};
+use smol::Executor;
 use url::Url;
 
 use super::{
     channel::{Channel, ChannelPtr},
-    session::SessionWeakPtr,
+    session::SessionWeakPtr2,
     transport::{Listener, PtListener},
 };
 use crate::{
-    system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
+    system::{LazyWeak, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
     Error, Result,
 };
 
@@ -39,7 +39,7 @@ pub type AcceptorPtr = Arc<Acceptor>;
 pub struct Acceptor {
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
     task: StoppableTaskPtr,
-    pub session: Mutex<Option<SessionWeakPtr>>,
+    pub(in crate::net) session: SessionWeakPtr2,
 }
 
 impl Acceptor {
@@ -48,7 +48,7 @@ impl Acceptor {
         Arc::new(Self {
             channel_subscriber: Subscriber::new(),
             task: StoppableTask::new(),
-            session: Mutex::new(None),
+            session: LazyWeak::new(),
         })
     }
 
@@ -86,7 +86,8 @@ impl Acceptor {
         loop {
             match listener.next().await {
                 Ok((stream, url)) => {
-                    let session = self.session.lock().await.clone().unwrap();
+                    let session = self.session.upgrade();
+                    let session = Arc::downgrade(&session);
                     let channel = Channel::new(stream, url, session).await;
                     self.channel_subscriber.notify(Ok(channel)).await;
                 }
