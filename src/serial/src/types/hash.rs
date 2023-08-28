@@ -21,20 +21,52 @@ use std::io::{Read, Result, Write};
 #[cfg(feature = "async")]
 use crate::{
     async_lib::{AsyncReadExt, AsyncWriteExt},
-    AsyncDecodable, AsyncEncodable,
+    async_trait, AsyncDecodable, AsyncEncodable, AsyncRead, AsyncWrite,
 };
-#[cfg(feature = "async")]
-use async_trait::async_trait;
-#[cfg(feature = "async")]
-use futures_lite::{AsyncRead, AsyncWrite};
 
 use crate::{Decodable, Encodable, ReadExt, WriteExt};
+
+#[cfg(feature = "blake2b_simd")]
+impl Encodable for blake2b_simd::Hash {
+    fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
+        s.write_slice(self.as_bytes())?;
+        Ok(blake2b_simd::OUTBYTES)
+    }
+}
+
+#[cfg(all(feature = "blake2b_simd", feature = "async"))]
+#[async_trait]
+impl AsyncEncodable for blake2b_simd::Hash {
+    async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> Result<usize> {
+        s.write_slice_async(self.as_bytes()).await?;
+        Ok(blake2b_simd::OUTBYTES)
+    }
+}
+
+#[cfg(feature = "blake2b_simd")]
+impl Decodable for blake2b_simd::Hash {
+    fn decode<D: Read>(mut d: D) -> Result<Self> {
+        let mut bytes = [0u8; blake2b_simd::OUTBYTES];
+        d.read_slice(&mut bytes)?;
+        Ok(bytes.into())
+    }
+}
+
+#[cfg(all(feature = "blake2b_simd", feature = "async"))]
+#[async_trait]
+impl AsyncDecodable for blake2b_simd::Hash {
+    async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> Result<Self> {
+        let mut bytes = [0u8; blake2b_simd::OUTBYTES];
+        d.read_slice_async(&mut bytes).await?;
+        Ok(bytes.into())
+    }
+}
 
 #[cfg(feature = "blake3")]
 impl Encodable for blake3::Hash {
     fn encode<S: Write>(&self, mut s: S) -> Result<usize> {
         s.write_slice(self.as_bytes())?;
-        Ok(32)
+        Ok(blake3::OUT_LEN)
     }
 }
 
@@ -50,7 +82,7 @@ impl AsyncEncodable for blake3::Hash {
 #[cfg(feature = "blake3")]
 impl Decodable for blake3::Hash {
     fn decode<D: Read>(mut d: D) -> Result<Self> {
-        let mut bytes = [0u8; 32];
+        let mut bytes = [0u8; blake3::OUT_LEN];
         d.read_slice(&mut bytes)?;
         Ok(bytes.into())
     }
