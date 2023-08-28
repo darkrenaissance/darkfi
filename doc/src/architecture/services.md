@@ -14,9 +14,7 @@ pub struct Service {
 
 impl Service {
     pub fn new(/* ... */, executor: ExecutorPtr) -> Arc<Self> {
-        Arc::new(Self {
-            // ...
-        })
+        // ...
     }
 
     pub async fn start(self: Arc<Self>) {
@@ -30,46 +28,6 @@ impl Service {
 
 Both `start()` and `stop()` should return immediately without blocking the caller.
 Any long running tasks they need to perform should be done using `StoppableTask` (see below).
-
-Of course you are free to vary this around within reason. For example, `P2p` looks like this:
-
-```rust
-pub struct P2p {
-    executor: ExecutorPtr,
-    session_outbound: Mutex<Option<Arc<OutboundSession>>>,
-    // ...
-}
-
-impl P2p {
-    pub async fn new(settings: Settings, executor: ExecutorPtr) -> P2pPtr {
-        let self_ = Arc::new(Self {
-            executor,
-            session_outbound: Mutex::new(None),
-            // ...
-        });
-
-        let parent = Arc::downgrade(&self_);
-        *self_.session_outbound.lock().await = Some(OutboundSession::new(parent));
-
-        self_
-    }
-
-    pub async fn start(self: Arc<Self>) -> Result<()> {
-        // ...
-        self.session_outbound().await.start().await;
-        Ok(())
-    }
-
-    pub async fn stop(&self) {
-        self.session_outbound().await.stop().await;
-        // ...
-    }
-}
-```
-
-When services depend on other services, pass them into the `new()` function as an
-`Arc<Foo>`. If the dependency also requires a reference to the object (such as when registering
-children with parents).
 
 ## `StoppableTask`
 
@@ -120,6 +78,16 @@ impl ManualSession {
 }
 ```
 
+The method in `start()` is a future that returns `Result<()>`. If you do not want
+to return a result (for example with long running processes), then simply use the future:
+
+```rust
+    async {
+        foo().await;
+        unreachable!()
+    }
+```
+
 ## Communicating Between Services
 
 Another tool in our toolbox is the `subscribe()/notify()` paradigm.
@@ -143,5 +111,59 @@ Then the API user can simply do:
 ```
 let stop_sub = channel.subscribe_stop().await?;
 let err = stop_sub.receive().await;
+stop_sub.unsubscribe().await;
+```
+
+## Parent-Child Relationships
+
+In the async context we are forced to use `Arc<Self>`, but often times we want a parent-child
+relationship where if both parties contain an Arc reference to the other it creates a
+circular loop. For this case, there is a handy helper called `LazyWeak`.
+
+```rust
+pub struct Parent {
+    child: Arc<Child>,
+    // ...
+}
+
+impl Parent {
+    pub async fn new(/* ... */) -> Arc<Self> {
+        let self_ = Arc::new(Self {
+            child: Child::new(),
+            // ...
+        });
+
+        self_.child.p2p.init(self_.clone());
+        // ...
+        self_
+    }
+
+    // ...
+}
+
+
+pub struct Child {
+    pub parent: LazyWeak<Parent>,
+    // ...
+}
+
+impl ManualSession {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            parent: LazyWeak::new(),
+            // ...
+        })
+    }
+
+    // ...
+}
+```
+
+Otherwise if the relationship is just one way, use `Arc<Foo>`. For example if doing dependency
+injection where component B dependent on component A, then we could do:
+
+```rust
+let comp_a = Foo::new();
+let comp_b = Bar::new(comp_a);
 ```
 
