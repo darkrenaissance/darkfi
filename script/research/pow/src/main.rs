@@ -28,13 +28,14 @@ use randomx::{RandomXCache, RandomXDataset, RandomXFlags, RandomXVM};
 
 const GENESIS: &[u8] = b"genesis";
 const DIFFICULTY: usize = 1;
+const HASH_LEN: usize = 32;
 
 #[derive(SerialEncodable, SerialDecodable)]
 struct Transaction(Vec<u8>);
 
 impl Transaction {
-    fn hash(&self) -> Result<blake3::Hash> {
-        let mut hasher = blake3::Hasher::new();
+    fn hash(&self) -> Result<blake2b_simd::Hash> {
+        let mut hasher = blake2b_simd::Params::new().hash_length(HASH_LEN).to_state();
         self.encode(&mut hasher)?;
         Ok(hasher.finalize())
     }
@@ -43,7 +44,7 @@ impl Transaction {
 #[derive(SerialEncodable, SerialDecodable)]
 struct BlockHeader {
     nonce: u32,
-    previous_hash: blake3::Hash,
+    previous_hash: blake2b_simd::Hash,
     timestamp: Timestamp,
     txtree: MerkleTree,
 }
@@ -55,9 +56,9 @@ struct Block {
 }
 
 impl Block {
-    fn hash(&self) -> Result<blake3::Hash> {
+    fn hash(&self) -> Result<blake2b_simd::Hash> {
         let mut len = 0;
-        let mut hasher = blake3::Hasher::new();
+        let mut hasher = blake2b_simd::Params::new().hash_length(HASH_LEN).to_state();
 
         len += self.header.encode(&mut hasher)?;
         len += self.header.txtree.root(0).unwrap().encode(&mut hasher)?;
@@ -68,19 +69,9 @@ impl Block {
         Ok(hasher.finalize())
     }
 
-    fn pow_input(&self) -> Result<[u8; blake3::OUT_LEN]> {
-        let mut hasher = blake3::Hasher::new();
-
-        let _ = self.header.encode(&mut hasher)?;
-        let _ = self.header.txtree.root(0).unwrap().encode(&mut hasher)?;
-        let _ = self.transactions.len().encode(&mut hasher)?;
-
-        Ok(hasher.finalize().into())
-    }
-
     fn insert_tx(&mut self, tx: &Transaction) -> Result<()> {
         let mut buf = [0u8; 64];
-        buf[..blake3::OUT_LEN].copy_from_slice(tx.hash()?.as_bytes());
+        buf[..HASH_LEN].copy_from_slice(tx.hash()?.as_bytes());
         let leaf = pallas::Base::from_uniform_bytes(&buf);
         self.header.txtree.append(leaf.into());
         Ok(())
@@ -89,7 +80,9 @@ impl Block {
 
 fn main() -> Result<()> {
     // Construct the genesis block
-    let genesis_hash = blake3::hash(GENESIS);
+    let genesis_hash =
+        blake2b_simd::Params::new().hash_length(HASH_LEN).to_state().update(GENESIS).finalize();
+
     let mut genesis_block = Block {
         header: BlockHeader {
             nonce: 0,
@@ -104,13 +97,13 @@ fn main() -> Result<()> {
     genesis_block.insert_tx(&genesis_tx)?;
 
     // Get initial PoW input
-    let pow_input = genesis_block.pow_input()?;
+    let pow_input = genesis_block.hash()?;
 
     // This is single-threaded mining, but check darkrenaissance/RandomX/examples/
     // for multi-threaded ops.
     let miner_setup = Instant::now();
     let flags = RandomXFlags::default() | RandomXFlags::FULLMEM;
-    let dataset = Arc::new(RandomXDataset::new(flags, &pow_input, 1).unwrap());
+    let dataset = Arc::new(RandomXDataset::new(flags, pow_input.as_bytes(), 1).unwrap());
     let vm = RandomXVM::new_fast(flags, &dataset).unwrap();
 
     // The miner creates a block
@@ -151,7 +144,7 @@ fn main() -> Result<()> {
     // Verify
     let verifier_setup = Instant::now();
     let flags = RandomXFlags::default();
-    let cache = RandomXCache::new(flags, &pow_input).unwrap();
+    let cache = RandomXCache::new(flags, pow_input.as_bytes()).unwrap();
     let vm = RandomXVM::new(flags, &cache).unwrap();
     println!("Verifier setup time: {:?}", verifier_setup.elapsed());
 

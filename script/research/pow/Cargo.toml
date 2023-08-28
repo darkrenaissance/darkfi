@@ -11,4 +11,4 @@ darkfi-serial = {path = "../../../src/serial"}
 darkfi-sdk = {path = "../../../src/sdk", features = ["async"]}
 darkfi = {path = "../../../", features = ["util"]}
 
-blake3 = "1.4.1"
+blake2b_simd = "1.0.1"
