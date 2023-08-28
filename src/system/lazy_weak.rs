@@ -71,9 +71,9 @@ use std::sync::{Arc, OnceLock, Weak};
 ///     }
 /// }
 /// ```
-pub struct LazyWeak<Parent: ?Sized>(OnceLock<Weak<Parent>>);
+pub struct LazyWeak<Parent>(OnceLock<Weak<Parent>>);
 
-impl<Parent: ?Sized> LazyWeak<Parent> {
+impl<Parent> LazyWeak<Parent> {
     /// Create an empty `LazyWeak`, which must immediately be followed by `weak.init()`.
     pub fn new() -> Self {
         Self(OnceLock::new())
