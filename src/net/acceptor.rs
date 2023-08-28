@@ -97,8 +97,10 @@ impl Acceptor {
                         // TODO: Should EINTR actually break out? Check if StoppableTask does this.
                         // TODO: Investigate why libc::EWOULDBLOCK is not considered reachable
                         match os_err {
-                            libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR => continue,
-                            _ => {/* Do nothing */}
+                            libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR => {
+                                continue
+                            }
+                            _ => { /* Do nothing */ }
                         }
                     }
                     error!(
