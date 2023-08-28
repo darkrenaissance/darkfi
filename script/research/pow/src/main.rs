@@ -160,8 +160,8 @@ fn main() -> Result<()> {
 
                     let out_hash = vm.hash(block.hash().unwrap().as_bytes());
                     let mut success = true;
-                    for idx in out_hash.iter().take(DIFFICULTY) {
-                        if *idx != 0x00 {
+                    for idx in 0..DIFFICULTY {
+                        if out_hash[idx] != 0x00 {
                             success = false;
                         }
                     }
@@ -174,6 +174,7 @@ fn main() -> Result<()> {
                             i, t, block.header.nonce
                         );
                         println!("[{}] [MINER] Block hash {}", i, block.hash().unwrap().to_hex(),);
+                        println!("[{}] [MINER] RandomX hash bytes: {:?}", i, out_hash);
                         break
                     }
 
@@ -202,8 +203,8 @@ fn main() -> Result<()> {
 
         let verification_time = Instant::now();
         let out_hash = vm.hash(miner_block.hash()?.as_bytes());
-        for idx in out_hash.iter().take(DIFFICULTY) {
-            assert!(*idx == 0x00);
+        for idx in 0..DIFFICULTY {
+            assert!(out_hash[idx] == 0x00);
         }
         println!("[{}] [VERIFIER] Verification time: {:?}", i, verification_time.elapsed());
 
