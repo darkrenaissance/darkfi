@@ -42,7 +42,7 @@ use randomx::{RandomXCache, RandomXDataset, RandomXFlags, RandomXVM};
 mod tests;
 
 // Number of threads to use for hashing
-const NUM_THREADS: u32 = 4;
+const NUM_THREADS: usize = 4;
 /// Constant genesis block string used as the previous block hash
 const GENESIS: &[u8] = b"genesis";
 /// The output length of the BLAKE2b hash in bytes
@@ -166,13 +166,13 @@ fn main() -> Result<()> {
     let genesis_tx = Transaction(vec![1, 3, 3, 7]);
     genesis_block.insert_tx(&genesis_tx)?;
 
-    let mut blockchain = vec![genesis_block.clone()];
-    let mut cummulative_difficulties = vec![BigUint::one()];
+    let mut blockchain: Vec<Block> = vec![];
+    let mut cummulative_difficulties: Vec<BigUint> = vec![];
 
-    let mut cummulative_difficulty = BigUint::one();
+    let mut cummulative_difficulty = BigUint::zero();
 
     // Melt the CPU
-    let mut n = 1;
+    let mut n = 0;
     let mut cur_block = genesis_block;
     loop {
         // Calculate the next difficulty
@@ -207,7 +207,8 @@ fn main() -> Result<()> {
         let miner_setup = Instant::now();
         let flags = RandomXFlags::default() | RandomXFlags::FULLMEM;
         println!("[{}] [MINER] Initializing RandomX dataset...", n);
-        let dataset = Arc::new(RandomXDataset::new(flags, pow_input.as_bytes(), 1).unwrap());
+        let dataset =
+            Arc::new(RandomXDataset::new(flags, pow_input.as_bytes(), NUM_THREADS).unwrap());
 
         // The miner creates a block
         let mut miner_block = Block {
@@ -238,7 +239,7 @@ fn main() -> Result<()> {
             let dataset = dataset.clone();
             handles.push(thread::spawn(move || {
                 println!("[{}] [MINER] Initializing RandomX VM #{}...", n, t);
-                block.header.nonce = t;
+                block.header.nonce = t as u32;
                 let vm = RandomXVM::new_fast(flags, &dataset).unwrap();
                 loop {
                     if found_block.load(Ordering::SeqCst) {
@@ -262,7 +263,7 @@ fn main() -> Result<()> {
 
                     // This means thread 0 will use nonces, 0, 4, 8, ...
                     // and thread 1 will use nonces, 1, 5, 9, ...
-                    block.header.nonce += NUM_THREADS;
+                    block.header.nonce += NUM_THREADS as u32;
                 }
             }))
         }
