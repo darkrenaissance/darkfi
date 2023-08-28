@@ -140,32 +140,32 @@ impl TcpListener {
 
 #[async_trait]
 impl PtListener for SmolTcpListener {
-    async fn next(&self) -> Result<(Box<dyn PtStream>, Url)> {
+    async fn next(&self) -> std::io::Result<(Box<dyn PtStream>, Url)> {
         let (stream, peer_addr) = match self.accept().await {
             Ok((s, a)) => (s, a),
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e),
         };
 
-        let url = Url::parse(&format!("tcp://{}", peer_addr))?;
+        let url = Url::parse(&format!("tcp://{}", peer_addr)).unwrap();
         Ok((Box::new(stream), url))
     }
 }
 
 #[async_trait]
 impl PtListener for (TlsAcceptor, SmolTcpListener) {
-    async fn next(&self) -> Result<(Box<dyn PtStream>, Url)> {
+    async fn next(&self) -> std::io::Result<(Box<dyn PtStream>, Url)> {
         let (stream, peer_addr) = match self.1.accept().await {
             Ok((s, a)) => (s, a),
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e),
         };
 
         let stream = match self.0.accept(stream).await {
             Ok(v) => v,
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e),
         };
 
-        let url = Url::parse(&format!("tcp+tls://{}", peer_addr))?;
+        let url = Url::parse(&format!("tcp+tls://{}", peer_addr)).unwrap();
 
-        Ok((Box::new(TlsStream::Server(stream.unwrap())), url))
+        Ok((Box::new(TlsStream::Server(stream)), url))
     }
 }

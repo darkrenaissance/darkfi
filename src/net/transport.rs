@@ -351,5 +351,5 @@ impl PtStream for smol::net::unix::UnixStream {}
 /// Wrapper trait for async listeners
 #[async_trait]
 pub trait PtListener: Send + Sync + Unpin {
-    async fn next(&self) -> Result<(Box<dyn PtStream>, Url)>;
+    async fn next(&self) -> std::io::Result<(Box<dyn PtStream>, Url)>;
 }

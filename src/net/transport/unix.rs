@@ -71,14 +71,15 @@ impl UnixListener {
 
 #[async_trait]
 impl PtListener for SmolUnixListener {
-    async fn next(&self) -> Result<(Box<dyn PtStream>, Url)> {
+    async fn next(&self) -> std::io::Result<(Box<dyn PtStream>, Url)> {
         let (stream, _peer_addr) = match self.accept().await {
             Ok((s, a)) => (s, a),
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e),
         };
 
         let addr = self.local_addr().unwrap();
-        let url = Url::parse(&format!("unix://{}", addr.as_pathname().unwrap().to_str().unwrap()))?;
+        let addr = addr.as_pathname().unwrap().to_str().unwrap();
+        let url = Url::parse(&format!("unix://{}", addr)).unwrap();
 
         Ok((Box::new(stream), url))
     }

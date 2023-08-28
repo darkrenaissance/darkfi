@@ -86,16 +86,25 @@ impl Acceptor {
         loop {
             match listener.next().await {
                 Ok((stream, url)) => {
-                    let channel =
-                        Channel::new(stream, url, self.session.lock().await.clone().unwrap()).await;
+                    let session = self.session.lock().await.clone().unwrap();
+                    let channel = Channel::new(stream, url, session).await;
                     self.channel_subscriber.notify(Ok(channel)).await;
                 }
+
+                // As per accept(2) recommendation:
+                Err(e) if e.raw_os_error().unwrap() == libc::EAGAIN => continue,
+                Err(e) if e.raw_os_error().unwrap() == libc::EWOULDBLOCK => continue,
+                Err(e) if e.raw_os_error().unwrap() == libc::ECONNABORTED => continue,
+                Err(e) if e.raw_os_error().unwrap() == libc::EPROTO => continue,
+                // TODO: Should EINTR actually break out? Check if StoppableTask does this.
+                Err(e) if e.raw_os_error().unwrap() == libc::EINTR => continue,
 
                 Err(e) => {
                     error!(
                         target: "net::acceptor::run_accept_loop()",
                         "[P2P] Acceptor failed listening: {}", e,
                     );
+                    return Err(e.into())
                 }
             }
         }

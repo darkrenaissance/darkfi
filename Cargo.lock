@@ -1599,6 +1599,7 @@ name = "darkfi-serial"
 version = "0.4.1"
 dependencies = [
  "async-trait",
+ "blake2b_simd",
  "blake3",
  "bridgetree",
  "darkfi-derive",
