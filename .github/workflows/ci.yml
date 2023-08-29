@@ -6,7 +6,6 @@ jobs:
   test-units:
     strategy:
       matrix:
-        #os: [ubuntu-latest, macos-latest]
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
 
@@ -29,11 +28,6 @@ jobs:
           sh contrib/dependency_setup.sh
         if: matrix.os == 'ubuntu-latest'
 
-      - name: Install dependencies (macOS)
-        run: |
-          sh contrib/dependency_setup.sh
-        if: matrix.os == 'macos-latest'
-
       - name: Run test units
         run: |
           make test
@@ -47,7 +41,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
 
     steps:
       - uses: actions/checkout@v3
@@ -67,11 +61,6 @@ jobs:
         run: |
           sh contrib/dependency_setup.sh
         if: matrix.os == 'ubuntu-latest'
-
-      - name: Install dependencies (macOS)
-        run: |
-          sh contrib/dependency_setup.sh
-        if: matrix.os == 'macos-latest'
 
       - name: Run feature powerset builds
         run: |
