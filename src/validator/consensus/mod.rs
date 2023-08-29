@@ -163,7 +163,7 @@ impl Consensus {
 
         // TODO: sign more stuff?
         // Sign block header using provided secret key
-        let signature = secret_key.sign(&mut OsRng, &header.headerhash().as_bytes()[..]);
+        let signature = secret_key.sign(&mut OsRng, &header.headerhash()?.as_bytes()[..]);
 
         // Generate block producer info
         let block_producer = BlockProducer::new(signature, proposal_tx, slot.last_eta);

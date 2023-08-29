@@ -17,8 +17,11 @@
  */
 use std::{io, io::Cursor};
 
+#[cfg(feature = "async-serial")]
+use darkfi_serial::async_trait;
+
 use darkfi_sdk::pasta::{pallas, vesta};
-use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::{
     helpers::SerdeFormat,
     plonk,

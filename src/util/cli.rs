@@ -19,18 +19,17 @@
 use std::{
     env, fs,
     io::Write,
-    marker::PhantomData,
-    path::{Path, PathBuf},
+    path::Path,
     str,
     sync::{Arc, Mutex},
     time::Instant,
 };
 
-use serde::{de::DeserializeOwned, Serialize};
 use simplelog::ConfigBuilder;
 
-use crate::{Error, Result};
+use crate::Result;
 
+/*
 #[derive(Clone, Default)]
 pub struct Config<T> {
     config: PhantomData<T>,
@@ -55,6 +54,7 @@ impl<T: Serialize + DeserializeOwned> Config<T> {
         }
     }
 }
+*/
 
 pub fn spawn_config(path: &Path, contents: &[u8]) -> Result<()> {
     if !path.exists() {

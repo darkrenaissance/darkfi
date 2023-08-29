@@ -251,7 +251,7 @@ impl TlsUpgrade {
     }
 
     // FIXME: Try to find a transparent way for this instead of implementing separately for all
-    #[cfg(feature = "p2p-transport-tcp")]
+    #[cfg(feature = "p2p-tcp")]
     pub async fn upgrade_listener_tcp_tls(
         self,
         listener: smol::net::TcpListener,

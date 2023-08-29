@@ -27,50 +27,50 @@ use crate::{Error, Result};
 /// TLS Upgrade Mechanism
 pub(crate) mod tls;
 
-#[cfg(feature = "p2p-transport-tcp")]
+#[cfg(feature = "p2p-tcp")]
 /// TCP Transport
 pub(crate) mod tcp;
 
-#[cfg(feature = "p2p-transport-tor")]
+#[cfg(feature = "p2p-tor")]
 /// Tor transport
 pub(crate) mod tor;
 
-#[cfg(feature = "p2p-transport-nym")]
+#[cfg(feature = "p2p-nym")]
 /// Nym transport
 pub(crate) mod nym;
 
-#[cfg(feature = "p2p-transport-unix")]
+#[cfg(feature = "p2p-unix")]
 /// Unix socket transport
 pub(crate) mod unix;
 
 /// Dialer variants
 #[derive(Debug, Clone)]
 pub enum DialerVariant {
-    #[cfg(feature = "p2p-transport-tcp")]
+    #[cfg(feature = "p2p-tcp")]
     /// Plain TCP
     Tcp(tcp::TcpDialer),
 
-    #[cfg(feature = "p2p-transport-tcp")]
+    #[cfg(feature = "p2p-tcp")]
     /// TCP with TLS
     TcpTls(tcp::TcpDialer),
 
-    #[cfg(feature = "p2p-transport-tor")]
+    #[cfg(feature = "p2p-tor")]
     /// Tor
     Tor(tor::TorDialer),
 
-    #[cfg(feature = "p2p-transport-tor")]
+    #[cfg(feature = "p2p-tor")]
     /// Tor with TLS
     TorTls(tor::TorDialer),
 
-    #[cfg(feature = "p2p-transport-nym")]
+    #[cfg(feature = "p2p-nym")]
     /// Nym
     Nym(nym::NymDialer),
 
-    #[cfg(feature = "p2p-transport-nym")]
+    #[cfg(feature = "p2p-nym")]
     /// Nym with TLS
     NymTls(nym::NymDialer),
 
-    #[cfg(feature = "p2p-transport-unix")]
+    #[cfg(feature = "p2p-unix")]
     /// Unix socket
     Unix(unix::UnixDialer),
 }
@@ -78,15 +78,15 @@ pub enum DialerVariant {
 /// Listener variants
 #[derive(Debug, Clone)]
 pub enum ListenerVariant {
-    #[cfg(feature = "p2p-transport-tcp")]
+    #[cfg(feature = "p2p-tcp")]
     /// Plain TCP
     Tcp(tcp::TcpListener),
 
-    #[cfg(feature = "p2p-transport-tcp")]
+    #[cfg(feature = "p2p-tcp")]
     /// TCP with TLS
     TcpTls(tcp::TcpListener),
 
-    #[cfg(feature = "p2p-transport-unix")]
+    #[cfg(feature = "p2p-unix")]
     /// Unix socket
     Unix(unix::UnixListener),
 }
@@ -123,7 +123,7 @@ impl Dialer {
     /// Instantiate a new [`Dialer`] with the given [`Url`].
     pub async fn new(endpoint: Url) -> Result<Self> {
         match endpoint.scheme().to_lowercase().as_str() {
-            #[cfg(feature = "p2p-transport-tcp")]
+            #[cfg(feature = "p2p-tcp")]
             "tcp" => {
                 // Build a TCP dialer
                 enforce_hostport!(endpoint);
@@ -132,7 +132,7 @@ impl Dialer {
                 Ok(Self { endpoint, variant })
             }
 
-            #[cfg(feature = "p2p-transport-tcp")]
+            #[cfg(feature = "p2p-tcp")]
             "tcp+tls" => {
                 // Build a TCP dialer wrapped with TLS
                 enforce_hostport!(endpoint);
@@ -141,7 +141,7 @@ impl Dialer {
                 Ok(Self { endpoint, variant })
             }
 
-            #[cfg(feature = "p2p-transport-tor")]
+            #[cfg(feature = "p2p-tor")]
             "tor" => {
                 // Build a Tor dialer
                 enforce_hostport!(endpoint);
@@ -150,7 +150,7 @@ impl Dialer {
                 Ok(Self { endpoint, variant })
             }
 
-            #[cfg(feature = "p2p-transport-tor")]
+            #[cfg(feature = "p2p-tor")]
             "tor+tls" => {
                 // Build a Tor dialer wrapped with TLS
                 enforce_hostport!(endpoint);
@@ -159,7 +159,7 @@ impl Dialer {
                 Ok(Self { endpoint, variant })
             }
 
-            #[cfg(feature = "p2p-transport-nym")]
+            #[cfg(feature = "p2p-nym")]
             "nym" => {
                 // Build a Nym dialer
                 enforce_hostport!(endpoint);
@@ -168,7 +168,7 @@ impl Dialer {
                 Ok(Self { endpoint, variant })
             }
 
-            #[cfg(feature = "p2p-transport-nym")]
+            #[cfg(feature = "p2p-nym")]
             "nym+tls" => {
                 // Build a Nym dialer wrapped with TLS
                 enforce_hostport!(endpoint);
@@ -177,7 +177,7 @@ impl Dialer {
                 Ok(Self { endpoint, variant })
             }
 
-            #[cfg(feature = "p2p-transport-unix")]
+            #[cfg(feature = "p2p-unix")]
             "unix" => {
                 enforce_abspath!(endpoint);
                 // Build a Unix socket dialer
@@ -193,7 +193,7 @@ impl Dialer {
     /// Dial an instantiated [`Dialer`]. This creates a connection and returns a stream.
     pub async fn dial(&self, timeout: Option<Duration>) -> Result<Box<dyn PtStream>> {
         match &self.variant {
-            #[cfg(feature = "p2p-transport-tcp")]
+            #[cfg(feature = "p2p-tcp")]
             DialerVariant::Tcp(dialer) => {
                 // NOTE: sockaddr here is an array, can contain both ipv4 and ipv6
                 let sockaddr = self.endpoint.socket_addrs(|| None)?;
@@ -201,7 +201,7 @@ impl Dialer {
                 Ok(Box::new(stream))
             }
 
-            #[cfg(feature = "p2p-transport-tcp")]
+            #[cfg(feature = "p2p-tcp")]
             DialerVariant::TcpTls(dialer) => {
                 let sockaddr = self.endpoint.socket_addrs(|| None)?;
                 let stream = dialer.do_dial(sockaddr[0], timeout).await?;
@@ -210,7 +210,7 @@ impl Dialer {
                 Ok(Box::new(stream))
             }
 
-            #[cfg(feature = "p2p-transport-tor")]
+            #[cfg(feature = "p2p-tor")]
             DialerVariant::Tor(dialer) => {
                 let host = self.endpoint.host_str().unwrap();
                 let port = self.endpoint.port().unwrap();
@@ -218,7 +218,7 @@ impl Dialer {
                 Ok(Box::new(stream))
             }
 
-            #[cfg(feature = "p2p-transport-tor")]
+            #[cfg(feature = "p2p-tor")]
             DialerVariant::TorTls(dialer) => {
                 let host = self.endpoint.host_str().unwrap();
                 let port = self.endpoint.port().unwrap();
@@ -228,22 +228,30 @@ impl Dialer {
                 Ok(Box::new(stream))
             }
 
-            #[cfg(feature = "p2p-transport-nym")]
+            #[cfg(feature = "p2p-nym")]
             DialerVariant::Nym(_dialer) => {
                 todo!();
             }
 
-            #[cfg(feature = "p2p-transport-nym")]
+            #[cfg(feature = "p2p-nym")]
             DialerVariant::NymTls(_dialer) => {
                 todo!();
             }
 
-            #[cfg(feature = "p2p-transport-unix")]
+            #[cfg(feature = "p2p-unix")]
             DialerVariant::Unix(dialer) => {
                 let path = self.endpoint.to_file_path()?;
                 let stream = dialer.do_dial(path).await?;
                 Ok(Box::new(stream))
             }
+
+            #[cfg(not(any(
+                feature = "p2p-tcp",
+                feature = "p2p-tor",
+                feature = "p2p-nym",
+                feature = "p2p-unix"
+            )))]
+            _ => panic!("No compiled p2p transports!"),
         }
     }
 
@@ -266,7 +274,7 @@ impl Listener {
     /// Must contain a scheme, host string, and a port.
     pub async fn new(endpoint: Url) -> Result<Self> {
         match endpoint.scheme().to_lowercase().as_str() {
-            #[cfg(feature = "p2p-transport-tcp")]
+            #[cfg(feature = "p2p-tcp")]
             "tcp" => {
                 // Build a TCP listener
                 enforce_hostport!(endpoint);
@@ -275,7 +283,7 @@ impl Listener {
                 Ok(Self { endpoint, variant })
             }
 
-            #[cfg(feature = "p2p-transport-tcp")]
+            #[cfg(feature = "p2p-tcp")]
             "tcp+tls" => {
                 // Build a TCP listener wrapped with TLS
                 enforce_hostport!(endpoint);
@@ -284,7 +292,7 @@ impl Listener {
                 Ok(Self { endpoint, variant })
             }
 
-            #[cfg(feature = "p2p-transport-unix")]
+            #[cfg(feature = "p2p-unix")]
             "unix" => {
                 enforce_abspath!(endpoint);
                 let variant = unix::UnixListener::new().await?;
@@ -300,14 +308,14 @@ impl Listener {
     /// This will open a socket and return the listener.
     pub async fn listen(&self) -> Result<Box<dyn PtListener>> {
         match &self.variant {
-            #[cfg(feature = "p2p-transport-tcp")]
+            #[cfg(feature = "p2p-tcp")]
             ListenerVariant::Tcp(listener) => {
                 let sockaddr = self.endpoint.socket_addrs(|| None)?;
                 let l = listener.do_listen(sockaddr[0]).await?;
                 Ok(Box::new(l))
             }
 
-            #[cfg(feature = "p2p-transport-tcp")]
+            #[cfg(feature = "p2p-tcp")]
             ListenerVariant::TcpTls(listener) => {
                 let sockaddr = self.endpoint.socket_addrs(|| None)?;
                 let l = listener.do_listen(sockaddr[0]).await?;
@@ -316,12 +324,15 @@ impl Listener {
                 Ok(Box::new(l))
             }
 
-            #[cfg(feature = "p2p-transport-unix")]
+            #[cfg(feature = "p2p-unix")]
             ListenerVariant::Unix(listener) => {
                 let path = self.endpoint.to_file_path()?;
                 let l = listener.do_listen(&path).await?;
                 Ok(Box::new(l))
             }
+
+            #[cfg(not(any(feature = "p2p-tcp", feature = "p2p-unix")))]
+            _ => panic!("No compiled p2p transports!"),
         }
     }
 
@@ -333,19 +344,19 @@ impl Listener {
 /// Wrapper trait for async streams
 pub trait PtStream: AsyncRead + AsyncWrite + Unpin + Send {}
 
-#[cfg(feature = "p2p-transport-tcp")]
+#[cfg(feature = "p2p-tcp")]
 impl PtStream for smol::net::TcpStream {}
 
-#[cfg(feature = "p2p-transport-tcp")]
+#[cfg(feature = "p2p-tcp")]
 impl PtStream for async_rustls::TlsStream<smol::net::TcpStream> {}
 
-#[cfg(feature = "p2p-transport-tor")]
+#[cfg(feature = "p2p-tor")]
 impl PtStream for arti_client::DataStream {}
 
-#[cfg(feature = "p2p-transport-tor")]
+#[cfg(feature = "p2p-tor")]
 impl PtStream for async_rustls::TlsStream<arti_client::DataStream> {}
 
-#[cfg(feature = "p2p-transport-unix")]
+#[cfg(feature = "p2p-unix")]
 impl PtStream for smol::net::unix::UnixStream {}
 
 /// Wrapper trait for async listeners

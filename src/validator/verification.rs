@@ -158,7 +158,7 @@ pub async fn verify_proposal_transaction(
     time_keeper: &TimeKeeper,
     tx: &Transaction,
 ) -> Result<()> {
-    let tx_hash = tx.hash();
+    let tx_hash = tx.hash()?;
     debug!(target: "validator::verification::verify_proposal_transaction", "Validating proposal transaction {}", tx_hash);
 
     // Transaction must contain a single Consensus::Proposal (0x02) call
@@ -192,7 +192,7 @@ pub async fn verify_transaction(
     tx: &Transaction,
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
 ) -> Result<()> {
-    let tx_hash = tx.hash();
+    let tx_hash = tx.hash()?;
     debug!(target: "validator::verification::verify_transaction", "Validating transaction {}", tx_hash);
 
     // Table of public inputs used for ZK proof verification

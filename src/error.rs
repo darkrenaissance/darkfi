@@ -415,7 +415,7 @@ pub enum Error {
     #[error("Contract execution failed")]
     ContractError(darkfi_sdk::error::ContractError),
 
-    #[cfg(feature = "wasm-runtime")]
+    #[cfg(feature = "blockchain")]
     #[error("contract wasm bincode not found")]
     WasmBincodeNotFound,
 

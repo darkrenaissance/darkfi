@@ -96,7 +96,6 @@ lazy_static = {version = "1.4.0", optional = true}
 url = {version = "2.4.0", features = ["serde"], optional = true}
 
 # Misc
-# TODO: Implement something simple and kill these deps
 simplelog = {version = "0.12.1", optional = true}
 
 # Crypto
@@ -113,8 +112,7 @@ wasmer-compiler-singlepass = {version = "4.1.2", optional = true}
 wasmer-middlewares = {version = "4.1.2", optional = true}
 
 # Wallet management
-rusqlite = {version = "0.29.0", features = ["bundled-sqlcipher-vendored-openssl"], optional = true}
-libsqlite3-sys = {version = "0.26.0", features = ["bundled-sqlcipher-vendored-openssl"], optional = true}
+rusqlite = {version = "0.29.0", features = ["sqlcipher"], optional = true}
 
 # Blockchain store
 sled = {version = "0.34.7", optional = true}
@@ -130,62 +128,83 @@ prettytable-rs = "0.10.0"
 
 # -----BEGIN LIBRARY FEATURES-----
 [features]
-p2p-transport-unix = []
-p2p-transport-tcp = []
-p2p-transport-tor = ["arti-client", "tor-hscrypto"]
-p2p-transport-nym = []
-
 async-serial = [
-    "darkfi-serial/async"
+    "darkfi-serial/async",
 ]
 
-async-runtime = [
-    "async-trait",
-    "futures",
-    "smol",
+async-sdk = [
+    "darkfi-sdk/async",
+    "darkfi-serial/async",
 ]
 
 blockchain = [
+    "blake3",
+    "sled",
+    "sled-overlay",
+
+    "darkfi-sdk",
+    "darkfi-serial",
+
+    "tx",
+    "util",
+    "zk",
+    "zkas",
+]
+
+validator = [
     "async-trait",
     "blake3",
     "crypto_api_chachapoly",
     "dashu",
-    #"halo2_proofs",
+    "halo2_proofs",
     "lazy_static",
-    #"rand",
-    "sled",
-    "sled-overlay",
+    "rand",
     "smol",
-    #"url",
+    "sled",
+    "url",
 
-    #"async-runtime",
     "darkfi-sdk/async",
-    "darkfi-serial/crypto",
+    "darkfi-serial",
+
+    "async-serial",
+    "blockchain",
     "net",
     "rpc",
+    "system",
     "tx",
-    #"util",
+    "util",
     "wallet",
     "wasm-runtime",
+    "zk",
+    "zkas",
 ]
 
 geode = [
     "blake3",
-
-    "async-runtime",
+    "futures",
+    "smol",
 ]
 
 event-graph = [
+    "async-trait",
     "blake3",
     "rand",
+    "smol",
     "tinyjson",
 
-    "async-runtime",
-    "darkfi-serial/async",
+    "darkfi-serial",
     "darkfi-serial/collections",
     "darkfi-serial/hash",
+
     "net",
+    "system",
+    "util",
 ]
+
+p2p-unix = []
+p2p-tcp = ["socket2"]
+p2p-tor = ["arti-client", "tor-hscrypto"]
+p2p-nym = []
 
 net = [
     "async-rustls",
@@ -197,32 +216,36 @@ net = [
     "rustls-pemfile",
     "semver",
     "smol",
-    "socket2",
+    "serde",
     "structopt",
     "structopt-toml",
     "url",
     "x509-parser",
 
     "darkfi-serial",
-    "darkfi-serial/async",
     "darkfi-serial/url",
+
     "async-serial",
     "system",
     "util",
 
-    "p2p-transport-tcp",
-    "p2p-transport-tor",
-    "p2p-transport-nym",
-    "p2p-transport-unix",
+    "p2p-tcp",
+    "p2p-tor",
+    #"p2p-nym",
+    "p2p-unix",
 ]
 
 rpc = [
+    "async-trait",
+    "futures",
     "rand",
+    "smol",
     "tinyjson",
     "url",
 
-    "async-runtime",
     "net",
+    "system",
+    "util",
 ]
 
 system = [
@@ -235,17 +258,15 @@ tx = [
     "blake3",
     "rand",
     
-    "darkfi-sdk/async",
+    "darkfi-sdk",
     "darkfi-serial",
+
     "zk",
 ]
 
 util = [
-    "rand",
-    "serde",
     "simplelog",
     "tinyjson",
-    "toml",
 
     "darkfi-serial",
 ]
@@ -253,9 +274,6 @@ util = [
 wallet = [
     "rusqlite",
     "smol",
-
-    "darkfi-serial",
-    "util",
 ]
 
 wasm-runtime = [
@@ -263,9 +281,10 @@ wasm-runtime = [
     "wasmer-compiler-singlepass",
     "wasmer-middlewares",
 
-    "blockchain",
-    "darkfi-sdk/async",
+    "darkfi-sdk",
     "darkfi-serial",
+
+    "blockchain",
     "util",
     "zk",
     "zkas",
@@ -276,8 +295,9 @@ zk = [
     "halo2_gadgets",
     "rand",
 
-    "darkfi-sdk/async",
-    "darkfi-serial/async",
+    "darkfi-sdk",
+    "darkfi-serial",
+
     "zkas",
 ]
 
@@ -285,21 +305,6 @@ zkas = [
     "darkfi-serial",
 ]
 # -----END LIBRARY FEATURES-----
-
-[[example]]
-name = "net"
-path = "example/net.rs"
-required-features = ["async-runtime", "net"]
-
-[[example]]
-name = "zk"
-path = "example/zk.rs"
-required-features = ["zk"]
-
-[[example]]
-name = "zk-inclusion-proof"
-path = "example/zk-inclusion-proof.rs"
-required-features = ["zk"]
 
 [patch.crates-io]
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}

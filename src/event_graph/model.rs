@@ -18,8 +18,10 @@
 
 use std::{cmp::Ordering, collections::HashMap, fmt::Debug, path::Path, sync::Arc};
 
+#[cfg(feature = "async-serial")]
+use darkfi_serial::async_trait;
 use darkfi_serial::{
-    async_trait, deserialize, serialize, Decodable, Encodable, SerialDecodable, SerialEncodable,
+    deserialize, serialize, Decodable, Encodable, SerialDecodable, SerialEncodable,
 };
 use log::{error, info};
 use smol::lock::Mutex;

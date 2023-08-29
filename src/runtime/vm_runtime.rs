@@ -35,16 +35,17 @@ use wasmer_middlewares::{
 };
 
 use super::{import, import::db::DbHandle, memory::MemoryManipulation};
-use crate::{blockchain::BlockchainOverlayPtr, util::time::TimeKeeper, Error, Result};
+use crate::{
+    blockchain::{contract_store::SMART_CONTRACT_ZKAS_DB_NAME, BlockchainOverlayPtr},
+    util::time::TimeKeeper,
+    Error, Result,
+};
 
 /// Name of the wasm linear memory in our guest module
 const MEMORY: &str = "memory";
 
 /// Gas limit for a contract
 const GAS_LIMIT: u64 = 400_000_000;
-
-/// The hardcoded db name for the zkas circuits database tree
-pub const SMART_CONTRACT_ZKAS_DB_NAME: &str = "_zkas";
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum ContractSection {

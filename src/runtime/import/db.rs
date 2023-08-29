@@ -30,7 +30,8 @@ use log::{debug, error, info};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::{
-    runtime::vm_runtime::{ContractSection, Env, SMART_CONTRACT_ZKAS_DB_NAME},
+    blockchain::contract_store::SMART_CONTRACT_ZKAS_DB_NAME,
+    runtime::vm_runtime::{ContractSection, Env},
     zk::{empty_witnesses, VerifyingKey, ZkCircuit},
     zkas::ZkBinary,
 };

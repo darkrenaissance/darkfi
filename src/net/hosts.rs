@@ -158,7 +158,7 @@ impl Hosts {
 
             match addr_.scheme() {
                 // Validate that the address is an actual onion.
-                #[cfg(feature = "p2p-transport-tor")]
+                #[cfg(feature = "p2p-tor")]
                 "tor" | "tor+tls" => {
                     use std::str::FromStr;
                     if tor_hscrypto::pk::HsId::from_str(host_str).is_err() {
@@ -167,10 +167,10 @@ impl Hosts {
                     debug!(target: "net::hosts::filter_addresses()", "[Tor] Valid: {}", host_str);
                 }
 
-                #[cfg(feature = "p2p-transport-nym")]
+                #[cfg(feature = "p2p-nym")]
                 "nym" | "nym+tls" => continue, // <-- Temp skip
 
-                #[cfg(feature = "p2p-transport-tcp")]
+                #[cfg(feature = "p2p-tcp")]
                 "tcp" | "tcp+tls" => {
                     debug!(target: "net::hosts::filter_addresses()", "[TCP] Valid: {}", host_str);
                 }

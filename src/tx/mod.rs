@@ -26,7 +26,11 @@ use darkfi_sdk::{
     pasta::pallas,
     tx::ContractCall,
 };
-use darkfi_serial::{async_trait, serialize, Encodable, SerialDecodable, SerialEncodable};
+
+#[cfg(feature = "async-serial")]
+use darkfi_serial::async_trait;
+
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 use log::{debug, error};
 use rand::{CryptoRng, RngCore};
 
@@ -103,10 +107,12 @@ impl Transaction {
 
     /// Verify Schnorr signatures for the entire transaction.
     pub fn verify_sigs(&self, pub_table: Vec<Vec<PublicKey>>) -> Result<()> {
-        let tx_data = self.encode_without_sigs()?;
+        // Hash the transaction without the signatures
         let mut hasher = blake3::Hasher::new();
-        hasher.update_rayon(&tx_data);
+        self.calls.encode(&mut hasher)?;
+        self.proofs.encode(&mut hasher)?;
         let data_hash = hasher.finalize();
+
         debug!("tx.verify_sigs: data_hash: {:?}", data_hash.as_bytes());
 
         assert!(pub_table.len() == self.signatures.len());
@@ -131,10 +137,12 @@ impl Transaction {
         rng: &mut (impl CryptoRng + RngCore),
         secret_keys: &[SecretKey],
     ) -> Result<Vec<Signature>> {
-        let tx_data = self.encode_without_sigs()?;
+        // Hash the transaction without the signatures
         let mut hasher = blake3::Hasher::new();
-        hasher.update_rayon(&tx_data);
+        self.calls.encode(&mut hasher)?;
+        self.proofs.encode(&mut hasher)?;
         let data_hash = hasher.finalize();
+
         debug!("tx.create_sigs: data_hash: {:?}", data_hash.as_bytes());
 
         let mut sigs = vec![];
@@ -147,18 +155,10 @@ impl Transaction {
         Ok(sigs)
     }
 
-    /// Encode the object into a byte vector for signing
-    pub fn encode_without_sigs(&self) -> Result<Vec<u8>> {
-        let mut buf = vec![];
-        self.calls.encode(&mut buf)?;
-        self.proofs.encode(&mut buf)?;
-        Ok(buf)
-    }
-
     /// Get the transaction hash
-    pub fn hash(&self) -> blake3::Hash {
+    pub fn hash(&self) -> Result<blake3::Hash> {
         let mut hasher = blake3::Hasher::new();
-        hasher.update_rayon(&serialize(self));
-        hasher.finalize()
+        self.encode(&mut hasher)?;
+        Ok(hasher.finalize())
     }
 }
