@@ -468,8 +468,7 @@ impl<T: Decodable> Decodable for Vec<T> {
     fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
         let len = VarInt::decode(&mut d)?.0;
         let mut ret = Vec::new();
-        ret.try_reserve(len as usize)
-            .map_err(|_| std::io::ErrorKind::InvalidData)?;
+        ret.try_reserve(len as usize).map_err(|_| std::io::ErrorKind::InvalidData)?;
         for _ in 0..len {
             ret.push(Decodable::decode(&mut d)?);
         }
@@ -494,8 +493,7 @@ impl<T: Decodable> Decodable for VecDeque<T> {
     fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
         let len = VarInt::decode(&mut d)?.0;
         let mut ret = VecDeque::new();
-        ret.try_reserve(len as usize)
-            .map_err(|_| std::io::ErrorKind::InvalidData)?;
+        ret.try_reserve(len as usize).map_err(|_| std::io::ErrorKind::InvalidData)?;
         for _ in 0..len {
             ret.push_back(Decodable::decode(&mut d)?);
         }
