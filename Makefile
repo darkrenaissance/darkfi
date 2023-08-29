@@ -77,19 +77,19 @@ fmt:
 	$(CARGO) fmt
 
 check: $(PROOFS_BIN) contracts
-	$(CARGO) hack check --release --feature-powerset --all
+	$(CARGO) hack check --release --feature-powerset --workspace
 
 clippy: $(PROOFS_BIN) contracts
-	$(CARGO) clippy --release --all-features --all --tests
+	$(CARGO) clippy --release --all-features --workspace --tests
 
 fix: $(PROOFS_BIN) contracts
-	$(CARGO) clippy --release --all-features --fix --allow-dirty --all
+	$(CARGO) clippy --release --all-features --fix --allow-dirty --workspace
 
 rustdoc: $(PROOFS_BIN) contracts
 	$(CARGO) doc --release --all-features --workspace --document-private-items --no-deps
 
 test: $(PROOFS_BIN) contracts
-	$(CARGO) test --release --all-features --all
+	$(CARGO) test --release --all-features --workspace
 
 coverage: $(PROOFS_BIN) contracts
 	$(CARGO) llvm-cov --release --all-features --workspace --html
