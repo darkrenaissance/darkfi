@@ -12,26 +12,22 @@ CARGO = cargo +nightly
 #TARGET_PRFX = --target=
 
 # Binaries to be built
-BINS = darkfid faucetd darkirc vanityaddr tau taud
-
-# zkas dependencies
-ZKASDEPS = \
-	Cargo.toml \
-	bin/zkas/Cargo.toml \
-	$(shell find src/zkas -type f) \
-	$(shell find src/serial -type f) \
-	$(shell find bin/zkas/src -type f)
+BINS = \
+	zkas \
+	darkfid \
+	darkfid2 \
+	faucetd \
+	darkirc \
+	genev \
+	genevd \
+	lilith \
+	tau \
+	taud \
+	vanityaddr
 
 # ZK proofs to compile with zkas
 PROOFS_SRC = $(shell find proof -type f -name '*.zk') example/simple.zk
 PROOFS_BIN = $(PROOFS_SRC:=.bin)
-
-# Common dependencies which should force the binaries to be rebuilt
-BINDEPS = \
-	Cargo.toml \
-	$(shell find bin/*/src -type f) \
-	$(shell find bin -type f -name '*.toml') \
-	$(shell find src -type f) \
 
 all: $(BINS)
 
@@ -47,58 +43,88 @@ contracts: zkas
 	$(MAKE) -C src/contract/consensus
 	$(MAKE) -C src/contract/deployooor
 
-$(BINS): contracts $(PROOFS_BIN) $(BINDEPS)
-	$(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) --all-features --release --package $@
-	cp -f target/$(RUST_TARGET)/release/$@ $@
+darkfid: $(PROOFS_BIN) contracts
+	$(MAKE) -C bin/darkfid
 
-check: contracts $(PROOFS_BIN)
-	$(CARGO) hack check --release --feature-powerset --all
+darkfid2: contracts
+	$(MAKE) -C bin/darkfid2
 
-fix: contracts $(PROOFS_BIN)
-	$(CARGO) clippy --release --all-features --fix --allow-dirty --all
+faucetd: contracts
+	$(MAKE) -C bin/faucetd
+
+darkirc:
+	$(MAKE) -C bin/darkirc
+
+genev:
+	$(MAKE) -C bin/genev/genev-cli
+
+genevd:
+	$(MAKE) -C bin/genev/genevd
+
+lilith:
+	$(MAKE) -C bin/lilith
+
+tau:
+	$(MAKE) -C bin/tau/tau-cli
+
+taud:
+	$(MAKE) -C bin/tau/taud
+
+vanityaddr:
+	$(MAKE) -C bin/vanityaddr
 
 fmt:
 	$(CARGO) fmt
 
-clippy: contracts $(PROOFS_BIN)
-	$(CARGO) clippy --release --all-features --all
+check: $(PROOFS_BIN) contracts
+	$(CARGO) hack check --release --feature-powerset --all
 
-rustdoc: contracts $(PROOFS_BIN)
+clippy: $(PROOFS_BIN) contracts
+	$(CARGO) clippy --release --all-features --all --tests
+
+fix: $(PROOFS_BIN) contracts
+	$(CARGO) clippy --release --all-features --fix --allow-dirty --all
+
+rustdoc: $(PROOFS_BIN) contracts
 	$(CARGO) doc --release --all-features --workspace --document-private-items --no-deps
 
 test: $(PROOFS_BIN) contracts
 	$(CARGO) test --release --all-features --all
 
-test-no-run: $(PROOFS_BIN) contracts
-	$(CARGO) test --release --all-features --all --no-run
-
-coverage: contracts $(PROOFS_BIN)
+coverage: $(PROOFS_BIN) contracts
 	$(CARGO) llvm-cov --release --all-features --workspace --html
 
-cleanbin:
-	rm -f $(BINS)
+clean:
+	$(MAKE) -C src/contract/money clean
+	$(MAKE) -C src/contract/dao clean
+	$(MAKE) -C src/contract/consensus clean
+	$(MAKE) -C src/contract/deployooor clean
+	$(MAKE) -C bin/zkas clean
+	$(MAKE) -C bin/darkfid clean
+	$(MAKE) -C bin/darkfid2 clean
+	$(MAKE) -C bin/faucetd clean
+	$(MAKE) -C bin/darkirc clean
+	$(MAKE) -C bin/genev/genev-cli clean
+	$(MAKE) -C bin/genev/genevd clean
+	$(MAKE) -C bin/lilith clean
+	$(MAKE) -C bin/tau/tau-cli clean
+	$(MAKE) -C bin/tau/taud clean
+	$(MAKE) -C bin/vanityaddr clean
+	rm -f $(PROOFS_BIN)
 
-clean: cleanbin
+distclean: clean
 	$(CARGO) clean
 
-install:
+install: all
 	@for i in $(BINS); \
 	do \
-		if test ! -f $$i; \
-		then \
-			echo "The '$$i' binary was not built."; \
-			echo "You should run 'make BINS=$$i' as a normal user before installing."; \
-			exit 1; \
-		fi; \
+		$(MAKE) -C $$i install \
 	done;
-	mkdir -p $(DESTDIR)$(PREFIX)/bin
-	cp -f $(BINS) $(DESTDIR)$(PREFIX)/bin
 
 uninstall:
 	for i in $(BINS); \
 	do \
-		rm -f $(DESTDIR)$(PREFIX)/bin/$$i; \
+		$(MAKE) -C $$i uninstall \
 	done;
 
-.PHONY: all check fix fmt clippy test test-no-run cleanbin clean \
-	install uninstall contracts coverage
+.PHONY: all contracts check fix fmt clippy rustdoc test coverage distclean clean install uninstall $(BINS)

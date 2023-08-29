@@ -135,6 +135,10 @@ p2p-transport-tcp = []
 p2p-transport-tor = ["arti-client", "tor-hscrypto"]
 p2p-transport-nym = []
 
+async-serial = [
+    "darkfi-serial/async"
+]
+
 async-runtime = [
     "async-trait",
     "futures",
@@ -202,6 +206,7 @@ net = [
     "darkfi-serial",
     "darkfi-serial/async",
     "darkfi-serial/url",
+    "async-serial",
     "system",
     "util",
 
@@ -242,7 +247,7 @@ util = [
     "tinyjson",
     "toml",
 
-    "darkfi-serial/async",
+    "darkfi-serial",
 ]
 
 wallet = [

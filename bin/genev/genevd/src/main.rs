@@ -41,7 +41,7 @@ mod rpc;
 use rpc::JsonRpcInterface;
 
 const CONFIG_FILE: &str = "genev_config.toml";
-const CONFIG_FILE_CONTENTS: &str = include_str!("../../genev_config.toml");
+const CONFIG_FILE_CONTENTS: &str = include_str!("../genev_config.toml");
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]

@@ -18,7 +18,10 @@
 
 use std::{fmt, time::UNIX_EPOCH};
 
-use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
+#[cfg(feature = "async-serial")]
+use darkfi_serial::async_trait;
+
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use crate::Result;
 
