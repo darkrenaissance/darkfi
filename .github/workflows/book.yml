@@ -10,7 +10,7 @@ jobs:
     compile-book:
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v2
+            - uses: actions/checkout@v3
               with:
                 persist-credentials: false
                 fetch-depth: 0
@@ -34,7 +34,7 @@ jobs:
                 target: wasm32-unknown-unknown
                 override: true
 
-            - uses: Swatinem/rust-cache@v1
+            - uses: Swatinem/rust-cache@v2
 
             - name: Install ghp-import and mdbook
               run: |

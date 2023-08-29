@@ -11,7 +11,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -22,7 +22,7 @@ jobs:
           target: wasm32-unknown-unknown
           override: true
 
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install dependencies (Linux)
         run: |
@@ -50,7 +50,7 @@ jobs:
         os: [ubuntu-latest, macos-latest]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -61,7 +61,7 @@ jobs:
           target: wasm32-unknown-unknown
           override: true
       - uses: taiki-e/install-action@cargo-hack
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install dependencies (Linux)
         run: |
@@ -82,7 +82,7 @@ jobs:
     timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
