@@ -87,10 +87,8 @@ impl Harness {
 
         // Generate validators using pregenerated vks
         let (_, vks) = vks::read_or_gen_vks_and_pks()?;
-        let mut sync_settings = Settings::default();
-        sync_settings.localnet = true;
-        let mut consensus_settings = Settings::default();
-        consensus_settings.localnet = true;
+        let mut sync_settings = Settings { localnet: true, ..Default::default() };
+        let mut consensus_settings = Settings { localnet: true, ..Default::default() };
 
         // Alice
         let alice_url = Url::parse("tcp+tls://127.0.0.1:18340")?;
@@ -175,7 +173,7 @@ impl Harness {
             let previous = PreviousSlot::new(
                 producers,
                 vec![previous_hash],
-                vec![previous.header.previous.clone()],
+                vec![previous.header.previous],
                 previous_slot.pid.error,
             );
             let (f, error, sigma1, sigma2) = slot_pid_output(&previous_slot, producers);
@@ -198,7 +196,7 @@ impl Harness {
             previous.header.epoch,
             slots.last().unwrap().id,
             timestamp,
-            previous.header.root.clone(),
+            previous.header.root,
         );
 
         // Generate block
@@ -218,7 +216,7 @@ pub async fn generate_node(
     skip_sync: bool,
 ) -> Result<Darkfid> {
     let sled_db = sled::Config::new().temporary(true).open()?;
-    vks::inject(&sled_db, &vks)?;
+    vks::inject(&sled_db, vks)?;
 
     let validator = Validator::new(&sled_db, config.clone()).await?;
 
@@ -229,7 +227,7 @@ pub async fn generate_node(
         subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
     }
 
-    let sync_p2p = spawn_sync_p2p(&sync_settings, &validator, &subscribers, ex.clone()).await;
+    let sync_p2p = spawn_sync_p2p(sync_settings, &validator, &subscribers, ex.clone()).await;
     let consensus_p2p = if let Some(settings) = consensus_settings {
         Some(spawn_consensus_p2p(settings, &validator, &subscribers, ex.clone()).await)
     } else {

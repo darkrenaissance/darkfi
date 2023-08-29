@@ -51,8 +51,8 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     th.validate_chains(3, 7).await?;
 
     // We are going to create a third node and try to sync from the previous two
-    let mut sync_settings = Settings::default();
-    sync_settings.localnet = true;
+    let mut sync_settings = Settings { localnet: true, ..Default::default() };
+
     let charlie_url = Url::parse("tcp+tls://127.0.0.1:18342")?;
     sync_settings.inbound_addrs = vec![charlie_url];
     let alice_url = th.alice.sync_p2p.settings().inbound_addrs[0].clone();
