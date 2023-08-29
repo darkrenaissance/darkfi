@@ -17,7 +17,7 @@ async-trait = "0.1.73"
 blake3 = "1.4.1"
 log = "0.4.20"
 tinyjson = "2.5.1"
-url = "2.4.0"
+url = "2.4.1"
 
 # Daemon
 easy-parallel = "3.3.0"
@@ -27,6 +27,6 @@ simplelog = "0.12.1"
 smol = "1.3.0"
 
 # Argument parsing
-serde = {version = "1.0.185", features = ["derive"]}
+serde = {version = "1.0.188", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"

@@ -22,9 +22,9 @@ simplelog = "0.12.1"
 smol = "1.3.0"
 term_grid = { git = "https://github.com/Dastan-glitch/rust-term-grid.git" }
 textwrap = "0.16.0"
-url = "2.4.0"
+url = "2.4.1"
 
 # Encoding and parsing
-clap = {version = "4.3.24", features = ["derive"]}
-serde = {version = "1.0.185", features = ["derive"]}
+clap = {version = "4.4.1", features = ["derive"]}
+serde = {version = "1.0.188", features = ["derive"]}
 tinyjson = "2.5.1"
