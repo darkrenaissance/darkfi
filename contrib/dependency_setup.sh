@@ -22,37 +22,37 @@ setup_mac() {
 }
 
 setup_apt() {
-	apt_deps="git make gcc pkg-config libasound2-dev"
+	apt_deps="git make gcc pkg-config libasound2-dev libssl-dev libsqlcipher-dev"
 	$1 install $apt_deps || return 1
 }
 
 setup_pacman() {
-	pacman_deps="git make gcc pkgconf alsa-lib"
+	pacman_deps="git make gcc pkgconf alsa-lib openssl sqlcipher"
 	$1 -Sy $pacman_deps || return 1
 }
 
 setup_xbps() {
-	xbps_deps="git make gcc pkg-config alsa-lib-devel"
+	xbps_deps="git make gcc pkg-config alsa-lib-devel openssl-devel sqlcipher-devel"
 	$1 -S $xbps_deps || return 1
 }
 
 setup_dnf() {
-	dnf_deps="git make gcc pkg-config findutils lato-fonts"
+	dnf_deps="git make gcc pkg-config alsa-lib-devel openssl-devel sqlcipher-devel"
 	$1 install -y $dnf_deps || return 1
 }
 
 setup_apk() {
-	apk_deps="git make gcc musl-dev pkgconfig alsa-lib-dev"
+	apk_deps="git make gcc musl-dev pkgconfig alsa-lib-dev openssl-dev sqlcipher-dev"
 	$1 add $apk_deps || return 1
 }
 
 setup_zypper() {
-	zypper_deps="git make gcc pkg-config findutils"
+	zypper_deps="git make gcc pkg-config alsa-devel openssl-devel sqlcipher-devel"
 	$1 install -y $zypper_deps || return 1
 }
 
 setup_emerge() {
-	emerge_deps="dev-vcs/git media-libs/alsa-lib"
+	emerge_deps="dev-vcs/git media-libs/alsa-lib dev-db/sqlcipher"
 	$1 $emerge_deps || return 1
 }
 
