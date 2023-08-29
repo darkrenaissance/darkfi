@@ -7,7 +7,7 @@ re-organized as we expand the complexity of the tests
 
 ### Motivation
 If you discover a crash while fuzzing, add it to the relevant
-subdirectory in `corpus/` and give it a meaningful name.
+subdirectory in `artifacts/` and give it a meaningful name.
 
 Files in the corpora will be used as default inputs in subsequent
 runs in the fuzzer. The fuzzer will then "mutate" or modify these
@@ -34,6 +34,6 @@ for `cargo fuzz run TARGET`
 the fuzzer. The filename's prefix will match the kind of error
 encountered: `oom` (out-of-memory), `crash`, etc.
 * Choose a `NAME` for the crash file, e.g. `corpus-crash-emptyfile`
-* `cp artifacts/TARGET/CRASH-FILE corpus/TARGET/NAME`
+* `mv artifacts/TARGET/CRASH-FILE artifacts/TARGET/NAME`
 
-Then add the new `corpus/TARGET/NAME` file to git.
+Then add the new `artifacts/TARGET/NAME` file to git.
