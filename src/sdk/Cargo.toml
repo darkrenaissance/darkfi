@@ -20,7 +20,7 @@ async = ["darkfi-serial/async"]
 thiserror = "1.0.47"
 
 # Serialization
-darkfi-serial = {version = "0.4.1", path = "../serial", features = ["derive", "crypto"]}
+darkfi-serial = {path = "../serial", features = ["crypto"]}
 
 # Encoding
 bs58 = "0.5.0"
@@ -41,6 +41,6 @@ lazy_static = "1.4.0"
 subtle = "2.5.0"
 
 [dev-dependencies]
-halo2_proofs = {version = "0.3.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
-halo2_gadgets = {version = "0.3.0", features = ["test-dev-graph", "test-dependencies"]}
+halo2_proofs = {version = "0.3.0", features = ["dev-graph", "sanity-checks"]}
+halo2_gadgets = "0.3.0"
 rand = "0.8.5"

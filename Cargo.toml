@@ -120,21 +120,21 @@ sled-overlay = {version = "0.0.8", optional = true}
 
 [dev-dependencies]
 clap = {version = "4.4.1", features = ["derive"]}
-halo2_proofs = {version = "0.3.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
-halo2_gadgets = {version = "0.3.0", features = ["test-dev-graph", "test-dependencies"]}
+halo2_proofs = {version = "0.3.0", features = ["dev-graph", "sanity-checks"]}
+halo2_gadgets = "0.3.0"
 plotters = "0.3.5"
 easy-parallel = "3.3.0"
 prettytable-rs = "0.10.0"
 
 # -----BEGIN LIBRARY FEATURES-----
 [features]
-default = []
 async-daemonize = []
 async-serial = ["darkfi-serial/async"]
 
 async-sdk = [
     "darkfi-sdk/async",
-    "darkfi-serial/async",
+
+    "async-serial",
 ]
 
 blockchain = [
@@ -142,9 +142,8 @@ blockchain = [
     "sled",
     "sled-overlay",
 
-    "darkfi-sdk",
-    "darkfi-serial",
-
+    "async-sdk",
+    "async-serial",
     "tx",
     "util",
     "zk",
@@ -163,9 +162,7 @@ validator = [
     "sled",
     "url",
 
-    "darkfi-sdk/async",
-    "darkfi-serial",
-
+    "async-sdk",
     "async-serial",
     "blockchain",
     "net",
@@ -257,10 +254,9 @@ system = [
 tx = [
     "blake3",
     "rand",
-    
-    "darkfi-sdk",
-    "darkfi-serial",
 
+    "async-sdk",
+    "async-serial",
     "zk",
 ]
 
