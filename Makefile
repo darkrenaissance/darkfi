@@ -35,9 +35,8 @@ BINDEPS = \
 
 all: $(BINS)
 
-zkas: $(ZKASDEPS)
-	$(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) --all-features --release --package $@
-	cp -f target/$(RUST_TARGET)/release/$@ $@
+zkas:
+	$(MAKE) -C bin/zkas
 
 $(PROOFS_BIN): zkas $(PROOFS_SRC)
 	./zkas $(basename $@) -o $@
