@@ -243,3 +243,16 @@ impl ZkBinary {
         Ok(opcodes)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::zkas::ZkBinary;
+
+    #[test]
+    fn panic_regression_001() {
+        // Out-of-memory panic from string deserialization.
+        // Read `doc/src/zkas/bincode.md` to understand the input.
+        let data = vec![11u8, 1, 177, 53, 1, 0, 0, 0, 0, 255, 0, 204, 200, 72, 72, 72, 72, 1];
+        let _dec = ZkBinary::decode(&data);
+    }
+}
