@@ -18,6 +18,9 @@ features = ["zkas"]
 path = "../src/serial"
 features = ["derive", "semver", "collections", "crypto", "hash"]
 
+[patch.crates-io]
+blake2b_simd = {git="https://github.com/parazyd/blake2_simd", branch="impl-common"}
+
 # Prevent this from interfering with workspaces
 [workspace]
 members = ["."]
