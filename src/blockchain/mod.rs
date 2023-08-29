@@ -24,7 +24,7 @@ use sled::Transactional;
 use darkfi_sdk::blockchain::Slot;
 use darkfi_serial::{deserialize, serialize, Decodable};
 
-use crate::{tx::Transaction, validator::consensus::next_block_reward, Error, Result};
+use crate::{tx::Transaction, Error, Result};
 
 /// Block related definitions and storage implementations
 pub mod block_store;
@@ -103,6 +103,7 @@ impl Blockchain {
         })
     }
 
+    /* TODO: FIXME: This should not be part of `Blockchain`
     /// A blockchain is considered valid, when every block is valid,
     /// based on validate_block checks.
     /// Be careful as this will try to load everything in memory.
@@ -117,6 +118,7 @@ impl Blockchain {
 
         Ok(())
     }
+    */
 
     /// Insert a given [`BlockInfo`] into the blockchain database.
     /// This functions wraps all the logic of separating the block into specific

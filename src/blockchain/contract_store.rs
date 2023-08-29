@@ -23,7 +23,6 @@ use darkfi_serial::{deserialize, serialize};
 use log::{debug, error};
 
 use crate::{
-    runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
     zk::{empty_witnesses, VerifyingKey, ZkCircuit},
     zkas::ZkBinary,
     Error, Result,
@@ -33,6 +32,9 @@ use super::SledDbOverlayPtr;
 
 const SLED_CONTRACTS_TREE: &[u8] = b"_contracts";
 const SLED_BINCODE_TREE: &[u8] = b"_wasm_bincode";
+
+/// The hardcoded db name for the zkas circuits database tree
+pub const SMART_CONTRACT_ZKAS_DB_NAME: &str = "_zkas";
 
 /// The `WasmStore` is a `sled` tree that stores the wasm bincode for deployed
 /// contracts.

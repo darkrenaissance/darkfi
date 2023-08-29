@@ -21,7 +21,10 @@ use darkfi_sdk::{
     crypto::schnorr::Signature,
     pasta::{group::ff::Field, pallas},
 };
-use darkfi_serial::{async_trait, deserialize, serialize, SerialDecodable, SerialEncodable};
+#[cfg(feature = "async-serial")]
+use darkfi_serial::async_trait;
+
+use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 
 use crate::{tx::Transaction, Error, Result};
 
@@ -188,7 +191,7 @@ impl From<BlockInfo> for Block {
         let slots = block_info.slots.iter().map(|x| x.id).collect();
         Self {
             magic: block_info.magic,
-            header: block_info.header.headerhash(),
+            header: block_info.header.headerhash().unwrap(),
             txs,
             producer: block_info.producer,
             slots,

@@ -20,7 +20,7 @@
 use darkfi_sdk::{blockchain::Slot, pasta::pallas};
 use darkfi_serial::{deserialize, serialize};
 
-use crate::{validator::consensus::pid::slot_pid_output, Error, Result};
+use crate::{Error, Result};
 
 use super::{parse_u64_key_record, SledDbOverlayPtr};
 
@@ -70,12 +70,14 @@ pub fn validate_slot(
         return error
     }
 
+    /* TODO: FIXME: blockchain should not depend on validator
     // Check PID output for this slot (6)
     if (slot.pid.f, slot.pid.error, slot.pid.sigma1, slot.pid.sigma2) !=
         slot_pid_output(previous, slot.previous.producers)
     {
         return error
     }
+    */
 
     // Check reward is the expected one (7)
     if &slot.last_eta != last_eta {

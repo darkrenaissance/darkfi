@@ -17,7 +17,10 @@
  */
 
 use darkfi_sdk::crypto::{MerkleNode, MerkleTree};
-use darkfi_serial::{async_trait, deserialize, serialize, SerialDecodable, SerialEncodable};
+
+#[cfg(feature = "async-serial")]
+use darkfi_serial::async_trait;
+use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{util::time::Timestamp, Error, Result};
 
@@ -53,8 +56,10 @@ impl Header {
     }
 
     /// Calculate the header hash
-    pub fn headerhash(&self) -> blake3::Hash {
-        blake3::hash(&serialize(self))
+    pub fn headerhash(&self) -> Result<blake3::Hash> {
+        let mut hasher = blake3::Hasher::new();
+        self.encode(&mut hasher)?;
+        Ok(hasher.finalize())
     }
 }
 
