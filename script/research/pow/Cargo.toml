@@ -9,7 +9,7 @@ edition = "2021"
 randomx = {git = "https://github.com/darkrenaissance/RandomX"}
 darkfi-serial = {path = "../../../src/serial"}
 darkfi-sdk = {path = "../../../src/sdk", features = ["async"]}
-darkfi = {path = "../../../", features = ["util"]}
+darkfi = {path = "../../../", features = ["util", "async-serial"]}
 
 rand = "0.8.5"
 blake2b_simd = "1.0.1"

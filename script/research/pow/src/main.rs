@@ -55,6 +55,10 @@ const DIFFICULTY_CUT: usize = 60;
 const DIFFICULTY_LAG: usize = 15;
 /// Target block time in seconds
 const DIFFICULTY_TARGET: usize = 60;
+/// The most recent blocks used to verify new blocks' timestamp
+const BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW: usize = 60;
+/// Time limit in the future of what blocks can be
+const BLOCK_FUTURE_TIME_LIMIT: u64 = 60 * 60 * 2;
 
 #[derive(Clone, SerialEncodable, SerialDecodable)]
 struct Transaction(Vec<u8>);
@@ -146,6 +150,57 @@ fn next_difficulty(
     let total_work = &cummulative_difficulties[cut_end - 1] - &cummulative_difficulties[cut_begin];
     assert!(total_work >= BigUint::zero());
     (total_work * target_seconds + time_span - BigUint::one()) / time_span
+}
+
+fn get_mid(a: u64, b: u64) -> u64 {
+    (a / 2) + (b / 2) + ((a - 2 * (a / 2)) + (b - 2 * (b / 2))) / 2
+}
+
+fn median(v: &mut Vec<u64>) -> u64 {
+    assert!(!v.is_empty());
+
+    if v.len() == 1 {
+        return v[0]
+    }
+
+    let n = v.len() / 2;
+    v.sort();
+
+    if v.len() % 2 == 0 {
+        v[n]
+    } else {
+        get_mid(v[n - 1], v[n])
+    }
+}
+
+fn check_block_timestamp_median(timestamps: &mut Vec<u64>, block: &Block) -> bool {
+    let median_ts = median(timestamps);
+
+    if block.header.timestamp.0 < median_ts {
+        return false
+    }
+
+    true
+}
+
+fn check_block_timestamp(block: &Block, blockchain: &[Block]) -> bool {
+    if block.header.timestamp.0 > Timestamp::current_time().0 + BLOCK_FUTURE_TIME_LIMIT {
+        return false
+    }
+
+    // If not enough blocks, no proper median yet, return true
+    if blockchain.len() < BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW {
+        return true
+    }
+
+    let mut timestamps: Vec<u64> = blockchain
+        .iter()
+        .rev()
+        .take(BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW)
+        .map(|x| x.header.timestamp.0)
+        .collect();
+
+    check_block_timestamp_median(&mut timestamps, block)
 }
 
 fn main() -> Result<()> {
@@ -277,6 +332,8 @@ fn main() -> Result<()> {
         miner_block.header.nonce = found_nonce.load(Ordering::SeqCst);
 
         // Verify
+        assert!(check_block_timestamp(&miner_block, &blockchain));
+
         let verifier_setup = Instant::now();
         let flags = RandomXFlags::default();
         let cache = RandomXCache::new(flags, pow_input.as_bytes()).unwrap();
