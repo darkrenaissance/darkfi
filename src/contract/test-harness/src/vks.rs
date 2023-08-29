@@ -24,7 +24,7 @@ use std::{
 };
 
 use darkfi::{
-    runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
+    blockchain::contract_store::SMART_CONTRACT_ZKAS_DB_NAME,
     zk::{empty_witnesses, ProvingKey, VerifyingKey, ZkCircuit},
     zkas::ZkBinary,
     Result,

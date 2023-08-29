@@ -17,12 +17,11 @@ name = "genevd"
 path = "src/main.rs"
 
 [dependencies]
-darkfi = {path = "../../../", features = ["event-graph", "rpc", "bs58", "util"]}
+darkfi = {path = "../../../", features = ["async-daemonize", "event-graph", "rpc"]}
 darkfi-serial = {path = "../../../src/serial"}
 
 # Misc
 async-trait = "0.1.73"
-libsqlite3-sys = {version = "0.26.0", features = ["bundled-sqlcipher-vendored-openssl"]}
 log = "0.4.20"
 tinyjson = "2.5.1"
 url = "2.4.0"

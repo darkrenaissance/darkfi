@@ -163,7 +163,7 @@ pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
 ///     Ok(())
 /// }
 /// ```
-#[cfg(feature = "async-runtime")]
+#[cfg(feature = "async-daemonize")]
 #[macro_export]
 macro_rules! async_daemonize {
     ($realmain:ident) => {

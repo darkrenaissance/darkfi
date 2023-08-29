@@ -1672,7 +1672,6 @@ dependencies = [
  "darkfi-serial",
  "easy-parallel",
  "futures",
- "libsqlite3-sys",
  "log",
  "rand 0.8.5",
  "rustls-pemfile",
@@ -2603,7 +2602,6 @@ dependencies = [
  "darkfi",
  "darkfi-serial",
  "easy-parallel",
- "libsqlite3-sys",
  "log",
  "serde",
  "signal-hook",
@@ -2754,7 +2752,6 @@ dependencies = [
  "darkfi",
  "darkfi-serial",
  "genevd",
- "libsqlite3-sys",
  "log",
  "simplelog",
  "smol",
@@ -2770,7 +2767,6 @@ dependencies = [
  "darkfi",
  "darkfi-serial",
  "easy-parallel",
- "libsqlite3-sys",
  "log",
  "serde",
  "signal-hook",
@@ -3259,8 +3255,6 @@ version = "0.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "afc22eff61b133b115c6e8c74e818c628d6d5e7a502afea6f64dee076dd94326"
 dependencies = [
- "cc",
- "openssl-sys",
  "pkg-config",
  "vcpkg",
 ]
@@ -3273,7 +3267,6 @@ dependencies = [
  "darkfi",
  "easy-parallel",
  "futures",
- "libsqlite3-sys",
  "log",
  "semver 1.0.18",
  "serde",
@@ -3613,28 +3606,6 @@ name = "opaque-debug"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "624a8340c38c1b80fd549087862da4ba43e08858af025b236e509b6649fc13d5"
-
-[[package]]
-name = "openssl-src"
-version = "111.27.0+1.1.1v"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06e8f197c82d7511c5b014030c9b1efeda40d7d5f99d23b4ceed3524a5e63f02"
-dependencies = [
- "cc",
-]
-
-[[package]]
-name = "openssl-sys"
-version = "0.9.91"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "866b5f16f90776b9bb8dc1e1802ac6f0513de3a7a7465867bfbc563dc737faac"
-dependencies = [
- "cc",
- "libc",
- "openssl-src",
- "pkg-config",
- "vcpkg",
-]
 
 [[package]]
 name = "option-ext"
@@ -5401,7 +5372,6 @@ dependencies = [
  "colored",
  "darkfi",
  "libc",
- "libsqlite3-sys",
  "log",
  "prettytable-rs",
  "serde",
@@ -5428,7 +5398,6 @@ dependencies = [
  "futures",
  "hex",
  "libc",
- "libsqlite3-sys",
  "log",
  "rand 0.8.5",
  "serde",

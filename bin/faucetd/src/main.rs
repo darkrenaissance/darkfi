@@ -50,7 +50,9 @@ use tinyjson::JsonValue;
 use url::Url;
 
 use darkfi::{
-    async_daemonize, cli_desc,
+    async_daemonize,
+    blockchain::contract_store::SMART_CONTRACT_ZKAS_DB_NAME,
+    cli_desc,
     consensus::{
         constants::{
             MAINNET_BOOTSTRAP_TIMESTAMP, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
@@ -70,7 +72,6 @@ use darkfi::{
         },
         server::{listen_and_serve, RequestHandler},
     },
-    runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
     system::{sleep, StoppableTask},
     tx::Transaction,
     util::{parse::decode_base10, path::expand_path},

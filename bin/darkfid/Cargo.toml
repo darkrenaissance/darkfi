@@ -12,8 +12,8 @@ edition = "2021"
 async-trait = "0.1.73"
 blake3 = "1.4.1"
 bs58 = "0.5.0"
-darkfi = {path = "../../", features = ["blockchain", "wallet", "rpc", "net", "zkas"]}
-darkfi-sdk = {path = "../../src/sdk"}
+darkfi = {path = "../../", features = ["async-daemonize", "validator"]}
+darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {path = "../../src/serial"}
 log = "0.4.20"
 sled = "0.34.7"

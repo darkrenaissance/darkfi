@@ -6,9 +6,9 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
-darkfi = {path = "../../../", features = ["zk", "tx", "blockchain"]}
+darkfi = {path = "../../../", features = ["validator"]}
 darkfi-sdk = {path = "../../../src/sdk"}
-darkfi-serial = {path = "../../../src/serial", features = ["derive", "crypto"]}
+darkfi-serial = {path = "../../../src/serial", features = ["crypto"]}
 darkfi-dao-contract = {path = "../dao", features = ["client", "no-entrypoint"]}
 darkfi-money-contract = {path = "../money", features = ["client", "no-entrypoint"]}
 darkfi-consensus-contract = {path = "../consensus", features = ["client", "no-entrypoint"]}

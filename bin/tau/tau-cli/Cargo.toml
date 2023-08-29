@@ -16,7 +16,6 @@ taud = {path = "../taud"}
 # Misc
 chrono = "0.4.26"
 colored = "2.0.4"
-libsqlite3-sys = {version = "0.26.0", features = ["bundled-sqlcipher-vendored-openssl"]}
 log = "0.4.20"
 prettytable-rs = "0.10.0"
 simplelog = "0.12.1"

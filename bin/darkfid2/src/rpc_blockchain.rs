@@ -24,11 +24,11 @@ use log::{debug, error};
 use tinyjson::JsonValue;
 
 use darkfi::{
+    blockchain::contract_store::SMART_CONTRACT_ZKAS_DB_NAME,
     rpc::jsonrpc::{
         ErrorCode::{InternalError, InvalidParams, ParseError},
         JsonError, JsonResponse, JsonResult,
     },
-    runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
     util::encoding::base64,
 };
 

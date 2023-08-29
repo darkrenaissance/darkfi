@@ -158,7 +158,7 @@ impl Darkfid {
             return server_error(RpcError::TxBroadcastFail, id, None)
         }
 
-        let tx_hash = tx.hash().to_string();
+        let tx_hash = tx.hash().unwrap().to_string();
         JsonResponse::new(JsonValue::String(tx_hash), id).into()
     }
 }

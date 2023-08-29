@@ -26,13 +26,12 @@ jobs:
 
       - name: Install dependencies (Linux)
         run: |
-          sudo apt update
-          sudo apt -y install build-essential clang libclang-dev llvm-dev libudev-dev pkg-config libasound2-dev
+          sh contrib/dependency_setup.sh
         if: matrix.os == 'ubuntu-latest'
 
       - name: Install dependencies (macOS)
         run: |
-          brew install llvm
+          sh contrib/dependency_setup.sh
         if: matrix.os == 'macos-latest'
 
       - name: Run test units
@@ -66,13 +65,12 @@ jobs:
 
       - name: Install dependencies (Linux)
         run: |
-          sudo apt update
-          sudo apt -y install build-essential clang libclang-dev llvm-dev libasound2-dev
+          sh contrib/dependency_setup.sh
         if: matrix.os == 'ubuntu-latest'
 
       - name: Install dependencies (macOS)
         run: |
-          brew install llvm
+          sh contrib/dependency_setup.sh
         if: matrix.os == 'macos-latest'
 
       - name: Run feature powerset builds

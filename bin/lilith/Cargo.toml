@@ -9,12 +9,11 @@ homepage = "https://dark.fi"
 repository = "https://github.com/darkrenaissance/darkfi"
 
 [dependencies]
-darkfi = {path = "../../", features = ["net", "rpc"]}
+darkfi = {path = "../../", features = ["toml", "async-daemonize", "net", "rpc"]}
 
 # Misc
 async-trait = "0.1.73"
 futures = "0.3.28"
-libsqlite3-sys = {version = "0.26.0", features = ["bundled-sqlcipher-vendored-openssl"]}
 log = "0.4.20"
 semver = "1.0.18"
 tinyjson = "2.5.1"

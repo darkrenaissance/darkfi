@@ -9,7 +9,7 @@ homepage = "https://dark.fi"
 repository = "https://github.com/darkrenaissance/darkfi"
 
 [dependencies]
-darkfi = {path = "../../", features = ["event-graph", "rpc", "bs58"]}
+darkfi = {path = "../../", features = ["bs58", "toml", "async-daemonize", "event-graph", "rpc"]}
 darkfi-serial = {path = "../../src/serial"}
 
 # TLS
@@ -25,7 +25,6 @@ rand = "0.8.5"
 # Misc
 clap = {version = "4.3.24", features = ["derive"]}
 chrono = "0.4.26"
-libsqlite3-sys = {version = "0.26.0", features = ["bundled-sqlcipher-vendored-openssl"]}
 log = "0.4.20"
 url = "2.4.0"
 
