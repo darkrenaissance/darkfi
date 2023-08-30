@@ -280,6 +280,7 @@ mod tests {
         let _dec = ZkBinary::decode(&data);
     }
 
+    #[test]
     fn panic_regression_001() {
         // Out-of-memory panic from string deserialization.
         // Read `doc/src/zkas/bincode.md` to understand the input.
