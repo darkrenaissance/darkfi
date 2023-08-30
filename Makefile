@@ -114,6 +114,7 @@ clean:
 
 distclean: clean
 	$(CARGO) clean
+	rm -rf target
 
 install: all
 	@for i in $(BINS); \
