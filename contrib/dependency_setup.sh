@@ -37,7 +37,7 @@ setup_xbps() {
 }
 
 setup_dnf() {
-	dnf_deps="git make gcc pkg-config alsa-lib-devel openssl-devel sqlcipher-devel"
+	dnf_deps="git make gcc pkg-config findutils lato-fonts fontconfig-devel perl-FindBin perl-File-Compare alsa-lib-devel python3-devel alsa-lib-devel openssl-devel sqlcipher-devel"
 	$1 install -y $dnf_deps || return 1
 }
 
