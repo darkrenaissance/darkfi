@@ -224,8 +224,24 @@ impl ZkBinary {
 
             let mut args = vec![];
             for _ in 0..arg_num.0 {
+                // Check bounds each time bytes[iter_offset] is accessed to prevent panics.
+                if iter_offset >= bytes.len() {
+                    return Err(ZkasErr(format!(
+                        "Bad offset for circuit: offset {} is >= circuit length {}",
+                        iter_offset,
+                        bytes.len()
+                    )))
+                }
                 let heap_type = bytes[iter_offset];
                 iter_offset += 1;
+
+                if iter_offset >= bytes.len() {
+                    return Err(ZkasErr(format!(
+                        "Bad offset for circuit: offset {} is >= circuit length {}",
+                        iter_offset,
+                        bytes.len()
+                    )))
+                }
                 let (heap_index, offset) = deserialize_partial::<VarInt>(&bytes[iter_offset..])?;
                 iter_offset += offset;
                 let heap_type = match HeapType::from_repr(heap_type) {
@@ -249,6 +265,21 @@ mod tests {
     use crate::zkas::ZkBinary;
 
     #[test]
+    fn panic_regression_002() {
+        // Index out of bounds panic in parse_circuit().
+        // Read `doc/src/zkas/bincode.md` to understand the input.
+        let data = vec![
+            11u8, 1, 177, 53, 2, 13, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 83, 105,
+            109, 112, 108, 101, 46, 99, 111, 110, 115, 116, 97, 110, 116, 3, 18, 86, 65, 76, 85,
+            69, 95, 67, 79, 77, 77, 73, 84, 95, 86, 65, 76, 85, 69, 2, 19, 86, 65, 76, 85, 69, 95,
+            67, 79, 77, 77, 73, 84, 95, 82, 65, 77, 68, 79, 77, 46, 108, 105, 116, 101, 114, 97,
+            108, 46, 119, 105, 116, 110, 101, 115, 115, 16, 18, 46, 99, 105, 114, 99, 117, 105,
+            116, 4, 2, 0, 2, 0, 0, 2, 2, 0, 3, 0, 1, 8, 2, 0, 4, 0, 5, 8, 1, 0, 6, 9, 1, 0, 6, 240,
+            1, 0, 7, 240, 41, 0, 0, 0, 1, 0, 8,
+        ];
+        let _dec = ZkBinary::decode(&data);
+    }
+
     fn panic_regression_001() {
         // Out-of-memory panic from string deserialization.
         // Read `doc/src/zkas/bincode.md` to understand the input.
