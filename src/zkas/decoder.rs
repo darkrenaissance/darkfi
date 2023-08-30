@@ -265,6 +265,14 @@ mod tests {
     use crate::zkas::ZkBinary;
 
     #[test]
+    fn panic_regression_001() {
+        // Out-of-memory panic from string deserialization.
+        // Read `doc/src/zkas/bincode.md` to understand the input.
+        let data = vec![11u8, 1, 177, 53, 1, 0, 0, 0, 0, 255, 0, 204, 200, 72, 72, 72, 72, 1];
+        let _dec = ZkBinary::decode(&data);
+    }
+
+    #[test]
     fn panic_regression_002() {
         // Index out of bounds panic in parse_circuit().
         // Read `doc/src/zkas/bincode.md` to understand the input.
@@ -277,14 +285,6 @@ mod tests {
             116, 4, 2, 0, 2, 0, 0, 2, 2, 0, 3, 0, 1, 8, 2, 0, 4, 0, 5, 8, 1, 0, 6, 9, 1, 0, 6, 240,
             1, 0, 7, 240, 41, 0, 0, 0, 1, 0, 8,
         ];
-        let _dec = ZkBinary::decode(&data);
-    }
-
-    #[test]
-    fn panic_regression_001() {
-        // Out-of-memory panic from string deserialization.
-        // Read `doc/src/zkas/bincode.md` to understand the input.
-        let data = vec![11u8, 1, 177, 53, 1, 0, 0, 0, 0, 255, 0, 204, 200, 72, 72, 72, 72, 1];
         let _dec = ZkBinary::decode(&data);
     }
 }
