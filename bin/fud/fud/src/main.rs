@@ -315,8 +315,8 @@ async fn fetch_file_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<(
         let mut invalid_file_routes = vec![];
 
         for peer in peers.iter() {
-            let session_out = fud.p2p.session_outbound().await;
-            let session_weak = Arc::downgrade(&fud.p2p.session_outbound().await);
+            let session_out = fud.p2p.session_outbound();
+            let session_weak = Arc::downgrade(&fud.p2p.session_outbound());
 
             info!("Connecting to {} to fetch {}", peer, file_hash);
             let connector = Connector::new(fud.p2p.settings(), session_weak);
@@ -422,8 +422,8 @@ async fn fetch_chunk_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<
         let mut invalid_chunk_routes = vec![];
 
         for peer in peers.iter() {
-            let session_out = fud.p2p.session_outbound().await;
-            let session_weak = Arc::downgrade(&fud.p2p.session_outbound().await);
+            let session_out = fud.p2p.session_outbound();
+            let session_weak = Arc::downgrade(&fud.p2p.session_outbound());
 
             info!("Connecting to {} to fetch {}", peer, chunk_hash);
             let connector = Connector::new(fud.p2p.settings(), session_weak);
