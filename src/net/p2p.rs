@@ -129,19 +129,18 @@ impl P2p {
 
         // First attempt any set manual connections
         for peer in &self.settings.peers {
-            self.session_manual().await.connect(peer.clone()).await;
+            self.session_manual().connect(peer.clone()).await;
         }
 
         // Start the inbound session
-        let inbound = self.session_inbound().await;
-        if let Err(err) = inbound.start().await {
+        if let Err(err) = self.session_inbound().start().await {
             error!(target: "net::p2p::start()", "Failed to start inbound session!: {}", err);
-            self.session_manual().await.stop().await;
+            self.session_manual().stop().await;
             return Err(err)
         }
 
         // Start the outbound session
-        self.session_outbound().await.start().await;
+        self.session_outbound().start().await;
 
         info!(target: "net::p2p::start()", "[P2P] P2P subsystem started");
         Ok(())
@@ -164,9 +163,9 @@ impl P2p {
     /// Stop the running P2P subsystem
     pub async fn stop(&self) {
         // Stop the sessions
-        self.session_manual().await.stop().await;
-        self.session_inbound().await.stop().await;
-        self.session_outbound().await.stop().await;
+        self.session_manual().stop().await;
+        self.session_inbound().stop().await;
+        self.session_outbound().stop().await;
     }
 
     /// Broadcasts a message concurrently across all active channels.
@@ -271,17 +270,17 @@ impl P2p {
     }
 
     /// Get pointer to manual session
-    pub async fn session_manual(&self) -> ManualSessionPtr {
+    pub fn session_manual(&self) -> ManualSessionPtr {
         self.session_manual.clone()
     }
 
     /// Get pointer to inbound session
-    pub async fn session_inbound(&self) -> InboundSessionPtr {
+    pub fn session_inbound(&self) -> InboundSessionPtr {
         self.session_inbound.clone()
     }
 
     /// Get pointer to outbound session
-    pub async fn session_outbound(&self) -> OutboundSessionPtr {
+    pub fn session_outbound(&self) -> OutboundSessionPtr {
         self.session_outbound.clone()
     }
 
@@ -303,7 +302,7 @@ impl P2p {
     }
 
     /// Send a dnet notification over the subscriber
-    pub async fn dnet_notify(&self, event: DnetEvent) {
+    pub(super) async fn dnet_notify(&self, event: DnetEvent) {
         self.dnet_subscriber.notify(event).await;
     }
 }

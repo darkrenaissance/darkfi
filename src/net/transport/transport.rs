@@ -24,24 +24,15 @@ use url::Url;
 
 use crate::{Error, Result};
 
-/// TLS Upgrade Mechanism
-pub(crate) mod tls;
-
-#[cfg(feature = "p2p-tcp")]
-/// TCP Transport
-pub(crate) mod tcp;
-
-#[cfg(feature = "p2p-tor")]
-/// Tor transport
-pub(crate) mod tor;
-
 #[cfg(feature = "p2p-nym")]
-/// Nym transport
-pub(crate) mod nym;
-
+use super::nym;
+#[cfg(feature = "p2p-tcp")]
+use super::tcp;
+use super::tls;
+#[cfg(feature = "p2p-tor")]
+use super::tor;
 #[cfg(feature = "p2p-unix")]
-/// Unix socket transport
-pub(crate) mod unix;
+use super::unix;
 
 /// Dialer variants
 #[derive(Debug, Clone)]

@@ -161,8 +161,8 @@ impl Lilith {
                 let p2p_ = p2p.clone();
                 let ex_ = ex.clone();
                 tasks.push(async move {
-                    let session_out = p2p_.session_outbound().await;
-                    let session_weak = Arc::downgrade(&p2p_.session_outbound().await);
+                    let session_out = p2p_.session_outbound();
+                    let session_weak = Arc::downgrade(&session_out);
 
                     let connector = Connector::new(p2p_.settings(), session_weak);
                     debug!(target: "lilith", "Connecting to {}", host);
