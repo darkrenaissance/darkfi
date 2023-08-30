@@ -154,14 +154,14 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'static>>) -> Result<
     ));
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, rpc_interface, executor.clone()),
+        listen_and_serve(args.rpc_listen, rpc_interface, None, executor.clone()),
         |res| async {
             match res {
-                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
                 Err(e) => error!(target: "genevd", "Failed starting JSON-RPC server: {}", e),
             }
         },
-        Error::RPCServerStopped,
+        Error::RpcServerStopped,
         executor.clone(),
     );
 

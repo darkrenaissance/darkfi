@@ -16,8 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashSet;
+
 use async_trait::async_trait;
 use log::debug;
+use smol::lock::MutexGuard;
 use tinyjson::JsonValue;
 
 use darkfi::{
@@ -25,6 +28,7 @@ use darkfi::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         server::RequestHandler,
     },
+    system::StoppableTaskPtr,
     util::time::Timestamp,
 };
 
@@ -78,6 +82,10 @@ impl RequestHandler for Darkfid {
             // ==============
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
+    }
+
+    async fn get_connections(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
+        self.rpc_connections.lock().await
     }
 }
 

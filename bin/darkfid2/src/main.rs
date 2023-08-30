@@ -16,10 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use log::{error, info};
-use smol::stream::StreamExt;
+use smol::{lock::Mutex, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -29,7 +32,7 @@ use darkfi::{
     cli_desc,
     net::{settings::SettingsOpt, P2pPtr},
     rpc::{jsonrpc::JsonSubscriber, server::listen_and_serve},
-    system::StoppableTask,
+    system::{StoppableTask, StoppableTaskPtr},
     util::time::TimeKeeper,
     validator::{Validator, ValidatorConfig, ValidatorPtr},
     Error, Result,
@@ -112,6 +115,8 @@ pub struct Darkfid {
     validator: ValidatorPtr,
     /// A map of various subscribers exporting live info from the blockchain
     subscribers: HashMap<&'static str, JsonSubscriber>,
+    /// JSON-RPC connection tracker
+    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 }
 
 impl Darkfid {
@@ -121,7 +126,13 @@ impl Darkfid {
         validator: ValidatorPtr,
         subscribers: HashMap<&'static str, JsonSubscriber>,
     ) -> Self {
-        Self { sync_p2p, consensus_p2p, validator, subscribers }
+        Self {
+            sync_p2p,
+            consensus_p2p,
+            validator,
+            subscribers,
+            rpc_connections: Mutex::new(HashSet::new()),
+        }
     }
 }
 
@@ -192,14 +203,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // created for it.
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, darkfid.clone(), ex.clone()),
+        listen_and_serve(args.rpc_listen, darkfid.clone(), None, ex.clone()),
         |res| async {
             match res {
-                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
                 Err(e) => error!(target: "darkfid", "Failed starting sync JSON-RPC server: {}", e),
             }
         },
-        Error::RPCServerStopped,
+        Error::RpcServerStopped,
         ex.clone(),
     );
 

@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use chrono::{Duration, Utc};
 use irc::ClientSubMsg;
@@ -240,17 +243,18 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         addr: rpc_listen_addr.clone(),
         p2p: p2p.clone(),
         dnet_sub: json_sub,
+        rpc_connections: Mutex::new(HashSet::new()),
     });
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(rpc_listen_addr, rpc_interface, executor.clone()),
+        listen_and_serve(rpc_listen_addr, rpc_interface, None, executor.clone()),
         |res| async {
             match res {
-                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
                 Err(e) => error!(target: "darkirc", "Failed starting JSON-RPC server: {}", e),
             }
         },
-        Error::RPCServerStopped,
+        Error::RpcServerStopped,
         executor.clone(),
     );
 

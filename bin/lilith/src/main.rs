@@ -27,7 +27,11 @@ use async_trait::async_trait;
 use futures::future::join_all;
 use log::{debug, error, info, warn};
 use semver::Version;
-use smol::{stream::StreamExt, Executor};
+use smol::{
+    lock::{Mutex, MutexGuard},
+    stream::StreamExt,
+    Executor,
+};
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use tinyjson::JsonValue;
@@ -41,7 +45,7 @@ use darkfi::{
         jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
     },
-    system::{sleep, StoppableTask},
+    system::{sleep, StoppableTask, StoppableTaskPtr},
     util::{
         file::{load_file, save_file},
         path::{expand_path, get_config_path},
@@ -138,6 +142,8 @@ struct NetInfo {
 struct Lilith {
     /// Spawned networks
     pub networks: Vec<Spawn>,
+    /// JSON-RPC connection tracker
+    pub rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 }
 
 impl Lilith {
@@ -234,6 +240,10 @@ impl RequestHandler for Lilith {
             "spawns" => return self.spawns(req.id, req.params).await,
             _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
+    }
+
+    async fn get_connections(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
+        self.rpc_connections.lock().await
     }
 }
 
@@ -445,7 +455,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     }
 
     // Set up main daemon and background tasks
-    let lilith = Arc::new(Lilith { networks });
+    let lilith = Arc::new(Lilith { networks, rpc_connections: Mutex::new(HashSet::new()) });
     let mut periodic_tasks = HashMap::new();
     for network in &lilith.networks {
         let name = network.name.clone();
@@ -468,14 +478,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!(target: "lilith", "Starting JSON-RPC server on {}", args.rpc_listen);
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, lilith.clone(), ex.clone()),
+        listen_and_serve(args.rpc_listen, lilith.clone(), None, ex.clone()),
         |res| async {
             match res {
-                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
                 Err(e) => error!(target: "lilith", "Failed starting JSON-RPC server: {}", e),
             }
         },
-        Error::RPCServerStopped,
+        Error::RpcServerStopped,
         ex.clone(),
     );
 

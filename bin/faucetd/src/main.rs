@@ -16,7 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+    str::FromStr,
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 use chrono::Utc;
@@ -42,7 +47,7 @@ use darkfi_serial::{deserialize, serialize, Encodable};
 use log::{debug, error, info};
 use rand::rngs::OsRng;
 use smol::{
-    lock::{Mutex, RwLock},
+    lock::{Mutex, MutexGuard, RwLock},
     stream::StreamExt,
 };
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
@@ -72,7 +77,7 @@ use darkfi::{
         },
         server::{listen_and_serve, RequestHandler},
     },
-    system::{sleep, StoppableTask},
+    system::{sleep, StoppableTask, StoppableTaskPtr},
     tx::Transaction,
     util::{parse::decode_base10, path::expand_path},
     wallet::{WalletDb, WalletPtr},
@@ -184,6 +189,7 @@ pub struct Faucetd {
     airdrop_map: AirdropMap,
     challenge_map: ChallengeMap,
     proving_keys: ProvingKeyMap,
+    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 }
 
 #[async_trait]
@@ -194,6 +200,10 @@ impl RequestHandler for Faucetd {
             "airdrop" => return self.airdrop(req.id, req.params).await,
             _ => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
+    }
+
+    async fn get_connections(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
+        self.rpc_connections.lock().await
     }
 }
 
@@ -271,6 +281,7 @@ impl Faucetd {
             airdrop_map: Arc::new(Mutex::new(HashMap::new())),
             challenge_map: Arc::new(Mutex::new(HashMap::new())),
             proving_keys,
+            rpc_connections: Mutex::new(HashSet::new()),
         };
 
         Ok(faucetd)
@@ -753,14 +764,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "faucetd", "Starting JSON-RPC server");
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, faucetd.clone(), ex.clone()),
+        listen_and_serve(args.rpc_listen, faucetd.clone(), None, ex.clone()),
         |res| async {
             match res {
-                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
                 Err(e) => error!(target: "faucetd", "Failed starting JSON-RPC server: {}", e),
             }
         },
-        Error::RPCServerStopped,
+        Error::RpcServerStopped,
         ex.clone(),
     );
 

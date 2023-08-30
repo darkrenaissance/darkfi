@@ -16,11 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use async_trait::async_trait;
 use log::debug;
-use smol::lock::Mutex;
+use smol::lock::{Mutex, MutexGuard};
 use tinyjson::JsonValue;
 
 use darkfi::{
@@ -33,6 +33,7 @@ use darkfi::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         server::RequestHandler,
     },
+    system::StoppableTaskPtr,
     util::{encoding::base64, time::Timestamp},
 };
 use darkfi_serial::deserialize;
@@ -44,6 +45,7 @@ pub struct JsonRpcInterface {
     model: ModelPtr<GenEvent>,
     seen: SeenPtr<EventId>,
     p2p: net::P2pPtr,
+    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 }
 
 #[async_trait]
@@ -58,6 +60,10 @@ impl RequestHandler for JsonRpcInterface {
             _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
+
+    async fn get_connections(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
+        self.rpc_connections.lock().await
+    }
 }
 
 impl JsonRpcInterface {
@@ -68,7 +74,14 @@ impl JsonRpcInterface {
         seen: SeenPtr<EventId>,
         p2p: net::P2pPtr,
     ) -> Self {
-        Self { _nickname, missed_events, model, seen, p2p }
+        Self {
+            _nickname,
+            missed_events,
+            model,
+            seen,
+            p2p,
+            rpc_connections: Mutex::new(HashSet::new()),
+        }
     }
 
     // RPCAPI:

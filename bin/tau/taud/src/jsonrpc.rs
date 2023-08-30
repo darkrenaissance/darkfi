@@ -16,12 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, fs::create_dir_all, path::PathBuf, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    fs::create_dir_all,
+    path::PathBuf,
+    sync::Arc,
+};
 
 use async_trait::async_trait;
 use crypto_box::ChaChaBox;
 use log::{debug, warn};
-use smol::lock::Mutex;
+use smol::lock::{Mutex, MutexGuard};
 use tinyjson::JsonValue;
 
 use darkfi::{
@@ -30,6 +35,7 @@ use darkfi::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
         server::RequestHandler,
     },
+    system::StoppableTaskPtr,
     util::{path::expand_path, time::Timestamp},
     Error,
 };
@@ -48,6 +54,7 @@ pub struct JsonRpcInterface {
     workspace: Mutex<String>,
     workspaces: Arc<HashMap<String, ChaChaBox>>,
     p2p: net::P2pPtr,
+    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 }
 
 #[async_trait]
@@ -73,6 +80,10 @@ impl RequestHandler for JsonRpcInterface {
 
         to_json_result(rep, req.id)
     }
+
+    async fn get_connections(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
+        self.rpc_connections.lock().await
+    }
 }
 
 impl JsonRpcInterface {
@@ -84,7 +95,15 @@ impl JsonRpcInterface {
         p2p: net::P2pPtr,
     ) -> Self {
         let workspace = Mutex::new(workspaces.iter().last().unwrap().0.clone());
-        Self { dataset_path, nickname, workspace, workspaces, notify_queue_sender, p2p }
+        Self {
+            dataset_path,
+            nickname,
+            workspace,
+            workspaces,
+            notify_queue_sender,
+            p2p,
+            rpc_connections: Mutex::new(HashSet::new()),
+        }
     }
 
     // RPCAPI:

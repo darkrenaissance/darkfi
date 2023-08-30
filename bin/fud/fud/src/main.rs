@@ -23,7 +23,13 @@ use std::{
 
 use async_trait::async_trait;
 use log::{debug, error, info, warn};
-use smol::{channel, fs::File, lock::RwLock, stream::StreamExt, Executor};
+use smol::{
+    channel,
+    fs::File,
+    lock::{Mutex, MutexGuard, RwLock},
+    stream::StreamExt,
+    Executor,
+};
 use structopt_toml::{structopt::StructOpt, StructOptToml};
 use tinyjson::JsonValue;
 use url::Url;
@@ -39,7 +45,7 @@ use darkfi::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         server::{listen_and_serve, RequestHandler},
     },
-    system::StoppableTask,
+    system::{StoppableTask, StoppableTaskPtr},
     util::path::expand_path,
     Error, Result,
 };
@@ -97,6 +103,8 @@ pub struct Fud {
     file_fetch_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
     chunk_fetch_tx: channel::Sender<(blake3::Hash, Result<()>)>,
     chunk_fetch_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
+
+    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 }
 
 #[async_trait]
@@ -111,6 +119,10 @@ impl RequestHandler for Fud {
             "dnet_switch" => return self.dnet_switch(req.id, req.params).await,
             _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
+    }
+
+    async fn get_connections(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
+        self.rpc_connections.lock().await
     }
 }
 
@@ -542,6 +554,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         file_fetch_rx,
         chunk_fetch_tx,
         chunk_fetch_rx,
+        rpc_connections: Mutex::new(HashSet::new()),
     });
 
     info!(target: "fud", "Starting fetch file task");
@@ -575,14 +588,14 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!(target: "fud", "Starting JSON-RPC server on {}", args.rpc_listen);
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, fud.clone(), ex.clone()),
+        listen_and_serve(args.rpc_listen, fud.clone(), None, ex.clone()),
         |res| async {
             match res {
-                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
                 Err(e) => error!(target: "fud", "Failed starting sync JSON-RPC server: {}", e),
             }
         },
-        Error::RPCServerStopped,
+        Error::RpcServerStopped,
         ex.clone(),
     );
 

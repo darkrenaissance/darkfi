@@ -16,8 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashSet;
+
 use async_trait::async_trait;
 use log::debug;
+use smol::lock::{Mutex, MutexGuard};
 use tinyjson::JsonValue;
 use url::Url;
 
@@ -28,12 +31,15 @@ use darkfi::{
         p2p_method::HandlerP2p,
         server::RequestHandler,
     },
+    system::StoppableTaskPtr,
 };
 
 pub struct JsonRpcInterface {
     pub addr: Url,
     pub p2p: net::P2pPtr,
     pub dnet_sub: JsonSubscriber,
+    /// JSON-RPC connection tracker
+    pub rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 }
 
 #[async_trait]
@@ -49,6 +55,10 @@ impl RequestHandler for JsonRpcInterface {
             "p2p.get_info" => self.p2p_get_info(req.id, req.params).await,
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
+    }
+
+    async fn get_connections(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
+        self.rpc_connections.lock().await
     }
 }
 

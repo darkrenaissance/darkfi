@@ -16,12 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{path::Path, str::FromStr, sync::Arc};
+use std::{collections::HashSet, path::Path, str::FromStr, sync::Arc};
 
 use async_trait::async_trait;
 use darkfi_sdk::crypto::PublicKey;
 use log::{error, info};
-use smol::{lock::Mutex, stream::StreamExt};
+use smol::{
+    lock::{Mutex, MutexGuard},
+    stream::StreamExt,
+};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -45,7 +48,7 @@ use darkfi::{
         jsonrpc::{ErrorCode::MethodNotFound, JsonError, JsonRequest, JsonResult},
         server::{listen_and_serve, RequestHandler},
     },
-    system::StoppableTask,
+    system::{StoppableTask, StoppableTaskPtr},
     util::path::expand_path,
     wallet::{WalletDb, WalletPtr},
     Error, Result,
@@ -184,6 +187,7 @@ pub struct Darkfid {
     sync_p2p: Option<P2pPtr>,
     _wallet: WalletPtr,
     validator_state: ValidatorStatePtr,
+    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 }
 
 // JSON-RPC methods
@@ -250,6 +254,10 @@ impl RequestHandler for Darkfid {
             _ => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
+
+    async fn get_connections(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
+        self.rpc_connections.lock().await
+    }
 }
 
 impl Darkfid {
@@ -259,7 +267,14 @@ impl Darkfid {
         sync_p2p: Option<P2pPtr>,
         _wallet: WalletPtr,
     ) -> Self {
-        Self { synced: Mutex::new(false), consensus_p2p, sync_p2p, _wallet, validator_state }
+        Self {
+            synced: Mutex::new(false),
+            consensus_p2p,
+            sync_p2p,
+            _wallet,
+            validator_state,
+            rpc_connections: Mutex::new(HashSet::new()),
+        }
     }
 }
 
@@ -430,14 +445,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!("Starting JSON-RPC server");
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, darkfid.clone(), ex.clone()),
+        listen_and_serve(args.rpc_listen, darkfid.clone(), None, ex.clone()),
         |res| async {
             match res {
-                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
                 Err(e) => error!(target: "darkfid", "Failed starting sync JSON-RPC server: {}", e),
             }
         },
-        Error::RPCServerStopped,
+        Error::RpcServerStopped,
         ex.clone(),
     );
 
