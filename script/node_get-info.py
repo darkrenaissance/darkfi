@@ -30,7 +30,7 @@ class JsonRpc:
 
     async def _make_request(self, method, params):
         ident = random.randint(0, 2**16)
-        print(ident)
+        #print(ident)
         request = {
             "jsonrpc": "2.0",
             "method": method,
@@ -45,7 +45,7 @@ class JsonRpc:
         data = await self.reader.readline()
         message = data.decode().strip()
         response = json.loads(message)
-        print(response)
+        #print(response)
         return response
 
     async def _subscribe(self, method, params):
@@ -60,7 +60,7 @@ class JsonRpc:
         message = json.dumps(request) + "\n"
         self.writer.write(message.encode())
         await self.writer.drain()
-        print("Subscribed")
+        #print("Subscribed")
 
     async def ping(self):
         return await self._make_request("ping", [])
