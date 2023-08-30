@@ -16,12 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::sync::Arc;
+
+use rand::{rngs::OsRng, Rng};
 use smol::{
     channel,
     future::{self, Future},
     Executor,
 };
-use std::sync::Arc;
 
 use super::CondVar;
 
@@ -33,7 +35,27 @@ pub struct StoppableTask {
     stop_send: channel::Sender<()>,
     stop_recv: channel::Receiver<()>,
     stop_barrier: CondVar,
+
+    // Used so we can keep StoppableTask in HashMap/HashSet
+    task_id: usize,
 }
+
+impl std::hash::Hash for StoppableTask {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.task_id.hash(state);
+    }
+}
+
+impl std::cmp::PartialEq for StoppableTask {
+    fn eq(&self, other: &Self) -> bool {
+        self.task_id == other.task_id
+    }
+}
+
+impl std::cmp::Eq for StoppableTask {}
 
 /// A task that can be prematurely stopped at any time.
 ///
@@ -51,7 +73,7 @@ pub struct StoppableTask {
 impl StoppableTask {
     pub fn new() -> Arc<Self> {
         let (stop_send, stop_recv) = channel::bounded(1);
-        Arc::new(Self { stop_send, stop_recv, stop_barrier: CondVar::new() })
+        Arc::new(Self { stop_send, stop_recv, stop_barrier: CondVar::new(), task_id: OsRng.gen() })
     }
 
     /// Stops the task. Will return when the process has fully closed.
