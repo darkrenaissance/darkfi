@@ -25,6 +25,7 @@ use darkfi::{
     net,
     rpc::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult, JsonSubscriber},
+        p2p_method::HandlerP2p,
         server::RequestHandler,
     },
 };
@@ -44,6 +45,7 @@ impl RequestHandler for JsonRpcInterface {
             "ping" => self.pong(req.id, req.params).await,
             "dnet.switch" => self.dnet_switch(req.id, req.params).await,
             "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
+            "p2p.get_info" => self.p2p_get_info(req.id, req.params).await,
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
@@ -88,5 +90,11 @@ impl JsonRpcInterface {
         }
 
         self.dnet_sub.clone().into()
+    }
+}
+
+impl HandlerP2p for JsonRpcInterface {
+    fn p2p(&self) -> net::P2pPtr {
+        self.p2p.clone()
     }
 }

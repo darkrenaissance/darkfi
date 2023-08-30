@@ -16,18 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
-use tinyjson::JsonValue::{self, Number as JsonNum, Object as JsonObj, String as JsonStr};
-
+use super::util::*;
 use crate::net;
-
-// helper functions
-fn json_map<const N: usize>(vals: [(&str, JsonValue); N]) -> JsonValue {
-    JsonObj(HashMap::from(vals.map(|(k, v)| (k.to_string(), v))))
-}
-fn json_str(val: &str) -> JsonValue {
-    JsonStr(val.to_string())
-}
 
 #[cfg(feature = "net")]
 impl From<net::channel::ChannelInfo> for JsonValue {

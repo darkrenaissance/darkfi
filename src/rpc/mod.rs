@@ -33,3 +33,9 @@ pub mod clock_sync;
 
 /// Various `From` implementations
 pub mod from_impl;
+
+/// Provides optional `p2p.get_info()` method
+pub mod p2p_method;
+
+/// Json helper methods and types
+pub mod util;

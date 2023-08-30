@@ -27,7 +27,10 @@
 //! same time.
 
 use std::{
-    sync::{Arc, Weak},
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc, Weak,
+    },
     time::{Duration, Instant},
 };
 
@@ -112,6 +115,15 @@ impl OutboundSession {
         self.peer_discovery.clone().stop().await;
     }
 
+    pub async fn slot_info(&self) -> Vec<u32> {
+        let mut info = Vec::new();
+        let slots = &*self.slots.lock().await;
+        for slot in slots {
+            info.push(slot.channel_id.load(Ordering::Relaxed));
+        }
+        info
+    }
+
     fn wakeup_peer_discovery(&self) {
         self.peer_discovery.notify()
     }
@@ -139,11 +151,19 @@ pub struct Slot {
     process: StoppableTaskPtr,
     wakeup_self: CondVar,
     session: Weak<OutboundSession>,
+    // For debugging
+    channel_id: AtomicU32,
 }
 
 impl Slot {
     fn new(session: Weak<OutboundSession>, slot: u32) -> Arc<Self> {
-        Arc::new(Self { slot, process: StoppableTask::new(), wakeup_self: CondVar::new(), session })
+        Arc::new(Self {
+            slot,
+            process: StoppableTask::new(),
+            wakeup_self: CondVar::new(),
+            session,
+            channel_id: AtomicU32::new(0),
+        })
     }
 
     async fn start(self: Arc<Self>) {
@@ -229,6 +249,7 @@ impl Slot {
                         err: err.to_string()
                     });
 
+                    self.channel_id.store(0, Ordering::Relaxed);
                     continue
                 }
             };
@@ -258,10 +279,16 @@ impl Slot {
                     slot: self.slot,
                     err: err.to_string()
                 });
+
+                self.channel_id.store(0, Ordering::Relaxed);
                 continue
             }
+
+            self.channel_id.store(channel.info.id, Ordering::Relaxed);
+
             // Wait for channel to close
             stop_sub.receive().await;
+            self.channel_id.store(0, Ordering::Relaxed);
         }
     }
 

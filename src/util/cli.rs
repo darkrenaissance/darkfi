@@ -199,7 +199,7 @@ macro_rules! async_daemonize {
             }
 
             // https://docs.rs/smol/latest/smol/struct.Executor.html#examples
-            let n_threads = std::thread::available_parallelism().unwrap().get();
+            let n_threads = 1;
             let ex = std::sync::Arc::new(smol::Executor::new());
             let (signal, shutdown) = smol::channel::unbounded::<()>();
             let (_, result) = easy_parallel::Parallel::new()
