@@ -1,41 +1,54 @@
-# Use: docker build . --pull --network=host -t darkfi:debian -f ./contrib/docker/Dockerfile.debian
-#   optionally with: --build-arg BUILD_OS_VER=slim-buster --build-arg RUN_OS_VER=buster-slim --build-arg RUST_VER=1.70
-#   rust nightly with: BUILD_OS_VER=bullseye-slim RUN_OS_VER=bullseye-slim RUST_VER=nightly REPOSITORY=rustlang/rust
+# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:debian -f ./contrib/docker/Dockerfile.debian --build-arg DONT_EXEC_TESTS=1
+#   optionally with: --build-arg OS_VER=bullseye-slim --build-arg RUST_VER=nightly
 
-ARG RUST_VER=1.70              # 1.67
-ARG BUILD_OS_VER=slim-bookworm # (12); slim-bullseye (11); slim-buster (10)
-ARG RUN_OS_VER=bookworm-slim   # (12); bullseye-slim (11); buster-slim (10)
-ARG REPOSITORY=rust            # rustlang/rust
+ARG RUST_VER=nightly-2023-06-21  # nightly 1.72
+ARG OS_VER=bookworm-slim         # (12); bullseye-slim (11); buster-slim (10)
 
-FROM ${REPOSITORY}:${RUST_VER}-${BUILD_OS_VER} as builder
+FROM debian:${OS_VER} as rust_builder
+
+ARG RUST_VER
 
 RUN apt-get update && apt-get install -y build-essential cmake jq wget \
-  pkg-config clang libclang-dev llvm-dev libudev-dev libfreetype6-dev \
-  libexpat1-dev curl gcc make libssl-dev fonts-lato libfontconfig-dev \
-  libasound2-dev
+  pkg-config clang libclang-dev llvm-dev libudev-dev libfreetype6-dev libasound2-dev \
+  libexpat1-dev curl gcc make libssl-dev fonts-lato libfontconfig-dev python3-dev libsqlite3-dev
 
-RUN mkdir /opt/darkfi
+RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 
-COPY . /opt/darkfi
-
-WORKDIR /opt/darkfi
+ENV PATH="/root/.cargo/bin:${PATH}"
 
 RUN rustup target add wasm32-unknown-unknown
 
-RUN make clean
-
-RUN rm -rf ./target/*
-
-RUN bash -c 'make -j test && make -j all'
+RUN cargo search whatever  # creates .cargo cache
 
 # 2. stage
-FROM debian:${RUN_OS_VER}
+FROM rust_builder as builder
 
-RUN apt-get -y update && apt-get install -y openssl fonts-lato \
+ARG DONT_EXEC_TESTS
+ARG RUST_VER
+
+WORKDIR /opt/darkfi
+
+COPY . /opt/darkfi
+
+RUN make clean
+
+RUN cargo update
+
+RUN rm -rf ./target/ zkas proof/*.bin
+
+RUN bash -c "if [ -z \"$DONT_EXEC_TESTS\" ]; then make -j test; fi"
+
+RUN bash -c 'make -j all'
+
+# 3. stage
+FROM debian:${OS_VER}
+
+RUN apt-get -y update && apt-get install -y openssl fonts-lato libout123-0 libmpg123-0 libasound2 libsqlite3-0 \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/darkfi
 
 COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
-   /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/faucetd \
-   /opt/darkfi/zkas /opt/darkfi/vanityaddr ./
+   /opt/darkfi/darkirc /opt/darkfi/faucetd \
+   /opt/darkfi/zkas /opt/darkfi/vanityaddr \
+   /opt/darkfi/tau /opt/darkfi/taud   ./

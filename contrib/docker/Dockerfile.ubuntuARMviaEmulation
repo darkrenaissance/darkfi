@@ -1,13 +1,11 @@
 # Beware, uses emulation, with AMD 24 threads: Building 6047.7s
-# Use: docker build . --platform=linux/arm64 --pull -t darkfi:ubuntu_arm64 -f contrib/docker/Dockerfile.ubuntuARMviaEmulation
+# Use: docker build . --platform=linux/arm64 --pull -t darkfi:ubuntu_arm64 -f contrib/docker/Dockerfile.ubuntuARMviaEmulation --build-arg DONT_EXEC_TESTS=1
 #   optionally with: --build-arg BUILD_OS_VER=20.04 --build-arg RUST_VER=1.70
 
-ARG RUST_VER=1.70      # stable nightly beta 1.67
-ARG BUILD_OS_VER=22.04 # 20.04
-ARG RUN_OS_VER=${BUILD_OS_VER}
-ARG REPOSITORY=ubuntu
+ARG RUST_VER=nightly-2023-06-21  # stable nightly beta 1.72
+ARG OS_VER=22.04                 # 20.04
 
-FROM --platform=$TARGETPLATFORM ${REPOSITORY}:${BUILD_OS_VER} as rust_builder
+FROM --platform=$TARGETPLATFORM ubuntu:${OS_VER} as rust_builder
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 ARG RUST_VER
@@ -17,7 +15,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install 
   build-essential cmake jq wget curl \
   pkg-config clang libclang-dev llvm-dev libudev-dev libfreetype6-dev \
   libexpat1-dev curl gcc make libssl-dev fonts-lato libfontconfig-dev \
-  libasound2-dev
+  libasound2-dev python3-dev libsqlite3-dev
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 
@@ -31,24 +29,33 @@ RUN cargo install -f cross
 # 2. stage
 FROM --platform=$TARGETPLATFORM  rust_builder as builder
 
+ARG DONT_EXEC_TESTS 
+ARG RUST_VER
+
 WORKDIR /opt/darkfi
 
 COPY . /opt/darkfi
 
+RUN cargo update
+
 RUN make clean
 
-RUN rm -rf ./target/*
+RUN rm -rf ./target/ zkas proof/*.bin
 
-RUN bash -c 'make -j test && make -j all'
+RUN bash -c "if [ -z \"$DONT_EXEC_TESTS\" ]; then make -j test; fi"
+
+RUN bash -c 'make -j all'
 
 # 3. stage
-FROM --platform=$TARGETPLATFORM ${REPOSITORY}:${RUN_OS_VER}
+FROM --platform=$TARGETPLATFORM ubuntu:${OS_VER}
 
-RUN apt-get -y update && apt-get install -y openssl fonts-lato \
+RUN apt-get -y update && apt-get install -y openssl fonts-lato libout123-0 libmpg123-0 libasound2 libsqlite3-0 \
   && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/darkfi
 
 COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
-   /opt/darkfi/ircd /opt/darkfi/dnetview /opt/darkfi/faucetd \
-   /opt/darkfi/zkas /opt/darkfi/vanityaddr ./
+   /opt/darkfi/darkirc /opt/darkfi/faucetd \
+   /opt/darkfi/zkas /opt/darkfi/vanityaddr \
+   /opt/darkfi/tau /opt/darkfi/taud  ./
+
