@@ -38,6 +38,16 @@ impl From<net::dnet::MessageInfo> for JsonValue {
 }
 
 #[cfg(feature = "net")]
+impl From<net::dnet::InboundInfo> for JsonValue {
+    fn from(info: net::dnet::InboundInfo) -> JsonValue {
+        json_map([
+            ("addr", JsonStr(info.addr.to_string())),
+            ("channel_id", JsonNum(info.channel_id.into())),
+        ])
+    }
+}
+
+#[cfg(feature = "net")]
 impl From<net::dnet::OutboundSlotSleeping> for JsonValue {
     fn from(info: net::dnet::OutboundSlotSleeping) -> JsonValue {
         json_map([("slot", JsonNum(info.slot.into()))])
@@ -88,6 +98,12 @@ impl From<net::dnet::DnetEvent> for JsonValue {
             }
             net::dnet::DnetEvent::RecvMessage(info) => {
                 json_map([("event", json_str("recv")), ("info", info.into())])
+            }
+            net::dnet::DnetEvent::InboundConnected(info) => {
+                json_map([("event", json_str("inbound_connected")), ("info", info.into())])
+            }
+            net::dnet::DnetEvent::InboundDisconnected(info) => {
+                json_map([("event", json_str("inbound_disconnected")), ("info", info.into())])
             }
             net::dnet::DnetEvent::OutboundSlotSleeping(info) => {
                 json_map([("event", json_str("outbound_slot_sleeping")), ("info", info.into())])

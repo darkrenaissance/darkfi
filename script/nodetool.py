@@ -99,6 +99,12 @@ async def main(argv):
         current_time = time.strftime("%H:%M:%S", t)
 
         match ev:
+            case "inbound_connected":
+                addr = info["addr"]
+                print(f"{current_time}  inbound (connect):    {addr}")
+            case "inbound_disconnected":
+                addr = info["addr"]
+                print(f"{current_time}  inbound (disconnect): {addr}")
             case "outbound_slot_sleeping":
                 slot = info["slot"]
                 print(f"{current_time}  slot {slot}: sleeping")

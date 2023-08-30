@@ -45,6 +45,15 @@ pub type SendMessage = MessageInfo;
 pub type RecvMessage = MessageInfo;
 
 #[derive(Clone, Debug)]
+pub struct InboundInfo {
+    pub addr: Url,
+    pub channel_id: u32,
+}
+
+pub type InboundConnected = InboundInfo;
+pub type InboundDisconnected = InboundInfo;
+
+#[derive(Clone, Debug)]
 pub struct OutboundSlotSleeping {
     pub slot: u32,
 }
@@ -78,6 +87,8 @@ pub struct OutboundPeerDiscovery {
 pub enum DnetEvent {
     SendMessage(MessageInfo),
     RecvMessage(MessageInfo),
+    InboundConnected(InboundConnected),
+    InboundDisconnected(InboundDisconnected),
     OutboundSlotSleeping(OutboundSlotSleeping),
     OutboundSlotConnecting(OutboundSlotConnecting),
     OutboundSlotConnected(OutboundSlotConnected),

@@ -34,6 +34,7 @@ use super::{
     super::{
         acceptor::{Acceptor, AcceptorPtr},
         channel::ChannelPtr,
+        dnet::{self, dnetev, DnetEvent},
         p2p::{P2p, P2pPtr},
     },
     Session, SessionBitFlag, SESSION_INBOUND,
@@ -157,18 +158,28 @@ impl InboundSession {
             "[P2P] Connected Inbound #{} [{}]", index, channel.address(),
         );
 
+        dnetev!(self, InboundConnected, {
+            addr: channel.info.addr.clone(),
+            channel_id: channel.info.id,
+        });
+
         let stop_sub = channel.subscribe_stop().await?;
 
         self.register_channel(channel.clone(), ex.clone()).await?;
 
         stop_sub.receive().await;
 
+        self.p2p().remove(channel.clone()).await;
+
         debug!(
             target: "net::inbound_session::setup_channel()",
-            "Received stop_sub, removing channel from P2P",
+            "Received stop_sub, channel removed from P2P",
         );
 
-        self.p2p().remove(channel).await;
+        dnetev!(self, InboundDisconnected, {
+            addr: channel.info.addr.clone(),
+            channel_id: channel.info.id,
+        });
 
         Ok(())
     }
