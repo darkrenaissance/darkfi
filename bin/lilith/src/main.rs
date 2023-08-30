@@ -52,6 +52,11 @@ use darkfi::{
 const CONFIG_FILE: &str = "lilith_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../lilith_config.toml");
 
+/// Period in which the peer purge happens (in seconds)
+const PURGE_PERIOD: u64 = 60;
+/// Amount of hosts to try each purge iteration
+const PROBE_HOSTS_N: u32 = 10;
+
 #[derive(Clone, Debug, serde::Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
 #[structopt(name = "lilith", about = cli_desc!())]
@@ -141,11 +146,12 @@ impl Lilith {
     async fn periodic_purge(name: String, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
         info!(target: "lilith", "Starting periodic host purge task for \"{}\"", name);
         loop {
-            // We'll pick up to 10 hosts every minute and try to connect to
-            // them. If we can't reach them, we'll remove them from our set.
-            sleep(60).await;
+            // We'll pick up to PROBE_HOSTS_N hosts every PURGE_PERIOD and try to
+            // connect to them. If we can't reach them, remove them from our set.
+            sleep(PURGE_PERIOD).await;
             debug!(target: "lilith", "[{}] Picking random hosts from db", name);
-            let lottery_winners = p2p.clone().hosts().fetch_n_random(10).await;
+
+            let lottery_winners = p2p.clone().hosts().fetch_n_random(PROBE_HOSTS_N).await;
             let win_str: Vec<&str> = lottery_winners.iter().map(|x| x.as_str()).collect();
             debug!(target: "lilith", "[{}] Got: {:?}", name, win_str);
 
@@ -185,6 +191,7 @@ impl Lilith {
                                 }
                                 Err(e) => {
                                     debug!(target: "lilith", "Handshake failure! {}", e);
+                                    p2p_.hosts().remove(host).await;
                                 }
                             }
                         }
