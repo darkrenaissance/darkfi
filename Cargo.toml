@@ -118,6 +118,10 @@ rusqlite = {version = "0.29.0", features = ["sqlcipher"], optional = true}
 sled = {version = "0.34.7", optional = true}
 sled-overlay = {version = "0.0.8", optional = true}
 
+# When using musl-libc, some bug happens when linking the system lib, so we need this
+[target.'cfg(target_env = "musl")'.dependencies]
+libsqlite3-sys = {version = "*", features = ["bundled-sqlcipher"], optional = true}
+
 [dev-dependencies]
 clap = {version = "4.4.1", features = ["derive"]}
 halo2_proofs = {version = "0.3.0", features = ["dev-graph", "sanity-checks"]}
@@ -200,7 +204,7 @@ event-graph = [
 
 p2p-unix = []
 p2p-tcp = ["socket2"]
-p2p-tor = ["arti-client", "tor-hscrypto"]
+p2p-tor = ["arti-client", "tor-hscrypto", "libsqlite3-sys"]
 p2p-nym = []
 
 net = [
