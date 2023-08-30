@@ -571,7 +571,7 @@ impl<T: AsyncDecodable + Send> AsyncDecodable for VecDeque<T> {
     #[inline]
     async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> Result<Self> {
         let len = VarInt::decode_async(d).await?.0;
-        let mut ret = Vec::new();
+        let mut ret = VecDeque::new();
         ret.try_reserve(len as usize).map_err(|_| std::io::ErrorKind::InvalidData)?;
         for _ in 0..len {
             ret.push_back(AsyncDecodable::decode_async(d).await?);
