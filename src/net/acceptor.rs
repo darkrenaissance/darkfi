@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::{io::ErrorKind, sync::Arc};
 
 use log::error;
 use smol::Executor;
@@ -92,20 +92,33 @@ impl Acceptor {
                 }
 
                 // As per accept(2) recommendation:
-                Err(e) => {
-                    if let Some(os_err) = e.raw_os_error() {
-                        // TODO: Should EINTR actually break out? Check if StoppableTask does this.
-                        // TODO: Investigate why libc::EWOULDBLOCK is not considered reachable
-                        match os_err {
-                            libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR => {
-                                continue
-                            }
-                            _ => { /* Do nothing */ }
-                        }
+                Err(e) if e.raw_os_error().is_some() => match e.raw_os_error().unwrap() {
+                    libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR => continue,
+                    _ => {
+                        error!(
+                            target: "net::acceptor::run_accept_loop()",
+                            "[P2P] Acceptor failed listening: {}", e,
+                        );
+                        error!(
+                            target: "net::acceptor::run_accept_loop()",
+                            "[P2P] Closing listener loop"
+                        );
+                        return Err(e.into())
                     }
+                },
+
+                // In case a TLS handshake fails, we'll get this:
+                Err(e) if e.kind() == ErrorKind::UnexpectedEof => continue,
+
+                // Errors we didn't handle above:
+                Err(e) => {
                     error!(
                         target: "net::acceptor::run_accept_loop()",
-                        "[P2P] Acceptor failed listening: {}", e,
+                        "[P2P] Unhandled listener.next() error: {}", e,
+                    );
+                    error!(
+                        target: "net::acceptor::run_accept_loop()",
+                        "[P2P] Closing listener loop"
                     );
                     return Err(e.into())
                 }
