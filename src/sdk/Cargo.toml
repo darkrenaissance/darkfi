@@ -42,5 +42,5 @@ subtle = "2.5.0"
 
 [dev-dependencies]
 halo2_proofs = {version = "0.3.0", features = ["dev-graph", "sanity-checks"]}
-halo2_gadgets = "0.3.0"
+halo2_gadgets = {version = "0.3.0", features = ["test-dependencies"]}
 rand = "0.8.5"
