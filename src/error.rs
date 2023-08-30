@@ -246,8 +246,13 @@ pub enum Error {
     #[error(transparent)]
     RpcServerError(RpcError),
 
+    #[cfg(feature = "rpc")]
+    #[error("JSON-RPC connections exhausted")]
+    RpcConnectionsExhausted,
+
+    #[cfg(feature = "rpc")]
     #[error("JSON-RPC server stopped")]
-    RPCServerStopped,
+    RpcServerStopped,
 
     #[error("Unexpected JSON-RPC data received: {0}")]
     UnexpectedJsonRpc(String),

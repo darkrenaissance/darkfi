@@ -16,11 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use async_trait::async_trait;
 use smol::{
     channel::{Receiver, Sender},
+    lock::{Mutex, MutexGuard},
     net::TcpListener,
     Executor,
 };
@@ -34,11 +35,13 @@ use darkfi::{
         jsonrpc::*,
         server::{accept, RequestHandler},
     },
+    system::StoppableTaskPtr,
     Result,
 };
 
 struct RpcSrv {
     stop_sub: (Sender<()>, Receiver<()>),
+    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 }
 
 impl RpcSrv {
@@ -63,6 +66,10 @@ impl RequestHandler for RpcSrv {
             _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
+
+    async fn get_connections(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
+        self.rpc_connections.lock().await
+    }
 }
 
 #[test]
@@ -77,16 +84,19 @@ fn jsonrpc_reqrep() -> Result<()> {
         let endpoint = Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?;
         drop(listener);
 
-        let rpcsrv = Arc::new(RpcSrv { stop_sub: smol::channel::unbounded() });
+        let rpcsrv = Arc::new(RpcSrv {
+            stop_sub: smol::channel::unbounded(),
+            rpc_connections: Mutex::new(HashSet::new()),
+        });
         let listener = Listener::new(endpoint.clone()).await?.listen().await?;
 
         executor
             .spawn(async move {
                 while let Ok((stream, peer_addr)) = listener.next().await {
-                    let _rh = rpcsrv.clone();
+                    let rh_ = rpcsrv.clone();
                     executor_
                         .spawn(async move {
-                            let _ = accept(stream, peer_addr.clone(), _rh).await;
+                            let _ = accept(stream, peer_addr.clone(), rh_, None).await;
                         })
                         .detach();
                 }

@@ -16,10 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::{collections::HashSet, io::ErrorKind, sync::Arc};
 
 use async_trait::async_trait;
 use log::{debug, error, info};
+use smol::lock::MutexGuard;
 use tinyjson::JsonValue;
 use url::Url;
 
@@ -29,7 +30,8 @@ use super::{
 };
 use crate::{
     net::transport::{Listener, PtListener, PtStream},
-    Result,
+    system::{StoppableTask, StoppableTaskPtr},
+    Error, Result,
 };
 
 /// Asynchronous trait implementing a handler for incoming JSON-RPC requests.
@@ -40,6 +42,20 @@ pub trait RequestHandler: Sync + Send {
     async fn pong(&self, id: u16, _params: JsonValue) -> JsonResult {
         JsonResponse::new(JsonValue::String("pong".to_string()), id).into()
     }
+
+    async fn get_connections(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>>;
+
+    async fn mark_connection(&self, task: StoppableTaskPtr) {
+        self.get_connections().await.insert(task);
+    }
+
+    async fn unmark_connection(&self, task: StoppableTaskPtr) {
+        self.get_connections().await.remove(&task);
+    }
+
+    async fn active_connections(&self) -> usize {
+        self.get_connections().await.len()
+    }
 }
 
 /// Accept function that should run inside a loop for accepting incoming
@@ -48,7 +64,20 @@ pub async fn accept(
     mut stream: Box<dyn PtStream>,
     addr: Url,
     rh: Arc<impl RequestHandler + 'static>,
+    conn_limit: Option<usize>,
 ) -> Result<()> {
+    // If there's a connection limit set, we will refuse connections
+    // after this point.
+    if let Some(conn_limit) = conn_limit {
+        if rh.clone().active_connections().await >= conn_limit {
+            debug!(
+                target: "rpc::server::accept()",
+                "Connection limit reached, refusing new conn"
+            );
+            return Err(Error::RpcConnectionsExhausted)
+        }
+    }
+
     loop {
         let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
         let _ = read_from_stream(&mut stream, &mut buf, false).await?;
@@ -99,34 +128,61 @@ pub async fn accept(
 async fn run_accept_loop(
     listener: Box<dyn PtListener>,
     rh: Arc<impl RequestHandler + 'static>,
+    conn_limit: Option<usize>,
     ex: Arc<smol::Executor<'_>>,
 ) -> Result<()> {
-    while let Ok((stream, peer_addr)) = listener.next().await {
-        info!(target: "rpc::server", "[RPC] Server accepted conn from {}", peer_addr);
-        // Detaching requests handling
-        let rh_ = rh.clone();
-        ex.spawn(async move {
-            if let Err(e) = accept(stream, peer_addr.clone(), rh_).await {
-                if e.to_string().as_str() == "Connection closed: Connection closed cleanly" {
-                    info!(
-                        target: "rpc::server",
-                        "[RPC] Closed connection from {}",
-                        peer_addr,
-                    );
-                } else {
-                    error!(
-                        target: "rpc::server",
-                        "[RPC] Server error on handling request from {}: {}",
-                        peer_addr, e,
-                    );
-                }
-            }
-        })
-        .detach();
-    }
+    loop {
+        match listener.next().await {
+            Ok((stream, url)) => {
+                let rh_ = rh.clone();
+                info!(target: "rpc::server", "[RPC] Server accepted conn from {}", url);
+                let task = StoppableTask::new();
+                let task_ = task.clone();
+                task.clone().start(
+                    accept(stream, url.clone(), rh.clone(), conn_limit),
+                    |_| async move {
+                        rh_.clone().unmark_connection(task_.clone()).await;
+                    },
+                    Error::ChannelStopped,
+                    ex.clone(),
+                );
 
-    // NOTE: This is here now to catch some code path. Will be handled properly.
-    panic!("RPC server listener stopped/crashed");
+                rh.clone().mark_connection(task.clone()).await;
+            }
+
+            // As per accept(2) recommendation:
+            Err(e) if e.raw_os_error().is_some() => match e.raw_os_error().unwrap() {
+                libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR => continue,
+                _ => {
+                    error!(
+                        target: "rpc::server::run_accept_loop()",
+                        "[RPC] Server failed listening: {}", e,
+                    );
+                    error!(
+                        target: "rpc::server::run_accept_loop()",
+                        "[RPC] Closing accept loop"
+                    );
+                    return Err(e.into())
+                }
+            },
+
+            // In case a TLS handshake fails, we'll get this:
+            Err(e) if e.kind() == ErrorKind::UnexpectedEof => continue,
+
+            // Errors we didn't handle above:
+            Err(e) => {
+                error!(
+                    target: "rpc::server::run_accept_loop()",
+                    "[RPC] Unhandled listener.next() error: {}", e,
+                );
+                error!(
+                    target: "rpc::server::run_accept_loop()",
+                    "[RPC] Closing acceptloop"
+                );
+                return Err(e.into())
+            }
+        }
+    }
 }
 
 /// Start a JSON-RPC server bound to the given accept URL and use the
@@ -134,8 +190,96 @@ async fn run_accept_loop(
 pub async fn listen_and_serve(
     accept_url: Url,
     rh: Arc<impl RequestHandler + 'static>,
+    conn_limit: Option<usize>,
     ex: Arc<smol::Executor<'_>>,
 ) -> Result<()> {
     let listener = Listener::new(accept_url).await?.listen().await?;
-    run_accept_loop(listener, rh, ex.clone()).await
+    run_accept_loop(listener, rh, conn_limit, ex.clone()).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{rpc::client::RpcClient, system::msleep};
+    use smol::{lock::Mutex, net::TcpListener, Executor};
+
+    struct RpcServer {
+        rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    }
+
+    #[async_trait]
+    impl RequestHandler for RpcServer {
+        async fn handle_request(&self, req: JsonRequest) -> JsonResult {
+            match req.method.as_str() {
+                "ping" => return self.pong(req.id, req.params).await,
+                _ => panic!(),
+            }
+        }
+
+        async fn get_connections(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
+            self.rpc_connections.lock().await
+        }
+    }
+
+    #[test]
+    fn conn_manager() -> Result<()> {
+        let executor = Arc::new(Executor::new());
+
+        // This simulates a server and a client. Through the function, there
+        // are some calls to sleep(), which are used for the tests, because
+        // otherwise they execute too fast. In practice, The RPC server is
+        // a long-running task so when polled, it should handle things in a
+        // correct manner.
+        smol::block_on(executor.run(async {
+            // Find an available port
+            let listener = TcpListener::bind("127.0.0.1:0").await?;
+            let sockaddr = listener.local_addr()?;
+            let endpoint = Url::parse(&format!("tcp://127.0.0.1:{}", sockaddr.port()))?;
+            drop(listener);
+
+            let rpc_server = Arc::new(RpcServer { rpc_connections: Mutex::new(HashSet::new()) });
+
+            let server_task = StoppableTask::new();
+            server_task.clone().start(
+                listen_and_serve(endpoint.clone(), rpc_server.clone(), None, executor.clone()),
+                |res| async move {
+                    match res {
+                        Ok(()) | Err(Error::RpcServerStopped) => {}
+                        Err(e) => panic!("{}", e),
+                    }
+                },
+                Error::RpcServerStopped,
+                executor.clone(),
+            );
+
+            // Let the server spawn
+            msleep(500).await;
+
+            // Connect a client
+            let rpc_client0 = RpcClient::new(endpoint.clone(), executor.clone()).await?;
+            msleep(500).await;
+            assert!(rpc_server.active_connections().await == 1);
+
+            // Connect another client
+            let rpc_client1 = RpcClient::new(endpoint.clone(), executor.clone()).await?;
+            msleep(500).await;
+            assert!(rpc_server.active_connections().await == 2);
+
+            // Close the first client
+            rpc_client0.close().await?;
+            msleep(500).await;
+            assert!(rpc_server.active_connections().await == 1);
+
+            // Close the second client
+            rpc_client1.close().await?;
+            msleep(500).await;
+            assert!(rpc_server.active_connections().await == 0);
+
+            // The Listener should be stopped when we stop the server task.
+            server_task.stop().await;
+            assert!(RpcClient::new(endpoint, executor.clone()).await.is_err());
+
+            Ok(())
+        }))
+    }
 }
