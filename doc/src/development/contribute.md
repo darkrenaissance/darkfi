@@ -25,7 +25,7 @@ and can be considered a priority.
 
 To find them, run the following command:
 ```
-git grep -E 'TODO|FIXME'
+$ git grep -E 'TODO|FIXME'
 ```
 
 ## Areas of work
@@ -66,14 +66,14 @@ After running the normal commands to set-up DarkFi as described in the README, r
 
 ```
 # Install cargo fuzz
-cargo install cargo-fuzz
+$ cargo install cargo-fuzz
 ```
 
 Run the following from the DarkFi repo folder:
 
 ```
-cd fuzz/
-cargo fuzz list
+$ cd fuzz/
+$ cargo fuzz list
 ```
 
 This will list the available fuzzing targets. Choose one and run it with:
@@ -81,10 +81,41 @@ This will list the available fuzzing targets. Choose one and run it with:
 ### Run
 ```
 # format: cargo fuzz run TARGET
-# e.g.
-cargo fuzz run serial
+# e.g. if `serial` is your target:
+$ cargo fuzz run --all-features serial 
 ```
 
 This process will run infinitely until a crash occurs or until it is cancelled by the user.
 
 If you are able to trigger a crash, get in touch with the DarkFi team via irc.
+
+## Troubleshooting
+
+The `master` branch is considered bleeding-edge so stability issues can occur. If you
+encounter issues, try the steps below. It is a good idea to revisit these steps
+periodically as things change. For example, even if you have already installed all
+dependencies, new ones may have been recently added and this could break your
+development environment.
+
+* Clear out artifacts and get a fresh build environment: 
+
+```sh
+# Get to the latest commit
+$ git pull origin master
+# Clean build artifacts
+$ make distclean
+```
+
+* Remove `Cargo.lock`. This will cause Rust to re-evaluate dependencies and could help
+if there is a version mismatch.
+
+* Ensure all dependencies are installed. Check the README.md and/or run:
+
+```
+$ sh contrib/dependency_setup.sh
+```
+
+* Ensure that you are using the nightly toolchain and are building for `wasm32-unknown-unknown`.
+Check `README.md` for instructions.
+
+* When running a `cargo` command, use the flag `--all-features`.
