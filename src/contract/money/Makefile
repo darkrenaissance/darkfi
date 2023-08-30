@@ -1,8 +1,7 @@
 .POSIX:
 
 # Cargo binary
-RUST_VER = +nightly-2023-06-21
-CARGO = cargo $(RUST_VER)
+CARGO = cargo +nightly
 
 # zkas compiler binary
 ZKAS = ../../../zkas
