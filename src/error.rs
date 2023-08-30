@@ -140,6 +140,9 @@ pub enum Error {
     #[error("Channel timed out")]
     ChannelTimeout,
 
+    #[error("Failed to reach any seeds")]
+    SeedFailed,
+
     #[error("Network service stopped")]
     NetworkServiceStopped,
 

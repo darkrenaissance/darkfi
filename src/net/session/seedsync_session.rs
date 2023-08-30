@@ -111,7 +111,7 @@ impl SeedSyncSession {
         join_all(tasks).await;
 
         if failed.load(Ordering::SeqCst) == settings.seeds.len() {
-            return Err(Error::ConnectFailed)
+            return Err(Error::SeedFailed)
         }
 
         // Seed process complete

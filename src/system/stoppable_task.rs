@@ -54,7 +54,7 @@ impl StoppableTask {
         Arc::new(Self { stop_send, stop_recv, stop_barrier: CondVar::new() })
     }
 
-    /// Stops the task
+    /// Stops the task. Will return when the process has fully closed.
     pub async fn stop(&self) {
         // Ignore any errors from this send
         let _ = self.stop_send.send(()).await;
