@@ -16,15 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fs::File, net::SocketAddr};
+use std::{fs::File, sync::Arc};
 
 use async_rustls::{rustls, TlsAcceptor};
-use async_std::{
-    net::TcpListener,
-    sync::{Arc, Mutex},
-};
-use futures::{io::BufReader, AsyncRead, AsyncReadExt, AsyncWrite};
 use log::{error, info};
+use smol::{
+    io::{self, AsyncRead, AsyncWrite, BufReader},
+    lock::Mutex,
+    net::{SocketAddr, TcpListener},
+};
 
 use darkfi::{
     event_graph::{
@@ -33,7 +33,7 @@ use darkfi::{
         view::ViewPtr,
     },
     net::P2pPtr,
-    system::SubscriberPtr,
+    system::{StoppableTask, SubscriberPtr},
     util::{path::expand_path, time::Timestamp},
     Error, Result,
 };
@@ -85,30 +85,45 @@ impl IrcServer {
         let (msg_notifier, msg_recv) = smol::channel::unbounded();
 
         // Listen to msgs from clients
-        executor
-            .clone()
-            .spawn(Self::listen_to_msgs(
+        StoppableTask::new().start(
+            Self::listen_to_msgs(
                 self.p2p.clone(),
                 self.model.clone(),
                 self.seen.clone(),
                 msg_recv,
+                self.missed_events.clone(),
                 self.clients_subscriptions.clone(),
-            ))
-            .detach();
+            ),
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkirc::irc::server::start", "Failed starting listen to msgs: {}", e),
+                }
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
 
         // Listen to msgs from View
-        executor
-            .clone()
-            .spawn(Self::listen_to_view(
+        StoppableTask::new().start(
+            Self::listen_to_view(
                 self.view.clone(),
                 self.seen.clone(),
                 self.missed_events.clone(),
                 self.clients_subscriptions.clone(),
-            ))
-            .detach();
+            ),
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkirc::irc::server::start", "Failed starting listen to view: {}", e),
+                }
+            },
+            Error::DetachedTaskStopped,
+            executor.clone(),
+        );
 
         // Start listening for new connections
-        self.listen(msg_notifier, executor.clone()).await?;
+        self.listen(msg_notifier, executor).await?;
 
         Ok(())
     }
@@ -138,7 +153,8 @@ impl IrcServer {
         p2p: P2pPtr,
         model: ModelPtr<PrivMsgEvent>,
         seen: SeenPtr<EventId>,
-        recv: smol::channel::Receiver<(NotifierMsg, u64)>,
+        recv: smol::channel::Receiver<(NotifierMsg, usize)>,
+        missed_events: Arc<Mutex<Vec<Event<PrivMsgEvent>>>>,
         clients_subscriptions: SubscriberPtr<ClientSubMsg>,
     ) -> Result<()> {
         loop {
@@ -162,7 +178,7 @@ impl IrcServer {
                     }
 
                     let event = Event {
-                        previous_event_hash: model.lock().await.get_head_hash(),
+                        previous_event_hash: model.lock().await.get_head_hash()?,
                         action: msg.clone(),
                         timestamp: Timestamp::current_time(),
                     };
@@ -176,6 +192,8 @@ impl IrcServer {
                     if !seen.push(&event.hash()).await {
                         continue
                     }
+
+                    missed_events.lock().await.push(event.clone());
 
                     p2p.broadcast(&event).await;
                 }
@@ -195,7 +213,7 @@ impl IrcServer {
     /// Start listening to new connections from irc clients
     pub async fn listen(
         &self,
-        notifier: smol::channel::Sender<(NotifierMsg, u64)>,
+        notifier: smol::channel::Sender<(NotifierMsg, usize)>,
         executor: Arc<smol::Executor<'_>>,
     ) -> Result<()> {
         let (listener, acceptor) = self.setup_listener().await?;
@@ -239,10 +257,10 @@ impl IrcServer {
         &self,
         stream: C,
         peer_addr: SocketAddr,
-        notifier: smol::channel::Sender<(NotifierMsg, u64)>,
+        notifier: smol::channel::Sender<(NotifierMsg, usize)>,
         executor: Arc<smol::Executor<'_>>,
     ) -> Result<()> {
-        let (reader, writer) = stream.split();
+        let (reader, writer) = io::split(stream);
         let reader = BufReader::new(reader);
 
         // Subscription for the new client
@@ -263,11 +281,18 @@ impl IrcServer {
         );
 
         // Start listening and detach
-        executor
-            .spawn(async move {
-                client.listen().await;
-            })
-            .detach();
+        StoppableTask::new().start(
+            // Weird hack to prevent lifetimes hell
+            async move {client.listen().await; Ok(())},
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkirc::irc::server::process_connection", "Failed starting client listen: {}", e),
+                }
+            },
+            Error::DetachedTaskStopped,
+            executor,
+        );
 
         Ok(())
     }
@@ -278,7 +303,7 @@ impl IrcServer {
         let listener = TcpListener::bind(listenaddr).await?;
 
         let acceptor = match self.settings.irc_listen.scheme() {
-            "tls" => {
+            "tcp+tls" => {
                 // openssl genpkey -algorithm ED25519 > example.com.key
                 // openssl req -new -out example.com.csr -key example.com.key
                 // openssl x509 -req -days 700 -in example.com.csr -signkey example.com.key -out example.com.crt

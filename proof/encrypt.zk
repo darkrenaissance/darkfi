@@ -5,6 +5,9 @@
 #
 # This is basically the el gamal scheme in ZK
 
+k = 13;
+field = "pallas";
+
 constant "Encrypt" {}
 
 witness "Encrypt" {

@@ -40,7 +40,7 @@ pub fn find_free_id(task_ids: &[u32]) -> u32 {
 pub fn set_event(task_info: &mut TaskInfo, action: &str, author: &str, content: &str) {
     debug!(target: "tau", "TaskInfo::set_event()");
     if !content.is_empty() {
-        task_info.events.0.push(TaskEvent::new(action.into(), author.into(), content.into()));
+        task_info.events.push(TaskEvent::new(action.into(), author.into(), content.into()));
     }
 }
 

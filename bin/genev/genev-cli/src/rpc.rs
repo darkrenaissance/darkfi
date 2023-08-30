@@ -16,16 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::debug;
-use serde_json::json;
-
 use darkfi::{
     event_graph::model::Event,
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
+    util::encoding::base64,
     Result,
 };
-
-use crate::BaseEvent;
+use darkfi_serial::{deserialize, serialize};
+use genevd::GenEvent;
+use log::debug;
+use tinyjson::JsonValue;
 
 pub struct Gen {
     pub rpc_client: RpcClient,
@@ -37,8 +37,10 @@ impl Gen {
     }
 
     /// Add a new task.
-    pub async fn add(&self, event: BaseEvent) -> Result<()> {
-        let req = JsonRequest::new("add", json!([event]));
+    pub async fn add(&self, event: GenEvent) -> Result<()> {
+        let event = JsonValue::String(base64::encode(&serialize(&event)));
+
+        let req = JsonRequest::new("add", vec![event]);
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);
@@ -46,14 +48,14 @@ impl Gen {
     }
 
     /// Get current open tasks ids.
-    pub async fn list(&self) -> Result<Vec<Event<BaseEvent>>> {
-        let req = JsonRequest::new("list", json!([]));
+    pub async fn list(&self) -> Result<Vec<Event<GenEvent>>> {
+        let req = JsonRequest::new("list", vec![]);
         let rep = self.rpc_client.request(req).await?;
 
         debug!("reply: {:?}", rep);
 
-        let bytes: Vec<u8> = serde_json::from_value(rep)?;
-        let events: Vec<Event<BaseEvent>> = darkfi_serial::deserialize(&bytes)?;
+        let bytes: Vec<u8> = base64::decode(rep.get::<String>().unwrap()).unwrap();
+        let events: Vec<Event<GenEvent>> = deserialize(&bytes)?;
 
         Ok(events)
     }

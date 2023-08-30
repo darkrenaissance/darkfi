@@ -16,33 +16,31 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::{HashMap, HashSet};
-
-use async_std::{
-    stream::StreamExt,
-    sync::{Arc, Mutex},
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
 };
+
 use futures::{stream::FuturesUnordered, TryFutureExt};
 use log::{debug, error, info, warn};
 use rand::{prelude::IteratorRandom, rngs::OsRng};
-use smol::Executor;
+use smol::{lock::Mutex, stream::StreamExt};
 use url::Url;
 
 use super::{
     channel::ChannelPtr,
+    dnet::DnetEvent,
     hosts::{Hosts, HostsPtr},
     message::Message,
     protocol::{protocol_registry::ProtocolRegistry, register_default_protocols},
     session::{
-        inbound_session::InboundDnet,
-        outbound_session::{OutboundDnet, OutboundState},
         InboundSession, InboundSessionPtr, ManualSession, ManualSessionPtr, OutboundSession,
-        OutboundSessionPtr, SeedSyncSession, Session,
+        OutboundSessionPtr, SeedSyncSession,
     },
     settings::{Settings, SettingsPtr},
 };
 use crate::{
-    system::{Subscriber, SubscriberPtr, Subscription},
+    system::{ExecutorPtr, Subscriber, SubscriberPtr, Subscription},
     Result,
 };
 
@@ -53,78 +51,36 @@ pub type ConnectedChannels = Mutex<HashMap<Url, ChannelPtr>>;
 /// Atomic pointer to the p2p interface
 pub type P2pPtr = Arc<P2p>;
 
-/// Representations of the p2p state
-enum P2pState {
-    /// The P2P object has been created but not yet started
-    Open,
-    /// We are performing the initial seed session
-    Start,
-    /// Seed session finished, but not yet running
-    Started,
-    /// P2P is running and the network is active
-    Run,
-    /// The P2P network has been stopped
-    Stopped,
-}
-
-/// Types of DnetInfo (used with sessions)
-pub enum DnetInfo {
-    /// Hosts info
-    Hosts(Vec<Url>),
-    /// Outbound Session Info
-    Outbound(OutboundDnet),
-    /// Inbound Session Info
-    Inbound(InboundDnet),
-    // Manual Session Info
-    //Manual(ManualDnet),
-}
-
-impl std::fmt::Display for P2pState {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::Open => "open",
-                Self::Start => "start",
-                Self::Started => "started",
-                Self::Run => "run",
-                Self::Stopped => "stopped",
-            }
-        )
-    }
-}
-
 /// Toplevel peer-to-peer networking interface
 pub struct P2p {
+    /// Global multithreaded executor reference
+    executor: ExecutorPtr,
     /// Channels pending connection
     pending: PendingChannels,
     /// Connected channels
     channels: ConnectedChannels,
     /// Subscriber for notifications of new channels
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
-    /// Subscriber for stop notifications
-    stop_subscriber: SubscriberPtr<()>,
     /// Known hosts (peers)
     hosts: HostsPtr,
     /// Protocol registry
     protocol_registry: ProtocolRegistry,
-    /// The state of the interface
-    state: Mutex<P2pState>,
     /// P2P network settings
     settings: SettingsPtr,
     /// Boolean lock marking if peer discovery is active
     pub peer_discovery_running: Mutex<bool>,
 
     /// Reference to configured [`ManualSession`]
-    session_manual: Mutex<Option<Arc<ManualSession>>>,
+    session_manual: ManualSessionPtr,
     /// Reference to configured [`InboundSession`]
-    session_inbound: Mutex<Option<Arc<InboundSession>>>,
+    session_inbound: InboundSessionPtr,
     /// Reference to configured [`OutboundSession`]
-    session_outbound: Mutex<Option<Arc<OutboundSession>>>,
+    session_outbound: OutboundSessionPtr,
 
     /// Enable network debugging
     pub dnet_enabled: Mutex<bool>,
+    /// The subscriber for which we can give dnet info over
+    dnet_subscriber: SubscriberPtr<DnetEvent>,
 }
 
 impl P2p {
@@ -136,111 +92,81 @@ impl P2p {
     ///
     /// Creates a weak pointer to self that is used by all sessions to access the
     /// p2p parent class.
-    pub async fn new(settings: Settings) -> P2pPtr {
+    pub async fn new(settings: Settings, executor: ExecutorPtr) -> P2pPtr {
         let settings = Arc::new(settings);
 
         let self_ = Arc::new(Self {
+            executor,
             pending: Mutex::new(HashSet::new()),
             channels: Mutex::new(HashMap::new()),
             channel_subscriber: Subscriber::new(),
-            stop_subscriber: Subscriber::new(),
             hosts: Hosts::new(settings.clone()),
             protocol_registry: ProtocolRegistry::new(),
-            state: Mutex::new(P2pState::Open),
             settings,
             peer_discovery_running: Mutex::new(false),
 
-            session_manual: Mutex::new(None),
-            session_inbound: Mutex::new(None),
-            session_outbound: Mutex::new(None),
+            session_manual: ManualSession::new(),
+            session_inbound: InboundSession::new(),
+            session_outbound: OutboundSession::new(),
 
             dnet_enabled: Mutex::new(false),
+            dnet_subscriber: Subscriber::new(),
         });
 
-        let parent = Arc::downgrade(&self_);
-
-        *self_.session_manual.lock().await = Some(ManualSession::new(parent.clone()));
-        *self_.session_inbound.lock().await = Some(InboundSession::new(parent.clone()));
-        *self_.session_outbound.lock().await = Some(OutboundSession::new(parent));
+        self_.session_manual.p2p.init(self_.clone());
+        self_.session_inbound.p2p.init(self_.clone());
+        self_.session_outbound.p2p.init(self_.clone());
 
         register_default_protocols(self_.clone()).await;
 
         self_
     }
 
-    /// Invoke startup and seeding sequence. Call from constructing thread.
-    pub async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
+    /// Starts inbound, outbound, and manual sessions.
+    pub async fn start(self: Arc<Self>) -> Result<()> {
         debug!(target: "net::p2p::start()", "P2P::start() [BEGIN]");
-        info!(target: "net::p2p::start()", "[P2P] Seeding P2P subsystem");
-        *self.state.lock().await = P2pState::Start;
-
-        // Start seed session
-        let seed = SeedSyncSession::new(Arc::downgrade(&self));
-        // This will block until all seed queries have finished
-        seed.start(ex.clone()).await?;
-
-        *self.state.lock().await = P2pState::Started;
-
-        debug!(target: "net::p2p::start()", "P2P::start() [END]");
-        Ok(())
-    }
-
-    /// Runs the network. Starts inbound, outbound, and manual sessions.
-    /// Waits for a stop signal and stops the network if received.
-    pub async fn run(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "net::p2p::run()", "P2P::run() [BEGIN]");
-        info!(target: "net::p2p::run()", "[P2P] Running P2P subsystem");
-        *self.state.lock().await = P2pState::Run;
+        info!(target: "net::p2p::start()", "[P2P] Starting P2P subsystem");
 
         // First attempt any set manual connections
-        let manual = self.session_manual().await;
         for peer in &self.settings.peers {
-            manual.clone().connect(peer.clone(), ex.clone()).await;
+            self.session_manual().await.connect(peer.clone()).await;
         }
 
         // Start the inbound session
         let inbound = self.session_inbound().await;
-        inbound.clone().start(ex.clone()).await?;
+        if let Err(err) = inbound.start().await {
+            error!(target: "net::p2p::start()", "Failed to start inbound session!: {}", err);
+            self.session_manual().await.stop().await;
+            return Err(err)
+        }
 
         // Start the outbound session
-        let outbound = self.session_outbound().await;
-        outbound.clone().start(ex.clone()).await?;
+        self.session_outbound().await.start().await;
 
-        info!(target: "net::p2p::run()", "[P2P] P2P subsystem started");
-
-        // Wait for stop signal
-        let stop_sub = self.subscribe_stop().await;
-        stop_sub.receive().await;
-
-        info!(target: "net::p2p::run()", "[P2P] Received P2P subsystem stop signal. Shutting down.");
-
-        // Stop the sessions
-        manual.stop().await;
-        inbound.stop().await;
-        outbound.stop().await;
-
-        *self.state.lock().await = P2pState::Stopped;
-
-        debug!(target: "net::p2p::run()", "P2P::run() [END]");
+        info!(target: "net::p2p::start()", "[P2P] P2P subsystem started");
         Ok(())
     }
 
-    /// Subscribe to a stop signal.
-    pub async fn subscribe_stop(&self) -> Subscription<()> {
-        self.stop_subscriber.clone().subscribe().await
+    /// Reseed the P2P network.
+    pub async fn seed(self: Arc<Self>) -> Result<()> {
+        debug!(target: "net::p2p::seed()", "P2P::seed() [BEGIN]");
+        info!(target: "net::p2p::seed()", "[P2P] Seeding P2P subsystem");
+
+        // Start seed session
+        let seed = SeedSyncSession::new(Arc::downgrade(&self));
+        // This will block until all seed queries have finished
+        seed.start().await?;
+
+        debug!(target: "net::p2p::seed()", "P2P::seed() [END]");
+        Ok(())
     }
 
     /// Stop the running P2P subsystem
     pub async fn stop(&self) {
-        self.stop_subscriber.notify(()).await
-    }
-
-    /// Add a channel to the set of connected channels
-    pub async fn store(&self, channel: ChannelPtr) {
-        // TODO: Check the code path for this, and potentially also insert the remote
-        // into the hosts list?
-        self.channels.lock().await.insert(channel.address().clone(), channel.clone());
-        self.channel_subscriber.notify(Ok(channel)).await;
+        // Stop the sessions
+        self.session_manual().await.stop().await;
+        self.session_inbound().await.stop().await;
+        self.session_outbound().await.stop().await;
     }
 
     /// Broadcasts a message concurrently across all active channels.
@@ -261,20 +187,22 @@ impl P2p {
             }
 
             futures.push(channel.send(message).map_err(|e| {
-                format!("P2P: Broadcasting message to {} failed: {}", channel.address(), e)
+                (
+                    format!("[P2P] Broadcasting message to {} failed: {}", channel.address(), e),
+                    channel.clone(),
+                )
             }));
         }
 
         if futures.is_empty() {
-            warn!(target: "net::p2p::broadcast()", "P2P: No connected channels found for broadcast");
+            warn!(target: "net::p2p::broadcast()", "[P2P] No connected channels found for broadcast");
             return
         }
 
         while let Some(entry) = futures.next().await {
-            // TODO: Here we can close the channels.
-            // See message_subscriber::_trigger_all on how to do it.
-            if let Err(e) = entry {
+            if let Err((e, chan)) = entry {
                 error!(target: "net::p2p::broadcast()", "{}", e);
+                self.remove(chan).await;
             }
         }
     }
@@ -284,18 +212,26 @@ impl P2p {
         self.channels.lock().await.contains_key(addr)
     }
 
+    /// Add a channel to the set of connected channels
+    pub(super) async fn store(&self, channel: ChannelPtr) {
+        // TODO: Check the code path for this, and potentially also insert the remote
+        // into the hosts list?
+        self.channels.lock().await.insert(channel.address().clone(), channel.clone());
+        self.channel_subscriber.notify(Ok(channel)).await;
+    }
+
     /// Remove a channel from the set of connected channels
-    pub async fn remove(&self, channel: ChannelPtr) {
+    pub(super) async fn remove(&self, channel: ChannelPtr) {
         self.channels.lock().await.remove(channel.address());
     }
 
     /// Add an address to the list of pending channels.
-    pub async fn add_pending(&self, addr: &Url) -> bool {
+    pub(super) async fn add_pending(&self, addr: &Url) -> bool {
         self.pending.lock().await.insert(addr.clone())
     }
 
     /// Remove a channel from the list of pending channels.
-    pub async fn remove_pending(&self, addr: &Url) {
+    pub(super) async fn remove_pending(&self, addr: &Url) {
         self.pending.lock().await.remove(addr);
     }
 
@@ -310,6 +246,10 @@ impl P2p {
         channels.values().choose(&mut OsRng).cloned()
     }
 
+    pub async fn is_connected(&self) -> bool {
+        !self.channels().lock().await.is_empty()
+    }
+
     /// Return an atomic pointer to the set network settings
     pub fn settings(&self) -> SettingsPtr {
         self.settings.clone()
@@ -320,6 +260,11 @@ impl P2p {
         self.hosts.clone()
     }
 
+    /// Reference the global executor
+    pub fn executor(&self) -> ExecutorPtr {
+        self.executor.clone()
+    }
+
     /// Return a reference to the internal protocol registry
     pub fn protocol_registry(&self) -> &ProtocolRegistry {
         &self.protocol_registry
@@ -327,26 +272,21 @@ impl P2p {
 
     /// Get pointer to manual session
     pub async fn session_manual(&self) -> ManualSessionPtr {
-        self.session_manual.lock().await.as_ref().unwrap().clone()
+        self.session_manual.clone()
     }
 
     /// Get pointer to inbound session
     pub async fn session_inbound(&self) -> InboundSessionPtr {
-        self.session_inbound.lock().await.as_ref().unwrap().clone()
+        self.session_inbound.clone()
     }
 
     /// Get pointer to outbound session
     pub async fn session_outbound(&self) -> OutboundSessionPtr {
-        self.session_outbound.lock().await.as_ref().unwrap().clone()
+        self.session_outbound.clone()
     }
 
     /// Enable network debugging
     pub async fn dnet_enable(&self) {
-        // Enable log for all connected channels if not enabled already
-        for channel in self.channels().lock().await.values() {
-            channel.dnet_enable().await;
-        }
-
         *self.dnet_enabled.lock().await = true;
         warn!("[P2P] Network debugging enabled!");
     }
@@ -354,111 +294,16 @@ impl P2p {
     /// Disable network debugging
     pub async fn dnet_disable(&self) {
         *self.dnet_enabled.lock().await = false;
-
-        // Clear out any held data
-        for channel in self.channels().lock().await.values() {
-            channel.dnet_disable().await;
-        }
-
         warn!("[P2P] Network debugging disabled!");
     }
 
-    /// Gather session dnet info and return it in a vec.
-    /// Returns an empty vec if dnet is disabled.
-    pub async fn dnet_info(&self) -> Vec<DnetInfo> {
-        let mut ret = vec![];
-
-        if *self.dnet_enabled.lock().await {
-            ret.push(self.session_inbound().await.dnet_info().await);
-            ret.push(self.session_outbound().await.dnet_info().await);
-            ret.push(DnetInfo::Hosts(self.hosts.load_all().await));
-        }
-
-        ret
+    /// Subscribe to dnet events
+    pub async fn dnet_subscribe(&self) -> Subscription<DnetEvent> {
+        self.dnet_subscriber.clone().subscribe().await
     }
 
-    /// Maps DnetInfo into a JSON struct usable by clients
-    pub fn map_dnet_info(dnet_info: Vec<DnetInfo>) -> serde_json::Value {
-        let mut map = serde_json::Map::new();
-        map.insert("inbound".into(), serde_json::Value::Null);
-        map.insert("outbound".into(), serde_json::Value::Null);
-        map.insert("hosts".into(), serde_json::Value::Null);
-
-        // We assume there will be one of each
-        for info in dnet_info {
-            match info {
-                DnetInfo::Hosts(hosts) => map["hosts"] = serde_json::json!(hosts),
-
-                DnetInfo::Outbound(outbound_info) => {
-                    let mut slot_info = vec![];
-                    for slot in outbound_info.slots {
-                        let Some(slot) = slot else {
-                            slot_info.push(serde_json::Value::Null);
-                            continue
-                        };
-
-                        let obj = if slot.state != OutboundState::Open {
-                            serde_json::json!({
-                                "addr": slot.addr.unwrap().to_string(),
-                                "state": slot.state.to_string(),
-                                "info": {
-                                    "addr": slot.channel.as_ref().unwrap().addr.to_string(),
-                                    "random_id": slot.channel.as_ref().unwrap().random_id,
-                                    "remote_id": slot.channel.as_ref().unwrap().remote_node_id,
-                                    "log": slot.channel.as_ref().unwrap().log.to_vec(),
-                                }
-                            })
-                        } else {
-                            serde_json::json!({
-                                "addr": serde_json::Value::Null,
-                                "state": slot.state.to_string(),
-                                "info": serde_json::Value::Null,
-                            })
-                        };
-
-                        slot_info.push(obj);
-                    }
-
-                    map["outbound"] = serde_json::json!(slot_info);
-                }
-
-                DnetInfo::Inbound(inbound_info) => {
-                    let mut slot_info = vec![];
-                    for slot in inbound_info.slots {
-                        let Some(slot) = slot else {
-                            slot_info.push(serde_json::Value::Null);
-                            continue
-                        };
-
-                        let obj = serde_json::json!({
-                            "addr": slot.addr.unwrap().to_string(),
-                            "info": {
-                                "addr": slot.channel.as_ref().unwrap().addr.to_string(),
-                                "random_id": slot.channel.as_ref().unwrap().random_id,
-                                "remote_id": slot.channel.as_ref().unwrap().remote_node_id,
-                                "log": slot.channel.as_ref().unwrap().log.to_vec(),
-                            }
-                        });
-
-                        slot_info.push(obj);
-                    }
-
-                    map["inbound"] = serde_json::json!(slot_info);
-                }
-            }
-        }
-
-        serde_json::json!(map)
+    /// Send a dnet notification over the subscriber
+    pub async fn dnet_notify(&self, event: DnetEvent) {
+        self.dnet_subscriber.notify(event).await;
     }
 }
-
-macro_rules! dnet {
-    ($self:expr, $($code:tt)*) => {
-        {
-            if *$self.p2p().dnet_enabled.lock().await {
-                $($code)*
-            }
-        }
-    };
-}
-pub(crate) use dnet;

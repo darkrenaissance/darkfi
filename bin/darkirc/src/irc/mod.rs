@@ -44,9 +44,9 @@ pub struct IrcConfig {
     pub is_pass_init: bool,
 
     // user config
-    pub nickname: String,
-    pub password: String,
-    pub capabilities: HashMap<String, bool>,
+    pub nick: String,
+    pub pass: String,
+    pub caps: HashMap<String, bool>,
 
     // channels and contacts
     pub auto_channels: Vec<String>,
@@ -56,7 +56,7 @@ pub struct IrcConfig {
 
 impl IrcConfig {
     pub fn new(settings: &Args) -> Result<Self> {
-        let password = settings.password.as_ref().unwrap_or(&String::new()).clone();
+        let pass = settings.password.as_ref().unwrap_or(&String::new()).clone();
 
         let mut auto_channels = settings.autojoin.clone();
         auto_channels.retain(|chan| chan.len() <= MAXIMUM_LENGTH_OF_NICK_CHAN_CNT);
@@ -67,8 +67,8 @@ impl IrcConfig {
         let channels = parse_configured_channels(&toml_contents)?;
         let contacts = parse_configured_contacts(&toml_contents)?;
 
-        let mut capabilities = HashMap::new();
-        capabilities.insert("no-history".to_string(), false);
+        let mut caps = HashMap::new();
+        caps.insert("no-history".to_string(), false);
 
         Ok(Self {
             is_nick_init: false,
@@ -76,12 +76,12 @@ impl IrcConfig {
             is_registered: false,
             is_cap_end: true,
             is_pass_init: false,
-            nickname: "anon".to_string(),
-            password,
+            nick: "anon".to_string(),
+            pass,
             auto_channels,
             channels,
             contacts,
-            capabilities,
+            caps,
         })
     }
 }

@@ -16,19 +16,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
 
-use async_std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use log::debug;
+use smol::lock::Mutex;
 
 use super::EventMsg;
 use crate::{
     event_graph::model::{Event, EventId, ModelPtr},
     impl_p2p_message, net,
     net::Message,
-    util::{async_util::sleep, ringbuffer::RingBuffer},
+    system::sleep,
+    util::ringbuffer::RingBuffer,
     Result,
 };
 
@@ -63,7 +64,7 @@ pub struct Seen<T> {
     seen: Mutex<RingBuffer<T, SIZE_OF_SEEN_BUFFER>>,
 }
 
-impl<T: Eq + PartialEq + Clone> Seen<T> {
+impl<T: Send + Sync + Eq + PartialEq + Clone> Seen<T> {
     pub fn new() -> SeenPtr<T> {
         Arc::new(Self { seen: Mutex::new(RingBuffer::new()) })
     }
@@ -215,7 +216,7 @@ where
                     continue
                 }
 
-                let children = model.get_offspring(leaf);
+                let children = model.get_offspring(leaf)?;
 
                 for child in children {
                     self.channel.send(&child).await?;
@@ -237,7 +238,7 @@ where
     async fn new_event(&self, event: &Event<T>) -> Result<()> {
         debug!(target: "event_graph", "ProtocolEvent::new_event()");
         let mut model = self.model.lock().await;
-        model.add(event.clone()).await;
+        model.add(event.clone()).await?;
 
         Ok(())
     }

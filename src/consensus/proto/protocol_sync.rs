@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Arc;
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use log::{debug, error, info};
 use smol::Executor;
@@ -141,7 +142,7 @@ impl ProtocolSync {
 
     async fn handle_receive_block(self: Arc<Self>) -> Result<()> {
         debug!(target: "consensus::protocol_sync::handle_receive_block()", "START");
-        let _exclude_list = vec![self.channel.address()];
+        let _exclude_list = [self.channel.address()];
         loop {
             let info = match self.block_sub.receive().await {
                 Ok(v) => v,
@@ -172,8 +173,7 @@ impl ProtocolSync {
                 let lock = self.state.read().await;
                 let current = lock.consensus.time_keeper.current_slot();
                 let participating = lock.consensus.participating;
-                if participating.is_some() {
-                    let slot = participating.unwrap();
+                if let Some(slot) = participating {
                     if current >= slot {
                         debug!(
                             target: "consensus::protocol_sync::handle_receive_block()",
@@ -308,8 +308,7 @@ impl ProtocolSync {
                 let lock = self.state.read().await;
                 let current = lock.consensus.time_keeper.current_slot();
                 let participating = lock.consensus.participating;
-                if participating.is_some() {
-                    let slot = participating.unwrap();
+                if let Some(slot) = participating {
                     if current >= slot {
                         debug!(
                             target: "consensus::protocol_sync::handle_receive_slot()",

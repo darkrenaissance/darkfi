@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
 use crate::consensus::{EncryptedTxRcpt, TransferStx};
 

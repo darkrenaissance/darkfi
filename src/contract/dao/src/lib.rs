@@ -57,12 +57,6 @@ pub mod entrypoint;
 /// Client API for interaction with this smart contract
 pub mod client;
 
-// TODO: Delete these and use the proper API
-#[cfg(feature = "client")]
-pub mod money_client;
-#[cfg(feature = "client")]
-pub mod wallet_cache;
-
 // These are the different sled trees that will be created
 pub const DAO_CONTRACT_DB_INFO_TREE: &str = "dao_info";
 pub const DAO_CONTRACT_DB_DAO_BULLAS: &str = "dao_bullas";

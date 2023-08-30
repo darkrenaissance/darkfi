@@ -16,9 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::marker::PhantomData;
+
 use halo2_proofs::{
     circuit::{AssignedCell, Chip, Layouter},
-    pasta::{group::ff::WithSmallOrderMulGroup, pallas},
+    pasta::group::ff::WithSmallOrderMulGroup,
     plonk,
     plonk::{Advice, Column, ConstraintSystem, Constraints, Expression, Selector},
     poly::Rotation,
@@ -41,11 +43,12 @@ pub struct SmallRangeCheckConfig {
 }
 
 #[derive(Clone, Debug)]
-pub struct SmallRangeCheckChip {
+pub struct SmallRangeCheckChip<F> {
     config: SmallRangeCheckConfig,
+    _marker: PhantomData<F>,
 }
 
-impl Chip<pallas::Base> for SmallRangeCheckChip {
+impl<F: WithSmallOrderMulGroup<3> + Ord> Chip<F> for SmallRangeCheckChip<F> {
     type Config = SmallRangeCheckConfig;
     type Loaded = ();
 
@@ -58,13 +61,13 @@ impl Chip<pallas::Base> for SmallRangeCheckChip {
     }
 }
 
-impl SmallRangeCheckChip {
+impl<F: WithSmallOrderMulGroup<3> + Ord> SmallRangeCheckChip<F> {
     pub fn construct(config: SmallRangeCheckConfig) -> Self {
-        Self { config }
+        Self { config, _marker: PhantomData }
     }
 
     pub fn configure(
-        meta: &mut ConstraintSystem<pallas::Base>,
+        meta: &mut ConstraintSystem<F>,
         z: Column<Advice>,
         range: u8,
     ) -> SmallRangeCheckConfig {
@@ -84,8 +87,8 @@ impl SmallRangeCheckChip {
 
     pub fn small_range_check(
         &self,
-        mut layouter: impl Layouter<pallas::Base>,
-        value: AssignedCell<pallas::Base, pallas::Base>,
+        mut layouter: impl Layouter<F>,
+        value: AssignedCell<F, F>,
     ) -> Result<(), plonk::Error> {
         layouter.assign_region(
             || "small range constrain",
@@ -105,6 +108,7 @@ mod tests {
     use halo2_proofs::{
         circuit::{floor_planner, Value},
         dev::MockProver,
+        pasta::pallas,
         plonk,
         plonk::Circuit,
     };
@@ -117,6 +121,7 @@ mod tests {
     impl Circuit<pallas::Base> for SmallRangeCircuit {
         type Config = (SmallRangeCheckConfig, Column<Advice>);
         type FloorPlanner = floor_planner::V1;
+        type Params = ();
 
         fn without_witnesses(&self) -> Self {
             Self::default()

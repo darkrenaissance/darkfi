@@ -16,16 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//! JSON-RPC client-side implementation.
-use std::time::Duration;
+use std::sync::Arc;
 
-use async_std::io::timeout;
-use futures::{select, AsyncReadExt, AsyncWriteExt, FutureExt};
+use futures::{select, FutureExt};
 use log::{debug, error};
-use serde_json::{json, Value};
+use smol::channel::{Receiver, Sender};
+use tinyjson::JsonValue;
 use url::Url;
 
-use super::jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult};
+use super::{
+    common::{read_from_stream, write_to_stream, INIT_BUF_SIZE},
+    jsonrpc::*,
+};
 use crate::{
     net::transport::{Dialer, PtStream},
     system::SubscriberPtr,
@@ -34,196 +36,213 @@ use crate::{
 
 /// JSON-RPC client implementation using asynchronous channels.
 pub struct RpcClient {
-    send: smol::channel::Sender<(Value, bool)>,
-    recv: smol::channel::Receiver<JsonResult>,
-    stop_signal: smol::channel::Sender<()>,
-    url: Url,
+    sender: Sender<(JsonRequest, bool)>,
+    receiver: Receiver<JsonResult>,
+    stop_signal: Sender<()>,
+    endpoint: Url,
 }
 
 impl RpcClient {
-    /// Instantiate a new JSON-RPC client that will connect to the given URL.
-    pub async fn new(url: Url) -> Result<Self> {
-        let (send, recv, stop_signal) = Self::open_channels(&url).await?;
-        Ok(Self { send, recv, stop_signal, url })
+    /// Instantiate a new JSON-RPC client that will connect to the given endpoint
+    pub async fn new(endpoint: Url, ex: Arc<smol::Executor<'_>>) -> Result<Self> {
+        let (sender, receiver, stop_signal) = Self::open_channels(endpoint.clone(), ex).await?;
+        Ok(Self { sender, receiver, stop_signal, endpoint })
     }
 
-    /// Close the channels of an instantiated [`RpcClient`].
+    /// Instantiate async channels for a new [`RpcClient`]
+    async fn open_channels(
+        endpoint: Url,
+        ex: Arc<smol::Executor<'_>>,
+    ) -> Result<(Sender<(JsonRequest, bool)>, Receiver<JsonResult>, Sender<()>)> {
+        let (data_send, data_recv) = smol::channel::unbounded();
+        let (result_send, result_recv) = smol::channel::unbounded();
+        let (stop_send, stop_recv) = smol::channel::bounded(1);
+
+        let dialer = Dialer::new(endpoint).await?;
+        // TODO: Could add a timeout here:
+        let stream = dialer.dial(None).await?;
+
+        // TODO: StoppableTask, see also above there's the stop_{send,recv}. Remove them
+        //       and replace with using StoppableTask.
+        ex.spawn(Self::reqrep_loop(stream, result_send, data_recv, stop_recv)).detach();
+
+        Ok((data_send, result_recv, stop_send))
+    }
+
+    /// Close the channels of an instantiated [`RpcClient`]
     pub async fn close(&self) -> Result<()> {
         self.stop_signal.send(()).await?;
         Ok(())
     }
 
-    /// Listen instantiated client for notifications.
-    /// NOTE: Subscriber listeners must perform response handling.
-    pub async fn subscribe(
-        &self,
-        req: JsonRequest,
-        subscriber: SubscriberPtr<JsonResult>,
-    ) -> Result<()> {
-        // Perform initial request.
-        debug!(target: "rpc::client", "--> {}", serde_json::to_string(&req)?);
-        // If the connection is closed, the sender will get an error for sending to a closed channel.
-        if let Err(e) = self.send.send((json!(req), false)).await {
-            error!(target: "rpc::client", "JSON-RPC client unable to send to {} (channels closed): {}", self.url, e);
-            return Err(Error::NetworkOperationFailed)
-        }
-
-        loop {
-            // If the connection is closed, the receiver will get an error for waiting on a closed channel.
-            let notification = self.recv.recv().await;
-            if notification.is_err() {
-                error!(target: "rpc::client", "JSON-RPC client unable to recv from {} (channels closed)", self.url);
-                break
-            }
-
-            // Notify subscribed channels
-            let notification = notification?;
-            debug!(target: "rpc::client", "<-- {}", serde_json::to_string(&notification)?);
-
-            subscriber.notify(notification.clone()).await;
-
-            // Stop listenning on error
-            match notification {
-                JsonResult::Notification(_) => {}
-                _ => break,
-            }
-
-            // Triggering next consume
-            if let Err(e) = self.send.send((json!(req), false)).await {
-                error!(target: "rpc::client", "JSON-RPC client unable to send to {} (channels closed): {}", self.url, e);
-                break
-            }
-        }
-
-        subscriber.notify(JsonError::new(ErrorCode::InternalError, None, req.id).into()).await;
-        Err(Error::NetworkOperationFailed)
-    }
-
-    /// Send a given JSON-RPC request over the instantiated client.
-    pub async fn request(&self, value: JsonRequest) -> Result<Value> {
-        let req_id = value.id.clone().as_u64().unwrap();
-
-        debug!(target: "rpc::client", "--> {}", serde_json::to_string(&value)?);
-
-        // If the connection is closed, the sender will get an error for
-        // sending to a closed channel.
-        if let Err(e) = self.send.send((json!(value), true)).await {
-            error!(target: "rpc::client", "JSON-RPC client unable to send to {} (channels closed): {}", self.url, e);
-            return Err(Error::NetworkOperationFailed)
-        }
-
-        // If the connection is closed, the receiver will get an error for
-        // waiting on a closed channel.
-        let reply = self.recv.recv().await;
-        if reply.is_err() {
-            error!(target: "rpc::client", "JSON-RPC client unable to recv from {} (channels closed)", self.url);
-            return Err(Error::NetworkOperationFailed)
-        }
-
-        match reply? {
-            JsonResult::Response(r) => {
-                // Check if the IDs match
-                let resp_id = r.id.as_u64();
-                if resp_id.is_none() {
-                    let e = JsonError::new(ErrorCode::InvalidId, None, r.id);
-                    return Err(Error::JsonRpcError(e.error.message.to_string()))
-                }
-
-                if resp_id.unwrap() != req_id {
-                    let e = JsonError::new(ErrorCode::InvalidId, None, r.id);
-                    return Err(Error::JsonRpcError(e.error.message.to_string()))
-                }
-
-                debug!(target: "rpc::client", "<-- {}", serde_json::to_string(&r)?);
-                Ok(r.result)
-            }
-            JsonResult::Error(e) => {
-                debug!(target: "rpc::client", "<-- {}", serde_json::to_string(&e)?);
-                Err(Error::JsonRpcError(e.error.message.to_string()))
-            }
-            JsonResult::Notification(n) => {
-                debug!(target: "rpc::client", "<-- {}", serde_json::to_string(&n)?);
-                Err(Error::JsonRpcError("Unexpected reply".to_string()))
-            }
-            JsonResult::Subscriber(_) => Err(Error::JsonRpcError("Unexpected reply".to_string())),
-        }
-    }
-
-    /// Oneshot send a given JSON-RPC request over the instantiated client
-    /// and close the channels on reply.
-    pub async fn oneshot_request(&self, value: JsonRequest) -> Result<Value> {
-        let rep = self.request(value).await?;
-        self.stop_signal.send(()).await?;
-        Ok(rep)
-    }
-
-    /// Instantiate channels for a new [`RpcClient`].
-    async fn open_channels(
-        uri: &Url,
-    ) -> Result<(
-        smol::channel::Sender<(Value, bool)>,
-        smol::channel::Receiver<JsonResult>,
-        smol::channel::Sender<()>,
-    )> {
-        let (data_send, data_recv) = smol::channel::unbounded();
-        let (result_send, result_recv) = smol::channel::unbounded();
-        let (stop_send, stop_recv) = smol::channel::unbounded();
-
-        let dialer = Dialer::new(uri.clone()).await?;
-        // TODO: Revisit the timeout here
-        let stream = dialer.dial(None).await?;
-        smol::spawn(Self::reqrep_loop(stream, result_send, data_recv, stop_recv)).detach();
-
-        Ok((data_send, result_recv, stop_send))
-    }
-
     /// Internal function that loops on a given stream and multiplexes the data.
     async fn reqrep_loop(
         mut stream: Box<dyn PtStream>,
-        result_send: smol::channel::Sender<JsonResult>,
-        data_recv: smol::channel::Receiver<(Value, bool)>,
-        stop_recv: smol::channel::Receiver<()>,
+        result_send: Sender<JsonResult>,
+        data_recv: Receiver<(JsonRequest, bool)>,
+        stop_recv: Receiver<()>,
     ) -> Result<()> {
-        // If timeout is enabled and we don't get a reply within 30 seconds, we'll fail.
-        let read_timeout = Duration::from_secs(30);
-
         loop {
-            // FIXME: Nasty size. 8M
-            let mut buf = vec![0; 1024 * 8192];
+            let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
 
             select! {
                 tuple = data_recv.recv().fuse() => {
-                    let (data, with_timeout) = tuple?;
-                    let data_bytes = serde_json::to_vec(&data)?;
-                    stream.write_all(&data_bytes).await?;
-                    // Since we are using async read and write,
-                    // the other side might not have finished writing
-                    // to the stream. To mitigate this, we perform a read
-                    // and check if data can be converted to a JsonResult.
-                    // If data is incomplete, this will fail, therefore,
-                    // we re-execute read and write after previous read in the buffer,
-                    // and repeat until the data in buffer can be converted.
-                    let mut n = 0;
-                    loop {
-                        n += if with_timeout {
-                            timeout(read_timeout, async { stream.read(&mut buf[n..]).await }).await?
-                        } else {
-                            stream.read(&mut buf[n..]).await?
-                        };
-                        match serde_json::from_slice(&buf[0..n]) {
-                            Ok(reply) => {
-                                result_send.send(reply).await?;
-                                break
-                            },
-                            Err(e) => debug!(target: "rpc::client", "JSON-RPC client retrying failed convertion with error: {}", e),
-                        }
-                    }
+                    let (request, with_timeout) = tuple?;
+                    let request = JsonResult::Request(request);
+                    write_to_stream(&mut stream, &request).await?;
+
+                    let _ = read_from_stream(&mut stream, &mut buf, with_timeout).await?;
+                    let val: JsonValue = String::from_utf8(buf)?.parse()?;
+                    let rep = JsonResult::try_from_value(&val)?;
+                    result_send.send(rep).await?;
                 }
 
-                _ = stop_recv.recv().fuse() => break
+                _ = stop_recv.recv().fuse() => break,
             }
         }
 
         Ok(())
+    }
+
+    /// Send a given JSON-RPC request over the instantiated client and
+    /// return a possible result. If the response is an error, returns
+    /// a `JsonRpcError`.
+    pub async fn request(&self, req: JsonRequest) -> Result<JsonValue> {
+        let req_id = req.id;
+        debug!(target: "rpc::client", "--> {}", req.stringify()?);
+
+        // If the connection is closed, the sender will get an error
+        // for sending to a closed channel.
+        if let Err(e) = self.sender.send((req, true)).await {
+            error!(
+                target: "rpc::client", "[RPC] Client unable to send to {}: {}",
+                self.endpoint, e,
+            );
+            return Err(Error::NetworkOperationFailed)
+        }
+
+        // If the connection is closed, the receiver will get an error
+        // for waiting on a closed channel.
+        let reply = self.receiver.recv().await;
+        if let Err(e) = reply {
+            error!(
+                target: "rpc::client", "[RPC] Client unable to recv from {}: {}",
+                self.endpoint, e,
+            );
+            return Err(Error::NetworkOperationFailed)
+        }
+
+        match reply.unwrap() {
+            JsonResult::Response(rep) => {
+                debug!(target: "rpc::client", "<-- {}", rep.stringify()?);
+
+                // Check if the IDs match
+                if req_id != rep.id {
+                    let e = JsonError::new(ErrorCode::IdMismatch, None, rep.id);
+                    return Err(Error::JsonRpcError((e.error.code, e.error.message)))
+                }
+
+                Ok(rep.result)
+            }
+
+            JsonResult::Error(e) => {
+                debug!(target: "rpc::client", "<-- {}", e.stringify()?);
+                Err(Error::JsonRpcError((e.error.code, e.error.message)))
+            }
+
+            JsonResult::Notification(n) => {
+                debug!(target: "rpc::client", "<-- {}", n.stringify()?);
+                let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
+                Err(Error::JsonRpcError((e.error.code, e.error.message)))
+            }
+
+            JsonResult::Request(r) => {
+                debug!(target: "rpc::client", "<-- {}", r.stringify()?);
+                let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
+                Err(Error::JsonRpcError((e.error.code, e.error.message)))
+            }
+
+            JsonResult::Subscriber(_) => {
+                // When?
+                let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
+                Err(Error::JsonRpcError((e.error.code, e.error.message)))
+            }
+        }
+    }
+
+    /// Oneshot send a given JSON-RPC request over the instantiated client
+    /// and immediately close the channels upon receiving a reply.
+    pub async fn oneshot_request(&self, req: JsonRequest) -> Result<JsonValue> {
+        let rep = match self.request(req).await {
+            Ok(v) => v,
+            Err(e) => {
+                self.stop_signal.send(()).await?;
+                return Err(e)
+            }
+        };
+
+        self.stop_signal.send(()).await?;
+        Ok(rep)
+    }
+
+    /// Listen instantiated client for notifications.
+    /// NOTE: Subscriber listeners must perform response handling.
+    pub async fn subscribe(&self, req: JsonRequest, sub: SubscriberPtr<JsonResult>) -> Result<()> {
+        // Perform initial request.
+        let req_id = req.id;
+        debug!(target: "rpc::client", "--> {}", req.stringify()?);
+
+        // If the connection is closed, the sender will get an error for
+        // sending to a closed channel.
+        if let Err(e) = self.sender.send((req, false)).await {
+            error!(target: "rpc::client", "[RPC] Client unable to send to {}: {}", self.endpoint, e);
+            return Err(Error::NetworkOperationFailed)
+        }
+
+        loop {
+            // If the connection is closed, the receiver will get an error
+            // for waiting on a closed channel.
+            let notification = self.receiver.recv().await;
+            if let Err(e) = notification {
+                error!(target: "rpc::client", "[RPC] Client unable to recv from {}: {}", self.endpoint, e);
+                self.stop_signal.send(()).await?;
+                break
+            }
+
+            // Notify subscribed channels
+            let notification = notification.unwrap();
+            match notification {
+                JsonResult::Notification(ref n) => {
+                    debug!(target: "rpc::client", "<-- {}", n.stringify()?);
+                    sub.notify(notification.clone()).await;
+                }
+
+                JsonResult::Error(e) => {
+                    debug!(target: "rpc::client", "<-- {}", e.stringify()?);
+                    return Err(Error::JsonRpcError((e.error.code, e.error.message)))
+                }
+
+                JsonResult::Response(r) => {
+                    debug!(target: "rpc::client", "<-- {}", r.stringify()?);
+                    let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
+                    return Err(Error::JsonRpcError((e.error.code, e.error.message)))
+                }
+
+                JsonResult::Request(r) => {
+                    debug!(target: "rpc::client", "<-- {}", r.stringify()?);
+                    let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
+                    return Err(Error::JsonRpcError((e.error.code, e.error.message)))
+                }
+
+                JsonResult::Subscriber(_) => {
+                    // When?
+                    let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
+                    return Err(Error::JsonRpcError((e.error.code, e.error.message)))
+                }
+            }
+        }
+
+        sub.notify(JsonError::new(ErrorCode::InternalError, None, req_id).into()).await;
+        Err(Error::NetworkOperationFailed)
     }
 }

@@ -18,8 +18,10 @@
 
 use std::{fmt, time::UNIX_EPOCH};
 
+#[cfg(feature = "async-serial")]
+use darkfi_serial::async_trait;
+
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use serde::{Deserialize, Serialize};
 
 use crate::Result;
 
@@ -48,6 +50,16 @@ impl TimeKeeper {
         verifying_slot: u64,
     ) -> Self {
         Self { genesis_ts, epoch_length, slot_time, verifying_slot }
+    }
+
+    /// Generate a Timekeeper for current slot
+    pub fn current(&self) -> Self {
+        Self {
+            genesis_ts: self.genesis_ts,
+            epoch_length: self.epoch_length,
+            slot_time: self.slot_time,
+            verifying_slot: self.current_slot(),
+        }
     }
 
     /// Calculates current epoch.
@@ -119,18 +131,7 @@ impl TimeKeeper {
 }
 
 /// Wrapper struct to represent system timestamps.
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Serialize,
-    Deserialize,
-    SerialEncodable,
-    SerialDecodable,
-    PartialEq,
-    PartialOrd,
-    Eq,
-)]
+#[derive(Clone, Copy, Debug, SerialEncodable, SerialDecodable, PartialEq, PartialOrd, Eq)]
 pub struct Timestamp(pub u64);
 
 impl Timestamp {
@@ -157,18 +158,7 @@ impl std::fmt::Display for Timestamp {
     }
 }
 
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Serialize,
-    Deserialize,
-    SerialEncodable,
-    SerialDecodable,
-    PartialEq,
-    PartialOrd,
-    Eq,
-)]
+#[derive(Clone, Copy, Debug, SerialEncodable, SerialDecodable, PartialEq, PartialOrd, Eq)]
 pub struct NanoTimestamp(pub u128);
 
 impl NanoTimestamp {

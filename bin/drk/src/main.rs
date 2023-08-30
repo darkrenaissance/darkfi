@@ -464,7 +464,7 @@ pub struct Drk {
 
 impl Drk {
     async fn new(endpoint: Url) -> Result<Self> {
-        let rpc_client = RpcClient::new(endpoint).await?;
+        let rpc_client = RpcClient::new(endpoint, None).await?;
         Ok(Self { rpc_client })
     }
 

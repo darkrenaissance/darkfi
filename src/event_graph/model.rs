@@ -16,14 +16,26 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cmp::Ordering, collections::HashMap, fmt::Debug};
+use std::{cmp::Ordering, collections::HashMap, fmt::Debug, path::Path, sync::Arc};
 
-use async_std::sync::{Arc, Mutex};
-use blake3;
-use darkfi_serial::{serialize, Decodable, Encodable, SerialDecodable, SerialEncodable};
+#[cfg(feature = "async-serial")]
+use darkfi_serial::async_trait;
+use darkfi_serial::{
+    deserialize, serialize, Decodable, Encodable, SerialDecodable, SerialEncodable,
+};
 use log::{error, info};
+use smol::lock::Mutex;
+use tinyjson::JsonValue;
 
-use crate::{event_graph::events_queue::EventsQueuePtr, util::time::Timestamp};
+use crate::{
+    event_graph::events_queue::EventsQueuePtr,
+    util::{
+        encoding::base64,
+        file::{load_json_file, save_json_file},
+        time::Timestamp,
+    },
+    Error, Result,
+};
 
 use super::EventMsg;
 
@@ -31,7 +43,6 @@ use super::EventMsg;
 pub type EventId = blake3::Hash;
 
 const MAX_DEPTH: u32 = 300;
-const MAX_HEIGHT: u32 = 300;
 
 #[derive(SerialEncodable, SerialDecodable, Clone, Debug)]
 pub struct Event<T: Send + Sync> {
@@ -49,7 +60,7 @@ where
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(SerialEncodable, SerialDecodable, Clone, Debug)]
 struct EventNode<T: Send + Sync> {
     // Only current root has this set to None
     parent: Option<EventId>,
@@ -60,7 +71,7 @@ struct EventNode<T: Send + Sync> {
 pub type ModelPtr<T> = Arc<Mutex<Model<T>>>;
 
 pub struct Model<T: Send + Sync + Debug> {
-    // This is periodically updated so we discard old nodes
+    // This is up to the application to reset or keep
     current_root: EventId,
     orphans: HashMap<EventId, Event<T>>,
     event_map: HashMap<EventId, EventNode<T>>,
@@ -71,6 +82,7 @@ impl<T> Model<T>
 where
     T: Send + Sync + Encodable + Decodable + Clone + EventMsg + Debug,
 {
+    /// Creates a new model with a hardcoded root event.
     pub fn new(events_queue: EventsQueuePtr<T>) -> Self {
         let root_node = EventNode {
             parent: None,
@@ -88,6 +100,40 @@ where
         event_map.insert(root_node_id, root_node);
 
         Self { current_root: root_node_id, orphans: HashMap::new(), event_map, events_queue }
+    }
+
+    /// Save tree to disk.
+    pub fn save_tree(&self, path: &Path) -> Result<()> {
+        let path = path.join("tree");
+        let tree = self.event_map.clone();
+        let ser_tree = base64::encode(&serialize(&tree));
+
+        save_json_file(&path, &JsonValue::String(ser_tree), false)?;
+
+        info!("Tree is saved to disk");
+
+        Ok(())
+    }
+
+    /// Load tree from disk.
+    pub fn load_tree(&mut self, path: &Path) -> Result<()> {
+        let path = path.join("tree");
+        if !path.exists() {
+            return Ok(())
+        }
+
+        let loaded_tree_obj = load_json_file(&path)?;
+        let loaded_tree_obj: &String = loaded_tree_obj
+            .get::<String>()
+            .ok_or(Error::Custom("Failed to load tree object from JsonValue".to_string()))?;
+        let loaded_tree_bytes = base64::decode(loaded_tree_obj.as_str())
+            .ok_or(Error::Custom("Failed to decode loaded tree".to_string()))?;
+        let dser_tree: HashMap<blake3::Hash, EventNode<T>> = deserialize(&loaded_tree_bytes)?;
+        self.event_map = dser_tree;
+
+        info!("Tree is loaded from disk");
+
+        Ok(())
     }
 
     pub fn reset_root(&mut self, timestamp: Timestamp) {
@@ -113,19 +159,66 @@ where
         info!("reset current root to: {:?}", self.current_root);
     }
 
-    pub fn get_head_hash(&self) -> EventId {
-        self.find_head()
+    /// Loops through all events, checks if the event is older than the
+    /// given timestamp, if older then it gets removed from the tree,
+    /// and reorganizes the resulted tree so the oldest event(s) is
+    /// child(ren) of root.
+    pub fn remove_old_events(&mut self, timestamp: Timestamp) -> crate::Result<()> {
+        let tree = self.event_map.clone();
+        let mut is_tree_changed = false;
+        for (event_hash, node) in tree {
+            if node.event.timestamp < timestamp {
+                if self.event_map.remove(&event_hash).is_none() {
+                    continue
+                }
+                is_tree_changed = true;
+                // root is definitely in tree
+                let parent = self.event_map.get_mut(&self.current_root).unwrap();
+                if parent.children.contains(&event_hash) {
+                    let index = parent.children.iter().position(|&n| n == event_hash).unwrap();
+                    parent.children.remove(index);
+                }
+            }
+        }
+        if is_tree_changed {
+            let binding = self.event_map.clone();
+            let min_hash = binding
+                .iter()
+                .min_by_key(|entry| entry.1.event.timestamp.0)
+                .ok_or(Error::Custom("Tree is empty".into()))?
+                .0;
+
+            self.event_map
+                .get_mut(min_hash)
+                .ok_or(Error::EventNotFound("min hash event".into()))?
+                .parent = Some(self.current_root);
+            self.event_map
+                .get_mut(min_hash)
+                .ok_or(Error::EventNotFound("min hash event".into()))?
+                .event
+                .previous_event_hash = self.current_root;
+
+            // root is definitely in tree
+            let parent = self.event_map.get_mut(&self.current_root).unwrap();
+            parent.children.push(*min_hash);
+        }
+
+        Ok(())
     }
 
-    pub async fn add(&mut self, event: Event<T>) {
+    /// Add an Event to the tree.
+    pub async fn add(&mut self, event: Event<T>) -> Result<()> {
         self.orphans.insert(event.hash(), event);
-        self.reorganize().await;
+        self.reorganize().await?;
+
+        Ok(())
     }
 
     pub fn is_orphan(&self, event: &Event<T>) -> bool {
         !self.event_map.contains_key(&event.previous_event_hash)
     }
 
+    /// Return a vector of childless events other than the current root.
     pub fn find_leaves(&self) -> Vec<EventId> {
         // collect the leaves in the tree
         let mut leaves = vec![];
@@ -140,14 +233,16 @@ where
         leaves
     }
 
+    /// Return an Event from the tree given its EventID.
     pub fn get_event(&self, event: &EventId) -> Option<Event<T>> {
         self.event_map.get(event).map(|en| en.event.clone())
     }
 
-    pub fn get_offspring(&self, event: &EventId) -> Vec<Event<T>> {
+    /// Return all the offsprings (including branches if any) of a given EventID.
+    pub fn get_offspring(&self, event: &EventId) -> Result<Vec<Event<T>>> {
         let mut offspring = vec![];
         let mut event = *event;
-        let head = self.find_head();
+        let head = self.get_head_hash()?;
         loop {
             if event == head {
                 break
@@ -163,10 +258,10 @@ where
             }
         }
 
-        offspring
+        Ok(offspring)
     }
 
-    async fn reorganize(&mut self) {
+    async fn reorganize(&mut self) -> Result<()> {
         for (_, orphan) in std::mem::take(&mut self.orphans) {
             // if self.is_orphan(&orphan) {
             //     // TODO should we remove orphan if it's too old
@@ -191,16 +286,19 @@ where
 
             self.event_map.insert(node_hash, node.clone());
 
-            self.events_queue.dispatch(&node.event).await.expect("error dispatching the event");
+            self.events_queue.dispatch(&node.event).await.ok();
 
-            // clean up the tree from old eventnodes
-            self.prune_chains();
-            self.update_root();
+            // clean up the tree from old EventNodes
+            self.prune_chains()?;
         }
+
+        Ok(())
     }
 
-    fn prune_chains(&mut self) {
-        let head = self.find_head();
+    /// Checks if EventNodes (branches) are too deep relative to the
+    /// current head, and prune those branches if they are.
+    fn prune_chains(&mut self) -> Result<()> {
+        let head = self.get_head_hash()?;
         let leaves = self.find_leaves();
 
         // Reject events which attach to chains too low in the chain
@@ -211,101 +309,70 @@ where
                 continue
             }
 
-            let depth = self.diff_depth(leaf, head);
+            let depth = self.diff_depth(leaf, head)?;
             if depth > MAX_DEPTH {
                 self.remove_node(leaf);
             }
         }
+
+        Ok(())
     }
 
-    fn update_root(&mut self) {
-        let head = self.find_head();
-        let leaves = self.find_leaves();
-
-        // find the common ancestor for each leaf and the head event
-        let mut ancestors = vec![];
-        for leaf in leaves {
-            if leaf == head {
-                continue
-            }
-
-            let ancestor = self.find_ancestor(leaf, head);
-            ancestors.push(ancestor);
-        }
-
-        // find the highest ancestor
-        let highest_ancestor = ancestors
-            .iter()
-            .max_by(|&a, &b| self.find_depth(*a, &head).cmp(&self.find_depth(*b, &head)));
-
-        // set the new root
-        if let Some(ancestor) = highest_ancestor {
-            // the ancestor must have at least height > MAX_HEIGHT
-            let ancestor_height = self.find_height(&self.current_root, ancestor).unwrap();
-            if ancestor_height < MAX_HEIGHT {
-                return
-            }
-
-            // removing the parents of the new root node
-            let mut root = self.event_map.get(&self.current_root).unwrap();
-            loop {
-                let root_hash = root.event.hash();
-
-                if &root_hash == ancestor {
-                    break
-                }
-
-                let root_childs = &root.children;
-                assert_eq!(root_childs.len(), 1);
-                let child = *root_childs.first().unwrap();
-
-                self.event_map.remove(&root_hash);
-                root = self.event_map.get(&child).unwrap();
-            }
-
-            self.current_root = *ancestor;
-        }
-    }
-
+    /// Removes an EventNode given its leaf
     fn remove_node(&mut self, mut event_id: EventId) {
         loop {
             if !self.event_map.contains_key(&event_id) {
                 break
             }
 
+            if event_id == self.current_root {
+                break
+            }
+
             let node = self.event_map.get(&event_id).unwrap().clone();
             self.event_map.remove(&event_id);
 
+            // only root event has its parent set to None.
+            // child won't even get added to tree unless its parent is already there.
             let parent = self.event_map.get_mut(&node.parent.unwrap()).unwrap();
+
+            if parent.children.is_empty() {
+                event_id = parent.event.hash();
+                continue
+            }
             let index = parent.children.iter().position(|&n| n == event_id).unwrap();
             parent.children.remove(index);
 
-            if !parent.children.is_empty() {
-                break
-            }
             event_id = parent.event.hash();
         }
     }
 
-    // find_head
-    // -> recursively call itself
-    // -> + 1 for every recursion, return self if no children
-    // -> select max from returned values
-    // Gets the lead node with the maximal number of events counting from root
-    fn find_head(&self) -> EventId {
-        self.find_longest_chain(&self.current_root, 0).0
+    /// Gets the lead node with the maximal number of events counting from root
+    pub fn get_head_hash(&self) -> Result<EventId> {
+        Ok(self.find_longest_chain(&self.current_root, 0)?.0)
     }
 
-    fn find_longest_chain(&self, parent_node: &EventId, i: u32) -> (EventId, u32) {
-        let children = &self.event_map.get(parent_node).unwrap().children;
+    /// -> recursively call itself
+    ///
+    /// -> + 1 for every recursion, return self if no children
+    ///
+    /// -> select max from returned values
+    ///
+    /// return the farthest EventID from the given one and the length as a tuple.
+    fn find_longest_chain(&self, parent_node: &EventId, i: u32) -> Result<(EventId, u32)> {
+        let children = &self
+            .event_map
+            .get(parent_node)
+            .ok_or(Error::EventNotFound("parent node".into()))?
+            .children;
         if children.is_empty() {
-            return (*parent_node, i)
+            return Ok((*parent_node, i))
         }
 
         let mut current_max = 0;
         let mut current_node = None;
         for node in children.iter() {
-            let (grandchild_node, grandchild_i) = self.find_longest_chain(node, i + 1);
+            let (grandchild_node, grandchild_i) = self.find_longest_chain(node, i + 1)?;
 
             match &grandchild_i.cmp(&current_max) {
                 Ordering::Greater => {
@@ -314,10 +381,18 @@ where
                 }
                 Ordering::Equal => {
                     // Break ties using the timestamp
-                    let grandchild_node_timestamp =
-                        self.event_map.get(&grandchild_node).unwrap().event.timestamp;
-                    let current_node_timestamp =
-                        self.event_map.get(&current_node.unwrap()).unwrap().event.timestamp;
+                    let grandchild_node_timestamp = self
+                        .event_map
+                        .get(&grandchild_node)
+                        .ok_or(Error::EventNotFound("grandchild event".into()))?
+                        .event
+                        .timestamp;
+                    let current_node_timestamp = self
+                        .event_map
+                        .get(&current_node.unwrap())
+                        .ok_or(Error::EventNotFound("current lead event".into()))?
+                        .event
+                        .timestamp;
 
                     if grandchild_node_timestamp > current_node_timestamp {
                         current_max = grandchild_i;
@@ -331,88 +406,93 @@ where
             }
         }
         assert_ne!(current_max, 0);
-        (current_node.expect("internal logic error"), current_max)
+        Ok((current_node.expect("internal logic error"), current_max))
     }
 
-    fn find_depth(&self, mut node: EventId, ancestor_id: &EventId) -> u32 {
+    /// Returns how far away an event is from one of its ancestor,
+    /// errors if `node` and `ancestor_id` are not on the same chain
+    fn find_depth(&self, mut node: EventId, ancestor_id: &EventId) -> Result<u32> {
         let mut depth = 0;
         while &node != ancestor_id {
             depth += 1;
-            if let Some(parent) = self.event_map.get(&node).unwrap().parent {
+            if let Some(parent) = self
+                .event_map
+                .get(&node)
+                .ok_or(Error::Custom("Event and ancestor are not on the same chain".into()))?
+                .parent
+            {
                 node = parent
             } else {
                 break
             }
         }
-        depth
+
+        Ok(depth)
     }
 
-    fn find_height(&self, node: &EventId, child_id: &EventId) -> Option<u32> {
-        let mut height = 0;
-
-        if node == child_id {
-            return Some(height)
-        }
-        height += 1;
-        let children = &self.event_map.get(node).unwrap().children;
-        if children.is_empty() {
-            return None
+    /// Find common ancestor between two events.
+    fn find_ancestor(&self, mut node_a: EventId, node_b: EventId) -> Result<EventId> {
+        // this func is only used when node_a is some leaf and node_b is head
+        // so this check is useless in our usecase
+        if node_a == self.current_root || node_b == self.current_root {
+            return Ok(self.current_root)
         }
 
-        for child in children.iter() {
-            if let Some(h) = self.find_height(child, child_id) {
-                return Some(height + h)
-            }
-        }
-        None
-    }
-
-    fn find_ancestor(&self, mut node_a: EventId, mut node_b: EventId) -> EventId {
-        // node_a is a child of node_b
-        let is_child = node_b == self.event_map.get(&node_a).unwrap().parent.unwrap();
-
-        if is_child {
-            return node_b
-        }
-
-        while node_a != node_b {
-            let node_a_parent = self.event_map.get(&node_a).unwrap().parent.unwrap();
-            let node_b_parent = self.event_map.get(&node_b).unwrap().parent.unwrap();
-
-            if node_a_parent == self.current_root || node_b_parent == self.current_root {
-                return self.current_root
-            }
-
+        loop {
+            let node_a_parent = self
+                .event_map
+                .get(&node_a)
+                .ok_or(Error::EventNotFound("leaf event".into()))?
+                .parent
+                .unwrap();
             node_a = node_a_parent;
-            node_b = node_b_parent;
+            if node_a == self.current_root {
+                return Ok(self.current_root)
+            }
+            if self.event_map.get(&node_a).unwrap().children.len() > 1 {
+                let offsprings = self
+                    .get_offspring(&node_a)?
+                    .iter()
+                    .map(|event| event.hash())
+                    .collect::<Vec<EventId>>();
+                if offsprings.contains(&node_b) {
+                    return Ok(node_a)
+                }
+            }
         }
-
-        node_a
     }
 
-    fn diff_depth(&self, node_a: EventId, node_b: EventId) -> u32 {
-        let ancestor = self.find_ancestor(node_a, node_b);
-        let node_a_depth = self.find_depth(node_a, &ancestor);
-        let node_b_depth = self.find_depth(node_b, &ancestor);
+    /// Find the length between two events.
+    fn diff_depth(&self, node_a: EventId, node_b: EventId) -> Result<u32> {
+        let ancestor = self.find_ancestor(node_a, node_b)?;
+        let node_a_depth = self.find_depth(node_a, &ancestor)?;
+        let node_b_depth = self.find_depth(node_b, &ancestor)?;
 
-        (node_b_depth + 1) - node_a_depth
+        Ok((node_b_depth + 1).abs_diff(node_a_depth))
     }
 
-    fn _debug(&self) {
+    fn _debug(&self) -> Result<()> {
         for (event_id, event_node) in &self.event_map {
-            let depth = self.find_depth(*event_id, &self.current_root);
+            let depth = self.find_depth(*event_id, &self.current_root)?;
             println!("{}: {:?} [depth={}]", event_id, event_node.event, depth);
         }
 
         println!("root: {}", self.current_root);
-        println!("head: {}", self.find_head());
+        println!("head: {}", self.get_head_hash()?);
+
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        fs::{create_dir_all, remove_dir_all},
+        path::PathBuf,
+    };
+
     use super::*;
-    use crate::event_graph::events_queue::EventsQueue;
+    use crate::{event_graph::events_queue::EventsQueue, system::sleep, Result};
 
     #[derive(SerialEncodable, SerialDecodable, Clone, Debug)]
     pub struct PrivMsgEvent {
@@ -437,189 +517,207 @@ mod tests {
         }
     }
 
-    fn create_message(previous_event_hash: EventId, timestamp: u64) -> Event<PrivMsgEvent> {
-        Event { previous_event_hash, action: PrivMsgEvent::new(), timestamp: Timestamp(timestamp) }
-    }
-
-    /* THIS IS FAILING
-    #[test]
-    fn test_update_root() {
-        let events_queue = EventsQueue::new();
-        let mut model = Model::new(events_queue);
-        let root_id = model.current_root;
-
-        // event_node 1
-        // Fill this node with MAX_HEIGHT events
-        let mut id1 = root_id;
-        for x in 0..MAX_HEIGHT {
-            let timestamp = get_current_time() + 1;
-            let node = create_message(id1, &format!("chain 1 msg {}", x), "message", timestamp);
-            id1 = node.hash();
-            model.add(node);
-        }
-
-        // event_node 2
-        // Fill this node with MAX_HEIGHT + 10 events
-        let mut id2 = root_id;
-        for x in 0..(MAX_HEIGHT + 10) {
-            let timestamp = get_current_time() + 1;
-            let node = create_message(id2, &format!("chain 2 msg {}", x), "message", timestamp);
-            id2 = node.hash();
-            model.add(node);
-        }
-
-        // Fill id2 node with MAX_HEIGHT / 2
-        let mut id3 = id2;
-        for x in (MAX_HEIGHT + 10)..(MAX_HEIGHT * 2) {
-            let timestamp = get_current_time() + 1;
-            let node =
-                create_message(id3, &format!("chain 2 branch 1 msg {}", x), "message", timestamp);
-            id3 = node.hash();
-            model.add(node);
-        }
-
-        // Fill id2 node with 9 events
-        let mut id4 = id2;
-        for x in (MAX_HEIGHT + 10)..(MAX_HEIGHT * 2 + 30) {
-            let timestamp = get_current_time() + 1;
-            let node =
-                create_message(id4, &format!("chain 2 branch 2 msg {}", x), "message", timestamp);
-            id4 = node.hash();
-            model.add(node);
-        }
-
-        assert_eq!(model.find_height(&model.current_root, &id2).unwrap(), 0);
-        assert_eq!(model.find_height(&model.current_root, &id3).unwrap(), (MAX_HEIGHT - 10));
-        assert_eq!(model.find_height(&model.current_root, &id4).unwrap(), (MAX_HEIGHT + 20));
-        assert_eq!(model.current_root, id2);
+    fn create_message(previous_event_hash: EventId, timestamp: Timestamp) -> Event<PrivMsgEvent> {
+        Event { previous_event_hash, action: PrivMsgEvent::new(), timestamp }
     }
 
     #[test]
-    fn test_find_height() {
-        let events_queue = EventsQueue::new();
-        let mut model = Model::new(events_queue);
-        let root_id = model.current_root;
+    fn test_remove_old_events() -> Result<()> {
+        smol::block_on(async {
+            let events_queue = EventsQueue::new();
+            let mut model = Model::new(events_queue);
+            let root_id = model.current_root;
 
-        // event_node 1
-        // Fill this node with 8 events
-        let mut id1 = root_id;
-        for x in 0..8 {
-            let timestamp = get_current_time() + 1;
-            let node = create_message(id1, &format!("chain 1 msg {}", x), "message", timestamp);
-            id1 = node.hash();
-            model.add(node);
-        }
+            // event_node 1
+            // Fill this node with 10 events
+            // These are considered old events from 10 days ago
+            let mut event_node_1_ids = vec![];
+            let mut id1 = root_id;
+            let timestamp = Timestamp::current_time().0 - 864000; // 864000 is 10 days in seconds
+            for i in 0..10 {
+                let node = create_message(id1, Timestamp(timestamp + i));
+                id1 = node.hash();
+                model.add(node).await?;
+                event_node_1_ids.push(id1);
+            }
+            sleep(1).await;
 
-        // event_node 2
-        // Fill this node with 14 events
-        let mut id2 = root_id;
-        for x in 0..14 {
-            let timestamp = get_current_time() + 1;
-            let node = create_message(id2, &format!("chain 2 msg {}", x), "message", timestamp);
-            id2 = node.hash();
-            model.add(node);
-        }
+            // event_node 2
+            // Fill this node with 10 events
+            // These are considered new events at current time
+            let timestamp = Timestamp::current_time().0;
+            for i in 0..150 {
+                let node = create_message(id1, Timestamp(timestamp + i));
+                id1 = node.hash();
+                model.add(node).await?;
+            }
+            sleep(1).await;
 
-        assert_eq!(model.find_height(&model.current_root, &id1).unwrap(), 8);
-        assert_eq!(model.find_height(&model.current_root, &id2).unwrap(), 14);
+            // every event older than one week gets removed
+            let ts = Timestamp::current_time().0 - 604800; // one week in seconds
+            let _ = model.remove_old_events(Timestamp(ts));
+
+            // ensure the 10 events from event_node 1 are not in the tree anymore
+            for event in event_node_1_ids {
+                assert!(!model.event_map.contains_key(&event));
+            }
+
+            // event_node 2 events (150) + root event = 151 events
+            assert_eq!(model.event_map.len(), 151_usize);
+
+            Ok(())
+        })
     }
 
     #[test]
-    fn test_prune_chains() {
-        let events_queue = EventsQueue::new();
-        let mut model = Model::new(events_queue);
-        let root_id = model.current_root;
+    fn test_prune_chains() -> Result<()> {
+        smol::block_on(async {
+            let events_queue = EventsQueue::new();
+            let mut model = Model::new(events_queue);
+            let root_id = model.current_root;
 
-        // event_node 1
-        // Fill this node with 3 events
-        let mut event_node_1_ids = vec![];
-        let mut id1 = root_id;
-        for x in 0..3 {
-            let timestamp = get_current_time() + 1;
-            let node = create_message(id1, &format!("chain 1 msg {}", x), "message", timestamp);
-            id1 = node.hash();
-            model.add(node);
-            event_node_1_ids.push(id1);
-        }
+            // event_node 1
+            // Fill this node with 10 events
+            let mut event_node_1_ids = vec![];
+            let mut id1 = root_id;
+            for _ in 0..10 {
+                let node = create_message(id1, Timestamp::current_time());
+                id1 = node.hash();
+                model.add(node).await?;
+                event_node_1_ids.push(id1);
+            }
 
-        // event_node 2
-        // Start from the root_id and fill the node with 14 events
-        // All the events from event_node_1 should get removed from the tree
-        let mut id2 = root_id;
-        for x in 0..(MAX_DEPTH + 10) {
-            let timestamp = get_current_time() + 1;
-            let node = create_message(id2, &format!("chain 2 msg {}", x), "message", timestamp);
-            id2 = node.hash();
-            model.add(node);
-        }
+            sleep(1).await;
 
-        assert_eq!(model.find_head(), id2);
+            // event_node 2
+            // Start from the root_id and fill the node with (MAX_DEPTH + 10) events.
+            // All the events from event_node_1 should get removed from the tree
+            let mut id2 = root_id;
+            for _ in 0..(MAX_DEPTH + 10) {
+                let node = create_message(id2, Timestamp::current_time());
+                id2 = node.hash();
+                model.add(node).await?;
+            }
 
-        for id in event_node_1_ids {
-            assert!(!model.event_map.contains_key(&id));
-        }
+            assert_eq!(model.get_head_hash()?, id2);
 
-        assert_eq!(model.event_map.len(), (MAX_DEPTH + 11) as usize);
+            // Ensure events from node 1 are removed in favor of node 2's longer chain
+            for id in event_node_1_ids {
+                assert!(!model.event_map.contains_key(&id));
+            }
+
+            // node1: (10 leaves) + node2: (MAX_DEPTH + 10) events + root event = (MAX_DEPTH + 11)
+            //  these ^^^^^^^^^^^ are pruned
+            assert_eq!(model.event_map.len(), (MAX_DEPTH + 11) as usize);
+
+            Ok(())
+        })
     }
 
     #[test]
-    fn test_diff_depth() {
-        let events_queue = EventsQueue::new();
-        let mut model = Model::new(events_queue);
-        let root_id = model.current_root;
+    fn test_diff_depth() -> Result<()> {
+        smol::block_on(async {
+            let events_queue = EventsQueue::new();
+            let mut model = Model::new(events_queue);
+            let root_id = model.current_root;
 
-        // event_node 1
-        // Fill this node with (MAX_DEPTH / 2) events
-        let mut id1 = root_id;
-        for x in 0..(MAX_DEPTH / 2) {
-            let timestamp = get_current_time() + 1;
-            let node = create_message(id1, &format!("chain 1 msg {}", x), "message", timestamp);
-            id1 = node.hash();
-            model.add(node);
-        }
+            // event_node 1
+            // Fill this node with (MAX_DEPTH / 2) events
+            let mut id1 = root_id;
+            for _ in 0..(MAX_DEPTH / 2) {
+                let node = create_message(id1, Timestamp::current_time());
+                id1 = node.hash();
+                model.add(node).await?;
+            }
 
-        // event_node 2
-        // Start from the root_id and fill the node with (MAX_DEPTH + 10) events
-        // all the events must be added since the depth between id1
-        // and the last head is less than MAX_DEPTH
-        let mut id2 = root_id;
-        for x in 0..(MAX_DEPTH + 10) {
-            let timestamp = get_current_time() + 1;
-            let node = create_message(id2, &format!("chain 2 msg {}", x), "message", timestamp);
-            id2 = node.hash();
-            model.add(node);
-        }
+            sleep(1).await;
 
-        assert_eq!(model.find_head(), id2);
+            // event_node 2
+            // Start from the root_id and fill the node with (MAX_DEPTH + 10) events
+            // all the events must be added since the depth between id1
+            // and the last head is less than MAX_DEPTH
+            let mut id2 = root_id;
+            for _ in 0..(MAX_DEPTH + 10) {
+                let node = create_message(id2, Timestamp::current_time());
+                id2 = node.hash();
+                model.add(node).await?;
+            }
 
-        // event_node 3
-        // This will start as new chain, but no events will be added
-        // since the last event's depth is MAX_DEPTH + 10
-        let mut id3 = root_id;
-        for x in 0..30 {
-            let timestamp = get_current_time() + 1;
-            let node = create_message(id3, &format!("chain 3 msg {}", x), "message", timestamp);
-            id3 = node.hash();
-            model.add(node);
+            assert_eq!(model.get_head_hash()?, id2);
 
-            // ensure events are not added
-            assert!(!model.event_map.contains_key(&id3));
-        }
+            sleep(1).await;
 
-        assert_eq!(model.find_head(), id2);
+            // event_node 3
+            // This will start as new chain, but no events will be added
+            // since the last event's depth is MAX_DEPTH + 10
+            let mut id3 = root_id;
+            for _ in 0..30 {
+                let node = create_message(id3, Timestamp::current_time());
+                id3 = node.hash();
+                model.add(node).await?;
 
-        // Add more events to the event_node 1
-        // At the end this chain must overtake the event_node 2
-        for x in (MAX_DEPTH / 2)..(MAX_DEPTH + 15) {
-            let timestamp = get_current_time() + 1;
-            let node = create_message(id1, &format!("chain 1 msg {}", x), "message", timestamp);
-            id1 = node.hash();
-            model.add(node);
-        }
+                // ensure events are not added
+                assert!(!model.event_map.contains_key(&id3));
+            }
 
-        assert_eq!(model.find_head(), id1);
+            sleep(1).await;
+
+            assert_eq!(model.get_head_hash()?, id2);
+
+            // Add more events to the event_node 1
+            // At the end this chain must overtake the event_node 2
+            for _ in (MAX_DEPTH / 2)..(MAX_DEPTH + 15) {
+                let node = create_message(id1, Timestamp::current_time());
+                id1 = node.hash();
+                model.add(node).await?;
+            }
+
+            assert_eq!(model.get_head_hash()?, id1);
+
+            Ok(())
+        })
     }
-    */
+
+    #[test]
+    fn save_load_model() -> Result<()> {
+        smol::block_on(async {
+            // Setup directories
+            let path = "/tmp/test_model";
+            remove_dir_all(path).ok();
+            let path = PathBuf::from(path);
+            create_dir_all(&path)?;
+
+            // First model
+            let events_queue = EventsQueue::<PrivMsgEvent>::new();
+            let mut model1 = Model::new(events_queue);
+            let root_id = model1.current_root;
+
+            // Create an event
+            let event = create_message(root_id, Timestamp::current_time());
+            // Add event to first model
+            model1.add(event).await?;
+
+            // Save first model
+            model1.save_tree(&path)?;
+
+            // Second model
+            let events_queue = EventsQueue::<PrivMsgEvent>::new();
+            let mut model2 = Model::new(events_queue);
+
+            // Load into second model
+            model2.load_tree(&path)?;
+
+            // Test equality
+            let res = model1.event_map.len() == model2.event_map.len() &&
+                model1.event_map.keys().all(|k| model2.event_map.contains_key(k));
+
+            assert!(res);
+
+            remove_dir_all(path).ok();
+
+            Ok(())
+        })
+    }
 
     #[test]
     fn test_event_hash() {
@@ -627,8 +725,7 @@ mod tests {
         let model = Model::new(events_queue);
         let root_id = model.current_root;
 
-        let timestamp = Timestamp::current_time().0 + 1;
-        let event = create_message(root_id, timestamp);
+        let event = create_message(root_id, Timestamp::current_time());
         let event2 = event.clone();
 
         let event_hash = event.hash();

@@ -19,6 +19,8 @@
 //! <https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-vrf-04#section-5>
 #![allow(non_snake_case)]
 
+#[cfg(feature = "async")]
+use darkfi_serial::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_gadgets::ecc::chip::FixedPoint;
 use pasta_curves::{

@@ -6,7 +6,7 @@ from tqdm import tqdm
 import os
 from core.strategy import random_strategy
 
-AVG_LEN = 10
+AVG_LEN = 5
 
 KP_STEP=0.01
 KP_SEARCH=-0.63
@@ -30,7 +30,6 @@ KI='ki'
 KP_RANGE_MULTIPLIER = 2
 KI_RANGE_MULTIPLIER = 2
 
-
 highest_gain = (KP_SEARCH, KI_SEARCH)
 
 parser = ArgumentParser()
@@ -45,13 +44,13 @@ rand_running_time = args.rand_running_time
 debug = args.debug
 
 def experiment(controller_type=CONTROLLER_TYPE_DISCRETE, rkp=0, rki=0, distribution=[], hp=True):
-    dt = DarkfiTable(ERC20DRK, RUNNING_TIME, controller_type, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0, r_kp=rkp, r_ki=rki, r_kd=0)
     RND_NODES = random.randint(5, NODES) if randomize_nodes else NODES
+    dt = DarkfiTable(sum([distribution[i] for i in range(RND_NODES)]), RUNNING_TIME, controller_type, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0, r_kp=rkp, r_ki=rki, r_kd=0, fee_kp=-0.068188, fee_ki=-0.000205)
     for idx in range(0,RND_NODES):
         darkie = Darkie(distribution[idx], strategy=random_strategy(EPOCH_LENGTH))
         dt.add_darkie(darkie)
-    acc, apy, reward, stake_ratio, apr = dt.background(rand_running_time, hp)
-    return acc, apy, reward, stake_ratio, apr
+    acc, cc_acc, apy, reward, stake_ratio, apr = dt.background(rand_running_time, hp)
+    return acc, cc_acc, apy, reward, stake_ratio, apr
 
 def multi_trial_exp(kp, ki, distribution = [], hp=True):
     global highest_apr
@@ -61,21 +60,24 @@ def multi_trial_exp(kp, ki, distribution = [], hp=True):
     global lowest_apr2target_diff
     new_record=False
     accs = []
+    cc_accs = []
     aprs = []
     rewards = []
     stakes_ratios = []
     aprs = []
     for i in range(0, AVG_LEN):
-        acc, apy, reward, stake_ratio, apr = experiment(CONTROLLER_TYPE_DISCRETE, rkp=kp, rki=ki, distribution=distribution, hp=hp)
+        acc, cc_acc, apy, reward, stake_ratio, apr = experiment(CONTROLLER_TYPE_DISCRETE, rkp=kp, rki=ki, distribution=distribution, hp=hp)
         accs += [acc]
+        cc_accs += [cc_acc]
         rewards += [reward]
         aprs += [apr]
         stakes_ratios += [stake_ratio]
     avg_acc = float(sum(accs))/AVG_LEN
+    avg_cc_acc = float(sum(cc_accs))/AVG_LEN
     avg_reward = float(sum(rewards))/AVG_LEN
     avg_staked = float(sum(stakes_ratios))/AVG_LEN
     avg_apr = float(sum(aprs))/AVG_LEN
-    buff = 'avg(acc): {}, avg(apr): {}, avg(reward): {}, avg(stake ratio): {}, kp: {}, ki:{}, '.format(avg_acc, avg_apr, avg_reward, avg_staked, kp, ki)
+    buff = 'avg(acc): {}, avg(cc_accs): {}, avg(apr): {}, avg(reward): {}, avg(stake ratio): {}, kp: {}, ki:{}, '.format(avg_acc, avg_cc_acc, avg_apr, avg_reward, avg_staked, kp, ki)
     if avg_apr > 0:
         gain = (kp, ki)
         acc_gain = (avg_apr, gain)

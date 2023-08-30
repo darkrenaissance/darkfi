@@ -30,6 +30,6 @@ clean:
 	rm -rf book
 
 github: all
-	ghp-import -m "Generate mdbook" -b gh-pages book/
+	./ghp_push.py
 
 .PHONY: $(JSONRPC) all clean github

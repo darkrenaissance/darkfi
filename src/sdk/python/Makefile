@@ -5,6 +5,8 @@ MATURIN = maturin
 
 all:
 	$(MATURIN) build --release
-	@echo "You can install this wheel with pip install"
 
-.PHONY: all
+dev:
+	$(MATURIN) develop --release
+
+.PHONY: all dev

@@ -19,6 +19,7 @@
 //! This API is crufty. Please rework it into something nice to read and nice to use.
 
 use darkfi::{
+    error::Error::CoinIsNotSlotProducer,
     zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
@@ -36,7 +37,7 @@ use darkfi_sdk::{
     },
     pasta::{group::ff::FromUniformBytes, pallas},
 };
-use log::{debug, info};
+use log::{debug, error, info};
 use rand::rngs::OsRng;
 
 use crate::{
@@ -128,6 +129,17 @@ pub struct ConsensusProposalCallBuilder {
 
 impl ConsensusProposalCallBuilder {
     pub fn build(&self) -> Result<ConsensusProposalCallDebris> {
+        let input_value_blind = pallas::Scalar::random(&mut OsRng);
+        let output_reward_blind = pallas::Scalar::random(&mut OsRng);
+
+        self.build_with_params(input_value_blind, output_reward_blind)
+    }
+
+    pub fn build_with_params(
+        &self,
+        input_value_blind: pallas::Scalar,
+        output_reward_blind: pallas::Scalar,
+    ) -> Result<ConsensusProposalCallDebris> {
         info!("Building Consensus::ProposalBurnV1 contract call");
         assert!(self.owncoin.note.value != 0);
 
@@ -139,11 +151,10 @@ impl ConsensusProposalCallBuilder {
             merkle_path,
             secret: self.owncoin.secret,
             note: self.owncoin.note.clone(),
-            value_blind: pallas::Scalar::random(&mut OsRng),
+            value_blind: input_value_blind,
         };
 
         debug!("Building Consensus::ProposalV1 anonymous output");
-        let output_reward_blind = pallas::Scalar::random(&mut OsRng);
         let output_value_blind = input.value_blind + output_reward_blind;
 
         // The output's secret key is derived from the old secret key
@@ -164,7 +175,7 @@ impl ConsensusProposalCallBuilder {
 
         info!("Building Consensus::ProposalV1 VRF proof");
         let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
-        vrf_input.extend_from_slice(&self.slot.previous_eta.to_repr());
+        vrf_input.extend_from_slice(&self.slot.last_eta.to_repr());
         vrf_input.extend_from_slice(self.fork_previous_hash.as_bytes());
         vrf_input.extend_from_slice(&pallas::Base::from(self.slot.id).to_repr());
         let vrf_proof = VrfProof::prove(input.secret, &vrf_input, &mut OsRng);
@@ -250,6 +261,18 @@ fn create_proposal_proof(
     let mu_rho = poseidon_hash([MU_RHO_PREFIX, eta, pallas::Base::from(slot.id)]);
     let rho = poseidon_hash([seed, mu_rho]);
 
+    // Verify coin is the slot block producer
+    let value_pallas = pallas::Base::from(input.note.value);
+    let shifted_target =
+        slot.pid.sigma1 * value_pallas + slot.pid.sigma2 * value_pallas * value_pallas + HEADSTART;
+
+    if y >= shifted_target {
+        error!("MU_Y: {:?}", mu_y);
+        error!("Y: {:?}", y);
+        error!("TARGET: {:?}", shifted_target);
+        return Err(CoinIsNotSlotProducer)
+    }
+
     // Derive the input's nullifier
     let nullifier = Nullifier::from(poseidon_hash([input.secret.inner(), input.note.serial]));
 
@@ -307,8 +330,8 @@ fn create_proposal_proof(
         y,
         mu_rho,
         rho,
-        sigma1: slot.sigma1,
-        sigma2: slot.sigma2,
+        sigma1: slot.pid.sigma1,
+        sigma2: slot.pid.sigma2,
         headstart: HEADSTART,
     };
 
@@ -329,7 +352,7 @@ fn create_proposal_proof(
         Witness::Base(Value::known(public_inputs.headstart)),
     ];
 
-    let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+    let circuit = ZkCircuit::new(prover_witnesses, zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 
     Ok((proof, public_inputs))

@@ -6,5 +6,116 @@
 ## The default values are left commented. They can be overridden either by
 ## uncommenting, or by using the command-line.
 
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:18340"
+
+# Participate in the consensus protocol
+consensus = false
+
+# Skip syncing process and start node right away
+skip_sync = false
+
 # Enable testing mode for local testing
 testing_mode = false
+
+## Sync P2P network settings
+[sync_net]
+# P2P accept addresses the instance listens on for inbound connections
+# You can also use an IPv6 address
+inbound = ["tcp+tls://0.0.0.0:8342"]
+# IPv6 version:
+#inbound = ["tcp+tls://[::]:8342"]
+# Combined:
+#inbound = ["tcp+tls://0.0.0.0:8342", "tcp+tls://[::]:8342"]
+
+# P2P external addresses the instance advertises so other peers can
+# reach us and connect to us, as long as inbound addrs are configured.
+# You can also use an IPv6 address
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8342"]
+# IPv6 version:
+#external_addrs = ["tcp+tls://[ipv6 address here]:8342"]
+# Combined:
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8342", "tcp+tls://[ipv6 address here]:8342"]
+
+# Peer nodes to manually connect to
+#peers = []
+
+# Seed nodes to connect to for peer discovery and/or adversising our
+# own external addresses
+#seeds = ["tcp+tls://lilith0.dark.fi:8342", "tcp+tls://lilith1.dark.fi:8342"]
+
+# Whitelisted network transports for outbound connections
+allowed_transports = ["tcp+tls"]
+
+# Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
+#transport_mixing = true
+
+# Outbound connection slots number, this many connections will be
+# attempted. (This does not include manual connections)
+outbound_connections = 8
+
+# Manual connections retry limit, 0 for forever looping
+#manual_attempt_limit = 0
+
+# Outbound connection timeout (in seconds)
+#outbound_connect_timeout = 10
+
+# Exchange versions (handshake) timeout (in seconds)
+#channel_handshake_timeout = 4
+
+# Ping-pong exchange execution interval (in seconds)
+#channel_heartbeat_interval = 10
+
+# Allow localnet hosts
+#localnet = false
+
+## Sync P2P network settings
+[consensus_net]
+# P2P accept addresses the instance listens on for inbound connections
+# You can also use an IPv6 address
+#inbound = ["tcp+tls://0.0.0.0:8341"]
+# IPv6 version:
+#inbound = ["tcp+tls://[::]:8341"]
+# Combined:
+#inbound = ["tcp+tls://0.0.0.0:8341", "tcp+tls://[::]:8341"]
+
+# P2P external addresses the instance advertises so other peers can
+# reach us and connect to us, as long as inbound addrs are configured.
+# You can also use an IPv6 address
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8341"]
+# IPv6 version:
+#external_addrs = ["tcp+tls://[ipv6 address here]:8341"]
+# Combined:
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8341", "tcp+tls://[ipv6 address here]:8341"]
+
+# Peer nodes to manually connect to
+#peers = []
+
+# Seed nodes to connect to for peer discovery and/or adversising our
+# own external addresses
+#seeds = ["tcp+tls://lilith0.dark.fi:8341", "tcp+tls://lilith1.dark.fi:8341"]
+
+# Whitelisted network transports for outbound connections
+#allowed_transports = ["tcp+tls"]
+
+# Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
+#transport_mixing = true
+
+# Outbound connection slots number, this many connections will be
+# attempted. (This does not include manual connections)
+#outbound_connections = 8
+
+# Manual connections retry limit, 0 for forever looping
+#manual_attempt_limit = 0
+
+# Outbound connection timeout (in seconds)
+#outbound_connect_timeout = 10
+
+# Exchange versions (handshake) timeout (in seconds)
+#channel_handshake_timeout = 4
+
+# Ping-pong exchange execution interval (in seconds)
+#channel_heartbeat_interval = 10
+
+# Allow localnet hosts
+#localnet = false

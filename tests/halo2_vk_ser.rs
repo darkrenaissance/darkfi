@@ -47,15 +47,15 @@ fn halo2_vk_ser() -> Result<()> {
     let bincode = include_bytes!("../proof/opcodes.zk.bin");
     let zkbin = ZkBinary::decode(bincode)?;
 
-    let verifier_witnesses = empty_witnesses(&zkbin);
+    let verifier_witnesses = empty_witnesses(&zkbin)?;
 
     println!("Building vk1");
-    let circuit = ZkCircuit::new(verifier_witnesses.clone(), zkbin.clone());
-    let vk1 = VerifyingKey::build(13, &circuit);
+    let circuit = ZkCircuit::new(verifier_witnesses.clone(), &zkbin);
+    let vk1 = VerifyingKey::build(zkbin.k, &circuit);
 
     println!("Building vk2");
-    let circuit = ZkCircuit::new(verifier_witnesses.clone(), zkbin.clone());
-    let vk2 = VerifyingKey::build(13, &circuit);
+    let circuit = ZkCircuit::new(verifier_witnesses.clone(), &zkbin);
+    let vk2 = VerifyingKey::build(zkbin.k, &circuit);
 
     let mut buf1 = vec![];
     let mut buf2 = vec![];
@@ -71,16 +71,20 @@ fn halo2_vk_ser() -> Result<()> {
 
     println!("Reading vk3");
     let mut buf1_c = Cursor::new(buf1);
-    let vk3 = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut buf1_c)?;
+    // Construct the circuit to be able to read the VerifyingKey
+    let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
+    let vk3 = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut buf1_c, circuit)?;
 
     println!("Reading vk4");
     let mut buf2_c = Cursor::new(buf2);
-    let vk4 = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut buf2_c)?;
+    // Construct the circuit to be able to read the VerifyingKey
+    let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
+    let vk4 = VerifyingKey::read::<Cursor<Vec<u8>>, ZkCircuit>(&mut buf2_c, circuit)?;
 
     // Now let's see if we can verify a proof with all four keys.
     println!("Creating pk");
-    let circuit = ZkCircuit::new(verifier_witnesses.clone(), zkbin.clone());
-    let pk = ProvingKey::build(13, &circuit);
+    let circuit = ZkCircuit::new(verifier_witnesses.clone(), &zkbin);
+    let pk = ProvingKey::build(zkbin.k, &circuit);
 
     let value = 666_u64;
     let value_blind = pallas::Scalar::random(&mut OsRng);
@@ -151,7 +155,7 @@ fn halo2_vk_ser() -> Result<()> {
     ];
 
     println!("Creating proof");
-    let circuit = ZkCircuit::new(prover_witnesses, zkbin);
+    let circuit = ZkCircuit::new(prover_witnesses, &zkbin);
     let proof = Proof::create(&pk, &[circuit], &public_inputs, &mut OsRng)?;
 
     println!("Verifying with vk1");

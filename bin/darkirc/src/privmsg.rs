@@ -17,7 +17,7 @@
  */
 
 use darkfi::event_graph::EventMsg;
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
 #[derive(SerialEncodable, SerialDecodable, Clone, Debug)]
 pub struct PrivMsgEvent {

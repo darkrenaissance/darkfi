@@ -22,7 +22,7 @@ use darkfi_sdk::{
     crypto::{MerkleNode, MerkleTree},
     pasta::pallas,
 };
-use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
 
 use super::{
     constants::{BLOCK_MAGIC_BYTES, BLOCK_VERSION},

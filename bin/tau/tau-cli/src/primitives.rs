@@ -16,58 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fmt, str::FromStr};
-
-use darkfi::{util::time::Timestamp, Error, Result};
+use darkfi::{util::time::Timestamp, Result};
 
 use crate::due_as_timestamp;
+pub(crate) use taud::task_info::{State, TaskEvent, TaskInfo};
 
-pub enum State {
-    Open,
-    Start,
-    Pause,
-    Stop,
-}
-
-impl State {
-    pub const fn is_start(&self) -> bool {
-        matches!(*self, Self::Start)
-    }
-    pub const fn is_pause(&self) -> bool {
-        matches!(*self, Self::Pause)
-    }
-    pub const fn is_stop(&self) -> bool {
-        matches!(*self, Self::Stop)
-    }
-}
-
-impl fmt::Display for State {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            State::Open => write!(f, "open"),
-            State::Start => write!(f, "start"),
-            State::Stop => write!(f, "stop"),
-            State::Pause => write!(f, "pause"),
-        }
-    }
-}
-
-impl FromStr for State {
-    type Err = Error;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        let result = match s.to_lowercase().as_str() {
-            "open" => State::Open,
-            "stop" => State::Stop,
-            "start" => State::Start,
-            "pause" => State::Pause,
-            _ => return Err(Error::ParseFailed("unable to parse state")),
-        };
-        Ok(result)
-    }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug)]
 pub struct BaseTask {
     pub title: String,
     pub tags: Vec<String>,
@@ -76,25 +30,6 @@ pub struct BaseTask {
     pub project: Vec<String>,
     pub due: Option<u64>,
     pub rank: Option<f32>,
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct TaskInfo {
-    pub ref_id: String,
-    pub workspace: String,
-    pub id: u32,
-    pub title: String,
-    pub tags: Vec<String>,
-    pub desc: String,
-    pub owner: String,
-    pub assign: Vec<String>,
-    pub project: Vec<String>,
-    pub due: Option<u64>,
-    pub rank: Option<f32>,
-    pub created_at: u64,
-    pub state: String,
-    pub events: Vec<TaskEvent>,
-    pub comments: Vec<Comment>,
 }
 
 impl From<BaseTask> for TaskInfo {
@@ -109,51 +44,13 @@ impl From<BaseTask> for TaskInfo {
             owner: String::default(),
             assign: value.assign,
             project: value.project,
-            due: value.due,
+            due: value.due.map(Timestamp),
             rank: value.rank,
-            created_at: u64::default(),
+            created_at: Timestamp(u64::default()),
             state: String::default(),
             events: vec![],
             comments: vec![],
         }
-    }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct TaskEvent {
-    pub action: String,
-    pub author: String,
-    pub content: String,
-    pub timestamp: Timestamp,
-}
-
-impl std::fmt::Display for TaskEvent {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "action: {}, timestamp: {}", self.action, self.timestamp)
-    }
-}
-
-impl Default for TaskEvent {
-    fn default() -> Self {
-        Self {
-            action: State::Open.to_string(),
-            author: "".to_string(),
-            content: "".to_string(),
-            timestamp: Timestamp::current_time(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct Comment {
-    content: String,
-    author: String,
-    timestamp: Timestamp,
-}
-
-impl std::fmt::Display for Comment {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{} author: {}, content: {} ", self.timestamp, self.author, self.content)
     }
 }
 

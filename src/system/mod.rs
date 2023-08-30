@@ -16,8 +16,45 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-pub mod stoppable_task;
-pub mod subscriber;
+use std::{sync::Arc, time::Duration};
 
+use smol::{Executor, Timer};
+
+/// Condition variable which allows a task to block until woken up
+pub mod condvar;
+pub use condvar::CondVar;
+
+/// Convenient late initialization of `Weak<Foo>`
+pub mod lazy_weak;
+pub use lazy_weak::LazyWeak;
+
+/// Implementation of async background task spawning which are stoppable
+/// using channel signalling.
+pub mod stoppable_task;
 pub use stoppable_task::{StoppableTask, StoppableTaskPtr};
+
+/// Simple broadcast (publish-subscribe) class
+pub mod subscriber;
 pub use subscriber::{Subscriber, SubscriberPtr, Subscription};
+
+/// Async timeout implementations
+pub mod timeout;
+pub use timeout::io_timeout;
+
+pub type ExecutorPtr = Arc<Executor<'static>>;
+
+/// Sleep for any number of seconds.
+pub async fn sleep(seconds: u64) {
+    Timer::after(Duration::from_secs(seconds)).await;
+}
+
+pub async fn sleep_forever() {
+    loop {
+        sleep(100000000).await
+    }
+}
+
+/// Sleep for any number of milliseconds.
+pub async fn msleep(millis: u64) {
+    Timer::after(Duration::from_millis(millis)).await;
+}

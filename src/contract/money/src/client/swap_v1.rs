@@ -76,7 +76,7 @@ pub struct SwapCallBuilder {
     /// `token_blinds`.
     pub value_blinds: [pallas::Scalar; 2],
     /// The blinds to be used for token ID pedersen commitments
-    pub token_blinds: [pallas::Scalar; 2],
+    pub token_blinds: [pallas::Base; 2],
     /// The coin to be used as the input to the swap
     pub coin: OwnCoin,
     /// Merkle tree of coins used to create inclusion proofs

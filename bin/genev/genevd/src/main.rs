@@ -16,13 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::{
-    stream::StreamExt,
-    sync::{Arc, Mutex},
-};
-
-use log::info;
-use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use std::sync::Arc;
 
 use darkfi::{
     async_daemonize, cli_desc,
@@ -34,19 +28,20 @@ use darkfi::{
     },
     net::{self, settings::SettingsOpt},
     rpc::server::listen_and_serve,
-    Result,
+    system::StoppableTask,
+    Error, Result,
 };
-
-mod genevent;
-mod rpc;
-
-use genevent::GenEvent;
+use genevd::GenEvent;
+use log::{error, info};
+use smol::{lock::Mutex, stream::StreamExt};
+use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
-use crate::rpc::JsonRpcInterface;
+mod rpc;
+use rpc::JsonRpcInterface;
 
 const CONFIG_FILE: &str = "genev_config.toml";
-const CONFIG_FILE_CONTENTS: &str = include_str!("../../genev_config.toml");
+const CONFIG_FILE_CONTENTS: &str = include_str!("../genev_config.toml");
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
@@ -89,7 +84,7 @@ async fn start_sync_loop(
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, executor: Arc<smol::Executor<'static>>) -> Result<()> {
     ////////////////////
     // Initialize the base structures
     ////////////////////
@@ -109,7 +104,7 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     let net_settings = args.net.clone();
 
     // New p2p
-    let p2p = net::P2p::new(net_settings.into()).await;
+    let p2p = net::P2p::new(net_settings.into(), executor.clone()).await;
     let p2p2 = p2p.clone();
 
     // Register the protocol_event
@@ -123,12 +118,9 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
         })
         .await;
 
-    // Start
-    p2p.clone().start(executor.clone()).await?;
-
     // Run
-    let executor_cloned = executor.clone();
-    executor_cloned.spawn(p2p.clone().run(executor.clone())).detach();
+    info!(target: "genevd", "Starting P2P network");
+    p2p.clone().start().await?;
 
     ////////////////////
     // Listner
@@ -136,7 +128,19 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
     let seen_ids = Seen::new();
     let missed_events = Arc::new(Mutex::new(vec![]));
 
-    executor.spawn(start_sync_loop(view, seen_ids.clone(), missed_events.clone())).detach();
+    info!(target: "genevd", "Starting sync loop task");
+    let sync_loop_task = StoppableTask::new();
+    sync_loop_task.clone().start(
+        start_sync_loop(view, seen_ids.clone(), missed_events.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "genevd", "Failed starting sync loop task: {}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        executor.clone(),
+    );
 
     //
     // RPC interface
@@ -148,13 +152,29 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
         seen_ids.clone(),
         p2p.clone(),
     ));
-    let _ex = executor.clone();
-    executor.spawn(listen_and_serve(args.rpc_listen.clone(), rpc_interface, _ex)).detach();
+    let rpc_task = StoppableTask::new();
+    rpc_task.clone().start(
+        listen_and_serve(args.rpc_listen, rpc_interface, executor.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "genevd", "Failed starting JSON-RPC server: {}", e),
+            }
+        },
+        Error::RPCServerStopped,
+        executor.clone(),
+    );
 
     // Signal handling for graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new()?;
+    let (signals_handler, signals_task) = SignalHandler::new(executor)?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
+
+    info!(target: "genevd", "Stopping JSON-RPC server...");
+    rpc_task.stop().await;
+
+    info!(target: "genevd", "Stopping sync loop task...");
+    sync_loop_task.stop().await;
 
     // stop p2p
     p2p2.stop().await;

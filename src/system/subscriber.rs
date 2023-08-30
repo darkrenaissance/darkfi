@@ -16,15 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
-use async_std::sync::{Arc, Mutex};
 use log::warn;
 use rand::{rngs::OsRng, Rng};
+use smol::lock::Mutex;
 
 pub type SubscriberPtr<T> = Arc<Subscriber<T>>;
-
-pub type SubscriptionId = u64;
+pub type SubscriptionId = usize;
 
 #[derive(Debug)]
 pub struct Subscription<T> {
@@ -44,12 +43,12 @@ impl<T: Clone> Subscription<T> {
         match message_result {
             Ok(message_result) => message_result,
             Err(err) => {
-                panic!("MessageSubscription::receive() recv_queue failed! {}", err);
+                panic!("Subscription::receive() recv_queue failed! {}", err);
             }
         }
     }
 
-    // Must be called manually since async Drop is not possible in Rust
+    /// Must be called manually since async Drop is not possible in Rust
     pub async fn unsubscribe(&self) {
         self.parent.clone().unsubscribe(self.id).await
     }
@@ -58,7 +57,7 @@ impl<T: Clone> Subscription<T> {
 /// Simple broadcast (publish-subscribe) class
 #[derive(Debug)]
 pub struct Subscriber<T> {
-    subs: Mutex<HashMap<u64, smol::channel::Sender<T>>>,
+    subs: Mutex<HashMap<SubscriptionId, smol::channel::Sender<T>>>,
 }
 
 impl<T: Clone> Subscriber<T> {
@@ -73,9 +72,14 @@ impl<T: Clone> Subscriber<T> {
     pub async fn subscribe(self: Arc<Self>) -> Subscription<T> {
         let (sender, recvr) = smol::channel::unbounded();
 
-        let sub_id = Self::random_id();
+        // Poor-man's do/while
+        let mut subs = self.subs.lock().await;
+        let mut sub_id = Self::random_id();
+        while subs.contains_key(&sub_id) {
+            sub_id = Self::random_id();
+        }
 
-        self.subs.lock().await.insert(sub_id, sender);
+        subs.insert(sub_id, sender);
 
         Subscription { id: sub_id, recv_queue: recvr, parent: self.clone() }
     }
@@ -87,7 +91,10 @@ impl<T: Clone> Subscriber<T> {
     pub async fn notify(&self, message_result: T) {
         for sub in (*self.subs.lock().await).values() {
             if let Err(e) = sub.send(message_result.clone()).await {
-                warn!(target: "system::subscriber", "Error returned sending message in notify() call! {}", e);
+                warn!(
+                    target: "system::subscriber",
+                    "[system::subscriber] Error returned sending message in notify() call: {}", e,
+                );
             }
         }
     }
@@ -99,7 +106,10 @@ impl<T: Clone> Subscriber<T> {
             }
 
             if let Err(e) = sub.send(message_result.clone()).await {
-                warn!(target: "system::subscriber", "Error returned sending message in notify_with_exclude() call! {}", e);
+                warn!(
+                    target: "system::subscriber",
+                    "[system::subscriber] Error returned sending message in notify_with_exclude() call! {}", e,
+                );
             }
         }
     }

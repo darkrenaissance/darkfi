@@ -25,7 +25,7 @@ use darkfi_sdk::{
     },
     pasta::pallas,
 };
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, Decodable, Encodable, SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
 
 use crate::Error;

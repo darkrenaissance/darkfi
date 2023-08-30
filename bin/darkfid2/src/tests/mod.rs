@@ -16,21 +16,27 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::Result;
+use std::sync::Arc;
+
+use darkfi::{net::Settings, Result};
 use darkfi_contract_test_harness::init_logger;
+use smol::Executor;
+use url::Url;
 
 mod harness;
-use harness::Harness;
+use harness::{generate_node, Harness, HarnessConfig};
 
-#[async_std::test]
-async fn add_blocks() -> Result<()> {
+mod forks;
+
+async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     init_logger();
 
     // Initialize harness in testing mode
-    let th = Harness::new(true).await?;
+    let config = HarnessConfig { testing_node: true, alice_initial: 1000, bob_initial: 500 };
+    let th = Harness::new(config, &ex).await?;
 
     // Retrieve genesis block
-    let previous = th.alice._validator.read().await.blockchain.last_block()?;
+    let previous = th.alice.validator.read().await.blockchain.last_block()?;
 
     // Generate next block
     let block1 = th.generate_next_block(&previous, 1).await?;
@@ -42,8 +48,43 @@ async fn add_blocks() -> Result<()> {
     th.add_blocks(&vec![block1, block2]).await?;
 
     // Validate chains
-    th.validate_chains().await?;
+    th.validate_chains(3, 7).await?;
+
+    // We are going to create a third node and try to sync from the previous two
+    let mut sync_settings = Settings { localnet: true, ..Default::default() };
+
+    let charlie_url = Url::parse("tcp+tls://127.0.0.1:18342")?;
+    sync_settings.inbound_addrs = vec![charlie_url];
+    let alice_url = th.alice.sync_p2p.settings().inbound_addrs[0].clone();
+    let bob_url = th.bob.sync_p2p.settings().inbound_addrs[0].clone();
+    sync_settings.peers = vec![alice_url, bob_url];
+    let charlie =
+        generate_node(&th.vks, &th.validator_config, &sync_settings, None, &ex, false).await?;
+    // Verify node synced
+    let genesis_txs_total = th.config.alice_initial + th.config.bob_initial;
+    let alice = &th.alice.validator.read().await;
+    let charlie = &charlie.validator.read().await;
+    charlie.validate_blockchain(genesis_txs_total, vec![]).await?;
+    assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
+    assert_eq!(alice.blockchain.slots.len(), charlie.blockchain.slots.len());
 
     // Thanks for reading
+    Ok(())
+}
+
+#[test]
+fn sync_blocks() -> Result<()> {
+    let ex = Arc::new(Executor::new());
+    let (signal, shutdown) = smol::channel::unbounded::<()>();
+
+    easy_parallel::Parallel::new().each(0..4, |_| smol::block_on(ex.run(shutdown.recv()))).finish(
+        || {
+            smol::block_on(async {
+                sync_blocks_real(ex.clone()).await.unwrap();
+                drop(signal);
+            })
+        },
+    );
+
     Ok(())
 }

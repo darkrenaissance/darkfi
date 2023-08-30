@@ -18,13 +18,11 @@
 
 use std::collections::BTreeMap;
 
-use sled::IVec;
-
 use crate::PrivMsgEvent;
 
 #[derive(Debug, Clone, Default)]
 pub struct NickServ {
-    _db: BTreeMap<IVec, IVec>,
+    _db: BTreeMap<Vec<u8>, Vec<u8>>,
 }
 
 impl NickServ {

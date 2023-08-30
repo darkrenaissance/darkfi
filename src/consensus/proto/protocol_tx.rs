@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Arc;
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
@@ -33,6 +34,8 @@ use crate::{
     Result,
 };
 
+impl_p2p_message!(Transaction, "tx");
+
 pub struct ProtocolTx {
     tx_sub: MessageSubscription<Transaction>,
     jobsman: ProtocolJobsManagerPtr,
@@ -40,8 +43,6 @@ pub struct ProtocolTx {
     p2p: P2pPtr,
     channel_address: Url,
 }
-
-impl_p2p_message!(Transaction, "tx");
 
 impl ProtocolTx {
     pub async fn init(

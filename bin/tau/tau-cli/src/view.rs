@@ -90,14 +90,18 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String) -> Result<()> {
             print_tags.push(t)
         }
 
+        let due_ = match task.due {
+            Some(ts) => ts.0,
+            None => 0,
+        };
+
         table.add_row(Row::new(vec![
             Cell::new(&task.id.to_string()).style_spec(gen_style),
             Cell::new(&task.title).style_spec(gen_style),
             Cell::new(&print_tags.join(", ")).style_spec(gen_style),
             Cell::new(&task.project.join(", ")).style_spec(gen_style),
             Cell::new(&task.assign.join(", ")).style_spec(gen_style),
-            Cell::new(&timestamp_to_date(task.due.unwrap_or(0), DateFormat::Date))
-                .style_spec(gen_style),
+            Cell::new(&timestamp_to_date(due_, DateFormat::Date)).style_spec(gen_style),
             if task.rank == max_rank {
                 Cell::new(&rank).style_spec(max_style)
             } else if task.rank == min_rank {
@@ -117,14 +121,29 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String) -> Result<()> {
             .build(),
     );
 
-    ws_table.printstd();
-    table.printstd();
+    if unsafe { libc::isatty(libc::STDOUT_FILENO) } == 1 {
+        ws_table.printstd();
+        table.printstd();
+    } else {
+        for row in table.row_iter() {
+            for cell in row.iter() {
+                print!("{}\t", cell.get_content());
+            }
+            println!();
+        }
+    }
+
     Ok(())
 }
 
 pub fn taskinfo_table(taskinfo: TaskInfo) -> Result<Table> {
-    let due = timestamp_to_date(taskinfo.due.unwrap_or(0), DateFormat::Date);
-    let created_at = timestamp_to_date(taskinfo.created_at, DateFormat::DateTime);
+    let due_ = match taskinfo.due {
+        Some(ts) => ts.0,
+        None => 0,
+    };
+
+    let due = timestamp_to_date(due_, DateFormat::Date);
+    let created_at = timestamp_to_date(taskinfo.created_at.0, DateFormat::DateTime);
     let rank = if let Some(r) = taskinfo.rank { r.to_string() } else { "".to_string() };
 
     let mut table = table!(

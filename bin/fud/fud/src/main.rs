@@ -16,347 +16,255 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, fs, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
-use async_std::{stream::StreamExt, sync::Arc};
 use async_trait::async_trait;
-use darkfi_serial::serialize;
 use log::{debug, error, info, warn};
-use serde_json::{json, Value};
-use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use smol::{channel, fs::File, lock::RwLock, stream::StreamExt, Executor};
+use structopt_toml::{structopt::StructOpt, StructOptToml};
+use tinyjson::JsonValue;
 use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
-    dht::{waiting_for_response, Dht, DhtPtr},
-    net,
+    geode::Geode,
+    net::{
+        self, connector::Connector, protocol::ProtocolVersion, session::Session,
+        settings::SettingsOpt, P2p, P2pPtr,
+    },
     rpc::{
-        jsonrpc::{
-            ErrorCode,
-            ErrorCode::{InvalidParams, MethodNotFound},
-            JsonError, JsonRequest, JsonResponse, JsonResult,
-        },
+        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         server::{listen_and_serve, RequestHandler},
     },
+    system::StoppableTask,
     util::path::expand_path,
-    Result,
+    Error, Result,
 };
 
-mod error;
-use error::{server_error, RpcError};
+/// P2P protocols
+mod proto;
+use proto::{
+    FudChunkPut, FudChunkReply, FudChunkRequest, FudFilePut, FudFileReply, FudFileRequest,
+    ProtocolFud,
+};
 
 const CONFIG_FILE: &str = "fud_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../fud_config.toml");
 
-#[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
+#[derive(Clone, Debug, serde::Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
 #[structopt(name = "fud", about = cli_desc!())]
 struct Args {
-    #[structopt(short, long)]
-    /// Configuration file to use
-    config: Option<String>,
-
-    #[structopt(long, default_value = "~/.config/darkfi/fud")]
-    /// Path to the contents directory
-    folder: String,
+    #[structopt(short, parse(from_occurrences))]
+    /// Increase verbosity (-vvv supported)
+    verbose: u8,
 
     #[structopt(long, default_value = "tcp://127.0.0.1:13336")]
     /// JSON-RPC listen URL
     rpc_listen: Url,
 
-    #[structopt(long)]
-    /// P2P accept addresses (repeatable flag)
-    p2p_accept: Vec<Url>,
-
-    #[structopt(long)]
-    /// P2P external addresses (repeatable flag)
-    p2p_external: Vec<Url>,
-
-    #[structopt(long, default_value = "8")]
-    /// Connection slots
-    slots: usize,
-
-    #[structopt(long)]
-    /// Connect to seed (repeatable flag)
-    seeds: Vec<Url>,
-
-    #[structopt(long)]
-    /// Connect to peer (repeatable flag)
-    peers: Vec<Url>,
-
-    #[structopt(long)]
-    /// Prefered transports for outbound connections (repeatable flag)
-    transports: Vec<String>,
-
-    #[structopt(long)]
-    /// Enable localnet hosts
-    localnet: bool,
-
-    #[structopt(long)]
-    /// Enable channel log
-    channel_log: bool,
-
     #[structopt(short, long)]
-    /// Set log file to ouput into
+    /// Configuration file to use
+    config: Option<String>,
+
+    #[structopt(long)]
+    /// Set log file path to output daemon logs into
     log: Option<String>,
 
-    #[structopt(short, parse(from_occurrences))]
-    /// Increase verbosity (-vvv supported)
-    verbose: u8,
+    #[structopt(long, default_value = "~/.local/share/fud")]
+    /// Base directory for filesystem storage
+    base_dir: String,
+
+    #[structopt(flatten)]
+    /// Network settings
+    net: SettingsOpt,
 }
 
-/// Struct representing the daemon.
 pub struct Fud {
-    /// Daemon dht state
-    dht: DhtPtr,
+    /// Routing table for file metadata
+    metadata_router: Arc<RwLock<HashMap<blake3::Hash, HashSet<Url>>>>,
+    /// Routing table for file chunks
+    chunks_router: Arc<RwLock<HashMap<blake3::Hash, HashSet<Url>>>>,
+    /// Pointer to the P2P network instance
+    p2p: P2pPtr,
+    /// The Geode instance
+    geode: Geode,
 
-    /// Path to the contents directory
-    folder: PathBuf,
+    file_fetch_tx: channel::Sender<(blake3::Hash, Result<()>)>,
+    file_fetch_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
+    chunk_fetch_tx: channel::Sender<(blake3::Hash, Result<()>)>,
+    chunk_fetch_rx: channel::Receiver<(blake3::Hash, Result<()>)>,
+}
+
+#[async_trait]
+impl RequestHandler for Fud {
+    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
+        match req.method.as_str() {
+            "ping" => return self.pong(req.id, req.params).await,
+
+            "put" => return self.put(req.id, req.params).await,
+            "get" => return self.get(req.id, req.params).await,
+
+            "dnet_switch" => return self.dnet_switch(req.id, req.params).await,
+            _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+        }
+    }
 }
 
 impl Fud {
-    pub async fn new(dht: DhtPtr, folder: PathBuf) -> Result<Self> {
-        Ok(Self { dht, folder })
-    }
-
-    /// Initialize fud dht state by reading the contents folder and generating
-    /// the corresponding dht records.
-    async fn init(&self) -> Result<()> {
-        info!("Initializing fud dht state for folder: {:?}", self.folder);
-
-        if !self.folder.exists() {
-            fs::create_dir_all(&self.folder)?;
-        }
-
-        let entries = fs::read_dir(&self.folder).unwrap();
-        {
-            let mut lock = self.dht.write().await;
-
-            // Sync lookup map with network
-            if let Err(e) = lock.sync_lookup_map().await {
-                error!("Failed to sync lookup map: {}", e);
-            }
-
-            for entry in entries {
-                let e = entry.unwrap();
-                let name = String::from(e.file_name().to_str().unwrap());
-                info!("Entry: {}", name);
-                let key_hash = blake3::hash(&serialize(&name));
-                let value: Vec<u8> = std::fs::read(e.path()).unwrap();
-                if let Err(e) = lock.insert(key_hash, value).await {
-                    error!("Failed to insert key: {}", e);
-                }
-            }
-        }
-
-        Ok(())
-    }
-
-    /// Signaling fud network that node goes offline.
-    async fn disconnect(&self) -> Result<()> {
-        debug!("Peer disconnecting, signaling network");
-
-        {
-            let mut lock = self.dht.write().await;
-            let records = lock.map.clone();
-            for key in records.keys() {
-                let result = lock.remove(*key).await;
-                match result {
-                    Ok(option) => match option {
-                        Some(k) => {
-                            debug!("Hash key removed: {}", k);
-                        }
-                        None => {
-                            warn!("Did not find key: {}", key);
-                        }
-                    },
-                    Err(e) => {
-                        error!("Failed to remove key: {}", e);
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     // RPCAPI:
-    // Returns all folder contents, with file changes.
-    // --> {"jsonrpc": "2.0", "method": "list", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": "[[files],[new],[deleted]", "id": 1}
-    pub async fn list(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let mut content = HashSet::new();
-        let mut new = HashSet::new();
-        let mut deleted = HashSet::new();
-
-        let entries = fs::read_dir(&self.folder).unwrap();
-        let records = self.dht.read().await.map.clone();
-        let mut entries_hashes = HashSet::new();
-
-        // We iterate files for new records
-        for entry in entries {
-            let e = entry.unwrap();
-            let name = String::from(e.file_name().to_str().unwrap());
-            let key_hash = blake3::hash(&serialize(&name));
-            entries_hashes.insert(key_hash);
-
-            if records.contains_key(&key_hash) {
-                content.insert(name.clone());
-            } else {
-                new.insert(name);
-            }
-        }
-
-        // We check records for removed files
-        for key in records.keys() {
-            if entries_hashes.contains(key) {
-                continue
-            }
-            deleted.insert(key.to_string());
-        }
-
-        JsonResponse::new(json!((content, new, deleted)), id).into()
-    }
-
-    // RPCAPI:
-    // Iterate contents folder and dht for potential changes.
-    // --> {"jsonrpc": "2.0", "method": "sync", "params": [], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": "true", "id": 1}
-    pub async fn sync(&self, id: Value, _params: &[Value]) -> JsonResult {
-        info!("Sync process started");
-
-        let entries = fs::read_dir(&self.folder).unwrap();
-        {
-            let mut lock = self.dht.write().await;
-            let records = lock.map.clone();
-            let mut entries_hashes = HashSet::new();
-
-            // We iterate files for new records
-            for entry in entries {
-                let e = entry.unwrap();
-                let name = String::from(e.file_name().to_str().unwrap());
-                info!("Entry: {}", name);
-                let key_hash = blake3::hash(&serialize(&name));
-                entries_hashes.insert(key_hash);
-
-                if records.contains_key(&key_hash) {
-                    continue
-                }
-
-                let value: Vec<u8> = std::fs::read(e.path()).unwrap();
-                if let Err(e) = lock.insert(key_hash, value).await {
-                    error!("Failed to insert key: {}", e);
-                    return server_error(RpcError::KeyInsertFail, id)
-                }
-            }
-
-            // We check records for removed files
-            let records = lock.map.clone();
-            for key in records.keys() {
-                if entries_hashes.contains(key) {
-                    continue
-                }
-
-                let result = lock.remove(*key).await;
-                match result {
-                    Ok(option) => match option {
-                        Some(k) => {
-                            debug!("Hash key removed: {}", k);
-                        }
-                        None => {
-                            warn!("Did not find key: {}", key);
-                        }
-                    },
-                    Err(e) => {
-                        error!("Failed to remove key: {}", e);
-                        return server_error(RpcError::KeyRemoveFail, id)
-                    }
-                }
-            }
-        }
-
-        JsonResponse::new(json!(true), id).into()
-    }
-
-    // RPCAPI:
-    // Checks if provided key exists and retrieve it from the local map or queries the network.
-    // Returns key or not found message.
-    // --> {"jsonrpc": "2.0", "method": "get", "params": ["name"], "id": 1}
-    // <-- {"jsonrpc": "2.0", "result": "path", "id": 1}
-    async fn get(&self, id: Value, params: &[Value]) -> JsonResult {
+    // Put a file onto the network. Takes a local filesystem path as a parameter.
+    // Returns the file hash that serves as a pointer to the uploaded file.
+    //
+    // --> {"jsonrpc": "2.0", "method": "put", "params": ["/foo.txt"], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result: "df4...3db7", "id": 42}
+    async fn put(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
-            return JsonError::new(InvalidParams, None, id).into()
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        let key = params[0].as_str().unwrap().to_string();
-        let key_hash = blake3::hash(&serialize(&key));
+        let path = params[0].get::<String>().unwrap();
+        let path = match expand_path(path.as_str()) {
+            Ok(v) => v,
+            Err(_) => return JsonError::new(ErrorCode::InvalidParams, None, id).into(),
+        };
 
-        // We execute this sequence to prevent lock races between threads
-        // Verify key exists
-        let exists = self.dht.read().await.contains_key(key_hash);
-        if exists.is_none() {
-            info!("Did not find key: {}", key);
-            return server_error(RpcError::UnknownKey, id)
-        }
-
-        // Check if key is local or should query network
-        let path = self.folder.join(key.clone());
-        let local = exists.unwrap();
-        if local {
-            match self.dht.read().await.get(key_hash) {
-                Some(_) => return JsonResponse::new(json!(path), id).into(),
-                None => {
-                    info!("Did not find key: {}", key);
-                    return server_error(RpcError::UnknownKey, id)
-                }
-            }
-        }
-
-        info!("Key doesn't exist locally, querring network...");
-        if let Err(e) = self.dht.read().await.request_key(key_hash).await {
-            error!("Failed to query key: {}", e);
-            return server_error(RpcError::QueryFailed, id)
-        }
-
-        info!("Waiting response...");
-        match waiting_for_response(self.dht.clone()).await {
-            Ok(response) => {
-                match response {
-                    Some(resp) => {
-                        info!("Key found!");
-                        // Optionally, we insert the key to our local map
-                        if let Err(e) =
-                            self.dht.write().await.insert(resp.key, resp.value.clone()).await
-                        {
-                            error!("Failed to insert key: {}", e);
-                            return server_error(RpcError::KeyInsertFail, id)
-                        }
-
-                        if let Err(e) = std::fs::write(path.clone(), resp.value) {
-                            error!("Failed to generate file for key: {}", e);
-                            return server_error(RpcError::FileGenerationFail, id)
-                        }
-                        JsonResponse::new(json!(path), id).into()
-                    }
-                    None => {
-                        info!("Did not find key: {}", key);
-                        server_error(RpcError::UnknownKey, id)
-                    }
-                }
-            }
+        // A valid path was passed. Let's see if we can read it, and if so,
+        // add it to Geode.
+        let fd = match File::open(&path).await {
+            Ok(v) => v,
             Err(e) => {
-                error!("Error while waiting network response: {}", e);
-                server_error(RpcError::WaitingNetworkError, id)
+                error!("Failed to open {:?}: {}", path, e);
+                return JsonError::new(ErrorCode::InvalidParams, None, id).into()
             }
-        }
+        };
+
+        let (file_hash, chunk_hashes) = match self.geode.insert(fd).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Failed inserting file {:?} to geode: {}", path, e);
+                return JsonError::new(ErrorCode::InternalError, None, id).into()
+            }
+        };
+
+        let fud_file = FudFilePut { file_hash, chunk_hashes };
+        self.p2p.broadcast(&fud_file).await;
+
+        JsonResponse::new(JsonValue::String(file_hash.to_hex().to_string()), id).into()
     }
 
     // RPCAPI:
-    // Replies to a ping method.
-    // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
-    async fn pong(&self, id: Value, _params: &[Value]) -> JsonResult {
-        JsonResponse::new(json!("pong"), id).into()
+    // Fetch a file from the network. Takes a file hash as parameter.
+    // Returns the paths to the local chunks of the file, if found/fetched.
+    //
+    // --> {"jsonrpc": "2.0", "method": "get", "params": ["1211...abfd"], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result: ["~/.local/share/fud/chunks/fab1...2314", ...], "id": 42}
+    async fn get(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 1 || !params[0].is_string() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        let file_hash = match blake3::Hash::from_hex(params[0].get::<String>().unwrap()) {
+            Ok(v) => v,
+            Err(_) => return JsonError::new(ErrorCode::InvalidParams, None, id).into(),
+        };
+
+        let chunked_file = match self.geode.get(&file_hash).await {
+            Ok(v) => v,
+            Err(Error::GeodeNeedsGc) => todo!(),
+            Err(Error::GeodeFileNotFound) => {
+                info!("Requested file {} not found in Geode, triggering fetch", file_hash);
+                self.file_fetch_tx.send((file_hash, Ok(()))).await.unwrap();
+                info!("Waiting for background file fetch task...");
+                let (i_file_hash, status) = self.file_fetch_rx.recv().await.unwrap();
+                match status {
+                    Ok(()) => {
+                        let ch_file = self.geode.get(&file_hash).await.unwrap();
+
+                        let m = FudFilePut {
+                            file_hash: i_file_hash,
+                            chunk_hashes: ch_file.iter().map(|(h, _)| *h).collect(),
+                        };
+
+                        self.p2p.broadcast(&m).await;
+
+                        ch_file
+                    }
+
+                    Err(Error::GeodeFileRouteNotFound) => {
+                        // TODO: Return FileNotFound error
+                        return JsonError::new(ErrorCode::InternalError, None, id).into()
+                    }
+
+                    Err(e) => panic!("{}", e),
+                }
+            }
+
+            Err(e) => panic!("{}", e),
+        };
+
+        if chunked_file.is_complete() {
+            let chunks: Vec<JsonValue> = chunked_file
+                .iter()
+                .map(|(_, path)| {
+                    JsonValue::String(
+                        path.as_ref().unwrap().clone().into_os_string().into_string().unwrap(),
+                    )
+                })
+                .collect();
+
+            return JsonResponse::new(JsonValue::Array(chunks), id).into()
+        }
+
+        // Fetch any missing chunks
+        let mut missing_chunks = vec![];
+        for (chunk, path) in chunked_file.iter() {
+            if path.is_none() {
+                missing_chunks.push(*chunk);
+            }
+        }
+
+        for chunk in missing_chunks {
+            self.chunk_fetch_tx.send((chunk, Ok(()))).await.unwrap();
+            let (i_chunk_hash, status) = self.chunk_fetch_rx.recv().await.unwrap();
+
+            match status {
+                Ok(()) => {
+                    let m = FudChunkPut { chunk_hash: i_chunk_hash };
+                    self.p2p.broadcast(&m).await;
+                    break
+                }
+                Err(Error::GeodeChunkRouteNotFound) => continue,
+
+                Err(e) => panic!("{}", e),
+            }
+        }
+
+        let chunked_file = match self.geode.get(&file_hash).await {
+            Ok(v) => v,
+            Err(e) => panic!("{}", e),
+        };
+
+        if !chunked_file.is_complete() {
+            todo!();
+            // Return JsonError missing chunks
+        }
+
+        let chunks: Vec<JsonValue> = chunked_file
+            .iter()
+            .map(|(_, path)| {
+                JsonValue::String(
+                    path.as_ref().unwrap().clone().into_os_string().into_string().unwrap(),
+                )
+            })
+            .collect();
+
+        JsonResponse::new(JsonValue::Array(chunks), id).into()
     }
 
     // RPCAPI:
@@ -366,101 +274,346 @@ impl Fud {
     //
     // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn dnet_switch(&self, id: Value, params: &[Value]) -> JsonResult {
-        if params.len() != 1 && params[0].as_bool().is_none() {
+    async fn dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 1 || !params[0].is_bool() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        if params[0].as_bool().unwrap() {
-            self.dht.read().await.p2p.dnet_enable().await;
+        let switch = params[0].get::<bool>().unwrap();
+
+        if *switch {
+            self.p2p.dnet_enable().await;
         } else {
-            self.dht.read().await.p2p.dnet_disable().await;
+            self.p2p.dnet_disable().await;
         }
 
-        JsonResponse::new(json!(true), id).into()
-    }
-
-    // RPCAPI:
-    // Retrieves P2P network information.
-    // --> {"jsonrpc": "2.0", "method": "dnet_info", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
-    async fn dnet_info(&self, id: Value, _params: &[Value]) -> JsonResult {
-        let dnet_info = self.dht.read().await.p2p.dnet_info().await;
-        JsonResponse::new(net::P2p::map_dnet_info(dnet_info), id).into()
+        JsonResponse::new(JsonValue::Boolean(true), id).into()
     }
 }
 
-#[async_trait]
-impl RequestHandler for Fud {
-    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        if !req.params.is_array() {
-            return JsonError::new(InvalidParams, None, req.id).into()
+/// Background task that receives file fetch requests and tries to
+/// fetch objects from the network using the routing table.
+/// TODO: This can be optimised a lot for connection reuse, etc.
+async fn fetch_file_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<()> {
+    info!("Started background file fetch task");
+    loop {
+        let (file_hash, _) = fud.file_fetch_rx.recv().await.unwrap();
+        info!("fetch_file_task: Received {}", file_hash);
+
+        let mut metadata_router = fud.metadata_router.write().await;
+        let peers = metadata_router.get_mut(&file_hash);
+
+        if peers.is_none() {
+            warn!("File {} not in routing table, cannot fetch", file_hash);
+            fud.file_fetch_tx.send((file_hash, Err(Error::GeodeFileRouteNotFound))).await.unwrap();
+            continue
         }
 
-        let params = req.params.as_array().unwrap();
+        let mut found = false;
+        let peers = peers.unwrap();
+        let mut invalid_file_routes = vec![];
 
-        match req.method.as_str() {
-            Some("list") => return self.list(req.id, params).await,
-            Some("sync") => return self.sync(req.id, params).await,
-            Some("get") => return self.get(req.id, params).await,
-            Some("ping") => return self.pong(req.id, params).await,
-            Some("dnet_switch") => return self.dnet_switch(req.id, params).await,
-            Some("dnet_info") => return self.dnet_info(req.id, params).await,
-            Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
+        for peer in peers.iter() {
+            let session_out = fud.p2p.session_outbound().await;
+            let session_weak = Arc::downgrade(&fud.p2p.session_outbound().await);
+
+            info!("Connecting to {} to fetch {}", peer, file_hash);
+            let connector = Connector::new(fud.p2p.settings(), session_weak);
+            match connector.connect(peer).await {
+                Ok((url, channel)) => {
+                    let proto_ver = ProtocolVersion::new(
+                        channel.clone(),
+                        fud.p2p.settings().clone(),
+                        fud.p2p.hosts().clone(),
+                    )
+                    .await;
+
+                    let handshake_task = session_out.perform_handshake_protocols(
+                        proto_ver,
+                        channel.clone(),
+                        executor.clone(),
+                    );
+
+                    channel.clone().start(executor.clone());
+
+                    if let Err(e) = handshake_task.await {
+                        error!("Handshake with {} failed: {}", url, e);
+                        // Delete peer from router
+                        invalid_file_routes.push(peer.clone());
+                        continue
+                    }
+
+                    let msg_subscriber = channel.subscribe_msg::<FudFileReply>().await.unwrap();
+                    let request = FudFileRequest { file_hash };
+
+                    if let Err(e) = channel.send(&request).await {
+                        error!("Failed sending FudFileRequest({}) to {}: {}", file_hash, url, e);
+                        continue
+                    }
+
+                    // TODO: With timeout!
+                    let reply = match msg_subscriber.receive().await {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("Error receiving FudFileReply from subscriber: {}", e);
+                            continue
+                        }
+                    };
+
+                    msg_subscriber.unsubscribe().await;
+                    channel.stop().await;
+
+                    if let Err(e) = fud.geode.insert_file(&file_hash, &reply.chunk_hashes).await {
+                        error!("Failed inserting file {} to Geode: {}", file_hash, e);
+                        continue
+                    }
+
+                    found = true;
+                    break
+                }
+
+                Err(e) => {
+                    error!("Failed to connect to {}: {}", peer, e);
+                    continue
+                }
+            }
         }
+
+        for peer in invalid_file_routes {
+            debug!("Removing peer {} from {} file router", peer, file_hash);
+            peers.remove(&peer);
+        }
+
+        if !found {
+            warn!("Did not manage to fetch {} file metadata", file_hash);
+            fud.file_fetch_tx.send((file_hash, Err(Error::GeodeFileRouteNotFound))).await.unwrap();
+            continue
+        }
+
+        info!("Successfully fetched {} file metadata", file_hash);
+        fud.file_fetch_tx.send((file_hash, Ok(()))).await.unwrap();
+    }
+}
+
+/// Background task that receives chunk fetch requests and tries to
+/// fetch objects from the network using the routing table.
+/// TODO: This can be optimised a lot for connection reuse, etc.
+async fn fetch_chunk_task(fud: Arc<Fud>, executor: Arc<Executor<'_>>) -> Result<()> {
+    info!("Started background chunk fetch task");
+    loop {
+        let (chunk_hash, _) = fud.chunk_fetch_rx.recv().await.unwrap();
+        info!("fetch_chunk_task: Received {}", chunk_hash);
+
+        let mut chunk_router = fud.chunks_router.write().await;
+        let peers = chunk_router.get_mut(&chunk_hash);
+
+        if peers.is_none() {
+            warn!("Chunk {} not in routing table, cannot fetch", chunk_hash);
+            fud.chunk_fetch_tx
+                .send((chunk_hash, Err(Error::GeodeChunkRouteNotFound)))
+                .await
+                .unwrap();
+            continue
+        }
+
+        let mut found = false;
+        let peers = peers.unwrap();
+        let mut invalid_chunk_routes = vec![];
+
+        for peer in peers.iter() {
+            let session_out = fud.p2p.session_outbound().await;
+            let session_weak = Arc::downgrade(&fud.p2p.session_outbound().await);
+
+            info!("Connecting to {} to fetch {}", peer, chunk_hash);
+            let connector = Connector::new(fud.p2p.settings(), session_weak);
+            match connector.connect(peer).await {
+                Ok((url, channel)) => {
+                    let proto_ver = ProtocolVersion::new(
+                        channel.clone(),
+                        fud.p2p.settings().clone(),
+                        fud.p2p.hosts().clone(),
+                    )
+                    .await;
+
+                    let handshake_task = session_out.perform_handshake_protocols(
+                        proto_ver,
+                        channel.clone(),
+                        executor.clone(),
+                    );
+
+                    channel.clone().start(executor.clone());
+
+                    if let Err(e) = handshake_task.await {
+                        error!("Handshake with {} failed: {}", url, e);
+                        // Delete peer from router
+                        invalid_chunk_routes.push(peer.clone());
+                        continue
+                    }
+
+                    let msg_subscriber = channel.subscribe_msg::<FudChunkReply>().await.unwrap();
+                    let request = FudChunkRequest { chunk_hash };
+
+                    if let Err(e) = channel.send(&request).await {
+                        error!("Failed sending FudChunkRequest({}) to {}: {}", chunk_hash, url, e);
+                        continue
+                    }
+
+                    // TODO: With timeout!
+                    let reply = match msg_subscriber.receive().await {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!("Error receiving FudChunkReply from subscriber: {}", e);
+                            continue
+                        }
+                    };
+
+                    msg_subscriber.unsubscribe().await;
+                    channel.stop().await;
+
+                    match fud.geode.insert_chunk(&reply.chunk).await {
+                        Ok(inserted_hash) => {
+                            if inserted_hash != chunk_hash {
+                                warn!("Received chunk does not match requested chunk");
+                                invalid_chunk_routes.push(peer.clone());
+                                continue
+                            }
+                        }
+                        Err(e) => {
+                            error!("Failed inserting chunk {} to Geode: {}", chunk_hash, e);
+                            continue
+                        }
+                    }
+
+                    found = true;
+                    break
+                }
+
+                Err(e) => {
+                    error!("Failed to connect to {}: {}", peer, e);
+                    continue
+                }
+            }
+        }
+
+        for peer in invalid_chunk_routes {
+            debug!("Removing peer {} from {} chunk router", peer, chunk_hash);
+            peers.remove(&peer);
+        }
+
+        if !found {
+            warn!("Did not manage to fetch {} chunk", chunk_hash);
+            fud.chunk_fetch_tx
+                .send((chunk_hash, Err(Error::GeodeChunkRouteNotFound)))
+                .await
+                .unwrap();
+            continue
+        }
+
+        info!("Successfully fetched {} chunk", chunk_hash);
+        fud.chunk_fetch_tx.send((chunk_hash, Ok(()))).await.unwrap();
     }
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
+    // The working directory for this daemon and geode.
+    let basedir = expand_path(&args.base_dir)?;
+
+    // Hashmaps used for routing
+    let metadata_router = Arc::new(RwLock::new(HashMap::new()));
+    let chunks_router = Arc::new(RwLock::new(HashMap::new()));
+
+    info!("Instantiating Geode instance");
+    let geode = Geode::new(&basedir).await?;
+
+    info!("Instantiating P2P network");
+    let p2p = P2p::new(args.net.into(), ex.clone()).await;
+
+    // Daemon instantiation
+    let (file_fetch_tx, file_fetch_rx) = smol::channel::unbounded();
+    let (chunk_fetch_tx, chunk_fetch_rx) = smol::channel::unbounded();
+    let fud = Arc::new(Fud {
+        metadata_router,
+        chunks_router,
+        p2p: p2p.clone(),
+        geode,
+        file_fetch_tx,
+        file_fetch_rx,
+        chunk_fetch_tx,
+        chunk_fetch_rx,
+    });
+
+    info!(target: "fud", "Starting fetch file task");
+    let file_task = StoppableTask::new();
+    file_task.clone().start(
+        fetch_file_task(fud.clone(), ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "fud", "Failed starting fetch file task: {}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
+
+    info!(target: "fud", "Starting fetch chunk task");
+    let chunk_task = StoppableTask::new();
+    chunk_task.clone().start(
+        fetch_chunk_task(fud.clone(), ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "fud", "Failed starting fetch chunk task: {}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
+
+    info!(target: "fud", "Starting JSON-RPC server on {}", args.rpc_listen);
+    let rpc_task = StoppableTask::new();
+    rpc_task.clone().start(
+        listen_and_serve(args.rpc_listen, fud.clone(), ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "fud", "Failed starting sync JSON-RPC server: {}", e),
+            }
+        },
+        Error::RPCServerStopped,
+        ex.clone(),
+    );
+
+    info!("Starting P2P protocols");
+    let fud_ = fud.clone();
+    let registry = p2p.protocol_registry();
+    registry
+        .register(net::SESSION_ALL, move |channel, p2p| {
+            let fud_ = fud_.clone();
+            async move { ProtocolFud::init(fud_, channel, p2p).await.unwrap() }
+        })
+        .await;
+    p2p.clone().start().await?;
+
     // Signal handling for graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new()?;
-
-    // P2P network
-    let network_settings = net::Settings {
-        inbound_addrs: args.p2p_accept,
-        outbound_connections: args.slots,
-        external_addrs: args.p2p_external,
-        peers: args.peers.clone(),
-        seeds: args.seeds.clone(),
-        allowed_transports: args.transports,
-        localnet: args.localnet,
-        ..Default::default()
-    };
-
-    let p2p = net::P2p::new(network_settings).await;
-
-    // Initialize daemon dht
-    let dht = Dht::new(None, p2p.clone(), signals_handler.term_rx.clone(), ex.clone()).await?;
-
-    // Initialize daemon
-    let folder = expand_path(&args.folder)?;
-    let fud = Fud::new(dht.clone(), folder).await?;
-    let fud = Arc::new(fud);
-
-    // JSON-RPC server
-    info!("Starting JSON-RPC server");
-    let _ex = ex.clone();
-    ex.spawn(listen_and_serve(args.rpc_listen, fud.clone(), _ex)).detach();
-
-    info!("Starting sync P2P network");
-    p2p.clone().start(ex.clone()).await?;
-    let _ex = ex.clone();
-    let _p2p = p2p.clone();
-    ex.spawn(async move {
-        if let Err(e) = _p2p.run(_ex).await {
-            error!("Failed starting P2P network: {}", e);
-        }
-    })
-    .detach();
-
-    fud.init().await?;
-
-    // Wait for termination signal
+    let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 
-    fud.disconnect().await?;
+    info!(target: "fud", "Stopping fetch file task...");
+    file_task.stop().await;
 
+    info!(target: "fud", "Stopping fetch chunk task...");
+    chunk_task.stop().await;
+
+    info!(target: "fud", "Stopping JSON-RPC server...");
+    rpc_task.stop().await;
+
+    info!("Stopping P2P network");
+    p2p.stop().await;
+
+    info!("Bye!");
     Ok(())
 }

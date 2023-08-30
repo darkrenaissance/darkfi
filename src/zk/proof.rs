@@ -17,9 +17,13 @@
  */
 use std::{io, io::Cursor};
 
+#[cfg(feature = "async-serial")]
+use darkfi_serial::async_trait;
+
+use darkfi_sdk::pasta::{pallas, vesta};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use halo2_proofs::{
-    pasta::{pallas, vesta},
+    helpers::SerdeFormat,
     plonk,
     plonk::{Circuit, SingleVerifier},
     poly::commitment::Params,
@@ -41,12 +45,11 @@ impl VerifyingKey {
     }
 
     pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
-        // FIXME: This can be optimized.
         let mut params = vec![];
         self.params.write(&mut params)?;
 
         let mut vk = vec![];
-        self.vk.write(&mut vk)?;
+        self.vk.write(&mut vk, SerdeFormat::RawBytes)?;
 
         let _ = writer.write(&(params.len() as u32).to_le_bytes())?;
         let _ = writer.write(&params)?;
@@ -58,11 +61,8 @@ impl VerifyingKey {
 
     pub fn read<R: io::Read, ConcreteCircuit: Circuit<pallas::Base>>(
         reader: &mut R,
+        circuit: ConcreteCircuit,
     ) -> io::Result<Self> {
-        // FIXME: This can be optimized
-        // FIXME: Don't assert
-
-        // FIXME: Make sure that the size is legitimate.
         // The format chosen in write():
         // [params.len()<u32>, params..., vk.len()<u32>, vk...]
 
@@ -89,7 +89,11 @@ impl VerifyingKey {
 
         let mut vk_c = Cursor::new(vk_buf);
         let vk: plonk::VerifyingKey<vesta::Affine> =
-            plonk::VerifyingKey::read::<Cursor<Vec<u8>>, ConcreteCircuit>(&mut vk_c, &params)?;
+            plonk::VerifyingKey::read::<Cursor<Vec<u8>>, ConcreteCircuit>(
+                &mut vk_c,
+                SerdeFormat::RawBytes,
+                circuit.params(),
+            )?;
 
         Ok(Self { params, vk })
     }
@@ -107,6 +111,57 @@ impl ProvingKey {
         let vk = plonk::keygen_vk(&params, c).unwrap();
         let pk = plonk::keygen_pk(&params, vk, c).unwrap();
         ProvingKey { params, pk }
+    }
+
+    pub fn write<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
+        let mut params = vec![];
+        self.params.write(&mut params)?;
+
+        let mut pk = vec![];
+        self.pk.write(&mut pk, SerdeFormat::RawBytes)?;
+
+        let _ = writer.write(&(params.len() as u32).to_le_bytes())?;
+        let _ = writer.write(&params)?;
+        let _ = writer.write(&(pk.len() as u32).to_le_bytes())?;
+        let _ = writer.write(&pk)?;
+
+        Ok(())
+    }
+
+    pub fn read<R: io::Read, ConcreteCircuit: Circuit<pallas::Base>>(
+        reader: &mut R,
+        circuit: ConcreteCircuit,
+    ) -> io::Result<Self> {
+        let mut params_len = [0u8; 4];
+        reader.read_exact(&mut params_len)?;
+        let params_len = u32::from_le_bytes(params_len) as usize;
+
+        let mut params_buf = vec![0u8; params_len];
+        reader.read_exact(&mut params_buf)?;
+
+        assert!(params_buf.len() == params_len);
+
+        let mut pk_len = [0u8; 4];
+        reader.read_exact(&mut pk_len)?;
+        let pk_len = u32::from_le_bytes(pk_len) as usize;
+
+        let mut pk_buf = vec![0u8; pk_len];
+        reader.read_exact(&mut pk_buf)?;
+
+        assert!(pk_buf.len() == pk_len);
+
+        let mut params_c = Cursor::new(params_buf);
+        let params: Params<vesta::Affine> = Params::read(&mut params_c)?;
+
+        let mut pk_c = Cursor::new(pk_buf);
+        let pk: plonk::ProvingKey<vesta::Affine> =
+            plonk::ProvingKey::read::<Cursor<Vec<u8>>, ConcreteCircuit>(
+                &mut pk_c,
+                SerdeFormat::RawBytes,
+                circuit.params(),
+            )?;
+
+        Ok(Self { params, pk })
     }
 }
 

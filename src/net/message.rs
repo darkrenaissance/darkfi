@@ -16,9 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable, VarInt};
-use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use log::debug;
+use darkfi_serial::{
+    async_trait, AsyncDecodable, AsyncEncodable, Decodable, Encodable, SerialDecodable,
+    SerialEncodable, VarInt,
+};
+use log::trace;
+use smol::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use url::Url;
 
 use crate::{Error, Result};
@@ -96,16 +99,16 @@ pub struct Packet {
 
 /// Reads and decodes an inbound payload from the given async stream.
 /// Returns decoded [`Packet`].
-pub async fn read_packet<R: AsyncRead + Unpin + Sized>(stream: &mut R) -> Result<Packet> {
+pub async fn read_packet<R: AsyncRead + Unpin + Send + Sized>(stream: &mut R) -> Result<Packet> {
     // Packets should have a 4 byte header of magic digits.
     // This is used for network debugging.
     let mut magic = [0u8; 4];
-    debug!(target: "net::message", "Reading magic...");
+    trace!(target: "net::message", "Reading magic...");
     stream.read_exact(&mut magic).await?;
 
-    debug!(target: "net::message", "Read magic {:?}", magic);
+    trace!(target: "net::message", "Read magic {:?}", magic);
     if magic != MAGIC_BYTES {
-        debug!(target: "net::message", "Error: Magic bytes mismatch");
+        trace!(target: "net::message", "Error: Magic bytes mismatch");
         return Err(Error::MalformedPacket)
     }
 
@@ -114,20 +117,20 @@ pub async fn read_packet<R: AsyncRead + Unpin + Sized>(stream: &mut R) -> Result
     let mut cmd = vec![0u8; command_len];
     stream.read_exact(&mut cmd).await?;
     let command = String::from_utf8(cmd)?;
-    debug!(target: "net::message", "Read command: {}", command);
+    trace!(target: "net::message", "Read command: {}", command);
 
     // The message-dependent data (see message types)
     let payload_len = VarInt::decode_async(stream).await?.0 as usize;
     let mut payload = vec![0u8; payload_len];
     stream.read_exact(&mut payload).await?;
-    debug!(target: "net::message", "Read payload {} bytes", payload_len);
+    trace!(target: "net::message", "Read payload {} bytes", payload_len);
 
     Ok(Packet { command, payload })
 }
 
 /// Sends an outbound packet by writing data to the given async stream.
 /// Returns the total written bytes.
-pub async fn send_packet<W: AsyncWrite + Unpin + Sized>(
+pub async fn send_packet<W: AsyncWrite + Unpin + Send + Sized>(
     stream: &mut W,
     packet: Packet,
 ) -> Result<usize> {
@@ -137,23 +140,25 @@ pub async fn send_packet<W: AsyncWrite + Unpin + Sized>(
 
     let mut written: usize = 0;
 
-    debug!(target: "net::message", "Sending magic...");
+    trace!(target: "net::message", "Sending magic...");
     stream.write_all(&MAGIC_BYTES).await?;
     written += MAGIC_BYTES.len();
-    debug!(target: "net::message", "Sent magic");
+    trace!(target: "net::message", "Sent magic");
 
-    debug!(target: "net::message", "Sending command...");
+    trace!(target: "net::message", "Sending command...");
     written += VarInt(packet.command.len() as u64).encode_async(stream).await?;
     let cmd_ref = packet.command.as_bytes();
     stream.write_all(cmd_ref).await?;
     written += cmd_ref.len();
-    debug!(target: "net::message", "Sent command: {}", packet.command);
+    trace!(target: "net::message", "Sent command: {}", packet.command);
 
-    debug!(target: "net::message", "Sending payload...");
+    trace!(target: "net::message", "Sending payload...");
     written += VarInt(packet.payload.len() as u64).encode_async(stream).await?;
     stream.write_all(&packet.payload).await?;
     written += packet.payload.len();
-    debug!(target: "net::message", "Sent payload {} bytes", packet.payload.len() as u64);
+    trace!(target: "net::message", "Sent payload {} bytes", packet.payload.len() as u64);
+
+    stream.flush().await?;
 
     Ok(written)
 }

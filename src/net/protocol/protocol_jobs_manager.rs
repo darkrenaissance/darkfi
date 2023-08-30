@@ -16,10 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::{Arc, Mutex};
-use futures::Future;
+use std::sync::Arc;
+
 use log::{debug, trace};
-use smol::{Executor, Task};
+use smol::{future::Future, lock::Mutex, Executor, Task};
 
 use super::super::channel::ChannelPtr;
 use crate::Result;
@@ -58,9 +58,9 @@ impl ProtocolJobsManager {
     async fn handle_stop(self: Arc<Self>) {
         let stop_sub = self.channel.subscribe_stop().await;
 
-        if stop_sub.is_ok() {
+        if let Ok(stop_sub) = stop_sub {
             // Wait for the stop signal
-            stop_sub.unwrap().receive().await;
+            stop_sub.receive().await;
         }
 
         self.close_all_tasks().await

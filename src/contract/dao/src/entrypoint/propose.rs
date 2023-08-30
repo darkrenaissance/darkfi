@@ -85,7 +85,7 @@ pub(crate) fn dao_propose_get_metadata(
         vec![
             params.token_commit,
             params.dao_merkle_root.inner(),
-            params.proposal_bulla,
+            params.proposal_bulla.inner(),
             *total_funds_coords.x(),
             *total_funds_coords.y(),
         ],

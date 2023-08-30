@@ -29,13 +29,10 @@ use super::{
     util::mod_r_p,
 };
 
-pub type ValueBlind = pallas::Scalar;
-pub type ValueCommit = pallas::Point;
-
 /// Pedersen commitment for a full-width base field element.
 #[allow(non_snake_case)]
-pub fn pedersen_commitment_base(value: pallas::Base, blind: ValueBlind) -> ValueCommit {
-    let hasher = ValueCommit::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
+pub fn pedersen_commitment_base(value: pallas::Base, blind: pallas::Scalar) -> pallas::Point {
+    let hasher = pallas::Point::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
     let V = NullifierK.generator();
     let R = hasher(&VALUE_COMMITMENT_R_BYTES);
 
@@ -44,8 +41,8 @@ pub fn pedersen_commitment_base(value: pallas::Base, blind: ValueBlind) -> Value
 
 /// Pedersen commitment for a 64-bit value, in the base field.
 #[allow(non_snake_case)]
-pub fn pedersen_commitment_u64(value: u64, blind: ValueBlind) -> ValueCommit {
-    let hasher = ValueCommit::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
+pub fn pedersen_commitment_u64(value: u64, blind: pallas::Scalar) -> pallas::Point {
+    let hasher = pallas::Point::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
     let V = hasher(&VALUE_COMMITMENT_V_BYTES);
     let R = hasher(&VALUE_COMMITMENT_R_BYTES);
 

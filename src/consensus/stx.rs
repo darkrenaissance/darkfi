@@ -20,12 +20,12 @@ use darkfi_sdk::{
     crypto::MerkleNode,
     pasta::{arithmetic::CurveAffine, group::Curve, pallas},
 };
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
 use crate::{
     zk::{proof::VerifyingKey, Proof},
     Error, Result,
 };
-use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 #[derive(Debug, Clone, SerialDecodable, SerialEncodable)]
 pub struct TransferStx {

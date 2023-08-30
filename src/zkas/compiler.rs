@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::str::Chars;
+use std::{io::Result, str::Chars};
 
 use darkfi_serial::{serialize, VarInt};
 
@@ -33,6 +33,7 @@ pub const MAGIC_BYTES: [u8; 4] = [0x0b, 0x01, 0xb1, 0x35];
 
 pub struct Compiler {
     namespace: String,
+    k: u32,
     constants: Vec<Constant>,
     witnesses: Vec<Witness>,
     statements: Vec<Statement>,
@@ -47,6 +48,7 @@ impl Compiler {
         filename: &str,
         source: Chars,
         namespace: String,
+        k: u32,
         constants: Vec<Constant>,
         witnesses: Vec<Witness>,
         statements: Vec<Statement>,
@@ -58,15 +60,18 @@ impl Compiler {
         let lines: Vec<String> = source.as_str().lines().map(|x| x.to_string()).collect();
         let error = ErrorEmitter::new("Compiler", filename, lines);
 
-        Self { namespace, constants, witnesses, statements, literals, debug_info, error }
+        Self { namespace, k, constants, witnesses, statements, literals, debug_info, error }
     }
 
-    pub fn compile(&self) -> Vec<u8> {
+    pub fn compile(&self) -> Result<Vec<u8>> {
         let mut bincode = vec![];
 
         // Write the magic bytes and version
         bincode.extend_from_slice(&MAGIC_BYTES);
         bincode.push(BINARY_VERSION);
+
+        // Write the circuit's k param
+        bincode.extend_from_slice(&serialize(&self.k));
 
         // Write the circuit's namespace
         bincode.extend_from_slice(&serialize(&self.namespace));
@@ -122,11 +127,11 @@ impl Compiler {
                             continue
                         }
 
-                        self.error.abort(
+                        return Err(self.error.abort(
                             &format!("Failed finding a heap reference for `{}`", arg.name),
                             arg.line,
                             arg.column,
-                        );
+                        ))
                     }
                     Arg::Lit(lit) => {
                         if let Some(found) = Compiler::lookup_literal(&self.literals, &lit.name) {
@@ -135,11 +140,11 @@ impl Compiler {
                             continue
                         }
 
-                        self.error.abort(
+                        return Err(self.error.abort(
                             &format!("Failed finding literal `{}`", lit.name),
                             lit.line,
                             lit.column,
-                        );
+                        ))
                     }
                     _ => unreachable!(),
                 };
@@ -148,12 +153,12 @@ impl Compiler {
 
         // If we're not doing debug info, we're done here and can return.
         if !self.debug_info {
-            return bincode
+            return Ok(bincode)
         }
 
         // TODO: Otherwise, we proceed appending debug info.
 
-        bincode
+        Ok(bincode)
     }
 
     fn lookup_heap(heap: &[&str], name: &str) -> Option<usize> {

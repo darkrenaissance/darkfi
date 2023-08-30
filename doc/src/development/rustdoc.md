@@ -18,7 +18,7 @@ Here the rustdoc for this repository's crates can be found.
 * [`faucetd`](faucetd/index.html)
 * [`fu`](fu/index.html)
 * [`fud`](fud/index.html)
-* [`ircd`](ircd/index.html)
+* [`darkirc`](darkirc/index.html)
 * [`lilith`](lilith/index.html)
 * [`tau`](tau/index.html)
 * [`taud`](taud/index.html)

@@ -16,12 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{blockchain::Slot, crypto::schnorr::Signature};
+use darkfi_sdk::{
+    blockchain::Slot,
+    crypto::schnorr::Signature,
+    pasta::{group::ff::Field, pallas},
+};
+#[cfg(feature = "async-serial")]
+use darkfi_serial::async_trait;
+
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 
 use crate::{tx::Transaction, Error, Result};
 
-use super::{parse_record, validate_slot, Header, SledDbOverlayPtr};
+use super::{parse_record, parse_u64_key_record, validate_slot, Header, SledDbOverlayPtr};
 
 /// Block version number
 pub const BLOCK_VERSION: u8 = 1;
@@ -148,7 +155,14 @@ impl BlockInfo {
             // All slots exluding the last one must have reward value set to 0.
             // Slots must already be in correct order (sorted by id).
             for slot in &self.slots[..self.slots.len() - 1] {
-                validate_slot(slot, previous_slot, &previous_hash, &previous.header.previous, 0)?;
+                validate_slot(
+                    slot,
+                    previous_slot,
+                    &previous_hash,
+                    &previous.header.previous,
+                    &previous.producer.eta,
+                    0,
+                )?;
                 previous_slot = slot;
             }
         }
@@ -158,6 +172,7 @@ impl BlockInfo {
             previous_slot,
             &previous_hash,
             &previous.header.previous,
+            &previous.producer.eta,
             expected_reward,
         )?;
 
@@ -176,7 +191,7 @@ impl From<BlockInfo> for Block {
         let slots = block_info.slots.iter().map(|x| x.id).collect();
         Self {
             magic: block_info.magic,
-            header: block_info.header.headerhash(),
+            header: block_info.header.headerhash().unwrap(),
             txs,
             producer: block_info.producer,
             slots,
@@ -405,7 +420,7 @@ impl BlockOrderStore {
         let mut order = vec![];
 
         for record in self.0.iter() {
-            order.push(parse_record(record.unwrap())?);
+            order.push(parse_u64_key_record(record.unwrap())?);
         }
 
         Ok(order)
@@ -421,7 +436,7 @@ impl BlockOrderStore {
         let mut counter = 0;
         while counter <= n {
             if let Some(found) = self.0.get_gt(key.to_be_bytes())? {
-                let (number, hash) = parse_record(found)?;
+                let (number, hash) = parse_u64_key_record(found)?;
                 key = number;
                 ret.push(hash);
                 counter += 1;
@@ -440,7 +455,7 @@ impl BlockOrderStore {
             Some(s) => s,
             None => return Err(Error::BlockNumberNotFound(0)),
         };
-        let (number, hash) = parse_record(found)?;
+        let (number, hash) = parse_u64_key_record(found)?;
 
         Ok((number, hash))
     }
@@ -449,7 +464,7 @@ impl BlockOrderStore {
     /// implementation for `Vec<u8>`.
     pub fn get_last(&self) -> Result<(u64, blake3::Hash)> {
         let found = self.0.last()?.unwrap();
-        let (number, hash) = parse_record(found)?;
+        let (number, hash) = parse_u64_key_record(found)?;
 
         Ok((number, hash))
     }
@@ -519,7 +534,7 @@ impl BlockOrderStoreOverlay {
     /// implementation for `Vec<u8>`.
     pub fn get_last(&self) -> Result<(u64, blake3::Hash)> {
         let found = self.0.lock().unwrap().last(SLED_BLOCK_ORDER_TREE)?.unwrap();
-        let (number, hash) = parse_record(found)?;
+        let (number, hash) = parse_u64_key_record(found)?;
 
         Ok((number, hash))
     }
@@ -537,11 +552,13 @@ pub struct BlockProducer {
     pub signature: Signature,
     /// Proposal transaction
     pub proposal: Transaction,
+    /// Block producer ETA
+    pub eta: pallas::Base,
 }
 
 impl BlockProducer {
-    pub fn new(signature: Signature, proposal: Transaction) -> Self {
-        Self { signature, proposal }
+    pub fn new(signature: Signature, proposal: Transaction, eta: pallas::Base) -> Self {
+        Self { signature, proposal, eta }
     }
 }
 
@@ -549,6 +566,7 @@ impl Default for BlockProducer {
     fn default() -> Self {
         let signature = Signature::dummy();
         let proposal = Transaction::default();
-        Self { signature, proposal }
+        let eta = pallas::Base::ZERO;
+        Self { signature, proposal, eta }
     }
 }

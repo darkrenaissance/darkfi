@@ -17,12 +17,12 @@
  */
 
 // [`Slot`] is defined in the sdk so contracts can use it
-use darkfi_sdk::blockchain::Slot;
+use darkfi_sdk::{blockchain::Slot, pasta::pallas};
 use darkfi_serial::{deserialize, serialize};
 
-use crate::{validator::consensus::pid::slot_pid_output, Error, Result};
+use crate::{Error, Result};
 
-use super::{parse_record, SledDbOverlayPtr};
+use super::{parse_u64_key_record, SledDbOverlayPtr};
 
 /// A slot is considered valid when the following rules apply:
 ///     1. Id increments previous slot id
@@ -32,13 +32,15 @@ use super::{parse_record, SledDbOverlayPtr};
 ///        up until this slot
 ///     5. Slot previous error value correspond to previous slot one
 ///     6. PID output for this slot is correct
-///     7. Slot reward value is the expected one
+///     7. Slot last eta is the expected one
+///     8. Slot reward value is the expected one
 /// Additional validity rules can be applied.
 pub fn validate_slot(
     slot: &Slot,
     previous: &Slot,
     previous_block_hash: &blake3::Hash,
     previous_block_sequence: &blake3::Hash,
+    last_eta: &pallas::Base,
     expected_reward: u64,
 ) -> Result<()> {
     let error = Err(Error::SlotIsInvalid(slot.id));
@@ -49,12 +51,12 @@ pub fn validate_slot(
     }
 
     // Check previous block hash (2)
-    if !slot.fork_hashes.contains(previous_block_hash) {
+    if !slot.previous.last_hashes.contains(previous_block_hash) {
         return error
     }
 
     // Check previous block sequence (3)
-    if !slot.fork_previous_hashes.contains(previous_block_sequence) {
+    if !slot.previous.second_to_last_hashes.contains(previous_block_sequence) {
         return error
     }
 
@@ -64,16 +66,25 @@ pub fn validate_slot(
     }
 
     // Check previous slot error (5)
-    if slot.previous_slot_error != previous.error {
+    if slot.previous.error != previous.pid.error {
         return error
     }
 
+    /* TODO: FIXME: blockchain should not depend on validator
     // Check PID output for this slot (6)
-    if (slot.f, slot.error, slot.sigma1, slot.sigma2) != slot_pid_output(previous) {
+    if (slot.pid.f, slot.pid.error, slot.pid.sigma1, slot.pid.sigma2) !=
+        slot_pid_output(previous, slot.previous.producers)
+    {
         return error
     }
+    */
 
     // Check reward is the expected one (7)
+    if &slot.last_eta != last_eta {
+        return error
+    }
+
+    // Check reward is the expected one (8)
     if slot.reward != expected_reward {
         return error
     }
@@ -150,7 +161,7 @@ impl SlotStore {
         let mut slots = vec![];
 
         for slot in self.0.iter() {
-            let (_, slot): ([u8; 8], Slot) = parse_record(slot.unwrap())?;
+            let (_, slot): (u64, Slot) = parse_u64_key_record(slot.unwrap())?;
             slots.push(slot);
         }
 
@@ -167,7 +178,7 @@ impl SlotStore {
         let mut counter = 0;
         while counter <= n {
             if let Some(found) = self.0.get_gt(key.to_be_bytes())? {
-                let (id, slot) = parse_record(found)?;
+                let (id, slot) = parse_u64_key_record(found)?;
                 key = id;
                 ret.push(slot);
                 counter += 1;
@@ -250,5 +261,13 @@ impl SlotStoreOverlay {
         }
 
         Ok(ret)
+    }
+
+    /// Fetch the last slot from the overlay, based on the `Ord`
+    /// implementation for `Vec<u8>`.
+    pub fn get_last(&self) -> Result<Slot> {
+        let found = self.0.lock().unwrap().last(SLED_SLOT_TREE)?.unwrap();
+        let slot = deserialize(&found.1)?;
+        Ok(slot)
     }
 }

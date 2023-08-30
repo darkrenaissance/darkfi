@@ -21,6 +21,9 @@ use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 use pasta_curves::{group::ff::Field, pallas};
 use rand_core::{CryptoRng, RngCore};
 
+#[cfg(feature = "async")]
+use darkfi_serial::async_trait;
+
 use super::{diffie_hellman, poseidon_hash, util::mod_r_p, PublicKey, SecretKey};
 use crate::error::ContractError;
 

@@ -7,6 +7,7 @@ from itertools import chain
 
 t = 3  # Threshold
 n = 5  # Participants
+assert t <= n
 
 # Pallas
 p = 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001
@@ -14,7 +15,7 @@ q = 0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001
 Fp = GF(p)
 Fq = GF(q)
 Ep = EllipticCurve(Fp, (0, 5))
-Ep.set_order(q * 0x01)
+Ep.set_order(q)
 
 # ValueCommitR Generator: g
 vcr_x = 0x07f444550fa409bb4f66235bea8d2048406ed745ee90802f0ec3c668883c5a91

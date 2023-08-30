@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::SystemTime;
+use std::{sync::Arc, time::SystemTime};
 
 use async_rustls::{
     rustls,
@@ -29,7 +29,6 @@ use async_rustls::{
     },
     TlsAcceptor, TlsConnector, TlsStream,
 };
-use async_std::sync::Arc;
 use log::error;
 use rustls_pemfile::pkcs8_private_keys;
 use x509_parser::{
@@ -234,7 +233,7 @@ impl TlsUpgrade {
                 .with_protocol_versions(&[&TLS13])
                 .unwrap()
                 .with_custom_certificate_verifier(server_cert_verifier)
-                .with_single_cert(vec![certificate], secret_key)
+                .with_client_auth_cert(vec![certificate], secret_key)
                 .unwrap(),
         );
 
@@ -252,11 +251,11 @@ impl TlsUpgrade {
     }
 
     // FIXME: Try to find a transparent way for this instead of implementing separately for all
-    #[cfg(feature = "p2p-transport-tcp")]
+    #[cfg(feature = "p2p-tcp")]
     pub async fn upgrade_listener_tcp_tls(
         self,
-        listener: async_std::net::TcpListener,
-    ) -> Result<(TlsAcceptor, async_std::net::TcpListener)> {
+        listener: smol::net::TcpListener,
+    ) -> Result<(TlsAcceptor, smol::net::TcpListener)> {
         Ok((TlsAcceptor::from(self.server_config), listener))
     }
 }

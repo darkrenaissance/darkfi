@@ -29,6 +29,9 @@ use pasta_curves::{
 };
 use subtle::{Choice, ConditionallySelectable};
 
+#[cfg(feature = "async")]
+use darkfi_serial::async_trait;
+
 use crate::crypto::constants::{
     sinsemilla::{i2lebsp_k, L_ORCHARD_MERKLE, MERKLE_CRH_PERSONALIZATION},
     MERKLE_DEPTH,

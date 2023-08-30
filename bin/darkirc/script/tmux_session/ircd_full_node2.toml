@@ -1,8 +1,11 @@
 ## JSON-RPC listen URL
-rpc_listen="tcp://127.0.0.1:8891"
+rpc_listen = "tcp://127.0.0.1:8891"
 
 ## IRC listen URL
-irc_listen="tcp://127.0.0.1:22023"
+irc_listen = "tcp://127.0.0.1:22023"
+
+## Sets Datastore Path
+datastore = "/tmp/darkirc_test/darkirc2"
 
 ## List of channels to autojoin for new client connections
 autojoin = ["#dev", "#test"]
@@ -10,11 +13,11 @@ autojoin = ["#dev", "#test"]
 ## P2P net settings
 [net]
 ## Connection slots
-outbound_connections=3
+outbound_connections = 3
 
 inbound = ["tcp://127.0.0.1:25553"]
 
-external_addr = ["tcp://127.0.0.1:25553"]
+external_addrs = ["tcp://127.0.0.1:25553"]
 
 # peers = ["tcp://127.0.0.1:25552"]
 
@@ -22,7 +25,7 @@ external_addr = ["tcp://127.0.0.1:25553"]
 seeds = ["tcp://127.0.0.1:25551"]
 
 # Prefered transports for outbound connections
-outbound_transports = ["tcp"]
+allowed_transports = ["tcp"]
 
 localnet = true
 #
@@ -32,8 +35,8 @@ localnet = true
 [channel."#test"]
 secret = "HoLfk8vXBvNsBZ73e2xRPBZ9vEbnF9FVi4fDdyU9AZLU"
 
-[private_key."GnS3vqKQtCnbJJcFMsUfTJc7w3B1E49MgZ8jKiksumYh"]
+[secret_key."GnS3vqKQtCnbJJcFMsUfTJc7w3B1E49MgZ8jKiksumYh"]
 
 [contact."node1"]
 ## contact public key
-contact_pubkey = "9sfMEVLphJ4dTX3SEvm6NBhTbWDqfsxu7R2bo88CtV8g"
+public_key = "9sfMEVLphJ4dTX3SEvm6NBhTbWDqfsxu7R2bo88CtV8g"

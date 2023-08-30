@@ -19,9 +19,9 @@
 use std::{io, time::Duration};
 
 use async_rustls::{TlsAcceptor, TlsStream};
-use async_std::net::{SocketAddr, TcpListener as AsyncStdTcpListener, TcpStream};
 use async_trait::async_trait;
 use log::debug;
+use smol::net::{SocketAddr, TcpListener as SmolTcpListener, TcpStream};
 use socket2::{Domain, Socket, TcpKeepalive, Type};
 use url::Url;
 
@@ -71,8 +71,8 @@ impl TcpDialer {
         debug!(target: "net::tcp::do_dial", "Dialing {} with TCP...", socket_addr);
         let socket = self.create_socket(socket_addr).await?;
 
-        let connection = if timeout.is_some() {
-            socket.connect_timeout(&socket_addr.into(), timeout.unwrap())
+        let connection = if let Some(timeout) = timeout {
+            socket.connect_timeout(&socket_addr.into(), timeout)
         } else {
             socket.connect(&socket_addr.into())
         };
@@ -85,7 +85,11 @@ impl TcpDialer {
         }
 
         socket.set_nonblocking(true)?;
-        let stream = TcpStream::from(std::net::TcpStream::from(socket));
+
+        let stream = std::net::TcpStream::from(socket);
+        let stream = smol::Async::<std::net::TcpStream>::try_from(stream)?;
+        let stream = TcpStream::from(stream);
+
         Ok(stream)
     }
 }
@@ -121,44 +125,47 @@ impl TcpListener {
     }
 
     /// Internal listen function
-    pub(crate) async fn do_listen(&self, socket_addr: SocketAddr) -> Result<AsyncStdTcpListener> {
+    pub(crate) async fn do_listen(&self, socket_addr: SocketAddr) -> Result<SmolTcpListener> {
         let socket = self.create_socket(socket_addr).await?;
         socket.bind(&socket_addr.into())?;
         socket.listen(self.backlog)?;
         socket.set_nonblocking(true)?;
-        Ok(AsyncStdTcpListener::from(std::net::TcpListener::from(socket)))
+
+        let listener = std::net::TcpListener::from(socket);
+        let listener = smol::Async::<std::net::TcpListener>::try_from(listener)?;
+
+        Ok(SmolTcpListener::from(listener))
     }
 }
 
 #[async_trait]
-impl PtListener for AsyncStdTcpListener {
-    async fn next(&self) -> Result<(Box<dyn PtStream>, Url)> {
+impl PtListener for SmolTcpListener {
+    async fn next(&self) -> std::io::Result<(Box<dyn PtStream>, Url)> {
         let (stream, peer_addr) = match self.accept().await {
             Ok((s, a)) => (s, a),
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e),
         };
 
-        let url = Url::parse(&format!("tcp://{}", peer_addr))?;
+        let url = Url::parse(&format!("tcp://{}", peer_addr)).unwrap();
         Ok((Box::new(stream), url))
     }
 }
 
 #[async_trait]
-impl PtListener for (TlsAcceptor, AsyncStdTcpListener) {
-    async fn next(&self) -> Result<(Box<dyn PtStream>, Url)> {
+impl PtListener for (TlsAcceptor, SmolTcpListener) {
+    async fn next(&self) -> std::io::Result<(Box<dyn PtStream>, Url)> {
         let (stream, peer_addr) = match self.1.accept().await {
             Ok((s, a)) => (s, a),
-            Err(e) => return Err(e.into()),
+            Err(e) => return Err(e),
         };
 
-        let stream = self.0.accept(stream).await;
+        let stream = match self.0.accept(stream).await {
+            Ok(v) => v,
+            Err(e) => return Err(e),
+        };
 
-        let url = Url::parse(&format!("tcp+tls://{}", peer_addr))?;
+        let url = Url::parse(&format!("tcp+tls://{}", peer_addr)).unwrap();
 
-        if let Err(e) = stream {
-            return Err(e.into())
-        }
-
-        Ok((Box::new(TlsStream::Server(stream.unwrap())), url))
+        Ok((Box::new(TlsStream::Server(stream)), url))
     }
 }

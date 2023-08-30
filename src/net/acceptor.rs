@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
 use log::error;
 use smol::Executor;
 use url::Url;
@@ -38,12 +39,12 @@ pub type AcceptorPtr = Arc<Acceptor>;
 pub struct Acceptor {
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
     task: StoppableTaskPtr,
-    pub session: Mutex<Option<SessionWeakPtr>>,
+    session: SessionWeakPtr,
 }
 
 impl Acceptor {
     /// Create new Acceptor object.
-    pub fn new(session: Mutex<Option<SessionWeakPtr>>) -> AcceptorPtr {
+    pub fn new(session: SessionWeakPtr) -> AcceptorPtr {
         Arc::new(Self {
             channel_subscriber: Subscriber::new(),
             task: StoppableTask::new(),
@@ -85,16 +86,28 @@ impl Acceptor {
         loop {
             match listener.next().await {
                 Ok((stream, url)) => {
-                    let channel =
-                        Channel::new(stream, url, self.session.lock().await.clone().unwrap()).await;
+                    let session = self.session.clone();
+                    let channel = Channel::new(stream, url, session).await;
                     self.channel_subscriber.notify(Ok(channel)).await;
                 }
 
+                // As per accept(2) recommendation:
                 Err(e) => {
+                    if let Some(os_err) = e.raw_os_error() {
+                        // TODO: Should EINTR actually break out? Check if StoppableTask does this.
+                        // TODO: Investigate why libc::EWOULDBLOCK is not considered reachable
+                        match os_err {
+                            libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR => {
+                                continue
+                            }
+                            _ => { /* Do nothing */ }
+                        }
+                    }
                     error!(
                         target: "net::acceptor::run_accept_loop()",
                         "[P2P] Acceptor failed listening: {}", e,
                     );
+                    return Err(e.into())
                 }
             }
         }

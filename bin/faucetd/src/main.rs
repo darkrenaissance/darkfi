@@ -16,12 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, path::Path, str::FromStr};
+use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc};
 
-use async_std::{
-    stream::StreamExt,
-    sync::{Arc, Mutex, RwLock},
-};
 use async_trait::async_trait;
 use chrono::Utc;
 use darkfi_money_contract::{
@@ -34,7 +30,8 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        contract_id::MONEY_CONTRACT_ID, mimc_vdf, Keypair, MerkleTree, PublicKey, DARK_TOKEN_ID,
+        contract_id::MONEY_CONTRACT_ID, mimc_vdf, pasta_prelude::Field, Keypair, MerkleNode,
+        MerkleTree, PublicKey, DARK_TOKEN_ID,
     },
     num_bigint::BigUint,
     num_traits::Num,
@@ -44,12 +41,18 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Encodable};
 use log::{debug, error, info};
 use rand::rngs::OsRng;
-use serde_json::{json, Value};
+use smol::{
+    lock::{Mutex, RwLock},
+    stream::StreamExt,
+};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use tinyjson::JsonValue;
 use url::Url;
 
 use darkfi::{
-    async_daemonize, cli_desc,
+    async_daemonize,
+    blockchain::contract_store::SMART_CONTRACT_ZKAS_DB_NAME,
+    cli_desc,
     consensus::{
         constants::{
             MAINNET_BOOTSTRAP_TIMESTAMP, MAINNET_GENESIS_HASH_BYTES, MAINNET_GENESIS_TIMESTAMP,
@@ -69,11 +72,11 @@ use darkfi::{
         },
         server::{listen_and_serve, RequestHandler},
     },
-    runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
+    system::{sleep, StoppableTask},
     tx::Transaction,
-    util::{async_util::sleep, parse::decode_base10, path::expand_path},
+    util::{parse::decode_base10, path::expand_path},
     wallet::{WalletDb, WalletPtr},
-    zk::{halo2::Field, proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses},
+    zk::{proof::ProvingKey, vm::ZkCircuit, vm_heap::empty_witnesses},
     zkas::ZkBinary,
     Error, Result,
 };
@@ -186,16 +189,10 @@ pub struct Faucetd {
 #[async_trait]
 impl RequestHandler for Faucetd {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        if !req.params.is_array() {
-            return JsonError::new(InvalidParams, None, req.id).into()
-        }
-
-        let params = req.params.as_array().unwrap();
-
         match req.method.as_str() {
-            Some("challenge") => return self.challenge(req.id, params).await,
-            Some("airdrop") => return self.airdrop(req.id, params).await,
-            Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
+            "challenge" => return self.challenge(req.id, req.params).await,
+            "airdrop" => return self.airdrop(req.id, req.params).await,
+            _ => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
 }
@@ -225,29 +222,28 @@ impl Faucetd {
             blockchain.contracts.lookup(&blockchain.sled_db, &cid, SMART_CONTRACT_ZKAS_DB_NAME)?;
 
         let Some(mint_zkbytes) = db_handle.get(serialize(&MONEY_CONTRACT_ZKAS_MINT_NS_V1))? else {
-            error!("{} zkas bincode not found in sled database", MONEY_CONTRACT_ZKAS_MINT_NS_V1);
+            error!(target: "faucetd", "{} zkas bincode not found in sled database", MONEY_CONTRACT_ZKAS_MINT_NS_V1);
             return Err(Error::ZkasBincodeNotFound)
         };
 
         let Some(burn_zkbytes) = db_handle.get(serialize(&MONEY_CONTRACT_ZKAS_BURN_NS_V1))? else {
-            error!("{} zkas bincode not found in sled database", MONEY_CONTRACT_ZKAS_BURN_NS_V1);
+            error!(target: "faucetd", "{} zkas bincode not found in sled database", MONEY_CONTRACT_ZKAS_BURN_NS_V1);
             return Err(Error::ZkasBincodeNotFound)
         };
 
         let (mint_zkbin, _): (Vec<u8>, Vec<u8>) = deserialize(&mint_zkbytes)?;
         let (burn_zkbin, _): (Vec<u8>, Vec<u8>) = deserialize(&burn_zkbytes)?;
 
-        let k = 13;
         let mint_zkbin = ZkBinary::decode(&mint_zkbin)?;
-        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin), mint_zkbin.clone());
+        let mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
 
         let burn_zkbin = ZkBinary::decode(&burn_zkbin)?;
-        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin), burn_zkbin.clone());
+        let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin)?, &burn_zkbin);
 
-        info!("Creating mint circuit proving key");
-        let mint_provingkey = ProvingKey::build(k, &mint_circuit);
-        info!("Creating burn circuit proving key");
-        let burn_provingkey = ProvingKey::build(k, &burn_circuit);
+        info!(target: "faucetd", "Creating mint circuit proving key");
+        let mint_provingkey = ProvingKey::build(mint_zkbin.k, &mint_circuit);
+        info!(target: "faucetd", "Creating burn circuit proving key");
+        let burn_provingkey = ProvingKey::build(burn_zkbin.k, &burn_circuit);
 
         {
             let provingkeys = vec![
@@ -261,7 +257,7 @@ impl Faucetd {
 
         // Get or create an initial keypair for signing transactions
         let keypair = Self::initialize_keypair(wallet.clone()).await?;
-        info!("Faucet pubkey: {}", keypair.public);
+        info!(target: "faucetd", "Faucet pubkey: {}", keypair.public);
 
         let faucetd = Self {
             synced: Mutex::new(false),
@@ -285,10 +281,10 @@ impl Faucetd {
         let wallet_schema = include_str!("../../../src/contract/money/wallet.sql");
 
         // Get a wallet connection
-        info!("Acquiring wallet connection");
+        info!(target: "faucetd", "Acquiring wallet connection");
         let conn = wallet.conn.lock().await;
 
-        info!("Initializing wallet schema");
+        info!(target: "faucetd", "Initializing wallet schema");
         conn.execute(wallet_schema, rusqlite::params![])?;
 
         let query = format!("SELECT * FROM {}", MONEY_TREE_COL_TREE);
@@ -299,12 +295,13 @@ impl Faucetd {
 
         let merkle_tree = match merkle_tree {
             Ok(v) => {
-                info!("Merkle tree already exists");
+                info!(target: "faucetd", "Merkle tree already exists");
                 v
             }
 
             Err(_) => {
-                let tree = MerkleTree::new(100);
+                let mut tree = MerkleTree::new(100);
+                tree.append(MerkleNode::from(pallas::Base::ZERO));
                 let tree_bytes = serialize(&tree);
                 let query = format!(
                     "DELETE FROM {}; INSERT INTO {} ({}) VALUES (?1)",
@@ -312,7 +309,7 @@ impl Faucetd {
                 );
 
                 conn.execute(&query, rusqlite::params![tree_bytes])?;
-                info!("Successfully initialized Merkle tree");
+                info!(target: "faucetd", "Successfully initialized Merkle tree");
                 tree
             }
         };
@@ -355,7 +352,7 @@ impl Faucetd {
                 );
 
                 conn.execute(&query, rusqlite::params![is_default, public_bytes, secret_bytes])?;
-                info!("Wrote keypair to wallet");
+                info!(target: "faucetd", "Wrote keypair to wallet");
                 keypair
             }
         };
@@ -377,22 +374,24 @@ impl Faucetd {
     //
     // --> {"jsonrpc": "2.0", "method": "challenge", "params": ["1DarkFi..."], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["0x123...", 10000], "id": 1}
-    async fn challenge(&self, id: Value, params: &[Value]) -> JsonResult {
+    async fn challenge(&self, id: u16, params: JsonValue) -> JsonResult {
         const N_STEPS: u64 = 2_000_000;
 
+        let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
         if !(*self.synced.lock().await) {
-            error!("challenge(): Blockchain is not yet synced");
+            error!(target: "faucetd", "challenge(): Blockchain is not yet synced");
             return JsonError::new(InternalError, None, id).into()
         }
 
-        let pubkey = match PublicKey::from_str(params[0].as_str().unwrap()) {
+        let pubkey = params[0].get::<String>().unwrap();
+        let pubkey = match PublicKey::from_str(pubkey) {
             Ok(v) => v,
             Err(e) => {
-                error!("challenge(): Failed parsing PublicKey from String: {}", e);
+                error!(target: "faucetd", "challenge(): Failed parsing PublicKey from String: {}", e);
                 return server_error(RpcError::ParseError, id)
             }
         };
@@ -415,7 +414,9 @@ impl Faucetd {
         map.insert(pubkey.to_bytes(), (c.clone(), N_STEPS));
         drop(map);
 
-        JsonResponse::new(json!([c.to_str_radix(16), N_STEPS]), id).into()
+        let chall = JsonValue::from(c.to_str_radix(16));
+        let steps = JsonValue::from(N_STEPS as f64);
+        JsonResponse::new(JsonValue::Array(vec![chall, steps]), id).into()
     }
 
     // RPCAPI:
@@ -432,35 +433,38 @@ impl Faucetd {
     //
     // --> {"jsonrpc": "2.0", "method": "airdrop", "params": ["1DarkFi...", 1.42, "0x123..."], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID", "id": 1}
-    async fn airdrop(&self, id: Value, params: &[Value]) -> JsonResult {
+    async fn airdrop(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+
         if params.len() != 3 ||
             !params[0].is_string() ||
-            !params[1].is_f64() ||
+            !params[1].is_number() ||
             !params[2].is_string()
         {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
         if !(*self.synced.lock().await) {
-            error!("airdrop(): Blockchain is not yet synced");
+            error!(target: "faucetd", "airdrop(): Blockchain is not yet synced");
             return JsonError::new(InternalError, None, id).into()
         }
 
         // Decode public key
-        let pubkey = match PublicKey::from_str(params[0].as_str().unwrap()) {
+        let pubkey = params[0].get::<String>().unwrap();
+        let pubkey = match PublicKey::from_str(pubkey) {
             Ok(v) => v,
             Err(e) => {
-                error!("airdrop(): Failed parsing PublicKey from String: {}", e);
+                error!(target: "faucetd", "airdrop(): Failed parsing PublicKey from String: {}", e);
                 return server_error(RpcError::ParseError, id)
             }
         };
 
         // Decode requested airdrop amount
-        let amount = params[1].as_f64().unwrap().to_string();
+        let amount = params[1].get::<f64>().unwrap().to_string();
         let amount = match decode_base10(&amount, 8, true) {
             Ok(v) => v,
             Err(_) => {
-                error!("airdrop(): Failed parsing amount from string");
+                error!(target: "faucetd", "airdrop(): Failed parsing amount from string");
                 return server_error(RpcError::ParseError, id)
             }
         };
@@ -470,9 +474,9 @@ impl Faucetd {
         }
 
         // Decode VDF witness
-        let witness = params[2].as_str().unwrap();
+        let witness = params[2].get::<String>().unwrap();
         let Ok(witness) = BigUint::from_str_radix(witness, 16) else {
-            error!("airdrop(): Failed parsing VDF witness from string");
+            error!(target: "faucetd", "airdrop(): Failed parsing VDF witness from string");
             return server_error(RpcError::ParseError, id)
         };
 
@@ -481,7 +485,7 @@ impl Faucetd {
         let map = self.airdrop_map.lock().await;
         if let Some(last_airdrop) = map.get(&pubkey.to_bytes()) {
             if now - last_airdrop <= self.airdrop_timeout {
-                error!("airdrop(): Time limit reached for {}", pubkey);
+                error!(target: "faucetd", "airdrop(): Time limit reached for {}", pubkey);
                 return server_error(RpcError::TimeLimitReached, id)
             }
         };
@@ -490,15 +494,15 @@ impl Faucetd {
         // Check if a VDF challenge exists
         let map = self.challenge_map.lock().await;
         let Some((challenge, n_steps)) = map.get(&pubkey.to_bytes()).cloned() else {
-            error!("airdrop(): No VDF challenge found for {}", pubkey);
+            error!(target: "faucetd", "airdrop(): No VDF challenge found for {}", pubkey);
             return server_error(RpcError::NoVdfChallenge, id)
         };
         drop(map);
 
         // Verify the VDF
-        info!("airdrop(): Verifying VDF for {}...", pubkey);
+        info!(target: "faucetd", "airdrop(): Verifying VDF for {}...", pubkey);
         if !mimc_vdf::verify(&challenge, n_steps, &witness) {
-            error!("airdrop(): VDF verification failed for {}", pubkey);
+            error!(target: "faucetd", "airdrop(): VDF verification failed for {}", pubkey);
             return server_error(RpcError::VdfVerifyFailed, id)
         }
 
@@ -513,17 +517,17 @@ impl Faucetd {
         let (mint_zkbin, mint_pk, burn_zkbin, burn_pk) = {
             let proving_keys_r = self.proving_keys.read().await;
             let Some(arr) = proving_keys_r.get(&cid.to_bytes()) else {
-                error!("Contract ID {} not found in proving keys hashmap", cid);
+                error!(target: "faucetd", "Contract ID {} not found in proving keys hashmap", cid);
                 return server_error(RpcError::InternalError, id)
             };
 
             let Some(mint_data) = arr.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_MINT_NS_V1) else {
-                error!("{} proof data not found in vector", MONEY_CONTRACT_ZKAS_MINT_NS_V1);
+                error!(target: "faucetd", "{} proof data not found in vector", MONEY_CONTRACT_ZKAS_MINT_NS_V1);
                 return server_error(RpcError::InternalError, id)
             };
 
             let Some(burn_data) = arr.iter().find(|x| x.0 == MONEY_CONTRACT_ZKAS_BURN_NS_V1) else {
-                error!("{} proof data not found in vector", MONEY_CONTRACT_ZKAS_BURN_NS_V1);
+                error!(target: "faucetd", "{} proof data not found in vector", MONEY_CONTRACT_ZKAS_BURN_NS_V1);
                 return server_error(RpcError::InternalError, id)
             };
 
@@ -554,7 +558,7 @@ impl Faucetd {
         let debris = match builder.build() {
             Ok(v) => v,
             Err(e) => {
-                error!("Failed to build transfer tx params: {}", e);
+                error!(target: "faucetd", "Failed to build transfer tx params: {}", e);
                 return server_error(RpcError::InternalError, id)
             }
         };
@@ -572,7 +576,7 @@ impl Faucetd {
         let lock = self.validator_state.read().await;
         let current_slot = lock.consensus.time_keeper.current_slot();
         if let Err(e) = lock.verify_transactions(&[tx.clone()], current_slot, false).await {
-            error!("airdrop(): Failed to verify transaction before broadcasting: {}", e);
+            error!(target: "faucetd", "airdrop(): Failed to verify transaction before broadcasting: {}", e);
             return JsonError::new(InternalError, None, id).into()
         }
 
@@ -585,14 +589,18 @@ impl Faucetd {
         drop(map);
 
         let tx_hash = blake3::hash(&serialize(&tx)).to_hex().as_str().to_string();
-        JsonResponse::new(json!(tx_hash), id).into()
+        JsonResponse::new(JsonValue::String(tx_hash), id).into()
     }
 }
 
-async fn prune_airdrop_maps(rate_map: AirdropMap, challenge_map: ChallengeMap, timeout: i64) {
+async fn prune_airdrop_maps(
+    rate_map: AirdropMap,
+    challenge_map: ChallengeMap,
+    timeout: i64,
+) -> Result<()> {
     loop {
         sleep(timeout as u64).await;
-        debug!("Pruning airdrop maps");
+        debug!(target: "faucetd", "Pruning airdrop maps");
 
         let now = Utc::now().timestamp();
 
@@ -620,9 +628,9 @@ async fn prune_airdrop_maps(rate_map: AirdropMap, challenge_map: ChallengeMap, t
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // Initialize or load wallet
-    let wallet = WalletDb::new(Some(expand_path(&args.wallet_path)?), &args.wallet_pass).await?;
+    let wallet = WalletDb::new(Some(expand_path(&args.wallet_path)?), Some(&args.wallet_pass))?;
 
     // Initialize or open sled database
     let db_path =
@@ -644,7 +652,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
             *TESTNET_INITIAL_DISTRIBUTION,
         ),
         x => {
-            error!("Unsupported chain `{}`", x);
+            error!(target: "faucetd", "Unsupported chain `{}`", x);
             return Err(Error::UnsupportedChain)
         }
     };
@@ -689,10 +697,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
         ..Default::default()
     };
 
-    let sync_p2p = net::P2p::new(network_settings).await;
+    let sync_p2p = net::P2p::new(network_settings, ex.clone()).await;
     let registry = sync_p2p.protocol_registry();
 
-    info!("Registering block sync P2P protocols...");
+    info!(target: "faucetd", "Registering block sync P2P protocols...");
     let _state = state.clone();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
@@ -724,46 +732,67 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     let faucetd = Arc::new(faucetd);
 
     // Task to periodically clean up the airdrop rate/challenge hashmaps
-    ex.spawn(prune_airdrop_maps(
-        faucetd.airdrop_map.clone(),
-        faucetd.challenge_map.clone(),
-        airdrop_timeout,
-    ))
-    .detach();
+    let airdrop_task = StoppableTask::new();
+    airdrop_task.clone().start(
+        prune_airdrop_maps(
+            faucetd.airdrop_map.clone(),
+            faucetd.challenge_map.clone(),
+            airdrop_timeout,
+        ),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "faucetd", "Failed starting airdrop prune task: {}", e),
+            }
+        },
+        Error::DetachedTaskStopped,
+        ex.clone(),
+    );
 
     // JSON-RPC server
-    info!("Starting JSON-RPC server");
-    let _ex = ex.clone();
-    ex.spawn(listen_and_serve(args.rpc_listen, faucetd.clone(), _ex)).detach();
+    info!(target: "faucetd", "Starting JSON-RPC server");
+    let rpc_task = StoppableTask::new();
+    rpc_task.clone().start(
+        listen_and_serve(args.rpc_listen, faucetd.clone(), ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "faucetd", "Failed starting JSON-RPC server: {}", e),
+            }
+        },
+        Error::RPCServerStopped,
+        ex.clone(),
+    );
 
-    info!("Starting sync P2P network");
-    sync_p2p.clone().start(ex.clone()).await?;
-    let _ex = ex.clone();
-    let _sync_p2p = sync_p2p.clone();
-    ex.spawn(async move {
-        if let Err(e) = _sync_p2p.run(_ex).await {
-            error!("Failed starting sync P2P network: {}", e);
-        }
-    })
-    .detach();
+    info!(target: "faucetd", "Starting sync P2P network");
+    sync_p2p.clone().start().await?;
 
     // TODO: I think this is not needed anymore
     //info!("Waiting for sync P2P outbound connections");
     //sync_p2p.clone().wait_for_outbound(ex).await?;
 
-    match block_sync_task(sync_p2p, state.clone()).await {
+    match block_sync_task(sync_p2p.clone(), state.clone()).await {
         Ok(()) => *faucetd.synced.lock().await = true,
-        Err(e) => error!("Failed syncing blockchain: {}", e),
+        Err(e) => error!(target: "faucetd", "Failed syncing blockchain: {}", e),
     }
 
     // Signal handling for graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new()?;
+    let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
-    info!("Caught termination signal, cleaning up and exiting...");
+    info!(target: "faucetd", "Caught termination signal, cleaning up and exiting...");
 
-    info!("Flushing database...");
+    info!(target: "faucetd", "Stopping JSON-RPC server...");
+    rpc_task.stop().await;
+
+    info!(target: "faucetd", "Stopping airdrop prune task...");
+    airdrop_task.stop().await;
+
+    info!(target: "faucetd", "Stopping syncing P2P network...");
+    sync_p2p.stop().await;
+
+    info!(target: "faucetd", "Flushing database...");
     let flushed_bytes = sled_db.flush_async().await?;
-    info!("Flushed {} bytes", flushed_bytes);
+    info!(target: "faucetd", "Flushed {} bytes", flushed_bytes);
 
     Ok(())
 }

@@ -18,14 +18,14 @@ def vesting_instance(vesting, running_time):
         darkies = []
         id = 0
         for name, distrib in vesting.items():
-            darkies += [Darkie(distrib[0] , vesting=distrib, strategy=random_strategy(EPOCH_LENGTH))]
+            darkies += [Darkie(distrib[0] , vesting=distrib, strategy=random_strategy(EPOCH_LENGTH), idx=id)]
             id+=1
             total_vesting+=distrib[-1]
         airdrop = 0
         for darkie in darkies:
             airdrop+=darkie.stake
-        print("initial airdrop: {}/{}% on {} nodes".format(airdrop, airdrop/native_drk*100, len(darkies)))
-        print('total predistribution: {}/{}%'.format(total_vesting, total_vesting/native_drk*100))
+        print("initial airdrop: {}/{}% on {} nodes".format(airdrop, airdrop/native_drk*100 if native_drk!=0 else 0 , len(darkies)))
+        print('total predistribution: {}/{}%'.format(total_vesting, total_vesting/native_drk*100 if native_drk !=0 else 0))
         dt = DarkfiTable(airdrop, running_time, kp=-0.010399999999938556, ki=-0.0365999996461878, kd=0.03840000000000491,  r_kp=-2.53, r_ki=29.5, r_kd=53.77)
         for darkie in darkies:
             dt.add_darkie(darkie)

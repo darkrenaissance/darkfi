@@ -16,10 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#[cfg(feature = "async-runtime")]
-/// async utility functions
-pub mod async_util;
-
 /// Command-line interface utilities
 pub mod cli;
 
@@ -40,3 +36,8 @@ pub mod time;
 
 /// Ring Buffer implementation
 pub mod ringbuffer;
+
+/// Permuted Congruential Generator (PCG)
+/// This is an insecure PRNG used for simulations and tests.
+#[cfg(feature = "rand")]
+pub mod pcg;

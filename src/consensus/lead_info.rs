@@ -20,7 +20,7 @@ use darkfi_sdk::{
     crypto::{schnorr::Signature, Keypair, PublicKey},
     pasta::pallas,
 };
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use log::error;
 
 use crate::{

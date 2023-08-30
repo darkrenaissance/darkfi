@@ -11,12 +11,16 @@ edition = "2021"
 [lib]
 doctest = false
 
+[features]
+default = []
+async = ["darkfi-serial/async"]
+
 [dependencies]
 # Error handling
-thiserror = "1.0.43"
+thiserror = "1.0.47"
 
 # Serialization
-darkfi-serial = {version = "0.4.1", path = "../serial", features = ["derive", "crypto"]}
+darkfi-serial = {path = "../serial", features = ["crypto"]}
 
 # Encoding
 bs58 = "0.5.0"
@@ -27,17 +31,16 @@ blake3 = "1.4.1"
 chacha20poly1305 = "0.10.1"
 halo2_gadgets = "0.3.0"
 bridgetree = "0.3.0"
-num-bigint = "0.4.3"
-num-traits = "0.2.15"
+num-bigint = "0.4.4"
+num-traits = "0.2.16"
 pasta_curves = "0.5.1"
 rand_core = "0.6.4"
-sha2 = "0.10.7"
 
 # Misc
 lazy_static = "1.4.0"
 subtle = "2.5.0"
 
 [dev-dependencies]
-halo2_proofs = {version = "0.3.0", features = ["dev-graph", "gadget-traces", "sanity-checks"]}
-halo2_gadgets = {version = "0.3.0", features = ["test-dev-graph", "test-dependencies"]}
+halo2_proofs = {version = "0.3.0", features = ["dev-graph", "sanity-checks"]}
+halo2_gadgets = {version = "0.3.0", features = ["test-dependencies"]}
 rand = "0.8.5"

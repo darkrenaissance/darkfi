@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::str::Chars;
+use std::{io::Result, str::Chars};
 
 use super::error::ErrorEmitter;
 
@@ -73,7 +73,7 @@ impl<'a> Lexer<'a> {
         Self { source, error }
     }
 
-    pub fn lex(&self) -> Vec<Token> {
+    pub fn lex(&self) -> Result<Vec<Token>> {
         let mut tokens = vec![];
         let mut lineno = 1;
         let mut column = 0;
@@ -120,11 +120,11 @@ impl<'a> Lexer<'a> {
                 }
 
                 if in_string {
-                    self.error.abort("Strings can't contain newlines", lineno, column);
+                    return Err(self.error.abort("Strings can't contain newlines", lineno, column))
                 }
 
                 if in_number {
-                    self.error.abort("Numbers can't contain newlines", lineno, column);
+                    return Err(self.error.abort("Numbers can't contain newlines", lineno, column))
                 }
 
                 in_comment = false;
@@ -162,7 +162,11 @@ impl<'a> Lexer<'a> {
 
                 if in_string {
                     // For now we forbid whitespace in strings.
-                    self.error.abort("Strings/Namespaces can't contain whitespace", lineno, column);
+                    return Err(self.error.abort(
+                        "Strings/Namespaces can't contain whitespace",
+                        lineno,
+                        column,
+                    ))
                 }
 
                 continue
@@ -204,7 +208,7 @@ impl<'a> Lexer<'a> {
             if in_string && c == '"' {
                 // " I need to fix my vis lexer
                 if buf.is_empty() {
-                    self.error.abort("String cannot be empty", lineno, column);
+                    return Err(self.error.abort("String cannot be empty", lineno, column))
                 }
                 new_string!();
                 continue
@@ -252,14 +256,19 @@ impl<'a> Lexer<'a> {
                         tokens.push(Token::new("=", TokenType::Assign, lineno, column));
                         continue
                     }
-                    _ => self.error.abort(&format!("Invalid token `{}`", c), lineno, column - 1),
+                    _ => {
+                        return Err(self.error.abort(
+                            &format!("Invalid token `{}`", c),
+                            lineno,
+                            column - 1,
+                        ))
+                    }
                 }
-                continue
             }
 
-            self.error.abort(&format!("Invalid token `{}`", c), lineno, column - 1);
+            return Err(self.error.abort(&format!("Invalid token `{}`", c), lineno, column - 1))
         }
 
-        tokens
+        Ok(tokens)
     }
 }

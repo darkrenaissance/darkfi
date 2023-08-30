@@ -18,11 +18,12 @@
 
 use darkfi_serial::deserialize;
 use log::{error, warn};
-use serde_json::{json, Value};
+use tinyjson::JsonValue;
 
 use darkfi::{
     rpc::jsonrpc::{ErrorCode::InvalidParams, JsonError, JsonResponse, JsonResult},
     tx::Transaction,
+    util::encoding::base64,
 };
 
 use super::Darkfid;
@@ -36,7 +37,8 @@ impl Darkfid {
     //
     // --> {"jsonrpc": "2.0", "method": "tx.simulate", "params": ["base58encodedTX"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    pub async fn tx_simulate(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn tx_simulate(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -47,10 +49,11 @@ impl Darkfid {
         }
 
         // Try to deserialize the transaction
-        let tx_bytes = match bs58::decode(params[0].as_str().unwrap().trim()).into_vec() {
-            Ok(v) => v,
-            Err(e) => {
-                error!("[RPC] tx.simulate: Failed decoding base58 transaction: {}", e);
+        let tx_enc = params[0].get::<String>().unwrap();
+        let tx_bytes = match base64::decode(tx_enc.trim()) {
+            Some(v) => v,
+            None => {
+                error!("[RPC] tx.simulate: Failed decoding base64 transaction");
                 return server_error(RpcError::ParseError, id, None)
             }
         };
@@ -79,7 +82,7 @@ impl Darkfid {
             }
         };
 
-        JsonResponse::new(json!(true), id).into()
+        JsonResponse::new(JsonValue::Boolean(true), id).into()
     }
 
     // RPCAPI:
@@ -90,7 +93,8 @@ impl Darkfid {
     //
     // --> {"jsonrpc": "2.0", "method": "tx.broadcast", "params": ["base58encodedTX"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "txID...", "id": 1}
-    pub async fn tx_broadcast(&self, id: Value, params: &[Value]) -> JsonResult {
+    pub async fn tx_broadcast(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
@@ -101,10 +105,11 @@ impl Darkfid {
         }
 
         // Try to deserialize the transaction
-        let tx_bytes = match bs58::decode(params[0].as_str().unwrap().trim()).into_vec() {
-            Ok(v) => v,
-            Err(e) => {
-                error!("[RPC] tx.broadcast: Failed decoding base58 transaction: {}", e);
+        let tx_enc = params[0].get::<String>().unwrap();
+        let tx_bytes = match base64::decode(tx_enc.trim()) {
+            Some(v) => v,
+            None => {
+                error!("[RPC] tx.broadcast: Failed decoding base64 transaction");
                 return server_error(RpcError::ParseError, id, None)
             }
         };
@@ -153,7 +158,7 @@ impl Darkfid {
             return server_error(RpcError::TxBroadcastFail, id, None)
         }
 
-        let tx_hash = tx.hash().to_string();
-        JsonResponse::new(json!(tx_hash), id).into()
+        let tx_hash = tx.hash().unwrap().to_string();
+        JsonResponse::new(JsonValue::String(tx_hash), id).into()
     }
 }

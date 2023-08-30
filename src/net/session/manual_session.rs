@@ -29,23 +29,23 @@
 //! and insures that no other part of the program uses the slots at the
 //! same time.
 
-use async_std::sync::{Arc, Mutex, Weak};
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use log::{info, warn};
-use smol::Executor;
+use smol::lock::Mutex;
 use url::Url;
 
 use super::{
     super::{
         channel::ChannelPtr,
         connector::Connector,
-        p2p::{DnetInfo, P2p, P2pPtr},
+        p2p::{P2p, P2pPtr},
     },
     Session, SessionBitFlag, SESSION_MANUAL,
 };
 use crate::{
-    system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr},
-    util::async_util::sleep,
+    system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr},
     Error, Result,
 };
 
@@ -53,22 +53,19 @@ pub type ManualSessionPtr = Arc<ManualSession>;
 
 /// Defines manual connections session.
 pub struct ManualSession {
-    p2p: Weak<P2p>,
+    pub(in crate::net) p2p: LazyWeak<P2p>,
     connect_slots: Mutex<Vec<StoppableTaskPtr>>,
     /// Subscriber used to signal channels processing
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
-    /// Flag to toggle channel_subscriber notifications
-    notify: Mutex<bool>,
 }
 
 impl ManualSession {
     /// Create a new manual session.
-    pub fn new(p2p: Weak<P2p>) -> ManualSessionPtr {
+    pub fn new() -> ManualSessionPtr {
         Arc::new(Self {
-            p2p,
-            connect_slots: Mutex::new(vec![]),
+            p2p: LazyWeak::new(),
+            connect_slots: Mutex::new(Vec::new()),
             channel_subscriber: Subscriber::new(),
-            notify: Mutex::new(false),
         })
     }
 
@@ -82,11 +79,12 @@ impl ManualSession {
     }
 
     /// Connect the manual session to the given address
-    pub async fn connect(self: Arc<Self>, addr: Url, ex: Arc<Executor<'_>>) {
+    pub async fn connect(self: Arc<Self>, addr: Url) {
+        let ex = self.p2p().executor();
         let task = StoppableTask::new();
 
         task.clone().start(
-            self.clone().channel_connect_loop(addr, ex.clone()),
+            self.clone().channel_connect_loop(addr),
             // Ignore stop handler
             |_| async {},
             Error::NetworkServiceStopped,
@@ -97,14 +95,11 @@ impl ManualSession {
     }
 
     /// Creates a connector object and tries to connect using it
-    pub async fn channel_connect_loop(
-        self: Arc<Self>,
-        addr: Url,
-        ex: Arc<Executor<'_>>,
-    ) -> Result<()> {
+    pub async fn channel_connect_loop(self: Arc<Self>, addr: Url) -> Result<()> {
+        let ex = self.p2p().executor();
         let parent = Arc::downgrade(&self);
         let settings = self.p2p().settings();
-        let connector = Connector::new(settings.clone(), Arc::new(parent));
+        let connector = Connector::new(settings.clone(), parent);
 
         let attempts = settings.manual_attempt_limit;
         let mut remaining = attempts;
@@ -139,9 +134,7 @@ impl ManualSession {
                     self.p2p().remove_pending(&addr).await;
 
                     // Notify that channel processing has finished
-                    if *self.notify.lock().await {
-                        self.channel_subscriber.notify(Ok(channel)).await;
-                    }
+                    self.channel_subscriber.notify(Ok(channel)).await;
 
                     // Wait for channel to close
                     stop_sub.receive().await;
@@ -164,9 +157,7 @@ impl ManualSession {
             // Wait and try again.
             // TODO: Should we notify about the failure now, or after all attempts
             // have failed?
-            if *self.notify.lock().await {
-                self.channel_subscriber.notify(Err(Error::ConnectFailed)).await;
-            }
+            self.channel_subscriber.notify(Err(Error::ConnectFailed)).await;
 
             remaining = if attempts == 0 { 1 } else { remaining - 1 };
             if remaining == 0 {
@@ -191,29 +182,15 @@ impl ManualSession {
 
         Ok(())
     }
-
-    /// Enable channel_subscriber notifications.
-    pub async fn enable_notify(self: Arc<Self>) {
-        *self.notify.lock().await = true;
-    }
-
-    /// Disable channel_subscriber notifications.
-    pub async fn disable_notify(self: Arc<Self>) {
-        *self.notify.lock().await = false;
-    }
 }
 
 #[async_trait]
 impl Session for ManualSession {
     fn p2p(&self) -> P2pPtr {
-        self.p2p.upgrade().unwrap()
+        self.p2p.upgrade()
     }
 
     fn type_id(&self) -> SessionBitFlag {
         SESSION_MANUAL
-    }
-
-    async fn dnet_info(&self) -> DnetInfo {
-        todo!()
     }
 }

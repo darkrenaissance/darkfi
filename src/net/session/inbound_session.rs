@@ -23,75 +23,55 @@
 //! an acceptor pointer, and a stoppable task pointer. Using a weak pointer
 //! to P2P allows us to avoid circular dependencies.
 
-use std::collections::HashMap;
+use std::sync::Arc;
 
-use async_std::sync::{Arc, Mutex, Weak};
 use async_trait::async_trait;
-use log::{error, info};
-use smol::Executor;
+use log::{debug, error, info};
+use smol::{lock::Mutex, Executor};
 use url::Url;
 
 use super::{
     super::{
         acceptor::{Acceptor, AcceptorPtr},
-        channel::{ChannelInfo, ChannelPtr},
-        p2p::{DnetInfo, P2p, P2pPtr},
+        channel::ChannelPtr,
+        p2p::{P2p, P2pPtr},
     },
     Session, SessionBitFlag, SESSION_INBOUND,
 };
 use crate::{
-    system::{StoppableTask, StoppableTaskPtr},
+    system::{LazyWeak, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
 
 pub type InboundSessionPtr = Arc<InboundSession>;
 
-/// dnet info for an inbound connection
-#[derive(Clone)]
-pub struct InboundInfo {
-    /// Remote address
-    pub addr: Option<Url>,
-    /// Channel info
-    pub channel: Option<ChannelInfo>,
-}
-
-impl InboundInfo {
-    async fn dnet_info(&self, p2p: P2pPtr) -> Option<Self> {
-        let Some(ref addr) = self.addr else { return None };
-
-        let Some(chan) = p2p.channels().lock().await.get(addr).cloned() else { return None };
-
-        Some(Self { addr: self.addr.clone(), channel: Some(chan.dnet_info().await) })
-    }
-}
-
 /// Defines inbound connections session
 pub struct InboundSession {
-    p2p: Weak<P2p>,
+    pub(in crate::net) p2p: LazyWeak<P2p>,
     acceptors: Mutex<Vec<AcceptorPtr>>,
     accept_tasks: Mutex<Vec<StoppableTaskPtr>>,
-    connect_infos: Mutex<Vec<HashMap<Url, InboundInfo>>>,
 }
 
 impl InboundSession {
     /// Create a new inbound session
-    pub fn new(p2p: Weak<P2p>) -> InboundSessionPtr {
+    pub fn new() -> InboundSessionPtr {
         Arc::new(Self {
-            p2p,
-            acceptors: Mutex::new(vec![]),
-            accept_tasks: Mutex::new(vec![]),
-            connect_infos: Mutex::new(vec![]),
+            p2p: LazyWeak::new(),
+            acceptors: Mutex::new(Vec::new()),
+            accept_tasks: Mutex::new(Vec::new()),
         })
     }
 
     /// Starts the inbound session. Begins by accepting connections and fails
     /// if the addresses are not configured. Then runs the channel subscription
     /// loop.
-    pub async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn start(self: Arc<Self>) -> Result<()> {
         if self.p2p().settings().inbound_addrs.is_empty() {
             info!(target: "net::inbound_session", "[P2P] Not configured for inbound connections.");
             return Ok(())
         }
+
+        let ex = self.p2p().executor();
 
         // Activate mutex lock on accept tasks.
         let mut accept_tasks = self.accept_tasks.lock().await;
@@ -109,7 +89,6 @@ impl InboundSession {
                 ex.clone(),
             );
 
-            self.connect_infos.lock().await.push(HashMap::new());
             accept_tasks.push(task);
         }
 
@@ -138,13 +117,12 @@ impl InboundSession {
     ) -> Result<()> {
         info!(target: "net::inbound_session", "[P2P] Starting Inbound session #{} on {}", index, accept_addr);
         // Generate a new acceptor for this inbound session
-        let acceptor = Acceptor::new(Mutex::new(None));
         let parent = Arc::downgrade(&self);
-        *acceptor.session.lock().await = Some(Arc::new(parent));
+        let acceptor = Acceptor::new(parent);
 
         // Start listener
         let result = acceptor.clone().start(accept_addr, ex).await;
-        if let Err(e) = result.clone() {
+        if let Err(e) = &result {
             error!(target: "net::inbound_session", "[P2P] Error starting listener #{}: {}", index, e);
             acceptor.stop().await;
         } else {
@@ -174,48 +152,35 @@ impl InboundSession {
         channel: ChannelPtr,
         ex: Arc<Executor<'_>>,
     ) -> Result<()> {
-        info!(target: "net::inbound_session", "[P2P] Connected Inbound #{} [{}]", index, channel.address());
-        self.register_channel(channel.clone(), ex.clone()).await?;
-
-        let addr = channel.address().clone();
-
-        self.connect_infos.lock().await[index]
-            .insert(addr.clone(), InboundInfo { addr: Some(addr.clone()), channel: None });
+        info!(
+            target: "net::inbound_session::setup_channel",
+            "[P2P] Connected Inbound #{} [{}]", index, channel.address(),
+        );
 
         let stop_sub = channel.subscribe_stop().await?;
+
+        self.register_channel(channel.clone(), ex.clone()).await?;
+
         stop_sub.receive().await;
 
-        self.connect_infos.lock().await[index].remove(&addr);
+        debug!(
+            target: "net::inbound_session::setup_channel()",
+            "Received stop_sub, removing channel from P2P",
+        );
+
+        self.p2p().remove(channel).await;
 
         Ok(())
     }
 }
 
-/// Dnet information for the inbound session
-pub struct InboundDnet {
-    /// Slot information
-    pub slots: Vec<Option<InboundInfo>>,
-}
-
 #[async_trait]
 impl Session for InboundSession {
     fn p2p(&self) -> P2pPtr {
-        self.p2p.upgrade().unwrap()
+        self.p2p.upgrade()
     }
 
     fn type_id(&self) -> SessionBitFlag {
         SESSION_INBOUND
-    }
-
-    async fn dnet_info(&self) -> DnetInfo {
-        let mut slots = vec![];
-
-        for listen_addr in (*self.connect_infos.lock().await).iter() {
-            for slot in listen_addr.values() {
-                slots.push(slot.dnet_info(self.p2p()).await);
-            }
-        }
-
-        DnetInfo::Inbound(InboundDnet { slots })
     }
 }

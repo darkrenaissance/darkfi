@@ -24,7 +24,7 @@ use url::Url;
 use darkfi::net::settings::SettingsOpt;
 
 pub const CONFIG_FILE: &str = "taud_config.toml";
-pub const CONFIG_FILE_CONTENTS: &str = include_str!("../../taud_config.toml");
+pub const CONFIG_FILE_CONTENTS: &str = include_str!("../taud_config.toml");
 
 /// taud cli
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
@@ -40,7 +40,7 @@ pub struct Args {
     pub rpc_listen: Url,
 
     /// Sets Datastore Path
-    #[structopt(long, default_value = "~/.tau")]
+    #[structopt(long, default_value = "~/.local/darkfi/tau")]
     pub datastore: String,
 
     #[structopt(flatten)]

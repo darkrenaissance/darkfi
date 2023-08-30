@@ -13,10 +13,13 @@ def fact(n, hp=False):
         return Num(2) if hp else 2
     else:
         return (Num(n) if hp else n)* fact(n-1, hp)
-
-# all inputs to this function are integers
-# sigmas are public
-# stake is private
+"""
+approximate ouroboros phi function
+all inputs to this function are integers
+@param sigmas: n sigmas of n-term approximation of phi target function
+@param stake: stakeholder stake
+@returns: target value T
+"""
 def approx_target_in_zk(sigmas, stake):
     # both sigma_1, sigma_2 are constants, if f is a constant.
     # if f is constant then sigma_12, sigma_2
@@ -41,4 +44,5 @@ def lottery(T, hp=False, log=False):
         lottery_line = str(y)+","+str(T)+"\n"
         with open("/tmp/sim_lottery_history.log", "a+") as f:
             f.write(lottery_line)
-    return y < T if y is not None and T is not None else False
+    won = y < T if y is not None and T is not None else False
+    return won, y

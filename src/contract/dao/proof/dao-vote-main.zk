@@ -1,3 +1,6 @@
+k = 13;
+field = "pallas";
+
 constant "DaoVoteMain" {
 	EcFixedPoint VALUE_COMMIT_RANDOM,
 	EcFixedPointShort VALUE_COMMIT_VALUE,

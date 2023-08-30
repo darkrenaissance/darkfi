@@ -1,9 +1,11 @@
+## This is the darkirc configuration file.
+## Review it carefully.
+
 ## JSON-RPC listen URL
-#rpc_listen="tcp://127.0.0.1:26660"
+#rpc_listen = "tcp://127.0.0.1:26660"
 
 ## IRC listen URL
-#irc_listen="tcp://127.0.0.1:7776"
-#irc_listen="tls://0.0.0.0:7796"
+#irc_listen = "tcp://127.0.0.1:6667"
 
 ## TLS certificate path if IRC acceptor uses TLS (optional)
 #irc_tls_cert = "/etc/letsencrypt/ircd/fullchain.pem"
@@ -11,74 +13,105 @@
 ## TLS secret key path if IRC acceptor uses TLS (optional)
 #irc_tls_secret = "/etc/letsencrypt/ircd/privkey.pem"
 
+## Sets Datastore Path
+#datastore = "~/.local/darkfi/darkirc"
+
 ## List of channels to autojoin for new client connections
-autojoin = ["#dev", "#memes", "#philosophy", "#markets", "#math", "#random"]
+autojoin = [
+    "#dev",
+    "#memes",
+    "#philosophy",
+    "#markets",
+    "#math",
+    "#random",
+]
 
 ## Daemon specific password (optional, but once you configure it,
 ## it is required from the client side)
-#password="CHANGE_ME"
+#password = "CHANGE_ME"
 
-## P2P net settings
+# P2P network settings
 [net]
-## Connection slots
-outbound_connections=5
-
 ## P2P accept addresses
-#inbound = ["tls://0.0.0.0:26661"]
-# ipv6 version:
-#inbound = ["tls://[::]:26661"]
+#inbound = ["tcp+tls://0.0.0.0:26661", "tcp+tls://[::]:26661"]
 
-## P2P external addresses
-## Put your IPs or hostnames here
-## This is how people can reach you on the inbound port configured above
-## You can also put an ipv6 address :)
-#external_addr = ["tls://XXX.XXX.XXX.XXX:26661"]
-# ipv6 version:
-#external_addr = ["tls://[ipv6 address here]:26661"]
+## Connection slots
+outbound_connections = 8
 
-## Manually configured peers to connect to
-#peers = ["tls://127.0.0.1:26661"]
+## Addresses we want to advertise to peers (optional)
+## These should be reachable externally
+#external_addrs = ["tcp+tls://my.resolveable.address:26661"]
 
 ## Seed nodes to connect to 
-seeds = ["tcp+tls://lilith0.dark.fi:26661", "tcp+tls://lilith1.dark.fi:26661"]
+seeds = [
+    "tcp+tls://lilith0.dark.fi:5262",
+    "tcp+tls://lilith1.dark.fi:5262",
+]
 
-# Prefered transports for outbound connections
-outbound_transports = ["tcp", "tcp+tls"]
+# Whitelisted transports for outbound connections
+allowed_transports = ["tcp+tls"]
 
-## Only used for debugging. Compromises privacy when set.
-#node_id = "foo"
+# Enable transport mixing
+# Allows mixing transports, e.g. tor+tls:// connecting to tcp+tls://
+# By default this is not allowed.
+transport_mixing = false
 
-## these are the default configuration for the p2p network
-#manual_attempt_limit=0
-#seed_query_timeout_seconds=8
-#connect_timeout_seconds=10
-#channel_handshake_seconds=4
-#channel_heartbeat_seconds=10
-
-## Per-channel settings
+## ====================
+## IRC channel settings
+## ====================
+##
+## You can create a shared secret with `darkirc --gen-secret`.
+## Never share this secret over unencrypted channels or with someone
+## who you do not want to be able to read all the channel messages.
+## Use it like this example:
 #[channel."#foo"]
-## Create with `ircd --gen-secret`
 #secret = "7CkVuFgwTUpJn5Sv67Q3fyEDpa28yrSeL5Hg2GqQ4jfM"
-## Topic to set for the channel
-#topic = "DarkFi Foo Stuff"
+#topic = "My secret channel"
 
 [channel."#dev"]
 topic = "DarkFi Development HQ"
 
-### Contacts list
-## Private key used to decrypt direct messages to you along with
-## contact_pubkey. (configured only once)
-## Generate keypair using 'ircd --gen-keypair' 
-## or to save to a file 'ircd --gen-keypair -o ~/some_dir/filename'
-## !!SHOULD NEVER SHARE THIS!!
-#[private_key."955Dfa83pU7RCevT2rMrGfhza4kcy6FShSNE6AdR4Q7A"]
+[channel."#markets"]
+topic = "Crypto Market Talk"
 
-## Shared Public key that encrypt direct communication between two nicknames
-## on the network.
-## These are in the form of [Contact_nick, Contact_pubkey]
-## Per-contact settings
-## contact nickname (this is not irc nickname, and could be anything you want)
-## irc msgs should be pointed to this nickname.
-#[contact."bar"]
-## contact public key
-#contact_pubkey = "C9vC6HNDfGQofWCapZfQK5MkV1JR8Cct839RDUCqbDGK"
+[channel."#math"]
+topic = "Math Talk"
+
+[channel."#memes"]
+topic = "DarkFi Meme Reality"
+
+[channel."#philosophy"]
+topic = "Philosophy Discussions"
+
+[channel."#random"]
+topic = "/b/"
+
+## ================
+## Contact settings
+## ================
+##
+## In this section we configure our contacts and people we want to
+## have encrypted DMs with. Your contacts' public keys should be
+## retrieved manually. Whenever this is changed, you can send a
+## SIGHUP signal to the running darkirc instance to reload these.
+##
+## The secret key used to decrypt direct messages sent to your public
+## key (the counterpart to this secret key).
+## It is also recommended to paste the public key here as a comment in
+## order to be able to easily reference it for sharing.
+##
+## You can generate a keypair with: darkirc --gen-keypair
+## and replace the secret key below with the generated one.
+## **You should never share this secret key with anyone**
+#[secret_key."AKfyoKxnHb8smqP2zt9BVvXkcN7pm9GnqqyuYRmxmWtR"]
+
+## This is where you put other people's public keys. The format is:
+## [contact."nickname"]. "nickname" can be anything you want.
+## This is how they will appear in your IRC client when they send you a DM.
+##
+## Example (set as many as you want):
+#[contact."satoshi"]
+#public_key = "C9vC6HNDfGQofWCapZfQK5MkV1JR8Cct839RDUCqbDGK"
+#
+#[contact."anon"]
+#public_key = "7iTddcopP2pkvszFjbFUr7MwTcMSKZkYP6zUan22pxfX"

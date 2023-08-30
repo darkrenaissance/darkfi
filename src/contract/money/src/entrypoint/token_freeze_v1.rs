@@ -75,7 +75,6 @@ pub(crate) fn money_token_freeze_process_instruction_v1(
 
     // We just check if the mint was already frozen beforehand
     let token_freeze_db = db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
-
     let token_id = TokenId::derive_public(params.signature_public);
 
     // Check that the mint is not frozen

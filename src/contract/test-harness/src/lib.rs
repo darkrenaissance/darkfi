@@ -16,51 +16,52 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::{collections::HashMap, io::Cursor, time::Instant};
 
 use darkfi::{
     blockchain::BlockInfo,
-    runtime::vm_runtime::SMART_CONTRACT_ZKAS_DB_NAME,
-    util::time::TimeKeeper,
+    tx::Transaction,
+    util::{
+        pcg::Pcg32,
+        time::{TimeKeeper, Timestamp},
+    },
     validator::{Validator, ValidatorConfig, ValidatorPtr},
     wallet::{WalletDb, WalletPtr},
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
-use darkfi_dao_contract::{
-    DAO_CONTRACT_ZKAS_DAO_EXEC_NS, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
-    DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
-    DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
-};
+use darkfi_dao_contract::model::{DaoBulla, DaoProposalBulla};
 use darkfi_money_contract::{
     client::{ConsensusNote, ConsensusOwnCoin, MoneyNote, OwnCoin},
     model::{ConsensusOutput, Output},
-    CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
-    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
-    MONEY_CONTRACT_ZKAS_MINT_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1,
-    MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    blockchain::Slot,
+    blockchain::{PidOutput, PreviousSlot, Slot},
+    bridgetree,
     crypto::{
-        poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey,
-        CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+        pasta_prelude::Field, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey,
+        SecretKey, TokenId,
     },
+    pasta::pallas,
 };
-use darkfi_serial::{deserialize, serialize};
 use log::{info, warn};
 use rand::rngs::OsRng;
 
 mod benchmarks;
 use benchmarks::TxActionBenchmarks;
 pub mod vks;
+use vks::{read_or_gen_vks_and_pks, Vks};
 
 mod consensus_genesis_stake;
 mod consensus_proposal;
 mod consensus_stake;
 mod consensus_unstake;
 mod consensus_unstake_request;
+mod dao_exec;
+mod dao_mint;
+mod dao_propose;
+mod dao_vote;
 mod money_airdrop;
 mod money_genesis_mint;
 mod money_otc_swap;
@@ -95,6 +96,7 @@ pub enum Holder {
     Bob,
     Charlie,
     Rachel,
+    Dao,
 }
 
 /// Enum representing transaction actions
@@ -111,6 +113,10 @@ pub enum TxAction {
     ConsensusProposal,
     ConsensusUnstakeRequest,
     ConsensusUnstake,
+    DaoMint,
+    DaoPropose,
+    DaoVote,
+    DaoExec,
 }
 
 pub struct Wallet {
@@ -120,9 +126,14 @@ pub struct Wallet {
     pub money_merkle_tree: MerkleTree,
     pub consensus_staked_merkle_tree: MerkleTree,
     pub consensus_unstaked_merkle_tree: MerkleTree,
+    pub dao_merkle_tree: MerkleTree,
+    pub dao_proposals_tree: MerkleTree,
     pub wallet: WalletPtr,
     pub unspent_money_coins: Vec<OwnCoin>,
     pub spent_money_coins: Vec<OwnCoin>,
+    pub dao_leafs: HashMap<DaoBulla, bridgetree::Position>,
+    // Here the MerkleTree is the snapshotted Money tree at the time of proposal creation
+    pub dao_prop_leafs: HashMap<DaoProposalBulla, (bridgetree::Position, MerkleTree)>,
 }
 
 impl Wallet {
@@ -130,12 +141,13 @@ impl Wallet {
         keypair: Keypair,
         genesis_block: &BlockInfo,
         faucet_pubkeys: &[PublicKey],
+        vks: &Vks,
     ) -> Result<Self> {
-        let wallet = WalletDb::new(None, "foo").await?;
+        let wallet = WalletDb::new(None, None)?;
         let sled_db = sled::Config::new().temporary(true).open()?;
 
-        // Use pregenerated vks
-        vks::inject(&sled_db)?;
+        // Use pregenerated vks and get pregenerated pks
+        vks::inject(&sled_db, vks)?;
 
         // Generate validator
         // NOTE: we are not using consensus constants here so we
@@ -144,15 +156,20 @@ impl Wallet {
         let config = ValidatorConfig::new(
             time_keeper,
             genesis_block.clone(),
+            0,
             faucet_pubkeys.to_vec(),
             false,
         );
         let validator = Validator::new(&sled_db, config).await?;
 
         // Create necessary Merkle trees for tracking
-        let money_merkle_tree = MerkleTree::new(100);
+        let mut money_merkle_tree = MerkleTree::new(100);
+        money_merkle_tree.append(MerkleNode::from(pallas::Base::ZERO));
         let consensus_staked_merkle_tree = MerkleTree::new(100);
         let consensus_unstaked_merkle_tree = MerkleTree::new(100);
+
+        let dao_merkle_tree = MerkleTree::new(100);
+        let dao_proposals_tree = MerkleTree::new(100);
 
         let unspent_money_coins = vec![];
         let spent_money_coins = vec![];
@@ -166,99 +183,69 @@ impl Wallet {
             money_merkle_tree,
             consensus_staked_merkle_tree,
             consensus_unstaked_merkle_tree,
+            dao_merkle_tree,
+            dao_proposals_tree,
             wallet,
             unspent_money_coins,
             spent_money_coins,
+            dao_leafs: HashMap::new(),
+            dao_prop_leafs: HashMap::new(),
         })
     }
 }
 
 pub struct TestHarness {
     pub holders: HashMap<Holder, Wallet>,
-    pub proving_keys: HashMap<&'static str, (ProvingKey, ZkBinary)>,
+    pub proving_keys: HashMap<String, (ProvingKey, ZkBinary)>,
     pub tx_action_benchmarks: HashMap<TxAction, TxActionBenchmarks>,
     pub genesis_block: blake3::Hash,
 }
 
 impl TestHarness {
-    pub async fn new(contracts: &[String]) -> Result<Self> {
+    pub async fn new(_contracts: &[String]) -> Result<Self> {
         let mut holders = HashMap::new();
-        let genesis_block = BlockInfo::default();
+        let mut genesis_block = BlockInfo::default();
+        genesis_block.header.timestamp = Timestamp(1689772567);
 
-        let faucet_kp = Keypair::random(&mut OsRng);
+        // Deterministic PRNG
+        let mut rng = Pcg32::new(42);
+
+        // Build or read precompiled zk pks and vks
+        let (pks, vks) = read_or_gen_vks_and_pks()?;
+
+        let mut proving_keys = HashMap::new();
+        for (bincode, namespace, pk) in pks {
+            let mut reader = Cursor::new(pk);
+            let zkbin = ZkBinary::decode(&bincode)?;
+            let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
+            let _pk = ProvingKey::read(&mut reader, circuit)?;
+            proving_keys.insert(namespace, (_pk, zkbin));
+        }
+
+        let faucet_kp = Keypair::random(&mut rng);
         let faucet_pubkeys = vec![faucet_kp.public];
-        let faucet = Wallet::new(faucet_kp, &genesis_block, &faucet_pubkeys).await?;
+        let faucet = Wallet::new(faucet_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
         holders.insert(Holder::Faucet, faucet);
 
-        let alice_kp = Keypair::random(&mut OsRng);
-        let alice = Wallet::new(alice_kp, &genesis_block, &faucet_pubkeys).await?;
-        // Alice is inserted at end of function
+        let alice_kp = Keypair::random(&mut rng);
+        let alice = Wallet::new(alice_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
+        holders.insert(Holder::Alice, alice);
 
-        let bob_kp = Keypair::random(&mut OsRng);
-        let bob = Wallet::new(bob_kp, &genesis_block, &faucet_pubkeys).await?;
+        let bob_kp = Keypair::random(&mut rng);
+        let bob = Wallet::new(bob_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
         holders.insert(Holder::Bob, bob);
 
-        let charlie_kp = Keypair::random(&mut OsRng);
-        let charlie = Wallet::new(charlie_kp, &genesis_block, &faucet_pubkeys).await?;
+        let charlie_kp = Keypair::random(&mut rng);
+        let charlie = Wallet::new(charlie_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
         holders.insert(Holder::Charlie, charlie);
 
-        let rachel_kp = Keypair::random(&mut OsRng);
-        let rachel = Wallet::new(rachel_kp, &genesis_block, &faucet_pubkeys).await?;
+        let rachel_kp = Keypair::random(&mut rng);
+        let rachel = Wallet::new(rachel_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
         holders.insert(Holder::Rachel, rachel);
 
-        // Get the zkas circuits and build proving keys
-        let mut proving_keys = HashMap::new();
-        let alice_sled = alice.validator.read().await.blockchain.sled_db.clone();
-
-        macro_rules! mkpk {
-            ($db:expr, $ns:expr) => {
-                info!("Building ProvingKey for {}", $ns);
-                let zkas_bytes = $db.get(&serialize(&$ns))?.unwrap();
-                let (zkbin, _): (Vec<u8>, Vec<u8>) = deserialize(&zkas_bytes)?;
-                let zkbin = ZkBinary::decode(&zkbin)?;
-                let witnesses = empty_witnesses(&zkbin);
-                let circuit = ZkCircuit::new(witnesses, zkbin.clone());
-                let pk = ProvingKey::build(13, &circuit);
-                proving_keys.insert($ns, (pk, zkbin));
-            };
-        }
-
-        if contracts.contains(&"money".to_string()) {
-            let db_handle = alice.validator.read().await.blockchain.contracts.lookup(
-                &alice_sled,
-                &MONEY_CONTRACT_ID,
-                SMART_CONTRACT_ZKAS_DB_NAME,
-            )?;
-            mkpk!(db_handle, MONEY_CONTRACT_ZKAS_MINT_NS_V1);
-            mkpk!(db_handle, MONEY_CONTRACT_ZKAS_BURN_NS_V1);
-            mkpk!(db_handle, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1);
-            mkpk!(db_handle, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1);
-        }
-
-        if contracts.contains(&"consensus".to_string()) {
-            let db_handle = alice.validator.read().await.blockchain.contracts.lookup(
-                &alice_sled,
-                &CONSENSUS_CONTRACT_ID,
-                SMART_CONTRACT_ZKAS_DB_NAME,
-            )?;
-            mkpk!(db_handle, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1);
-            mkpk!(db_handle, CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1);
-            mkpk!(db_handle, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1);
-        }
-
-        if contracts.contains(&"dao".to_string()) {
-            let db_handle = alice.validator.read().await.blockchain.contracts.lookup(
-                &alice_sled,
-                &DAO_CONTRACT_ID,
-                SMART_CONTRACT_ZKAS_DB_NAME,
-            )?;
-            mkpk!(db_handle, DAO_CONTRACT_ZKAS_DAO_EXEC_NS);
-            mkpk!(db_handle, DAO_CONTRACT_ZKAS_DAO_MINT_NS);
-            mkpk!(db_handle, DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS);
-            mkpk!(db_handle, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS);
-            mkpk!(db_handle, DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS);
-            mkpk!(db_handle, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS);
-        }
+        let dao_kp = Keypair::random(&mut rng);
+        let dao = Wallet::new(dao_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
+        holders.insert(Holder::Dao, dao);
 
         // Build benchmarks map
         let mut tx_action_benchmarks = HashMap::new();
@@ -274,9 +261,10 @@ impl TestHarness {
         tx_action_benchmarks
             .insert(TxAction::ConsensusUnstakeRequest, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::ConsensusUnstake, TxActionBenchmarks::default());
-
-        // Alice jumps down the rabbit hole
-        holders.insert(Holder::Alice, alice);
+        tx_action_benchmarks.insert(TxAction::DaoMint, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::DaoPropose, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::DaoVote, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::DaoExec, TxActionBenchmarks::default());
 
         Ok(Self {
             holders,
@@ -286,13 +274,40 @@ impl TestHarness {
         })
     }
 
+    pub async fn execute_erroneous_txs(
+        &mut self,
+        action: TxAction,
+        holder: &Holder,
+        txs: &[Transaction],
+        slot: u64,
+        erroneous: usize,
+    ) -> Result<()> {
+        let wallet = self.holders.get(holder).unwrap();
+        let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&action).unwrap();
+        let timer = Instant::now();
+
+        let erroneous_txs = wallet
+            .validator
+            .read()
+            .await
+            .add_transactions(txs, slot, false)
+            .await
+            .err()
+            .unwrap()
+            .retrieve_erroneous_txs()?;
+        assert_eq!(erroneous_txs.len(), erroneous);
+        tx_action_benchmark.verify_times.push(timer.elapsed());
+
+        Ok(())
+    }
+
     pub fn gather_owncoin(
         &mut self,
-        holder: Holder,
-        output: Output,
+        holder: &Holder,
+        output: &Output,
         secret_key: Option<SecretKey>,
     ) -> Result<OwnCoin> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let leaf_position = wallet.money_merkle_tree.mark().unwrap();
         let secret_key = match secret_key {
             Some(key) => key,
@@ -317,10 +332,10 @@ impl TestHarness {
     /// before each output coin. Assumes using wallet secret key.
     pub fn gather_multiple_owncoins(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         outputs: &[Output],
     ) -> Result<Vec<OwnCoin>> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let secret_key = wallet.keypair.secret;
         let mut owncoins = vec![];
         for output in outputs {
@@ -348,11 +363,11 @@ impl TestHarness {
 
     pub fn gather_owncoin_at_index(
         &mut self,
-        holder: Holder,
+        holder: &Holder,
         outputs: &[Output],
         index: usize,
     ) -> Result<OwnCoin> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let secret_key = wallet.keypair.secret;
         let mut owncoin = None;
         for (i, output) in outputs.iter().enumerate() {
@@ -382,11 +397,11 @@ impl TestHarness {
 
     pub fn gather_consensus_staked_owncoin(
         &mut self,
-        holder: Holder,
-        output: ConsensusOutput,
+        holder: &Holder,
+        output: &ConsensusOutput,
         secret_key: Option<SecretKey>,
     ) -> Result<ConsensusOwnCoin> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let leaf_position = wallet.consensus_staked_merkle_tree.mark().unwrap();
         let secret_key = match secret_key {
             Some(key) => key,
@@ -406,11 +421,11 @@ impl TestHarness {
 
     pub fn gather_consensus_unstaked_owncoin(
         &mut self,
-        holder: Holder,
-        output: ConsensusOutput,
+        holder: &Holder,
+        output: &ConsensusOutput,
         secret_key: Option<SecretKey>,
     ) -> Result<ConsensusOwnCoin> {
-        let wallet = self.holders.get_mut(&holder).unwrap();
+        let wallet = self.holders.get_mut(holder).unwrap();
         let leaf_position = wallet.consensus_unstaked_merkle_tree.mark().unwrap();
         let secret_key = match secret_key {
             Some(key) => key,
@@ -441,19 +456,9 @@ impl TestHarness {
         // using same consensus parameters
         let genesis_block = self.genesis_block;
         let genesis_slot = self.get_slot_by_slot(0).await?;
-        let slot = Slot::new(
-            id,
-            genesis_slot.previous_eta,
-            vec![genesis_block],
-            vec![genesis_block],
-            0.0,
-            0.0,
-            0.0,
-            0,
-            0,
-            genesis_slot.sigma1,
-            genesis_slot.sigma2,
-        );
+        let previous = PreviousSlot::new(0, vec![genesis_block], vec![genesis_block], 0.0);
+        let pid = PidOutput::new(0.0, 0.0, genesis_slot.pid.sigma1, genesis_slot.pid.sigma2);
+        let slot = Slot::new(id, previous, pid, genesis_slot.last_eta, 0, 0);
 
         // Store generated slot
         for wallet in self.holders.values() {
@@ -482,6 +487,11 @@ impl TestHarness {
                 consensus_unstake_root == wallet.consensus_unstaked_merkle_tree.root(0).unwrap()
             );
         }
+    }
+
+    pub fn token_id(&self, holder: &Holder) -> TokenId {
+        let holder = self.holders.get(holder).unwrap();
+        TokenId::derive_public(holder.token_mint_authority.public)
     }
 
     pub fn statistics(&self) {

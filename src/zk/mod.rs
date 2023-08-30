@@ -31,11 +31,15 @@ pub mod gadget;
 pub mod proof;
 pub use proof::{Proof, ProvingKey, VerifyingKey};
 
+/// Trace computation of intermediate values in circuit
+mod tracer;
+pub use tracer::DebugOpValue;
+
 pub mod halo2 {
     pub use halo2_proofs::{
         arithmetic::Field,
         circuit::{AssignedCell, Layouter, Value},
-        plonk,
+        dev, plonk,
         plonk::{Advice, Assigned, Column},
     };
 }

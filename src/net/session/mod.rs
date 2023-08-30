@@ -16,16 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::{Arc, Weak};
+use std::sync::{Arc, Weak};
+
 use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
 
-use super::{
-    channel::ChannelPtr,
-    p2p::{DnetInfo, P2pPtr},
-    protocol::ProtocolVersion,
-};
+use super::{channel::ChannelPtr, p2p::P2pPtr, protocol::ProtocolVersion};
 use crate::Result;
 
 pub mod inbound_session;
@@ -45,7 +42,7 @@ pub const SESSION_MANUAL: SessionBitFlag = 0b0100;
 pub const SESSION_SEED: SessionBitFlag = 0b1000;
 pub const SESSION_ALL: SessionBitFlag = 0b1111;
 
-pub type SessionWeakPtr = Arc<Weak<dyn Session + Send + Sync + 'static>>;
+pub type SessionWeakPtr = Weak<dyn Session + Send + Sync + 'static>;
 
 /// Removes channel from the list of connected channels when a stop signal
 /// is received.
@@ -54,9 +51,9 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
     // Subscribe to stop events
     let stop_sub = channel.clone().subscribe_stop().await;
 
-    if stop_sub.is_ok() {
+    if let Ok(stop_sub) = stop_sub {
         // Wait for a stop event
-        stop_sub.unwrap().receive().await;
+        stop_sub.receive().await;
     }
 
     debug!(
@@ -154,7 +151,4 @@ pub trait Session: Sync {
 
     /// Return the session bit flag for the session type
     fn type_id(&self) -> SessionBitFlag;
-
-    /// Get network debug info
-    async fn dnet_info(&self) -> DnetInfo;
 }

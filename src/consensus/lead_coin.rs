@@ -25,7 +25,7 @@ use darkfi_sdk::{
     },
     pasta::{arithmetic::CurveAffine, group::Curve, pallas},
 };
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use halo2_proofs::{arithmetic::Field, circuit::Value};
 use log::info;
 use rand::rngs::OsRng;
@@ -362,7 +362,7 @@ impl LeadCoin {
             Witness::Base(Value::known(sigma2)),
             Witness::Base(Value::known(headstart)),
         ];
-        let circuit = ZkCircuit::new(witnesses, zkbin);
+        let circuit = ZkCircuit::new(witnesses, &zkbin);
         let public_inputs = self.public_inputs(sigma1, sigma2, eta, slot, derived_blind);
         (Ok(Proof::create(pk, &[circuit], &public_inputs, &mut OsRng).unwrap()), public_inputs)
     }
@@ -416,7 +416,7 @@ impl LeadCoin {
             Witness::Scalar(Value::known(transfered_coin.opening)),
             Witness::Base(Value::known(xferval)),
         ];
-        let circuit = ZkCircuit::new(witnesses, zkbin);
+        let circuit = ZkCircuit::new(witnesses, &zkbin);
         let proof = Proof::create(
             pk,
             &[circuit],

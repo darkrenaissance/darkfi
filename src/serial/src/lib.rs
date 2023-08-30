@@ -25,7 +25,12 @@ use std::{
 pub use darkfi_derive::{SerialDecodable, SerialEncodable};
 
 #[cfg(feature = "async")]
-mod async_serial;
+mod async_lib;
+#[cfg(feature = "async")]
+pub use async_lib::{
+    async_trait, deserialize_async, deserialize_async_partial, serialize_async, AsyncDecodable,
+    AsyncEncodable, AsyncRead, AsyncWrite,
+};
 
 mod endian;
 mod types;
@@ -462,7 +467,8 @@ impl<T: Decodable> Decodable for Vec<T> {
     #[inline]
     fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
         let len = VarInt::decode(&mut d)?.0;
-        let mut ret = Vec::with_capacity(len as usize);
+        let mut ret = Vec::new();
+        ret.try_reserve(len as usize).map_err(|_| std::io::ErrorKind::InvalidData)?;
         for _ in 0..len {
             ret.push(Decodable::decode(&mut d)?);
         }
@@ -486,7 +492,8 @@ impl<T: Decodable> Decodable for VecDeque<T> {
     #[inline]
     fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
         let len = VarInt::decode(&mut d)?.0;
-        let mut ret = VecDeque::with_capacity(len as usize);
+        let mut ret = VecDeque::new();
+        ret.try_reserve(len as usize).map_err(|_| std::io::ErrorKind::InvalidData)?;
         for _ in 0..len {
             ret.push_back(Decodable::decode(&mut d)?);
         }
@@ -590,6 +597,7 @@ impl Decodable for Cow<'static, str> {
 #[cfg(test)]
 mod tests {
     use super::{endian::*, *};
+    use futures_lite::AsyncWriteExt;
 
     #[test]
     fn serialize_int_test() {
@@ -861,7 +869,7 @@ mod tests {
         First = 0x01,
         Second = 0x03,
         Third = 0xf1,
-        Fourth = 0xfefe,
+        Fourth = 0xfe,
     }
 
     #[test]
@@ -877,10 +885,10 @@ mod tests {
         let second = serialize(&TestEnum1::Second);
         let third = serialize(&TestEnum1::Third);
         let fourth = serialize(&TestEnum1::Fourth);
-        assert_eq!(first, [0]);
-        assert_eq!(second, [1]);
-        assert_eq!(third, [2]);
-        assert_eq!(fourth, [3]);
+        assert_eq!(first, [0x01]);
+        assert_eq!(second, [0x03]);
+        assert_eq!(third, [0xf1]);
+        assert_eq!(fourth, [0xfe]);
     }
 
     #[derive(Debug, PartialEq, SerialEncodable, SerialDecodable)]

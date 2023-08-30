@@ -22,7 +22,7 @@ use std::{
     path::Path,
 };
 
-use serde::{de::DeserializeOwned, Serialize};
+use tinyjson::JsonValue;
 
 use crate::Result;
 
@@ -40,16 +40,19 @@ pub fn save_file(path: &Path, st: &str) -> Result<()> {
     Ok(())
 }
 
-pub fn load_json_file<T: DeserializeOwned>(path: &Path) -> Result<T> {
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-
-    let value: T = serde_json::from_reader(reader)?;
-    Ok(value)
+pub fn load_json_file(path: &Path) -> Result<JsonValue> {
+    let st = load_file(path)?;
+    Ok(st.parse()?)
 }
 
-pub fn save_json_file<T: Serialize>(path: &Path, value: &T) -> Result<()> {
-    let file = File::create(path)?;
-    serde_json::to_writer_pretty(file, value)?;
+pub fn save_json_file(path: &Path, value: &JsonValue, pretty: bool) -> Result<()> {
+    let mut file = File::create(path)?;
+
+    if pretty {
+        value.format_to(&mut file)?;
+    } else {
+        value.write_to(&mut file)?;
+    }
+
     Ok(())
 }

@@ -20,17 +20,17 @@ use std::{
     collections::{HashMap, HashSet},
     path::Path,
     process::exit,
+    sync::Arc,
 };
 
-use async_std::{stream::StreamExt, sync::Arc};
 use async_trait::async_trait;
 use futures::future::join_all;
 use log::{debug, error, info, warn};
 use semver::Version;
-use serde_json::json;
-use smol::Executor;
+use smol::{stream::StreamExt, Executor};
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
+use tinyjson::JsonValue;
 use toml::Value;
 use url::Url;
 
@@ -38,18 +38,15 @@ use darkfi::{
     async_daemonize, cli_desc,
     net::{self, connector::Connector, protocol::ProtocolVersion, session::Session, P2p, P2pPtr},
     rpc::{
-        jsonrpc::{
-            ErrorCode::{InvalidParams, MethodNotFound},
-            JsonError, JsonRequest, JsonResponse, JsonResult,
-        },
+        jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
     },
+    system::{sleep, StoppableTask},
     util::{
-        async_util::sleep,
         file::{load_file, save_file},
         path::{expand_path, get_config_path},
     },
-    Result,
+    Error, Result,
 };
 
 const CONFIG_FILE: &str = "lilith_config.toml";
@@ -93,21 +90,27 @@ struct Spawn {
 }
 
 impl Spawn {
-    async fn addresses(&self) -> Vec<String> {
-        self.p2p.hosts().load_all().await.iter().map(|addr| addr.to_string()).collect()
+    async fn addresses(&self) -> Vec<JsonValue> {
+        self.p2p
+            .hosts()
+            .fetch_all()
+            .await
+            .iter()
+            .map(|addr| JsonValue::String(addr.to_string()))
+            .collect()
     }
 
-    async fn info(&self) -> serde_json::Value {
+    async fn info(&self) -> JsonValue {
         let mut addr_vec = vec![];
         for addr in &self.p2p.settings().inbound_addrs {
-            addr_vec.push(addr.as_ref().to_string());
+            addr_vec.push(JsonValue::String(addr.as_ref().to_string()));
         }
 
-        json!({
-            "name": self.name.clone(),
-            "urls": addr_vec,
-            "hosts": self.addresses().await,
-        })
+        JsonValue::Object(HashMap::from([
+            ("name".to_string(), JsonValue::String(self.name.clone())),
+            ("urls".to_string(), JsonValue::Array(addr_vec)),
+            ("hosts".to_string(), JsonValue::Array(self.addresses().await)),
+        ]))
     }
 }
 
@@ -135,16 +138,16 @@ struct Lilith {
 impl Lilith {
     /// Internal task to run a periodic purge of unreachable hosts
     /// for a specific P2P network.
-    async fn periodic_purge(name: String, p2p: P2pPtr, ex: Arc<Executor<'_>>) {
-        info!("Starting periodic host purge task for \"{}\"", name);
+    async fn periodic_purge(name: String, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
+        info!(target: "lilith", "Starting periodic host purge task for \"{}\"", name);
         loop {
             // We'll pick up to 10 hosts every minute and try to connect to
             // them. If we can't reach them, we'll remove them from our set.
             sleep(60).await;
-            debug!("[{}] Picking random hosts from db", name);
-            let lottery_winners = p2p.clone().hosts().get_n_random(10).await;
+            debug!(target: "lilith", "[{}] Picking random hosts from db", name);
+            let lottery_winners = p2p.clone().hosts().fetch_n_random(10).await;
             let win_str: Vec<&str> = lottery_winners.iter().map(|x| x.as_str()).collect();
-            debug!("[{}] Got: {:?}", name, win_str);
+            debug!(target: "lilith", "[{}] Got: {:?}", name, win_str);
 
             let mut tasks = vec![];
 
@@ -155,11 +158,11 @@ impl Lilith {
                     let session_out = p2p_.session_outbound().await;
                     let session_weak = Arc::downgrade(&p2p_.session_outbound().await);
 
-                    let connector = Connector::new(p2p_.settings(), Arc::new(session_weak));
-                    debug!("Connecting to {}", host);
-                    match connector.connect(&host).await {
+                    let connector = Connector::new(p2p_.settings(), session_weak);
+                    debug!(target: "lilith", "Connecting to {}", host);
+                    match connector.connect(host).await {
                         Ok((_url, channel)) => {
-                            debug!("Connected successfully!");
+                            debug!(target: "lilith", "Connected successfully!");
                             let proto_ver = ProtocolVersion::new(
                                 channel.clone(),
                                 p2p_.settings().clone(),
@@ -177,17 +180,17 @@ impl Lilith {
 
                             match handshake_task.await {
                                 Ok(()) => {
-                                    debug!("Handshake success! Stopping channel.");
+                                    debug!(target: "lilith", "Handshake success! Stopping channel.");
                                     channel.stop().await;
                                 }
                                 Err(e) => {
-                                    debug!("Handshake failure! {}", e);
+                                    debug!(target: "lilith", "Handshake failure! {}", e);
                                 }
                             }
                         }
 
                         Err(e) => {
-                            debug!("Failed to connect to {}, removing from set ({})", host, e);
+                            debug!(target: "lilith", "Failed to connect to {}, removing from set ({})", host, e);
                             // Remove from hosts set
                             p2p_.hosts().remove(host).await;
                         }
@@ -200,24 +203,17 @@ impl Lilith {
     }
 
     // RPCAPI:
-    // Replies to a ping method.
-    // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result", "pong", "id: 42}
-    async fn pong(&self, id: serde_json::Value, _params: &[serde_json::Value]) -> JsonResult {
-        JsonResponse::new(json!("pong"), id).into()
-    }
-
-    // RPCAPI:
     // Returns all spawned networks names with their node addresses.
     // --> {"jsonrpc": "2.0", "method": "spawns", "params": [], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": {"spawns": spawns_info}, "id": 42}
-    async fn spawns(&self, id: serde_json::Value, _params: &[serde_json::Value]) -> JsonResult {
+    async fn spawns(&self, id: u16, _params: JsonValue) -> JsonResult {
         let mut spawns = vec![];
         for spawn in &self.networks {
             spawns.push(spawn.info().await);
         }
 
-        let json = json!({ "spawns": spawns });
+        let json =
+            JsonValue::Object(HashMap::from([("spawns".to_string(), JsonValue::Array(spawns))]));
 
         JsonResponse::new(json, id).into()
     }
@@ -226,16 +222,10 @@ impl Lilith {
 #[async_trait]
 impl RequestHandler for Lilith {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        if !req.params.is_array() {
-            return JsonError::new(InvalidParams, None, req.id).into()
-        }
-
-        let params = req.params.as_array().unwrap();
-
         match req.method.as_str() {
-            Some("spawns") => return self.spawns(req.id, params).await,
-            Some("ping") => return self.pong(req.id, params).await,
-            Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
+            "ping" => return self.pong(req.id, req.params).await,
+            "spawns" => return self.spawns(req.id, req.params).await,
+            _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
 }
@@ -246,7 +236,7 @@ fn load_hosts(path: &Path, networks: &[&str]) -> HashMap<String, HashSet<Url>> {
 
     let contents = load_file(path);
     if let Err(e) = contents {
-        warn!("Failed retrieving saved hosts: {}", e);
+        warn!(target: "lilith", "Failed retrieving saved hosts: {}", e);
         return saved_hosts
     }
 
@@ -261,7 +251,7 @@ fn load_hosts(path: &Path, networks: &[&str]) -> HashMap<String, HashSet<Url>> {
             let url = match Url::parse(data[1]) {
                 Ok(u) => u,
                 Err(e) => {
-                    warn!("Skipping malformed url: {} ({})", data[1], e);
+                    warn!(target: "lilith", "Skipping malformed url: {} ({})", data[1], e);
                     continue
                 }
             };
@@ -278,15 +268,15 @@ async fn save_hosts(path: &Path, networks: &[Spawn]) {
     let mut tsv = String::new();
 
     for spawn in networks {
-        for host in spawn.p2p.hosts().load_all().await {
+        for host in spawn.p2p.hosts().fetch_all().await {
             tsv.push_str(&format!("{}\t{}\n", spawn.name, host.as_str()));
         }
     }
 
     if !tsv.eq("") {
-        info!("Saving current hosts of spawned networks to: {:?}", path);
+        info!(target: "lilith", "Saving current hosts of spawned networks to: {:?}", path);
         if let Err(e) = save_file(path, &tsv) {
-            error!("Failed saving hosts: {}", e);
+            error!(target: "lilith", "Failed saving hosts: {}", e);
         }
     }
 }
@@ -299,10 +289,10 @@ fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
     if let Value::Table(map) = toml::from_str(data)? {
         if map.contains_key("network") && map["network"].is_table() {
             for net in map["network"].as_table().unwrap() {
-                info!("Found configuration for network: {}", net.0);
+                info!(target: "lilith", "Found configuration for network: {}", net.0);
                 let table = net.1.as_table().unwrap();
                 if !table.contains_key("port") {
-                    warn!("Network port is mandatory, skipping network.");
+                    warn!(target: "lilith", "Network port is mandatory, skipping network.");
                     continue
                 }
 
@@ -361,7 +351,7 @@ async fn spawn_net(
     info: &NetInfo,
     accept_addrs: &[Url],
     saved_hosts: &HashSet<Url>,
-    ex: Arc<Executor<'_>>,
+    ex: Arc<Executor<'static>>,
 ) -> Result<Spawn> {
     let mut listen_urls = vec![];
 
@@ -378,6 +368,7 @@ async fn spawn_net(
         seeds: info.seeds.clone(),
         peers: info.peers.clone(),
         outbound_connections: 0,
+        outbound_connect_timeout: 30,
         app_version: info.version.clone(),
         localnet: info.localnet,
         allowed_transports: vec![
@@ -392,38 +383,29 @@ async fn spawn_net(
     };
 
     // Create P2P instance
-    let p2p = P2p::new(settings).await;
+    let p2p = P2p::new(settings, ex.clone()).await;
 
     // Fill db with cached hosts
     let hosts: Vec<Url> = saved_hosts.iter().cloned().collect();
     p2p.hosts().store(&hosts).await;
 
     let addrs_str: Vec<&str> = listen_urls.iter().map(|x| x.as_str()).collect();
-    info!("Starting seed network node for \"{}\" on {:?}", name, addrs_str);
-    p2p.clone().start(ex.clone()).await?;
-    let name_ = name.clone();
-    let p2p_ = p2p.clone();
-    let ex_ = ex.clone();
-    ex.spawn(async move {
-        if let Err(e) = p2p_.run(ex_).await {
-            error!("Failed starting P2P network seed for \"{}\": {}", name_, e);
-        }
-    })
-    .detach();
+    info!(target: "lilith", "Starting seed network node for \"{}\" on {:?}", name, addrs_str);
+    p2p.clone().start().await?;
 
     let spawn = Spawn { name, p2p };
     Ok(spawn)
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     // Pick up network settings from the TOML config
     let cfg_path = get_config_path(args.config, CONFIG_FILE)?;
     let toml_contents = std::fs::read_to_string(cfg_path)?;
     let configured_nets = parse_configured_networks(&toml_contents)?;
 
     if configured_nets.is_empty() {
-        error!("No networks are enabled in config");
+        error!(target: "lilith", "No networks are enabled in config");
         exit(1);
     }
 
@@ -449,7 +431,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
         {
             Ok(spawn) => networks.push(spawn),
             Err(e) => {
-                error!("Failed to start P2P network seed for \"{}\": {}", name, e);
+                error!(target: "lilith", "Failed to start P2P network seed for \"{}\": {}", name, e);
                 exit(1);
             }
         }
@@ -457,30 +439,58 @@ async fn realmain(args: Args, ex: Arc<Executor<'_>>) -> Result<()> {
 
     // Set up main daemon and background tasks
     let lilith = Arc::new(Lilith { networks });
+    let mut periodic_tasks = HashMap::new();
     for network in &lilith.networks {
         let name = network.name.clone();
-        ex.spawn(Lilith::periodic_purge(name, network.p2p.clone(), ex.clone())).detach();
+        let task = StoppableTask::new();
+        task.clone().start(
+            Lilith::periodic_purge(name.clone(), network.p2p.clone(), ex.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "lilith", "Failed starting periodic task for \"{}\": {}", name, e),
+                }
+            },
+            Error::DetachedTaskStopped,
+            ex.clone(),
+        );
+        periodic_tasks.insert(network.name.clone(), task);
     }
 
     // JSON-RPC server
-    info!("Starting JSON-RPC server on {}", args.rpc_listen);
-    let _ex = ex.clone();
-    ex.spawn(listen_and_serve(args.rpc_listen, lilith.clone(), _ex)).detach();
+    info!(target: "lilith", "Starting JSON-RPC server on {}", args.rpc_listen);
+    let rpc_task = StoppableTask::new();
+    rpc_task.clone().start(
+        listen_and_serve(args.rpc_listen, lilith.clone(), ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "lilith", "Failed starting JSON-RPC server: {}", e),
+            }
+        },
+        Error::RPCServerStopped,
+        ex.clone(),
+    );
 
     // Signal handling for graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new()?;
+    let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
-    info!("Caught termination signal, cleaning up and exiting...");
+    info!(target: "lilith", "Caught termination signal, cleaning up and exiting...");
 
     // Save in-memory hosts to tsv file
     save_hosts(&expand_path(&args.hosts_file)?, &lilith.networks).await;
 
+    info!(target: "lilith", "Stopping JSON-RPC server...");
+    rpc_task.stop().await;
+
     // Cleanly stop p2p networks
     for spawn in &lilith.networks {
-        info!("Stopping \"{}\" P2P", spawn.name);
+        info!(target: "lilith", "Stopping \"{}\" periodic task", spawn.name);
+        periodic_tasks.get(&spawn.name).unwrap().stop().await;
+        info!(target: "lilith", "Stopping \"{}\" P2P", spawn.name);
         spawn.p2p.stop().await;
     }
 
-    info!("Bye!");
+    info!(target: "lilith", "Bye!");
     Ok(())
 }

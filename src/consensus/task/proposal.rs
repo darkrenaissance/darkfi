@@ -16,14 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Arc;
+use std::sync::Arc;
+
 use log::{debug, error, info, warn};
 
 use super::consensus_sync_task;
 use crate::{
     consensus::{constants, ValidatorStatePtr},
     net::P2pPtr,
-    util::{async_util::sleep, time::Timestamp},
+    system::sleep,
+    util::time::Timestamp,
+    Result,
 };
 
 /// async task used for participating in the consensus protocol
@@ -32,7 +35,7 @@ pub async fn proposal_task(
     sync_p2p: P2pPtr,
     state: ValidatorStatePtr,
     ex: Arc<smol::Executor<'_>>,
-) {
+) -> Result<()> {
     // Check if network is configured to start in the future,
     // otherwise wait for current or next slot finalization period for optimal sync conditions.
     // NOTE: Network beign configured to start in the future should always be the case
@@ -87,7 +90,7 @@ pub async fn proposal_task(
                 error!(target: "consensus::proposal", "consensus: Failed syncing consensus state: {}. Quitting consensus.", e);
                 // TODO: Perhaps notify over a channel in order to
                 // stop consensus p2p protocols.
-                return
+                return Ok(())
             }
         };
 
@@ -116,6 +119,8 @@ pub async fn proposal_task(
         // Increase retries count on consensus loop break
         retries += 1;
     }
+
+    Ok(())
 }
 
 /// Consensus protocol loop

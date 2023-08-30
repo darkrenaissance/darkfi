@@ -19,7 +19,7 @@
 use super::VarType;
 
 /// Opcodes supported by the zkas VM
-#[derive(Copy, Clone, Debug)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, Debug)]
 #[repr(u8)]
 pub enum Opcode {
     /// Intermediate opcode for the compiler, should never appear in the result
@@ -153,6 +153,35 @@ impl Opcode {
             0xf0 => Some(Self::ConstrainInstance),
             0xff => Some(Self::DebugPrint),
             _ => None,
+        }
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Noop => "noop",
+            Self::EcAdd => "ec_add",
+            Self::EcMul => "ec_mul",
+            Self::EcMulBase => "ec_mul_base",
+            Self::EcMulShort => "ec_mul_short",
+            Self::EcMulVarBase => "ec_mul_var_base",
+            Self::EcGetX => "ec_get_x",
+            Self::EcGetY => "ec_get_y",
+            Self::PoseidonHash => "poseidon_hash",
+            Self::MerkleRoot => "merkle_root",
+            Self::BaseAdd => "base_add",
+            Self::BaseMul => "base_mul",
+            Self::BaseSub => "base_sub",
+            Self::WitnessBase => "witness_base",
+            Self::RangeCheck => "range_check",
+            Self::LessThanStrict => "less_than_strict",
+            Self::LessThanLoose => "less_than_loose",
+            Self::BoolCheck => "bool_check",
+            Self::CondSelect => "cond_select",
+            Self::ZeroCondSelect => "zero_cond",
+            Self::ConstrainEqualBase => "constrain_equal_base",
+            Self::ConstrainEqualPoint => "constrain_equal_point",
+            Self::ConstrainInstance => "constrain_instance",
+            Self::DebugPrint => "debug",
         }
     }
 

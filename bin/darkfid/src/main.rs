@@ -16,15 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{path::Path, str::FromStr};
+use std::{path::Path, str::FromStr, sync::Arc};
 
-use async_std::{
-    stream::StreamExt,
-    sync::{Arc, Mutex},
-};
 use async_trait::async_trait;
 use darkfi_sdk::crypto::PublicKey;
 use log::{error, info};
+use smol::{lock::Mutex, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -45,12 +42,10 @@ use darkfi::{
     net::P2pPtr,
     rpc::{
         clock_sync::check_clock,
-        jsonrpc::{
-            ErrorCode::{InvalidParams, MethodNotFound},
-            JsonError, JsonRequest, JsonResult,
-        },
+        jsonrpc::{ErrorCode::MethodNotFound, JsonError, JsonRequest, JsonResult},
         server::{listen_and_serve, RequestHandler},
     },
+    system::StoppableTask,
     util::path::expand_path,
     wallet::{WalletDb, WalletPtr},
     Error, Result,
@@ -203,66 +198,56 @@ mod rpc_wallet;
 #[async_trait]
 impl RequestHandler for Darkfid {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        if !req.params.is_array() {
-            return JsonError::new(InvalidParams, None, req.id).into()
-        }
-
-        let params = req.params.as_array().unwrap();
-
         match req.method.as_str() {
             // =====================
             // Miscellaneous methods
             // =====================
-            Some("ping") => return self.misc_pong(req.id, params).await,
-            Some("clock") => return self.misc_clock(req.id, params).await,
-            Some("sync_dnet_switch") => return self.misc_sync_dnet_switch(req.id, params).await,
-            Some("sync_dnet_info") => return self.misc_sync_dnet_info(req.id, params).await,
-            Some("consensus_dnet_switch") => {
-                return self.misc_consensus_dnet_switch(req.id, params).await
-            }
-            Some("consensus_dnet_info") => {
-                return self.misc_consensus_dnet_info(req.id, params).await
+            "ping" => return self.pong(req.id, req.params).await,
+            "clock" => return self.misc_clock(req.id, req.params).await,
+            "sync_dnet_switch" => return self.misc_sync_dnet_switch(req.id, req.params).await,
+            "consensus_dnet_switch" => {
+                return self.misc_consensus_dnet_switch(req.id, req.params).await
             }
 
             // ==================
             // Blockchain methods
             // ==================
-            Some("blockchain.get_slot") => return self.blockchain_get_slot(req.id, params).await,
-            Some("blockchain.get_tx") => return self.blockchain_get_tx(req.id, params).await,
-            Some("blockchain.last_known_slot") => {
-                return self.blockchain_last_known_slot(req.id, params).await
+            "blockchain.get_slot" => return self.blockchain_get_slot(req.id, req.params).await,
+            "blockchain.get_tx" => return self.blockchain_get_tx(req.id, req.params).await,
+            "blockchain.last_known_slot" => {
+                return self.blockchain_last_known_slot(req.id, req.params).await
             }
-            Some("blockchain.subscribe_blocks") => {
-                return self.blockchain_subscribe_blocks(req.id, params).await
+            "blockchain.subscribe_blocks" => {
+                return self.blockchain_subscribe_blocks(req.id, req.params).await
             }
-            Some("blockchain.subscribe_err_txs") => {
-                return self.blockchain_subscribe_err_txs(req.id, params).await
+            "blockchain.subscribe_err_txs" => {
+                return self.blockchain_subscribe_err_txs(req.id, req.params).await
             }
-            Some("blockchain.lookup_zkas") => {
-                return self.blockchain_lookup_zkas(req.id, params).await
+            "blockchain.lookup_zkas" => {
+                return self.blockchain_lookup_zkas(req.id, req.params).await
             }
 
             // ===================
             // Transaction methods
             // ===================
-            Some("tx.simulate") => return self.tx_simulate(req.id, params).await,
-            Some("tx.broadcast") => return self.tx_broadcast(req.id, params).await,
+            "tx.simulate" => return self.tx_simulate(req.id, req.params).await,
+            "tx.broadcast" => return self.tx_broadcast(req.id, req.params).await,
 
             // ==============
             // Wallet methods
             // ==============
-            Some("wallet.exec_sql") => return self.wallet_exec_sql(req.id, params).await,
-            Some("wallet.query_row_single") => {
-                return self.wallet_query_row_single(req.id, params).await
+            "wallet.exec_sql" => return self.wallet_exec_sql(req.id, req.params).await,
+            "wallet.query_row_single" => {
+                return self.wallet_query_row_single(req.id, req.params).await
             }
-            Some("wallet.query_row_multi") => {
-                return self.wallet_query_row_multi(req.id, params).await
+            "wallet.query_row_multi" => {
+                return self.wallet_query_row_multi(req.id, req.params).await
             }
 
             // ==============
             // Invalid method
             // ==============
-            Some(_) | None => return JsonError::new(MethodNotFound, None, req.id).into(),
+            _ => return JsonError::new(MethodNotFound, None, req.id).into(),
         }
     }
 }
@@ -279,7 +264,7 @@ impl Darkfid {
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
+async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     if args.consensus && args.clock_sync {
         // We verify that if peer/seed nodes are configured, their rpc config also exists
         if ((!args.consensus_p2p_peer.is_empty() && args.consensus_peer_rpc.is_empty()) ||
@@ -301,7 +286,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     }
 
     // Initialize or load wallet
-    let wallet = WalletDb::new(Some(expand_path(&args.wallet_path)?), &args.wallet_pass).await?;
+    let wallet = WalletDb::new(Some(expand_path(&args.wallet_path)?), Some(&args.wallet_pass))?;
 
     // Initialize or open sled database
     let db_path =
@@ -371,7 +356,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
             ..Default::default()
         };
 
-        let p2p = net::P2p::new(sync_network_settings).await;
+        let p2p = net::P2p::new(sync_network_settings, ex.clone()).await;
         let registry = p2p.protocol_registry();
 
         let _state = state.clone();
@@ -413,7 +398,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
                 localnet: args.localnet,
                 ..Default::default()
             };
-            let p2p = net::P2p::new(consensus_network_settings).await;
+            let p2p = net::P2p::new(consensus_network_settings, ex.clone()).await;
             let registry = p2p.protocol_registry();
 
             let _state = state.clone();
@@ -443,19 +428,21 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
 
     // JSON-RPC server
     info!("Starting JSON-RPC server");
-    let _ex = ex.clone();
-    ex.spawn(listen_and_serve(args.rpc_listen, darkfid.clone(), _ex)).detach();
+    let rpc_task = StoppableTask::new();
+    rpc_task.clone().start(
+        listen_and_serve(args.rpc_listen, darkfid.clone(), ex.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "darkfid", "Failed starting sync JSON-RPC server: {}", e),
+            }
+        },
+        Error::RPCServerStopped,
+        ex.clone(),
+    );
 
     info!("Starting sync P2P network");
-    sync_p2p.clone().unwrap().start(ex.clone()).await?;
-    let _ex = ex.clone();
-    let _sync_p2p = sync_p2p.clone();
-    ex.spawn(async move {
-        if let Err(e) = _sync_p2p.unwrap().run(_ex).await {
-            error!("Failed starting sync P2P network: {}", e);
-        }
-    })
-    .detach();
+    sync_p2p.clone().unwrap().start().await?;
 
     // TODO: I think this is not necessary anymore
     //info!("Waiting for sync P2P outbound connections");
@@ -467,35 +454,52 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
     }
 
     // Consensus protocol
-    if args.consensus && *darkfid.synced.lock().await {
+    let proposal_task = if args.consensus && *darkfid.synced.lock().await {
         info!("Starting consensus P2P network");
-        consensus_p2p.clone().unwrap().start(ex.clone()).await?;
-        let _ex = ex.clone();
-        let _consensus_p2p = consensus_p2p.clone();
-        ex.spawn(async move {
-            if let Err(e) = _consensus_p2p.unwrap().run(_ex).await {
-                error!("Failed starting consensus P2P network: {}", e);
-            }
-        })
-        .detach();
+        let consensus_p2p = consensus_p2p.clone().unwrap();
+        consensus_p2p.clone().start().await?;
 
         // TODO: I think this is not necessary anymore
         //info!("Waiting for consensus P2P outbound connections");
         //consensus_p2p.clone().unwrap().wait_for_outbound(ex.clone()).await?;
 
         info!("Starting consensus protocol task");
-        let _ex = ex.clone();
-        ex.spawn(proposal_task(consensus_p2p.unwrap(), sync_p2p.unwrap(), state, _ex)).detach();
+        let task = StoppableTask::new();
+        task.clone().start(
+            proposal_task(consensus_p2p.clone(), sync_p2p.clone().unwrap(), state, ex.clone()),
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::ProposalTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid", "Failed starting proposal task: {}", e),
+                }
+            },
+            Error::ProposalTaskStopped,
+            ex.clone(),
+        );
+        Some(task)
     } else {
         info!("Not starting consensus P2P network");
-    }
+        None
+    };
 
     // Signal handling for graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new()?;
+    let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 
-    // TODO: STOP P2P NETS
+    info!(target: "darkfid", "Stopping JSON-RPC server...");
+    rpc_task.stop().await;
+
+    info!(target: "darkfid", "Stopping syncing P2P network...");
+    sync_p2p.clone().unwrap().stop().await;
+
+    if let Some(task) = proposal_task {
+        info!(target: "darkfid", "Stopping proposal task...");
+        task.stop().await;
+
+        info!(target: "darkfid", "Stopping consensus P2P network...");
+        consensus_p2p.unwrap().stop().await;
+    }
 
     info!("Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;

@@ -16,23 +16,47 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::{Error, ErrorKind, Read, Write};
-
+use std::io::{Error, ErrorKind, Read, Result, Write};
 use url::Url;
+
+#[cfg(feature = "async")]
+use crate::{AsyncDecodable, AsyncEncodable};
+#[cfg(feature = "async")]
+use async_trait::async_trait;
+#[cfg(feature = "async")]
+use futures_lite::{AsyncRead, AsyncWrite};
 
 use crate::{Decodable, Encodable};
 
 impl Encodable for Url {
-    #[inline]
-    fn encode<S: Write>(&self, s: S) -> Result<usize, Error> {
-        self.as_str().to_string().encode(s)
+    fn encode<S: Write>(&self, s: S) -> Result<usize> {
+        self.as_str().encode(s)
+    }
+}
+
+#[cfg(feature = "async")]
+#[async_trait]
+impl AsyncEncodable for Url {
+    async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> Result<usize> {
+        self.as_str().encode_async(s).await
     }
 }
 
 impl Decodable for Url {
-    #[inline]
-    fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
+    fn decode<D: Read>(mut d: D) -> Result<Self> {
         let s: String = Decodable::decode(&mut d)?;
+        match Url::parse(&s) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(Error::new(ErrorKind::Other, e)),
+        }
+    }
+}
+
+#[cfg(feature = "async")]
+#[async_trait]
+impl AsyncDecodable for Url {
+    async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> Result<Self> {
+        let s: String = AsyncDecodable::decode_async(d).await?;
         match Url::parse(&s) {
             Ok(v) => Ok(v),
             Err(e) => Err(Error::new(ErrorKind::Other, e)),

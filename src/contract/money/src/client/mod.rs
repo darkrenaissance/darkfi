@@ -31,7 +31,7 @@ use darkfi_sdk::{
     crypto::{pasta_prelude::*, Nullifier, SecretKey, TokenId, DARK_TOKEN_ID},
     pasta::pallas,
 };
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
 use crate::model::Coin;
 
@@ -112,7 +112,7 @@ pub struct MoneyNote {
     /// Blinding factor for the value pedersen commitment
     pub value_blind: pallas::Scalar,
     /// Blinding factor for the token ID pedersen commitment
-    pub token_blind: pallas::Scalar,
+    pub token_blind: pallas::Base,
     /// Attached memo (arbitrary data)
     pub memo: Vec<u8>,
 }
@@ -158,7 +158,7 @@ impl From<ConsensusNote> for MoneyNote {
             spend_hook: pallas::Base::ZERO,
             user_data: pallas::Base::ZERO,
             value_blind: consensus_note.value_blind,
-            token_blind: pallas::Scalar::ZERO,
+            token_blind: pallas::Base::ZERO,
             memo: vec![],
         }
     }

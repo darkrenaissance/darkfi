@@ -16,29 +16,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::sync::Arc;
+
 use clap::{Parser, Subcommand};
-
-use darkfi_serial::{SerialDecodable, SerialEncodable};
-use serde::Serialize;
-use simplelog::{ColorChoice, TermLogger, TerminalMode};
-use url::Url;
-
 use darkfi::{
     rpc::client::RpcClient,
     util::cli::{get_log_config, get_log_level},
     Result,
 };
+use simplelog::{ColorChoice, TermLogger, TerminalMode};
+use smol::Executor;
+use url::Url;
 
-use crate::rpc::Gen;
+use genevd::GenEvent;
 
 mod rpc;
-
-#[derive(SerialEncodable, SerialDecodable, Debug, Serialize)]
-pub struct BaseEvent {
-    pub nick: String,
-    pub title: String,
-    pub text: String,
-}
+use rpc::Gen;
 
 #[derive(Parser)]
 #[clap(name = "genev", version)]
@@ -62,42 +55,47 @@ enum SubCmd {
     List,
 }
 
-#[async_std::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let args = Args::parse();
 
     let log_level = get_log_level(args.verbose);
     let log_config = get_log_config(args.verbose);
     TermLogger::init(log_level, log_config, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    let rpc_client = RpcClient::new(args.endpoint).await?;
-    let gen = Gen { rpc_client };
+    let executor = Arc::new(Executor::new());
 
-    match args.command {
-        Some(subcmd) => match subcmd {
-            SubCmd::Add { values } => {
-                let event = BaseEvent {
-                    nick: values[0].clone(),
-                    title: values[1].clone(),
-                    text: values[2..].join(" "),
-                };
-                return gen.add(event).await
-            }
-            SubCmd::List => {
-                let events = gen.list().await?;
-                for event in events {
-                    println!("=============================");
-                    println!(
-                        "- nickname: {}, title: {}, text: {}",
-                        event.action.nick, event.action.title, event.action.text
-                    );
+    smol::block_on(executor.run(async {
+        let rpc_client = RpcClient::new(args.endpoint, executor.clone()).await?;
+        let gen = Gen { rpc_client };
+
+        match args.command {
+            Some(subcmd) => match subcmd {
+                SubCmd::Add { values } => {
+                    let event = GenEvent {
+                        nick: values[0].clone(),
+                        title: values[1].clone(),
+                        text: values[2..].join(" "),
+                    };
+
+                    return gen.add(event).await
                 }
-            }
-        },
-        None => println!("none"),
-    }
 
-    gen.close_connection().await?;
+                SubCmd::List => {
+                    let events = gen.list().await?;
+                    for event in events {
+                        println!("=============================");
+                        println!(
+                            "- nickname: {}, title: {}, text: {}",
+                            event.action.nick, event.action.title, event.action.text
+                        );
+                    }
+                }
+            },
+            None => println!("none"),
+        }
 
-    Ok(())
+        gen.close_connection().await?;
+
+        Ok(())
+    }))
 }

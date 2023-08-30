@@ -18,3 +18,6 @@
 
 /// Base32 encoding and decoding
 pub mod base32;
+
+/// Base64 encoding and decoding
+pub mod base64;

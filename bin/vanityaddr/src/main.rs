@@ -17,44 +17,36 @@
  */
 
 use std::{
-    process::exit,
+    process::{exit, ExitCode},
     sync::{mpsc::channel, Arc},
+    thread::available_parallelism,
 };
 
-use clap::Parser;
-use darkfi::util::cli::ProgressInc;
+use arg::Args;
+use darkfi::{util::cli::ProgressInc, ANSI_LOGO};
 use darkfi_sdk::crypto::{ContractId, PublicKey, SecretKey, TokenId};
 use rand::rngs::OsRng;
-use rayon::prelude::*;
+use rayon::iter::ParallelIterator;
 
-use darkfi::cli_desc;
+const ABOUT: &str =
+    concat!("vanityaddr ", env!("CARGO_PKG_VERSION"), '\n', env!("CARGO_PKG_DESCRIPTION"));
 
-#[derive(Parser)]
-#[clap(name = "vanityaddr", about = cli_desc!(), version)]
-#[clap(arg_required_else_help(true))]
-struct Args {
-    /// Prefixes to search
-    prefix: Vec<String>,
+const USAGE: &str = r#"
+Usage: vanityaddr [OPTIONS] <PREFIX> <PREFIX> ...
 
-    /// Should the search be case-sensitive
-    #[clap(short)]
-    case_sensitive: bool,
+Arguments:
+  <PREFIX>    Prefixes to search
 
-    /// Search for an Address
-    #[clap(long)]
-    address: bool,
+Options:
+  -c    Make the search case-sensitive
+  -t    Number of threads to use (defaults to number of available CPUs)
+  -A    Search for an address
+  -C    Search for a Contract ID
+  -T    Search for a Token ID
+"#;
 
-    /// Search for a Token ID
-    #[clap(long)]
-    token_id: bool,
-
-    /// Search for a Contract ID
-    #[clap(long)]
-    contract_id: bool,
-
-    /// Number of threads to use (defaults to number of available CPUs)
-    #[clap(short)]
-    threads: Option<usize>,
+fn usage() {
+    print!("{}{}\n{}", ANSI_LOGO, ABOUT, USAGE);
 }
 
 struct DrkAddr {
@@ -138,39 +130,49 @@ impl Prefixable for DrkContract {
     }
 }
 
-fn main() {
-    let args = Args::parse();
+fn main() -> ExitCode {
+    let argv;
+    let mut hflag = false;
+    let mut cflag = false;
+    let mut addrflag = false;
+    let mut toknflag = false;
+    let mut ctrcflag = false;
 
-    if !((args.address ^ args.contract_id ^ args.token_id) &&
-        !(args.address && args.contract_id && args.token_id))
+    let mut n_threads = available_parallelism().unwrap().get();
+
     {
-        eprintln!("Error: Can only search for one of Address/ContractId/TokenId");
-        exit(1);
+        let mut args = Args::new().with_cb(|args, flag| match flag {
+            'c' => cflag = true,
+            'A' => addrflag = true,
+            'T' => toknflag = true,
+            'C' => ctrcflag = true,
+            't' => n_threads = args.eargf().parse::<usize>().unwrap(),
+            _ => hflag = true,
+        });
+
+        argv = args.parse();
     }
 
-    if args.prefix.is_empty() {
-        eprintln!("Error: No prefix given to search.");
-        exit(1);
+    if hflag || argv.is_empty() {
+        usage();
+        return ExitCode::FAILURE
     }
 
-    // Check if prefixes are valid base58
-    for (idx, prefix) in args.prefix.iter().enumerate() {
+    if (addrflag as u8 + toknflag as u8 + ctrcflag as u8) != 1 {
+        eprintln!("The search flags are mutually exclusive. Use only one of -A/-C/-T.");
+        return ExitCode::FAILURE
+    }
+
+    // Validate search prefixes
+    for (idx, prefix) in argv.iter().enumerate() {
         match bs58::decode(prefix).into_vec() {
             Ok(_) => {}
             Err(e) => {
-                eprintln!("Error: Invalid base58 for prefix {}: {}", idx, e);
-                exit(1);
+                eprintln!("Error: Invalid base58 for prefix #{}: {}", idx, e);
+                return ExitCode::FAILURE
             }
-        };
+        }
     }
-
-    // Threadpool
-    let num_threads = if args.threads.is_some() {
-        args.threads.unwrap()
-    } else {
-        std::thread::available_parallelism().unwrap().get()
-    };
-    let rayon_pool = rayon::ThreadPoolBuilder::new().num_threads(num_threads).build().unwrap();
 
     // Handle SIGINT
     let (tx, rx) = channel();
@@ -180,33 +182,20 @@ fn main() {
     // Something fancy
     let progress = Arc::new(ProgressInc::new());
 
-    // Fire off the threadpool
+    // Threadpool
     let progress_ = progress.clone();
+    let rayon_pool = rayon::ThreadPoolBuilder::new().num_threads(n_threads).build().unwrap();
     rayon_pool.spawn(move || {
-        if args.token_id {
-            let tid = rayon::iter::repeat(DrkToken::new)
-                .inspect(|_| progress_.inc(1))
-                .map(|create| create())
-                .find_any(|token_id| token_id.starts_with_any(&args.prefix, args.case_sensitive))
-                .expect("Failed to find a token ID match");
-
-            // The above will keep running until it finds a match or until the
-            // program terminates. Only if a match is found shall the following
-            // code be executed and the program exit successfully:
-            let attempts = progress_.position();
-            progress_.finish_and_clear();
-
-            println!(
-                "{{\"token_id\":\"{}\",\"attempts\":{},\"secret\":\"{}\"}}",
-                tid.token_id, attempts, tid.secret,
-            );
-        } else if args.address {
+        if addrflag {
             let addr = rayon::iter::repeat(DrkAddr::new)
                 .inspect(|_| progress_.inc(1))
                 .map(|create| create())
-                .find_any(|address| address.starts_with_any(&args.prefix, args.case_sensitive))
+                .find_any(|address| address.starts_with_any(&argv, cflag))
                 .expect("Failed to find an address match");
 
+            // The above will keep running until it finds a match or until
+            // the program terminates. Only if a match is found shall the
+            // following code be executed and the program exit successfully:
             let attempts = progress_.position();
             progress_.finish_and_clear();
 
@@ -214,13 +203,29 @@ fn main() {
                 "{{\"address\":\"{}\",\"attempts\":{},\"secret\":\"{}\"}}",
                 addr.public, attempts, addr.secret,
             );
-        } else if args.contract_id {
+        }
+
+        if toknflag {
+            let tid = rayon::iter::repeat(DrkToken::new)
+                .inspect(|_| progress_.inc(1))
+                .map(|create| create())
+                .find_any(|token_id| token_id.starts_with_any(&argv, cflag))
+                .expect("Failed to find a token ID match");
+
+            let attempts = progress_.position();
+            progress_.finish_and_clear();
+
+            println!(
+                "{{\"token_id\":\"{}\",\"attempts\":{},\"secret\":\"{}\"}}",
+                tid.token_id, attempts, tid.secret,
+            );
+        }
+
+        if ctrcflag {
             let cid = rayon::iter::repeat(DrkContract::new)
                 .inspect(|_| progress_.inc(1))
                 .map(|create| create())
-                .find_any(|contract_id| {
-                    contract_id.starts_with_any(&args.prefix, args.case_sensitive)
-                })
+                .find_any(|contract_id| contract_id.starts_with_any(&argv, cflag))
                 .expect("Failed to find a contract ID match");
 
             let attempts = progress_.position();
@@ -239,5 +244,5 @@ fn main() {
     rx.recv().expect("Could not receive from channel");
     progress.finish_and_clear();
     eprintln!("\r\x1b[2KCaught SIGINT, exiting...");
-    exit(127);
+    ExitCode::FAILURE
 }

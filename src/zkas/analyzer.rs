@@ -17,7 +17,7 @@
  */
 
 use std::{
-    io::{stdin, stdout, Read, Write},
+    io::{stdin, stdout, Read, Result, Write},
     str::Chars,
 };
 
@@ -52,7 +52,7 @@ impl Analyzer {
         Self { constants, witnesses, statements, literals: vec![], heap: vec![], error }
     }
 
-    pub fn analyze_types(&mut self) {
+    pub fn analyze_types(&mut self) -> Result<()> {
         // To work around the pedantic safety, we'll make new vectors and then
         // replace the `statements` and `heap` vectors from the `Analyzer`
         // object when we are done.
@@ -70,7 +70,7 @@ impl Analyzer {
             if !(arg_types[0] == VarType::BaseArray || arg_types[0] == VarType::ScalarArray) {
                 // Check that number of args is correct
                 if statement.rhs.len() != arg_types.len() {
-                    self.error.abort(
+                    return Err(self.error.abort(
                         &format!(
                             "Incorrect number of arguments for statement. Expected {}, got {}.",
                             arg_types.len(),
@@ -78,16 +78,16 @@ impl Analyzer {
                         ),
                         statement.line,
                         1,
-                    );
+                    ))
                 }
             } else {
                 // In case of arrays, check there's at least one element.
                 if statement.rhs.is_empty() {
-                    self.error.abort(
+                    return Err(self.error.abort(
                         "Expected at least one element for statement using arrays.",
                         statement.line,
                         1,
-                    );
+                    ))
                 }
             }
 
@@ -97,18 +97,18 @@ impl Analyzer {
                 Opcode::RangeCheck => {
                     if let Arg::Lit(arg0) = &statement.rhs[0] {
                         if &arg0.name != "64" && &arg0.name != "253" {
-                            self.error.abort(
+                            return Err(self.error.abort(
                                 "Supported range checks are only 64 and 253 bits.",
                                 arg0.line,
                                 arg0.column,
-                            );
+                            ))
                         }
                     } else {
-                        self.error.abort(
+                        return Err(self.error.abort(
                             "Invalid argument for range_check opcode.",
                             statement.line,
                             0,
-                        );
+                        ))
                     }
                 }
 
@@ -127,14 +127,14 @@ impl Analyzer {
                 if let Arg::Func(func) = arg {
                     let (f_return_types, f_arg_types) = func.opcode.arg_types();
                     if f_return_types.is_empty() {
-                        self.error.abort(
+                        return Err(self.error.abort(
                             &format!(
                                 "Used a function argument which doesn't have a return value: {:?}",
                                 func.opcode
                             ),
                             statement.line,
                             1,
-                        );
+                        ))
                     }
 
                     let v = Variable {
@@ -146,7 +146,7 @@ impl Analyzer {
 
                     if arg_types[0] == VarType::BaseArray {
                         if f_return_types[0] != VarType::Base {
-                            self.error.abort(
+                            return Err(self.error.abort(
                                 &format!(
                                     "Function passed as argument returns wrong type. Expected `{:?}`, got `{:?}`.",
                                     VarType::Base,
@@ -154,11 +154,11 @@ impl Analyzer {
                                 ),
                                 v.line,
                                 v.column,
-                            );
+                            ))
                         }
                     } else if arg_types[0] == VarType::ScalarArray {
                         if f_return_types[0] != VarType::Scalar {
-                            self.error.abort(
+                            return Err(self.error.abort(
                                 &format!(
                                     "Function passed as argument returns wrong type. Expected `{:?}`, got `{:?}`.",
                                     VarType::Scalar,
@@ -166,10 +166,10 @@ impl Analyzer {
                                 ),
                                 v.line,
                                 v.column,
-                            );
+                            ));
                         }
                     } else if f_return_types[0] != arg_types[idx] {
-                        self.error.abort(
+                        return Err(self.error.abort(
                             &format!(
                                 "Function passed as argument returns wrong type. Expected `{:?}`, got `{:?}`.",
                                 arg_types[idx],
@@ -177,7 +177,7 @@ impl Analyzer {
                             ),
                             v.line,
                             v.column,
-                        );
+                        ))
                     }
 
                     // Replace the statement function call with the variable from
@@ -195,14 +195,14 @@ impl Analyzer {
                                 };
 
                                 if var_type != f_arg_types[inner_idx] {
-                                    self.error.abort(
+                                    return Err(self.error.abort(
                                         &format!(
                                             "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
                                             f_arg_types[inner_idx], var_type
                                         ),
                                         ln,
                                         col,
-                                    );
+                                    ))
                                 }
 
                                 // Apply the proper type.
@@ -213,11 +213,11 @@ impl Analyzer {
                                 continue
                             }
 
-                            self.error.abort(
+                            return Err(self.error.abort(
                                 &format!("Unknown variable reference `{}`.", v.name),
                                 v.line,
                                 v.column,
-                            );
+                            ))
                         } else {
                             unimplemented!()
                         }
@@ -255,14 +255,14 @@ impl Analyzer {
                     // type checking.
                     let var_type = v.typ.to_vartype();
                     if var_type != arg_types[idx] {
-                        self.error.abort(
+                        return Err(self.error.abort(
                             &format!(
                                 "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
                                 arg_types[idx], var_type
                             ),
                             v.line,
                             v.column,
-                        );
+                        ))
                     }
 
                     self.literals.push(v.clone());
@@ -281,7 +281,7 @@ impl Analyzer {
 
                         if arg_types[0] == VarType::BaseArray {
                             if var_type != VarType::Base {
-                                self.error.abort(
+                                return Err(self.error.abort(
                                     &format!(
                                         "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
                                         VarType::Base,
@@ -289,11 +289,11 @@ impl Analyzer {
                                     ),
                                     v.line,
                                     v.column,
-                                );
+                                ))
                             }
                         } else if arg_types[0] == VarType::ScalarArray {
                             if var_type != VarType::Scalar {
-                                self.error.abort(
+                                return Err(self.error.abort(
                                     &format!(
                                         "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
                                         VarType::Scalar,
@@ -301,17 +301,17 @@ impl Analyzer {
                                     ),
                                     v.line,
                                     v.column,
-                                );
+                                ))
                             }
                         } else if var_type != arg_types[idx] && arg_types[idx] != VarType::Any {
-                            self.error.abort(
+                            return Err(self.error.abort(
                                 &format!(
                                     "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
                                     arg_types[idx], var_type
                                 ),
                                 v.line,
                                 v.column,
-                            );
+                            ))
                         }
 
                         // Replace Dummy type with correct type.
@@ -321,11 +321,11 @@ impl Analyzer {
                         continue
                     }
 
-                    self.error.abort(
+                    return Err(self.error.abort(
                         &format!("Unknown variable reference `{}`.", v.name),
                         v.line,
                         v.column,
-                    );
+                    ))
                 }
             } // <-- statement.rhs.iter().enumerate()
 
@@ -356,6 +356,8 @@ impl Analyzer {
         //println!("=================STATEMENTS===============\n{:#?}", self.statements);
         //println!("====================HEAP==================\n{:#?}", self.heap);
         //println!("==================LITERALS================\n{:#?}", self.literals);
+
+        Ok(())
     }
 
     fn lookup_var(&self, name: &str) -> Option<Var> {
@@ -404,7 +406,7 @@ impl Analyzer {
         None
     }
 
-    pub fn analyze_semantic(&mut self) {
+    pub fn analyze_semantic(&mut self) -> Result<()> {
         let mut heap = vec![];
 
         println!("Loading constants...\n-----");
@@ -443,11 +445,11 @@ impl Analyzer {
                     if let Some(index) = heap.iter().position(|&r| r == &arg.name) {
                         println!("Found at heap index {}", index);
                     } else {
-                        self.error.abort(
+                        return Err(self.error.abort(
                             &format!("Could not find `{}` on the heap", arg.name),
                             arg.line,
                             arg.column,
-                        );
+                        ))
                     }
                 } else if let Arg::Lit(lit) = arg {
                     println!("Using literal `{}`", lit.name);
@@ -470,6 +472,8 @@ impl Analyzer {
                 _ => unreachable!(),
             }
         }
+
+        Ok(())
     }
 
     fn pause() {

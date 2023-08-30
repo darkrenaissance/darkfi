@@ -30,9 +30,10 @@ use darkfi::{
 
 use super::{error::RpcError, server_error, Darkfid};
 */
-use super::Darkfid;
 use darkfi::rpc::jsonrpc::JsonResult;
-use serde_json::Value;
+use tinyjson::JsonValue;
+
+use super::Darkfid;
 
 impl Darkfid {
     // RPCAPI:
@@ -54,7 +55,7 @@ impl Darkfid {
     //
     // --> {"jsonrpc": "2.0", "method": "wallet.query_row_single", "params": [...], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": ["va", "lu", "es", ...], "id": 1}
-    pub async fn wallet_query_row_single(&self, _id: Value, _params: &[Value]) -> JsonResult {
+    pub async fn wallet_query_row_single(&self, _id: u16, _params: JsonValue) -> JsonResult {
         todo!();
         /* TODO: This will be abstracted away
         // We need at least 3 params for something we want to fetch, and we want them in pairs.
@@ -207,7 +208,7 @@ impl Darkfid {
     //
     // --> {"jsonrpc": "2.0", "method": "wallet.query_row_multi", "params": [...], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [["va", "lu"], ["es", "es"], ...], "id": 1}
-    pub async fn wallet_query_row_multi(&self, _id: Value, _params: &[Value]) -> JsonResult {
+    pub async fn wallet_query_row_multi(&self, _id: u16, _params: JsonValue) -> JsonResult {
         todo!();
         /* TODO: This will be abstracted away
         // We need at least 3 params for something we want to fetch, and we want them in pairs.
@@ -331,7 +332,7 @@ impl Darkfid {
     //
     // --> {"jsonrpc": "2.0", "method": "wallet.exec_sql", "params": ["CREATE TABLE ..."], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    pub async fn wallet_exec_sql(&self, _id: Value, _params: &[Value]) -> JsonResult {
+    pub async fn wallet_exec_sql(&self, _id: u16, _params: JsonValue) -> JsonResult {
         todo!();
         /* TODO: This will be abstracted away
         if params.is_empty() || !params[0].is_string() {

@@ -16,11 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::process::exit;
+use std::{process::exit, sync::Arc};
 
 use clap::{Parser, Subcommand};
 use log::{error, info};
 use simplelog::{ColorChoice, TermLogger, TerminalMode};
+use smol::Executor;
 use url::Url;
 
 use darkfi::{
@@ -42,7 +43,7 @@ use primitives::{task_from_cli, State, TaskEvent};
 use util::{due_as_timestamp, prompt_text};
 use view::{print_task_info, print_task_list};
 
-use crate::primitives::TaskInfo;
+use taud::task_info::TaskInfo;
 
 const DEFAULT_PATH: &str = "~/tau_exported_tasks";
 
@@ -160,240 +161,250 @@ pub struct Tau {
     pub rpc_client: RpcClient,
 }
 
-#[async_std::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let args = Args::parse();
 
     let log_level = get_log_level(args.verbose);
     let log_config = get_log_config(args.verbose);
     TermLogger::init(log_level, log_config, TerminalMode::Mixed, ColorChoice::Auto)?;
 
-    let rpc_client = RpcClient::new(args.endpoint).await?;
-    let tau = Tau { rpc_client };
+    let executor = Arc::new(Executor::new());
 
-    let mut filters = args.filters.clone();
+    smol::block_on(executor.run(async {
+        let rpc_client = RpcClient::new(args.endpoint, executor.clone()).await?;
+        let tau = Tau { rpc_client };
 
-    // If IDs are provided in filter we use them to get the tasks from the daemon
-    // then remove IDs from filter so we can do apply_filter() normally.
-    // If not provided we use get_ids() to get them from the daemon.
-    let ids = get_ids(&mut filters)?;
-    let ids_clone = ids.clone();
-    let task_ids = if ids.is_empty() { tau.get_ids().await? } else { ids };
+        let mut filters = args.filters.clone();
 
-    let mut tasks =
-        if filters.contains(&"state:stop".to_string()) || filters.contains(&"all".to_string()) {
+        // If IDs are provided in filter we use them to get the tasks from the daemon
+        // then remove IDs from filter so we can do apply_filter() normally.
+        // If not provided we use get_ids() to get them from the daemon.
+        let ids = get_ids(&mut filters)?;
+        let ids_clone = ids.clone();
+        let task_ids = if ids.is_empty() { tau.get_ids().await? } else { ids };
+
+        let mut tasks = if filters.contains(&"state:stop".to_string()) ||
+            filters.contains(&"all".to_string())
+        {
             tau.get_stop_tasks(None).await?
         } else {
             vec![]
         };
-    for id in task_ids {
-        tasks.push(tau.get_task_by_id(id).await?);
-    }
+        for id in task_ids {
+            tasks.push(tau.get_task_by_id(id).await?);
+        }
 
-    if ids_clone.len() == 1 && args.command.is_none() {
-        let tsk = tasks[0].clone();
-        print_task_info(tsk)?;
+        if ids_clone.len() == 1 && args.command.is_none() {
+            let tsk = tasks[0].clone();
+            print_task_info(tsk)?;
 
-        return Ok(())
-    }
+            return Ok(())
+        }
 
-    for filter in filters {
-        apply_filter(&mut tasks, &filter);
-    }
+        for filter in filters {
+            apply_filter(&mut tasks, &filter);
+        }
 
-    // Parse subcommands
-    match args.command {
-        Some(sc) => match sc {
-            TauSubcommand::Add { values } => {
-                let mut task = task_from_cli(values)?;
-                if task.title.is_empty() {
-                    error!("Please provide a title for the task.");
-                    exit(1);
-                };
-
-                if task.desc.is_none() {
-                    task.desc = prompt_text(TaskInfo::from(task.clone()), "description")?;
-                };
-
-                if task.clone().desc.unwrap().trim().is_empty() {
-                    error!("Abort adding the task due to empty description.");
-                    exit(1)
-                }
-
-                let title = task.clone().title;
-                if tau.add(task).await? {
-                    println!("Created task \"{}\"", title);
-                }
-                Ok(())
-            }
-
-            TauSubcommand::Modify { values } => {
-                if args.filters.is_empty() {
-                    no_filter_warn()
-                }
-                let base_task = task_from_cli(values)?;
-                for task in tasks.clone() {
-                    let res = tau.update(task.id.into(), base_task.clone()).await?;
-                    if res {
-                        let tsk = tau.get_task_by_id(task.id.into()).await?;
-                        print_task_info(tsk)?;
-                    }
-                }
-
-                Ok(())
-            }
-
-            TauSubcommand::Start => {
-                if args.filters.is_empty() {
-                    no_filter_warn()
-                }
-                let state = State::Start;
-                for task in tasks {
-                    if tau.set_state(task.id.into(), &state).await? {
-                        println!("Started task: {:?}", task.id);
-                    }
-                }
-
-                Ok(())
-            }
-
-            TauSubcommand::Open => {
-                if args.filters.is_empty() {
-                    no_filter_warn()
-                }
-                let state = State::Open;
-                for task in tasks {
-                    if tau.set_state(task.id.into(), &state).await? {
-                        println!("Opened task: {:?}", task.id);
-                    }
-                }
-
-                Ok(())
-            }
-
-            TauSubcommand::Pause => {
-                if args.filters.is_empty() {
-                    no_filter_warn()
-                }
-                let state = State::Pause;
-                for task in tasks {
-                    if tau.set_state(task.id.into(), &state).await? {
-                        println!("Paused task: {:?}", task.id);
-                    }
-                }
-
-                Ok(())
-            }
-
-            TauSubcommand::Stop => {
-                if args.filters.is_empty() {
-                    no_filter_warn()
-                }
-                let state = State::Stop;
-                for task in tasks {
-                    if tau.set_state(task.id.into(), &state).await? {
-                        println!("Stopped task: {}", task.id);
-                    }
-                }
-
-                Ok(())
-            }
-
-            TauSubcommand::Comment { content } => {
-                if args.filters.is_empty() {
-                    no_filter_warn()
-                }
-                for task in tasks {
-                    let comment = if content.is_empty() {
-                        prompt_text(task.clone(), "comment")?
-                    } else {
-                        Some(content.join(" "))
+        // Parse subcommands
+        match args.command {
+            Some(sc) => match sc {
+                TauSubcommand::Add { values } => {
+                    let mut task = task_from_cli(values)?;
+                    if task.title.is_empty() {
+                        error!("Please provide a title for the task.");
+                        exit(1);
                     };
 
-                    if comment.clone().unwrap().trim().is_empty() || comment.is_none() {
-                        error!("Abort due to empty comment.");
+                    if task.desc.is_none() {
+                        task.desc = prompt_text(TaskInfo::from(task.clone()), "description")?;
+                    };
+
+                    if task.clone().desc.unwrap().trim().is_empty() {
+                        error!("Abort adding the task due to empty description.");
                         exit(1)
                     }
 
-                    let res = tau.set_comment(task.id.into(), comment.unwrap().trim()).await?;
+                    let title = task.clone().title;
+
+                    let task_id = tau.add(task).await?;
+                    if task_id > 0 {
+                        println!("Created task {} \"{}\"", task_id, title);
+                    }
+                    Ok(())
+                }
+
+                TauSubcommand::Modify { values } => {
+                    if args.filters.is_empty() {
+                        no_filter_warn()
+                    }
+                    let base_task = task_from_cli(values)?;
+                    for task in tasks.clone() {
+                        let res = tau.update(task.id, base_task.clone()).await?;
+                        if res {
+                            let tsk = tau.get_task_by_id(task.id).await?;
+                            print_task_info(tsk)?;
+                        }
+                    }
+
+                    Ok(())
+                }
+
+                TauSubcommand::Start => {
+                    if args.filters.is_empty() {
+                        no_filter_warn()
+                    }
+                    let state = State::Start;
+                    for task in tasks {
+                        if tau.set_state(task.id, &state).await? {
+                            println!("Started task: {:?}", task.id);
+                        }
+                    }
+
+                    Ok(())
+                }
+
+                TauSubcommand::Open => {
+                    if args.filters.is_empty() {
+                        no_filter_warn()
+                    }
+                    let state = State::Open;
+                    for task in tasks {
+                        if tau.set_state(task.id, &state).await? {
+                            println!("Opened task: {:?}", task.id);
+                        }
+                    }
+
+                    Ok(())
+                }
+
+                TauSubcommand::Pause => {
+                    if args.filters.is_empty() {
+                        no_filter_warn()
+                    }
+                    let state = State::Pause;
+                    for task in tasks {
+                        if tau.set_state(task.id, &state).await? {
+                            println!("Paused task: {:?}", task.id);
+                        }
+                    }
+
+                    Ok(())
+                }
+
+                TauSubcommand::Stop => {
+                    if args.filters.is_empty() {
+                        no_filter_warn()
+                    }
+                    let state = State::Stop;
+                    for task in tasks {
+                        if tau.set_state(task.id, &state).await? {
+                            println!("Stopped task: {}", task.id);
+                        }
+                    }
+
+                    Ok(())
+                }
+
+                TauSubcommand::Comment { content } => {
+                    if args.filters.is_empty() {
+                        no_filter_warn()
+                    }
+                    for task in tasks {
+                        let comment = if content.is_empty() {
+                            prompt_text(task.clone(), "comment")?
+                        } else {
+                            Some(content.join(" "))
+                        };
+
+                        if comment.clone().unwrap().trim().is_empty() || comment.is_none() {
+                            error!("Abort due to empty comment.");
+                            exit(1)
+                        }
+
+                        let res = tau.set_comment(task.id, comment.unwrap().trim()).await?;
+                        if res {
+                            let tsk = tau.get_task_by_id(task.id).await?;
+                            print_task_info(tsk)?;
+                        }
+                    }
+                    Ok(())
+                }
+
+                TauSubcommand::Info => {
+                    for task in tasks {
+                        let task = tau.get_task_by_id(task.id).await?;
+                        print_task_info(task)?;
+                    }
+                    Ok(())
+                }
+
+                TauSubcommand::Switch { workspace } => {
+                    if tau.switch_ws(workspace.clone()).await? {
+                        println!("You are now on \"{}\" workspace", workspace);
+                    } else {
+                        println!("Workspace \"{}\" is not configured", workspace);
+                    }
+
+                    Ok(())
+                }
+
+                TauSubcommand::Export { path } => {
+                    let path = path.unwrap_or_else(|| DEFAULT_PATH.into());
+                    let res = tau.export_to(path.clone()).await?;
+
                     if res {
-                        let tsk = tau.get_task_by_id(task.id.into()).await?;
-                        print_task_info(tsk)?;
+                        info!("Exported to {}", path);
+                    } else {
+                        error!("Error exporting to {}", path);
                     }
-                }
-                Ok(())
-            }
 
-            TauSubcommand::Info => {
-                for task in tasks {
-                    let task = tau.get_task_by_id(task.id.into()).await?;
-                    print_task_info(task)?;
-                }
-                Ok(())
-            }
-
-            TauSubcommand::Switch { workspace } => {
-                if tau.switch_ws(workspace.clone()).await? {
-                    println!("You are now on \"{}\" workspace", workspace);
+                    Ok(())
                 }
 
-                Ok(())
-            }
+                TauSubcommand::Import { path } => {
+                    let path = path.unwrap_or_else(|| DEFAULT_PATH.into());
+                    let res = tau.import_from(path.clone()).await?;
 
-            TauSubcommand::Export { path } => {
-                let path = path.unwrap_or_else(|| DEFAULT_PATH.into());
-                let res = tau.export_to(path.clone()).await?;
-
-                if res {
-                    info!("Exported to {}", path);
-                } else {
-                    error!("Error exporting to {}", path);
-                }
-
-                Ok(())
-            }
-
-            TauSubcommand::Import { path } => {
-                let path = path.unwrap_or_else(|| DEFAULT_PATH.into());
-                let res = tau.import_from(path.clone()).await?;
-
-                if res {
-                    info!("Imported from {}", path);
-                } else {
-                    error!("Error importing from {}", path);
-                }
-
-                Ok(())
-            }
-
-            TauSubcommand::Log { month, assignee } => {
-                match month {
-                    Some(date) => {
-                        let ts =
-                            to_naivedate(date.clone())?.and_hms_opt(12, 0, 0).unwrap().timestamp();
-                        let tasks = tau.get_stop_tasks(Some(ts)).await?;
-                        drawdown(date, tasks, assignee)?;
+                    if res {
+                        info!("Imported from {}", path);
+                    } else {
+                        error!("Error importing from {}", path);
                     }
-                    None => {
-                        let ws = tau.get_ws().await?;
-                        let tasks = tau.get_stop_tasks(None).await?;
-                        print_task_list(tasks, ws)?;
-                    }
+
+                    Ok(())
                 }
 
-                Ok(())
-            }
+                TauSubcommand::Log { month, assignee } => {
+                    match month {
+                        Some(date) => {
+                            let ts = to_naivedate(date.clone())?
+                                .and_hms_opt(12, 0, 0)
+                                .unwrap()
+                                .timestamp();
+                            let tasks = tau.get_stop_tasks(Some(ts.try_into().unwrap())).await?;
+                            drawdown(date, tasks, assignee)?;
+                        }
+                        None => {
+                            let ws = tau.get_ws().await?;
+                            let tasks = tau.get_stop_tasks(None).await?;
+                            print_task_list(tasks, ws)?;
+                        }
+                    }
 
-            TauSubcommand::List => {
+                    Ok(())
+                }
+
+                TauSubcommand::List => {
+                    let ws = tau.get_ws().await?;
+                    print_task_list(tasks, ws)
+                }
+            },
+            None => {
                 let ws = tau.get_ws().await?;
                 print_task_list(tasks, ws)
             }
-        },
-        None => {
-            let ws = tau.get_ws().await?;
-            print_task_list(tasks, ws)
-        }
-    }?;
+        }?;
 
-    tau.close_connection().await
+        tau.close_connection().await
+    }))
 }

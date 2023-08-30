@@ -1,8 +1,11 @@
 ## JSON-RPC listen URL
-rpc_listen="tcp://127.0.0.1:8892"
+rpc_listen = "tcp://127.0.0.1:8892"
 
 ## IRC listen URL
-irc_listen="tcp://127.0.0.1:22024"
+irc_listen = "tcp://127.0.0.1:22024"
+
+## Sets Datastore Path
+datastore = "/tmp/darkirc_test/darkirc3"
 
 ## List of channels to autojoin for new client connections
 autojoin = ["#dev", "#test"]
@@ -10,11 +13,11 @@ autojoin = ["#dev", "#test"]
 ## P2P net settings
 [net]
 ## Connection slots
-outbound_connections=3
+outbound_connections = 3
 
 inbound = ["tcp://127.0.0.1:25554"]
 
-external_addr = ["tcp://127.0.0.1:25554"]
+external_addrs = ["tcp://127.0.0.1:25554"]
 
 # peers = ["tcp://127.0.0.1:25552"]
 
@@ -22,7 +25,7 @@ external_addr = ["tcp://127.0.0.1:25554"]
 seeds = ["tcp://127.0.0.1:25551"]
 
 # Prefered transports for outbound connections
-outbound_transports = ["tcp"]
+allowed_transports = ["tcp"]
 
 localnet = true
 #

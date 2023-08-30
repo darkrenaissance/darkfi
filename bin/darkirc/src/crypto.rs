@@ -20,7 +20,7 @@ use std::{collections::HashMap, fmt};
 
 use crypto_box::{
     aead::{Aead, AeadCore},
-    SalsaBox,
+    ChaChaBox,
 };
 use rand::rngs::OsRng;
 
@@ -31,18 +31,18 @@ use crate::{
 
 #[derive(serde::Serialize)]
 pub struct KeyPair {
-    pub private_key: String,
-    pub public_key: String,
+    pub public: String,
+    pub secret: String,
 }
 
 impl fmt::Display for KeyPair {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Public key: {}\nPrivate key: {}", self.public_key, self.private_key)
+        write!(f, "Public key: {}\nSecret key: {}", self.public, self.secret)
     }
 }
 
 /// The format we're using is nonce+ciphertext, where nonce is 24 bytes.
-fn try_decrypt(salt_box: &SalsaBox, ciphertext: &str) -> Option<String> {
+fn try_decrypt(salt_box: &ChaChaBox, ciphertext: &str) -> Option<String> {
     let bytes = match bs58::decode(ciphertext).into_vec() {
         Ok(v) => v,
         Err(_) => return None,
@@ -69,8 +69,8 @@ fn try_decrypt(salt_box: &SalsaBox, ciphertext: &str) -> Option<String> {
 }
 
 /// The format we're using is nonce+ciphertext, where nonce is 24 bytes.
-pub fn encrypt(salt_box: &SalsaBox, plaintext: &[u8]) -> String {
-    let nonce = SalsaBox::generate_nonce(&mut OsRng);
+pub fn encrypt(salt_box: &ChaChaBox, plaintext: &[u8]) -> String {
+    let nonce = ChaChaBox::generate_nonce(&mut OsRng);
     let mut ciphertext = salt_box.encrypt(&nonce, plaintext).unwrap();
 
     let mut concat = vec![];
@@ -83,19 +83,14 @@ pub fn encrypt(salt_box: &SalsaBox, plaintext: &[u8]) -> String {
 pub fn decrypt_target(
     contact: &mut String,
     privmsg: &mut PrivMsgEvent,
-    configured_chans: HashMap<String, ChannelInfo>,
-    configured_contacts: HashMap<String, ContactInfo>,
+    configured_chans: &HashMap<String, ChannelInfo>,
+    configured_contacts: &HashMap<String, ContactInfo>,
 ) {
     for chan_name in configured_chans.keys() {
         let chan_info = configured_chans.get(chan_name).unwrap();
-        if !chan_info.joined {
-            continue
-        }
 
-        let salt_box = chan_info.salt_box.clone();
-
-        if let Some(salt_box) = salt_box {
-            let decrypted_target = try_decrypt(&salt_box, &privmsg.target);
+        if let Some(salt_box) = &chan_info.salt_box {
+            let decrypted_target = try_decrypt(salt_box, &privmsg.target);
             if decrypted_target.is_none() {
                 continue
             }
@@ -112,9 +107,8 @@ pub fn decrypt_target(
     for cnt_name in configured_contacts.keys() {
         let cnt_info = configured_contacts.get(cnt_name).unwrap();
 
-        let salt_box = cnt_info.salt_box.clone();
-        if let Some(salt_box) = salt_box {
-            let decrypted_target = try_decrypt(&salt_box, &privmsg.target);
+        if let Some(salt_box) = &cnt_info.salt_box {
+            let decrypted_target = try_decrypt(salt_box, &privmsg.target);
             if decrypted_target.is_none() {
                 continue
             }
@@ -129,7 +123,7 @@ pub fn decrypt_target(
 }
 
 /// Decrypt PrivMsg nickname and message
-pub fn decrypt_privmsg(salt_box: &SalsaBox, privmsg: &mut PrivMsgEvent) {
+pub fn decrypt_privmsg(salt_box: &ChaChaBox, privmsg: &mut PrivMsgEvent) {
     let decrypted_nick = try_decrypt(salt_box, &privmsg.nick);
     let decrypted_msg = try_decrypt(salt_box, &privmsg.msg);
 
@@ -142,7 +136,7 @@ pub fn decrypt_privmsg(salt_box: &SalsaBox, privmsg: &mut PrivMsgEvent) {
 }
 
 /// Encrypt PrivMsg
-pub fn encrypt_privmsg(salt_box: &SalsaBox, privmsg: &mut PrivMsgEvent) {
+pub fn encrypt_privmsg(salt_box: &ChaChaBox, privmsg: &mut PrivMsgEvent) {
     privmsg.nick = encrypt(salt_box, &pad(privmsg.nick.clone().into()));
     privmsg.target = encrypt(salt_box, &pad(privmsg.target.clone().into()));
     privmsg.msg = encrypt(salt_box, privmsg.msg.as_bytes());

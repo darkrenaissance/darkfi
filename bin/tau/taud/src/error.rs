@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use serde_json::Value;
-
 use darkfi::rpc::jsonrpc::{ErrorCode, JsonError, JsonResponse, JsonResult};
+use tinyjson::JsonValue;
 
 #[derive(Debug, thiserror::Error)]
 pub enum TaudError {
@@ -31,20 +30,16 @@ pub enum TaudError {
     #[error("InternalError")]
     Darkfi(#[from] darkfi::error::Error),
     #[error("Json serialization error: `{0}`")]
-    SerdeJsonError(String),
+    JsonError(String),
     #[error("Encryption error: `{0}`")]
     EncryptionError(String),
+    #[error("Decryption error: `{0}`")]
+    DecryptionError(String),
     #[error("IO Error: `{0}`")]
     IoError(String),
 }
 
 pub type TaudResult<T> = std::result::Result<T, TaudError>;
-
-impl From<serde_json::Error> for TaudError {
-    fn from(err: serde_json::Error) -> TaudError {
-        TaudError::SerdeJsonError(err.to_string())
-    }
-}
 
 impl From<crypto_box::aead::Error> for TaudError {
     fn from(err: crypto_box::aead::Error) -> TaudError {
@@ -58,20 +53,23 @@ impl From<std::io::Error> for TaudError {
     }
 }
 
-pub fn to_json_result(res: TaudResult<Value>, id: Value) -> JsonResult {
+pub fn to_json_result(res: TaudResult<JsonValue>, id: u16) -> JsonResult {
     match res {
         Ok(v) => JsonResponse::new(v, id).into(),
         Err(err) => match err {
             TaudError::InvalidId => {
                 JsonError::new(ErrorCode::InvalidParams, Some("invalid task id".into()), id).into()
             }
-            TaudError::InvalidData(e) | TaudError::SerdeJsonError(e) => {
+            TaudError::InvalidData(e) | TaudError::JsonError(e) => {
                 JsonError::new(ErrorCode::InvalidParams, Some(e), id).into()
             }
             TaudError::InvalidDueTime => {
                 JsonError::new(ErrorCode::InvalidParams, Some("invalid due time".into()), id).into()
             }
             TaudError::EncryptionError(e) => {
+                JsonError::new(ErrorCode::InternalError, Some(e), id).into()
+            }
+            TaudError::DecryptionError(e) => {
                 JsonError::new(ErrorCode::InternalError, Some(e), id).into()
             }
             TaudError::Darkfi(e) => {

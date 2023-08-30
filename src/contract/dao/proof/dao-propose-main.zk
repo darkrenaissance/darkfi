@@ -1,3 +1,6 @@
+k = 13;
+field = "pallas";
+
 constant "DaoProposeMain" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,

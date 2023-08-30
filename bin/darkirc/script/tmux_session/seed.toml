@@ -4,6 +4,9 @@
 ## IRC listen URL
 # irc_listen="tcp://127.0.0.1:22020"
 
+## Sets Datastore Path
+datastore = "/tmp/darkirc_test/darkirc_seed"
+
 ## List of channels to autojoin for new client connections
 autojoin = ["#dev"]
 

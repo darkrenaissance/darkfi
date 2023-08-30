@@ -19,18 +19,17 @@
 use std::{
     env, fs,
     io::Write,
-    marker::PhantomData,
-    path::{Path, PathBuf},
+    path::Path,
     str,
     sync::{Arc, Mutex},
     time::Instant,
 };
 
-use serde::{de::DeserializeOwned, Serialize};
 use simplelog::ConfigBuilder;
 
-use crate::{Error, Result};
+use crate::Result;
 
+/*
 #[derive(Clone, Default)]
 pub struct Config<T> {
     config: PhantomData<T>,
@@ -55,6 +54,7 @@ impl<T: Serialize + DeserializeOwned> Config<T> {
         }
     }
 }
+*/
 
 pub fn spawn_config(path: &Path, contents: &[u8]) -> Result<()> {
     if !path.exists() {
@@ -118,7 +118,6 @@ pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
 ///
 /// The Cargo.toml dependencies needed for this are:
 /// ```text
-/// async-std = "1.12.0"
 /// darkfi = { path = "../../", features = ["util"] }
 /// easy-parallel = "3.2.0"
 /// signal-hook-async-std = "0.2.2"
@@ -134,8 +133,8 @@ pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
 ///
 /// Example usage:
 /// ```
-/// use async_std::{stream::StreamExt, sync::Arc};
-//  use darkfi::{async_daemonize, cli_desc, Result};
+/// use darkfi::{async_daemonize, cli_desc, Result};
+/// use smol::stream::StreamExt;
 /// use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 ///
 /// const CONFIG_FILE: &str = "daemond_config.toml";
@@ -159,12 +158,12 @@ pub fn get_log_config(verbosity_level: u8) -> simplelog::Config {
 /// }
 ///
 /// async_daemonize!(realmain);
-/// async fn realmain(args: Args, ex: Arc<smol::Executor<'_>>) -> Result<()> {
+/// async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 ///     println!("Hello, world!");
 ///     Ok(())
 /// }
 /// ```
-#[cfg(feature = "async-runtime")]
+#[cfg(feature = "async-daemonize")]
 #[macro_export]
 macro_rules! async_daemonize {
     ($realmain:ident) => {
@@ -201,7 +200,7 @@ macro_rules! async_daemonize {
 
             // https://docs.rs/smol/latest/smol/struct.Executor.html#examples
             let n_threads = std::thread::available_parallelism().unwrap().get();
-            let ex = async_std::sync::Arc::new(smol::Executor::new());
+            let ex = std::sync::Arc::new(smol::Executor::new());
             let (signal, shutdown) = smol::channel::unbounded::<()>();
             let (_, result) = easy_parallel::Parallel::new()
                 // Run four executor threads
@@ -229,7 +228,9 @@ macro_rules! async_daemonize {
         }
 
         impl SignalHandler {
-            fn new() -> Result<(Self, async_std::task::JoinHandle<Result<()>>)> {
+            fn new(
+                ex: std::sync::Arc<smol::Executor<'static>>,
+            ) -> Result<(Self, smol::Task<Result<()>>)> {
                 let (term_tx, term_rx) = smol::channel::bounded::<()>(1);
                 let signals = signal_hook_async_std::Signals::new([
                     signal_hook::consts::SIGHUP,
@@ -239,17 +240,13 @@ macro_rules! async_daemonize {
                 ])?;
                 let handle = signals.handle();
                 let sighup_sub = darkfi::system::Subscriber::new();
-                let signals_task =
-                    async_std::task::spawn(handle_signals(signals, term_tx, sighup_sub.clone()));
+                let signals_task = ex.spawn(handle_signals(signals, term_tx, sighup_sub.clone()));
 
                 Ok((Self { term_rx, handle, sighup_sub }, signals_task))
             }
 
             /// Handler waits for termination signal
-            async fn wait_termination(
-                &self,
-                signals_task: async_std::task::JoinHandle<Result<()>>,
-            ) -> Result<()> {
+            async fn wait_termination(&self, signals_task: smol::Task<Result<()>>) -> Result<()> {
                 self.term_rx.recv().await?;
                 print!("\r");
                 self.handle.close();

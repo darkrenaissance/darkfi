@@ -37,7 +37,11 @@
 //! function. This runs the version exchange protocol, stores the channel in the
 //! p2p list of channels, and subscribes to a stop signal.
 
-use async_std::sync::{Arc, Weak};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, Weak,
+};
+
 use async_trait::async_trait;
 use futures::future::join_all;
 use log::{debug, info, warn};
@@ -47,11 +51,11 @@ use url::Url;
 use super::{
     super::{
         connector::Connector,
-        p2p::{DnetInfo, P2p, P2pPtr},
+        p2p::{P2p, P2pPtr},
     },
     Session, SessionBitFlag, SESSION_SEED,
 };
-use crate::Result;
+use crate::{Error, Result};
 
 pub type SeedSyncSessionPtr = Arc<SeedSyncSession>;
 
@@ -68,7 +72,7 @@ impl SeedSyncSession {
 
     /// Start the seed sync session. Creates a new task for every seed
     /// connection and starts the seed on each task.
-    pub async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn start(self: Arc<Self>) -> Result<()> {
         debug!(target: "net::session::seedsync_session", "SeedSyncSession::start() [START]");
         let settings = self.p2p().settings();
 
@@ -82,10 +86,15 @@ impl SeedSyncSession {
         }
 
         // Gather tasks so we can execute concurrently
+        let executor = self.p2p().executor();
         let mut tasks = Vec::with_capacity(settings.seeds.len());
+
+        let failed = Arc::new(AtomicUsize::new(0));
+
         for (i, seed) in settings.seeds.iter().enumerate() {
             let ex_ = executor.clone();
             let self_ = self.clone();
+            let failed_ = failed.clone();
 
             tasks.push(async move {
                 if let Err(e) = self_.clone().start_seed(i, seed.clone(), ex_.clone()).await {
@@ -93,12 +102,17 @@ impl SeedSyncSession {
                         target: "net::session::seedsync_session",
                         "[P2P] Seed #{} connection failed: {}", i, e,
                     );
+                    failed_.fetch_add(1, Ordering::SeqCst);
                 }
             });
         }
 
         // Poll concurrently
         join_all(tasks).await;
+
+        if failed.load(Ordering::SeqCst) == settings.seeds.len() {
+            return Err(Error::ConnectFailed)
+        }
 
         // Seed process complete
         if self.p2p().hosts().is_empty().await {
@@ -123,7 +137,7 @@ impl SeedSyncSession {
 
         let settings = self.p2p.upgrade().unwrap().settings();
         let parent = Arc::downgrade(&self);
-        let connector = Connector::new(settings.clone(), Arc::new(parent));
+        let connector = Connector::new(settings.clone(), parent);
 
         match connector.connect(&seed).await {
             Ok((url, ch)) => {
@@ -176,9 +190,5 @@ impl Session for SeedSyncSession {
 
     fn type_id(&self) -> SessionBitFlag {
         SESSION_SEED
-    }
-
-    async fn dnet_info(&self) -> DnetInfo {
-        todo!()
     }
 }

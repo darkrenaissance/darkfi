@@ -35,21 +35,19 @@ use crate::{
     Error, Result,
 };
 
-/// Validate given [`BlockInfo`], and apply it to the provided overlay
-pub async fn verify_block(
+/// Validate given genesis [`BlockInfo`], and apply it to the provided overlay
+pub async fn verify_genesis_block(
     overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
     block: &BlockInfo,
-    previous: Option<&BlockInfo>,
-    expected_reward: u64,
-    testing_mode: bool,
+    genesis_txs_total: u64,
 ) -> Result<()> {
-    let block_hash = block.blockhash();
-    debug!(target: "validator", "Validating block {}", block_hash);
+    let block_hash = block.blockhash().to_string();
+    debug!(target: "validator::verification::verify_genesis_block", "Validating genesis block {}", block_hash);
 
     // Check if block already exists
     if overlay.lock().unwrap().has_block(block)? {
-        return Err(Error::BlockAlreadyExists(block.blockhash().to_string()))
+        return Err(Error::BlockAlreadyExists(block_hash))
     }
 
     // Block slot must be the same as the time keeper verifying slot
@@ -57,29 +55,99 @@ pub async fn verify_block(
         return Err(Error::VerifyingSlotMissmatch())
     }
 
-    // TODO: on genesis block, verify slot.total_tokens = txs.total,
-    // thats our genesis distribution, and reward is 0
-
-    // Validate block using its previous, excluding genesis
-    if block.header.slot != 0 {
-        if previous.is_none() {
-            return Err(Error::BlockPreviousMissing())
-        }
-        block.validate(previous.unwrap(), expected_reward)?;
+    // Check genesis slot exist
+    if block.slots.len() != 1 {
+        return Err(Error::BlockIsInvalid(block_hash))
     }
 
-    // Validate proposal transaction if not in testing mode
-    if !testing_mode {
-        verify_proposal_transaction(overlay, time_keeper, &block.producer.proposal).await?;
+    // Retrieve genesis slot
+    let genesis_slot = block.slots.last().unwrap();
+
+    // Genesis block slot total token must correspond to the total
+    // of all genesis transactions public inputs (genesis distribution).
+    if genesis_slot.total_tokens != genesis_txs_total {
+        return Err(Error::SlotIsInvalid(genesis_slot.id))
+    }
+
+    // Verify there is not reward
+    if genesis_slot.reward != 0 {
+        return Err(Error::SlotIsInvalid(genesis_slot.id))
+    }
+
+    // Genesis transaction must be the Transaction::default() one (empty)
+    if block.producer.proposal != Transaction::default() {
+        error!(target: "validator::verification::verify_genesis_block", "Genesis proposal transaction is not default one");
+        return Err(TxVerifyFailed::ErroneousTxs(vec![block.producer.proposal.clone()]).into())
     }
 
     // Verify transactions
-    verify_transactions(overlay, time_keeper, &block.txs).await?;
+    let erroneous_txs = verify_transactions(overlay, time_keeper, &block.txs).await?;
+    if !erroneous_txs.is_empty() {
+        warn!(target: "validator::verification::verify_genesis_block", "Erroneous transactions found in set");
+        overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+        return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
+    }
 
     // Insert block
     overlay.lock().unwrap().add_block(block)?;
 
-    debug!(target: "validator", "Block {} verified successfully", block_hash);
+    debug!(target: "validator::verification::verify_genesis_block", "Genesis block {} verified successfully", block_hash);
+    Ok(())
+}
+
+/// Validate given [`BlockInfo`], and apply it to the provided overlay
+pub async fn verify_block(
+    overlay: &BlockchainOverlayPtr,
+    time_keeper: &TimeKeeper,
+    block: &BlockInfo,
+    previous: &BlockInfo,
+    expected_reward: u64,
+    testing_mode: bool,
+) -> Result<()> {
+    let block_hash = block.blockhash().to_string();
+    debug!(target: "validator::verification::verify_block", "Validating block {}", block_hash);
+
+    // Check if block already exists
+    if overlay.lock().unwrap().has_block(block)? {
+        return Err(Error::BlockAlreadyExists(block_hash))
+    }
+
+    // Block slot must be the same as the time keeper verifying slot
+    if block.header.slot != time_keeper.verifying_slot {
+        return Err(Error::VerifyingSlotMissmatch())
+    }
+
+    // Validate block, using its previous
+    block.validate(previous, expected_reward)?;
+
+    // Validate proposal transaction if not in testing mode
+    if !testing_mode {
+        verify_proposal_transaction(overlay, time_keeper, &block.producer.proposal).await?;
+        verify_producer_signature(block)?;
+    }
+
+    // Verify transactions
+    let erroneous_txs = verify_transactions(overlay, time_keeper, &block.txs).await?;
+    if !erroneous_txs.is_empty() {
+        warn!(target: "validator::verification::verify_block", "Erroneous transactions found in set");
+        overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
+        return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
+    }
+
+    // Insert block
+    overlay.lock().unwrap().add_block(block)?;
+
+    debug!(target: "validator::verification::verify_block", "Block {} verified successfully", block_hash);
+    Ok(())
+}
+
+/// Validate block proposer signature, using the proposal transaction signature as signing key
+/// over blocks header, transactions and slots.
+pub fn verify_producer_signature(_block: &BlockInfo) -> Result<()> {
+    // TODO:
+    // Grab public key from proposal transaction metadata on verify_proposal_transaction
+    // and pass it here to verify the signature
+
     Ok(())
 }
 
@@ -90,24 +158,14 @@ pub async fn verify_proposal_transaction(
     time_keeper: &TimeKeeper,
     tx: &Transaction,
 ) -> Result<()> {
-    let tx_hash = tx.hash();
-    debug!(target: "validator", "Validating proposal transaction {}", tx_hash);
-
-    // Genesis transaction must be the Transaction::default() one (empty)
-    if time_keeper.verifying_slot == 0 {
-        if *tx != Transaction::default() {
-            error!(target: "validator", "Genesis proposal transaction is not default one");
-            return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
-        }
-
-        return Ok(())
-    }
+    let tx_hash = tx.hash()?;
+    debug!(target: "validator::verification::verify_proposal_transaction", "Validating proposal transaction {}", tx_hash);
 
     // Transaction must contain a single Consensus::Proposal (0x02) call
     if tx.calls.len() != 1 ||
         (tx.calls[0].contract_id != *CONSENSUS_CONTRACT_ID && tx.calls[0].data[0] != 0x02)
     {
-        error!(target: "validator", "Proposal transaction is malformed");
+        error!(target: "validator::verification::verify_proposal_transaction", "Proposal transaction is malformed");
         return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
 
@@ -121,7 +179,7 @@ pub async fn verify_proposal_transaction(
     // won't have fee
     verify_transaction(overlay, time_keeper, tx, &mut vks).await?;
 
-    debug!(target: "validator", "Proposal transaction {} verified successfully", tx_hash);
+    debug!(target: "validator::verification::verify_proposal_transaction", "Proposal transaction {} verified successfully", tx_hash);
 
     Ok(())
 }
@@ -134,8 +192,8 @@ pub async fn verify_transaction(
     tx: &Transaction,
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
 ) -> Result<()> {
-    let tx_hash = tx.hash();
-    debug!(target: "validator", "Validating transaction {}", tx_hash);
+    let tx_hash = tx.hash()?;
+    debug!(target: "validator::verification::verify_transaction", "Validating transaction {}", tx_hash);
 
     // Table of public inputs used for ZK proof verification
     let mut zkp_table = vec![];
@@ -144,20 +202,20 @@ pub async fn verify_transaction(
 
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
-        debug!(target: "validator", "Executing contract call {}", idx);
+        debug!(target: "validator::verification::verify_transaction", "Executing contract call {}", idx);
 
         // Write the actual payload data
         let mut payload = vec![];
         payload.write_u32(idx as u32)?; // Call index
         tx.calls.encode(&mut payload)?; // Actual call data
 
-        debug!(target: "validator", "Instantiating WASM runtime");
+        debug!(target: "validator::verification::verify_transaction", "Instantiating WASM runtime");
         let wasm = overlay.lock().unwrap().wasm_bincode.get(call.contract_id)?;
 
         let mut runtime =
             Runtime::new(&wasm, overlay.clone(), call.contract_id, time_keeper.clone())?;
 
-        debug!(target: "validator", "Executing \"metadata\" call");
+        debug!(target: "validator::verification::verify_transaction", "Executing \"metadata\" call");
         let metadata = runtime.metadata(&payload)?;
 
         // Decode the metadata retrieved from the execution
@@ -167,10 +225,10 @@ pub async fn verify_transaction(
         let zkp_pub: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
         let sig_pub: Vec<PublicKey> = Decodable::decode(&mut decoder)?;
         // TODO: Make sure we've read all the bytes above.
-        debug!(target: "validator", "Successfully executed \"metadata\" call");
+        debug!(target: "validator::verification::verify_transaction", "Successfully executed \"metadata\" call");
 
         // Here we'll look up verifying keys and insert them into the per-contract map.
-        debug!(target: "validator", "Performing VerifyingKey lookups from the sled db");
+        debug!(target: "validator::verification::verify_transaction", "Performing VerifyingKey lookups from the sled db");
         for (zkas_ns, _) in &zkp_pub {
             let inner_vk_map = verifying_keys.get_mut(&call.contract_id.to_bytes()).unwrap();
 
@@ -191,14 +249,14 @@ pub async fn verify_transaction(
 
         // After getting the metadata, we run the "exec" function with the same runtime
         // and the same payload.
-        debug!(target: "validator", "Executing \"exec\" call");
+        debug!(target: "validator::verification::verify_transaction", "Executing \"exec\" call");
         let state_update = runtime.exec(&payload)?;
-        debug!(target: "validator", "Successfully executed \"exec\" call");
+        debug!(target: "validator::verification::verify_transaction", "Successfully executed \"exec\" call");
 
         // If that was successful, we apply the state update in the ephemeral overlay.
-        debug!(target: "validator", "Executing \"apply\" call");
+        debug!(target: "validator::verification::verify_transaction", "Executing \"apply\" call");
         runtime.apply(&state_update)?;
-        debug!(target: "validator", "Successfully executed \"apply\" call");
+        debug!(target: "validator::verification::verify_transaction", "Successfully executed \"apply\" call");
 
         // At this point we're done with the call and move on to the next one.
     }
@@ -206,29 +264,29 @@ pub async fn verify_transaction(
     // When we're done looping and executing over the tx's contract calls, we now
     // move on with verification. First we verify the signatures as that's cheaper,
     // and then finally we verify the ZK proofs.
-    debug!(target: "validator", "Verifying signatures for transaction {}", tx_hash);
+    debug!(target: "validator::verification::verify_transaction", "Verifying signatures for transaction {}", tx_hash);
     if sig_table.len() != tx.signatures.len() {
-        error!(target: "validator", "Incorrect number of signatures in tx {}", tx_hash);
+        error!(target: "validator::verification::verify_transaction", "Incorrect number of signatures in tx {}", tx_hash);
         return Err(TxVerifyFailed::MissingSignatures.into())
     }
 
     // TODO: Go through the ZK circuits that have to be verified and account for the opcodes.
 
     if let Err(e) = tx.verify_sigs(sig_table) {
-        error!(target: "validator", "Signature verification for tx {} failed: {}", tx_hash, e);
+        error!(target: "validator::verification::verify_transaction", "Signature verification for tx {} failed: {}", tx_hash, e);
         return Err(TxVerifyFailed::InvalidSignature.into())
     }
 
-    debug!(target: "validator", "Signature verification successful");
+    debug!(target: "validator::verification::verify_transaction", "Signature verification successful");
 
-    debug!(target: "validator", "Verifying ZK proofs for transaction {}", tx_hash);
+    debug!(target: "validator::verification::verify_transaction", "Verifying ZK proofs for transaction {}", tx_hash);
     if let Err(e) = tx.verify_zkps(verifying_keys, zkp_table).await {
-        error!(target: "validator", "ZK proof verification for tx {} failed: {}", tx_hash, e);
+        error!(target: "validator::verification::verify_transaction", "ZK proof verification for tx {} failed: {}", tx_hash, e);
         return Err(TxVerifyFailed::InvalidZkProof.into())
     }
 
-    debug!(target: "validator", "ZK proof verification successful");
-    debug!(target: "validator", "Transaction {} verified successfully", tx_hash);
+    debug!(target: "validator::verification::verify_transaction", "ZK proof verification successful");
+    debug!(target: "validator::verification::verify_transaction", "Transaction {} verified successfully", tx_hash);
 
     Ok(())
 }
@@ -242,7 +300,7 @@ pub async fn verify_transactions(
     time_keeper: &TimeKeeper,
     txs: &[Transaction],
 ) -> Result<Vec<Transaction>> {
-    debug!(target: "validator", "Verifying {} transactions", txs.len());
+    debug!(target: "validator::verification::verify_transactions", "Verifying {} transactions", txs.len());
 
     // Tracker for failed txs
     let mut erroneous_txs = vec![];
@@ -261,7 +319,7 @@ pub async fn verify_transactions(
     for tx in txs {
         overlay.lock().unwrap().checkpoint();
         if let Err(e) = verify_transaction(overlay, time_keeper, tx, &mut vks).await {
-            warn!(target: "validator", "Transaction verification failed: {}", e);
+            warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {}", e);
             erroneous_txs.push(tx.clone());
             // TODO: verify this works as expected
             overlay.lock().unwrap().revert_to_checkpoint()?;

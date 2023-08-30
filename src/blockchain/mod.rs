@@ -24,12 +24,13 @@ use sled::Transactional;
 use darkfi_sdk::blockchain::Slot;
 use darkfi_serial::{deserialize, serialize, Decodable};
 
-use crate::{tx::Transaction, validator::consensus::next_block_reward, Error, Result};
+use crate::{tx::Transaction, Error, Result};
 
 /// Block related definitions and storage implementations
 pub mod block_store;
 pub use block_store::{
-    Block, BlockInfo, BlockOrderStore, BlockOrderStoreOverlay, BlockStore, BlockStoreOverlay,
+    Block, BlockInfo, BlockOrderStore, BlockOrderStoreOverlay, BlockProducer, BlockStore,
+    BlockStoreOverlay,
 };
 
 /// Header definition and storage implementation
@@ -102,6 +103,7 @@ impl Blockchain {
         })
     }
 
+    /* TODO: FIXME: This should not be part of `Blockchain`
     /// A blockchain is considered valid, when every block is valid,
     /// based on validate_block checks.
     /// Be careful as this will try to load everything in memory.
@@ -116,6 +118,7 @@ impl Blockchain {
 
         Ok(())
     }
+    */
 
     /// Insert a given [`BlockInfo`] into the blockchain database.
     /// This functions wraps all the logic of separating the block into specific
@@ -540,6 +543,39 @@ impl BlockchainOverlay {
 
         Ok(())
     }
+
+    /// Auxiliary function to create a full clone using SledDbOverlay::clone,
+    /// generating new pointers for the underlying overlays.
+    pub fn full_clone(&self) -> Result<BlockchainOverlayPtr> {
+        let overlay = Arc::new(Mutex::new(self.overlay.lock().unwrap().clone()));
+        let headers = HeaderStoreOverlay::new(&overlay)?;
+        let blocks = BlockStoreOverlay::new(&overlay)?;
+        let order = BlockOrderStoreOverlay::new(&overlay)?;
+        let slots = SlotStoreOverlay::new(&overlay)?;
+        let transactions = TxStoreOverlay::new(&overlay)?;
+        let contracts = ContractStateStoreOverlay::new(&overlay)?;
+        let wasm_bincode = WasmStoreOverlay::new(&overlay)?;
+
+        Ok(Arc::new(Mutex::new(Self {
+            overlay,
+            headers,
+            blocks,
+            order,
+            slots,
+            transactions,
+            contracts,
+            wasm_bincode,
+        })))
+    }
+}
+
+/// Parse a sled record with a u64 keyin the form of a tuple (`key`, `value`).
+pub fn parse_u64_key_record<T: Decodable>(record: (sled::IVec, sled::IVec)) -> Result<(u64, T)> {
+    let key_bytes: [u8; 8] = record.0.as_ref().try_into().unwrap();
+    let key = u64::from_be_bytes(key_bytes);
+    let value = deserialize(&record.1)?;
+
+    Ok((key, value))
 }
 
 /// Parse a sled record in the form of a tuple (`key`, `value`).

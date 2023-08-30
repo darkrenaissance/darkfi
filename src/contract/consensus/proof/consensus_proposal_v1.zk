@@ -1,3 +1,6 @@
+k = 13;
+field = "pallas";
+
 constant "ConsensusProposal_V1" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,
@@ -148,7 +151,7 @@ circuit "ConsensusProposal_V1" {
 	constrain_instance(headstart);
 
 	# Play lottery
-	less_than_loose(y, shifted_target);
+	less_than_strict(y, shifted_target);
 
 	# At this point we've enforced all of our public inputs.
 }

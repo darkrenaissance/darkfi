@@ -1,199 +1,187 @@
 #!/usr/bin/env python3
+# This file is part of DarkFi (https://dark.fi)
+#
+# Copyright (C) 2020-2023 Dyne.org foundation
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+"""
+Python tool to prototype zkVM proofs given zkas source code and necessary
+witness values in JSON format.
+"""
+import json
+import sys
+from darkfi_sdk.pasta import Fp, Fq, Ep
+from darkfi_sdk.zkas import (MockProver, ZkBinary, ZkCircuit, ProvingKey,
+                             Proof, VerifyingKey)
 
-from argparse import ArgumentParser
-from darkfi_sdk_py.affine import Affine
-from darkfi_sdk_py.base import Base
-from darkfi_sdk_py.point import Point
-from darkfi_sdk_py.proof import Proof
-from darkfi_sdk_py.proving_key import ProvingKey
-from darkfi_sdk_py.scalar import Scalar
-from darkfi_sdk_py.verifying_key import VerifyingKey
-from darkfi_sdk_py.zk_binary import ZkBinary
-from darkfi_sdk_py.zk_circuit import ZkCircuit
-from pprint import pprint
-from sys import getsizeof
-from time import time
+def eprint(fstr, *args):
+    print("error: " + fstr, *args, file=sys.stderr)
 
-
-def heap_add(heap, element):
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> heap")
-    pprint(heap)
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> to add")
-    pprint(element)
-    heap.append(element)
-
-
-def pubins_add(pubins, element):
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> pubins")
-    pprint(pubins)
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> to add")
-    pprint(element)
-    pubins.append(element)
-
-
-def get_pubins(statements, witnesses, constant_count, literals):
-    # Python heap for executing zk statements
-    heap = [None] * constant_count + witnesses
-    pubins = []
-    for stmt in statements:
-        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Statement")
-        print(stmt)
-        opcode, args = stmt[0], stmt[1]
-        if opcode == 'BaseAdd':
-            a = heap[args[0][1]]
-            b = heap[args[1][1]]
-            heap_add(heap, a + b)
-        elif opcode == 'BaseMul':
-            a = heap[args[0][1]]
-            b = heap[args[1][1]]
-            heap_add(heap, a * b)
-        elif opcode == 'BaseSub':
-            a = heap[args[0][1]]
-            b = heap[args[1][1]]
-            heap_add(heap, a - b)
-        elif opcode == 'EcAdd':
-            a = heap[args[0][1]]
-            b = heap[args[1][1]]
-            heap_add(heap, a + b)
-        elif opcode == 'EcMul':
-            a = heap[args[0][1]]
-            heap_add(heap, Point.mul_r_generator(a))
-        elif opcode in {'EcMulBase', 'EcMulVarBase'}:
-            i = args[0][1]
-            base = heap[i]
-            product = Point.mul_base(base)
-            heap_add(heap, product)
-        elif opcode == 'EcMulShort':
-            value = heap[args[0][1]]
-            heap_add(heap, Point.mul_short(value))
-        elif opcode == 'EcGetX':
-            i = args[0][1]
-            point = heap[i]
-            x, _ = point.to_affine().coordinates()
-            heap_add(heap, x)
-        elif opcode == 'EcGetY':
-            i = args[0][1]
-            point = heap[i]
-            _, y = point.to_affine().coordinates()
-            heap_add(heap, y)
-        elif opcode == 'PoseidonHash':
-            messages = [heap[m[1]] for m in args]
-            heap_add(heap, Base.poseidon_hash(messages))
-        elif opcode == 'MerkleRoot':
-            i = heap[args[0][1]]
-            p = heap[args[1][1]]
-            a = heap[args[2][1]]
-            heap_add(heap, Base.merkle_root(i, p, a))
-        elif opcode == 'ConstrainInstance':
-            i = args[0][1]
-            element = heap[i]
-            pubins_add(pubins, element)
-        elif opcode == 'WitnessBase':
-            type = args[0][0]
-            assert type == 'Lit', f"type should LitType instead of {type}"
-            i = args[0][1]
-            element = int(literals[i][1])  # (LitType, Lit)
-            base = Base.from_u64(element)
-            heap_add(heap, base)
-        elif opcode == 'CondSelect':
-            cnd = heap[args[0][1]]
-            thn = heap[args[1][1]]
-            els = heap[args[2][1]]
-            assert cnd == Base.from_u64(0) or cnd == Base.from_u64(
-                1), "Failed bool check"
-            res = thn if cnd == Base.from_u64(1) else els
-            heap_add(heap, res)
-        elif opcode in IGNORED_OPCODES:
-            print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Ignored opcode")
-            pprint(opcode)
+def show_trace(opcodes, trace):
+    print(f"{'Line':<4} {'Opcode':<22} {'Type':<10} {'Values'}")
+    for i, (opcode, (optype, args)) in enumerate(zip(opcodes, trace)):
+        if args:
+            args = ", ".join([str(arg) for arg in args])
+            args = f"[{args}]"
         else:
-            print(
-                ">>>>>>>>>>>>>>>>>>>>>>>>>>>>> Missing implementation for opcode"
-            )
-            pprint(opcode)
-    return pubins
+            args = ""
+        opcode = str(opcode)
+        optype = str(optype)
+        print(f"{i:<4} {opcode:<22} {optype:<10} {args}")
 
+def main(witness_file, source_file, mock=False, trace=False):
+    """main zkrunner logic"""
+    # We will first attempt to decode the witnesses from the JSON file.
+    # Refer to the `witness_gen.py` file to see what the format of this
+    # file should be.
+    print("Decoding witnesses...")
+    if witness_file == "-":
+        witness_data = json.load(sys.stdin)
+    else:
+        with open(witness_file, "r", encoding="utf-8") as json_file:
+            witness_data = json.load(json_file)
 
-def bincode_data(bincode):
-    with open(bincode, "rb") as f:
-        bincode = f.read()
-        zkbin = ZkBinary.decode(bincode)
-        return {
-            "zkbin": zkbin,
-            "namespace": zkbin.namespace(),
-            "witnesses": zkbin.witnesses(),
-            "constant_count": zkbin.constant_count(),
-            "statements": zkbin.opcodes(),
-            "literals": zkbin.literals()
-        }
+    # Then we attempt to compile the given zkas code and create a
+    # zkVM circuit. This compiling logic happens in the Python bindings'
+    # `ZkBinary::new` function, and should be equivalent to the actual
+    # `zkas` binary provided in the DarkFi codebase.
+    print("Compiling zkas code...")
+    with open(source_file, "r", encoding="utf-8") as zkas_file:
+        zkas_source = zkas_file.read()
 
+    # This line will compile the source code
+    zkbin = ZkBinary(source_file, zkas_source)
 
-IGNORED_OPCODES = {
-    'Noop', 'RangeCheck', 'LessThanStrict', 'LessThanLoose', 'BoolCheck',
-    'ConstrainEqualBase', 'ConstrainEqualPoint', 'DebugPrint'
-}
-K = 13
+    # Construct the initial circuit object.
+    circuit = ZkCircuit(zkbin)
+
+    # If we want to build an actual proof, we'll need a proving key
+    # and a verifying key.
+    # circuit.verifier_build() is called so that the inital circuit
+    # (which contains no witnesses) actually calls empty_witnesses()
+    # in order to have the correct code path when the circuit gets
+    # synthesized.
+    if not mock:
+        print("Building proving key...")
+        proving_key = ProvingKey.build(zkbin.k(), circuit.verifier_build())
+
+        print("Building verifying key...")
+        verifying_key = VerifyingKey.build(zkbin.k(), circuit.verifier_build())
+
+    # Now we scan through the parsed JSON witness file and
+    # build our "heap". These will be appended to the initial
+    # circuit and decide the code path for the prover.
+    for witness in witness_data["witnesses"]:
+        assert len(witness) == 1
+        if value := witness.get("EcPoint"):
+            circuit.witness_ecpoint(Ep(value))
+
+        elif value := witness.get("EcNiPoint"):
+            assert len(value) == 2
+            xcoord, ycoord = Fp(value[0]), Fp(value[1])
+            circuit.witness_ecnipoint(Ep(xcoord, ycoord))
+
+        elif value := witness.get("Base"):
+            circuit.witness_base(Fp(value))
+
+        elif value := witness.get("Scalar"):
+            circuit.witness_scalar(Fq(value))
+
+        elif value := witness.get("MerklePath"):
+            path = [Fp(i) for i in value]
+            assert len(path) == 32
+            circuit.witness_merklepath(path)
+
+        elif value := witness.get("Uint32"):
+            circuit.witness_uint32(value)
+
+        elif value := witness.get("Uint64"):
+            circuit.witness_uint64(value)
+
+        else:
+            eprint(f"Invalid Witness type for witness {witness}")
+            return -1
+
+    # circuit.prover_build() will actually construct the circuit
+    # with the values witnessed above.
+    circuit = circuit.prover_build()
+    if trace:
+        if mock:
+            eprint(f"Debug trace can only be enabled with --prove")
+            return -2
+        circuit.enable_trace()
+
+    # Instances are our public inputs for the proof and they're also
+    # part of the JSON file.
+    instances = []
+    for instance in witness_data["instances"]:
+        instances.append(Fp(instance))
+
+    # If we're building an actual proof, we'll use the ProvingKey to
+    # prove and our VerifyingKey to verify the proof.
+    if not mock:
+        print("Proving knowledge of witnesses...")
+        proof = Proof.create(proving_key, [circuit], instances)
+
+        if trace:
+            show_trace(zkbin.opcodes(), circuit.opvalues())
+
+        print("Verifying ZK proof...")
+        proof.verify(verifying_key, instances)
+
+    # Otherwise, we'll simply run the MockProver:
+    else:
+        print("Running MockProver...")
+        proof = MockProver.run(zkbin.k(), circuit, instances)
+
+        print("Verifying MockProver...")
+        proof.verify()
+
+    print("Proof verified successfully!")
+    return 0
 
 if __name__ == "__main__":
+    from argparse import ArgumentParser
 
-    ##### Script inputs #####
+    parser = ArgumentParser(
+        prog="zkrunner",
+        description="Python util for running zk proofs",
+        epilog="This tool is only for prototyping purposes",
+    )
 
-    bincode_path = "opcodes.no-nipoint.zk.bin"
-    # bincode_path = "../../example/simple.zk.bin" # You must change the witnesses as well
-    bincode_data_ = bincode_data(bincode_path)
-    zkbin, statements, constant_count, literals = bincode_data_[
-        'zkbin'], bincode_data_['statements'], bincode_data_[
-            'constant_count'], bincode_data_['literals']
-    witnesses = [
-        Base.from_u64(3),
-        Scalar.from_u64(4),
-        Base.from_u64(5),
-        Base.from_u64(6),
-        Base.from_u64(7),
-        Base.from_u64(8),
-        10,
-        [Base.from_u64(42)] * 32,
-        Base.from_u64(1),
-    ]
+    parser.add_argument(
+        "SOURCE",
+        help="Path to zkas source code",
+    )
+    parser.add_argument(
+        "-w",
+        "--witness",
+        required=True,
+        help="Path to JSON file holding witnesses",
+    )
+    parser.add_argument(
+        "--prove",
+        action="store_true",
+        help="Actually create a real proof instead of using MockProver",
+    )
+    parser.add_argument(
+        "--trace",
+        action="store_true",
+        help="Enable debug trace (only works with --prove enabled)",
+    )
 
-    ##### Proving #####
+    args = parser.parse_args()
+    sys.exit(main(args.witness, args.SOURCE, mock=not args.prove,
+                  trace=args.trace))
 
-    print("Making public inputs based off of witnesses......")
-    pubins = get_pubins(statements, witnesses, constant_count, literals)
-
-    print("Witnessing each witness into prover's circuit.....")
-    zkcircuit = ZkCircuit(zkbin)
-    zkcircuit.witness_base(witnesses[0])
-    zkcircuit.witness_scalar(witnesses[1])
-    zkcircuit.witness_base(witnesses[2])
-    zkcircuit.witness_base(witnesses[3])
-    zkcircuit.witness_base(witnesses[4])
-    zkcircuit.witness_base(witnesses[5])
-    zkcircuit.witness_u32(witnesses[6])
-    zkcircuit.witness_merkle_path(witnesses[7])
-    zkcircuit.witness_base(witnesses[8])
-    zkcircuit = zkcircuit.build(zkbin)
-
-    print("Making proving key.....")
-    start = time()
-    proving_key = ProvingKey.build(K, zkcircuit)
-    print(f"Time for making proving key: {time() - start}")
-
-    print("Proving.....")
-    start = time()
-    proof = Proof.create(proving_key, [zkcircuit], pubins)
-    print(f"Time for proving: {time() - start}")
-
-    ##### Verifiying #####
-
-    zkcircuit_v = zkcircuit.verifier_build(zkbin)
-
-    print(f"Making verifying key.....")
-    start = time()
-    verifying_key = VerifyingKey.build(K, zkcircuit_v)
-    print(f"Time for making verifying key: {time() - start}")
-
-    print("Verifying.....")
-    start = time()
-    proof.verify(verifying_key, pubins)
-    print(f"Time for verifying {time() - start}")

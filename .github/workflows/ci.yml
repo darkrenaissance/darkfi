@@ -6,12 +6,11 @@ jobs:
   test-units:
     strategy:
       matrix:
-        #os: [ubuntu-latest, macos-latest]
         os: [ubuntu-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -22,18 +21,12 @@ jobs:
           target: wasm32-unknown-unknown
           override: true
 
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install dependencies (Linux)
         run: |
-          sudo apt update
-          sudo apt -y install jq build-essential clang libclang-dev llvm-dev libudev-dev pkg-config libasound2-dev
+          sh contrib/dependency_setup.sh
         if: matrix.os == 'ubuntu-latest'
-
-      - name: Install dependencies (macOS)
-        run: |
-          brew install llvm
-        if: matrix.os == 'macos-latest'
 
       - name: Run test units
         run: |
@@ -41,17 +34,17 @@ jobs:
 
       - name: Compile all bins
         run: |
-          ./contrib/compile_all_bins.sh
+          make
 
   feature-powerset:
     name: Test crate feature powerset on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -62,18 +55,12 @@ jobs:
           target: wasm32-unknown-unknown
           override: true
       - uses: taiki-e/install-action@cargo-hack
-      - uses: Swatinem/rust-cache@v1
+      - uses: Swatinem/rust-cache@v2
 
       - name: Install dependencies (Linux)
         run: |
-          sudo apt update
-          sudo apt -y install jq build-essential clang libclang-dev llvm-dev libudev-dev pkg-config libasound2-dev
+          sh contrib/dependency_setup.sh
         if: matrix.os == 'ubuntu-latest'
-
-      - name: Install dependencies (macOS)
-        run: |
-          brew install llvm
-        if: matrix.os == 'macos-latest'
 
       - name: Run feature powerset builds
         run: |
@@ -84,7 +71,7 @@ jobs:
     timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly

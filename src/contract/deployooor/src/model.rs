@@ -16,6 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#[cfg(feature = "client")]
+use darkfi_serial::async_trait;
+
 use darkfi_sdk::crypto::{ContractId, PublicKey};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 

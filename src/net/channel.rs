@@ -16,28 +16,30 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::{Arc, Mutex};
-use darkfi_serial::serialize;
-use futures::{
-    io::{ReadHalf, WriteHalf},
-    AsyncReadExt,
-};
+use std::sync::Arc;
+
+use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
 use log::{debug, error, info};
 use rand::{rngs::OsRng, Rng};
-use smol::Executor;
+use smol::{
+    io::{self, ReadHalf, WriteHalf},
+    lock::Mutex,
+    Executor,
+};
 use url::Url;
 
 use super::{
+    dnet::{self, dnetev, DnetEvent},
     message,
     message::Packet,
     message_subscriber::{MessageSubscription, MessageSubsystem},
-    p2p::{dnet, P2pPtr},
+    p2p::P2pPtr,
     session::{Session, SessionBitFlag, SessionWeakPtr},
     transport::PtStream,
 };
 use crate::{
     system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
-    util::{ringbuffer::RingBuffer, time::NanoTimestamp},
+    util::time::NanoTimestamp,
     Error, Result,
 };
 
@@ -45,24 +47,15 @@ use crate::{
 pub type ChannelPtr = Arc<Channel>;
 
 /// Channel debug info
-#[derive(Clone)]
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct ChannelInfo {
     pub addr: Url,
-    pub random_id: u32,
-    pub remote_node_id: String,
-    pub log: RingBuffer<(NanoTimestamp, String, String), 512>,
+    pub id: u32,
 }
 
 impl ChannelInfo {
     fn new(addr: Url) -> Self {
-        Self { addr, random_id: OsRng.gen(), remote_node_id: String::new(), log: RingBuffer::new() }
-    }
-
-    /// Get available debug info, resets the ringbuffer when called.
-    fn dnet_info(&mut self) -> Self {
-        let info = self.clone();
-        self.log = RingBuffer::new();
-        info
+        Self { addr, id: OsRng.gen() }
     }
 }
 
@@ -72,8 +65,6 @@ pub struct Channel {
     reader: Mutex<ReadHalf<Box<dyn PtStream>>>,
     /// The writing half of the transport stream
     writer: Mutex<WriteHalf<Box<dyn PtStream>>>,
-    /// Socket address
-    address: Url,
     /// The message subsystem instance for this channel
     message_subsystem: MessageSubsystem,
     /// Subscriber listening for stop signal for closing this channel
@@ -85,12 +76,12 @@ pub struct Channel {
     /// Weak pointer to respective session
     session: SessionWeakPtr,
     /// Channel debug info
-    info: Mutex<Option<ChannelInfo>>,
+    pub info: ChannelInfo,
 }
 
 impl std::fmt::Debug for Channel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.address)
+        write!(f, "{}", self.address())
     }
 }
 
@@ -98,28 +89,19 @@ impl Channel {
     /// Sets up a new channel. Creates a reader and writer [`PtStream`] and
     /// summons the message subscriber subsystem. Performs a network handshake
     /// on the subsystem dispatchers.
-    pub async fn new(
-        stream: Box<dyn PtStream>,
-        address: Url,
-        session: SessionWeakPtr,
-    ) -> Arc<Self> {
-        let (reader, writer) = stream.split();
+    pub async fn new(stream: Box<dyn PtStream>, addr: Url, session: SessionWeakPtr) -> Arc<Self> {
+        let (reader, writer) = io::split(stream);
         let reader = Mutex::new(reader);
         let writer = Mutex::new(writer);
 
         let message_subsystem = MessageSubsystem::new();
         Self::setup_dispatchers(&message_subsystem).await;
 
-        let info = if *session.upgrade().unwrap().p2p().dnet_enabled.lock().await {
-            Mutex::new(Some(ChannelInfo::new(address.clone())))
-        } else {
-            Mutex::new(None)
-        };
+        let info = ChannelInfo::new(addr.clone());
 
         Arc::new(Self {
             reader,
             writer,
-            address,
             message_subsystem,
             stop_subscriber: Subscriber::new(),
             receive_task: StoppableTask::new(),
@@ -137,26 +119,6 @@ impl Channel {
         subsystem.add_dispatch::<message::PongMessage>().await;
         subsystem.add_dispatch::<message::GetAddrsMessage>().await;
         subsystem.add_dispatch::<message::AddrsMessage>().await;
-    }
-
-    /// Fetch dnet info for the channel, if enabled.
-    /// Returns the [`Channel::address`] and [`ChannelInfo`].
-    pub(crate) async fn dnet_info(&self) -> ChannelInfo {
-        // We're unwrapping here because if we get None it means
-        // there's a bug somehwere where we initialized dnet but
-        // ChannelInfo was not created.
-        self.info.lock().await.as_mut().unwrap().dnet_info()
-    }
-
-    pub(crate) async fn dnet_enable(&self) {
-        let mut info = self.info.lock().await;
-        if info.is_none() {
-            *info = Some(ChannelInfo::new(self.address.clone()));
-        }
-    }
-
-    pub(crate) async fn dnet_disable(&self) {
-        *self.info.lock().await = None;
     }
 
     /// Starts the channel. Runs a receive loop to start receiving messages
@@ -224,7 +186,7 @@ impl Channel {
         // Catch failure and stop channel, return a net error
         if let Err(e) = self.send_message(message).await {
             error!(
-                target: "net::channel::send()", "[P2P]Channel send error for [{}]: {}",
+                target: "net::channel::send()", "[P2P] Channel send error for [{}]: {}",
                 self.address(), e
             );
             self.stop().await;
@@ -246,16 +208,14 @@ impl Channel {
     async fn send_message<M: message::Message>(&self, message: &M) -> Result<()> {
         let packet = Packet { command: M::NAME.to_string(), payload: serialize(message) };
 
-        dnet!(self,
-            let time = NanoTimestamp::current_time();
-            match self.info.lock().await.as_mut() {
-                Some(info) => info.log.push((time, "send".into(), packet.command.clone())),
-                None => unreachable!(),
-            }
-        );
+        dnetev!(self, SendMessage, {
+            chan: self.info.clone(),
+            cmd: packet.command.clone(),
+            time: NanoTimestamp::current_time(),
+        });
 
         let stream = &mut *self.writer.lock().await;
-        let _written = message::send_packet(stream, packet).await?;
+        let _ = message::send_packet(stream, packet).await?;
 
         Ok(())
     }
@@ -306,13 +266,13 @@ impl Channel {
                     if Self::is_eof_error(&err) {
                         info!(
                             target: "net::channel::main_receive_loop()",
-                            "[net] Channel inbound connection {} disconnected",
+                            "[P2P] Channel inbound connection {} disconnected",
                             self.address(),
                         );
                     } else {
                         error!(
                             target: "net::channel::main_receive_loop()",
-                            "Read error on channel {}: {}",
+                            "[P2P] Read error on channel {}: {}",
                             self.address(), err,
                         );
                     }
@@ -326,6 +286,12 @@ impl Channel {
                 }
             };
 
+            dnetev!(self, RecvMessage, {
+                chan: self.info.clone(),
+                cmd: packet.command.clone(),
+                time: NanoTimestamp::current_time(),
+            });
+
             // Send result to our subscribers
             self.message_subsystem.notify(&packet.command, &packet.payload).await;
         }
@@ -333,7 +299,7 @@ impl Channel {
 
     /// Returns the local socket address
     pub fn address(&self) -> &Url {
-        &self.address
+        &self.info.addr
     }
 
     /// Returns the inner [`MessageSubsystem`] reference

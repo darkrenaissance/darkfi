@@ -46,7 +46,8 @@ use darkfi_dao_contract::{
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        poseidon_hash, MerkleNode, MerkleTree, PublicKey, SecretKey, TokenId, DAO_CONTRACT_ID,
+        poseidon_hash, Keypair, MerkleNode, MerkleTree, PublicKey, SecretKey, TokenId,
+        DAO_CONTRACT_ID,
     },
     pasta::pallas,
 };
@@ -143,6 +144,11 @@ impl Dao {
             y,
             self.bulla_blind,
         ]))
+    }
+
+    pub fn keypair(&self) -> Keypair {
+        let public = PublicKey::from_secret(self.secret_key);
+        Keypair { public, secret: self.secret_key }
     }
 }
 
@@ -527,8 +533,8 @@ impl Drk {
     /// List DAO(s) imported in the wallet. If an ID is given, just print the
     /// metadata for that specific one, if found.
     pub async fn dao_list(&self, dao_id: Option<u64>) -> Result<()> {
-        if dao_id.is_some() {
-            return self.dao_list_single(dao_id.unwrap()).await
+        if let Some(dao_id) = dao_id {
+            return self.dao_list_single(dao_id).await
         }
 
         let daos = self.get_daos().await?;
@@ -1077,7 +1083,7 @@ impl Drk {
             }
 
             for proposal in new_dao_proposals {
-                proposals_tree.append(MerkleNode::from(proposal.0.proposal_bulla));
+                proposals_tree.append(MerkleNode::from(proposal.0.proposal_bulla.inner()));
 
                 // If we're able to decrypt this note, that's the way to link it
                 // to a specific DAO.
@@ -1119,7 +1125,7 @@ impl Drk {
                         let mut proposal_id = None;
 
                         for i in daos_proposals {
-                            if i.bulla() == vote.0.proposal_bulla {
+                            if i.bulla() == vote.0.proposal_bulla.inner() {
                                 proposal_id = Some(i.id);
                                 break
                             }

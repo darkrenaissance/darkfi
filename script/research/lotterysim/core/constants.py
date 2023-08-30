@@ -1,37 +1,72 @@
 from decimal import Decimal as Num
 
-N_TERM = 2
-CONTROLLER_TYPE_ANALOGUE=-1
-CONTROLLER_TYPE_DISCRETE=0
-CONTROLLER_TYPE_TAKAHASHI=1
-ERC20DRK=2.1*10**9
-
+# number approximation terms
+N_TERM = 5
+# analogue controller enum
+CONTROLLER_TYPE_ANALOGUE = -1
+# discrete controller enum
+CONTROLLER_TYPE_DISCRETE = 0
+# takahashi controller enum
+CONTROLLER_TYPE_TAKAHASHI = 1
+# initial distribution of tokens (random value for sake of experimentation)
+ERC20DRK = 10000
+# initial distribution
+PREMINT = ERC20DRK
+# group base/order
 L = 28948022309329048855892746252171976963363056481941560715954676764349967630337.0
-
+# secondary finalization controller minimal clipped value
 F_MIN = 0.0001
+# secondary finalization controller maximal clipped value
 F_MAX = 0.9999
-
+# primary reward controller minimal clipped value
 REWARD_MIN = 1
+# primary reward controller maximal clipped value
 REWARD_MAX = 1000
-
+# slot length in seconds
 SLOT = 90
-ONE_YEAR = Num(365.25*24*60*60/SLOT)
-ONE_MONTH = int(30*24*60*60/SLOT)
+# epoch length in slots
+EPOCH_LENGTH = 10
+# one month in slots
+ONE_MONTH = 60*60*24*30/SLOT
+# one year in slots
+ONE_YEAR = 365.25*24*60*60/SLOT
+# vesting issuance period
 VESTING_PERIOD = ONE_MONTH
-
-TARGET_APR = Num(0.12)
-
+# stakeholder assumes  APR target
+TARGET_APR = 0.15
+# primary controller assumes accuracy target
 PRIMARY_REWARD_TARGET = 0.35 # staked ratio
+# secondary controller assumes certain frequency of leaders per slot
 SECONDARY_LEAD_TARGET = 1 #number of lead per slot
-
+# maximum transaction size
+MAX_BLOCK_SIZE = 100
+# maximum transaction computational cost
+MAX_BLOCK_CC = 10
+# fee controller computational capacity target
+FEE_TARGET = MAX_BLOCK_CC
+# max fee base value
+FEE_MAX = 1
+# min fee base value
+FEE_MIN = 0.00001
+# negligible value added to denominator to avoid invalid division by zero
 EPSILON = 1
-EPOCH_LENGTH = Num(10)
-
+# window of accuracy calculation
+ACC_WINDOW = int(EPOCH_LENGTH)*10
+# headstart airdrop period
+HEADSTART_AIRDROP = 0
+# threshold of randomly slashing stakeholder
+SLASHING_RATIO = 0.000005
+# number of nodes
+NODES = 1000
+# headstart value
+BASE_L = NODES**-1*L
+# decimal high precision.
 L_HP = Num(L)
 F_MIN_HP = Num(F_MIN)
 F_MAX_HP = Num(F_MAX)
 EPSILON_HP = Num(EPSILON)
 REWARD_MIN_HP = Num(REWARD_MIN)
 REWARD_MAX_HP = Num(REWARD_MAX)
-
-ACC_WINDOW = 100
+BASE_L_HP = Num(BASE_L)
+CC_DIFF_EPSILON=0.0001
+MIL_SLOT = 1000

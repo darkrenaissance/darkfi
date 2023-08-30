@@ -28,7 +28,7 @@ you have all the necessary dependencies.
 
 ```shell
 % git clone https://github.com/darkrenaissance/darkfi 
-% cd darkfi
+% cd darkfi && git checkout v0.4.1
 % make BINS=ircd
 % sudo make install BINS=ircd
 ```
@@ -80,7 +80,7 @@ following commands (there is an assumption that `irc_listen` in the
 `ircd` config file is set to `127.0.0.1:6667`):
 
 ```
-/server add darkfi localhost/6667 -autoconnect
+/server add darkfi localhost/6667 -notls -autoconnect
 /save
 /quit
 ```
@@ -110,7 +110,7 @@ which requests a list of addresses from the seed node and disconnects
 straight after receiving them.
 
 The first time you run the program, a config file will be created in
-`~/.config/darkfi` if your are using Linux or in 
+`~/.config/darkfi` if you are using Linux or in 
 `~/Library/Application Support/darkfi/` on MacOS. 
 You must specify an inbound accept address in your config file to configure a seed node:
 
@@ -195,3 +195,13 @@ inbound and outbound connections.
 Copy [this script](https://github.com/narodnik/weechat-global-buffer/blob/main/buffclone.py) to `~/.weechat/python/autoload/`,
 and you will create a single buffer which aggregates messages from all channels. It's useful to monitor activity
 from all channels without needing to flick through them.
+
+## Network-level privacy
+
+Nodes have knowledge of their peers, including the IP addresses of connected hosts.
+
+DarkFi supports the use of pluggable transports, including Tor and Nym, to provide network-level privacy. As long as there
+are live seed nodes configured to support a Tor or Nym connection, users can connect to `ircd` and benefit from the
+protections offered by these protocols.
+
+Other approaches include connecting via a cloud server or VPN. Research the risks involved in these methods before connecting.

@@ -25,9 +25,8 @@ use darkfi::{
 };
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_base,
-        pedersen_commitment_u64, poseidon_hash, MerkleNode, Nullifier, PublicKey, TokenId,
-        DARK_TOKEN_ID,
+        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash,
+        MerkleNode, Nullifier, PublicKey, TokenId, DARK_TOKEN_ID,
     },
     pasta::pallas,
 };
@@ -47,23 +46,16 @@ pub struct MoneyUnstakeCallDebris {
 pub struct MoneyMintRevealed {
     pub coin: Coin,
     pub value_commit: pallas::Point,
-    pub token_commit: pallas::Point,
+    pub token_commit: pallas::Base,
 }
 
 impl MoneyMintRevealed {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
         let valcom_coords = self.value_commit.to_affine().coordinates().unwrap();
-        let tokcom_coords = self.token_commit.to_affine().coordinates().unwrap();
 
         // NOTE: It's important to keep these in the same order
         // as the `constrain_instance` calls in the zkas code.
-        vec![
-            self.coin.inner(),
-            *valcom_coords.x(),
-            *valcom_coords.y(),
-            *tokcom_coords.x(),
-            *tokcom_coords.y(),
-        ]
+        vec![self.coin.inner(), *valcom_coords.x(), *valcom_coords.y(), self.token_commit]
     }
 }
 
@@ -108,7 +100,7 @@ impl MoneyUnstakeCallBuilder {
         let serial = pallas::Base::random(&mut OsRng);
         let spend_hook = pallas::Base::ZERO;
         let user_data_enc = pallas::Base::random(&mut OsRng);
-        let token_blind = pallas::Scalar::ZERO;
+        let token_blind = pallas::Base::ZERO;
 
         info!("Building Money::UnstakeV1 Mint ZK proof");
         let (proof, public_inputs) = create_unstake_mint_proof(
@@ -167,13 +159,13 @@ pub fn create_unstake_mint_proof(
     pk: &ProvingKey,
     output: &TransactionBuilderOutputInfo,
     value_blind: pallas::Scalar,
-    token_blind: pallas::Scalar,
+    token_blind: pallas::Base,
     serial: pallas::Base,
     spend_hook: pallas::Base,
     user_data: pallas::Base,
 ) -> Result<(Proof, MoneyMintRevealed)> {
     let value_commit = pedersen_commitment_u64(output.value, value_blind);
-    let token_commit = pedersen_commitment_base(output.token_id.inner(), token_blind);
+    let token_commit = poseidon_hash([output.token_id.inner(), token_blind]);
     let (pub_x, pub_y) = output.public_key.xy();
 
     let coin = Coin::from(poseidon_hash([
@@ -197,10 +189,10 @@ pub fn create_unstake_mint_proof(
         Witness::Base(Value::known(spend_hook)),
         Witness::Base(Value::known(user_data)),
         Witness::Scalar(Value::known(value_blind)),
-        Witness::Scalar(Value::known(token_blind)),
+        Witness::Base(Value::known(token_blind)),
     ];
 
-    let circuit = ZkCircuit::new(prover_witnesses, zkbin.clone());
+    let circuit = ZkCircuit::new(prover_witnesses, zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 
     Ok((proof, public_inputs))

@@ -16,11 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::{
-    stream::StreamExt,
-    sync::{Arc, Mutex},
-};
-use libc::mkfifo;
 use std::{
     collections::HashMap,
     env,
@@ -28,17 +23,21 @@ use std::{
     fs::{create_dir_all, remove_dir_all},
     io::{stdin, Write},
     path::Path,
+    sync::Arc,
 };
 
 use crypto_box::{
     aead::{Aead, AeadCore},
-    rand_core::OsRng,
-    SalsaBox, SecretKey,
+    ChaChaBox, SecretKey,
 };
-use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, deserialize, serialize, SerialDecodable, SerialEncodable};
 use futures::{select, FutureExt};
+use libc::mkfifo;
 use log::{debug, error, info};
+use rand::rngs::OsRng;
+use smol::{lock::Mutex, stream::StreamExt};
 use structopt_toml::StructOptToml;
+use tinyjson::JsonValue;
 
 use darkfi::{
     async_daemonize,
@@ -51,26 +50,26 @@ use darkfi::{
     },
     net::{self, P2pPtr},
     rpc::server::listen_and_serve,
+    system::StoppableTask,
     util::{path::expand_path, time::Timestamp},
     Error, Result,
 };
 
-mod error;
 mod jsonrpc;
-mod month_tasks;
 mod settings;
-mod task_info;
-mod util;
 
-use crate::{
-    error::TaudResult,
-    jsonrpc::JsonRpcInterface,
-    settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
+use taud::{
+    error::{TaudError, TaudResult},
     task_info::{TaskEvent, TaskInfo},
     util::pipe_write,
 };
 
-fn get_workspaces(settings: &Args) -> Result<HashMap<String, SalsaBox>> {
+use crate::{
+    jsonrpc::JsonRpcInterface,
+    settings::{Args, CONFIG_FILE, CONFIG_FILE_CONTENTS},
+};
+
+fn get_workspaces(settings: &Args) -> Result<HashMap<String, ChaChaBox>> {
     let mut workspaces = HashMap::new();
 
     for workspace in settings.workspaces.iter() {
@@ -84,8 +83,8 @@ fn get_workspaces(settings: &Args) -> Result<HashMap<String, SalsaBox>> {
 
         let secret = crypto_box::SecretKey::from(bytes);
         let public = secret.public_key();
-        let salsa_box = crypto_box::SalsaBox::new(&public, &secret);
-        workspaces.insert(workspace.to_string(), salsa_box);
+        let chacha_box = crypto_box::ChaChaBox::new(&public, &secret);
+        workspaces.insert(workspace.to_string(), chacha_box);
     }
 
     Ok(workspaces)
@@ -93,49 +92,58 @@ fn get_workspaces(settings: &Args) -> Result<HashMap<String, SalsaBox>> {
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct EncryptedTask {
-    nonce: Vec<u8>,
-    payload: Vec<u8>,
+    payload: String,
 }
 
 impl EventMsg for EncryptedTask {
     fn new() -> Self {
-        Self {
-            nonce: [
-                19, 40, 199, 87, 248, 23, 187, 11, 119, 237, 214, 65, 5, 206, 187, 33, 222, 107,
-                140, 84, 114, 61, 205, 40,
-            ]
-            .to_vec(),
-            payload: [
-                30, 66, 74, 74, 65, 78, 80, 120, 85, 66, 106, 119, 119, 81, 66, 55, 112, 80, 88,
-                85, 82, 97, 79, 108, 115, 83, 113, 78, 71, 116, 113, 4, 114, 111, 111, 116, 1, 0,
-                0, 0, 5, 116, 105, 116, 108, 101, 0, 4, 100, 101, 115, 99, 6, 100, 97, 114, 107,
-                102, 105, 0, 0, 0, 0, 42, 47, 14, 100, 0, 0, 0, 0, 4, 111, 112, 101, 110, 0, 0,
-            ]
-            .to_vec(),
-        }
+        Self { payload: String::from("root") }
     }
 }
 
 fn encrypt_task(
     task: &TaskInfo,
-    salsa_box: &SalsaBox,
+    chacha_box: &ChaChaBox,
     rng: &mut OsRng,
 ) -> TaudResult<EncryptedTask> {
     debug!("start encrypting task");
 
-    let nonce = SalsaBox::generate_nonce(rng);
+    let nonce = ChaChaBox::generate_nonce(rng);
     let payload = &serialize(task)[..];
-    let payload = salsa_box.encrypt(&nonce, payload)?;
+    let mut payload = chacha_box.encrypt(&nonce, payload)?;
 
-    let nonce = nonce.to_vec();
-    Ok(EncryptedTask { nonce, payload })
+    let mut concat = vec![];
+    concat.append(&mut nonce.as_slice().to_vec());
+    concat.append(&mut payload);
+
+    let payload = bs58::encode(concat.clone()).into_string();
+
+    Ok(EncryptedTask { payload })
 }
 
-fn decrypt_task(encrypt_task: &EncryptedTask, salsa_box: &SalsaBox) -> TaudResult<TaskInfo> {
+fn try_decrypt_task(encrypt_task: &EncryptedTask, chacha_box: &ChaChaBox) -> TaudResult<TaskInfo> {
     debug!("start decrypting task");
 
-    let nonce = encrypt_task.nonce.as_slice();
-    let decrypted_task = salsa_box.decrypt(nonce.into(), &encrypt_task.payload[..])?;
+    let bytes = match bs58::decode(&encrypt_task.payload).into_vec() {
+        Ok(v) => v,
+        Err(_) => return Err(TaudError::DecryptionError("Error decoding payload".to_string())),
+    };
+
+    if bytes.len() < 25 {
+        return Err(TaudError::DecryptionError("Invalid bytes length".to_string()))
+    }
+
+    // Try extracting the nonce
+    let nonce = match bytes[0..24].try_into() {
+        Ok(v) => v,
+        Err(_) => return Err(TaudError::DecryptionError("Invalid nonce".to_string())),
+    };
+
+    // Take the remaining ciphertext
+    let message = &bytes[24..];
+
+    // let nonce = encrypt_task.nonce.as_slice();
+    let decrypted_task = chacha_box.decrypt(nonce, message)?;
 
     let task = deserialize(&decrypted_task)?;
 
@@ -148,7 +156,7 @@ async fn start_sync_loop(
     view: ViewPtr<EncryptedTask>,
     model: ModelPtr<EncryptedTask>,
     seen: SeenPtr<EventId>,
-    workspaces: HashMap<String, SalsaBox>,
+    workspaces: Arc<HashMap<String, ChaChaBox>>,
     datastore_path: std::path::PathBuf,
     missed_events: Arc<Mutex<Vec<Event<EncryptedTask>>>>,
     piped: bool,
@@ -160,11 +168,11 @@ async fn start_sync_loop(
             task_event = broadcast_rcv.recv().fuse() => {
                 let tk = task_event.map_err(Error::from)?;
                 if workspaces.contains_key(&tk.workspace) {
-                    let salsa_box = workspaces.get(&tk.workspace).unwrap();
-                    let encrypted_task = encrypt_task(&tk, salsa_box, &mut OsRng)?;
+                    let chacha_box = workspaces.get(&tk.workspace).unwrap();
+                    let encrypted_task = encrypt_task(&tk, chacha_box, &mut OsRng)?;
                     info!(target: "tau", "Send the task: ref: {}", tk.ref_id);
                     let event = Event {
-                        previous_event_hash: model.lock().await.get_head_hash(),
+                        previous_event_hash: model.lock().await.get_head_hash().map_err(Error::from)?,
                         action: encrypted_task,
                         timestamp: Timestamp::current_time(),
                     };
@@ -191,11 +199,11 @@ async fn start_sync_loop(
 async fn on_receive_task(
     task: &EncryptedTask,
     datastore_path: &Path,
-    workspaces: &HashMap<String, SalsaBox>,
+    workspaces: &HashMap<String, ChaChaBox>,
     piped: bool,
 ) -> TaudResult<()> {
-    for (workspace, salsa_box) in workspaces.iter() {
-        let task = decrypt_task(task, salsa_box);
+    for (workspace, chacha_box) in workspaces.iter() {
+        let task = try_decrypt_task(task, chacha_box);
         if let Err(e) = task {
             debug!("unable to decrypt the task: {}", e);
             continue
@@ -209,31 +217,31 @@ async fn on_receive_task(
             // otherwise it's a modification.
             match TaskInfo::load(&task.ref_id, datastore_path) {
                 Ok(loaded_task) => {
-                    let loaded_events = loaded_task.events.0;
-                    let mut events = task.events.0.clone();
+                    let loaded_events = loaded_task.events;
+                    let mut events = task.events.clone();
                     events.retain(|ev| !loaded_events.contains(ev));
 
                     let file = "/tmp/tau_pipe";
                     let mut pipe_write = pipe_write(file)?;
                     let mut task_clone = task.clone();
-                    task_clone.events.0 = events;
+                    task_clone.events = events;
 
-                    let json = serde_json::to_string(&task_clone).unwrap();
-                    pipe_write.write_all(json.as_bytes())?;
+                    let json: JsonValue = (&task_clone).into();
+                    pipe_write.write_all(json.stringify().unwrap().as_bytes())?;
                 }
                 Err(_) => {
                     let file = "/tmp/tau_pipe";
                     let mut pipe_write = pipe_write(file)?;
                     let mut task_clone = task.clone();
 
-                    task_clone.events.0.push(TaskEvent::new(
+                    task_clone.events.push(TaskEvent::new(
                         "add_task".to_string(),
                         task_clone.owner.clone(),
                         "".to_string(),
                     ));
 
-                    let json = serde_json::to_string(&task_clone).unwrap();
-                    pipe_write.write_all(json.as_bytes())?;
+                    let json: JsonValue = (&task_clone).into();
+                    pipe_write.write_all(json.stringify().unwrap().as_bytes())?;
                 }
             }
         }
@@ -243,7 +251,7 @@ async fn on_receive_task(
 }
 
 async_daemonize!(realmain);
-async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<()> {
+async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Result<()> {
     let datastore_path = expand_path(&settings.datastore)?;
 
     let nickname =
@@ -297,7 +305,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
                 continue
             }
             let secret_key = SecretKey::generate(&mut OsRng);
-            let encoded = bs58::encode(secret_key.as_bytes());
+            let encoded = bs58::encode(secret_key.to_bytes());
 
             println!("workspace: {}:{}", workspace, encoded.into_string());
             println!("Please add it to the config file.");
@@ -307,7 +315,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         return Ok(())
     }
 
-    let workspaces = get_workspaces(&settings)?;
+    let workspaces = Arc::new(get_workspaces(&settings)?);
 
     if workspaces.is_empty() {
         error!("Please add at least one workspace to the config file.");
@@ -323,6 +331,8 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     let view = Arc::new(Mutex::new(View::new(events_queue)));
     let model_clone = model.clone();
 
+    model.lock().await.load_tree(&datastore_path)?;
+
     ////////////////////
     // Buffers
     ////////////////////
@@ -336,7 +346,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     //
     let net_settings = settings.net.clone();
 
-    let p2p = net::P2p::new(net_settings.into()).await;
+    let p2p = net::P2p::new(net_settings.into(), executor.clone()).await;
     let registry = p2p.protocol_registry();
 
     registry
@@ -348,9 +358,8 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         })
         .await;
 
-    p2p.clone().start(executor.clone()).await?;
-
-    executor.spawn(p2p.clone().run(executor.clone())).detach();
+    info!(target: "taud", "Starting P2P network");
+    p2p.clone().start().await?;
 
     ////////////////////
     // Listner
@@ -358,19 +367,29 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
     let seen_ids = Seen::new();
     let missed_events = Arc::new(Mutex::new(vec![]));
 
-    executor
-        .spawn(start_sync_loop(
+    info!(target: "taud", "Starting sync loop task");
+    let sync_loop_task = StoppableTask::new();
+    sync_loop_task.clone().start(
+        start_sync_loop(
             broadcast_rcv,
             view,
-            model_clone,
+            model_clone.clone(),
             seen_ids,
             workspaces.clone(),
             datastore_path.clone(),
             missed_events,
             settings.piped,
             p2p.clone(),
-        ))
-        .detach();
+        ),
+        |res| async {
+            match res {
+                Ok(()) | Err(TaudError::Darkfi(Error::DetachedTaskStopped)) => { /* Do nothing */ }
+                Err(e) => error!(target: "taud", "Failed starting sync loop task: {}", e),
+            }
+        },
+        TaudError::Darkfi(Error::DetachedTaskStopped),
+        executor.clone(),
+    );
 
     //
     // RPC interface
@@ -382,13 +401,31 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'_>>) -> Result<(
         workspaces.clone(),
         p2p.clone(),
     ));
-    let _ex = executor.clone();
-    executor.spawn(listen_and_serve(settings.rpc_listen.clone(), rpc_interface, _ex)).detach();
+    let rpc_task = StoppableTask::new();
+    rpc_task.clone().start(
+        listen_and_serve(settings.rpc_listen, rpc_interface, executor.clone()),
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::RPCServerStopped) => { /* Do nothing */ }
+                Err(e) => error!(target: "taud", "Failed starting JSON-RPC server: {}", e),
+            }
+        },
+        Error::RPCServerStopped,
+        executor.clone(),
+    );
 
     // Signal handling for graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new()?;
+    let (signals_handler, signals_task) = SignalHandler::new(executor)?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
+
+    info!(target: "taud", "Stopping JSON-RPC server...");
+    rpc_task.stop().await;
+
+    info!(target: "taud", "Stopping sync loop task...");
+    sync_loop_task.stop().await;
+
+    model_clone.lock().await.save_tree(&datastore_path)?;
 
     p2p.stop().await;
 

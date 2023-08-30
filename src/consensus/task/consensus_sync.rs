@@ -24,7 +24,7 @@ use crate::{
         Float10, ValidatorStatePtr,
     },
     net::P2pPtr,
-    util::async_util::sleep,
+    system::sleep,
     Result,
 };
 
@@ -96,7 +96,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     // Listen for next finalization
     info!(target: "consensus::consensus_sync", "Waiting for next finalization...");
     let subscriber = state.read().await.subscribers.get("blocks").unwrap().clone();
-    let subscription = subscriber.subscribe().await;
+    let subscription = subscriber.sub.subscribe().await;
     subscription.receive().await;
     subscription.unsubscribe().await;
 

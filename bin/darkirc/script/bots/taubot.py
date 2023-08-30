@@ -1,18 +1,18 @@
 import argparse
 import irc
 import json
-import socket
 import sys
 
 # parse arguments
 parser = argparse.ArgumentParser(description='IRC bot to send a pipe to an IRC channel')
 parser.add_argument('--server',default='127.0.0.1', help='IRC server')
-parser.add_argument('--port', default=11066, help='port of the IRC server')
-parser.add_argument('--nickname', help='bot nickname in IRC')
+parser.add_argument('--port', default=22024, help='port of the IRC server')
+parser.add_argument('--nickname', default='tau-notifier', help='bot nickname in IRC')
 parser.add_argument('--channel', default="#dev", action='append', help='channel to join')
 parser.add_argument('--pipe', default="/tmp/tau_pipe" , help='pipe to read from')
 parser.add_argument('--skip', default="prv", help='Project or Tags to skip notifications for')
-parser.add_argument('--alt-chan', default="#test", required='--skip' in sys.argv, help='Alternative channel to send notifications to when there are skipped tasks')
+parser.add_argument('--skip-workspace', default="prv-ws", help='Workspace to skip notifications for')
+parser.add_argument('--alt-chan', default="#test", required='--skip' in sys.argv or '--skip-workspace' in sys.argv, help='Alternative channel to send notifications to when there are skipped tasks')
 
 args = parser.parse_args()
 
@@ -41,7 +41,7 @@ while True:
                     assigned = ", ".join(task['assign'])
 
                     project = task['project'] if task['project'] is not None else []
-                    if args.skip in project or '+' + args.skip in task['tags']:
+                    if args.skip in project or '+' + args.skip in task['tags'] or args.skip_workspace in task['workspace']:
                         channel = args.alt_chan
 
                     if len(assigned) > 0:
@@ -57,7 +57,7 @@ while True:
                     title = task['title']
 
                     project = task['project'] if task['project'] is not None else []
-                    if args.skip in project or '+' + args.skip in task['tags']:
+                    if args.skip in project or '+' + args.skip in task['tags'] or args.skip_workspace in task['workspace']:
                         channel = args.alt_chan
 
                     if state == "start":
@@ -76,7 +76,7 @@ while True:
                     title = task['title']
                     
                     project = task['project'] if task['project'] is not None else []
-                    if args.skip in project or '+' + args.skip in task['tags']:
+                    if args.skip in project or '+' + args.skip in task['tags'] or args.skip_workspace in task['workspace']:
                         channel = args.alt_chan
 
                     notification = f"{user} commented on task ({id}): {title}"
@@ -89,7 +89,7 @@ while True:
                     title = task['title']
 
                     project = task['project'] if task['project'] is not None else []
-                    if args.skip in project or '+' + args.skip in task['tags']:
+                    if args.skip in project or '+' + args.skip in task['tags'] or args.skip_workspace in task['workspace']:
                         channel = args.alt_chan
 
                     notification = f"{user} reassigned task ({id}): {title} to {assignees}"

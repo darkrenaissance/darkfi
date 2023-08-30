@@ -16,7 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use async_std::sync::Arc;
+use std::sync::Arc;
+
 use structopt::StructOpt;
 use url::Url;
 
@@ -58,6 +59,12 @@ pub struct Settings {
     pub channel_heartbeat_interval: u64,
     /// Allow localnet hosts
     pub localnet: bool,
+    /// Delete a peer from hosts if they've been quarantined N times
+    pub hosts_quarantine_limit: usize,
+    /// Cooling off time for peer discovery when unsuccessful
+    pub outbound_peer_discovery_cooloff_time: u64,
+    /// Time between peer discovery attempts
+    pub outbound_peer_discovery_attempt_time: u64,
 }
 
 impl Default for Settings {
@@ -80,6 +87,9 @@ impl Default for Settings {
             channel_handshake_timeout: 10,
             channel_heartbeat_interval: 10,
             localnet: false,
+            hosts_quarantine_limit: 50,
+            outbound_peer_discovery_cooloff_time: 30,
+            outbound_peer_discovery_attempt_time: 5,
         }
     }
 }
@@ -139,7 +149,7 @@ pub struct SettingsOpt {
     #[structopt(skip)]
     pub node_id: String,
 
-    /// Preferred transports for outbound connections    
+    /// Preferred transports for outbound connections
     #[serde(default)]
     #[structopt(long = "transports")]
     pub allowed_transports: Vec<String>,
@@ -151,6 +161,15 @@ pub struct SettingsOpt {
     #[serde(default)]
     #[structopt(long)]
     pub localnet: bool,
+
+    #[structopt(skip)]
+    pub hosts_quarantine_limit: Option<usize>,
+
+    #[structopt(skip)]
+    pub outbound_peer_discovery_cooloff_time: Option<u64>,
+
+    #[structopt(skip)]
+    pub outbound_peer_discovery_attempt_time: Option<u64>,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -173,6 +192,13 @@ impl From<SettingsOpt> for Settings {
             channel_handshake_timeout: opt.channel_handshake_timeout.unwrap_or(10),
             channel_heartbeat_interval: opt.channel_heartbeat_interval.unwrap_or(10),
             localnet: opt.localnet,
+            hosts_quarantine_limit: opt.hosts_quarantine_limit.unwrap_or(15),
+            outbound_peer_discovery_cooloff_time: opt
+                .outbound_peer_discovery_cooloff_time
+                .unwrap_or(30),
+            outbound_peer_discovery_attempt_time: opt
+                .outbound_peer_discovery_attempt_time
+                .unwrap_or(5),
         }
     }
 }

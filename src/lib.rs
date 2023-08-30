@@ -24,17 +24,14 @@ pub use error::{ClientFailed, ClientResult, Error, Result};
 #[cfg(feature = "blockchain")]
 pub mod blockchain;
 
-#[cfg(feature = "blockchain")]
+#[cfg(feature = "validator")]
 pub mod consensus;
 
-#[cfg(feature = "blockchain")]
+#[cfg(feature = "validator")]
 pub mod validator;
 
-#[cfg(feature = "dht")]
-pub mod dht;
-
-#[cfg(feature = "dht")]
-pub mod dht2;
+#[cfg(feature = "geode")]
+pub mod geode;
 
 #[cfg(feature = "event-graph")]
 pub mod event_graph;

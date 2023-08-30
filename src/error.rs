@@ -90,6 +90,14 @@ pub enum Error {
     #[error("serde_json error: {0}")]
     SerdeJsonError(String),
 
+    #[cfg(feature = "tinyjson")]
+    #[error("JSON parse error: {0}")]
+    JsonParseError(String),
+
+    #[cfg(feature = "tinyjson")]
+    #[error("JSON generate error: {0}")]
+    JsonGenerateError(String),
+
     #[cfg(feature = "toml")]
     #[error(transparent)]
     TomlDeserializeError(#[from] toml::de::Error),
@@ -119,8 +127,9 @@ pub enum Error {
     #[error("Connection failed")]
     ConnectFailed,
 
-    #[error("Timeout Error")]
-    TimeoutError,
+    #[cfg(feature = "system")]
+    #[error(transparent)]
+    TimeoutError(#[from] crate::system::timeout::TimeoutError),
 
     #[error("Connection timed out")]
     ConnectTimeout,
@@ -171,6 +180,9 @@ pub enum Error {
 
     #[error("Node is not connected to other nodes.")]
     NetworkNotConnected,
+
+    #[error("P2P network stopped")]
+    P2PNetworkStopped,
 
     // =============
     // Crypto errors
@@ -224,8 +236,15 @@ pub enum Error {
     #[error("Unsupported chain")]
     UnsupportedChain,
 
-    #[error("JSON-RPC error: {0}")]
-    JsonRpcError(String),
+    #[error("JSON-RPC error: {0:?}")]
+    JsonRpcError((i32, String)),
+
+    #[cfg(feature = "rpc")]
+    #[error(transparent)]
+    RpcServerError(RpcError),
+
+    #[error("JSON-RPC server stopped")]
+    RPCServerStopped,
 
     #[error("Unexpected JSON-RPC data received: {0}")]
     UnexpectedJsonRpc(String),
@@ -235,6 +254,9 @@ pub enum Error {
 
     #[error("Public inputs are invalid")]
     InvalidPublicInputsError,
+
+    #[error("Coin is not the slot block producer")]
+    CoinIsNotSlotProducer,
 
     #[error("Error during leader proof verification")]
     LeaderProofVerification,
@@ -256,6 +278,9 @@ pub enum Error {
 
     #[error("Proposal contains missmatched hashes")]
     ProposalHashesMissmatchError,
+
+    #[error("Proposal contains unknown slots")]
+    ProposalContainsUnknownSlots,
 
     #[error("Proposal contains missmatched headers")]
     ProposalHeadersMissmatchError,
@@ -280,6 +305,9 @@ pub enum Error {
 
     #[error("Erroneous transactions detected")]
     ErroneousTxsDetected,
+
+    #[error("Proposal task stopped")]
+    ProposalTaskStopped,
 
     // ===============
     // Database errors
@@ -313,9 +341,6 @@ pub enum Error {
 
     #[error("Block {0} already in database")]
     BlockAlreadyExists(String),
-
-    #[error("Didn't provide blocks' previous")]
-    BlockPreviousMissing(),
 
     #[error("Block {0} not found in database")]
     BlockNotFound(String),
@@ -390,7 +415,7 @@ pub enum Error {
     #[error("Contract execution failed")]
     ContractError(darkfi_sdk::error::ContractError),
 
-    #[cfg(feature = "wasm-runtime")]
+    #[cfg(feature = "blockchain")]
     #[error("contract wasm bincode not found")]
     WasmBincodeNotFound,
 
@@ -401,6 +426,12 @@ pub enum Error {
     #[cfg(feature = "wasm-runtime")]
     #[error("contract execution error")]
     ContractExecError(u64),
+
+    // ====================
+    // Event Graph errors
+    // ====================
+    #[error("Event is not found in tree: {0}")]
+    EventNotFound(String),
 
     // ====================
     // Miscellaneous errors
@@ -444,6 +475,9 @@ pub enum Error {
     #[error("System clock went backwards")]
     BackwardsTime(std::time::SystemTimeError),
 
+    #[error("Detached task stopped")]
+    DetachedTaskStopped,
+
     // ==============================================
     // Wrappers for other error types in this library
     // ==============================================
@@ -460,20 +494,27 @@ pub enum Error {
     #[error("clock out of sync with peers: {0}")]
     ClockOutOfSync(String),
 
-    // ==============
-    // DHT errors
-    // ==============
-    #[error("Chunk not found")]
-    DhtChunkNotFound,
+    // ================
+    // DHT/Geode errors
+    // ================
+    #[error("Geode needs garbage collection")]
+    GeodeNeedsGc,
 
-    #[error("File metadata not found")]
-    DhtFileMetadataNotFound,
+    #[error("Geode file not found")]
+    GeodeFileNotFound,
 
-    // FIXME: This is out of context, be specific when writing errors.
-    #[error("Did not find key")]
-    UnknownKey,
+    #[error("Geode chunk not found")]
+    GeodeChunkNotFound,
 
+    #[error("Geode file route not found")]
+    GeodeFileRouteNotFound,
+
+    #[error("Geode chunk route not found")]
+    GeodeChunkRouteNotFound,
+
+    // =========
     // Catch-all
+    // =========
     #[error("{0}")]
     Custom(String),
 }
@@ -496,6 +537,9 @@ impl Error {
 /// Transaction verification errors
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum TxVerifyFailed {
+    #[error("Transaction {0} already exists")]
+    AlreadySeenTx(String),
+
     #[error("Invalid transaction signature")]
     InvalidSignature,
 
@@ -540,6 +584,33 @@ pub enum ClientFailed {
     VerifyError(String),
 }
 
+#[cfg(feature = "rpc")]
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum RpcError {
+    #[error("Connection closed: {0}")]
+    ConnectionClosed(String),
+
+    #[error("Invalid JSON: {0}")]
+    InvalidJson(String),
+
+    #[error("IO Error: {0}")]
+    IoError(std::io::ErrorKind),
+}
+
+#[cfg(feature = "rpc")]
+impl From<std::io::Error> for RpcError {
+    fn from(err: std::io::Error) -> Self {
+        Self::IoError(err.kind())
+    }
+}
+
+#[cfg(feature = "rpc")]
+impl From<RpcError> for Error {
+    fn from(err: RpcError) -> Self {
+        Self::RpcServerError(err)
+    }
+}
+
 impl From<Error> for ClientFailed {
     fn from(err: Error) -> Self {
         Self::InternalError(err.to_string())
@@ -549,13 +620,6 @@ impl From<Error> for ClientFailed {
 impl From<std::io::Error> for ClientFailed {
     fn from(err: std::io::Error) -> Self {
         Self::Io(err.kind())
-    }
-}
-
-#[cfg(feature = "async-std")]
-impl From<async_std::future::TimeoutError> for Error {
-    fn from(_err: async_std::future::TimeoutError) -> Self {
-        Self::TimeoutError
     }
 }
 
@@ -651,6 +715,20 @@ impl From<async_rustls::rustls::client::InvalidDnsNameError> for Error {
 impl From<serde_json::Error> for Error {
     fn from(err: serde_json::Error) -> Self {
         Self::SerdeJsonError(err.to_string())
+    }
+}
+
+#[cfg(feature = "tinyjson")]
+impl From<tinyjson::JsonParseError> for Error {
+    fn from(err: tinyjson::JsonParseError) -> Self {
+        Self::JsonParseError(err.to_string())
+    }
+}
+
+#[cfg(feature = "tinyjson")]
+impl From<tinyjson::JsonGenerateError> for Error {
+    fn from(err: tinyjson::JsonGenerateError) -> Self {
+        Self::JsonGenerateError(err.to_string())
     }
 }
 

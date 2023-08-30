@@ -13,8 +13,8 @@ PROOFS_BIN = $(PROOFS_SRC:=.bin)
 # wasm source files
 WASM_SRC = \
 	$(shell find src -type f) \
-	$(shell find ../../sdk -type f) \
-	$(shell find ../../serial -type f)
+	$(shell find ../../sdk -type f -name '*.rs') \
+	$(shell find ../../serial -type f -name '*.rs')
 
 # wasm contract binary
 WASM_BIN = dao_contract.wasm

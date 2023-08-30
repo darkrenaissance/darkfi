@@ -1,6 +1,6 @@
 [package]
 name = "darkfi-sdk-py"
-description = "Python bindings for Darkfi SDK"
+description = "Python bindings for the DarkFi SDK"
 version = "0.4.1"
 edition = "2021"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
@@ -8,14 +8,14 @@ license = "AGPL-3.0-only"
 homepage = "https://dark.fi"
 repository = "https://github.com/darkrenaissance/darkfi"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "darkfi_sdk_py"
+name = "darkfi_sdk"
 crate-type = ["cdylib"]
+doc = false
 
 [dependencies]
-darkfi = { path = "../../../", features = ["zk", "zkas"] }
-darkfi-sdk = { path = "../" }
+darkfi = {path = "../../../", features = ["zk", "zkas"]}
+darkfi-sdk = {path = "../"}
 halo2_gadgets = "0.3.0"
-pyo3 = "0.19.1"
+pyo3 = "0.19.2"
 rand = "0.8.5"

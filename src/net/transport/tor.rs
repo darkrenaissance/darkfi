@@ -19,10 +19,9 @@
 use std::time::Duration;
 
 use arti_client::{config::BoolOrAuto, DataStream, StreamPrefs, TorClient};
-use async_std::future;
 use log::debug;
 
-use crate::Result;
+use crate::{system::timeout::timeout, Result};
 
 /// Tor Dialer implementation
 #[derive(Debug, Clone)]
@@ -39,7 +38,7 @@ impl TorDialer {
         &self,
         host: &str,
         port: u16,
-        timeout: Option<Duration>,
+        conn_timeout: Option<Duration>,
     ) -> Result<DataStream> {
         debug!(target: "net::tor::do_dial", "Dialing {}:{} with Tor...", host, port);
         debug!(target: "net::tor::do_dial", "Bootstrapping...");
@@ -47,15 +46,12 @@ impl TorDialer {
         let mut stream_prefs = StreamPrefs::new();
         stream_prefs.connect_to_onion_services(BoolOrAuto::Explicit(true));
 
-        if timeout.is_some() {
-            let res = future::timeout(
-                timeout.unwrap(),
-                client.connect_with_prefs((host, port), &stream_prefs),
-            )
-            .await?;
-            return Ok(res?)
-        }
+        let stream = if let Some(conn_timeout) = conn_timeout {
+            timeout(conn_timeout, client.connect_with_prefs((host, port), &stream_prefs)).await?
+        } else {
+            Ok(client.connect_with_prefs((host, port), &stream_prefs).await?)
+        };
 
-        Ok(client.connect_with_prefs((host, port), &stream_prefs).await?)
+        Ok(stream?)
     }
 }

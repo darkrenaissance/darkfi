@@ -1,4 +1,7 @@
 # Circuit used to mint arbitrary coins given a mint authority secret.
+k = 13;
+field = "pallas";
+
 constant "TokenMint_V1" {
 	EcFixedPointShort VALUE_COMMIT_VALUE,
 	EcFixedPoint VALUE_COMMIT_RANDOM,
@@ -23,12 +26,10 @@ witness "TokenMint_V1" {
 	# Random blinding factor for the value commitment
 	Scalar value_blind,
 	# Random blinding factor for the token ID
-	Scalar token_blind,
+	Base token_blind,
 }
 
 circuit "TokenMint_V1" {
-	# TODO: verify if supply must be > 0 and add corresponding opcode
-
 	# TokenID derivation path (See darkfi_sdk::crypto::TokenId)
 	derivation_path = witness_base(69);
 
@@ -62,10 +63,7 @@ circuit "TokenMint_V1" {
 	constrain_instance(ec_get_x(value_commit));
 	constrain_instance(ec_get_y(value_commit));
 
-	# Pedersen commitment for the token ID
-	tcv = ec_mul_base(token_id, NULLIFIER_K);
-	tcr = ec_mul(token_blind, VALUE_COMMIT_RANDOM);
-	token_commit = ec_add(tcv, tcr);
-	constrain_instance(ec_get_x(token_commit));
-	constrain_instance(ec_get_y(token_commit));
+	# Commitment for the coin's token ID
+	token_commit = poseidon_hash(token_id, token_blind);
+	constrain_instance(token_commit);
 }
