@@ -16,22 +16,23 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
-
 use smol::{
     channel,
     future::{self, Future},
     Executor,
 };
+use std::sync::Arc;
+
+use super::CondVar;
 
 pub type StoppableTaskPtr = Arc<StoppableTask>;
 
-#[derive(Debug)]
 pub struct StoppableTask {
     // NOTE: we could send the error code from stop() instead of having it specified in start()
     // but then that would introduce lifetimes to the entire struct.
     stop_send: channel::Sender<()>,
     stop_recv: channel::Receiver<()>,
+    stop_barrier: CondVar,
 }
 
 /// A task that can be prematurely stopped at any time.
@@ -50,13 +51,14 @@ pub struct StoppableTask {
 impl StoppableTask {
     pub fn new() -> Arc<Self> {
         let (stop_send, stop_recv) = channel::bounded(1);
-        Arc::new(Self { stop_send, stop_recv })
+        Arc::new(Self { stop_send, stop_recv, stop_barrier: CondVar::new() })
     }
 
     /// Stops the task
     pub async fn stop(&self) {
         // Ignore any errors from this send
         let _ = self.stop_send.send(()).await;
+        self.stop_barrier.wait().await;
     }
 
     /// Starts the task.
@@ -85,6 +87,7 @@ impl StoppableTask {
 
                 let result = future::or(main, stop_fut).await;
                 stop_handler(result).await;
+                self.stop_barrier.notify();
             })
             .detach();
     }
