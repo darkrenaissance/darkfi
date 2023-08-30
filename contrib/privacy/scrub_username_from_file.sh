@@ -40,8 +40,8 @@ ME=$(whoami)
 # The string in $ME will be replaced with this string.
 REPLACE="user"
 
-FILE=$1
-DST=$(basename $1)
+FILE="$1"
+DST=$(basename $FILE)
 
 if ! [ -f $FILE ]; then
 	echo "Target should be a file"
