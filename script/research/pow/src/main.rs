@@ -33,7 +33,8 @@ use darkfi_sdk::{
     num_traits::{One, Zero},
     pasta::{group::ff::FromUniformBytes, pallas},
 };
-use darkfi_serial::{async_trait, Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{async_trait, Encodable, SerialEncodable};
+use lazy_static::lazy_static;
 use num_bigint::BigUint;
 use rand::{rngs::OsRng, Rng};
 use randomx::{RandomXCache, RandomXDataset, RandomXFlags, RandomXVM};
@@ -41,29 +42,37 @@ use randomx::{RandomXCache, RandomXDataset, RandomXFlags, RandomXVM};
 #[cfg(test)]
 mod tests;
 
-// Number of threads to use for hashing
-const NUM_THREADS: usize = 4;
-/// Constant genesis block string used as the previous block hash
-const GENESIS: &[u8] = b"genesis";
+/// Number of threads to use for hashing
+const N_THREADS: usize = 4;
 /// The output length of the BLAKE2b hash in bytes
 const HASH_LEN: usize = 32;
-/// Blocks, must be >=2
+/// Amount of blocks to take for next difficulty calculation.
+/// Must be >= 2
 const DIFFICULTY_WINDOW: usize = 720;
-/// Timestamps to cut after sorting, (2*DIFFICULTY_CUT<=DIFFICULTY_WINDOW-2) must be true
+/// Timestamps to cut after sorting for next difficulty calculation.
+/// (2*DIFFICULTY_CUT <= DIFFICULTY_WINDOW-2) must be true.
 const DIFFICULTY_CUT: usize = 60;
 /// !!!
 const DIFFICULTY_LAG: usize = 15;
 /// Target block time in seconds
-const DIFFICULTY_TARGET: usize = 60;
-/// The most recent blocks used to verify new blocks' timestamp
+const DIFFICULTY_TARGET: usize = 2;
+/// How many most recent blocks to use to verify new blocks' timestamp
 const BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW: usize = 60;
 /// Time limit in the future of what blocks can be
 const BLOCK_FUTURE_TIME_LIMIT: u64 = 60 * 60 * 2;
 
-#[derive(Clone, SerialEncodable, SerialDecodable)]
+lazy_static! {
+    /// The genesis block hash
+    static ref GENESIS_HASH: blake2b_simd::Hash =
+        blake2b_simd::Params::new().hash_length(HASH_LEN).to_state().update(b"genesis").finalize();
+}
+
+#[derive(Clone, SerialEncodable)]
+/// Dummy transaction definition
 struct Transaction(Vec<u8>);
 
 impl Transaction {
+    /// Hash the transaction
     fn hash(&self) -> Result<blake2b_simd::Hash> {
         let mut hasher = blake2b_simd::Params::new().hash_length(HASH_LEN).to_state();
         self.encode(&mut hasher)?;
@@ -71,62 +80,119 @@ impl Transaction {
     }
 }
 
-#[derive(Clone, SerialEncodable, SerialDecodable)]
+#[derive(Clone, SerialEncodable)]
+/// A block's header
 struct BlockHeader {
+    /// The block's nonce. This value changes arbitrarily with mining.
     nonce: u32,
+    /// The hash of the previous block in the blockchain
     previous_hash: blake2b_simd::Hash,
-    timestamp: Timestamp,
+    /// The block timestamp
+    timestamp: u64,
+    /// Merkle tree of the transactions contained in this block
     txtree: MerkleTree,
 }
 
-#[derive(Clone, SerialEncodable, SerialDecodable)]
+#[derive(Clone, SerialEncodable)]
+/// Block definition
 struct Block {
+    /// The block header
     header: BlockHeader,
-    transactions: Vec<Transaction>,
+    /// Transactions contained in the block
+    txs: Vec<Transaction>,
 }
 
 impl Block {
+    /// Compute the block's hash
     fn hash(&self) -> Result<blake2b_simd::Hash> {
-        let mut len = 0;
         let mut hasher = blake2b_simd::Params::new().hash_length(HASH_LEN).to_state();
 
+        let mut len: usize = 0;
         len += self.header.encode(&mut hasher)?;
         len += self.header.txtree.root(0).unwrap().encode(&mut hasher)?;
-        len += self.transactions.len().encode(&mut hasher)?;
-
+        len += self.txs.len().encode(&mut hasher)?;
         len.encode(&mut hasher)?;
 
         Ok(hasher.finalize())
     }
 
-    fn insert_tx(&mut self, tx: &Transaction) -> Result<()> {
+    /// Append a transaction to the block. Also adds it to the Merkle tree.
+    fn append_tx(&mut self, tx: Transaction) -> Result<()> {
         let mut buf = [0u8; 64];
         buf[..HASH_LEN].copy_from_slice(tx.hash()?.as_bytes());
         let leaf = pallas::Base::from_uniform_bytes(&buf);
+
         self.header.txtree.append(leaf.into());
-        self.transactions.push(tx.clone());
+        self.txs.push(tx);
+
         Ok(())
     }
 }
 
-fn next_difficulty(
-    mut timestamps: Vec<u64>,
-    mut cummulative_difficulties: Vec<BigUint>,
-    target_seconds: usize,
-) -> BigUint {
-    if timestamps.len() > DIFFICULTY_WINDOW {
-        timestamps.resize(DIFFICULTY_WINDOW, 1);
-        cummulative_difficulties.resize(DIFFICULTY_WINDOW, BigUint::one());
+fn get_mid(a: u64, b: u64) -> u64 {
+    (a / 2) + (b / 2) + ((a - 2 * (a / 2)) + (b - 2 * (b / 2))) / 2
+}
+
+/// Aux function to calculate the median of a given `Vec<u64>`.
+/// The function sorts the vector internally.
+fn median(v: &mut Vec<u64>) -> u64 {
+    assert!(v.is_empty());
+
+    if v.len() == 1 {
+        return v[0]
     }
 
+    let n = v.len() / 2;
+    v.sort_unstable();
+
+    if v.len() % 2 == 0 {
+        v[n]
+    } else {
+        get_mid(v[n - 1], v[n])
+    }
+}
+
+/// Verify a block's timestamp is valid and matches certain criteria.
+fn check_block_timestamp(block: &Block, timestamps: &mut Vec<u64>) -> bool {
+    if block.header.timestamp > Timestamp::current_time().0 + BLOCK_FUTURE_TIME_LIMIT {
+        return false
+    }
+
+    // If not enough blocks, no proper median yet, return true
+    if timestamps.len() < BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW {
+        return true
+    }
+
+    // Make sure the timestamp is higher than the median
+    if block.header.timestamp < median(timestamps) {
+        return false
+    }
+
+    true
+}
+
+/// Calculate the next mining difficulty.
+///
+/// Takes a `RingBuffer` of timestamps, a `RingBuffer` of cummulative
+/// difficulties, and a target block time in seconds.
+/// **NOTE**: `timestamps` get sorted in this function.
+///
+/// Panics if:
+/// * `timestamps.len() != cummulative_difficulties.len()`
+/// * `timestamps.len() > DIFFICULTY_WINDOW`
+fn next_difficulty(
+    timestamps: &mut Vec<u64>,
+    cummulative_difficulties: &[BigUint],
+    target_seconds: usize,
+) -> BigUint {
     let length = timestamps.len();
-    assert!(length == cummulative_difficulties.len());
+    assert!(length == cummulative_difficulties.len() && length <= DIFFICULTY_WINDOW);
 
     if length <= 1 {
         return BigUint::one()
     }
 
-    assert!(length <= DIFFICULTY_WINDOW);
+    // Sort the timestamps vector
     timestamps.sort_unstable();
 
     let cut_begin: usize;
@@ -148,89 +214,42 @@ fn next_difficulty(
     }
 
     let total_work = &cummulative_difficulties[cut_end - 1] - &cummulative_difficulties[cut_begin];
-    assert!(total_work >= BigUint::zero());
+    assert!(total_work > BigUint::zero());
+
     (total_work * target_seconds + time_span - BigUint::one()) / time_span
-}
-
-fn get_mid(a: u64, b: u64) -> u64 {
-    (a / 2) + (b / 2) + ((a - 2 * (a / 2)) + (b - 2 * (b / 2))) / 2
-}
-
-fn median(v: &mut Vec<u64>) -> u64 {
-    assert!(!v.is_empty());
-
-    if v.len() == 1 {
-        return v[0]
-    }
-
-    let n = v.len() / 2;
-    v.sort();
-
-    if v.len() % 2 == 0 {
-        v[n]
-    } else {
-        get_mid(v[n - 1], v[n])
-    }
-}
-
-fn check_block_timestamp_median(timestamps: &mut Vec<u64>, block: &Block) -> bool {
-    let median_ts = median(timestamps);
-
-    if block.header.timestamp.0 < median_ts {
-        return false
-    }
-
-    true
-}
-
-fn check_block_timestamp(block: &Block, blockchain: &[Block]) -> bool {
-    if block.header.timestamp.0 > Timestamp::current_time().0 + BLOCK_FUTURE_TIME_LIMIT {
-        return false
-    }
-
-    // If not enough blocks, no proper median yet, return true
-    if blockchain.len() < BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW {
-        return true
-    }
-
-    let mut timestamps: Vec<u64> = blockchain
-        .iter()
-        .rev()
-        .take(BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW)
-        .map(|x| x.header.timestamp.0)
-        .collect();
-
-    check_block_timestamp_median(&mut timestamps, block)
 }
 
 fn main() -> Result<()> {
     // Construct the genesis block
-    let genesis_hash =
-        blake2b_simd::Params::new().hash_length(HASH_LEN).to_state().update(GENESIS).finalize();
-
     let mut genesis_block = Block {
         header: BlockHeader {
             nonce: 0,
-            previous_hash: genesis_hash,
-            timestamp: Timestamp::current_time(),
-            txtree: MerkleTree::new(100),
+            previous_hash: *GENESIS_HASH,
+            timestamp: Timestamp::current_time().0,
+            txtree: MerkleTree::new(1),
         },
-        transactions: vec![],
+        txs: vec![],
     };
 
     let genesis_tx = Transaction(vec![1, 3, 3, 7]);
-    genesis_block.insert_tx(&genesis_tx)?;
+    genesis_block.append_tx(genesis_tx)?;
 
-    let mut blockchain: Vec<Block> = vec![];
-    let mut cummulative_difficulties: Vec<BigUint> = vec![];
-
+    // This represents the blocks in our blockchain
+    let mut blockchain: Vec<Block> = vec![genesis_block.clone()];
+    // The cummulative difficulties track difficulty through time.
+    // The genesis block (block 0) is ignored. Blocks 1 and 2 must have difficulty 1.
+    let mut difficulties = vec![];
     let mut cummulative_difficulty = BigUint::zero();
+    // We also track block timestamps this way.
+    let mut timestamps = vec![];
 
     // Melt the CPU
-    let mut n = 0;
-    let mut cur_block = genesis_block;
     loop {
-        // Calculate the next difficulty
+        // Reference to our chain tip
+        let n = blockchain.len(); // Block height
+        let cur_block = &blockchain.last().unwrap();
+
+        // Calculate the next difficulty target: T = 2^256 / difficulty
         let begin: usize;
         let end: usize;
         if n < DIFFICULTY_WINDOW + DIFFICULTY_LAG {
@@ -241,64 +260,58 @@ fn main() -> Result<()> {
             begin = end - DIFFICULTY_WINDOW;
         }
 
-        let timestamps: Vec<u64> =
-            blockchain[begin..end].iter().map(|x| x.header.timestamp.0).collect();
-        let difficulties: Vec<BigUint> = cummulative_difficulties[begin..end].to_vec();
-
-        let difficulty = next_difficulty(timestamps, difficulties, DIFFICULTY_TARGET);
-
-        let target = BigUint::from_bytes_be(&[
-            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-            0xff, 0xff, 0xff, 0xff,
-        ]) / &difficulty;
-        println!("[{}] [MINER] Difficulty: {}", n, difficulty);
-        println!("[{}] [MINER] Target: {}", n, target);
+        let mut ts: Vec<u64> = timestamps[begin..end].to_vec();
+        let difficulty = next_difficulty(&mut ts, &difficulties[begin..end], DIFFICULTY_TARGET);
+        let target = BigUint::from_bytes_be(&[0xFF; 32]) / &difficulty;
+        println!("[#{}] [MINER] Difficulty:  0x{:064x}", n, difficulty);
+        println!("[#{}] [MINER] Mine target: 0x{:064x}", n, target);
 
         // Get the PoW input. The key changes with every mined block.
-        let pow_input = cur_block.hash()?;
-        println!("[{}] [MINER] PoW Input: {}", n, pow_input.to_hex());
+        let powinput = cur_block.hash()?;
+        println!("[#{}] [MINER] PoW input: {}", n, powinput.to_hex());
 
         let miner_setup = Instant::now();
         let flags = RandomXFlags::default() | RandomXFlags::FULLMEM;
-        println!("[{}] [MINER] Initializing RandomX dataset...", n);
-        let dataset =
-            Arc::new(RandomXDataset::new(flags, pow_input.as_bytes(), NUM_THREADS).unwrap());
+        println!("[#{}] [MINER] Initializing RandomX dataset...", n);
+        let dataset = Arc::new(RandomXDataset::new(flags, powinput.as_bytes(), N_THREADS).unwrap());
 
         // The miner creates a block
         let mut miner_block = Block {
             header: BlockHeader {
                 nonce: 0,
                 previous_hash: cur_block.hash()?,
-                timestamp: Timestamp::current_time(),
-                txtree: MerkleTree::new(100),
+                timestamp: Timestamp::current_time().0,
+                txtree: MerkleTree::new(1),
             },
-            transactions: vec![],
+            txs: vec![],
         };
+
+        // Insert some transactions from the mempool
         let tx0 = Transaction(OsRng.gen::<[u8; 32]>().to_vec());
         let tx1 = Transaction(OsRng.gen::<[u8; 32]>().to_vec());
-        miner_block.insert_tx(&tx0)?;
-        miner_block.insert_tx(&tx1)?;
-        println!("[{}] [MINER] Setup time: {:?}", n, miner_setup.elapsed());
+        miner_block.append_tx(tx0)?;
+        miner_block.append_tx(tx1)?;
+        println!("[#{}] [MINER] Setup time: {:?}", n, miner_setup.elapsed());
 
         // Multithreaded mining setup
         let mining_time = Instant::now();
         let mut handles = vec![];
         let found_block = Arc::new(AtomicBool::new(false));
         let found_nonce = Arc::new(AtomicU32::new(0));
-        for t in 0..NUM_THREADS {
+        for t in 0..N_THREADS {
             let target = target.clone();
             let mut block = miner_block.clone();
             let found_block = Arc::clone(&found_block);
             let found_nonce = Arc::clone(&found_nonce);
-            let dataset = dataset.clone();
+            let dataset = Arc::clone(&dataset);
+
             handles.push(thread::spawn(move || {
-                println!("[{}] [MINER] Initializing RandomX VM #{}...", n, t);
+                println!("[#{}] [MINER] Initializing RandomX VM #{}...", n, t);
                 block.header.nonce = t as u32;
                 let vm = RandomXVM::new_fast(flags, &dataset).unwrap();
                 loop {
                     if found_block.load(Ordering::SeqCst) {
-                        println!("[{}] [MINER] Block was found, thread #{} exiting", n, t);
+                        println!("[#{}] [MINER] Block found, thread #{} exiting", n, t);
                         break
                     }
 
@@ -308,50 +321,53 @@ fn main() -> Result<()> {
                         found_block.store(true, Ordering::SeqCst);
                         found_nonce.store(block.header.nonce, Ordering::SeqCst);
                         println!(
-                            "[{}] [MINER] Thread #{} found block using nonce {}",
+                            "[#{}] [MINER] Thread #{} found block using nonce {}",
                             n, t, block.header.nonce
                         );
-                        println!("[{}] [MINER] Block hash {}", n, block.hash().unwrap().to_hex(),);
-                        println!("[{}] [MINER] RandomX hash bytes: {:?}", n, out_hash);
+                        println!("[#{}] [MINER] Block hash {}", n, block.hash().unwrap().to_hex());
+                        println!("[#{}] [MINER] RandomX output: 0x{:064x}", n, out_hash);
                         break
                     }
 
                     // This means thread 0 will use nonces, 0, 4, 8, ...
                     // and thread 1 will use nonces, 1, 5, 9, ...
-                    block.header.nonce += NUM_THREADS as u32;
+                    block.header.nonce += N_THREADS as u32;
                 }
-            }))
+            }));
         }
 
         for handle in handles {
             let _ = handle.join();
         }
-        println!("[{}] [MINER] Mining time: {:?}", n, mining_time.elapsed());
+        println!("[#{}] [MINER] Mining time: {:?}", n, mining_time.elapsed());
 
-        // Set the valid mined nonce in the block that's broadcasted
+        // Set the valid mined nonce in the block that's being broadcasted
         miner_block.header.nonce = found_nonce.load(Ordering::SeqCst);
 
-        // Verify
-        assert!(check_block_timestamp(&miner_block, &blockchain));
+        // Now the block is broadcasted to the network, and a node can verify it.
+        // First we verify the block's timestamp. We take the last
+        // `BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW` timestamps and perform the check:
+        let mut v_ts =
+            timestamps.iter().rev().take(BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW).copied().collect();
+        assert!(check_block_timestamp(&miner_block, &mut v_ts));
 
+        // Then we verify the proof of work:
         let verifier_setup = Instant::now();
         let flags = RandomXFlags::default();
-        let cache = RandomXCache::new(flags, pow_input.as_bytes()).unwrap();
+        let cache = RandomXCache::new(flags, powinput.as_bytes()).unwrap();
         let vm = RandomXVM::new(flags, &cache).unwrap();
-        println!("[{}] [VERIFIER] Setup time: {:?}", n, verifier_setup.elapsed());
+        println!("[#{}] [VERIFIER] Setup time: {:?}", n, verifier_setup.elapsed());
 
         let verification_time = Instant::now();
         let out_hash = vm.hash(miner_block.hash()?.as_bytes());
         let out_hash = BigUint::from_bytes_be(&out_hash);
         assert!(out_hash <= target);
-        println!("[{}] [VERIFIER] Verification time: {:?}", n, verification_time.elapsed());
+        println!("[#{}] [VERIFIER] Verification time: {:?}", n, verification_time.elapsed());
 
         // The new block appends to the blockchain
-        cur_block = miner_block.clone();
+        timestamps.push(miner_block.header.timestamp);
         blockchain.push(miner_block);
         cummulative_difficulty += difficulty;
-        cummulative_difficulties.push(cummulative_difficulty.clone());
-
-        n += 1;
+        difficulties.push(cummulative_difficulty.clone());
     }
 }

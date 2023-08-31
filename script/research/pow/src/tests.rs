@@ -56,9 +56,10 @@ fn test_wide_difficulty() {
             begin = end - DIFFICULTY_WINDOW;
         }
 
-        let timestamps_cut = timestamps[begin..end].to_vec();
-        let difficulty_cut = cummulative_difficulties[begin..end].to_vec();
-        let res = next_difficulty(timestamps_cut, difficulty_cut, DEFAULT_TEST_DIFFICULTY_TARGET);
+        let mut timestamps_cut = timestamps[begin..end].to_vec();
+        let difficulty_cut = &cummulative_difficulties[begin..end];
+        let res =
+            next_difficulty(&mut timestamps_cut, difficulty_cut, DEFAULT_TEST_DIFFICULTY_TARGET);
 
         if res != difficulty {
             eprintln!("Wrong wide difficulty for block {}", n);
