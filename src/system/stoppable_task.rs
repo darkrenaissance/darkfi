@@ -169,12 +169,7 @@ mod tests {
                 },
                 // Handle stop
                 |result| async move {
-                    assert!(result.is_err());
-                    let is_correct_err = match result {
-                        Err(Error::DetachedTaskStopped) => true,
-                        _ => false,
-                    };
-                    assert!(is_correct_err);
+                    assert!(matches!(result, Err(Error::DetachedTaskStopped)));
                 },
                 Error::DetachedTaskStopped,
                 executor_,
