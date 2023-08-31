@@ -43,18 +43,22 @@ pub trait RequestHandler: Sync + Send {
         JsonResponse::new(JsonValue::String("pong".to_string()), id).into()
     }
 
-    async fn get_connections(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>>;
+    async fn connections_mut(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>>;
+
+    async fn connections(&self) -> Vec<StoppableTaskPtr> {
+        self.connections_mut().await.iter().cloned().collect()
+    }
 
     async fn mark_connection(&self, task: StoppableTaskPtr) {
-        self.get_connections().await.insert(task);
+        self.connections_mut().await.insert(task);
     }
 
     async fn unmark_connection(&self, task: StoppableTaskPtr) {
-        self.get_connections().await.remove(&task);
+        self.connections_mut().await.remove(&task);
     }
 
     async fn active_connections(&self) -> usize {
-        self.get_connections().await.len()
+        self.connections_mut().await.len()
     }
 }
 
@@ -216,7 +220,7 @@ mod tests {
             }
         }
 
-        async fn get_connections(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
+        async fn connections_mut(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
             self.rpc_connections.lock().await
         }
     }
@@ -247,8 +251,7 @@ mod tests {
                     match res {
                         Ok(()) | Err(Error::RpcServerStopped) => {
                             eprintln!("Stopping connections");
-                            for (i, task) in rpc_server_.get_connections().await.iter().enumerate()
-                            {
+                            for (i, task) in rpc_server_.connections().await.iter().enumerate() {
                                 eprintln!("Stopping connection #{}", i);
                                 task.stop().await;
                             }
@@ -273,19 +276,27 @@ mod tests {
             msleep(500).await;
             assert!(rpc_server.active_connections().await == 2);
 
+            // And another one
+            let _rpc_client2 = RpcClient::new(endpoint.clone(), executor.clone()).await?;
+            msleep(500).await;
+            assert!(rpc_server.active_connections().await == 3);
+
             // Close the first client
             rpc_client0.close().await?;
             msleep(500).await;
-            assert!(rpc_server.active_connections().await == 1);
+            assert!(rpc_server.active_connections().await == 2);
 
             // Close the second client
             rpc_client1.close().await?;
             msleep(500).await;
-            assert!(rpc_server.active_connections().await == 0);
+            assert!(rpc_server.active_connections().await == 1);
 
             // The Listener should be stopped when we stop the server task.
             server_task.stop().await;
             assert!(RpcClient::new(endpoint, executor.clone()).await.is_err());
+
+            // After the server is stopped, the connections tasks should also be stopped
+            assert!(rpc_server.active_connections().await == 0);
 
             Ok(())
         }))
