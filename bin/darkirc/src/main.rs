@@ -54,7 +54,7 @@ pub mod rpc;
 pub mod settings;
 
 use crate::{
-    crypto::KeyPair,
+    crypto::saltbox::KeyPair,
     irc::{IrcConfig, IrcServer},
     privmsg::PrivMsgEvent,
     rpc::JsonRpcInterface,

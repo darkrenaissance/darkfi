@@ -32,7 +32,7 @@ use smol::{
 };
 
 use crate::{
-    crypto::{decrypt_privmsg, decrypt_target, encrypt_privmsg},
+    crypto::saltbox::{decrypt_privmsg, decrypt_target, encrypt_privmsg},
     settings,
     settings::{Nick, UserMode, RPL},
     ChannelInfo, PrivMsgEvent,
