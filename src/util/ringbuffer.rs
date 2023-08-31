@@ -71,6 +71,20 @@ impl<T: Eq + PartialEq + Clone, const N: usize> RingBuffer<T, N> {
     pub fn to_vec(&self) -> Vec<T> {
         self.0.iter().cloned().collect()
     }
+
+    /// Rearranges the internal storage of this deque so it is one contiguous slice.
+    pub fn make_contiguous(&mut self) -> &mut [T] {
+        self.0.make_contiguous()
+    }
+}
+
+impl<T, const N: usize> std::ops::Index<usize> for RingBuffer<T, N> {
+    type Output = T;
+
+    #[inline]
+    fn index(&self, index: usize) -> &T {
+        self.0.get(index).expect("Out of bounds access")
+    }
 }
 
 #[cfg(test)]
