@@ -170,7 +170,7 @@ impl Channel {
     pub async fn send<M: message::Message>(&self, message: &M) -> Result<()> {
         debug!(
              target: "net::channel::send()", "[START] command={} {:?}",
-             M::NAME, self.address(),
+             M::NAME, self,
         );
 
         if *self.stopped.lock().await {
