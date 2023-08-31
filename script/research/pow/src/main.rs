@@ -55,7 +55,7 @@ const DIFFICULTY_CUT: usize = 60;
 /// !!!
 const DIFFICULTY_LAG: usize = 15;
 /// Target block time in seconds
-const DIFFICULTY_TARGET: usize = 2;
+const DIFFICULTY_TARGET: usize = 20;
 /// How many most recent blocks to use to verify new blocks' timestamp
 const BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW: usize = 60;
 /// Time limit in the future of what blocks can be
@@ -248,6 +248,7 @@ fn main() -> Result<()> {
         // Reference to our chain tip
         let n = blockchain.len(); // Block height
         let cur_block = &blockchain.last().unwrap();
+        assert!(difficulties.len() == timestamps.len() && timestamps.len() == n - 1);
 
         // Calculate the next difficulty target: T = 2^256 / difficulty
         let begin: usize;
