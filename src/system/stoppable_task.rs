@@ -57,14 +57,6 @@ impl StoppableTask {
         Arc::new(Self { signal: CondVar::new(), barrier: CondVar::new(), task_id: OsRng.gen() })
     }
 
-    /// Stops the task. On completion, guarantees the process has stopped.
-    pub async fn stop(&self) {
-        trace!(target: "system::StoppableTask", "Stopping task {}", self.task_id);
-        self.signal.notify();
-        self.barrier.wait().await;
-        trace!(target: "system::StoppableTask", "Stopped task {}", self.task_id);
-    }
-
     /// Starts the task.
     ///
     /// * `main` is a function of the type `async fn foo() -> ()`
@@ -118,6 +110,14 @@ impl StoppableTask {
             })
             .detach();
     }
+
+    /// Stops the task. On completion, guarantees the process has stopped.
+    pub async fn stop(&self) {
+        trace!(target: "system::StoppableTask", "Stopping task {}", self.task_id);
+        self.signal.notify();
+        self.barrier.wait().await;
+        trace!(target: "system::StoppableTask", "Stopped task {}", self.task_id);
+    }
 }
 
 impl std::hash::Hash for StoppableTask {
@@ -136,3 +136,50 @@ impl std::cmp::PartialEq for StoppableTask {
 }
 
 impl std::cmp::Eq for StoppableTask {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{error::Error, system::sleep_forever};
+    use smol::Executor;
+    use std::sync::Arc;
+
+    #[test]
+    fn stoppit_mom() {
+        let mut cfg = simplelog::ConfigBuilder::new();
+        cfg.add_filter_ignore("async_io".to_string());
+        cfg.add_filter_ignore("polling".to_string());
+        simplelog::TermLogger::init(
+            simplelog::LevelFilter::Trace,
+            cfg.build(),
+            simplelog::TerminalMode::Mixed,
+            simplelog::ColorChoice::Auto,
+        )
+        .unwrap();
+
+        let executor = Arc::new(Executor::new());
+        let executor_ = executor.clone();
+        smol::block_on(executor.run(async move {
+            let task = StoppableTask::new();
+            task.clone().start(
+                // Main process is an infinite loop
+                async {
+                    sleep_forever().await;
+                    unreachable!()
+                },
+                // Handle stop
+                |result| async move {
+                    assert!(result.is_err());
+                    let is_correct_err = match result {
+                        Err(Error::DetachedTaskStopped) => true,
+                        _ => false,
+                    };
+                    assert!(is_correct_err);
+                },
+                Error::DetachedTaskStopped,
+                executor_,
+            );
+            task.stop().await;
+        }))
+    }
+}

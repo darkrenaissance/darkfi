@@ -108,3 +108,64 @@ impl<'a> Future for CondVarWait<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use smol::Executor;
+    use std::sync::Arc;
+
+    #[test]
+    fn condvar_test() {
+        let executor = Arc::new(Executor::new());
+        let executor_ = executor.clone();
+        smol::block_on(executor.run(async move {
+            let cv = Arc::new(CondVar::new());
+
+            let cv_ = cv.clone();
+            executor_
+                .spawn(async move {
+                    // Waits here until notify() is called
+                    cv_.wait().await;
+                })
+                .detach();
+
+            // Allow above code to continue
+            cv.notify();
+        }))
+    }
+
+    #[test]
+    fn condvar_reset() {
+        let executor = Arc::new(Executor::new());
+        let executor_ = executor.clone();
+        smol::block_on(executor.run(async move {
+            let cv = Arc::new(CondVar::new());
+
+            let cv_ = cv.clone();
+            executor_
+                .spawn(async move {
+                    cv_.wait().await;
+                })
+                .detach();
+
+            // #1 send signal
+            cv.notify();
+            // Multiple calls to notify do nothing until we call reset()
+            cv.notify();
+
+            // Without calling reset(), then the wait() will return instantly
+            cv.reset();
+
+            let cv_ = cv.clone();
+            executor_
+                .spawn(async move {
+                    cv_.wait().await;
+                })
+                .detach();
+
+            // #2 send signal again
+            cv.notify();
+        }))
+    }
+}
