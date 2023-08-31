@@ -252,11 +252,11 @@ fn main() -> Result<()> {
         // Calculate the next difficulty target: T = 2^256 / difficulty
         let begin: usize;
         let end: usize;
-        if n < DIFFICULTY_WINDOW + DIFFICULTY_LAG {
+        if n - 1 < DIFFICULTY_WINDOW + DIFFICULTY_LAG {
             begin = 0;
-            end = min(n, DIFFICULTY_WINDOW);
+            end = min(n - 1, DIFFICULTY_WINDOW);
         } else {
-            end = n - DIFFICULTY_LAG;
+            end = n - 1 - DIFFICULTY_LAG;
             begin = end - DIFFICULTY_WINDOW;
         }
 
