@@ -16,7 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cmp::Ordering, collections::HashMap, fmt::Debug, path::Path, sync::Arc};
+use std::{
+    cmp::Ordering,
+    collections::HashMap,
+    fmt::Debug,
+    fs::File,
+    io::{Read, Write},
+    path::Path,
+    sync::Arc,
+};
 
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
@@ -25,17 +33,8 @@ use darkfi_serial::{
 };
 use log::{debug, error, info};
 use smol::lock::Mutex;
-use tinyjson::JsonValue;
 
-use crate::{
-    event_graph::events_queue::EventsQueuePtr,
-    util::{
-        encoding::base64,
-        file::{load_json_file, save_json_file},
-        time::Timestamp,
-    },
-    Error, Result,
-};
+use crate::{event_graph::events_queue::EventsQueuePtr, util::time::Timestamp, Error, Result};
 
 use super::EventMsg;
 
@@ -107,9 +106,9 @@ where
         debug!(target: "event_graph", "Model::save_tree()");
         let path = path.join("tree");
         let tree = self.event_map.clone();
-        let ser_tree = base64::encode(&serialize(&tree));
 
-        save_json_file(&path, &JsonValue::String(ser_tree), false)?;
+        let mut file = File::create(path)?;
+        file.write_all(&serialize(&tree))?;
 
         info!("Tree is saved to disk");
 
@@ -124,12 +123,11 @@ where
             return Ok(())
         }
 
-        let loaded_tree_obj = load_json_file(&path)?;
-        let loaded_tree_obj: &String = loaded_tree_obj
-            .get::<String>()
-            .ok_or(Error::Custom("Failed to load tree object from JsonValue".to_string()))?;
-        let loaded_tree_bytes = base64::decode(loaded_tree_obj.as_str())
-            .ok_or(Error::Custom("Failed to decode loaded tree".to_string()))?;
+        let mut file = File::open(path)?;
+        // read the same file back into a Vec of bytes
+        let mut loaded_tree_bytes = Vec::<u8>::new();
+        file.read_to_end(&mut loaded_tree_bytes)?;
+
         let dser_tree: HashMap<blake3::Hash, EventNode<T>> = deserialize(&loaded_tree_bytes)?;
         self.event_map = dser_tree;
 
@@ -774,7 +772,7 @@ mod tests {
 
             assert!(res);
 
-            remove_dir_all(path).ok();
+            remove_dir_all(path)?;
 
             Ok(())
         })
