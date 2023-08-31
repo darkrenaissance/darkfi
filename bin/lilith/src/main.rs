@@ -476,12 +476,13 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     // JSON-RPC server
     info!(target: "lilith", "Starting JSON-RPC server on {}", args.rpc_listen);
+    let lilith_ = lilith.clone();
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
         listen_and_serve(args.rpc_listen, lilith.clone(), None, ex.clone()),
-        |res| async {
+        |res| async move {
             match res {
-                Ok(()) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::RpcServerStopped) => lilith_.stop_connections().await,
                 Err(e) => error!(target: "lilith", "Failed starting JSON-RPC server: {}", e),
             }
         },

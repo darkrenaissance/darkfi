@@ -29,14 +29,13 @@ use tinyjson::JsonValue;
 use url::Url;
 
 use darkfi::{
-    net::transport::Listener,
     rpc::{
         client::RpcClient,
         jsonrpc::*,
-        server::{accept, RequestHandler},
+        server::{listen_and_serve, RequestHandler},
     },
-    system::StoppableTaskPtr,
-    Result,
+    system::{msleep, StoppableTask, StoppableTaskPtr},
+    Error, Result,
 };
 
 struct RpcSrv {
@@ -75,7 +74,6 @@ impl RequestHandler for RpcSrv {
 #[test]
 fn jsonrpc_reqrep() -> Result<()> {
     let executor = Arc::new(Executor::new());
-    let executor_ = executor.clone();
 
     smol::block_on(executor.run(async {
         // Find an available port
@@ -88,20 +86,22 @@ fn jsonrpc_reqrep() -> Result<()> {
             stop_sub: smol::channel::unbounded(),
             rpc_connections: Mutex::new(HashSet::new()),
         });
-        let listener = Listener::new(endpoint.clone()).await?.listen().await?;
+        let rpcsrv_ = Arc::clone(&rpcsrv);
 
-        executor
-            .spawn(async move {
-                while let Ok((stream, peer_addr)) = listener.next().await {
-                    let rh_ = rpcsrv.clone();
-                    executor_
-                        .spawn(async move {
-                            let _ = accept(stream, peer_addr.clone(), rh_, None).await;
-                        })
-                        .detach();
+        let rpc_task = StoppableTask::new();
+        rpc_task.clone().start(
+            listen_and_serve(endpoint.clone(), rpcsrv.clone(), None, executor.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::RpcServerStopped) => rpcsrv_.stop_connections().await,
+                    Err(e) => eprintln!("Failed starting JSON-RPC server: {}", e),
                 }
-            })
-            .detach();
+            },
+            Error::RpcServerStopped,
+            executor.clone(),
+        );
+
+        msleep(500).await;
 
         let client = RpcClient::new(endpoint, executor.clone()).await?;
         let req = JsonRequest::new("ping", vec![]);

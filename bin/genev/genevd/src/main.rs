@@ -27,7 +27,7 @@ use darkfi::{
         view::{View, ViewPtr},
     },
     net::{self, settings::SettingsOpt},
-    rpc::server::listen_and_serve,
+    rpc::server::{listen_and_serve, RequestHandler},
     system::StoppableTask,
     Error, Result,
 };
@@ -153,11 +153,12 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'static>>) -> Result<
         p2p.clone(),
     ));
     let rpc_task = StoppableTask::new();
+    let rpc_interface_ = rpc_interface.clone();
     rpc_task.clone().start(
         listen_and_serve(args.rpc_listen, rpc_interface, None, executor.clone()),
-        |res| async {
+        |res| async move {
             match res {
-                Ok(()) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::RpcServerStopped) => rpc_interface_.stop_connections().await,
                 Err(e) => error!(target: "genevd", "Failed starting JSON-RPC server: {}", e),
             }
         },

@@ -49,7 +49,7 @@ use darkfi::{
         EventMsg,
     },
     net::{self, P2pPtr},
-    rpc::server::listen_and_serve,
+    rpc::server::{listen_and_serve, RequestHandler},
     system::StoppableTask,
     util::{path::expand_path, time::Timestamp},
     Error, Result,
@@ -403,10 +403,10 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     ));
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(settings.rpc_listen, rpc_interface, None, executor.clone()),
-        |res| async {
+        listen_and_serve(settings.rpc_listen, rpc_interface.clone(), None, executor.clone()),
+        |res| async move {
             match res {
-                Ok(()) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::RpcServerStopped) => rpc_interface.stop_connections().await,
                 Err(e) => error!(target: "taud", "Failed starting JSON-RPC server: {}", e),
             }
         },

@@ -763,11 +763,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // JSON-RPC server
     info!(target: "faucetd", "Starting JSON-RPC server");
     let rpc_task = StoppableTask::new();
+    let faucetd_ = faucetd.clone();
     rpc_task.clone().start(
         listen_and_serve(args.rpc_listen, faucetd.clone(), None, ex.clone()),
-        |res| async {
+        |res| async move {
             match res {
-                Ok(()) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::RpcServerStopped) => faucetd_.stop_connections().await,
                 Err(e) => error!(target: "faucetd", "Failed starting JSON-RPC server: {}", e),
             }
         },

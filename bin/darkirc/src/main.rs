@@ -38,7 +38,10 @@ use darkfi::{
         view::View,
     },
     net,
-    rpc::{jsonrpc::JsonSubscriber, server::listen_and_serve},
+    rpc::{
+        jsonrpc::JsonSubscriber,
+        server::{listen_and_serve, RequestHandler},
+    },
     system::{sleep, StoppableTask, Subscriber, SubscriberPtr},
     util::{file::save_json_file, path::expand_path, time::Timestamp},
     Error, Result,
@@ -245,12 +248,14 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         dnet_sub: json_sub,
         rpc_connections: Mutex::new(HashSet::new()),
     });
+
     let rpc_task = StoppableTask::new();
+    let rpc_interface_ = rpc_interface.clone();
     rpc_task.clone().start(
         listen_and_serve(rpc_listen_addr, rpc_interface, None, executor.clone()),
-        |res| async {
+        |res| async move {
             match res {
-                Ok(()) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::RpcServerStopped) => rpc_interface_.stop_connections().await,
                 Err(e) => error!(target: "darkirc", "Failed starting JSON-RPC server: {}", e),
             }
         },

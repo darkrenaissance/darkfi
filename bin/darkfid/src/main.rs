@@ -444,11 +444,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // JSON-RPC server
     info!("Starting JSON-RPC server");
     let rpc_task = StoppableTask::new();
+    let darkfid_ = darkfid.clone();
     rpc_task.clone().start(
         listen_and_serve(args.rpc_listen, darkfid.clone(), None, ex.clone()),
-        |res| async {
+        |res| async move {
             match res {
-                Ok(()) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::RpcServerStopped) => darkfid_.stop_connections().await,
                 Err(e) => error!(target: "darkfid", "Failed starting sync JSON-RPC server: {}", e),
             }
         },

@@ -587,11 +587,12 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!(target: "fud", "Starting JSON-RPC server on {}", args.rpc_listen);
     let rpc_task = StoppableTask::new();
+    let fud_ = fud.clone();
     rpc_task.clone().start(
         listen_and_serve(args.rpc_listen, fud.clone(), None, ex.clone()),
-        |res| async {
+        |res| async move {
             match res {
-                Ok(()) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::RpcServerStopped) => fud_.stop_connections().await,
                 Err(e) => error!(target: "fud", "Failed starting sync JSON-RPC server: {}", e),
             }
         },
@@ -600,8 +601,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     );
 
     info!("Starting P2P protocols");
-    let fud_ = fud.clone();
     let registry = p2p.protocol_registry();
+    let fud_ = fud.clone();
     registry
         .register(net::SESSION_ALL, move |channel, p2p| {
             let fud_ = fud_.clone();

@@ -31,7 +31,10 @@ use darkfi::{
     blockchain::BlockInfo,
     cli_desc,
     net::{settings::SettingsOpt, P2pPtr},
-    rpc::{jsonrpc::JsonSubscriber, server::listen_and_serve},
+    rpc::{
+        jsonrpc::JsonSubscriber,
+        server::{listen_and_serve, RequestHandler},
+    },
     system::{StoppableTask, StoppableTaskPtr},
     util::time::TimeKeeper,
     validator::{Validator, ValidatorConfig, ValidatorPtr},
@@ -202,11 +205,12 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // stop() function to shut down, also terminating the task we
     // created for it.
     let rpc_task = StoppableTask::new();
+    let darkfid_ = darkfid.clone();
     rpc_task.clone().start(
         listen_and_serve(args.rpc_listen, darkfid.clone(), None, ex.clone()),
-        |res| async {
+        |res| async move {
             match res {
-                Ok(()) | Err(Error::RpcServerStopped) => { /* Do nothing */ }
+                Ok(()) | Err(Error::RpcServerStopped) => darkfid_.stop_connections().await,
                 Err(e) => error!(target: "darkfid", "Failed starting sync JSON-RPC server: {}", e),
             }
         },

@@ -60,6 +60,14 @@ pub trait RequestHandler: Sync + Send {
     async fn active_connections(&self) -> usize {
         self.connections_mut().await.len()
     }
+
+    async fn stop_connections(&self) {
+        info!(target: "rpc::server", "[RPC] Server stopped, closing connections");
+        for (i, task) in self.connections().await.iter().enumerate() {
+            debug!(target: "rpc::server", "Stopping connection #{}", i);
+            task.stop().await;
+        }
+    }
 }
 
 /// Accept function that should run inside a loop for accepting incoming
@@ -250,11 +258,7 @@ mod tests {
                 |res| async move {
                     match res {
                         Ok(()) | Err(Error::RpcServerStopped) => {
-                            eprintln!("Stopping connections");
-                            for (i, task) in rpc_server_.connections().await.iter().enumerate() {
-                                eprintln!("Stopping connection #{}", i);
-                                task.stop().await;
-                            }
+                            rpc_server_.stop_connections().await
                         }
                         Err(e) => panic!("{}", e),
                     }
