@@ -121,7 +121,7 @@ impl RequestHandler for Fud {
         }
     }
 
-    async fn get_connections(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
+    async fn connections_mut(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
         self.rpc_connections.lock().await
     }
 }
