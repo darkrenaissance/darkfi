@@ -23,7 +23,25 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
-/// Condition variable which allows a task to block until woken up
+/// Condition variables allow you to block a task while waiting for an event to occur.
+/// Condition variables are typically associated with a boolean predicate (a condition).
+/// ```rust
+///    let cv = Arc::new(CondVar::new());
+///
+///    let cv_ = cv.clone();
+///    executor_
+///        .spawn(async move {
+///            // Waits here until notify() is called
+///            cv_.wait().await;
+///            // Check for some condition...
+///        })
+///        .detach();
+///
+///    // Allow above code to continue
+///    cv.notify();
+/// ```
+/// After the condition variable is woken up, the user may `wait` again for another `notify`
+/// signal by first calling `cv_.reset()`.
 pub struct CondVar {
     state: Mutex<CondVarState>,
 }
