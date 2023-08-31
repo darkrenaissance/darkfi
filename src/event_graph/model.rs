@@ -23,7 +23,7 @@ use darkfi_serial::async_trait;
 use darkfi_serial::{
     deserialize, serialize, Decodable, Encodable, SerialDecodable, SerialEncodable,
 };
-use log::{error, info};
+use log::{debug, error, info};
 use smol::lock::Mutex;
 use tinyjson::JsonValue;
 
@@ -104,6 +104,7 @@ where
 
     /// Save tree to disk.
     pub fn save_tree(&self, path: &Path) -> Result<()> {
+        debug!(target: "event_graph", "Model::save_tree()");
         let path = path.join("tree");
         let tree = self.event_map.clone();
         let ser_tree = base64::encode(&serialize(&tree));
@@ -117,6 +118,7 @@ where
 
     /// Load tree from disk.
     pub fn load_tree(&mut self, path: &Path) -> Result<()> {
+        debug!(target: "event_graph", "Model::load_tree()");
         let path = path.join("tree");
         if !path.exists() {
             return Ok(())
@@ -164,6 +166,7 @@ where
     /// and reorganizes the resulted tree so the oldest event(s) is
     /// child(ren) of root.
     pub fn remove_old_events(&mut self, timestamp: Timestamp) -> crate::Result<()> {
+        debug!(target: "event_graph", "Model::remove_old_events()");
         let tree = self.event_map.clone();
         let mut is_tree_changed = false;
         for (event_hash, node) in tree {
@@ -208,6 +211,7 @@ where
 
     /// Add an Event to the tree.
     pub async fn add(&mut self, event: Event<T>) -> Result<()> {
+        debug!(target: "event_graph", "Model::add()");
         self.orphans.insert(event.hash(), event);
         self.reorganize().await?;
 
@@ -220,6 +224,7 @@ where
 
     /// Return a vector of childless events other than the current root.
     pub fn find_leaves(&self) -> Vec<EventId> {
+        debug!(target: "event_graph", "Model::find_leaves()");
         // collect the leaves in the tree
         let mut leaves = vec![];
 
@@ -235,11 +240,13 @@ where
 
     /// Return an Event from the tree given its EventID.
     pub fn get_event(&self, event: &EventId) -> Option<Event<T>> {
+        debug!(target: "event_graph", "Model::get_event()");
         self.event_map.get(event).map(|en| en.event.clone())
     }
 
     /// Return all the offsprings (including branches if any) of a given EventID.
     pub fn get_offspring(&self, event: &EventId, offspring: &mut Vec<Event<T>>) -> Result<()> {
+        debug!(target: "event_graph", "Model::get_offspring()");
         let node = self.event_map.get(event).ok_or(Error::EventNotFound("child node".into()))?;
         offspring.push(node.event.clone());
 
@@ -256,6 +263,7 @@ where
     }
 
     async fn reorganize(&mut self) -> Result<()> {
+        debug!(target: "event_graph", "Model::reorganize()");
         for (_, orphan) in std::mem::take(&mut self.orphans) {
             // if self.is_orphan(&orphan) {
             //     // TODO should we remove orphan if it's too old
@@ -292,6 +300,7 @@ where
     /// Checks if EventNodes (branches) are too deep relative to the
     /// current head, and prune those branches if they are.
     fn prune_chains(&mut self) -> Result<()> {
+        debug!(target: "event_graph", "Model::prune_chains()");
         let head = self.get_head_hash()?;
         let leaves = self.find_leaves();
 
@@ -314,6 +323,7 @@ where
 
     /// Removes an EventNode given its leaf
     fn remove_node(&mut self, mut event_id: EventId) {
+        debug!(target: "event_graph", "Model::remove_node()");
         loop {
             if !self.event_map.contains_key(&event_id) {
                 break
@@ -343,6 +353,7 @@ where
 
     /// Gets the lead node with the maximal number of events counting from root
     pub fn get_head_hash(&self) -> Result<EventId> {
+        debug!(target: "event_graph", "Model::get_head_hash()");
         Ok(self.find_longest_chain(&self.current_root, 0)?.0)
     }
 
@@ -354,6 +365,7 @@ where
     ///
     /// return the farthest EventID from the given one and the length as a tuple.
     fn find_longest_chain(&self, parent_node: &EventId, i: u32) -> Result<(EventId, u32)> {
+        debug!(target: "event_graph", "Model::find_longest_chain()");
         let children = &self
             .event_map
             .get(parent_node)
@@ -406,6 +418,7 @@ where
     /// Returns how far away an event is from one of its ancestor,
     /// errors if `node` and `ancestor_id` are not on the same chain
     fn find_depth(&self, mut node: EventId, ancestor_id: &EventId) -> Result<u32> {
+        debug!(target: "event_graph", "Model::find_depth()");
         let mut depth = 0;
         while &node != ancestor_id {
             depth += 1;
@@ -426,6 +439,7 @@ where
 
     /// Find common ancestor between two events.
     fn find_ancestor(&self, mut node_a: EventId, node_b: EventId) -> Result<EventId> {
+        debug!(target: "event_graph", "Model::find_ancestor()");
         // this func is only used when node_a is some leaf and node_b is head
         // so this check is useless in our usecase
         if node_a == self.current_root || node_b == self.current_root {
@@ -457,6 +471,7 @@ where
 
     /// Find the length between two events.
     fn diff_depth(&self, node_a: EventId, node_b: EventId) -> Result<u32> {
+        debug!(target: "event_graph", "Model::diff_depth()");
         let ancestor = self.find_ancestor(node_a, node_b)?;
         let node_a_depth = self.find_depth(node_a, &ancestor)?;
         let node_b_depth = self.find_depth(node_b, &ancestor)?;
