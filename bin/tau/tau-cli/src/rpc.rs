@@ -26,8 +26,8 @@ use crate::{
 };
 
 impl Tau {
-    pub async fn close_connection(&self) -> Result<()> {
-        self.rpc_client.close().await
+    pub async fn close_connection(&self) {
+        self.rpc_client.stop().await
     }
 
     /// Add a new task.

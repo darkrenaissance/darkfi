@@ -94,7 +94,7 @@ fn main() -> Result<()> {
             None => println!("none"),
         }
 
-        gen.close_connection().await?;
+        gen.close_connection().await;
 
         Ok(())
     }))

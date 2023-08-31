@@ -286,12 +286,12 @@ mod tests {
             assert!(rpc_server.active_connections().await == 3);
 
             // Close the first client
-            rpc_client0.close().await?;
+            rpc_client0.stop().await;
             msleep(500).await;
             assert!(rpc_server.active_connections().await == 2);
 
             // Close the second client
-            rpc_client1.close().await?;
+            rpc_client1.stop().await;
             msleep(500).await;
             assert!(rpc_server.active_connections().await == 1);
 

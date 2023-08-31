@@ -405,6 +405,7 @@ fn main() -> Result<()> {
             }
         }?;
 
-        tau.close_connection().await
+        tau.close_connection().await;
+        Ok(())
     }))
 }

@@ -238,7 +238,6 @@ net = [
 
 rpc = [
     "async-trait",
-    "futures",
     "rand",
     "smol",
     "tinyjson",
