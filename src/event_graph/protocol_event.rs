@@ -216,7 +216,8 @@ where
                     continue
                 }
 
-                let children = model.get_offspring(leaf)?;
+                let mut children = vec![];
+                model.get_offspring(leaf, &mut children)?;
 
                 for child in children {
                     self.channel.send(&child).await?;

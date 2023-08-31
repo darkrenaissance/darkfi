@@ -239,26 +239,20 @@ where
     }
 
     /// Return all the offsprings (including branches if any) of a given EventID.
-    pub fn get_offspring(&self, event: &EventId) -> Result<Vec<Event<T>>> {
-        let mut offspring = vec![];
-        let mut event = *event;
-        let head = self.get_head_hash()?;
-        loop {
-            if event == head {
-                break
-            }
-            if let Some(ev) = self.event_map.get(&event) {
-                for child in ev.children.iter() {
-                    let child = self.event_map.get(child).unwrap();
-                    offspring.push(child.event.clone());
-                    event = child.event.hash();
-                }
-            } else {
-                break
-            }
+    pub fn get_offspring(&self, event: &EventId, offspring: &mut Vec<Event<T>>) -> Result<()> {
+        let node = self.event_map.get(event).ok_or(Error::EventNotFound("child node".into()))?;
+        offspring.push(node.event.clone());
+
+        // is a leaf
+        if node.children.is_empty() {
+            return Ok(())
         }
 
-        Ok(offspring)
+        for child in node.children.iter() {
+            self.get_offspring(child, offspring)?;
+        }
+
+        Ok(())
     }
 
     async fn reorganize(&mut self) -> Result<()> {
@@ -450,11 +444,10 @@ where
                 return Ok(self.current_root)
             }
             if self.event_map.get(&node_a).unwrap().children.len() > 1 {
-                let offsprings = self
-                    .get_offspring(&node_a)?
-                    .iter()
-                    .map(|event| event.hash())
-                    .collect::<Vec<EventId>>();
+                let mut offsprings = vec![];
+                self.get_offspring(&node_a, &mut offsprings)?;
+                let offsprings =
+                    offsprings.iter().map(|event| event.hash()).collect::<Vec<EventId>>();
                 if offsprings.contains(&node_b) {
                     return Ok(node_a)
                 }
@@ -673,6 +666,59 @@ mod tests {
             }
 
             assert_eq!(model.get_head_hash()?, id1);
+
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn offspring_test() -> Result<()> {
+        smol::block_on(async {
+            let events_queue = EventsQueue::new();
+            let mut model = Model::new(events_queue);
+            let root_id = model.current_root;
+
+            // event_node 1
+            // Fill this node with 100 events
+            let mut event_node_1_ids = vec![];
+            let mut id1 = root_id;
+            let timestamp = Timestamp::current_time().0 - 500;
+            for i in 0..100 {
+                let node = create_message(id1, Timestamp(timestamp + i));
+                id1 = node.hash();
+                model.add(node).await?;
+                event_node_1_ids.push(id1);
+            }
+            sleep(1).await;
+
+            // event_node 2
+            // Fill this node with 150 events
+            let mut id2 = root_id;
+            let timestamp = Timestamp::current_time().0 - 100;
+            for i in 0..150 {
+                let node = create_message(id2, Timestamp(timestamp + i));
+                id2 = node.hash();
+                model.add(node).await?;
+            }
+            sleep(1).await;
+
+            // event_node 3
+            // Fill this node with 75 events
+            let mut id3 = root_id;
+            let timestamp = Timestamp::current_time().0 + 150;
+            for i in 0..75 {
+                let node = create_message(id3, Timestamp(timestamp + i));
+                id3 = node.hash();
+                model.add(node).await?;
+            }
+            sleep(1).await;
+
+            let mut offspring = vec![];
+
+            model.get_offspring(&model.current_root, &mut offspring)?;
+
+            // root event + 100 + 150 + 75 = 326
+            assert_eq!(offspring.len(), 326_usize);
 
             Ok(())
         })
