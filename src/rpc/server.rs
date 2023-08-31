@@ -238,13 +238,21 @@ mod tests {
             drop(listener);
 
             let rpc_server = Arc::new(RpcServer { rpc_connections: Mutex::new(HashSet::new()) });
+            let rpc_server_ = rpc_server.clone();
 
             let server_task = StoppableTask::new();
             server_task.clone().start(
                 listen_and_serve(endpoint.clone(), rpc_server.clone(), None, executor.clone()),
                 |res| async move {
                     match res {
-                        Ok(()) | Err(Error::RpcServerStopped) => {}
+                        Ok(()) | Err(Error::RpcServerStopped) => {
+                            eprintln!("Stopping connections");
+                            for (i, task) in rpc_server_.get_connections().await.iter().enumerate()
+                            {
+                                eprintln!("Stopping connection #{}", i);
+                                task.stop().await;
+                            }
+                        }
                         Err(e) => panic!("{}", e),
                     }
                 },
