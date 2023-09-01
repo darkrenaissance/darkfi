@@ -41,6 +41,7 @@ use super::EventMsg;
 //pub type EventId = [u8; blake3::OUT_LEN];
 pub type EventId = blake3::Hash;
 
+const ORPHAN_EXPIRE_TIME: u64 = 3600 * 24; // a day in seconds, too much?
 const MAX_DEPTH: u32 = 300;
 
 #[derive(SerialEncodable, SerialDecodable, Clone, Debug)]
@@ -216,8 +217,9 @@ where
         Ok(())
     }
 
-    pub fn is_orphan(&self, event: &Event<T>) -> bool {
-        !self.event_map.contains_key(&event.previous_event_hash)
+    pub fn is_old(&self, event: &Event<T>) -> bool {
+        !self.event_map.contains_key(&event.previous_event_hash) &&
+            event.timestamp.0 + ORPHAN_EXPIRE_TIME < Timestamp::current_time().0
     }
 
     /// Return a vector of childless events other than the current root.
@@ -263,10 +265,10 @@ where
     async fn reorganize(&mut self) -> Result<()> {
         debug!(target: "event_graph", "Model::reorganize()");
         for (_, orphan) in std::mem::take(&mut self.orphans) {
-            // if self.is_orphan(&orphan) {
-            //     // TODO should we remove orphan if it's too old
-            //     continue
-            // }
+            if self.is_old(&orphan) {
+                info!("too old, removing orphan");
+                continue
+            }
 
             let prev_event = orphan.previous_event_hash;
 
