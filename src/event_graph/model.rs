@@ -137,29 +137,6 @@ where
         Ok(())
     }
 
-    pub fn reset_root(&mut self, timestamp: Timestamp) {
-        let root_node = EventNode {
-            parent: None,
-            event: Event {
-                previous_event_hash: blake3::hash(b""), // This is a blake3 hash of NULL
-                action: T::new(),
-                timestamp,
-            },
-            children: Vec::new(),
-        };
-
-        let root_node_id = root_node.event.hash();
-
-        let mut event_map = HashMap::new();
-        event_map.insert(root_node_id, root_node);
-
-        self.current_root = root_node_id;
-        self.orphans = HashMap::new();
-        self.event_map = event_map;
-
-        info!("reset current root to: {:?}", self.current_root);
-    }
-
     /// Loops through all events, checks if the event is older than the
     /// given timestamp, if older then it gets removed from the tree,
     /// and reorganizes the resulted tree so the oldest event(s) is
@@ -217,6 +194,7 @@ where
         Ok(())
     }
 
+    /// Is event (basically orphan) older than ORPHAN_EXPIRE_TIME?
     pub fn is_old(&self, event: &Event<T>) -> bool {
         !self.event_map.contains_key(&event.previous_event_hash) &&
             event.timestamp.0 + ORPHAN_EXPIRE_TIME < Timestamp::current_time().0

@@ -140,6 +140,9 @@ where
         })
     }
 
+    // Receives an event, checks if we already have it, if not, add it
+    // to tree, broadcast an inventory of the event and rebroadcast
+    // the event itself.
     async fn handle_receive_event(self: Arc<Self>) -> Result<()> {
         debug!(target: "event_graph", "ProtocolEvent::handle_receive_event() [START]");
         let exclude_list = vec![self.channel.address().clone()];
@@ -161,6 +164,9 @@ where
         }
     }
 
+    // Receives an inventory msg, checks if we already have it, if not,
+    // and if hash in inv is not in tree then ask for the event,
+    // and then rebroadcast the inv anyways.
     async fn handle_receive_inv(self: Arc<Self>) -> Result<()> {
         debug!(target: "event_graph", "ProtocolEvent::handle_receive_inv() [START]");
         let exclude_list = vec![self.channel.address().clone()];
@@ -169,7 +175,6 @@ where
             let inv = (*inv).to_owned();
             let inv_item = inv.invs[0].clone();
 
-            // for inv in inv.invs.iter() {
             if !self.seen_inv.push(&inv_item.hash).await {
                 continue
             }
@@ -178,12 +183,12 @@ where
                 self.send_getdata(vec![inv_item.hash]).await?;
             }
 
-            // }
-
-            // Broadcast the inv msg
             self.p2p.broadcast_with_exclude(&inv, &exclude_list).await;
         }
     }
+
+    // Receives getdata msg, retrieve event data of contained eventID
+    // from our tree and sends it.
     async fn handle_receive_getdata(self: Arc<Self>) -> Result<()> {
         debug!(target: "event_graph", "ProtocolEvent::handle_receive_getdata() [START]");
         loop {
@@ -199,6 +204,7 @@ where
         }
     }
 
+    // Receives sencevent, gets the offspring of the contained eventID and sends them.
     async fn handle_receive_syncevent(self: Arc<Self>) -> Result<()> {
         debug!(target: "event_graph", "ProtocolEvent::handle_receive_syncevent() [START]");
         loop {

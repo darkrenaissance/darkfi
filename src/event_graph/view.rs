@@ -47,9 +47,7 @@ where
     }
 
     pub async fn process(&mut self) -> Result<Event<T>> {
-        // loop {
         let new_event = self.events_queue.fetch().await?;
         Ok(new_event)
-        // }
     }
 }
