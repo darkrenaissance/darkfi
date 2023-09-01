@@ -13,7 +13,7 @@ autojoin = ["#dev", "#test"]
 ## P2P net settings
 [net]
 ## Connection slots
-outbound_connections = 0
+outbound_connections = 3
 
 inbound = ["tcp://127.0.0.1:25552"]
 
