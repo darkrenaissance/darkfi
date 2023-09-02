@@ -49,7 +49,10 @@ use darkfi::{
         EventMsg,
     },
     net::{self, P2pPtr},
-    rpc::server::{listen_and_serve, RequestHandler},
+    rpc::{
+        jsonrpc::JsonSubscriber,
+        server::{listen_and_serve, RequestHandler},
+    },
     system::StoppableTask,
     util::{path::expand_path, time::Timestamp},
     Error, Result,
@@ -391,6 +394,35 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         executor.clone(),
     );
 
+    // ==============
+    // p2p dnet setup
+    // ==============
+    info!(target: "taud", "Starting dnet subs task");
+    let json_sub = JsonSubscriber::new("dnet.subscribe_events");
+    let json_sub_ = json_sub.clone();
+    let p2p_ = p2p.clone();
+    let dnet_task = StoppableTask::new();
+    dnet_task.clone().start(
+        async move {
+            let dnet_sub = p2p_.dnet_subscribe().await;
+            loop {
+                let event = dnet_sub.receive().await;
+                debug!("Got dnet event: {:?}", event);
+                json_sub_.notify(vec![event.into()]).await;
+            }
+        },
+        |res| async {
+            match res {
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                Err(e) => {
+                    error!(target: "taud", "Failed starting dnet subs task: {}", e)
+                }
+            }
+        },
+        Error::DetachedTaskStopped,
+        executor.clone(),
+    );
+
     //
     // RPC interface
     //
@@ -400,6 +432,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         nickname.unwrap(),
         workspaces.clone(),
         p2p.clone(),
+        json_sub,
     ));
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(

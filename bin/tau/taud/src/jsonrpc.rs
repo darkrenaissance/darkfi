@@ -32,7 +32,8 @@ use tinyjson::JsonValue;
 use darkfi::{
     net,
     rpc::{
-        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
+        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult, JsonSubscriber},
+        p2p_method::HandlerP2p,
         server::RequestHandler,
     },
     system::StoppableTaskPtr,
@@ -54,6 +55,7 @@ pub struct JsonRpcInterface {
     workspace: Mutex<String>,
     workspaces: Arc<HashMap<String, ChaChaBox>>,
     p2p: net::P2pPtr,
+    dnet_sub: JsonSubscriber,
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 }
 
@@ -74,7 +76,10 @@ impl RequestHandler for JsonRpcInterface {
             "get_stop_tasks" => self.get_stop_tasks(req.params).await,
 
             "ping" => return self.pong(req.id, req.params).await,
-            "dnet_switch" => self.dnet_switch(req.params).await,
+            "dnet.subscribe_events" => return self.dnet_subscribe_events(req.id, req.params).await,
+            "dnet.switch" => self.dnet_switch(req.params).await,
+            // TODO: make this optional
+            "p2p.get_info" => return self.p2p_get_info(req.id, req.params).await,
             _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         };
 
@@ -86,6 +91,12 @@ impl RequestHandler for JsonRpcInterface {
     }
 }
 
+impl HandlerP2p for JsonRpcInterface {
+    fn p2p(&self) -> net::P2pPtr {
+        self.p2p.clone()
+    }
+}
+
 impl JsonRpcInterface {
     pub fn new(
         dataset_path: PathBuf,
@@ -93,6 +104,7 @@ impl JsonRpcInterface {
         nickname: String,
         workspaces: Arc<HashMap<String, ChaChaBox>>,
         p2p: net::P2pPtr,
+        dnet_sub: JsonSubscriber,
     ) -> Self {
         let workspace = Mutex::new(workspaces.iter().last().unwrap().0.clone());
         Self {
@@ -103,6 +115,7 @@ impl JsonRpcInterface {
             notify_queue_sender,
             p2p,
             rpc_connections: Mutex::new(HashSet::new()),
+            dnet_sub,
         }
     }
 
@@ -128,6 +141,22 @@ impl JsonRpcInterface {
         }
 
         Ok(JsonValue::Boolean(true))
+    }
+
+    // RPCAPI:
+    // Initializes a subscription to p2p dnet events.
+    // Once a subscription is established, `darkirc` will send JSON-RPC notifications of
+    // new network events to the subscriber.
+    //
+    // --> {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [`event`]}
+    pub async fn dnet_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if !params.is_empty() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        self.dnet_sub.clone().into()
     }
 
     // RPCAPI:
