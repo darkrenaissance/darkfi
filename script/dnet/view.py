@@ -20,87 +20,135 @@ import asyncio
 import time
 from scroll import ScrollBar, Scrollable
 
-loop = asyncio.get_event_loop()
+event_loop = asyncio.get_event_loop()
 
-class ServiceWidget(urwid.TreeWidget):
-    def get_display_text(self):
-        return self.get_node().get_value()['name']
+class MyListBox(urwid.ListBox):
+    def focus_next(self):
+        try: 
+            self.body.set_focus(self.body.get_next(self.body.get_focus()[1])[1])
+        except:
+            pass
+    def focus_previous(self):
+        try: 
+            self.body.set_focus(self.body.get_prev(self.body.get_focus()[1])[1])
+        except:
+            pass            
 
-class ChildNode(urwid.TreeNode):
-    def load_widget(self):
-        return ServiceWidget(self)
+    def load_info(self):
+        return InfoWidget(self)
 
-# Service/ session
-class ServiceNode(urwid.ParentNode):
-    def load_widget(self):
-        return ServiceWidget(self)
+class ServiceWidget(urwid.WidgetWrap):
+    def __init__(self):
+        test = urwid.Text("1")
+        super().__init__(test)
+        self._w = urwid.AttrWrap(self._w, None)
+        self.update_w()
 
-    def load_child_keys(self):
-        data = self.get_value()
-        return range(len(data['session']))
+    def selectable(self):
+        return True
 
-    def load_child_node(self, key):
-        childdata = self.get_value()['session'][key]
-        childdepth = self.get_depth() + 1
-        if 'session' in childdata:
-            childclass = ServiceNode
-        else:
-            childclass = ChildNode
-        return childclass(childdata, parent=self, key=key, depth=childdepth)
+    def keypress(self, size, key):
+        if key in ('q'):
+            raise urwid.ExitMainLoop()
+        return key
 
-class Dnetview:
+    def update_w(self):
+        self._w.focus_attr = 'line'
+
+    def name(self):
+        return "ServiceWidget"
+
+class SessionWidget(urwid.WidgetWrap):
+    def __init__(self):
+        test = urwid.Text("2")
+        super().__init__(test)
+        self._w = urwid.AttrWrap(self._w, None)
+        self.update_w()
+
+    def selectable(self):
+        return True
+
+    def keypress(self, size, key):
+        if key in ('q'):
+            raise urwid.ExitMainLoop()
+        return key
+
+    def update_w(self):
+        self._w.focus_attr = 'line'
+
+    def name(self):
+        return "SessionWidget"
+
+class ConnectWidget(urwid.WidgetWrap):
+    def __init__(self):
+        test = urwid.Text("3")
+        super().__init__(test)
+        self._w = urwid.AttrWrap(self._w, None)
+        self.update_w()
+
+    def selectable(self):
+        return True
+
+    def keypress(self, size, key):
+        if key in ('q'):
+            raise urwid.ExitMainLoop()
+        return key
+
+    def update_w(self):
+        self._w.focus_attr = 'line'
+
+    def name(self):
+        return "ConnectWidget"
+
+def main():
     palette = [
               ('body','light gray','black', 'standout'),
               ("line","dark cyan","black","standout"),
               ]
 
-    def __init__(self, data=None):
-        self.topnode = ServiceNode(data)
+    info_text = urwid.Text("")
+    pile = urwid.Pile([info_text])
+    scroll = ScrollBar(Scrollable(pile))
+    rightbox = urwid.LineBox(scroll)
+    
+    widget = ServiceWidget()
+    widget2 = SessionWidget()
+    widget3 = ConnectWidget()
+    listbox_content = [widget, widget2, widget3]
+    listbox = MyListBox(urwid.SimpleListWalker(listbox_content))
+    leftbox = urwid.LineBox(listbox)
 
-        self.listbox = urwid.Columns([urwid.TreeListBox(urwid.TreeWalker(self.topnode))])
-        self.listbox.offset_rows = 1
-        
-        list_frame = urwid.LineBox(self.listbox)
+    columns = urwid.Columns([leftbox, rightbox], focus_column=0)
+    view = urwid.Frame(urwid.AttrWrap( columns, 'body' ))
 
-        pile = urwid.Pile([])
-        loop.create_task(get_info(pile))
+    event_loop.create_task(render_info(pile, listbox))
 
-        scroll = ScrollBar(Scrollable(pile))
-        scroll_frame = urwid.LineBox(scroll)
+    loop = urwid.MainLoop(view, palette,
+        event_loop=urwid.AsyncioEventLoop(loop=event_loop),
+                               )
 
-        columns = urwid.Columns([list_frame, scroll_frame], focus_column=0)
-        self.view = urwid.Frame(urwid.AttrWrap( columns, 'body' ))
+    loop.run()
 
-    def main(self):
-        self.loop = urwid.MainLoop(self.view, self.palette,
-            event_loop=urwid.AsyncioEventLoop(loop=loop),
-            unhandled_input=self.unhandled_input)
-        self.loop.run()
-
-    def unhandled_input(self, k):
-        if k in ('q','Q'):
-            raise urwid.ExitMainLoop()
-
-
-def get_example_tree():
-    tree = {"name":"service","session":[]}
-    for i in range(2):
-        tree['session'].append({"name":f"session{str(i)}"})
-        tree['session'][i]['session']=[]
-        for j in range(2):
-            tree['session'][i]['session'].append({"name":"connection"+
-                                                      str(i) + "." + str(j)})
-    return tree
-
-async def get_info(pile):
+async def render_info(pile, listbox):
     while True:
-        await asyncio.sleep(0.5)
-        t = time.localtime()
-        current_time = time.strftime("%H:%M:%S", t)
-        text = urwid.Text(f"{current_time}: recv ping-pong")
-        pile.contents.append((text, pile.options()))
+        await asyncio.sleep(0.1)
+        pile.contents.clear()
+        focus_w = listbox.get_focus()
+        match focus_w[0].name():
+            case "ServiceWidget":
+                pile.contents.append((urwid.Text("1"), pile.options()))
+            case "SessionWidget":
+                pile.contents.append((urwid.Text("2"), pile.options()))
+            case "ConnectWidget":
+                pile.contents.append((urwid.Text("3"), pile.options()))
 
-if __name__ == '__main__':
-    sample = get_example_tree()
-    Dnetview(sample).main()
+if __name__ == "__main__":
+   main()
+
+
+
+
+
+
+
 
