@@ -1,0 +1,7 @@
+#[[nodes]]
+#name = "ircd"
+#port = 10555
+
+[[nodes]]
+name = "darkirc"
+port = 26660
