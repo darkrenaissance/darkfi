@@ -1,7 +1,10 @@
 # DarkFi Fuzzing
 
-This directory contains our fuzz tests. It is a WIP and likley to be
-re-organized as we expand the complexity of the tests
+This directory contains our fuzz tests. It is a WIP and likely to be
+re-organized as we expand the complexity of the tests.
+
+This document covers the usage of `libfuzzer`. An alternative fuzzing
+tool `honggfuzz` and its related files are located in `fuzz/honggfuzz`.
 
 ## Building the corpora
 
