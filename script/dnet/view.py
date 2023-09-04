@@ -17,7 +17,7 @@
 
 import urwid
 import asyncio
-import time
+
 from scroll import ScrollBar, Scrollable
 
 event_loop = asyncio.get_event_loop()
@@ -123,12 +123,6 @@ class Dnetview():
         columns = urwid.Columns([leftbox, rightbox], focus_column=0)
         self.view = urwid.Frame(urwid.AttrWrap( columns, 'body' ))
 
-    def main(self):
-        event_loop.create_task(self.render_info())
-        loop = urwid.MainLoop(self.view, self.palette,
-            event_loop=urwid.AsyncioEventLoop(loop=event_loop))
-        loop.run()
-
     async def render_info(self):
         while True:
             await asyncio.sleep(0.1)
@@ -141,15 +135,3 @@ class Dnetview():
                     self.pile.contents.append((urwid.Text("2"), self.pile.options()))
                 case "ConnectView":
                     self.pile.contents.append((urwid.Text("3"), self.pile.options()))
-    
-if __name__ == '__main__':
-    dnet = Dnetview()
-    dnet.main()
-
-
-
-
-
-
-
-
