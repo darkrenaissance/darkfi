@@ -1,0 +1,48 @@
+=====================================================================
+TIME: 2023-08-30.15:26:53
+=====================================================================
+FUZZER ARGS:
+ mutationsPerRun : 5
+ externalCmd     : NULL
+ fuzzStdin       : FALSE
+ timeout         : 5 (sec)
+ ignoreAddr      : (nil)
+ ASLimit         : 0 (MiB)
+ RSSLimit        : 0 (MiB)
+ DATALimit       : 0 (MiB)
+ wordlistFile    : NULL
+ dynFileMethod   : 
+ fuzzTarget      : hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string 
+CRASH:
+DESCRIPTION: 
+ORIG_FNAME: 63ade6888888884b45c5555555557de6.00000010.honggfuzz.cov
+FUZZ_FNAME: hfuzz_workspace/serial-decode-string/SIGABRT.PC.7ffff7c8e83c.STACK.c8ecc5e84.CODE.-6.ADDR.0.INSTR.mov____%eax,%ebx.fuzz
+PID: 237583
+SIGNAL: SIGABRT (6)
+PC: 0x7ffff7c8e83c
+FAULT ADDRESS: 0x0
+INSTRUCTION: mov____%eax,%ebx
+STACK HASH: 0000000c8ecc5e84
+STACK:
+ <0x00007ffff7c3e668> [func:UNKNOWN file: line:0 module:/usr/lib/libc.so.6]
+ <0x00007ffff7c264b8> [func:UNKNOWN file: line:0 module:/usr/lib/libc.so.6]
+ <0x000055555558ec77> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x000055555555d197> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x0000555555560f77> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x000055555558cf50> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x000055555558cc91> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x000055555558b586> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x000055555558ca22> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x000055555555e393> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x000055555555fa3a> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x000055555556074b> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x0000555555560a9d> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x00005555555608d5> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x000055555556089a> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x0000555555560828> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x00005555555867fb> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x00005555555607fc> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+ <0x00007ffff7c27cd0> [func:UNKNOWN file: line:0 module:/usr/lib/libc.so.6]
+ <0x00007ffff7c27d8a> [func:UNKNOWN file: line:0 module:/usr/lib/libc.so.6]
+ <0x000055555555ecd5> [func:UNKNOWN file: line:0 module:/home/psychopomp/coding/darkfi/main/fuzz2/hfuzz_target/x86_64-unknown-linux-gnu/release/serial-decode-string]
+=====================================================================
