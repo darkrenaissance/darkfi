@@ -26,8 +26,8 @@ autojoin = [
     "#random",
 ]
 
-## Daemon specific password (optional, but once you configure it,
-## it is required from the client side)
+## IRC server specific password
+## (optional, but once configured, it is required from the IRC client side)
 #password = "CHANGE_ME"
 
 # P2P network settings
@@ -35,8 +35,11 @@ autojoin = [
 ## P2P accept addresses
 #inbound = ["tcp+tls://0.0.0.0:26661", "tcp+tls://[::]:26661"]
 
-## Connection slots
+## Outbound connection slots
 outbound_connections = 8
+
+## Inbound connection slots
+#inbound_connections = 0
 
 ## Addresses we want to advertise to peers (optional)
 ## These should be reachable externally

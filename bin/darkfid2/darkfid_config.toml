@@ -54,6 +54,10 @@ allowed_transports = ["tcp+tls"]
 # attempted. (This does not include manual connections)
 outbound_connections = 8
 
+# Inbound connections slots number, this many active inbound connections
+# will be allowed. (This does not include manual or outbound connections)
+#inbound_connections = 0
+
 # Manual connections retry limit, 0 for forever looping
 #manual_attempt_limit = 0
 

@@ -1,7 +1,10 @@
+## This is the tau daemon configuration file.
+## Review it carefully.
+
 ## JSON-RPC listen URL
 #rpc_listen="tcp://127.0.0.1:23330"
 
-## Sets Datastore Path
+## Datastore Path
 #datastore = "~/.local/darkfi/tau"
 
 ## Current display name
@@ -13,17 +16,17 @@ workspaces = ["darkfi-dev:2bCqQTd8BJgeUzH7JQELZxjQuWS8aCmXZ9C6w7ktNS1v"]
 # P2P network settings
 [net]
 ## P2P accept addresses
-#inbound = ["tcp+tls://127.0.0.1:23331"]
+#inbound = ["tcp+tls://0.0.0.0:23331", "tcp+tls://[::]:23331"]
 
-## Connection slots
+## Outbound connection slots
 outbound_connections = 8
 
-## Addresses we want to advertise to peers
-## These should be reachable externally
-#external_addrs = ["tcp+tls://127.0.0.1:23331"]
+## Inbound connection slots
+inbound_connections = 0
 
-## Specific peers to connect to
-#peers = ["tcp+tls://127.0.0.1:23331"]
+## Addresses we want to advertise to peers (optional)
+## These should be reachable externally
+#external_addrs = ["tcp+tls://my.resolveable.address:23331"]
 
 ## Seed nodes to connect to
 seeds = [
@@ -37,4 +40,4 @@ allowed_transports = ["tcp+tls"]
 # Enable transport mixing
 # Allows mixing transports, e.g. tor+tls:// connecting to tcp+tls://
 # By default this is not allowed.
-#transport_mixing = false
+transport_mixing = false
