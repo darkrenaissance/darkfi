@@ -16,7 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fmt, sync::Arc};
+use std::{
+    fmt,
+    sync::{
+        atomic::{AtomicBool, Ordering::SeqCst},
+        Arc,
+    },
+};
 
 use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
 use log::{debug, error, info};
@@ -72,7 +78,7 @@ pub struct Channel {
     /// Task that is listening for the stop signal
     receive_task: StoppableTaskPtr,
     /// A boolean marking if this channel is stopped
-    stopped: Mutex<bool>,
+    stopped: AtomicBool,
     /// Weak pointer to respective session
     session: SessionWeakPtr,
     /// Channel debug info
@@ -99,7 +105,7 @@ impl Channel {
             message_subsystem,
             stop_subscriber: Subscriber::new(),
             receive_task: StoppableTask::new(),
-            stopped: Mutex::new(false),
+            stopped: AtomicBool::new(false),
             session,
             info,
         })
@@ -124,7 +130,7 @@ impl Channel {
         self.receive_task.clone().start(
             self.clone().main_receive_loop(),
             |result| self_.handle_stop(result),
-            Error::NetworkServiceStopped,
+            Error::ChannelStopped,
             executor,
         );
 
@@ -136,15 +142,7 @@ impl Channel {
     /// been closed.
     pub async fn stop(&self) {
         debug!(target: "net::channel::stop()", "START {:?}", self);
-
-        if !*self.stopped.lock().await {
-            *self.stopped.lock().await = true;
-
-            self.stop_subscriber.notify(Error::ChannelStopped).await;
-            self.receive_task.stop().await;
-            self.message_subsystem.trigger_error(Error::ChannelStopped).await;
-        }
-
+        self.receive_task.stop().await;
         debug!(target: "net::channel::stop()", "END {:?}", self);
     }
 
@@ -153,7 +151,7 @@ impl Channel {
     pub async fn subscribe_stop(&self) -> Result<Subscription<Error>> {
         debug!(target: "net::channel::subscribe_stop()", "START {:?}", self);
 
-        if *self.stopped.lock().await {
+        if self.stopped.load(SeqCst) {
             return Err(Error::ChannelStopped)
         }
 
@@ -173,7 +171,7 @@ impl Channel {
              M::NAME, self,
         );
 
-        if *self.stopped.lock().await {
+        if self.stopped.load(SeqCst) {
             return Err(Error::ChannelStopped)
         }
 
@@ -236,10 +234,15 @@ impl Channel {
     async fn handle_stop(self: Arc<Self>, result: Result<()>) {
         debug!(target: "net::channel::handle_stop()", "[START] {:?}", self);
 
+        self.stopped.store(true, SeqCst);
+
         match result {
             Ok(()) => panic!("Channel task should never complete without error status"),
             // Send this error to all channel subscribers
-            Err(e) => self.message_subsystem.trigger_error(e).await,
+            Err(e) => {
+                self.stop_subscriber.notify(Error::ChannelStopped).await;
+                self.message_subsystem.trigger_error(e).await;
+            }
         }
 
         debug!(target: "net::channel::handle_stop()", "[END] {:?}", self);
@@ -275,7 +278,6 @@ impl Channel {
                         target: "net::channel::main_receive_loop()",
                         "Stopping channel {:?}", self
                     );
-                    self.stop().await;
                     return Err(Error::ChannelStopped)
                 }
             };

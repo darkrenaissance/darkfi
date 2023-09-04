@@ -112,6 +112,7 @@ impl StoppableTask {
     }
 
     /// Stops the task. On completion, guarantees the process has stopped.
+    /// Can be called multiple times. After the first call, this does nothing.
     pub async fn stop(&self) {
         trace!(target: "system::StoppableTask", "Stopping task {}", self.task_id);
         self.signal.notify();
