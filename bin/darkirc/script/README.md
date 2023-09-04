@@ -32,4 +32,4 @@ the tweet text and print it out in irc.
 ## `tau-notifier`
 sends notifications about some `tau` commands (namely: adding a new 
 task, changing state, reassigning and new comments) to desired channels 
-in `ircd`. 
+in `darkirc`. 

@@ -3,7 +3,7 @@
 ## How to get started
 
 Every monday 16:00 CET, there is our main dev meeting on
-[our chat](https://darkrenaissance.github.io/darkfi/misc/ircd/ircd.html).
+[our chat](https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html).
 Feel free to join and discuss with other darkfi devs.
 
 In general, the best way to get started is to explore the codebase thoroughly and

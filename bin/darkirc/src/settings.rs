@@ -47,7 +47,7 @@ pub enum RPL {
     EndOfNames = 366,
 }
 
-/// ircd cli
+/// darkirc cli
 #[derive(Clone, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
 #[structopt(name = "darkirc")]
