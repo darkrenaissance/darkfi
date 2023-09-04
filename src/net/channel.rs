@@ -137,9 +137,8 @@ impl Channel {
         debug!(target: "net::channel::start()", "END {:?}", self);
     }
 
-    /// Stops the channel. Steps through each component of the channel connection
-    /// and sends a stop signal. Notifies all subscribers that the channel has
-    /// been closed.
+    /// Stops the channel.
+    /// Notifies all subscribers that the channel has been closed in `handle_stop()`.
     pub async fn stop(&self) {
         debug!(target: "net::channel::stop()", "START {:?}", self);
         self.receive_task.stop().await;
