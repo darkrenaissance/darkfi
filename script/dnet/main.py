@@ -18,7 +18,9 @@
 import sys
 import urwid
 import asyncio
+import logging
 
+import model
 from rpc import JsonRpc
 from view import Dnetview
 
@@ -29,7 +31,6 @@ async def get_info(rpc):
             break
         except OSError:
             pass
-
     response = await rpc._make_request("p2p.get_info", [])
     info = response["result"]
     channels = info["channels"]
@@ -38,40 +39,42 @@ async def get_info(rpc):
         id = channel["id"]
         channel_lookup[id] = channel
 
-    #print("inbound:")
+    logging.debug("inbound")
     for channel in channels:
         if channel["session"] != "inbound":
             continue
         url = channel["url"]
-        #print(f"  {url}")
+        logging.debug(f"  {url}")
 
-    #print("outbound:")
+    logging.debug("outbound")
     for i, id in enumerate(info["outbound_slots"]):
         if id == 0:
-            #print(f"  {i}: none")
+            logging.debug(f"  {i}: none")
             continue
 
         assert id in channel_lookup
         url = channel_lookup[id]["url"]
-        #print(f"  {i}: {url}")
+        logging.debug(f"  {i}: {url}")
 
-    #print("seed:")
+    logging.debug("seed")
     for channel in channels:
         if channel["session"] != "seed":
             continue
         url = channel["url"]
-        #print(f"  {url}")
+        logging.debug(f"  {i}: {url}")
 
-    #print("manual:")
+    logging.debug("manual")
     for channel in channels:
         if channel["session"] != "manual":
             continue
         url = channel["url"]
-        #print(f"  {url}")
+        logging.debug(f"  {i}: {url}")
 
     await rpc.stop()
 
 if __name__ == '__main__':
+    logging.basicConfig(filename='dnet.log', encoding='utf-8', level=logging.DEBUG)
+
     ev = asyncio.get_event_loop()
 
     rpc = JsonRpc()
