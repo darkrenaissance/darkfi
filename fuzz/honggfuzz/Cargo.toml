@@ -1,0 +1,41 @@
+[package]
+name = "darkfi-fuzz2"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+honggfuzz = "0.5"
+
+[dependencies.darkfi]
+path = "../.."
+features = ["zkas"]
+
+[dependencies.darkfi-serial]
+path = "../../src/serial"
+features = ["derive", "semver", "collections", "crypto", "hash"]
+
+[patch.crates-io]
+blake2b_simd = {git="https://github.com/parazyd/blake2_simd", branch="impl-common"}
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "zkbinary-decode"
+path = "src/zkbinary_decode.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "serial-decode-string"
+path = "src/serial_decode_string.rs"
+test = false
+doc = false
