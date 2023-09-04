@@ -15,19 +15,16 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import sys
-import urwid
-import asyncio
-import logging
+import sys, toml, urwid, asyncio, logging
 
 import model
 from rpc import JsonRpc
 from view import Dnetview
 
-async def get_info(rpc):
+async def get_info(rpc, name, port):
     while True:
         try:
-            await rpc.start("localhost", 26660)
+            await rpc.start("localhost", port)
             break
         except OSError:
             pass
@@ -39,6 +36,7 @@ async def get_info(rpc):
         id = channel["id"]
         channel_lookup[id] = channel
 
+    logging.debug(f"{name}")
     logging.debug("inbound")
     for channel in channels:
         if channel["session"] != "inbound":
@@ -72,13 +70,22 @@ async def get_info(rpc):
 
     await rpc.stop()
 
+
+def get_config():
+    with open("config.toml") as f:
+        cfg = toml.load(f)
+        return cfg
+
 if __name__ == '__main__':
     logging.basicConfig(filename='dnet.log', encoding='utf-8', level=logging.DEBUG)
 
-    ev = asyncio.get_event_loop()
+    config = get_config()
+    nodes = config.get("nodes")
 
+    ev = asyncio.get_event_loop()
     rpc = JsonRpc()
-    ev.create_task(get_info(rpc))
+    for node in nodes:
+        ev.create_task(get_info(rpc, node['name'], node['port']))
 
     dnet = Dnetview()
     ev.create_task(dnet.render_info())
