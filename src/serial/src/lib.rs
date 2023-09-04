@@ -267,7 +267,19 @@ impl_int_encodable!(i32, read_i32, write_i32);
 impl_int_encodable!(i64, read_i64, write_i64);
 impl_int_encodable!(i128, read_i128, write_i128);
 
-/// Variable-integer encoding
+/// Variable-integer encoding.
+/// Integer can be encoded depending on the represented value to save space.
+/// Variable length integers always precede an array/vector of a type of data
+/// that may vary in length. Longer numbers are encoded in little endian.
+///
+/// | Value         | Storage length | Format                              |
+/// |---------------|----------------|-------------------------------------|
+/// | <= 0xfc       | 1              | u8                                  |
+/// | <= 0xffff     | 3              | `0xfd` followed by `value` as `u16` |
+/// | <= 0xffffffff | 5              | `0xfe` followed by `value` as `u32` |
+/// | -             | 9              | `0xff` followed by `value` as `u64` |
+///
+/// See also [Bitcoin variable length integers](https://en.bitcoin.it/wiki/Protocol_documentation#Variable_length_integer).
 #[derive(Debug, PartialEq, Eq)]
 pub struct VarInt(pub u64);
 
