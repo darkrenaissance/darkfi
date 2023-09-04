@@ -49,6 +49,9 @@ pub struct Settings {
     /// Outbound connection slots number, this many connections will be
     /// attempted. (This does not include manual connections)
     pub outbound_connections: usize,
+    /// Inbound connection slots number, this many active listening connections
+    /// will be allowed. (This does not include manual connections)
+    pub inbound_connections: usize,
     /// Manual connections retry limit, 0 for forever looping
     pub manual_attempt_limit: usize,
     /// Outbound connection timeout (in seconds)
@@ -82,6 +85,7 @@ impl Default for Settings {
             allowed_transports: vec![],
             transport_mixing: true,
             outbound_connections: 0,
+            inbound_connections: 0,
             manual_attempt_limit: 0,
             outbound_connect_timeout: 15,
             channel_handshake_timeout: 10,
@@ -107,8 +111,12 @@ pub struct SettingsOpt {
     pub inbound: Vec<Url>,
 
     /// Outbound connection slots number
-    #[structopt(long = "slots")]
+    #[structopt(long = "outbound-slots")]
     pub outbound_connections: Option<usize>,
+
+    /// Inbound connection slots number
+    #[structopt(long = "inbound-slots")]
+    pub inbound_connections: Option<usize>,
 
     /// P2P external addresses node advertises so other peers can
     /// reach us and connect to us, as long as inbound addresses
@@ -187,6 +195,7 @@ impl From<SettingsOpt> for Settings {
             allowed_transports: opt.allowed_transports,
             transport_mixing: opt.transport_mixing.unwrap_or(false),
             outbound_connections: opt.outbound_connections.unwrap_or(0),
+            inbound_connections: opt.inbound_connections.unwrap_or(0),
             manual_attempt_limit: opt.manual_attempt_limit.unwrap_or(0),
             outbound_connect_timeout: opt.outbound_connect_timeout.unwrap_or(15),
             channel_handshake_timeout: opt.channel_handshake_timeout.unwrap_or(10),

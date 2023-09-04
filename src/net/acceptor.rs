@@ -16,7 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{io::ErrorKind, sync::Arc};
+use std::{
+    io::ErrorKind,
+    sync::{
+        atomic::{AtomicUsize, Ordering::SeqCst},
+        Arc,
+    },
+};
 
 use log::error;
 use smol::Executor;
@@ -28,7 +34,7 @@ use super::{
     transport::{Listener, PtListener},
 };
 use crate::{
-    system::{StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
+    system::{CondVar, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription},
     Error, Result,
 };
 
@@ -40,6 +46,7 @@ pub struct Acceptor {
     channel_subscriber: SubscriberPtr<Result<ChannelPtr>>,
     task: StoppableTaskPtr,
     session: SessionWeakPtr,
+    conn_count: AtomicUsize,
 }
 
 impl Acceptor {
@@ -49,6 +56,7 @@ impl Acceptor {
             channel_subscriber: Subscriber::new(),
             task: StoppableTask::new(),
             session,
+            conn_count: AtomicUsize::new(0),
         })
     }
 
@@ -74,7 +82,7 @@ impl Acceptor {
     fn accept(self: Arc<Self>, listener: Box<dyn PtListener>, ex: Arc<Executor<'_>>) {
         let self_ = self.clone();
         self.task.clone().start(
-            self.run_accept_loop(listener),
+            self.run_accept_loop(listener, ex.clone()),
             |result| self_.handle_stop(result),
             Error::NetworkServiceStopped,
             ex,
@@ -82,12 +90,53 @@ impl Acceptor {
     }
 
     /// Run the accept loop.
-    async fn run_accept_loop(self: Arc<Self>, listener: Box<dyn PtListener>) -> Result<()> {
+    async fn run_accept_loop(
+        self: Arc<Self>,
+        listener: Box<dyn PtListener>,
+        ex: Arc<Executor<'_>>,
+    ) -> Result<()> {
+        // CondVar used to notify the loop to recheck if new connections can
+        // be accepted by the listener.
+        let cv = Arc::new(CondVar::new());
+
         loop {
+            // Refuse new connections if we're up to the connection limit
+            let limit = self.session.upgrade().unwrap().p2p().settings().inbound_connections;
+            if self.clone().conn_count.load(SeqCst) >= limit {
+                // This will get notified every time an inbound channel is stopped.
+                // These channels are the channels spawned below on listener.next().is_ok().
+                // After the notification, we reset the condvar and retry this loop to see
+                // if we can accept more connections, and if not - we'll be back here.
+                cv.wait().await;
+                cv.reset();
+                continue
+            }
+
+            // Now we wait for a new connection.
             match listener.next().await {
                 Ok((stream, url)) => {
+                    // Create the new Channel.
                     let session = self.session.clone();
                     let channel = Channel::new(stream, url, session).await;
+
+                    // Increment the connection counter
+                    self.conn_count.fetch_add(1, SeqCst);
+
+                    // This task will subscribe on the new channel and decrement
+                    // the connection counter. Along with that, it will notify
+                    // the CondVar that might be waiting to allow new connections.
+                    let self_ = self.clone();
+                    let channel_ = channel.clone();
+                    let cv_ = cv.clone();
+                    ex.spawn(async move {
+                        let stop_sub = channel_.subscribe_stop().await.unwrap();
+                        stop_sub.receive().await;
+                        self_.conn_count.fetch_sub(1, SeqCst);
+                        cv_.notify();
+                    })
+                    .detach();
+
+                    // Finally, notify any subscribers about the new channel.
                     self.channel_subscriber.notify(Ok(channel)).await;
                 }
 
