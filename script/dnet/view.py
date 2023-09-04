@@ -22,7 +22,7 @@ from scroll import ScrollBar, Scrollable
 
 event_loop = asyncio.get_event_loop()
 
-class MyListBox(urwid.ListBox):
+class LeftList(urwid.ListBox):
     def focus_next(self):
         try: 
             self.body.set_focus(self.body.get_next(self.body.get_focus()[1])[1])
@@ -37,7 +37,7 @@ class MyListBox(urwid.ListBox):
     def load_info(self):
         return InfoWidget(self)
 
-class ServiceWidget(urwid.WidgetWrap):
+class ServiceView(urwid.WidgetWrap):
     def __init__(self):
         test = urwid.Text("1")
         super().__init__(test)
@@ -56,9 +56,9 @@ class ServiceWidget(urwid.WidgetWrap):
         self._w.focus_attr = 'line'
 
     def name(self):
-        return "ServiceWidget"
+        return "ServiceView"
 
-class SessionWidget(urwid.WidgetWrap):
+class SessionView(urwid.WidgetWrap):
     def __init__(self):
         test = urwid.Text("2")
         super().__init__(test)
@@ -77,9 +77,9 @@ class SessionWidget(urwid.WidgetWrap):
         self._w.focus_attr = 'line'
 
     def name(self):
-        return "SessionWidget"
+        return "SessionView"
 
-class ConnectWidget(urwid.WidgetWrap):
+class ConnectView(urwid.WidgetWrap):
     def __init__(self):
         test = urwid.Text("3")
         super().__init__(test)
@@ -98,52 +98,53 @@ class ConnectWidget(urwid.WidgetWrap):
         self._w.focus_attr = 'line'
 
     def name(self):
-        return "ConnectWidget"
+        return "ConnectView"
 
-def main():
+class Dnetview():
     palette = [
               ('body','light gray','black', 'standout'),
               ("line","dark cyan","black","standout"),
               ]
 
-    info_text = urwid.Text("")
-    pile = urwid.Pile([info_text])
-    scroll = ScrollBar(Scrollable(pile))
-    rightbox = urwid.LineBox(scroll)
+    def __init__(self, data=None):
+        info_text = urwid.Text("")
+        self.pile = urwid.Pile([info_text])
+        scroll = ScrollBar(Scrollable(self.pile))
+        rightbox = urwid.LineBox(scroll)
+        
+        widget = ServiceView()
+        widget2 = SessionView()
+        widget3 = ConnectView()
+
+        listbox_content = [widget, widget2, widget3]
+        self.listbox = LeftList(urwid.SimpleListWalker(listbox_content))
+        leftbox = urwid.LineBox(self.listbox)
+
+        columns = urwid.Columns([leftbox, rightbox], focus_column=0)
+        self.view = urwid.Frame(urwid.AttrWrap( columns, 'body' ))
+
+    def main(self):
+        event_loop.create_task(self.render_info())
+        loop = urwid.MainLoop(self.view, self.palette,
+            event_loop=urwid.AsyncioEventLoop(loop=event_loop))
+        loop.run()
+
+    async def render_info(self):
+        while True:
+            await asyncio.sleep(0.1)
+            self.pile.contents.clear()
+            focus_w = self.listbox.get_focus()
+            match focus_w[0].name():
+                case "ServiceView":
+                    self.pile.contents.append((urwid.Text("1"), self.pile.options()))
+                case "SessionView":
+                    self.pile.contents.append((urwid.Text("2"), self.pile.options()))
+                case "ConnectView":
+                    self.pile.contents.append((urwid.Text("3"), self.pile.options()))
     
-    widget = ServiceWidget()
-    widget2 = SessionWidget()
-    widget3 = ConnectWidget()
-    listbox_content = [widget, widget2, widget3]
-    listbox = MyListBox(urwid.SimpleListWalker(listbox_content))
-    leftbox = urwid.LineBox(listbox)
-
-    columns = urwid.Columns([leftbox, rightbox], focus_column=0)
-    view = urwid.Frame(urwid.AttrWrap( columns, 'body' ))
-
-    event_loop.create_task(render_info(pile, listbox))
-
-    loop = urwid.MainLoop(view, palette,
-        event_loop=urwid.AsyncioEventLoop(loop=event_loop),
-                               )
-
-    loop.run()
-
-async def render_info(pile, listbox):
-    while True:
-        await asyncio.sleep(0.1)
-        pile.contents.clear()
-        focus_w = listbox.get_focus()
-        match focus_w[0].name():
-            case "ServiceWidget":
-                pile.contents.append((urwid.Text("1"), pile.options()))
-            case "SessionWidget":
-                pile.contents.append((urwid.Text("2"), pile.options()))
-            case "ConnectWidget":
-                pile.contents.append((urwid.Text("3"), pile.options()))
-
-if __name__ == "__main__":
-   main()
+if __name__ == '__main__':
+    dnet = Dnetview()
+    dnet.main()
 
 
 
