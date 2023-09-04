@@ -143,7 +143,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             let datastore = expand_path(&settings.output.unwrap())?;
             save_json_file(&datastore, &JsonValue::String(pub_encoded), false)?;
         } else {
-            println!("Public key recoverd: {}", pub_encoded);
+            println!("Public key recovered: {}", pub_encoded);
         }
 
         return Ok(())
