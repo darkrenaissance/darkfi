@@ -131,7 +131,7 @@ impl TimeKeeper {
 }
 
 /// Wrapper struct to represent system timestamps.
-#[derive(Clone, Copy, Debug, SerialEncodable, SerialDecodable, PartialEq, PartialOrd, Eq)]
+#[derive(Hash, Clone, Copy, Debug, SerialEncodable, SerialDecodable, PartialEq, PartialOrd, Eq)]
 pub struct Timestamp(pub u64);
 
 impl Timestamp {

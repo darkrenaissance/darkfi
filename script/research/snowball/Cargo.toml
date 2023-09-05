@@ -1,0 +1,16 @@
+[package]
+name = "snowball-consensus"
+version = "0.4.1"
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[workspace]
+
+[dependencies]
+darkfi = {path = "../../../", features = ["util"]}
+darkfi-serial = {path = "../../../src/serial"}
+
+blake3 = "1.4.1"
+num-bigint = "0.4.4"
+rand = "0.8.5"

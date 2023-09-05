@@ -1,0 +1,7 @@
+* Port to async in order to simulate a concurrent network more closely
+* Sybil protection
+* Orphan handling can be more efficient
+* DAG can be more efficient
+* Checkpoints can be taken to reduce overhead of storing entire history
+* Pruning
+* Timestamp manipulation verification
