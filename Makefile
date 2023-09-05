@@ -119,7 +119,7 @@ distclean: clean
 install: $(BINS)
 	@for i in $(BINS); \
 	do \
-		echo $(MAKE) -C bin/$$i install; \
+		$(MAKE) -C bin/$$i install; \
 	done;
 
 uninstall:
