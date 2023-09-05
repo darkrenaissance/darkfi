@@ -173,6 +173,32 @@ impl P2p {
         self.broadcast_with_exclude(message, &[]).await
     }
 
+    /// Broadcast a message concurrently to all given peers.
+    pub async fn broadcast_to<M: Message>(&self, message: &M, peer_list: &[ChannelPtr]) {
+        let mut futures = FuturesUnordered::new();
+
+        for channel in peer_list {
+            futures.push(channel.send(message).map_err(|e| {
+                (
+                    format!("[P2P] Broadcasting message to {} failed: {}", channel.address(), e),
+                    channel.clone(),
+                )
+            }));
+        }
+
+        if futures.is_empty() {
+            warn!(target: "net::p2p::broadcast()", "[P2P] No connected channels found for broadcast");
+            return
+        }
+
+        while let Some(entry) = futures.next().await {
+            if let Err((e, chan)) = entry {
+                error!(target: "net::p2p::broadcast()", "{}", e);
+                self.remove(chan).await;
+            }
+        }
+    }
+
     /// Broadcasts a message concurrently across active channels, excluding
     /// the ones provided in `exclude_list`.
     pub async fn broadcast_with_exclude<M: Message>(&self, message: &M, exclude_list: &[Url]) {
