@@ -30,14 +30,11 @@ you have all the necessary dependencies.
 % git clone https://github.com/darkrenaissance/darkfi 
 % cd darkfi 
 % make darkirc
-% # install system wide only if you can make sure there would be no
-% # multiple darkirc versions installed
-% sudo make install darkirc 
 ```
 
 ## Usage (DarkFi Network)
 
-Upon installing `darkirc` as described above, the preconfigured defaults
+Upon compiling `darkirc` as described above, the preconfigured defaults
 will allow you to connect to the network and start chatting with the
 rest of the DarkFi community.
 
@@ -48,7 +45,7 @@ weekly meetings, and where the community is most active and talks
 about DarkFi development.
 
 ```shell
-% darkirc
+% ./darkirc
 ```
 
 `darkirc` will create a configuration file `darkirc_config.toml` by 
@@ -62,7 +59,7 @@ When done, you can run `darkirc` for the second time in order for it to
 connect to the network and start participating in the P2P protocol:
 
 ```shell
-% darkirc
+% ./darkirc
 ```
 
 Whenever you edit `darkirc_config.toml` file and if you have your 
