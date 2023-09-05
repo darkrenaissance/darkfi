@@ -32,6 +32,21 @@ you have all the necessary dependencies.
 % make darkirc
 ```
 
+## Installation (Android)
+
+This is for Android 64 bit (which is most phones).
+
+1. Install Docker
+2. Run `cd bin/darkirc/ && make android`. The resulting file will be called
+   `darkirc.aarch64-android`. Copy this to your phone.
+3. Install Termux and RevolutionIRC on F-Droid.
+4. You can access the phone storage from `/sdcard/` and copy the file
+   into the Termux home.
+5. Run `termux-wake-lock`. This stops Android suspending the daemon.
+6. Run the daemon. You can open new Termux sessions by swiping from
+   the left to bring up the sidebar.
+7. Connect the RevolutionIRC frontend.
+
 ## Usage (DarkFi Network)
 
 Upon compiling `darkirc` as described above, the preconfigured defaults

@@ -2,7 +2,6 @@
 
 see [Darkfi Book](https://darkrenaissance.github.io/darkfi/misc/darkirc/darkirc.html) for the installation guide.
 
-
 ## Services
 
 To operate with `darkirc` using IRC clients, we can implement special

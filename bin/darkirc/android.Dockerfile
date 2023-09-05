@@ -2,7 +2,7 @@ FROM ubuntu
 
 RUN apt update
 RUN apt install -yq openjdk-19-jre-headless openjdk-19-jdk-headless
-RUN apt install -yq wget unzip cmake
+RUN apt install -yq wget unzip cmake file
 
 RUN cd /tmp/ && \
     wget -O install-rustup.sh https://sh.rustup.rs && \
@@ -29,20 +29,19 @@ RUN cd ${ANDROID_HOME}/cmdline-tools/ && \
 RUN yes | ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager --licenses
 RUN ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "platform-tools"
 RUN ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "platforms;android-34"
-RUN ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "ndk-bundle"
+RUN ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "ndk;25.2.9519653"
 RUN ${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager "build-tools;34.0.0"
 
 RUN echo '[target.aarch64-linux-android] \n\
-ar = "/opt/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ar" \n\
-linker = "/opt/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang" \n\
+ar = "/opt/android-sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar" \n\
+linker = "/opt/android-sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang" \n\
 ' > /root/.cargo/config
 
 # Needed by the ring dependency
-ENV TARGET_AR /opt/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android-ar
-ENV TARGET_CC /opt/android-sdk/ndk-bundle/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android30-clang
+ENV TARGET_AR /opt/android-sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-ar
+ENV TARGET_CC /opt/android-sdk/ndk/25.2.9519653/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android33-clang
 
 # Make sqlite3
-RUN apt install -yq file
 RUN cd /tmp/ && \
     wget -O sqlite.zip https://www.sqlite.org/2023/sqlite-amalgamation-3430000.zip && \
     unzip sqlite.zip && \
@@ -66,13 +65,8 @@ LOCAL_C_INCLUDES        := ../build \n\
 LOCAL_EXPORT_C_INCLUDES := ../build \n\
 LOCAL_CFLAGS            := -DSQLITE_THREADSAFE=1 \n\
 include $(BUILD_STATIC_LIBRARY)' > jni/Android.mk && \
-    /opt/android-sdk/ndk-bundle/ndk-build
+    /opt/android-sdk/ndk/25.2.9519653/ndk-build
 ENV RUSTFLAGS "-L/tmp/sqlite/obj/local/arm64-v8a/"
-
-# Bug in cargo
-# https://blog.rust-lang.org/2023/01/09/android-ndk-update-r25.html
-# https://github.com/rust-lang/rust/pull/85806#issuecomment-1096266946
-RUN find ${ANDROID_HOME} -name "libunwind.a" -execdir bash -c 'echo "INPUT(-lunwind)" > libgcc.a' \;
 
 # Make directory for user code
 RUN mkdir /root/src
