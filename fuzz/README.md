@@ -57,11 +57,17 @@ simplify the fuzz harness instead to reduce its code coverage. If the
 harness is targeting a high-level function, try isolating the problem
 and fuzzing a lower-level function instead.
 
+### Increasing memory usage
 It is possible to increase the amount of memory libFuzzer is allowed to use by passing an argument
 to it via libFuzzer like so:
 
 ```sh
 cargo fuzz run --all-features zkas-decoder -- "-rss_limit_mb=4096"
+```
+
+To disable memory limits entirely, pass the argument:
+```sh
+"-rss_limit_mb=0"
 ```
 
 However, this is unlikely to resolve the issue due to differences in
