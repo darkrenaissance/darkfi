@@ -1,3 +1,21 @@
+/* This file is part of DarkFi (https://dark.fi)
+ *
+ * Copyright (C) 2020-2023 Dyne.org foundation
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
@@ -7,12 +25,6 @@ use darkfi::util::time::Timestamp;
 use darkfi_serial::Encodable;
 use num_bigint::BigUint;
 use rand::prelude::SliceRandom;
-
-// NOTE: When a node sends a message to another node, and
-// this other node does not have (some of) its parents, it
-// should ask for these parents from the node that sent the
-// message. If the node is unable to produce the parents,
-// then the message can be considered malicious and dropped.
 
 /// Number of random samples in each query
 const K: usize = 20;
@@ -141,16 +153,44 @@ impl SnowballNode {
         sample_votes.into_iter().max_by_key(|&(_, count)| count).map(|(message, _)| message)
     }
 
-    fn receive_vote(&mut self, message: &Message) {
+    fn receive_vote(&mut self, from_node: &SnowballNode, message: &Message) {
+        // Request any missing parent messages
+        let missing_parents = self.request_missing_references(from_node, message);
+        for parent_msg in missing_parents {
+            if self.validate_message(&parent_msg) {
+                self.add_to_dag(&parent_msg);
+            } else {
+                // The parent message is invalid.
+                self.malicious_counter += 1;
+                return
+            }
+        }
+
         *self.message_votes.entry(message.clone()).or_insert(0) += 1;
 
-        // Check if the message can be added to the DAG, or if it should be added
-        // to the orphan pool.
         if message.references.iter().all(|ref_id| self.dag.contains_key(ref_id)) {
             self.add_to_dag(message);
         } else {
             self.orphan_pool.push(message.clone());
         }
+    }
+
+    fn request_missing_references(
+        &self,
+        from_node: &SnowballNode,
+        message: &Message,
+    ) -> Vec<Message> {
+        let mut missing_refs = Vec::new();
+
+        for ref_id in &message.references {
+            if !self.dag.contains_key(ref_id) {
+                if let Some(parent_msg) = from_node.dag.get(ref_id) {
+                    missing_refs.push(parent_msg.clone());
+                }
+            }
+        }
+
+        missing_refs
     }
 
     fn update_preference(&mut self) {
@@ -342,8 +382,7 @@ fn main() {
                     for &idx in node_indices.iter().take(GOSSIP_SIZE) {
                         if let Some(other_node) = network.get_mut(&idx) {
                             if !other_node.is_malicious() && other_node.online {
-                                other_node.receive_vote(&malformed_msg);
-                                other_node.add_to_dag(&malformed_msg);
+                                other_node.receive_vote(node, &malformed_msg);
                             }
                         }
                     }
@@ -365,8 +404,7 @@ fn main() {
                         if let Some(other_node) = network.get_mut(&idx) {
                             if other_node.validate_message(&vote) {
                                 if !other_node.is_malicious() && other_node.online {
-                                    other_node.receive_vote(&vote);
-                                    other_node.add_to_dag(&vote);
+                                    other_node.receive_vote(node, &vote);
                                 }
                             } else {
                                 // Increase malicious counter if a malformed message is received
