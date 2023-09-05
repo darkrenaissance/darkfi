@@ -6,6 +6,49 @@ re-organized as we expand the complexity of the tests.
 This document covers the usage of `libfuzzer`. An alternative fuzzing
 tool `honggfuzz` and its related files are located in `fuzz/honggfuzz`.
 
+## Install
+```sh
+cargo install cargo-fuzz
+```
+
+## Usage
+```sh
+# List available targets
+$ cargo fuzz list
+# Run fuzzer on a target
+# format: cargo fuzz run TARGET
+# e.g. if `serial` is your target:
+$ cargo fuzz run serial 
+```
+
+This process will run infinitely until a crash occurs or until it is cancelled by the user.
+
+### Optimization
+Fuzzing benefits from running as many tests as possible, so optimizing our time
+and throughput is very important. The number of jobs used by the computer
+can be increased by passing the following argument:
+
+```sh
+--jobs $(nproc)
+```
+
+The Address Sanitizer can be disabled for any Rust code that does not use `unsafe`:
+
+```sh
+-s none
+```
+
+The flags `--release`, `--debug-assertions` also improve throughput and are enabled
+by default.
+
+In the case of DarkFi, we also want to supply `--all-features`.
+
+In summary, a more efficient way to fuzz safe Rust code is the following:
+
+```sh
+cargo fuzz run --jobs $(nproc) -s none --all-features TARGET 
+```
+
 ## Building the corpora
 
 ### Motivation
