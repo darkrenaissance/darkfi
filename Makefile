@@ -21,8 +21,8 @@ BINS = \
 	genev/genev-cli \
 	genev/genevd \
 	lilith \
-	tau \
-	taud \
+	tau/tau-cli \
+	tau/taud \
 	vanityaddr
 
 # ZK proofs to compile with zkas
