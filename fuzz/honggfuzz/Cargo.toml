@@ -9,6 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 honggfuzz = "0.5"
+bitcoin = "0.30.1"
 
 [dependencies.darkfi]
 path = "../.."
@@ -37,5 +38,11 @@ doc = false
 [[bin]]
 name = "serial-decode-string"
 path = "src/serial_decode_string.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "varint-differential"
+path = "src/varint_differential.rs"
 test = false
 doc = false
