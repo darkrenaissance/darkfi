@@ -20,6 +20,17 @@ $(BIN): $(SRC)
 	$(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) --release --package darkirc
 	cp -f ../../target/$(RUST_TARGET)/release/darkirc $@
 
+android:
+	docker build -t test:latest . --file android.Dockerfile
+	# Use this command to get an interactive terminal inside docker:
+	#docker run -v $(shell pwd)/../../:/root/src -it test:latest /bin/bash
+	docker run -v $(shell pwd)/../../:/root/src -t test:latest make _aarch64-android
+
+# Invoked inside docker by the command above
+# We need to mount this directory as a volume using -v so docker can access it
+_aarch64-android:
+	cargo build --release --target aarch64-linux-android --package darkirc
+
 clean:
 	rm -f $(BIN)
 
