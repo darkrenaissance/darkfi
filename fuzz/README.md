@@ -57,7 +57,7 @@ simplify the fuzz harness instead to reduce its code coverage. If the
 harness is targeting a high-level function, try isolating the problem
 and fuzzing a lower-level function instead.
 
-### Increasing memory usage
+### Increasing allowed memory usage
 It is possible to increase the amount of memory libFuzzer is allowed to use by passing an argument
 to it via libFuzzer like so:
 
