@@ -8,10 +8,10 @@
 #irc_listen = "tcp://127.0.0.1:6667"
 
 ## TLS certificate path if IRC acceptor uses TLS (optional)
-#irc_tls_cert = "/etc/letsencrypt/ircd/fullchain.pem"
+#irc_tls_cert = "/etc/letsencrypt/darkirc/fullchain.pem"
 
 ## TLS secret key path if IRC acceptor uses TLS (optional)
-#irc_tls_secret = "/etc/letsencrypt/ircd/privkey.pem"
+#irc_tls_secret = "/etc/letsencrypt/darkirc/privkey.pem"
 
 ## Sets Datastore Path
 #datastore = "~/.local/darkfi/darkirc"

@@ -1,16 +1,16 @@
 ## JSON-RPC listen URL
-rpc_listen="127.0.0.1:8000"
+rpc_listen = "127.0.0.1:8000"
 
 ## IRC listen URL
-irc_listen="127.0.0.1:11065"
+irc_listen = "127.0.0.1:11065"
 
 ## Sets Datastore Path
-datastore="~/.config/ircd-seed"
+datastore = "~/.config/darkirc-seed"
 
 ## Raft net settings
 [net]
 ## P2P accept addresses
-inbound=["127.0.0.1:11001"]
+inbound = ["127.0.0.1:11001"]
 
 ## Connection slots
 # outbound_connections=5
@@ -30,4 +30,3 @@ inbound=["127.0.0.1:11001"]
 #connect_timeout_seconds=10
 #channel_handshake_seconds=4
 #channel_heartbeat_seconds=10
-

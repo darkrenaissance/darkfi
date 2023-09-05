@@ -1,11 +1,11 @@
 ## JSON-RPC listen URL
-rpc_listen="127.0.0.1:7777"
+rpc_listen = "127.0.0.1:7777"
 
 ## IRC listen URL
-irc_listen="127.0.0.1:11066"
+irc_listen = "127.0.0.1:11066"
 
 ## Sets Datastore Path
-datastore="~/.config/ircd-outbound"
+datastore = "~/.config/darkirc-outbound"
 
 ## Raft net settings
 [net]
@@ -13,7 +13,7 @@ datastore="~/.config/ircd-outbound"
 # inbound=["127.0.0.1:11002"]
 
 ## Connection slots
-outbound_connections=5
+outbound_connections = 5
 
 ## P2P external addresses
 #external_addr=["127.0.0.1:11002"]
@@ -22,7 +22,7 @@ outbound_connections=5
 #peers=["127.0.0.1:11003"]
 
 ## Seed nodes to connect to 
-seeds=["127.0.0.1:11001"]
+seeds = ["127.0.0.1:11001"]
 
 ## these are the default configuration for the p2p network
 #manual_attempt_limit=0
@@ -30,4 +30,3 @@ seeds=["127.0.0.1:11001"]
 #connect_timeout_seconds=10
 #channel_handshake_seconds=4
 #channel_heartbeat_seconds=10
-

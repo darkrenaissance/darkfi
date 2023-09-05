@@ -90,7 +90,7 @@ enum TauSubcommand {
     /// @person1 @person2
     ///
     /// All keys example:
-    ///     tau add Improve CLI desc:"Description here" project:tau,ircd @dave @rusty due:0210 rank:2.2
+    ///     tau add Improve CLI desc:"Description here" project:tau,darkirc @dave @rusty due:0210 rank:2.2
     ///
     #[clap(verbatim_doc_comment)]
     Add {
