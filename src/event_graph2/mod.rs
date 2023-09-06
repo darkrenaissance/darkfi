@@ -22,12 +22,14 @@ use std::{
 };
 
 use async_recursion::async_recursion;
-use darkfi_serial::{
-    async_trait, deserialize_async, serialize_async, Encodable, SerialDecodable, SerialEncodable,
-};
+use darkfi_serial::{deserialize_async, serialize_async};
 use smol::lock::RwLock;
 
-use crate::{net::P2pPtr, util::time::Timestamp, Result};
+use crate::{net::P2pPtr, Result};
+
+/// An event graph event
+pub mod event;
+pub use event::Event;
 
 /// P2P protocol implementation for the Event Graph
 pub mod proto;
@@ -153,86 +155,5 @@ impl EventGraph {
         // Once all the parents are visited, add the current event
         // to the start of the list
         ordered_events.push_front(event_id);
-    }
-}
-
-/// Representation of an event in the Event Graph
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct Event {
-    /// Timestamp of the event
-    timestamp: Timestamp,
-    /// Content of the event
-    content: Vec<u8>,
-    /// Parent nodes in the event DAG
-    parents: [blake3::Hash; N_EVENT_PARENTS],
-}
-
-impl Event {
-    /// Create a new event with the given data and an [`EventGraph`] reference.
-    /// The timestamp of the event will be the current time, and the parents
-    /// will be `N_EVENT_PARENTS` from the current event graph unreferenced tips.
-    pub async fn new(data: Vec<u8>, event_graph: EventGraphPtr) -> Self {
-        Self {
-            timestamp: Timestamp::current_time(),
-            content: data,
-            parents: event_graph.get_unreferenced_tips().await,
-        }
-    }
-
-    /// Hash the [`Event`] to retrieve its ID
-    pub fn id(&self) -> blake3::Hash {
-        let mut hasher = blake3::Hasher::new();
-        self.timestamp.encode(&mut hasher).unwrap();
-        self.content.encode(&mut hasher).unwrap();
-        self.parents.encode(&mut hasher).unwrap();
-        hasher.finalize()
-    }
-
-    /*
-    /// Check if an [`Event`] is considered too old.
-    fn is_too_old(&self) -> bool {
-        self.timestamp.0 < Timestamp::current_time().0 - ORPHAN_AGE_LIMIT
-    }
-    */
-
-    /// Validate a new event for the correct layout.
-    pub fn validate(&self) -> bool {
-        // Let's not bother with empty events
-        if self.content.is_empty() {
-            return false
-        }
-
-        // Check if the event is too old or too new
-        let now = Timestamp::current_time().0;
-        let too_old = self.timestamp.0 < now - EVENT_TIME_DRIFT;
-        let too_new = self.timestamp.0 > now + EVENT_TIME_DRIFT;
-
-        if too_old || too_new {
-            return false
-        }
-
-        // Validate the parents. We have to check that at least one parent
-        // is not NULL, that the parent does not recursively reference the
-        // event, and that no two parents are the same.
-        let mut seen = HashSet::new();
-        let self_id = self.id();
-
-        for parent_id in self.parents.iter() {
-            if parent_id == &NULL_ID {
-                continue
-            }
-
-            if parent_id == &self_id {
-                return false
-            }
-
-            if seen.contains(parent_id) {
-                return false
-            }
-
-            seen.insert(parent_id)
-        }
-
-        !seen.is_empty()
     }
 }
