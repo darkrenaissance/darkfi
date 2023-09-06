@@ -82,12 +82,14 @@ This will list the available fuzzing targets. Choose one and run it with:
 ```
 # format: cargo fuzz run TARGET
 # e.g. if `serial` is your target:
-$ cargo fuzz run --all-features serial 
+$ cargo fuzz run --all-features -s none --jobs $(nproc) serial 
 ```
 
 This process will run infinitely until a crash occurs or until it is cancelled by the user.
 
 If you are able to trigger a crash, get in touch with the DarkFi team via irc.
+
+Further information on fuzzing in DarkFi is available [here](https://github.com/darkrenaissance/darkfi/blob/master/fuzz/README.md).
 
 ## Troubleshooting
 

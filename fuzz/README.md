@@ -6,6 +6,49 @@ re-organized as we expand the complexity of the tests.
 This document covers the usage of `libfuzzer`. An alternative fuzzing
 tool `honggfuzz` and its related files are located in `fuzz/honggfuzz`.
 
+## Install
+```sh
+cargo install cargo-fuzz
+```
+
+## Usage
+```sh
+# List available targets
+$ cargo fuzz list
+# Run fuzzer on a target
+# format: cargo fuzz run TARGET
+# e.g. if `serial` is your target:
+$ cargo fuzz run serial 
+```
+
+This process will run infinitely until a crash occurs or until it is cancelled by the user.
+
+### Optimization
+Fuzzing benefits from running as many tests as possible, so optimizing our time
+and throughput is very important. The number of jobs used by the computer
+can be increased by passing the following argument:
+
+```sh
+--jobs $(nproc)
+```
+
+The Address Sanitizer can be disabled for any Rust code that does not use `unsafe`:
+
+```sh
+-s none
+```
+
+The flags `--release`, `--debug-assertions` also improve throughput and are enabled
+by default.
+
+In the case of DarkFi, we also want to supply `--all-features`.
+
+In summary, a more efficient way to fuzz safe Rust code is the following:
+
+```sh
+cargo fuzz run --jobs $(nproc) -s none --all-features TARGET 
+```
+
 ## Building the corpora
 
 ### Motivation
@@ -57,11 +100,17 @@ simplify the fuzz harness instead to reduce its code coverage. If the
 harness is targeting a high-level function, try isolating the problem
 and fuzzing a lower-level function instead.
 
+### Increasing allowed memory usage
 It is possible to increase the amount of memory libFuzzer is allowed to use by passing an argument
 to it via libFuzzer like so:
 
 ```sh
 cargo fuzz run --all-features zkas-decoder -- "-rss_limit_mb=4096"
+```
+
+To disable memory limits entirely, pass the argument:
+```sh
+"-rss_limit_mb=0"
 ```
 
 However, this is unlikely to resolve the issue due to differences in
