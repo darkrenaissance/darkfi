@@ -211,23 +211,28 @@ impl Event {
             return false
         }
 
-        // Check there is at least one valid parent.
-        // TODO: It's possible multiple parents are the same and not NULL.
-        //       Should we consider this invalid?
-        let mut has_valid_parent = false;
+        // Validate the parents. We have to check that at least one parent
+        // is not NULL, that the parent does not recursively reference the
+        // event, and that no two parents are the same.
+        let mut seen = HashSet::new();
         let self_id = self.id();
+
         for parent_id in self.parents.iter() {
-            // If it's recursing to us, obviously it's malicious
+            if parent_id == &NULL_ID {
+                continue
+            }
+
             if parent_id == &self_id {
                 return false
             }
 
-            // Check that at least one parent is not NULL
-            if parent_id != &NULL_ID {
-                has_valid_parent = true;
+            if seen.contains(parent_id) {
+                return false
             }
+
+            seen.insert(parent_id)
         }
 
-        has_valid_parent
+        !seen.is_empty()
     }
 }
