@@ -87,6 +87,7 @@ structopt-toml = {version= "0.5.1", optional = true}
 toml = {version = "0.7.6", optional = true}
 # Big float high precision arithmetics
 dashu = {version = "0.3.1", optional = true}
+num-bigint = {version = "0.4.4", optional = true}
 
 # Utilities
 # TODO: check chrono usage and impl our own
@@ -191,6 +192,7 @@ event-graph = [
     "async-trait",
     "async-recursion",
     "blake3",
+    "num-bigint",
     "rand",
     "sled",
     "smol",

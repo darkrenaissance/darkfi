@@ -1431,6 +1431,7 @@ dependencies = [
  "libc",
  "libsqlite3-sys",
  "log",
+ "num-bigint",
  "pin-project-lite",
  "plotters",
  "prettytable-rs",

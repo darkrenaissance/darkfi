@@ -54,8 +54,8 @@ fn eventgraph_propagation() {
     cfg.add_filter_ignore("net::channel::send()".to_string());
 
     simplelog::TermLogger::init(
-        //simplelog::LevelFilter::Info,
-        simplelog::LevelFilter::Debug,
+        simplelog::LevelFilter::Info,
+        //simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
@@ -182,8 +182,8 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
         random_node.p2p.broadcast(&EventPut(event0)).await;
     }
 
-    info!("Waiting 10s until the p2p broadcasts settle");
-    sleep(10).await;
+    info!("Waiting 20s until the p2p broadcasts settle");
+    sleep(20).await;
 
     // Assert that everyone has the same DAG
     let mut contents = HashMap::new();
