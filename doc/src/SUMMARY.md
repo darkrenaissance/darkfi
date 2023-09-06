@@ -50,6 +50,7 @@
   - [ZK explainer](crypto/zk_explainer.md)
   - [Research](crypto/research.md)
   - [Rate-Limit Nullifiers](crypto/rln.md)
+  - [Trustless 2 of 3 Key Recovery Scheme](crypto/key-recovery-2-of-3.md)
   - [Reading maths books](crypto/reading-maths-books.md)
 - [Miscellaneous tools](misc/misc.md)
   - [vanityaddr](misc/vanityaddr.md)
