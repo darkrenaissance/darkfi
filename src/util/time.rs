@@ -56,7 +56,7 @@ impl TimeKeeper {
         Self { genesis_ts, epoch_length, slot_time, verifying_slot }
     }
 
-    /// Generate a Timekeeper for current slot
+    /// Generate a TimeKeeper for current slot
     pub fn current(&self) -> Self {
         Self {
             genesis_ts: self.genesis_ts,
@@ -153,7 +153,7 @@ impl TimeKeeperSafe {
         }
         Self { timekeeper: TimeKeeper { genesis_ts, epoch_length, slot_time, verifying_slot } }
     }
-    /// Generate a TimekeeperSafe for current slot
+    /// Generate a TimeKeeperSafe for current slot
     pub fn current(&self) -> TimeKeeperSafe {
         TimeKeeperSafe::new(
             self.timekeeper.genesis_ts,
