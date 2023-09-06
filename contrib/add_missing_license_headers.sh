@@ -1,6 +1,6 @@
 #!/bin/sh
 
-files="$(find . -type f -name '*.rs' | grep -v 'target/')"
+files="$(find . -regextype posix-extended -regex ".*\.(py|rs|sh)$" | grep -v 'target/')"
 
 echo "$files" | while read -r file ; do
 	if ! grep -q '/* This file is part of DarkFi ' "$file"; then
