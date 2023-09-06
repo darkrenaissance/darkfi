@@ -175,16 +175,25 @@ impl TimeKeeperSafe {
     /// epoch 1 has one less slot(the genesis slot) and
     /// rest epoch have the normal amount of slots.
     pub fn slot_epoch(&self, slot: u64) -> u64 {
+        if self.timekeeper.epoch_length == 0 {
+            panic!("Epoch length cannot be zero");
+        }
         self.timekeeper.slot_epoch(slot)
     }
 
     /// Calculates current slot, based on elapsed time from the genesis block.
     pub fn current_slot(&self) -> u64 {
+        if self.timekeeper.slot_time == 0 {
+            panic!("Slot time cannot be zero");
+        }
         self.timekeeper.current_slot()
     }
 
     /// Calculates the relative number of the provided slot.
     pub fn relative_slot(&self, slot: u64) -> u64 {
+        if self.timekeeper.epoch_length == 0 {
+            panic!("Epoch length cannot be zero");
+        }
         self.timekeeper.relative_slot(slot)
     }
 
@@ -382,7 +391,7 @@ pub fn timestamp_to_date(timestamp: u64, format: DateFormat) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{TimeKeeperSafe, Timestamp};
+    use super::{TimeKeeper, TimeKeeperSafe, Timestamp};
 
     #[test]
     #[should_panic]
@@ -395,5 +404,32 @@ mod tests {
     #[should_panic]
     fn panic_on_unsafe_slot_time() {
         TimeKeeperSafe::new(Timestamp::current_time(), 1, 0, 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_on_unsafe_call_to_method_current_slot() {
+        // Test against manual initialization of unsafe TimeKeeper fields.
+        let tk_unsafe =
+            TimeKeeperSafe { timekeeper: TimeKeeper::new(Timestamp::current_time(), 0, 0, 0) };
+        tk_unsafe.current_slot();
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_on_unsafe_call_to_method_relative_slot() {
+        // Test against manual initialization of unsafe TimeKeeper fields.
+        let tk_unsafe =
+            TimeKeeperSafe { timekeeper: TimeKeeper::new(Timestamp::current_time(), 0, 0, 0) };
+        tk_unsafe.relative_slot(0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_on_unsafe_call_to_method_slot_epoch() {
+        // Test against manual initialization of unsafe TimeKeeper fields.
+        let tk_unsafe =
+            TimeKeeperSafe { timekeeper: TimeKeeper::new(Timestamp::current_time(), 0, 0, 0) };
+        tk_unsafe.slot_epoch(0);
     }
 }
