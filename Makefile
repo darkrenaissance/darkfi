@@ -18,11 +18,11 @@ BINS = \
 	darkfid2 \
 	faucetd \
 	darkirc \
-	genev \
-	genevd \
+	genev/genev-cli \
+	genev/genevd \
 	lilith \
-	tau \
-	taud \
+	tau/tau-cli \
+	tau/taud \
 	vanityaddr
 
 # ZK proofs to compile with zkas
@@ -116,16 +116,16 @@ distclean: clean
 	$(CARGO) clean
 	rm -rf target
 
-install: all
+install: $(BINS)
 	@for i in $(BINS); \
 	do \
-		$(MAKE) -C $$i install \
+		$(MAKE) -C bin/$$i install; \
 	done;
 
 uninstall:
 	for i in $(BINS); \
 	do \
-		$(MAKE) -C $$i uninstall \
+		$(MAKE) -C bin/$$i uninstall; \
 	done;
 
 .PHONY: all contracts check fix fmt clippy rustdoc test coverage distclean clean install uninstall $(BINS)
