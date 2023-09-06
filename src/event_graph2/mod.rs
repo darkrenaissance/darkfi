@@ -62,7 +62,8 @@ pub struct EventGraph {
     /// A `HashSet` containg event IDs and their 1-level parents.
     /// These come from the events we've sent out using `EventPut`.
     /// They are used with `EventReq` to decide if we should reply
-    /// or not.
+    /// or not. Additionally it is also used when we broadcast the
+    /// `TipRep` message telling peers about our unreferenced tips.
     broadcasted_ids: RwLock<HashSet<blake3::Hash>>,
 }
 

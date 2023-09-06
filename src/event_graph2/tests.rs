@@ -44,11 +44,14 @@ const N_CONNS: usize = N_NODES / 3;
 #[ignore]
 fn eventgraph_propagation() {
     let mut cfg = simplelog::ConfigBuilder::new();
+    cfg.add_filter_ignore("sled".to_string());
     cfg.add_filter_ignore("net::protocol_ping".to_string());
     cfg.add_filter_ignore("net::channel::subscribe_stop()".to_string());
     cfg.add_filter_ignore("net::hosts".to_string());
     cfg.add_filter_ignore("net::message_subscriber".to_string());
     cfg.add_filter_ignore("net::protocol_address".to_string());
+    cfg.add_filter_ignore("net::protocol_version".to_string());
+    cfg.add_filter_ignore("net::channel::send()".to_string());
 
     simplelog::TermLogger::init(
         //simplelog::LevelFilter::Info,
@@ -204,7 +207,7 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     }
     let value = orders.values().next().unwrap();
     for (i, order) in orders.iter() {
-        assert!(order == value, "{} has wrong order:\n{:#?}\nvs{:#?}", i, order, value);
+        assert!(order == value, "Node {} has wrong order:\n{:#?}\nvs{:#?}", i, order, value);
     }
 
     // Stop the P2P network

@@ -50,6 +50,10 @@ pub struct ProtocolEventGraph {
     ev_req_sub: MessageSubscription<EventReq>,
     /// `MessageSubscriber` for `EventRep`
     ev_rep_sub: MessageSubscription<EventRep>,
+    /// `MessageSubscriber` for `TipReq`
+    tip_req_sub: MessageSubscription<TipReq>,
+    /// `MessageSubscriber` for `TipRep`
+    _tip_rep_sub: MessageSubscription<TipRep>,
     /// Peer malicious message count
     malicious_count: AtomicUsize,
     /// P2P jobs manager pointer
@@ -71,12 +75,23 @@ impl_p2p_message!(EventReq, "EventGraph::EventReq");
 pub struct EventRep(pub Event);
 impl_p2p_message!(EventRep, "EventGraph::EventRep");
 
+/// A P2P message representing a request for a peer's DAG tips
+#[derive(Clone, SerialEncodable, SerialDecodable)]
+pub struct TipReq {}
+impl_p2p_message!(TipReq, "EventGraph::TipReq");
+
+/// A P2P message representing a reply for the peer's DAG tips
+#[derive(Clone, SerialEncodable, SerialDecodable)]
+pub struct TipRep(pub Vec<blake3::Hash>);
+impl_p2p_message!(TipRep, "EventGraph::TipRep");
+
 #[async_trait]
 impl ProtocolBase for ProtocolEventGraph {
     async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
         self.jobsman.clone().start(ex.clone());
         self.jobsman.clone().spawn(self.clone().handle_event_put(), ex.clone()).await;
         self.jobsman.clone().spawn(self.clone().handle_event_req(), ex.clone()).await;
+        self.jobsman.clone().spawn(self.clone().handle_tip_req(), ex.clone()).await;
         Ok(())
     }
 
@@ -91,10 +106,14 @@ impl ProtocolEventGraph {
         msg_subsystem.add_dispatch::<EventPut>().await;
         msg_subsystem.add_dispatch::<EventReq>().await;
         msg_subsystem.add_dispatch::<EventRep>().await;
+        msg_subsystem.add_dispatch::<TipReq>().await;
+        msg_subsystem.add_dispatch::<TipRep>().await;
 
         let ev_put_sub = channel.subscribe_msg::<EventPut>().await?;
         let ev_req_sub = channel.subscribe_msg::<EventReq>().await?;
         let ev_rep_sub = channel.subscribe_msg::<EventRep>().await?;
+        let tip_req_sub = channel.subscribe_msg::<TipReq>().await?;
+        let tip_rep_sub = channel.subscribe_msg::<TipRep>().await?;
 
         Ok(Arc::new(Self {
             channel: channel.clone(),
@@ -102,6 +121,8 @@ impl ProtocolEventGraph {
             ev_put_sub,
             ev_req_sub,
             ev_rep_sub,
+            tip_req_sub,
+            _tip_rep_sub: tip_rep_sub,
             malicious_count: AtomicUsize::new(0),
             jobsman: ProtocolJobsManager::new("ProtocolEventGraph", channel.clone()),
         }))
@@ -111,13 +132,7 @@ impl ProtocolEventGraph {
         loop {
             let event = match self.ev_put_sub.receive().await {
                 Ok(v) => v.0.clone(),
-                Err(e) => {
-                    error!(
-                        target: "event_graph::handle_event_put()",
-                        "[EVENTGRAPH] handle_event_put() recv fail: {}", e,
-                    );
-                    continue
-                }
+                Err(_) => continue,
             };
 
             // We received an event. Check if we already have it in our DAG.
@@ -241,17 +256,11 @@ impl ProtocolEventGraph {
         loop {
             let event_id = match self.ev_req_sub.receive().await {
                 Ok(v) => v.0,
-                Err(e) => {
-                    error!(
-                        target: "event_graph::handle_event_req()",
-                        "[EVENTGRAPH] handle_event_req() recv fail: {}", e,
-                    );
-                    continue
-                }
+                Err(_) => continue,
             };
 
             // We received an event request from somebody.
-            // If we do have ti, we will send it back to them as `EventRep`.
+            // If we do have it, we will send it back to them as `EventRep`.
             // Otherwise, we'll stay quiet. An honest node should always have
             // something to reply with provided that the request is legitimate,
             // i.e. we've sent something to them and they did not have some of
@@ -286,13 +295,38 @@ impl ProtocolEventGraph {
             let mut bcast_ids = self.event_graph.broadcasted_ids.write().await;
             for parent_id in event.parents.iter() {
                 if parent_id != &NULL_ID {
-                    bcast_ids.insert(event_id);
+                    bcast_ids.insert(*parent_id);
                 }
             }
+
+            // TODO: We should remove the reply from the bcast IDs for this specific channel.
+            //       We can't remove them for everyone.
+            //bcast_ids.remove(&event_id);
             drop(bcast_ids);
 
             // Reply with the event
             self.channel.send(&EventRep(event)).await?;
+        }
+    }
+
+    async fn handle_tip_req(self: Arc<Self>) -> Result<()> {
+        loop {
+            self.tip_req_sub.receive().await?;
+
+            // TODO: Rate limit
+
+            // We received a tip request. Let's find them, add them to
+            // our bcast ids list, and reply with them.
+            let mut tips = self.event_graph.get_unreferenced_tips().await.to_vec();
+            tips.retain(|x| x != &NULL_ID);
+
+            let mut bcast_ids = self.event_graph.broadcasted_ids.write().await;
+            for tip in tips.iter() {
+                bcast_ids.insert(*tip);
+            }
+            drop(bcast_ids);
+
+            self.channel.send(&TipRep(tips)).await?;
         }
     }
 }
