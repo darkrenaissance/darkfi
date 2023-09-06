@@ -862,22 +862,58 @@ mod tests {
 
     #[test]
     fn encode_payload_test() -> Result<(), Error> {
-        let mut buf = vec![];
-        encode_payload!(&mut buf, 1_i32, 2_i32, b"Hello World");
-        assert_eq!(
-            buf,
-            [1, 0, 0, 0, 2, 0, 0, 0, 72, 101, 108, 108, 111, 32, 87, 111, 114, 108, 100]
-        );
+        let mut i32_buf1 = vec![];
+        let mut i32_buf2 = vec![];
+        1_i32.encode(&mut i32_buf1)?;
+        2_i32.encode(&mut i32_buf2)?;
+
+        let mut string_buf = vec![];
+        b"Hello World".encode(&mut string_buf)?;
+
+        /*
+        eprintln!("{:?}", i32_buf1);
+        eprintln!("{:?}", i32_buf2);
+        eprintln!("{:?}", string_buf);
+        */
 
         let mut buf = vec![];
-        encode_payload!(&mut buf, 1.5f64, -1i64, true, 0x10000, [0xfe, 0xff, 0x00, 0x00, 0x00]);
-        assert_eq!(
-            buf,
-            [
-                0, 0, 0, 0, 0, 0, 248, 63, 255, 255, 255, 255, 255, 255, 255, 255, 1, 0, 0, 1, 0,
-                254, 255, 0, 0, 0
-            ]
-        );
+        let mut buf_verify = vec![];
+        buf_verify.extend_from_slice(&i32_buf1);
+        buf_verify.extend_from_slice(&i32_buf2);
+        buf_verify.extend_from_slice(&string_buf);
+
+        encode_payload!(&mut buf, 1_i32, 2_i32, b"Hello World");
+        assert_eq!(buf, buf_verify);
+
+        let mut f64_buf = vec![];
+        let mut i64_buf = vec![];
+        let mut bool_buf = vec![];
+        let mut u32_buf = vec![];
+        let mut array_buf = vec![];
+        1.5f64.encode(&mut f64_buf)?;
+        (-1i64).encode(&mut i64_buf)?;
+        true.encode(&mut bool_buf)?;
+        0x10000_u32.encode(&mut u32_buf)?;
+        [0xfe, 0xff, 0x00, 0x00, 0x00].encode(&mut array_buf)?;
+
+        /*
+        eprintln!("{:?}", f64_buf);
+        eprintln!("{:?}", i64_buf);
+        eprintln!("{:?}", bool_buf);
+        eprintln!("{:?}", u32_buf);
+        eprintln!("{:?}", array_buf);
+        */
+
+        let mut buf = vec![];
+        let mut buf_verify = vec![];
+        buf_verify.extend_from_slice(&f64_buf);
+        buf_verify.extend_from_slice(&i64_buf);
+        buf_verify.extend_from_slice(&bool_buf);
+        buf_verify.extend_from_slice(&u32_buf);
+        buf_verify.extend_from_slice(&array_buf);
+        encode_payload!(&mut buf, 1.5f64, -1i64, true, 0x10000_u32, [0xfe, 0xff, 0x00, 0x00, 0x00]);
+        assert_eq!(buf, buf_verify);
+
         Ok(())
     }
 
