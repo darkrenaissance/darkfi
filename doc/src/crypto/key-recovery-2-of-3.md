@@ -7,7 +7,7 @@ The basic concept relies on the additivity of functions $(f\circ g)(a) = f(a) + 
 and additive homomorphism of EC points. That way we avoid heavy MPC multiplications
 and keep the scheme lightweight.
 
-The values $x_0, \dots, x_5$ are fixed strings known by all players.
+The values $x_1, \dots, x_6$ are fixed strings known by all players.
 
 ## Constructing the Line
 
