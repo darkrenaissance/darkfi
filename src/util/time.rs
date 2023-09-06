@@ -30,6 +30,10 @@ const MIN_IN_HOUR: u64 = 60;
 const SECS_IN_HOUR: u64 = 3600;
 
 /// Helper structure providing time related calculations.
+/// This struct is optimized for performance and does not check
+/// its arithmetic: division-by-zero is possible for certain values.
+/// [`TimeKeeperSafe`] should be used if safety is more important than
+/// performance.
 #[derive(Clone)]
 pub struct TimeKeeper {
     /// Genesis block creation timestamp
@@ -74,28 +78,16 @@ impl TimeKeeper {
     /// epoch 1 has one less slot(the genesis slot) and
     /// rest epoch have the normal amount of slots.
     pub fn slot_epoch(&self, slot: u64) -> u64 {
-        // Don't divide by zero
-        if slot == 0 || self.epoch_length == 0 {
-            return 0
-        }
         (slot / self.epoch_length) + 1
     }
 
     /// Calculates current slot, based on elapsed time from the genesis block.
     pub fn current_slot(&self) -> u64 {
-        // Don't divide by zero
-        if self.slot_time == 0 {
-            return 0
-        }
         self.genesis_ts.elapsed() / self.slot_time
     }
 
     /// Calculates the relative number of the provided slot.
     pub fn relative_slot(&self, slot: u64) -> u64 {
-        // Don't divide by zero
-        if self.epoch_length == 0 {
-            return 0
-        }
         slot % self.epoch_length
     }
 
@@ -136,6 +128,99 @@ impl TimeKeeper {
     /// Calculates current system timestamp.
     pub fn system_timestamp(&self) -> Result<u64> {
         Ok(UNIX_EPOCH.elapsed()?.as_secs())
+    }
+}
+/// Wrapper struct that allows only coherent and safe values for a [`TimeKeeper`].
+#[derive(Clone)]
+pub struct TimeKeeperSafe {
+    timekeeper: TimeKeeper,
+}
+
+impl TimeKeeperSafe {
+    pub fn new(
+        genesis_ts: Timestamp,
+        epoch_length: u64,
+        slot_time: u64,
+        verifying_slot: u64,
+    ) -> Self {
+        // TimeKeeper uses epoch_length and slot_time as divisors so they should
+        // never be zero in this struct.
+        if epoch_length == 0 {
+            panic!("Epoch length cannot be zero");
+        }
+        if slot_time == 0 {
+            panic!("Slot time cannot be zero");
+        }
+        Self { timekeeper: TimeKeeper { genesis_ts, epoch_length, slot_time, verifying_slot } }
+    }
+    /// Generate a TimekeeperSafe for current slot
+    pub fn current(&self) -> TimeKeeperSafe {
+        TimeKeeperSafe::new(
+            self.timekeeper.genesis_ts,
+            self.timekeeper.epoch_length,
+            self.timekeeper.slot_time,
+            self.timekeeper.current_slot(),
+        )
+    }
+
+    /// Calculates current epoch.
+    pub fn current_epoch(&self) -> u64 {
+        self.timekeeper.current_epoch()
+    }
+
+    /// Calculates the epoch of the provided slot.
+    /// Only slot 0 exists in epoch 0, everything
+    /// else is incremented by one. This practically
+    /// means that epoch 0 has 1 slot(the genesis slot),
+    /// epoch 1 has one less slot(the genesis slot) and
+    /// rest epoch have the normal amount of slots.
+    pub fn slot_epoch(&self, slot: u64) -> u64 {
+        self.timekeeper.slot_epoch(slot)
+    }
+
+    /// Calculates current slot, based on elapsed time from the genesis block.
+    pub fn current_slot(&self) -> u64 {
+        self.timekeeper.current_slot()
+    }
+
+    /// Calculates the relative number of the provided slot.
+    pub fn relative_slot(&self, slot: u64) -> u64 {
+        self.timekeeper.relative_slot(slot)
+    }
+
+    /// Calculates the epoch of the verifying slot.
+    pub fn verifying_slot_epoch(&self) -> u64 {
+        self.timekeeper.verifying_slot_epoch()
+    }
+
+    /// Calculates seconds until next Nth slot starting time.
+    pub fn next_n_slot_start(&self, n: u64) -> u64 {
+        self.timekeeper.next_n_slot_start(n)
+    }
+
+    /// Calculate slots until next Nth epoch.
+    /// Epoch duration is configured using the EPOCH_LENGTH value.
+    pub fn slots_to_next_n_epoch(&self, n: u64) -> u64 {
+        self.timekeeper.slots_to_next_n_epoch(n)
+    }
+
+    /// Calculates seconds until next Nth epoch starting time.
+    pub fn next_n_epoch_start(&self, n: u64) -> u64 {
+        self.timekeeper.next_n_epoch_start(n)
+    }
+
+    /// Calculates current blockchain timestamp.
+    /// Blockchain timestamp is the time elapsed since
+    /// Genesis timestamp, based on slot time ticking,
+    /// therefore representing the starting timestamp of
+    /// current slot.
+    pub fn blockchain_timestamp(&self) -> u64 {
+        self.timekeeper.blockchain_timestamp()
+    }
+
+    /// Calculates current system timestamp.
+    pub fn system_timestamp(&self) -> Result<u64> {
+        self.timekeeper.system_timestamp()
     }
 }
 
@@ -297,18 +382,18 @@ pub fn timestamp_to_date(timestamp: u64, format: DateFormat) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{TimeKeeper, Timestamp};
+    use super::{TimeKeeperSafe, Timestamp};
 
     #[test]
-    fn zero_values_are_safe() {
-        // Ensure no panics occur when all fields are set to 0.
-        // Certain functions above use division so a panic can occur
-        // if division-by-zero is performed.
-        let ts = Timestamp::current_time();
-        let tk = TimeKeeper::new(ts, 0, 0, 0);
-        // Try all TimeKeeper functions that use division.
-        tk.current_epoch();
-        tk.slot_epoch(0);
-        tk.relative_slot(0);
+    #[should_panic]
+    fn panic_on_unsafe_epoch_length() {
+        // Ensure panic when epoch_length is 0.
+        TimeKeeperSafe::new(Timestamp::current_time(), 0, 1, 1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_on_unsafe_slot_time() {
+        TimeKeeperSafe::new(Timestamp::current_time(), 1, 0, 1);
     }
 }
