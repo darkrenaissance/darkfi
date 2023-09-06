@@ -534,20 +534,32 @@ impl<T: Decodable> Decodable for Option<T> {
     }
 }
 
-impl<const N: usize> Encodable for [u8; N] {
+impl<T, const N: usize> Encodable for [T; N]
+where
+    T: Encodable,
+{
     #[inline]
-    fn encode<S: WriteExt>(&self, mut s: S) -> Result<usize, Error> {
-        s.write_slice(&self[..])?;
-        Ok(self.len())
+    fn encode<S: Write>(&self, mut s: S) -> Result<usize, Error> {
+        let mut len = 0;
+        for elem in self.iter() {
+            len += elem.encode(&mut s)?;
+        }
+        Ok(len)
     }
 }
 
-impl<const N: usize> Decodable for [u8; N] {
+impl<T, const N: usize> Decodable for [T; N]
+where
+    T: Decodable + core::fmt::Debug,
+{
     #[inline]
     fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
-        let mut ret = [0; N];
-        d.read_slice(&mut ret)?;
-        Ok(ret)
+        let mut ret = vec![];
+        for _ in 0..N {
+            ret.push(Decodable::decode(&mut d)?);
+        }
+
+        Ok(ret.try_into().unwrap())
     }
 }
 

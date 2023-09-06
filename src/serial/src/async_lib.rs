@@ -604,21 +604,34 @@ impl<T: AsyncDecodable> AsyncDecodable for Option<T> {
 }
 
 #[async_trait]
-impl<const N: usize> AsyncEncodable for [u8; N] {
+impl<T, const N: usize> AsyncEncodable for [T; N]
+where
+    T: AsyncEncodable + Sync,
+{
     #[inline]
-    async fn encode_async<S: AsyncWriteExt + Unpin + Send>(&self, s: &mut S) -> Result<usize> {
-        s.write_slice_async(&self[..]).await?;
-        Ok(self.len())
+    async fn encode_async<S: AsyncWrite + Unpin + Send>(&self, s: &mut S) -> Result<usize> {
+        let mut len = 0;
+        for elem in self.iter() {
+            len += elem.encode_async(s).await?;
+        }
+
+        Ok(len)
     }
 }
 
 #[async_trait]
-impl<const N: usize> AsyncDecodable for [u8; N] {
+impl<T, const N: usize> AsyncDecodable for [T; N]
+where
+    T: AsyncDecodable + Send + core::fmt::Debug,
+{
     #[inline]
     async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> Result<Self> {
-        let mut ret = [0; N];
-        d.read_slice_async(&mut ret).await?;
-        Ok(ret)
+        let mut ret = vec![];
+        for _ in 0..N {
+            ret.push(AsyncDecodable::decode_async(d).await?);
+        }
+
+        Ok(ret.try_into().unwrap())
     }
 }
 
