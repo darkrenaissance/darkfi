@@ -159,7 +159,7 @@ impl TimeKeeperSafe {
             self.timekeeper.genesis_ts,
             self.timekeeper.epoch_length,
             self.timekeeper.slot_time,
-            self.timekeeper.current_slot(),
+            self.timekeeper.verifying_slot,
         )
     }
 
