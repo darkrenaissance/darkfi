@@ -74,7 +74,8 @@ impl TimeKeeper {
     /// epoch 1 has one less slot(the genesis slot) and
     /// rest epoch have the normal amount of slots.
     pub fn slot_epoch(&self, slot: u64) -> u64 {
-        if slot == 0 {
+        // Don't divide by zero
+        if slot == 0 || self.epoch_length == 0 {
             return 0
         }
         (slot / self.epoch_length) + 1
@@ -82,11 +83,19 @@ impl TimeKeeper {
 
     /// Calculates current slot, based on elapsed time from the genesis block.
     pub fn current_slot(&self) -> u64 {
+        // Don't divide by zero
+        if self.slot_time == 0 {
+            return 0
+        }
         self.genesis_ts.elapsed() / self.slot_time
     }
 
     /// Calculates the relative number of the provided slot.
     pub fn relative_slot(&self, slot: u64) -> u64 {
+        // Don't divide by zero
+        if self.epoch_length == 0 {
+            return 0
+        }
         slot % self.epoch_length
     }
 
@@ -283,5 +292,23 @@ pub fn timestamp_to_date(timestamp: u64, format: DateFormat) -> String {
                 dt.year, dt.month, dt.day, dt.hour, dt.min, dt.sec, dt.nanos
             )
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Timestamp, TimeKeeper};
+
+    #[test]
+    fn zero_values_are_safe() {
+        // Ensure no panics occur when all fields are set to 0.
+        // Certain functions above use division so a panic can occur
+        // if division-by-zero is performed.
+        let ts = Timestamp::current_time();
+        let tk = TimeKeeper::new(ts,0,0,0);
+        // Try all TimeKeeper functions that use division.
+        tk.current_epoch();
+        tk.slot_epoch(0);
+        tk.relative_slot(0);
     }
 }
