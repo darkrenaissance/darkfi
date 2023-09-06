@@ -297,7 +297,7 @@ pub fn timestamp_to_date(timestamp: u64, format: DateFormat) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{Timestamp, TimeKeeper};
+    use super::{TimeKeeper, Timestamp};
 
     #[test]
     fn zero_values_are_safe() {
@@ -305,7 +305,7 @@ mod tests {
         // Certain functions above use division so a panic can occur
         // if division-by-zero is performed.
         let ts = Timestamp::current_time();
-        let tk = TimeKeeper::new(ts,0,0,0);
+        let tk = TimeKeeper::new(ts, 0, 0, 0);
         // Try all TimeKeeper functions that use division.
         tk.current_epoch();
         tk.slot_epoch(0);
