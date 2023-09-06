@@ -207,7 +207,14 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     }
     let value = orders.values().next().unwrap();
     for (i, order) in orders.iter() {
-        assert!(order == value, "Node {} has wrong order:\n{:#?}\nvs{:#?}", i, order, value);
+        assert!(
+            order == value,
+            "Node {} has wrong order:\n{:#?}\nvs{:#?}\nGENESIS:{}",
+            i,
+            order,
+            value,
+            genesis_event.id()
+        );
     }
 
     // Stop the P2P network

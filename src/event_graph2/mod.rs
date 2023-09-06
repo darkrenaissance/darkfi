@@ -78,7 +78,42 @@ impl EventGraph {
         Ok(Arc::new(Self { p2p, dag, unreferenced_tips, last_event, broadcasted_ids }))
     }
 
-    /// Insert an event into the DAG
+    /// Sync the DAG from connected peers
+    pub async fn dag_sync(&self) {
+        // We do an optimistic sync where we ask all our connected peers for
+        // the DAG tips (unreferenced events)  and then we accept the ones we
+        // see the most times.
+        // * Compare received tips with local ones, identify which we are missing.
+        // * Request these from peers
+        // * Recursively request these backward
+        //
+        // Verification:
+        // * Timestamps should go backwards
+        // * Cross-check with multiple peers, this means we should request the
+        //   same event from multiple peers and make sure it is the same.
+        // * Since we should be pruning, if we're not synced after some reasonable
+        //   amount of iterations, these could be faulty peers and we can try again
+        //   from the beginning
+        todo!()
+    }
+
+    /// Prune the DAG
+    pub async fn dag_prune(&self) {
+        // The DAG should periodically be pruned. This can be a configurable
+        // parameter. By pruning, we should deterministically replace the
+        // genesis event (can use a deterministic timestamp) and drop everything
+        // in the DAG, leaving just the new genesis event.
+        // Do not use `chrono`.
+        todo!()
+    }
+
+    /// Insert an event into the DAG.
+    /// This will append the new event into the unreferenced tips set, and
+    /// remove the event's parents from it. It will also append the event's
+    /// level-1 parents to the `broadcasted_ids` set, so the P2P protocol
+    /// knows that any requests for them are actually legitimate.
+    /// TODO: The `broadcasted_ids` set should periodically be pruned, when
+    /// some sensible time has passed after broadcasting the event.
     pub async fn dag_insert(&self, event: &Event) -> Result<blake3::Hash> {
         let event_id = event.id();
         let s_event = serialize_async(event).await;
@@ -119,6 +154,8 @@ impl EventGraph {
     }
 
     /// Perform a topological sort of the DAG.
+    /// Once the events are sorted topologically, the user can also additionally
+    /// sort them by timestamp after fetching the actual events from the database.
     pub async fn order_events(&self) -> Vec<blake3::Hash> {
         let mut ordered_events = VecDeque::new();
         let mut visited = HashSet::new();
