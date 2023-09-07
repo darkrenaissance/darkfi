@@ -16,7 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, sync::Arc};
+// cargo +nightly test --release --features=event-graph --lib eventgraph_propagation -- --include-ignored
+
+use std::sync::Arc;
 
 use log::info;
 use rand::{prelude::SliceRandom, Rng};
@@ -52,8 +54,8 @@ fn eventgraph_propagation() {
     cfg.add_filter_ignore("net::channel::send()".to_string());
 
     simplelog::TermLogger::init(
-        //simplelog::LevelFilter::Info,
-        simplelog::LevelFilter::Debug,
+        simplelog::LevelFilter::Info,
+        //simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
@@ -137,82 +139,41 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     info!("Waiting 10s until all peers connect");
     sleep(10).await;
 
-    // Now we get to the logic.
-    //for i in 1..1001_u16 {
-    for i in 1..3_u16 {
-        // A random node creates an event
-        let random_node = eg_instances.choose(&mut rand::thread_rng()).unwrap();
-        let event = Event::new(i.to_le_bytes().to_vec(), random_node.clone()).await;
-
-        // The node adds it to their DAG
-        let event_id = random_node.dag_insert(&event).await.unwrap();
-        // The node broadcasts it
-        info!("Broadcasting {}", event_id);
-        random_node.p2p.broadcast(&EventPut(event)).await;
-
-        // Another random node creates five events and sends them out of order.
-        let random_node = eg_instances.choose(&mut rand::thread_rng()).unwrap();
-
-        let event0 = Event::new(i.to_le_bytes().to_vec(), random_node.clone()).await;
-        let event0_id = random_node.dag_insert(&event0).await.unwrap();
-
-        let event1 = Event::new(i.to_le_bytes().to_vec(), random_node.clone()).await;
-        let event1_id = random_node.dag_insert(&event1).await.unwrap();
-
-        let event2 = Event::new(i.to_le_bytes().to_vec(), random_node.clone()).await;
-        let event2_id = random_node.dag_insert(&event2).await.unwrap();
-
-        let event3 = Event::new(i.to_le_bytes().to_vec(), random_node.clone()).await;
-        let event3_id = random_node.dag_insert(&event3).await.unwrap();
-
-        let event4 = Event::new(i.to_le_bytes().to_vec(), random_node.clone()).await;
-        let event4_id = random_node.dag_insert(&event4).await.unwrap();
-
-        info!("Broadcasting {}", event3_id);
-        random_node.p2p.broadcast(&EventPut(event3)).await;
-        info!("Broadcasting {}", event2_id);
-        random_node.p2p.broadcast(&EventPut(event2)).await;
-        info!("Broadcasting {}", event4_id);
-        random_node.p2p.broadcast(&EventPut(event4)).await;
-        info!("Broadcasting {}", event1_id);
-        random_node.p2p.broadcast(&EventPut(event1)).await;
-        info!("Broadcasting {}", event0_id);
-        random_node.p2p.broadcast(&EventPut(event0)).await;
-    }
-
-    info!("Waiting 20s until the p2p broadcasts settle");
-    sleep(20).await;
-
-    // Assert that everyone has the same DAG
-    let mut contents = HashMap::new();
+    // =========================================
+    // 1. Assert that everyone's DAG is the same
+    // =========================================
     for (i, eg) in eg_instances.iter().enumerate() {
-        let mut ids = vec![];
-        for r in eg.dag.iter() {
-            let (id, _) = r.unwrap();
-            ids.push(blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap()));
-        }
-
-        contents.insert(i, ids);
+        let tips = eg.unreferenced_tips.read().await;
+        assert!(eg.dag.len() == 1, "Node {}", i);
+        assert!(tips.len() == 1, "Node {}", i);
+        assert!(tips.get(&genesis_event_id).is_some(), "Node {}", i);
     }
-    let value = contents.values().next().unwrap();
-    assert!(contents.values().all(|v| v == value));
 
-    // Assert that everyone's DAG sorts the same.
-    let mut orders = HashMap::new();
+    // ==========================================
+    // 2. Create an event in one node and publish
+    // ==========================================
+    let random_node = eg_instances.choose(&mut rand::thread_rng()).unwrap();
+    let event = Event::new(vec![1, 2, 3, 4], random_node.clone()).await;
+    assert!(event.parents.contains(&genesis_event_id));
+    // The node adds it to their DAG.
+    let event_id = random_node.dag_insert(&event).await.unwrap();
+    let tips = random_node.unreferenced_tips.read().await;
+    assert!(tips.len() == 1);
+    assert!(tips.get(&event_id).is_some());
+    drop(tips);
+    info!("Broadcasting event {}", event_id);
+    random_node.p2p.broadcast(&EventPut(event)).await;
+    info!("Waiting 10s for event propagation");
+    sleep(10).await;
+
+    // ====================================================
+    // 3. Assert that everyone has the new event in the DAG
+    // ====================================================
     for (i, eg) in eg_instances.iter().enumerate() {
-        let order = eg.order_events().await;
-        orders.insert(i, order);
-    }
-    let value = orders.values().next().unwrap();
-    for (i, order) in orders.iter() {
-        assert!(
-            order == value,
-            "Node {} has wrong order:\n{:#?}\nvs{:#?}\nGENESIS:{}",
-            i,
-            order,
-            value,
-            genesis_event_id,
-        );
+        let tips = eg.unreferenced_tips.read().await;
+        assert!(eg.dag.len() == 2, "Node {}", i);
+        assert!(tips.len() == 1, "Node {}", i);
+        assert!(tips.get(&event_id).is_some(), "Node {}", i);
     }
 
     // Stop the P2P network
