@@ -25,9 +25,16 @@ use std::{
 use async_recursion::async_recursion;
 use darkfi_serial::{deserialize_async, serialize_async};
 use num_bigint::BigUint;
-use smol::{lock::RwLock, Executor};
+use smol::{
+    lock::{Mutex, RwLock},
+    Executor,
+};
 
-use crate::{net::P2pPtr, Result};
+use crate::{
+    net::P2pPtr,
+    system::{StoppableTask, StoppableTaskPtr},
+    Error, Result,
+};
 
 /// An event graph event
 pub mod event;
@@ -72,8 +79,8 @@ pub struct EventGraph {
     /// or not. Additionally it is also used when we broadcast the
     /// `TipRep` message telling peers about our unreferenced tips.
     broadcasted_ids: RwLock<HashSet<blake3::Hash>>,
-    // DAG Pruning Task
-    //prune_task: StoppableTaskPtr,
+    /// DAG Pruning Task
+    prune_task: Mutex<Option<StoppableTaskPtr>>,
 }
 
 impl EventGraph {
@@ -90,7 +97,13 @@ impl EventGraph {
         let unreferenced_tips = RwLock::new(HashSet::new());
         let broadcasted_ids = RwLock::new(HashSet::new());
 
-        let self_ = Arc::new(Self { p2p, dag: dag.clone(), unreferenced_tips, broadcasted_ids });
+        let self_ = Arc::new(Self {
+            p2p,
+            dag: dag.clone(),
+            unreferenced_tips,
+            broadcasted_ids,
+            prune_task: Mutex::new(None),
+        });
 
         // Create the current genesis event based on the `days_rotation`
         let current_genesis = Self::generate_genesis(days_rotation);
@@ -106,7 +119,25 @@ impl EventGraph {
         // Find the unreferenced tips in the current DAG state.
         *self_.unreferenced_tips.write().await = self_.find_unreferenced_tips().await;
 
+        // Spawn the DAG pruning task
+        let self__ = self_.clone();
+        let prune_task = StoppableTask::new();
+        *self_.prune_task.lock().await = Some(prune_task.clone());
+
+        prune_task.clone().start(
+            self_.clone().dag_prune(days_rotation),
+            |_| async move {
+                self__.clone()._handle_stop().await;
+            },
+            Error::DetachedTaskStopped,
+            ex.clone(),
+        );
+
         Ok(self_)
+    }
+
+    async fn _handle_stop(&self) {
+        log::warn!("DAG PRUNE TASK STOPPED");
     }
 
     /// Generate a deterministic genesis event corresponding to the DAG's configuration.
@@ -147,12 +178,11 @@ impl EventGraph {
     }
 
     /// Background task periodically pruning the DAG.
-    async fn dag_prune(&self) {
+    async fn dag_prune(self: Arc<Self>, days_rotation: u64) -> Result<()> {
         // The DAG should periodically be pruned. This can be a configurable
         // parameter. By pruning, we should deterministically replace the
         // genesis event (can use a deterministic timestamp) and drop everything
         // in the DAG, leaving just the new genesis event.
-        // Do not use `chrono`.
         todo!()
     }
 
