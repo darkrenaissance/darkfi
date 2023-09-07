@@ -24,9 +24,9 @@ use std::{
 use async_recursion::async_recursion;
 use darkfi_serial::{deserialize_async, serialize_async};
 use num_bigint::BigUint;
-use smol::lock::RwLock;
+use smol::{lock::RwLock, Executor};
 
-use crate::{net::P2pPtr, Result};
+use crate::{net::P2pPtr, util::time::Timestamp, Result};
 
 /// An event graph event
 pub mod event;
@@ -35,9 +35,15 @@ pub use event::Event;
 /// P2P protocol implementation for the Event Graph
 pub mod proto;
 
+/// Utility functions
+mod util;
+use util::{days_since, DAY};
+
 #[cfg(test)]
 mod tests;
 
+/// Initial genesis timestamp (07 Sep 2023, 00:00:00 UTC)
+const INITIAL_GENESIS: u64 = 1694044800;
 /// The number of parents an event is supposed to have.
 const N_EVENT_PARENTS: usize = 5;
 /// Allowed timestamp drift in seconds
@@ -66,17 +72,62 @@ pub struct EventGraph {
     /// or not. Additionally it is also used when we broadcast the
     /// `TipRep` message telling peers about our unreferenced tips.
     broadcasted_ids: RwLock<HashSet<blake3::Hash>>,
+    // DAG Pruning Task
+    //prune_task: StoppableTaskPtr,
 }
 
 impl EventGraph {
-    /// Create a new [`EventGraph`] instance
-    pub fn new(p2p: P2pPtr, sled_db: &sled::Db, dag_tree_name: &str) -> Result<EventGraphPtr> {
+    /// Create a new [`EventGraph`] instance.
+    /// * `days_rotation` marks the lifetime of the DAG before it's pruned.
+    pub async fn new(
+        p2p: P2pPtr,
+        sled_db: &sled::Db,
+        dag_tree_name: &str,
+        days_rotation: u64,
+        ex: Arc<Executor<'_>>,
+    ) -> Result<EventGraphPtr> {
         let dag = sled_db.open_tree(dag_tree_name)?;
         let unreferenced_tips = RwLock::new(HashSet::new());
         let last_event = RwLock::new(NULL_ID);
         let broadcasted_ids = RwLock::new(HashSet::new());
 
-        Ok(Arc::new(Self { p2p, dag, unreferenced_tips, last_event, broadcasted_ids }))
+        let self_ = Arc::new(Self {
+            p2p,
+            dag: dag.clone(),
+            unreferenced_tips,
+            last_event,
+            broadcasted_ids,
+        });
+
+        // Create the current genesis event based on the `days_rotation`
+        let current_genesis = Self::generate_genesis(days_rotation);
+
+        // Check if we have it in our DAG.
+        // If not, we can prune the DAG and insert this new genesis event.
+        if !dag.contains_key(current_genesis.id().as_bytes())? {
+            dag.clear()?;
+            self_.dag_insert(&current_genesis).await?;
+        }
+
+        Ok(self_)
+    }
+
+    /// Generate a deterministic genesis event corresponding to the DAG's configuration.
+    fn generate_genesis(days_rotation: u64) -> Event {
+        // First check how many days passed since initial genesis.
+        let days_passed = days_since(INITIAL_GENESIS);
+
+        // Calculate the number of days_rotation intervals since INITIAL_GENESIS
+        let rotations_since_genesis = days_passed / days_rotation;
+
+        // Calculate the timestamp of the most recent event
+        let timestamp = INITIAL_GENESIS + (rotations_since_genesis * days_rotation * DAY as u64);
+
+        Event {
+            timestamp: Timestamp(timestamp),
+            content: vec![0x47, 0x45, 0x4e, 0x45, 0x53, 0x49, 0x53],
+            parents: [NULL_ID; N_EVENT_PARENTS],
+        }
     }
 
     /// Sync the DAG from connected peers
@@ -98,8 +149,8 @@ impl EventGraph {
         todo!()
     }
 
-    /// Prune the DAG
-    pub async fn dag_prune(&self) {
+    /// Spawn a background task periodically pruning the DAG.
+    async fn dag_prune(&self) {
         // The DAG should periodically be pruned. This can be a configurable
         // parameter. By pruning, we should deterministically replace the
         // genesis event (can use a deterministic timestamp) and drop everything

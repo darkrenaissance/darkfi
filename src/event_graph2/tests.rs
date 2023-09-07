@@ -26,11 +26,10 @@ use url::Url;
 use crate::{
     event_graph2::{
         proto::{EventPut, ProtocolEventGraph},
-        Event, EventGraph, NULL_ID, N_EVENT_PARENTS,
+        Event, EventGraph, NULL_ID,
     },
     net::{P2p, Settings, SESSION_ALL},
     system::sleep,
-    util::time::Timestamp,
 };
 
 /// Number of nodes to spawn
@@ -82,11 +81,7 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     let mut eg_instances = vec![];
     let mut rng = rand::thread_rng();
 
-    let genesis_event = Event {
-        timestamp: Timestamp::current_time(),
-        content: vec![0xff, 0xba, 0xfe, 0xf1],
-        parents: [NULL_ID; N_EVENT_PARENTS],
-    };
+    let mut genesis_event_id = NULL_ID;
 
     // Initialize the nodes
     for i in 0..N_NODES {
@@ -113,11 +108,13 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
 
         let p2p = P2p::new(settings, ex.clone()).await;
         let sled_db = sled::Config::new().temporary(true).open().unwrap();
-        let event_graph = EventGraph::new(p2p.clone(), &sled_db, "dag").unwrap();
+        let event_graph =
+            EventGraph::new(p2p.clone(), &sled_db, "dag", 1, ex.clone()).await.unwrap();
         let event_graph_ = event_graph.clone();
 
-        // Everyone initializes the event graph with a genesis event.
-        event_graph.dag_insert(&genesis_event).await.unwrap();
+        if genesis_event_id == NULL_ID {
+            genesis_event_id = *event_graph.last_event.read().await;
+        }
 
         // Register the P2P protocols
         let registry = p2p.protocol_registry();
@@ -213,7 +210,7 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
             i,
             order,
             value,
-            genesis_event.id()
+            genesis_event_id,
         );
     }
 
