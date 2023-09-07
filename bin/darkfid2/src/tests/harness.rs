@@ -87,8 +87,10 @@ impl Harness {
 
         // Generate validators using pregenerated vks
         let (_, vks) = vks::read_or_gen_vks_and_pks()?;
-        let mut sync_settings = Settings { localnet: true, ..Default::default() };
-        let mut consensus_settings = Settings { localnet: true, ..Default::default() };
+        let mut sync_settings =
+            Settings { localnet: true, inbound_connections: 3, ..Default::default() };
+        let mut consensus_settings =
+            Settings { localnet: true, inbound_connections: 3, ..Default::default() };
 
         // Alice
         let alice_url = Url::parse("tcp+tls://127.0.0.1:18340")?;
