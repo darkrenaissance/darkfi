@@ -16,9 +16,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import urwid
+import logging
 import asyncio
 
 from scroll import ScrollBar, Scrollable
+from model import NodeInfo
 
 event_loop = asyncio.get_event_loop()
 
@@ -38,8 +40,8 @@ class LeftList(urwid.ListBox):
         return InfoWidget(self)
 
 class ServiceView(urwid.WidgetWrap):
-    def __init__(self):
-        test = urwid.Text("1")
+    def __init__(self, info):
+        test = urwid.Text(f"{info}")
         super().__init__(test)
         self._w = urwid.AttrWrap(self._w, None)
         self.update_w()
@@ -48,8 +50,8 @@ class ServiceView(urwid.WidgetWrap):
         return True
 
     def keypress(self, size, key):
-        if key in ('q'):
-            raise urwid.ExitMainLoop()
+        #if key in ('q'):
+        #    raise urwid.ExitMainLoop()
         return key
 
     def update_w(self):
@@ -59,8 +61,8 @@ class ServiceView(urwid.WidgetWrap):
         return "ServiceView"
 
 class SessionView(urwid.WidgetWrap):
-    def __init__(self):
-        test = urwid.Text("2")
+    def __init__(self, info):
+        test = urwid.Text(f"{info}")
         super().__init__(test)
         self._w = urwid.AttrWrap(self._w, None)
         self.update_w()
@@ -69,8 +71,8 @@ class SessionView(urwid.WidgetWrap):
         return True
 
     def keypress(self, size, key):
-        if key in ('q'):
-            raise urwid.ExitMainLoop()
+        #if key in ('q'):
+        #    raise urwid.ExitMainLoop()
         return key
 
     def update_w(self):
@@ -80,8 +82,8 @@ class SessionView(urwid.WidgetWrap):
         return "SessionView"
 
 class ConnectView(urwid.WidgetWrap):
-    def __init__(self):
-        test = urwid.Text("3")
+    def __init__(self, info):
+        test = urwid.Text(f"{info}")
         super().__init__(test)
         self._w = urwid.AttrWrap(self._w, None)
         self.update_w()
@@ -90,8 +92,8 @@ class ConnectView(urwid.WidgetWrap):
         return True
 
     def keypress(self, size, key):
-        if key in ('q'):
-            raise urwid.ExitMainLoop()
+        #if key in ('q'):
+        #    raise urwid.ExitMainLoop()
         return key
 
     def update_w(self):
@@ -100,37 +102,49 @@ class ConnectView(urwid.WidgetWrap):
     def name(self):
         return "ConnectView"
 
-class Dnetview():
+class View():
     palette = [
               ('body','light gray','black', 'standout'),
               ("line","dark cyan","black","standout"),
               ]
 
-    def __init__(self, data=None):
+    def __init__(self, data=NodeInfo):
+        #logging.debug(f"dnetview init {data}")
+
         info_text = urwid.Text("")
         self.pile = urwid.Pile([info_text])
         scroll = ScrollBar(Scrollable(self.pile))
         rightbox = urwid.LineBox(scroll)
         
-        widget = ServiceView()
-        widget2 = SessionView()
-        widget3 = ConnectView()
+        self.service_info = urwid.Text("")
+        widget = ServiceView(self.service_info)
 
-        listbox_content = [widget, widget2, widget3]
-        self.listbox = LeftList(urwid.SimpleListWalker(listbox_content))
+        self.session_info = urwid.Text("")
+        widget2 = SessionView(self.session_info)
+
+        self.connect_info = urwid.Text("")
+        widget3 = ConnectView(self.connect_info)
+
+        self.listbox_content = [widget, widget2, widget3]
+        self.listbox = LeftList(urwid.SimpleListWalker(self.listbox_content))
         leftbox = urwid.LineBox(self.listbox)
 
         columns = urwid.Columns([leftbox, rightbox], focus_column=0)
-        self.view = urwid.Frame(urwid.AttrWrap( columns, 'body' ))
+        self.ui = urwid.Frame(urwid.AttrWrap( columns, 'body' ))
 
-    async def render_info(self):
+    async def update_view(self, data=NodeInfo):
+        while True:
+            await asyncio.sleep(0.1)
+            self.service_info = urwid.Text("")
+       
+    async def render_info(self, channels):
         while True:
             await asyncio.sleep(0.1)
             self.pile.contents.clear()
             focus_w = self.listbox.get_focus()
             match focus_w[0].name():
                 case "ServiceView":
-                    self.pile.contents.append((urwid.Text("1"), self.pile.options()))
+                    self.pile.contents.append((urwid.Text(f""), self.pile.options()))
                 case "SessionView":
                     self.pile.contents.append((urwid.Text("2"), self.pile.options()))
                 case "ConnectView":

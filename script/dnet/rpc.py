@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import asyncio, json, random, time
+import asyncio, json, random, time, logging
 
 class JsonRpc:
     async def start(self, server, port):
@@ -29,7 +29,6 @@ class JsonRpc:
 
     async def _make_request(self, method, params):
         ident = random.randint(0, 2**16)
-        #print(ident)
         request = {
             "jsonrpc": "2.0",
             "method": method,
@@ -40,11 +39,9 @@ class JsonRpc:
         message = json.dumps(request) + "\n"
         self.writer.write(message.encode())
         await self.writer.drain()
-
         data = await self.reader.readline()
         message = data.decode().strip()
         response = json.loads(message)
-        #print(response)
         return response
 
     async def _subscribe(self, method, params):
@@ -59,7 +56,7 @@ class JsonRpc:
         message = json.dumps(request) + "\n"
         self.writer.write(message.encode())
         await self.writer.drain()
-        #print("Subscribed")
+        logging.debug("Subscribed")
 
     async def ping(self):
         return await self._make_request("ping", [])

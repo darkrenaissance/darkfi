@@ -15,81 +15,78 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import sys, toml, urwid, asyncio, logging
+import sys, toml, json, urwid, asyncio, logging
 
-import model
+from model import Model
 from rpc import JsonRpc
-from view import Dnetview
+from view import View
 
-async def get_info(rpc, name, port):
-    while True:
-        try:
-            await rpc.start("localhost", port)
-            break
-        except OSError:
-            pass
-    response = await rpc._make_request("p2p.get_info", [])
-    info = response["result"]
-    channels = info["channels"]
-    channel_lookup = {}
-    for channel in channels:
-        id = channel["id"]
-        channel_lookup[id] = channel
+class Dnetview:
+    def __init__(self):
+        self.ev = asyncio.get_event_loop()
+        self.queue = asyncio.Queue()
 
-    logging.debug(f"{name}")
-    logging.debug("inbound")
-    for channel in channels:
-        if channel["session"] != "inbound":
-            continue
-        url = channel["url"]
-        logging.debug(f"  {url}")
+        self.config = self.get_config()
+        self.model = Model()
+        self.view = View(self.model)
 
-    logging.debug("outbound")
-    for i, id in enumerate(info["outbound_slots"]):
-        if id == 0:
-            logging.debug(f"  {i}: none")
-            continue
+    async def subscribe(self, rpc, name, port):
+        info = {}
+    
+        while True:
+            try:
+                logging.debug(f"Start {name} RPC on port {port}")
+                await rpc.start("localhost", port)
+                break
+            # TODO: offline node handling
+            except OSError:
+                pass
+    
+        data = await rpc._make_request("p2p.get_info", [])
+        logging.debug(f"get_info: {data}")
 
-        assert id in channel_lookup
-        url = channel_lookup[id]["url"]
-        logging.debug(f"  {i}: {url}")
+        await rpc.dnet_switch(True)
+        await rpc.dnet_subscribe_events()
 
-    logging.debug("seed")
-    for channel in channels:
-        if channel["session"] != "seed":
-            continue
-        url = channel["url"]
-        logging.debug(f"  {i}: {url}")
+        while True:
+            data = await rpc.reader.readline()
+            data = json.loads(data)
+            # TODO: update data structures
+            logging.debug(f"events: {data}")
+    
+        await rpc.dnet_switch(False)
+        await rpc.stop()
+    
+    def get_config(self):
+        with open("config.toml") as f:
+            cfg = toml.load(f)
+            return cfg
+    
+    async def start_connect_slots(self, nodes):
+        tasks = []
+        async with asyncio.TaskGroup() as tg:
+            for i, node in enumerate(nodes):
+                rpc = JsonRpc()
+                task = tg.create_task(self.subscribe(rpc, node['name'], node['port']))
 
-    logging.debug("manual")
-    for channel in channels:
-        if channel["session"] != "manual":
-            continue
-        url = channel["url"]
-        logging.debug(f"  {i}: {url}")
+    def main(self):
+        logging.basicConfig(filename='dnet.log', encoding='utf-8', level=logging.DEBUG)
+        nodes = self.config.get("nodes")
 
-    await rpc.stop()
+        self.ev.create_task(self.start_connect_slots(nodes))
+        self.ev.create_task(self.view.update_view(self.model))
 
+        loop = urwid.MainLoop(self.view.ui, self.view.palette,
+            unhandled_input=self.unhandled_input,
+            event_loop=urwid.AsyncioEventLoop(loop=self.ev))
+        loop.run()
 
-def get_config():
-    with open("config.toml") as f:
-        cfg = toml.load(f)
-        return cfg
-
+    def unhandled_input(self, key):
+        if key in ('q'):
+            for task in asyncio.all_tasks():
+                task.cancel()
+            raise urwid.ExitMainLoop()
+    
 if __name__ == '__main__':
-    logging.basicConfig(filename='dnet.log', encoding='utf-8', level=logging.DEBUG)
-
-    config = get_config()
-    nodes = config.get("nodes")
-
-    ev = asyncio.get_event_loop()
-    rpc = JsonRpc()
-    for node in nodes:
-        ev.create_task(get_info(rpc, node['name'], node['port']))
-
     dnet = Dnetview()
-    ev.create_task(dnet.render_info())
-
-    loop = urwid.MainLoop(dnet.view, dnet.palette,
-        event_loop=urwid.AsyncioEventLoop(loop=ev))
-    loop.run()
+    dnet.main()
