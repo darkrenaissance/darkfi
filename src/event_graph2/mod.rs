@@ -17,6 +17,7 @@
  */
 
 use std::{
+    cmp::Ordering,
     collections::{HashSet, VecDeque},
     sync::Arc,
 };
@@ -26,7 +27,7 @@ use darkfi_serial::{deserialize_async, serialize_async};
 use num_bigint::BigUint;
 use smol::{lock::RwLock, Executor};
 
-use crate::{net::P2pPtr, util::time::Timestamp, Result};
+use crate::{net::P2pPtr, Result};
 
 /// An event graph event
 pub mod event;
@@ -43,6 +44,7 @@ use util::{days_since, DAY};
 mod tests;
 
 /// Initial genesis timestamp (07 Sep 2023, 00:00:00 UTC)
+/// Must always be UTC midnight.
 const INITIAL_GENESIS: u64 = 1694044800;
 /// The number of parents an event is supposed to have.
 const N_EVENT_PARENTS: usize = 5;
@@ -106,6 +108,7 @@ impl EventGraph {
         // If not, we can prune the DAG and insert this new genesis event.
         if !dag.contains_key(current_genesis.id().as_bytes())? {
             dag.clear()?;
+            sled_db.flush_async().await?;
             self_.dag_insert(&current_genesis).await?;
         }
 
@@ -124,7 +127,7 @@ impl EventGraph {
         let timestamp = INITIAL_GENESIS + (rotations_since_genesis * days_rotation * DAY as u64);
 
         Event {
-            timestamp: Timestamp(timestamp),
+            timestamp,
             content: vec![0x47, 0x45, 0x4e, 0x45, 0x53, 0x49, 0x53],
             parents: [NULL_ID; N_EVENT_PARENTS],
         }
@@ -149,7 +152,7 @@ impl EventGraph {
         todo!()
     }
 
-    /// Spawn a background task periodically pruning the DAG.
+    /// Background task periodically pruning the DAG.
     async fn dag_prune(&self) {
         // The DAG should periodically be pruned. This can be a configurable
         // parameter. By pruning, we should deterministically replace the
@@ -271,15 +274,17 @@ impl EventGraph {
                 let existing_event: Event = deserialize_async(&existing_event).await.unwrap();
 
                 // Sort by timestamp
-                if event.timestamp.0 < existing_event.timestamp.0 {
-                    pos = idx;
-                } else if event.timestamp.0 == existing_event.timestamp.0 {
-                    // In case of a tie-breaker, use the event ID
-                    let a = BigUint::from_bytes_be(event_id.as_bytes());
-                    let b = BigUint::from_bytes_be(existing_id.as_bytes());
-                    if a < b {
-                        pos = idx;
+                match event.timestamp.cmp(&existing_event.timestamp) {
+                    Ordering::Less => pos = idx,
+                    Ordering::Equal => {
+                        // In case of a tie-breaker, use the event ID
+                        let a = BigUint::from_bytes_be(event_id.as_bytes());
+                        let b = BigUint::from_bytes_be(existing_id.as_bytes());
+                        if a < b {
+                            pos = idx;
+                        }
                     }
+                    _ => {}
                 }
             }
         }

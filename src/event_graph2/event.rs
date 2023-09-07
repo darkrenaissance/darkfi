@@ -16,18 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashSet;
+use std::{collections::HashSet, time::UNIX_EPOCH};
 
 use darkfi_serial::{async_trait, Encodable, SerialDecodable, SerialEncodable};
 
 use super::{EventGraphPtr, EVENT_TIME_DRIFT, NULL_ID, N_EVENT_PARENTS};
-use crate::util::time::Timestamp;
 
 /// Representation of an event in the Event Graph
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Event {
     /// Timestamp of the event
-    pub(super) timestamp: Timestamp,
+    pub(super) timestamp: u64,
     /// Content of the event
     pub(super) content: Vec<u8>,
     /// Parent nodes in the event DAG
@@ -42,7 +41,7 @@ impl Event {
     /// of the codebase.
     pub async fn new(data: Vec<u8>, event_graph: EventGraphPtr) -> Self {
         Self {
-            timestamp: Timestamp::current_time(),
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_secs(),
             content: data,
             parents: event_graph.get_unreferenced_tips().await,
         }
@@ -60,7 +59,7 @@ impl Event {
     /*
     /// Check if an [`Event`] is considered too old.
     fn is_too_old(&self) -> bool {
-        self.timestamp.0 < Timestamp::current_time().0 - ORPHAN_AGE_LIMIT
+        self.timestamp < UNIX_EPOCH.elapsed().unwrap().as_secs() - ORPHAN_AGE_LIMIT
     }
     */
 
@@ -73,9 +72,9 @@ impl Event {
         }
 
         // Check if the event is too old or too new
-        let now = Timestamp::current_time().0;
-        let too_old = self.timestamp.0 < now - EVENT_TIME_DRIFT;
-        let too_new = self.timestamp.0 > now + EVENT_TIME_DRIFT;
+        let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        let too_old = self.timestamp < now - EVENT_TIME_DRIFT;
+        let too_new = self.timestamp > now + EVENT_TIME_DRIFT;
 
         if too_old || too_new {
             return false
