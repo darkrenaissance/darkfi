@@ -20,10 +20,12 @@ use std::{
     cmp::Ordering,
     collections::{HashSet, VecDeque},
     sync::Arc,
+    time::UNIX_EPOCH,
 };
 
 use async_recursion::async_recursion;
 use darkfi_serial::{deserialize_async, serialize_async};
+use log::debug;
 use num_bigint::BigUint;
 use smol::{
     lock::{Mutex, RwLock},
@@ -32,7 +34,7 @@ use smol::{
 
 use crate::{
     net::P2pPtr,
-    system::{StoppableTask, StoppableTaskPtr},
+    system::{sleep, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
 
@@ -45,7 +47,7 @@ pub mod proto;
 
 /// Utility functions
 mod util;
-use util::{days_since, DAY};
+use util::{days_since, next_rotation_timestamp, DAY};
 
 #[cfg(test)]
 mod tests;
@@ -183,7 +185,26 @@ impl EventGraph {
         // parameter. By pruning, we should deterministically replace the
         // genesis event (can use a deterministic timestamp) and drop everything
         // in the DAG, leaving just the new genesis event.
-        todo!()
+        loop {
+            // Find the next rotation timestamp:
+            let next_rotation = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
+
+            // Prepare the new genesis event
+            let current_genesis = Event {
+                timestamp: next_rotation,
+                content: vec![0x47, 0x45, 0x4e, 0x45, 0x53, 0x49, 0x53],
+                parents: [NULL_ID; N_EVENT_PARENTS],
+            };
+
+            // Sleep until it's time to rotate.
+            let s = UNIX_EPOCH.elapsed().unwrap().as_secs() - next_rotation;
+            debug!(target: "event_graph::dag_prune()", "Sleeping {}s until next DAG prune", s);
+            sleep(s).await;
+            debug!(target: "event_graph::dag_prune()", "Rotation period reached. Pruning DAG");
+
+            self.dag.clear()?;
+            self.dag_insert(&current_genesis).await?;
+        }
     }
 
     /// Insert an event into the DAG.

@@ -46,3 +46,44 @@ pub(super) fn days_since(midnight_ts: u64) -> u64 {
     // Convert the elapsed seconds into days
     elapsed_seconds / DAY as u64
 }
+
+/// Calculate the timestamp of the next DAG rotation.
+pub(super) fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: u64) -> u64 {
+    // Calculate the number of days since the given starting point
+    let days_passed = days_since(starting_timestamp);
+
+    // Find out how many rotation periods have occurred since
+    // the starting point
+    let rotations_since_start = (days_passed + rotation_period - 1) / rotation_period;
+
+    // Find out the number of days until the next rotation
+    let days_until_next_rotation = rotations_since_start * rotation_period - days_passed;
+
+    // Get the timestamp for the next rotation
+    midnight_timestamp(days_until_next_rotation as i64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_days_since() {
+        let five_days_ago = midnight_timestamp(-5);
+        assert_eq!(days_since(five_days_ago), 5);
+
+        let today = midnight_timestamp(0);
+        assert_eq!(days_since(today), 0);
+    }
+
+    #[test]
+    fn test_next_rotation_timestamp() {
+        let starting_point = midnight_timestamp(-10);
+        let rotation_period = 7;
+
+        // The first rotation since the starting point would be 3 days ago.
+        // So the next rotation should be 4 days from now.
+        let expected = midnight_timestamp(4);
+        assert_eq!(next_rotation_timestamp(starting_point, rotation_period), expected);
+    }
+}
