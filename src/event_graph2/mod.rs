@@ -66,8 +66,6 @@ pub struct EventGraph {
     dag: sled::Tree,
     /// The set of unreferenced DAG tips
     unreferenced_tips: RwLock<HashSet<blake3::Hash>>,
-    /// The last event ID inserted into the DAG
-    last_event: RwLock<blake3::Hash>,
     /// A `HashSet` containg event IDs and their 1-level parents.
     /// These come from the events we've sent out using `EventPut`.
     /// They are used with `EventReq` to decide if we should reply
@@ -90,16 +88,9 @@ impl EventGraph {
     ) -> Result<EventGraphPtr> {
         let dag = sled_db.open_tree(dag_tree_name)?;
         let unreferenced_tips = RwLock::new(HashSet::new());
-        let last_event = RwLock::new(NULL_ID);
         let broadcasted_ids = RwLock::new(HashSet::new());
 
-        let self_ = Arc::new(Self {
-            p2p,
-            dag: dag.clone(),
-            unreferenced_tips,
-            last_event,
-            broadcasted_ids,
-        });
+        let self_ = Arc::new(Self { p2p, dag: dag.clone(), unreferenced_tips, broadcasted_ids });
 
         // Create the current genesis event based on the `days_rotation`
         let current_genesis = Self::generate_genesis(days_rotation);
@@ -111,6 +102,9 @@ impl EventGraph {
             sled_db.flush_async().await?;
             self_.dag_insert(&current_genesis).await?;
         }
+
+        // Find the unreferenced tips in the current DAG state.
+        *self_.unreferenced_tips.write().await = self_.find_unreferenced_tips().await;
 
         Ok(self_)
     }
@@ -186,9 +180,29 @@ impl EventGraph {
         drop(bcast_ids);
 
         self.dag.insert(event_id.as_bytes(), s_event).unwrap();
-        *self.last_event.write().await = event_id;
 
         Ok(event_id)
+    }
+
+    /// Find the unreferenced tips in the current DAG state.
+    async fn find_unreferenced_tips(&self) -> HashSet<blake3::Hash> {
+        // First get all the event IDs
+        let mut tips = HashSet::new();
+        for iter_elem in self.dag.iter() {
+            let (id, _) = iter_elem.unwrap();
+            let id = blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap());
+            tips.insert(id);
+        }
+
+        for iter_elem in self.dag.iter() {
+            let (_, event) = iter_elem.unwrap();
+            let event: Event = deserialize_async(&event).await.unwrap();
+            for parent in event.parents.iter() {
+                tips.remove(parent);
+            }
+        }
+
+        tips
     }
 
     /// Get the current set of unreferenced tips in the DAG.

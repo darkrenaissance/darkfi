@@ -112,8 +112,10 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
             EventGraph::new(p2p.clone(), &sled_db, "dag", 1, ex.clone()).await.unwrap();
         let event_graph_ = event_graph.clone();
 
+        // Take the last sled item since there's only 1
         if genesis_event_id == NULL_ID {
-            genesis_event_id = *event_graph.last_event.read().await;
+            let (id, _) = event_graph.dag.last().unwrap().unwrap();
+            genesis_event_id = blake3::Hash::from_bytes((&id as &[u8]).try_into().unwrap());
         }
 
         // Register the P2P protocols
