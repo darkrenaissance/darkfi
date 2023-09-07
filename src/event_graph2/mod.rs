@@ -25,7 +25,7 @@ use std::{
 
 use async_recursion::async_recursion;
 use darkfi_serial::{deserialize_async, serialize_async};
-use log::debug;
+use log::{debug, info};
 use num_bigint::BigUint;
 use smol::{
     lock::{Mutex, RwLock},
@@ -55,12 +55,13 @@ mod tests;
 /// Initial genesis timestamp (07 Sep 2023, 00:00:00 UTC)
 /// Must always be UTC midnight.
 const INITIAL_GENESIS: u64 = 1694044800;
+/// Genesis event contents
+const GENESIS_CONTENTS: &[u8] = &[0x47, 0x45, 0x4e, 0x45, 0x53, 0x49, 0x53];
+
 /// The number of parents an event is supposed to have.
 const N_EVENT_PARENTS: usize = 5;
 /// Allowed timestamp drift in seconds
 const EVENT_TIME_DRIFT: u64 = 60;
-// Allowed orphan age limit in seconds
-//const ORPHAN_AGE_LIMIT: u64 = 60 * 5;
 /// Null event ID
 const NULL_ID: blake3::Hash = blake3::Hash::from_bytes([0x00; blake3::OUT_LEN]);
 
@@ -113,8 +114,11 @@ impl EventGraph {
         // Check if we have it in our DAG.
         // If not, we can prune the DAG and insert this new genesis event.
         if !dag.contains_key(current_genesis.id().as_bytes())? {
+            info!(
+                target: "event_graph::new()",
+                "[EVENTGRAPH] DAG does not contain current genesis, pruning existing data",
+            );
             dag.clear()?;
-            sled_db.flush_async().await?;
             self_.dag_insert(&current_genesis).await?;
         }
 
@@ -153,11 +157,7 @@ impl EventGraph {
         // Calculate the timestamp of the most recent event
         let timestamp = INITIAL_GENESIS + (rotations_since_genesis * days_rotation * DAY as u64);
 
-        Event {
-            timestamp,
-            content: vec![0x47, 0x45, 0x4e, 0x45, 0x53, 0x49, 0x53],
-            parents: [NULL_ID; N_EVENT_PARENTS],
-        }
+        Event { timestamp, content: GENESIS_CONTENTS.to_vec(), parents: [NULL_ID; N_EVENT_PARENTS] }
     }
 
     /// Sync the DAG from connected peers
@@ -185,6 +185,8 @@ impl EventGraph {
         // parameter. By pruning, we should deterministically replace the
         // genesis event (can use a deterministic timestamp) and drop everything
         // in the DAG, leaving just the new genesis event.
+        debug!(target: "event_graph::dag_prune()", "Spawned background DAG pruning task");
+
         loop {
             // Find the next rotation timestamp:
             let next_rotation = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
@@ -192,7 +194,7 @@ impl EventGraph {
             // Prepare the new genesis event
             let current_genesis = Event {
                 timestamp: next_rotation,
-                content: vec![0x47, 0x45, 0x4e, 0x45, 0x53, 0x49, 0x53],
+                content: GENESIS_CONTENTS.to_vec(),
                 parents: [NULL_ID; N_EVENT_PARENTS],
             };
 
@@ -204,6 +206,7 @@ impl EventGraph {
 
             self.dag.clear()?;
             self.dag_insert(&current_genesis).await?;
+            debug!(target: "event_graph::dag_prune()", "DAG pruned successfully");
         }
     }
 
@@ -216,10 +219,13 @@ impl EventGraph {
     /// some sensible time has passed after broadcasting the event.
     pub async fn dag_insert(&self, event: &Event) -> Result<blake3::Hash> {
         let event_id = event.id();
+        debug!(target: "event_graph::dag_insert()", "Inserting event {} into the DAG", event_id);
         let s_event = serialize_async(event).await;
 
+        // Update the unreferenced DAG tips set
         let mut unreferenced_tips = self.unreferenced_tips.write().await;
         let mut bcast_ids = self.broadcasted_ids.write().await;
+
         for parent_id in event.parents.iter() {
             if parent_id != &NULL_ID {
                 unreferenced_tips.remove(parent_id);
@@ -227,10 +233,14 @@ impl EventGraph {
             }
         }
         unreferenced_tips.insert(event_id);
-        drop(unreferenced_tips);
-        drop(bcast_ids);
 
         self.dag.insert(event_id.as_bytes(), s_event).unwrap();
+
+        // We hold the write locks until this point because we insert the event
+        // into the database above, so we don't want anything to read these until
+        // that insertion is complete.
+        drop(unreferenced_tips);
+        drop(bcast_ids);
 
         Ok(event_id)
     }

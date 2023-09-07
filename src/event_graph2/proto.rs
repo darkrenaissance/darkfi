@@ -26,7 +26,7 @@ use std::{
 };
 
 use darkfi_serial::{async_trait, deserialize_async, SerialDecodable, SerialEncodable};
-use log::{debug, error};
+use log::{debug, error, trace, warn};
 use smol::Executor;
 
 use super::{Event, EventGraphPtr, NULL_ID};
@@ -128,12 +128,19 @@ impl ProtocolEventGraph {
         }))
     }
 
+    /// Protocol function handling `EventPut`.
+    /// This is triggered whenever someone broadcasts (or relays) a new
+    /// event on the network.
     async fn handle_event_put(self: Arc<Self>) -> Result<()> {
         loop {
             let event = match self.ev_put_sub.receive().await {
                 Ok(v) => v.0.clone(),
                 Err(_) => continue,
             };
+            trace!(
+                 target: "event_graph::protocol::handle_event_put()",
+                 "Got EventPut: {} [{}]", event.id(), self.channel.address(),
+            );
 
             // We received an event. Check if we already have it in our DAG.
             // Also check if we have the event's parents. In the case we do
@@ -148,7 +155,7 @@ impl ProtocolEventGraph {
                 let malicious_count = self.malicious_count.fetch_add(1, SeqCst);
                 if malicious_count + 1 == MALICIOUS_THRESHOLD {
                     error!(
-                        target: "event_graph::handle_event_put()",
+                        target: "event_graph::protocol::handle_event_put()",
                         "[EVENTGRAPH] Peer {} reached malicious threshold. Dropping connection.",
                         self.channel.address(),
                     );
@@ -156,24 +163,30 @@ impl ProtocolEventGraph {
                     return Err(Error::ChannelStopped)
                 }
 
+                warn!(
+                    target: "event_graph::protocol::handle_event_put()",
+                    "[EVENTGRAPH] Peer {} sent us a malicious event", self.channel.address(),
+                );
                 continue
             }
 
             // If we have already seen the event, we'll stay quiet.
             let event_id = event.id();
             if self.event_graph.dag.contains_key(event_id.as_bytes()).unwrap() {
-                debug!(target: "event_graph::handle_event_put()", "Got known event");
+                debug!(
+                    target: "event_graph::protocol::handle_event_put()",
+                    "Event {} is already known", event_id,
+                );
                 continue
             }
 
             // At this point, this is a new event to us. Let's see if we
             // have all of its parents.
-            /*
-            info!(
-                target: "event_graph::handle_event_put()",
-                "[EVENTGRAPH] Got new event"
+            debug!(
+                target: "event_graph::protocol::handle_event_put()",
+                "Event {} is new", event_id,
             );
-            */
+
             let mut missing_parents = HashSet::new();
             for parent_id in event.parents.iter() {
                 // `event.validate()` should have already made sure that
@@ -191,21 +204,21 @@ impl ProtocolEventGraph {
             // fetch them from this peer.
             if !missing_parents.is_empty() {
                 debug!(
-                    target: "event_graph::handle_event_put()",
+                    target: "event_graph::protocol::handle_event_put()",
                     "Event has {} missing parents. Requesting...", missing_parents.len(),
                 );
                 let mut received_events = HashMap::new();
                 for parent_id in missing_parents.iter() {
                     debug!(
-                        target: "event_graph::handle_event_put()",
-                        "Requesting {}", parent_id,
+                        target: "event_graph::protocol::handle_event_put()",
+                        "Requesting {}...", parent_id,
                     );
                     self.channel.send(&EventReq(*parent_id)).await?;
                     let parent = match timeout(REPLY_TIMEOUT, self.ev_rep_sub.receive()).await {
                         Ok(parent) => parent?,
                         Err(_) => {
                             error!(
-                                target: "event_graph::handle_event_put()",
+                                target: "event_graph::protocol::handle_event_put()",
                                 "[EVENTGRAPH] Timeout while waiting for parent {} from {}",
                                 parent_id, self.channel.address(),
                             );
@@ -217,7 +230,7 @@ impl ProtocolEventGraph {
 
                     if &parent.id() != parent_id {
                         error!(
-                            target: "event_graph::handle_event_put()",
+                            target: "event_graph::protocol::handle_event_put()",
                             "[EVENTGRAPH] Peer {} replied with a wrong event: {}",
                             self.channel.address(), parent.id(),
                         );
@@ -226,7 +239,7 @@ impl ProtocolEventGraph {
                     }
 
                     debug!(
-                        target: "event_graph::handle_event_put()",
+                        target: "event_graph::protocol::handle_event_put()",
                         "Got correct parent event {}", parent.id(),
                     );
 
@@ -242,9 +255,13 @@ impl ProtocolEventGraph {
 
             // If we're here, we have all the parents, and we can now
             // add the actual event to the DAG.
+            debug!(
+                target: "event_graph::protocol::handle_event_put()",
+                "Got all parents necessary for insertion",
+            );
             self.event_graph.dag_insert(&event).await.unwrap();
 
-            // Relay the event to other peers
+            // Relay the event to other peers.
             self.event_graph
                 .p2p
                 .broadcast_with_exclude(&EventPut(event), &[self.channel.address().clone()])
@@ -252,12 +269,18 @@ impl ProtocolEventGraph {
         }
     }
 
+    /// Protocol function handling `EventReq`.
+    /// This is triggered whenever someone requests an event from us.
     async fn handle_event_req(self: Arc<Self>) -> Result<()> {
         loop {
             let event_id = match self.ev_req_sub.receive().await {
                 Ok(v) => v.0,
                 Err(_) => continue,
             };
+            trace!(
+                target: "event_graph::protocol::handle_event_req()",
+                "Got EventReq: {} [{}]", event_id, self.channel.address(),
+            );
 
             // We received an event request from somebody.
             // If we do have it, we will send it back to them as `EventRep`.
@@ -274,7 +297,7 @@ impl ProtocolEventGraph {
                 let malicious_count = self.malicious_count.fetch_add(1, SeqCst);
                 if malicious_count + 1 == MALICIOUS_THRESHOLD {
                     error!(
-                        target: "event_graph::handle_event_req()",
+                        target: "event_graph::protocol::handle_event_req()",
                         "[EVENTGRAPH] Peer {} reached malicious threshold. Dropping connection.",
                         self.channel.address(),
                     );
@@ -282,6 +305,11 @@ impl ProtocolEventGraph {
                     return Err(Error::ChannelStopped)
                 }
 
+                warn!(
+                    target: "event_graph::protocol::handle_event_req()",
+                    "[EVENTGRAPH] Peer {} requested an unexpected event {}",
+                    self.channel.address(), event_id,
+                );
                 continue
             }
 
@@ -309,9 +337,16 @@ impl ProtocolEventGraph {
         }
     }
 
+    /// Protocol function handling `TipReq`.
+    /// This is triggered when someone requests the current unreferenced
+    /// tips of our DAG.
     async fn handle_tip_req(self: Arc<Self>) -> Result<()> {
         loop {
             self.tip_req_sub.receive().await?;
+            trace!(
+                target: "event_graph::protocol::handle_tip_req()",
+                "Got TipReq [{}]", self.channel.address(),
+            );
 
             // TODO: Rate limit
 

@@ -32,12 +32,11 @@ use crate::{
     system::sleep,
 };
 
-/// Number of nodes to spawn
-const N_NODES: usize = 50;
-//const N_NODES: usize = 2;
-/// Number of peers each node connects to
-const N_CONNS: usize = N_NODES / 3;
-//const N_CONNS: usize = 1;
+// Number of nodes to spawn and number of peers each node connects to
+const N_NODES: usize = 5;
+const N_CONNS: usize = 2;
+//const N_NODES: usize = 50;
+//const N_CONNS: usize = N_NODES / 3;
 
 #[test]
 #[ignore]
@@ -53,8 +52,8 @@ fn eventgraph_propagation() {
     cfg.add_filter_ignore("net::channel::send()".to_string());
 
     simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
-        //simplelog::LevelFilter::Debug,
+        //simplelog::LevelFilter::Info,
+        simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
