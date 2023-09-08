@@ -35,7 +35,7 @@ use crate::{impl_p2p_message, net::*, system::timeout::timeout, Error, Result};
 /// drop the peer from our P2P connection.
 const MALICIOUS_THRESHOLD: usize = 5;
 /// Time to wait for a parent ID reply
-const REPLY_TIMEOUT: Duration = Duration::from_secs(5);
+pub(super) const REPLY_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// P2P protocol implementation for the Event Graph.
 pub struct ProtocolEventGraph {
@@ -52,7 +52,7 @@ pub struct ProtocolEventGraph {
     /// `MessageSubscriber` for `TipReq`
     tip_req_sub: MessageSubscription<TipReq>,
     /// `MessageSubscriber` for `TipRep`
-    _tip_rep_sub: MessageSubscription<TipRep>,
+    tip_rep_sub: MessageSubscription<TipRep>,
     /// Peer malicious message count
     malicious_count: AtomicUsize,
     /// P2P jobs manager pointer
@@ -121,7 +121,7 @@ impl ProtocolEventGraph {
             ev_req_sub,
             ev_rep_sub,
             tip_req_sub,
-            _tip_rep_sub: tip_rep_sub,
+            tip_rep_sub,
             malicious_count: AtomicUsize::new(0),
             jobsman: ProtocolJobsManager::new("ProtocolEventGraph", channel.clone()),
         }))

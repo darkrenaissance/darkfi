@@ -524,6 +524,12 @@ pub enum Error {
     #[error("Geode chunk route not found")]
     GeodeChunkRouteNotFound,
 
+    // ==================
+    // Event Graph errors
+    // ==================
+    #[error("DAG sync failed")]
+    DagSyncFailed,
+
     // =========
     // Catch-all
     // =========
