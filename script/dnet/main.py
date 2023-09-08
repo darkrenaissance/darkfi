@@ -43,7 +43,11 @@ class Dnetview:
                 pass
     
         data = await rpc._make_request("p2p.get_info", [])
-        logging.debug(f"get_info: {data}")
+
+        try:
+            self.queue.put_nowait(data)
+        except:
+            logging.debug("subscribe().put_nowait(): QueueFull")
 
         await rpc.dnet_switch(True)
         await rpc.dnet_subscribe_events()
@@ -51,8 +55,12 @@ class Dnetview:
         while True:
             data = await rpc.reader.readline()
             data = json.loads(data)
-            # TODO: update data structures
-            logging.debug(f"events: {data}")
+            #logging.debug(f"events: {data}")
+
+            try:
+                self.queue.put_nowait(data)
+            except:
+                logging.debug("subscribe().putnowait(): QueueFull")
     
         await rpc.dnet_switch(False)
         await rpc.stop()
@@ -67,7 +75,17 @@ class Dnetview:
         async with asyncio.TaskGroup() as tg:
             for i, node in enumerate(nodes):
                 rpc = JsonRpc()
-                task = tg.create_task(self.subscribe(rpc, node['name'], node['port']))
+                subscribe = tg.create_task(self.subscribe(rpc, node['name'], node['port']))
+                update = tg.create_task(self.update_model())
+
+    async def update_model(self):
+        while True:
+            try:
+                item = await self.queue.get()
+                logging.debug(f"result: {item}")
+                self.queue.task_done()
+            except self.queue.is_empty():
+                logging.debug("update_model(): QueueEmpty")
 
     def main(self):
         logging.basicConfig(filename='dnet.log', encoding='utf-8', level=logging.DEBUG)
