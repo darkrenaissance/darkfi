@@ -49,6 +49,10 @@ pub(super) fn days_since(midnight_ts: u64) -> u64 {
 
 /// Calculate the timestamp of the next DAG rotation.
 pub(super) fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: u64) -> u64 {
+    // Prevent division by 0
+    if rotation_period == 0 {
+        panic!("Rotation period cannot be 0");
+    }
     // Calculate the number of days since the given starting point
     let days_passed = days_since(starting_timestamp);
 
@@ -56,11 +60,13 @@ pub(super) fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: 
     // the starting point
     let rotations_since_start = (days_passed + rotation_period - 1) / rotation_period;
 
-    // Find out the number of days until the next rotation
-    let days_until_next_rotation = rotations_since_start * rotation_period - days_passed;
+    // Find out the number of days until the next rotation. Panic if result is beyond the range
+    // of i64.
+    let days_until_next_rotation: i64 =
+        (rotations_since_start * rotation_period - days_passed).try_into().unwrap();
 
     // Get the timestamp for the next rotation
-    midnight_timestamp(days_until_next_rotation as i64)
+    midnight_timestamp(days_until_next_rotation)
 }
 
 #[cfg(test)]
@@ -85,5 +91,17 @@ mod tests {
         // So the next rotation should be 4 days from now.
         let expected = midnight_timestamp(4);
         assert_eq!(next_rotation_timestamp(starting_point, rotation_period), expected);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_next_rotation_timestamp_panics_on_overflow() {
+        next_rotation_timestamp(0, u64::MAX);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_next_rotation_timestamp_panics_on_division_by_zero() {
+        next_rotation_timestamp(0, 0);
     }
 }
