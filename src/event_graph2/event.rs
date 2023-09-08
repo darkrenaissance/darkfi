@@ -105,3 +105,62 @@ impl Event {
         !seen.is_empty()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_valid_event() -> Event {
+        Event {
+            timestamp: UNIX_EPOCH.elapsed().unwrap().as_secs(),
+            content: vec![1u8],
+            parents: [
+                blake3::hash(b"1"),
+                blake3::hash(b"2"),
+                blake3::hash(b"3"),
+                blake3::hash(b"4"),
+                blake3::hash(b"5"),
+            ],
+        }
+    }
+    #[test]
+    fn event_is_valid() {
+        // Validate our test Event struct
+        assert!(make_valid_event().validate());
+    }
+
+    #[test]
+    fn invalid_events() {
+        // TODO: Not checked:
+        // - "the parent does not recursively reference the event"
+        let e = make_valid_event();
+
+        let mut event_empty_content = e.clone();
+        event_empty_content.content = vec![];
+        assert_eq!(event_empty_content.validate(), false);
+
+        let mut event_timestamp_too_old = e.clone();
+        event_timestamp_too_old.timestamp = 0;
+        assert_eq!(event_timestamp_too_old.validate(), false);
+
+        let mut event_timestamp_too_new = e.clone();
+        event_timestamp_too_new.timestamp = u64::MAX;
+        assert_eq!(event_timestamp_too_new.validate(), false);
+
+        let mut event_duplicated_parents = e.clone();
+        let duplicated_parents = [
+            blake3::hash(b"1"),
+            blake3::hash(b"1"),
+            blake3::hash(b"3"),
+            blake3::hash(b"4"),
+            blake3::hash(b"5"),
+        ];
+        event_duplicated_parents.parents = duplicated_parents;
+        assert_eq!(event_duplicated_parents.validate(), false);
+
+        let mut event_null_parents = e.clone();
+        let all_null_parents = [NULL_ID, NULL_ID, NULL_ID, NULL_ID, NULL_ID];
+        event_null_parents.parents = all_null_parents;
+        assert_eq!(event_null_parents.validate(), false);
+    }
+}
