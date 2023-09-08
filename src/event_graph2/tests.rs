@@ -41,7 +41,6 @@ const N_CONNS: usize = 2;
 //const N_CONNS: usize = N_NODES / 3;
 
 #[test]
-#[ignore]
 fn eventgraph_propagation() {
     let mut cfg = simplelog::ConfigBuilder::new();
     cfg.add_filter_ignore("sled".to_string());
@@ -221,10 +220,64 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // ===========================================
     // 6. Create multiple events on multiple nodes
     // ===========================================
+    // node 1
+    // =======
+    let node1 = eg_instances.choose(&mut rand::thread_rng()).unwrap();
+    let event0_1 = Event::new(vec![1, 2, 3, 4, 3], node1.clone()).await;
+    let _ = node1.dag_insert(&event0_1).await.unwrap();
+    node1.p2p.broadcast(&EventPut(event0_1)).await;
+
+    let event1_1 = Event::new(vec![1, 2, 3, 4, 4], node1.clone()).await;
+    let _ = node1.dag_insert(&event1_1).await.unwrap();
+    node1.p2p.broadcast(&EventPut(event1_1)).await;
+
+    let event2_1 = Event::new(vec![1, 2, 3, 4, 5], node1.clone()).await;
+    let _ = node1.dag_insert(&event2_1).await.unwrap();
+    node1.p2p.broadcast(&EventPut(event2_1)).await;
+
+    // =======
+    // node 2
+    // =======
+    let node2 = eg_instances.choose(&mut rand::thread_rng()).unwrap();
+    let event0_2 = Event::new(vec![1, 2, 3, 4, 6], node2.clone()).await;
+    let _ = node2.dag_insert(&event0_2).await.unwrap();
+    node2.p2p.broadcast(&EventPut(event0_2)).await;
+    let event1_2 = Event::new(vec![1, 2, 3, 4, 7], node2.clone()).await;
+    let _ = node2.dag_insert(&event1_2).await.unwrap();
+    node2.p2p.broadcast(&EventPut(event1_2)).await;
+
+    let event2_2 = Event::new(vec![1, 2, 3, 4, 8], node2.clone()).await;
+    let _ = node2.dag_insert(&event2_2).await.unwrap();
+    node2.p2p.broadcast(&EventPut(event2_2)).await;
+
+    // =======
+    // node 3
+    // =======
+    let node3 = eg_instances.choose(&mut rand::thread_rng()).unwrap();
+    let event0_3 = Event::new(vec![1, 2, 3, 4, 9], node3.clone()).await;
+    let _ = node3.dag_insert(&event0_3).await.unwrap();
+    node2.p2p.broadcast(&EventPut(event0_3)).await;
+
+    let event1_3 = Event::new(vec![1, 2, 3, 4, 10], node3.clone()).await;
+    let _ = node3.dag_insert(&event1_3).await.unwrap();
+    node2.p2p.broadcast(&EventPut(event1_3)).await;
+
+    let event2_3 = Event::new(vec![1, 2, 3, 4, 11], node3.clone()).await;
+    let event2_3_id = node3.dag_insert(&event2_3).await.unwrap();
+    node3.p2p.broadcast(&EventPut(event2_3)).await;
+
+    info!("Waiting 10s for events propagation");
+    sleep(10).await;
 
     // ==========================================
     // 7. Assert that everyone has all the events
     // ==========================================
+    for (i, eg) in eg_instances.iter().enumerate() {
+        let tips = eg.unreferenced_tips.read().await;
+        assert!(eg.dag.len() == 14, "Node {}, expected 14 events, have {}", i, eg.dag.len());
+        // 5 events from 2. and 4. + 9 events from 6. = ^
+        assert!(tips.get(&event2_3_id).is_some(), "Node {}, expected tip to be {}", i, event2_3_id);
+    }
 
     // Stop the P2P network
     for eg in eg_instances.iter() {
