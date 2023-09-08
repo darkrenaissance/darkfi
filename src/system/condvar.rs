@@ -60,6 +60,7 @@ impl CondVar {
     pub fn notify(&self) {
         let mut state = self.state.lock().unwrap();
         state.is_awake = true;
+        // Notify the executor that the pending future from wait() is to be polled again.
         if let Some(waker) = state.waker.take() {
             waker.wake()
         }
@@ -96,6 +97,7 @@ impl Default for CondVar {
     }
 }
 
+/// Awaitable futures object returned by `condvar.wait()`
 pub struct CondVarWait<'a> {
     state: &'a Mutex<CondVarState>,
 }
@@ -107,6 +109,16 @@ impl<'a> Future for CondVarWait<'a> {
         let mut state = self.state.lock().unwrap();
 
         // Avoid cloning wherever possible.
+        // This code below is equivalent to:
+        //
+        //     state.waker = Some(cx.waker().clone());
+        //
+        // However checking whether the waker we have wakes up the same task
+        // as the one in the context cx, means we don't have to re-clone if
+        // we already have it.
+        //
+        // It's a minor thing which is basically recommended in the docs on
+        // creating pollable futures.
         let new_waker = match state.waker.take() {
             Some(waker) => {
                 let cx_waker = cx.waker();
