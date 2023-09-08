@@ -1,5 +1,4 @@
 load('pedersen.sage')
-load('ec_share.sage')
 
 def open_2pc(party0_share, party1_share):
     return party0_share + party1_share
@@ -9,7 +8,7 @@ def verify_2pc_mac_check(party0_mac, party1_mac):
 
 global_key = random.randint(0, p)
 
-class AuthenticatedShare(object):
+class ECAuthenticatedShare(object):
       """
       additive share
       """
@@ -33,32 +32,26 @@ class AuthenticatedShare(object):
 
           return opened_share
 
-      def sub_scalar(self, scalar, party_id):
-          return AuthenticatedShare(self.share - scalar, self.mac, self.public_modifier + scalar) if party_id == 0 else AuthenticatedShare(self.share , self.mac, self.public_modifier + scalar)
-      
-      def add_scalar(self, scalar, party_id):
-          return AuthenticatedShare(self.share + scalar, self.mac , self.public_modifier - scalar) if party_id ==0 else AuthenticatedShare(self.share, self.mac, self.public_modifier - scalar)
-
       def mul_scalar(self, scalar):
-          return AuthenticatedShare(self.share * scalar, self.mac * scalar, self.public_modifier * scalar)
+          return ECAuthenticatedShare(self.share * scalar, self.mac * scalar, self.public_modifier * scalar)
 
-      def mul_point(self, point):
-          return ECAuthenticatedShare(self.share * point, self.mac * point, self.public_modifier * point)
-
+      def add_point(self, point, party_id):
+          return ECAuthenticatedShare(self.share + point, self.mac , self.public_modifier - point) if party_id ==0 else ECAuthenticatedShare(self.share, self.mac, self.public_modifier - point)
+          
       def __add__(self, rhs):
           '''
           add additive shares
           '''
-          return AuthenticatedShare(self.share + rhs.share, self.mac + rhs.mac, self.public_modifier + rhs.public_modifier)
+          return ECAuthenticatedShare(self.share + rhs.share, self.mac + rhs.mac, self.public_modifier + rhs.public_modifier)
 
       def __sub__(self, rhs):
           '''
           sub additive shares
           '''
-          return AuthenticatedShare(self.share - rhs.share, self.mac - rhs.mac, self.public_modifier - rhs.public_modifier)
+          return ECAuthenticatedShare(self.share - rhs.share, self.mac - rhs.mac, self.public_modifier - rhs.public_modifier)
 
 
-class MultiplicationAuthenticatedShares(object):
+class ScalingECAuthenticatedShares(object):
       def __init__(self, alpha, beta, triplet, party_id):
           # authenticated shares
           self.alpha_as = alpha
@@ -69,12 +62,13 @@ class MultiplicationAuthenticatedShares(object):
           self.party_id = party_id
 
       def __mul__(self, peer_share):
-          masked_d_share = self.alpha_as - self.a_as      
-          peer_masked_d_share = peer_share.alpha_as - peer_share.a_as
-          d = open_2pc(masked_d_share.share, peer_masked_d_share.share)
-
+          generator = CurvePoint.generator()
+          
           masked_e_share = self.beta_as - self.b_as
           peer_masked_e_share = peer_share.beta_as - peer_share.b_as
           e = open_2pc(masked_e_share.share, peer_masked_e_share.share)
+          peer_masked_d_share = peer_share.alpha_as - peer_share.a_as.mul_point(generator)
+          masked_d_share = self.alpha_as - self.a_as.mul_point(generator)
+          d = open_2pc(masked_d_share.share, peer_masked_d_share.share)
 
-          return (self.b_as.mul_scalar(d) + self.a_as.mul_scalar(e) + self.c_as).add_scalar(d*e, self.party_id)
+          return (self.b_as.mul_point(d) + self.a_as.mul_point(generator).mul_scalar(e) + self.c_as.mul_point(generator)).add_point(d * e, self.party_id)
