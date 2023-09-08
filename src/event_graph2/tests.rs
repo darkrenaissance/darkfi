@@ -114,7 +114,7 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
         let p2p = P2p::new(settings, ex.clone()).await;
         let sled_db = sled::Config::new().temporary(true).open().unwrap();
         let event_graph =
-            EventGraph::new(p2p.clone(), &sled_db, "dag", 1, ex.clone()).await.unwrap();
+            EventGraph::new(p2p.clone(), sled_db, "dag", 1, ex.clone()).await.unwrap();
         let event_graph_ = event_graph.clone();
 
         // Take the last sled item since there's only 1

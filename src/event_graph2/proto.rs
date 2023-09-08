@@ -17,7 +17,6 @@
  */
 
 use std::{
-    collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicUsize, Ordering::SeqCst},
         Arc,

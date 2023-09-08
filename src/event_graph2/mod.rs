@@ -91,7 +91,7 @@ impl EventGraph {
     /// * `days_rotation` marks the lifetime of the DAG before it's pruned.
     pub async fn new(
         p2p: P2pPtr,
-        sled_db: &sled::Db,
+        sled_db: sled::Db,
         dag_tree_name: &str,
         days_rotation: u64,
         ex: Arc<Executor<'_>>,
@@ -133,7 +133,7 @@ impl EventGraph {
         prune_task.clone().start(
             self_.clone().dag_prune(days_rotation),
             |_| async move {
-                self__.clone()._handle_stop().await;
+                self__.clone()._handle_stop(sled_db).await;
             },
             Error::DetachedTaskStopped,
             ex.clone(),
@@ -142,8 +142,9 @@ impl EventGraph {
         Ok(self_)
     }
 
-    async fn _handle_stop(&self) {
-        log::warn!("DAG PRUNE TASK STOPPED");
+    async fn _handle_stop(&self, sled_db: sled::Db) {
+        info!(target: "event_graph::_handle_stop()", "[EVENTGRAPH] Prune task stopped, flushing sled");
+        sled_db.flush_async().await.unwrap();
     }
 
     /// Generate a deterministic genesis event corresponding to the DAG's configuration.
@@ -204,6 +205,7 @@ impl EventGraph {
             sleep(s).await;
             debug!(target: "event_graph::dag_prune()", "Rotation period reached. Pruning DAG");
 
+            *self.unreferenced_tips.write().await = HashSet::new();
             self.dag.clear()?;
             self.dag_insert(&current_genesis).await?;
             debug!(target: "event_graph::dag_prune()", "DAG pruned successfully");
