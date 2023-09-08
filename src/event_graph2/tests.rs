@@ -48,14 +48,18 @@ fn eventgraph_propagation() {
     cfg.add_filter_ignore("net::protocol_ping".to_string());
     cfg.add_filter_ignore("net::channel::subscribe_stop()".to_string());
     cfg.add_filter_ignore("net::hosts".to_string());
+    cfg.add_filter_ignore("net::session".to_string());
     cfg.add_filter_ignore("net::message_subscriber".to_string());
     cfg.add_filter_ignore("net::protocol_address".to_string());
     cfg.add_filter_ignore("net::protocol_version".to_string());
+    cfg.add_filter_ignore("net::protocol_registry".to_string());
     cfg.add_filter_ignore("net::channel::send()".to_string());
+    cfg.add_filter_ignore("net::channel::start()".to_string());
+    cfg.add_filter_ignore("net::channel::subscribe_msg()".to_string());
 
     simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
-        //simplelog::LevelFilter::Debug,
+        //simplelog::LevelFilter::Info,
+        simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
@@ -175,6 +179,52 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
         assert!(tips.len() == 1, "Node {}", i);
         assert!(tips.get(&event_id).is_some(), "Node {}", i);
     }
+
+    // ==============================================================
+    // 4. Create multiple events on a node and broadcast the last one
+    //    The `EventPut` logic should manage to fetch all of them,
+    //    provided that the last one references the earlier ones.
+    // ==============================================================
+    let random_node = eg_instances.choose(&mut rand::thread_rng()).unwrap();
+    let event0 = Event::new(vec![1, 2, 3, 4, 0], random_node.clone()).await;
+    let event0_id = random_node.dag_insert(&event0).await.unwrap();
+    let event1 = Event::new(vec![1, 2, 3, 4, 1], random_node.clone()).await;
+    let event1_id = random_node.dag_insert(&event1).await.unwrap();
+    let event2 = Event::new(vec![1, 2, 3, 4, 2], random_node.clone()).await;
+    let event2_id = random_node.dag_insert(&event2).await.unwrap();
+    // Genesis event + event from 2. + upper 3 events
+    assert!(random_node.dag.len() == 5);
+    let tips = random_node.unreferenced_tips.read().await;
+    assert!(tips.len() == 1);
+    assert!(tips.get(&event2_id).is_some());
+    drop(tips);
+
+    let event_chain =
+        vec![(event0_id, event0.parents), (event1_id, event1.parents), (event2_id, event2.parents)];
+
+    info!("Broadcasting event {}", event2_id);
+    info!("Event chain: {:#?}", event_chain);
+    random_node.p2p.broadcast(&EventPut(event2)).await;
+    info!("Waiting 10s for event propagation");
+    sleep(10).await;
+
+    // ==========================================
+    // 5. Assert that everyone has all the events
+    // ==========================================
+    for (i, eg) in eg_instances.iter().enumerate() {
+        let tips = eg.unreferenced_tips.read().await;
+        assert!(eg.dag.len() == 5, "Node {}, expected 5 events, have {}", i, eg.dag.len());
+        assert!(tips.len() == 1, "Node {}, expected 1 tip, have {}", i, tips.len());
+        assert!(tips.get(&event2_id).is_some(), "Node {}, expected tip to be {}", i, event2_id);
+    }
+
+    // ===========================================
+    // 6. Create multiple events on multiple nodes
+    // ===========================================
+
+    // ==========================================
+    // 7. Assert that everyone has all the events
+    // ==========================================
 
     // Stop the P2P network
     for eg in eg_instances.iter() {

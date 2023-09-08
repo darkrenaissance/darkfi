@@ -187,68 +187,99 @@ impl ProtocolEventGraph {
                 "Event {} is new", event_id,
             );
 
-            let mut missing_parents = HashSet::new();
+            let mut missing_parents = vec![];
             for parent_id in event.parents.iter() {
                 // `event.validate()` should have already made sure that
-                // not all parents are NULL.
+                // not all parents are NULL, and that there are no duplicates.
                 if parent_id == &NULL_ID {
                     continue
                 }
 
                 if !self.event_graph.dag.contains_key(parent_id.as_bytes()).unwrap() {
-                    missing_parents.insert(*parent_id);
+                    missing_parents.push(*parent_id);
                 }
             }
 
             // If we have missing parents, then we have to attempt to
-            // fetch them from this peer.
+            // fetch them from this peer. Do this recursively until we
+            // find all of them.
             if !missing_parents.is_empty() {
+                // We track the received events in a vec. If/when we get all
+                // of them, we need to insert them in reverse so the DAG state
+                // stays correct and unreferenced tips represent the actual thing
+                // they should. If we insert them out of order, then we might have
+                // wrong unreferenced tips.
+                // TODO: What should we do if at some point the events become too old?
+                let mut received_events = vec![];
+
                 debug!(
                     target: "event_graph::protocol::handle_event_put()",
                     "Event has {} missing parents. Requesting...", missing_parents.len(),
                 );
-                let mut received_events = HashMap::new();
-                for parent_id in missing_parents.iter() {
-                    debug!(
-                        target: "event_graph::protocol::handle_event_put()",
-                        "Requesting {}...", parent_id,
-                    );
-                    self.channel.send(&EventReq(*parent_id)).await?;
-                    let parent = match timeout(REPLY_TIMEOUT, self.ev_rep_sub.receive()).await {
-                        Ok(parent) => parent?,
-                        Err(_) => {
+
+                while !missing_parents.is_empty() {
+                    for parent_id in missing_parents.clone().iter() {
+                        debug!(
+                            target: "event_graph::protocol::handle_event_put()",
+                            "Requesting {}...", parent_id,
+                        );
+
+                        self.channel.send(&EventReq(*parent_id)).await?;
+                        let parent = match timeout(REPLY_TIMEOUT, self.ev_rep_sub.receive()).await {
+                            Ok(parent) => parent?,
+                            Err(_) => {
+                                error!(
+                                    target: "event_graph::protocol::handle_event_put()",
+                                    "[EVENTGRAPH] Timeout while waiting for parent {} from {}",
+                                    parent_id, self.channel.address(),
+                                );
+                                self.channel.stop().await;
+                                return Err(Error::ChannelStopped)
+                            }
+                        };
+                        let parent = parent.0.clone();
+
+                        if &parent.id() != parent_id {
                             error!(
                                 target: "event_graph::protocol::handle_event_put()",
-                                "[EVENTGRAPH] Timeout while waiting for parent {} from {}",
-                                parent_id, self.channel.address(),
+                                "[EVENTGRAPH] Peer {} replied with a wrong event: {}",
+                                self.channel.address(), parent.id(),
                             );
                             self.channel.stop().await;
                             return Err(Error::ChannelStopped)
                         }
-                    };
-                    let parent = parent.0.clone();
 
-                    if &parent.id() != parent_id {
-                        error!(
+                        debug!(
                             target: "event_graph::protocol::handle_event_put()",
-                            "[EVENTGRAPH] Peer {} replied with a wrong event: {}",
-                            self.channel.address(), parent.id(),
+                            "Got correct parent event {}", parent.id(),
                         );
-                        self.channel.stop().await;
-                        return Err(Error::ChannelStopped)
+
+                        received_events.push(parent.clone());
+                        let pos = missing_parents.iter().position(|id| id == &parent.id()).unwrap();
+                        missing_parents.remove(pos);
+
+                        // See if we have the upper parents
+                        for upper_parent in parent.parents.iter() {
+                            if upper_parent == &NULL_ID {
+                                continue
+                            }
+
+                            if !self.event_graph.dag.contains_key(upper_parent.as_bytes()).unwrap()
+                            {
+                                debug!(
+                                    target: "event_graph::protocol::handle_event_put()",
+                                    "Found upper missing parent event{}", upper_parent,
+                                );
+                                missing_parents.push(*upper_parent);
+                            }
+                        }
                     }
+                } // <-- while !missing_parents.is_empty()
 
-                    debug!(
-                        target: "event_graph::protocol::handle_event_put()",
-                        "Got correct parent event {}", parent.id(),
-                    );
-
-                    received_events.insert(parent.id(), parent);
-                }
                 // At this point we should've got all the events.
                 // We should add them to the DAG.
                 // TODO: FIXME: Also validate these events.
-                for event in received_events.values() {
+                for event in received_events.iter().rev() {
                     self.event_graph.dag_insert(event).await.unwrap();
                 }
             } // <-- !missing_parents.is_empty()
