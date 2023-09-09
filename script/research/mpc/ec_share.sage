@@ -72,3 +72,21 @@ class ScalingECAuthenticatedShares(object):
           d = open_2pc(masked_d_share.share, peer_masked_d_share.share)
 
           return (self.b_as.mul_point(d) + self.a_as.mul_point(generator).mul_scalar(e) + self.c_as.mul_point(generator)).add_point(d * e, self.party_id)
+
+class MSM(object):
+      def __init__(self, points,  scalars, source,  party_id):
+          '''
+          naive multi scalar multiplicatin, between authenticatedpointsshares, and authenticatedscalarshares
+          '''
+          self.points = points
+          self.scalars = scalars
+          self.source = source
+          self.party_id = party_id
+
+      def msm(self):
+          assert (len(self.points) == len(self.scalars))
+          beaver = self.source
+          point_scalars = []
+          for point, scalar in zip(self.points, self.scalars):
+              point_scalars += [ScalingECAuthenticatedShares(point, scalar, beaver.triplet(self.party_id), self.party_id)]
+          return point_scalars

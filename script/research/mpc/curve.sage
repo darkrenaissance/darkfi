@@ -24,7 +24,7 @@ class CurvePoint():
           return "[ x: %s, y: %s, z: 1]"%(self.x, self.y)
 
       def random(max=p):
-          return G* random.randint(0, max)
+          return G * random.randint(0, max)
 
       def __add__(self, rhs):
           return self.point + rhs.point

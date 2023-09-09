@@ -58,3 +58,4 @@ lhs = lhs_share.authenticated_open(rhs_share)
 
 mul_res = party0_val * party1_val
 assert (lhs == (party0_val * party1_val)), 'lhs: {}, rhs: {}'.format(lhs, party0_val * party1_val)
+
