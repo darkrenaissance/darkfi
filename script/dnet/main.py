@@ -43,9 +43,10 @@ class Dnetview:
                 pass
     
         data = await rpc._make_request("p2p.get_info", [])
+        info[name] = data
 
         try:
-            self.queue.put_nowait(data)
+            self.queue.put_nowait(info)
         except:
             logging.debug("subscribe().put_nowait(): QueueFull")
 
@@ -55,10 +56,11 @@ class Dnetview:
         while True:
             data = await rpc.reader.readline()
             data = json.loads(data)
+            info[name] = data
             #logging.debug(f"events: {data}")
 
             try:
-                self.queue.put_nowait(data)
+                self.queue.put_nowait(info)
             except:
                 logging.debug("subscribe().putnowait(): QueueFull")
     
@@ -76,13 +78,22 @@ class Dnetview:
             for i, node in enumerate(nodes):
                 rpc = JsonRpc()
                 subscribe = tg.create_task(self.subscribe(rpc, node['name'], node['port']))
-                update = tg.create_task(self.update_model())
+                nodes = tg.create_task(self.update_info())
 
-    async def update_model(self):
+    async def update_info(self):
         while True:
             try:
-                item = await self.queue.get()
-                logging.debug(f"result: {item}")
+                info = await self.queue.get()
+                values = list(info.values())[0]
+
+                # Update node info
+                if "result" in values:
+                    self.model.update(info)
+
+                # Update event info: TODO
+                if "params" in values:
+                    logging.debug("update_info(): Event detected")
+
                 self.queue.task_done()
             except self.queue.is_empty():
                 logging.debug("update_model(): QueueEmpty")

@@ -21,58 +21,10 @@ class Model:
     def __init__(self):
         self.nodes = {}
 
-    def update(self, new_node):
-        self.nodes.update(new_node)
+    def update(self, node):
+        name = list(node.keys())[0]
+        values = list(node.values())[0]
+        self.nodes[name] = values
 
     def __repr__(self):
         return f"{self.nodes}"
-
-class NodeInfo():
-    def __init__(self, channels, slots):
-        self.node = {}
-        inbound = {}
-        outbounds = {"slots": []}
-        manual = {}
-        seed = {}
-
-        for name, channels in info.items():
-            channel_lookup = {}
-            for channel in channels:
-                id = channel["id"]
-                channel_lookup[id] = channel
-
-            for channel in channels:
-                if channel["session"] != "inbound":
-                    continue
-                url = channel["url"]
-                inbound["inbound"] = url
-
-            
-            for i, id in enumerate(slots):
-                if id == 0:
-                    outbounds["slots"].append(f"{i}: none")
-                    continue
-
-                assert id in channel_lookup
-                url = channel_lookup[id]["url"]
-                outbounds["slots"].append(f"{i}: {url}")
-
-            for channel in channels:
-                if channel["session"] != "seed":
-                    continue
-                url = channel["url"]
-                seed["seed"] = url
-
-            for channel in channels:
-                if channel["session"] != "manual":
-                    continue
-                url = channel["url"]
-                manual["manual"] = url
-
-        self.node[name] = [inbound, outbounds, manual,
-                                seed]
-
-    def __repr__(self):
-        return f"{self.node}"
-
-

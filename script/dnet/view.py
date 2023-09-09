@@ -20,7 +20,7 @@ import logging
 import asyncio
 
 from scroll import ScrollBar, Scrollable
-from model import NodeInfo
+from model import Model
 
 event_loop = asyncio.get_event_loop()
 
@@ -108,7 +108,7 @@ class View():
               ("line","dark cyan","black","standout"),
               ]
 
-    def __init__(self, data=NodeInfo):
+    def __init__(self, data):
         #logging.debug(f"dnetview init {data}")
 
         info_text = urwid.Text("")
@@ -132,8 +132,9 @@ class View():
         columns = urwid.Columns([leftbox, rightbox], focus_column=0)
         self.ui = urwid.Frame(urwid.AttrWrap( columns, 'body' ))
 
-    async def update_view(self, data=NodeInfo):
+    async def update_view(self, data):
         while True:
+            logging.debug(f"update_view() received model: {data}")
             await asyncio.sleep(0.1)
             self.service_info = urwid.Text("")
        
