@@ -108,6 +108,8 @@ class Dnetview:
         loop = urwid.MainLoop(self.view.ui, self.view.palette,
             unhandled_input=self.unhandled_input,
             event_loop=urwid.AsyncioEventLoop(loop=self.ev))
+
+        #loop.set_alarm_in(2, self.view.update_view)
         loop.run()
 
     def unhandled_input(self, key):
