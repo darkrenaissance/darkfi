@@ -315,3 +315,5 @@ halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
 arti-client = {git="https://gitlab.torproject.org/tpo/core/arti", rev="3fdadcc7509f60cfdfc51df2664aaf2f73bbd2f0"}
 tor-hscrypto = {git="https://gitlab.torproject.org/tpo/core/arti", rev="3fdadcc7509f60cfdfc51df2664aaf2f73bbd2f0"}
 blake2b_simd = {git="https://github.com/parazyd/blake2_simd", branch="impl-common"}
+# fix ARM rust nightly issue https://github.com/servo/pathfinder/pull/542 Stop using old-style simd_shuffle
+pathfinder_simd = {git="https://github.com/servo/pathfinder", rev="38709546b32bc1d4489c6332045363602c3e8f88"}
