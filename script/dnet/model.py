@@ -19,12 +19,89 @@ import logging
 
 class Model:
     def __init__(self):
+        self.info = Info()
         self.nodes = {}
 
-    def update(self, node):
+    def update_node(self, key, value):
+        self.nodes[key] = value
+
+    def handle_nodes(self, node):
+        channel_lookup = {}
+
         name = list(node.keys())[0]
         values = list(node.values())[0]
-        self.nodes[name] = values
 
+        info = values["result"]
+        channels = info["channels"]
+
+        for channel in channels:
+            id = channel["id"]
+            channel_lookup[id] = channel
+
+        for channel in channels:
+            if channel["session"] != "inbound":
+                continue
+            url = channel["url"]
+            self.info.update_inbound("inbound", url)
+
+        for i, id in enumerate(info["outbound_slots"]):
+            if id == 0:
+                self.info.update_outbound(f"{i}", "none")
+                continue
+
+            assert id in channel_lookup
+            url = channel_lookup[id]["url"]
+            self.info.update_outbound(f"{i}", url)
+
+        for channel in channels:
+            if channel["session"] != "seed":
+                continue
+            url = channel["url"]
+            self.info.update_seed("seed", url)
+
+        for channel in channels:
+            if channel["session"] != "manual":
+                continue
+            url = channel["url"]
+            self.info.update_manual("manual", url)
+
+        self.update_node(name, self.info)
+
+    def handle_event(self, event):
+        name = list(event.keys())[0]
+        params = list(event.values())[0]
+        
     def __repr__(self):
         return f"{self.nodes}"
+    
+class Info:
+    def __init__(self):
+        self.outbounds = {}
+        self.inbound = {}
+        self.manual = {}
+        self.seed = {}
+        self.msgs = {}
+    
+    def update_outbound(self, key, value):
+        self.outbounds[key] = value
+
+    def update_inbound(self, key, value):
+        self.inbound[key] = value
+
+    def update_manual(self, key, value):
+        self.manual[key] = value
+
+    def update_seed(self, key, value):
+        self.seed[key] = value
+
+    def update_msg(self, msg):
+        self.msgs = msg
+
+    def __repr__(self):
+        return (
+            f"outbound: {self.outbounds}"
+            f"inbound: {self.inbound}"
+            f"manual: {self.manual}"
+            f"seed: {self.seed}"
+            f"msg: {self.msgs}"
+            )

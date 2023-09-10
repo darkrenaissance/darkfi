@@ -57,7 +57,7 @@ class Dnetview:
             data = await rpc.reader.readline()
             data = json.loads(data)
             info[name] = data
-            #logging.debug(f"events: {data}")
+            #logging.debug(f"{info}")
 
             try:
                 self.queue.put_nowait(info)
@@ -88,11 +88,13 @@ class Dnetview:
 
                 # Update node info
                 if "result" in values:
-                    self.model.update(info)
+                    self.model.handle_nodes(info)
 
                 # Update event info: TODO
                 if "params" in values:
-                    logging.debug("update_info(): Event detected")
+                    continue
+                    # TODO
+                    #self.model.handle_event(info)
 
                 self.queue.task_done()
             except self.queue.is_empty():
@@ -110,7 +112,6 @@ class Dnetview:
             unhandled_input=self.unhandled_input,
             event_loop=urwid.AsyncioEventLoop(loop=self.ev))
 
-        #loop.set_alarm_in(2, self.view.update_view)
         loop.run()
 
     def unhandled_input(self, key):

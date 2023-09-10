@@ -147,54 +147,28 @@ class View():
                     widget = NodeView(name)
                     self.listwalker.contents.append(widget)
 
-                    info = values["result"]
-                    channels = info["channels"]
-                    channel_lookup = {}
-                    for channel in channels:
-                        id = channel["id"]
-                        channel_lookup[id] = channel
+                    outbounds = values.outbounds
+                    inbound = values.inbound
+                    manual = values.manual
+                    seed = values.seed
 
-                    for channel in channels:
-                        if channel["session"] != "inbound":
-                            continue
-                        widget = ConnectView("inbound")
+                    if len(outbounds) != 0:
+                        widget = ConnectView("  outbound")
                         self.listwalker.contents.append(widget)
-
-                        url = channel["url"]
-                        widget = SlotView(f"    {url}")
-                        self.listwalker.contents.append(widget)
-
-                    widget = ConnectView("  outbound")
-                    self.listwalker.contents.append(widget)
-                    for i, id in enumerate(info["outbound_slots"]):
-                        if id == 0:
-                            widget = SlotView(f"    {i}: none")
+                        for num, name in outbounds.items():
+                            widget = SlotView(f"    {num}: {name}")
                             self.listwalker.contents.append(widget)
-                            continue
 
-                        assert id in channel_lookup
-                        url = channel_lookup[id]["url"]
-                        widget = SlotView(f"    {i}: {url}")
+                    if len(inbound) != 0:
+                        widget = ConnectView("  inbound")
                         self.listwalker.contents.append(widget)
 
-                    for channel in channels:
-                        if channel["session"] != "seed":
-                            continue
-                        widget = ConnectView("seed")
+                    if len(seed) != 0:
+                        widget = ConnectView("  seed")
                         self.listwalker.contents.append(widget)
 
-                        url = channel["url"]
-                        widget = SlotView(f"    {url}")
-                        self.listwalker.contents.append(widget)
-
-                    for channel in channels:
-                        if channel["session"] != "manual":
-                            continue
-                        widget = ConnectView("manual")
-                        self.listwalker.contents.append(widget)
-
-                        url = channel["url"]
-                        widget = SlotView(f"    {url}")
+                    if len(manual) != 0:
+                        widget = ConnectView("  manual")
                         self.listwalker.contents.append(widget)
 
             await asyncio.sleep(0.1)
