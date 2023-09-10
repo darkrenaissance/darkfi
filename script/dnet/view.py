@@ -18,26 +18,33 @@
 import urwid
 import logging
 import asyncio
-import datetime
+import datetime as dt
 
 from scroll import ScrollBar, Scrollable
 from model import Model
 
 event_loop = asyncio.get_event_loop()
 
+
 class LeftList(urwid.ListBox):
+
     def focus_next(self):
         try: 
-            self.body.set_focus(self.body.get_next(self.body.get_focus()[1])[1])
+            self.body.set_focus(self.body.get_next(
+                self.body.get_focus()[1])[1])
         except:
             pass
+
     def focus_previous(self):
         try: 
-            self.body.set_focus(self.body.get_prev(self.body.get_focus()[1])[1])
+            self.body.set_focus(self.body.get_prev(
+                self.body.get_focus()[1])[1])
         except:
             pass            
 
+
 class NodeView(urwid.WidgetWrap):
+
     def __init__(self, info):
         self.name = info
         self.text = urwid.Text(f"{self.name}")
@@ -62,7 +69,9 @@ class NodeView(urwid.WidgetWrap):
     def get_name(self):
         return self.name
 
+
 class ConnectView(urwid.WidgetWrap):
+
     def __init__(self, info):
         self.name = info
         self.text = urwid.Text(f"{self.name}")
@@ -74,8 +83,6 @@ class ConnectView(urwid.WidgetWrap):
         return True
 
     def keypress(self, size, key):
-        #if key in ('q'):
-        #    raise urwid.ExitMainLoop()
         return key
 
     def update_w(self):
@@ -87,7 +94,9 @@ class ConnectView(urwid.WidgetWrap):
     def get_name(self):
         return self.name
 
+
 class SlotView(urwid.WidgetWrap):
+
     def __init__(self, info):
         self.name = info
         self.text = urwid.Text(f"{self.name}")
@@ -99,8 +108,6 @@ class SlotView(urwid.WidgetWrap):
         return True
 
     def keypress(self, size, key):
-        #if key in ('q'):
-        #    raise urwid.ExitMainLoop()
         return key
 
     def update_w(self):
@@ -111,6 +118,7 @@ class SlotView(urwid.WidgetWrap):
 
     def get_name(self):
         return self.name
+
 
 class View():
     palette = [
@@ -124,18 +132,17 @@ class View():
         self.pile = urwid.Pile([info_text])
         scroll = ScrollBar(Scrollable(self.pile))
         rightbox = urwid.LineBox(scroll)
-        
         self.listbox_content = []
         self.listwalker = urwid.SimpleListWalker(self.listbox_content)
         self.list = LeftList(self.listwalker)
         leftbox = urwid.LineBox(self.list)
-
         columns = urwid.Columns([leftbox, rightbox], focus_column=0)
         self.ui = urwid.Frame(urwid.AttrWrap( columns, 'body' ))
 
     async def update_view(self):
+        names = []
         while True:
-            names = []
+            await asyncio.sleep(0.1)
             for item in self.listwalker.contents:
                 name = item.get_name()
                 names.append(name)
@@ -143,7 +150,6 @@ class View():
             for name, values in self.model.nodes.items():
                 if name in names:
                     continue
-
                 else:
                     widget = NodeView(name)
                     self.listwalker.contents.append(widget)
@@ -172,44 +178,39 @@ class View():
                         widget = ConnectView("  manual")
                         self.listwalker.contents.append(widget)
 
-            await asyncio.sleep(0.1)
-
     async def render_info(self):
         while True:
             await asyncio.sleep(0.1)
             self.pile.contents.clear()
             focus_w = self.list.get_focus()
             match focus_w[0].get_widget():
+
                 case "NodeView":
                     self.pile.contents.append((
                         urwid.Text(f"Node selected"),
                         self.pile.options()))
+
                 case "ConnectView":
                     self.pile.contents.append((
                         urwid.Text("Connection selected"),
                         self.pile.options()))
+
                 case "SlotView":
-                    name = focus_w[0].get_name()
-                    # Remove the prepend
-                    name = name[7:]
+                    numbered_name = focus_w[0].get_name()
+                    # Remove numbering
+                    name = numbered_name[7:]
+
                     if name in self.model.info.msgs.keys():
-                        values = (
-                                self.model.info.msgs.get(name)
-                                )
+                        values = (self.model.info.msgs.get(name))
+
                         for value in values:
-                            nanotime = (
-                            int(value[0])
-                            )
-                            time = (
-                                    datetime.datetime.fromtimestamp(
-                                    nanotime/1000000000).strftime(
-                                    '%Y-%m-%d %H:%M:%S.%f')
-                                    )
+                            nano = (int(value[0]))
+                            time = (dt.datetime
+                                    .fromtimestamp(nano/1000000000)
+                                    .strftime('%Y-%m-%d %H:%M:%S.%f'))
                             event = value[1]
                             msg = value[2]
-                        #logging.debug(values)
-                            self.pile.contents.append((
-                                urwid.Text(
+                            self.pile.contents.append((urwid.Text(
                                     f"{time}: {event}: {msg}"),
-                                self.pile.options()))
+                                    self.pile.options()))
 

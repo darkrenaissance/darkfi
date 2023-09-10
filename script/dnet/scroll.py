@@ -33,6 +33,7 @@ SCROLLBAR_RIGHT = 'right'
 # Add support for ScrollBar class (see stig.tui.scroll)
 # https://github.com/urwid/urwid/issues/226
 class ListBox_patched(urwid.ListBox):
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._rows_max = None
@@ -330,6 +331,7 @@ DEFAULT_THUMB_CHAR = '\u2588'
 DEFAULT_TROUGH_CHAR = " "
 DEFAULT_SIDE = SCROLLBAR_RIGHT
 
+
 class ScrollBar(urwid.WidgetDecoration):
 
     _thumb_char = DEFAULT_THUMB_CHAR
@@ -569,5 +571,6 @@ class ScrollBar(urwid.WidgetDecoration):
                 return True
 
         return False
+
 
 __all__ = ["Scrollable", "ScrollBar"]

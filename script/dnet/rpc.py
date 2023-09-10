@@ -15,9 +15,15 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import asyncio, json, random, time, logging
+import json
+import time
+import random
+import logging
+import asyncio
+
 
 class JsonRpc:
+
     async def start(self, server, port):
         reader, writer = await asyncio.open_connection(server, port)
         self.reader = reader

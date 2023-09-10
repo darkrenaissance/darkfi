@@ -17,7 +17,9 @@
 
 import logging
 
+
 class Model:
+
     def __init__(self):
         self.info = Info()
         self.nodes = {}
@@ -27,10 +29,8 @@ class Model:
 
     def handle_nodes(self, node):
         channel_lookup = {}
-
         name = list(node.keys())[0]
         values = list(node.values())[0]
-
         info = values["result"]
         channels = info["channels"]
 
@@ -70,7 +70,6 @@ class Model:
     def handle_event(self, event):
         name = list(event.keys())[0]
         values = list(event.values())[0]
-
         params = values.get("params")
         event = params[0].get("event")
         info = params[0].get("info")
@@ -92,7 +91,9 @@ class Model:
     def __repr__(self):
         return f"{self.nodes}"
     
+
 class Info:
+
     def __init__(self):
         self.outbounds = {}
         self.inbound = {}
@@ -119,10 +120,8 @@ class Info:
             self.msgs[key] = [value]
 
     def __repr__(self):
-        return (
-            f"outbound: {self.outbounds}"
+        return (f"outbound: {self.outbounds}"
             f"inbound: {self.inbound}"
             f"manual: {self.manual}"
             f"seed: {self.seed}"
-            f"msg: {self.msgs}"
-            )
+            f"msg: {self.msgs}")

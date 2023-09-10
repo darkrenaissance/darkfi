@@ -21,18 +21,18 @@ from model import Model
 from rpc import JsonRpc
 from view import View
 
+
 class Dnetview:
+
     def __init__(self):
         self.ev = asyncio.get_event_loop()
         self.queue = asyncio.Queue()
-
         self.config = self.get_config()
         self.model = Model()
         self.view = View(self.model)
 
     async def subscribe(self, rpc, name, port):
         info = {}
-    
         while True:
             try:
                 logging.debug(f"Start {name} RPC on port {port}")
@@ -77,7 +77,8 @@ class Dnetview:
         async with asyncio.TaskGroup() as tg:
             for i, node in enumerate(nodes):
                 rpc = JsonRpc()
-                subscribe = tg.create_task(self.subscribe(rpc, node['name'], node['port']))
+                subscribe = tg.create_task(self.subscribe(
+                            rpc, node['name'], node['port']))
                 nodes = tg.create_task(self.update_info())
 
     async def update_info(self):
@@ -99,7 +100,9 @@ class Dnetview:
                 logging.debug("update_model(): error {}", e)
 
     def main(self):
-        logging.basicConfig(filename='dnet.log', encoding='utf-8', level=logging.DEBUG)
+        logging.basicConfig(filename='dnet.log',
+                            encoding='utf-8',
+                            level=logging.DEBUG)
         nodes = self.config.get("nodes")
 
         self.ev.create_task(self.start_connect_slots(nodes))
@@ -107,9 +110,9 @@ class Dnetview:
         self.ev.create_task(self.view.render_info())
 
         loop = urwid.MainLoop(self.view.ui, self.view.palette,
-            unhandled_input=self.unhandled_input,
-            event_loop=urwid.AsyncioEventLoop(loop=self.ev))
-
+                              unhandled_input=self.unhandled_input,
+                              event_loop=urwid.AsyncioEventLoop(
+                              loop=self.ev))
         loop.run()
 
     def unhandled_input(self, key):
@@ -118,6 +121,7 @@ class Dnetview:
                 task.cancel()
             raise urwid.ExitMainLoop()
     
+
 if __name__ == '__main__':
     dnet = Dnetview()
     dnet.main()
