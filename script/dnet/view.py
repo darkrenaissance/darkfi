@@ -18,6 +18,7 @@
 import urwid
 import logging
 import asyncio
+import datetime
 
 from scroll import ScrollBar, Scrollable
 from model import Model
@@ -117,8 +118,8 @@ class View():
               ("line","dark cyan","black","standout"),
               ]
 
-    def __init__(self, data):
-        self.data = data
+    def __init__(self, model):
+        self.model = model
         info_text = urwid.Text("")
         self.pile = urwid.Pile([info_text])
         scroll = ScrollBar(Scrollable(self.pile))
@@ -139,7 +140,7 @@ class View():
                 name = item.get_name()
                 names.append(name)
 
-            for name, values in self.data.nodes.items():
+            for name, values in self.model.nodes.items():
                 if name in names:
                     continue
 
@@ -181,10 +182,34 @@ class View():
             match focus_w[0].get_widget():
                 case "NodeView":
                     self.pile.contents.append((
-                        urwid.Text(f"Node selected"), self.pile.options()))
+                        urwid.Text(f"Node selected"),
+                        self.pile.options()))
                 case "ConnectView":
                     self.pile.contents.append((
-                        urwid.Text("Connection selected"), self.pile.options()))
+                        urwid.Text("Connection selected"),
+                        self.pile.options()))
                 case "SlotView":
-                    self.pile.contents.append((
-                        urwid.Text("Slot selected"), self.pile.options()))
+                    name = focus_w[0].get_name()
+                    # Remove the prepend
+                    name = name[7:]
+                    if name in self.model.info.msgs.keys():
+                        values = (
+                                self.model.info.msgs.get(name)
+                                )
+                        for value in values:
+                            nanotime = (
+                            int(value[0])
+                            )
+                            time = (
+                                    datetime.datetime.fromtimestamp(
+                                    nanotime/1000000000).strftime(
+                                    '%Y-%m-%d %H:%M:%S.%f')
+                                    )
+                            event = value[1]
+                            msg = value[2]
+                        #logging.debug(values)
+                            self.pile.contents.append((
+                                urwid.Text(
+                                    f"{time}: {event}: {msg}"),
+                                self.pile.options()))
+

@@ -92,13 +92,11 @@ class Dnetview:
 
                 # Update event info: TODO
                 if "params" in values:
-                    continue
-                    # TODO
-                    #self.model.handle_event(info)
+                    self.model.handle_event(info)
 
                 self.queue.task_done()
-            except self.queue.is_empty():
-                logging.debug("update_model(): QueueEmpty")
+            except OSError as e:
+                logging.debug("update_model(): error {}", e)
 
     def main(self):
         logging.basicConfig(filename='dnet.log', encoding='utf-8', level=logging.DEBUG)

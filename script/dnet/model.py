@@ -69,8 +69,26 @@ class Model:
 
     def handle_event(self, event):
         name = list(event.keys())[0]
-        params = list(event.values())[0]
-        
+        values = list(event.values())[0]
+
+        params = values.get("params")
+        event = params[0].get("event")
+        info = params[0].get("info")
+
+        if "chan" in info:
+            time = info.get("time")
+            cmd = info.get("cmd")
+            chan = info.get("chan")
+            addr = chan.get("addr")
+
+            self.info.update_msg(addr, (time, event, cmd))
+        else:
+            # TODO
+            #slot = info.get("slot")
+            logging.debug(info)
+            logging.debug(event)
+            #self.info.update_msgs(addr, (time, event, cmd))
+
     def __repr__(self):
         return f"{self.nodes}"
     
@@ -94,8 +112,11 @@ class Info:
     def update_seed(self, key, value):
         self.seed[key] = value
 
-    def update_msg(self, msg):
-        self.msgs = msg
+    def update_msg(self, key, value):
+        if key in self.msgs:
+            self.msgs[key] += [value]
+        else:
+            self.msgs[key] = [value]
 
     def __repr__(self):
         return (
