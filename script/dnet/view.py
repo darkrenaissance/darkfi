@@ -36,9 +36,6 @@ class LeftList(urwid.ListBox):
         except:
             pass            
 
-    def load_info(self):
-        return InfoWidget(self)
-
 class NodeView(urwid.WidgetWrap):
     def __init__(self, info):
         self.name = info
@@ -83,7 +80,7 @@ class ConnectView(urwid.WidgetWrap):
     def update_w(self):
         self._w.focus_attr = 'line'
 
-    def name(self):
+    def get_widget(self):
         return "ConnectView"
 
     def get_name(self):
@@ -108,7 +105,7 @@ class SlotView(urwid.WidgetWrap):
     def update_w(self):
         self._w.focus_attr = 'line'
 
-    def name(self):
+    def get_widget(self):
         return "SlotView"
 
     def get_name(self):
@@ -121,23 +118,12 @@ class View():
               ]
 
     def __init__(self, data):
-        #logging.debug(f"dnetview init {data}")
-
         self.data = data
         info_text = urwid.Text("")
         self.pile = urwid.Pile([info_text])
         scroll = ScrollBar(Scrollable(self.pile))
         rightbox = urwid.LineBox(scroll)
         
-        #self.node_info = urwid.Text("")
-        #widget = NodeView(self.node_info)
-
-        #self.connect_info = urwid.Text("")
-        #widget2 = ConnectView(self.connect_info)
-
-        #self.slot_info = urwid.Text("")
-        #widget3 = SlotView(self.slot_info)
-
         self.listbox_content = []
         self.listwalker = urwid.SimpleListWalker(self.listbox_content)
         self.list = LeftList(self.listwalker)
@@ -146,26 +132,14 @@ class View():
         columns = urwid.Columns([leftbox, rightbox], focus_column=0)
         self.ui = urwid.Frame(urwid.AttrWrap( columns, 'body' ))
 
-    #def update_view(self, loop, data):
-    #    data = self.data
-
-    #    logging.debug(len(data.nodes))
-    #    for name, values in data.nodes.items():
-    #        self.node_info = urwid.Text(name)
-    #        widget = NodeView(self.node_info)
-    #        self.listbox_content.append(widget)
-
-    #    #loop.set_alarm_in(2, update_view)
-    #    #await asyncio.sleep(0.1)
-
-    async def update_view(self, data):
+    async def update_view(self):
         while True:
             names = []
             for item in self.listwalker.contents:
                 name = item.get_name()
                 names.append(name)
 
-            for name, values in data.nodes.items():
+            for name, values in self.data.nodes.items():
                 if name in names:
                     continue
 
@@ -187,20 +161,20 @@ class View():
                         self.listwalker.contents.append(widget)
 
                         url = channel["url"]
-                        widget = SlotView(url)
+                        widget = SlotView(f"    {url}")
                         self.listwalker.contents.append(widget)
 
                     widget = ConnectView("  outbound")
                     self.listwalker.contents.append(widget)
                     for i, id in enumerate(info["outbound_slots"]):
                         if id == 0:
-                            widget = SlotView(f"  {i}: none")
+                            widget = SlotView(f"    {i}: none")
                             self.listwalker.contents.append(widget)
                             continue
 
                         assert id in channel_lookup
                         url = channel_lookup[id]["url"]
-                        widget = SlotView(f"  {i}: {url}")
+                        widget = SlotView(f"    {i}: {url}")
                         self.listwalker.contents.append(widget)
 
                     for channel in channels:
@@ -210,7 +184,7 @@ class View():
                         self.listwalker.contents.append(widget)
 
                         url = channel["url"]
-                        widget = SlotView(f"  {url}")
+                        widget = SlotView(f"    {url}")
                         self.listwalker.contents.append(widget)
 
                     for channel in channels:
@@ -220,22 +194,23 @@ class View():
                         self.listwalker.contents.append(widget)
 
                         url = channel["url"]
-                        widget = SlotView(url)
+                        widget = SlotView(f"    {url}")
                         self.listwalker.contents.append(widget)
-
-                        print(f"  {url}")
 
             await asyncio.sleep(0.1)
 
-    async def render_info(self, channels):
+    async def render_info(self):
         while True:
             await asyncio.sleep(0.1)
             self.pile.contents.clear()
-            focus_w = self.listbox.get_focus()
-            match focus_w[0].name():
+            focus_w = self.list.get_focus()
+            match focus_w[0].get_widget():
                 case "NodeView":
-                    self.pile.contents.append((urwid.Text(f""), self.pile.options()))
+                    self.pile.contents.append((
+                        urwid.Text(f"Node selected"), self.pile.options()))
                 case "ConnectView":
-                    self.pile.contents.append((urwid.Text("2"), self.pile.options()))
+                    self.pile.contents.append((
+                        urwid.Text("Connection selected"), self.pile.options()))
                 case "SlotView":
-                    self.pile.contents.append((urwid.Text("3"), self.pile.options()))
+                    self.pile.contents.append((
+                        urwid.Text("Slot selected"), self.pile.options()))

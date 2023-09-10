@@ -103,7 +103,8 @@ class Dnetview:
         nodes = self.config.get("nodes")
 
         self.ev.create_task(self.start_connect_slots(nodes))
-        self.ev.create_task(self.view.update_view(self.model))
+        self.ev.create_task(self.view.update_view())
+        self.ev.create_task(self.view.render_info())
 
         loop = urwid.MainLoop(self.view.ui, self.view.palette,
             unhandled_input=self.unhandled_input,
