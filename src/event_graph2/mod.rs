@@ -34,7 +34,7 @@ use smol::{
 
 use crate::{
     net::P2pPtr,
-    system::{sleep, StoppableTask, StoppableTaskPtr},
+    system::{sleep, timeout::timeout, StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
 
@@ -44,7 +44,7 @@ pub use event::Event;
 
 /// P2P protocol implementation for the Event Graph
 pub mod proto;
-use proto::TipReq;
+use proto::{EventRep, EventReq, TipRep, TipReq, REPLY_TIMEOUT};
 
 /// Utility functions
 mod util;
@@ -184,7 +184,7 @@ impl EventGraph {
         let mut communicated_peers = channels.len();
         info!(
             target: "event_graph::dag_sync()",
-            "[EVENTGRAPH]Syncing DAG from {} peers...", communicated_peers,
+            "[EVENTGRAPH] Syncing DAG from {} peers...", communicated_peers,
         );
 
         // Here we keep track of the tips and how many time we've seen them.
@@ -193,6 +193,19 @@ impl EventGraph {
         // Let's first ask all of our peers for their tips and collect them
         // in our hashmap above.
         for (url, channel) in channels.iter() {
+            let tip_rep_sub = match channel.subscribe_msg::<TipRep>().await {
+                Ok(v) => v,
+                Err(e) => {
+                    error!(
+                        target: "event_graph::dag_sync()",
+                        "[EVENTGRAPH] Sync: Couldn't subscribe TipReq for peer {}, skipping ({})",
+                        url, e,
+                    );
+                    communicated_peers -= 1;
+                    continue
+                }
+            };
+
             if let Err(e) = channel.send(&TipReq {}).await {
                 error!(
                     target: "event_graph::dag_sync()",
@@ -202,22 +215,18 @@ impl EventGraph {
                 continue
             };
 
-            // TODO: I can't access tip_rep_sub from here.
-            /*
             let peer_tips = match timeout(REPLY_TIMEOUT, tip_rep_sub.receive()).await {
                 Ok(peer_tips) => peer_tips?,
                 Err(_) => {
                     error!(
                         target: "event_graph::dag_sync()",
-                        "Peer {} didn't reply with tips in time, skipping", url,
+                        "[EVENTGRAPH] Sync: Peer {} didn't reply with tips in time, skipping", url,
                     );
                     communicated_peers -= 1;
                     continue
                 }
             };
             let peer_tips = &peer_tips.0;
-            */
-            let peer_tips = vec![];
 
             // Note down the seen tips
             for tip in peer_tips {
@@ -250,9 +259,132 @@ impl EventGraph {
         drop(tips);
 
         // Now begin fetching the events backwards.
-        // TODO: Reuse the recursive logic from EventPut handler.
+        let mut missing_parents = vec![];
+        for tip in considered_tips.iter() {
+            assert!(tip != &NULL_ID);
 
-        todo!()
+            if !self.dag.contains_key(tip.as_bytes()).unwrap() {
+                missing_parents.push(*tip);
+            }
+        }
+
+        if missing_parents.is_empty() {
+            return Ok(())
+        }
+
+        info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] Fetching events");
+        let mut received_events = vec![];
+        while !missing_parents.is_empty() {
+            for parent_id in missing_parents.clone().iter() {
+                let mut found_event = false;
+
+                for (url, channel) in channels.iter() {
+                    debug!(
+                        target: "event_graph::dag_sync()",
+                        "Requesting {} from {}...", parent_id, url,
+                    );
+
+                    let ev_rep_sub = match channel.subscribe_msg::<EventRep>().await {
+                        Ok(v) => v,
+                        Err(e) => {
+                            error!(
+                                target: "event_graph::dag_sync()",
+                                "[EVENTGRAPH] Sync: Couldn't subscribe EventRep for peer {}, skipping ({})",
+                                url, e,
+                            );
+                            continue
+                        }
+                    };
+
+                    if let Err(e) = channel.send(&EventReq(*parent_id)).await {
+                        error!(
+                            target: "event_graph::dag_sync()",
+                            "[EVENTGRAPH] Sync: Failed communicating EventReq({}) to {}: {}",
+                            parent_id, url, e,
+                        );
+                        continue
+                    }
+
+                    let parent = match timeout(REPLY_TIMEOUT, ev_rep_sub.receive()).await {
+                        Ok(parent) => parent,
+                        Err(_) => {
+                            error!(
+                                target: "event_graph::dag_sync()",
+                                "[EVENTGRAPH] Sync: Timeout waiting for parent {} from {}",
+                                parent_id, url,
+                            );
+                            continue
+                        }
+                    };
+
+                    let parent = match parent {
+                        Ok(v) => v.0.clone(),
+                        Err(e) => {
+                            error!(
+                                target: "event_graph::dag_sync()",
+                                "[EVENTGRAPH] Sync: Failed receiving parent {}: {}",
+                                parent_id, e,
+                            );
+                            continue
+                        }
+                    };
+
+                    if &parent.id() != parent_id {
+                        error!(
+                            target: "event_graph::dag_sync()",
+                            "[EVENTGRAPH] Sync: Peer {} replied with a wrong event: {}",
+                            url, parent.id(),
+                        );
+                        continue
+                    }
+
+                    debug!(
+                        target: "event_graph::dag_sync()",
+                        "Got correct parent event {}", parent_id,
+                    );
+
+                    received_events.push(parent.clone());
+                    let pos = missing_parents.iter().position(|id| id == &parent.id()).unwrap();
+                    missing_parents.remove(pos);
+                    found_event = true;
+
+                    // See if we have the upper parents
+                    for upper_parent in parent.parents.iter() {
+                        if upper_parent == &NULL_ID {
+                            continue
+                        }
+
+                        if !self.dag.contains_key(upper_parent.as_bytes()).unwrap() {
+                            debug!(
+                                target: "event_graph::dag_sync()",
+                                "Found upper missing parent event{}", upper_parent,
+                            );
+                            missing_parents.push(*upper_parent);
+                        }
+                    }
+
+                    break
+                }
+
+                if !found_event {
+                    error!(
+                        target: "event_graph::dag_sync()",
+                        "[EVENTGRAPH] Sync: Failed to get all events",
+                    );
+                    return Err(Error::DagSyncFailed)
+                }
+            }
+        } // <-- while !missing_parents.is_empty
+
+        // At this point we should've got all the events.
+        // We should add them to the DAG.
+        // TODO: FIXME: Also validate these events.
+        for event in received_events.iter().rev() {
+            self.dag_insert(event).await.unwrap();
+        }
+
+        info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] DAG synced successfully!");
+        Ok(())
     }
 
     /// Background task periodically pruning the DAG.

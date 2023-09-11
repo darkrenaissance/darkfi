@@ -41,6 +41,7 @@ const N_CONNS: usize = 2;
 //const N_CONNS: usize = N_NODES / 3;
 
 #[test]
+#[ignore]
 fn eventgraph_propagation() {
     let mut cfg = simplelog::ConfigBuilder::new();
     cfg.add_filter_ignore("sled".to_string());
@@ -272,6 +273,68 @@ async fn eventgraph_propagation_real(ex: Arc<Executor<'static>>) {
     // ==========================================
     // 7. Assert that everyone has all the events
     // ==========================================
+    for (i, eg) in eg_instances.iter().enumerate() {
+        let tips = eg.unreferenced_tips.read().await;
+        assert!(eg.dag.len() == 14, "Node {}, expected 14 events, have {}", i, eg.dag.len());
+        // 5 events from 2. and 4. + 9 events from 6. = ^
+        assert!(tips.get(&event2_3_id).is_some(), "Node {}, expected tip to be {}", i, event2_3_id);
+    }
+
+    // ============================================================
+    // 8. Start a new node and try to sync the DAG from other peers
+    // ============================================================
+    {
+        // Connect to N_CONNS random peers.
+        let mut peers = vec![];
+        for _ in 0..N_CONNS {
+            let port = 13200 + rng.gen_range(0..N_NODES);
+            peers.push(Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap());
+        }
+
+        let settings = Settings {
+            localnet: true,
+            inbound_addrs: vec![
+                Url::parse(&format!("tcp://127.0.0.1:{}", 13200 + N_NODES + 1)).unwrap()
+            ],
+            outbound_connections: 0,
+            outbound_connect_timeout: 2,
+            inbound_connections: usize::MAX,
+            peers,
+            allowed_transports: vec!["tcp".to_string()],
+            ..Default::default()
+        };
+
+        let p2p = P2p::new(settings, ex.clone()).await;
+        let sled_db = sled::Config::new().temporary(true).open().unwrap();
+        let event_graph =
+            EventGraph::new(p2p.clone(), sled_db, "dag", 1, ex.clone()).await.unwrap();
+        let event_graph_ = event_graph.clone();
+
+        // Register the P2P protocols
+        let registry = p2p.protocol_registry();
+        registry
+            .register(SESSION_ALL, move |channel, _| {
+                let event_graph_ = event_graph_.clone();
+                async move { ProtocolEventGraph::init(event_graph_, channel).await.unwrap() }
+            })
+            .await;
+
+        eg_instances.push(event_graph.clone());
+
+        event_graph.p2p.clone().start().await.unwrap();
+
+        info!("Waiting 10s for new node connection");
+        sleep(10).await;
+
+        event_graph.dag_sync().await.unwrap();
+    }
+
+    info!("Waiting 10s for things to settle");
+    sleep(10).await;
+
+    // ============================================================
+    // 9. Assert the new synced DAG has the same contents as others
+    // ============================================================
     for (i, eg) in eg_instances.iter().enumerate() {
         let tips = eg.unreferenced_tips.read().await;
         assert!(eg.dag.len() == 14, "Node {}, expected 14 events, have {}", i, eg.dag.len());

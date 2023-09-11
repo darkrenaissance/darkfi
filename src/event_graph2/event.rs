@@ -137,15 +137,15 @@ mod tests {
 
         let mut event_empty_content = e.clone();
         event_empty_content.content = vec![];
-        assert_eq!(event_empty_content.validate(), false);
+        assert!(!event_empty_content.validate());
 
         let mut event_timestamp_too_old = e.clone();
         event_timestamp_too_old.timestamp = 0;
-        assert_eq!(event_timestamp_too_old.validate(), false);
+        assert!(!event_timestamp_too_old.validate());
 
         let mut event_timestamp_too_new = e.clone();
         event_timestamp_too_new.timestamp = u64::MAX;
-        assert_eq!(event_timestamp_too_new.validate(), false);
+        assert!(!event_timestamp_too_new.validate());
 
         let mut event_duplicated_parents = e.clone();
         let duplicated_parents = [
@@ -156,11 +156,11 @@ mod tests {
             blake3::hash(b"5"),
         ];
         event_duplicated_parents.parents = duplicated_parents;
-        assert_eq!(event_duplicated_parents.validate(), false);
+        assert!(!event_duplicated_parents.validate());
 
         let mut event_null_parents = e.clone();
         let all_null_parents = [NULL_ID, NULL_ID, NULL_ID, NULL_ID, NULL_ID];
         event_null_parents.parents = all_null_parents;
-        assert_eq!(event_null_parents.validate(), false);
+        assert!(!event_null_parents.validate());
     }
 }

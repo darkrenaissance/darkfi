@@ -52,7 +52,7 @@ pub struct ProtocolEventGraph {
     /// `MessageSubscriber` for `TipReq`
     tip_req_sub: MessageSubscription<TipReq>,
     /// `MessageSubscriber` for `TipRep`
-    tip_rep_sub: MessageSubscription<TipRep>,
+    _tip_rep_sub: MessageSubscription<TipRep>,
     /// Peer malicious message count
     malicious_count: AtomicUsize,
     /// P2P jobs manager pointer
@@ -112,7 +112,7 @@ impl ProtocolEventGraph {
         let ev_req_sub = channel.subscribe_msg::<EventReq>().await?;
         let ev_rep_sub = channel.subscribe_msg::<EventRep>().await?;
         let tip_req_sub = channel.subscribe_msg::<TipReq>().await?;
-        let tip_rep_sub = channel.subscribe_msg::<TipRep>().await?;
+        let _tip_rep_sub = channel.subscribe_msg::<TipRep>().await?;
 
         Ok(Arc::new(Self {
             channel: channel.clone(),
@@ -121,7 +121,7 @@ impl ProtocolEventGraph {
             ev_req_sub,
             ev_rep_sub,
             tip_req_sub,
-            tip_rep_sub,
+            _tip_rep_sub,
             malicious_count: AtomicUsize::new(0),
             jobsman: ProtocolJobsManager::new("ProtocolEventGraph", channel.clone()),
         }))
