@@ -127,6 +127,8 @@ a > .hljs {
 /* Nav Icons */
 
 .nav-chapters {
+    display: none;
+
     font-size: 2.5em;
     text-align: center;
     text-decoration: none;
@@ -138,7 +140,7 @@ a > .hljs {
     max-width: 150px;
     min-width: 90px;
 
-    display: flex;
+    /* display: flex; */
     justify-content: center;
     align-content: center;
     flex-direction: column;
