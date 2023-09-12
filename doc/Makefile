@@ -14,6 +14,7 @@ all: $(JSONRPC)
 	./generate_seminar_ics.py --ics
 	$(MAKE) -C ../ rustdoc
 	cp -r ../target/doc/* book/development/
+	./remove_chapter_nav_js.py
 
 $(DARKFID_JSONRPC):
 	@echo "# darkfid JSON-RPC API" > $@
