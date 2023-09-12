@@ -117,3 +117,27 @@ impl Default for Slot {
         Self::new(0, PreviousSlot::default(), PidOutput::default(), pallas::Base::ZERO, 0, 0)
     }
 }
+
+// TODO: This values are experimental, should be replaced with the proper ones once defined
+pub const POW_CUTOFF: u64 = 1000000;
+pub const POS_START: u64 = 1000001;
+/// Auxiliary function to calculate provided block height(slot) expected PoW reward value.
+/// Genesis block(0) always returns reward value 0.
+/// A cut-off is used, signalling PoS start, after which reward value 0 is returned.
+pub fn pow_expected_reward(block_height: u64) -> u64 {
+    match block_height {
+        0 => 0,
+        1..=1000 => 20,
+        1001..=2000 => 18,
+        2001..=3000 => 16,
+        3001..=4000 => 14,
+        4001..=5000 => 12,
+        5001..=6000 => 10,
+        6001..=7000 => 8,
+        7001..=8000 => 6,
+        8001..=9000 => 4,
+        9001..=10000 => 2,
+        10001..=POW_CUTOFF => 1,
+        POS_START.. => 0,
+    }
+}

@@ -56,6 +56,9 @@ pub mod stake_v1;
 /// `Money::UnstakeV1` API
 pub mod unstake_v1;
 
+/// `Money::PoWRewardV1` API
+pub mod pow_reward_v1;
+
 // Wallet SQL table constant names. These have to represent the `wallet.sql`
 // SQL schema.
 // TODO: They should also be prefixed with the contract ID to avoid collisions.

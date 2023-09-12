@@ -84,6 +84,10 @@ use unstake_v1::{
     money_unstake_process_update_v1,
 };
 
+/// `Money::PoWReward` functions
+mod pow_reward_v1;
+use pow_reward_v1::{money_pow_reward_get_metadata_v1, money_pow_reward_process_instruction_v1};
+
 darkfi_sdk::define_contract!(
     init: init_contract,
     exec: process_instruction,
@@ -221,6 +225,11 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
             let metadata = money_unstake_get_metadata_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
         }
+
+        MoneyFunction::PoWRewardV1 => {
+            let metadata = money_pow_reward_get_metadata_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&metadata)?)
+        }
     }
 }
 
@@ -274,6 +283,11 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let update_data = money_unstake_process_instruction_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)
         }
+
+        MoneyFunction::PoWRewardV1 => {
+            let update_data = money_pow_reward_process_instruction_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&update_data)?)
+        }
     }
 }
 
@@ -295,13 +309,8 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
             Ok(money_otcswap_process_update_v1(cid, update)?)
         }
 
-        MoneyFunction::GenesisMintV1 => {
-            // FIXME: GenesisMint uses the same update as `TokenMintV1`
-            let update: MoneyTokenMintUpdateV1 = deserialize(&update_data[1..])?;
-            Ok(money_token_mint_process_update_v1(cid, update)?)
-        }
-
-        MoneyFunction::TokenMintV1 => {
+        MoneyFunction::GenesisMintV1 | MoneyFunction::TokenMintV1 | MoneyFunction::PoWRewardV1 => {
+            // FIXME: GenesisMint and PoWReward use the same update as `TokenMintV1`
             let update: MoneyTokenMintUpdateV1 = deserialize(&update_data[1..])?;
             Ok(money_token_mint_process_update_v1(cid, update)?)
         }

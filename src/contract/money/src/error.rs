@@ -117,6 +117,9 @@ pub enum MoneyError {
 
     #[error("Missing nullifier in set")]
     MissingNullifier,
+
+    #[error("Call is executed after cutoff slot")]
+    PoWRewardCallAfterCutoffSlot,
 }
 
 impl From<MoneyError> for ContractError {
@@ -154,6 +157,7 @@ impl From<MoneyError> for ContractError {
             MoneyError::PreviousCallInputMismatch => Self::Custom(30),
             MoneyError::GenesisCallNonGenesisSlot => Self::Custom(31),
             MoneyError::MissingNullifier => Self::Custom(32),
+            MoneyError::PoWRewardCallAfterCutoffSlot => Self::Custom(33),
         }
     }
 }

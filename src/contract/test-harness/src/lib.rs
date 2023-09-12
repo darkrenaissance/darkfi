@@ -65,6 +65,7 @@ mod dao_vote;
 mod money_airdrop;
 mod money_genesis_mint;
 mod money_otc_swap;
+mod money_pow_reward;
 mod money_token;
 mod money_transfer;
 
@@ -108,6 +109,7 @@ pub enum TxAction {
     MoneyGenesisMint,
     MoneyTransfer,
     MoneyOtcSwap,
+    MoneyPoWReward,
     ConsensusGenesisStake,
     ConsensusStake,
     ConsensusProposal,
@@ -255,6 +257,7 @@ impl TestHarness {
         tx_action_benchmarks.insert(TxAction::MoneyGenesisMint, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::MoneyOtcSwap, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::MoneyTransfer, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::MoneyPoWReward, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::ConsensusGenesisStake, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::ConsensusStake, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::ConsensusProposal, TxActionBenchmarks::default());

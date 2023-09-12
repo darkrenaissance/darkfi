@@ -51,12 +51,17 @@ test-genesis-mint: all
 		--package darkfi-money-contract \
 		--test genesis_mint $(ARGS)
 
+test-pow-reward: all
+	$(CARGO) test --release --features=no-entrypoint,client \
+		--package darkfi-money-contract \
+		--test pow_reward $(ARGS)
+
 bench:
 	$(CARGO) test --release --features=no-entrypoint,client \
 		--package darkfi-money-contract \
 		--test verification_bench $(FILTER)
 
-test: test-integration test-mint-pay-swap test-txs-verification test-genesis-mint
+test: test-integration test-mint-pay-swap test-txs-verification test-genesis-mint test-pow-reward
 
 test-no-run:
 	$(MAKE) test-integration ARGS=$(NO_RUN)
