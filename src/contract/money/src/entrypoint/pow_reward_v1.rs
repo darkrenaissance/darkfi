@@ -18,10 +18,13 @@
 
 use darkfi_sdk::{
     blockchain::{pow_expected_reward, POW_CUTOFF},
-    crypto::{pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, DARK_TOKEN_ID},
-    db::{db_contains_key, db_lookup},
-    error::ContractError,
-    msg,
+    crypto::{
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode,
+        DARK_TOKEN_ID,
+    },
+    db::{db_contains_key, db_lookup, db_set},
+    error::{ContractError, ContractResult},
+    merkle_add, msg,
     pasta::pallas,
     util::get_verifying_slot,
     ContractCall,
@@ -30,8 +33,10 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::MoneyError,
-    model::{MoneyTokenMintParamsV1, MoneyTokenMintUpdateV1},
-    MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    model::{MoneyPoWRewardParamsV1, MoneyPoWRewardUpdateV1},
+    MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
+    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
+    MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
 /// `get_metadata` function for `Money::PoWRewardV1`
@@ -41,7 +46,7 @@ pub(crate) fn money_pow_reward_get_metadata_v1(
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: MoneyTokenMintParamsV1 = deserialize(&self_.data[1..])?;
+    let params: MoneyPoWRewardParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
@@ -76,7 +81,7 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
     calls: Vec<ContractCall>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: MoneyTokenMintParamsV1 = deserialize(&self_.data[1..])?;
+    let params: MoneyPoWRewardParamsV1 = deserialize(&self_.data[1..])?;
 
     // Verify this contract call is verified against a slot(block height) before PoS transition,
     // excluding genesis.
@@ -136,10 +141,36 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
     }
 
     // Create a state update. We only need the new coin.
-    let update = MoneyTokenMintUpdateV1 { coin: params.output.coin };
+    let update = MoneyPoWRewardUpdateV1 { coin: params.output.coin };
     let mut update_data = vec![];
     update_data.write_u8(MoneyFunction::PoWRewardV1 as u8)?;
     update.encode(&mut update_data)?;
 
     Ok(update_data)
+}
+
+/// `process_update` function for `Money::PoWRewardV1`
+pub(crate) fn money_pow_reward_process_update_v1(
+    cid: ContractId,
+    update: MoneyPoWRewardUpdateV1,
+) -> ContractResult {
+    // Grab all db handles we want to work on
+    let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
+    let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
+    let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+
+    msg!("[PoWRewardV1] Adding new coin to the set");
+    db_set(coins_db, &serialize(&update.coin), &[])?;
+
+    msg!("[PoWRewardV1] Adding new coin to the Merkle tree");
+    let coins = vec![MerkleNode::from(update.coin.inner())];
+    merkle_add(
+        info_db,
+        coin_roots_db,
+        &serialize(&MONEY_CONTRACT_LATEST_COIN_ROOT),
+        &serialize(&MONEY_CONTRACT_COIN_MERKLE_TREE),
+        &coins,
+    )?;
+
+    Ok(())
 }

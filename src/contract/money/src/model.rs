@@ -158,6 +158,22 @@ pub struct MoneyTransferUpdateV1 {
     pub coins: Vec<Coin>,
 }
 
+/// Parameters for `Money::GenesisMint`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyGenesisMintParamsV1 {
+    /// Clear input
+    pub input: ClearInput,
+    /// Anonymous output
+    pub output: Output,
+}
+
+/// State update for `Money::GenesisMint`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyGenesisMintUpdateV1 {
+    /// The newly minted coin
+    pub coin: Coin,
+}
+
 /// Parameters for `Money::TokenMint`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyTokenMintParamsV1 {
@@ -188,6 +204,22 @@ pub struct MoneyTokenFreezeParamsV1 {
 pub struct MoneyTokenFreezeUpdateV1 {
     /// Mint authority public key
     pub signature_public: PublicKey,
+}
+
+/// Parameters for `Money::PoWReward`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyPoWRewardParamsV1 {
+    /// Clear input
+    pub input: ClearInput,
+    /// Anonymous output
+    pub output: Output,
+}
+
+/// State update for `Money::PoWReward`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyPoWRewardUpdateV1 {
+    /// The newly minted coin
+    pub coin: Coin,
 }
 
 /// Parameters for `Money::Stake`
