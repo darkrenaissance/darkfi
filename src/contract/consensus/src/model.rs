@@ -37,6 +37,15 @@ pub struct ConsensusGenesisStakeParamsV1 {
 }
 // ANCHOR_END: ConsensusGenesisStakeParams
 
+/// State update for `Consensus::GenesisStake`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+// ANCHOR: ConsensusGenesisStakeUpdate
+pub struct ConsensusGenesisStakeUpdateV1 {
+    /// The newly minted coin
+    pub coin: Coin,
+}
+// ANCHOR_END: ConsensusGenesisStakeUpdate
+
 /// Parameters for `Consensus::Proposal`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 // ANCHOR: ConsensusProposalParams

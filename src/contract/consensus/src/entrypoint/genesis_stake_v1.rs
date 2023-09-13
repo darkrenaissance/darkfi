@@ -17,21 +17,26 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError, model::ConsensusStakeUpdateV1, CONSENSUS_CONTRACT_STAKED_COINS_TREE,
-    CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
+    error::MoneyError, CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_STAKED_COINS_TREE,
+    CONSENSUS_CONTRACT_STAKED_COIN_LATEST_COIN_ROOT, CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE,
+    CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_UNSTAKED_COINS_TREE,
+    CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, pedersen_commitment_u64, ContractId, DARK_TOKEN_ID},
-    db::{db_contains_key, db_lookup},
-    error::ContractError,
-    msg,
+    crypto::{pasta_prelude::*, pedersen_commitment_u64, ContractId, MerkleNode, DARK_TOKEN_ID},
+    db::{db_contains_key, db_lookup, db_set},
+    error::{ContractError, ContractResult},
+    merkle_add, msg,
     pasta::pallas,
     util::get_verifying_slot,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
-use crate::{model::ConsensusGenesisStakeParamsV1, ConsensusFunction};
+use crate::{
+    model::{ConsensusGenesisStakeParamsV1, ConsensusGenesisStakeUpdateV1},
+    ConsensusFunction,
+};
 
 /// `get_metadata` function for `Consensus::GenesisStakeV1`
 ///
@@ -82,13 +87,16 @@ pub(crate) fn consensus_genesis_stake_process_instruction_v1(
     // Verify this contract call is verified on the genesis slot (0).
     let verifying_slot = get_verifying_slot();
     if verifying_slot != 0 {
-        msg!("[GenesisStakeV1] Error: Call is executed for slot {}, not genesis", verifying_slot);
+        msg!(
+            "[ConsensusGenesisStakeV1] Error: Call is executed for slot {}, not genesis",
+            verifying_slot
+        );
         return Err(MoneyError::GenesisCallNonGenesisSlot.into())
     }
 
     // Only DARK_TOKEN_ID can be minted and staked on genesis slot.
     if params.input.token_id != *DARK_TOKEN_ID {
-        msg!("[GenesisStakeV1] Error: Clear input used non-native token");
+        msg!("[ConsensusGenesisStakeV1] Error: Clear input used non-native token");
         return Err(MoneyError::TransferClearInputNonNativeToken.into())
     }
 
@@ -100,13 +108,13 @@ pub(crate) fn consensus_genesis_stake_process_instruction_v1(
     // Check that the coin from the output hasn't existed before.
     let coin = serialize(&params.output.coin);
     if db_contains_key(staked_coins_db, &coin)? {
-        msg!("[GenesisStakeV1] Error: Output coin was already seen in the set of staked coins");
+        msg!("[ConsensusGenesisStakeV1] Error: Output coin was already seen in the set of staked coins");
         return Err(MoneyError::DuplicateCoin.into())
     }
 
     // Check that the coin from the output hasn't existed before in unstake set.
     if db_contains_key(unstaked_coins_db, &coin)? {
-        msg!("[GenesisStakeV1] Error: Output coin was already seen in the set of unstaked coins");
+        msg!("[ConsensusGenesisStakeV1] Error: Output coin was already seen in the set of unstaked coins");
         return Err(MoneyError::DuplicateCoin.into())
     }
 
@@ -115,15 +123,41 @@ pub(crate) fn consensus_genesis_stake_process_instruction_v1(
     if pedersen_commitment_u64(params.input.value, params.input.value_blind) !=
         params.output.value_commit
     {
-        msg!("[GenesisStakeV1] Error: Value commitment mismatch");
+        msg!("[ConsensusGenesisStakeV1] Error: Value commitment mismatch");
         return Err(MoneyError::ValueMismatch.into())
     }
 
     // Create a state update.
-    let update = ConsensusStakeUpdateV1 { coin: params.output.coin };
+    let update = ConsensusGenesisStakeUpdateV1 { coin: params.output.coin };
     let mut update_data = vec![];
     update_data.write_u8(ConsensusFunction::StakeV1 as u8)?;
     update.encode(&mut update_data)?;
 
     Ok(update_data)
+}
+
+/// `process_update` function for `Consensus::GenesisStakeV1`
+pub(crate) fn consensus_genesis_stake_process_update_v1(
+    cid: ContractId,
+    update: ConsensusGenesisStakeUpdateV1,
+) -> ContractResult {
+    // Grab all necessary db handles for where we want to write
+    let info_db = db_lookup(cid, CONSENSUS_CONTRACT_INFO_TREE)?;
+    let staked_coins_db = db_lookup(cid, CONSENSUS_CONTRACT_STAKED_COINS_TREE)?;
+    let staked_coin_roots_db = db_lookup(cid, CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE)?;
+
+    msg!("[ConsensusGenesisStakeV1] Adding new coin to the set");
+    db_set(staked_coins_db, &serialize(&update.coin), &[])?;
+
+    msg!("[ConsensusGenesisStakeV1] Adding new coin to the Merkle tree");
+    let coins: Vec<_> = vec![MerkleNode::from(update.coin.inner())];
+    merkle_add(
+        info_db,
+        staked_coin_roots_db,
+        &serialize(&CONSENSUS_CONTRACT_STAKED_COIN_LATEST_COIN_ROOT),
+        &serialize(&CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE),
+        &coins,
+    )?;
+
+    Ok(())
 }

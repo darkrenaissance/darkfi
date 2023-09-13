@@ -54,7 +54,7 @@ perform the state transition. We enforce that:
 If these checks pass, we create a state update with the output coin:
 
 ```rust,no_run,no_playground
-{{#include ../../../../src/contract/money/src/model.rs:ConsensusStakeUpdate}}
+{{#include ../../../../src/contract/consensus/src/model.rs:ConsensusGenesisStakeUpdate}}
 ```
 
 ### [`process_update()`](https://github.com/darkrenaissance/darkfi/blob/master/src/contract/consensus/src/entrypoint/stake_v1.rs#L176)
