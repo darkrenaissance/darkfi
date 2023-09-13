@@ -1,4 +1,6 @@
 load('beaver.sage')
+from random import randint
+
 p = 10
 
 party0_val = 3
@@ -6,12 +8,12 @@ party1_val = 22
 public_scalar = 2
 
 # additive share distribution, and communication of private values
-party0_random = random.randint(0,p)
+party0_random = randint(0,p)
 alpha1 = AuthenticatedShare(party0_random)
 alpha2 = AuthenticatedShare(party0_val - party0_random)
 assert (alpha1.authenticated_open(alpha2) == party0_val)
 
-party1_random = random.randint(0,p)
+party1_random = randint(0,p)
 beta1 = AuthenticatedShare(party1_random)
 beta2 = AuthenticatedShare(party1_val - party1_random)
 assert (beta1.authenticated_open(beta2) == party1_val)

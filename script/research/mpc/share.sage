@@ -1,5 +1,4 @@
-load('pedersen.sage')
-load('ec_share.sage')
+load('../mpc/ec_share.sage')
 
 def open_2pc(party0_share, party1_share):
     return party0_share + party1_share
@@ -35,7 +34,7 @@ class AuthenticatedShare(object):
 
       def sub_scalar(self, scalar, party_id):
           return AuthenticatedShare(self.share - scalar, self.mac, self.public_modifier + scalar) if party_id == 0 else AuthenticatedShare(self.share , self.mac, self.public_modifier + scalar)
-      
+
       def add_scalar(self, scalar, party_id):
           return AuthenticatedShare(self.share + scalar, self.mac , self.public_modifier - scalar) if party_id ==0 else AuthenticatedShare(self.share, self.mac, self.public_modifier - scalar)
 
@@ -69,7 +68,7 @@ class MultiplicationAuthenticatedShares(object):
           self.party_id = party_id
 
       def __mul__(self, peer_share):
-          masked_d_share = self.alpha_as - self.a_as      
+          masked_d_share = self.alpha_as - self.a_as
           peer_masked_d_share = peer_share.alpha_as - peer_share.a_as
           d = open_2pc(masked_d_share.share, peer_masked_d_share.share)
 

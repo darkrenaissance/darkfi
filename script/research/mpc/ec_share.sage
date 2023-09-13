@@ -1,5 +1,3 @@
-load('pedersen.sage')
-
 def open_2pc(party0_share, party1_share):
     return party0_share + party1_share
 
@@ -90,3 +88,6 @@ class MSM(object):
           for point, scalar in zip(self.points, self.scalars):
               point_scalars += [ScalingECAuthenticatedShares(point, scalar, beaver.triplet(self.party_id), self.party_id)]
           return point_scalars
+
+      def sum(self):
+          return sum(self.msm())

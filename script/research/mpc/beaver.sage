@@ -1,4 +1,4 @@
-load('share.sage')
+load('../mpc/share.sage')
 
 import random
 class Source(object):
@@ -16,4 +16,3 @@ class Source(object):
       def triplet(self, party_id):
           triplet = [self.left_a, self.left_b, self.left_c] if party_id==0 else [self.right_a, self.right_b, self.right_c]
           return [AuthenticatedShare(share) for share in triplet]
-       
