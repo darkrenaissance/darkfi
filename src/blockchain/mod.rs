@@ -103,23 +103,6 @@ impl Blockchain {
         })
     }
 
-    /* TODO: FIXME: This should not be part of `Blockchain`
-    /// A blockchain is considered valid, when every block is valid,
-    /// based on validate_block checks.
-    /// Be careful as this will try to load everything in memory.
-    pub fn validate(&self) -> Result<()> {
-        // We use block order store here so we have all blocks in order
-        let blocks = self.order.get_all()?;
-        for (index, block) in blocks[1..].iter().enumerate() {
-            let full_blocks = self.get_blocks_by_hash(&[blocks[index].1, block.1])?;
-            let expected_reward = next_block_reward();
-            full_blocks[1].validate(&full_blocks[0], expected_reward)?;
-        }
-
-        Ok(())
-    }
-    */
-
     /// Insert a given [`BlockInfo`] into the blockchain database.
     /// This functions wraps all the logic of separating the block into specific
     /// data that can be fed into the different trees of the database.

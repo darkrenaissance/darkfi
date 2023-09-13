@@ -26,7 +26,7 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness, TxAction};
-use darkfi_sdk::{blockchain::pow_expected_reward, crypto::DARK_TOKEN_ID};
+use darkfi_sdk::{blockchain::expected_reward, crypto::DARK_TOKEN_ID};
 use log::info;
 
 #[test]
@@ -68,7 +68,7 @@ fn pow_reward() -> Result<()> {
         current_slot += 1;
         th.generate_slot(current_slot).await?;
 
-        let alice_reward = pow_expected_reward(current_slot);
+        let alice_reward = expected_reward(current_slot);
         info!(target: "money", "[Malicious] ================================");
         info!(target: "money", "[Malicious] Building erroneous PoW reward tx");
         info!(target: "money", "[Malicious] ================================");

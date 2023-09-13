@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    blockchain::{pow_expected_reward, POW_CUTOFF},
+    blockchain::{expected_reward, POW_CUTOFF},
     crypto::{
         pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode,
         DARK_TOKEN_ID,
@@ -102,7 +102,7 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
     }
 
     // Verify reward value matches the expected one for this slot(block height)
-    let expected_reward = pow_expected_reward(verifying_slot);
+    let expected_reward = expected_reward(verifying_slot);
     if params.input.value != expected_reward {
         msg!(
             "[PoWRewardV1] Error: Reward value({}) is not the block height({}) expected one: {}",

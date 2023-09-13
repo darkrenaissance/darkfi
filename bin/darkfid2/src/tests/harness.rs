@@ -23,15 +23,12 @@ use darkfi::{
     net::Settings,
     rpc::jsonrpc::JsonSubscriber,
     util::time::TimeKeeper,
-    validator::{
-        consensus::{next_block_reward, pid::slot_pid_output},
-        Validator, ValidatorConfig,
-    },
+    validator::{pid::slot_pid_output, Validator, ValidatorConfig},
     Result,
 };
 use darkfi_contract_test_harness::{vks, Holder, TestHarness};
 use darkfi_sdk::{
-    blockchain::{PidOutput, PreviousSlot, Slot},
+    blockchain::{expected_reward, PidOutput, PreviousSlot, Slot},
     pasta::{group::ff::Field, pallas},
 };
 use url::Url;
@@ -182,7 +179,7 @@ impl Harness {
             let pid = PidOutput::new(f, error, sigma1, sigma2);
             let total_tokens = previous_slot.total_tokens + previous_slot.reward;
             // Only last slot in the sequence has a reward
-            let reward = if i == slots_count - 1 { next_block_reward() } else { 0 };
+            let reward = if i == slots_count - 1 { expected_reward(id) } else { 0 };
             let slot = Slot::new(id, previous, pid, pallas::Base::ZERO, total_tokens, reward);
             slots.push(slot.clone());
             previous_slot = slot;

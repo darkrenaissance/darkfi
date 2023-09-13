@@ -121,23 +121,26 @@ impl Default for Slot {
 // TODO: This values are experimental, should be replaced with the proper ones once defined
 pub const POW_CUTOFF: u64 = 1000000;
 pub const POS_START: u64 = 1000001;
-/// Auxiliary function to calculate provided block height(slot) expected PoW reward value.
-/// Genesis block(0) always returns reward value 0.
-/// A cut-off is used, signalling PoS start, after which reward value 0 is returned.
-pub fn pow_expected_reward(block_height: u64) -> u64 {
-    match block_height {
+/// Auxiliary function to calculate provided slot(block height) expected reward value.
+/// Genesis slot(0) always returns reward value 0.
+/// We use PoW bootstrap, configured to reduce rewards at fixed slot numbers, until a cutoff.
+/// Once cut-off is reached, signalling PoS start, reward value is based on DARK token-economics.
+pub fn expected_reward(slot: u64) -> u64 {
+    // Configured block rewards (1 DRK == 1 * 10^8)
+    match slot {
         0 => 0,
-        1..=1000 => 20,
-        1001..=2000 => 18,
-        2001..=3000 => 16,
-        3001..=4000 => 14,
-        4001..=5000 => 12,
-        5001..=6000 => 10,
-        6001..=7000 => 8,
-        7001..=8000 => 6,
-        8001..=9000 => 4,
-        9001..=10000 => 2,
-        10001..=POW_CUTOFF => 1,
-        POS_START.. => 0,
+        1..=1000 => 2_000_000_000,         // 20 DRK
+        1001..=2000 => 1_800_000_000,      // 18 DRK
+        2001..=3000 => 1_600_000_000,      // 16 DRK
+        3001..=4000 => 1_400_000_000,      // 14 DRK
+        4001..=5000 => 1_200_000_000,      // 12 DRK
+        5001..=6000 => 1_000_000_000,      // 10 DRK
+        6001..=7000 => 800_000_000,        // 8 DRK
+        7001..=8000 => 600_000_000,        // 6 DRK
+        8001..=9000 => 400_000_000,        // 4 DRK
+        9001..=10000 => 200_000_000,       // 2 DRK
+        10001..=POW_CUTOFF => 100_000_000, // 1 DRK
+        // TODO (res) implement reward mechanism with accord to DRK, DARK token-economics.
+        POS_START.. => 100_000_000, // 1 DRK
     }
 }

@@ -22,7 +22,7 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    blockchain::pow_expected_reward,
+    blockchain::expected_reward,
     crypto::{note::AeadEncryptedNote, pasta_prelude::*, Keypair, PublicKey, DARK_TOKEN_ID},
     pasta::pallas,
 };
@@ -148,7 +148,7 @@ impl PoWRewardCallBuilder {
     }
 
     pub fn build(&self) -> Result<PoWRewardCallDebris> {
-        let reward = pow_expected_reward(self.slot);
+        let reward = expected_reward(self.slot);
         assert!(reward != 0);
         self._build(reward)
     }

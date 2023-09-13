@@ -18,11 +18,11 @@
 
 use darkfi::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay, Header},
-    validator::consensus::{next_block_reward, pid::slot_pid_output},
+    validator::{pid::slot_pid_output, verification::validate_blockchain},
     Error, Result,
 };
 use darkfi_sdk::{
-    blockchain::{PidOutput, PreviousSlot, Slot},
+    blockchain::{expected_reward, PidOutput, PreviousSlot, Slot},
     pasta::{group::ff::Field, pallas},
 };
 
@@ -44,10 +44,8 @@ impl Harness {
     }
 
     fn validate_chains(&self) -> Result<()> {
-        /* FIXME: see blockchain fixme
-        self.alice.validate()?;
-        self.bob.validate()?;
-        */
+        validate_blockchain(&self.alice)?;
+        validate_blockchain(&self.bob)?;
 
         assert_eq!(self.alice.len(), self.bob.len());
 
@@ -70,7 +68,7 @@ impl Harness {
         let (f, error, sigma1, sigma2) = slot_pid_output(previous_slot, producers);
         let pid = PidOutput::new(f, error, sigma1, sigma2);
         let total_tokens = previous_slot.total_tokens + previous_slot.reward;
-        let reward = next_block_reward();
+        let reward = expected_reward(id);
         let slot = Slot::new(id, previous_slot_info, pid, pallas::Base::ZERO, total_tokens, reward);
 
         // We increment timestamp so we don't have to use sleep
@@ -110,7 +108,7 @@ impl Harness {
             // This will be true for every insert, apart from genesis
             if let Some(p) = previous {
                 // Retrieve expected reward
-                let expected_reward = next_block_reward();
+                let expected_reward = expected_reward(block.header.slot);
 
                 // Validate block
                 block.validate(&p, expected_reward)?;

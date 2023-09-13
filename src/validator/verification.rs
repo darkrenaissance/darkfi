@@ -19,6 +19,7 @@
 use std::{collections::HashMap, io::Cursor};
 
 use darkfi_sdk::{
+    blockchain::expected_reward,
     crypto::{PublicKey, CONSENSUS_CONTRACT_ID},
     pasta::pallas,
 };
@@ -26,7 +27,7 @@ use darkfi_serial::{Decodable, Encodable, WriteExt};
 use log::{debug, error, warn};
 
 use crate::{
-    blockchain::{BlockInfo, BlockchainOverlayPtr},
+    blockchain::{BlockInfo, Blockchain, BlockchainOverlayPtr},
     error::TxVerifyFailed,
     runtime::vm_runtime::Runtime,
     tx::Transaction,
@@ -327,4 +328,19 @@ pub async fn verify_transactions(
     }
 
     Ok(erroneous_txs)
+}
+
+/// A blockchain is considered valid, when every block is valid,
+/// based on validate_block checks.
+/// Be careful as this will try to load everything in memory.
+pub fn validate_blockchain(blockchain: &Blockchain) -> Result<()> {
+    // We use block order store here so we have all blocks in order
+    let blocks = blockchain.order.get_all()?;
+    for (index, block) in blocks[1..].iter().enumerate() {
+        let full_blocks = blockchain.get_blocks_by_hash(&[blocks[index].1, block.1])?;
+        let expected_reward = expected_reward(full_blocks[1].header.slot);
+        full_blocks[1].validate(&full_blocks[0], expected_reward)?;
+    }
+
+    Ok(())
 }

@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    blockchain::{PidOutput, PreviousSlot, Slot},
+    blockchain::{expected_reward, PidOutput, PreviousSlot, Slot},
     crypto::{schnorr::SchnorrSecret, MerkleNode, MerkleTree, SecretKey},
     pasta::{group::ff::PrimeField, pallas},
 };
@@ -31,15 +31,9 @@ use crate::{
     },
     tx::Transaction,
     util::time::{TimeKeeper, Timestamp},
-    validator::{consensus::pid::slot_pid_output, verify_block, verify_transactions},
+    validator::{pid::slot_pid_output, verify_block, verify_transactions},
     Error, Result,
 };
-
-/// DarkFi consensus PID controller
-pub mod pid;
-
-/// Base 10 big float implementation for high precision arithmetics
-pub mod float_10;
 
 /// Consensus configuration
 const TXS_CAP: usize = 50;
@@ -247,7 +241,7 @@ impl Consensus {
         let previous = fork.overlay.lock().unwrap().last_block()?;
 
         // Retrieve expected reward
-        let expected_reward = next_block_reward();
+        let expected_reward = expected_reward(time_keeper.verifying_slot);
 
         // Verify proposal block (6)
         if verify_block(
@@ -343,7 +337,7 @@ impl Consensus {
             time_keeper.verifying_slot = block.header.slot;
 
             // Retrieve expected reward
-            let expected_reward = next_block_reward();
+            let expected_reward = expected_reward(time_keeper.verifying_slot);
 
             // Verify block
             if verify_block(
@@ -594,12 +588,4 @@ impl Fork {
 
         Ok(Self { overlay, proposals, slots, mempool })
     }
-}
-
-/// Block producer reward.
-/// TODO (res) implement reward mechanism with accord to DRK, DARK token-economics.
-pub fn next_block_reward() -> u64 {
-    // Configured block reward (1 DRK == 1 * 10^8)
-    let reward: u64 = 100_000_000;
-    reward
 }

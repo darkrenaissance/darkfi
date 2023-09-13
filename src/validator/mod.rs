@@ -18,7 +18,10 @@
 
 use std::sync::Arc;
 
-use darkfi_sdk::{blockchain::Slot, crypto::PublicKey};
+use darkfi_sdk::{
+    blockchain::{expected_reward, Slot},
+    crypto::PublicKey,
+};
 use darkfi_serial::serialize;
 use log::{debug, error, info, warn};
 use smol::lock::RwLock;
@@ -33,7 +36,10 @@ use crate::{
 
 /// DarkFi consensus module
 pub mod consensus;
-use consensus::{next_block_reward, Consensus};
+use consensus::Consensus;
+
+/// DarkFi consensus PID controller
+pub mod pid;
 
 /// Verification functions
 pub mod verification;
@@ -42,6 +48,9 @@ use verification::{verify_block, verify_genesis_block, verify_transactions};
 /// Helper utilities
 pub mod utils;
 use utils::deploy_native_contracts;
+
+/// Base 10 big float implementation for high precision arithmetics
+pub mod float_10;
 
 /// Configuration for initializing [`Validator`]
 #[derive(Clone)]
@@ -291,7 +300,7 @@ impl Validator {
             time_keeper.verifying_slot = block.header.slot;
 
             // Retrieve expected reward
-            let expected_reward = next_block_reward();
+            let expected_reward = expected_reward(time_keeper.verifying_slot);
 
             // Verify block
             if verify_block(
@@ -419,7 +428,7 @@ impl Validator {
             time_keeper.verifying_slot = block.header.slot;
 
             // Retrieve expected reward
-            let expected_reward = next_block_reward();
+            let expected_reward = expected_reward(time_keeper.verifying_slot);
 
             // Verify block
             if verify_block(
