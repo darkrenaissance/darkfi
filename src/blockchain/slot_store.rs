@@ -22,7 +22,7 @@ use darkfi_serial::{deserialize, serialize};
 
 use crate::{Error, Result};
 
-use super::{parse_u64_key_record, SledDbOverlayPtr};
+use super::{parse_record, parse_u64_key_record, SledDbOverlayPtr};
 
 const SLED_SLOT_TREE: &[u8] = b"_slots";
 
@@ -201,5 +201,153 @@ impl SlotStoreOverlay {
         let found = self.0.lock().unwrap().last(SLED_SLOT_TREE)?.unwrap();
         let slot = deserialize(&found.1)?;
         Ok(slot)
+    }
+}
+
+const SLED_BLOCK_SLOTS_TREE: &[u8] = b"_blocks_slots";
+
+/// The `BlocksSlotsStore` is a `sled` tree storing all the blocks' corresponding slot
+/// uids, meaning the slot numbers leading up to each block, where the key is the
+/// blocks' hash, and value is the serialized slot uids vector.
+#[derive(Clone)]
+pub struct BlocksSlotsStore(pub sled::Tree);
+
+impl BlocksSlotsStore {
+    /// Opens a new or existing `BlocksSlotsStore` on the given sled database.
+    pub fn new(db: &sled::Db) -> Result<Self> {
+        let tree = db.open_tree(SLED_BLOCK_SLOTS_TREE)?;
+        Ok(Self(tree))
+    }
+
+    /// Insert a slice of block hashes and their `u64` vectors into the store.
+    pub fn insert(&self, hashes: &[blake3::Hash], slots: &[&Vec<u64>]) -> Result<()> {
+        let batch = self.insert_batch(hashes, slots)?;
+        self.0.apply_batch(batch)?;
+        Ok(())
+    }
+
+    /// Generate the sled batch corresponding to an insert, so caller
+    /// can handle the write operation. The block hash is used as the key,
+    /// and the block slots serialized vector is used as value.
+    pub fn insert_batch(
+        &self,
+        hashes: &[blake3::Hash],
+        slots: &[&Vec<u64>],
+    ) -> Result<sled::Batch> {
+        if hashes.len() != slots.len() {
+            return Err(Error::InvalidInputLengths)
+        }
+
+        let mut batch = sled::Batch::default();
+
+        for (i, hash) in hashes.iter().enumerate() {
+            let serialized = serialize(slots[i]);
+            batch.insert(hash.as_bytes(), serialized);
+        }
+
+        Ok(batch)
+    }
+
+    /// Check if the blocks slots store contains a given block hash.
+    pub fn contains(&self, blockhash: &blake3::Hash) -> Result<bool> {
+        Ok(self.0.contains_key(blockhash.as_bytes())?)
+    }
+
+    /// Fetch given blocks slots from the blocks slots store.
+    /// The resulting vector contains `Option`, which is `Some` if the block slots
+    /// were found in the blocks slots store, and otherwise it is `None`, if they have not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one block was not found.
+    pub fn get(
+        &self,
+        block_hashes: &[blake3::Hash],
+        strict: bool,
+    ) -> Result<Vec<Option<Vec<u64>>>> {
+        let mut ret = Vec::with_capacity(block_hashes.len());
+
+        for hash in block_hashes {
+            if let Some(found) = self.0.get(hash.as_bytes())? {
+                let slots = deserialize(&found)?;
+                ret.push(Some(slots));
+            } else {
+                if strict {
+                    let s = hash.to_hex().as_str().to_string();
+                    return Err(Error::BlockSlotsNotFound(s))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
+    }
+
+    /// Retrieve all blocks slots from the block store in the form of a tuple
+    /// (`hash`, `Vec<u64>`).
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all(&self) -> Result<Vec<(blake3::Hash, Vec<u64>)>> {
+        let mut blocks_slots = vec![];
+
+        for block_slots in self.0.iter() {
+            blocks_slots.push(parse_record(block_slots.unwrap())?);
+        }
+
+        Ok(blocks_slots)
+    }
+}
+
+/// Overlay structure over a [`BlocksSlotsStore`] instance.
+pub struct BlocksSlotsStoreOverlay(SledDbOverlayPtr);
+
+impl BlocksSlotsStoreOverlay {
+    pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
+        overlay.lock().unwrap().open_tree(SLED_BLOCK_SLOTS_TREE)?;
+        Ok(Self(overlay.clone()))
+    }
+
+    /// Insert a slice of block hashes and their `u64` vectors into the overlay.
+    /// The block hash is used as the key, and the block slots serialized vector
+    /// is used as value.
+    pub fn insert(&self, hashes: &[blake3::Hash], slots: &[&Vec<u64>]) -> Result<()> {
+        if hashes.len() != slots.len() {
+            return Err(Error::InvalidInputLengths)
+        }
+
+        let mut lock = self.0.lock().unwrap();
+
+        for (i, hash) in hashes.iter().enumerate() {
+            let serialized = serialize(slots[i]);
+            lock.insert(SLED_BLOCK_SLOTS_TREE, hash.as_bytes(), &serialized)?;
+        }
+
+        Ok(())
+    }
+
+    /// Fetch given blocks slots from the overlay.
+    /// The resulting vector contains `Option`, which is `Some` if the block slots
+    /// were found in the overlay, and otherwise it is `None`, if they have not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one block was not found.
+    pub fn get(
+        &self,
+        block_hashes: &[blake3::Hash],
+        strict: bool,
+    ) -> Result<Vec<Option<Vec<u64>>>> {
+        let mut ret = Vec::with_capacity(block_hashes.len());
+        let lock = self.0.lock().unwrap();
+
+        for hash in block_hashes {
+            if let Some(found) = lock.get(SLED_BLOCK_SLOTS_TREE, hash.as_bytes())? {
+                let slots = deserialize(&found)?;
+                ret.push(Some(slots));
+            } else {
+                if strict {
+                    let s = hash.to_hex().as_str().to_string();
+                    return Err(Error::BlockSlotsNotFound(s))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
     }
 }

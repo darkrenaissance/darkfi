@@ -36,9 +36,10 @@ pub const BLOCK_VERSION: u8 = 1;
 /// Block magic bytes
 const BLOCK_MAGIC_BYTES: [u8; 4] = [0x11, 0x6d, 0x75, 0x1f];
 
-/// This struct represents a tuple of the form (`magic`, `header`, `txs`, `producer`, `slots`).
-/// The header and transactions are stored as hashes, while slots are stored as integers,
-/// serving as pointers to the actual data in the sled database.
+/// This struct represents a tuple of the form (`magic`, `header`, `txs`, `signature`, `eta`).
+/// The header and transactions are stored as hashes, serving as pointers to the actual data
+/// in the sled database.
+/// NOTE: This struct fields are considered final, as it represents a blockchain block.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Block {
     /// Block magic bytes
@@ -51,8 +52,6 @@ pub struct Block {
     pub signature: Signature,
     /// Block producer ETA
     pub eta: pallas::Base,
-    /// Slots up until this block
-    pub slots: Vec<u64>,
 }
 
 impl Block {
@@ -61,10 +60,9 @@ impl Block {
         txs: Vec<blake3::Hash>,
         signature: Signature,
         eta: pallas::Base,
-        slots: Vec<u64>,
     ) -> Self {
         let magic = BLOCK_MAGIC_BYTES;
-        Self { magic, header, txs, signature, eta, slots }
+        Self { magic, header, txs, signature, eta }
     }
 
     /// Calculate the block hash
@@ -73,7 +71,10 @@ impl Block {
     }
 }
 
-/// Structure representing full block data.
+/// Structure representing full block data, acting as
+/// a wrapper struct over `Block`, enabling us to include
+/// more information that might be used in different block
+/// version, without affecting the original struct.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct BlockInfo {
     /// Block magic bytes
@@ -127,14 +128,12 @@ impl BlockInfo {
 impl From<BlockInfo> for Block {
     fn from(block_info: BlockInfo) -> Self {
         let txs = block_info.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
-        let slots = block_info.slots.iter().map(|x| x.id).collect();
         Self {
             magic: block_info.magic,
             header: block_info.header.headerhash().unwrap(),
             txs,
             signature: block_info.signature,
             eta: block_info.eta,
-            slots,
         }
     }
 }
