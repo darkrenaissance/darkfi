@@ -19,7 +19,7 @@
 use std::{collections::HashMap, io::Cursor};
 
 use darkfi_sdk::{
-    crypto::{PublicKey, CONSENSUS_CONTRACT_ID},
+    crypto::{PublicKey, CONSENSUS_CONTRACT_ID, MONEY_CONTRACT_ID},
     pasta::pallas,
 };
 use darkfi_serial::{Decodable, Encodable, WriteExt};
@@ -136,7 +136,7 @@ pub async fn verify_block(
     // Validate proposal transaction if not in testing mode
     if !testing_mode {
         let tx = block.txs.last().unwrap();
-        verify_proposal_transaction(overlay, time_keeper, tx).await?;
+        verify_producer_transaction(overlay, time_keeper, tx).await?;
         verify_producer_signature(block)?;
     }
 
@@ -166,9 +166,9 @@ pub fn verify_producer_signature(_block: &BlockInfo) -> Result<()> {
     Ok(())
 }
 
-/// Validate WASM execution, signatures, and ZK proofs for a given proposal [`Transaction`],
+/// Validate WASM execution, signatures, and ZK proofs for a given producer [`Transaction`],
 /// and apply it to the provided overlay.
-pub async fn verify_proposal_transaction(
+pub async fn verify_producer_transaction(
     overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
     tx: &Transaction,
@@ -176,24 +176,104 @@ pub async fn verify_proposal_transaction(
     let tx_hash = tx.hash()?;
     debug!(target: "validator::verification::verify_proposal_transaction", "Validating proposal transaction {}", tx_hash);
 
-    // Transaction must contain a single Consensus::Proposal (0x02) call
+    // Transaction must contain a single call, either Money::PoWReward(0x08) or Consensus::Proposal(0x02)
     if tx.calls.len() != 1 ||
-        (tx.calls[0].contract_id != *CONSENSUS_CONTRACT_ID && tx.calls[0].data[0] != 0x02)
+        (tx.calls[0].contract_id != *MONEY_CONTRACT_ID &&
+            tx.calls[0].contract_id != *CONSENSUS_CONTRACT_ID) ||
+        (tx.calls[0].contract_id == *MONEY_CONTRACT_ID && tx.calls[0].data[0] != 0x08) ||
+        (tx.calls[0].contract_id == *CONSENSUS_CONTRACT_ID && tx.calls[0].data[0] != 0x02)
     {
         error!(target: "validator::verification::verify_proposal_transaction", "Proposal transaction is malformed");
         return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
 
-    // Map of ZK proof verifying keys for the current transaction batch
-    let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
+    let call = &tx.calls[0];
+
+    // Map of ZK proof verifying keys for the current transaction
+    let mut verifying_keys: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
 
     // Initialize the map
-    vks.insert(tx.calls[0].contract_id.to_bytes(), HashMap::new());
+    verifying_keys.insert(call.contract_id.to_bytes(), HashMap::new());
 
-    // TODO: when fee is implemented, differentiate here since this transaction
-    // won't have fee
-    verify_transaction(overlay, time_keeper, tx, &mut vks).await?;
+    // Table of public inputs used for ZK proof verification
+    let mut zkp_table = vec![];
+    // Table of public keys used for signature verification
+    let mut sig_table = vec![];
 
+    debug!(target: "validator::verification::verify_proposal_transaction", "Executing contract call");
+
+    // Write the actual payload data
+    let mut payload = vec![];
+    payload.write_u32(0)?; // Call index
+    tx.calls.encode(&mut payload)?; // Actual call data
+
+    debug!(target: "validator::verification::verify_proposal_transaction", "Instantiating WASM runtime");
+    let wasm = overlay.lock().unwrap().wasm_bincode.get(call.contract_id)?;
+
+    let mut runtime = Runtime::new(&wasm, overlay.clone(), call.contract_id, time_keeper.clone())?;
+
+    debug!(target: "validator::verification::verify_proposal_transaction", "Executing \"metadata\" call");
+    let metadata = runtime.metadata(&payload)?;
+
+    // Decode the metadata retrieved from the execution
+    let mut decoder = Cursor::new(&metadata);
+
+    // The tuple is (zkas_ns, public_inputs)
+    let zkp_pub: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
+    let sig_pub: Vec<PublicKey> = Decodable::decode(&mut decoder)?;
+    // TODO: Make sure we've read all the bytes above.
+    debug!(target: "validator::verification::verify_proposal_transaction", "Successfully executed \"metadata\" call");
+
+    // Here we'll look up verifying keys and insert them into the map.
+    debug!(target: "validator::verification::verify_proposal_transaction", "Performing VerifyingKey lookups from the sled db");
+    for (zkas_ns, _) in &zkp_pub {
+        // TODO: verify this is correct behavior
+        let inner_vk_map = verifying_keys.get_mut(&call.contract_id.to_bytes()).unwrap();
+        if inner_vk_map.contains_key(zkas_ns.as_str()) {
+            continue
+        }
+        let (_, vk) = overlay.lock().unwrap().contracts.get_zkas(&call.contract_id, zkas_ns)?;
+        inner_vk_map.insert(zkas_ns.to_string(), vk);
+    }
+
+    zkp_table.push(zkp_pub);
+    sig_table.push(sig_pub);
+
+    // After getting the metadata, we run the "exec" function with the same runtime
+    // and the same payload.
+    debug!(target: "validator::verification::verify_proposal_transaction", "Executing \"exec\" call");
+    let state_update = runtime.exec(&payload)?;
+    debug!(target: "validator::verification::verify_proposal_transaction", "Successfully executed \"exec\" call");
+
+    // If that was successful, we apply the state update in the ephemeral overlay.
+    debug!(target: "validator::verification::verify_proposal_transaction", "Executing \"apply\" call");
+    runtime.apply(&state_update)?;
+    debug!(target: "validator::verification::verify_proposal_transaction", "Successfully executed \"apply\" call");
+
+    // When we're done executing over the tx's contract call, we now move on with verification.
+    // First we verify the signatures as that's cheaper, and then finally we verify the ZK proofs.
+    debug!(target: "validator::verification::verify_proposal_transaction", "Verifying signatures for transaction {}", tx_hash);
+    if sig_table.len() != tx.signatures.len() {
+        error!(target: "validator::verification::verify_proposal_transaction", "Incorrect number of signatures in tx {}", tx_hash);
+        return Err(TxVerifyFailed::MissingSignatures.into())
+    }
+
+    // TODO: Go through the ZK circuits that have to be verified and account for the opcodes.
+
+    if let Err(e) = tx.verify_sigs(sig_table) {
+        error!(target: "validator::verification::verify_proposal_transaction", "Signature verification for tx {} failed: {}", tx_hash, e);
+        return Err(TxVerifyFailed::InvalidSignature.into())
+    }
+
+    debug!(target: "validator::verification::verify_proposal_transaction", "Signature verification successful");
+
+    debug!(target: "validator::verification::verify_proposal_transaction", "Verifying ZK proofs for transaction {}", tx_hash);
+    if let Err(e) = tx.verify_zkps(&verifying_keys, zkp_table).await {
+        error!(target: "validator::verification::verify_proposal_transaction", "ZK proof verification for tx {} failed: {}", tx_hash, e);
+        return Err(TxVerifyFailed::InvalidZkProof.into())
+    }
+
+    debug!(target: "validator::verification::verify_proposal_transaction", "ZK proof verification successful");
     debug!(target: "validator::verification::verify_proposal_transaction", "Proposal transaction {} verified successfully", tx_hash);
 
     Ok(())
@@ -217,6 +297,14 @@ pub async fn verify_transaction(
 
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
+        // Transaction must not contain a reward call, Money::PoWReward(0x08) or Consensus::Proposal(0x02)
+        if (call.contract_id == *MONEY_CONTRACT_ID && call.data[0] == 0x08) ||
+            (call.contract_id == *CONSENSUS_CONTRACT_ID && call.data[0] == 0x02)
+        {
+            error!(target: "validator::verification::verify_transaction", "Reward transaction detected");
+            return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+        }
+
         debug!(target: "validator::verification::verify_transaction", "Executing contract call {}", idx);
 
         // Write the actual payload data
