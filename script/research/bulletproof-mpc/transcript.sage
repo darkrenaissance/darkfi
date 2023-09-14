@@ -1,6 +1,6 @@
 import os
 
-os.environ['PYTHONHASHSEED'] = '1234'
+os.environ['PYTHONHASHSEED'] = '0'
 random.seed(0)
 class Transcript(object):
     def __init__(self, label):
