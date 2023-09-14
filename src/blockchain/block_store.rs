@@ -28,7 +28,7 @@ use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 
 use crate::{tx::Transaction, Error, Result};
 
-use super::{parse_record, parse_u64_key_record, validate_slot, Header, SledDbOverlayPtr};
+use super::{parse_record, parse_u64_key_record, Header, SledDbOverlayPtr};
 
 /// Block version number
 pub const BLOCK_VERSION: u8 = 1;
@@ -114,74 +114,6 @@ impl BlockInfo {
     pub fn blockhash(&self) -> blake3::Hash {
         let block: Block = self.clone().into();
         block.blockhash()
-    }
-
-    /// A block is considered valid when the following rules apply:
-    ///     1. Parent hash is equal to the hash of the previous block
-    ///     2. Timestamp increments previous block timestamp
-    ///     3. Slot increments previous block slot
-    ///     4. Slots vector is not empty and all its slots are valid
-    ///     5. Slot is the same as the slots vector last slot id
-    /// Additional validity rules can be applied.
-    pub fn validate(&self, previous: &Self, expected_reward: u64) -> Result<()> {
-        let error = Err(Error::BlockIsInvalid(self.blockhash().to_string()));
-        let previous_hash = previous.blockhash();
-
-        // Check previous hash (1)
-        if self.header.previous != previous_hash {
-            return error
-        }
-
-        // Check timestamps are incremental (2)
-        if self.header.timestamp <= previous.header.timestamp {
-            return error
-        }
-
-        // Check slots are incremental (3)
-        if self.header.slot <= previous.header.slot {
-            return error
-        }
-
-        // Verify slots (4)
-        if self.slots.is_empty() {
-            return error
-        }
-
-        // Retrieve previous block last slot
-        let mut previous_slot = previous.slots.last().unwrap();
-
-        // Check if empty slots existed
-        if self.slots.len() > 1 {
-            // All slots exluding the last one must have reward value set to 0.
-            // Slots must already be in correct order (sorted by id).
-            for slot in &self.slots[..self.slots.len() - 1] {
-                validate_slot(
-                    slot,
-                    previous_slot,
-                    &previous_hash,
-                    &previous.header.previous,
-                    &previous.producer.eta,
-                    0,
-                )?;
-                previous_slot = slot;
-            }
-        }
-
-        validate_slot(
-            self.slots.last().unwrap(),
-            previous_slot,
-            &previous_hash,
-            &previous.header.previous,
-            &previous.producer.eta,
-            expected_reward,
-        )?;
-
-        // Check block slot is the last slot id (5)
-        if self.slots.last().unwrap().id != self.header.slot {
-            return error
-        }
-
-        Ok(())
     }
 }
 

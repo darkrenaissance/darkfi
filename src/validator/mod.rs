@@ -45,6 +45,9 @@ pub mod pid;
 pub mod verification;
 use verification::{verify_block, verify_genesis_block, verify_transactions};
 
+/// Validation functions
+pub mod validation;
+
 /// Helper utilities
 pub mod utils;
 use utils::deploy_native_contracts;

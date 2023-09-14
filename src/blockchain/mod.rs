@@ -39,7 +39,7 @@ pub use header_store::{Header, HeaderStore, HeaderStoreOverlay};
 
 /// Slots storage implementation
 pub mod slot_store;
-pub use slot_store::{validate_slot, SlotStore, SlotStoreOverlay};
+pub use slot_store::{SlotStore, SlotStoreOverlay};
 
 /// Transactions related storage implementations
 pub mod tx_store;

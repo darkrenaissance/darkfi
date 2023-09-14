@@ -17,80 +17,12 @@
  */
 
 // [`Slot`] is defined in the sdk so contracts can use it
-use darkfi_sdk::{blockchain::Slot, pasta::pallas};
+use darkfi_sdk::blockchain::Slot;
 use darkfi_serial::{deserialize, serialize};
 
 use crate::{Error, Result};
 
 use super::{parse_u64_key_record, SledDbOverlayPtr};
-
-/// A slot is considered valid when the following rules apply:
-///     1. Id increments previous slot id
-///     2. Forks extend previous block hash
-///     3. Forks follow previous block sequence
-///     4. Slot total tokens represent the total network tokens
-///        up until this slot
-///     5. Slot previous error value correspond to previous slot one
-///     6. PID output for this slot is correct
-///     7. Slot last eta is the expected one
-///     8. Slot reward value is the expected one
-/// Additional validity rules can be applied.
-pub fn validate_slot(
-    slot: &Slot,
-    previous: &Slot,
-    previous_block_hash: &blake3::Hash,
-    previous_block_sequence: &blake3::Hash,
-    last_eta: &pallas::Base,
-    expected_reward: u64,
-) -> Result<()> {
-    let error = Err(Error::SlotIsInvalid(slot.id));
-
-    // Check slots are incremental (1)
-    if slot.id <= previous.id {
-        return error
-    }
-
-    // Check previous block hash (2)
-    if !slot.previous.last_hashes.contains(previous_block_hash) {
-        return error
-    }
-
-    // Check previous block sequence (3)
-    if !slot.previous.second_to_last_hashes.contains(previous_block_sequence) {
-        return error
-    }
-
-    // Check total tokens (4)
-    if slot.total_tokens != previous.total_tokens + previous.reward {
-        return error
-    }
-
-    // Check previous slot error (5)
-    if slot.previous.error != previous.pid.error {
-        return error
-    }
-
-    /* TODO: FIXME: blockchain should not depend on validator
-    // Check PID output for this slot (6)
-    if (slot.pid.f, slot.pid.error, slot.pid.sigma1, slot.pid.sigma2) !=
-        slot_pid_output(previous, slot.previous.producers)
-    {
-        return error
-    }
-    */
-
-    // Check reward is the expected one (7)
-    if &slot.last_eta != last_eta {
-        return error
-    }
-
-    // Check reward is the expected one (8)
-    if slot.reward != expected_reward {
-        return error
-    }
-
-    Ok(())
-}
 
 const SLED_SLOT_TREE: &[u8] = b"_slots";
 

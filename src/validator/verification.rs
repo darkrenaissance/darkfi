@@ -19,7 +19,6 @@
 use std::{collections::HashMap, io::Cursor};
 
 use darkfi_sdk::{
-    blockchain::expected_reward,
     crypto::{PublicKey, CONSENSUS_CONTRACT_ID},
     pasta::pallas,
 };
@@ -27,11 +26,12 @@ use darkfi_serial::{Decodable, Encodable, WriteExt};
 use log::{debug, error, warn};
 
 use crate::{
-    blockchain::{BlockInfo, Blockchain, BlockchainOverlayPtr},
+    blockchain::{BlockInfo, BlockchainOverlayPtr},
     error::TxVerifyFailed,
     runtime::vm_runtime::Runtime,
     tx::Transaction,
     util::time::TimeKeeper,
+    validator::validation::validate_block,
     zk::VerifyingKey,
     Error, Result,
 };
@@ -119,7 +119,7 @@ pub async fn verify_block(
     }
 
     // Validate block, using its previous
-    block.validate(previous, expected_reward)?;
+    validate_block(block, previous, expected_reward)?;
 
     // Validate proposal transaction if not in testing mode
     if !testing_mode {
@@ -222,7 +222,7 @@ pub async fn verify_transaction(
         // Decode the metadata retrieved from the execution
         let mut decoder = Cursor::new(&metadata);
 
-        // The tuple is (zkasa_ns, public_inputs)
+        // The tuple is (zkas_ns, public_inputs)
         let zkp_pub: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
         let sig_pub: Vec<PublicKey> = Decodable::decode(&mut decoder)?;
         // TODO: Make sure we've read all the bytes above.
@@ -328,19 +328,4 @@ pub async fn verify_transactions(
     }
 
     Ok(erroneous_txs)
-}
-
-/// A blockchain is considered valid, when every block is valid,
-/// based on validate_block checks.
-/// Be careful as this will try to load everything in memory.
-pub fn validate_blockchain(blockchain: &Blockchain) -> Result<()> {
-    // We use block order store here so we have all blocks in order
-    let blocks = blockchain.order.get_all()?;
-    for (index, block) in blocks[1..].iter().enumerate() {
-        let full_blocks = blockchain.get_blocks_by_hash(&[blocks[index].1, block.1])?;
-        let expected_reward = expected_reward(full_blocks[1].header.slot);
-        full_blocks[1].validate(&full_blocks[0], expected_reward)?;
-    }
-
-    Ok(())
 }

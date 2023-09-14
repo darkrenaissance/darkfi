@@ -18,7 +18,10 @@
 
 use darkfi::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay, Header},
-    validator::{pid::slot_pid_output, verification::validate_blockchain},
+    validator::{
+        pid::slot_pid_output,
+        validation::{validate_block, validate_blockchain},
+    },
     Error, Result,
 };
 use darkfi_sdk::{
@@ -111,7 +114,7 @@ impl Harness {
                 let expected_reward = expected_reward(block.header.slot);
 
                 // Validate block
-                block.validate(&p, expected_reward)?;
+                validate_block(block, &p, expected_reward)?;
             }
 
             // Insert block
