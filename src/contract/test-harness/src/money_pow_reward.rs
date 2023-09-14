@@ -100,8 +100,31 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyPoWReward).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.read().await.add_transactions(&[tx.clone()], slot, true).await?;
+        wallet.validator.read().await.add_test_producer_transaction(tx, slot, true).await?;
         wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
+        tx_action_benchmark.verify_times.push(timer.elapsed());
+
+        Ok(())
+    }
+
+    pub async fn execute_erroneous_pow_reward_tx(
+        &mut self,
+        holder: &Holder,
+        tx: &Transaction,
+        slot: u64,
+    ) -> Result<()> {
+        let wallet = self.holders.get_mut(holder).unwrap();
+        let tx_action_benchmark =
+            self.tx_action_benchmarks.get_mut(&TxAction::MoneyPoWReward).unwrap();
+        let timer = Instant::now();
+
+        assert!(wallet
+            .validator
+            .read()
+            .await
+            .add_test_producer_transaction(tx, slot, true)
+            .await
+            .is_err());
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())

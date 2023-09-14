@@ -25,7 +25,7 @@
 //! with detection of erroneous transactions.
 
 use darkfi::Result;
-use darkfi_contract_test_harness::{init_logger, Holder, TestHarness, TxAction};
+use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
 use darkfi_sdk::{blockchain::expected_reward, crypto::DARK_TOKEN_ID};
 use log::info;
 
@@ -56,14 +56,8 @@ fn pow_reward() -> Result<()> {
         info!(target: "money", "[Malicious] =======================================");
         info!(target: "money", "[Malicious] Checking PoW reward tx for genesis slot");
         info!(target: "money", "[Malicious] =======================================");
-        th.execute_erroneous_txs(
-            TxAction::MoneyPoWReward,
-            &Holder::Alice,
-            &[pow_reward_tx.clone()],
-            current_slot,
-            1,
-        )
-        .await?;
+        th.execute_erroneous_pow_reward_tx(&Holder::Alice, &pow_reward_tx.clone(), current_slot)
+            .await?;
 
         current_slot += 1;
         th.generate_slot(current_slot).await?;
@@ -78,14 +72,8 @@ fn pow_reward() -> Result<()> {
         info!(target: "money", "[Malicious] =======================================");
         info!(target: "money", "[Malicious] Checking erroneous amount PoW reward tx");
         info!(target: "money", "[Malicious] =======================================");
-        th.execute_erroneous_txs(
-            TxAction::MoneyPoWReward,
-            &Holder::Alice,
-            &[pow_reward_tx.clone()],
-            current_slot,
-            1,
-        )
-        .await?;
+        th.execute_erroneous_pow_reward_tx(&Holder::Alice, &pow_reward_tx.clone(), current_slot)
+            .await?;
 
         info!(target: "money", "[Alice] ======================");
         info!(target: "money", "[Alice] Building PoW reward tx");
