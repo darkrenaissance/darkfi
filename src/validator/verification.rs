@@ -56,23 +56,26 @@ pub async fn verify_genesis_block(
         return Err(Error::VerifyingSlotMissmatch())
     }
 
-    // Check genesis slot exist
-    if block.slots.len() != 1 {
-        return Err(Error::BlockIsInvalid(block_hash))
-    }
+    // Check extra stuff based on block version
+    if block.header.version > 0 {
+        // Check genesis slot exist
+        if block.slots.len() != 1 {
+            return Err(Error::BlockIsInvalid(block_hash))
+        }
 
-    // Retrieve genesis slot
-    let genesis_slot = block.slots.last().unwrap();
+        // Retrieve genesis slot
+        let genesis_slot = block.slots.last().unwrap();
 
-    // Genesis block slot total token must correspond to the total
-    // of all genesis transactions public inputs (genesis distribution).
-    if genesis_slot.total_tokens != genesis_txs_total {
-        return Err(Error::SlotIsInvalid(genesis_slot.id))
-    }
+        // Genesis block slot total token must correspond to the total
+        // of all genesis transactions public inputs (genesis distribution).
+        if genesis_slot.total_tokens != genesis_txs_total {
+            return Err(Error::SlotIsInvalid(genesis_slot.id))
+        }
 
-    // Verify there is no reward
-    if genesis_slot.reward != 0 {
-        return Err(Error::SlotIsInvalid(genesis_slot.id))
+        // Verify there is no reward
+        if genesis_slot.reward != 0 {
+            return Err(Error::SlotIsInvalid(genesis_slot.id))
+        }
     }
 
     // Verify transactions vector contains at least one(producers) transaction

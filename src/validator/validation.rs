@@ -53,43 +53,46 @@ pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, expected_reward: 
         return error
     }
 
-    // Verify slots (4)
-    if block.slots.is_empty() {
-        return error
-    }
-
-    // Retrieve previous block last slot
-    let mut previous_slot = previous.slots.last().unwrap();
-
-    // Check if empty slots existed
-    if block.slots.len() > 1 {
-        // All slots exluding the last one must have reward value set to 0.
-        // Slots must already be in correct order (sorted by id).
-        for slot in &block.slots[..block.slots.len() - 1] {
-            validate_slot(
-                slot,
-                previous_slot,
-                &previous_hash,
-                &previous.header.previous,
-                &previous.eta,
-                0,
-            )?;
-            previous_slot = slot;
+    // Check extra stuff based on block version
+    if block.header.version > 0 {
+        // Verify slots (4)
+        if block.slots.is_empty() {
+            return error
         }
-    }
 
-    validate_slot(
-        block.slots.last().unwrap(),
-        previous_slot,
-        &previous_hash,
-        &previous.header.previous,
-        &previous.eta,
-        expected_reward,
-    )?;
+        // Retrieve previous block last slot
+        let mut previous_slot = previous.slots.last().unwrap();
 
-    // Check block slot is the last slot id (5)
-    if block.slots.last().unwrap().id != block.header.slot {
-        return error
+        // Check if empty slots existed
+        if block.slots.len() > 1 {
+            // All slots exluding the last one must have reward value set to 0.
+            // Slots must already be in correct order (sorted by id).
+            for slot in &block.slots[..block.slots.len() - 1] {
+                validate_slot(
+                    slot,
+                    previous_slot,
+                    &previous_hash,
+                    &previous.header.previous,
+                    &previous.eta,
+                    0,
+                )?;
+                previous_slot = slot;
+            }
+        }
+
+        validate_slot(
+            block.slots.last().unwrap(),
+            previous_slot,
+            &previous_hash,
+            &previous.header.previous,
+            &previous.eta,
+            expected_reward,
+        )?;
+
+        // Check block slot is the last slot id (5)
+        if block.slots.last().unwrap().id != block.header.slot {
+            return error
+        }
     }
 
     Ok(())
