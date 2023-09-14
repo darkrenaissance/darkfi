@@ -43,7 +43,9 @@ pub mod pid;
 
 /// Verification functions
 pub mod verification;
-use verification::{verify_block, verify_genesis_block, verify_transactions};
+use verification::{
+    verify_block, verify_genesis_block, verify_producer_transaction, verify_transactions,
+};
 
 /// Validation functions
 pub mod validation;
@@ -390,6 +392,54 @@ impl Validator {
         debug!(target: "validator::receive_test_slot", "Appending slot to ledger");
         self.blockchain.slots.insert(&[slot.clone()])?;
 
+        Ok(())
+    }
+
+    /// Validate a producer `Transaction` and apply it if valid.
+    /// In case the transactions fail, ir will be returned to the caller.
+    /// The function takes a boolean called `write` which tells it to actually write
+    /// the state transitions to the database.
+    /// This should be only used for test purposes.
+    pub async fn add_test_producer_transaction(
+        &self,
+        tx: &Transaction,
+        verifying_slot: u64,
+        write: bool,
+    ) -> Result<()> {
+        debug!(target: "validator::add_test_producer_transaction", "Instantiating BlockchainOverlay");
+        let overlay = BlockchainOverlay::new(&self.blockchain)?;
+
+        // Generate a time keeper using transaction verifying slot
+        let time_keeper = TimeKeeper::new(
+            self.consensus.time_keeper.genesis_ts,
+            self.consensus.time_keeper.epoch_length,
+            self.consensus.time_keeper.slot_time,
+            verifying_slot,
+        );
+
+        // Verify transaction
+        let mut erroneous_txs = vec![];
+        if let Err(e) = verify_producer_transaction(&overlay, &time_keeper, tx).await {
+            warn!(target: "validator::add_test_producer_transaction", "Transaction verification failed: {}", e);
+            erroneous_txs.push(tx.clone());
+        }
+
+        let lock = overlay.lock().unwrap();
+        let mut overlay = lock.overlay.lock().unwrap();
+        if !erroneous_txs.is_empty() {
+            warn!(target: "validator::add_test_producer_transaction", "Erroneous transactions found in set");
+            overlay.purge_new_trees()?;
+            return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
+        }
+
+        if !write {
+            debug!(target: "validator::add_test_producer_transaction", "Skipping apply of state updates because write=false");
+            overlay.purge_new_trees()?;
+            return Ok(())
+        }
+
+        debug!(target: "validator::add_test_producer_transaction", "Applying overlay changes");
+        overlay.apply()?;
         Ok(())
     }
 
