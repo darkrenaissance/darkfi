@@ -49,8 +49,6 @@ pub struct Block {
     pub txs: Vec<blake3::Hash>,
     /// Block producer signature
     pub signature: Signature,
-    /// Proposal transaction
-    pub proposal: Transaction,
     /// Block producer ETA
     pub eta: pallas::Base,
     /// Slots up until this block
@@ -62,12 +60,11 @@ impl Block {
         header: blake3::Hash,
         txs: Vec<blake3::Hash>,
         signature: Signature,
-        proposal: Transaction,
         eta: pallas::Base,
         slots: Vec<u64>,
     ) -> Self {
         let magic = BLOCK_MAGIC_BYTES;
-        Self { magic, header, txs, signature, proposal, eta, slots }
+        Self { magic, header, txs, signature, eta, slots }
     }
 
     /// Calculate the block hash
@@ -87,8 +84,6 @@ pub struct BlockInfo {
     pub txs: Vec<Transaction>,
     /// Block producer signature
     pub signature: Signature,
-    /// Proposal transaction
-    pub proposal: Transaction,
     /// Block producer ETA
     pub eta: pallas::Base,
     /// Slots payload
@@ -102,9 +97,8 @@ impl Default for BlockInfo {
         Self {
             magic,
             header: Header::default(),
-            txs: vec![],
+            txs: vec![Transaction::default()],
             signature: Signature::dummy(),
-            proposal: Transaction::default(),
             eta: pallas::Base::ZERO,
             slots: vec![Slot::default()],
         }
@@ -116,12 +110,11 @@ impl BlockInfo {
         header: Header,
         txs: Vec<Transaction>,
         signature: Signature,
-        proposal: Transaction,
         eta: pallas::Base,
         slots: Vec<Slot>,
     ) -> Self {
         let magic = BLOCK_MAGIC_BYTES;
-        Self { magic, header, txs, signature, proposal, eta, slots }
+        Self { magic, header, txs, signature, eta, slots }
     }
 
     /// Calculate the block hash
@@ -140,7 +133,6 @@ impl From<BlockInfo> for Block {
             header: block_info.header.headerhash().unwrap(),
             txs,
             signature: block_info.signature,
-            proposal: block_info.proposal,
             eta: block_info.eta,
             slots,
         }

@@ -82,14 +82,7 @@ impl Harness {
         let header =
             Header::new(previous_hash, previous.header.epoch, id, timestamp, previous.header.root);
 
-        BlockInfo::new(
-            header,
-            vec![],
-            previous.signature,
-            previous.proposal.clone(),
-            previous.eta,
-            vec![slot],
-        )
+        BlockInfo::new(header, previous.txs.clone(), previous.signature, previous.eta, vec![slot])
     }
 
     fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {

@@ -22,6 +22,7 @@ use darkfi::{
     blockchain::{BlockInfo, Header},
     net::Settings,
     rpc::jsonrpc::JsonSubscriber,
+    tx::Transaction,
     util::time::TimeKeeper,
     validator::{pid::slot_pid_output, Validator, ValidatorConfig},
     Result,
@@ -64,9 +65,13 @@ impl Harness {
         // Generate default genesis block
         let mut genesis_block = BlockInfo::default();
 
+        // Retrieve genesis producer transaction
+        let producer_tx = genesis_block.txs.pop().unwrap();
+
         // Append genesis transactions and calculate their total
         genesis_block.txs.push(genesis_stake_tx);
         genesis_block.txs.push(genesis_mint_tx);
+        genesis_block.txs.push(producer_tx);
         let genesis_txs_total = genesis_txs_total(&genesis_block.txs)?;
         genesis_block.slots[0].total_tokens = genesis_txs_total;
 
@@ -201,9 +206,8 @@ impl Harness {
         // Generate block
         let block = BlockInfo::new(
             header,
-            vec![],
+            vec![Transaction::default()],
             previous.signature,
-            previous.proposal.clone(),
             previous.eta,
             slots,
         );

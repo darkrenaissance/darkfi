@@ -128,8 +128,11 @@ impl Consensus {
         }
         let fork = &self.forks[fork_index];
 
-        // Grab forks' unproposed transactions and their root
-        let unproposed_txs = fork.unproposed_txs(&self.blockchain, &time_keeper).await?;
+        // Grab forks' unproposed transactions
+        let mut unproposed_txs = fork.unproposed_txs(&self.blockchain, &time_keeper).await?;
+        unproposed_txs.push(proposal_tx);
+
+        // Calculate transactions tree root
         let mut tree = MerkleTree::new(100);
         // The following is pretty weird, so something better should be done.
         for tx in &unproposed_txs {
@@ -158,14 +161,8 @@ impl Consensus {
         let signature = secret_key.sign(&mut OsRng, &header.headerhash()?.as_bytes()[..]);
 
         // Generate the block and its proposal
-        let block = BlockInfo::new(
-            header,
-            unproposed_txs,
-            signature,
-            proposal_tx,
-            slot.last_eta,
-            fork.slots.clone(),
-        );
+        let block =
+            BlockInfo::new(header, unproposed_txs, signature, slot.last_eta, fork.slots.clone());
         let proposal = Proposal::new(block);
 
         Ok(proposal)

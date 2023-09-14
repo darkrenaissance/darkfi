@@ -41,10 +41,16 @@ use crate::proto::{ProtocolBlock, ProtocolProposal, ProtocolSync, ProtocolTx};
 /// Auxiliary function to calculate the total amount of minted tokens in provided
 /// genesis transactions set. This includes both staked and normal tokens.
 /// If a non-genesis transaction is found, execution fails.
+/// Set must also include the genesis transaction(empty) at last position.
 pub fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
     let mut total = 0;
 
-    for tx in txs {
+    if txs.is_empty() {
+        return Ok(total)
+    }
+
+    // Iterate transactions, exluding producer(last) one
+    for tx in &txs[..txs.len() - 1] {
         // Transaction must contain a single Consensus::GenesisStake or Money::GenesisMint call
         if tx.calls.len() != 1 {
             return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
@@ -67,6 +73,11 @@ pub fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
         };
 
         total += value;
+    }
+
+    let tx = txs.last().unwrap();
+    if tx != &Transaction::default() {
+        return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
 
     Ok(total)

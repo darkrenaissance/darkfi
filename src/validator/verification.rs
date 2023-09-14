@@ -70,19 +70,26 @@ pub async fn verify_genesis_block(
         return Err(Error::SlotIsInvalid(genesis_slot.id))
     }
 
-    // Verify there is not reward
+    // Verify there is no reward
     if genesis_slot.reward != 0 {
         return Err(Error::SlotIsInvalid(genesis_slot.id))
     }
 
-    // Genesis transaction must be the Transaction::default() one (empty)
-    if block.proposal != Transaction::default() {
-        error!(target: "validator::verification::verify_genesis_block", "Genesis proposal transaction is not default one");
-        return Err(TxVerifyFailed::ErroneousTxs(vec![block.proposal.clone()]).into())
+    // Verify transactions vector contains at least one(producers) transaction
+    if block.txs.is_empty() {
+        return Err(Error::BlockContainsNoTransactions(block_hash))
     }
 
-    // Verify transactions
-    let erroneous_txs = verify_transactions(overlay, time_keeper, &block.txs).await?;
+    // Genesis transaction must be the Transaction::default() one(empty)
+    let tx = block.txs.last().unwrap();
+    if tx != &Transaction::default() {
+        error!(target: "validator::verification::verify_genesis_block", "Genesis proposal transaction is not default one");
+        return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+    }
+
+    // Verify transactions, exluding producer(last) one
+    let txs = &block.txs[..block.txs.len() - 1];
+    let erroneous_txs = verify_transactions(overlay, time_keeper, txs).await?;
     if !erroneous_txs.is_empty() {
         warn!(target: "validator::verification::verify_genesis_block", "Erroneous transactions found in set");
         overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
@@ -121,14 +128,21 @@ pub async fn verify_block(
     // Validate block, using its previous
     validate_block(block, previous, expected_reward)?;
 
+    // Verify transactions vector contains at least one(producers) transaction
+    if block.txs.is_empty() {
+        return Err(Error::BlockContainsNoTransactions(block_hash))
+    }
+
     // Validate proposal transaction if not in testing mode
     if !testing_mode {
-        verify_proposal_transaction(overlay, time_keeper, &block.proposal).await?;
+        let tx = block.txs.last().unwrap();
+        verify_proposal_transaction(overlay, time_keeper, tx).await?;
         verify_producer_signature(block)?;
     }
 
-    // Verify transactions
-    let erroneous_txs = verify_transactions(overlay, time_keeper, &block.txs).await?;
+    // Verify transactions, exluding producer(last) one
+    let txs = &block.txs[..block.txs.len() - 1];
+    let erroneous_txs = verify_transactions(overlay, time_keeper, txs).await?;
     if !erroneous_txs.is_empty() {
         warn!(target: "validator::verification::verify_block", "Erroneous transactions found in set");
         overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;

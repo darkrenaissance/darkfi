@@ -192,14 +192,7 @@ impl Blockchain {
             let slots = self.slots.get(&block.slots, true)?;
             let slots = slots.iter().map(|x| x.clone().unwrap()).collect();
 
-            let info = BlockInfo::new(
-                header,
-                txs,
-                block.signature,
-                block.proposal.clone(),
-                block.eta,
-                slots,
-            );
+            let info = BlockInfo::new(header, txs, block.signature, block.eta, slots);
             ret.push(info);
         }
 
@@ -514,14 +507,7 @@ impl BlockchainOverlay {
             let slots = self.slots.get(&block.slots, true)?;
             let slots = slots.iter().map(|x| x.clone().unwrap()).collect();
 
-            let info = BlockInfo::new(
-                header,
-                txs,
-                block.signature,
-                block.proposal.clone(),
-                block.eta,
-                slots,
-            );
+            let info = BlockInfo::new(header, txs, block.signature, block.eta, slots);
             ret.push(info);
         }
 

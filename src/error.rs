@@ -360,6 +360,9 @@ pub enum Error {
     #[error("Block with order number {0} not found in database")]
     BlockNumberNotFound(u64),
 
+    #[error("Block {0} contains 0 transactions")]
+    BlockContainsNoTransactions(String),
+
     #[error("Verifying slot missmatch")]
     VerifyingSlotMissmatch(),
 
