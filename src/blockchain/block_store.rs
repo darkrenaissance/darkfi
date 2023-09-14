@@ -47,8 +47,12 @@ pub struct Block {
     pub header: blake3::Hash,
     /// Trasaction hashes
     pub txs: Vec<blake3::Hash>,
-    /// Block producer info
-    pub producer: BlockProducer,
+    /// Block producer signature
+    pub signature: Signature,
+    /// Proposal transaction
+    pub proposal: Transaction,
+    /// Block producer ETA
+    pub eta: pallas::Base,
     /// Slots up until this block
     pub slots: Vec<u64>,
 }
@@ -57,11 +61,13 @@ impl Block {
     pub fn new(
         header: blake3::Hash,
         txs: Vec<blake3::Hash>,
-        producer: BlockProducer,
+        signature: Signature,
+        proposal: Transaction,
+        eta: pallas::Base,
         slots: Vec<u64>,
     ) -> Self {
         let magic = BLOCK_MAGIC_BYTES;
-        Self { magic, header, txs, producer, slots }
+        Self { magic, header, txs, signature, proposal, eta, slots }
     }
 
     /// Calculate the block hash
@@ -79,8 +85,12 @@ pub struct BlockInfo {
     pub header: Header,
     /// Transactions payload
     pub txs: Vec<Transaction>,
-    /// Block producer info
-    pub producer: BlockProducer,
+    /// Block producer signature
+    pub signature: Signature,
+    /// Proposal transaction
+    pub proposal: Transaction,
+    /// Block producer ETA
+    pub eta: pallas::Base,
     /// Slots payload
     pub slots: Vec<Slot>,
 }
@@ -93,7 +103,9 @@ impl Default for BlockInfo {
             magic,
             header: Header::default(),
             txs: vec![],
-            producer: BlockProducer::default(),
+            signature: Signature::dummy(),
+            proposal: Transaction::default(),
+            eta: pallas::Base::ZERO,
             slots: vec![Slot::default()],
         }
     }
@@ -103,11 +115,13 @@ impl BlockInfo {
     pub fn new(
         header: Header,
         txs: Vec<Transaction>,
-        producer: BlockProducer,
+        signature: Signature,
+        proposal: Transaction,
+        eta: pallas::Base,
         slots: Vec<Slot>,
     ) -> Self {
         let magic = BLOCK_MAGIC_BYTES;
-        Self { magic, header, txs, producer, slots }
+        Self { magic, header, txs, signature, proposal, eta, slots }
     }
 
     /// Calculate the block hash
@@ -125,7 +139,9 @@ impl From<BlockInfo> for Block {
             magic: block_info.magic,
             header: block_info.header.headerhash().unwrap(),
             txs,
-            producer: block_info.producer,
+            signature: block_info.signature,
+            proposal: block_info.proposal,
+            eta: block_info.eta,
             slots,
         }
     }
@@ -474,31 +490,5 @@ impl BlockOrderStoreOverlay {
     /// Check if overlay contains any records
     pub fn is_empty(&self) -> Result<bool> {
         Ok(self.0.lock().unwrap().is_empty(SLED_BLOCK_ORDER_TREE)?)
-    }
-}
-
-/// This struct represents [`Block`] producer information.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct BlockProducer {
-    /// Block producer signature
-    pub signature: Signature,
-    /// Proposal transaction
-    pub proposal: Transaction,
-    /// Block producer ETA
-    pub eta: pallas::Base,
-}
-
-impl BlockProducer {
-    pub fn new(signature: Signature, proposal: Transaction, eta: pallas::Base) -> Self {
-        Self { signature, proposal, eta }
-    }
-}
-
-impl Default for BlockProducer {
-    fn default() -> Self {
-        let signature = Signature::dummy();
-        let proposal = Transaction::default();
-        let eta = pallas::Base::ZERO;
-        Self { signature, proposal, eta }
     }
 }

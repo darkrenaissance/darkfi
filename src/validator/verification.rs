@@ -76,9 +76,9 @@ pub async fn verify_genesis_block(
     }
 
     // Genesis transaction must be the Transaction::default() one (empty)
-    if block.producer.proposal != Transaction::default() {
+    if block.proposal != Transaction::default() {
         error!(target: "validator::verification::verify_genesis_block", "Genesis proposal transaction is not default one");
-        return Err(TxVerifyFailed::ErroneousTxs(vec![block.producer.proposal.clone()]).into())
+        return Err(TxVerifyFailed::ErroneousTxs(vec![block.proposal.clone()]).into())
     }
 
     // Verify transactions
@@ -123,7 +123,7 @@ pub async fn verify_block(
 
     // Validate proposal transaction if not in testing mode
     if !testing_mode {
-        verify_proposal_transaction(overlay, time_keeper, &block.producer.proposal).await?;
+        verify_proposal_transaction(overlay, time_keeper, &block.proposal).await?;
         verify_producer_signature(block)?;
     }
 

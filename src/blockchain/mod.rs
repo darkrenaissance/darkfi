@@ -29,8 +29,7 @@ use crate::{tx::Transaction, Error, Result};
 /// Block related definitions and storage implementations
 pub mod block_store;
 pub use block_store::{
-    Block, BlockInfo, BlockOrderStore, BlockOrderStoreOverlay, BlockProducer, BlockStore,
-    BlockStoreOverlay,
+    Block, BlockInfo, BlockOrderStore, BlockOrderStoreOverlay, BlockStore, BlockStoreOverlay,
 };
 
 /// Header definition and storage implementation
@@ -193,7 +192,14 @@ impl Blockchain {
             let slots = self.slots.get(&block.slots, true)?;
             let slots = slots.iter().map(|x| x.clone().unwrap()).collect();
 
-            let info = BlockInfo::new(header, txs, block.producer.clone(), slots);
+            let info = BlockInfo::new(
+                header,
+                txs,
+                block.signature,
+                block.proposal.clone(),
+                block.eta,
+                slots,
+            );
             ret.push(info);
         }
 
@@ -508,7 +514,14 @@ impl BlockchainOverlay {
             let slots = self.slots.get(&block.slots, true)?;
             let slots = slots.iter().map(|x| x.clone().unwrap()).collect();
 
-            let info = BlockInfo::new(header, txs, block.producer.clone(), slots);
+            let info = BlockInfo::new(
+                header,
+                txs,
+                block.signature,
+                block.proposal.clone(),
+                block.eta,
+                slots,
+            );
             ret.push(info);
         }
 

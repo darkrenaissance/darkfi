@@ -199,7 +199,14 @@ impl Harness {
         );
 
         // Generate block
-        let block = BlockInfo::new(header, vec![], previous.producer.clone(), slots);
+        let block = BlockInfo::new(
+            header,
+            vec![],
+            previous.signature,
+            previous.proposal.clone(),
+            previous.eta,
+            slots,
+        );
 
         Ok(block)
     }

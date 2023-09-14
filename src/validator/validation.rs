@@ -71,7 +71,7 @@ pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, expected_reward: 
                 previous_slot,
                 &previous_hash,
                 &previous.header.previous,
-                &previous.producer.eta,
+                &previous.eta,
                 0,
             )?;
             previous_slot = slot;
@@ -83,7 +83,7 @@ pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, expected_reward: 
         previous_slot,
         &previous_hash,
         &previous.header.previous,
-        &previous.producer.eta,
+        &previous.eta,
         expected_reward,
     )?;
 

@@ -26,9 +26,7 @@ use log::{error, info, warn};
 use rand::rngs::OsRng;
 
 use crate::{
-    blockchain::{
-        BlockInfo, BlockProducer, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header,
-    },
+    blockchain::{BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header},
     tx::Transaction,
     util::time::{TimeKeeper, Timestamp},
     validator::{pid::slot_pid_output, verify_block, verify_transactions},
@@ -159,11 +157,15 @@ impl Consensus {
         // Sign block header using provided secret key
         let signature = secret_key.sign(&mut OsRng, &header.headerhash()?.as_bytes()[..]);
 
-        // Generate block producer info
-        let block_producer = BlockProducer::new(signature, proposal_tx, slot.last_eta);
-
         // Generate the block and its proposal
-        let block = BlockInfo::new(header, unproposed_txs, block_producer, fork.slots.clone());
+        let block = BlockInfo::new(
+            header,
+            unproposed_txs,
+            signature,
+            proposal_tx,
+            slot.last_eta,
+            fork.slots.clone(),
+        );
         let proposal = Proposal::new(block);
 
         Ok(proposal)
