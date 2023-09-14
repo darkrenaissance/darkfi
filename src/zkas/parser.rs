@@ -890,6 +890,11 @@ impl Parser {
                     ))
                 }
 
+                // At this stage of parsing, we should have assigned `stmt` a StatementType that is
+                // not a Noop. If we have failed to do so, we cannot proceed because Nooops must
+                // never be pased to the compiler. This can occur when multiple independent
+                // statements are passed on one line, or if a statement is not terminated by a
+                // semicolon.
                 if stmt.typ == StatementType::Noop {
                     return Err(self.error.abort(
                         "Statement is a NOOP; not allowed. (Did you miss a semicolon?)",
