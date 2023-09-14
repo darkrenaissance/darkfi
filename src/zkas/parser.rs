@@ -890,6 +890,14 @@ impl Parser {
                     ))
                 }
 
+                if stmt.typ == StatementType::Noop {
+                    return Err(self.error.abort(
+                        "Statement is a NOOP; not allowed. (Did you miss a semicolon?)",
+                        token.line,
+                        token.column,
+                    ))
+                }
+
                 ret.push(stmt);
                 stmt = Statement::default();
             }
