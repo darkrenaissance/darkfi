@@ -111,8 +111,7 @@ impl Compiler {
                 StatementType::Assign => tmp_heap.push(&i.lhs.as_ref().unwrap().name),
                 // In case of a simple call, we don't append anything to the heap
                 StatementType::Call => {}
-                // TODO: FIXME: unreachable is reached with missing semicolons in the code
-                _ => unreachable!(),
+                _ => unreachable!("Invalid statement type in circuit: {:?}", i.typ),
             }
 
             bincode.push(i.opcode as u8);
