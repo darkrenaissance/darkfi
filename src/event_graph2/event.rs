@@ -56,6 +56,11 @@ impl Event {
         hasher.finalize()
     }
 
+    /// Return a reference to the event's content
+    pub fn content(&self) -> &[u8] {
+        &self.content
+    }
+
     /*
     /// Check if an [`Event`] is considered too old.
     fn is_too_old(&self) -> bool {

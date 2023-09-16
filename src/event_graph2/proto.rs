@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+// TODO: FIXME: Some of the protocols should block operations until DAG is synced.
+
 use std::{
     sync::{
         atomic::{AtomicUsize, Ordering::SeqCst},
@@ -279,7 +281,7 @@ impl ProtocolEventGraph {
                 // We should add them to the DAG.
                 // TODO: FIXME: Also validate these events.
                 for event in received_events.iter().rev() {
-                    self.event_graph.dag_insert(event).await.unwrap();
+                    self.event_graph.dag_insert(event.clone()).await.unwrap();
                 }
             } // <-- !missing_parents.is_empty()
 
@@ -289,7 +291,7 @@ impl ProtocolEventGraph {
                 target: "event_graph::protocol::handle_event_put()",
                 "Got all parents necessary for insertion",
             );
-            self.event_graph.dag_insert(&event).await.unwrap();
+            self.event_graph.dag_insert(event.clone()).await.unwrap();
 
             // Relay the event to other peers.
             self.event_graph
