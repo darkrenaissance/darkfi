@@ -16,83 +16,44 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::{collections::HashSet, sync::Arc};
 
-use darkfi::{util::path::get_config_path, Result};
+use crypto_box::ChaChaBox;
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
-use crate::{
-    settings::{
-        parse_configured_channels, parse_configured_contacts, Args, ChannelInfo, ContactInfo,
-        CONFIG_FILE, MAXIMUM_LENGTH_OF_NICK_CHAN_CNT,
-    },
-    PrivMsgEvent,
-};
+/// IRC client state
+pub(crate) mod client;
 
-mod client;
-pub use client::IrcClient;
+/// IRC server implementation
+pub(crate) mod server;
 
-mod server;
-pub use server::IrcServer;
+/// IRC command handler
+pub(crate) mod command;
 
-#[derive(Clone)]
-pub struct IrcConfig {
-    // init bool
-    pub is_nick_init: bool,
-    pub is_user_init: bool,
-    pub is_registered: bool,
-    pub is_cap_end: bool,
-    pub is_pass_init: bool,
+/// IRC numerics and server replies
+pub(crate) mod rpl;
 
-    // user config
+/// Hardcoded server name
+const SERVER_NAME: &str = "irc.dark.fi";
+
+/// IRC PRIVMSG
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct Privmsg {
+    pub channel: String,
     pub nick: String,
-    pub pass: String,
-    pub caps: HashMap<String, bool>,
-
-    // channels and contacts
-    pub auto_channels: Vec<String>,
-    pub channels: HashMap<String, ChannelInfo>,
-    pub contacts: HashMap<String, ContactInfo>,
+    pub msg: String,
 }
 
-impl IrcConfig {
-    pub fn new(settings: &Args) -> Result<Self> {
-        let pass = settings.password.as_ref().unwrap_or(&String::new()).clone();
-
-        let mut auto_channels = settings.autojoin.clone();
-        auto_channels.retain(|chan| chan.len() <= MAXIMUM_LENGTH_OF_NICK_CHAN_CNT);
-
-        // Pick up channel settings from the TOML configuration
-        let cfg_path = get_config_path(settings.config.clone(), CONFIG_FILE)?;
-        let toml_contents = std::fs::read_to_string(cfg_path)?;
-        let channels = parse_configured_channels(&toml_contents)?;
-        let contacts = parse_configured_contacts(&toml_contents)?;
-
-        let mut caps = HashMap::new();
-        caps.insert("no-history".to_string(), false);
-
-        Ok(Self {
-            is_nick_init: false,
-            is_user_init: false,
-            is_registered: false,
-            is_cap_end: true,
-            is_pass_init: false,
-            nick: "anon".to_string(),
-            pass,
-            auto_channels,
-            channels,
-            contacts,
-            caps,
-        })
-    }
-}
-
+/// IRC channel definition
 #[derive(Clone)]
-pub enum ClientSubMsg {
-    Privmsg(PrivMsgEvent),
-    Config(IrcConfig),
+pub struct IrcChannel {
+    pub topic: String,
+    pub nicks: HashSet<String>,
+    pub saltbox: Option<Arc<ChaChaBox>>,
 }
+
+/// IRC contact definition
 #[derive(Clone)]
-pub enum NotifierMsg {
-    Privmsg(PrivMsgEvent),
-    UpdateConfig,
+pub struct IrcContact {
+    pub saltbox: Option<Arc<ChaChaBox>>,
 }

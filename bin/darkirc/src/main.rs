@@ -15,205 +15,177 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
-
-use chrono::{Duration, Utc};
-use irc::ClientSubMsg;
-use log::{debug, error, info};
-use rand::rngs::OsRng;
-use smol::{fs::create_dir_all, lock::Mutex, stream::StreamExt};
-use structopt_toml::StructOptToml;
-use tinyjson::JsonValue;
+use std::{collections::HashSet, sync::Arc};
 
 use darkfi::{
-    async_daemonize,
-    event_graph::{
-        events_queue::EventsQueue,
-        model::{Model, ModelPtr},
-        protocol_event::{ProtocolEvent, Seen},
-        view::View,
-    },
-    net,
+    async_daemonize, cli_desc,
+    event_graph2::{proto::ProtocolEventGraph, EventGraph, EventGraphPtr},
+    net::{settings::SettingsOpt, P2p, P2pPtr, SESSION_ALL},
     rpc::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
     },
-    system::{sleep, StoppableTask, Subscriber, SubscriberPtr},
-    util::{file::save_json_file, path::expand_path, time::Timestamp},
+    system::{StoppableTask, StoppableTaskPtr},
+    util::path::{expand_path, get_config_path},
     Error, Result,
 };
+use log::{debug, error, info};
+use rand::rngs::OsRng;
+use smol::{fs, lock::Mutex, stream::StreamExt, Executor};
+use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
+use url::Url;
 
-pub mod crypto;
-pub mod irc;
-pub mod privmsg;
-pub mod rpc;
-pub mod settings;
+const CONFIG_FILE: &str = "darkirc_config.toml";
+const CONFIG_FILE_CONTENTS: &str = include_str!("../darkirc_config.toml");
 
-use crate::{
-    crypto::saltbox::KeyPair,
-    irc::{IrcConfig, IrcServer},
-    privmsg::PrivMsgEvent,
-    rpc::JsonRpcInterface,
-    settings::{Args, ChannelInfo, CONFIG_FILE, CONFIG_FILE_CONTENTS},
-};
+/// IRC server and client handler implementation
+mod irc;
+use irc::server::IrcServer;
 
-async fn parse_signals(
-    sighup_sub: SubscriberPtr<Args>,
-    client_sub: SubscriberPtr<ClientSubMsg>,
-) -> Result<()> {
-    debug!("Started signal parsing handler");
-    let subscription = sighup_sub.subscribe().await;
-    loop {
-        let args = subscription.receive().await;
-        let new_config = IrcConfig::new(&args)?;
-        client_sub.notify(ClientSubMsg::Config(new_config)).await;
-    }
+/// Cryptography utilities
+mod crypto;
+
+/// JSON-RPC methods
+mod rpc;
+
+/// Settings utilities
+mod settings;
+
+#[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
+#[serde(default)]
+#[structopt(name = "darkirc", about = cli_desc!())]
+struct Args {
+    #[structopt(short, parse(from_occurrences))]
+    /// Increase verbosity (-vvv supported)
+    verbose: u8,
+
+    #[structopt(short, long)]
+    /// Configuration file to use
+    config: Option<String>,
+
+    #[structopt(long)]
+    /// Set log file output
+    log: Option<String>,
+
+    #[structopt(long, default_value = "tcp://127.0.0.1:26660")]
+    /// RPC server listen address
+    rpc_listen: Url,
+
+    #[structopt(long, default_value = "tcp://127.0.0.1:6667")]
+    /// IRC server listen address
+    irc_listen: Url,
+
+    /// Optional TLS certificate file path if `irc_listen` uses TLS
+    irc_tls_cert: Option<String>,
+
+    /// Optional TLS certificate key file path if `irc_listen` uses TLS
+    irc_tls_secret: Option<String>,
+
+    #[structopt(short, long, default_value = "~/.local/darkfi/darkirc_db")]
+    /// Datastore (DB) path
+    datastore: String,
+
+    /// Generate a new NaCl keypair and exit
+    #[structopt(long)]
+    gen_chacha_keypair: bool,
+
+    /// Generate a new encrypted channel NaCl secret and exit
+    #[structopt(long)]
+    gen_channel_secret: bool,
+
+    /// Recover NaCl public key from a secret key
+    #[structopt(long)]
+    get_chacha_pubkey: Option<String>,
+
+    /// P2P network settings
+    #[structopt(flatten)]
+    net: SettingsOpt,
 }
 
-// Removes events older than one week ,then sleeps untill next midnight
-async fn remove_old_events(model: ModelPtr<PrivMsgEvent>) -> Result<()> {
-    loop {
-        let now = Utc::now();
+pub struct DarkIrc {
+    /// P2P network pointer
+    p2p: P2pPtr,
+    /// Event Graph instance
+    event_graph: EventGraphPtr,
+    /// JSON-RPC connection tracker
+    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    /// dnet JSON-RPC subscriber
+    dnet_sub: JsonSubscriber,
+}
 
-        // clocks are valid, safe to unwrap
-        let next_midnight = (now + Duration::days(1)).date_naive().and_hms_opt(0, 0, 0).unwrap();
-
-        let duration = next_midnight.signed_duration_since(now.naive_utc()).to_std().unwrap();
-
-        let week_old_datetime =
-            (now - Duration::weeks(1)).date_naive().and_hms_opt(0, 0, 0).unwrap();
-        let timestamp = week_old_datetime.timestamp() as u64;
-
-        model.lock().await.remove_old_events(Timestamp(timestamp))?;
-        info!("Removing old events");
-
-        sleep(duration.as_secs() + 1).await;
+impl DarkIrc {
+    fn new(p2p: P2pPtr, event_graph: EventGraphPtr, dnet_sub: JsonSubscriber) -> Self {
+        Self { p2p, event_graph, rpc_connections: Mutex::new(HashSet::new()), dnet_sub }
     }
 }
 
 async_daemonize!(realmain);
-async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Result<()> {
-    let datastore_path = expand_path(&settings.datastore)?;
-
-    // mkdir datastore_path if not exists
-    create_dir_all(datastore_path.clone()).await?;
-
-    // Signal handling for config reload and graceful termination.
-    let (signals_handler, signals_task) = SignalHandler::new(executor.clone())?;
-    let client_sub = Subscriber::new();
-    executor.spawn(parse_signals(signals_handler.sighup_sub.clone(), client_sub.clone())).detach();
-
-    ////////////////////
-    // Generate new keypair and exit
-    ////////////////////
-    if settings.gen_keypair {
-        let secret_key = crypto_box::SecretKey::generate(&mut OsRng);
-        let public_key = secret_key.public_key();
-        let secret = bs58::encode(secret_key.to_bytes()).into_string();
-        let public = bs58::encode(public_key.as_bytes()).into_string();
-
-        let kp = KeyPair { secret, public };
-
-        if settings.output.is_some() {
-            let datastore = expand_path(&settings.output.unwrap())?;
-            let kp_enc = JsonValue::Object(HashMap::from([
-                ("public".to_string(), JsonValue::String(kp.public)),
-                ("secret".to_string(), JsonValue::String(kp.secret)),
-            ]));
-            save_json_file(&datastore, &kp_enc, false)?;
-        } else {
-            println!("Generated keypair:\n{}", kp);
-        }
-
+async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
+    if args.gen_chacha_keypair {
+        let secret = crypto_box::SecretKey::generate(&mut OsRng);
+        let public = secret.public_key();
+        let secret = bs58::encode(secret.to_bytes()).into_string();
+        let public = bs58::encode(public.to_bytes()).into_string();
+        println!("Place this in your config file:\n");
+        println!("[crypto]");
+        println!("#dm_chacha_public = \"{}\"", public);
+        println!("dm_chacha_secret = \"{}\"", secret);
         return Ok(())
     }
 
-    if settings.secret.is_some() {
-        let secret = settings.secret.clone().unwrap();
-        let bytes: [u8; 32] = bs58::decode(secret).into_vec()?.try_into().unwrap();
-        let secret = crypto_box::SecretKey::from(bytes);
-        let pubkey = secret.public_key();
-        let pub_encoded = bs58::encode(pubkey.as_bytes()).into_string();
-
-        if settings.output.is_some() {
-            let datastore = expand_path(&settings.output.unwrap())?;
-            save_json_file(&datastore, &JsonValue::String(pub_encoded), false)?;
-        } else {
-            println!("Public key recovered: {}", pub_encoded);
-        }
-
+    if args.gen_channel_secret {
+        let secret = crypto_box::SecretKey::generate(&mut OsRng);
+        let secret = bs58::encode(secret.to_bytes()).into_string();
+        println!("Place this in your config file:\n");
+        println!("[channel.\"#yourchannelname\"]");
+        println!("secret = \"{}\"", secret);
         return Ok(())
     }
 
-    if settings.gen_secret {
-        let secret_key = crypto_box::SecretKey::generate(&mut OsRng);
-        let encoded = bs58::encode(secret_key.to_bytes());
-        println!("{}", encoded.into_string());
+    if let Some(chacha_secret) = args.get_chacha_pubkey {
+        let bytes = match bs58::decode(chacha_secret).into_vec() {
+            Ok(v) => v,
+            Err(e) => {
+                println!("Error: {}", e);
+                return Err(Error::ParseFailed("Secret key parsing failed"))
+            }
+        };
+
+        if bytes.len() != 32 {
+            return Err(Error::ParseFailed("Decoded base58 is not 32 bytes long"))
+        }
+
+        let secret: [u8; 32] = bytes.try_into().unwrap();
+        let secret = crypto_box::SecretKey::from(secret);
+        println!("{}", bs58::encode(secret.public_key().to_bytes()).into_string());
         return Ok(())
     }
 
-    ////////////////////
-    // Initialize the base structures
-    ////////////////////
-    let events_queue = EventsQueue::<PrivMsgEvent>::new();
-    let model = Arc::new(Mutex::new(Model::new(events_queue.clone())));
-    let view = Arc::new(Mutex::new(View::new(events_queue.clone())));
-    let model_clone = model.clone();
-    let model_clone2 = model.clone();
+    info!("Initializing DarkIRC node");
 
-    {
-        // Temporarly load model and check if the loaded head is not
-        // older than one week (already removed from other node's tree)
-        let now = Utc::now();
+    // Create datastore path if not there already.
+    let datastore = expand_path(&args.datastore)?;
+    fs::create_dir_all(&datastore).await?;
 
-        let now_datetime = (now - Duration::weeks(1)).date_naive().and_hms_opt(0, 0, 0).unwrap();
-        let timestamp = Timestamp(now_datetime.timestamp() as u64);
+    info!("Instantiating event DAG");
+    let sled_db = sled::open(datastore)?;
+    let p2p = P2p::new(args.net.into(), ex.clone()).await;
+    let event_graph =
+        EventGraph::new(p2p.clone(), sled_db.clone(), "darkirc_dag", 1, ex.clone()).await?;
 
-        let mut loaded_model = Model::new(events_queue.clone());
-        loaded_model.load_tree(&datastore_path)?;
-
-        if loaded_model
-            .get_event(&loaded_model.get_head_hash()?)
-            .is_some_and(|event| event.timestamp >= timestamp)
-        {
-            model.lock().await.load_tree(&datastore_path)?;
-        }
-    }
-
-    ////////////////////
-    // P2p setup
-    ////////////////////
-    // Buffers
-    let seen_event = Seen::new();
-    let seen_inv = Seen::new();
-
-    // Check the version
-    let net_settings = settings.net.clone();
-
-    // New p2p
-    let p2p = net::P2p::new(net_settings.into(), executor.clone()).await;
-
-    // Register the protocol_event
+    info!("Registering EventGraph P2P protocol");
+    let event_graph_ = Arc::clone(&event_graph);
     let registry = p2p.protocol_registry();
     registry
-        .register(net::SESSION_ALL, move |channel, p2p| {
-            let seen_event = seen_event.clone();
-            let seen_inv = seen_inv.clone();
-            let model = model.clone();
-            async move { ProtocolEvent::init(channel, p2p, model, seen_event, seen_inv).await }
+        .register(SESSION_ALL, move |channel, _| {
+            let event_graph_ = event_graph_.clone();
+            async move { ProtocolEventGraph::init(event_graph_, channel).await.unwrap() }
         })
         .await;
 
-    // ==============
-    // p2p dnet setup
-    // ==============
-    info!(target: "darkirc", "Starting dnet subs task");
-    let json_sub = JsonSubscriber::new("dnet.subscribe_events");
-    let json_sub_ = json_sub.clone();
+    info!("Starting dnet subs task");
+    let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
+    let dnet_sub_ = dnet_sub.clone();
     let p2p_ = p2p.clone();
     let dnet_task = StoppableTask::new();
     dnet_task.clone().start(
@@ -222,117 +194,103 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             loop {
                 let event = dnet_sub.receive().await;
                 debug!("Got dnet event: {:?}", event);
-                json_sub_.notify(vec![event.into()]).await;
+                dnet_sub_.notify(vec![event.into()]).await;
             }
         },
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => {
-                    error!(target: "darkirc", "Failed starting remove old events task: {}", e)
-                }
+                Err(e) => panic!("{}", e),
             }
         },
         Error::DetachedTaskStopped,
-        executor.clone(),
+        ex.clone(),
     );
 
-    ////////////////////
-    // RPC interface setup
-    ////////////////////
-    let rpc_listen_addr = settings.rpc_listen.clone();
-    info!(target: "darkirc", "Starting JSON-RPC server on {}", rpc_listen_addr);
-    let rpc_interface = Arc::new(JsonRpcInterface {
-        addr: rpc_listen_addr.clone(),
-        p2p: p2p.clone(),
-        dnet_sub: json_sub,
-        rpc_connections: Mutex::new(HashSet::new()),
-    });
-
+    info!("Starting JSON-RPC server");
+    let darkirc = Arc::new(DarkIrc::new(p2p.clone(), event_graph.clone(), dnet_sub));
+    let darkirc_ = Arc::clone(&darkirc);
     let rpc_task = StoppableTask::new();
-    let rpc_interface_ = rpc_interface.clone();
     rpc_task.clone().start(
-        listen_and_serve(rpc_listen_addr, rpc_interface, None, executor.clone()),
+        listen_and_serve(args.rpc_listen, darkirc.clone(), None, ex.clone()),
         |res| async move {
             match res {
-                Ok(()) | Err(Error::RpcServerStopped) => rpc_interface_.stop_connections().await,
-                Err(e) => error!(target: "darkirc", "Failed starting JSON-RPC server: {}", e),
+                Ok(()) | Err(Error::RpcServerStopped) => darkirc_.stop_connections().await,
+                Err(e) => error!("Failed stopping JSON-RPC server: {}", e),
             }
         },
         Error::RpcServerStopped,
-        executor.clone(),
+        ex.clone(),
     );
 
-    ////////////////////
-    // Start P2P network
-    ////////////////////
-    info!(target: "darkirc", "Starting P2P network");
-    p2p.clone().start().await?;
-
-    ////////////////////
-    // IRC server
-    ////////////////////
-    info!(target: "darkirc", "Starting IRC server");
+    info!("Starting IRC server");
+    let config_path = get_config_path(args.config, CONFIG_FILE)?;
     let irc_server = IrcServer::new(
-        settings.clone(),
-        p2p.clone(),
-        model_clone.clone(),
-        view.clone(),
-        client_sub,
+        darkirc.clone(),
+        args.irc_listen,
+        args.irc_tls_cert,
+        args.irc_tls_secret,
+        config_path,
     )
     .await?;
-    let irc_server_task = StoppableTask::new();
-    let executor_ = executor.clone();
-    irc_server_task.clone().start(
-        // Weird hack to prevent lifetimes hell
-        async move { irc_server.start(executor_).await },
-        |res| async {
+
+    let irc_task = StoppableTask::new();
+    let ex_ = ex.clone();
+    irc_task.clone().start(
+        irc_server.clone().listen(ex_),
+        |res| async move {
             match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => error!(target: "darkirc", "Failed starting IRC server: {}", e),
+                Ok(()) | Err(Error::DetachedTaskStopped) => { /* TODO: */ }
+                Err(e) => error!("Failed stopping IRC server: {}", e),
             }
         },
         Error::DetachedTaskStopped,
-        executor.clone(),
+        ex.clone(),
     );
 
-    // Reset root task
-    info!(target: "darkirc", "Starting remove old events task");
-    let remove_old_events_task = StoppableTask::new();
-    remove_old_events_task.clone().start(
-        remove_old_events(model_clone2),
-        |res| async {
-            match res {
-                Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                Err(e) => {
-                    error!(target: "darkirc", "Failed starting remove old events task: {}", e)
+    info!("Starting P2P network");
+    p2p.clone().start().await?;
+
+    /*
+    // We'll attempt to sync 5 times
+    for i in 1..=6 {
+        info!("Syncing event DAG (attempt #{})", i);
+        match event_graph.dag_sync().await {
+            Ok(()) => break,
+            Err(e) => {
+                if i == 6 {
+                    error!("Failed syncing DAG. Exiting.");
+                    p2p.stop().await;
+                    return Err(Error::DagSyncFailed)
+                } else {
+                    // TODO: Maybe at this point we should prune or something?
+                    // TODO: Or maybe just tell the user to delete the DAG from FS.
+                    error!("Failed syncing DAG ({}), retrying in 10s...", e);
+                    sleep(10).await;
                 }
             }
-        },
-        Error::DetachedTaskStopped,
-        executor,
-    );
+        }
+    }
+    */
 
-    // Wait for termination signal
+    // Signal handling for graceful termination.
+    let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 
-    model_clone.lock().await.save_tree(&datastore_path)?;
-
-    info!(target: "darkirc", "Stopping dnet subs task...");
-    dnet_task.stop().await;
-
-    info!(target: "darkirc", "Stopping JSON-RPC server...");
-    rpc_task.stop().await;
-
-    info!(target: "darkirc", "Stopping P2P network");
+    info!("Stopping P2P network");
     p2p.stop().await;
 
-    info!(target: "darkirc", "Stopping IRC server...");
-    irc_server_task.stop().await;
+    info!("Stopping JSON-RPC server");
+    rpc_task.stop().await;
+    dnet_task.stop().await;
 
-    info!(target: "darkirc", "Stopping remove old events task...");
-    remove_old_events_task.stop().await;
+    info!("Stopping IRC server");
+    irc_task.stop().await;
 
+    info!("Flushing sled");
+    sled_db.flush_async().await?;
+
+    info!("Shut down successfully");
     Ok(())
 }

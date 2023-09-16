@@ -138,7 +138,8 @@ prettytable-rs = "0.10.0"
 
 # -----BEGIN LIBRARY FEATURES-----
 [features]
-async-daemonize = []
+async-daemonize = ["system"]
+
 async-serial = ["darkfi-serial/async"]
 
 async-sdk = [

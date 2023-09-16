@@ -16,324 +16,326 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fs::File, sync::Arc};
+use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf, sync::Arc};
 
 use async_rustls::{rustls, TlsAcceptor};
-use log::{error, info};
-use smol::{
-    io::{self, AsyncRead, AsyncWrite, BufReader},
-    lock::Mutex,
-    net::{SocketAddr, TcpListener},
-};
-
 use darkfi::{
-    event_graph::{
-        model::{Event, EventId, ModelPtr},
-        protocol_event::{Seen, SeenPtr},
-        view::ViewPtr,
-    },
-    net::P2pPtr,
-    system::{StoppableTask, SubscriberPtr},
-    util::{path::expand_path, time::Timestamp},
+    event_graph2::Event,
+    system::{StoppableTask, StoppableTaskPtr, Subscription},
+    util::path::expand_path,
     Error, Result,
 };
+use log::{debug, error, info};
+use smol::{
+    fs,
+    lock::Mutex,
+    net::{SocketAddr, TcpListener},
+    prelude::{AsyncRead, AsyncWrite},
+    Executor,
+};
+use url::Url;
 
-use super::{ClientSubMsg, IrcClient, IrcConfig, NotifierMsg};
+use super::{client::Client, IrcChannel, IrcContact, Privmsg};
+use crate::{
+    crypto::saltbox,
+    settings::{parse_autojoin_channels, parse_configured_channels, parse_configured_contacts},
+    DarkIrc,
+};
 
-use crate::{settings::Args, PrivMsgEvent};
-
-mod nickserv;
-use nickserv::NickServ;
-
-const NICK_NICKSERV: &str = "nickserv";
-
+/// IRC server instance
 pub struct IrcServer {
-    settings: Args,
-    p2p: P2pPtr,
-    model: ModelPtr<PrivMsgEvent>,
-    view: ViewPtr<PrivMsgEvent>,
-    clients_subscriptions: SubscriberPtr<ClientSubMsg>,
-    seen: SeenPtr<EventId>,
-    missed_events: Arc<Mutex<Vec<Event<PrivMsgEvent>>>>,
-    /// nickserv service
-    pub nickserv: NickServ,
+    /// DarkIrc instance
+    pub darkirc: Arc<DarkIrc>,
+    /// Path to the darkirc config file
+    config_path: PathBuf,
+    /// TCP listener
+    listener: TcpListener,
+    /// TLS acceptor
+    acceptor: Option<TlsAcceptor>,
+    /// Configured autojoin channels
+    pub autojoin: Mutex<Vec<String>>,
+    /// Configured IRC channels
+    pub channels: Mutex<HashMap<String, IrcChannel>>,
+    /// Configured IRC contacts
+    pub contacts: Mutex<HashMap<String, IrcContact>>,
+    /// Active client connections
+    clients: Mutex<HashMap<u16, StoppableTaskPtr>>,
 }
 
 impl IrcServer {
+    /// Instantiate a new IRC server. This function will try to bind a TCP socket,
+    /// and optionally load a TLS certificate and key. To start the listening loop,
+    /// call `IrcServer::listen()`.
     pub async fn new(
-        settings: Args,
-        p2p: P2pPtr,
-        model: ModelPtr<PrivMsgEvent>,
-        view: ViewPtr<PrivMsgEvent>,
-        clients_subscriptions: SubscriberPtr<ClientSubMsg>,
-    ) -> Result<Self> {
-        let seen = Seen::new();
-        let missed_events = Arc::new(Mutex::new(vec![]));
-        Ok(Self {
-            settings,
-            p2p,
-            model,
-            view,
-            clients_subscriptions,
-            seen,
-            missed_events,
-            nickserv: NickServ::default(),
-        })
-    }
-
-    pub async fn start(&self, executor: Arc<smol::Executor<'_>>) -> Result<()> {
-        let (msg_notifier, msg_recv) = smol::channel::unbounded();
-
-        // Listen to msgs from clients
-        StoppableTask::new().start(
-            Self::listen_to_msgs(
-                self.p2p.clone(),
-                self.model.clone(),
-                self.seen.clone(),
-                msg_recv,
-                self.missed_events.clone(),
-                self.clients_subscriptions.clone(),
-            ),
-            |res| async {
-                match res {
-                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                    Err(e) => error!(target: "darkirc::irc::server::start", "Failed starting listen to msgs: {}", e),
-                }
-            },
-            Error::DetachedTaskStopped,
-            executor.clone(),
-        );
-
-        // Listen to msgs from View
-        StoppableTask::new().start(
-            Self::listen_to_view(
-                self.view.clone(),
-                self.seen.clone(),
-                self.missed_events.clone(),
-                self.clients_subscriptions.clone(),
-            ),
-            |res| async {
-                match res {
-                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                    Err(e) => error!(target: "darkirc::irc::server::start", "Failed starting listen to view: {}", e),
-                }
-            },
-            Error::DetachedTaskStopped,
-            executor.clone(),
-        );
-
-        // Start listening for new connections
-        self.listen(msg_notifier, executor).await?;
-
-        Ok(())
-    }
-
-    async fn listen_to_view(
-        view: ViewPtr<PrivMsgEvent>,
-        seen: SeenPtr<EventId>,
-        missed_events: Arc<Mutex<Vec<Event<PrivMsgEvent>>>>,
-        clients_subscriptions: SubscriberPtr<ClientSubMsg>,
-    ) -> Result<()> {
-        loop {
-            let event = view.lock().await.process().await?;
-            if !seen.push(&event.hash()).await {
-                continue
-            }
-
-            missed_events.lock().await.push(event.clone());
-
-            let msg = event.action.clone();
-
-            clients_subscriptions.notify(ClientSubMsg::Privmsg(msg)).await;
+        darkirc: Arc<DarkIrc>,
+        listen: Url,
+        tls_cert: Option<String>,
+        tls_secret: Option<String>,
+        config_path: PathBuf,
+    ) -> Result<Arc<Self>> {
+        let scheme = listen.scheme();
+        if scheme != "tcp" && scheme != "tcp+tls" {
+            error!("IRC server supports listening only on tcp:// or tcp+tls://");
+            return Err(Error::BindFailed(listen.to_string()))
         }
-    }
 
-    /// Start listening to msgs from irc clients
-    pub async fn listen_to_msgs(
-        p2p: P2pPtr,
-        model: ModelPtr<PrivMsgEvent>,
-        seen: SeenPtr<EventId>,
-        recv: smol::channel::Receiver<(NotifierMsg, usize)>,
-        missed_events: Arc<Mutex<Vec<Event<PrivMsgEvent>>>>,
-        clients_subscriptions: SubscriberPtr<ClientSubMsg>,
-    ) -> Result<()> {
-        loop {
-            let (msg, subscription_id) = recv.recv().await?;
-
-            match msg {
-                NotifierMsg::Privmsg(msg) => {
-                    // First check if we're communicating with any services.
-                    // If not, then we proceed with behaving like it's a normal
-                    // message.
-                    // TODO: This needs to be protected from adversaries doing
-                    //       remote execution.
-                    #[allow(clippy::single_match)]
-                    match msg.target.to_lowercase().as_str() {
-                        NICK_NICKSERV => {
-                            //self.nickserv.act(msg);
-                            continue
-                        }
-
-                        _ => {} // pass
-                    }
-
-                    let event = Event {
-                        previous_event_hash: model.lock().await.get_head_hash()?,
-                        action: msg.clone(),
-                        timestamp: Timestamp::current_time(),
-                    };
-
-                    // Since this will be added to the View directly, other clients connected to irc
-                    // server must get informed about this new msg
-                    clients_subscriptions
-                        .notify_with_exclude(ClientSubMsg::Privmsg(msg), &[subscription_id])
-                        .await;
-
-                    if !seen.push(&event.hash()).await {
-                        continue
-                    }
-
-                    missed_events.lock().await.push(event.clone());
-
-                    p2p.broadcast(&event).await;
-                }
-
-                NotifierMsg::UpdateConfig => {
-                    //
-                    // load and parse the new settings from configuration file and pass it to all
-                    // irc clients
-                    //
-                    // let new_config = IrcConfig::new()?;
-                    // clients_subscriptions.notify(ClientSubMsg::Config(new_config)).await;
-                }
-            }
+        if scheme == "tcp+tls" && (tls_cert.is_none() || tls_secret.is_none()) {
+            error!("You must provide a TLS certificate and key if you want a TLS server");
+            return Err(Error::BindFailed(listen.to_string()))
         }
-    }
 
-    /// Start listening to new connections from irc clients
-    pub async fn listen(
-        &self,
-        notifier: smol::channel::Sender<(NotifierMsg, usize)>,
-        executor: Arc<smol::Executor<'_>>,
-    ) -> Result<()> {
-        let (listener, acceptor) = self.setup_listener().await?;
-        info!("[IRC SERVER] listening on {}", self.settings.irc_listen);
-
-        loop {
-            let (stream, peer_addr) = match listener.accept().await {
-                Ok((s, a)) => (s, a),
-                Err(e) => {
-                    error!("[IRC SERVER] Failed accepting new connections: {}", e);
-                    continue
-                }
-            };
-
-            let result = if let Some(acceptor) = acceptor.clone() {
-                // TLS connection
-                let stream = match acceptor.accept(stream).await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        error!("[IRC SERVER] Failed accepting TLS connection: {}", e);
-                        continue
-                    }
-                };
-                self.process_connection(stream, peer_addr, notifier.clone(), executor.clone()).await
-            } else {
-                // TCP connection
-                self.process_connection(stream, peer_addr, notifier.clone(), executor.clone()).await
-            };
-
-            if let Err(e) = result {
-                error!("[IRC SERVER] Failed processing connection {}: {}", peer_addr, e);
-                continue
-            };
-
-            info!("[IRC SERVER] Accept new connection: {}", peer_addr);
-        }
-    }
-
-    /// On every new connection create new IrcClient
-    async fn process_connection<C: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
-        &self,
-        stream: C,
-        peer_addr: SocketAddr,
-        notifier: smol::channel::Sender<(NotifierMsg, usize)>,
-        executor: Arc<smol::Executor<'_>>,
-    ) -> Result<()> {
-        let (reader, writer) = io::split(stream);
-        let reader = BufReader::new(reader);
-
-        // Subscription for the new client
-        let client_subscription = self.clients_subscriptions.clone().subscribe().await;
-
-        // new irc configuration
-        let irc_config = IrcConfig::new(&self.settings)?;
-
-        // New irc client
-        let mut client = IrcClient::new(
-            writer,
-            reader,
-            peer_addr,
-            irc_config,
-            notifier,
-            client_subscription,
-            self.missed_events.clone(),
-        );
-
-        // Start listening and detach
-        StoppableTask::new().start(
-            // Weird hack to prevent lifetimes hell
-            async move {client.listen().await; Ok(())},
-            |res| async {
-                match res {
-                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                    Err(e) => error!(target: "darkirc::irc::server::process_connection", "Failed starting client listen: {}", e),
-                }
-            },
-            Error::DetachedTaskStopped,
-            executor,
-        );
-
-        Ok(())
-    }
-
-    /// Setup a listener for irc server
-    async fn setup_listener(&self) -> Result<(TcpListener, Option<TlsAcceptor>)> {
-        let listenaddr = self.settings.irc_listen.socket_addrs(|| None)?[0];
-        let listener = TcpListener::bind(listenaddr).await?;
-
-        let acceptor = match self.settings.irc_listen.scheme() {
+        // Bind listener
+        let listen_addr = listen.socket_addrs(|| None)?[0];
+        let listener = TcpListener::bind(listen_addr).await?;
+        let acceptor = match scheme {
             "tcp+tls" => {
                 // openssl genpkey -algorithm ED25519 > example.com.key
                 // openssl req -new -out example.com.csr -key example.com.key
-                // openssl x509 -req -days 700 -in example.com.csr -signkey example.com.key -out example.com.crt
-
-                if self.settings.irc_tls_secret.is_none() || self.settings.irc_tls_cert.is_none() {
-                    error!("[IRC SERVER] To listen using TLS, please set irc_tls_secret and irc_tls_cert in your config file.");
-                    return Err(Error::KeypairPathNotFound)
-                }
-
-                let file =
-                    File::open(expand_path(self.settings.irc_tls_secret.as_ref().unwrap())?)?;
-                let mut reader = std::io::BufReader::new(file);
+                // openssl x509 -req -in example.com.csr -signkey example.com.key -out example.com.crt
+                let f = File::open(expand_path(tls_secret.as_ref().unwrap())?)?;
+                let mut reader = BufReader::new(f);
                 let secret = &rustls_pemfile::pkcs8_private_keys(&mut reader)?[0];
                 let secret = rustls::PrivateKey(secret.clone());
 
-                let file = File::open(expand_path(self.settings.irc_tls_cert.as_ref().unwrap())?)?;
-                let mut reader = std::io::BufReader::new(file);
-                let certificate = &rustls_pemfile::certs(&mut reader)?[0];
-                let certificate = rustls::Certificate(certificate.clone());
+                let f = File::open(expand_path(tls_cert.as_ref().unwrap())?)?;
+                let mut reader = BufReader::new(f);
+                let cert = &rustls_pemfile::certs(&mut reader)?[0];
+                let cert = rustls::Certificate(cert.clone());
 
                 let config = rustls::ServerConfig::builder()
                     .with_safe_defaults()
                     .with_no_client_auth()
-                    .with_single_cert(vec![certificate], secret)?;
+                    .with_single_cert(vec![cert], secret)?;
 
                 let acceptor = TlsAcceptor::from(Arc::new(config));
                 Some(acceptor)
             }
             _ => None,
         };
-        Ok((listener, acceptor))
+
+        let self_ = Arc::new(Self {
+            darkirc,
+            config_path,
+            listener,
+            acceptor,
+            autojoin: Mutex::new(Vec::new()),
+            channels: Mutex::new(HashMap::new()),
+            contacts: Mutex::new(HashMap::new()),
+            clients: Mutex::new(HashMap::new()),
+        });
+
+        // Load any channel/contact configuration.
+        self_.rehash().await?;
+
+        Ok(self_)
+    }
+
+    /// Reload the darkirc configuration file and reconfigure channels and contacts.
+    pub async fn rehash(&self) -> Result<()> {
+        let contents = fs::read_to_string(&self.config_path).await?;
+        let contents = match toml::from_str(&contents) {
+            Ok(v) => v,
+            Err(e) => {
+                error!("Failed parsing TOML config: {}", e);
+                return Err(Error::ParseFailed("Failed parsing TOML config"))
+            }
+        };
+
+        // Parse autojoin channels
+        let autojoin = parse_autojoin_channels(&contents)?;
+
+        // Parse configured channels
+        let channels = parse_configured_channels(&contents)?;
+
+        // Parse configured contacts
+        let contacts = parse_configured_contacts(&contents)?;
+
+        // FIXME: This will remove clients' joined channels. They need to stay.
+        // Only if everything is fine, replace.
+        *self.autojoin.lock().await = autojoin;
+        *self.channels.lock().await = channels;
+        *self.contacts.lock().await = contacts;
+
+        Ok(())
+    }
+
+    /// Start accepting new IRC connections.
+    pub async fn listen(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
+        loop {
+            let (stream, peer_addr) = match self.listener.accept().await {
+                Ok((s, a)) => (s, a),
+
+                // As per usual accept(2) recommendations
+                Err(e) if e.raw_os_error().is_some() => match e.raw_os_error().unwrap() {
+                    libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR => continue,
+                    _ => {
+                        error!("[IRC SERVER] Failed accepting connection: {}", e);
+                        return Err(e.into())
+                    }
+                },
+
+                Err(e) => {
+                    error!("[IRC SERVER] Failed accepting new connection: {}", e);
+                    continue
+                }
+            };
+
+            match &self.acceptor {
+                // Expecting encrypted TLS connection
+                Some(acceptor) => {
+                    let stream = match acceptor.accept(stream).await {
+                        Ok(s) => s,
+                        Err(e) => {
+                            error!("[IRC SERVER] Failed accepting new TLS connection: {}", e);
+                            continue
+                        }
+                    };
+
+                    // Subscribe to incoming events and set up the connection.
+                    let incoming = self.darkirc.event_graph.event_sub.clone().subscribe().await;
+                    if let Err(e) = self
+                        .clone()
+                        .process_connection(stream, peer_addr, incoming, ex.clone())
+                        .await
+                    {
+                        error!("[IRC SERVER] Failed processing new connection: {}", e);
+                        continue
+                    };
+                }
+
+                // Expecting plain TCP connection
+                None => {
+                    // Subscribe to incoming events and set up the connection.
+                    let incoming = self.darkirc.event_graph.event_sub.clone().subscribe().await;
+                    if let Err(e) = self
+                        .clone()
+                        .process_connection(stream, peer_addr, incoming, ex.clone())
+                        .await
+                    {
+                        error!("[IRC SERVER] Failed processing new connection: {}", e);
+                        continue
+                    };
+                }
+            }
+
+            info!("[IRC SERVER] Accepted new client connection at: {}", peer_addr);
+        }
+    }
+
+    /// IRC client connection process.
+    /// Sets up multiplexing between the server and client.
+    /// Detaches the connection as a `StoppableTask`.
+    async fn process_connection<C: AsyncRead + AsyncWrite + Send + Unpin + 'static>(
+        self: Arc<Self>,
+        stream: C,
+        peer_addr: SocketAddr,
+        incoming: Subscription<Event>,
+        ex: Arc<Executor<'_>>,
+    ) -> Result<()> {
+        let port = peer_addr.port();
+        let client = Client::new(self.clone(), incoming, peer_addr).await?;
+
+        let conn_task = StoppableTask::new();
+        self.clients.lock().await.insert(port, conn_task.clone());
+
+        conn_task.clone().start(
+            async move { client.multiplex_connection(stream).await },
+            move |_| async move {
+                info!("[IRC SERVER] Disconnected client from {}", peer_addr);
+                self.clone().clients.lock().await.remove(&port);
+            },
+            Error::ChannelStopped,
+            ex,
+        );
+
+        Ok(())
+    }
+
+    /// Try encrypting a given `Privmsg` if there is such a channel/contact.
+    pub async fn try_encrypt(&self, privmsg: &mut Privmsg) {
+        if let Some((name, channel)) = self.channels.lock().await.get_key_value(&privmsg.channel) {
+            if let Some(saltbox) = &channel.saltbox {
+                privmsg.channel = saltbox::encrypt(saltbox, privmsg.channel.as_bytes());
+                privmsg.nick = saltbox::encrypt(saltbox, privmsg.nick.as_bytes());
+                privmsg.msg = saltbox::encrypt(saltbox, privmsg.msg.as_bytes());
+                debug!("Successfully encrypted message for {}", name);
+                return
+            }
+        };
+
+        if let Some((name, contact)) = self.contacts.lock().await.get_key_value(&privmsg.channel) {
+            if let Some(saltbox) = &contact.saltbox {
+                privmsg.channel = saltbox::encrypt(saltbox, privmsg.channel.as_bytes());
+                privmsg.nick = saltbox::encrypt(saltbox, privmsg.nick.as_bytes());
+                privmsg.msg = saltbox::encrypt(saltbox, privmsg.msg.as_bytes());
+                debug!("Successfully encrypted message for {}", name);
+            }
+        };
+    }
+
+    /// Try decrypting a given potentially encrypted `Privmsg` object.
+    pub async fn try_decrypt(&self, privmsg: &mut Privmsg) {
+        // If all fields have base58, then we can consider decrypting.
+        let channel_ciphertext = match bs58::decode(&privmsg.channel).into_vec() {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+
+        let nick_ciphertext = match bs58::decode(&privmsg.nick).into_vec() {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+
+        let msg_ciphertext = match bs58::decode(&privmsg.msg).into_vec() {
+            Ok(v) => v,
+            Err(_) => return,
+        };
+
+        // Now go through all 3 ciphertexts. We'll use intermediate buffers
+        // for decryption, and only if all passes, we will return a modified
+        // (i.e. decrypted) privmsg, otherwise we return the original.
+        for (name, channel) in self.channels.lock().await.iter() {
+            if let Some(saltbox) = &channel.saltbox {
+                let Some(channel_dec) = saltbox::try_decrypt(saltbox, &channel_ciphertext) else {
+                    continue
+                };
+
+                let Some(nick_dec) = saltbox::try_decrypt(saltbox, &nick_ciphertext) else {
+                    continue
+                };
+
+                let Some(msg_dec) = saltbox::try_decrypt(saltbox, &msg_ciphertext) else {
+                    continue
+                };
+
+                privmsg.channel = channel_dec;
+                privmsg.nick = nick_dec;
+                privmsg.msg = msg_dec;
+                debug!("Successfuly decrypted message for {}", name);
+                return
+            }
+        }
+
+        for (name, contact) in self.contacts.lock().await.iter() {
+            if let Some(saltbox) = &contact.saltbox {
+                let Some(channel_dec) = saltbox::try_decrypt(saltbox, &channel_ciphertext) else {
+                    continue
+                };
+
+                let Some(nick_dec) = saltbox::try_decrypt(saltbox, &nick_ciphertext) else {
+                    continue
+                };
+
+                let Some(msg_dec) = saltbox::try_decrypt(saltbox, &msg_ciphertext) else {
+                    continue
+                };
+
+                privmsg.channel = channel_dec;
+                privmsg.nick = nick_dec;
+                privmsg.msg = msg_dec;
+                debug!("Successfully decrypted message from {}", name);
+                return
+            }
+        }
     }
 }

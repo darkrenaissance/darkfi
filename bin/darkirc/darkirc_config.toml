@@ -51,6 +51,9 @@ seeds = [
     "tcp+tls://lilith1.dark.fi:5262",
 ]
 
+## Manual peers to connect to
+#peers = []
+
 # Whitelisted transports for outbound connections
 allowed_transports = ["tcp+tls"]
 
@@ -106,7 +109,8 @@ topic = "/b/"
 ## You can generate a keypair with: darkirc --gen-keypair
 ## and replace the secret key below with the generated one.
 ## **You should never share this secret key with anyone**
-#[secret_key."AKfyoKxnHb8smqP2zt9BVvXkcN7pm9GnqqyuYRmxmWtR"]
+#[crypto]
+#dm_chacha_secret = "AKfyoKxnHb8smqP2zt9BVvXkcN7pm9GnqqyuYRmxmWtR"
 
 ## This is where you put other people's public keys. The format is:
 ## [contact."nickname"]. "nickname" can be anything you want.
@@ -114,7 +118,7 @@ topic = "/b/"
 ##
 ## Example (set as many as you want):
 #[contact."satoshi"]
-#public_key = "C9vC6HNDfGQofWCapZfQK5MkV1JR8Cct839RDUCqbDGK"
+#dm_chacha_public = "C9vC6HNDfGQofWCapZfQK5MkV1JR8Cct839RDUCqbDGK"
 #
 #[contact."anon"]
-#public_key = "7iTddcopP2pkvszFjbFUr7MwTcMSKZkYP6zUan22pxfX"
+#dm_chacha_public = "7iTddcopP2pkvszFjbFUr7MwTcMSKZkYP6zUan22pxfX"
