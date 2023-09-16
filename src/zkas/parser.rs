@@ -157,7 +157,20 @@ impl Parser {
             return Err(self.error.abort("Source file does not start with k=n;", k.line, k.column))
         }
 
-        let declared_k = number.token.parse().unwrap();
+        // Ensure that the value for k can be parsed correctly into the token type.
+        // The below code catches cases where a large k value exceeding the bounds of the target
+        // type is supplied by the user. Without this check an integer overflow can occur.
+        let declared_k = match number.token.parse() {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(self.error.abort(
+                    &format!("k param is invalid, max allowed is {}. Error: {}", MAX_K, e),
+                    number.line,
+                    number.column,
+                ))
+            }
+        };
+
         if declared_k > MAX_K {
             return Err(self.error.abort(
                 &format!("k param is too high, max allowed is {}", MAX_K),
@@ -470,6 +483,11 @@ impl Parser {
 
     /// Routine checks on section structure
     fn check_section_structure(&self, section: &str, tokens: Vec<Token>) -> Result<()> {
+        // Offsets 0 and 1 are accessed directly below, so we need a length of at
+        // least 2 in order to avoid an index-out-of-bounds panic.
+        if tokens.len() < 2 {
+            return Err(self.error.abort("Insufficient number of tokens in section.", 0, 0))
+        }
         if tokens[0].token_type != TokenType::String {
             return Err(self.error.abort(
                 "Section declaration must start with a naming string.",
@@ -1031,7 +1049,18 @@ impl Parser {
                         break
                     }
 
-                    x => unimplemented!("{:#?}", x),
+                    // Note: Unimplemented symbols throw an error now instead of a panic.
+                    // This assists with fuzz testing as existing features can still be tested
+                    // without causing the fuzzer to choke due to the panic created
+                    // by unimplmented!().
+                    // x => unimplemented!("{:#?}", x),
+                    _ => {
+                        return Err(self.error.abort(
+                            &format!("Characer is illegal/unimplemented in this context",),
+                            arg.line,
+                            arg.column,
+                        ))
+                    }
                 };
 
                 if sep.token_type == TokenType::RightParen {
