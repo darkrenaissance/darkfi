@@ -61,28 +61,6 @@ class AuthenticatedShare(object):
           '''
           return AuthenticatedShare(self.share - rhs.share, self.mac - rhs.mac, self.public_modifier - rhs.public_modifier)
 
-'''
-class MultiplicationAuthenticatedShares(object):
-      def __init__(self, alpha, beta, triplet, party_id):
-          # authenticated shares
-          self.alpha_as = alpha
-          self.beta_as = beta
-          self.a_as = triplet[0]
-          self.b_as = triplet[1]
-          self.c_as = triplet[2]
-          self.party_id = party_id
-
-      def __mul__(self, peer_share):
-          masked_d_share = self.alpha_as - self.a_as
-          peer_masked_d_share = peer_share.alpha_as - peer_share.a_as
-          d = open_2pc(masked_d_share.share, peer_masked_d_share.share)
-
-          masked_e_share = self.beta_as - self.b_as
-          peer_masked_e_share = peer_share.beta_as - peer_share.b_as
-          e = open_2pc(masked_e_share.share, peer_masked_e_share.share)
-
-          return (self.b_as.mul_scalar(d) + self.a_as.mul_scalar(e) + self.c_as).add_scalar(d*e, self.party_id)
-'''
 
 class MultiplicationAuthenticatedShares(object):
       def __init__(self, alpha, beta, triplet, party_id):
@@ -96,8 +74,6 @@ class MultiplicationAuthenticatedShares(object):
 
           d1 = self.alpha_as - self.a_as
           e1 = self.beta_as - self.b_as
-          print('[{}] beta: {}, b: {}'.format(self.party_id, self.beta_as, self.b_as))
-          print('[{}] e: {}'.format(self.party_id, e1))
           self.d = d1
           self.e = e1
 

@@ -1,5 +1,8 @@
 # stark curve https://docs.starkware.co/starkex/crypto/stark-curve.html
 
+import random
+
+
 p = 3618502788666131213697322783095070105623107215331596699973092056135872020481
 alpha = 1
 # $$y^2 = x^3 + \alpha \dot x + \beta$$  (mod p)
@@ -12,7 +15,7 @@ G_generator = E(8747394510780077664574649897743220836492786075332494811513824810
 p_scalar = 3618502788666131213697322783095070105526743751716087489154079457884512865583
 K = GF(p_scalar)
 
-import random
+
 class CurvePoint():
       def __init__(self, x=None, y=None):
           if x==None or y==None:
