@@ -46,3 +46,9 @@ name = "varint-differential"
 path = "src/varint_differential.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "zkas-compile"
+path = "src/zkas_compile.rs"
+test = false
+doc = false
