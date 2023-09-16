@@ -124,6 +124,10 @@ impl Parser {
         let mut ast_inner = IndexMap::new();
         let mut ast = IndexMap::new();
 
+        if self.tokens.len() == 0 {
+            return Err(self.error.abort("Source file does not contain any valid tokens.", 0, 0))
+        }
+
         if self.tokens[0].token_type != TokenType::Symbol {
             return Err(self.error.abort(
                 "Source file does not start with a section. Expected `constant/witness/circuit`.",
@@ -430,7 +434,10 @@ impl Parser {
 
         // Tokens have been processed and ast is complete
 
-        let ns = namespace.unwrap();
+        let ns = match namespace {
+            Some(v) => v,
+            None => return Err(self.error.abort("Missing namespace in .zk source.", 0, 0)),
+        };
         ast.insert(ns.clone(), ast_inner);
 
         let constants = {
