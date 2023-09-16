@@ -6,10 +6,10 @@ test inputs for the fuzzer. This should in turn allow for more efficient fuzzing
 '
 set -e
 
-# Run from inside fuzz2 directory
+# Run from inside fuzz/honggfuzz directory
 CWD=$(pwd)
 DST=$CWD/hfuzz_workspace/zkbinary-decode/input/
 cd ..
 mkdir -p $DST
-find -name "*.zk.bin" -exec cp {} $CWD/hfuzz_workspace/zkbinary-decode/input/ \;
+find -name "*.zk.bin" -exec cp {} $DST \;
 cd $CWD
