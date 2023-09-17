@@ -270,18 +270,16 @@ impl Analyzer {
                                 v.column,
                             ))
                         }
-                    } else if arg_types[0] == VarType::ScalarArray {
-                        if var_type != VarType::Scalar {
-                            return Err(self.error.abort(
-                                &format!(
-                                    "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
-                                    VarType::Scalar,
-                                    var_type
-                                ),
-                                v.line,
-                                v.column,
-                            ))
-                        }
+                    } else if arg_types[0] == VarType::ScalarArray && var_type != VarType::Scalar {
+                        return Err(self.error.abort(
+                            &format!(
+                                "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
+                                VarType::Scalar,
+                                var_type
+                            ),
+                            v.line,
+                            v.column,
+                        ))
                     }
                     // Validation for non-Array types
                     if var_type != arg_types[idx] {
