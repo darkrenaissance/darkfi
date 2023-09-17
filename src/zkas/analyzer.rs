@@ -253,7 +253,37 @@ impl Analyzer {
                 if let Arg::Lit(v) = arg {
                     // Match this literal type to a VarType for
                     // type checking.
+
                     let var_type = v.typ.to_vartype();
+                    // TODO: Refactor the Array type checks here and in the Arg::Var
+                    // section so that there is less repetition.
+                    // Validation for Array types
+                    if arg_types[0] == VarType::BaseArray {
+                        if var_type != VarType::Base {
+                            return Err(self.error.abort(
+                                &format!(
+                                    "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
+                                    VarType::Base,
+                                    var_type
+                                ),
+                                v.line,
+                                v.column,
+                            ))
+                        }
+                    } else if arg_types[0] == VarType::ScalarArray {
+                        if var_type != VarType::Scalar {
+                            return Err(self.error.abort(
+                                &format!(
+                                    "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
+                                    VarType::Scalar,
+                                    var_type
+                                ),
+                                v.line,
+                                v.column,
+                            ))
+                        }
+                    }
+                    // Validation for non-Array types
                     if var_type != arg_types[idx] {
                         return Err(self.error.abort(
                             &format!(
@@ -337,6 +367,14 @@ impl Analyzer {
             // result on the heap.
             if statement.typ == StatementType::Assign {
                 let mut var = statement.lhs.clone().unwrap();
+                // Since we are doing an assignment, ensure that there is a return type.
+                if return_types.is_empty() {
+                    return Err(self.error.abort(
+                        "Cannot perform assignment without a return type",
+                        var.line,
+                        var.column,
+                    ))
+                }
                 var.typ = return_types[0];
                 stmt.lhs = Some(var.clone());
                 heap.push(var.clone());
