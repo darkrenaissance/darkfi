@@ -19,7 +19,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use darkfi::{
     async_daemonize, cli_desc,
-    event_graph2::{proto::ProtocolEventGraph, EventGraph, EventGraphPtr},
+    event_graph::{proto::ProtocolEventGraph, EventGraph, EventGraphPtr},
     net::{settings::SettingsOpt, P2p, P2pPtr, SESSION_ALL},
     rpc::{
         jsonrpc::JsonSubscriber,

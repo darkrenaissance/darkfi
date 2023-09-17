@@ -25,7 +25,7 @@ use std::{
 };
 
 use darkfi::{
-    event_graph2::{proto::EventPut, Event, NULL_ID},
+    event_graph::{proto::EventPut, Event, NULL_ID},
     system::Subscription,
     Error, Result,
 };

@@ -20,7 +20,7 @@ use std::{collections::HashMap, fs::File, io::BufReader, path::PathBuf, sync::Ar
 
 use async_rustls::{rustls, TlsAcceptor};
 use darkfi::{
-    event_graph2::Event,
+    event_graph::Event,
     system::{StoppableTask, StoppableTaskPtr, Subscription},
     util::path::expand_path,
     Error, Result,

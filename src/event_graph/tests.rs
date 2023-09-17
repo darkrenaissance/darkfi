@@ -26,7 +26,7 @@ use smol::{channel, future, Executor};
 use url::Url;
 
 use crate::{
-    event_graph2::{
+    event_graph::{
         proto::{EventPut, ProtocolEventGraph},
         Event, EventGraph, NULL_ID,
     },
