@@ -124,7 +124,7 @@ impl Parser {
         let mut ast_inner = IndexMap::new();
         let mut ast = IndexMap::new();
 
-        if self.tokens.len() == 0 {
+        if self.tokens.is_empty() {
             return Err(self.error.abort("Source file does not contain any valid tokens.", 0, 0))
         }
 
@@ -1056,7 +1056,7 @@ impl Parser {
                     // x => unimplemented!("{:#?}", x),
                     _ => {
                         return Err(self.error.abort(
-                            &format!("Characer is illegal/unimplemented in this context",),
+                            "Character is illegal/unimplemented in this context",
                             arg.line,
                             arg.column,
                         ))
