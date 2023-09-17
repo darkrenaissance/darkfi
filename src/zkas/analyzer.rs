@@ -186,6 +186,8 @@ impl Analyzer {
 
                     let mut rhs_inner = vec![];
                     for (inner_idx, i) in func.rhs.iter().enumerate() {
+                        // TODO: Implement cases where `i` is type Arg::Literal
+                        // TODO: Implement cases where `i` is type Arg::Func
                         if let Arg::Var(v) = i {
                             if let Some(var_ref) = self.lookup_var(&v.name) {
                                 let (var_type, ln, col) = match var_ref {
@@ -218,8 +220,20 @@ impl Analyzer {
                                 v.line,
                                 v.column,
                             ))
+                        } else if let Arg::Lit(l) = i {
+                            return Err(self.error.abort(
+                                &format!("Expected argument `{}` to be of type Variable. Literals are not yet supported in nested function calls.", l.name),
+                                l.line,
+                                l.column,
+                            ))
+                        } else if let Arg::Func(f) = i {
+                            return Err(self.error.abort(
+                                &format!("Expected argument `{}` to be of type Variable. Nested function calls are not yet supported beyond a depth of 1.", Opcode::name(&f.opcode)),
+                                f.line,
+                                0,
+                            ))
                         } else {
-                            unimplemented!()
+                            unreachable!();
                         }
                     }
 
