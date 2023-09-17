@@ -1,15 +1,22 @@
 # Summary
 
-[DarkFi](README.md)
+# About
+
+- [DarkFi](README.md)
 - [Philosophy](philosophy/philosophy.md)
   - [Ideology](philosophy/ideology.md)
   - [Books](philosophy/books.md)
-- [Testnet Guide](testnet/testnet.md)
-  - [Running a Node](testnet/node.md)
-  - [Airdrops](testnet/airdrop.md)
-  - [Payments](testnet/payment.md)
-  - [Atomic Swap](testnet/atomic-swap.md)
-  - [DAO](testnet/dao.md)
+
+# Testnet Guide
+
+- [Running a Node](testnet/node.md)
+- [Airdrops](testnet/airdrop.md)
+- [Payments](testnet/payment.md)
+- [Atomic Swap](testnet/atomic-swap.md)
+- [DAO](testnet/dao.md)
+
+# Developer Doc
+
 - [Development](development/development.md)
   - [Contribute](development/contribute.md)
   - [Learn](development/learn.md)
@@ -31,7 +38,7 @@
   - [Tooling](architecture/tooling.md)
   - [P2P Network](architecture/p2p-network.md)
   - [Services](architecture/services.md)
-- [Smart Contracts](architecture/sc/sc.md)
+  - [Smart Contracts](architecture/sc/sc.md)
   - [Transaction lifetime](architecture/sc/tx-lifetime.md)
 - [zkas](zkas/index.md)
   - [Bincode](zkas/bincode.md)
@@ -45,22 +52,27 @@
   - [Anonymous Nodes](clients/anonymous_nodes.md)
     - [Tor Inbound Node](clients/tor_inbound.md)
     - [Nym Outbound Node](clients/nym_outbound.md)
-- [Crypto](crypto/crypto.md)
-  - [FFT](crypto/fft.md)
-  - [ZK explainer](crypto/zk_explainer.md)
-  - [Research](crypto/research.md)
-  - [Rate-Limit Nullifiers](crypto/rln.md)
-  - [Key Recovery Scheme](crypto/key-recovery.md)
-  - [Reading maths books](crypto/reading-maths-books.md)
-- [Miscellaneous tools](misc/misc.md)
-  - [vanityaddr](misc/vanityaddr.md)
-  - [darkirc](misc/darkirc/darkirc.md)
-  	- [Specification](misc/darkirc/specification.md)
-  	- [Private Message](misc/darkirc/private_message.md)
-  - [tau](misc/tau.md)
-  - [event_graph](misc/event_graph/event_graph.md)
-    - [Network Protocol](misc/event_graph/network_protocol.md)
-  - [dnetview](misc/dnetview.md)
+
+# Crypto
+
+- [FFT](crypto/fft.md)
+- [ZK explainer](crypto/zk_explainer.md)
+- [Research](crypto/research.md)
+- [Rate-Limit Nullifiers](crypto/rln.md)
+- [Key Recovery Scheme](crypto/key-recovery.md)
+- [Reading maths books](crypto/reading-maths-books.md)
+
+# Misc
+
+- [vanityaddr](misc/vanityaddr.md)
+- [darkirc](misc/darkirc/darkirc.md)
+	- [Specification](misc/darkirc/specification.md)
+	- [Private Message](misc/darkirc/private_message.md)
+- [tau](misc/tau.md)
+- [event_graph](misc/event_graph/event_graph.md)
+  - [Network Protocol](misc/event_graph/network_protocol.md)
+- [dnetview](misc/dnetview.md)
 - [Zero2darkfi](zero2darkfi/zero2darkfi.md)
   - [darkmap](zero2darkfi/darkmap.md)
 - [Glossary](glossary/glossary.md)
+
