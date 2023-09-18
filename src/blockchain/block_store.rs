@@ -33,17 +33,12 @@ use super::{parse_record, parse_u64_key_record, Header, SledDbOverlayPtr};
 /// Block version number
 pub const BLOCK_VERSION: u8 = 1;
 
-/// Block magic bytes
-const BLOCK_MAGIC_BYTES: [u8; 4] = [0x11, 0x6d, 0x75, 0x1f];
-
-/// This struct represents a tuple of the form (`magic`, `header`, `txs`, `signature`, `eta`).
+/// This struct represents a tuple of the form (`header`, `txs`, `signature`, `eta`).
 /// The header and transactions are stored as hashes, serving as pointers to the actual data
 /// in the sled database.
 /// NOTE: This struct fields are considered final, as it represents a blockchain block.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Block {
-    /// Block magic bytes
-    pub magic: [u8; 4],
     /// Block header
     pub header: blake3::Hash,
     /// Trasaction hashes
@@ -61,8 +56,7 @@ impl Block {
         signature: Signature,
         eta: pallas::Base,
     ) -> Self {
-        let magic = BLOCK_MAGIC_BYTES;
-        Self { magic, header, txs, signature, eta }
+        Self { header, txs, signature, eta }
     }
 
     /// Calculate the block hash
@@ -77,8 +71,6 @@ impl Block {
 /// version, without affecting the original struct.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct BlockInfo {
-    /// Block magic bytes
-    pub magic: [u8; 4],
     /// Block header data
     pub header: Header,
     /// Transactions payload
@@ -94,9 +86,7 @@ pub struct BlockInfo {
 impl Default for BlockInfo {
     /// Represents the genesis block on current timestamp
     fn default() -> Self {
-        let magic = BLOCK_MAGIC_BYTES;
         Self {
-            magic,
             header: Header::default(),
             txs: vec![Transaction::default()],
             signature: Signature::dummy(),
@@ -114,8 +104,7 @@ impl BlockInfo {
         eta: pallas::Base,
         slots: Vec<Slot>,
     ) -> Self {
-        let magic = BLOCK_MAGIC_BYTES;
-        Self { magic, header, txs, signature, eta, slots }
+        Self { header, txs, signature, eta, slots }
     }
 
     /// Calculate the block hash
@@ -129,7 +118,6 @@ impl From<BlockInfo> for Block {
     fn from(block_info: BlockInfo) -> Self {
         let txs = block_info.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
         Self {
-            magic: block_info.magic,
             header: block_info.header.headerhash().unwrap(),
             txs,
             signature: block_info.signature,
