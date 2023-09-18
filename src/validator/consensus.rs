@@ -18,7 +18,7 @@
 
 use darkfi_sdk::{
     blockchain::{expected_reward, PidOutput, PreviousSlot, Slot},
-    crypto::{schnorr::SchnorrSecret, MerkleNode, MerkleTree, SecretKey},
+    crypto::{schnorr::SchnorrSecret, SecretKey},
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
@@ -94,7 +94,7 @@ impl Consensus {
 
         for fork in &self.forks {
             let last_proposal = fork.last_proposal()?;
-            if last_proposal.block.header.slot == slot {
+            if last_proposal.block.header.height == slot {
                 producers += 1;
             }
             last_hashes.push(last_proposal.hash);
@@ -132,16 +132,6 @@ impl Consensus {
         let mut unproposed_txs = fork.unproposed_txs(&self.blockchain, &time_keeper).await?;
         unproposed_txs.push(proposal_tx);
 
-        // Calculate transactions tree root
-        let mut tree = MerkleTree::new(100);
-        // The following is pretty weird, so something better should be done.
-        for tx in &unproposed_txs {
-            let mut hash = [0_u8; 32];
-            hash[0..31].copy_from_slice(&blake3::hash(&serialize(tx)).as_bytes()[0..31]);
-            tree.append(MerkleNode::from(pallas::Base::from_repr(hash).unwrap()));
-        }
-        let root = tree.root(0).unwrap();
-
         // Grab forks' last block proposal(previous)
         let previous = fork.last_proposal()?;
 
@@ -149,23 +139,25 @@ impl Consensus {
         let slot = fork.slots.last().unwrap();
         // TODO: verify if header timestamp should be blockchain or system timestamp
         let header = Header::new(
-            previous.block.blockhash(),
+            previous.block.hash()?,
             time_keeper.slot_epoch(slot.id),
             slot.id,
             Timestamp::current_time(),
-            root,
+            slot.last_eta,
         );
+
+        // Generate the block
+        let mut block = BlockInfo::new_empty(header, fork.slots.clone());
+
+        // Add transactions to the block
+        block.append_txs(unproposed_txs)?;
 
         // TODO: sign more stuff?
         // Sign block header using provided secret key
-        let signature = secret_key.sign(&mut OsRng, &header.headerhash()?.as_bytes()[..]);
+        block.signature = secret_key.sign(&mut OsRng, &block.header.hash()?.as_bytes()[..]);
 
-        // Generate the block and its proposal
-        let block =
-            BlockInfo::new(header, unproposed_txs, signature, slot.last_eta, fork.slots.clone());
-        let proposal = Proposal::new(block);
-
-        Ok(proposal)
+        // Generate the block proposal from the block
+        Proposal::new(block)
     }
 
     /// Given a proposal, the node verifys it and finds which fork it extends.
@@ -193,12 +185,12 @@ impl Consensus {
         let hdr = &proposal.block.header;
 
         // Ignore proposal if not for current slot (2)
-        if hdr.slot != time_keeper.verifying_slot {
+        if hdr.height != time_keeper.verifying_slot {
             return Err(Error::ProposalNotForCurrentSlotError)
         }
 
         // Check if proposal hash matches actual one (3)
-        let proposal_hash = proposal.block.blockhash();
+        let proposal_hash = proposal.block.hash()?;
         if proposal.hash != proposal_hash {
             warn!(
                 target: "validator::consensus::append_proposal", "Received proposal contains mismatched hashes: {} - {}",
@@ -302,7 +294,7 @@ impl Consensus {
             // Check if we extend canonical
             let (last_slot, last_block) = self.blockchain.last()?;
             if proposal.block.header.previous != last_block ||
-                proposal.block.header.slot <= last_slot
+                proposal.block.header.height <= last_slot
             {
                 return Err(Error::ExtendedChainIndexNotFound)
             }
@@ -333,7 +325,7 @@ impl Consensus {
         // Validate and insert each block
         for block in blocks {
             // Use block slot in time keeper
-            time_keeper.verifying_slot = block.header.slot;
+            time_keeper.verifying_slot = block.header.height;
 
             // Retrieve expected reward
             let expected_reward = expected_reward(time_keeper.verifying_slot);
@@ -352,7 +344,7 @@ impl Consensus {
             {
                 error!(target: "validator::consensus::find_extended_fork_overlay", "Erroneous block found in set");
                 fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-                return Err(Error::BlockIsInvalid(block.blockhash().to_string()))
+                return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
             };
 
             // Use last inserted block as next iteration previous
@@ -432,9 +424,9 @@ pub struct Proposal {
 }
 
 impl Proposal {
-    pub fn new(block: BlockInfo) -> Self {
-        let hash = block.blockhash();
-        Self { hash, block }
+    pub fn new(block: BlockInfo) -> Result<Self> {
+        let hash = block.hash()?;
+        Ok(Self { hash, block })
     }
 }
 
@@ -477,7 +469,7 @@ impl Fork {
                 .clone()
         };
 
-        Ok(Proposal::new(block))
+        Proposal::new(block)
     }
 
     /// Utility function to extract leader selection lottery randomness(eta),
@@ -485,7 +477,7 @@ impl Fork {
     fn get_last_eta(&self) -> Result<pallas::Base> {
         // Retrieve last block(or proposal) hash
         let hash = if self.proposals.is_empty() {
-            self.overlay.lock().unwrap().last_block()?.blockhash()
+            self.overlay.lock().unwrap().last_block()?.hash()?
         } else {
             *self.proposals.last().unwrap()
         };

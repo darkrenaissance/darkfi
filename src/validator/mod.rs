@@ -260,7 +260,7 @@ impl Validator {
     /// The node retrieves a block and tries to add it if it doesn't
     /// already exists.
     pub async fn append_block(&mut self, block: &BlockInfo) -> Result<()> {
-        let block_hash = block.blockhash().to_string();
+        let block_hash = block.hash()?.to_string();
 
         // Check if block already exists
         if self.blockchain.has_block(block)? {
@@ -301,8 +301,8 @@ impl Validator {
 
         // Validate and insert each block
         for block in blocks {
-            // Use block slot in time keeper
-            time_keeper.verifying_slot = block.header.slot;
+            // Use block height in time keeper
+            time_keeper.verifying_slot = block.header.height;
 
             // Retrieve expected reward
             let expected_reward = expected_reward(time_keeper.verifying_slot);
@@ -321,7 +321,7 @@ impl Validator {
             {
                 error!(target: "validator::add_blocks", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-                return Err(Error::BlockIsInvalid(block.blockhash().to_string()))
+                return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
             };
 
             // Store block transactions
@@ -477,8 +477,8 @@ impl Validator {
 
         // Validate and insert each block
         for block in &blocks[1..] {
-            // Use block slot in time keeper
-            time_keeper.verifying_slot = block.header.slot;
+            // Use block height in time keeper
+            time_keeper.verifying_slot = block.header.height;
 
             // Retrieve expected reward
             let expected_reward = expected_reward(time_keeper.verifying_slot);
@@ -497,7 +497,7 @@ impl Validator {
             {
                 error!(target: "validator::validate_blockchain", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-                return Err(Error::BlockIsInvalid(block.blockhash().to_string()))
+                return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
             };
 
             // Use last inserted block as next iteration previous

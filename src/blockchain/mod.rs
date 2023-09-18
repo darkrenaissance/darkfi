@@ -134,7 +134,8 @@ impl Blockchain {
         batches.push(bocks_batch);
 
         // Store block order
-        let blocks_order_batch = self.order.insert_batch(&[block.header.slot], &block_hash_vec)?;
+        let blocks_order_batch =
+            self.order.insert_batch(&[block.header.height], &block_hash_vec)?;
         trees.push(self.order.0.clone());
         batches.push(blocks_order_batch);
 
@@ -160,7 +161,7 @@ impl Blockchain {
 
     /// Check if the given [`BlockInfo`] is in the database and all trees.
     pub fn has_block(&self, block: &BlockInfo) -> Result<bool> {
-        let blockhash = match self.order.get(&[block.header.slot], true) {
+        let blockhash = match self.order.get(&[block.header.height], true) {
             Ok(v) => v[0].unwrap(),
             Err(_) => return Ok(false),
         };
@@ -191,7 +192,7 @@ impl Blockchain {
         }
 
         // Check provided info produces the same hash
-        Ok(blockhash == block.blockhash())
+        Ok(blockhash == block.hash()?)
     }
 
     /// Retrieve [`BlockInfo`]s by given hashes. Fails if any of them is not found.
@@ -218,13 +219,13 @@ impl Blockchain {
             // Retrieve extra stuff based on block version
             let mut block_slots = vec![];
             if header.version > 0 {
-                let slots = self.blocks_slots.get(&[block.blockhash()], true)?;
+                let slots = self.blocks_slots.get(&[block.hash()?], true)?;
                 let slots = slots[0].clone().unwrap();
                 let slots = self.slots.get(&slots, true)?;
                 block_slots = slots.iter().map(|x| x.clone().unwrap()).collect();
             }
 
-            let info = BlockInfo::new(header, txs, block.signature, block.eta, block_slots);
+            let info = BlockInfo::new(header, txs, block.signature, block_slots);
             ret.push(info);
         }
 
@@ -488,7 +489,7 @@ impl BlockchainOverlay {
         let block_hash_vec = [block_hash];
 
         // Store block order
-        self.order.insert(&[block.header.slot], &block_hash_vec)?;
+        self.order.insert(&[block.header.height], &block_hash_vec)?;
 
         // Store extra stuff based on block version
         if block.header.version > 0 {
@@ -505,7 +506,7 @@ impl BlockchainOverlay {
 
     /// Check if the given [`BlockInfo`] is in the database and all trees.
     pub fn has_block(&self, block: &BlockInfo) -> Result<bool> {
-        let blockhash = match self.order.get(&[block.header.slot], true) {
+        let blockhash = match self.order.get(&[block.header.height], true) {
             Ok(v) => v[0].unwrap(),
             Err(_) => return Ok(false),
         };
@@ -536,7 +537,7 @@ impl BlockchainOverlay {
         }
 
         // Check provided info produces the same hash
-        Ok(blockhash == block.blockhash())
+        Ok(blockhash == block.hash()?)
     }
 
     /// Retrieve [`BlockInfo`]s by given hashes. Fails if any of them is not found.
@@ -563,13 +564,13 @@ impl BlockchainOverlay {
             // Retrieve extra stuff based on block version
             let mut block_slots = vec![];
             if header.version > 0 {
-                let slots = self.blocks_slots.get(&[block.blockhash()], true)?;
+                let slots = self.blocks_slots.get(&[block.hash()?], true)?;
                 let slots = slots[0].clone().unwrap();
                 let slots = self.slots.get(&slots, true)?;
                 block_slots = slots.iter().map(|x| x.clone().unwrap()).collect();
             }
 
-            let info = BlockInfo::new(header, txs, block.signature, block.eta, block_slots);
+            let info = BlockInfo::new(header, txs, block.signature, block_slots);
             ret.push(info);
         }
 

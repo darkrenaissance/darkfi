@@ -273,7 +273,7 @@ impl TestHarness {
             holders,
             proving_keys,
             tx_action_benchmarks,
-            genesis_block: genesis_block.blockhash(),
+            genesis_block: genesis_block.hash()?,
         })
     }
 

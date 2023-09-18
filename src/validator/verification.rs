@@ -43,7 +43,7 @@ pub async fn verify_genesis_block(
     block: &BlockInfo,
     genesis_txs_total: u64,
 ) -> Result<()> {
-    let block_hash = block.blockhash().to_string();
+    let block_hash = block.hash()?.to_string();
     debug!(target: "validator::verification::verify_genesis_block", "Validating genesis block {}", block_hash);
 
     // Check if block already exists
@@ -51,8 +51,8 @@ pub async fn verify_genesis_block(
         return Err(Error::BlockAlreadyExists(block_hash))
     }
 
-    // Block slot must be the same as the time keeper verifying slot
-    if block.header.slot != time_keeper.verifying_slot {
+    // Block height must be the same as the time keeper verifying slot
+    if block.header.height != time_keeper.verifying_slot {
         return Err(Error::VerifyingSlotMissmatch())
     }
 
@@ -115,7 +115,7 @@ pub async fn verify_block(
     expected_reward: u64,
     testing_mode: bool,
 ) -> Result<()> {
-    let block_hash = block.blockhash().to_string();
+    let block_hash = block.hash()?.to_string();
     debug!(target: "validator::verification::verify_block", "Validating block {}", block_hash);
 
     // Check if block already exists
@@ -123,8 +123,8 @@ pub async fn verify_block(
         return Err(Error::BlockAlreadyExists(block_hash))
     }
 
-    // Block slot must be the same as the time keeper verifying slot
-    if block.header.slot != time_keeper.verifying_slot {
+    // Block height must be the same as the time keeper verifying slot
+    if block.header.height != time_keeper.verifying_slot {
         return Err(Error::VerifyingSlotMissmatch())
     }
 

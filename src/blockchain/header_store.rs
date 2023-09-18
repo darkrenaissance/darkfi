@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{MerkleNode, MerkleTree};
+use darkfi_sdk::{
+    crypto::MerkleTree,
+    pasta::{group::ff::Field, pallas},
+};
 
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
@@ -26,37 +29,42 @@ use crate::{util::time::Timestamp, Error, Result};
 
 use super::{block_store::BLOCK_VERSION, parse_record, SledDbOverlayPtr};
 
-/// This struct represents a tuple of the form (version, previous, epoch, slot, timestamp, merkle_root).
+/// This struct represents a tuple of the form (version, previous, epoch, height, timestamp, nonce, merkle_root).
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Header {
     /// Block version
     pub version: u8,
     /// Previous block hash
     pub previous: blake3::Hash,
-    /// Epoch
+    /// Epoch number
     pub epoch: u64,
-    /// Slot UID
-    pub slot: u64,
+    /// Block/Slot height
+    pub height: u64,
     /// Block creation timestamp
     pub timestamp: Timestamp,
-    /// Root of the transaction hashes merkle tree
-    pub root: MerkleNode,
+    /// The block's nonce.
+    /// In PoW, this value changes arbitrarily with mining.
+    /// In PoS, we can use this value as our block producer ETA.
+    pub nonce: pallas::Base,
+    /// Merkle tree of the transactions contained in this block
+    pub tree: MerkleTree,
 }
 
 impl Header {
     pub fn new(
         previous: blake3::Hash,
         epoch: u64,
-        slot: u64,
+        height: u64,
         timestamp: Timestamp,
-        root: MerkleNode,
+        nonce: pallas::Base,
     ) -> Self {
         let version = BLOCK_VERSION;
-        Self { version, previous, epoch, slot, timestamp, root }
+        let tree = MerkleTree::new(1);
+        Self { version, previous, epoch, height, timestamp, nonce, tree }
     }
 
-    /// Calculate the header hash
-    pub fn headerhash(&self) -> Result<blake3::Hash> {
+    /// Compute the header's hash
+    pub fn hash(&self) -> Result<blake3::Hash> {
         let mut hasher = blake3::Hasher::new();
         self.encode(&mut hasher)?;
         Ok(hasher.finalize())
@@ -71,7 +79,7 @@ impl Default for Header {
             0,
             0,
             Timestamp::current_time(),
-            MerkleTree::new(100).root(0).unwrap(),
+            pallas::Base::ZERO,
         )
     }
 }

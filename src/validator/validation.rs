@@ -35,8 +35,8 @@ use crate::{
 ///     5. Slot is the same as the slots vector last slot id
 /// Additional validity rules can be applied.
 pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, expected_reward: u64) -> Result<()> {
-    let error = Err(Error::BlockIsInvalid(block.blockhash().to_string()));
-    let previous_hash = previous.blockhash();
+    let error = Err(Error::BlockIsInvalid(block.hash()?.to_string()));
+    let previous_hash = previous.hash()?;
 
     // Check previous hash (1)
     if block.header.previous != previous_hash {
@@ -48,8 +48,8 @@ pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, expected_reward: 
         return error
     }
 
-    // Check slots are incremental (3)
-    if block.header.slot <= previous.header.slot {
+    // Check heights are incremental (3)
+    if block.header.height <= previous.header.height {
         return error
     }
 
@@ -73,7 +73,7 @@ pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, expected_reward: 
                     previous_slot,
                     &previous_hash,
                     &previous.header.previous,
-                    &previous.eta,
+                    &previous.header.nonce,
                     0,
                 )?;
                 previous_slot = slot;
@@ -85,12 +85,12 @@ pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, expected_reward: 
             previous_slot,
             &previous_hash,
             &previous.header.previous,
-            &previous.eta,
+            &previous.header.nonce,
             expected_reward,
         )?;
 
-        // Check block slot is the last slot id (5)
-        if block.slots.last().unwrap().id != block.header.slot {
+        // Check block height is the last slot id (5)
+        if block.slots.last().unwrap().id != block.header.height {
             return error
         }
     }
@@ -172,7 +172,7 @@ pub fn validate_blockchain(blockchain: &Blockchain) -> Result<()> {
     let blocks = blockchain.order.get_all()?;
     for (index, block) in blocks[1..].iter().enumerate() {
         let full_blocks = blockchain.get_blocks_by_hash(&[blocks[index].1, block.1])?;
-        let expected_reward = expected_reward(full_blocks[1].header.slot);
+        let expected_reward = expected_reward(full_blocks[1].header.height);
         validate_block(&full_blocks[1], &full_blocks[0], expected_reward)?;
     }
 

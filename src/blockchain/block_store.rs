@@ -19,12 +19,12 @@
 use darkfi_sdk::{
     blockchain::Slot,
     crypto::schnorr::Signature,
-    pasta::{group::ff::Field, pallas},
+    pasta::{group::ff::FromUniformBytes, pallas},
 };
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
 
-use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{tx::Transaction, Error, Result};
 
@@ -33,7 +33,7 @@ use super::{parse_record, parse_u64_key_record, Header, SledDbOverlayPtr};
 /// Block version number
 pub const BLOCK_VERSION: u8 = 1;
 
-/// This struct represents a tuple of the form (`header`, `txs`, `signature`, `eta`).
+/// This struct represents a tuple of the form (`header`, `txs`, `signature`).
 /// The header and transactions are stored as hashes, serving as pointers to the actual data
 /// in the sled database.
 /// NOTE: This struct fields are considered final, as it represents a blockchain block.
@@ -45,23 +45,18 @@ pub struct Block {
     pub txs: Vec<blake3::Hash>,
     /// Block producer signature
     pub signature: Signature,
-    /// Block producer ETA
-    pub eta: pallas::Base,
 }
 
 impl Block {
-    pub fn new(
-        header: blake3::Hash,
-        txs: Vec<blake3::Hash>,
-        signature: Signature,
-        eta: pallas::Base,
-    ) -> Self {
-        Self { header, txs, signature, eta }
+    pub fn new(header: blake3::Hash, txs: Vec<blake3::Hash>, signature: Signature) -> Self {
+        Self { header, txs, signature }
     }
 
-    /// Calculate the block hash
-    pub fn blockhash(&self) -> blake3::Hash {
-        blake3::hash(&serialize(self))
+    /// Compute the block's blockchain hash
+    pub fn hash(&self) -> Result<blake3::Hash> {
+        let mut hasher = blake3::Hasher::new();
+        self.encode(&mut hasher)?;
+        Ok(hasher.finalize())
     }
 }
 
@@ -77,8 +72,6 @@ pub struct BlockInfo {
     pub txs: Vec<Transaction>,
     /// Block producer signature
     pub signature: Signature,
-    /// Block producer ETA
-    pub eta: pallas::Base,
     /// Slots payload
     pub slots: Vec<Slot>,
 }
@@ -90,7 +83,6 @@ impl Default for BlockInfo {
             header: Header::default(),
             txs: vec![Transaction::default()],
             signature: Signature::dummy(),
-            eta: pallas::Base::ZERO,
             slots: vec![Slot::default()],
         }
     }
@@ -101,28 +93,66 @@ impl BlockInfo {
         header: Header,
         txs: Vec<Transaction>,
         signature: Signature,
-        eta: pallas::Base,
         slots: Vec<Slot>,
     ) -> Self {
-        Self { header, txs, signature, eta, slots }
+        Self { header, txs, signature, slots }
     }
 
-    /// Calculate the block hash
-    pub fn blockhash(&self) -> blake3::Hash {
+    /// Generate an empty block for provided Header
+    /// and slots vector. Transactions and the producer
+    /// signature must be added after.
+    pub fn new_empty(header: Header, slots: Vec<Slot>) -> Self {
+        let txs = vec![];
+        let signature = Signature::dummy();
+        Self { header, txs, signature, slots }
+    }
+
+    /// Compute the block's blockchain hash
+    pub fn hash(&self) -> Result<blake3::Hash> {
         let block: Block = self.clone().into();
-        block.blockhash()
+        block.hash()
+    }
+
+    /// Compute the block's hash used for mining
+    pub fn mining_hash(&self) -> Result<blake3::Hash> {
+        let mut hasher = blake3::Hasher::new();
+
+        let mut len: usize = 0;
+        len += self.header.encode(&mut hasher)?;
+        len += self.header.tree.root(0).unwrap().encode(&mut hasher)?;
+        len += self.txs.len().encode(&mut hasher)?;
+        len.encode(&mut hasher)?;
+
+        Ok(hasher.finalize())
+    }
+
+    /// Append a transaction to the block. Also adds it to the Merkle tree.
+    pub fn append_tx(&mut self, tx: Transaction) -> Result<()> {
+        let mut buf = [0u8; 64];
+        buf[..blake3::OUT_LEN].copy_from_slice(tx.hash()?.as_bytes());
+        let leaf = pallas::Base::from_uniform_bytes(&buf);
+
+        self.header.tree.append(leaf.into());
+        self.txs.push(tx);
+
+        Ok(())
+    }
+
+    /// Append a vector of transactions to the block. Also adds them to the
+    /// Merkle tree.
+    pub fn append_txs(&mut self, txs: Vec<Transaction>) -> Result<()> {
+        for tx in txs {
+            self.append_tx(tx)?;
+        }
+
+        Ok(())
     }
 }
 
 impl From<BlockInfo> for Block {
     fn from(block_info: BlockInfo) -> Self {
         let txs = block_info.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
-        Self {
-            header: block_info.header.headerhash().unwrap(),
-            txs,
-            signature: block_info.signature,
-            eta: block_info.eta,
-        }
+        Self { header: block_info.header.hash().unwrap(), txs, signature: block_info.signature }
     }
 }
 

@@ -55,8 +55,8 @@ impl Harness {
         Ok(())
     }
 
-    fn generate_next_block(&self, previous: &BlockInfo) -> BlockInfo {
-        let previous_hash = previous.blockhash();
+    fn generate_next_block(&self, previous: &BlockInfo) -> Result<BlockInfo> {
+        let previous_hash = previous.hash()?;
 
         // Generate slot
         let previous_slot = previous.slots.last().unwrap();
@@ -80,9 +80,18 @@ impl Harness {
 
         // Generate header
         let header =
-            Header::new(previous_hash, previous.header.epoch, id, timestamp, previous.header.root);
+            Header::new(previous_hash, previous.header.epoch, id, timestamp, previous.header.nonce);
 
-        BlockInfo::new(header, previous.txs.clone(), previous.signature, previous.eta, vec![slot])
+        // Generate the block
+        let mut block = BlockInfo::new_empty(header, vec![slot]);
+
+        // Add transactions to the block
+        block.append_txs(previous.txs.clone())?;
+
+        // Attach signature
+        block.signature = previous.signature;
+
+        Ok(block)
     }
 
     fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
@@ -105,13 +114,13 @@ impl Harness {
         for block in blocks {
             // Check if block already exists
             if lock.has_block(block)? {
-                return Err(Error::BlockAlreadyExists(block.blockhash().to_string()))
+                return Err(Error::BlockAlreadyExists(block.hash()?.to_string()))
             }
 
             // This will be true for every insert, apart from genesis
             if let Some(p) = previous {
                 // Retrieve expected reward
-                let expected_reward = expected_reward(block.header.slot);
+                let expected_reward = expected_reward(block.header.height);
 
                 // Validate block
                 validate_block(block, &p, expected_reward)?;
@@ -146,13 +155,13 @@ fn blockchain_add_blocks() -> Result<()> {
         let genesis_block = BlockInfo::default();
         blocks.push(genesis_block.clone());
 
-        let block = th.generate_next_block(&genesis_block);
+        let block = th.generate_next_block(&genesis_block)?;
         blocks.push(block.clone());
 
-        let block = th.generate_next_block(&block);
+        let block = th.generate_next_block(&block)?;
         blocks.push(block.clone());
 
-        let block = th.generate_next_block(&block);
+        let block = th.generate_next_block(&block)?;
         blocks.push(block.clone());
 
         th.add_blocks(&blocks)?;

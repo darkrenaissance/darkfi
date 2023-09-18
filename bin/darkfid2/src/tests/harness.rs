@@ -165,7 +165,7 @@ impl Harness {
         previous: &BlockInfo,
         slots_count: usize,
     ) -> Result<BlockInfo> {
-        let previous_hash = previous.blockhash();
+        let previous_hash = previous.hash()?;
 
         // Generate empty slots
         let mut slots = Vec::with_capacity(slots_count);
@@ -200,17 +200,17 @@ impl Harness {
             previous.header.epoch,
             slots.last().unwrap().id,
             timestamp,
-            previous.header.root,
+            previous.header.nonce,
         );
 
-        // Generate block
-        let block = BlockInfo::new(
-            header,
-            vec![Transaction::default()],
-            previous.signature,
-            previous.eta,
-            slots,
-        );
+        // Generate the block
+        let mut block = BlockInfo::new_empty(header, slots);
+
+        // Add transactions to the block
+        block.append_txs(vec![Transaction::default()])?;
+
+        // Attach signature
+        block.signature = previous.signature;
 
         Ok(block)
     }
