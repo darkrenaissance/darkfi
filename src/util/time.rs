@@ -78,6 +78,9 @@ impl TimeKeeper {
     /// epoch 1 has one less slot(the genesis slot) and
     /// rest epoch have the normal amount of slots.
     pub fn slot_epoch(&self, slot: u64) -> u64 {
+        if slot == 0 {
+            return 0
+        }
         (slot / self.epoch_length) + 1
     }
 
