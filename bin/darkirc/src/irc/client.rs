@@ -34,7 +34,7 @@ use futures::FutureExt;
 use log::{debug, error, warn};
 use smol::{
     io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader},
-    lock::Mutex,
+    lock::RwLock,
     net::SocketAddr,
     prelude::{AsyncRead, AsyncWrite},
 };
@@ -64,9 +64,9 @@ pub struct Client {
     /// Client socket addr
     pub addr: SocketAddr,
     /// ID of the last sent event
-    pub last_sent: Mutex<blake3::Hash>,
+    pub last_sent: RwLock<blake3::Hash>,
     /// Active (joined) channels for this client
-    pub channels: Mutex<HashSet<String>>,
+    pub channels: RwLock<HashSet<String>>,
     /// Penalty counter, when limit is reached, disconnect client
     pub penalty: AtomicUsize,
     /// Registration marker
@@ -74,13 +74,13 @@ pub struct Client {
     /// Registration pause marker
     pub reg_paused: AtomicBool,
     /// Client username
-    pub username: Mutex<String>,
+    pub username: RwLock<String>,
     /// Client nickname
-    pub nickname: Mutex<String>,
+    pub nickname: RwLock<String>,
     /// Client realname
-    pub realname: Mutex<String>,
+    pub realname: RwLock<String>,
     /// Client caps
-    pub caps: Mutex<HashMap<String, bool>>,
+    pub caps: RwLock<HashMap<String, bool>>,
 }
 
 impl Client {
@@ -96,15 +96,15 @@ impl Client {
             server,
             incoming,
             addr,
-            last_sent: Mutex::new(NULL_ID),
-            channels: Mutex::new(HashSet::new()),
+            last_sent: RwLock::new(NULL_ID),
+            channels: RwLock::new(HashSet::new()),
             penalty: AtomicUsize::new(0),
             registered: AtomicBool::new(false),
             reg_paused: AtomicBool::new(false),
-            username: Mutex::new(String::from("*")),
-            nickname: Mutex::new(String::from("*")),
-            realname: Mutex::new(String::from("*")),
-            caps: Mutex::new(caps),
+            username: RwLock::new(String::from("*")),
+            nickname: RwLock::new(String::from("*")),
+            realname: RwLock::new(String::from("*")),
+            caps: RwLock::new(caps),
         })
     }
 
@@ -147,7 +147,8 @@ impl Client {
                         // handle the rest of the propagation.
                         Ok(Some(event)) => {
                             // Update the last sent event.
-                            *self.last_sent.lock().await = event.id();
+                            let event_id = event.id();
+                            *self.last_sent.write().await = event_id;
 
                             // If it fails for some reason, for now, we just note it
                             // and pass.
@@ -177,7 +178,8 @@ impl Client {
                 // Process message from the network. These should only be PRIVMSG.
                 r = self.incoming.receive().fuse() => {
                     // We will skip this if it's our own message.
-                    if *self.last_sent.lock().await == r.id() {
+                    let event_id = r.id();
+                    if *self.last_sent.read().await == event_id {
                         continue
                     }
 
@@ -195,12 +197,12 @@ impl Client {
 
                     // If we have this channel, or it's a DM to our nickname, forward
                     // it to the client.
-                    let have_channel = self.channels.lock().await.contains(&privmsg.channel);
-                    let msg_for_self = *self.nickname.lock().await == privmsg.channel;
+                    let have_channel = self.channels.read().await.contains(&privmsg.channel);
+                    let msg_for_self = *self.nickname.read().await == privmsg.channel;
 
                     if have_channel || msg_for_self {
                         // Add the nickname to the list of nicks on the channel
-                        (*self.server.channels.lock().await).get_mut(&privmsg.channel)
+                        (*self.server.channels.write().await).get_mut(&privmsg.channel)
                             .unwrap().nicks.insert(privmsg.nick.clone());
 
                         // Format the message
@@ -265,7 +267,7 @@ impl Client {
         // Commands can begin with :garbage, but we will reject clients
         // doing that for now to keep the protocol simple and focused.
         let cmd = tokens.next().ok_or(Error::ParseFailed("Invalid command line"))?;
-        let args = line.replacen(cmd, "", 1);
+        let args = line.replacen(cmd, "", 1).trim().to_string();
         let cmd = cmd.to_uppercase();
 
         debug!("[{}] --> {}{}", self.addr, cmd, args);
@@ -314,7 +316,7 @@ impl Client {
             let (_, msg) = args.split_at(msg_offset);
             let mut privmsg = Privmsg {
                 channel,
-                nick: self.nickname.lock().await.to_string(),
+                nick: self.nickname.read().await.to_string(),
                 msg: msg.to_string(),
             };
 

@@ -28,7 +28,7 @@ use darkfi::{
 use log::{debug, error, info};
 use smol::{
     fs,
-    lock::Mutex,
+    lock::{Mutex, RwLock},
     net::{SocketAddr, TcpListener},
     prelude::{AsyncRead, AsyncWrite},
     Executor,
@@ -53,11 +53,11 @@ pub struct IrcServer {
     /// TLS acceptor
     acceptor: Option<TlsAcceptor>,
     /// Configured autojoin channels
-    pub autojoin: Mutex<Vec<String>>,
+    pub autojoin: RwLock<Vec<String>>,
     /// Configured IRC channels
-    pub channels: Mutex<HashMap<String, IrcChannel>>,
+    pub channels: RwLock<HashMap<String, IrcChannel>>,
     /// Configured IRC contacts
-    pub contacts: Mutex<HashMap<String, IrcContact>>,
+    pub contacts: RwLock<HashMap<String, IrcContact>>,
     /// Active client connections
     clients: Mutex<HashMap<u16, StoppableTaskPtr>>,
 }
@@ -118,9 +118,9 @@ impl IrcServer {
             config_path,
             listener,
             acceptor,
-            autojoin: Mutex::new(Vec::new()),
-            channels: Mutex::new(HashMap::new()),
-            contacts: Mutex::new(HashMap::new()),
+            autojoin: RwLock::new(Vec::new()),
+            channels: RwLock::new(HashMap::new()),
+            contacts: RwLock::new(HashMap::new()),
             clients: Mutex::new(HashMap::new()),
         });
 
@@ -152,9 +152,9 @@ impl IrcServer {
 
         // FIXME: This will remove clients' joined channels. They need to stay.
         // Only if everything is fine, replace.
-        *self.autojoin.lock().await = autojoin;
-        *self.channels.lock().await = channels;
-        *self.contacts.lock().await = contacts;
+        *self.autojoin.write().await = autojoin;
+        *self.channels.write().await = channels;
+        *self.contacts.write().await = contacts;
 
         Ok(())
     }
@@ -253,7 +253,7 @@ impl IrcServer {
 
     /// Try encrypting a given `Privmsg` if there is such a channel/contact.
     pub async fn try_encrypt(&self, privmsg: &mut Privmsg) {
-        if let Some((name, channel)) = self.channels.lock().await.get_key_value(&privmsg.channel) {
+        if let Some((name, channel)) = self.channels.read().await.get_key_value(&privmsg.channel) {
             if let Some(saltbox) = &channel.saltbox {
                 privmsg.channel = saltbox::encrypt(saltbox, privmsg.channel.as_bytes());
                 privmsg.nick = saltbox::encrypt(saltbox, privmsg.nick.as_bytes());
@@ -263,7 +263,7 @@ impl IrcServer {
             }
         };
 
-        if let Some((name, contact)) = self.contacts.lock().await.get_key_value(&privmsg.channel) {
+        if let Some((name, contact)) = self.contacts.read().await.get_key_value(&privmsg.channel) {
             if let Some(saltbox) = &contact.saltbox {
                 privmsg.channel = saltbox::encrypt(saltbox, privmsg.channel.as_bytes());
                 privmsg.nick = saltbox::encrypt(saltbox, privmsg.nick.as_bytes());
@@ -292,9 +292,9 @@ impl IrcServer {
         };
 
         // Now go through all 3 ciphertexts. We'll use intermediate buffers
-        // for decryption, and only if all passes, we will return a modified
+        // for decryption, iff all passes, we will return a modified
         // (i.e. decrypted) privmsg, otherwise we return the original.
-        for (name, channel) in self.channels.lock().await.iter() {
+        for (name, channel) in self.channels.read().await.iter() {
             if let Some(saltbox) = &channel.saltbox {
                 let Some(channel_dec) = saltbox::try_decrypt(saltbox, &channel_ciphertext) else {
                     continue
@@ -316,7 +316,7 @@ impl IrcServer {
             }
         }
 
-        for (name, contact) in self.contacts.lock().await.iter() {
+        for (name, contact) in self.contacts.read().await.iter() {
             if let Some(saltbox) = &contact.saltbox {
                 let Some(channel_dec) = saltbox::try_decrypt(saltbox, &channel_ciphertext) else {
                     continue

@@ -50,7 +50,10 @@
 //! Some of the above commands could actually be implemented and could
 //! work in respect to the P2P network.
 
-use std::{collections::HashSet, sync::atomic::Ordering::SeqCst};
+use std::{
+    collections::HashSet,
+    sync::{atomic::Ordering::SeqCst, Arc},
+};
 
 use darkfi::Result;
 use log::{error, info};
@@ -74,7 +77,7 @@ impl Client {
             ))])
         }
 
-        let nick = self.nickname.lock().await.to_string();
+        let nick = self.nickname.read().await.to_string();
 
         let replies = vec![
             ReplyType::Server((
@@ -97,12 +100,12 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} CAP :{}", self.nickname.lock().await, INVALID_SYNTAX),
+                format!("{} CAP :{}", self.nickname.read().await, INVALID_SYNTAX),
             ))])
         };
 
-        let caps_keys: Vec<String> = self.caps.lock().await.keys().cloned().collect();
-        let nick = self.nickname.lock().await.to_string();
+        let caps_keys: Vec<String> = self.caps.read().await.keys().cloned().collect();
+        let nick = self.nickname.read().await.to_string();
 
         match subcommand.to_uppercase().as_str() {
             "LS" => {
@@ -110,7 +113,7 @@ impl Client {
                 let Some(_version) = tokens.next() else {
                     return Ok(vec![ReplyType::Server((
                         ERR_NEEDMOREPARAMS,
-                        format!("{} CAP :{}", self.nickname.lock().await, INVALID_SYNTAX),
+                        format!("{} CAP :{}", self.nickname.read().await, INVALID_SYNTAX),
                     ))])
                 };
                 */
@@ -139,7 +142,7 @@ impl Client {
                 let mut ack_list = vec![];
                 let mut nak_list = vec![];
 
-                let mut available_caps = self.caps.lock().await;
+                let mut available_caps = self.caps.write().await;
                 for cap in cap_reqs {
                     if available_caps.contains_key(cap) {
                         available_caps.insert(cap.to_string(), true);
@@ -173,7 +176,7 @@ impl Client {
             "LIST" => {
                 let enabled_caps: Vec<String> = self
                     .caps
-                    .lock()
+                    .read()
                     .await
                     .clone()
                     .into_iter()
@@ -204,7 +207,7 @@ impl Client {
         self.penalty.fetch_add(1, SeqCst);
         Ok(vec![ReplyType::Server((
             ERR_NEEDMOREPARAMS,
-            format!("{} CAP :{}", self.nickname.lock().await, INVALID_SYNTAX),
+            format!("{} CAP :{}", nick, INVALID_SYNTAX),
         ))])
     }
 
@@ -223,7 +226,7 @@ impl Client {
             ))])
         }
 
-        let nick = self.nickname.lock().await.clone();
+        let nick = self.nickname.read().await.clone();
         let replies = vec![
             ReplyType::Server((
                 RPL_INFO,
@@ -250,19 +253,20 @@ impl Client {
         }
 
         // Client's (already) active channels
-        let mut active_channels = self.channels.lock().await;
+        let mut active_channels = self.channels.write().await;
         // Here we'll hold valid channel names.
         let mut channels = HashSet::new();
 
         // Let's scan through our channels. For now we'll only support
         // channel names starting with a single '#' character.
+        let nick = self.nickname.read().await.to_string();
         let tokens = args.split_ascii_whitespace();
         for channel in tokens {
             if !channel.starts_with('#') {
                 self.penalty.fetch_add(1, SeqCst);
                 return Ok(vec![ReplyType::Server((
                     ERR_NEEDMOREPARAMS,
-                    format!("{} JOIN :{}", self.nickname.lock().await, INVALID_SYNTAX),
+                    format!("{} JOIN :{}", nick, INVALID_SYNTAX),
                 ))])
             }
 
@@ -276,14 +280,13 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} JOIN :{}", self.nickname.lock().await, INVALID_SYNTAX),
+                format!("{} JOIN :{}", nick, INVALID_SYNTAX),
             ))])
         }
 
         // Create new channels for this client and construct replies.
-        let mut server_channels = self.server.channels.lock().await;
+        let mut server_channels = self.server.channels.write().await;
         let mut replies = vec![];
-        let nick = self.nickname.lock().await.to_string();
         for channel in channels {
             // Insert the channel name into the set of client's active channels
             active_channels.insert(channel.clone());
@@ -337,10 +340,10 @@ impl Client {
             ))])
         }
 
-        let nick = self.nickname.lock().await.to_string();
+        let nick = self.nickname.read().await.to_string();
 
         let mut list = vec![];
-        for (name, channel) in self.server.channels.lock().await.iter() {
+        for (name, channel) in self.server.channels.read().await.iter() {
             list.push(format!("{} {} {} :{}", nick, name, channel.nicks.len(), channel.topic));
         }
 
@@ -368,17 +371,17 @@ impl Client {
             ))])
         }
 
+        let nick = self.nickname.read().await.to_string();
+
         let mut tokens = args.split_ascii_whitespace();
 
         let Some(target) = tokens.next() else {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} MODE :{}", self.nickname.lock().await, INVALID_SYNTAX),
+                format!("{} MODE :{}", nick, INVALID_SYNTAX),
             ))])
         };
-
-        let nick = self.nickname.lock().await.to_string();
 
         if target == nick {
             return Ok(vec![ReplyType::Server((RPL_UMODEIS, format!("{} +", nick)))])
@@ -391,7 +394,7 @@ impl Client {
             ))])
         }
 
-        if !self.server.channels.lock().await.contains_key(target) {
+        if !self.server.channels.read().await.contains_key(target) {
             return Ok(vec![ReplyType::Server((
                 ERR_NOSUCHNICK,
                 format!("{} {} :No such nick or channel name", nick, target),
@@ -433,14 +436,14 @@ impl Client {
             ))])
         }
 
-        let nick = self.nickname.lock().await.to_string();
+        let nick = self.nickname.read().await.to_string();
         let mut tokens = args.split_ascii_whitespace();
         let mut replies = vec![];
 
         // If a channel was requested, reply only with that one.
         // Otherwise, return info for all known channels.
         if let Some(req_chan) = tokens.next() {
-            if let Some(chan) = self.server.channels.lock().await.get(req_chan) {
+            if let Some(chan) = self.server.channels.read().await.get(req_chan) {
                 let nicks: Vec<String> = chan.nicks.iter().cloned().collect();
 
                 replies.push(ReplyType::Server((
@@ -456,7 +459,7 @@ impl Client {
 
             Ok(replies)
         } else {
-            for (name, chan) in self.server.channels.lock().await.iter() {
+            for (name, chan) in self.server.channels.read().await.iter() {
                 let nicks: Vec<String> = chan.nicks.iter().cloned().collect();
 
                 replies.push(ReplyType::Server((
@@ -482,7 +485,7 @@ impl Client {
         let mut tokens = args.split_ascii_whitespace();
 
         // Reference the current nickname
-        let old_nick = self.nickname.lock().await.to_string();
+        let old_nick = self.nickname.read().await.to_string();
 
         let Some(nickname) = tokens.next() else {
             self.penalty.fetch_add(1, SeqCst);
@@ -503,10 +506,10 @@ impl Client {
         }
 
         // Set the new nickname
-        *self.nickname.lock().await = nickname.to_string();
+        *self.nickname.write().await = nickname.to_string();
 
         // If the username is set, we can complete the registration
-        if *self.username.lock().await != "*" && !self.registered.load(SeqCst) {
+        if *self.username.read().await != "*" && !self.registered.load(SeqCst) {
             self.registered.store(true, SeqCst);
             if self.reg_paused.load(SeqCst) {
                 return Ok(vec![])
@@ -517,7 +520,7 @@ impl Client {
 
         // If we were registered, we send a client reply about it.
         if self.registered.load(SeqCst) {
-            Ok(vec![ReplyType::Client((old_nick, format!("NICK :{}", self.nickname.lock().await)))])
+            Ok(vec![ReplyType::Client((old_nick, format!("NICK :{}", nickname)))])
         } else {
             // Otherwise, we don't reply.
             Ok(vec![])
@@ -536,13 +539,14 @@ impl Client {
             ))])
         }
 
+        let nick = self.nickname.read().await.to_string();
         let mut tokens = args.split_ascii_whitespace();
 
         let Some(channel) = tokens.next() else {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} PART :{}", self.nickname.lock().await, INVALID_SYNTAX),
+                format!("{} PART :{}", nick, INVALID_SYNTAX),
             ))])
         };
 
@@ -550,25 +554,22 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} PART :{}", self.nickname.lock().await, INVALID_SYNTAX),
+                format!("{} PART :{}", nick, INVALID_SYNTAX),
             ))])
         }
 
-        let mut active_channels = self.channels.lock().await;
+        let mut active_channels = self.channels.write().await;
         if !active_channels.contains(channel) {
             return Ok(vec![ReplyType::Server((
                 ERR_NOSUCHCHANNEL,
-                format!("{} {} :No such channel", self.nickname.lock().await, channel),
+                format!("{} {} :No such channel", nick, channel),
             ))])
         }
 
         // Remove the channel from the client's channel list
         active_channels.remove(channel);
 
-        let replies = vec![ReplyType::Client((
-            self.nickname.lock().await.to_string(),
-            format!("PART {} :Bye", channel),
-        ))];
+        let replies = vec![ReplyType::Client((nick, format!("PART {} :Bye", channel)))];
 
         Ok(replies)
     }
@@ -591,7 +592,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NOORIGIN,
-                format!("{} :No origin specified", self.nickname.lock().await),
+                format!("{} :No origin specified", self.nickname.read().await),
             ))])
         };
 
@@ -611,33 +612,34 @@ impl Client {
             ))])
         }
 
+        let nick = self.nickname.read().await.to_string();
         let mut tokens = args.split_ascii_whitespace();
 
         let Some(target) = tokens.next() else {
             return Ok(vec![ReplyType::Server((
                 ERR_NORECIPIENT,
-                format!("{} :No recipient given (PRIVMSG)", self.nickname.lock().await),
+                format!("{} :No recipient given (PRIVMSG)", nick),
             ))])
         };
 
         let Some(message) = tokens.next() else {
             return Ok(vec![ReplyType::Server((
                 ERR_NOTEXTTOSEND,
-                format!("{} :No text to send", self.nickname.lock().await),
+                format!("{} :No text to send", nick),
             ))])
         };
 
         if !message.starts_with(':') {
             return Ok(vec![ReplyType::Server((
                 ERR_NOTEXTTOSEND,
-                format!("{} :No text to send", self.nickname.lock().await),
+                format!("{} :No text to send", nick),
             ))])
         }
 
         // We only send a client reply if the message is for ourself.
         // Anything else is rendered by the IRC client and not supposed
         // to be echoed by the IRC serer.
-        if target == *self.nickname.lock().await {
+        if target == nick {
             return Ok(vec![ReplyType::Client((
                 target.to_string(),
                 format!("PRIVMSG {} {}", target, message),
@@ -646,11 +648,8 @@ impl Client {
 
         // If it's a DM and we don't have an encryption key, we will
         // refuse to send it. Send ERR_NORECIPIENT to the client.
-        if !target.starts_with('#') && !self.server.contacts.lock().await.contains_key(target) {
-            return Ok(vec![ReplyType::Server((
-                ERR_NOSUCHNICK,
-                format!("{} :{}", self.nickname.lock().await, target),
-            ))])
+        if !target.starts_with('#') && !self.server.contacts.read().await.contains_key(target) {
+            return Ok(vec![ReplyType::Server((ERR_NOSUCHNICK, format!("{} :{}", nick, target)))])
         }
 
         Ok(vec![])
@@ -681,48 +680,46 @@ impl Client {
             ))])
         }
 
+        let nick = self.nickname.read().await.to_string();
         let mut tokens = args.split_ascii_whitespace();
 
         let Some(channel) = tokens.next() else {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} TOPIC :{}", self.nickname.lock().await, INVALID_SYNTAX),
+                format!("{} TOPIC :{}", nick, INVALID_SYNTAX),
             ))])
         };
 
-        if !self.server.channels.lock().await.contains_key(channel) {
+        if !self.server.channels.read().await.contains_key(channel) {
             return Ok(vec![ReplyType::Server((
                 ERR_NOSUCHCHANNEL,
-                format!("{} {} :No such channel", self.nickname.lock().await, channel),
+                format!("{} {} :No such channel", nick, channel),
             ))])
         }
 
         // If there's a topic, we'll set it, otherwise return the set topic.
         let Some(topic) = tokens.next() else {
-            let topic = self.server.channels.lock().await.get(channel).unwrap().topic.clone();
+            let topic = self.server.channels.read().await.get(channel).unwrap().topic.clone();
             if topic.is_empty() {
                 return Ok(vec![ReplyType::Server((
                     RPL_NOTOPIC,
-                    format!("{} {} :No topic is set", self.nickname.lock().await, channel),
+                    format!("{} {} :No topic is set", nick, channel),
                 ))])
             } else {
                 return Ok(vec![ReplyType::Server((
                     RPL_TOPIC,
-                    format!("{} {} :{}", self.nickname.lock().await, channel, topic),
+                    format!("{} {} :{}", nick, channel, topic),
                 ))])
             }
         };
 
         // Set the new topic
-        self.server.channels.lock().await.get_mut(channel).unwrap().topic =
+        self.server.channels.write().await.get_mut(channel).unwrap().topic =
             topic.strip_prefix(':').unwrap().to_string();
 
         // Send reply
-        let replies = vec![ReplyType::Client((
-            self.nickname.lock().await.to_string(),
-            format!("TOPIC {} {}", channel, topic),
-        ))];
+        let replies = vec![ReplyType::Client((nick, format!("TOPIC {} {}", channel, topic)))];
 
         Ok(replies)
     }
@@ -738,18 +735,19 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_ALREADYREGISTERED,
-                format!("{} :{}", self.nickname.lock().await, ALREADY_REGISTERED),
+                format!("{} :{}", self.nickname.read().await, ALREADY_REGISTERED),
             ))])
         }
 
         // Parse the line
+        let nick = self.nickname.read().await.to_string();
         let mut tokens = args.split_ascii_whitespace();
 
         let Some(username) = tokens.next() else {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} USER :{}", self.nickname.lock().await, INVALID_SYNTAX),
+                format!("{} USER :{}", nick, INVALID_SYNTAX),
             ))])
         };
 
@@ -758,7 +756,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} USER :{}", self.nickname.lock().await, INVALID_SYNTAX),
+                format!("{} USER :{}", nick, INVALID_SYNTAX),
             ))])
         };
 
@@ -767,7 +765,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} USER :{}", self.nickname.lock().await, INVALID_SYNTAX),
+                format!("{} USER :{}", nick, INVALID_SYNTAX),
             ))])
         };
 
@@ -776,7 +774,7 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} USER :{}", self.nickname.lock().await, INVALID_SYNTAX),
+                format!("{} USER :{}", nick, INVALID_SYNTAX),
             ))])
         };
 
@@ -784,15 +782,15 @@ impl Client {
             self.penalty.fetch_add(1, SeqCst);
             return Ok(vec![ReplyType::Server((
                 ERR_NEEDMOREPARAMS,
-                format!("{} USER :{}", self.nickname.lock().await, INVALID_SYNTAX),
+                format!("{} USER :{}", nick, INVALID_SYNTAX),
             ))])
         }
 
-        *self.username.lock().await = username.to_string();
-        *self.realname.lock().await = realname.to_string();
+        *self.username.write().await = username.to_string();
+        *self.realname.write().await = realname.to_string();
 
         // If the nickname is set, we can complete the registration
-        if *self.nickname.lock().await != "*" {
+        if nick != "*" {
             self.registered.store(true, SeqCst);
             if self.reg_paused.load(SeqCst) {
                 return Ok(vec![])
@@ -821,7 +819,7 @@ impl Client {
             RPL_VERSION,
             format!(
                 "{} {} {} :Let there be dark!",
-                self.nickname.lock().await,
+                self.nickname.read().await,
                 env!("CARGO_PKG_VERSION"),
                 SERVER_NAME
             ),
@@ -832,7 +830,7 @@ impl Client {
 
     /// Internal function that constructs the welcome message.
     async fn welcome(&self) -> Vec<ReplyType> {
-        let nick = self.nickname.lock().await.to_string();
+        let nick = self.nickname.read().await.to_string();
 
         let mut replies = vec![
             ReplyType::Server((RPL_WELCOME, format!("{} :{}", nick, WELCOME))),
@@ -851,8 +849,8 @@ impl Client {
 
         // If we have any configured autojoin channels, let's join the user
         // and set their topics, if any.
-        let mut config_chans = self.server.channels.lock().await;
-        for channel in self.server.autojoin.lock().await.iter() {
+        let mut config_chans = self.server.channels.write().await;
+        for channel in self.server.autojoin.read().await.iter() {
             replies.push(ReplyType::Client((nick.clone(), format!("JOIN :{}", channel))));
             replies.push(ReplyType::Server((
                 RPL_NAMREPLY,
