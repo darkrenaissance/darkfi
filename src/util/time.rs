@@ -30,8 +30,10 @@ const MIN_IN_HOUR: u64 = 60;
 const SECS_IN_HOUR: u64 = 3600;
 
 /// Helper structure providing time related calculations.
-/// This struct is optimized for performance and does not check
-/// its arithmetic: division-by-zero is possible for certain values.
+/// This struct is optimized for performance. The developer is responsible
+/// for ensuring `slot_time` and `epoch_length` are greater than 0.
+/// Values of 0 for these fields are incoherent and unsafe in asynchronous
+/// context.
 /// [`TimeKeeperSafe`] should be used if safety is more important than
 /// performance.
 #[derive(Clone)]
