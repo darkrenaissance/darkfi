@@ -50,10 +50,7 @@
 //! Some of the above commands could actually be implemented and could
 //! work in respect to the P2P network.
 
-use std::{
-    collections::HashSet,
-    sync::{atomic::Ordering::SeqCst, Arc},
-};
+use std::{collections::HashSet, sync::atomic::Ordering::SeqCst};
 
 use darkfi::Result;
 use log::{error, info};
@@ -788,6 +785,11 @@ impl Client {
 
         *self.username.write().await = username.to_string();
         *self.realname.write().await = realname.to_string();
+
+        // The username is now set, we can open the sled tree for seen messages
+        self.seen
+            .set(self.server.darkirc.sled.open_tree(format!("darkirc_user_{}", username)).unwrap())
+            .unwrap();
 
         // If the nickname is set, we can complete the registration
         if nick != "*" {

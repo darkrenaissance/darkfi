@@ -20,7 +20,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst},
-        Arc,
+        Arc, OnceLock,
     },
 };
 
@@ -55,7 +55,7 @@ pub enum ReplyType {
     Cap(String),
 }
 
-/// Stateful IRC client, used for each client connection
+/// Stateful IRC client handler, used for each client connection
 pub struct Client {
     /// Pointer to parent `IrcServer`
     pub server: Arc<IrcServer>,
@@ -81,6 +81,9 @@ pub struct Client {
     pub realname: RwLock<String>,
     /// Client caps
     pub caps: RwLock<HashMap<String, bool>>,
+    /// Set of seen messages for the user
+    /// TODO: It grows indefinitely, needs to be pruned.
+    pub seen: OnceLock<sled::Tree>,
 }
 
 impl Client {
@@ -105,6 +108,7 @@ impl Client {
             nickname: RwLock::new(String::from("*")),
             realname: RwLock::new(String::from("*")),
             caps: RwLock::new(caps),
+            seen: OnceLock::new(),
         })
     }
 
@@ -155,6 +159,9 @@ impl Client {
                             if let Err(e) = self.server.darkirc.event_graph.dag_insert(event.clone()).await {
                                 error!("[IRC CLIENT] Failed inserting new event to DAG: {}", e);
                             } else {
+                                // We sent this, so it should be considered seen.
+                                self.seen.get().unwrap().insert(event_id.as_bytes(), &[]).unwrap();
+
                                 // Otherwise, broadcast it
                                 self.server.darkirc.p2p.broadcast(&EventPut(event)).await;
                             }
@@ -214,6 +221,9 @@ impl Client {
                             error!("[IRC CLIENT] Failed writing PRIVMSG to client: {}", e);
                             continue
                         }
+
+                        // Mark the message as seen for this USER
+                        self.seen.get().unwrap().insert(event_id.as_bytes(), &[]).unwrap();
                     }
                 }
             }
@@ -267,7 +277,7 @@ impl Client {
         // Commands can begin with :garbage, but we will reject clients
         // doing that for now to keep the protocol simple and focused.
         let cmd = tokens.next().ok_or(Error::ParseFailed("Invalid command line"))?;
-        let args = line.replacen(cmd, "", 1).trim().to_string();
+        let args = line.replacen(cmd, "", 1);
         let cmd = cmd.to_uppercase();
 
         debug!("[{}] --> {}{}", self.addr, cmd, args);

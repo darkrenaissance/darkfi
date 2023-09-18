@@ -105,6 +105,8 @@ struct Args {
 pub struct DarkIrc {
     /// P2P network pointer
     p2p: P2pPtr,
+    /// Sled DB (also used in event_graph)
+    sled: sled::Db,
     /// Event Graph instance
     event_graph: EventGraphPtr,
     /// JSON-RPC connection tracker
@@ -114,8 +116,13 @@ pub struct DarkIrc {
 }
 
 impl DarkIrc {
-    fn new(p2p: P2pPtr, event_graph: EventGraphPtr, dnet_sub: JsonSubscriber) -> Self {
-        Self { p2p, event_graph, rpc_connections: Mutex::new(HashSet::new()), dnet_sub }
+    fn new(
+        p2p: P2pPtr,
+        sled: sled::Db,
+        event_graph: EventGraphPtr,
+        dnet_sub: JsonSubscriber,
+    ) -> Self {
+        Self { p2p, sled, event_graph, rpc_connections: Mutex::new(HashSet::new()), dnet_sub }
     }
 }
 
@@ -208,7 +215,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     );
 
     info!("Starting JSON-RPC server");
-    let darkirc = Arc::new(DarkIrc::new(p2p.clone(), event_graph.clone(), dnet_sub));
+    let darkirc =
+        Arc::new(DarkIrc::new(p2p.clone(), sled_db.clone(), event_graph.clone(), dnet_sub));
     let darkirc_ = Arc::clone(&darkirc);
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
