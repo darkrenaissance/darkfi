@@ -49,25 +49,25 @@ In summary, a more efficient way to fuzz safe Rust code is the following:
 cargo fuzz run --jobs $(nproc) -s none --all-features TARGET 
 ```
 
-## Building the corpora
+## Fuzzing Corpora 
 
-### Motivation
-If you discover a crash while fuzzing, add it to the relevant
-subdirectory in `artifacts/` and give it a meaningful name.
+### What is a corpus?
+A fuzzing corpus consists of a set of starting inputs. The fuzzer can 
+"mutate" these inputs using various algorithms to create new inputs
+that can help test a greater portion of the code.
 
-Files in the corpora will be used as default inputs in subsequent
-runs in the fuzzer. The fuzzer will then "mutate" or modify these
-inputs using various algorithms to create new yet similar inputs.
-This is a way to get more value from fuzzing as we'll be able to
-test using inputs similar to ones that have been problematic in the
-past and therefore more likely to find bugs.
+Good inputs consist of valid data that the program expects as well
+as edge-cases that could cause e.g. parsing issues. 
 
-Another benefit is that we will be able to detect regressions
-in the codebase by simply running our known corpora against the fuzzer
-and making sure the code doesn't crash.
+### Building the corpora
+If you find a crash or panic while fuzzing, libfuzzer will save the
+corresponding input in `artifacts/<target>`.
 
-Finally, the corpora make for good building blocks for unit tests 
-as they represent known error cases that the code has had at some point.
+You should copy this input into `regressions/<target>` and give it
+a meaningful name.
+
+(We use `regressions/` instead of committing `artifacts/` to make it
+easier to share corpora between libfuzzer and honggfuzz.)
 
 ### Example
 e.g. scenario: while testing ZkBinary's decode() function, you find
@@ -80,9 +80,16 @@ for `cargo fuzz run TARGET`
 the fuzzer. The filename's prefix will match the kind of error
 encountered: `oom` (out-of-memory), `crash`, etc.
 * Choose a `NAME` for the crash file, e.g. `corpus-crash-emptyfile`
-* `mv artifacts/TARGET/CRASH-FILE artifacts/TARGET/NAME`
+* `mv artifacts/TARGET/CRASH-FILE regressions/TARGET/NAME`
 
-Then add the new `artifacts/TARGET/NAME` file to git.
+Then add the new `regressions/TARGET/NAME` file to git.
+
+### Creating unit tests
+
+The files in `regressions/` can be converted to unit tests in 
+the relevant source code. We should aim to do this where possible
+as the unit tests get run on every commit whereas fuzzing happens
+only periodically and requires more training to use.
 
 ## Out-of-memory issues in libfuzzer/AddressSanitizer
 
