@@ -51,3 +51,9 @@ name = "decode-string"
 path = "fuzz_targets/decode_string.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "zkas-compile"
+path = "fuzz_targets/zkas_compile.rs"
+test = false
+doc = false
