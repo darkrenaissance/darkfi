@@ -1,5 +1,5 @@
 [package]
-name = "darkfi-fuzz2"
+name = "darkfi-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"

@@ -58,9 +58,11 @@ fn main() {
                 return
             }
 
-            if analyzer.analyze_semantic().is_err() {
-                return
-            }
+            // Skip this section because it automatically pauses to prompt
+            // for user inputwhich is probably preventing coverage.
+            // if analyzer.analyze_semantic().is_err() {
+            //     return
+            // }
 
             let compiler = Compiler::new(
                 filename,
