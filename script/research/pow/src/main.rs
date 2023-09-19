@@ -108,11 +108,10 @@ impl Block {
     fn hash(&self) -> Result<blake2b_simd::Hash> {
         let mut hasher = blake2b_simd::Params::new().hash_length(HASH_LEN).to_state();
 
-        let mut len: usize = 0;
-        len += self.header.encode(&mut hasher)?;
-        len += self.header.txtree.root(0).unwrap().encode(&mut hasher)?;
-        len += self.txs.len().encode(&mut hasher)?;
-        len.encode(&mut hasher)?;
+        self.header.nonce.encode(&mut hasher)?;
+        self.header.previous_hash.encode(&mut hasher)?;
+        self.header.timestamp.encode(&mut hasher)?;
+        self.header.txtree.root(0).unwrap().encode(&mut hasher)?;
 
         Ok(hasher.finalize())
     }

@@ -52,11 +52,17 @@ impl Block {
         Self { header, txs, signature }
     }
 
-    /// Compute the block's blockchain hash
-    pub fn hash(&self) -> Result<blake3::Hash> {
-        let mut hasher = blake3::Hasher::new();
-        self.encode(&mut hasher)?;
-        Ok(hasher.finalize())
+    /// A block's hash is the same as the hash of its header
+    pub fn hash(&self) -> blake3::Hash {
+        self.header
+    }
+
+    /// Generate a `Block` from a `BlockInfo`
+    pub fn from_block_info(block_info: &BlockInfo) -> Result<Self> {
+        let header = block_info.header.hash()?;
+        let txs = block_info.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
+        let signature = block_info.signature;
+        Ok(Self { header, txs, signature })
     }
 }
 
@@ -107,22 +113,15 @@ impl BlockInfo {
         Self { header, txs, signature, slots }
     }
 
-    /// Compute the block's blockchain hash
+    /// A block's hash is the same as the hash of its header
     pub fn hash(&self) -> Result<blake3::Hash> {
-        let block: Block = self.clone().into();
-        block.hash()
+        self.header.hash()
     }
 
-    /// Compute the block's hash used for mining
-    pub fn mining_hash(&self) -> Result<blake3::Hash> {
+    /// Compute the block's full hash
+    pub fn full_hash(&self) -> Result<blake3::Hash> {
         let mut hasher = blake3::Hasher::new();
-
-        let mut len: usize = 0;
-        len += self.header.encode(&mut hasher)?;
-        len += self.header.tree.root(0).unwrap().encode(&mut hasher)?;
-        len += self.txs.len().encode(&mut hasher)?;
-        len.encode(&mut hasher)?;
-
+        self.encode(&mut hasher)?;
         Ok(hasher.finalize())
     }
 
@@ -146,13 +145,6 @@ impl BlockInfo {
         }
 
         Ok(())
-    }
-}
-
-impl From<BlockInfo> for Block {
-    fn from(block_info: BlockInfo) -> Self {
-        let txs = block_info.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
-        Self { header: block_info.header.hash().unwrap(), txs, signature: block_info.signature }
     }
 }
 
@@ -180,17 +172,16 @@ impl BlockStore {
 
     /// Generate the sled batch corresponding to an insert, so caller
     /// can handle the write operation.
-    /// The blocks are hashed with BLAKE3 and this block hash is used as
-    /// the key, while value is the serialized [`Block`] itself.
+    /// The block's hash() function output is used as the key,
+    /// while value is the serialized [`Block`] itself.
     /// On success, the function returns the block hashes in the same order.
     pub fn insert_batch(&self, blocks: &[Block]) -> Result<(sled::Batch, Vec<blake3::Hash>)> {
         let mut ret = Vec::with_capacity(blocks.len());
         let mut batch = sled::Batch::default();
 
         for block in blocks {
-            let serialized = serialize(block);
-            let blockhash = blake3::hash(&serialized);
-            batch.insert(blockhash.as_bytes(), serialized);
+            let blockhash = block.hash();
+            batch.insert(blockhash.as_bytes(), serialize(block));
             ret.push(blockhash);
         }
 
@@ -250,17 +241,16 @@ impl BlockStoreOverlay {
     }
 
     /// Insert a slice of [`Block`] into the overlay.
-    /// The block are hashed with BLAKE3 and this block hash is used as
-    /// the key, while value is the serialized [`Block`] itself.
+    /// The block's hash() function output is used as the key,
+    /// while value is the serialized [`Block`] itself.
     /// On success, the function returns the block hashes in the same order.
     pub fn insert(&self, blocks: &[Block]) -> Result<Vec<blake3::Hash>> {
         let mut ret = Vec::with_capacity(blocks.len());
         let mut lock = self.0.lock().unwrap();
 
         for block in blocks {
-            let serialized = serialize(block);
-            let blockhash = blake3::hash(&serialized);
-            lock.insert(SLED_BLOCK_TREE, blockhash.as_bytes(), &serialized)?;
+            let blockhash = block.hash();
+            lock.insert(SLED_BLOCK_TREE, blockhash.as_bytes(), &serialize(block))?;
             ret.push(blockhash);
         }
 

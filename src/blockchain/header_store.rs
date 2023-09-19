@@ -66,7 +66,15 @@ impl Header {
     /// Compute the header's hash
     pub fn hash(&self) -> Result<blake3::Hash> {
         let mut hasher = blake3::Hasher::new();
-        self.encode(&mut hasher)?;
+
+        self.version.encode(&mut hasher)?;
+        self.previous.encode(&mut hasher)?;
+        self.epoch.encode(&mut hasher)?;
+        self.height.encode(&mut hasher)?;
+        self.timestamp.encode(&mut hasher)?;
+        self.nonce.encode(&mut hasher)?;
+        self.tree.root(0).unwrap().encode(&mut hasher)?;
+
         Ok(hasher.finalize())
     }
 }
@@ -108,8 +116,8 @@ impl HeaderStore {
 
     /// Generate the sled batch corresponding to an insert, so caller
     /// can handle the write operation.
-    /// The headers are hashed with BLAKE3 and this header hash is used as
-    /// the key, while value is the serialized [`Header`] itself.
+    /// The header's hash() function output is used as the key,
+    /// while value is the serialized [`Header`] itself.
     /// On success, the function returns the header hashes in the same
     /// order, along with the corresponding operation batch.
     pub fn insert_batch(&self, headers: &[Header]) -> Result<(sled::Batch, Vec<blake3::Hash>)> {
@@ -117,9 +125,8 @@ impl HeaderStore {
         let mut batch = sled::Batch::default();
 
         for header in headers {
-            let serialized = serialize(header);
-            let headerhash = blake3::hash(&serialized);
-            batch.insert(headerhash.as_bytes(), serialized);
+            let headerhash = header.hash()?;
+            batch.insert(headerhash.as_bytes(), serialize(header));
             ret.push(headerhash);
         }
 
@@ -179,17 +186,16 @@ impl HeaderStoreOverlay {
     }
 
     /// Insert a slice of [`Header`] into the overlay.
-    /// The headers are hashed with BLAKE3 and this headerhash is used as
-    /// the key, while value is the serialized [`Header`] itself.
+    /// The header's hash() function output is used as the key,
+    /// while value is the serialized [`Header`] itself.
     /// On success, the function returns the header hashes in the same order.
     pub fn insert(&self, headers: &[Header]) -> Result<Vec<blake3::Hash>> {
         let mut ret = Vec::with_capacity(headers.len());
         let mut lock = self.0.lock().unwrap();
 
         for header in headers {
-            let serialized = serialize(header);
-            let headerhash = blake3::hash(&serialized);
-            lock.insert(SLED_HEADER_TREE, headerhash.as_bytes(), &serialized)?;
+            let headerhash = header.hash()?;
+            lock.insert(SLED_HEADER_TREE, headerhash.as_bytes(), &serialize(header))?;
             ret.push(headerhash);
         }
 

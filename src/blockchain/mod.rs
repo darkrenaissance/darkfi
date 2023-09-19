@@ -126,7 +126,7 @@ impl Blockchain {
         batches.push(headers_batch);
 
         // Store block
-        let blk: Block = Block::from(block.clone());
+        let blk: Block = Block::from_block_info(block)?;
         let (bocks_batch, block_hashes) = self.blocks.insert_batch(&[blk])?;
         let block_hash = block_hashes[0];
         let block_hash_vec = [block_hash];
@@ -219,7 +219,7 @@ impl Blockchain {
             // Retrieve extra stuff based on block version
             let mut block_slots = vec![];
             if header.version > 0 {
-                let slots = self.blocks_slots.get(&[block.hash()?], true)?;
+                let slots = self.blocks_slots.get(&[block.hash()], true)?;
                 let slots = slots[0].clone().unwrap();
                 let slots = self.slots.get(&slots, true)?;
                 block_slots = slots.iter().map(|x| x.clone().unwrap()).collect();
@@ -484,7 +484,7 @@ impl BlockchainOverlay {
         self.headers.insert(&[block.header.clone()])?;
 
         // Store block
-        let blk: Block = Block::from(block.clone());
+        let blk: Block = Block::from_block_info(block)?;
         let block_hash = self.blocks.insert(&[blk])?[0];
         let block_hash_vec = [block_hash];
 
@@ -564,7 +564,7 @@ impl BlockchainOverlay {
             // Retrieve extra stuff based on block version
             let mut block_slots = vec![];
             if header.version > 0 {
-                let slots = self.blocks_slots.get(&[block.hash()?], true)?;
+                let slots = self.blocks_slots.get(&[block.hash()], true)?;
                 let slots = slots[0].clone().unwrap();
                 let slots = self.slots.get(&slots, true)?;
                 block_slots = slots.iter().map(|x| x.clone().unwrap()).collect();
