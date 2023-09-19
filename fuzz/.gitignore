@@ -3,3 +3,7 @@ artifacts/
 corpus
 coverage
 Cargo.lock
+
+# Code coverage artifacts
+*.html
+*.profdata
