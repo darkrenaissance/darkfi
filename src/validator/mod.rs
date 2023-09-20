@@ -38,6 +38,9 @@ use crate::{
 pub mod consensus;
 use consensus::Consensus;
 
+/// DarkFi PoW module
+pub mod pow;
+
 /// DarkFi consensus PID controller
 pub mod pid;
 
