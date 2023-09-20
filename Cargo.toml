@@ -166,6 +166,7 @@ validator = [
     "dashu",
     "halo2_proofs",
     "lazy_static",
+    "num-bigint",
     "rand",
     "randomx",
     "smol",
