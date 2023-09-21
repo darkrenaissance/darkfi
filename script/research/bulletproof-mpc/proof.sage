@@ -36,9 +36,10 @@ class Proof(object):
                 R_l += R
 
                 # choose true random challenges u, u^{-1}
-                transcript.append_message(b'L', bytes(''.join([l.__str__() for l in L]), encoding='utf-8'))
-                transcript.append_message(b'R', bytes(''.join([r.__str__() for r in R]), encoding='utf-8'))
-                u = K(transcript.challenge_bytes(b'u'))
+                #transcript.append_message(b'L', bytes(''.join([l.__str__() for l in L]), encoding='utf-8'))
+                #transcript.append_message(b'R', bytes(''.join([r.__str__() for r in R]), encoding='utf-8'))
+                #u = K(transcript.challenge_bytes(b'u'))
+                u = K(1)
                 u_inv = 1/u
 
                 for i in range(n):
@@ -74,10 +75,11 @@ class Proof(object):
                 R_l += R
 
                 # choose true random challenges u, u^{-1]}
-                transcript.append_message(b'L', bytes(''.join([l.__str__() for l in L]), encoding='utf-8'))
-                transcript.append_message(b'R', bytes(''.join([r.__str__() for r in R]), encoding='utf-8'))
+                #transcript.append_message(b'L', bytes(''.join([l.__str__() for l in L]), encoding='utf-8'))
+                #transcript.append_message(b'R', bytes(''.join([r.__str__() for r in R]), encoding='utf-8'))
 
-                u = K(transcript.challenge_bytes(b'u'))
+                #u = K(transcript.challenge_bytes(b'u'))
+                u = K(1)
                 u_inv = 1/u
                 for i in range(n):
                     # u * a_prime_l + u^{-1} * a_prime_r
@@ -103,9 +105,10 @@ class Proof(object):
           challenges_inv = []
           lg_n = len(self.lhs)
           for L, R in zip(self.lhs, self.rhs):
-              verifier.append_message(b'L', bytes(''.join([l.__str__() for l in [L]]), encoding='utf-8'))
-              verifier.append_message(b'R', bytes(''.join([r.__str__() for r in [R]]), encoding='utf-8'))
-              u = K(verifier.challenge_bytes(b'u'))
+              #verifier.append_message(b'L', bytes(''.join([l.__str__() for l in [L]]), encoding='utf-8'))
+              #verifier.append_message(b'R', bytes(''.join([r.__str__() for r in [R]]), encoding='utf-8'))
+              #u = K(verifier.challenge_bytes(b'u'))
+              u = K(1)
               u_inv = 1/u
               challenges += [u]
               challenges_inv += [1/u]
@@ -142,10 +145,17 @@ class Proof(object):
           ## h^{h_factor_b_s}
           res_p_3 = CurvePoint.msm(H, h_times_b_div_s)
           # L^(u^2)
+          print("L: {}".format(self.lhs))
           res_p_4 = CurvePoint.msm(self.lhs, neg_u_sq)
           # R^(u^-2)
+          print('R: {}'.format(self.rhs))
           res_p_5 = CurvePoint.msm(self.rhs, neg_u_inv_sq)
           # P prime  = L^{u^2} * P * R^{u^{-1}}
+          print('p_1: {}'.format(res_p_1))
+          print('p_2: {}'.format(res_p_2))
+          print('p_3: {}'.format(res_p_3))
+          print('p_4: {}'.format(res_p_4))
+          print('p_5: {}'.format(res_p_5))
           res_p = res_p_1 + res_p_2 + res_p_3 + res_p_4 + res_p_5;
           res = res_p == P
           # P prime == H(u^{-1} * a_prime_r, u * a_prime_l, u * b_prime_r, u ^ {-1} * b_prime_l, c_prime)
