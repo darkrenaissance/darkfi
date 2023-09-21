@@ -97,6 +97,9 @@ struct Args {
     #[structopt(long)]
     get_chacha_pubkey: Option<String>,
 
+    #[structopt(long)]
+    skip_dag_sync: bool,
+
     /// P2P network settings
     #[structopt(flatten)]
     net: SettingsOpt,
@@ -261,8 +264,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     info!("Waiting for some P2P connections...");
     sleep(5).await;
-    if !p2p.channels().lock().await.is_empty() {
-        // We'll attempt to sync 5 times
+
+    // We'll attempt to sync 5 times
+    if !args.skip_dag_sync {
         for i in 1..=6 {
             info!("Syncing event DAG (attempt #{})", i);
             match event_graph.dag_sync().await {
