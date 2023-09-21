@@ -25,7 +25,7 @@ use darkfi::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
     },
-    system::{StoppableTask, StoppableTaskPtr},
+    system::{sleep, StoppableTask, StoppableTaskPtr},
     util::path::{expand_path, get_config_path},
     Error, Result,
 };
@@ -259,27 +259,29 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!("Starting P2P network");
     p2p.clone().start().await?;
 
-    /*
-    // We'll attempt to sync 5 times
-    for i in 1..=6 {
-        info!("Syncing event DAG (attempt #{})", i);
-        match event_graph.dag_sync().await {
-            Ok(()) => break,
-            Err(e) => {
-                if i == 6 {
-                    error!("Failed syncing DAG. Exiting.");
-                    p2p.stop().await;
-                    return Err(Error::DagSyncFailed)
-                } else {
-                    // TODO: Maybe at this point we should prune or something?
-                    // TODO: Or maybe just tell the user to delete the DAG from FS.
-                    error!("Failed syncing DAG ({}), retrying in 10s...", e);
-                    sleep(10).await;
+    info!("Waiting for some P2P connections...");
+    sleep(5).await;
+    if !p2p.channels().lock().await.is_empty() {
+        // We'll attempt to sync 5 times
+        for i in 1..=6 {
+            info!("Syncing event DAG (attempt #{})", i);
+            match event_graph.dag_sync().await {
+                Ok(()) => break,
+                Err(e) => {
+                    if i == 6 {
+                        error!("Failed syncing DAG. Exiting.");
+                        p2p.stop().await;
+                        return Err(Error::DagSyncFailed)
+                    } else {
+                        // TODO: Maybe at this point we should prune or something?
+                        // TODO: Or maybe just tell the user to delete the DAG from FS.
+                        error!("Failed syncing DAG ({}), retrying in 10s...", e);
+                        sleep(10).await;
+                    }
                 }
             }
         }
     }
-    */
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
