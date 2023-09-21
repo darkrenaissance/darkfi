@@ -321,6 +321,9 @@ pub enum Error {
     #[error("Proposal task stopped")]
     ProposalTaskStopped,
 
+    #[error("Miner task stopped")]
+    MinerTaskStopped,
+
     // ===============
     // Database errors
     // ===============

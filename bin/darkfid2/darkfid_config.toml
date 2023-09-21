@@ -22,7 +22,7 @@ testing_mode = false
 [sync_net]
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
-inbound = ["tcp+tls://0.0.0.0:8342"]
+inbound = ["tcp+tls://0.0.0.0:18342"]
 # IPv6 version:
 #inbound = ["tcp+tls://[::]:8342"]
 # Combined:

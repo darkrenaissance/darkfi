@@ -55,7 +55,7 @@ mod rpc_tx;
 
 /// Validator async tasks
 mod task;
-use task::sync::sync_task;
+use task::{miner_task, sync_task};
 
 /// P2P net protocols
 mod proto;
@@ -223,11 +223,11 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     // Consensus protocol
     if args.consensus {
-        info!("Starting consensus P2P network");
+        info!(target: "darkfid", "Starting consensus P2P network");
         let consensus_p2p = consensus_p2p.clone().unwrap();
         consensus_p2p.clone().start().await?;
     } else {
-        info!("Not starting consensus P2P network");
+        info!(target: "darkfid", "Not starting consensus P2P network");
     }
 
     // Sync blockchain
@@ -239,6 +239,28 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     // Clean node pending transactions
     darkfid.validator.write().await.purge_pending_txs().await?;
+
+    // Consensus protocol
+    let consensus_task = if args.consensus {
+        info!(target: "darkfid", "Starting consensus protocol task");
+        let task = StoppableTask::new();
+        task.clone().start(
+            // Weird hack to prevent lifetimes hell
+            async move { miner_task(&darkfid).await },
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::MinerTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid", "Failed starting miner task: {}", e),
+                }
+            },
+            Error::MinerTaskStopped,
+            ex.clone(),
+        );
+        Some(task)
+    } else {
+        info!(target: "darkfid", "Not participating in consensus");
+        None
+    };
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
@@ -254,6 +276,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     if args.consensus {
         info!(target: "darkfid", "Stopping consensus P2P network...");
         consensus_p2p.unwrap().stop().await;
+
+        info!(target: "darkfid", "Stopping consensus task...");
+        consensus_task.unwrap().stop().await;
     }
 
     info!(target: "darkfid", "Flushing sled database...");
