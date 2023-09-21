@@ -282,6 +282,24 @@ impl Client {
             ))])
         }
 
+        // Weechat sends channels as `#chan1,#chan2,#chan3`. Handle it.
+        if channels.len() == 1 {
+            let list = channels.iter().next().unwrap().clone();
+            channels.remove(list.as_str());
+
+            for channel in list.split(',') {
+                if !channel.starts_with('#') {
+                    self.penalty.fetch_add(1, SeqCst);
+                    return Ok(vec![ReplyType::Server((
+                        ERR_NEEDMOREPARAMS,
+                        format!("{} JOIN :{}", nick, INVALID_SYNTAX),
+                    ))])
+                }
+
+                channels.insert(channel.to_string());
+            }
+        }
+
         // Create new channels for this client and construct replies.
         let mut server_channels = self.server.channels.write().await;
         let mut replies = vec![];
