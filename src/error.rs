@@ -158,6 +158,9 @@ pub enum Error {
     #[error("Network operation failed")]
     NetworkOperationFailed,
 
+    #[error("Missing P2P message dispatcher")]
+    MissingDispatcher,
+
     #[cfg(feature = "arti-client")]
     #[error(transparent)]
     ArtiError(#[from] arti_client::Error),

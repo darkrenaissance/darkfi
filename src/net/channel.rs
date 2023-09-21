@@ -288,7 +288,15 @@ impl Channel {
             });
 
             // Send result to our subscribers
-            self.message_subsystem.notify(&packet.command, &packet.payload).await;
+            match self.message_subsystem.notify(&packet.command, &packet.payload).await {
+                Ok(()) => {}
+                // If we're getting messages without dispatchers, it's spam.
+                Err(Error::MissingDispatcher) => {
+                    debug!(target: "net::channel::main_receive_loop()", "Stopping channel {:?}", self);
+                    return Err(Error::ChannelStopped)
+                }
+                Err(_) => unreachable!("You added a new error in notify()"),
+            }
         }
     }
 

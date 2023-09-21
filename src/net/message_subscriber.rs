@@ -241,17 +241,17 @@ impl MessageSubsystem {
 
     /// Transmits a payload to a dispatcher.
     /// Returns an error if the payload fails to transmit.
-    pub async fn notify(&self, command: &str, payload: &[u8]) {
+    pub async fn notify(&self, command: &str, payload: &[u8]) -> Result<()> {
         let Some(dispatcher) = self.dispatchers.lock().await.get(command).cloned() else {
             warn!(
                 target: "net::message_subscriber::notify",
                 "message_subscriber::notify: Command '{}' did not find a dispatcher",
                 command,
             );
-            return
+            return Err(Error::MissingDispatcher)
         };
 
-        dispatcher.trigger(payload).await;
+        Ok(dispatcher.trigger(payload).await)
     }
 
     /// Concurrently transmits an error message across dispatchers.
