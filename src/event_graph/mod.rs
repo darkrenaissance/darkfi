@@ -280,6 +280,7 @@ impl EventGraph {
         }
 
         if missing_parents.is_empty() {
+            info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] DAG synced successfully!");
             return Ok(())
         }
 
