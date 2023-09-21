@@ -160,6 +160,7 @@ impl Client {
                                 error!("[IRC CLIENT] Failed inserting new event to DAG: {}", e);
                             } else {
                                 // We sent this, so it should be considered seen.
+                                debug!("Marking event {} as seen", event_id);
                                 self.seen.get().unwrap().insert(event_id.as_bytes(), &[]).unwrap();
 
                                 // Otherwise, broadcast it
@@ -223,6 +224,7 @@ impl Client {
                         }
 
                         // Mark the message as seen for this USER
+                        debug!("Marking event {} as seen", event_id);
                         self.seen.get().unwrap().insert(event_id.as_bytes(), &[]).unwrap();
                     }
                 }

@@ -53,7 +53,8 @@
 use std::{collections::HashSet, sync::atomic::Ordering::SeqCst};
 
 use darkfi::Result;
-use log::{error, info};
+use darkfi_serial::deserialize_async_partial;
+use log::{debug, error, info};
 
 use super::{
     client::{Client, ReplyType},
@@ -284,11 +285,12 @@ impl Client {
         // Create new channels for this client and construct replies.
         let mut server_channels = self.server.channels.write().await;
         let mut replies = vec![];
-        for channel in channels {
+
+        for channel in channels.iter() {
             // Insert the channel name into the set of client's active channels
             active_channels.insert(channel.clone());
             // Create or update the channel on the server side.
-            if let Some(server_chan) = server_channels.get_mut(&channel) {
+            if let Some(server_chan) = server_channels.get_mut(channel) {
                 server_chan.nicks.insert(nick.clone());
             } else {
                 let chan = IrcChannel {
@@ -310,7 +312,7 @@ impl Client {
                 format!("{} {} :End of NAMES list", nick, channel),
             )));
 
-            if let Some(chan) = server_channels.get(&channel) {
+            if let Some(chan) = server_channels.get(channel) {
                 if !chan.topic.is_empty() {
                     replies.push(ReplyType::Client((
                         nick.clone(),
@@ -319,6 +321,9 @@ impl Client {
                 }
             }
         }
+
+        // Potentially extend the replies with channel history
+        replies.append(&mut self.get_history(&channels).await.unwrap());
 
         Ok(replies)
     }
@@ -852,7 +857,12 @@ impl Client {
         // If we have any configured autojoin channels, let's join the user
         // and set their topics, if any.
         let mut config_chans = self.server.channels.write().await;
+        let mut autojoin_chans = HashSet::new();
         for channel in self.server.autojoin.read().await.iter() {
+            autojoin_chans.insert(channel.clone());
+        }
+
+        for channel in autojoin_chans.iter() {
             replies.push(ReplyType::Client((nick.clone(), format!("JOIN :{}", channel))));
             replies.push(ReplyType::Server((
                 RPL_NAMREPLY,
@@ -876,6 +886,54 @@ impl Client {
             }
         }
 
+        // Potentially extend replies with history
+        autojoin_chans.insert(self.nickname.read().await.to_string());
+        replies.append(&mut self.get_history(&autojoin_chans).await.unwrap());
+
         replies
+    }
+
+    /// Internal function that scans the DAG and returns events for
+    /// given channels. Will return empty if no_history CAP is requested.
+    async fn get_history(&self, channels: &HashSet<String>) -> Result<Vec<ReplyType>> {
+        if channels.is_empty() || *self.caps.read().await.get("no-history").unwrap() {
+            return Ok(vec![])
+        }
+
+        let dag_events = self.server.darkirc.event_graph.order_events().await;
+        let seen_events = self.seen.get().unwrap();
+
+        let mut replies = vec![];
+
+        for event_id in dag_events.iter() {
+            // If it was seen, skip
+            if seen_events.contains_key(event_id.as_bytes()).unwrap() {
+                continue
+            }
+
+            // Get the event from the DAG
+            let event = self.server.darkirc.event_graph.dag_get(event_id).await.unwrap().unwrap();
+
+            // Try to deserialize it. (Here we skip errors)
+            let Ok((mut privmsg, _)) = deserialize_async_partial(event.content()).await else {
+                continue
+            };
+
+            // Potentially decrypt the privmsg
+            self.server.try_decrypt(&mut privmsg).await;
+
+            // If the privmsg is intented for any of the given channels, add it as
+            // a reply and mark it as seen in the seen_events tree.
+            if !channels.contains(&privmsg.channel) {
+                continue
+            }
+
+            let msg = format!("PRIVMSG {} :{}", privmsg.channel, privmsg.msg);
+            replies.push(ReplyType::Client((privmsg.nick, msg)));
+            debug!("Marking event {} as seen", event_id);
+            seen_events.insert(event_id.as_bytes(), &[]).unwrap();
+        }
+
+        Ok(replies)
     }
 }

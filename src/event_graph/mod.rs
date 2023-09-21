@@ -469,6 +469,14 @@ impl EventGraph {
         Ok(event_id)
     }
 
+    /// Fetch an event from the DAG
+    pub async fn dag_get(&self, event_id: &blake3::Hash) -> Result<Option<Event>> {
+        let Some(bytes) = self.dag.get(event_id.as_bytes())? else { return Ok(None) };
+        let event: Event = deserialize_async(&bytes).await?;
+
+        Ok(Some(event))
+    }
+
     /// Find the unreferenced tips in the current DAG state.
     async fn find_unreferenced_tips(&self) -> HashSet<blake3::Hash> {
         // First get all the event IDs
