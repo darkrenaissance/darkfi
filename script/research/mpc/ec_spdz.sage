@@ -46,8 +46,7 @@ party1_val = random.randint(0,p)
 party1_random = random.randint(0,p)
 beta1 = AuthenticatedShare(party1_random, source, 0)
 beta2 = AuthenticatedShare(party1_val - party1_random, source, 0)
-
-
+# scaling elliptic curve Authenticated share by authenticated scalar
 a1b1 = ScalingECAuthenticatedShares(alpha1, beta1, source.triplet(0), 0)
 a2b2 = ScalingECAuthenticatedShares(alpha2, beta2, source.triplet(1), 1)
 

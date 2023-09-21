@@ -22,6 +22,9 @@ class AuthenticatedShare(object):
           self.source = source
 
 
+      def copy(self):
+          return AuthenticatedShare(K(self.share), self.source, self.party_id, K(self.mac), K(self.public_modifier))
+
       def __repr__(self):
           return "share: %s, mac: %s"%(self.share, self.mac)
 

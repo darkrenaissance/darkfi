@@ -15,4 +15,5 @@ class Source(object):
       def triplet(self, party_id):
             #triple = [self.left_a, self.left_b, self.left_c] if party_id==0 else [self.right_a, self.right_b, self.right_c]
             #return [AuthenticatedShare(share, self, party_id) for share in triple]
+            #TODO
             return [AuthenticatedShare(share, self, party_id) for share in [1,1,2]]

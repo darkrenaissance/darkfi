@@ -17,6 +17,9 @@ class ECAuthenticatedShare(object):
           self.mac = global_key * self.share if mac==None else mac
           self.public_modifier = 0  if modifier == None else modifier # carry out extra addition/subtraction by public scalars until opening
 
+      def copy(self):
+          return ECAuthenticatedShare(self.share, self.mac, self.public_modifier)
+
       def __repr__(self):
           return "share: %s, mac: %s"%(self.share, self.mac)
 
@@ -35,6 +38,7 @@ class ECAuthenticatedShare(object):
 
       def mul_scalar(self, scalar):
           return ECAuthenticatedShare(self.share * scalar, self.mac * scalar, self.public_modifier * scalar)
+
 
       def __mul__(self, factor):
           return self.mul_scalar(factor)
@@ -56,7 +60,7 @@ class ECAuthenticatedShare(object):
 
 
 class ScalingECAuthenticatedShares(object):
-      def __init__(self, alpha, beta, triplet, party_id):
+      def __init__(self, alpha, beta, triplet, party_id, generator=None, e=None, d=None):
           # authenticated shares
           self.alpha_as = alpha
           self.beta_as = beta
@@ -65,11 +69,15 @@ class ScalingECAuthenticatedShares(object):
           self.c_as = triplet[2]
           self.party_id = party_id
           #
-          self.generator = CurvePoint.generator()
+          self.generator = generator if generator is not None else CurvePoint.generator()
           d1 = self.alpha_as - self.a_as.mul_point(self.generator)
           e1 = self.beta_as - self.b_as
-          self.e = e1
-          self.d = d1
+          self.e = e if e is not None else e1
+          self.d = d if d is not None else d1
+          #print("sas pt: {}, scalar: {}".format(self.alpha_as, self.beta_as))
+
+      def copy(self):
+          return ScalingECAuthenticatedShares(self.alpha_as.copy(), self.beta_as.copy(), [self.a_as, self.b_as, self.c_as], self.party_id, self.generator, self.e, self.d)
 
       def mul(self, d2, e2):
           e = open_2pc(self.e.share, e2.share)
@@ -77,22 +85,27 @@ class ScalingECAuthenticatedShares(object):
           return (self.b_as.mul_point(d) + self.a_as.mul_point(self.generator).mul_scalar(e) + self.c_as.mul_point(self.generator)).add_point(d * e, self.party_id) if self.party_id ==0 else self.b_as.mul_point(d) + self.a_as.mul_point(self.generator).mul_scalar(e) + self.c_as.mul_point(self.generator)
 
 class MSM(object):
-      def __init__(self, points,  scalars, source,  party_id):
+      def __init__(self, points,  scalars, source,  party_id, point_scalars=[]):
           '''
           naive multi scalar multiplicatin, between authenticatedpointsshares, and authenticatedscalarshares
           '''
           self.points = points
           self.scalars = scalars
-          assert (len(self.points) == len(self.scalars))
+          assert (len(self.points) == len(self.scalars)), 'len(p): {}, len(s): {}'.format(len(self.points), len(self.scalars))
           self.source = source
           self.party_id = party_id
           beaver = self.source
+          #self.point_scalars = point_scalars
+          #if len(self.point_scalars)==0:
           self.point_scalars = []
-
           for point, scalar in zip(self.points, self.scalars):
               self.point_scalars += [ScalingECAuthenticatedShares(point, scalar, beaver.triplet(self.party_id), self.party_id)]
+
+      def copy(self):
+          return MSM([i.copy() for i in self.points], [i.copy() for i in self.scalars], self.source, self.party_id, [i.copy() for i in self.point_scalars])
+
       def msm(self, de):
-          self.point_scalars = [point.mul(de[0], de[1]) for de, point in zip(de, self.point_scalars)]
+          self.point_scalars = [point.mul(de_i[0], de_i[1]) for de_i, point in zip(de, self.point_scalars)]
           zero_ec_share = ECAuthenticatedShare(0)
           for ps in self.point_scalars:
               zero_ec_share += ps
