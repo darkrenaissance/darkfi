@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{cmp::Ordering, fmt::Write, str::FromStr};
+use std::{cmp::Ordering, collections::HashMap, fmt::Write, str::FromStr};
 
 use prettytable::{
     format::{consts::FORMAT_NO_COLSEP, FormatBuilder, LinePosition, LineSeparator},
@@ -34,8 +34,8 @@ use crate::{
     TaskEvent,
 };
 
-pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String) -> Result<()> {
-    let mut tasks = tasks;
+pub fn print_task_list(tasks_map: HashMap<usize, TaskInfo>, ws: String) -> Result<()> {
+    let mut tasks = tasks_map.clone().into_values().collect::<Vec<TaskInfo>>();
 
     let mut table = Table::new();
     table.set_format(
@@ -70,7 +70,7 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String) -> Result<()> {
         min_rank = last.rank;
     }
 
-    for task in tasks {
+    for (task_id, task) in tasks_map {
         let state = State::from_str(&task.state.clone())?;
 
         let (max_style, min_style, mid_style, gen_style) = if state.is_start() {
@@ -96,7 +96,7 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String) -> Result<()> {
         };
 
         table.add_row(Row::new(vec![
-            Cell::new(&task.id.to_string()).style_spec(gen_style),
+            Cell::new(&task_id.to_string()).style_spec(gen_style),
             Cell::new(&task.title).style_spec(gen_style),
             Cell::new(&print_tags.join(", ")).style_spec(gen_style),
             Cell::new(&task.project.join(", ")).style_spec(gen_style),
@@ -136,7 +136,7 @@ pub fn print_task_list(tasks: Vec<TaskInfo>, ws: String) -> Result<()> {
     Ok(())
 }
 
-pub fn taskinfo_table(taskinfo: TaskInfo) -> Result<Table> {
+pub fn taskinfo_table(id: usize, taskinfo: TaskInfo) -> Result<Table> {
     let due_ = match taskinfo.due {
         Some(ts) => ts.0,
         None => 0,
@@ -149,7 +149,7 @@ pub fn taskinfo_table(taskinfo: TaskInfo) -> Result<Table> {
     let mut table = table!(
          [Bd => "ref_id", &taskinfo.ref_id],
          ["workspace", &taskinfo.workspace],
-         [Bd =>"id", &taskinfo.id.to_string()],
+         [Bd =>"id", &id.to_string()],
          ["owner", &taskinfo.owner],
          [Bd =>"title", &taskinfo.title],
          ["tags", &taskinfo.tags.join(", ")],
@@ -189,8 +189,8 @@ pub fn comments_table(taskinfo: TaskInfo) -> Result<Table> {
     Ok(comments_table)
 }
 
-pub fn print_task_info(taskinfo: TaskInfo) -> Result<()> {
-    let table = taskinfo_table(taskinfo.clone())?;
+pub fn print_task_info(id: usize, taskinfo: TaskInfo) -> Result<()> {
+    let table = taskinfo_table(id, taskinfo.clone())?;
     table.printstd();
 
     let events_table = events_table(taskinfo.clone())?;
@@ -284,4 +284,13 @@ pub fn comments_as_string(events: Vec<TaskEvent>) -> (String, String) {
         }
     }
     (events_str, timestamps_str)
+}
+
+pub fn find_free_id(task_ids: &[u32]) -> u32 {
+    for i in 1.. {
+        if !task_ids.contains(&i) {
+            return i
+        }
+    }
+    1
 }

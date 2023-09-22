@@ -39,7 +39,6 @@ use darkfi::{
 use crate::{
     error::{TaudError, TaudResult},
     month_tasks::MonthTasks,
-    util::find_free_id,
 };
 
 pub enum State {
@@ -189,7 +188,6 @@ impl Comment {
 pub struct TaskInfo {
     pub ref_id: String,
     pub workspace: String,
-    pub id: u32,
     pub title: String,
     pub tags: Vec<String>,
     pub desc: String,
@@ -208,7 +206,6 @@ impl From<&TaskInfo> for JsonValue {
     fn from(task: &TaskInfo) -> JsonValue {
         let ref_id = JsonValue::String(task.ref_id.clone());
         let workspace = JsonValue::String(task.workspace.clone());
-        let id = JsonValue::Number(task.id.into());
         let title = JsonValue::String(task.title.clone());
         let tags: Vec<JsonValue> = task.tags.iter().map(|x| JsonValue::String(x.clone())).collect();
         let desc = JsonValue::String(task.desc.clone());
@@ -240,7 +237,6 @@ impl From<&TaskInfo> for JsonValue {
         JsonValue::Object(HashMap::from([
             ("ref_id".to_string(), ref_id),
             ("workspace".to_string(), workspace),
-            ("id".to_string(), id),
             ("title".to_string(), title),
             ("tags".to_string(), JsonValue::Array(tags)),
             ("desc".to_string(), desc),
@@ -293,7 +289,6 @@ impl From<JsonValue> for TaskInfo {
         TaskInfo {
             ref_id: value["ref_id"].get::<String>().unwrap().clone(),
             workspace: value["workspace"].get::<String>().unwrap().clone(),
-            id: *value["id"].get::<f64>().unwrap() as u32,
             title: value["title"].get::<String>().unwrap().clone(),
             tags: tags.iter().map(|x| x.get::<String>().unwrap().clone()).collect(),
             desc: value["desc"].get::<String>().unwrap().clone(),
@@ -318,20 +313,17 @@ impl TaskInfo {
         owner: &str,
         due: Option<Timestamp>,
         rank: Option<f32>,
-        dataset_path: &Path,
     ) -> TaudResult<Self> {
         // generate ref_id
         let ref_id = gen_id(30);
 
         let created_at = Timestamp::current_time();
 
-        let task_ids: Vec<u32> =
-            MonthTasks::load_current_tasks(dataset_path, workspace.clone(), false)?
-                .into_iter()
-                .map(|t| t.id)
-                .collect();
-
-        let id: u32 = find_free_id(&task_ids);
+        // let task_ids: Vec<u32> =
+        //     MonthTasks::load_current_tasks(dataset_path, workspace.clone(), false)?
+        //         .into_iter()
+        //         .map(|t| t.id)
+        //         .collect();
 
         if let Some(d) = &due {
             if *d < Timestamp::current_time() {
@@ -342,7 +334,6 @@ impl TaskInfo {
         Ok(Self {
             ref_id,
             workspace,
-            id,
             title: title.into(),
             desc: desc.into(),
             owner: owner.into(),
@@ -402,9 +393,9 @@ impl TaskInfo {
         dataset_path.join("task").join(ref_id)
     }
 
-    pub fn get_id(&self) -> u32 {
-        debug!(target: "tau", "TaskInfo::get_id()");
-        self.id
+    pub fn get_ref_id(&self) -> String {
+        debug!(target: "tau", "TaskInfo::get_ref_id()");
+        self.ref_id.clone()
     }
 
     pub fn set_title(&mut self, title: &str) {

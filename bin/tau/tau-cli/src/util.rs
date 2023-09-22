@@ -75,7 +75,7 @@ pub fn prompt_text(task_info: TaskInfo, what: &str) -> Result<Option<String>> {
     writeln!(file, "\n# ------------------------ >8 ------------------------")?;
     writeln!(file, "# Do not modify or remove the line above.")?;
     writeln!(file, "# Everything below it will be ignored.")?;
-    writeln!(file, "\n{}", taskinfo_table(task_info.clone())?)?;
+    writeln!(file, "\n{}", taskinfo_table(0, task_info.clone())?)?;
     writeln!(file, "{}", events_table(task_info.clone())?)?;
     writeln!(file, "{}", comments_table(task_info)?)?;
 

@@ -27,7 +27,7 @@ use log::debug;
 use darkfi::{Error, Result};
 
 use crate::task_info::{TaskEvent, TaskInfo};
-
+/*
 pub fn find_free_id(task_ids: &[u32]) -> u32 {
     for i in 1.. {
         if !task_ids.contains(&i) {
@@ -36,6 +36,7 @@ pub fn find_free_id(task_ids: &[u32]) -> u32 {
     }
     1
 }
+ */
 
 pub fn set_event(task_info: &mut TaskInfo, action: &str, author: &str, content: &str) {
     debug!(target: "tau", "TaskInfo::set_event()");
@@ -53,29 +54,29 @@ pub fn pipe_write<P: AsRef<Path>>(path: P) -> Result<File> {
         .map_err(Error::from)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
 
-    use darkfi::Result;
-    #[test]
-    fn find_free_id_test() -> Result<()> {
-        let mut ids: Vec<u32> = vec![1, 3, 8, 9, 10, 3];
-        let ids_empty: Vec<u32> = vec![];
-        let ids_duplicate: Vec<u32> = vec![1; 100];
+//     use darkfi::Result;
+//     #[test]
+//     fn find_free_id_test() -> Result<()> {
+//         let mut ids: Vec<u32> = vec![1, 3, 8, 9, 10, 3];
+//         let ids_empty: Vec<u32> = vec![];
+//         let ids_duplicate: Vec<u32> = vec![1; 100];
 
-        let find_id = find_free_id(&ids);
+//         let find_id = find_free_id(&ids);
 
-        assert_eq!(find_id, 2);
+//         assert_eq!(find_id, 2);
 
-        ids.push(find_id);
+//         ids.push(find_id);
 
-        assert_eq!(find_free_id(&ids), 4);
+//         assert_eq!(find_free_id(&ids), 4);
 
-        assert_eq!(find_free_id(&ids_empty), 1);
+//         assert_eq!(find_free_id(&ids_empty), 1);
 
-        assert_eq!(find_free_id(&ids_duplicate), 2);
+//         assert_eq!(find_free_id(&ids_duplicate), 2);
 
-        Ok(())
-    }
-}
+//         Ok(())
+//     }
+// }

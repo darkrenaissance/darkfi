@@ -273,7 +273,6 @@ mod tests {
             "NICKNAME",
             None,
             Some(0.0),
-            &dataset_path,
         )?;
 
         task.save(&dataset_path)?;
@@ -321,7 +320,6 @@ mod tests {
             "NICKNAME",
             None,
             Some(0.0),
-            &dataset_path,
         )?;
 
         task.save(&dataset_path)?;

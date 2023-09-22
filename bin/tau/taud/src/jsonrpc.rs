@@ -45,7 +45,7 @@ use taud::{
     error::{to_json_result, TaudError, TaudResult},
     month_tasks::MonthTasks,
     task_info::{Comment, TaskInfo},
-    util::{find_free_id, set_event},
+    util::set_event,
 };
 
 pub struct JsonRpcInterface {
@@ -64,11 +64,11 @@ impl RequestHandler for JsonRpcInterface {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         let rep = match req.method.as_str() {
             "add" => self.add(req.params).await,
-            "get_ids" => self.get_ids(req.params).await,
+            "get_ref_ids" => self.get_ref_ids(req.params).await,
             "update" => self.update(req.params).await,
             "set_state" => self.set_state(req.params).await,
             "set_comment" => self.set_comment(req.params).await,
-            "get_task_by_id" => self.get_task_by_id(req.params).await,
+            "get_task_by_ref_id" => self.get_task_by_ref_id(req.params).await,
             "switch_ws" => self.switch_ws(req.params).await,
             "get_ws" => self.get_ws(req.params).await,
             "export" => self.export_to(req.params).await,
@@ -252,31 +252,30 @@ impl JsonRpcInterface {
             &self.nickname,
             due,
             rank,
-            &self.dataset_path,
         )?;
         new_task.set_project(&projects);
         new_task.set_assign(&assigns);
         new_task.set_tags(&tags);
 
         self.notify_queue_sender.send(new_task.clone()).await.map_err(Error::from)?;
-        Ok(JsonValue::Number(new_task.id.into()))
+        Ok(JsonValue::Boolean(true))
     }
 
     // RPCAPI:
     // List tasks
     // --> {"jsonrpc": "2.0", "method": "get_ids", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [task_id, ...], "id": 1}
-    async fn get_ids(&self, params: JsonValue) -> TaudResult<JsonValue> {
+    async fn get_ref_ids(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         debug!(target: "tau", "JsonRpc::get_ids() params {:?}", params);
 
         let ws = self.workspace.lock().await.clone();
         let tasks = MonthTasks::load_current_tasks(&self.dataset_path, ws, false)?;
 
-        let task_ids: Vec<JsonValue> =
-            tasks.iter().map(|task| JsonValue::Number(task.get_id().into())).collect();
+        let task_ref_ids: Vec<JsonValue> =
+            tasks.iter().map(|task| JsonValue::String(task.get_ref_id())).collect();
 
-        Ok(JsonValue::Array(task_ids))
+        Ok(JsonValue::Array(task_ref_ids))
     }
 
     // RPCAPI:
@@ -287,14 +286,14 @@ impl JsonRpcInterface {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         debug!(target: "tau", "JsonRpc::update() params {:?}", params);
 
-        if params.len() != 2 || !params[0].is_number() || !params[1].is_object() {
+        if params.len() != 2 || !params[0].is_string() || !params[1].is_object() {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
 
         let ws = self.workspace.lock().await.clone();
 
         let task = self.check_params_for_update(
-            *params[0].get::<f64>().unwrap() as u32,
+            params[0].get::<String>().unwrap(),
             params[1].get::<HashMap<String, JsonValue>>().unwrap(),
             ws,
         )?;
@@ -315,7 +314,7 @@ impl JsonRpcInterface {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         debug!(target: "tau", "JsonRpc::set_state() params {:?}", params);
 
-        if params.len() != 2 || !params[0].is_number() || !params[1].is_string() {
+        if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
 
@@ -323,7 +322,7 @@ impl JsonRpcInterface {
         let ws = self.workspace.lock().await.clone();
 
         let mut task: TaskInfo =
-            self.load_task_by_id(*params[0].get::<f64>().unwrap() as u32, ws)?;
+            self.load_task_by_ref_id(params[0].get::<String>().unwrap(), ws)?;
 
         if states.contains(&state.as_str()) {
             task.set_state(state);
@@ -343,15 +342,15 @@ impl JsonRpcInterface {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         debug!(target: "tau", "JsonRpc::set_comment() params {:?}", params);
 
-        if params.len() != 2 || !params[0].is_number() || !params[1].is_string() {
+        if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
         }
 
-        let id = *params[0].get::<f64>().unwrap() as u32;
+        let ref_id = params[0].get::<String>().unwrap();
         let comment_content = params[1].get::<String>().unwrap();
 
         let ws = self.workspace.lock().await.clone();
-        let mut task: TaskInfo = self.load_task_by_id(id, ws)?;
+        let mut task: TaskInfo = self.load_task_by_ref_id(ref_id, ws)?;
 
         task.set_comment(Comment::new(comment_content, &self.nickname));
         set_event(&mut task, "comment", &self.nickname, comment_content);
@@ -365,16 +364,16 @@ impl JsonRpcInterface {
     // Get a task by id.
     // --> {"jsonrpc": "2.0", "method": "get_task_by_id", "params": [task_id], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
-    async fn get_task_by_id(&self, params: JsonValue) -> TaudResult<JsonValue> {
+    async fn get_task_by_ref_id(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         debug!(target: "tau", "JsonRpc::get_task_by_id() params {:?}", params);
 
-        if params.len() != 1 || !params[0].is_number() {
+        if params.len() != 1 || !params[0].is_string() {
             return Err(TaudError::InvalidData("len of params should be 1".into()))
         }
 
         let ws = self.workspace.lock().await.clone();
-        let task: TaskInfo = self.load_task_by_id(*params[0].get::<f64>().unwrap() as u32, ws)?;
+        let task: TaskInfo = self.load_task_by_ref_id(params[0].get::<String>().unwrap(), ws)?;
         let task: JsonValue = (&task).into();
 
         Ok(task)
@@ -502,15 +501,9 @@ impl JsonRpcInterface {
         let path = expand_path(path)?.join("exported_tasks");
         let ws = self.workspace.lock().await.clone();
 
-        let mut task_ids: Vec<u32> =
-            MonthTasks::load_current_tasks(&self.dataset_path, ws.clone(), false)?
-                .into_iter()
-                .map(|t| t.id)
-                .collect();
-
         let imported_tasks = MonthTasks::load_current_tasks(&path, ws.clone(), true)?;
 
-        for mut task in imported_tasks {
+        for task in imported_tasks {
             if MonthTasks::load_current_tasks(&self.dataset_path, ws.clone(), false)?
                 .into_iter()
                 .map(|t| t.ref_id)
@@ -519,27 +512,25 @@ impl JsonRpcInterface {
                 continue
             }
 
-            task.id = find_free_id(&task_ids);
-            task_ids.push(task.id);
             self.notify_queue_sender.send(task).await.map_err(Error::from)?;
         }
         Ok(JsonValue::Boolean(true))
     }
 
-    fn load_task_by_id(&self, task_id: u32, ws: String) -> TaudResult<TaskInfo> {
+    fn load_task_by_ref_id(&self, task_ref_id: &str, ws: String) -> TaudResult<TaskInfo> {
         let tasks = MonthTasks::load_current_tasks(&self.dataset_path, ws, false)?;
-        let task = tasks.into_iter().find(|t| (t.get_id()) == task_id);
+        let task = tasks.into_iter().find(|t| (t.get_ref_id()) == task_ref_id);
 
         task.ok_or(TaudError::InvalidId)
     }
 
     fn check_params_for_update(
         &self,
-        task_id: u32,
+        task_ref_id: &str,
         fields: &HashMap<String, JsonValue>,
         ws: String,
     ) -> TaudResult<TaskInfo> {
-        let mut task: TaskInfo = self.load_task_by_id(task_id, ws)?;
+        let mut task: TaskInfo = self.load_task_by_ref_id(task_ref_id, ws)?;
 
         if fields.contains_key("title") {
             let title = fields["title"].get::<String>().unwrap();
