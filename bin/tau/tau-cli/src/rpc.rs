@@ -75,8 +75,8 @@ impl Tau {
         Ok(ret)
     }
 
-    /// Update existing task given it's ID and some params.
-    pub async fn update(&self, ref_id: &str, task: BaseTask) -> Result<bool> {
+    /// modify existing task given it's ID and some params.
+    pub async fn modify(&self, ref_id: &str, task: BaseTask) -> Result<bool> {
         let mut params = HashMap::new();
 
         let map = |x: &String| JsonValue::String(x.clone().to_owned());
@@ -98,7 +98,7 @@ impl Tau {
         params.insert("rank".into(), rank);
 
         let req = JsonRequest::new(
-            "update",
+            "modify",
             vec![JsonValue::String(ref_id.into()), JsonValue::Object(params)],
         );
         let rep = self.rpc_client.request(req).await?;

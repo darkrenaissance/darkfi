@@ -65,7 +65,7 @@ impl RequestHandler for JsonRpcInterface {
         let rep = match req.method.as_str() {
             "add" => self.add(req.params).await,
             "get_ref_ids" => self.get_ref_ids(req.params).await,
-            "update" => self.update(req.params).await,
+            "modify" => self.modify(req.params).await,
             "set_state" => self.set_state(req.params).await,
             "set_comment" => self.set_comment(req.params).await,
             "get_task_by_ref_id" => self.get_task_by_ref_id(req.params).await,
@@ -279,12 +279,12 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
-    // Update task and returns `true` upon success.
-    // --> {"jsonrpc": "2.0", "method": "update", "params": [task_id, {"title": "new title"} ], "id": 1}
+    // Modify task and returns `true` upon success.
+    // --> {"jsonrpc": "2.0", "method": "modify", "params": [task_id, {"title": "new title"} ], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
-    async fn update(&self, params: JsonValue) -> TaudResult<JsonValue> {
+    async fn modify(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::update() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::modify() params {:?}", params);
 
         if params.len() != 2 || !params[0].is_string() || !params[1].is_object() {
             return Err(TaudError::InvalidData("len of params should be 2".into()))
@@ -292,7 +292,7 @@ impl JsonRpcInterface {
 
         let ws = self.workspace.lock().await.clone();
 
-        let task = self.check_params_for_update(
+        let task = self.check_params_for_modify(
             params[0].get::<String>().unwrap(),
             params[1].get::<HashMap<String, JsonValue>>().unwrap(),
             ws,
@@ -524,7 +524,7 @@ impl JsonRpcInterface {
         task.ok_or(TaudError::InvalidId)
     }
 
-    fn check_params_for_update(
+    fn check_params_for_modify(
         &self,
         task_ref_id: &str,
         fields: &HashMap<String, JsonValue>,
