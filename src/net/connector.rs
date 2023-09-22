@@ -18,6 +18,7 @@
 
 use std::time::Duration;
 
+use log::debug;
 use url::Url;
 
 use super::{
@@ -26,7 +27,7 @@ use super::{
     settings::SettingsPtr,
     transport::Dialer,
 };
-use crate::Result;
+use crate::{Error, Result};
 
 /// Create outbound socket connections
 pub struct Connector {
@@ -44,6 +45,11 @@ impl Connector {
 
     /// Establish an outbound connection
     pub async fn connect(&self, url: &Url) -> Result<(Url, ChannelPtr)> {
+        if self.session.upgrade().unwrap().p2p().hosts().is_rejected(url).await {
+            debug!(target: "net::connector::connect", "Peer {} is rejected", url);
+            return Err(Error::ConnectFailed)
+        }
+
         let mut endpoint = url.clone();
 
         let transports = &self.settings.allowed_transports;

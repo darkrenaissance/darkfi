@@ -47,6 +47,9 @@ pub struct Hosts {
     /// Internet interrupt (goblins unplugging cables)
     quarantine: RwLock<HashMap<Url, usize>>,
 
+    /// Peers we reject from connecting
+    rejected: RwLock<HashSet<Url>>,
+
     /// Subscriber listening for store updates
     store_subscriber: SubscriberPtr<usize>,
 
@@ -60,6 +63,7 @@ impl Hosts {
         Arc::new(Self {
             addrs: RwLock::new(HashSet::new()),
             quarantine: RwLock::new(HashMap::new()),
+            rejected: RwLock::new(HashSet::new()),
             store_subscriber: Subscriber::new(),
             settings,
         })
@@ -208,6 +212,21 @@ impl Hosts {
             debug!(target: "net::hosts::remove()", "Added peer {} to quarantine", url);
             q.insert(url.clone(), 0);
         }
+    }
+
+    /// Check if a given peer should be rejected
+    pub async fn is_rejected(&self, peer: &Url) -> bool {
+        self.rejected.read().await.contains(peer)
+    }
+
+    /// Mark a peer as rejected
+    pub async fn mark_rejected(&self, peer: &Url) {
+        self.rejected.write().await.insert(peer.clone());
+    }
+
+    /// Unmark a rejected peer
+    pub async fn unmark_rejected(&self, peer: &Url) {
+        self.rejected.write().await.remove(peer);
     }
 
     /// Check if the host list is empty.

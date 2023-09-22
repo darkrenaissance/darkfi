@@ -116,6 +116,12 @@ impl Acceptor {
             // Now we wait for a new connection.
             match listener.next().await {
                 Ok((stream, url)) => {
+                    // Check if we reject this peer
+                    if self.session.upgrade().unwrap().p2p().hosts().is_rejected(&url).await {
+                        debug!(target: "net::acceptor::run_accept_loop()", "Peer {} is rejected", url);
+                        continue
+                    }
+
                     // Create the new Channel.
                     let session = self.session.clone();
                     let channel = Channel::new(stream, url, session).await;
