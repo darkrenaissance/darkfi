@@ -293,6 +293,16 @@ impl Channel {
                 // If we're getting messages without dispatchers, it's spam.
                 Err(Error::MissingDispatcher) => {
                     debug!(target: "net::channel::main_receive_loop()", "Stopping channel {:?}", self);
+
+                    // We will reject further connections from this peer
+                    self.session
+                        .upgrade()
+                        .unwrap()
+                        .p2p()
+                        .hosts()
+                        .mark_rejected(self.address())
+                        .await;
+
                     return Err(Error::ChannelStopped)
                 }
                 Err(_) => unreachable!("You added a new error in notify()"),
