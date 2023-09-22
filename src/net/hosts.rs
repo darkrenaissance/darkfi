@@ -48,7 +48,7 @@ pub struct Hosts {
     quarantine: RwLock<HashMap<Url, usize>>,
 
     /// Peers we reject from connecting
-    rejected: RwLock<HashSet<Url>>,
+    rejected: RwLock<HashSet<String>>,
 
     /// Subscriber listening for store updates
     store_subscriber: SubscriberPtr<usize>,
@@ -216,17 +216,37 @@ impl Hosts {
 
     /// Check if a given peer should be rejected
     pub async fn is_rejected(&self, peer: &Url) -> bool {
-        self.rejected.read().await.contains(peer)
+        let Some(hostname) = peer.host_str() else { return false };
+
+        // Don't reject localhost.
+        // This however allows any Tor and Nym connections.
+        if hostname == "127.0.0.1" || hostname == "[::1]" {
+            return false
+        }
+
+        self.rejected.read().await.contains(hostname)
     }
 
     /// Mark a peer as rejected
     pub async fn mark_rejected(&self, peer: &Url) {
-        self.rejected.write().await.insert(peer.clone());
+        // We ignore UNIX sockets here so we will just work
+        // with stuff that has host_str().
+        if let Some(hostname) = peer.host_str() {
+            // Don't reject localhost.
+            // This however allows any Tor and Nym connections.
+            if hostname == "127.0.0.1" || hostname == "[::1]" {
+                return
+            }
+
+            self.rejected.write().await.insert(hostname.to_string());
+        }
     }
 
     /// Unmark a rejected peer
     pub async fn unmark_rejected(&self, peer: &Url) {
-        self.rejected.write().await.remove(peer);
+        if let Some(hostname) = peer.host_str() {
+            self.rejected.write().await.remove(hostname);
+        }
     }
 
     /// Check if the host list is empty.
