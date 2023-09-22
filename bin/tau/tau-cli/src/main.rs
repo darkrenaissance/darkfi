@@ -253,11 +253,12 @@ fn main() -> Result<()> {
                     }
 
                     let base_task = task_from_cli(values)?;
-                    for (id, task) in tasks_local_id {
+                    for id in ids_clone {
+                        let task = tasks_local_id.get(&(id as usize)).unwrap();
                         let res = tau.update(&task.ref_id, base_task.clone()).await?;
                         if res {
                             let tsk = tau.get_task_by_ref_id(&task.ref_id).await?;
-                            print_task_info(id, tsk)?;
+                            print_task_info(id as usize, tsk)?;
                         }
                     }
 

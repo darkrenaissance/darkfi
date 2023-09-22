@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashMap;
+
 use darkfi::{rpc::jsonrpc::JsonRequest, Result};
 use log::debug;
 use tinyjson::JsonValue;
@@ -75,28 +77,29 @@ impl Tau {
 
     /// Update existing task given it's ID and some params.
     pub async fn update(&self, ref_id: &str, task: BaseTask) -> Result<bool> {
-        let mut params = vec![
-            JsonValue::String(task.title.clone()),
-            JsonValue::Array(task.tags.iter().map(|x| JsonValue::String(x.clone())).collect()),
-            JsonValue::String(task.desc.unwrap_or("".to_string())),
-            JsonValue::Array(task.assign.iter().map(|x| JsonValue::String(x.clone())).collect()),
-            JsonValue::Array(task.project.iter().map(|x| JsonValue::String(x.clone())).collect()),
-        ];
+        let mut params = HashMap::new();
+
+        let map = |x: &String| JsonValue::String(x.clone().to_owned());
+        params.insert("title".into(), JsonValue::String(task.title.clone()));
+        params.insert("desc".into(), JsonValue::String(task.desc.unwrap_or("".to_string())));
+        params.insert("tags".into(), JsonValue::Array(task.tags.iter().map(map).collect()));
+        params.insert("assign".into(), JsonValue::Array(task.assign.iter().map(map).collect()));
+        params.insert("project".into(), JsonValue::Array(task.project.iter().map(map).collect()));
 
         let due = if let Some(num) = task.due {
             JsonValue::String(num.to_string())
         } else {
             JsonValue::Null
         };
-        params.push(due);
+        params.insert("due".into(), due);
 
         let rank =
             if let Some(num) = task.rank { JsonValue::Number(num.into()) } else { JsonValue::Null };
-        params.push(rank);
+        params.insert("rank".into(), rank);
 
         let req = JsonRequest::new(
             "update",
-            vec![JsonValue::String(ref_id.into()), JsonValue::Array(params)],
+            vec![JsonValue::String(ref_id.into()), JsonValue::Object(params)],
         );
         let rep = self.rpc_client.request(req).await?;
 
