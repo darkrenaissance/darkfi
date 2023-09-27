@@ -26,20 +26,31 @@ class Proof(object):
                 al_g = [al*g for al, g in zip(a_l, G_factors[n:2*n])]
                 br_h = [br*h for br,h in zip(b_r, H_factors[0:n])]
                 L_gr_al_g = CurvePoint.msm(G_r, al_g)
+                print("L_gr_al_g: {}".format(L_gr_al_g))
                 L_hl_br_h = CurvePoint.msm(H_l, br_h)
+                print("L_hl_br_h: {}".format(L_hl_br_h))
+                print('C_L: {}'.format(c_l))
                 L_q_cl = CurvePoint.msm(Q, c_l)
+                print("L_q_cl: {}".format(L_q_cl))
                 # L, R
                 # note that P  = L*R
                 L = [sum([L_gr_al_g, L_hl_br_h , L_q_cl])]
-                R = [sum([CurvePoint.msm(G_l, [ar*g for ar, g in zip(a_r, G_factors[0:n])]), CurvePoint.msm(H_r, [bl*h for bl,h in zip(b_l, H_factors[n:2*n])]), CurvePoint.msm(Q, c_r)])]
+                R_gl_ar_g = CurvePoint.msm(G_l, [ar*g for ar, g in zip(a_r, G_factors[0:n])])
+                print("R_gl_ar_g: {}".format(R_gl_ar_g))
+                R_hr_bl_h = CurvePoint.msm(H_r, [bl*h for bl,h in zip(b_l, H_factors[n:2*n])])
+                print("R_hr_bl_h: {}".format(R_hr_bl_h))
+                print('C_R: {}'.format(c_r))
+                R_q_cr = CurvePoint.msm(Q, c_r)
+                print('R_q_cr: {}'.format(R_q_cr))
+                R = [sum([R_gl_ar_g, R_hr_bl_h, R_q_cr])]
                 L_l += L
                 R_l += R
 
                 # choose true random challenges u, u^{-1}
-                #transcript.append_message(b'L', bytes(''.join([l.__str__() for l in L]), encoding='utf-8'))
-                #transcript.append_message(b'R', bytes(''.join([r.__str__() for r in R]), encoding='utf-8'))
-                #u = K(transcript.challenge_bytes(b'u'))
-                u = K(1)
+                transcript.append_message(b'L', bytes(''.join([l.__str__() for l in L]), encoding='utf-8'))
+                transcript.append_message(b'R', bytes(''.join([r.__str__() for r in R]), encoding='utf-8'))
+                u = K(transcript.challenge_bytes(b'u'))
+                #u = K(1)
                 u_inv = 1/u
 
                 for i in range(n):
@@ -75,11 +86,11 @@ class Proof(object):
                 R_l += R
 
                 # choose true random challenges u, u^{-1]}
-                #transcript.append_message(b'L', bytes(''.join([l.__str__() for l in L]), encoding='utf-8'))
-                #transcript.append_message(b'R', bytes(''.join([r.__str__() for r in R]), encoding='utf-8'))
+                transcript.append_message(b'L', bytes(''.join([l.__str__() for l in L]), encoding='utf-8'))
+                transcript.append_message(b'R', bytes(''.join([r.__str__() for r in R]), encoding='utf-8'))
 
-                #u = K(transcript.challenge_bytes(b'u'))
-                u = K(1)
+                u = K(transcript.challenge_bytes(b'u'))
+                #u = K(1)
                 u_inv = 1/u
                 for i in range(n):
                     # u * a_prime_l + u^{-1} * a_prime_r
@@ -99,6 +110,8 @@ class Proof(object):
           self.rhs = R_l
           self.a = a[0]
           self.b = b[0]
+          print("L: {}".format(self.lhs))
+          print('R: {}'.format(self.rhs))
 
       def challenges(self, n, verifier):
           challenges = []
@@ -145,10 +158,8 @@ class Proof(object):
           ## h^{h_factor_b_s}
           res_p_3 = CurvePoint.msm(H, h_times_b_div_s)
           # L^(u^2)
-          print("L: {}".format(self.lhs))
           res_p_4 = CurvePoint.msm(self.lhs, neg_u_sq)
           # R^(u^-2)
-          print('R: {}'.format(self.rhs))
           res_p_5 = CurvePoint.msm(self.rhs, neg_u_inv_sq)
           # P prime  = L^{u^2} * P * R^{u^{-1}}
           print('p_1: {}'.format(res_p_1))

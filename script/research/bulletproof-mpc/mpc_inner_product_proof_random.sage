@@ -8,11 +8,10 @@ import numpy as np
 
 ##
 n = 2
-#Q = to_ec_shares_list([CurvePoint.generator()])
-#H = to_ec_shares_list([CurvePoint.generator() for i in range(0,n)])
-#G = to_ec_shares_list([CurvePoint.generator() for i in range(0,n)])
+
+#Q = to_ec_shares_list([CurvePoint.generator() for _ in range(0, int(n/2))])
 Q = to_ec_shares_list([CurvePoint.generator()])
-Q1 = to_ec_shares_list([CurvePoint.random()])
+Q1 = to_ec_shares_list([CurvePoint.random() for _ in range(len(Q))])
 Q2 = [q - q1 for q, q1 in zip(Q, Q1)]
 
 H = to_ec_shares_list([CurvePoint.generator() for i in range(0,n)])
@@ -24,10 +23,10 @@ G1 = to_ec_shares_list([CurvePoint.random() for i in range(0,n)])
 G2 = [g - g1 for g, g1 in zip(G, G1)]
 
 ## source
-source = TestSource()
+source = Source(p)
 ## alpha
-party0_val = [1,2]
-party1_val = [2,4]
+party0_val = [random.randint(0,p) for _ in range(0,n)]
+party1_val = [random.randint(0,p) for _ in range(0,n)]
 party0_random = [random.randint(0,p) for _ in range(0,n)]
 alpha1 = [AuthenticatedShare(party0_random[i], source, 0) for i in range(0,n)]
 alpha2 = [AuthenticatedShare(party0_val[i] - party0_random[i], source, 0) for i in range(0,n)]
@@ -111,76 +110,6 @@ c_r_res = [c_r_lhs_i.authenticated_open(c_r_rhs_i) for c_r_lhs_i, c_r_rhs_i in z
 party_0_proof.create(party_1_proof_c_l, party_1_proof_c_r)
 party_1_proof.create(party_0_proof_c_l, party_0_proof_c_r)
 
-# validate L_gr_al_g
-L_gr_al_g_truth_table = [874739451078007766457464989774322083649278607533249481151382481072868806602, 152666792071518830868575557812948353041420400780739481342941381225525861407 , 1]
-L_gr_al_g_lhs = party_0_proof.L_gr_al_g_share.copy().msm(party_1_proof.L_gr_al_g_share.copy().de())
-L_gr_al_g_rhs = party_1_proof.L_gr_al_g_share.copy().msm(party_0_proof.L_gr_al_g_share.copy().de())
-L_gr_al_g = L_gr_al_g_lhs.authenticated_open(L_gr_al_g_rhs)
-assert L_gr_al_g[0] == L_gr_al_g_truth_table[0] and L_gr_al_g[1] == L_gr_al_g_truth_table[1], 'L_gr_al_g: {}'.format(L_gr_al_g)
-
-# validate L_hl_br_h
-L_hl_br_h_truth_table = [296568192680735721663075531306405401515803196637037431012739700151231900092, 2496008012906462030584867856951610048657271546413643307709739611216909709750, 1]
-L_hl_br_h_lhs = party_0_proof.L_hl_br_h_share.copy().msm(party_1_proof.L_hl_br_h_share.copy().de())
-L_hl_br_h_rhs = party_1_proof.L_hl_br_h_share.copy().msm(party_0_proof.L_hl_br_h_share.copy().de())
-L_hl_br_h = L_hl_br_h_lhs.authenticated_open(L_hl_br_h_rhs)
-assert L_hl_br_h[0] == L_hl_br_h_truth_table[0] and L_hl_br_h[1] == L_hl_br_h_truth_table[1], 'L_hl_br_h: {}'.format(L_hl_br_h)
-
-# validate L_q_cl
-L_q_cl_truth_table = [296568192680735721663075531306405401515803196637037431012739700151231900092, 2496008012906462030584867856951610048657271546413643307709739611216909709750, 1]
-L_q_cl_lhs = party_0_proof.L_q_cl_share.copy().msm(party_1_proof.L_q_cl_share.copy().de())
-L_q_cl_rhs = party_1_proof.L_q_cl_share.copy().msm(party_0_proof.L_q_cl_share.copy().de())
-
-L_q_cl = L_q_cl_lhs.authenticated_open(L_q_cl_rhs)
-
-assert L_q_cl[0] == L_q_cl_truth_table[0] and L_q_cl[1] == L_q_cl_truth_table[1], 'L_q_cl: {}'.format(L_q_cl)
-
-#validate R_gl_ar_g
-R_gl_ar_g_truth_table = [3324833730090626974525872402899302150520188025637965566623476530814354734325, 3147007486456030910661996439995670279305852583596209647900952752170983517249, 1]
-R_gl_ar_g_lhs = party_0_proof.R_gl_ar_g_share.copy().msm(party_1_proof.R_gl_ar_g_share.copy().de())
-R_gl_ar_g_rhs = party_1_proof.R_gl_ar_g_share.copy().msm(party_0_proof.R_gl_ar_g_share.copy().de())
-print(R_gl_ar_g_lhs)
-print(R_gl_ar_g_rhs)
-R_gl_ar_g = R_gl_ar_g_lhs.authenticated_open(R_gl_ar_g_rhs)
-assert R_gl_ar_g[0] == R_gl_ar_g_truth_table[0] and R_gl_ar_g[1] == R_gl_ar_g_truth_table[1], 'R_gl_ar_g: {}'.format(R_gl_ar_g)
-
-#validate R_hr_bl_h
-R_hr_bl_h_truth_table = [3324833730090626974525872402899302150520188025637965566623476530814354734325, 3147007486456030910661996439995670279305852583596209647900952752170983517249, 1]
-R_hr_bl_h_lhs = party_0_proof.R_hr_bl_h_share.copy().msm(party_1_proof.R_hr_bl_h_share.copy().de())
-R_hr_bl_h_rhs = party_1_proof.R_hr_bl_h_share.copy().msm(party_0_proof.R_hr_bl_h_share.copy().de())
-R_hr_bl_h = R_hr_bl_h_lhs.authenticated_open(R_hr_bl_h_rhs)
-assert R_hr_bl_h[0] == R_hr_bl_h_truth_table[0] and R_hr_bl_h[1] == R_hr_bl_h_truth_table[1], 'R_hr_bl_h: {}'.format(R_hr_bl_h)
-
-#validate R_q_cr
-R_q_cr_truth_table = [296568192680735721663075531306405401515803196637037431012739700151231900092, 2496008012906462030584867856951610048657271546413643307709739611216909709750, 1]
-R_q_cr_lhs = party_0_proof.R_q_cr_share.copy().msm(party_1_proof.R_q_cr_share.copy().de())
-R_q_cr_rhs = party_1_proof.R_q_cr_share.copy().msm(party_0_proof.R_q_cr_share.copy().de())
-R_q_cr = R_q_cr_lhs.authenticated_open(R_q_cr_rhs)
-print(R_q_cr_lhs)
-print(R_q_cr_rhs)
-assert R_q_cr[0] == R_q_cr_truth_table[0] and R_q_cr[1] == R_q_cr_truth_table[1], 'R_q_cr: {}'.format(R_q_cr)
-
-# validate L,R
-L_truth_table = [944745129853146482146311827146531433242387523423467361347719369673366386761, 2394221861052833782597287772330532919046009427329165562185942323334687758988, 1]
-R_truth_table = [3136030469135674343172465880817263454880219855664441593466904169223571314065, 3230850854683103635133032411878658931556916918508772276704988424959453909526, 1]
-L = []
-R = []
-for party_0_proof_lhs, party_1_proof_lhs in zip(party_0_proof.lhs, party_1_proof.lhs):
-    l_i_l = []
-    for i in range(len(party_0_proof_lhs)):
-        l_i_l_0_lhs = party_0_proof_lhs[i].copy().msm(party_1_proof_lhs[i].de())
-        l_i_l_1_rhs = party_1_proof_lhs[i].copy().msm(party_0_proof_lhs[i].de())
-        l_i_l += [l_i_l_0_lhs.authenticated_open(l_i_l_1_rhs)]
-    L += [sum(l_i_l)]
-assert L[0][0] == L_truth_table[0] and L[0][1] == L_truth_table[1], 'L: {}'.format(L)
-
-for party_0_proof_rhs, party_1_proof_rhs in zip(party_0_proof.rhs, party_1_proof.rhs):
-    r_i_l = []
-    for i in range(len(party_0_proof_rhs)):
-        r_i_l_lhs = party_0_proof_rhs[i].copy().msm(party_1_proof_rhs[i].de())
-        r_i_l_rhs = party_1_proof_rhs[i].copy().msm(party_0_proof_rhs[i].de())
-        r_i_l += [r_i_l_lhs.authenticated_open(r_i_l_rhs)]
-    R += [sum(r_i_l)]
-assert R[0][0] == R_truth_table[0] and R[0][1] == R_truth_table[1], 'R: {}'.format(R)
 
 ## expected P
 expected_P =  sum([g_a_prime, h_b_prime, q_c])

@@ -68,6 +68,7 @@ party_1_c_shares = [their_c_share.mul(my_c_share.d, my_c_share.e) for my_c_share
 party_1_c_share = [sum_shares(party_1_c_shares, source, 1)]
 party_1_q_c_shares = MSM(Q2, party_1_c_share, source, 1)
 c_shares = [party_0_c_share[0].authenticated_open(party_1_c_share[0])]
+print('c: {}'.format(c_shares[0]))
 assert(c_shares[0] == sum([a*b for a,b in zip(party0_val, party1_val)])), 'sum: {}'.format(sum([a*b for a,b in zip(party0_val, party1_val)]))
 
 party_0_h_b_prime_shares = MSM(H1, party_0_b_prime_shares, source, 0)
