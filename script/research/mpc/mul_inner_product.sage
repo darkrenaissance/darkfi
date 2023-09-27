@@ -33,4 +33,5 @@ for a2b2 in a2b2_l:
 lhs_l = [a1b1.mul(a2b2.d, a2b2.e) for a1b1, a2b2 in zip(a1b1_l, a2b2_l)]
 rhs_l = [a2b2.mul(a1b1.d, a1b1.e) for a1b1, a2b2 in zip(a1b1_l, a2b2_l)]
 res = [lhs.authenticated_open(rhs) for lhs, rhs in zip(lhs_l, rhs_l)]
+print('c: {}'.format(sum(res)))
 assert (sum(res) == np.dot(party0_val,party1_val)), 'mul: {}, expected mul: {}'.format(res, party0_val*party1_val)

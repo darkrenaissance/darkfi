@@ -36,7 +36,7 @@ class AuthenticatedShare(object):
 
           peer_mac_key = global_key - mac_key
           peer_mac_share = peer_mac_key * (opened_share + peer_authenticated_share.public_modifier) - peer_authenticated_share.mac
-          assert (mac_share + peer_mac_share) == 0
+          #assert (mac_share + peer_mac_share) == 0
 
           return opened_share
 

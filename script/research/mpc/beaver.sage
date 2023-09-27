@@ -17,3 +17,9 @@ class Source(object):
             #return [AuthenticatedShare(share, self, party_id) for share in triple]
             #TODO
             return [AuthenticatedShare(share, self, party_id) for share in [1,1,2]]
+
+class TestSource(object):
+      def __init__(self):
+            pass
+      def triplet(self, party_id):
+            return [AuthenticatedShare(share, self, party_id) for share in [1,1,2]]

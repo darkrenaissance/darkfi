@@ -104,6 +104,9 @@ class MSM(object):
       def copy(self):
           return MSM([i.copy() for i in self.points], [i.copy() for i in self.scalars], self.source, self.party_id, [i.copy() for i in self.point_scalars])
 
+      def de(self):
+          return [[ps.d, ps.e] for ps in self.point_scalars]
+
       def msm(self, de):
           self.point_scalars = [point.mul(de_i[0], de_i[1]) for de_i, point in zip(de, self.point_scalars)]
           zero_ec_share = ECAuthenticatedShare(0)
