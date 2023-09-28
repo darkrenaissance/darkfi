@@ -241,12 +241,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     darkfid.validator.write().await.purge_pending_txs().await?;
 
     // Consensus protocol
-    let consensus_task = if args.consensus {
+    let (consensus_task, consensus_sender) = if args.consensus {
         info!(target: "darkfid", "Starting consensus protocol task");
+        let (sender, recvr) = smol::channel::bounded(1);
         let task = StoppableTask::new();
         task.clone().start(
             // Weird hack to prevent lifetimes hell
-            async move { miner_task(&darkfid).await },
+            async move { miner_task(&darkfid, &recvr).await },
             |res| async {
                 match res {
                     Ok(()) | Err(Error::MinerTaskStopped) => { /* Do nothing */ }
@@ -256,10 +257,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             Error::MinerTaskStopped,
             ex.clone(),
         );
-        Some(task)
+        (Some(task), Some(sender))
     } else {
         info!(target: "darkfid", "Not participating in consensus");
-        None
+        (None, None)
     };
 
     // Signal handling for graceful termination.
@@ -278,6 +279,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         consensus_p2p.unwrap().stop().await;
 
         info!(target: "darkfid", "Stopping consensus task...");
+        // Send signal to spawned miner threads to stop
+        consensus_sender.unwrap().send(()).await?;
         consensus_task.unwrap().stop().await;
     }
 

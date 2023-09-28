@@ -17,18 +17,15 @@
  */
 
 use darkfi::{
-    blockchain::BlockInfo,
-    system::sleep,
-    util::time::Timestamp,
-    validator::pow::{mine_block, PoWModule},
-    Result,
+    blockchain::BlockInfo, system::sleep, util::time::Timestamp, validator::pow::PoWModule, Result,
 };
 use log::info;
+use smol::channel::Receiver;
 
 use crate::{proto::BlockInfoMessage, Darkfid};
 
 /// async task used for participating in the PoW consensus protocol
-pub async fn miner_task(node: &Darkfid) -> Result<()> {
+pub async fn miner_task(node: &Darkfid, stop_signal: &Receiver<()>) -> Result<()> {
     // TODO: For now we asume we have a single miner that produces block,
     //       until the PoW consensus and proper validations have been added.
     //       The miner workflow would be:
@@ -52,6 +49,14 @@ pub async fn miner_task(node: &Darkfid) -> Result<()> {
     // We sleep so our miner can grab their pickaxe
     sleep(10).await;
 
+    // Start miner loop
+    miner_loop(node, stop_signal).await?;
+
+    Ok(())
+}
+
+/// Miner loop
+async fn miner_loop(node: &Darkfid, stop_signal: &Receiver<()>) -> Result<()> {
     // TODO: add miner threads arg
     // Generate a PoW module
     let mut module = PoWModule::new(node.validator.read().await.blockchain.clone(), None, Some(90));
@@ -73,7 +78,7 @@ pub async fn miner_task(node: &Darkfid) -> Result<()> {
         next_block.header.previous = last.hash()?;
         next_block.header.height = last.header.height + 1;
         next_block.header.timestamp = Timestamp::current_time();
-        mine_block(module.clone(), &mut next_block);
+        module.mine_block(&mut next_block, stop_signal)?;
 
         // Verify it
         module.verify_block(&next_block)?;
@@ -90,9 +95,5 @@ pub async fn miner_task(node: &Darkfid) -> Result<()> {
 
         // Update PoW module
         module.append(timestamp, &difficulty);
-
-        // TODO: remove this once mining is not blocking
-        // Lazy way to enable stopping this task
-        sleep(10).await;
     }
 }
