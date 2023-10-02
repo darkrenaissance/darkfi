@@ -313,17 +313,10 @@ impl TaskInfo {
         owner: &str,
         due: Option<Timestamp>,
         rank: Option<f32>,
+        created_at: Timestamp,
     ) -> TaudResult<Self> {
         // generate ref_id
         let ref_id = gen_id(30);
-
-        let created_at = Timestamp::current_time();
-
-        // let task_ids: Vec<u32> =
-        //     MonthTasks::load_current_tasks(dataset_path, workspace.clone(), false)?
-        //         .into_iter()
-        //         .map(|t| t.id)
-        //         .collect();
 
         if let Some(d) = &due {
             if *d < Timestamp::current_time() {

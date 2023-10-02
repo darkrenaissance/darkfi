@@ -273,6 +273,7 @@ mod tests {
             "NICKNAME",
             None,
             Some(0.0),
+            Timestamp::current_time(),
         )?;
 
         task.save(&dataset_path)?;
@@ -320,6 +321,7 @@ mod tests {
             "NICKNAME",
             None,
             Some(0.0),
+            Timestamp::current_time(),
         )?;
 
         task.save(&dataset_path)?;

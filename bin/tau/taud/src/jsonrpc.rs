@@ -178,39 +178,36 @@ impl JsonRpcInterface {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         debug!(target: "tau", "JsonRpc::add() params {:?}", params);
 
-        if params.len() != 7 ||
-            !params[0].is_string() ||
-            !params[1].is_array() ||
-            !params[2].is_string() ||
-            !params[3].is_array() ||
-            !params[4].is_array()
-        {
+        if !params[0].is_object() {
             return Err(TaudError::InvalidData("Invalid parameters".to_string()))
         }
 
-        let due = match &params[5] {
+        let params = params[0].get::<HashMap<String, JsonValue>>().unwrap();
+
+        if params.len() != 9 {
+            return Err(TaudError::InvalidData("Invalid parameters".to_string()))
+        }
+
+        let due = match params["due"] {
             JsonValue::Null => None,
-            JsonValue::String(u64_str) => match u64_str.parse::<u64>() {
-                Ok(v) => Some(Timestamp(v)),
-                Err(e) => return Err(TaudError::InvalidData(e.to_string())),
-            },
-            _ => return Err(TaudError::InvalidData("Invalid parameters".to_string())),
+            JsonValue::Number(numba) => Some(Timestamp(numba as u64)),
+            _ => return Err(TaudError::InvalidData("Invalid parameter \"due\"".to_string())),
         };
 
-        let rank = match params[6] {
+        let rank = match params["rank"] {
             JsonValue::Null => None,
             JsonValue::Number(numba) => Some(numba as f32),
-            _ => return Err(TaudError::InvalidData("Invalid parameters".to_string())),
+            _ => return Err(TaudError::InvalidData("Invalid parameter \"rank\"".to_string())),
         };
 
         let tags = {
             let mut tags = vec![];
 
-            for val in params[1].get::<Vec<JsonValue>>().unwrap().iter() {
+            for val in params["tags"].get::<Vec<JsonValue>>().unwrap().iter() {
                 if let Some(tag) = val.get::<String>() {
                     tags.push(tag.clone());
                 } else {
-                    return Err(TaudError::InvalidData("Invalid parameters".to_string()))
+                    return Err(TaudError::InvalidData("Invalid parameter \"tags\"".to_string()))
                 }
             }
 
@@ -220,11 +217,11 @@ impl JsonRpcInterface {
         let assigns = {
             let mut assigns = vec![];
 
-            for val in params[3].get::<Vec<JsonValue>>().unwrap().iter() {
+            for val in params["assign"].get::<Vec<JsonValue>>().unwrap().iter() {
                 if let Some(assign) = val.get::<String>() {
                     assigns.push(assign.clone());
                 } else {
-                    return Err(TaudError::InvalidData("Invalid parameters".to_string()))
+                    return Err(TaudError::InvalidData("Invalid parameter \"assign\"".to_string()))
                 }
             }
 
@@ -234,24 +231,30 @@ impl JsonRpcInterface {
         let projects = {
             let mut projects = vec![];
 
-            for val in params[4].get::<Vec<JsonValue>>().unwrap().iter() {
+            for val in params["project"].get::<Vec<JsonValue>>().unwrap().iter() {
                 if let Some(project) = val.get::<String>() {
                     projects.push(project.clone());
                 } else {
-                    return Err(TaudError::InvalidData("Invalid parameters".to_string()))
+                    return Err(TaudError::InvalidData("Invalid parameter \"project\"".to_string()))
                 }
             }
 
             projects
         };
 
+        let created_at = match params["created_at"] {
+            JsonValue::Number(numba) => Some(numba as u64),
+            _ => return Err(TaudError::InvalidData("Invalid parameter \"created_at\"".to_string())),
+        };
+
         let mut new_task: TaskInfo = TaskInfo::new(
             self.workspace.lock().await.clone(),
-            params[0].get::<String>().unwrap(),
-            params[2].get::<String>().unwrap(),
+            params["title"].get::<String>().unwrap(),
+            params["desc"].get::<String>().unwrap(),
             &self.nickname,
             due,
             rank,
+            Timestamp(created_at.unwrap()),
         )?;
         new_task.set_project(&projects);
         new_task.set_assign(&assigns);
@@ -366,7 +369,7 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
     async fn get_task_by_ref_id(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::get_task_by_id() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::get_task_by_ref_id() params {:?}", params);
 
         if params.len() != 1 || !params[0].is_string() {
             return Err(TaudError::InvalidData("len of params should be 1".into()))
