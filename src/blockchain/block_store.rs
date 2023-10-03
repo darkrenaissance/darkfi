@@ -30,9 +30,6 @@ use crate::{tx::Transaction, Error, Result};
 
 use super::{parse_record, parse_u64_key_record, Header, SledDbOverlayPtr};
 
-/// Block version number
-pub const BLOCK_VERSION: u8 = 1;
-
 /// This struct represents a tuple of the form (`header`, `txs`, `signature`).
 /// The header and transactions are stored as hashes, serving as pointers to the actual data
 /// in the sled database.

@@ -70,9 +70,6 @@ async fn miner_loop(node: &Darkfid, stop_signal: &Receiver<()>) -> Result<()> {
 
         // Mine next block
         let difficulty = module.next_difficulty();
-        // TODO: BlockInfo::default() should be based on block version
-        // TODO: block version should be derived from cuttoff const, not
-        //       hardcoded BLOCK_VERSION
         let mut next_block = BlockInfo::default();
         next_block.header.version = 0;
         next_block.header.previous = last.hash()?;

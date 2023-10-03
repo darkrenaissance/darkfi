@@ -121,6 +121,16 @@ impl Default for Slot {
 // TODO: This values are experimental, should be replaced with the proper ones once defined
 pub const POW_CUTOFF: u64 = 1000000;
 pub const POS_START: u64 = 1000001;
+
+/// Auxiliary function to calculate provided block height(slot) block version.
+/// PoW blocks use version 1, while PoS ones use version 2.
+pub fn block_version(height: u64) -> u8 {
+    match height {
+        0..=POW_CUTOFF => 1,
+        POS_START.. => 2,
+    }
+}
+
 /// Auxiliary function to calculate provided block height(slot) expected reward value.
 /// Genesis slot(0) always returns reward value 0.
 /// We use PoW bootstrap, configured to reduce rewards at fixed height numbers, until a cutoff.

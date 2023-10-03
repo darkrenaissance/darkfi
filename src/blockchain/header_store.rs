@@ -17,6 +17,7 @@
  */
 
 use darkfi_sdk::{
+    blockchain::block_version,
     crypto::MerkleTree,
     pasta::{group::ff::Field, pallas},
 };
@@ -27,7 +28,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEn
 
 use crate::{util::time::Timestamp, Error, Result};
 
-use super::{block_store::BLOCK_VERSION, parse_record, SledDbOverlayPtr};
+use super::{parse_record, SledDbOverlayPtr};
 
 /// This struct represents a tuple of the form (version, previous, epoch, height, timestamp, nonce, merkle_root).
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
@@ -58,7 +59,7 @@ impl Header {
         timestamp: Timestamp,
         nonce: pallas::Base,
     ) -> Self {
-        let version = BLOCK_VERSION;
+        let version = block_version(height);
         let tree = MerkleTree::new(1);
         Self { version, previous, epoch, height, timestamp, nonce, tree }
     }
