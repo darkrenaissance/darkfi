@@ -37,8 +37,8 @@ fn pow_reward() -> Result<()> {
         // Holders this test will use
         const HOLDERS: [Holder; 3] = [Holder::Faucet, Holder::Alice, Holder::Bob];
 
-        // Slot to verify against
-        let mut current_slot = 0;
+        // Block height(slot) to verify against
+        let mut current_height = 0;
 
         // Initialize harness
         let mut th = TestHarness::new(&["money".to_string()]).await?;
@@ -51,41 +51,41 @@ fn pow_reward() -> Result<()> {
         info!(target: "money", "[Malicious] =======================================");
         info!(target: "money", "[Malicious] Building PoW reward tx for genesis slot");
         info!(target: "money", "[Malicious] =======================================");
-        let (pow_reward_tx, _) = th.pow_reward(&Holder::Alice, current_slot, Some(0))?;
+        let (pow_reward_tx, _) = th.pow_reward(&Holder::Alice, current_height, Some(0))?;
 
         info!(target: "money", "[Malicious] =======================================");
         info!(target: "money", "[Malicious] Checking PoW reward tx for genesis slot");
         info!(target: "money", "[Malicious] =======================================");
-        th.execute_erroneous_pow_reward_tx(&Holder::Alice, &pow_reward_tx.clone(), current_slot)
+        th.execute_erroneous_pow_reward_tx(&Holder::Alice, &pow_reward_tx.clone(), current_height)
             .await?;
 
-        current_slot += 1;
-        th.generate_slot(current_slot).await?;
+        current_height += 1;
+        th.generate_slot(current_height).await?;
 
-        let alice_reward = expected_reward(current_slot);
+        let alice_reward = expected_reward(current_height);
         info!(target: "money", "[Malicious] ================================");
         info!(target: "money", "[Malicious] Building erroneous PoW reward tx");
         info!(target: "money", "[Malicious] ================================");
         let (pow_reward_tx, _) =
-            th.pow_reward(&Holder::Alice, current_slot, Some(alice_reward + 1))?;
+            th.pow_reward(&Holder::Alice, current_height, Some(alice_reward + 1))?;
 
         info!(target: "money", "[Malicious] =======================================");
         info!(target: "money", "[Malicious] Checking erroneous amount PoW reward tx");
         info!(target: "money", "[Malicious] =======================================");
-        th.execute_erroneous_pow_reward_tx(&Holder::Alice, &pow_reward_tx.clone(), current_slot)
+        th.execute_erroneous_pow_reward_tx(&Holder::Alice, &pow_reward_tx.clone(), current_height)
             .await?;
 
         info!(target: "money", "[Alice] ======================");
         info!(target: "money", "[Alice] Building PoW reward tx");
         info!(target: "money", "[Alice] ======================");
         let (pow_reward_tx, pow_reward_params) =
-            th.pow_reward(&Holder::Alice, current_slot, None)?;
+            th.pow_reward(&Holder::Alice, current_height, None)?;
 
         for holder in &HOLDERS {
             info!(target: "money", "[{holder:?}] =============================");
             info!(target: "money", "[{holder:?}] Executing Alice PoW reward tx");
             info!(target: "money", "[{holder:?}] =============================");
-            th.execute_pow_reward_tx(holder, &pow_reward_tx, &pow_reward_params, current_slot)
+            th.execute_pow_reward_tx(holder, &pow_reward_tx, &pow_reward_params, current_height)
                 .await?;
         }
 
@@ -114,7 +114,7 @@ fn pow_reward() -> Result<()> {
             info!(target: "money", "[{holder:?}] ==============================");
             info!(target: "money", "[{holder:?}] Executing Alice2Bob payment tx");
             info!(target: "money", "[{holder:?}] ==============================");
-            th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_slot, true)
+            th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_height, true)
                 .await?;
         }
 

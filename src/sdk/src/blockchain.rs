@@ -121,13 +121,13 @@ impl Default for Slot {
 // TODO: This values are experimental, should be replaced with the proper ones once defined
 pub const POW_CUTOFF: u64 = 1000000;
 pub const POS_START: u64 = 1000001;
-/// Auxiliary function to calculate provided slot(block height) expected reward value.
+/// Auxiliary function to calculate provided block height(slot) expected reward value.
 /// Genesis slot(0) always returns reward value 0.
-/// We use PoW bootstrap, configured to reduce rewards at fixed slot numbers, until a cutoff.
+/// We use PoW bootstrap, configured to reduce rewards at fixed height numbers, until a cutoff.
 /// Once cut-off is reached, signalling PoS start, reward value is based on DARK token-economics.
-pub fn expected_reward(slot: u64) -> u64 {
+pub fn expected_reward(height: u64) -> u64 {
     // Configured block rewards (1 DRK == 1 * 10^8)
-    match slot {
+    match height {
         0 => 0,
         1..=1000 => 2_000_000_000,         // 20 DRK
         1001..=2000 => 1_800_000_000,      // 18 DRK

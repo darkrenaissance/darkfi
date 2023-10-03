@@ -37,7 +37,7 @@ impl TestHarness {
     pub fn pow_reward(
         &mut self,
         holder: &Holder,
-        slot: u64,
+        block_height: u64,
         reward: Option<u64>,
     ) -> Result<(Transaction, MoneyTokenMintParamsV1)> {
         let wallet = self.holders.get(holder).unwrap();
@@ -56,7 +56,7 @@ impl TestHarness {
 
         let builder = PoWRewardCallBuilder {
             keypair: wallet.keypair,
-            slot,
+            block_height,
             spend_hook,
             user_data,
             mint_zkbin: mint_zkbin.clone(),
@@ -93,14 +93,14 @@ impl TestHarness {
         holder: &Holder,
         tx: &Transaction,
         params: &MoneyTokenMintParamsV1,
-        slot: u64,
+        block_height: u64,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyPoWReward).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.read().await.add_test_producer_transaction(tx, slot, true).await?;
+        wallet.validator.read().await.add_test_producer_transaction(tx, block_height, true).await?;
         wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
@@ -111,7 +111,7 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
         tx: &Transaction,
-        slot: u64,
+        block_height: u64,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark =
@@ -122,7 +122,7 @@ impl TestHarness {
             .validator
             .read()
             .await
-            .add_test_producer_transaction(tx, slot, true)
+            .add_test_producer_transaction(tx, block_height, true)
             .await
             .is_err());
         tx_action_benchmark.verify_times.push(timer.elapsed());

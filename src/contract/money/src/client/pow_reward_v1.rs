@@ -65,8 +65,8 @@ impl PoWRewardRevealed {
 pub struct PoWRewardCallBuilder {
     /// Caller's keypair
     pub keypair: Keypair,
-    /// Rewarded slot(block)
-    pub slot: u64,
+    /// Rewarded block height(slot)
+    pub block_height: u64,
     /// Spend hook for the output
     pub spend_hook: pallas::Base,
     /// User data for the output
@@ -148,7 +148,7 @@ impl PoWRewardCallBuilder {
     }
 
     pub fn build(&self) -> Result<PoWRewardCallDebris> {
-        let reward = expected_reward(self.slot);
+        let reward = expected_reward(self.block_height);
         assert!(reward != 0);
         self._build(reward)
     }
