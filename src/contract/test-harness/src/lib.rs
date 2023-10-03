@@ -157,6 +157,7 @@ impl Wallet {
         let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
         let config = ValidatorConfig::new(
             time_keeper,
+            Some(90),
             genesis_block.clone(),
             0,
             faucet_pubkeys.to_vec(),

@@ -73,6 +73,7 @@ const CUT_BEGIN: usize = 60;
 const CUT_END: usize = 660;
 /// Default target block time, in seconds
 const DIFFICULTY_TARGET: usize = 20;
+// TODO: maybe add more difficulty targets (testnet, mainnet, etc)
 /// How many most recent blocks to use to verify new blocks' timestamp
 const BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW: usize = 60;
 /// Time limit in the future of what blocks can be
@@ -175,12 +176,18 @@ impl PoWModule {
         difficulty == &self.next_difficulty()
     }
 
-    /// Verify provided block timestamp is valid and matches certain criteria
-    pub fn verify_timestamp(&self, timestamp: u64) -> bool {
+    /// Verify provided block timestamp is not far in the future and
+    /// check its valid acorrding to current timestamps median
+    pub fn verify_current_timestamp(&self, timestamp: u64) -> bool {
         if timestamp > Timestamp::current_time().0 + BLOCK_FUTURE_TIME_LIMIT {
             return false
         }
 
+        self.verify_timestamp_by_median(timestamp)
+    }
+
+    /// Verify provided block timestamp is valid and matches certain criteria
+    pub fn verify_timestamp_by_median(&self, timestamp: u64) -> bool {
         // If not enough blocks, no proper median yet, return true
         if self.timestamps.len() < BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW {
             return true
@@ -192,17 +199,17 @@ impl PoWModule {
         timestamp >= median(timestamps)
     }
 
-    /// Verify provided block timestamp and difficulty pair
-    pub fn verify_pair(&self, timestamp: u64, difficulty: &BigUint) {
-        assert!(self.verify_timestamp(timestamp));
-        assert!(self.verify_difficulty(difficulty));
+    /// Verify provided block timestamp and hash
+    pub fn verify_current_block(&self, block: &BlockInfo) -> Result<()> {
+        // First we verify the block's timestamp
+        assert!(self.verify_current_timestamp(block.header.timestamp.0));
+
+        // Then we verify the block's hash
+        self.verify_block_hash(block)
     }
 
     /// Verify provided block corresponds to next mine target
-    pub fn verify_block(&self, block: &BlockInfo) -> Result<()> {
-        // First we verify the block's timestamp
-        assert!(self.verify_timestamp(block.header.timestamp.0));
-
+    pub fn verify_block_hash(&self, block: &BlockInfo) -> Result<()> {
         // Then we verify the proof of work:
         let verifier_setup = Instant::now();
 
@@ -421,7 +428,7 @@ mod tests {
         module.mine_block(&mut next_block, &recvr)?;
 
         // Verify it
-        module.verify_block(&next_block)?;
+        module.verify_current_block(&next_block)?;
 
         Ok(())
     }

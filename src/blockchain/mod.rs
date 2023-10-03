@@ -139,19 +139,16 @@ impl Blockchain {
         trees.push(self.order.0.clone());
         batches.push(blocks_order_batch);
 
-        // Store extra stuff based on block version
-        if block.header.version > 0 {
-            // Store block slots uids vector
-            let slots = block.slots.iter().map(|x| x.id).collect();
-            let blocks_slots_bactch = self.blocks_slots.insert_batch(&block_hash_vec, &[&slots])?;
-            trees.push(self.blocks_slots.0.clone());
-            batches.push(blocks_slots_bactch);
+        // Store block slots uids vector
+        let slots = block.slots.iter().map(|x| x.id).collect();
+        let blocks_slots_bactch = self.blocks_slots.insert_batch(&block_hash_vec, &[&slots])?;
+        trees.push(self.blocks_slots.0.clone());
+        batches.push(blocks_slots_bactch);
 
-            // Store block slots
-            let slots_batch = self.slots.insert_batch(&block.slots)?;
-            trees.push(self.slots.0.clone());
-            batches.push(slots_batch);
-        }
+        // Store block slots
+        let slots_batch = self.slots.insert_batch(&block.slots)?;
+        trees.push(self.slots.0.clone());
+        batches.push(slots_batch);
 
         // Perform an atomic transaction over the trees and apply the batches.
         self.atomic_write(&trees, &batches)?;
@@ -173,22 +170,19 @@ impl Blockchain {
             return Ok(false)
         }
 
-        // Check extra stuff based on block version
-        if block.header.version > 0 {
-            // Check if we have block slots uids vector
-            let slots = match self.blocks_slots.get(&[blockhash], true) {
-                Ok(v) => v[0].clone().unwrap(),
-                Err(_) => return Ok(false),
-            };
-            let provided_block_slots: Vec<u64> = block.slots.iter().map(|x| x.id).collect();
-            if slots != provided_block_slots {
-                return Ok(false)
-            }
+        // Check if we have block slots uids vector
+        let slots = match self.blocks_slots.get(&[blockhash], true) {
+            Ok(v) => v[0].clone().unwrap(),
+            Err(_) => return Ok(false),
+        };
+        let provided_block_slots: Vec<u64> = block.slots.iter().map(|x| x.id).collect();
+        if slots != provided_block_slots {
+            return Ok(false)
+        }
 
-            // Check if we have all slots
-            if self.slots.get(&slots, true).is_err() {
-                return Ok(false)
-            }
+        // Check if we have all slots
+        if self.slots.get(&slots, true).is_err() {
+            return Ok(false)
         }
 
         // Check provided info produces the same hash
@@ -216,14 +210,10 @@ impl Blockchain {
             let txs = self.transactions.get(&block.txs, true)?;
             let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
 
-            // Retrieve extra stuff based on block version
-            let mut block_slots = vec![];
-            if header.version > 0 {
-                let slots = self.blocks_slots.get(&[block.hash()], true)?;
-                let slots = slots[0].clone().unwrap();
-                let slots = self.slots.get(&slots, true)?;
-                block_slots = slots.iter().map(|x| x.clone().unwrap()).collect();
-            }
+            let slots = self.blocks_slots.get(&[block.hash()], true)?;
+            let slots = slots[0].clone().unwrap();
+            let slots = self.slots.get(&slots, true)?;
+            let block_slots = slots.iter().map(|x| x.clone().unwrap()).collect();
 
             let info = BlockInfo::new(header, txs, block.signature, block_slots);
             ret.push(info);
@@ -491,15 +481,12 @@ impl BlockchainOverlay {
         // Store block order
         self.order.insert(&[block.header.height], &block_hash_vec)?;
 
-        // Store extra stuff based on block version
-        if block.header.version > 0 {
-            // Store block slots uids vector
-            let slots = block.slots.iter().map(|x| x.id).collect();
-            self.blocks_slots.insert(&block_hash_vec, &[&slots])?;
+        // Store block slots uids vector
+        let slots = block.slots.iter().map(|x| x.id).collect();
+        self.blocks_slots.insert(&block_hash_vec, &[&slots])?;
 
-            // Store block slots
-            self.slots.insert(&block.slots)?;
-        }
+        // Store block slots
+        self.slots.insert(&block.slots)?;
 
         Ok(block_hash)
     }
@@ -518,22 +505,19 @@ impl BlockchainOverlay {
             return Ok(false)
         }
 
-        // Check extra stuff based on block version
-        if block.header.version > 0 {
-            // Check if we have block slots uids vector
-            let slots = match self.blocks_slots.get(&[blockhash], true) {
-                Ok(v) => v[0].clone().unwrap(),
-                Err(_) => return Ok(false),
-            };
-            let provided_block_slots: Vec<u64> = block.slots.iter().map(|x| x.id).collect();
-            if slots != provided_block_slots {
-                return Ok(false)
-            }
+        // Check if we have block slots uids vector
+        let slots = match self.blocks_slots.get(&[blockhash], true) {
+            Ok(v) => v[0].clone().unwrap(),
+            Err(_) => return Ok(false),
+        };
+        let provided_block_slots: Vec<u64> = block.slots.iter().map(|x| x.id).collect();
+        if slots != provided_block_slots {
+            return Ok(false)
+        }
 
-            // Check if we have all slots
-            if self.slots.get(&slots, true).is_err() {
-                return Ok(false)
-            }
+        // Check if we have all slots
+        if self.slots.get(&slots, true).is_err() {
+            return Ok(false)
         }
 
         // Check provided info produces the same hash
@@ -561,14 +545,10 @@ impl BlockchainOverlay {
             let txs = self.transactions.get(&block.txs, true)?;
             let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
 
-            // Retrieve extra stuff based on block version
-            let mut block_slots = vec![];
-            if header.version > 0 {
-                let slots = self.blocks_slots.get(&[block.hash()], true)?;
-                let slots = slots[0].clone().unwrap();
-                let slots = self.slots.get(&slots, true)?;
-                block_slots = slots.iter().map(|x| x.clone().unwrap()).collect();
-            }
+            let slots = self.blocks_slots.get(&[block.hash()], true)?;
+            let slots = slots[0].clone().unwrap();
+            let slots = self.slots.get(&slots, true)?;
+            let block_slots = slots.iter().map(|x| x.clone().unwrap()).collect();
 
             let info = BlockInfo::new(header, txs, block.signature, block_slots);
             ret.push(info);

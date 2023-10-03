@@ -159,8 +159,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     let genesis_block = BlockInfo::default();
     let genesis_txs_total = genesis_txs_total(&genesis_block.txs)?;
     let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
+    // TODO: add miner threads arg
     let config = ValidatorConfig::new(
         time_keeper,
+        Some(40),
         genesis_block,
         genesis_txs_total,
         vec![],

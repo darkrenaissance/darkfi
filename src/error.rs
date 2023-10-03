@@ -354,6 +354,9 @@ pub enum Error {
     #[error("Block {0} is invalid")]
     BlockIsInvalid(String),
 
+    #[error("Block version {0} is invalid")]
+    BlockVersionIsInvalid(u8),
+
     #[error("Block {0} already in database")]
     BlockAlreadyExists(String),
 

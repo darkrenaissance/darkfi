@@ -28,7 +28,7 @@ fn forks() -> Result<()> {
     let blockchain = Blockchain::new(&sled::Config::new().temporary(true).open()?)?;
 
     // Create a fork
-    let fork = Fork::new(&blockchain)?;
+    let fork = Fork::new(&blockchain, Some(90))?;
 
     // Add a dummy record to fork
     fork.overlay.lock().unwrap().order.insert(&[0], &[record0])?;

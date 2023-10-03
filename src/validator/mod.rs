@@ -40,6 +40,7 @@ use consensus::Consensus;
 
 /// DarkFi PoW module
 pub mod pow;
+use pow::PoWModule;
 
 /// DarkFi consensus PID controller
 pub mod pid;
@@ -65,6 +66,8 @@ pub mod float_10;
 pub struct ValidatorConfig {
     /// Helper structure to calculate time related operations
     pub time_keeper: TimeKeeper,
+    /// Currently configured PoW target
+    pub pow_target: Option<usize>,
     /// Genesis block
     pub genesis_block: BlockInfo,
     /// Total amount of minted tokens in genesis block
@@ -78,12 +81,20 @@ pub struct ValidatorConfig {
 impl ValidatorConfig {
     pub fn new(
         time_keeper: TimeKeeper,
+        pow_target: Option<usize>,
         genesis_block: BlockInfo,
         genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
         testing_mode: bool,
     ) -> Self {
-        Self { time_keeper, genesis_block, genesis_txs_total, faucet_pubkeys, testing_mode }
+        Self {
+            time_keeper,
+            pow_target,
+            genesis_block,
+            genesis_txs_total,
+            faucet_pubkeys,
+            testing_mode,
+        }
     }
 }
 
@@ -132,7 +143,8 @@ impl Validator {
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
         info!(target: "validator::new", "Initializing Consensus");
-        let consensus = Consensus::new(blockchain.clone(), config.time_keeper, testing_mode);
+        let consensus =
+            Consensus::new(blockchain.clone(), config.time_keeper, config.pow_target, testing_mode);
 
         // Create the actual state
         let state =
@@ -296,8 +308,9 @@ impl Validator {
         // Retrieve last block
         let mut previous = &overlay.lock().unwrap().last_block()?;
 
-        // Create a time keeper to validate each block
+        // Create a time keeper and a PoW module to validate each block
         let mut time_keeper = self.consensus.time_keeper.clone();
+        let mut module = self.consensus.module.clone();
 
         // Keep track of all blocks transactions to remove them from pending txs store
         let mut removed_txs = vec![];
@@ -314,6 +327,7 @@ impl Validator {
             if verify_block(
                 &overlay,
                 &time_keeper,
+                &module,
                 block,
                 previous,
                 expected_reward,
@@ -326,6 +340,11 @@ impl Validator {
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
             };
+
+            // Update PoW module
+            if block.header.version == 1 {
+                module.append(block.header.timestamp.0, &module.next_difficulty());
+            }
 
             // Store block transactions
             for tx in &block.txs {
@@ -342,6 +361,9 @@ impl Validator {
         // Purge pending erroneous txs since canonical state has been changed
         self.blockchain.remove_pending_txs(&removed_txs)?;
         self.purge_pending_txs().await?;
+
+        // Update PoW module
+        self.consensus.module = module;
 
         Ok(())
     }
@@ -407,6 +429,7 @@ impl Validator {
         &self,
         tx: &Transaction,
         verifying_slot: u64,
+        block_version: u8,
         write: bool,
     ) -> Result<()> {
         debug!(target: "validator::add_test_producer_transaction", "Instantiating BlockchainOverlay");
@@ -422,7 +445,8 @@ impl Validator {
 
         // Verify transaction
         let mut erroneous_txs = vec![];
-        if let Err(e) = verify_producer_transaction(&overlay, &time_keeper, tx).await {
+        if let Err(e) = verify_producer_transaction(&overlay, &time_keeper, tx, block_version).await
+        {
             warn!(target: "validator::add_test_producer_transaction", "Transaction verification failed: {}", e);
             erroneous_txs.push(tx.clone());
         }
@@ -453,6 +477,7 @@ impl Validator {
         &self,
         genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
+        pow_target: Option<usize>,
     ) -> Result<()> {
         let blocks = self.blockchain.get_all()?;
 
@@ -469,8 +494,9 @@ impl Validator {
         // Set previous
         let mut previous = &blocks[0];
 
-        // Create a time keeper to validate each block
+        // Create a time keeper and a PoW module to validate each block
         let mut time_keeper = self.consensus.time_keeper.clone();
+        let mut module = PoWModule::new(blockchain.clone(), None, pow_target);
 
         // Deploy native wasm contracts
         deploy_native_contracts(&overlay, &time_keeper, &faucet_pubkeys)?;
@@ -490,6 +516,7 @@ impl Validator {
             if verify_block(
                 &overlay,
                 &time_keeper,
+                &module,
                 block,
                 previous,
                 expected_reward,
@@ -502,6 +529,11 @@ impl Validator {
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
             };
+
+            // Update PoW module
+            if block.header.version == 1 {
+                module.append(block.header.timestamp.0, &module.next_difficulty());
+            }
 
             // Use last inserted block as next iteration previous
             previous = block;

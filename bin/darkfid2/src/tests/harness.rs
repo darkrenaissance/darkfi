@@ -29,7 +29,7 @@ use darkfi::{
 };
 use darkfi_contract_test_harness::{vks, Holder, TestHarness};
 use darkfi_sdk::{
-    blockchain::{expected_reward, PidOutput, PreviousSlot, Slot},
+    blockchain::{expected_reward, PidOutput, PreviousSlot, Slot, POS_START},
     pasta::{group::ff::Field, pallas},
 };
 use url::Url;
@@ -42,6 +42,7 @@ use crate::{
 };
 
 pub struct HarnessConfig {
+    pub pow_target: Option<usize>,
     pub testing_node: bool,
     pub alice_initial: u64,
     pub bob_initial: u64,
@@ -81,6 +82,7 @@ impl Harness {
         let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
         let validator_config = ValidatorConfig::new(
             time_keeper,
+            config.pow_target,
             genesis_block,
             genesis_txs_total,
             vec![],
@@ -134,8 +136,8 @@ impl Harness {
         let alice = &self.alice.validator.read().await;
         let bob = &self.bob.validator.read().await;
 
-        alice.validate_blockchain(genesis_txs_total, vec![]).await?;
-        bob.validate_blockchain(genesis_txs_total, vec![]).await?;
+        alice.validate_blockchain(genesis_txs_total, vec![], self.config.pow_target).await?;
+        bob.validate_blockchain(genesis_txs_total, vec![], self.config.pow_target).await?;
 
         let alice_blockchain_len = alice.blockchain.len();
         assert_eq!(alice_blockchain_len, bob.blockchain.len());
@@ -160,7 +162,7 @@ impl Harness {
         Ok(())
     }
 
-    pub async fn generate_next_block(
+    pub async fn generate_next_pos_block(
         &self,
         previous: &BlockInfo,
         slots_count: usize,
@@ -171,7 +173,7 @@ impl Harness {
         let mut slots = Vec::with_capacity(slots_count);
         let mut previous_slot = previous.slots.last().unwrap().clone();
         for i in 0..slots_count {
-            let id = previous_slot.id + 1;
+            let id = if previous_slot.id < POS_START { POS_START } else { previous_slot.id + 1 };
             // First slot in the sequence has (at least) 1 previous slot producer
             let producers = if i == 0 { 1 } else { 0 };
             let previous = PreviousSlot::new(
@@ -195,10 +197,11 @@ impl Harness {
         timestamp.add(1);
 
         // Generate header
+        let height = slots.last().unwrap().id;
         let header = Header::new(
             previous_hash,
-            previous.header.epoch,
-            slots.last().unwrap().id,
+            self.alice.validator.read().await.consensus.time_keeper.slot_epoch(height),
+            height,
             timestamp,
             previous.header.nonce,
         );

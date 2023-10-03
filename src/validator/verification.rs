@@ -31,7 +31,7 @@ use crate::{
     runtime::vm_runtime::Runtime,
     tx::Transaction,
     util::time::TimeKeeper,
-    validator::validation::validate_block,
+    validator::{pow::PoWModule, validation::validate_block},
     zk::VerifyingKey,
     Error, Result,
 };
@@ -51,31 +51,33 @@ pub async fn verify_genesis_block(
         return Err(Error::BlockAlreadyExists(block_hash))
     }
 
+    // Block height must be 0
+    if block.header.height != 0 {
+        return Err(Error::BlockIsInvalid(block_hash))
+    }
+
     // Block height must be the same as the time keeper verifying slot
     if block.header.height != time_keeper.verifying_slot {
         return Err(Error::VerifyingSlotMissmatch())
     }
 
-    // Check extra stuff based on block version
-    if block.header.version > 0 {
-        // Check genesis slot exist
-        if block.slots.len() != 1 {
-            return Err(Error::BlockIsInvalid(block_hash))
-        }
+    // Check genesis slot exist
+    if block.slots.len() != 1 {
+        return Err(Error::BlockIsInvalid(block_hash))
+    }
 
-        // Retrieve genesis slot
-        let genesis_slot = block.slots.last().unwrap();
+    // Retrieve genesis slot
+    let genesis_slot = block.slots.last().unwrap();
 
-        // Genesis block slot total token must correspond to the total
-        // of all genesis transactions public inputs (genesis distribution).
-        if genesis_slot.total_tokens != genesis_txs_total {
-            return Err(Error::SlotIsInvalid(genesis_slot.id))
-        }
+    // Genesis block slot total token must correspond to the total
+    // of all genesis transactions public inputs (genesis distribution).
+    if genesis_slot.total_tokens != genesis_txs_total {
+        return Err(Error::SlotIsInvalid(genesis_slot.id))
+    }
 
-        // Verify there is no reward
-        if genesis_slot.reward != 0 {
-            return Err(Error::SlotIsInvalid(genesis_slot.id))
-        }
+    // Verify there is no reward
+    if genesis_slot.reward != 0 {
+        return Err(Error::SlotIsInvalid(genesis_slot.id))
     }
 
     // Verify transactions vector contains at least one(producers) transaction
@@ -110,6 +112,7 @@ pub async fn verify_genesis_block(
 pub async fn verify_block(
     overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
+    module: &PoWModule,
     block: &BlockInfo,
     previous: &BlockInfo,
     expected_reward: u64,
@@ -128,8 +131,13 @@ pub async fn verify_block(
         return Err(Error::VerifyingSlotMissmatch())
     }
 
+    // Block epoch must be the correct one, calculated by the time keeper configuration
+    if block.header.epoch != time_keeper.slot_epoch(block.header.height) {
+        return Err(Error::VerifyingSlotMissmatch())
+    }
+
     // Validate block, using its previous
-    validate_block(block, previous, expected_reward)?;
+    validate_block(block, previous, expected_reward, module)?;
 
     // Verify transactions vector contains at least one(producers) transaction
     if block.txs.is_empty() {
@@ -139,7 +147,8 @@ pub async fn verify_block(
     // Validate proposal transaction if not in testing mode
     if !testing_mode {
         let tx = block.txs.last().unwrap();
-        let public_key = verify_producer_transaction(overlay, time_keeper, tx).await?;
+        let public_key =
+            verify_producer_transaction(overlay, time_keeper, tx, block.header.version).await?;
         verify_producer_signature(block, &public_key)?;
     }
 
@@ -176,22 +185,33 @@ pub async fn verify_producer_transaction(
     overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
     tx: &Transaction,
+    block_version: u8,
 ) -> Result<PublicKey> {
     let tx_hash = tx.hash()?;
     debug!(target: "validator::verification::verify_producer_transaction", "Validating proposal transaction {}", tx_hash);
 
-    // Transaction must contain a single call, either Money::PoWReward(0x08) or Consensus::Proposal(0x02)
-    if tx.calls.len() != 1 ||
-        (tx.calls[0].contract_id != *MONEY_CONTRACT_ID &&
-            tx.calls[0].contract_id != *CONSENSUS_CONTRACT_ID) ||
-        (tx.calls[0].contract_id == *MONEY_CONTRACT_ID && tx.calls[0].data[0] != 0x08) ||
-        (tx.calls[0].contract_id == *CONSENSUS_CONTRACT_ID && tx.calls[0].data[0] != 0x02)
-    {
-        error!(target: "validator::verification::verify_producer_transaction", "Proposal transaction is malformed");
+    // Transaction must contain a single call
+    if tx.calls.len() != 1 {
         return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
 
+    // Verify call based on version
     let call = &tx.calls[0];
+    match block_version {
+        1 => {
+            // Version 1 blocks must contain a Money::PoWReward(0x08) call
+            if call.contract_id != *MONEY_CONTRACT_ID || call.data[0] != 0x08 {
+                return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+            }
+        }
+        2 => {
+            // Version 1 blocks must contain a Consensus::Proposal(0x02) call
+            if call.contract_id != *CONSENSUS_CONTRACT_ID || call.data[0] != 0x02 {
+                return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+            }
+        }
+        _ => return Err(Error::BlockVersionIsInvalid(block_version)),
+    }
 
     // Map of ZK proof verifying keys for the current transaction
     let mut verifying_keys: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();

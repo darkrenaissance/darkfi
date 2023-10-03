@@ -29,7 +29,7 @@ use crate::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header},
     tx::Transaction,
     util::time::{TimeKeeper, Timestamp},
-    validator::{pid::slot_pid_output, verify_block, verify_transactions},
+    validator::{pid::slot_pid_output, pow::PoWModule, verify_block, verify_transactions},
     Error, Result,
 };
 
@@ -42,25 +42,38 @@ pub struct Consensus {
     pub blockchain: Blockchain,
     /// Helper structure to calculate time related operations
     pub time_keeper: TimeKeeper,
+    /// Currently configured PoW target
+    pub pow_target: Option<usize>,
     /// Node is participating to consensus
     pub participating: bool,
     /// Last slot node check for finalization
     pub checked_finalization: u64,
     /// Fork chains containing block proposals
     pub forks: Vec<Fork>,
+    // TODO: remove this once everything goes through forks
+    /// Canonical blockchain PoW module state
+    pub module: PoWModule,
     /// Flag to enable testing mode
     pub testing_mode: bool,
 }
 
 impl Consensus {
     /// Generate a new Consensus state.
-    pub fn new(blockchain: Blockchain, time_keeper: TimeKeeper, testing_mode: bool) -> Self {
+    pub fn new(
+        blockchain: Blockchain,
+        time_keeper: TimeKeeper,
+        pow_target: Option<usize>,
+        testing_mode: bool,
+    ) -> Self {
+        let module = PoWModule::new(blockchain.clone(), None, pow_target);
         Self {
             blockchain,
             time_keeper,
+            pow_target,
             participating: false,
             checked_finalization: 0,
             forks: vec![],
+            module,
             testing_mode,
         }
     }
@@ -72,7 +85,7 @@ impl Consensus {
 
         // If no forks exist, create a new one as a basis to extend
         if self.forks.is_empty() {
-            self.forks.push(Fork::new(&self.blockchain)?);
+            self.forks.push(Fork::new(&self.blockchain, self.pow_target)?);
         }
 
         // Grab previous slot information
@@ -238,6 +251,7 @@ impl Consensus {
         if verify_block(
             &fork.overlay,
             &time_keeper,
+            &fork.module,
             &proposal.block,
             &previous,
             expected_reward,
@@ -250,6 +264,11 @@ impl Consensus {
             fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
             return Err(Error::BlockIsInvalid(proposal.hash.to_string()))
         };
+
+        // Update PoW module
+        if proposal.block.header.version == 1 {
+            fork.module.append(proposal.block.header.timestamp.0, &fork.module.next_difficulty());
+        }
 
         // If a fork index was found, replace forks with the mutated one,
         // otherwise push the new fork.
@@ -299,7 +318,7 @@ impl Consensus {
                 return Err(Error::ExtendedChainIndexNotFound)
             }
 
-            return Ok((Fork::new(&self.blockchain)?, None))
+            return Ok((Fork::new(&self.blockchain, self.pow_target)?, None))
         }
 
         let (f_index, p_index) = found.unwrap();
@@ -310,7 +329,7 @@ impl Consensus {
         }
 
         // Rebuild fork
-        let mut fork = Fork::new(&self.blockchain)?;
+        let mut fork = Fork::new(&self.blockchain, self.pow_target)?;
         fork.proposals = original_fork.proposals[..p_index + 1].to_vec();
 
         // Retrieve proposals blocks from original fork
@@ -334,6 +353,7 @@ impl Consensus {
             if verify_block(
                 &fork.overlay,
                 &time_keeper,
+                &fork.module,
                 block,
                 previous,
                 expected_reward,
@@ -346,6 +366,11 @@ impl Consensus {
                 fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
             };
+
+            // Update PoW module
+            if block.header.version == 1 {
+                fork.module.append(block.header.timestamp.0, &fork.module.next_difficulty());
+            }
 
             // Use last inserted block as next iteration previous
             previous = block;
@@ -444,6 +469,8 @@ impl From<Proposal> for BlockInfo {
 pub struct Fork {
     /// Overlay cache over canonical Blockchain
     pub overlay: BlockchainOverlayPtr,
+    /// Current PoW module state,
+    pub module: PoWModule,
     /// Fork proposal hashes sequence
     pub proposals: Vec<blake3::Hash>,
     /// Hot/live slots
@@ -453,11 +480,12 @@ pub struct Fork {
 }
 
 impl Fork {
-    pub fn new(blockchain: &Blockchain) -> Result<Self> {
+    pub fn new(blockchain: &Blockchain, pow_target: Option<usize>) -> Result<Self> {
+        let module = PoWModule::new(blockchain.clone(), None, pow_target);
         let mempool =
             blockchain.get_pending_txs()?.iter().map(|tx| blake3::hash(&serialize(tx))).collect();
         let overlay = BlockchainOverlay::new(blockchain)?;
-        Ok(Self { overlay, proposals: vec![], slots: vec![], mempool })
+        Ok(Self { overlay, module, proposals: vec![], slots: vec![], mempool })
     }
 
     /// Auxiliary function to retrieve last proposal
@@ -573,10 +601,11 @@ impl Fork {
     /// overlay pointer have been updated to the cloned one.
     pub fn full_clone(&self) -> Result<Self> {
         let overlay = self.overlay.lock().unwrap().full_clone()?;
+        let module = self.module.clone();
         let proposals = self.proposals.clone();
         let slots = self.slots.clone();
         let mempool = self.mempool.clone();
 
-        Ok(Self { overlay, proposals, slots, mempool })
+        Ok(Self { overlay, module, proposals, slots, mempool })
     }
 }
