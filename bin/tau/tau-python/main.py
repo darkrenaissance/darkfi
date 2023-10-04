@@ -149,7 +149,7 @@ async def show_active_tasks():
     refids = await api.get_ref_ids()
     tasks = []
     for refid in refids:
-        tasks.append(await api.get_task_by_ref_id(refid))
+        tasks.append(await api.fetch_task(refid))
     list_tasks(tasks, [])
 
 async def show_deactive_tasks(month):
@@ -225,7 +225,7 @@ def list_tasks(tasks, filters):
     print(tabulate(table, headers=headers))
 
 async def show_task(refid):
-    task = await api.get_task_by_ref_id(refid)
+    task = await api.fetch_task(refid)
     task_table(task)
     return 0
 
@@ -349,7 +349,7 @@ def wrap_comment(comment, width):
         lines.append(comment[line_start:])
     return '\n'.join(lines)
 
-async def modify_task(id, args):
+async def modify_task(refid, args):
     changes = []
     for arg in args:
         if arg[0] == "+":
@@ -378,41 +378,41 @@ async def modify_task(id, args):
             changes.append(("set", attr, val))
         else:
             print(f"warning: unknown arg '{arg}'. Skipping...", file=sys.stderr)
-    await api.modify_task(USERNAME, id, changes)
+    await api.modify_task(refid, changes)
     return 0
 
-async def change_task_status(id, status):
-    task = await api.fetch_task(id)
+async def change_task_status(refid, status):
+    task = await api.fetch_task(refid)
     assert task is not None
     title = task["title"]
 
-    if not await api.change_task_status(USERNAME, id, status):
+    if not await api.change_task_status(refid, status):
         return -1
 
     if status == "start":
-        print(f"Started task {id} '{title}'")
+        print(f"Started task '{title}'")
     elif status == "pause":
-        print(f"Paused task {id} '{title}'")
+        print(f"Paused task '{title}'")
     elif status == "stop":
-        print(f"Completed task {id} '{title}'")
+        print(f"Completed task '{title}'")
     elif status == "cancel":
-        print(f"Cancelled task {id} '{title}'")
+        print(f"Cancelled task '{title}'")
 
     return 0
 
-async def comment(id, args):
+async def comment(refid, args):
     if not args:
         comment = prompt_comment_text()
     else:
         comment = " ".join(args)
 
-    if not await api.add_task_comment(USERNAME, id, comment):
+    if not await api.add_task_comment(refid, comment):
         return -1
 
-    task = await api.fetch_task(id)
+    task = await api.fetch_task(refid)
     assert task is not None
     title = task["title"]
-    print(f"Commented on task {id} '{title}'")
+    print(f"Commented on task'{title}'")
     return 0
 
 def is_filtered(task, filters):
@@ -470,7 +470,7 @@ async def main():
     free_ids = []
     tasks = []
     for refid in refids:
-        tasks.append(await api.get_task_by_ref_id(refid))
+        tasks.append(await api.fetch_task(refid))
         free_ids.append(find_free_id(free_ids))
 
     data = map_ids(free_ids, refids)    
@@ -549,15 +549,15 @@ Example:
     subcmd, args = args[0], args[1:]
 
     if subcmd == "modify":
-        if (errc := await modify_task(id, args)) < 0:
+        if (errc := await modify_task(refid, args)) < 0:
             return errc
-        return await show_task(id)
+        return await show_task(refid)
     elif subcmd in ["start", "pause", "stop", "cancel"]:
         status = subcmd
-        if (errc := await change_task_status(id, status)) < 0:
+        if (errc := await change_task_status(refid, status)) < 0:
             return errc
     elif subcmd == "comment":
-        if (errc := await comment(id, args)) < 0:
+        if (errc := await comment(refid, args)) < 0:
             return errc
     elif subcmd == "archive":
         if len(args) == 1:
@@ -569,7 +569,7 @@ Example:
         else:
             month = lib.util.current_month()
 
-        if (errc := await show_archive_task(id, month)) < 0:
+        if (errc := await show_archive_task(refid, month)) < 0:
             return errc
     else:
         print(f"error: unknown subcommand '{subcmd}'")
