@@ -821,18 +821,40 @@ impl Parser {
                 continue
             }
 
-            let (mut left_paren, mut right_paren) = (0, 0);
+            let (mut left_paren, mut right_paren, mut left_bracket, mut right_bracket) =
+                (0, 0, 0, 0);
             for i in &statement {
                 match i.token.as_str() {
                     "(" => left_paren += 1,
                     ")" => right_paren += 1,
+                    "[" => left_bracket += 1,
+                    "]" => right_bracket += 1,
                     _ => {}
                 }
             }
 
-            if left_paren != right_paren || (left_paren == 0 || right_paren == 0) {
+            if (left_paren == 0 && right_paren == 0) && (left_bracket == 0 && right_bracket == 0) {
                 return Err(self.error.abort(
-                    "Incorrect number of left and right parenthesis for statement.",
+                    "Statement must include a function call or array initialization. No parentheses or square brackets present.",
+                    statement[0].line,
+                    statement[0].column,
+                ))
+            }
+
+            if (left_bracket != right_bracket) || (left_paren != right_paren) {
+                return Err(self.error.abort(
+                    "Parentheses or brackets are not matched.",
+                    statement[0].line,
+                    statement[0].column,
+                ))
+            }
+
+            // Is there a valid use-case for defining nested arrays? For now,
+            // if square brackets are present, raise an error unless there is
+            // exactly one pair.
+            if left_bracket > 0 && left_bracket > 1 {
+                return Err(self.error.abort(
+                    "Only one pair of brackets allowed for array declaration",
                     statement[0].line,
                     statement[0].column,
                 ))
@@ -892,11 +914,25 @@ impl Parser {
                 // assignment or a function call without a return value.
                 // Let's dig deeper to see what the statement's call is, and
                 // what it contains as arguments. With this we'll fill `rhs`.
-                // The arguments could be literal types, other variables, or
-                // even nested function calls.
+                // The arguments could be literal types, other variables, an
+                // array declaration, or even nested function calls.
                 // For now, we don't care if the params are valid, as this is
                 // the job of the semantic analyzer which comes after the
                 // parsing module.
+
+                // Array declaration.
+                // TODO: Support function calls in array declarations. Currently
+                // only literals can be used to construct an array.
+                // Check only left_bracket. Validation to check that the brackets
+                // are matched has already been performed above.
+                if left_bracket > 0 {
+                    return Err(self.error.abort(
+                        "Arrays are not implemented yet.",
+                        token.line,
+                        token.column,
+                    ))
+                    //let rhs = self.parse_array_assignment(&mut iter);
+                }
 
                 // The assumption here is that the current token is a function
                 // call, so we check if it's legit and start digging.
@@ -935,6 +971,27 @@ impl Parser {
 
         Ok(ret)
     }
+
+    // fn parse_array_assignment(
+    //     &self,
+    //     iter: &mut Peekable<std::slice::Iter<'_, Token>>,
+    // ) -> Result<Vec<Arg>> {
+    //     if let Some(next_token) = iter.peek() {
+    //         if next_token.token_type != TokenType::LeftBracket {
+    //             return Err(self.error.abort(
+    //                 "Invalid array assignment opening. Must start with a '['.",
+    //                 next_token.line,
+    //                 next_token.column,
+    //             ))
+    //         }
+    //         // Skip the opening parenthesis
+    //         iter.next();
+    //     } else {
+    //         // TODO: Use token line number and column
+    //         return Err(self.error.abort("Premature ending of statement.", 0, 0))
+    //     }
+    //     todo!();
+    // }
 
     fn parse_function_call(
         &self,
