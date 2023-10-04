@@ -40,16 +40,22 @@ async def query(method, params):
 
 async def get_info():
     return await query("get_info", [])
-########
+
+async def add_task(task):
+    return await query("add", [task])
+
 async def get_ref_ids():
     return await query("get_ref_ids", [])
 
-async def get_task_by_ref_id(refid):
+async def fetch_task(refid):
     return await query("get_task_by_ref_id", [refid])
 
-########
-async def add_task(task):
-    return await query("add", [task])
+async def change_task_status(refid, status):
+    await query("set_state", [refid, status])
+    return True
+
+async def modify_task(refid, changes):
+    return await query("modify", [refid, changes])
 
 async def fetch_active_tasks():
     return await query("fetch_active_tasks", [])
@@ -57,20 +63,9 @@ async def fetch_active_tasks():
 async def fetch_deactive_tasks(month):
     return await query("fetch_deactive_tasks", [month])
 
-async def fetch_task(task_id):
-    return await query("fetch_task", [task_id])
+async def fetch_archive_task(task_refid, month):
+    return await query("fetch_archive_task", [task_refid, month])
 
-async def fetch_archive_task(task_id, month):
-    return await query("fetch_archive_task", [task_id, month])
-
-async def modify_task(who, id, changes):
-    return await query("modify_task", [who, id, changes])
-
-async def change_task_status(who, id, status):
-    await query("change_task_status", [who, id, status])
+async def add_task_comment(refid, comment):
+    await query("set_comment", [refid, comment])
     return True
-
-async def add_task_comment(who, id, comment):
-    await query("add_task_comment", [who, id, comment])
-    return True
-
