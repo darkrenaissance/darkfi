@@ -473,15 +473,7 @@ async def main():
         tasks.append(await api.get_task_by_ref_id(refid))
         free_ids.append(find_free_id(free_ids))
 
-    mapped_ids = map_ids(free_ids, refids)
-    
-    json.dump( mapped_ids, open( "IDsMap.json", 'w' ) )
-
-    try:
-        data = json.load( open( "IDsMap.json" ) )
-    except OSError:
-        print("Error: Mapped IDs file does not exist")
-        
+    data = map_ids(free_ids, refids)    
 
     if len(sys.argv) == 1:
         await show_active_tasks()
@@ -544,7 +536,7 @@ Example:
 
     try:
         id = int(sys.argv[1])
-        refid = data[str(id)]
+        refid = data[id]
     except ValueError:
         print("error: invalid ID", file=sys.stderr)
         return -1
