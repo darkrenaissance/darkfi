@@ -177,7 +177,7 @@ def list_tasks(tasks, filters):
             dt = lib.util.unix_to_datetime(task["due"])
             due = dt.strftime("%H:%M %d/%m/%y")
 
-        rank = task["rank"] if task["rank"] is not None else ""
+        rank = round(task["rank"], 4) if task["rank"] is not None else ""
 
         if status == "start":
             id =        Fore.GREEN + str(id)         + Style.RESET_ALL
@@ -237,7 +237,7 @@ async def show_archive_task(id, month):
 def tabulate_task(task):
     tags = " ".join(f"+{tag}" for tag in task["tags"])
     assign = " ".join(f"@{assign}" for assign in task["assign"])
-    rank = task["rank"] if task["rank"] is not None else ""
+    rank = round(task["rank"], 4) if task["rank"] is not None else ""
     if task["due"] is None:
         due = ""
     else:
