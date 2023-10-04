@@ -160,7 +160,7 @@ def list_tasks(tasks, filters):
     headers = ["ID", "Title", "Status", "Project",
                "Tags", "assign", "Rank", "Due"]
     table_rows = []
-    for id, task in enumerate(tasks):
+    for id, task in enumerate(tasks, 1):
         if task is None:
             continue
         if is_filtered(task, filters):
@@ -457,7 +457,7 @@ def is_filtered(task, filters):
     return False
 
 def find_free_id(task_ids):
-    for i in range(1, len(task_ids)):
+    for i in range(1, 1000):
         if i not in task_ids:
             return i
     1
@@ -466,30 +466,14 @@ def map_ids(task_ids, ref_ids):
     return dict(zip(task_ids, ref_ids))
 
 async def main():
-
     refids = await api.get_ref_ids()
     free_ids = []
     tasks = []
     for refid in refids:
         tasks.append(await api.get_task_by_ref_id(refid))
-        numba = find_free_id(free_ids)
-        print(numba)
-        free_ids.append(numba)
-
-    print(refids)
-
-    print(len(tasks))
-
-    # for i in range(1, len(tasks)):
-    #     numba = find_free_id(free_ids)
-    #     print(numba)
-    #     free_ids.append(numba)
-    
-    print(free_ids)
+        free_ids.append(find_free_id(free_ids))
 
     mapped_ids = map_ids(free_ids, refids)
-
-    print(mapped_ids)
     
     json.dump( mapped_ids, open( "IDsMap.json", 'w' ) )
 
@@ -502,9 +486,6 @@ async def main():
     if len(sys.argv) == 1:
         await show_active_tasks()
         return 0
-    
-    
-
 
     if sys.argv[1] in ["-h", "--help", "help"]:
         print('''USAGE:
