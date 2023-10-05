@@ -20,7 +20,7 @@ use std::time::Instant;
 
 use darkfi::{tx::Transaction, Result};
 use darkfi_money_contract::{
-    client::pow_reward_v1::PoWRewardCallBuilder, model::MoneyTokenMintParamsV1, MoneyFunction,
+    client::pow_reward_v1::PoWRewardCallBuilder, model::MoneyPoWRewardParamsV1, MoneyFunction,
     MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
@@ -39,7 +39,7 @@ impl TestHarness {
         holder: &Holder,
         block_height: u64,
         reward: Option<u64>,
-    ) -> Result<(Transaction, MoneyTokenMintParamsV1)> {
+    ) -> Result<(Transaction, MoneyPoWRewardParamsV1)> {
         let wallet = self.holders.get(holder).unwrap();
 
         let (mint_pk, mint_zkbin) =
@@ -50,6 +50,10 @@ impl TestHarness {
 
         let timer = Instant::now();
 
+        // Proposals always extend genesis block
+        let last_nonce = self.genesis_block.header.nonce;
+        let fork_hash = self.genesis_block.hash()?;
+
         // We're just going to be using a zero spend-hook and user-data
         let spend_hook = pallas::Base::zero();
         let user_data = pallas::Base::zero();
@@ -57,6 +61,9 @@ impl TestHarness {
         let builder = PoWRewardCallBuilder {
             keypair: wallet.keypair,
             block_height,
+            last_nonce,
+            fork_hash,
+            fork_previous_hash: fork_hash,
             spend_hook,
             user_data,
             mint_zkbin: mint_zkbin.clone(),
@@ -92,7 +99,7 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
         tx: &Transaction,
-        params: &MoneyTokenMintParamsV1,
+        params: &MoneyPoWRewardParamsV1,
         block_height: u64,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(holder).unwrap();

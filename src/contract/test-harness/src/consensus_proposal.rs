@@ -54,7 +54,7 @@ impl TestHarness {
         let timer = Instant::now();
 
         // Proposals always extend genesis block
-        let fork_hash = self.genesis_block;
+        let fork_hash = self.genesis_block.hash()?;
 
         // Building Consensus::Propose params
         let proposal_call_debris = ConsensusProposalCallBuilder {

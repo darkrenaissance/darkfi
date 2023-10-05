@@ -201,7 +201,7 @@ pub struct TestHarness {
     pub holders: HashMap<Holder, Wallet>,
     pub proving_keys: HashMap<String, (ProvingKey, ZkBinary)>,
     pub tx_action_benchmarks: HashMap<TxAction, TxActionBenchmarks>,
-    pub genesis_block: blake3::Hash,
+    pub genesis_block: BlockInfo,
 }
 
 impl TestHarness {
@@ -270,12 +270,7 @@ impl TestHarness {
         tx_action_benchmarks.insert(TxAction::DaoVote, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::DaoExec, TxActionBenchmarks::default());
 
-        Ok(Self {
-            holders,
-            proving_keys,
-            tx_action_benchmarks,
-            genesis_block: genesis_block.hash()?,
-        })
+        Ok(Self { holders, proving_keys, tx_action_benchmarks, genesis_block })
     }
 
     pub async fn execute_erroneous_txs(
@@ -458,7 +453,7 @@ impl TestHarness {
     pub async fn generate_slot(&self, id: u64) -> Result<Slot> {
         // We grab the genesis slot to generate slot
         // using same consensus parameters
-        let genesis_block = self.genesis_block;
+        let genesis_block = self.genesis_block.hash()?;
         let genesis_slot = self.get_slot_by_slot(0).await?;
         let previous = PreviousSlot::new(0, vec![genesis_block], vec![genesis_block], 0.0);
         let pid = PidOutput::new(0.0, 0.0, genesis_slot.pid.sigma1, genesis_slot.pid.sigma2);

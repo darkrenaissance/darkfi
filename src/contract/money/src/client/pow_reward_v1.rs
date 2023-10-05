@@ -23,7 +23,10 @@ use darkfi::{
 };
 use darkfi_sdk::{
     blockchain::expected_reward,
-    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Keypair, PublicKey, DARK_TOKEN_ID},
+    crypto::{
+        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, Keypair, PublicKey,
+        DARK_TOKEN_ID,
+    },
     pasta::pallas,
 };
 use log::{debug, info};
@@ -37,11 +40,11 @@ use crate::{
         },
         MoneyNote,
     },
-    model::{ClearInput, Coin, MoneyTokenMintParamsV1, Output},
+    model::{ClearInput, Coin, MoneyPoWRewardParamsV1, Output},
 };
 
 pub struct PoWRewardCallDebris {
-    pub params: MoneyTokenMintParamsV1,
+    pub params: MoneyPoWRewardParamsV1,
     pub proofs: Vec<Proof>,
 }
 
@@ -67,6 +70,13 @@ pub struct PoWRewardCallBuilder {
     pub keypair: Keypair,
     /// Rewarded block height(slot)
     pub block_height: u64,
+    /// Extending fork last proposal/block nonce
+    pub last_nonce: pallas::Base,
+    /// Extending fork last proposal/block hash
+    pub fork_hash: blake3::Hash,
+    /// Extending fork second to last proposal/block hash
+    pub fork_previous_hash: blake3::Hash,
+    /// Merkle tree of coins used to create inclusion proofs
     /// Spend hook for the output
     pub spend_hook: pallas::Base,
     /// User data for the output
@@ -142,7 +152,20 @@ impl PoWRewardCallBuilder {
             note: encrypted_note,
         };
 
-        let params = MoneyTokenMintParamsV1 { input: c_input, output: c_output };
+        info!("Building Consensus::ProposalV1 VRF proof");
+        let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
+        vrf_input.extend_from_slice(&self.last_nonce.to_repr());
+        vrf_input.extend_from_slice(self.fork_previous_hash.as_bytes());
+        vrf_input.extend_from_slice(&pallas::Base::from(self.block_height).to_repr());
+        let vrf_proof = VrfProof::prove(self.keypair.secret, &vrf_input, &mut OsRng);
+
+        let params = MoneyPoWRewardParamsV1 {
+            input: c_input,
+            output: c_output,
+            fork_hash: self.fork_hash,
+            fork_previous_hash: self.fork_previous_hash,
+            vrf_proof,
+        };
         let debris = PoWRewardCallDebris { params, proofs: vec![proof] };
         Ok(debris)
     }

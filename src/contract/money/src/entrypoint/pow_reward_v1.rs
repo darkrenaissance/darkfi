@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    blockchain::{expected_reward, POW_CUTOFF},
+    blockchain::{expected_reward, Slot, POW_CUTOFF},
     crypto::{
         pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode,
         DARK_TOKEN_ID,
@@ -26,7 +26,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     merkle_add, msg,
     pasta::pallas,
-    util::get_verifying_slot,
+    util::{get_slot, get_verifying_slot},
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -93,6 +93,38 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
             POW_CUTOFF
         );
         return Err(MoneyError::PoWRewardCallAfterCutoffSlot.into())
+    }
+
+    // Grab the slot to validate consensus params against
+    let Some(slot) = get_slot(verifying_slot)? else {
+        msg!("[PoWRewardV1] Error: Missing slot {} from db", verifying_slot);
+        return Err(MoneyError::PoWRewardMissingSlot.into())
+    };
+    let slot: Slot = deserialize(&slot)?;
+
+    // Verify proposal extends a known fork
+    if !slot.previous.last_hashes.contains(&params.fork_hash) {
+        msg!("[PoWRewardV1] Error: Block extends unknown fork {}", params.fork_hash);
+        return Err(MoneyError::PoWRewardExtendsUnknownFork.into())
+    }
+
+    // Verify sequence is correct
+    if !slot.previous.second_to_last_hashes.contains(&params.fork_previous_hash) {
+        let fork_prev = &params.fork_previous_hash;
+        msg!("[PoWRewardV1] Error: Block extends unknown fork {}", fork_prev);
+        return Err(MoneyError::PoWRewardExtendsUnknownFork.into())
+    }
+
+    // Construct VRF input
+    let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
+    vrf_input.extend_from_slice(&slot.last_nonce.to_repr());
+    vrf_input.extend_from_slice(params.fork_previous_hash.as_bytes());
+    vrf_input.extend_from_slice(&pallas::Base::from(slot.id).to_repr());
+
+    // Verify VRF proof
+    if !params.vrf_proof.verify(params.input.signature_public, &vrf_input) {
+        msg!("[PoWRewardV1] Error: VRF proof couldn't be verified");
+        return Err(MoneyError::PoWRewardErroneousVrfProof.into())
     }
 
     // Only DARK_TOKEN_ID can be minted as PoW reward.
