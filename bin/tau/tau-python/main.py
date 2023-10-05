@@ -55,8 +55,8 @@ async def add_task(task_args):
         print("Abort adding the task due to empty description.")
         exit(-1)
 
-    id = await api.add_task(task)
-    print(f"Created task {id}.")
+    if await api.add_task(task):
+        print(f"Created task '{title}'.")
 
 def prompt_text(comment_lines):
     temp = tempfile.NamedTemporaryFile()
@@ -98,7 +98,6 @@ def prompt_comment_text():
 def set_task_attr(task, attr, val):
     # templ = lib.util.task_template
     assert attr in ["desc", "rank", "due", "project"]
-    print(attr)
     # assert templ[attr] != list
 
     if val.lower() == "none":
