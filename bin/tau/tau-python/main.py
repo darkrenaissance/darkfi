@@ -237,6 +237,7 @@ async def show_archive_task(id, month):
 def tabulate_task(task):
     tags = " ".join(f"+{tag}" for tag in task["tags"])
     assign = " ".join(f"@{assign}" for assign in task["assign"])
+    project = " ".join(f"{project}" for project in task["project"])
     rank = round(task["rank"], 4) if task["rank"] is not None else ""
     if task["due"] is None:
         due = ""
@@ -252,7 +253,7 @@ def tabulate_task(task):
         ["Title:", task["title"]],
         ["Description:", task["desc"]],
         ["Status:", task["state"]],
-        ["Project:", task["project"]],
+        ["Project:", project],
         ["Tags:", tags],
         ["assign:", assign],
         ["Rank:", rank],
@@ -266,43 +267,32 @@ def task_table(task):
 
     table = []
     for event in task["events"]:
-        cmd, when, args = event[0], event[1], event[2:]
+        act, who, when, args = event["action"], event["author"], event["timestamp"], event["content"]
         when = lib.util.unix_to_datetime(when)
         when = when.strftime("%H:%M %d/%m/%y")
-        if cmd == "set":
-            who, attr, val = args
-            if attr == "due" and val is not None:
-                val = lib.util.unix_to_datetime(val)
-                val = val.strftime("%H:%M %d/%m/%y")
+        
+        if act == "due" and when is not None:
             table.append([
-                Style.DIM + f"{who} changed {attr} to {val}" + Style.RESET_ALL,
+                Style.DIM + f"{who} changed {act} to {when}" + Style.RESET_ALL,
                 "",
                 Style.DIM + when + Style.RESET_ALL
             ])
-        elif cmd == "append":
-            who, attr, val = args
-            if attr == "tags":
-                val = f"+{val}"
-            elif attr == "assign":
-                val = f"@{val}"
+        elif act == "tags":
+            val = f"+{args}"
             table.append([
-                Style.DIM + f"{who} added {val} to {attr}" + Style.RESET_ALL,
+                Style.DIM + f"{who} added {act} to {val}" + Style.RESET_ALL,
                 "",
                 Style.DIM + when + Style.RESET_ALL
             ])
-        elif cmd == "remove":
-            who, attr, val = args
-            if attr == "tags":
-                val = f"+{val}"
-            elif attr == "assign":
-                val = f"@{val}"
+        elif act == "assign":
+            val = f"@{args}"
             table.append([
-                Style.DIM + f"{who} removed {val} from {attr}" + Style.RESET_ALL,
+                Style.DIM + f"{who} added {act} to {val}" + Style.RESET_ALL,
                 "",
                 Style.DIM + when + Style.RESET_ALL
             ])
-        elif cmd == "state":
-            who, status = args
+        elif act == "state":
+            status = args
             if status == "pause":
                 status_verb = "paused"
             elif status in ["start", "cancel"]:
@@ -319,15 +309,21 @@ def task_table(task):
                 "",
                 Style.DIM + when + Style.RESET_ALL
             ])
+        else:
+            table.append([
+                Style.DIM + f"{who} changed {act} to {args}" + Style.RESET_ALL,
+                "",
+                Style.DIM + when + Style.RESET_ALL
+            ])
     print(tabulate(table))
 
     table = []
     for event in task['events']:
-        cmd, when, args = event[0], event[1], event[2:]
+        act, who, when, args = event["action"], event["author"], event["timestamp"], event["content"]
         when = lib.util.unix_to_datetime(when)
         when = when.strftime("%H:%M %d/%m/%y")
-        if cmd == "comment":
-            who, comment = args
+        if act == "comment":
+            comment = args
             table.append([
                 f"{who}>",
                 wrap_comment(comment, 58),
@@ -350,21 +346,21 @@ def wrap_comment(comment, width):
     return '\n'.join(lines)
 
 async def modify_task(refid, args):
-    changes = []
+    changes = {}
     for arg in args:
         if arg[0] == "+":
-            tag = arg[1:]
-            changes.append(("append", "tags", tag))
+            tag = arg
+            changes["tags"] = tag
         # This must go before the next elif block
         elif arg.startswith("-@"):
-            assign = arg[2:]
-            changes.append(("remove", "assign", assign))
+            assign = arg
+            changes["assign"] = assign
         elif arg[0] == "-":
-            tag = arg[1:]
-            changes.append(("remove", "tags", tag))
+            tag = arg
+            changes["tags"] = tag
         elif arg[0] == "@":
-            assign = arg[1:]
-            changes.append(("append", "assign", assign))
+            assign = arg
+            changes["assign"] = assign
         elif ":" in arg:
             attr, val = arg.split(":", 1)
             if val.lower() == "none":
@@ -375,7 +371,7 @@ async def modify_task(refid, args):
                 val = None
             else:
                 val = convert_attr_val(attr, val)
-            changes.append(("set", attr, val))
+            changes[str(attr)] = val
         else:
             print(f"warning: unknown arg '{arg}'. Skipping...", file=sys.stderr)
     await api.modify_task(refid, changes)
