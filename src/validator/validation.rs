@@ -85,7 +85,7 @@ pub fn validate_pow_block(
     // Check block hash corresponds to next one (5)
     module.verify_block_hash(block)?;
 
-    // Verify slots vector is empty (6)
+    // Verify slots vector contains single slot (6)
     if block.slots.len() != 1 {
         return error
     }
@@ -100,6 +100,7 @@ pub fn validate_pow_block(
         previous_slot,
         &previous_hash,
         &previous.header.previous,
+        &pallas::Base::from(previous.header.nonce),
         expected_reward,
     )?;
 
@@ -120,7 +121,7 @@ pub fn validate_pow_block(
 ///     5. Slot previous error value correspond to previous slot one
 ///     6. Slot previous has only 1 producer(the miner)
 ///     7. PID output for this slot is correct(zero)
-///     8. Slot last eta is the expected one(zero)
+///     8. Slot last nonce is the expected one
 ///     9. Slot reward value is the expected one
 /// Additional validity rules can be applied.
 pub fn validate_pow_slot(
@@ -128,6 +129,7 @@ pub fn validate_pow_slot(
     previous: &Slot,
     previous_block_hash: &blake3::Hash,
     previous_block_sequence: &blake3::Hash,
+    last_nonce: &pallas::Base,
     expected_reward: u64,
 ) -> Result<()> {
     let error = Err(Error::SlotIsInvalid(slot.id));
@@ -169,8 +171,8 @@ pub fn validate_pow_slot(
         return error
     }
 
-    // Check eta is the expected one (8)
-    if slot.last_eta != pallas::Base::ZERO {
+    // Check nonce is the expected one
+    if &slot.last_nonce != last_nonce {
         return error
     }
 
@@ -270,7 +272,7 @@ pub fn validate_pos_block(
 ///        up until this slot
 ///     5. Slot previous error value correspond to previous slot one
 ///     6. PID output for this slot is correct
-///     7. Slot last eta is the expected one
+///     7. Slot last nonce(eta) is the expected one
 ///     8. Slot reward value is the expected one
 /// Additional validity rules can be applied.
 pub fn validate_pos_slot(
@@ -278,7 +280,7 @@ pub fn validate_pos_slot(
     previous: &Slot,
     previous_block_hash: &blake3::Hash,
     previous_block_sequence: &blake3::Hash,
-    last_eta: &pallas::Base,
+    last_nonce: &pallas::Base,
     expected_reward: u64,
 ) -> Result<()> {
     let error = Err(Error::SlotIsInvalid(slot.id));
@@ -315,8 +317,8 @@ pub fn validate_pos_slot(
         return error
     }
 
-    // Check eta is the expected one (7)
-    if &slot.last_eta != last_eta {
+    // Check nonce(eta) is the expected one (7)
+    if &slot.last_nonce != last_nonce {
         return error
     }
 

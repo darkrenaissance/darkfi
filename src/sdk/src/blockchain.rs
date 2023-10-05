@@ -90,8 +90,8 @@ pub struct Slot {
     pub previous: PreviousSlot,
     /// Slot PID output
     pub pid: PidOutput,
-    /// Last block/proposal eta
-    pub last_eta: pallas::Base,
+    /// Last block/proposal nonce(eta)
+    pub last_nonce: pallas::Base,
     /// Total tokens up until this slot
     pub total_tokens: u64,
     /// Slot reward
@@ -103,11 +103,11 @@ impl Slot {
         id: u64,
         previous: PreviousSlot,
         pid: PidOutput,
-        last_eta: pallas::Base,
+        last_nonce: pallas::Base,
         total_tokens: u64,
         reward: u64,
     ) -> Self {
-        Self { id, previous, pid, last_eta, total_tokens, reward }
+        Self { id, previous, pid, last_nonce, total_tokens, reward }
     }
 }
 

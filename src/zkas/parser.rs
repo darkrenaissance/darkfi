@@ -852,7 +852,7 @@ impl Parser {
             // Is there a valid use-case for defining nested arrays? For now,
             // if square brackets are present, raise an error unless there is
             // exactly one pair.
-            if left_bracket > 0 && left_bracket > 1 {
+            if left_bracket > 1 {
                 return Err(self.error.abort(
                     "Only one pair of brackets allowed for array declaration",
                     statement[0].line,

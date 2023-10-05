@@ -19,7 +19,7 @@
 use darkfi::{blockchain::BlockInfo, system::sleep, util::time::Timestamp, Result};
 use darkfi_sdk::{
     blockchain::{expected_reward, PidOutput, PreviousSlot, Slot},
-    pasta::{group::ff::Field, pallas},
+    pasta::pallas,
 };
 use log::info;
 use smol::channel::Receiver;
@@ -81,7 +81,14 @@ async fn miner_loop(node: &Darkfid, stop_signal: &Receiver<()>) -> Result<()> {
         let pid = PidOutput::default();
         let total_tokens = last_slot.total_tokens + last_slot.reward;
         let reward = expected_reward(id);
-        let slot = Slot::new(id, previous, pid, pallas::Base::ZERO, total_tokens, reward);
+        let slot = Slot::new(
+            id,
+            previous,
+            pid,
+            pallas::Base::from(last.header.nonce),
+            total_tokens,
+            reward,
+        );
 
         // Mine next block
         let mut next_block = BlockInfo::default();

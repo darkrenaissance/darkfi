@@ -156,7 +156,7 @@ impl Consensus {
             time_keeper.slot_epoch(slot.id),
             slot.id,
             Timestamp::current_time(),
-            slot.last_eta,
+            slot.last_nonce,
         );
 
         // Generate the block
@@ -500,22 +500,24 @@ impl Fork {
         Proposal::new(block)
     }
 
-    /// Utility function to extract leader selection lottery randomness(eta),
+    /// Utility function to extract leader selection lottery randomness(nonce/eta),
     /// defined as the hash of the last block, converted to pallas base.
-    fn get_last_eta(&self) -> Result<pallas::Base> {
-        // Retrieve last block(or proposal) hash
-        let hash = if self.proposals.is_empty() {
-            self.overlay.lock().unwrap().last_block()?.hash()?
-        } else {
-            *self.proposals.last().unwrap()
-        };
+    fn get_last_nonce(&self) -> Result<pallas::Base> {
+        // Retrieve last block(or proposal)
+        let proposal = self.last_proposal()?;
 
-        // Read first 240 bits
-        let mut bytes: [u8; 32] = *hash.as_bytes();
-        bytes[30] = 0;
-        bytes[31] = 0;
+        match proposal.block.header.version {
+            1 => Ok(pallas::Base::from(proposal.block.header.nonce)),
+            2 => {
+                // Read first 240 bits of proposal hash
+                let mut bytes: [u8; 32] = *proposal.hash.as_bytes();
+                bytes[30] = 0;
+                bytes[31] = 0;
 
-        Ok(pallas::Base::from_repr(bytes).unwrap())
+                Ok(pallas::Base::from_repr(bytes).unwrap())
+            }
+            _ => Err(Error::BlockVersionIsInvalid(proposal.block.header.version)),
+        }
     }
 
     /// Auxiliary function to retrieve unproposed valid transactions.
@@ -586,11 +588,11 @@ impl Fork {
         let pid = PidOutput::new(f, error, sigma1, sigma2);
 
         // Each slot starts as an empty slot(not reward) when generated, carrying
-        // last eta
-        let last_eta = self.get_last_eta()?;
+        // last nonce(eta)
+        let last_nonce = self.get_last_nonce()?;
         let total_tokens = previous_slot.total_tokens + previous_slot.reward;
         let reward = 0;
-        let slot = Slot::new(id, previous, pid, last_eta, total_tokens, reward);
+        let slot = Slot::new(id, previous, pid, last_nonce, total_tokens, reward);
         self.slots.push(slot);
 
         Ok(())
