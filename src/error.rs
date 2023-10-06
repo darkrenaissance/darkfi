@@ -279,6 +279,9 @@ pub enum Error {
     #[error("State transition failed")]
     StateTransitionError,
 
+    #[error("No forks exist")]
+    ForksNotFound,
+
     #[error("Check if proposal extends any existing fork chains failed")]
     ExtendedChainIndexNotFound,
 

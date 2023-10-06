@@ -286,6 +286,29 @@ impl Consensus {
         Ok(())
     }
 
+    /// Auxiliary function to find current best ranked fork.
+    pub fn best_fork_index(&self) -> Result<usize> {
+        // Check if node has any forks
+        if self.forks.is_empty() {
+            return Err(Error::ForksNotFound)
+        }
+
+        // Find the best ranked fork
+        let mut best = 0;
+        let mut index = 0;
+        for (f_index, fork) in self.forks.iter().enumerate() {
+            let rank = fork.rank()?;
+            if rank <= best {
+                continue
+            }
+
+            best = rank;
+            index = f_index;
+        }
+
+        Ok(index)
+    }
+
     /// Given a proposal, find the index of the fork chain it extends, along with the specific
     /// extended proposal index.
     fn find_extended_fork_index(&self, proposal: &Proposal) -> Result<(usize, usize)> {
@@ -596,6 +619,26 @@ impl Fork {
         self.slots.push(slot);
 
         Ok(())
+    }
+
+    /// Auxiliarry function to compute fork's rank, assuming all proposals are valid.
+    pub fn rank(&self) -> Result<u64> {
+        // If the fork is empty its rank is 0
+        if self.proposals.is_empty() {
+            return Ok(0)
+        }
+
+        // Retrieve the sum of all fork proposals ranks
+        let mut sum = 0;
+        let proposals = self.overlay.lock().unwrap().get_blocks_by_hash(&self.proposals)?;
+        for proposal in &proposals {
+            sum += proposal.rank()?;
+        }
+
+        // Use fork(proposals) length as a multiplier to compute the actual fork rank
+        let rank = proposals.len() as u64 * sum;
+
+        Ok(rank)
     }
 
     /// Auxiliary function to create a full clone using BlockchainOverlay::full_clone.
