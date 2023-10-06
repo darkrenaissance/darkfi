@@ -29,7 +29,9 @@ use crate::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header},
     tx::Transaction,
     util::time::{TimeKeeper, Timestamp},
-    validator::{pid::slot_pid_output, pow::PoWModule, verify_block, verify_transactions},
+    validator::{
+        pid::slot_pid_output, pow::PoWModule, utils::block_rank, verify_block, verify_transactions,
+    },
     Error, Result,
 };
 
@@ -632,7 +634,19 @@ impl Fork {
         let mut sum = 0;
         let proposals = self.overlay.lock().unwrap().get_blocks_by_hash(&self.proposals)?;
         for proposal in &proposals {
-            sum += proposal.rank()?;
+            // For block height > 3, retrieve their previous previous block
+            let previous_previous = if proposal.header.height > 3 {
+                let previous = &self
+                    .overlay
+                    .lock()
+                    .unwrap()
+                    .get_blocks_by_hash(&[proposal.header.previous])?[0];
+                self.overlay.lock().unwrap().get_blocks_by_hash(&[previous.header.previous])?[0]
+                    .clone()
+            } else {
+                proposal.clone()
+            };
+            sum += block_rank(proposal, &previous_previous)?;
         }
 
         // Use fork(proposals) length as a multiplier to compute the actual fork rank

@@ -16,19 +16,15 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::Cursor;
-
 use darkfi_sdk::{
     blockchain::Slot,
-    crypto::{ecvrf::VrfProof, pasta_prelude::PrimeField, schnorr::Signature},
+    crypto::schnorr::Signature,
     pasta::{group::ff::FromUniformBytes, pallas},
 };
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
 
-use darkfi_serial::{
-    deserialize, serialize, Decodable, Encodable, SerialDecodable, SerialEncodable,
-};
+use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
 
 use crate::{tx::Transaction, Error, Result};
 
@@ -146,46 +142,6 @@ impl BlockInfo {
         }
 
         Ok(())
-    }
-
-    /// Compute block's rank, assuming the block is valid.
-    pub fn rank(&self) -> Result<u64> {
-        // Genesis block has rank 0
-        if self.header.height == 0 {
-            return Ok(0)
-        }
-
-        // Extract VRF proof from the producer transaction
-        let tx = self.txs.last().unwrap();
-        let data = &tx.calls[0].data;
-        let position = match self.header.version {
-            // PoW uses MoneyPoWRewardParamsV1
-            1 => 563,
-            // PoS uses ConsensusProposalParamsV1
-            2 => 490,
-            _ => return Err(Error::BlockVersionIsInvalid(self.header.version)),
-        };
-        let mut decoder = Cursor::new(&data);
-        decoder.set_position(position);
-        let vrf_proof: VrfProof = Decodable::decode(&mut decoder)?;
-
-        // Compute nonce u64
-        let mut nonce = [0u8; 8];
-        nonce.copy_from_slice(&self.header.nonce.to_repr()[..8]);
-        let nonce = u64::from_be_bytes(nonce);
-
-        // Compute VRF u64
-        let mut vrf = [0u8; 64];
-        vrf[..blake3::OUT_LEN].copy_from_slice(vrf_proof.hash_output().as_bytes());
-        let vrf_pallas = pallas::Base::from_uniform_bytes(&vrf);
-        let mut vrf = [0u8; 8];
-        vrf.copy_from_slice(&vrf_pallas.to_repr()[..8]);
-        let vrf = u64::from_be_bytes(vrf);
-
-        // Finally, compute the rank
-        let rank = nonce % vrf;
-
-        Ok(rank)
     }
 }
 

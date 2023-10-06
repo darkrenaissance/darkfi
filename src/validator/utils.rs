@@ -16,12 +16,23 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{PublicKey, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
-use darkfi_serial::serialize;
+use std::io::Cursor;
+
+use darkfi_sdk::{
+    crypto::{
+        ecvrf::VrfProof, pasta_prelude::PrimeField, PublicKey, CONSENSUS_CONTRACT_ID,
+        DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+    },
+    pasta::{group::ff::FromUniformBytes, pallas},
+};
+use darkfi_serial::{serialize, Decodable};
 use log::info;
 
 use crate::{
-    blockchain::BlockchainOverlayPtr, runtime::vm_runtime::Runtime, util::time::TimeKeeper, Result,
+    blockchain::{BlockInfo, BlockchainOverlayPtr},
+    runtime::vm_runtime::Runtime,
+    util::time::TimeKeeper,
+    Error, Result,
 };
 
 /// Deploy DarkFi native wasm contracts to provided blockchain overlay.
@@ -85,4 +96,52 @@ pub fn deploy_native_contracts(
     info!(target: "validator::utils::deploy_native_contracts", "Finished deployment of native WASM contracts");
 
     Ok(())
+}
+
+/// Compute a block's rank, assuming the its valid.
+/// Genesis block has rank 0.
+/// First 2 blocks rank is equal to their nonce, since their previous
+/// previous block producer doesn't exist or have a VRF.
+pub fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Result<u64> {
+    // Genesis block has rank 0
+    if block.header.height == 0 {
+        return Ok(0)
+    }
+
+    // Compute nonce u64
+    let mut nonce = [0u8; 8];
+    nonce.copy_from_slice(&block.header.nonce.to_repr()[..8]);
+    let nonce = u64::from_be_bytes(nonce);
+
+    // First 2 block have rank equal to their nonce
+    if block.header.height < 3 {
+        return Ok(nonce)
+    }
+
+    // Extract VRF proof from the previous previous producer transaction
+    let tx = previous_previous.txs.last().unwrap();
+    let data = &tx.calls[0].data;
+    let position = match previous_previous.header.version {
+        // PoW uses MoneyPoWRewardParamsV1
+        1 => 563,
+        // PoS uses ConsensusProposalParamsV1
+        2 => 490,
+        _ => return Err(Error::BlockVersionIsInvalid(previous_previous.header.version)),
+    };
+    let mut decoder = Cursor::new(&data);
+    decoder.set_position(position);
+    let vrf_proof: VrfProof = Decodable::decode(&mut decoder)?;
+
+    // Compute VRF u64
+    let mut vrf = [0u8; 64];
+    vrf[..blake3::OUT_LEN].copy_from_slice(vrf_proof.hash_output().as_bytes());
+    let vrf_pallas = pallas::Base::from_uniform_bytes(&vrf);
+    let mut vrf = [0u8; 8];
+    vrf.copy_from_slice(&vrf_pallas.to_repr()[..8]);
+    let vrf = u64::from_be_bytes(vrf);
+
+    // Finally, compute the rank
+    let rank = nonce % vrf;
+
+    Ok(rank)
 }
