@@ -274,7 +274,7 @@ impl Consensus {
 
         // If a fork index was found, replace forks with the mutated one,
         // otherwise push the new fork.
-        fork.proposals.push(proposal.hash);
+        fork.append_proposal(proposal.hash)?;
         fork.slots = vec![];
         match index {
             Some(i) => {
@@ -288,7 +288,7 @@ impl Consensus {
         Ok(())
     }
 
-    /// Auxiliary function to find current best ranked fork.
+    /// Auxiliary function to find current best ranked fork index.
     pub fn best_fork_index(&self) -> Result<usize> {
         // Check if node has any forks
         if self.forks.is_empty() {
@@ -299,7 +299,7 @@ impl Consensus {
         let mut best = 0;
         let mut index = 0;
         for (f_index, fork) in self.forks.iter().enumerate() {
-            let rank = fork.rank()?;
+            let rank = fork.rank;
             if rank <= best {
                 continue
             }
@@ -502,6 +502,8 @@ pub struct Fork {
     pub slots: Vec<Slot>,
     /// Valid pending transaction hashes
     pub mempool: Vec<blake3::Hash>,
+    /// Current fork rank, cached for better performance
+    pub rank: u64,
 }
 
 impl Fork {
@@ -510,7 +512,16 @@ impl Fork {
         let mempool =
             blockchain.get_pending_txs()?.iter().map(|tx| blake3::hash(&serialize(tx))).collect();
         let overlay = BlockchainOverlay::new(blockchain)?;
-        Ok(Self { overlay, module, proposals: vec![], slots: vec![], mempool })
+        Ok(Self { overlay, module, proposals: vec![], slots: vec![], mempool, rank: 0 })
+    }
+
+    /// Auxiliary function to append a proposal and recalculate current
+    /// fork rank
+    pub fn append_proposal(&mut self, proposal: blake3::Hash) -> Result<()> {
+        self.proposals.push(proposal);
+        self.rank = self.rank()?;
+
+        Ok(())
     }
 
     /// Auxiliary function to retrieve last proposal
@@ -664,7 +675,8 @@ impl Fork {
         let proposals = self.proposals.clone();
         let slots = self.slots.clone();
         let mempool = self.mempool.clone();
+        let rank = self.rank;
 
-        Ok(Self { overlay, module, proposals, slots, mempool })
+        Ok(Self { overlay, module, proposals, slots, mempool, rank })
     }
 }
