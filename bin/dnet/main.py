@@ -35,7 +35,7 @@ class Dnetview:
         info = {}
         while True:
             try:
-                logging.debug(f"Start {name} RPC on port {port}")
+                #logging.debug(f"Start {name} RPC on port {port}")
                 await rpc.start("localhost", port)
                 break
             # TODO: offline node handling

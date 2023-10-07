@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import logging
+import logging, time 
 
 
 class Model:
@@ -71,22 +71,49 @@ class Model:
         name = list(event.keys())[0]
         values = list(event.values())[0]
         params = values.get("params")
+
         event = params[0].get("event")
         info = params[0].get("info")
 
         if "chan" in info:
-            time = info.get("time")
+            t = info.get("time")
             cmd = info.get("cmd")
             chan = info.get("chan")
             addr = chan.get("addr")
 
-            self.info.update_msg(addr, (time, event, cmd))
+            self.info.update_msg(addr, (t, event, cmd))
         else:
-            # TODO
-            #slot = info.get("slot")
-            logging.debug(info)
-            logging.debug(event)
-            #self.info.update_msgs(addr, (time, event, cmd))
+            t = time.localtime()
+            current_time = time.strftime("%H:%M:%S", t)
+            logging.debug(current_time)
+
+            match event:
+                case "inbound_connected":
+                    addr = info["addr"]
+                    logging.debug(f"{current_time} inbound (connect):    {addr}")
+                case "inbound_disconnected":
+                    addr = info["addr"]
+                    logging.debug(f"{current_time} inbound (disconnect): {addr}")
+                case "outbound_slot_sleeping":
+                    slot = info["slot"]
+                    logging.debug(f"{current_time} slot {slot}: sleeping")
+                case "outbound_slot_connecting":
+                    slot = info["slot"]
+                    addr = info["addr"]
+                    logging.debug(f"{current_time} slot {slot}: connecting   addr={addr}")
+                case "outbound_slot_connected":
+                    slot = info["slot"]
+                    addr = info["addr"]
+                    channel_id = info["channel_id"]
+                    logging.debug(f"{current_time} slot {slot}: connected    addr={addr}")
+                case "outbound_slot_disconnected":
+                    slot = info["slot"]
+                    err = info["err"]
+                    logging.debug(f"{current_time} slot {slot}: disconnected err='{err}'")
+                case "outbound_peer_discovery":
+                    attempt = info["attempt"]
+                    state = info["state"]
+                    logging.debug(f"{current_time} peer_discovery: {state} (attempt {attempt})")
 
     def __repr__(self):
         return f"{self.nodes}"
