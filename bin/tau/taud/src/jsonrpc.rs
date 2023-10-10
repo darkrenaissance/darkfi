@@ -552,50 +552,24 @@ impl JsonRpcInterface {
         }
 
         if fields.contains_key("rank") {
-            // TODO: Why is this a double Option?
-            let rank = {
-                match fields["rank"] {
-                    JsonValue::Null => None,
-                    JsonValue::Number(rank) => Some(Some(rank as f32)),
-                    _ => unreachable!(),
+            match fields["rank"] {
+                JsonValue::Null => set_event(&mut task, "rank", &self.nickname, "None"),
+                JsonValue::Number(rank) => {
+                    task.set_rank(Some(rank as f32));
+                    set_event(&mut task, "rank", &self.nickname, &rank.to_string())
                 }
-            };
-
-            if let Some(rank) = rank {
-                task.set_rank(rank);
-                match rank {
-                    Some(r) => {
-                        set_event(&mut task, "rank", &self.nickname, &r.to_string());
-                    }
-                    None => {
-                        set_event(&mut task, "rank", &self.nickname, "None");
-                    }
-                }
+                _ => unreachable!(),
             }
         }
 
         if fields.contains_key("due") {
-            // TODO: Why is this a double Option?
-            let due = {
-                match &fields["due"] {
-                    JsonValue::Null => None,
-                    JsonValue::String(ts_str) => {
-                        Some(Some(Timestamp(ts_str.parse::<u64>().unwrap())))
-                    }
-                    _ => unreachable!(),
+            match &fields["due"] {
+                JsonValue::Null => set_event(&mut task, "due", &self.nickname, "None"),
+                JsonValue::Number(ts_num) => {
+                    task.set_due(Some(Timestamp(*ts_num as u64)));
+                    set_event(&mut task, "due", &self.nickname, &ts_num.to_string())
                 }
-            };
-
-            if let Some(d) = due {
-                task.set_due(d);
-                match d {
-                    Some(v) => {
-                        set_event(&mut task, "due", &self.nickname, &v.to_string());
-                    }
-                    None => {
-                        set_event(&mut task, "due", &self.nickname, "None");
-                    }
-                }
+                _ => unreachable!(),
             }
         }
 
