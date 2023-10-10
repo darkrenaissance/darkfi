@@ -27,15 +27,15 @@ async def add_task(task_args):
     title_words = []
     for arg in task_args:
         if arg[0] == "+":
-            tag = arg[1:]
+            tag = arg
             if tag in task["tags"]:
-                print(f"error: duplicate tag +{tag} in task", file=sys.stderr)
+                print(f"error: duplicate tag {tag} in task", file=sys.stderr)
                 sys.exit(-1)
             task["tags"].append(tag)
         elif arg[0] == "@":
-            assign = arg[1:]
+            assign = arg
             if assign in task["assign"]:
-                print(f"error: duplicate assign @{assign} in task", file=sys.stderr)
+                print(f"error: duplicate assign {assign} in task", file=sys.stderr)
                 sys.exit(-1)
             task["assign"].append(assign)
         elif ":" in arg:
@@ -278,16 +278,22 @@ def task_table(task):
                 Style.DIM + when + Style.RESET_ALL
             ])
         elif act == "tags":
-            val = f"+{args}"
+            val = f"{args}"
+            tags_event = f"{who} added {val} to {act}"
+            if val[0] == "-":
+                tags_event = f"{who} removed {val} from {act}"
             table.append([
-                Style.DIM + f"{who} added {act} to {val}" + Style.RESET_ALL,
+                Style.DIM + tags_event + Style.RESET_ALL,
                 "",
                 Style.DIM + when + Style.RESET_ALL
             ])
         elif act == "assign":
-            val = f"@{args}"
+            val = f"{args}"
+            assign_event = f"{who} added {val} to {act}"
+            if val[0] == "-":
+                assign_event = f"{who} removed {val} from {act}"
             table.append([
-                Style.DIM + f"{who} added {act} to {val}" + Style.RESET_ALL,
+                Style.DIM + assign_event + Style.RESET_ALL,
                 "",
                 Style.DIM + when + Style.RESET_ALL
             ])
@@ -346,21 +352,15 @@ def wrap_comment(comment, width):
     return '\n'.join(lines)
 
 async def modify_task(refid, args):
-    changes = {}
+    changes = {}    
     for arg in args:
-        if arg[0] == "+":
-            tag = arg
-            changes["tags"] = tag
         # This must go before the next elif block
-        elif arg.startswith("-@"):
-            assign = arg
-            changes["assign"] = assign
-        elif arg[0] == "-":
-            tag = arg
-            changes["tags"] = tag
-        elif arg[0] == "@":
-            assign = arg
-            changes["assign"] = assign
+        if arg.startswith("@") or arg.startswith("-@"):
+            changes["assign"] = []
+            changes["assign"].append(arg)
+        elif arg.startswith("+") or arg.startswith("-"):
+            changes["tags"] = []
+            changes["tags"].append(arg)
         elif ":" in arg:
             attr, val = arg.split(":", 1)
             if val.lower() == "none":

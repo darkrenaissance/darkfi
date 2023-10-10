@@ -404,19 +404,28 @@ impl TaskInfo {
     pub fn set_tags(&mut self, tags: &[String]) {
         debug!(target: "tau", "TaskInfo::set_tags()");
         for tag in tags.iter() {
-            if tag.starts_with('+') && !self.tags.contains(tag) {
-                self.tags.push(tag.to_string());
+            let stripped = &tag[1..];
+            if tag.starts_with('+') && !self.tags.contains(&stripped.to_string()) {
+                self.tags.push(stripped.to_string());
             }
             if tag.starts_with('-') {
-                let t = tag.replace('-', "+");
-                self.tags.retain(|tag| tag != &t);
+                self.tags.retain(|tag| tag != stripped);
             }
         }
     }
 
     pub fn set_assign(&mut self, assigns: &[String]) {
         debug!(target: "tau", "TaskInfo::set_assign()");
-        self.assign = assigns.to_owned();
+        // self.assign = assigns.to_owned();
+        for assign in assigns.iter() {
+            let stripped = assign.split('@').collect::<Vec<&str>>()[1];
+            if assign.starts_with('@') && !self.assign.contains(&stripped.to_string()) {
+                self.assign.push(stripped.to_string());
+            }
+            if assign.starts_with("-@") {
+                self.assign.retain(|assign| assign != stripped);
+            }
+        }
     }
 
     pub fn set_project(&mut self, projects: &[String]) {
