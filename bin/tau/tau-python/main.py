@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 import asyncio, json, os, sys, tempfile
 from datetime import datetime
+import time
 from tabulate import tabulate
 from colorama import Fore, Back, Style
 
@@ -532,7 +533,7 @@ Example:
     try:
         id = int(sys.argv[1])
         refid = data[id]
-    except ValueError:
+    except (ValueError, KeyError):
         print("error: invalid ID", file=sys.stderr)
         return -1
 
@@ -546,6 +547,7 @@ Example:
     if subcmd == "modify":
         if (errc := await modify_task(refid, args)) < 0:
             return errc
+        time.sleep(0.1)
         return await show_task(refid)
     elif subcmd in ["start", "pause", "stop", "cancel"]:
         status = subcmd
