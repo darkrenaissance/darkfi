@@ -102,7 +102,11 @@ pub fn deploy_native_contracts(
 /// Genesis block has rank 0.
 /// First 2 blocks rank is equal to their nonce, since their previous
 /// previous block producer doesn't exist or have a VRF.
-pub fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Result<u64> {
+pub fn block_rank(
+    block: &BlockInfo,
+    previous_previous: &BlockInfo,
+    testing_mode: bool,
+) -> Result<u64> {
     // Genesis block has rank 0
     if block.header.height == 0 {
         return Ok(0)
@@ -113,8 +117,8 @@ pub fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Result<u6
     nonce.copy_from_slice(&block.header.nonce.to_repr()[..8]);
     let nonce = u64::from_be_bytes(nonce);
 
-    // First 2 block have rank equal to their nonce
-    if block.header.height < 3 {
+    // First 2 blocks or testing ones have rank equal to their nonce
+    if block.header.height < 3 || testing_mode {
         return Ok(nonce)
     }
 

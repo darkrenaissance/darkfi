@@ -16,12 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{blockchain::BlockInfo, system::sleep, util::time::Timestamp, Result};
-use darkfi_sdk::{
-    blockchain::{expected_reward, PidOutput, PreviousSlot, Slot},
-    pasta::pallas,
-};
+use darkfi::{system::sleep, tx::Transaction, validator::consensus::Proposal, Result};
+use darkfi_sdk::crypto::SecretKey;
 use log::info;
+use rand::rngs::OsRng;
 use smol::channel::Receiver;
 
 use crate::{proto::BlockInfoMessage, Darkfid};
@@ -59,62 +57,42 @@ pub async fn miner_task(node: &Darkfid, stop_signal: &Receiver<()>) -> Result<()
 
 /// Miner loop
 async fn miner_loop(node: &Darkfid, stop_signal: &Receiver<()>) -> Result<()> {
+    // TODO: secret should be a daemon arg(.toml config)
+    let secret_key = SecretKey::random(&mut OsRng);
+    let tx = Transaction::default();
+
+    // Generate a new fork to be able to extend
+    node.validator.write().await.consensus.generate_pow_slot()?;
+
     // Miner loop
-    let timekeeper = node.validator.read().await.consensus.time_keeper.clone();
     loop {
-        // TODO: consensus should generate next block, along with its difficulty,
-        //       derived from best fork
-        // Retrieve last block
-        let last = node.validator.read().await.blockchain.last_block()?;
-        let last_hash = last.hash()?;
-
-        // Generate next PoW slot
-        let last_slot = last.slots.last().unwrap().clone();
-        let id = last_slot.id + 1;
-        let producers = 1;
-        let previous = PreviousSlot::new(
-            producers,
-            vec![last_hash],
-            vec![last.header.previous],
-            last_slot.pid.error,
-        );
-        let pid = PidOutput::default();
-        let total_tokens = last_slot.total_tokens + last_slot.reward;
-        let reward = expected_reward(id);
-        let slot = Slot::new(
-            id,
-            previous,
-            pid,
-            pallas::Base::from(last.header.nonce),
-            total_tokens,
-            reward,
-        );
-
-        // Mine next block
-        let mut next_block = BlockInfo::default();
-        next_block.header.previous = last_hash;
-        next_block.header.height = slot.id;
-        next_block.header.epoch = timekeeper.slot_epoch(next_block.header.height);
-        next_block.header.timestamp = Timestamp::current_time();
-        next_block.slots = vec![slot];
-        node.validator.read().await.consensus.module.mine_block(&mut next_block, stop_signal)?;
+        // Mine next block proposal
+        let (next_proposal, fork_index) = node
+            .validator
+            .read()
+            .await
+            .consensus
+            .generate_proposal(&secret_key, tx.clone())
+            .await?;
+        let mut next_block = next_proposal.block;
+        let module = node.validator.read().await.consensus.forks[fork_index].module.clone();
+        module.mine_block(&mut next_block, stop_signal)?;
 
         // Verify it
         node.validator.read().await.consensus.module.verify_current_block(&next_block)?;
 
-        // Generate stuff before pushing block to blockchain
-        let timestamp = next_block.header.timestamp.0;
-        let message = BlockInfoMessage::from(&next_block);
-
-        // Append block to blockchain
+        // Append the mined proposal
+        let proposal = Proposal::new(next_block)?;
         let mut lock = node.validator.write().await;
-        lock.add_blocks(&[next_block]).await?;
+        lock.consensus.append_proposal(&proposal).await?;
 
-        // Update PoW module
-        let difficulty = lock.consensus.module.next_difficulty();
-        lock.consensus.module.append(timestamp, &difficulty);
-
-        // Broadcast block
-        node.sync_p2p.broadcast(&message).await;
+        // Check if we can finalize anything and broadcast them
+        let finalized = lock.finalization().await?;
+        if !finalized.is_empty() {
+            for block in finalized {
+                let message = BlockInfoMessage::from(&block);
+                node.sync_p2p.broadcast(&message).await;
+            }
+        }
     }
 }

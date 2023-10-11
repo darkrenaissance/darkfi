@@ -87,6 +87,8 @@ impl TimeKeeper {
     }
 
     /// Calculates current slot, based on elapsed time from the genesis block.
+    // TODO: Since we are doing a PoW->PoS transition, this should use the last
+    // PoW block timestamp as genesis, and add POW_CUTTOF slots on top.
     pub fn current_slot(&self) -> u64 {
         self.genesis_ts.elapsed() / self.slot_time
     }

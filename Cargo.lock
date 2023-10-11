@@ -1704,6 +1704,7 @@ dependencies = [
  "darkfi-serial",
  "easy-parallel",
  "log",
+ "rand 0.8.5",
  "serde",
  "signal-hook",
  "signal-hook-async-std",

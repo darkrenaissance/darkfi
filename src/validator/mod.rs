@@ -36,7 +36,7 @@ use crate::{
 
 /// DarkFi consensus module
 pub mod consensus;
-use consensus::Consensus;
+use consensus::{Consensus, Proposal};
 
 /// DarkFi PoW module
 pub mod pow;
@@ -48,7 +48,8 @@ pub mod pid;
 /// Verification functions
 pub mod verification;
 use verification::{
-    verify_block, verify_genesis_block, verify_producer_transaction, verify_transactions,
+    verify_block, verify_genesis_block, verify_producer_transaction, verify_proposal,
+    verify_transactions,
 };
 
 /// Validation functions
@@ -286,6 +287,35 @@ impl Validator {
         self.add_blocks(&[block.clone()]).await?;
         info!(target: "validator::append_block", "Block added: {}", block_hash);
         Ok(())
+    }
+
+    /// The node checks if proposals can be finalized.
+    /// If proposals are found, node appends them to canonical, excluding the
+    /// last one, and rebuild the finalized fork to contain the last one.
+    pub async fn finalization(&mut self) -> Result<Vec<BlockInfo>> {
+        info!(target: "validator::finalization", "Performing finalization check");
+
+        // Grab blocks that can be finalized
+        let mut finalized = self.consensus.finalization().await?;
+        if finalized.is_empty() {
+            info!(target: "validator::finalization", "No proposals can be finalized");
+            return Ok(vec![])
+        }
+
+        // Exclude last proposal
+        let last = finalized.pop().unwrap();
+
+        // Append finalized blocks
+        info!(target: "validator::finalization", "Finalizing {} proposals...", finalized.len());
+        self.add_blocks(&finalized).await?;
+
+        // Rebuild best fork using last proposal
+        self.consensus.forks = vec![];
+        self.consensus.generate_pow_slot()?;
+        self.consensus.append_proposal(&Proposal::new(last)?).await?;
+        info!(target: "validator::finalization", "Finalization completed!");
+
+        Ok(finalized)
     }
 
     // ==========================
