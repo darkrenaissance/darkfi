@@ -29,7 +29,8 @@ use crate::{tx::Transaction, Error, Result};
 /// Block related definitions and storage implementations
 pub mod block_store;
 pub use block_store::{
-    Block, BlockInfo, BlockOrderStore, BlockOrderStoreOverlay, BlockStore, BlockStoreOverlay,
+    Block, BlockDifficultyStore, BlockDifficultyStoreOverlay, BlockInfo, BlockOrderStore,
+    BlockOrderStoreOverlay, BlockStore, BlockStoreOverlay,
 };
 
 /// Header definition and storage implementation
@@ -65,6 +66,8 @@ pub struct Blockchain {
     pub slots: SlotStore,
     /// Blocks Slots sled tree
     pub blocks_slots: BlocksSlotsStore,
+    /// Block height difficulties sled tree,
+    pub difficulties: BlockDifficultyStore,
     /// Transactions sled tree
     pub transactions: TxStore,
     /// Pending transactions sled tree
@@ -85,6 +88,7 @@ impl Blockchain {
         let order = BlockOrderStore::new(db)?;
         let slots = SlotStore::new(db)?;
         let blocks_slots = BlocksSlotsStore::new(db)?;
+        let difficulties = BlockDifficultyStore::new(db)?;
         let transactions = TxStore::new(db)?;
         let pending_txs = PendingTxStore::new(db)?;
         let pending_txs_order = PendingTxOrderStore::new(db)?;
@@ -98,6 +102,7 @@ impl Blockchain {
             order,
             slots,
             blocks_slots,
+            difficulties,
             transactions,
             pending_txs,
             pending_txs_order,
@@ -409,6 +414,8 @@ pub struct BlockchainOverlay {
     pub slots: SlotStoreOverlay,
     /// Blocks slots overlay
     pub blocks_slots: BlocksSlotsStoreOverlay,
+    /// Block height difficulties overlay,
+    pub difficulties: BlockDifficultyStoreOverlay,
     /// Transactions overlay
     pub transactions: TxStoreOverlay,
     /// Contract states overlay
@@ -426,6 +433,7 @@ impl BlockchainOverlay {
         let order = BlockOrderStoreOverlay::new(&overlay)?;
         let slots = SlotStoreOverlay::new(&overlay)?;
         let blocks_slots = BlocksSlotsStoreOverlay::new(&overlay)?;
+        let difficulties = BlockDifficultyStoreOverlay::new(&overlay)?;
         let transactions = TxStoreOverlay::new(&overlay)?;
         let contracts = ContractStateStoreOverlay::new(&overlay)?;
         let wasm_bincode = WasmStoreOverlay::new(&overlay)?;
@@ -437,6 +445,7 @@ impl BlockchainOverlay {
             order,
             slots,
             blocks_slots,
+            difficulties,
             transactions,
             contracts,
             wasm_bincode,
@@ -578,6 +587,7 @@ impl BlockchainOverlay {
         let order = BlockOrderStoreOverlay::new(&overlay)?;
         let slots = SlotStoreOverlay::new(&overlay)?;
         let blocks_slots = BlocksSlotsStoreOverlay::new(&overlay)?;
+        let difficulties = BlockDifficultyStoreOverlay::new(&overlay)?;
         let transactions = TxStoreOverlay::new(&overlay)?;
         let contracts = ContractStateStoreOverlay::new(&overlay)?;
         let wasm_bincode = WasmStoreOverlay::new(&overlay)?;
@@ -589,6 +599,7 @@ impl BlockchainOverlay {
             order,
             slots,
             blocks_slots,
+            difficulties,
             transactions,
             contracts,
             wasm_bincode,

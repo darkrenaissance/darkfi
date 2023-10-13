@@ -25,6 +25,7 @@ use darkfi_sdk::{
 use darkfi_serial::async_trait;
 
 use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
+use num_bigint::BigUint;
 
 use crate::{tx::Transaction, Error, Result};
 
@@ -294,7 +295,7 @@ const SLED_BLOCK_ORDER_TREE: &[u8] = b"_block_order";
 
 /// The `BlockOrderStore` is a `sled` tree storing the order of the
 /// blockchain's blocks, where the key is the order number, and the value is
-/// the blocks' hash. [`BlockStore`] can be queried with this hash.
+/// the blocks' hash. [`BlockOrderStore`] can be queried with this order number.
 #[derive(Clone)]
 pub struct BlockOrderStore(pub sled::Tree);
 
@@ -486,5 +487,173 @@ impl BlockOrderStoreOverlay {
     /// Check if overlay contains any records
     pub fn is_empty(&self) -> Result<bool> {
         Ok(self.0.lock().unwrap().is_empty(SLED_BLOCK_ORDER_TREE)?)
+    }
+}
+
+/// Auxiliary structure used to keep track of block PoW difficulty information.
+/// Note: we only need height cummulative difficulty, but we also keep its actual
+/// difficulty, so we can verify the sequence and/or know specific block height
+/// difficulty, if ever needed.
+#[derive(Debug)]
+pub struct BlockDifficulty {
+    /// Block height number
+    pub height: u64,
+    /// Block creation timestamp
+    pub timestamp: u64,
+    /// Height difficulty
+    pub difficulty: BigUint,
+    /// Height cummulative difficulty (total + height difficulty)
+    pub cummulative_difficulty: BigUint,
+}
+
+impl BlockDifficulty {
+    pub fn new(
+        height: u64,
+        timestamp: u64,
+        difficulty: BigUint,
+        cummulative_difficulty: BigUint,
+    ) -> Self {
+        Self { height, timestamp, difficulty, cummulative_difficulty }
+    }
+}
+
+// Note: Doing all the imports here as this might get obselete if
+// we implemented Encodable/Decodable for num_bigint::BigUint.
+impl darkfi_serial::Encodable for BlockDifficulty {
+    fn encode<S: std::io::Write>(&self, mut s: S) -> std::io::Result<usize> {
+        let mut len = 0;
+        len += self.height.encode(&mut s)?;
+        len += self.timestamp.encode(&mut s)?;
+        len += self.difficulty.to_bytes_be().encode(&mut s)?;
+        len += self.cummulative_difficulty.to_bytes_be().encode(&mut s)?;
+        Ok(len)
+    }
+}
+
+impl darkfi_serial::Decodable for BlockDifficulty {
+    fn decode<D: std::io::Read>(mut d: D) -> std::io::Result<Self> {
+        let height: u64 = darkfi_serial::Decodable::decode(&mut d)?;
+        let timestamp: u64 = darkfi_serial::Decodable::decode(&mut d)?;
+        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
+        let difficulty: BigUint = BigUint::from_bytes_be(&bytes);
+        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
+        let cummulative_difficulty: BigUint = BigUint::from_bytes_be(&bytes);
+        let ret = Self { height, timestamp, difficulty, cummulative_difficulty };
+        Ok(ret)
+    }
+}
+
+/// [`BlockDifficulty`] sled tree
+const SLED_BLOCK_DIFFICULTY_TREE: &[u8] = b"_block_difficulty";
+
+/// The `BlockDifficultyStore` is a `sled` tree storing the difficulty information
+/// of the blockchain's blocks, where the key is the block height number, and the
+/// value is the blocks' hash. [`BlockDifficultyStore`] can be queried with this
+/// height number.
+#[derive(Clone)]
+pub struct BlockDifficultyStore(pub sled::Tree);
+
+impl BlockDifficultyStore {
+    /// Opens a new or existing `BlockDifficultyStore` on the given sled database.
+    pub fn new(db: &sled::Db) -> Result<Self> {
+        let tree = db.open_tree(SLED_BLOCK_DIFFICULTY_TREE)?;
+        Ok(Self(tree))
+    }
+
+    /// Insert a slice of [`BlockDifficulty`] into the store.
+    pub fn insert(&self, block_difficulties: &[BlockDifficulty]) -> Result<()> {
+        let batch = self.insert_batch(block_difficulties)?;
+        self.0.apply_batch(batch)?;
+        Ok(())
+    }
+
+    /// Generate the sled batch corresponding to an insert, so caller
+    /// can handle the write operation.
+    /// The block's height number is used as the key, while value is
+    //  the serialized [`BlockDifficulty`] itself.
+    pub fn insert_batch(&self, block_difficulties: &[BlockDifficulty]) -> Result<sled::Batch> {
+        let mut batch = sled::Batch::default();
+
+        for block_difficulty in block_difficulties {
+            batch.insert(&block_difficulty.height.to_be_bytes(), serialize(block_difficulty));
+        }
+
+        Ok(batch)
+    }
+
+    /// Fetch given block height numbers from the block difficulties store.
+    /// The resulting vector contains `Option`, which is `Some` if the block
+    /// height number was found in the block difficulties store, and otherwise
+    /// it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one block height number was not found.
+    pub fn get(&self, heights: &[u64], strict: bool) -> Result<Vec<Option<BlockDifficulty>>> {
+        let mut ret = Vec::with_capacity(heights.len());
+
+        for height in heights {
+            if let Some(found) = self.0.get(height.to_be_bytes())? {
+                let block_difficulty = deserialize(&found)?;
+                ret.push(Some(block_difficulty));
+            } else {
+                if strict {
+                    return Err(Error::BlockDifficultyNotFound(*height))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
+    }
+
+    /// Fetch the last N records from the block difficulties store, in order.
+    pub fn get_last_n(&self, n: usize) -> Result<Vec<BlockDifficulty>> {
+        // Build an iterator to retrieve last N records
+        let records = self.0.iter().rev().take(n);
+        // Since the iterator grabs in right -> left order,
+        // we deserialize found records, and push them in reverse order
+        let mut last_n = vec![];
+        for record in records {
+            last_n.insert(0, deserialize(&record?.1)?);
+        }
+
+        Ok(last_n)
+    }
+
+    /// Retrieve all blockdifficulties from the block difficulties store in
+    /// the form of a vector containing (`height`, `difficulty`) tuples.
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all(&self) -> Result<Vec<(u64, BlockDifficulty)>> {
+        let mut block_difficulties = vec![];
+
+        for record in self.0.iter() {
+            block_difficulties.push(parse_u64_key_record(record.unwrap())?);
+        }
+
+        Ok(block_difficulties)
+    }
+}
+
+/// Overlay structure over a [`BlockDifficultyStore`] instance.
+pub struct BlockDifficultyStoreOverlay(SledDbOverlayPtr);
+
+impl BlockDifficultyStoreOverlay {
+    pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
+        overlay.lock().unwrap().open_tree(SLED_BLOCK_DIFFICULTY_TREE)?;
+        Ok(Self(overlay.clone()))
+    }
+
+    /// Insert a slice of [`BlockDifficulty`] into the overlay.
+    pub fn insert(&self, block_difficulties: &[BlockDifficulty]) -> Result<()> {
+        let mut lock = self.0.lock().unwrap();
+
+        for block_difficulty in block_difficulties {
+            lock.insert(
+                SLED_BLOCK_DIFFICULTY_TREE,
+                &block_difficulty.height.to_be_bytes(),
+                &serialize(block_difficulty),
+            )?;
+        }
+
+        Ok(())
     }
 }

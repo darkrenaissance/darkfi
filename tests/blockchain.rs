@@ -40,7 +40,7 @@ struct Node {
 impl Node {
     fn new() -> Result<Self> {
         let blockchain = Blockchain::new(&sled::Config::new().temporary(true).open()?)?;
-        let module = PoWModule::new(blockchain.clone(), None, POW_TARGET);
+        let module = PoWModule::new(blockchain.clone(), None, POW_TARGET)?;
         Ok(Self { blockchain, module })
     }
 }

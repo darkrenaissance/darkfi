@@ -35,7 +35,10 @@ use randomx::{RandomXCache, RandomXDataset, RandomXFlags, RandomXVM};
 use smol::channel::Receiver;
 
 use crate::{
-    blockchain::{BlockInfo, Blockchain},
+    blockchain::{
+        block_store::{BlockDifficulty, BlockInfo},
+        Blockchain, BlockchainOverlayPtr,
+    },
     util::{ringbuffer::RingBuffer, time::Timestamp},
     validator::utils::median,
     Error, Result,
@@ -79,8 +82,6 @@ const BLOCK_FUTURE_TIME_LIMIT: u64 = 60 * 60 * 2;
 /// This struct represents the information required by the PoW algorithm
 #[derive(Clone)]
 pub struct PoWModule {
-    /// Canonical (finalized) blockchain
-    pub blockchain: Blockchain,
     /// Number of threads to use for hashing,
     /// if None provided will use N_THREADS
     pub threads: usize,
@@ -92,18 +93,33 @@ pub struct PoWModule {
     /// Latest block cummulative difficulties ringbuffer
     pub difficulties: RingBuffer<BigUint, BUF_SIZE>,
     /// Total blocks cummulative difficulty
+    /// Note: we keep this as a struct field for faster
+    /// access(optimization), since its always same as
+    /// difficulties buffer last.
     pub cummulative_difficulty: BigUint,
 }
 
 impl PoWModule {
-    pub fn new(blockchain: Blockchain, threads: Option<usize>, target: Option<usize>) -> Self {
+    pub fn new(
+        blockchain: Blockchain,
+        threads: Option<usize>,
+        target: Option<usize>,
+    ) -> Result<Self> {
         let threads = if let Some(t) = threads { t } else { N_THREADS };
         let target = if let Some(t) = target { t } else { DIFFICULTY_TARGET };
-        // TODO: store/retrieve info in/from sled
-        let timestamps = RingBuffer::<u64, BUF_SIZE>::new();
-        let difficulties = RingBuffer::<BigUint, BUF_SIZE>::new();
-        let cummulative_difficulty = BigUint::zero();
-        Self { blockchain, threads, target, timestamps, difficulties, cummulative_difficulty }
+
+        // Retrieving last BUF_ZISE difficulties from blockchain to build the buffers
+        let mut timestamps = RingBuffer::<u64, BUF_SIZE>::new();
+        let mut difficulties = RingBuffer::<BigUint, BUF_SIZE>::new();
+        let mut cummulative_difficulty = BigUint::zero();
+        let last_n = blockchain.difficulties.get_last_n(BUF_SIZE)?;
+        for difficulty in last_n {
+            timestamps.push(difficulty.timestamp);
+            difficulties.push(difficulty.cummulative_difficulty.clone());
+            cummulative_difficulty = difficulty.cummulative_difficulty;
+        }
+
+        Ok(Self { threads, target, timestamps, difficulties, cummulative_difficulty })
     }
 
     /// Compute the next mining difficulty, based on current ring buffers.
@@ -247,6 +263,17 @@ impl PoWModule {
         self.difficulties.push(self.cummulative_difficulty.clone());
     }
 
+    /// Append provided block difficulty to the ring buffers and insert
+    /// it to provided overlay
+    pub fn append_difficulty(
+        &mut self,
+        overlay: &BlockchainOverlayPtr,
+        difficulty: BlockDifficulty,
+    ) -> Result<()> {
+        self.append(difficulty.timestamp, &difficulty.difficulty);
+        overlay.lock().unwrap().difficulties.insert(&[difficulty])
+    }
+
     /// Mine provided block, based on provided PoW module next mine target and difficulty
     pub fn mine_block(
         &self,
@@ -369,7 +396,7 @@ mod tests {
     fn test_wide_difficulty() -> Result<()> {
         let sled_db = sled::Config::new().temporary(true).open()?;
         let blockchain = Blockchain::new(&sled_db)?;
-        let mut module = PoWModule::new(blockchain, None, Some(DEFAULT_TEST_DIFFICULTY_TARGET));
+        let mut module = PoWModule::new(blockchain, None, Some(DEFAULT_TEST_DIFFICULTY_TARGET))?;
 
         let output = Command::new("./script/research/pow/gen_wide_data.py").output().unwrap();
         let reader = Cursor::new(output.stdout);
@@ -402,7 +429,7 @@ mod tests {
         // Default setup
         let sled_db = sled::Config::new().temporary(true).open()?;
         let blockchain = Blockchain::new(&sled_db)?;
-        let module = PoWModule::new(blockchain, None, Some(DEFAULT_TEST_DIFFICULTY_TARGET));
+        let module = PoWModule::new(blockchain, None, Some(DEFAULT_TEST_DIFFICULTY_TARGET))?;
         let (_, recvr) = smol::channel::bounded(1);
         let genesis_block = BlockInfo::default();
 

@@ -67,9 +67,9 @@ impl Consensus {
         time_keeper: TimeKeeper,
         pow_target: Option<usize>,
         testing_mode: bool,
-    ) -> Self {
-        let module = PoWModule::new(blockchain.clone(), None, pow_target);
-        Self {
+    ) -> Result<Self> {
+        let module = PoWModule::new(blockchain.clone(), None, pow_target)?;
+        Ok(Self {
             blockchain,
             time_keeper,
             participating: false,
@@ -77,7 +77,7 @@ impl Consensus {
             forks: vec![],
             module,
             testing_mode,
-        }
+        })
     }
 
     /// Generate next hot/live PoW slot for all current forks.

@@ -27,7 +27,10 @@ use log::{debug, error, info, warn};
 use smol::lock::RwLock;
 
 use crate::{
-    blockchain::{BlockInfo, Blockchain, BlockchainOverlay},
+    blockchain::{
+        block_store::{BlockDifficulty, BlockInfo},
+        Blockchain, BlockchainOverlay,
+    },
     error::TxVerifyFailed,
     tx::Transaction,
     util::time::TimeKeeper,
@@ -144,8 +147,12 @@ impl Validator {
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
         info!(target: "validator::new", "Initializing Consensus");
-        let consensus =
-            Consensus::new(blockchain.clone(), config.time_keeper, config.pow_target, testing_mode);
+        let consensus = Consensus::new(
+            blockchain.clone(),
+            config.time_keeper,
+            config.pow_target,
+            testing_mode,
+        )?;
 
         // Create the actual state
         let state =
@@ -376,7 +383,17 @@ impl Validator {
 
             // Update PoW module
             if block.header.version == 1 {
-                module.append(block.header.timestamp.0, &module.next_difficulty()?);
+                // Generate block difficulty
+                let difficulty = module.next_difficulty()?;
+                let cummulative_difficulty =
+                    module.cummulative_difficulty.clone() + difficulty.clone();
+                let block_difficulty = BlockDifficulty::new(
+                    block.header.height,
+                    block.header.timestamp.0,
+                    difficulty,
+                    cummulative_difficulty,
+                );
+                module.append_difficulty(&overlay, block_difficulty)?;
             }
 
             // Store block transactions
@@ -529,7 +546,7 @@ impl Validator {
 
         // Create a time keeper and a PoW module to validate each block
         let mut time_keeper = self.consensus.time_keeper.clone();
-        let mut module = PoWModule::new(blockchain.clone(), None, pow_target);
+        let mut module = PoWModule::new(blockchain.clone(), None, pow_target)?;
 
         // Deploy native wasm contracts
         deploy_native_contracts(&overlay, &time_keeper, &faucet_pubkeys)?;
