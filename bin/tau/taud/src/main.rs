@@ -23,38 +23,38 @@ use std::{
     fs::{create_dir_all, remove_dir_all},
     io::{stdin, Write},
     path::Path,
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 
 use crypto_box::{
     aead::{Aead, AeadCore},
     ChaChaBox, SecretKey,
 };
-use darkfi_serial::{async_trait, deserialize, serialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{
+    async_trait, deserialize, deserialize_async_partial, serialize, serialize_async,
+    SerialDecodable, SerialEncodable,
+};
 use futures::{select, FutureExt};
 use libc::mkfifo;
 use log::{debug, error, info};
 use rand::rngs::OsRng;
-use smol::{lock::Mutex, stream::StreamExt};
+use smol::{fs, lock::RwLock, stream::StreamExt};
 use structopt_toml::StructOptToml;
 use tinyjson::JsonValue;
 
 use darkfi::{
     async_daemonize,
     event_graph::{
-        events_queue::EventsQueue,
-        model::{Event, EventId, Model, ModelPtr},
-        protocol_event::{ProtocolEvent, Seen, SeenPtr},
-        view::{View, ViewPtr},
-        EventMsg,
+        proto::{EventPut, ProtocolEventGraph},
+        Event, EventGraph, EventGraphPtr, NULL_ID,
     },
-    net::{self, P2pPtr},
+    net::{P2p, P2pPtr, SESSION_ALL},
     rpc::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
     },
     system::StoppableTask,
-    util::{path::expand_path, time::Timestamp},
+    util::path::expand_path,
     Error, Result,
 };
 
@@ -96,12 +96,6 @@ fn get_workspaces(settings: &Args) -> Result<HashMap<String, ChaChaBox>> {
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct EncryptedTask {
     payload: String,
-}
-
-impl EventMsg for EncryptedTask {
-    fn new() -> Self {
-        Self { payload: String::from("root") }
-    }
 }
 
 fn encrypt_task(
@@ -155,18 +149,19 @@ fn try_decrypt_task(encrypt_task: &EncryptedTask, chacha_box: &ChaChaBox) -> Tau
 
 #[allow(clippy::too_many_arguments)]
 async fn start_sync_loop(
+    event_graph: EventGraphPtr,
     broadcast_rcv: smol::channel::Receiver<TaskInfo>,
-    view: ViewPtr<EncryptedTask>,
-    model: ModelPtr<EncryptedTask>,
-    seen: SeenPtr<EventId>,
     workspaces: Arc<HashMap<String, ChaChaBox>>,
     datastore_path: std::path::PathBuf,
-    missed_events: Arc<Mutex<Vec<Event<EncryptedTask>>>>,
     piped: bool,
     p2p: P2pPtr,
+    sled: sled::Db,
+    last_sent: RwLock<blake3::Hash>,
+    seen: OnceLock<sled::Tree>,
 ) -> TaudResult<()> {
+    let incoming = event_graph.event_sub.clone().subscribe().await;
+    seen.set(sled.open_tree("tau_db").unwrap()).unwrap();
     loop {
-        let mut v = view.lock().await;
         select! {
             task_event = broadcast_rcv.recv().fuse() => {
                 let tk = task_event.map_err(Error::from)?;
@@ -174,25 +169,46 @@ async fn start_sync_loop(
                     let chacha_box = workspaces.get(&tk.workspace).unwrap();
                     let encrypted_task = encrypt_task(&tk, chacha_box, &mut OsRng)?;
                     info!(target: "tau", "Send the task: ref: {}", tk.ref_id);
-                    let event = Event {
-                        previous_event_hash: model.lock().await.get_head_hash().map_err(Error::from)?,
-                        action: encrypted_task,
-                        timestamp: Timestamp::current_time(),
-                    };
+                    // Build a DAG event and return it.
+                    let event = Event::new(
+                        serialize_async(&encrypted_task).await,
+                        event_graph.clone(),
+                    )
+                    .await;
+                    // Update the last sent event.
+                    // let event_id = event.id();
+                    // *last_sent.write().await = event_id;
 
-                    p2p.broadcast(&event).await;
+                    // If it fails for some reason, for now, we just note it
+                    // and pass.
+                    if let Err(e) = event_graph.dag_insert(event.clone()).await {
+                        error!("[IRC CLIENT] Failed inserting new event to DAG: {}", e);
+                    } else {
+                        // We sent this, so it should be considered seen.
+                        // TODO: should we save task on send or on receive?
+                        // on receive better because it's garanteed your event is out there
+                        // debug!("Marking event {} as seen", event_id);
+                        // seen.get().unwrap().insert(event_id.as_bytes(), &[]).unwrap();
 
+                        // Otherwise, broadcast it
+                        p2p.broadcast(&EventPut(event)).await;
+                    }
                 }
             }
-            task_event = v.process().fuse() => {
-                let event = task_event.map_err(Error::from)?;
-                if !seen.push(&event.hash()).await {
+            task_event = incoming.receive().fuse() => {
+                let event_id = task_event.id();
+                if *last_sent.read().await == event_id {
                     continue
                 }
-
-                missed_events.lock().await.push(event.clone());
-
-                on_receive_task(&event.action, &datastore_path, &workspaces, piped)
+                // Try to deserialize the `Event`'s content into a `Privmsg`
+                let enc_task: EncryptedTask = match deserialize_async_partial(task_event.content()).await {
+                    Ok((v, _)) => v,
+                    Err(e) => {
+                        error!("[TAUD] Failed deserializing incoming EncryptedTask event: {}", e);
+                        continue
+                    }
+                };
+                on_receive_task(&enc_task, &datastore_path, &workspaces, piped)
                     .await?;
             }
         }
@@ -326,40 +342,29 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         return Ok(())
     }
 
-    ////////////////////
-    // Initialize the base structures
-    ////////////////////
-    let events_queue = EventsQueue::<EncryptedTask>::new();
-    let model = Arc::new(Mutex::new(Model::new(events_queue.clone())));
-    let view = Arc::new(Mutex::new(View::new(events_queue)));
-    let model_clone = model.clone();
+    info!("Initializing taud node");
 
-    model.lock().await.load_tree(&datastore_path)?;
+    // Create datastore path if not there already.
+    let datastore = expand_path(&settings.datastore)?;
+    fs::create_dir_all(&datastore).await?;
 
-    ////////////////////
-    // Buffers
-    ////////////////////
-    let seen_event = Seen::new();
-    let seen_inv = Seen::new();
+    info!("Instantiating event DAG");
+    let sled_db = sled::open(datastore)?;
+    let p2p = P2p::new(settings.net.into(), executor.clone()).await;
+    let event_graph =
+        EventGraph::new(p2p.clone(), sled_db.clone(), "darkirc_dag", 1, executor.clone()).await?;
 
-    let (broadcast_snd, broadcast_rcv) = smol::channel::unbounded::<TaskInfo>();
-
-    //
-    // P2p setup
-    //
-    let net_settings = settings.net.clone();
-
-    let p2p = net::P2p::new(net_settings.into(), executor.clone()).await;
+    info!("Registering EventGraph P2P protocol");
+    let event_graph_ = Arc::clone(&event_graph);
     let registry = p2p.protocol_registry();
-
     registry
-        .register(net::SESSION_ALL, move |channel, p2p| {
-            let seen_event = seen_event.clone();
-            let seen_inv = seen_inv.clone();
-            let model = model.clone();
-            async move { ProtocolEvent::init(channel, p2p, model, seen_event, seen_inv).await }
+        .register(SESSION_ALL, move |channel, _| {
+            let event_graph_ = event_graph_.clone();
+            async move { ProtocolEventGraph::init(event_graph_, channel).await.unwrap() }
         })
         .await;
+
+    let (broadcast_snd, broadcast_rcv) = smol::channel::unbounded::<TaskInfo>();
 
     info!(target: "taud", "Starting P2P network");
     p2p.clone().start().await?;
@@ -367,22 +372,21 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     ////////////////////
     // Listner
     ////////////////////
-    let seen_ids = Seen::new();
-    let missed_events = Arc::new(Mutex::new(vec![]));
-
     info!(target: "taud", "Starting sync loop task");
+    let last_sent = RwLock::new(NULL_ID);
+    let seen = OnceLock::new();
     let sync_loop_task = StoppableTask::new();
     sync_loop_task.clone().start(
         start_sync_loop(
+            event_graph.clone(),
             broadcast_rcv,
-            view,
-            model_clone.clone(),
-            seen_ids,
             workspaces.clone(),
             datastore_path.clone(),
-            missed_events,
             settings.piped,
             p2p.clone(),
+            sled_db.clone(),
+            last_sent,
+            seen,
         ),
         |res| async {
             match res {
@@ -457,8 +461,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     info!(target: "taud", "Stopping sync loop task...");
     sync_loop_task.stop().await;
-
-    model_clone.lock().await.save_tree(&datastore_path)?;
 
     p2p.stop().await;
 

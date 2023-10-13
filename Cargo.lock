@@ -5446,6 +5446,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d0e916b1148c8e263850e1ebcbd046f333e0683c724876bb0da63ea4373dc8a"
 
 [[package]]
+name = "taud"
+version = "0.4.1"
+dependencies = [
+ "async-trait",
+ "blake3",
+ "bs58",
+ "chrono",
+ "crypto_box",
+ "darkfi",
+ "darkfi-serial",
+ "easy-parallel",
+ "futures",
+ "hex",
+ "libc",
+ "log",
+ "rand 0.8.5",
+ "serde",
+ "signal-hook",
+ "signal-hook-async-std",
+ "simplelog",
+ "sled",
+ "smol",
+ "structopt",
+ "structopt-toml",
+ "thiserror",
+ "tinyjson",
+ "toml 0.7.6",
+ "url",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
