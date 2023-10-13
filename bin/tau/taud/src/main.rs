@@ -53,7 +53,7 @@ use darkfi::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
     },
-    system::StoppableTask,
+    system::{sleep, StoppableTask},
     util::path::expand_path,
     Error, Result,
 };
@@ -155,12 +155,12 @@ async fn start_sync_loop(
     datastore_path: std::path::PathBuf,
     piped: bool,
     p2p: P2pPtr,
-    sled: sled::Db,
     last_sent: RwLock<blake3::Hash>,
     seen: OnceLock<sled::Tree>,
 ) -> TaudResult<()> {
     let incoming = event_graph.event_sub.clone().subscribe().await;
-    seen.set(sled.open_tree("tau_db").unwrap()).unwrap();
+    let seen_events = seen.get().unwrap();
+
     loop {
         select! {
             task_event = broadcast_rcv.recv().fuse() => {
@@ -200,6 +200,11 @@ async fn start_sync_loop(
                 if *last_sent.read().await == event_id {
                     continue
                 }
+
+                if seen_events.contains_key(event_id.as_bytes()).unwrap() {
+                    continue
+                }
+
                 // Try to deserialize the `Event`'s content into a `Privmsg`
                 let enc_task: EncryptedTask = match deserialize_async_partial(task_event.content()).await {
                     Ok((v, _)) => v,
@@ -352,7 +357,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     let sled_db = sled::open(datastore)?;
     let p2p = P2p::new(settings.net.into(), executor.clone()).await;
     let event_graph =
-        EventGraph::new(p2p.clone(), sled_db.clone(), "darkirc_dag", 1, executor.clone()).await?;
+        EventGraph::new(p2p.clone(), sled_db.clone(), "taud_dag", 0, executor.clone()).await?;
 
     info!("Registering EventGraph P2P protocol");
     let event_graph_ = Arc::clone(&event_graph);
@@ -369,12 +374,64 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     info!(target: "taud", "Starting P2P network");
     p2p.clone().start().await?;
 
+    info!(target: "taud", "Waiting for some P2P connections...");
+    sleep(5).await;
+
+    // We'll attempt to sync 5 times
+    if !settings.skip_dag_sync {
+        for i in 1..=6 {
+            info!("Syncing event DAG (attempt #{})", i);
+            match event_graph.dag_sync().await {
+                Ok(()) => break,
+                Err(e) => {
+                    if i == 6 {
+                        error!("Failed syncing DAG. Exiting.");
+                        p2p.stop().await;
+                        return Err(Error::DagSyncFailed)
+                    } else {
+                        // TODO: Maybe at this point we should prune or something?
+                        // TODO: Or maybe just tell the user to delete the DAG from FS.
+                        error!("Failed syncing DAG ({}), retrying in 10s...", e);
+                        sleep(10).await;
+                    }
+                }
+            }
+        }
+    }
+
     ////////////////////
     // Listner
     ////////////////////
     info!(target: "taud", "Starting sync loop task");
     let last_sent = RwLock::new(NULL_ID);
     let seen = OnceLock::new();
+    seen.set(sled_db.open_tree("tau_db").unwrap()).unwrap();
+
+    ////////////////////
+    // get history
+    ////////////////////
+    let dag_events = event_graph.order_events().await;
+    let seen_events = seen.get().unwrap();
+
+    for event_id in dag_events.iter() {
+        // If it was seen, skip
+        if seen_events.contains_key(event_id.as_bytes()).unwrap() {
+            continue
+        }
+
+        // Get the event from the DAG
+        let event = event_graph.dag_get(event_id).await.unwrap().unwrap();
+
+        // Try to deserialize it. (Here we skip errors)
+        let Ok((enc_task, _)) = deserialize_async_partial(event.content()).await else { continue };
+
+        // Potentially decrypt the privmsg
+        on_receive_task(&enc_task, &datastore_path, &workspaces, false).await.unwrap();
+
+        debug!("Marking event {} as seen", event_id);
+        seen_events.insert(event_id.as_bytes(), &[]).unwrap();
+    }
+
     let sync_loop_task = StoppableTask::new();
     sync_loop_task.clone().start(
         start_sync_loop(
@@ -384,9 +441,8 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             datastore_path.clone(),
             settings.piped,
             p2p.clone(),
-            sled_db.clone(),
             last_sent,
-            seen,
+            seen.clone(),
         ),
         |res| async {
             match res {

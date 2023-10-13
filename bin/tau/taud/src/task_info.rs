@@ -28,7 +28,6 @@ use log::debug;
 use tinyjson::JsonValue;
 
 use darkfi::{
-    event_graph::gen_id,
     util::{
         file::{load_json_file, save_json_file},
         time::Timestamp,
@@ -39,6 +38,7 @@ use darkfi::{
 use crate::{
     error::{TaudError, TaudResult},
     month_tasks::MonthTasks,
+    util::gen_id,
 };
 
 pub enum State {

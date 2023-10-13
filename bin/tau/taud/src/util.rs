@@ -25,6 +25,7 @@ use std::{
 use log::debug;
 
 use darkfi::{Error, Result};
+use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
 
 use crate::task_info::{TaskEvent, TaskInfo};
 /*
@@ -52,6 +53,10 @@ pub fn pipe_write<P: AsRef<Path>>(path: P) -> Result<File> {
         .custom_flags(libc::O_NONBLOCK)
         .open(path)
         .map_err(Error::from)
+}
+
+pub fn gen_id(len: usize) -> String {
+    OsRng.sample_iter(&Alphanumeric).take(len).map(char::from).collect()
 }
 
 // #[cfg(test)]

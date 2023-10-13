@@ -1,16 +1,13 @@
 #!/usr/bin/python3
-import asyncio, json, os, sys, tempfile
+import asyncio, os, sys, tempfile
 from datetime import datetime
 import time
 from tabulate import tabulate
-from colorama import Fore, Back, Style
+from colorama import Fore, Style
 
 import api, lib.util
 
-# USERNAME = lib.config.get("username", "Anonymous")
-USERNAME = "Anonymous"
-
-async def add_task(task_args):
+async def add_task(task_args, server_name, port):
     task = {
         "title": None,
         "tags": [],
@@ -55,8 +52,19 @@ async def add_task(task_args):
     if task["desc"].strip() == '':
         print("Abort adding the task due to empty description.")
         exit(-1)
+    
+    if task["rank"] is not None:
+        task["rank"] = round(task["rank"], 4)
+    
+    try:
+        if task["ref_id"].strip() == '':
+            task.pop('ref_id')
+        if task["workspace"].strip() == '':
+            task.pop('workspace')
+    except KeyError:
+        pass
 
-    if await api.add_task(task):
+    if await api.add_task(task, server_name, port):
         print(f"Created task '{title}'.")
 
 def prompt_text(comment_lines):
@@ -87,7 +95,7 @@ def prompt_description_text(task):
         "\n# ------------------------ >8 ------------------------",
         "# Do not modify or remove the line above.",
         "# Everything below it will be ignored.",
-        f"\n{tabulate_task(task)}"
+        f"\n{tabulate_task(task, True)}"
     ])
 
 def prompt_comment_text():
@@ -145,18 +153,19 @@ def convert_attr_val(attr, val):
         print(f"error: unhandled attr '{attr}' = {val}")
         sys.exit(-1)
 
-async def show_active_tasks():
-    refids = await api.get_ref_ids()
+async def show_active_tasks(workspace, server_name, port):
+    refids = await api.get_ref_ids(server_name, port)
     tasks = []
     for refid in refids:
-        tasks.append(await api.fetch_task(refid))
-    list_tasks(tasks, [])
+        tasks.append(await api.fetch_task(refid, server_name, port))
+    list_tasks(tasks, workspace, [])
 
-async def show_deactive_tasks(month):
-    tasks = await api.fetch_deactive_tasks(month)
-    list_tasks(tasks, [])
+async def show_deactive_tasks(month_ts, workspace, server_name, port):
+    tasks = await api.fetch_deactive_tasks(month_ts, server_name, port)
+    list_tasks(tasks, workspace, [])
 
-def list_tasks(tasks, filters):
+def list_tasks(tasks, workspace, filters):
+    print(f"Workspace: {workspace}")
     headers = ["ID", "Title", "Status", "Project",
                "Tags", "assign", "Rank", "Due"]
     table_rows = []
@@ -197,15 +206,24 @@ def list_tasks(tasks, filters):
             assign =    Fore.YELLOW + str(assign)    + Style.RESET_ALL
             rank =      Fore.YELLOW + str(rank)      + Style.RESET_ALL
             due =       Fore.YELLOW + str(due)       + Style.RESET_ALL
+        elif status == "stop":
+            id =        Fore.RED + str(id)           + Style.RESET_ALL
+            title =     Fore.RED + str(title)        + Style.RESET_ALL
+            status =    Fore.RED + str(status)       + Style.RESET_ALL
+            project =   Fore.RED + str(project)      + Style.RESET_ALL
+            tags =      Fore.RED + str(tags)         + Style.RESET_ALL
+            assign =    Fore.RED + str(assign)       + Style.RESET_ALL
+            rank =      Fore.RED + str(rank)         + Style.RESET_ALL
+            due =       Fore.RED + str(due)          + Style.RESET_ALL
         else:
-            #id =        Style.DIM  + str(id)        + Style.RESET_ALL
-            #title =     Style.DIM  + str(title)     + Style.RESET_ALL
-            #status =    Style.DIM  + str(status)    + Style.RESET_ALL
-            project =    Style.DIM  + str(project)   + Style.RESET_ALL
-            tags =       Style.DIM  + str(tags)      + Style.RESET_ALL
-            #assign =    Style.DIM  + str(assign)    + Style.RESET_ALL
-            rank =       Style.DIM  + str(rank)      + Style.RESET_ALL
-            due =        Style.DIM  + str(due)       + Style.RESET_ALL
+            #id =       Style.DIM  + str(id)         + Style.RESET_ALL
+            #title =    Style.DIM  + str(title)      + Style.RESET_ALL
+            #status =   Style.DIM  + str(status)     + Style.RESET_ALL
+            project =   Style.DIM  + str(project)    + Style.RESET_ALL
+            tags =      Style.DIM  + str(tags)       + Style.RESET_ALL
+            #assign =   Style.DIM  + str(assign)     + Style.RESET_ALL
+            rank =      Style.DIM  + str(rank)       + Style.RESET_ALL
+            due =       Style.DIM  + str(due)        + Style.RESET_ALL
 
         rank_value = task["rank"] if task["rank"] is not None else 0
         row = [
@@ -224,17 +242,17 @@ def list_tasks(tasks, filters):
              sorted(table_rows, key=lambda item: item[0], reverse=True)]
     print(tabulate(table, headers=headers))
 
-async def show_task(refid):
-    task = await api.fetch_task(refid)
+async def show_task(refid, server_name, port):
+    task = await api.fetch_task(refid, server_name, port)
     task_table(task)
     return 0
 
-async def show_archive_task(id, month):
-    task = await api.fetch_archive_task(id, month)
+async def show_archive_task(ref_id, month_ts, server_name, port):
+    task = await api.fetch_archive_task(ref_id, month_ts, server_name, port)
     task_table(task)
     return 0
 
-def tabulate_task(task):
+def tabulate_task(task, prompt):
     tags = " ".join(f"+{tag}" for tag in task["tags"])
     assign = " ".join(f"@{assign}" for assign in task["assign"])
     project = " ".join(f"{project}" for project in task["project"])
@@ -249,13 +267,19 @@ def tabulate_task(task):
     dt = lib.util.unix_to_datetime(task["created_at"])
     created_at = dt.strftime("%H:%M %d/%m/%y")
 
+    if prompt:
+        task["ref_id"] = ''
+        task["workspace"] = ''
+
     table = [
+        ["RefID:", task["ref_id"]],
         ["Title:", task["title"]],
+        ["Workspace:", task["workspace"]],
         ["Description:", task["desc"]],
         ["Status:", task["state"]],
         ["Project:", project],
         ["Tags:", tags],
-        ["assign:", assign],
+        ["Assign:", assign],
         ["Rank:", rank],
         ["Due:", due],
         ["Created:", created_at],
@@ -263,7 +287,7 @@ def tabulate_task(task):
     return tabulate(table, headers=["Attribute", "Value"])
 
 def task_table(task):
-    print(tabulate_task(task))
+    print(tabulate_task(task, False))
 
     table = []
     for event in task["events"]:
@@ -277,23 +301,13 @@ def task_table(task):
                 "",
                 Style.DIM + when + Style.RESET_ALL
             ])
-        elif act == "tags":
+        elif act == "tags" or act == "assign":
             val = f"{args}"
-            tags_event = f"{who} added {val} to {act}"
+            event = f"{who} added {val} to {act}"
             if val[0] == "-":
-                tags_event = f"{who} removed {val} from {act}"
+                event = f"{who} removed {val} from {act}"
             table.append([
-                Style.DIM + tags_event + Style.RESET_ALL,
-                "",
-                Style.DIM + when + Style.RESET_ALL
-            ])
-        elif act == "assign":
-            val = f"{args}"
-            assign_event = f"{who} added {val} to {act}"
-            if val[0] == "-":
-                assign_event = f"{who} removed {val} from {act}"
-            table.append([
-                Style.DIM + assign_event + Style.RESET_ALL,
+                Style.DIM + event + Style.RESET_ALL,
                 "",
                 Style.DIM + when + Style.RESET_ALL
             ])
@@ -315,6 +329,8 @@ def task_table(task):
                 "",
                 Style.DIM + when + Style.RESET_ALL
             ])
+        elif act == "comment":
+            continue
         else:
             table.append([
                 Style.DIM + f"{who} changed {act} to {args}" + Style.RESET_ALL,
@@ -351,7 +367,7 @@ def wrap_comment(comment, width):
         lines.append(comment[line_start:])
     return '\n'.join(lines)
 
-async def modify_task(refid, args):
+async def modify_task(refid, args, server_name, port):
     changes = {}    
     for arg in args:
         # This must go before the next elif block
@@ -374,15 +390,15 @@ async def modify_task(refid, args):
             changes[str(attr)] = val
         else:
             print(f"warning: unknown arg '{arg}'. Skipping...", file=sys.stderr)
-    await api.modify_task(refid, changes)
+    await api.modify_task(refid, changes, server_name, port)
     return 0
 
-async def change_task_status(refid, status):
-    task = await api.fetch_task(refid)
+async def change_task_status(refid, status, server_name, port):
+    task = await api.fetch_task(refid, server_name, port)
     assert task is not None
     title = task["title"]
 
-    if not await api.change_task_status(refid, status):
+    if not await api.change_task_status(refid, status, server_name, port):
         return -1
 
     if status == "start":
@@ -396,16 +412,16 @@ async def change_task_status(refid, status):
 
     return 0
 
-async def comment(refid, args):
+async def comment(refid, args, server_name, port):
     if not args:
         comment = prompt_comment_text()
     else:
         comment = " ".join(args)
 
-    if not await api.add_task_comment(refid, comment):
+    if not await api.add_task_comment(refid, comment, server_name, port):
         return -1
 
-    task = await api.fetch_task(refid)
+    task = await api.fetch_task(refid, server_name, port)
     assert task is not None
     title = task["title"]
     print(f"Commented on task'{title}'")
@@ -437,11 +453,6 @@ def is_filtered(task, filters):
                     sys.exit(-1)
                 if task["state"] != val:
                     return True
-            elif attr == "project":
-                if task["project"] is None:
-                    return True
-                if not task["project"].startswith(val):
-                    return True
             else:
                 val = convert_attr_val(attr, val)
                 if task[attr] != val:
@@ -462,20 +473,33 @@ def map_ids(task_ids, ref_ids):
     return dict(zip(task_ids, ref_ids))
 
 async def main():
-    refids = await api.get_ref_ids()
+    val = str('127.0.0.1:23330')
+
+    for i in range(1, len(sys.argv)):
+        if sys.argv[i] == "-e":
+            val = sys.argv[i+1]
+            del sys.argv[i]
+            del sys.argv[i]
+            break
+    
+    server_name, port = val.split(':')
+    
+    refids = await api.get_ref_ids(server_name, port)
     free_ids = []
     tasks = []
     for refid in refids:
-        tasks.append(await api.fetch_task(refid))
+        tasks.append(await api.fetch_task(refid, server_name, port))
         free_ids.append(find_free_id(free_ids))
 
-    data = map_ids(free_ids, refids)    
+    data = map_ids(free_ids, refids)
+
+    workspace = await api.get_workspace(server_name, port)
 
     if len(sys.argv) == 1:
-        await show_active_tasks()
+        await show_active_tasks(workspace, server_name, port)
         return 0
 
-    if sys.argv[1] in ["-h", "--help", "help"]:
+    if any(x in ["-h", "--help", "help"] for x in sys.argv):
         print('''USAGE:
     tau [OPTIONS] [SUBCOMMAND]
 
@@ -490,44 +514,106 @@ SUBCOMMANDS:
     pause      Pause task(s).
     start      Start task(s).
     stop       Stop task(s).
+    switch     Switch between configured workspaces.
     help       Show this help text.
 
-Example:
+Examples:
     tau add task one due:0312 rank:1.022 project:zk +lol @sk desc:desc +abc +def
-    tau add task two  rank:1.044 project:cr +mol @up desc:desc2
+    tau add task two rank:1.044 project:cr +mol @up desc:desc2
     tau add task three due:0512 project:zy +trol @kk desc:desc3 +who
     tau 1 modify @upgr due:1112 rank:none
+    tau 1 modify -@up
     tau 1 modify -mol -xx
     tau 2 start
     tau 1 comment "this is an awesome comment"
     tau 2 pause
+    tau switch darkfi
     tau archive         # current month's completed tasks
     tau archive 1122    # completed tasks in Nov. 2022
-    tau 0 archive 1122  # show info of task completed in Nov. 2022
+    tau archive 1 1122  # show info of task completed in Nov. 2022
 ''')
         return 0
     elif sys.argv[1] == "add":
         task_args = sys.argv[2:]
-        await add_task(task_args)
+        await add_task(task_args, server_name, port)
         return 0
     elif sys.argv[1] == "archive":
-        if len(sys.argv) > 2:
-            if len(sys.argv[2]) == 4:
-                month = sys.argv[2]
+        if len(sys.argv) == 4:
+            if len(sys.argv[3]) == 4:
+                month = sys.argv[3]
+                month_ts = lib.util.month_to_unix(month)
             else:
                 print("error: month must be of format MMYY")
                 return -1
-        else:
-            month = lib.util.current_month()
+                
+            archive_refids = await api.get_archive_ref_ids(month_ts, server_name, port)
+            afree_ids = []
+            atasks = []
+            for arefid in archive_refids:
+                atasks.append(await api.fetch_archive_task(arefid, month_ts, server_name, port))
+                afree_ids.append(find_free_id(afree_ids))
 
-        await show_deactive_tasks(month)
+            adata = map_ids(afree_ids, archive_refids)
+
+            if len(sys.argv[2]) < 4:
+                try:
+                    tid = int(sys.argv[2])
+                    arefid = adata[tid]
+                except (ValueError, KeyError):
+                    print("error: invalid ID", file=sys.stderr)
+                    return -1
+            else:
+                print("error: invalid ID", file=sys.stderr)
+                return -1
+            
+            
+            if (errc := await show_archive_task(arefid, month_ts, server_name, port)) < 0:
+                return errc
+        elif len(sys.argv) == 3:
+            if len(sys.argv[2]) == 4:
+                month = sys.argv[2]
+                month_ts = lib.util.month_to_unix(month)
+                await show_deactive_tasks(month_ts, workspace, server_name, port)
+            elif len(sys.argv[2]) < 4:
+                month_ts = lib.util.month_to_unix()
+                archive_refids = await api.get_archive_ref_ids(month_ts, server_name, port)
+                afree_ids = []
+                atasks = []
+                for arefid in archive_refids:
+                    atasks.append(await api.fetch_archive_task(arefid, month_ts, server_name, port))
+                    afree_ids.append(find_free_id(afree_ids))
+
+                adata = map_ids(afree_ids, archive_refids)
+
+                try:
+                    tid = int(sys.argv[2])
+                    arefid = adata[tid]
+                except (ValueError, KeyError):
+                    print("error: invalid ID", file=sys.stderr)
+                    return -1
+                
+                if (errc := await show_archive_task(arefid, month_ts, server_name, port)) < 0:
+                    return errc
+            else:
+                print("error: usage format is: tau archive [ID] [MONTH]")
+                return -1
+        else:
+            month_ts = lib.util.month_to_unix()
+            await show_deactive_tasks(month_ts, workspace, server_name, port)
+        
         return 0
     elif sys.argv[1] == "show":
         if len(sys.argv) > 2:
             filters = sys.argv[2:]
-            list_tasks(tasks, filters)
+            list_tasks(tasks, workspace, filters)
         else:
-            await show_active_tasks()
+            await show_active_tasks(workspace, server_name, port)
+        return 0
+    elif sys.argv[1] == "switch":
+        if not await api.switch_workspace(sys.argv[2], server_name, port):
+            print(f"Error: Workspace \"{sys.argv[2]}\" is not configured.")
+        else:
+            print(f"You are now on \"{sys.argv[2]}\" workspace.")
         return 0
 
     try:
@@ -540,34 +626,23 @@ Example:
     args = sys.argv[2:]
 
     if not args:
-        return await show_task(refid)
+        return await show_task(refid, server_name, port)
 
     subcmd, args = args[0], args[1:]
 
     if subcmd == "modify":
-        if (errc := await modify_task(refid, args)) < 0:
+        if (errc := await modify_task(refid, args, server_name, port)) < 0:
             return errc
         time.sleep(0.1)
-        return await show_task(refid)
-    elif subcmd in ["start", "pause", "stop", "cancel"]:
+        return await show_task(refid, server_name, port)
+    elif subcmd in ["start", "pause", "stop", "open"]:
         status = subcmd
-        if (errc := await change_task_status(refid, status)) < 0:
+        if (errc := await change_task_status(refid, status, server_name, port)) < 0:
             return errc
     elif subcmd == "comment":
-        if (errc := await comment(refid, args)) < 0:
+        if (errc := await comment(refid, args, server_name, port)) < 0:
             return errc
-    elif subcmd == "archive":
-        if len(args) == 1:
-            if len(args[0]) == 4:
-                month = args[0]
-            else:
-                print("Error: month must be of format MMYY")
-                return -1
-        else:
-            month = lib.util.current_month()
-
-        if (errc := await show_archive_task(refid, month)) < 0:
-            return errc
+        time.sleep(0.2)
     else:
         print(f"error: unknown subcommand '{subcmd}'")
         return -1

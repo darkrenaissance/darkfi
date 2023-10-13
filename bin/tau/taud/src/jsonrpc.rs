@@ -65,6 +65,7 @@ impl RequestHandler for JsonRpcInterface {
         let rep = match req.method.as_str() {
             "add" => self.add(req.params).await,
             "get_ref_ids" => self.get_ref_ids(req.params).await,
+            "get_archive_ref_ids" => self.get_archive_ref_ids(req.params).await,
             "modify" => self.modify(req.params).await,
             "set_state" => self.set_state(req.params).await,
             "set_comment" => self.set_comment(req.params).await,
@@ -73,7 +74,8 @@ impl RequestHandler for JsonRpcInterface {
             "get_ws" => self.get_ws(req.params).await,
             "export" => self.export_to(req.params).await,
             "import" => self.import_from(req.params).await,
-            "get_stop_tasks" => self.get_stop_tasks(req.params).await,
+            "fetch_deactive_tasks" => self.fetch_deactive_tasks(req.params).await,
+            "fetch_archive_task" => self.fetch_archive_task(req.params).await,
 
             "ping" => return self.pong(req.id, req.params).await,
             "dnet.subscribe_events" => return self.dnet_subscribe_events(req.id, req.params).await,
@@ -282,6 +284,33 @@ impl JsonRpcInterface {
     }
 
     // RPCAPI:
+    // List tasks
+    // --> {"jsonrpc": "2.0", "method": "get_ids", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": [task_id, ...], "id": 1}
+    async fn get_archive_ref_ids(&self, params: JsonValue) -> TaudResult<JsonValue> {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        debug!(target: "tau", "JsonRpc::get_archive_ref_ids() params {:?}", params);
+
+        let month = match params[0].get::<String>() {
+            Some(u64_str) => match u64_str.parse::<u64>() {
+                Ok(v) => Some(Timestamp(v)),
+                //Err(e) => return Err(TaudError::InvalidData(e.to_string())),
+                Err(_) => None,
+            },
+
+            None => None,
+        };
+
+        let ws = self.workspace.lock().await.clone();
+        let tasks = MonthTasks::load_stop_tasks(&self.dataset_path, ws, month.as_ref())?;
+
+        let task_ref_ids: Vec<JsonValue> =
+            tasks.iter().map(|task| JsonValue::String(task.get_ref_id())).collect();
+
+        Ok(JsonValue::Array(task_ref_ids))
+    }
+
+    // RPCAPI:
     // Modify task and returns `true` upon success.
     // --> {"jsonrpc": "2.0", "method": "modify", "params": [task_id, {"title": "new title"} ], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 1}
@@ -384,11 +413,11 @@ impl JsonRpcInterface {
 
     // RPCAPI:
     // Get all tasks.
-    // --> {"jsonrpc": "2.0", "method": "get_stop_tasks", "params": [task_id], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "fetch_deactive_tasks", "params": [task_id], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "task", "id": 1}
-    async fn get_stop_tasks(&self, params: JsonValue) -> TaudResult<JsonValue> {
+    async fn fetch_deactive_tasks(&self, params: JsonValue) -> TaudResult<JsonValue> {
         let params = params.get::<Vec<JsonValue>>().unwrap();
-        debug!(target: "tau", "JsonRpc::get_stop_tasks() params {:?}", params);
+        debug!(target: "tau", "JsonRpc::fetch_deactive_tasks() params {:?}", params);
 
         if params.len() != 1 || !params[0].is_string() {
             return Err(TaudError::InvalidData("len of params should be 1".into()))
@@ -410,6 +439,40 @@ impl JsonRpcInterface {
         let tasks: Vec<JsonValue> = tasks.iter().map(|x| x.into()).collect();
 
         Ok(JsonValue::Array(tasks))
+    }
+
+    async fn fetch_archive_task(&self, params: JsonValue) -> TaudResult<JsonValue> {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        debug!(target: "tau", "JsonRpc::fetch_archive_task() params {:?}", params);
+
+        if params.len() != 2 || !params[0].is_string() || !params[1].is_string() {
+            return Err(TaudError::InvalidData("len of params should be 2".into()))
+        }
+
+        let ref_id = params[0].get::<String>().unwrap();
+
+        let month = match params[1].get::<String>() {
+            Some(u64_str) => match u64_str.parse::<u64>() {
+                Ok(v) => Some(Timestamp(v)),
+                //Err(e) => return Err(TaudError::InvalidData(e.to_string())),
+                Err(_) => None,
+            },
+
+            None => None,
+        };
+
+        let ws = self.workspace.lock().await.clone();
+
+        let mut tasks = MonthTasks::load_stop_tasks(&self.dataset_path, ws, month.as_ref())?;
+        tasks.retain(|x| x.ref_id == *ref_id);
+
+        if tasks.len() != 1 {
+            return Err(TaudError::InvalidData("Must return a single value".into()))
+        }
+
+        let task: JsonValue = (&tasks[0]).into();
+
+        Ok(task)
     }
 
     // RPCAPI:

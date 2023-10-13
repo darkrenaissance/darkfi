@@ -1,5 +1,5 @@
 import random, time
-from datetime import datetime
+from datetime import UTC, datetime
 
 def random_blob_idx():
     return "%030x" % random.randrange(16**30)
@@ -7,12 +7,11 @@ def random_blob_idx():
 def datetime_to_unix(dt):
     return int(time.mktime(dt.timetuple()))
 def now():
-    return datetime_to_unix(datetime.now())
+    return datetime_to_unix(datetime.now(tz=UTC))
 
-# returns MMYY format
-def current_month():
-    today = datetime.today()
-    return today.strftime("%m%y")
+def month_to_unix(month=None):
+    month_year = month if month is not None else datetime.utcnow().strftime("%m%y")
+    return datetime.strptime(month_year,"%m%y").timestamp()
 
 def unix_to_datetime(timestamp):
     return datetime.utcfromtimestamp(int(timestamp))

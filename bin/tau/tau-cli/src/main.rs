@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, process::exit, sync::Arc};
+use std::{process::exit, sync::Arc};
 
 use clap::{Parser, Subcommand};
 use log::{error, info};
@@ -41,7 +41,7 @@ use drawdown::{drawdown, to_naivedate};
 use filter::{apply_filter, get_ids, no_filter_warn};
 use primitives::{task_from_cli, State, TaskEvent};
 use util::{due_as_timestamp, prompt_text};
-use view::{find_free_id, print_task_info, print_task_list};
+use view::{print_task_info, print_task_list};
 
 use taud::task_info::TaskInfo;
 
@@ -181,43 +181,28 @@ fn main() -> Result<()> {
         // If not provided we use get_ids() to get them from the daemon.
         let ids = get_ids(&mut filters)?;
         let ids_clone = ids.clone();
-        let mut tasks_local_id = HashMap::new();
+        let task_ids = if ids.is_empty() { tau.get_ids().await? } else { ids };
 
-        let task_ref_ids = tau.get_ref_ids().await?;
-
-        let tasks = if filters.contains(&"state:stop".to_string()) ||
+        let mut tasks = if filters.contains(&"state:stop".to_string()) ||
             filters.contains(&"all".to_string())
         {
             tau.get_stop_tasks(None).await?
         } else {
             vec![]
         };
-
-        let mut store_ids = vec![];
-
-        for task in tasks.clone() {
-            let task_id = find_free_id(&store_ids);
-            tasks_local_id.insert(task_id as usize, task);
-            store_ids.push(task_id);
-        }
-
-        for refid in task_ref_ids {
-            let task_id = find_free_id(&store_ids);
-            let element = tau.get_task_by_ref_id(&refid).await?;
-            tasks_local_id.insert(task_id as usize, element);
-            store_ids.push(task_id);
+        for id in task_ids {
+            tasks.push(tau.get_task_by_id(id).await?);
         }
 
         if ids_clone.len() == 1 && args.command.is_none() {
-            let id_itself = ids_clone[0] as usize;
-            let tsk = tasks_local_id.get(&id_itself).unwrap();
-            print_task_info(id_itself, tsk.clone())?;
+            let tsk = tasks[0].clone();
+            print_task_info(tsk)?;
 
             return Ok(())
         }
 
         for filter in filters {
-            apply_filter(&mut tasks_local_id.clone().into_values().collect(), &filter);
+            apply_filter(&mut tasks, &filter);
         }
 
         // Parse subcommands
@@ -241,8 +226,9 @@ fn main() -> Result<()> {
 
                     let title = task.clone().title;
 
-                    if tau.add(task).await? {
-                        println!("Created task \"{}\"", title);
+                    let task_id = tau.add(task).await?;
+                    if task_id > 0 {
+                        println!("Created task {} \"{}\"", task_id, title);
                     }
                     Ok(())
                 }
@@ -251,14 +237,12 @@ fn main() -> Result<()> {
                     if args.filters.is_empty() {
                         no_filter_warn()
                     }
-
                     let base_task = task_from_cli(values)?;
-                    for id in ids_clone {
-                        let task = tasks_local_id.get(&(id as usize)).unwrap();
-                        let res = tau.modify(&task.ref_id, base_task.clone()).await?;
+                    for task in tasks.clone() {
+                        let res = tau.update(task.id, base_task.clone()).await?;
                         if res {
-                            let tsk = tau.get_task_by_ref_id(&task.ref_id).await?;
-                            print_task_info(id as usize, tsk)?;
+                            let tsk = tau.get_task_by_id(task.id).await?;
+                            print_task_info(tsk)?;
                         }
                     }
 
@@ -269,12 +253,10 @@ fn main() -> Result<()> {
                     if args.filters.is_empty() {
                         no_filter_warn()
                     }
-
                     let state = State::Start;
-                    for id in ids_clone {
-                        let task = tasks_local_id.get(&(id as usize)).unwrap();
-                        if tau.set_state(&task.ref_id, &state).await? {
-                            println!("Started task: {} with refid: {}", id, task.ref_id);
+                    for task in tasks {
+                        if tau.set_state(task.id, &state).await? {
+                            println!("Started task: {:?}", task.id);
                         }
                     }
 
@@ -285,12 +267,10 @@ fn main() -> Result<()> {
                     if args.filters.is_empty() {
                         no_filter_warn()
                     }
-
                     let state = State::Open;
-                    for id in ids_clone {
-                        let task = tasks_local_id.get(&(id as usize)).unwrap();
-                        if tau.set_state(&task.ref_id, &state).await? {
-                            println!("Opened task: {} with refid: {}", id, task.ref_id);
+                    for task in tasks {
+                        if tau.set_state(task.id, &state).await? {
+                            println!("Opened task: {:?}", task.id);
                         }
                     }
 
@@ -301,12 +281,10 @@ fn main() -> Result<()> {
                     if args.filters.is_empty() {
                         no_filter_warn()
                     }
-
                     let state = State::Pause;
-                    for id in ids_clone {
-                        let task = tasks_local_id.get(&(id as usize)).unwrap();
-                        if tau.set_state(&task.ref_id, &state).await? {
-                            println!("Paused task: {} with refid: {}", id, task.ref_id);
+                    for task in tasks {
+                        if tau.set_state(task.id, &state).await? {
+                            println!("Paused task: {:?}", task.id);
                         }
                     }
 
@@ -317,12 +295,10 @@ fn main() -> Result<()> {
                     if args.filters.is_empty() {
                         no_filter_warn()
                     }
-
                     let state = State::Stop;
-                    for id in ids_clone {
-                        let task = tasks_local_id.get(&(id as usize)).unwrap();
-                        if tau.set_state(&task.ref_id, &state).await? {
-                            println!("Stopped task: {} with refid: {}", id, task.ref_id);
+                    for task in tasks {
+                        if tau.set_state(task.id, &state).await? {
+                            println!("Stopped task: {}", task.id);
                         }
                     }
 
@@ -333,9 +309,7 @@ fn main() -> Result<()> {
                     if args.filters.is_empty() {
                         no_filter_warn()
                     }
-
-                    for id in ids_clone {
-                        let task = tasks_local_id.get(&(id as usize)).unwrap();
+                    for task in tasks {
                         let comment = if content.is_empty() {
                             prompt_text(task.clone(), "comment")?
                         } else {
@@ -347,20 +321,19 @@ fn main() -> Result<()> {
                             exit(1)
                         }
 
-                        let res = tau.set_comment(&task.ref_id, comment.unwrap().trim()).await?;
+                        let res = tau.set_comment(task.id, comment.unwrap().trim()).await?;
                         if res {
-                            let tsk = tau.get_task_by_ref_id(&task.ref_id).await?;
-                            print_task_info(id as usize, tsk)?;
+                            let tsk = tau.get_task_by_id(task.id).await?;
+                            print_task_info(tsk)?;
                         }
                     }
                     Ok(())
                 }
 
                 TauSubcommand::Info => {
-                    for id in ids_clone {
-                        let task = tasks_local_id.get(&(id as usize)).unwrap();
-                        let task = tau.get_task_by_ref_id(&task.ref_id).await?;
-                        print_task_info(id as usize, task)?;
+                    for task in tasks {
+                        let task = tau.get_task_by_id(task.id).await?;
+                        print_task_info(task)?;
                     }
                     Ok(())
                 }
@@ -412,9 +385,9 @@ fn main() -> Result<()> {
                             drawdown(date, tasks, assignee)?;
                         }
                         None => {
-                            let _ws = tau.get_ws().await?;
-                            let _tasks = tau.get_stop_tasks(None).await?;
-                            // print_task_list(tasks, ws)?;
+                            let ws = tau.get_ws().await?;
+                            let tasks = tau.get_stop_tasks(None).await?;
+                            print_task_list(tasks, ws)?;
                         }
                     }
 
@@ -423,12 +396,12 @@ fn main() -> Result<()> {
 
                 TauSubcommand::List => {
                     let ws = tau.get_ws().await?;
-                    print_task_list(tasks_local_id, ws)
+                    print_task_list(tasks, ws)
                 }
             },
             None => {
                 let ws = tau.get_ws().await?;
-                print_task_list(tasks_local_id, ws)
+                print_task_list(tasks, ws)
             }
         }?;
 

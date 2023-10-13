@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
-
 use darkfi::{rpc::jsonrpc::JsonRequest, Result};
 use log::debug;
 use tinyjson::JsonValue;
@@ -33,7 +31,7 @@ impl Tau {
     }
 
     /// Add a new task.
-    pub async fn add(&self, task: BaseTask) -> Result<bool> {
+    pub async fn add(&self, task: BaseTask) -> Result<u32> {
         let mut params = vec![
             JsonValue::String(task.title.clone()),
             JsonValue::Array(task.tags.iter().map(|x| JsonValue::String(x.clone())).collect()),
@@ -57,49 +55,48 @@ impl Tau {
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);
-        Ok(*rep.get::<bool>().unwrap())
+        Ok(*rep.get::<f64>().unwrap() as u32)
     }
 
     /// Get current open tasks ids.
-    pub async fn get_ref_ids(&self) -> Result<Vec<String>> {
-        let req = JsonRequest::new("get_ref_ids", vec![]);
+    pub async fn get_ids(&self) -> Result<Vec<u32>> {
+        let req = JsonRequest::new("get_ids", vec![]);
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);
 
         let mut ret = vec![];
         for i in rep.get::<Vec<JsonValue>>().unwrap() {
-            ret.push(i.get::<String>().unwrap().to_string())
+            ret.push(*i.get::<f64>().unwrap() as u32)
         }
 
         Ok(ret)
     }
 
-    /// modify existing task given it's ID and some params.
-    pub async fn modify(&self, ref_id: &str, task: BaseTask) -> Result<bool> {
-        let mut params = HashMap::new();
-
-        let map = |x: &String| JsonValue::String(x.clone().to_owned());
-        params.insert("title".into(), JsonValue::String(task.title.clone()));
-        params.insert("desc".into(), JsonValue::String(task.desc.unwrap_or("".to_string())));
-        params.insert("tags".into(), JsonValue::Array(task.tags.iter().map(map).collect()));
-        params.insert("assign".into(), JsonValue::Array(task.assign.iter().map(map).collect()));
-        params.insert("project".into(), JsonValue::Array(task.project.iter().map(map).collect()));
+    /// Update existing task given it's ID and some params.
+    pub async fn update(&self, id: u32, task: BaseTask) -> Result<bool> {
+        let mut params = vec![
+            JsonValue::String(task.title.clone()),
+            JsonValue::Array(task.tags.iter().map(|x| JsonValue::String(x.clone())).collect()),
+            JsonValue::String(task.desc.unwrap_or("".to_string())),
+            JsonValue::Array(task.assign.iter().map(|x| JsonValue::String(x.clone())).collect()),
+            JsonValue::Array(task.project.iter().map(|x| JsonValue::String(x.clone())).collect()),
+        ];
 
         let due = if let Some(num) = task.due {
             JsonValue::String(num.to_string())
         } else {
             JsonValue::Null
         };
-        params.insert("due".into(), due);
+        params.push(due);
 
         let rank =
             if let Some(num) = task.rank { JsonValue::Number(num.into()) } else { JsonValue::Null };
-        params.insert("rank".into(), rank);
+        params.push(rank);
 
         let req = JsonRequest::new(
-            "modify",
-            vec![JsonValue::String(ref_id.into()), JsonValue::Object(params)],
+            "update",
+            vec![JsonValue::Number(id.into()), JsonValue::Array(params)],
         );
         let rep = self.rpc_client.request(req).await?;
 
@@ -108,10 +105,10 @@ impl Tau {
     }
 
     /// Set the state for a task.
-    pub async fn set_state(&self, ref_id: &str, state: &State) -> Result<bool> {
+    pub async fn set_state(&self, id: u32, state: &State) -> Result<bool> {
         let req = JsonRequest::new(
             "set_state",
-            vec![JsonValue::String(ref_id.into()), JsonValue::String(state.to_string())],
+            vec![JsonValue::Number(id.into()), JsonValue::String(state.to_string())],
         );
         let rep = self.rpc_client.request(req).await?;
 
@@ -120,10 +117,10 @@ impl Tau {
     }
 
     /// Set a comment for a task.
-    pub async fn set_comment(&self, ref_id: &str, content: &str) -> Result<bool> {
+    pub async fn set_comment(&self, id: u32, content: &str) -> Result<bool> {
         let req = JsonRequest::new(
             "set_comment",
-            vec![JsonValue::String(ref_id.into()), JsonValue::String(content.to_string())],
+            vec![JsonValue::Number(id.into()), JsonValue::String(content.to_string())],
         );
         let rep = self.rpc_client.request(req).await?;
 
@@ -132,8 +129,8 @@ impl Tau {
     }
 
     /// Get task data by its ID.
-    pub async fn get_task_by_ref_id(&self, ref_id: &str) -> Result<TaskInfo> {
-        let req = JsonRequest::new("get_task_by_ref_id", vec![JsonValue::String(ref_id.into())]);
+    pub async fn get_task_by_id(&self, id: u32) -> Result<TaskInfo> {
+        let req = JsonRequest::new("get_task_by_id", vec![JsonValue::Number(id.into())]);
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);

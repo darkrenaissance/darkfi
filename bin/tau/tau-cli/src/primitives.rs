@@ -37,6 +37,7 @@ impl From<BaseTask> for TaskInfo {
         Self {
             ref_id: String::default(),
             workspace: String::default(),
+            id: u32::default(),
             title: value.title,
             tags: value.tags,
             desc: String::default(),
