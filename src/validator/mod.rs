@@ -306,7 +306,10 @@ impl Validator {
         let last = finalized.pop().unwrap();
 
         // Append finalized blocks
-        info!(target: "validator::finalization", "Finalizing {} proposals...", finalized.len());
+        info!(target: "validator::finalization", "Finalizing {} proposals:", finalized.len());
+        for block in &finalized {
+            info!(target: "validator::finalization", "\t{}", block.hash()?);
+        }
         self.add_blocks(&finalized).await?;
 
         // Rebuild best fork using last proposal
@@ -373,7 +376,7 @@ impl Validator {
 
             // Update PoW module
             if block.header.version == 1 {
-                module.append(block.header.timestamp.0, &module.next_difficulty());
+                module.append(block.header.timestamp.0, &module.next_difficulty()?);
             }
 
             // Store block transactions
@@ -562,7 +565,7 @@ impl Validator {
 
             // Update PoW module
             if block.header.version == 1 {
-                module.append(block.header.timestamp.0, &module.next_difficulty());
+                module.append(block.header.timestamp.0, &module.next_difficulty()?);
             }
 
             // Use last inserted block as next iteration previous

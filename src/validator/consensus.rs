@@ -22,7 +22,7 @@ use darkfi_sdk::{
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
-use log::{error, info};
+use log::{debug, error, info};
 use rand::rngs::OsRng;
 
 use crate::{
@@ -194,6 +194,8 @@ impl Consensus {
     /// Given a proposal, the node verifys it and finds which fork it extends.
     /// If the proposal extends the canonical blockchain, a new fork chain is created.
     pub async fn append_proposal(&mut self, proposal: &Proposal) -> Result<()> {
+        info!(target: "validator::consensus::append_proposal", "Appending proposal {}", proposal.hash);
+
         // Verify proposal and grab corresponding fork
         let (mut fork, index) = verify_proposal(self, proposal).await?;
 
@@ -206,7 +208,7 @@ impl Consensus {
             1 => {
                 // Update PoW module
                 fork.module
-                    .append(proposal.block.header.timestamp.0, &fork.module.next_difficulty());
+                    .append(proposal.block.header.timestamp.0, &fork.module.next_difficulty()?);
                 // and generate next PoW slot for this specific fork
                 fork.generate_pow_slot()?;
             }
@@ -342,7 +344,7 @@ impl Consensus {
 
             // Update PoW module
             if block.header.version == 1 {
-                fork.module.append(block.header.timestamp.0, &fork.module.next_difficulty());
+                fork.module.append(block.header.timestamp.0, &fork.module.next_difficulty()?);
             }
 
             // Use last inserted block as next iteration previous
@@ -370,7 +372,7 @@ impl Consensus {
     pub async fn finalization(&mut self) -> Result<Vec<BlockInfo>> {
         // Set last slot finalization check occured to current slot
         let slot = self.time_keeper.current_slot();
-        info!(target: "validator::consensus::finalization", "Started finalization check for slot: {}", slot);
+        debug!(target: "validator::consensus::finalization", "Started finalization check for slot: {}", slot);
         self.checked_finalization = slot;
 
         // Grab best fork
@@ -380,7 +382,7 @@ impl Consensus {
         // Check its length
         let length = fork.proposals.len();
         if length < FINALIZATION_SECURITY_THRESSHOLD {
-            info!(target: "validator::consensus::finalization", "Nothing to finalize yet, best fork size: {}", length);
+            debug!(target: "validator::consensus::finalization", "Nothing to finalize yet, best fork size: {}", length);
             return Ok(vec![])
         }
 

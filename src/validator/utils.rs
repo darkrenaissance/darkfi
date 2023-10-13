@@ -149,3 +149,25 @@ pub fn block_rank(
 
     Ok(rank)
 }
+
+/// Auxiliary function to calculate the middle value between provided u64 numbers
+pub fn get_mid(a: u64, b: u64) -> u64 {
+    (a / 2) + (b / 2) + ((a - 2 * (a / 2)) + (b - 2 * (b / 2))) / 2
+}
+
+/// Auxiliary function to calculate the median of a given `Vec<u64>`.
+/// The function sorts the vector internally.
+pub fn median(mut v: Vec<u64>) -> u64 {
+    if v.len() == 1 {
+        return v[0]
+    }
+
+    let n = v.len() / 2;
+    v.sort_unstable();
+
+    if v.len() % 2 == 0 {
+        v[n]
+    } else {
+        get_mid(v[n - 1], v[n])
+    }
+}

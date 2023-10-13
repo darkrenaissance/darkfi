@@ -327,6 +327,18 @@ pub enum Error {
     #[error("Miner task stopped")]
     MinerTaskStopped,
 
+    #[error("Calculated total work is zero")]
+    PoWTotalWorkIsZero,
+
+    #[error("Erroneous cutoff calculation")]
+    PoWCuttofCalculationError,
+
+    #[error("Provided timestamp is invalid")]
+    PoWInvalidTimestamp,
+
+    #[error("Provided output hash is greater than current target")]
+    PoWInvalidOutHash,
+
     // ===============
     // Database errors
     // ===============

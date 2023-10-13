@@ -143,7 +143,7 @@ impl Harness {
 
                 // Update PoW module
                 if block.header.version == 1 {
-                    node.module.append(block.header.timestamp.0, &node.module.next_difficulty());
+                    node.module.append(block.header.timestamp.0, &node.module.next_difficulty()?);
                 }
             }
 

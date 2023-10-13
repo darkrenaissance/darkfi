@@ -345,7 +345,7 @@ pub fn validate_blockchain(blockchain: &Blockchain, pow_target: Option<usize>) -
         validate_block(full_block, &full_blocks[0], expected_reward, &module)?;
         // Update PoW module
         if full_block.header.version == 1 {
-            module.append(full_block.header.timestamp.0, &module.next_difficulty());
+            module.append(full_block.header.timestamp.0, &module.next_difficulty()?);
         }
     }
 

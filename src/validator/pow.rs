@@ -29,7 +29,7 @@ use darkfi_sdk::{
     num_traits::{One, Zero},
     pasta::pallas,
 };
-use log::info;
+use log::debug;
 use num_bigint::BigUint;
 use randomx::{RandomXCache, RandomXDataset, RandomXFlags, RandomXVM};
 use smol::channel::Receiver;
@@ -37,12 +37,9 @@ use smol::channel::Receiver;
 use crate::{
     blockchain::{BlockInfo, Blockchain},
     util::{ringbuffer::RingBuffer, time::Timestamp},
+    validator::utils::median,
     Error, Result,
 };
-
-// TODO: replace asserts with error returns
-// TODO: Set correct log targets
-// TODO: verify why we use Instant here instead of our own Timestamp
 
 // Note: We have combined some constants for better performance.
 /// Default number of threads to use for hashing
@@ -111,11 +108,7 @@ impl PoWModule {
 
     /// Compute the next mining difficulty, based on current ring buffers.
     /// If ring buffers contain 2 or less items, difficulty 1 is returned.
-    // TODO: difficulty 1 for first 2 blocks makes cummulative difficulty
-    //       to increment slowly, making diversion to target very slow.
-    //       We should increase this value after testing, so blocks diverge
-    //       to target block time faster.
-    pub fn next_difficulty(&self) -> BigUint {
+    pub fn next_difficulty(&self) -> Result<BigUint> {
         // Retrieve first DIFFICULTY_WINDOW timestamps from the ring buffer
         let mut timestamps: Vec<u64> =
             self.timestamps.iter().take(DIFFICULTY_WINDOW).copied().collect();
@@ -123,14 +116,14 @@ impl PoWModule {
         // Check we have enough timestamps
         let length = timestamps.len();
         if length < 2 {
-            return BigUint::one()
+            return Ok(BigUint::one())
         }
 
         // Sort the timestamps vector
         timestamps.sort_unstable();
 
         // Grab cutoff indexes
-        let (cut_begin, cut_end) = self.cutoff(length);
+        let (cut_begin, cut_end) = self.cutoff(length)?;
 
         // Calculate total time span
         let cut_end = cut_end - 1;
@@ -141,17 +134,22 @@ impl PoWModule {
 
         // Calculate total work done during this time span
         let total_work = &self.difficulties[cut_end] - &self.difficulties[cut_begin];
-        assert!(total_work > BigUint::zero());
+        if total_work <= BigUint::zero() {
+            return Err(Error::PoWTotalWorkIsZero)
+        }
 
-        (total_work * self.target + time_span - BigUint::one()) / time_span
+        // Compute next difficulty
+        let next_difficulty = (total_work * self.target + time_span - BigUint::one()) / time_span;
+
+        Ok(next_difficulty)
     }
 
     /// Calculate cutoff indexes.
     /// If buffers have been filled, we return the
     /// already known indexes, for performance.
-    fn cutoff(&self, length: usize) -> (usize, usize) {
+    fn cutoff(&self, length: usize) -> Result<(usize, usize)> {
         if length >= DIFFICULTY_WINDOW {
-            return (CUT_BEGIN, CUT_END)
+            return Ok((CUT_BEGIN, CUT_END))
         }
 
         let (cut_begin, cut_end) = if length <= RETAINED {
@@ -161,19 +159,23 @@ impl PoWModule {
             (cut_begin, cut_begin + RETAINED)
         };
         // Sanity check
-        assert!(/* cut_begin >= 0 && */ cut_begin + 2 <= cut_end && cut_end <= length);
+        if
+        /* cut_begin < 0 || */
+        cut_begin + 2 > cut_end || cut_end > length {
+            return Err(Error::PoWCuttofCalculationError)
+        }
 
-        (cut_begin, cut_end)
+        Ok((cut_begin, cut_end))
     }
 
     /// Compute the next mine target
-    pub fn next_mine_target(&self) -> BigUint {
-        BigUint::from_bytes_be(&[0xFF; 32]) / &self.next_difficulty()
+    pub fn next_mine_target(&self) -> Result<BigUint> {
+        Ok(BigUint::from_bytes_be(&[0xFF; 32]) / &self.next_difficulty()?)
     }
 
     /// Verify provided difficulty corresponds to the next one
-    pub fn verify_difficulty(&self, difficulty: &BigUint) -> bool {
-        difficulty == &self.next_difficulty()
+    pub fn verify_difficulty(&self, difficulty: &BigUint) -> Result<bool> {
+        Ok(difficulty == &self.next_difficulty()?)
     }
 
     /// Verify provided block timestamp is not far in the future and
@@ -202,7 +204,9 @@ impl PoWModule {
     /// Verify provided block timestamp and hash
     pub fn verify_current_block(&self, block: &BlockInfo) -> Result<()> {
         // First we verify the block's timestamp
-        assert!(self.verify_current_timestamp(block.header.timestamp.0));
+        if !self.verify_current_timestamp(block.header.timestamp.0) {
+            return Err(Error::PoWInvalidTimestamp)
+        }
 
         // Then we verify the block's hash
         self.verify_block_hash(block)
@@ -214,13 +218,13 @@ impl PoWModule {
         let verifier_setup = Instant::now();
 
         // Grab the next mine target
-        let target = self.next_mine_target();
+        let target = self.next_mine_target()?;
 
         // Setup verifier
         let flags = RandomXFlags::default();
         let cache = RandomXCache::new(flags, block.header.previous.as_bytes()).unwrap();
         let vm = RandomXVM::new(flags, &cache).unwrap();
-        info!(target: "validator::pow::verify_block", "[VERIFIER] Setup time: {:?}", verifier_setup.elapsed());
+        debug!(target: "validator::pow::verify_block", "[VERIFIER] Setup time: {:?}", verifier_setup.elapsed());
 
         // Compute the output hash
         let verification_time = Instant::now();
@@ -228,8 +232,10 @@ impl PoWModule {
         let out_hash = BigUint::from_bytes_be(&out_hash);
 
         // Verify hash is less than the expected mine target
-        assert!(out_hash <= target);
-        info!(target: "validator::pow::verify_block", "[VERIFIER] Verification time: {:?}", verification_time.elapsed());
+        if out_hash > target {
+            return Err(Error::PoWInvalidOutHash)
+        }
+        debug!(target: "validator::pow::verify_block", "[VERIFIER] Verification time: {:?}", verification_time.elapsed());
 
         Ok(())
     }
@@ -250,16 +256,16 @@ impl PoWModule {
         let miner_setup = Instant::now();
 
         // Grab the next mine target
-        let target = self.next_mine_target();
-        info!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{:064x}", target);
+        let target = self.next_mine_target()?;
+        debug!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{:064x}", target);
 
         // Get the PoW input. The key changes with every mined block.
         let input = miner_block.header.previous;
-        info!(target: "validator::pow::mine_block", "[MINER] PoW input: {}", input.to_hex());
+        debug!(target: "validator::pow::mine_block", "[MINER] PoW input: {}", input.to_hex());
         let flags = RandomXFlags::default() | RandomXFlags::FULLMEM;
-        info!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX dataset...");
+        debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX dataset...");
         let dataset = Arc::new(RandomXDataset::new(flags, input.as_bytes(), self.threads).unwrap());
-        info!(target: "validator::pow::mine_block", "[MINER] Setup time: {:?}", miner_setup.elapsed());
+        debug!(target: "validator::pow::mine_block", "[MINER] Setup time: {:?}", miner_setup.elapsed());
 
         // Multithreaded mining setup
         let mining_time = Instant::now();
@@ -276,19 +282,19 @@ impl PoWModule {
             let stop_signal = stop_signal.clone();
 
             handles.push(thread::spawn(move || {
-                info!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX VM #{}...", t);
+                debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX VM #{}...", t);
                 let mut miner_nonce = t;
                 let vm = RandomXVM::new_fast(flags, &dataset).unwrap();
                 loop {
                     // Check if stop signal was received
                     if stop_signal.is_full() {
-                        info!(target: "validator::pow::mine_block", "[MINER] Stop signal received, thread #{} exiting", t);
+                        debug!(target: "validator::pow::mine_block", "[MINER] Stop signal received, thread #{} exiting", t);
                         break
                     }
 
                     block.header.nonce = pallas::Base::from(miner_nonce as u64);
                     if found_block.load(Ordering::SeqCst) {
-                        info!(target: "validator::pow::mine_block", "[MINER] Block found, thread #{} exiting", t);
+                        debug!(target: "validator::pow::mine_block", "[MINER] Block found, thread #{} exiting", t);
                         break
                     }
 
@@ -297,11 +303,11 @@ impl PoWModule {
                     if out_hash <= target {
                         found_block.store(true, Ordering::SeqCst);
                         found_nonce.store(miner_nonce, Ordering::SeqCst);
-                        info!(target: "validator::pow::mine_block", "[MINER] Thread #{} found block using nonce {}",
+                        debug!(target: "validator::pow::mine_block", "[MINER] Thread #{} found block using nonce {}",
                             t, miner_nonce
                         );
-                        info!(target: "validator::pow::mine_block", "[MINER] Block hash {}", block.hash().unwrap().to_hex());
-                        info!(target: "validator::pow::mine_block", "[MINER] RandomX output: 0x{:064x}", out_hash);
+                        debug!(target: "validator::pow::mine_block", "[MINER] Block hash {}", block.hash().unwrap().to_hex());
+                        debug!(target: "validator::pow::mine_block", "[MINER] RandomX output: 0x{:064x}", out_hash);
                         break
                     }
 
@@ -320,7 +326,7 @@ impl PoWModule {
             return Err(Error::MinerTaskStopped)
         }
 
-        info!(target: "validator::pow::mine_block", "[MINER] Mining time: {:?}", mining_time.elapsed());
+        debug!(target: "validator::pow::mine_block", "[MINER] Mining time: {:?}", mining_time.elapsed());
 
         // Set the valid mined nonce in the block
         miner_block.header.nonce = pallas::Base::from(found_nonce.load(Ordering::SeqCst) as u64);
@@ -337,28 +343,6 @@ impl std::fmt::Display for PoWModule {
         write!(f, "\ttimestamps: {:?}", self.timestamps)?;
         write!(f, "\tdifficulties: {:?}", self.difficulties)?;
         write!(f, "\tcummulative_difficulty: {}", self.cummulative_difficulty)
-    }
-}
-
-// TODO: move these to utils or something
-fn get_mid(a: u64, b: u64) -> u64 {
-    (a / 2) + (b / 2) + ((a - 2 * (a / 2)) + (b - 2 * (b / 2))) / 2
-}
-
-/// Aux function to calculate the median of a given `Vec<u64>`.
-/// The function sorts the vector internally.
-fn median(mut v: Vec<u64>) -> u64 {
-    if v.len() == 1 {
-        return v[0]
-    }
-
-    let n = v.len() / 2;
-    v.sort_unstable();
-
-    if v.len() % 2 == 0 {
-        v[n]
-    } else {
-        get_mid(v[n - 1], v[n])
     }
 }
 
@@ -398,7 +382,7 @@ mod tests {
             let timestamp = parts[0].parse::<u64>().unwrap();
             let difficulty = BigUint::from_str_radix(&parts[1], 10).unwrap();
 
-            let res = module.next_difficulty();
+            let res = module.next_difficulty()?;
 
             if res != difficulty {
                 eprintln!("Wrong wide difficulty for block {}", n);
