@@ -18,6 +18,14 @@
 import logging, time 
 
 
+# -------------------------------------------------------------------
+# TODO:
+#   * on first get_info call, initialize data structure
+#   * use channel id as key
+#   * e.g. outbound[id] = [info1, info2, ...]
+#   * create unique null id if not connected
+# -------------------------------------------------------------------
+
 class Model:
 
     def __init__(self):
@@ -75,45 +83,51 @@ class Model:
         event = params[0].get("event")
         info = params[0].get("info")
 
-        if "chan" in info:
-            t = info.get("time")
-            cmd = info.get("cmd")
-            chan = info.get("chan")
-            addr = chan.get("addr")
+        t = time.localtime()
+        current_time = time.strftime("%H:%M:%S", t)
 
-            self.info.update_msg(addr, (t, event, cmd))
-        else:
-            t = time.localtime()
-            current_time = time.strftime("%H:%M:%S", t)
-            logging.debug(current_time)
-
-            match event:
-                case "inbound_connected":
-                    addr = info["addr"]
-                    logging.debug(f"{current_time} inbound (connect):    {addr}")
-                case "inbound_disconnected":
-                    addr = info["addr"]
-                    logging.debug(f"{current_time} inbound (disconnect): {addr}")
-                case "outbound_slot_sleeping":
-                    slot = info["slot"]
-                    logging.debug(f"{current_time} slot {slot}: sleeping")
-                case "outbound_slot_connecting":
-                    slot = info["slot"]
-                    addr = info["addr"]
-                    logging.debug(f"{current_time} slot {slot}: connecting   addr={addr}")
-                case "outbound_slot_connected":
-                    slot = info["slot"]
-                    addr = info["addr"]
-                    channel_id = info["channel_id"]
-                    logging.debug(f"{current_time} slot {slot}: connected    addr={addr}")
-                case "outbound_slot_disconnected":
-                    slot = info["slot"]
-                    err = info["err"]
-                    logging.debug(f"{current_time} slot {slot}: disconnected err='{err}'")
-                case "outbound_peer_discovery":
-                    attempt = info["attempt"]
-                    state = info["state"]
-                    logging.debug(f"{current_time} peer_discovery: {state} (attempt {attempt})")
+        match event:
+            case "send_msg":
+                t = info.get("time")
+                cmd = info.get("cmd")
+                chan = info.get("chan")
+                addr = info.get("addr")
+                logging.debug(f"{t} {addr} {event} {cmd}")
+                self.info.update_msg(addr, (t, event, cmd))
+            case "recv_msg":
+                t = info.get("time")
+                cmd = info.get("cmd")
+                chan = info.get("chan")
+                addr = info.get("addr")
+                logging.debug(f"{t} {addr} {event} {cmd}")
+                self.info.update_msg(addr, (t, event, cmd))
+            case "inbound_connected":
+                addr = info["addr"]
+                logging.debug(f"{current_time} inbound (connect):    {addr}")
+            case "inbound_disconnected":
+                addr = info["addr"]
+                logging.debug(f"{current_time} inbound (disconnect): {addr}")
+            case "outbound_slot_sleeping":
+                slot = info["slot"]
+                logging.debug(f"{current_time} slot {slot}: sleeping")
+                self.info.append_outbound(str(slot), "sleeping")
+            case "outbound_slot_connecting":
+                slot = info["slot"]
+                addr = info["addr"]
+                logging.debug(f"{current_time} slot {slot}: connecting   addr={addr}")
+            case "outbound_slot_connected":
+                slot = info["slot"]
+                addr = info["addr"]
+                channel_id = info["channel_id"]
+                logging.debug(f"{current_time} slot {slot}: connected    addr={addr}")
+            case "outbound_slot_disconnected":
+                slot = info["slot"]
+                err = info["err"]
+                logging.debug(f"{current_time} slot {slot}: disconnected")
+            case "outbound_peer_discovery":
+                attempt = info["attempt"]
+                state = info["state"]
+                logging.debug(f"{current_time} peer_discovery: {state} (attempt {attempt})")
 
     def __repr__(self):
         return f"{self.nodes}"
@@ -129,7 +143,7 @@ class Info:
         self.msgs = {}
     
     def update_outbound(self, key, value):
-        self.outbounds[key] = value
+        self.outbounds[key] = [value]
 
     def update_inbound(self, key, value):
         self.inbound[key] = value
@@ -145,6 +159,10 @@ class Info:
             self.msgs[key] += [value]
         else:
             self.msgs[key] = [value]
+
+    def append_outbound(self, key, value):
+        if value not in self.outbounds[key]:
+            self.outbounds[key].append(value)
 
     def __repr__(self):
         return (f"outbound: {self.outbounds}"

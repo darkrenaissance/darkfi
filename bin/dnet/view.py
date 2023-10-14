@@ -23,6 +23,15 @@ import datetime as dt
 from scroll import ScrollBar, Scrollable
 from model import Model
 
+#----------------------------------------------------------------------
+# TODO: 
+#   * create a dictionary that stores:
+#   * channel[id] = index
+#   * index = listwalker.contents[i]
+#   * sort data by ID, constantly update listwalker_contents[i]
+#   * if it's a null id, render empty info
+# -------------------------------------------------------------------
+
 event_loop = asyncio.get_event_loop()
 
 
@@ -148,13 +157,21 @@ class View():
                 names.append(name)
 
             for name, values in self.model.nodes.items():
+                # Update events
                 if name in names:
-                    continue
+                    for key, value in values.outbounds.items():
+                        if len(value) == 1:
+                            continue
+                        else:
+                            slot = SlotView(f"    {key}: {str(value[1])}")
+                            self.listwalker.contents[int(key)] = widget
+                # Update get_info()
                 else:
                     widget = NodeView(name)
                     self.listwalker.contents.append(widget)
 
                     outbounds = values.outbounds
+                    logging.debug("outbounds", outbounds)
                     inbound = values.inbound
                     manual = values.manual
                     seed = values.seed
@@ -162,8 +179,8 @@ class View():
                     if len(outbounds) != 0:
                         widget = ConnectView("  outbound")
                         self.listwalker.contents.append(widget)
-                        for num, name in outbounds.items():
-                            widget = SlotView(f"    {num}: {name}")
+                        for num, info in outbounds.items():
+                            widget = SlotView(f"    {num}: {info[0]}")
                             self.listwalker.contents.append(widget)
 
                     if len(inbound) != 0:
