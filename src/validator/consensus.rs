@@ -302,7 +302,18 @@ impl Consensus {
                 }
             }
 
-            return Ok((Fork::new(&self.blockchain, self.module.clone())?, None))
+            // Generate a new fork extending canonical
+            let mut fork = Fork::new(&self.blockchain, self.module.clone())?;
+            if proposal.block.header.height < POS_START {
+                fork.generate_pow_slot()?;
+            } else {
+                let id = self.time_keeper.current_slot();
+                let (producers, last_hashes, second_to_last_hashes) =
+                    self.previous_slot_info(id - 1)?;
+                fork.generate_pos_slot(id, producers, &last_hashes, &second_to_last_hashes)?;
+            }
+
+            return Ok((fork, None))
         }
 
         let (f_index, p_index) = found.unwrap();
@@ -360,15 +371,15 @@ impl Consensus {
             previous = block;
         }
 
-        // TODO: verify this works as expected
-        // Grab forked block slots as rebuilt fork hot/live slots
-        fork.slots = original_fork
-            .overlay
-            .lock()
-            .unwrap()
-            .get_blocks_by_hash(&[original_fork.proposals[p_index]])?[0]
-            .slots
-            .clone();
+        // Rebuilt fork hot/live slots
+        if proposal.block.header.height < POS_START {
+            fork.generate_pow_slot()?;
+        } else {
+            let id = time_keeper.verifying_slot;
+            let (producers, last_hashes, second_to_last_hashes) =
+                self.previous_slot_info(id - 1)?;
+            fork.generate_pos_slot(id, producers, &last_hashes, &second_to_last_hashes)?;
+        }
 
         Ok((fork, None))
     }
