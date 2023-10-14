@@ -144,8 +144,8 @@ impl Consensus {
         secret_key: &SecretKey,
         proposal_tx: Transaction,
     ) -> Result<(Proposal, usize)> {
-        // Grab best fork and its last slot
-        let fork_index = self.best_fork_index()?;
+        // Grab best forks, pick the first and its last slot
+        let fork_index = self.best_forks_indexes()?[0];
         let fork = &self.forks[fork_index];
         let slot = fork.slots.last().unwrap();
 
@@ -231,27 +231,36 @@ impl Consensus {
         Ok(())
     }
 
-    /// Auxiliary function to find current best ranked fork index.
-    pub fn best_fork_index(&self) -> Result<usize> {
+    /// Auxiliary function to find current best ranked forks indexes.
+    pub fn best_forks_indexes(&self) -> Result<Vec<usize>> {
         // Check if node has any forks
         if self.forks.is_empty() {
             return Err(Error::ForksNotFound)
         }
 
-        // Find the best ranked fork
+        // Find the best ranked forks
         let mut best = 0;
-        let mut index = 0;
+        let mut indexes = vec![];
         for (f_index, fork) in self.forks.iter().enumerate() {
             let rank = fork.rank;
-            if rank <= best {
+
+            // Fork ranks lower that current best
+            if rank < best {
                 continue
             }
 
+            // Fork has same rank as current best
+            if rank == best {
+                indexes.push(f_index);
+                continue
+            }
+
+            // Fork ranks higher that current best
             best = rank;
-            index = f_index;
+            indexes = vec![f_index];
         }
 
-        Ok(index)
+        Ok(indexes)
     }
 
     /// Given a proposal, find the index of the fork chain it extends, along with the specific
@@ -365,8 +374,9 @@ impl Consensus {
     }
 
     /// Consensus finalization logic:
-    /// - If the current best fork has reached greater length than the security thresshold,
-    ///   all proposals excluding the last one in that fork can be finalized (append to canonical blockchain).
+    /// - If the current best fork has reached greater length than the security thresshold, and
+    ///   no other fork exist with same rank, all proposals excluding the last one in that fork
+    //    can be finalized (append to canonical blockchain).
     /// When best fork can be finalized, blocks(proposals) should be appended to canonical, excluding the
     /// last one, and fork should be rebuilt.
     pub async fn finalization(&mut self) -> Result<Vec<BlockInfo>> {
@@ -375,9 +385,16 @@ impl Consensus {
         debug!(target: "validator::consensus::finalization", "Started finalization check for slot: {}", slot);
         self.checked_finalization = slot;
 
-        // Grab best fork
-        let fork_index = self.best_fork_index()?;
-        let fork = &self.forks[fork_index];
+        // Grab best forks
+        let forks_indexes = self.best_forks_indexes()?;
+        // Check if multiple forks with same rank were found
+        if forks_indexes.len() > 1 {
+            debug!(target: "validator::consensus::finalization", "Multiple best ranked forks were found");
+            return Ok(vec![])
+        }
+
+        // Grag the actual best fork
+        let fork = &self.forks[forks_indexes[0]];
 
         // Check its length
         let length = fork.proposals.len();

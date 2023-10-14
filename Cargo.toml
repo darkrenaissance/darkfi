@@ -150,6 +150,7 @@ blockchain = [
     "blake3",
     "sled",
     "sled-overlay",
+    "num-bigint",
 
     "async-sdk",
     "async-serial",
