@@ -16,6 +16,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import logging, time 
+import datetime as dt
 
 
 # -------------------------------------------------------------------
@@ -88,19 +89,29 @@ class Model:
         
         match event:
             case "send":
-                t = info.get("time")
+                nano = info.get("time")
                 cmd = info.get("cmd")
                 chan = info.get("chan")
-                addr = info.get("addr")
-                logging.debug(f"{t} {addr} {event} {cmd}")
+                addr = chan.get("addr")
+
+                t = (dt.datetime
+                        .fromtimestamp(int(nano)/1000000000)
+                        .strftime('%Y-%m-%d %H:%M:%S.%f'))
+
                 self.info.update_msg(addr, (t, event, cmd))
+                logging.debug(f"{t} {addr} {event} {cmd}")
             case "recv":
-                t = info.get("time")
+                nano = info.get("time")
                 cmd = info.get("cmd")
                 chan = info.get("chan")
-                addr = info.get("addr")
-                logging.debug(f"{t} {addr} {event} {cmd}")
+                addr = chan.get("addr")
+
+                t = (dt.datetime
+                        .fromtimestamp(int(nano)/1000000000)
+                        .strftime('%Y-%m-%d %H:%M:%S.%f'))
+                
                 self.info.update_msg(addr, (t, event, cmd))
+                logging.debug(f"{t} {addr} {event} {cmd}")
             case "inbound_connected":
                 addr = info["addr"]
                 logging.debug(f"{current_time} inbound (connect):    {addr}")

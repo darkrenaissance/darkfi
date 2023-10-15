@@ -221,12 +221,10 @@ class View():
                         values = (self.model.info.msgs.get(name))
 
                         for value in values:
-                            nano = (int(value[0]))
-                            time = (dt.datetime
-                                    .fromtimestamp(nano/1000000000)
-                                    .strftime('%Y-%m-%d %H:%M:%S.%f'))
+                            time = value[0]
                             event = value[1]
                             msg = value[2]
+
                             self.pile.contents.append((urwid.Text(
                                     f"{time}: {event}: {msg}"),
                                     self.pile.options()))
