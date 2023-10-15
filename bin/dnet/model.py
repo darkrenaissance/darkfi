@@ -85,16 +85,16 @@ class Model:
 
         t = time.localtime()
         current_time = time.strftime("%H:%M:%S", t)
-
+        
         match event:
-            case "send_msg":
+            case "send":
                 t = info.get("time")
                 cmd = info.get("cmd")
                 chan = info.get("chan")
                 addr = info.get("addr")
                 logging.debug(f"{t} {addr} {event} {cmd}")
                 self.info.update_msg(addr, (t, event, cmd))
-            case "recv_msg":
+            case "recv":
                 t = info.get("time")
                 cmd = info.get("cmd")
                 chan = info.get("chan")
