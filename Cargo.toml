@@ -22,6 +22,7 @@ members = [
     "bin/zkas",
     "bin/darkfid",
     "bin/darkfid2",
+    "bin/darkfi-mmproxy",
     #"bin/drk",
     "bin/faucetd",
     #"bin/fud/fu",
