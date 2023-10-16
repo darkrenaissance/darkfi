@@ -53,7 +53,10 @@ by calling `session.wakeup()`.
 * **Choking controller**. BitTorrent no longer uses naive tit-for-tat, instead libtorrent implements an anti-leech seeding algo
   from the paper [Improving BitTorrent: A Simple Approach](https://qed.usc.edu/papers/ChowGM08.pdf), which is focused on distributing
   bandwidth to all peers. See also [libtorrent/src/choker.cpp](https://github.com/arvidn/libtorrent/blob/RC_2_0/src/choker.cpp).
+    * All p2p messages will have a score which represents workload for the node. There is a hard limit, and in general the choker
+      will try to balance the scores between all available channels.
 * **Smart ban**. Malicious peers which violate protocols are hard banned. For example sending the wrong data for a chunk.
+    * Add a method `channel.ban()` which immediately disconnects and blacklists the address.
 * **uTP congestion control**. BitTorrent implements a UDP protocol with its own congestion control. We could do such a similar strategy
   with the addition of removing ordering. This reduces protocol latency mitigating attacks. See [libtorrent.org/utp.html](https://libtorrent.org/utp.html)
   for more info.
