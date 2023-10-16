@@ -213,17 +213,29 @@ impl TryFrom<&JsonValue> for JsonRequest {
             ))
         }
 
-        if !map.contains_key("params") || !map["params"].is_array() {
+        if !map.contains_key("params")
+        /* || !map["params"].is_array() */
+        {
             return Err(RpcError::InvalidJson(
                 "Request does not contain valid \"params\" field".to_string(),
             ))
         }
 
+        let params = if map["params"].is_object() {
+            JsonValue::Array(vec![map["params"].clone()])
+        } else if map["params"].is_array() {
+            map["params"].clone().into()
+        } else {
+            return Err(RpcError::InvalidJson(
+                "Request does not contain valid \"params\" field".to_string(),
+            ))
+        };
+
         Ok(Self {
             jsonrpc: "2.0",
             id: *map["id"].get::<f64>().unwrap() as u16,
             method: map["method"].get::<String>().unwrap().clone(),
-            params: map["params"].clone(),
+            params,
         })
     }
 }
