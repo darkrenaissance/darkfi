@@ -60,7 +60,7 @@ class Model:
 
             assert id in channel_lookup
             url = channel_lookup[id]["url"]
-            self.info.update_outbound(f"{i}", url)
+            self.info.update_outbound(f"{id}", url)
 
         for channel in channels:
             if channel["session"] != "seed":
@@ -80,65 +80,57 @@ class Model:
         name = list(event.keys())[0]
         values = list(event.values())[0]
         params = values.get("params")
-
         event = params[0].get("event")
         info = params[0].get("info")
 
         t = time.localtime()
         current_time = time.strftime("%H:%M:%S", t)
         
-        match event:
+        match event:                        
             case "send":
                 nano = info.get("time")
                 cmd = info.get("cmd")
                 chan = info.get("chan")
                 addr = chan.get("addr")
-
                 t = (dt.datetime
                         .fromtimestamp(int(nano)/1000000000)
                         .strftime('%Y-%m-%d %H:%M:%S.%f'))
-
                 self.info.update_msg(addr, (t, event, cmd))
-                logging.debug(f"{t} {addr} {event} {cmd}")
             case "recv":
                 nano = info.get("time")
                 cmd = info.get("cmd")
                 chan = info.get("chan")
                 addr = chan.get("addr")
-
                 t = (dt.datetime
                         .fromtimestamp(int(nano)/1000000000)
                         .strftime('%Y-%m-%d %H:%M:%S.%f'))
-                
                 self.info.update_msg(addr, (t, event, cmd))
-                logging.debug(f"{t} {addr} {event} {cmd}")
             case "inbound_connected":
                 addr = info["addr"]
-                logging.debug(f"{current_time} inbound (connect):    {addr}")
+                self.info.update_event((f"{name}", "inbound"), f"inbound (connect): {addr}")
             case "inbound_disconnected":
                 addr = info["addr"]
-                logging.debug(f"{current_time} inbound (disconnect): {addr}")
+                self.info.update_event((f"{name}","inbound"), f"inbound (disconnect): {addr}")
             case "outbound_slot_sleeping":
                 slot = info["slot"]
-                logging.debug(f"{current_time} slot {slot}: sleeping")
-                self.info.append_outbound(str(slot), "sleeping")
+                self.info.update_event((f"{name}", f"{slot}"), "sleeping")
             case "outbound_slot_connecting":
                 slot = info["slot"]
                 addr = info["addr"]
-                logging.debug(f"{current_time} slot {slot}: connecting   addr={addr}")
+                self.info.update_event((f"{name}", f"{slot}"), f"connecting  addr={addr}")
             case "outbound_slot_connected":
                 slot = info["slot"]
                 addr = info["addr"]
                 channel_id = info["channel_id"]
-                logging.debug(f"{current_time} slot {slot}: connected    addr={addr}")
+                self.info.update_event(f"{name}, {slot}", f"connected   addr={addr}")
             case "outbound_slot_disconnected":
                 slot = info["slot"]
                 err = info["err"]
-                logging.debug(f"{current_time} slot {slot}: disconnected")
+                self.info.update_event((f"{slot}", "{slot}"), "disconnected")
             case "outbound_peer_discovery":
                 attempt = info["attempt"]
                 state = info["state"]
-                logging.debug(f"{current_time} peer_discovery: {state} (attempt {attempt})")
+                self.info.update_event((f"{name}", "outbound"), f"peer discovery: {state} (attempt {attempt})")
 
     def __repr__(self):
         return f"{self.nodes}"
@@ -150,11 +142,12 @@ class Info:
         self.outbounds = {}
         self.inbound = {}
         self.manual = {}
+        self.event = {}
         self.seed = {}
         self.msgs = {}
     
     def update_outbound(self, key, value):
-        self.outbounds[key] = [value]
+        self.outbounds[key] = value
 
     def update_inbound(self, key, value):
         self.inbound[key] = value
@@ -165,15 +158,14 @@ class Info:
     def update_seed(self, key, value):
         self.seed[key] = value
 
+    def update_event(self, key, value):
+        self.event[key] = value
+
     def update_msg(self, key, value):
         if key in self.msgs:
             self.msgs[key] += [value]
         else:
             self.msgs[key] = [value]
-
-    def append_outbound(self, key, value):
-        if value not in self.outbounds[key]:
-            self.outbounds[key].append(value)
 
     def __repr__(self):
         return (f"outbound: {self.outbounds}"

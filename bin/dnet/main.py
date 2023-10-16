@@ -86,14 +86,12 @@ class Dnetview:
             try:
                 info = await self.queue.get()
                 values = list(info.values())[0]
+                method = values.get("method")
 
-                # Update node info
-                if "result" in values:
-                    self.model.handle_nodes(info)
-
-                # Update event info: TODO
-                if "params" in values:
+                if method == "dnet.subscribe_events":
                     self.model.handle_event(info)
+                else:
+                    self.model.handle_nodes(info)
 
                 self.queue.task_done()
             except OSError as e:
