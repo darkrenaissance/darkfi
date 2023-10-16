@@ -191,6 +191,11 @@ impl Client {
                         continue
                     }
 
+                    // If this event was seen, skip it
+                    if self.seen.get().unwrap().contains_key(event_id.as_bytes()).unwrap() {
+                        continue
+                    }
+
                     // Try to deserialize the `Event`'s content into a `Privmsg`
                     let mut privmsg: Privmsg = match deserialize_async_partial(r.content()).await {
                         Ok((v, _)) => v,
