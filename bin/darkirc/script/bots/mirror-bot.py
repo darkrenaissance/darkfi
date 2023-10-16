@@ -36,7 +36,7 @@ ircd.connect(ircd_server, ircd_port, ircd_channels, botnick)
 
 while True:
     darkirc_text = darkirc.get_response()
-    if not len(darkirc_text) > 0:
+    if not len(darkirc_text.strip()) > 0:
         continue
     
     print(darkirc_text)
