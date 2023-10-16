@@ -2,8 +2,8 @@
 
 proof of burn of staked coin.
 
-$$ X = <sn, ep, pk_x, pk_y, root, cm_x^{value}, cm_y^{value}> $$
-$$ W = <value, ep, nonce, value_{blind}, sk, \tau ,path> $$
+$$ X = (sn, ep, pk_x, pk_y, root, cm_x^{value}, cm_y^{value}) $$
+$$ W = (value, ep, nonce, value_{blind}, sk, \tau ,path) $$
 $$ \mathcal{L}= \{X:W\in \mathcal{R}\} $$
 
 | Public Input | Description                                                |

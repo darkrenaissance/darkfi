@@ -1,7 +1,7 @@
 # leadership mint proof
 
-$$ X = <ep, C, cm_x^{value}, cm_y^{value}> $$
-$$ W = <pk_x, pk_y, value, ep, nonce, value_{blind}> $$
+$$ X = (ep, C, cm_x^{value}, cm_y^{value}) $$
+$$ W = (pk_x, pk_y, value, ep, nonce, value_{blind}) $$
 $$ \mathcal{L}= \{X:W\in \mathcal{R}\} $$
 
 | Public Input | Description                                                |

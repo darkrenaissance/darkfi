@@ -19,8 +19,8 @@ a new coin that includes the block reward and is eligible to compete
 in upcoming future slots.
 
 
-$$ X = <sn, ep, pk_x, pk_y, root, cm_x^{value}, cm_y^{value}, reward, cm_x^{value^{out}}, cm_y^{value^{out}}, C, \mu_y, y, \mu_{\rho}, \rho,\sigma_1, \sigma_2, headstart> $$
-$$ W = <sk, nonce, value, ep, reward, value_{blind}, \tau, path, value_{blind}^{out}, \mu_y, \mu_{\rho}, \sigma1, \sigma2, headstart> $$
+$$ X = (sn, ep, pk_x, pk_y, root, cm_x^{value}, cm_y^{value}, reward, cm_x^{value^{out}}, cm_y^{value^{out}}, C, \mu_y, y, \mu_{\rho}, \rho,\sigma_1, \sigma_2, headstart) $$
+$$ W = (sk, nonce, value, ep, reward, value_{blind}, \tau, path, value_{blind}^{out}, \mu_y, \mu_{\rho}, \sigma1, \sigma2, headstart) $$
 $$ \mathcal{L}= \{X:W\in \mathcal{R}\} $$
 
 
