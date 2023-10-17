@@ -12,6 +12,9 @@ rpc_listen = "tcp://127.0.0.1:18340"
 # Participate in the consensus protocol
 consensus = false
 
+# Wallet address to receive consensus rewards
+#recipient = "YOUR_WALLET_ADDRESS_HERE"
+
 # Skip syncing process and start node right away
 skip_sync = false
 

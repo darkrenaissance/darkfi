@@ -18,12 +18,11 @@
 
 use darkfi_sdk::{
     blockchain::{expected_reward, PidOutput, PreviousSlot, Slot, POS_START},
-    crypto::{schnorr::SchnorrSecret, SecretKey},
+    crypto::SecretKey,
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
 use log::{debug, error, info};
-use rand::rngs::OsRng;
 
 use crate::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header},
@@ -133,20 +132,15 @@ impl Consensus {
         Ok((producers, last_hashes, second_to_last_hashes))
     }
 
-    /// Generate a block proposal for the next/current hot/live(last) slot,
-    /// containing all pending transactions. Proposal extends the best fork
-    /// chain the node is holding. This should only be called after
-    /// generating next/current slot. Proposal is signed using provided secret
-    /// key, which must also have signed the provided proposal transaction.
-    /// Best fork index is also returned in case its required.
-    pub async fn generate_proposal(
+    /// Generate an unsigned block for provided fork, containing all
+    /// pending transactions. This should only be called after generating
+    /// next/current slot.
+    pub async fn generate_unsigned_block(
         &self,
-        secret_key: &SecretKey,
-        proposal_tx: Transaction,
-    ) -> Result<(Proposal, usize)> {
-        // Grab best forks, pick the first and its last slot
-        let fork_index = self.best_forks_indexes()?[0];
-        let fork = &self.forks[fork_index];
+        fork: &Fork,
+        producer_tx: Transaction,
+    ) -> Result<BlockInfo> {
+        // Grab fork's last slot
         let slot = fork.slots.last().unwrap();
 
         // Generate a time keeper for next/current slot
@@ -160,7 +154,7 @@ impl Consensus {
 
         // Grab forks' unproposed transactions
         let mut unproposed_txs = fork.unproposed_txs(&self.blockchain, &time_keeper).await?;
-        unproposed_txs.push(proposal_tx);
+        unproposed_txs.push(producer_tx);
 
         // Grab forks' last block proposal(previous)
         let previous = fork.last_proposal()?;
@@ -181,14 +175,28 @@ impl Consensus {
         // Add transactions to the block
         block.append_txs(unproposed_txs)?;
 
-        // TODO: sign more stuff?
-        // Sign block header using provided secret key
-        block.signature = secret_key.sign(&mut OsRng, &block.header.hash()?.as_bytes()[..]);
+        Ok(block)
+    }
+
+    /// Generate a block proposal for provided fork, containing all
+    /// pending transactions. This should only be called after generating
+    /// next/current slot. Proposal is signed using provided secret key,
+    /// which must also have signed the provided proposal transaction.
+    pub async fn generate_signed_proposal(
+        &self,
+        fork: &Fork,
+        producer_tx: Transaction,
+        secret_key: &SecretKey,
+    ) -> Result<Proposal> {
+        let mut block = self.generate_unsigned_block(fork, producer_tx).await?;
+
+        // Sign block
+        block.sign(secret_key)?;
 
         // Generate the block proposal from the block
         let proposal = Proposal::new(block)?;
 
-        Ok((proposal, fork_index))
+        Ok(proposal)
     }
 
     /// Given a proposal, the node verifys it and finds which fork it extends.

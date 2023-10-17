@@ -18,6 +18,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    str::FromStr,
     sync::Arc,
 };
 
@@ -41,6 +42,7 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_contract_test_harness::vks;
+use darkfi_sdk::crypto::PublicKey;
 
 #[cfg(test)]
 mod tests;
@@ -82,6 +84,10 @@ struct Args {
     #[structopt(long)]
     /// Participate in the consensus protocol
     consensus: bool,
+
+    #[structopt(long)]
+    /// Wallet address to receive consensus rewards
+    recipient: Option<String>,
 
     #[structopt(long)]
     /// Skip syncing process and start node right away
@@ -245,11 +251,20 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // Consensus protocol
     let (consensus_task, consensus_sender) = if args.consensus {
         info!(target: "darkfid", "Starting consensus protocol task");
+        // Grab rewards recipient public key(address)
+        if args.recipient.is_none() {
+            return Err(Error::ParseFailed("Recipient address missing"))
+        }
+        let recipient = match PublicKey::from_str(&args.recipient.unwrap()) {
+            Ok(address) => address,
+            Err(_) => return Err(Error::InvalidAddress),
+        };
+
         let (sender, recvr) = smol::channel::bounded(1);
         let task = StoppableTask::new();
         task.clone().start(
             // Weird hack to prevent lifetimes hell
-            async move { miner_task(&darkfid, &recvr).await },
+            async move { miner_task(&darkfid, &recipient, &recvr).await },
             |res| async {
                 match res {
                     Ok(()) | Err(Error::MinerTaskStopped) => { /* Do nothing */ }

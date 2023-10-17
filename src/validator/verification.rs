@@ -90,6 +90,10 @@ pub async fn verify_genesis_block(
         return Err(Error::BlockContainsNoTransactions(block_hash))
     }
 
+    // Insert genesis slot so transactions can be validated against.
+    // Since an overlay is used, original database is not affected.
+    overlay.lock().unwrap().slots.insert(&[genesis_slot.clone()])?;
+
     // Genesis transaction must be the Transaction::default() one(empty)
     let tx = block.txs.last().unwrap();
     if tx != &Transaction::default() {
@@ -148,6 +152,11 @@ pub async fn verify_block(
     if block.txs.is_empty() {
         return Err(Error::BlockContainsNoTransactions(block_hash))
     }
+
+    // Insert last block slot so transactions can be validated against.
+    // Rest (empty) slots will be inserted along with the block.
+    // Since an overlay is used, original database is not affected.
+    overlay.lock().unwrap().slots.insert(&[block.slots.last().unwrap().clone()])?;
 
     // Verify proposal transaction if not in testing mode
     if !testing_mode {

@@ -18,7 +18,10 @@
 
 use darkfi_sdk::{
     blockchain::Slot,
-    crypto::schnorr::Signature,
+    crypto::{
+        schnorr::{SchnorrSecret, Signature},
+        SecretKey,
+    },
     pasta::{group::ff::FromUniformBytes, pallas},
 };
 #[cfg(feature = "async-serial")]
@@ -26,6 +29,7 @@ use darkfi_serial::async_trait;
 
 use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
 use num_bigint::BigUint;
+use rand::rngs::OsRng;
 
 use crate::{tx::Transaction, Error, Result};
 
@@ -141,6 +145,14 @@ impl BlockInfo {
         for tx in txs {
             self.append_tx(tx)?;
         }
+
+        Ok(())
+    }
+
+    /// Sign block header using provided secret key
+    // TODO: sign more stuff?
+    pub fn sign(&mut self, secret_key: &SecretKey) -> Result<()> {
+        self.signature = secret_key.sign(&mut OsRng, &self.hash()?.as_bytes()[..]);
 
         Ok(())
     }
