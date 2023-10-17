@@ -24,7 +24,7 @@ use darkfi::{
 use darkfi_sdk::{
     blockchain::expected_reward,
     crypto::{
-        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, Keypair, PublicKey,
+        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, PublicKey, SecretKey,
         DARK_TOKEN_ID,
     },
     pasta::pallas,
@@ -66,8 +66,10 @@ impl PoWRewardRevealed {
 
 /// Struct holding necessary information to build a `Money::PoWRewardV1` contract call.
 pub struct PoWRewardCallBuilder {
-    /// Caller's keypair
-    pub keypair: Keypair,
+    /// Caller's secret key, used for signing and VRF proof generation
+    pub secret: SecretKey,
+    /// Reward recipient's public key
+    pub recipient: PublicKey,
     /// Rewarded block height(slot)
     pub block_height: u64,
     /// Extending fork last proposal/block nonce
@@ -95,14 +97,10 @@ impl PoWRewardCallBuilder {
         // Only DARK_TOKEN_ID can be minted as PoW reward.
         let token_id = *DARK_TOKEN_ID;
 
-        let input = TransactionBuilderClearInputInfo {
-            value,
-            token_id,
-            signature_secret: self.keypair.secret,
-        };
+        let input =
+            TransactionBuilderClearInputInfo { value, token_id, signature_secret: self.secret };
 
-        let output =
-            TransactionBuilderOutputInfo { value, token_id, public_key: self.keypair.public };
+        let output = TransactionBuilderOutputInfo { value, token_id, public_key: self.recipient };
 
         // We just create the commitment blinds here. We simply encofce
         // that the clear input and the anon output have the same commitments.
@@ -157,7 +155,7 @@ impl PoWRewardCallBuilder {
         vrf_input.extend_from_slice(&self.last_nonce.to_repr());
         vrf_input.extend_from_slice(self.fork_previous_hash.as_bytes());
         vrf_input.extend_from_slice(&pallas::Base::from(self.block_height).to_repr());
-        let vrf_proof = VrfProof::prove(self.keypair.secret, &vrf_input, &mut OsRng);
+        let vrf_proof = VrfProof::prove(self.secret, &vrf_input, &mut OsRng);
 
         let params = MoneyPoWRewardParamsV1 {
             input: c_input,

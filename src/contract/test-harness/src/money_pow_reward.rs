@@ -37,6 +37,7 @@ impl TestHarness {
     pub fn pow_reward(
         &mut self,
         holder: &Holder,
+        recipient: Option<&Holder>,
         block_height: u64,
         reward: Option<u64>,
     ) -> Result<(Transaction, MoneyPoWRewardParamsV1)> {
@@ -58,8 +59,16 @@ impl TestHarness {
         let spend_hook = pallas::Base::zero();
         let user_data = pallas::Base::zero();
 
+        let recipient = if let Some(holder) = recipient {
+            let holder = self.holders.get(holder).unwrap();
+            holder.keypair.public
+        } else {
+            wallet.keypair.public
+        };
+
         let builder = PoWRewardCallBuilder {
-            keypair: wallet.keypair,
+            secret: wallet.keypair.secret,
+            recipient,
             block_height,
             last_nonce,
             fork_hash,

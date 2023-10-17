@@ -51,7 +51,7 @@ fn pow_reward() -> Result<()> {
         info!(target: "money", "[Malicious] =======================================");
         info!(target: "money", "[Malicious] Building PoW reward tx for genesis slot");
         info!(target: "money", "[Malicious] =======================================");
-        let (pow_reward_tx, _) = th.pow_reward(&Holder::Alice, current_height, Some(0))?;
+        let (pow_reward_tx, _) = th.pow_reward(&Holder::Alice, None, current_height, Some(0))?;
 
         info!(target: "money", "[Malicious] =======================================");
         info!(target: "money", "[Malicious] Checking PoW reward tx for genesis slot");
@@ -67,7 +67,7 @@ fn pow_reward() -> Result<()> {
         info!(target: "money", "[Malicious] Building erroneous PoW reward tx");
         info!(target: "money", "[Malicious] ================================");
         let (pow_reward_tx, _) =
-            th.pow_reward(&Holder::Alice, current_height, Some(alice_reward + 1))?;
+            th.pow_reward(&Holder::Alice, None, current_height, Some(alice_reward + 1))?;
 
         info!(target: "money", "[Malicious] =======================================");
         info!(target: "money", "[Malicious] Checking erroneous amount PoW reward tx");
@@ -79,7 +79,7 @@ fn pow_reward() -> Result<()> {
         info!(target: "money", "[Alice] Building PoW reward tx");
         info!(target: "money", "[Alice] ======================");
         let (pow_reward_tx, pow_reward_params) =
-            th.pow_reward(&Holder::Alice, current_height, None)?;
+            th.pow_reward(&Holder::Alice, None, current_height, None)?;
 
         for holder in &HOLDERS {
             info!(target: "money", "[{holder:?}] =============================");
@@ -128,11 +128,36 @@ fn pow_reward() -> Result<()> {
         let bob_oc = th.gather_owncoin(&Holder::Bob, &transfer_params.outputs[1], None)?;
         bob_owncoins.push(bob_oc);
 
+        // Alice can also send her PoW reward directly to bob
+        current_height += 1;
+        th.generate_slot(current_height).await?;
+
+        info!(target: "money", "[Alice] ==============================");
+        info!(target: "money", "[Alice] Building PoW reward tx for Bob");
+        info!(target: "money", "[Alice] ==============================");
+        let (pow_reward_tx, pow_reward_params) =
+            th.pow_reward(&Holder::Alice, Some(&Holder::Bob), current_height, None)?;
+
+        for holder in &HOLDERS {
+            info!(target: "money", "[{holder:?}] =====================================");
+            info!(target: "money", "[{holder:?}] Executing Alice PoW reward tx for Bob");
+            info!(target: "money", "[{holder:?}] =====================================");
+            th.execute_pow_reward_tx(holder, &pow_reward_tx, &pow_reward_params, current_height)
+                .await?;
+        }
+
+        th.assert_trees(&HOLDERS);
+
+        // Bob gathers his new owncoin
+        let bob_oc = th.gather_owncoin(&Holder::Bob, &pow_reward_params.output, None)?;
+        bob_owncoins.push(bob_oc);
+
         // Validating transaction outcomes
         assert!(alice_owncoins.len() == 1);
-        assert!(bob_owncoins.len() == 1);
+        assert!(bob_owncoins.len() == 2);
         assert!(alice_owncoins[0].note.value == alice_reward - alice_send);
         assert!(bob_owncoins[0].note.value == alice_send);
+        assert!(bob_owncoins[1].note.value == alice_reward);
 
         // Statistics
         th.statistics();
