@@ -161,14 +161,18 @@ impl EventGraph {
 
     /// Generate a deterministic genesis event corresponding to the DAG's configuration.
     fn generate_genesis(days_rotation: u64) -> Event {
+        // Days rotation is u64 except zero
+        let genesis_days_rotation = if days_rotation == 0 { 1 } else { days_rotation };
+
         // First check how many days passed since initial genesis.
         let days_passed = days_since(INITIAL_GENESIS);
 
         // Calculate the number of days_rotation intervals since INITIAL_GENESIS
-        let rotations_since_genesis = days_passed / days_rotation;
+        let rotations_since_genesis = days_passed / genesis_days_rotation;
 
         // Calculate the timestamp of the most recent event
-        let timestamp = INITIAL_GENESIS + (rotations_since_genesis * days_rotation * DAY as u64);
+        let timestamp =
+            INITIAL_GENESIS + (rotations_since_genesis * genesis_days_rotation * DAY as u64);
 
         Event { timestamp, content: GENESIS_CONTENTS.to_vec(), parents: [NULL_ID; N_EVENT_PARENTS] }
     }
@@ -409,6 +413,9 @@ impl EventGraph {
         debug!(target: "event_graph::dag_prune()", "Spawned background DAG pruning task");
 
         loop {
+            if days_rotation == 0 {
+                return Ok(())
+            }
             // Find the next rotation timestamp:
             let next_rotation = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
 
