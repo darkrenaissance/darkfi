@@ -77,6 +77,7 @@ class Model:
         self.update_node(name, self.info)
 
     def handle_event(self, event):
+        logging.debug(event)
         name = list(event.keys())[0]
         values = list(event.values())[0]
         params = values.get("params")
@@ -85,7 +86,7 @@ class Model:
 
         t = time.localtime()
         current_time = time.strftime("%H:%M:%S", t)
-        
+
         match event:                        
             case "send":
                 nano = info.get("time")

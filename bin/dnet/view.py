@@ -213,35 +213,35 @@ class View():
             await asyncio.sleep(0.1)
             self.pile.contents.clear()
             focus_w = self.list.get_focus()
-            match focus_w[0].get_widget():
-
-                case "NodeView":
-                    self.pile.contents.append((
-                        urwid.Text(f"Node selected"),
-                        self.pile.options()))
-
-                case "ConnectView":
-                    name = focus_w[0].get_name()
-                    
-                    if name in self.model.info.event.keys():
-                        values = self.model.info.event.get(name)
-
+            if focus_w[0] is None:
+                continue
+            else:
+                match focus_w[0].get_widget():
+                    case "NodeView":
                         self.pile.contents.append((
-                            urwid.Text(f" {values}"),
+                            urwid.Text(f"Node selected"),
                             self.pile.options()))
+                    case "ConnectView":
+                        name = focus_w[0].get_name()
+                        
+                        if name in self.model.info.event.keys():
+                            values = self.model.info.event.get(name)
 
-                case "SlotView":
-                    addr = focus_w[0].get_addr()
+                            self.pile.contents.append((
+                                urwid.Text(f" {values}"),
+                                self.pile.options()))
+                    case "SlotView":
+                        addr = focus_w[0].get_addr()
 
-                    if addr in self.model.info.msgs.keys():
-                        values = self.model.info.msgs.get(addr)
+                        if addr in self.model.info.msgs.keys():
+                            values = self.model.info.msgs.get(addr)
 
-                        for value in values:
-                            time = value[0]
-                            event = value[1]
-                            msg = value[2]
+                            for value in values:
+                                time = value[0]
+                                event = value[1]
+                                msg = value[2]
 
-                            self.pile.contents.append((urwid.Text(
-                                    f"{time}: {event}: {msg}"),
-                                    self.pile.options()))
+                                self.pile.contents.append((urwid.Text(
+                                        f"{time}: {event}: {msg}"),
+                                        self.pile.options()))
 

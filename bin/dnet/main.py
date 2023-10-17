@@ -25,7 +25,8 @@ from view import View
 class Dnetview:
 
     def __init__(self):
-        self.ev = asyncio.get_event_loop()
+        self.ev = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.ev)
         self.queue = asyncio.Queue()
         self.config = self.get_config()
         self.model = Model()
