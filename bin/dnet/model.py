@@ -37,6 +37,7 @@ class Model:
         self.nodes[key] = value
 
     def handle_nodes(self, node):
+        logging.debug(node)
         channel_lookup = {}
         name = list(node.keys())[0]
         values = list(node.values())[0]

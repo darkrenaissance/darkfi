@@ -32,15 +32,16 @@ class Dnetview:
         self.model = Model()
         self.view = View(self.model)
 
-    async def subscribe(self, rpc, name, port):
+    async def subscribe(self, rpc, name, host, port):
         info = {}
         while True:
             try:
-                #logging.debug(f"Start {name} RPC on port {port}")
-                await rpc.start("localhost", port)
+                await rpc.start(host, port)
+                logging.debug(f"Started {name} RPC on port {port}")
                 break
             # TODO: offline node handling
-            except OSError:
+            except Exception as e:
+                logging.debug(f"failed to connect {host}:{port} {e}")
                 pass
     
         data = await rpc._make_request("p2p.get_info", [])
@@ -79,7 +80,8 @@ class Dnetview:
             for i, node in enumerate(nodes):
                 rpc = JsonRpc()
                 subscribe = tg.create_task(self.subscribe(
-                            rpc, node['name'], node['port']))
+                            rpc, node['name'], node['host'],
+                            node['port']))
                 nodes = tg.create_task(self.update_info())
 
     async def update_info(self):
