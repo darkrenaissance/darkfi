@@ -106,7 +106,6 @@ impl RequestHandler for MiningProxy {
 
             // Stratum methods
             "login" => self.stratum_login(req.id, req.params).await,
-            "job" => self.stratum_job(req.id, req.params).await,
             "submit" => self.stratum_submit(req.id, req.params).await,
             "keepalived" => self.stratum_keepalived(req.id, req.params).await,
 

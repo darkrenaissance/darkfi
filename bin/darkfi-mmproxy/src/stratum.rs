@@ -97,10 +97,6 @@ impl MiningProxy {
         todo!()
     }
 
-    pub async fn stratum_job(&self, id: u16, params: JsonValue) -> JsonResult {
-        todo!()
-    }
-
     pub async fn stratum_submit(&self, id: u16, params: JsonValue) -> JsonResult {
         todo!()
     }
