@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use darkfi::{
     async_daemonize, cli_desc,
@@ -62,18 +65,26 @@ struct Args {
     rpc_listen: Url,
 
     #[structopt(long)]
+    /// List of worker logins
+    workers: Vec<String>,
+
+    #[structopt(long)]
     /// Set log file output
     log: Option<String>,
 }
 
 struct MiningProxy {
+    /// Worker logins
+    logins: HashMap<String, String>,
     /// JSON-RPC connection tracker
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    /// Main async executor reference
+    executor: Arc<Executor<'static>>,
 }
 
 impl MiningProxy {
-    fn new() -> Self {
-        Self { rpc_connections: Mutex::new(HashSet::new()) }
+    fn new(logins: HashMap<String, String>, executor: Arc<Executor<'static>>) -> Self {
+        Self { logins, rpc_connections: Mutex::new(HashSet::new()), executor }
     }
 }
 
@@ -136,9 +147,20 @@ impl RequestHandler for MiningProxy {
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
-    info!("Starting JSON-RPC server");
-    let mmproxy = Arc::new(MiningProxy::new());
+    // Parse worker logins
+    let mut logins = HashMap::new();
+    for worker in args.workers {
+        let mut split = worker.split(':');
+        let user = split.next().unwrap().to_string();
+        let pass = split.next().unwrap().to_string();
+        info!("Whitelisting worker \"{}:{}\"", user, pass);
+        logins.insert(user, pass);
+    }
+
+    let mmproxy = Arc::new(MiningProxy::new(logins, ex.clone()));
     let mmproxy_ = Arc::clone(&mmproxy);
+
+    info!("Starting JSON-RPC server");
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
         listen_and_serve(args.rpc_listen, mmproxy.clone(), None, ex.clone()),

@@ -17,6 +17,7 @@ log = "0.4.20"
 
 # Encoding
 url = "2.4.1"
+uuid = {version = "1.4.1", features = ["v4"]}
 
 # Daemon
 easy-parallel = "3.3.0"

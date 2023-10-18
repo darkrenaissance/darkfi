@@ -16,19 +16,83 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashMap;
+
 use darkfi::rpc::{
     jsonrpc::{ErrorCode, JsonError, JsonResult},
     util::JsonValue,
 };
+use uuid::Uuid;
 
 use super::MiningProxy;
 
+/// Algo string representing Monero's RandomX
+pub const RANDOMX_ALGO: &str = "rx/0";
+
 impl MiningProxy {
+    /// Stratum login method. `darkfi-mmproxy` will check that it is a valid worker
+    /// login, and will also search for `RANDOMX_ALGO`.
+    /// TODO: More proper error codes
     pub async fn stratum_login(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_object() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
+
+        let params = params[0].get::<HashMap<String, JsonValue>>().unwrap();
+
+        if !params.contains_key("login") ||
+            !params.contains_key("pass") ||
+            !params.contains_key("agent") ||
+            !params.contains_key("algo")
+        {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        let Some(login) = params["login"].get::<String>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
+
+        let Some(pass) = params["pass"].get::<String>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
+
+        let Some(agent) = params["agent"].get::<String>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
+
+        let Some(algos) = params["algo"].get::<Vec<JsonValue>>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
+
+        // We'll only support rx/0 algo.
+        let mut found_xmr_algo = false;
+        for algo in algos {
+            if !algo.is_string() {
+                return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+            }
+
+            if algo.get::<String>().unwrap() == RANDOMX_ALGO {
+                found_xmr_algo = true;
+                break
+            }
+        }
+
+        if !found_xmr_algo {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        // Check valid login
+        let Some(known_pass) = self.logins.get(login) else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
+
+        if known_pass != pass {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        // Login success, generate UUID
+        let uuid = Uuid::new_v4();
 
         todo!()
     }
