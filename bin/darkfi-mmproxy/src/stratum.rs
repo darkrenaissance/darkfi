@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 
 use darkfi::rpc::{
-    jsonrpc::{ErrorCode, JsonError, JsonResult},
+    jsonrpc::{ErrorCode, JsonError, JsonResponse, JsonResult},
     util::JsonValue,
 };
 use uuid::Uuid;
@@ -105,7 +105,35 @@ impl MiningProxy {
         todo!()
     }
 
+    /// Non standard but widely supported protocol extension. Miner sends `keepalived`
+    /// to prevent connection timeout.
     pub async fn stratum_keepalived(&self, id: u16, params: JsonValue) -> JsonResult {
-        todo!()
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 1 || !params[0].is_object() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        let params = params[0].get::<HashMap<String, JsonValue>>().unwrap();
+
+        if !params.contains_key("id") {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        let Some(uuid) = params["id"].get::<String>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
+
+        if self.workers.read().await.contains_key(uuid) {
+            return JsonResponse::new(
+                JsonValue::Object(HashMap::from([(
+                    "status".to_string(),
+                    JsonValue::String("KEEPALIVED".to_string()),
+                )])),
+                id,
+            )
+            .into()
+        }
+
+        return JsonError::new(ErrorCode::InvalidParams, None, id).into()
     }
 }

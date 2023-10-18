@@ -34,7 +34,7 @@ use darkfi_serial::async_trait;
 use log::{debug, error, info};
 use serde::Deserialize;
 use smol::{
-    lock::{Mutex, MutexGuard},
+    lock::{Mutex, MutexGuard, RwLock},
     stream::StreamExt,
     Executor,
 };
@@ -76,6 +76,8 @@ struct Args {
 struct MiningProxy {
     /// Worker logins
     logins: HashMap<String, String>,
+    /// Workers UUIDs
+    workers: RwLock<HashMap<String, String>>,
     /// JSON-RPC connection tracker
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     /// Main async executor reference
@@ -84,7 +86,12 @@ struct MiningProxy {
 
 impl MiningProxy {
     fn new(logins: HashMap<String, String>, executor: Arc<Executor<'static>>) -> Self {
-        Self { logins, rpc_connections: Mutex::new(HashSet::new()), executor }
+        Self {
+            logins,
+            workers: RwLock::new(HashMap::new()),
+            rpc_connections: Mutex::new(HashSet::new()),
+            executor,
+        }
     }
 }
 
