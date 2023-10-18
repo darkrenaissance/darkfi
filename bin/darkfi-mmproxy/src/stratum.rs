@@ -98,6 +98,37 @@ impl MiningProxy {
     }
 
     pub async fn stratum_submit(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 1 || !params[0].is_object() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        let params = params[0].get::<HashMap<String, JsonValue>>().unwrap();
+
+        if !params.contains_key("id") ||
+            !params.contains_key("job_id") ||
+            !params.contains_key("nonce") ||
+            !params.contains_key("result")
+        {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        let Some(uuid) = params["id"].get::<String>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
+
+        let Some(job_id) = params["job_id"].get::<String>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
+
+        let Some(nonce) = params["nonce"].get::<String>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
+
+        let Some(result) = params["result"].get::<String>() else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
+
         todo!()
     }
 
