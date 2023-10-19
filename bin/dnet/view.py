@@ -138,8 +138,8 @@ class SlotView(urwid.WidgetWrap):
 
 class View():
     palette = [
-              ('body','light gray','black', 'standout'),
-              ("line","dark cyan","black","standout"),
+              ('body','light gray','default', 'standout'),
+              ('line','dark cyan','default','standout'),
               ]
 
     def __init__(self, model):
