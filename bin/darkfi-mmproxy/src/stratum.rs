@@ -16,20 +16,56 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use darkfi::rpc::{
-    jsonrpc::{ErrorCode, JsonError, JsonResponse, JsonResult},
-    util::JsonValue,
+use darkfi::{
+    rpc::{
+        jsonrpc::{ErrorCode, JsonError, JsonResponse, JsonResult, JsonSubscriber},
+        util::JsonValue,
+    },
+    system::{timeout::timeout, StoppableTask},
+    Error, Result,
 };
+use log::{debug, error, warn};
+use smol::{channel, lock::RwLock};
 use uuid::Uuid;
 
-use super::MiningProxy;
+use super::{error::RpcError, MiningProxy, Worker};
 
 /// Algo string representing Monero's RandomX
 pub const RANDOMX_ALGO: &str = "rx/0";
 
 impl MiningProxy {
+    /// Background task listening for keepalives from a worker, if timeout is reached
+    /// the worker will be dropped.
+    async fn keepalive_task(
+        workers: Arc<RwLock<HashMap<Uuid, Worker>>>,
+        uuid: Uuid,
+        ka_recv: channel::Receiver<()>,
+    ) -> Result<()> {
+        const TIMEOUT: Duration = Duration::from_secs(60);
+
+        loop {
+            let Ok(r) = timeout(TIMEOUT, ka_recv.recv()).await else {
+                // Timeout, remove worker
+                warn!("keepalive_task {} worker timed out", uuid);
+                workers.write().await.remove(&uuid);
+                break
+            };
+
+            match r {
+                Ok(()) => continue,
+                Err(e) => {
+                    error!("keepalive_task {} channel recv error: {}", uuid, e);
+                    workers.write().await.remove(&uuid);
+                    break
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     /// Stratum login method. `darkfi-mmproxy` will check that it is a valid worker
     /// login, and will also search for `RANDOMX_ALGO`.
     /// TODO: More proper error codes
@@ -79,22 +115,60 @@ impl MiningProxy {
         }
 
         if !found_xmr_algo {
-            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+            return JsonError::new(
+                RpcError::UnsupportedMiningAlgo.into(),
+                Some("Unsupported mining algo".to_string()),
+                id,
+            )
+            .into()
         }
 
         // Check valid login
         let Some(known_pass) = self.logins.get(login) else {
-            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+            return JsonError::new(
+                RpcError::InvalidWorkerLogin.into(),
+                Some("Unknown worker username".to_string()),
+                id,
+            )
+            .into()
         };
 
         if known_pass != pass {
-            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+            return JsonError::new(
+                RpcError::InvalidWorkerLogin.into(),
+                Some("Invalid worker password".to_string()),
+                id,
+            )
+            .into()
         }
 
         // Login success, generate UUID
         let uuid = Uuid::new_v4();
 
-        todo!()
+        // Create job subscriber
+        let job_sub = JsonSubscriber::new("job");
+
+        // Create keepalive channel
+        let (ka_send, ka_recv) = channel::unbounded();
+
+        // Create background keepalive task
+        let ka_task = StoppableTask::new();
+
+        // Create worker
+        let worker = Worker::new(job_sub, ka_send, ka_task.clone());
+
+        // Insert into connections map
+        self.workers.write().await.insert(uuid, worker);
+
+        // Spawn background task
+        ka_task.start(
+            Self::keepalive_task(self.workers.clone(), uuid.clone(), ka_recv),
+            move |_| async move { debug!("keepalive_task for {} exited", uuid) },
+            Error::DetachedTaskStopped,
+            self.executor.clone(),
+        );
+
+        todo!("send current job")
     }
 
     pub async fn stratum_submit(&self, id: u16, params: JsonValue) -> JsonResult {
@@ -150,17 +224,28 @@ impl MiningProxy {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         };
 
-        if self.workers.read().await.contains_key(uuid) {
-            return JsonResponse::new(
-                JsonValue::Object(HashMap::from([(
-                    "status".to_string(),
-                    JsonValue::String("KEEPALIVED".to_string()),
-                )])),
-                id,
-            )
-            .into()
+        let Ok(uuid) = Uuid::try_from(uuid.as_str()) else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
+
+        // Ping the keepalive task
+        let workers = self.workers.read().await;
+        let Some(worker) = workers.get(&uuid) else {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        };
+
+        if let Err(e) = worker.ka_send.send(()).await {
+            error!("stratum_keepalived: keepalive task ping error: {}", e);
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        return JsonResponse::new(
+            JsonValue::Object(HashMap::from([(
+                "status".to_string(),
+                JsonValue::String("KEEPALIVED".to_string()),
+            )])),
+            id,
+        )
+        .into()
     }
 }

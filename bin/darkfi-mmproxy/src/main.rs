@@ -24,16 +24,17 @@ use std::{
 use darkfi::{
     async_daemonize, cli_desc,
     rpc::{
-        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
+        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult, JsonSubscriber},
         server::{listen_and_serve, RequestHandler},
     },
     system::{StoppableTask, StoppableTaskPtr},
     Error, Result,
 };
 use darkfi_serial::async_trait;
-use log::{debug, error, info};
+use log::{error, info};
 use serde::Deserialize;
 use smol::{
+    channel,
     lock::{Mutex, MutexGuard, RwLock},
     stream::StreamExt,
     Executor,
@@ -41,7 +42,9 @@ use smol::{
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use url::Url;
+use uuid::Uuid;
 
+mod error;
 mod monero;
 mod stratum;
 
@@ -64,6 +67,10 @@ struct Args {
     /// JSON-RPC server listen URL
     rpc_listen: Url,
 
+    #[structopt(long, default_value = "tcp://127.0.0.1:18081")]
+    /// monerod JSON-RPC server listen URL
+    monerod_rpc: Url,
+
     #[structopt(long)]
     /// List of worker logins
     workers: Vec<String>,
@@ -73,11 +80,30 @@ struct Args {
     log: Option<String>,
 }
 
+struct Worker {
+    /// JSON-RPC notification subscriber, used to send job notifications
+    job_sub: JsonSubscriber,
+    /// Keepalive sender channel, pinged from stratum keepalived
+    ka_send: channel::Sender<()>,
+    /// Background keepalive task reference
+    ka_task: StoppableTaskPtr,
+}
+
+impl Worker {
+    fn new(
+        job_sub: JsonSubscriber,
+        ka_send: channel::Sender<()>,
+        ka_task: StoppableTaskPtr,
+    ) -> Self {
+        Self { job_sub, ka_send, ka_task }
+    }
+}
+
 struct MiningProxy {
     /// Worker logins
     logins: HashMap<String, String>,
     /// Workers UUIDs
-    workers: RwLock<HashMap<String, String>>,
+    workers: Arc<RwLock<HashMap<Uuid, Worker>>>,
     /// JSON-RPC connection tracker
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     /// Main async executor reference
@@ -88,7 +114,7 @@ impl MiningProxy {
     fn new(logins: HashMap<String, String>, executor: Arc<Executor<'static>>) -> Self {
         Self {
             logins,
-            workers: RwLock::new(HashMap::new()),
+            workers: Arc::new(RwLock::new(HashMap::new())),
             rpc_connections: Mutex::new(HashSet::new()),
             executor,
         }
@@ -153,6 +179,7 @@ impl RequestHandler for MiningProxy {
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
+    info!("Starting DarkFi x Monero merge mining proxy...");
     // Parse worker logins
     let mut logins = HashMap::new();
     for worker in args.workers {
@@ -179,6 +206,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Error::RpcServerStopped,
         ex.clone(),
     );
+
+    info!("Merge mining proxy ready, waiting for connections...");
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
