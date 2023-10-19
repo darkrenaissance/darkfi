@@ -24,7 +24,7 @@ use darkfi::{
     rpc::jsonrpc::JsonSubscriber,
     tx::Transaction,
     util::time::TimeKeeper,
-    validator::{pid::slot_pid_output, Validator, ValidatorConfig},
+    validator::{pid::slot_pid_output, utils::genesis_txs_total, Validator, ValidatorConfig},
     Result,
 };
 use darkfi_contract_test_harness::{vks, Holder, TestHarness};
@@ -37,7 +37,7 @@ use url::Url;
 use crate::{
     proto::BlockInfoMessage,
     task::sync::sync_task,
-    utils::{genesis_txs_total, spawn_consensus_p2p, spawn_sync_p2p},
+    utils::{spawn_consensus_p2p, spawn_sync_p2p},
     Darkfid,
 };
 

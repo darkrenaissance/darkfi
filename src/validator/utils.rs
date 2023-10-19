@@ -30,7 +30,9 @@ use log::info;
 
 use crate::{
     blockchain::{BlockInfo, BlockchainOverlayPtr},
+    error::TxVerifyFailed,
     runtime::vm_runtime::Runtime,
+    tx::Transaction,
     util::time::TimeKeeper,
     Error, Result,
 };
@@ -170,4 +172,52 @@ pub fn median(mut v: Vec<u64>) -> u64 {
     } else {
         get_mid(v[n - 1], v[n])
     }
+}
+
+/// Auxiliary function to calculate the total amount of minted tokens in provided
+/// genesis transactions set. This includes both staked and normal tokens.
+/// If a non-genesis transaction is found, execution fails.
+/// Set must also include the genesis transaction(empty) at last position.
+pub fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
+    let mut total = 0;
+
+    if txs.is_empty() {
+        return Ok(total)
+    }
+
+    // Iterate transactions, exluding producer(last) one
+    for tx in &txs[..txs.len() - 1] {
+        // Transaction must contain a single Consensus::GenesisStake (0x00)
+        // or Money::GenesisMint (0x01) call
+        if tx.calls.len() != 1 {
+            return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+        }
+        let call = &tx.calls[0];
+        let function = call.data[0];
+        if !(call.contract_id == *CONSENSUS_CONTRACT_ID || call.contract_id == *MONEY_CONTRACT_ID) ||
+            (call.contract_id == *CONSENSUS_CONTRACT_ID && function != 0x00_u8) ||
+            (call.contract_id == *MONEY_CONTRACT_ID && function != 0x01_u8)
+        {
+            return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+        }
+
+        // Extract transaction input value.
+        // Consensus::GenesisStake uses ConsensusGenesisStakeParamsV1, while
+        // Money::GenesisMint uses MoneyGenesisMintParamsV1. Both params structs
+        // have the value at same position (1).
+        let data = &tx.calls[0].data;
+        let position = 1;
+        let mut decoder = Cursor::new(&data);
+        decoder.set_position(position);
+        let value: u64 = Decodable::decode(&mut decoder)?;
+
+        total += value;
+    }
+
+    let tx = txs.last().unwrap();
+    if tx != &Transaction::default() {
+        return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+    }
+
+    Ok(total)
 }

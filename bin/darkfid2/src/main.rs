@@ -38,7 +38,7 @@ use darkfi::{
     },
     system::{StoppableTask, StoppableTaskPtr},
     util::time::TimeKeeper,
-    validator::{Validator, ValidatorConfig, ValidatorPtr},
+    validator::{utils::genesis_txs_total, Validator, ValidatorConfig, ValidatorPtr},
     Error, Result,
 };
 use darkfi_contract_test_harness::vks;
@@ -64,7 +64,7 @@ mod proto;
 
 /// Utility functions
 mod utils;
-use utils::{genesis_txs_total, spawn_consensus_p2p, spawn_sync_p2p};
+use utils::{spawn_consensus_p2p, spawn_sync_p2p};
 
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
