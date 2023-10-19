@@ -170,7 +170,7 @@ class View():
                     widget = NodeView(node)
                     self.listwalker.contents.append(widget)
 
-                    outbounds = values.outbounds
+                    outbounds = values.outbound
                     inbound = values.inbound
                     manual = values.manual
                     seed = values.seed
@@ -185,6 +185,9 @@ class View():
                     if len(inbound) != 0:
                         widget = ConnectView(node, "inbound")
                         self.listwalker.contents.append(widget)
+                        for i, info in inbound.items():
+                            widget = SlotView(node, i, info)
+                            self.listwalker.contents.append(widget)
 
                     if len(seed) != 0:
                         widget = ConnectView(node, "seed")

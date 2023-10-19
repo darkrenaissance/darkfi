@@ -37,7 +37,7 @@ class Model:
         self.nodes[key] = value
 
     def handle_nodes(self, node):
-        logging.debug(node)
+        logging.debug(f"p2p_get_info(): {node}")
         channel_lookup = {}
         name = list(node.keys())[0]
         values = list(node.values())[0]
@@ -51,8 +51,10 @@ class Model:
         for channel in channels:
             if channel["session"] != "inbound":
                 continue
-            url = channel["url"]
-            self.info.update_inbound("inbound", url)
+
+            id = channel["id"]
+            url = channel_lookup[id]["url"]
+            self.info.update_inbound(f"{id}", url)
 
         for i, id in enumerate(info["outbound_slots"]):
             if id == 0:
@@ -78,7 +80,7 @@ class Model:
         self.update_node(name, self.info)
 
     def handle_event(self, event):
-        logging.debug(event)
+        logging.debug(f"dnet_subscribe(): {event}")
         name = list(event.keys())[0]
         values = list(event.values())[0]
         params = values.get("params")
@@ -141,7 +143,7 @@ class Model:
 class Info:
 
     def __init__(self):
-        self.outbounds = {}
+        self.outbound = {}
         self.inbound = {}
         self.manual = {}
         self.event = {}
@@ -149,7 +151,7 @@ class Info:
         self.msgs = {}
     
     def update_outbound(self, key, value):
-        self.outbounds[key] = value
+        self.outbound[key] = value
 
     def update_inbound(self, key, value):
         self.inbound[key] = value
@@ -170,7 +172,7 @@ class Info:
             self.msgs[key] = [value]
 
     def __repr__(self):
-        return (f"outbound: {self.outbounds}"
+        return (f"outbound: {self.outbound}"
             f"inbound: {self.inbound}"
             f"manual: {self.manual}"
             f"seed: {self.seed}"
