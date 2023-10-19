@@ -193,7 +193,8 @@ pub fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
             return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
         }
         let call = &tx.calls[0];
-        let function = call.data[0];
+        let data = &call.data;
+        let function = data[0];
         if !(call.contract_id == *CONSENSUS_CONTRACT_ID || call.contract_id == *MONEY_CONTRACT_ID) ||
             (call.contract_id == *CONSENSUS_CONTRACT_ID && function != 0x00_u8) ||
             (call.contract_id == *MONEY_CONTRACT_ID && function != 0x01_u8)
@@ -205,7 +206,6 @@ pub fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
         // Consensus::GenesisStake uses ConsensusGenesisStakeParamsV1, while
         // Money::GenesisMint uses MoneyGenesisMintParamsV1. Both params structs
         // have the value at same position (1).
-        let data = &tx.calls[0].data;
         let position = 1;
         let mut decoder = Cursor::new(&data);
         decoder.set_position(position);
