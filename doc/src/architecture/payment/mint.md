@@ -9,9 +9,9 @@ $$ \mathcal{L}= \{X:W\in \mathcal{R}\} $$
 | Public Input         | Description                                             |
 |----------------------|---------------------------------------------------------|
 | $cm^{coin}$          | coin commitment as field element                        |
-| $cm^{value}_x        | x coordinate of value point commitment                  |
-| $cm^{value}_y        | y coordinate of value point commitment                  |
-| $cm^{token}          | commitment of tokenId as field element                  |
+| $cm^{value}_x$       | x coordinate of value point commitment                  |
+| $cm^{value}_y$       | y coordinate of value point commitment                  |
+| $cm^{token}$         | commitment of tokenId as field element                  |
 
 | witnesses            | Description                                         |
 |----------------------|-----------------------------------------------------|

@@ -16,4 +16,4 @@ $$ \mathcal{L}= \{X:W\in \mathcal{R}\} $$
 
 | witnesses            | Description                                         |
 |----------------------|-----------------------------------------------------|
-| $authority^{secret}  | minting authority secret key                        |
+| $authority^{secret}$ | minting authority secret key                        |

@@ -10,9 +10,9 @@ $$ \mathcal{L} = \{X:W\in \mathcal{R}\} $$
 | Public Input         | Description                                             |
 |----------------------|---------------------------------------------------------|
 | nullifier            | hash of (secretKey||serial)                             |
-| $cm^{value}_x        | x coordinate of value point commitment                  |
-| $cm^{value}_y        | y coordinate of value point commitment                  |
-| $cm^{token}          | commitment of tokenId as field element                  |
+| $cm^{value}_x$       | x coordinate of value point commitment                  |
+| $cm^{value}_y$       | y coordinate of value point commitment                  |
+| $cm^{token}$         | commitment of tokenId as field element                  |
 | root                 | root of commitments tree                                |
 | data                 | data read during execution of burn spendHook contract   |
 | spendHook            | burn related contract                                   |

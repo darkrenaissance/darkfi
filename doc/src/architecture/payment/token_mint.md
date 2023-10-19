@@ -16,9 +16,9 @@ $$ \mathcal{L}= \{X:W\in \mathcal{R}\} $$
 |$authority^{public}_x$| minting authority public key x-coordinate               |
 | token                | derived token id                                        |
 | $cm^{coin}$          | coin commitment as field element                        |
-| $cm^{value}_x        | x coordinate of supply point commitment                 |
-| $cm^{value}_y        | y coordinate of supply point commitment                 |
-| $cm^{token}          | commitment of tokenId as field element                  |
+| $cm^{value}_x$       | x coordinate of supply point commitment                 |
+| $cm^{value}_y$       | y coordinate of supply point commitment                 |
+| $cm^{token}$         | commitment of tokenId as field element                  |
 
 | witnesses            | Description                                         |
 |----------------------|-----------------------------------------------------|
