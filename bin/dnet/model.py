@@ -98,7 +98,7 @@ class Model:
                 addr = chan.get("addr")
                 t = (dt.datetime
                         .fromtimestamp(int(nano)/1000000000)
-                        .strftime('%Y-%m-%d %H:%M:%S.%f'))
+                        .strftime('%H:%M:%S'))
                 self.info.update_msg(addr, (t, event, cmd))
             case "recv":
                 nano = info.get("time")
@@ -107,7 +107,7 @@ class Model:
                 addr = chan.get("addr")
                 t = (dt.datetime
                         .fromtimestamp(int(nano)/1000000000)
-                        .strftime('%Y-%m-%d %H:%M:%S.%f'))
+                        .strftime('%H:%M:%S'))
                 self.info.update_msg(addr, (t, event, cmd))
             case "inbound_connected":
                 addr = info["addr"]
