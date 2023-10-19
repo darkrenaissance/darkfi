@@ -26,7 +26,7 @@ use darkfi::{
     system::{timeout::timeout, StoppableTask},
     Error, Result,
 };
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use smol::{channel, lock::RwLock};
 use uuid::Uuid;
 
@@ -43,6 +43,7 @@ impl MiningProxy {
         uuid: Uuid,
         ka_recv: channel::Receiver<()>,
     ) -> Result<()> {
+        debug!("Spawned keepalive_task for worker {}", uuid);
         const TIMEOUT: Duration = Duration::from_secs(60);
 
         loop {
@@ -54,7 +55,10 @@ impl MiningProxy {
             };
 
             match r {
-                Ok(()) => continue,
+                Ok(()) => {
+                    debug!("keepalive_task {} got ping", uuid);
+                    continue
+                }
                 Err(e) => {
                     error!("keepalive_task {} channel recv error: {}", uuid, e);
                     workers.write().await.remove(&uuid);
@@ -168,7 +172,17 @@ impl MiningProxy {
             self.executor.clone(),
         );
 
-        todo!("send current job")
+        info!("Added worker {} ({})", login, uuid);
+
+        // TODO: Send current job
+        return JsonResponse::new(
+            JsonValue::Object(HashMap::from([(
+                "status".to_string(),
+                JsonValue::String("KEEPALIVED".to_string()),
+            )])),
+            id,
+        )
+        .into()
     }
 
     pub async fn stratum_submit(&self, id: u16, params: JsonValue) -> JsonResult {
