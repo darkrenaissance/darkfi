@@ -38,6 +38,25 @@ Then each slot performs this algorithm:
 
 ## Security
 
+### Design Considerations
+
+* Mitigate attacks to a reasonable degree. Ensuring complete coverage against attacks is infeasible and likely
+  introduces significant latency into protocols.
+* Primarily target the p2p network running over anonymity networks like Tor, i2p or Nym.
+  This means we cannot rely on node addresses being reliable. Even on the clearnet, attackers can easily obtain
+  large numbers of proxy addresses.
+
+The main attacks are:
+
+* **Sybil attack**. A malicious actor tries to subvert the network using sockpuppet nodes. For example
+  false signalling using version messages on the p2p network.
+* **Eclipse attack**. Targets a single node, through a p2p MitM attack where the malicious actor controls all
+  the traffic you see. For example they might send you a payment, then want to doublespend without you
+  knowing about it.
+* **Denial of Service**. Usually happens when a node is overloaded by too much data being sent.
+
+### Common Mitigations
+
 * **Backoff/falloff**. This is the strategy implemented in Bitcoin. This can be bad when arbitrary limits are implemented
   since we slow down traffic for no reason.
 * **Choking controller**. BitTorrent no longer uses naive tit-for-tat, instead libtorrent implements an anti-leech seeding algo
@@ -45,6 +64,7 @@ Then each slot performs this algorithm:
   bandwidth to all peers. See also [libtorrent/src/choker.cpp](https://github.com/arvidn/libtorrent/blob/RC_2_0/src/choker.cpp).
     * All p2p messages will have a score which represents workload for the node. There is a hard limit, and in general the choker
       will try to balance the scores between all available channels.
+    * Opening the connection itself has a score with inbound connections assigned more cost than outgoing ones.
 * **Smart ban**. Malicious peers which violate protocols are hard banned. For example sending the wrong data for a chunk.
     * Add a method `channel.ban()` which immediately disconnects and blacklists the address.
 * **uTP congestion control**. BitTorrent implements a UDP protocol with its own congestion control. We could do such a similar strategy
@@ -55,4 +75,35 @@ Then each slot performs this algorithm:
   details of this algorithm. This aids with network connectivity, avoiding netsplits which could make the network more susceptible to
   eclipse/sybil attacks (large scale MiTM).
     * For this we would need a function to connect to a host, send a ping, receive a pong and disconnect to test node connectivity.
+* **Protocol-level reputation system**. You have a keypair, which accrues more trust from the network. Nodes gossip trust metrics.
+    * See [AnonRep: Towards Tracking-Resistant Anonymous Reputation](https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-zhai.pdf)
+    * Also the discussion in
+      [Semaphore RLN, rate limiting nullifier for spam prevention in anonymous p2p setting](https://ethresear.ch/t/semaphore-rln-rate-limiting-nullifier-for-spam-prevention-in-anonymous-p2p-setting/5009)
+* **Reduce blast radius**. The p2p subsystem should run on its own dedicated executor, separate from database lookups or other
+  system operations.
+* **fail2ban**
+* **Optimized blockchain database**. Most databases are written for interleaved reads and writes as well as deletion. Blockchains follow
+  a different pattern of infrequent writes being mostly append-only, and requiring weaker guarantees.
+
+### Protocol Suggestions
+
+Core protocols should be modeled and analyzed with DoS protections added. Below are suggestions to start the investigation.
+
+* Do not forward orphan txs or blocks.
+* Drop all double spend txs.
+    * Alternatively require a higher fee if we want to enable replace by fee.
+    * Do not forward double spend txs.
+* Do not forward the same object (block, transaction .etc) to the same peer twice. Violation results in `channel.ban()`.
+* Very low fee txs are rate limited.
+* Limit orphan txs.
+* Drop large or unusual orphan transactions to limit damage.
+* Consider a verification cache to prevent attacks that try to trigger re-verification of stored orphan txs. Also limit the size of the cache.
+  See [Fixed vulnerability explanation: Why the signature cache is a DoS protection.](https://bitcointalk.org/index.php?topic=136422.0)
+* Perform more expensive checks later in tx validation.
+* Nodes will only relay valid transactions with a certain fee amount. More expensive transactions require a higher fee.
+* Complex operations such as requesting data can be mitigated by tracking the number of requests from a peer.
+    * Attackers may attempt flooding invs for invalid data. The peer responds with get data but that object doesn't exist using
+      up precious bandwidth. Limit both the rate of invs to 2/s and size of items to 35.
+    * Also loops can cause an issue if triggered by the network. This should be carefully analyzed and flattened if possible,
+      otherwise they should be guarded against attack.
 
