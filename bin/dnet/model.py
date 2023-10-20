@@ -63,7 +63,7 @@ class Model:
 
             assert id in channel_lookup
             url = channel_lookup[id]["url"]
-            self.info.update_outbound(f"{id}", url)
+            self.info.update_outbound(f"{i}", url)
 
         for channel in channels:
             if channel["session"] != "seed":
