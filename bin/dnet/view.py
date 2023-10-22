@@ -188,7 +188,7 @@ class View():
                         for i, info in inbound.items():
                             widget = SlotView(node, i, info)
                             self.listwalker.contents.append(widget)
-
+                        #logging.debug(len(self.listwalker.contents))
                     if len(seed) != 0:
                         widget = ConnectView(node, "seed")
                         self.listwalker.contents.append(widget)

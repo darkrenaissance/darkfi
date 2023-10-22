@@ -39,7 +39,6 @@ class Model:
 
     def handle_nodes(self, node):
         #logging.debug(f"p2p_get_info(): {node}")
-        #channel_lookup = {}
         name = list(node.keys())[0]
         values = list(node.values())[0]
         info = values["result"]
@@ -81,7 +80,6 @@ class Model:
         self.update_node(name, self.info)
 
     def handle_event(self, event):
-        #logging.debug(f"dnet_subscribe(): {event}")
         name = list(event.keys())[0]
         values = list(event.values())[0]
         params = values.get("params")
@@ -113,35 +111,45 @@ class Model:
             case "inbound_connected":
                 addr = info["addr"]
                 id = info.get("channel_id")
-                logging.debug(f"{name} inbound (connect): {addr}")
-                logging.debug(params)
                 self.info.update_inbound(f"{id}", addr)
+
+                logging.debug(f"{current_time}  inbound (connect):    {addr}")
             case "inbound_disconnected":
                 addr = info["addr"]
                 id = info.get("channel_id")
-                logging.debug(f"{name} inbound (disconnect): {addr}")
-                logging.debug(params)
                 self.info.remove_inbound(id)
+
+                logging.debug(f"{current_time}  inbound (disconnect): {addr}")
             case "outbound_slot_sleeping":
                 slot = info["slot"]
                 self.info.update_event((f"{name}", f"{slot}"), "sleeping")
+
+                logging.debug(f"{current_time}  slot {slot}: sleeping")
             case "outbound_slot_connecting":
                 slot = info["slot"]
                 addr = info["addr"]
                 self.info.update_event((f"{name}", f"{slot}"), f"connecting: addr={addr}")
+
+                logging.debug(f"{current_time}  slot {slot}: connecting   addr={addr}")
             case "outbound_slot_connected":
                 slot = info["slot"]
                 addr = info["addr"]
                 channel_id = info["channel_id"]
                 self.info.update_event((f"{name}", f"{slot}"), f"connected: addr={addr}")
+
+                logging.debug(f"{current_time}  slot {slot}: connected    addr={addr}")
             case "outbound_slot_disconnected":
                 slot = info["slot"]
                 err = info["err"]
                 self.info.update_event((f"{name}", f"{slot}"), f"disconnected: {err}")
+
+                logging.debug(f"{current_time}  slot {slot}: disconnected err='{err}'")
             case "outbound_peer_discovery":
                 attempt = info["attempt"]
                 state = info["state"]
                 self.info.update_event((f"{name}", "outbound"), f"peer discovery: {state} (attempt {attempt})")
+
+                logging.debug(f"{current_time}  peer_discovery: {state} (attempt {attempt})")
 
     def __repr__(self):
         return f"{self.nodes}"
@@ -162,7 +170,6 @@ class Info:
 
     def update_inbound(self, key, value):
         self.inbound[key] = value
-        logging.debug(self.inbound.items())
 
     def remove_inbound(self, key):
         if key in self.inbound:

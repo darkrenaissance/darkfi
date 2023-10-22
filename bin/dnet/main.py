@@ -56,16 +56,13 @@ class Dnetview:
         await rpc.dnet_subscribe_events()
 
         while True:
+            await asyncio.sleep(0.01)
             data = await rpc.reader.readline()
             data = json.loads(data)
-            info[name] = data
-            #logging.debug(f"{info}")
 
-            try:
-                self.queue.put_nowait(info)
-            except:
-                logging.debug("subscribe().putnowait(): QueueFull")
-    
+            info[name] = data
+            self.queue.put_nowait(info)
+
         await rpc.dnet_switch(False)
         await rpc.stop()
     
@@ -86,19 +83,16 @@ class Dnetview:
 
     async def update_info(self):
         while True:
-            try:
-                info = await self.queue.get()
-                values = list(info.values())[0]
-                method = values.get("method")
+            info = await self.queue.get()
+            values = list(info.values())[0]
+            method = values.get("method")
 
-                if method == "dnet.subscribe_events":
-                    self.model.handle_event(info)
-                else:
-                    self.model.handle_nodes(info)
+            if method == "dnet.subscribe_events":
+                self.model.handle_event(info)
+            else:
+                self.model.handle_nodes(info)
 
-                self.queue.task_done()
-            except OSError as e:
-                logging.debug("update_model(): error {}", e)
+            self.queue.task_done()
 
     def main(self):
         logging.basicConfig(filename='dnet.log',
