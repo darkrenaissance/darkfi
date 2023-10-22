@@ -32,13 +32,14 @@ class Model:
     def __init__(self):
         self.info = Info()
         self.nodes = {}
+        self.channel_lookup = {}
 
     def update_node(self, key, value):
         self.nodes[key] = value
 
     def handle_nodes(self, node):
-        logging.debug(f"p2p_get_info(): {node}")
-        channel_lookup = {}
+        #logging.debug(f"p2p_get_info(): {node}")
+        #channel_lookup = {}
         name = list(node.keys())[0]
         values = list(node.values())[0]
         info = values["result"]
@@ -46,14 +47,14 @@ class Model:
 
         for channel in channels:
             id = channel["id"]
-            channel_lookup[id] = channel
+            self.channel_lookup[id] = channel
 
         for channel in channels:
             if channel["session"] != "inbound":
                 continue
 
             id = channel["id"]
-            url = channel_lookup[id]["url"]
+            url = self.channel_lookup[id]["url"]
             self.info.update_inbound(f"{id}", url)
 
         for i, id in enumerate(info["outbound_slots"]):
@@ -61,8 +62,8 @@ class Model:
                 self.info.update_outbound(f"{i}", "none")
                 continue
 
-            assert id in channel_lookup
-            url = channel_lookup[id]["url"]
+            assert id in self.channel_lookup
+            url = self.channel_lookup[id]["url"]
             self.info.update_outbound(f"{i}", url)
 
         for channel in channels:
@@ -80,7 +81,7 @@ class Model:
         self.update_node(name, self.info)
 
     def handle_event(self, event):
-        logging.debug(f"dnet_subscribe(): {event}")
+        #logging.debug(f"dnet_subscribe(): {event}")
         name = list(event.keys())[0]
         values = list(event.values())[0]
         params = values.get("params")
@@ -111,26 +112,32 @@ class Model:
                 self.info.update_msg(addr, (t, event, cmd))
             case "inbound_connected":
                 addr = info["addr"]
-                self.info.update_event((f"{name}", "inbound"), f"inbound (connect): {addr}")
+                id = info.get("channel_id")
+                logging.debug(f"{name} inbound (connect): {addr}")
+                logging.debug(params)
+                self.info.update_inbound(f"{id}", addr)
             case "inbound_disconnected":
                 addr = info["addr"]
-                self.info.update_event((f"{name}","inbound"), f"inbound (disconnect): {addr}")
+                id = info.get("channel_id")
+                logging.debug(f"{name} inbound (disconnect): {addr}")
+                logging.debug(params)
+                self.info.remove_inbound(id)
             case "outbound_slot_sleeping":
                 slot = info["slot"]
                 self.info.update_event((f"{name}", f"{slot}"), "sleeping")
             case "outbound_slot_connecting":
                 slot = info["slot"]
                 addr = info["addr"]
-                self.info.update_event((f"{name}", f"{slot}"), f"connecting  addr={addr}")
+                self.info.update_event((f"{name}", f"{slot}"), f"connecting: addr={addr}")
             case "outbound_slot_connected":
                 slot = info["slot"]
                 addr = info["addr"]
                 channel_id = info["channel_id"]
-                self.info.update_event(f"{name}, {slot}", f"connected   addr={addr}")
+                self.info.update_event((f"{name}", f"{slot}"), f"connected: addr={addr}")
             case "outbound_slot_disconnected":
                 slot = info["slot"]
                 err = info["err"]
-                self.info.update_event((f"{slot}", "{slot}"), "disconnected")
+                self.info.update_event((f"{name}", f"{slot}"), f"disconnected: {err}")
             case "outbound_peer_discovery":
                 attempt = info["attempt"]
                 state = info["state"]
@@ -155,6 +162,11 @@ class Info:
 
     def update_inbound(self, key, value):
         self.inbound[key] = value
+        logging.debug(self.inbound.items())
+
+    def remove_inbound(self, key):
+        if key in self.inbound:
+            del self.inbound[key] 
 
     def update_manual(self, key, value):
         self.manual[key] = value

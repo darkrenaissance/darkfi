@@ -200,15 +200,17 @@ class View():
             for index, item in enumerate(self.listwalker.contents):
                 name = item.get_name()
                 if name in self.model.info.event.keys():
-                    slot_num = name[1]
-                    match slot_num:
+                    postfix = name[1]
+                    match postfix:
                         case "outbound":
+                            # Outhound event info (displayed in render_info())
                             continue
                         case "inbound":
                             continue
                         case _:
+                            # Slot event info
                             value = self.model.info.event.get(name)
-                            widget = SlotView(node, slot_num, value)
+                            widget = SlotView(node, postfix, value)
                             self.listwalker.contents[index] = widget
 
     async def render_info(self):
