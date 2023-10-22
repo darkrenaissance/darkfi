@@ -107,3 +107,10 @@ Core protocols should be modeled and analyzed with DoS protections added. Below 
     * Also loops can cause an issue if triggered by the network. This should be carefully analyzed and flattened if possible,
       otherwise they should be guarded against attack.
 
+### Customizable Policy
+
+Apps should be able to configure:
+
+* Reject hosts, for example based off current overall resource utilization or the host addr.
+* Accounting abstraction for scoring connections.
+
