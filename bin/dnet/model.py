@@ -112,43 +112,36 @@ class Model:
                 addr = info["addr"]
                 id = info.get("channel_id")
                 self.info.update_inbound(f"{id}", addr)
-
                 logging.debug(f"{current_time}  inbound (connect):    {addr}")
             case "inbound_disconnected":
                 addr = info["addr"]
                 id = info.get("channel_id")
-                self.info.remove_inbound(id)
-
+                self.info.remove_inbound(f"{id}")
                 logging.debug(f"{current_time}  inbound (disconnect): {addr}")
             case "outbound_slot_sleeping":
                 slot = info["slot"]
                 self.info.update_event((f"{name}", f"{slot}"), "sleeping")
-
                 logging.debug(f"{current_time}  slot {slot}: sleeping")
             case "outbound_slot_connecting":
                 slot = info["slot"]
                 addr = info["addr"]
                 self.info.update_event((f"{name}", f"{slot}"), f"connecting: addr={addr}")
-
                 logging.debug(f"{current_time}  slot {slot}: connecting   addr={addr}")
             case "outbound_slot_connected":
                 slot = info["slot"]
                 addr = info["addr"]
                 channel_id = info["channel_id"]
                 self.info.update_event((f"{name}", f"{slot}"), f"connected: addr={addr}")
-
                 logging.debug(f"{current_time}  slot {slot}: connected    addr={addr}")
             case "outbound_slot_disconnected":
                 slot = info["slot"]
                 err = info["err"]
                 self.info.update_event((f"{name}", f"{slot}"), f"disconnected: {err}")
-
                 logging.debug(f"{current_time}  slot {slot}: disconnected err='{err}'")
             case "outbound_peer_discovery":
                 attempt = info["attempt"]
                 state = info["state"]
                 self.info.update_event((f"{name}", "outbound"), f"peer discovery: {state} (attempt {attempt})")
-
                 logging.debug(f"{current_time}  peer_discovery: {state} (attempt {attempt})")
 
     def __repr__(self):
@@ -172,8 +165,7 @@ class Info:
         self.inbound[key] = value
 
     def remove_inbound(self, key):
-        if key in self.inbound:
-            del self.inbound[key] 
+        del self.inbound[key]
 
     def update_manual(self, key, value):
         self.manual[key] = value

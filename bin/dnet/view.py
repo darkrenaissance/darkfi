@@ -55,6 +55,7 @@ class LeftList(urwid.ListBox):
 class NodeView(urwid.WidgetWrap):
 
     def __init__(self, info):
+        self.type = "node"
         self.name = info
         self.text = urwid.Text(f"{self.name}")
         super().__init__(self.text)
@@ -78,9 +79,13 @@ class NodeView(urwid.WidgetWrap):
     def get_name(self):
         return self.name
 
+    def get_type(self):
+        return self.type
+
 class ConnectView(urwid.WidgetWrap):
 
     def __init__(self, node, kind):
+        self.type = f"{kind}-connect"
         self.name = (f"{node}", f"{kind}")
         self.text = urwid.Text(f"  {kind}")
         super().__init__(self.text)
@@ -102,15 +107,18 @@ class ConnectView(urwid.WidgetWrap):
     def get_name(self):
         return self.name
 
+    def get_type(self):
+        return self.type
+
 class SlotView(urwid.WidgetWrap):
 
-    def __init__(self, node, num, info):
-        self.num = num
-        self.name = (f"{node}", f"{num}")
-        #self.name = info[0]
+    def __init__(self, node, type, id, info):
+        self.id = id
+        self.type = type
+        self.name = (f"{node}", f"{id}")
         self.addr = info
-        if len(num) == 1:
-            self.text = urwid.Text(f"    {num}: {self.addr}")
+        if len(id) == 1:
+            self.text = urwid.Text(f"    {id}: {self.addr}")
         else:
             self.text = urwid.Text(f"    {self.addr}")
         super().__init__(self.text)
@@ -135,6 +143,9 @@ class SlotView(urwid.WidgetWrap):
     def get_addr(self):
         return self.addr
 
+    def get_type(self):
+        return self.type
+
 
 class View():
     palette = [
@@ -157,62 +168,74 @@ class View():
 
 
     async def update_view(self):
-        online = []
+        known_nodes = []
+        known_inbound = []
         while True:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.01)
             for index, item in enumerate(self.listwalker.contents):
-                online.append(item.get_name())
+                known_nodes.append(item.get_name())
 
+            # Render get_info()
             for node, values in self.model.nodes.items():
-                if node in online:
+                if node in known_nodes:
                     continue
                 else:
                     widget = NodeView(node)
                     self.listwalker.contents.append(widget)
-
                     outbounds = values.outbound
                     inbound = values.inbound
                     manual = values.manual
                     seed = values.seed
-
                     if len(outbounds) != 0:
                         widget = ConnectView(node, "outbound")
                         self.listwalker.contents.append(widget)
                         for i, info in outbounds.items():
-                            widget = SlotView(node, i, info)
+                            widget = SlotView(node, "outbound", i, info)
                             self.listwalker.contents.append(widget)
-
                     if len(inbound) != 0:
                         widget = ConnectView(node, "inbound")
                         self.listwalker.contents.append(widget)
                         for i, info in inbound.items():
-                            widget = SlotView(node, i, info)
+                            widget = SlotView(node, "inbound", i, info)
                             self.listwalker.contents.append(widget)
-                        #logging.debug(len(self.listwalker.contents))
                     if len(seed) != 0:
                         widget = ConnectView(node, "seed")
                         self.listwalker.contents.append(widget)
-
                     if len(manual) != 0:
                         widget = ConnectView(node, "manual")
                         self.listwalker.contents.append(widget)
 
+            # Update outbound slot info
             for index, item in enumerate(self.listwalker.contents):
-                name = item.get_name()
-                if name in self.model.info.event.keys():
-                    postfix = name[1]
-                    match postfix:
-                        case "outbound":
-                            # Outhound event info (displayed in render_info())
-                            continue
-                        case "inbound":
-                            continue
-                        case _:
-                            # Slot event info
-                            value = self.model.info.event.get(name)
-                            widget = SlotView(node, postfix, value)
-                            self.listwalker.contents[index] = widget
+                if item.get_type() == "outbound":
+                    name = item.get_name()
+                    if name in self.model.info.event.keys():
+                        value = self.model.info.event.get(name)
+                        widget = SlotView(node, "outbound", name[1], value)
+                        self.listwalker.contents[index] = widget
 
+            # Update new inbound connections
+            for index, item in enumerate(self.listwalker.contents):
+                if item.get_type() == "inbound":
+                    name = item.get_name()
+                    known_inbound.append(name[1])
+            for id, addr in self.model.info.inbound.items():
+                if id in known_inbound:
+                    continue
+                else:
+                    widget = SlotView(node, "inbound", id, addr)
+                    self.listwalker.contents.append(widget)
+
+            # Remove disconnected inbounds 
+            for id in known_inbound:
+                if id in self.model.info.inbound.keys():
+                    continue
+                for index, item in enumerate(self.listwalker.contents):
+                    name = item.get_name()
+                    if name[1] == id:
+                        del self.listwalker.contents[index]
+            
+    # Render subscribe_events() (right menu)
     async def render_info(self):
         while True:
             await asyncio.sleep(0.1)

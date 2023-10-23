@@ -39,7 +39,6 @@ class Dnetview:
                 await rpc.start(host, port)
                 logging.debug(f"Started {name} RPC on port {port}")
                 break
-            # TODO: offline node handling
             except Exception as e:
                 logging.debug(f"failed to connect {host}:{port} {e}")
                 pass
@@ -47,11 +46,7 @@ class Dnetview:
         data = await rpc._make_request("p2p.get_info", [])
         info[name] = data
 
-        try:
-            self.queue.put_nowait(info)
-        except:
-            logging.debug("subscribe().put_nowait(): QueueFull")
-
+        await self.queue.put(info)
         await rpc.dnet_switch(True)
         await rpc.dnet_subscribe_events()
 
@@ -59,9 +54,8 @@ class Dnetview:
             await asyncio.sleep(0.01)
             data = await rpc.reader.readline()
             data = json.loads(data)
-
             info[name] = data
-            self.queue.put_nowait(info)
+            await self.queue.put(info)
 
         await rpc.dnet_switch(False)
         await rpc.stop()
