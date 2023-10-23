@@ -204,6 +204,9 @@ class View():
                     if len(manual) != 0:
                         widget = ConnectView(node, "manual")
                         self.listwalker.contents.append(widget)
+                        for i, info in manual.items():
+                            widget = SlotView(node, "manual", i, info)
+                            self.listwalker.contents.append(widget)
 
             # Update outbound slot info
             for index, item in enumerate(self.listwalker.contents):
@@ -211,6 +214,7 @@ class View():
                     name = item.get_name()
                     if name in self.model.info.event.keys():
                         value = self.model.info.event.get(name)
+                        logging.debug(value)
                         widget = SlotView(node, "outbound", name[1], value)
                         self.listwalker.contents[index] = widget
 
