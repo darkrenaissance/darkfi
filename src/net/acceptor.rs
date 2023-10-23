@@ -24,7 +24,7 @@ use std::{
     },
 };
 
-use log::{debug, error};
+use log::{debug, error, warn};
 use smol::Executor;
 use url::Url;
 
@@ -150,6 +150,13 @@ impl Acceptor {
                 // As per accept(2) recommendation:
                 Err(e) if e.raw_os_error().is_some() => match e.raw_os_error().unwrap() {
                     libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR => continue,
+                    libc::ECONNRESET => {
+                        warn!(
+                            target: "net::acceptor::run_accept_loop()",
+                            "[P2P] Connection reset by peer in accept_loop"
+                        );
+                        continue
+                    }
                     _ => {
                         error!(
                             target: "net::acceptor::run_accept_loop()",
