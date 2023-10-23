@@ -52,6 +52,10 @@ pub(crate) fn dao_exec_get_metadata(
     let all_vote_coords = blind_vote.all_vote_commit.to_affine().coordinates().unwrap();
     let input_value_coords = params.input_value_commit.to_affine().coordinates().unwrap();
 
+    // TODO (CRITICAL): deserialize MoneyTransfer data, and pass user_data_enc below.
+    //                  This should be enforced inside the ZK contract.
+    //                  When decrypted it should match dao_bulla.
+
     zk_public_inputs.push((
         DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string(),
         vec![
