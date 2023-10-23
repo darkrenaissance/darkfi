@@ -195,7 +195,7 @@ pub(crate) fn money_transfer_process_instruction_v1(
 
             let next = &calls[next_call_idx as usize];
             if next.contract_id.inner() != input.spend_hook {
-                msg!("[TransferV1] Error: Invoking contract call does not match spend hook in input {}", i);
+                msg!("[TransferV1] Error: Invoked contract call does not match spend hook in input {}", i);
                 return Err(MoneyError::SpendHookMismatch.into())
             }
         }

@@ -29,6 +29,7 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
 
 use crate::{
+    error::DaoError,
     model::{DaoExecUpdate, DaoMintUpdate, DaoProposeUpdate, DaoVoteUpdate},
     DaoFunction, DAO_CONTRACT_DB_DAO_BULLAS, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS,
     DAO_CONTRACT_DB_INFO_TREE, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_DB_VOTE_NULLIFIERS,
@@ -179,7 +180,29 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         return Err(ContractError::Internal)
     }
 
-    match DaoFunction::try_from(calls[call_idx as usize].data[0])? {
+    let self_ = &calls[call_idx as usize];
+    let func = DaoFunction::try_from(self_.data[0])?;
+
+    if calls.len() != 1 {
+        // Enforce a strict structure for our tx
+        if calls.len() != 2 || call_idx != 1 {
+            msg!("[Dao] Error: No more than 2 calls allowed, and DAO call must be last");
+            return Err(DaoError::InvalidCalls.into())
+        }
+
+        // We can unpack user_data and check the function call is correct.
+        // But in this contract, only DAO::exec() can be invoked by other ones.
+        // So just check the function call is correct.
+
+        // NOTE: we may wish to improve this since it cripples user composability.
+
+        if func != DaoFunction::Exec {
+            msg!("[Dao] Error: Only DAO::exec() can be invoked");
+            return Err(DaoError::InvalidCalls.into())
+        }
+    }
+
+    match func {
         DaoFunction::Mint => {
             let update_data = dao_mint_process_instruction(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)

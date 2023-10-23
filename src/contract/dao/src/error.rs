@@ -20,6 +20,9 @@ use darkfi_sdk::error::ContractError;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum DaoError {
+    #[error("Invalid calls")]
+    InvalidCalls,
+
     #[error("DAO already exists")]
     DaoAlreadyExists,
 
@@ -66,20 +69,21 @@ pub enum DaoError {
 impl From<DaoError> for ContractError {
     fn from(e: DaoError) -> Self {
         match e {
-            DaoError::DaoAlreadyExists => Self::Custom(1),
-            DaoError::ProposalInputsEmpty => Self::Custom(2),
-            DaoError::InvalidInputMerkleRoot => Self::Custom(3),
-            DaoError::InvalidDaoMerkleRoot => Self::Custom(4),
-            DaoError::ProposalAlreadyExists => Self::Custom(5),
-            DaoError::VoteInputsEmpty => Self::Custom(6),
-            DaoError::ProposalNonexistent => Self::Custom(7),
-            DaoError::ProposalEnded => Self::Custom(8),
-            DaoError::CoinAlreadySpent => Self::Custom(9),
-            DaoError::DoubleVote => Self::Custom(10),
-            DaoError::ExecCallInvalidFormat => Self::Custom(11),
-            DaoError::ExecCallOutputsMismatch => Self::Custom(12),
-            DaoError::ExecCallValueMismatch => Self::Custom(13),
-            DaoError::VoteCommitMismatch => Self::Custom(14),
+            DaoError::InvalidCalls => Self::Custom(1),
+            DaoError::DaoAlreadyExists => Self::Custom(2),
+            DaoError::ProposalInputsEmpty => Self::Custom(3),
+            DaoError::InvalidInputMerkleRoot => Self::Custom(4),
+            DaoError::InvalidDaoMerkleRoot => Self::Custom(5),
+            DaoError::ProposalAlreadyExists => Self::Custom(6),
+            DaoError::VoteInputsEmpty => Self::Custom(7),
+            DaoError::ProposalNonexistent => Self::Custom(8),
+            DaoError::ProposalEnded => Self::Custom(9),
+            DaoError::CoinAlreadySpent => Self::Custom(10),
+            DaoError::DoubleVote => Self::Custom(11),
+            DaoError::ExecCallInvalidFormat => Self::Custom(12),
+            DaoError::ExecCallOutputsMismatch => Self::Custom(13),
+            DaoError::ExecCallValueMismatch => Self::Custom(14),
+            DaoError::VoteCommitMismatch => Self::Custom(15),
         }
     }
 }

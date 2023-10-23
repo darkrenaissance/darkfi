@@ -92,7 +92,7 @@ pub struct Input {
     /// must have this value as its ID.
     pub spend_hook: pallas::Base,
     /// Encrypted user data field. An encrypted commitment to arbitrary data.
-    /// When spend hook is set (it is nonzero), then this field may be user
+    /// When spend hook is set (it is nonzero), then this field may be used
     /// to pass data to the invoked contract.
     pub user_data_enc: pallas::Base,
     /// Public key for the signature
