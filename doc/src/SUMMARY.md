@@ -7,13 +7,15 @@
   - [Ideology](philosophy/ideology.md)
   - [Books](philosophy/books.md)
 
-# Testnet Guide
+# User Guide
 
 - [Running a Node](testnet/node.md)
 - [Airdrops](testnet/airdrop.md)
 - [Payments](testnet/payment.md)
 - [Atomic Swap](testnet/atomic-swap.md)
 - [DAO](testnet/dao.md)
+- [ircd](misc/ircd/ircd.md)
+	- [Private Message](misc/ircd/private_message.md)
 
 # Developer Doc
 
@@ -65,9 +67,7 @@
 # Misc
 
 - [vanityaddr](misc/vanityaddr.md)
-- [ircd](misc/ircd/ircd.md)
-	- [Specification](misc/ircd/specification.md)
-	- [Private Message](misc/ircd/private_message.md)
+- [IRCd Specification](misc/ircd/specification.md)
 - [tau](misc/tau.md)
 - [event_graph](misc/event_graph/event_graph.md)
   - [Network Protocol](misc/event_graph/network_protocol.md)
