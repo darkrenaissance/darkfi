@@ -23,14 +23,6 @@ import datetime as dt
 from scroll import ScrollBar, Scrollable
 from model import Model
 
-#----------------------------------------------------------------------
-# TODO: 
-#   * create a dictionary that stores:
-#   * channel[id] = index
-#   * index = listwalker.contents[i]
-#   * sort data by ID, constantly update listwalker_contents[i]
-#   * if it's a null id, render empty info
-# -------------------------------------------------------------------
 
 event_loop = asyncio.get_event_loop()
 
@@ -171,7 +163,7 @@ class View():
         known_nodes = []
         known_inbound = []
         while True:
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0.1)
             for index, item in enumerate(self.listwalker.contents):
                 known_nodes.append(item.get_name())
 
@@ -182,39 +174,43 @@ class View():
                 else:
                     widget = NodeView(node)
                     self.listwalker.contents.append(widget)
-                    outbounds = values.outbound
-                    inbound = values.inbound
-                    manual = values.manual
-                    seed = values.seed
-                    if len(outbounds) != 0:
+
+                    if values['outbound']:
                         widget = ConnectView(node, "outbound")
                         self.listwalker.contents.append(widget)
-                        for i, info in outbounds.items():
+                        for i, info in values['outbound'].items():
                             widget = SlotView(node, "outbound", i, info)
                             self.listwalker.contents.append(widget)
-                    if len(inbound) != 0:
+
+                    if values['inbound']:
                         widget = ConnectView(node, "inbound")
                         self.listwalker.contents.append(widget)
-                        for i, info in inbound.items():
+                        for i, info in values['inbound'].items():
                             widget = SlotView(node, "inbound", i, info)
                             self.listwalker.contents.append(widget)
-                    if len(seed) != 0:
-                        widget = ConnectView(node, "seed")
-                        self.listwalker.contents.append(widget)
-                    if len(manual) != 0:
+
+                    if values['manual']:
                         widget = ConnectView(node, "manual")
                         self.listwalker.contents.append(widget)
-                        for i, info in manual.items():
+                        for i, info in values['manual'].items():
                             widget = SlotView(node, "manual", i, info)
                             self.listwalker.contents.append(widget)
+
+                    if values['seed']:
+                        widget = ConnectView(node, "seed")
+                        self.listwalker.contents.append(widget)
+                        for i, info in values['seed'].items():
+                            widget = SlotView(node, "seed", i, info)
+                            self.listwalker.contents.append(widget)
+
 
             # Update outbound slot info
             for index, item in enumerate(self.listwalker.contents):
                 if item.get_type() == "outbound":
                     name = item.get_name()
-                    if name in self.model.info.event.keys():
-                        value = self.model.info.event.get(name)
-                        logging.debug(value)
+                    node = name[0]
+                    if name in self.model.nodes[node]['event']:
+                        value = self.model.nodes[node]['event'].get(name)
                         widget = SlotView(node, "outbound", name[1], value)
                         self.listwalker.contents[index] = widget
 
@@ -222,56 +218,67 @@ class View():
             for index, item in enumerate(self.listwalker.contents):
                 if item.get_type() == "inbound":
                     name = item.get_name()
-                    known_inbound.append(name[1])
-            for id, addr in self.model.info.inbound.items():
-                if id in known_inbound:
-                    continue
-                else:
-                    widget = SlotView(node, "inbound", id, addr)
-                    self.listwalker.contents.append(widget)
+                    if name[1] not in known_inbound:
+                        known_inbound.append(name[1])
+            for node, value in self.model.nodes.items():
+                for id, addr in value['inbound'].items():
+                   if id in known_inbound:
+                       continue
+                   else:
+                       widget = SlotView(node, "inbound", id, addr)
+                       self.listwalker.contents.append(widget)
 
-            # Remove disconnected inbounds 
-            for id in known_inbound:
-                if id in self.model.info.inbound.keys():
-                    continue
-                for index, item in enumerate(self.listwalker.contents):
-                    name = item.get_name()
-                    if name[1] == id:
-                        del self.listwalker.contents[index]
+            # Remove disconnected inbounds
+            for inbound in known_inbound:
+                for value in self.model.nodes.values():
+                    if inbound in value['inbound']:
+                        continue
+                    for index, item in enumerate(self.listwalker.contents):
+                        name = item.get_name()
+                        if name[1] == id:
+                            del self.listwalker.contents[index]
             
+
     # Render subscribe_events() (right menu)
     async def render_info(self):
         while True:
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.01)
             self.pile.contents.clear()
+            logging.debug(self.pile.contents)
             focus_w = self.list.get_focus()
             if focus_w[0] is None:
                 continue
             else:
                 match focus_w[0].get_widget():
                     case "NodeView":
+                        logging.debug("node selected")
+                        # TODO: We will display additional node info here.
                         self.pile.contents.append((
-                            urwid.Text(f"Node selected"),
+                            urwid.Text(f""),
                             self.pile.options()))
                     case "ConnectView":
+                        logging.debug("connection selected")
                         name = focus_w[0].get_name()
-                        
-                        if name in self.model.info.event.keys():
-                            values = self.model.info.event.get(name)
+                        info = self.model.nodes.get(name[0])
+                        if name in info['event']:
+                            ev = info['event'].get(name)
+                            logging.debug(f"{ev}")
 
                             self.pile.contents.append((
-                                urwid.Text(f" {values}"),
+                                urwid.Text(f" {ev}"),
                                 self.pile.options()))
                     case "SlotView":
+                        logging.debug("slot selected")
                         addr = focus_w[0].get_addr()
+                        name = focus_w[0].get_name()
+                        info = self.model.nodes.get(name[0])
+                        if addr in info['msgs']:
+                            msg = info['msgs'].get(addr)
 
-                        if addr in self.model.info.msgs.keys():
-                            values = self.model.info.msgs.get(addr)
-
-                            for value in values:
-                                time = value[0]
-                                event = value[1]
-                                msg = value[2]
+                            for m in msg:
+                                time = m[0]
+                                event = m[1]
+                                msg = m[2]
 
                                 self.pile.contents.append((urwid.Text(
                                         f"{time}: {event}: {msg}"),

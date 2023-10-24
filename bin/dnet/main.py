@@ -82,9 +82,9 @@ class Dnetview:
             method = values.get("method")
 
             if method == "dnet.subscribe_events":
-                self.model.handle_event(info)
+                self.model.add_event(info)
             else:
-                self.model.handle_nodes(info)
+                self.model.add_node(info)
 
             self.queue.task_done()
 
