@@ -195,7 +195,7 @@ impl EventGraph {
         //   from the beginning
 
         // Get references to all our peers.
-        let channels = self.p2p.channels().lock().await.clone();
+        let channels = self.p2p.channels().await;
         let mut communicated_peers = channels.len();
         info!(
             target: "event_graph::dag_sync()",
@@ -207,7 +207,9 @@ impl EventGraph {
 
         // Let's first ask all of our peers for their tips and collect them
         // in our hashmap above.
-        for (url, channel) in channels.iter() {
+        for channel in channels.iter() {
+            let url = channel.address();
+
             let tip_rep_sub = match channel.subscribe_msg::<TipRep>().await {
                 Ok(v) => v,
                 Err(e) => {
@@ -294,7 +296,9 @@ impl EventGraph {
             for parent_id in missing_parents.clone().iter() {
                 let mut found_event = false;
 
-                for (url, channel) in channels.iter() {
+                for channel in channels.iter() {
+                    let url = channel.address();
+
                     debug!(
                         target: "event_graph::dag_sync()",
                         "Requesting {} from {}...", parent_id, url,

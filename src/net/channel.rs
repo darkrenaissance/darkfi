@@ -161,6 +161,10 @@ impl Channel {
         Ok(sub)
     }
 
+    pub fn is_stopped(&self) -> bool {
+        self.stopped.load(SeqCst)
+    }
+
     /// Sends a message across a channel. Calls `send_message` that creates
     /// a new payload and sends it over the network transport as a packet.
     /// Returns an error if something goes wrong.

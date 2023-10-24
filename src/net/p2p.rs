@@ -173,63 +173,42 @@ impl P2p {
         self.broadcast_with_exclude(message, &[]).await
     }
 
-    /// Broadcast a message concurrently to all given peers.
-    pub async fn broadcast_to<M: Message>(&self, message: &M, peer_list: &[ChannelPtr]) {
-        let mut futures = FuturesUnordered::new();
-
-        for channel in peer_list {
-            futures.push(channel.send(message).map_err(|e| {
-                (
-                    format!("[P2P] Broadcasting message to {} failed: {}", channel.address(), e),
-                    channel.clone(),
-                )
-            }));
-        }
-
-        if futures.is_empty() {
-            warn!(target: "net::p2p::broadcast()", "[P2P] No connected channels found for broadcast");
-            return
-        }
-
-        while let Some(entry) = futures.next().await {
-            if let Err((e, chan)) = entry {
-                error!(target: "net::p2p::broadcast()", "{}", e);
-                self.remove(chan).await;
-            }
-        }
-    }
-
     /// Broadcasts a message concurrently across active channels, excluding
     /// the ones provided in `exclude_list`.
     pub async fn broadcast_with_exclude<M: Message>(&self, message: &M, exclude_list: &[Url]) {
-        let chans = self.channels.lock().await;
-        let iter = chans.values();
-        let mut futures = FuturesUnordered::new();
-
-        for channel in iter {
+        let mut channels = Vec::new();
+        for channel in self.channels().await {
             if exclude_list.contains(channel.address()) {
                 continue
             }
-
-            futures.push(channel.send(message).map_err(|e| {
-                (
-                    format!("[P2P] Broadcasting message to {} failed: {}", channel.address(), e),
-                    channel.clone(),
-                )
-            }));
+            channels.push(channel);
         }
+        self.broadcast_to(message, &channels).await
+    }
 
-        if futures.is_empty() {
+    /// Broadcast a message concurrently to all given peers.
+    pub async fn broadcast_to<M: Message>(&self, message: &M, channel_list: &[ChannelPtr]) {
+        if channel_list.is_empty() {
             warn!(target: "net::p2p::broadcast()", "[P2P] No connected channels found for broadcast");
             return
         }
 
-        while let Some(entry) = futures.next().await {
-            if let Err((e, chan)) = entry {
-                error!(target: "net::p2p::broadcast()", "{}", e);
-                self.remove(chan).await;
-            }
+        let futures = FuturesUnordered::new();
+
+        for channel in channel_list {
+            futures.push(channel.send(message).map_err(|e| {
+                error!(
+                    target: "net::p2p::broadcast()",
+                    "[P2P] Broadcasting message to {} failed: {}",
+                    channel.address(), e
+                );
+                // If the channel is stopped then it should automatically die
+                // and the session will remove it from p2p.
+                assert!(channel.is_stopped());
+            }));
         }
+
+        let _results: Vec<_> = futures.collect().await;
     }
 
     /// Check whether we're connected to a given address
@@ -260,19 +239,19 @@ impl P2p {
         self.pending.lock().await.remove(addr);
     }
 
-    /// Return reference to connected channels map
-    pub fn channels(&self) -> &ConnectedChannels {
-        &self.channels
+    /// Return all connected channels
+    pub async fn channels(&self) -> Vec<ChannelPtr> {
+        self.channels.lock().await.values().cloned().collect()
     }
 
     /// Retrieve a random connected channel from the
     pub async fn random_channel(&self) -> Option<ChannelPtr> {
-        let channels = self.channels().lock().await;
+        let channels = self.channels.lock().await;
         channels.values().choose(&mut OsRng).cloned()
     }
 
     pub async fn is_connected(&self) -> bool {
-        !self.channels().lock().await.is_empty()
+        !self.channels.lock().await.is_empty()
     }
 
     /// Return an atomic pointer to the set network settings

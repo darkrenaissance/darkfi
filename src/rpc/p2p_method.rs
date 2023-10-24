@@ -28,7 +28,7 @@ use crate::net;
 pub trait HandlerP2p: Sync + Send {
     async fn p2p_get_info(&self, id: u16, _params: JsonValue) -> JsonResult {
         let mut channels = Vec::new();
-        for (url, channel) in self.p2p().channels().lock().await.iter() {
+        for channel in self.p2p().channels().await {
             let session = match channel.session_type_id() {
                 net::session::SESSION_INBOUND => "inbound",
                 net::session::SESSION_OUTBOUND => "outbound",
@@ -37,7 +37,7 @@ pub trait HandlerP2p: Sync + Send {
                 _ => panic!("invalid result from channel.session_type_id()"),
             };
             channels.push(json_map([
-                ("url", JsonStr(url.clone().into())),
+                ("url", JsonStr(channel.address().clone().into())),
                 ("session", json_str(session)),
                 ("id", JsonNum(channel.info.id.into())),
             ]));
