@@ -6,6 +6,7 @@ ecvrf[^1] is elliptic curve Verifiable Random Function satisfies:
 - full pseudo-randomness [^4]
 
 ## ecvrf protocol
+
 ### proof generation
 
 $proof = prove(sk, data)$, `sk` is VRF private key, `data` is input data as stream of bytes, proof is the vrf output.
