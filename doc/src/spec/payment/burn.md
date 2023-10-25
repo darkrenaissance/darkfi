@@ -34,3 +34,7 @@ $$ \mathcal{L} = \{X:W\in \mathcal{R}\} $$
 | pos                  | coin commitment leaf position in the merkle tree    |
 | path                 | coin commitment merkle tree path                    |
 | $signature^{secret}$ | signature secret key                                |
+
+# circuit checks
+
+- if the `coin` has `value` zero, then coin is set to zero, with leaf position 0 in the sparse-merkle-tree, the aim is prevent burning zero coins.
