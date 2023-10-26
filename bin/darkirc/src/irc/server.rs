@@ -42,6 +42,9 @@ use crate::{
     DarkIrc,
 };
 
+/// Max channel/nick length
+pub const MAX_NICK_LEN: usize = 24;
+
 /// IRC server instance
 pub struct IrcServer {
     /// DarkIrc instance
@@ -251,12 +254,26 @@ impl IrcServer {
         Ok(())
     }
 
+    fn pad(string: &str) -> Vec<u8> {
+        let mut bytes = string.as_bytes().to_vec();
+        bytes.resize(MAX_NICK_LEN, 0x00);
+        bytes
+    }
+
+    fn unpad(vec: &mut Vec<u8>) {
+        if let Some(i) = vec.iter().rposition(|x| *x != 0) {
+            let new_len = i + 1;
+            vec.truncate(new_len);
+        }
+    }
+
     /// Try encrypting a given `Privmsg` if there is such a channel/contact.
     pub async fn try_encrypt(&self, privmsg: &mut Privmsg) {
         if let Some((name, channel)) = self.channels.read().await.get_key_value(&privmsg.channel) {
             if let Some(saltbox) = &channel.saltbox {
-                privmsg.channel = saltbox::encrypt(saltbox, privmsg.channel.as_bytes());
-                privmsg.nick = saltbox::encrypt(saltbox, privmsg.nick.as_bytes());
+                // We will pad the name and nick to MAX_NICK_LEN so they all look the same.
+                privmsg.channel = saltbox::encrypt(saltbox, &Self::pad(&privmsg.channel));
+                privmsg.nick = saltbox::encrypt(saltbox, &Self::pad(&privmsg.nick));
                 privmsg.msg = saltbox::encrypt(saltbox, privmsg.msg.as_bytes());
                 debug!("Successfully encrypted message for {}", name);
                 return
@@ -265,8 +282,9 @@ impl IrcServer {
 
         if let Some((name, contact)) = self.contacts.read().await.get_key_value(&privmsg.channel) {
             if let Some(saltbox) = &contact.saltbox {
-                privmsg.channel = saltbox::encrypt(saltbox, privmsg.channel.as_bytes());
-                privmsg.nick = saltbox::encrypt(saltbox, privmsg.nick.as_bytes());
+                // We will pad the nicks to MAX_NICK_LEN so they all look the same.
+                privmsg.channel = saltbox::encrypt(saltbox, &Self::pad(&privmsg.channel));
+                privmsg.nick = saltbox::encrypt(saltbox, &Self::pad(&privmsg.nick));
                 privmsg.msg = saltbox::encrypt(saltbox, privmsg.msg.as_bytes());
                 debug!("Successfully encrypted message for {}", name);
             }
@@ -296,11 +314,12 @@ impl IrcServer {
         // (i.e. decrypted) privmsg, otherwise we return the original.
         for (name, channel) in self.channels.read().await.iter() {
             if let Some(saltbox) = &channel.saltbox {
-                let Some(channel_dec) = saltbox::try_decrypt(saltbox, &channel_ciphertext) else {
+                let Some(mut channel_dec) = saltbox::try_decrypt(saltbox, &channel_ciphertext)
+                else {
                     continue
                 };
 
-                let Some(nick_dec) = saltbox::try_decrypt(saltbox, &nick_ciphertext) else {
+                let Some(mut nick_dec) = saltbox::try_decrypt(saltbox, &nick_ciphertext) else {
                     continue
                 };
 
@@ -308,21 +327,25 @@ impl IrcServer {
                     continue
                 };
 
-                privmsg.channel = channel_dec;
-                privmsg.nick = nick_dec;
-                privmsg.msg = msg_dec;
-                debug!("Successfuly decrypted message for {}", name);
+                Self::unpad(&mut channel_dec);
+                Self::unpad(&mut nick_dec);
+
+                privmsg.channel = String::from_utf8_lossy(&channel_dec).into();
+                privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
+                privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
+                debug!("Successfully decrypted message for {}", name);
                 return
             }
         }
 
         for (name, contact) in self.contacts.read().await.iter() {
             if let Some(saltbox) = &contact.saltbox {
-                let Some(channel_dec) = saltbox::try_decrypt(saltbox, &channel_ciphertext) else {
+                let Some(mut channel_dec) = saltbox::try_decrypt(saltbox, &channel_ciphertext)
+                else {
                     continue
                 };
 
-                let Some(nick_dec) = saltbox::try_decrypt(saltbox, &nick_ciphertext) else {
+                let Some(mut nick_dec) = saltbox::try_decrypt(saltbox, &nick_ciphertext) else {
                     continue
                 };
 
@@ -330,9 +353,12 @@ impl IrcServer {
                     continue
                 };
 
-                privmsg.channel = channel_dec;
-                privmsg.nick = nick_dec;
-                privmsg.msg = msg_dec;
+                Self::unpad(&mut channel_dec);
+                Self::unpad(&mut nick_dec);
+
+                privmsg.channel = String::from_utf8_lossy(&channel_dec).into();
+                privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
+                privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
                 debug!("Successfully decrypted message from {}", name);
                 return
             }

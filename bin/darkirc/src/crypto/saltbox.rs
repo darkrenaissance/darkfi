@@ -45,18 +45,18 @@ pub fn encrypt(salt_box: &ChaChaBox, plaintext: &[u8]) -> String {
 }
 
 /// Attempt to decrypt given ciphertext using the given `ChaChaBox`.
-/// Returns a lossy utf-8 string on success, and `None` on failure.
+/// Returns a `Vec<u8>` on success, and `None` on failure.
 ///
 /// The encryption format we're using with `ChaChaBox` is `nonce||ciphertext`,
 /// where nonce is 24 bytes large, and the remaining data should be the ciphertext.
-pub fn try_decrypt(salt_box: &ChaChaBox, ciphertext: &[u8]) -> Option<String> {
+pub fn try_decrypt(salt_box: &ChaChaBox, ciphertext: &[u8]) -> Option<Vec<u8>> {
     // Make sure we have enough bytes to work with
     if ciphertext.len() < 25 {
         return None
     }
 
     match salt_box.decrypt((&ciphertext[0..24]).into(), &ciphertext[24..]) {
-        Ok(v) => Some(String::from_utf8_lossy(&v).into()),
+        Ok(v) => Some(v),
         Err(_) => None,
     }
 }

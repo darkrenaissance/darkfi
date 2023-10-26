@@ -59,6 +59,7 @@ use log::{debug, error, info};
 use super::{
     client::{Client, ReplyType},
     rpl::*,
+    server::MAX_NICK_LEN,
     IrcChannel, SERVER_NAME,
 };
 
@@ -260,7 +261,7 @@ impl Client {
         let nick = self.nickname.read().await.to_string();
         let tokens = args.split_ascii_whitespace();
         for channel in tokens {
-            if !channel.starts_with('#') {
+            if !channel.starts_with('#') || channel.as_bytes().len() > MAX_NICK_LEN {
                 self.penalty.fetch_add(1, SeqCst);
                 return Ok(vec![ReplyType::Server((
                     ERR_NEEDMOREPARAMS,
@@ -288,7 +289,7 @@ impl Client {
             channels.remove(list.as_str());
 
             for channel in list.split(',') {
-                if !channel.starts_with('#') {
+                if !channel.starts_with('#') || channel.as_bytes().len() > MAX_NICK_LEN {
                     self.penalty.fetch_add(1, SeqCst);
                     return Ok(vec![ReplyType::Server((
                         ERR_NEEDMOREPARAMS,
@@ -522,6 +523,15 @@ impl Client {
             return Ok(vec![ReplyType::Server((
                 ERR_ERRONEOUSNICKNAME,
                 format!("{} {} :Erroneous nickname", old_nick, nickname),
+            ))])
+        }
+
+        // Disallow too long nicks
+        if nickname.as_bytes().len() > MAX_NICK_LEN {
+            self.penalty.fetch_add(1, SeqCst);
+            return Ok(vec![ReplyType::Server((
+                ERR_ERRONEOUSNICKNAME,
+                format!("{} {} :Nickname too long", old_nick, nickname),
             ))])
         }
 
