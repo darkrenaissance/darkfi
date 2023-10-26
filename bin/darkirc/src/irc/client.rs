@@ -214,9 +214,12 @@ impl Client {
                     let msg_for_self = *self.nickname.read().await == privmsg.channel;
 
                     if have_channel || msg_for_self {
-                        // Add the nickname to the list of nicks on the channel
-                        (*self.server.channels.write().await).get_mut(&privmsg.channel)
-                            .unwrap().nicks.insert(privmsg.nick.clone());
+                        // Add the nickname to the list of nicks on the channel, if it's a channel.
+                        let mut chans_lock = self.server.channels.write().await;
+                        if let Some(chan) = chans_lock.get_mut(&privmsg.channel) {
+                            chan.nicks.insert(privmsg.nick.clone());
+                        }
+                        drop(chans_lock);
 
                         // Format the message
                         let msg = format!("PRIVMSG {} :{}", privmsg.channel, privmsg.msg);
