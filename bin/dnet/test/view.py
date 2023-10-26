@@ -44,6 +44,7 @@ class Demo:
     async def say_hello(self):
         while True:
             await asyncio.sleep(0.1)
+            self.ev.call_soon(self.loop.draw_screen)
             self.listwalker.contents.append(urwid.Text("hello"))
     
 
