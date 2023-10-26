@@ -357,8 +357,10 @@ impl IrcServer {
                 Self::unpad(&mut nick_dec);
 
                 privmsg.channel = String::from_utf8_lossy(&channel_dec).into();
-                privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
+                //privmsg.nick = String::from_utf8_lossy(&nick_dec).into();
+                privmsg.nick = name.to_string();
                 privmsg.msg = String::from_utf8_lossy(&msg_dec).into();
+
                 debug!("Successfully decrypted message from {}", name);
                 return
             }
