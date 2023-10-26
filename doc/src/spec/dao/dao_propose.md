@@ -1,6 +1,9 @@
 # dao propose
+
 $$ X = (cm^{token}, root^{bulla}, proposal, value^{total}_x, value^{total}_y) $$
+
 $$ W = (value^{total}, blind^{value^{total}}, blind^{token}, proposal^{destination}_x, proposal^{destination}_y, proposal^{amount}, proposal^{tokenId}, blind^{proposal}, proposerLimit, quorum, approvalRatio_{quot}, approvalRatio_{base}, tokenId, pub_x, pub_y, blind^{bulla}, pos, path) $$
+
 $$ \mathcal{L}= \{X:W\in \mathcal{R}\} $$
 
 | public input               |                                               |
@@ -35,5 +38,5 @@ $$ \mathcal{L}= \{X:W\in \mathcal{R}\} $$
 
 # circuit checks
 
-- $proposal^{amount} > 0 $
-- ${proposerLimit <= value^{total} $
+- $ proposal^{amount} > 0 $
+- $ proposerLimit <= value^{total} $

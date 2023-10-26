@@ -1,8 +1,8 @@
 # vote
 
-$$ X = (cm^{token}, proposal, cm^{vote^{yes}}_x, cm^{vote^{yes}}_y, cm^{vote^{all}}_x, cm^{vote^{all}}_y )$$
+$$ X = (cm^{token}, proposal, cm^{vote^{yes}}_x, cm^{vote^{yes}}_y, cm^{vote^{all}}_x, cm^{vote^{all}}_y) $$
 
-$$ W = (proposal^{destination}_x, proposal^{destination}_y, proposal^{amount}, tokenId, blind^{proposal}, proposerLimit, quorum, approvalRatio_{quot}, approvalRatio_{base}, tokenId, pub_x, pub_y, blind^{bulla}, vote^{yes}, blind^{vote^{yes}}, vote^{value}, vote^{all}_{value}, blind^{vote^{all}_{value}}, blind^{token} )$$
+$$ W = (proposal^{destination}_x, proposal^{destination}_y, proposal^{amount}, tokenId, blind^{proposal}, proposerLimit, quorum, approvalRatio_{quot}, approvalRatio_{base}, tokenId, pub_x, pub_y, blind^{bulla}, vote^{yes}, blind^{vote^{yes}}, vote^{value}, vote^{all}_{value}, blind^{vote^{all}_{value}}, blind^{token}) $$
 
 $$ \mathcal{L}= \{X:W\in \mathcal{R}\} $$
 
@@ -30,8 +30,12 @@ $$ \mathcal{L}= \{X:W\in \mathcal{R}\} $$
 | $pub_x$                    | dao public key x coordinate                            |
 | $pub_y$                    | dao public key y coordinate                            |
 | $blind^{bulla}$            | bulla commitment blinding factor                       |
-| $vote^{yes}$               | yes vote                                               |
-| $blind^{vote^{yes}}$        | yes vote commitment blinding factor                    |
+| $vote^{yes}$               | yes vote a boolean as either 0, or 1                   |
+| $blind^{vote^{yes}}$        | yes vote commitment blinding factor                   |
 | $vote^{all}_{value}$        | all votes value                                       |
-| $blind^{vote^{all}_{value}}$| blinding term for all votes commitments                |
+| $blind^{vote^{all}_{value}}$| blinding term for all votes commitments               |
 | $blind^{token}$             | governance token blinding term                        |
+
+# circuit checks
+
+- validate that $vote^{yes}$ is either 0, or 1.
