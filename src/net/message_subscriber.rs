@@ -251,7 +251,8 @@ impl MessageSubsystem {
             return Err(Error::MissingDispatcher)
         };
 
-        Ok(dispatcher.trigger(payload).await)
+        dispatcher.trigger(payload).await;
+        Ok(())
     }
 
     /// Concurrently transmits an error message across dispatchers.
@@ -298,7 +299,7 @@ mod tests {
             // 2. Publish data there
             let msg = MyVersionMessage(110);
             let payload = serialize(&msg);
-            subsystem.notify("verver", &payload).await;
+            subsystem.notify("verver", &payload).await.unwrap();
 
             // Receive:
             // 1. Do a get easy

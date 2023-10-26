@@ -35,11 +35,8 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
     info!(target: "consensus::consensus_sync", "Starting consensus state sync...");
     let current_slot = state.read().await.consensus.time_keeper.current_slot();
     // Loop through connected channels
-    let channels_map = p2p.channels().lock().await;
-    let values = channels_map.values();
-    // Using len here because is_empty() uses unstable library feature
-    // called 'exact_size_is_empty'.
-    if values.len() == 0 {
+    let channels = p2p.channels().await;
+    if channels.is_empty() {
         warn!(target: "consensus::consensus_sync", "Node is not connected to other nodes");
         let mut lock = state.write().await;
         lock.consensus.bootstrap_slot = current_slot;
@@ -50,7 +47,7 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
 
     // Node iterates the channel peers to check if at least on peer has seen slots
     let mut peer = None;
-    for channel in values {
+    for channel in channels {
         // Communication setup
         let msg_subsystem = channel.message_subsystem();
         msg_subsystem.add_dispatch::<ConsensusSyncResponse>().await;
@@ -77,9 +74,6 @@ pub async fn consensus_sync_task(p2p: P2pPtr, state: ValidatorStatePtr) -> Resul
         peer = Some(channel.clone());
         break
     }
-
-    // Release channels lock
-    drop(channels_map);
 
     // If no peer knows about any slots, that means that the network was bootstrapped or restarted
     // and no node has started consensus.
