@@ -24,26 +24,6 @@ from scroll import ScrollBar, Scrollable
 from model import Model
 
 
-event_loop = asyncio.get_event_loop()
-
-
-class LeftList(urwid.ListBox):
-
-    def focus_next(self):
-        try: 
-            self.body.set_focus(self.body.get_next(
-                self.body.get_focus()[1])[1])
-        except:
-            pass
-
-    def focus_previous(self):
-        try: 
-            self.body.set_focus(self.body.get_prev(
-                self.body.get_focus()[1])[1])
-        except:
-            pass            
-
-
 class NodeView(urwid.WidgetWrap):
 
     def __init__(self, info):
@@ -153,17 +133,21 @@ class View():
         rightbox = urwid.LineBox(scroll)
         self.listbox_content = []
         self.listwalker = urwid.SimpleListWalker(self.listbox_content)
-        self.list = LeftList(self.listwalker)
+        self.list = urwid.ListBox(self.listwalker)
         leftbox = urwid.LineBox(self.list)
         columns = urwid.Columns([leftbox, rightbox], focus_column=0)
         self.ui = urwid.Frame(urwid.AttrWrap( columns, 'body' ))
 
 
-    async def update_view(self):
+    async def update_view(self, evloop: asyncio.AbstractEventLoop,
+                          loop: urwid.MainLoop):
         known_nodes = []
         known_inbound = []
         while True:
             await asyncio.sleep(0.1)
+            # Redraw the screen
+            evloop.call_soon(loop.draw_screen)
+
             for index, item in enumerate(self.listwalker.contents):
                 known_nodes.append(item.get_name())
 
@@ -240,35 +224,34 @@ class View():
             
 
     # Render subscribe_events() (right menu)
-    async def render_info(self):
+    async def render_info(self, evloop: asyncio.AbstractEventLoop,
+                          loop: urwid.MainLoop):
         while True:
             await asyncio.sleep(0.01)
+            # Redraw the screen
+            evloop.call_soon(loop.draw_screen)
+
             self.pile.contents.clear()
-            logging.debug(self.pile.contents)
             focus_w = self.list.get_focus()
             if focus_w[0] is None:
                 continue
             else:
                 match focus_w[0].get_widget():
                     case "NodeView":
-                        logging.debug("node selected")
                         # TODO: We will display additional node info here.
                         self.pile.contents.append((
                             urwid.Text(f""),
                             self.pile.options()))
                     case "ConnectView":
-                        logging.debug("connection selected")
                         name = focus_w[0].get_name()
                         info = self.model.nodes.get(name[0])
                         if name in info['event']:
                             ev = info['event'].get(name)
-                            logging.debug(f"{ev}")
 
                             self.pile.contents.append((
                                 urwid.Text(f" {ev}"),
                                 self.pile.options()))
                     case "SlotView":
-                        logging.debug("slot selected")
                         addr = focus_w[0].get_addr()
                         name = focus_w[0].get_name()
                         info = self.model.nodes.get(name[0])
