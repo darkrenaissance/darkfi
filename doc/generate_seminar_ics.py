@@ -123,7 +123,7 @@ def print_ics():
         s = ''.join(ch if ch.isalnum() else '' for ch in event["title"])
         ics_file = f"{event['start']}_{s}.ics"
 
-        with open(f"book/development/{ics_file}", "w") as f:
+        with open(f"book/dev/{ics_file}", "w") as f:
             f.write('\n'.join(ics))
             f.write('\n')
 
