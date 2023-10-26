@@ -1,12 +1,10 @@
 use darkfi_sdk::pasta::pallas;
 use std::{collections::HashMap, fs::File, io::Write, path::Path};
-#[cfg(feature = "tinyjson")]
 use tinyjson::JsonValue::{Array as JsonArray, Object as JsonObj, String as JsonStr};
 
 use crate::zk::Witness;
 
 /// Export witness.json which can be used by zkrunner for debugging circuits
-#[cfg(feature = "tinyjson")]
 pub fn export_witness_json<P: AsRef<Path>>(
     output_path: P,
     prover_witnesses: &Vec<Witness>,
