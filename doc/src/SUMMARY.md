@@ -66,38 +66,38 @@
 
 # Specs
 
-- [Payment] (spec/payment/payment.md)
-  - [burn] (spec/payment/burn.md)
-  - [mint] (spec/payment/mint.md)
-  - [coin] (spec/payment/coin.md)
-  - [token id] (spec/payment/token_id.md)
-  - [freeze token] (spec/payment/freeze_token.md)
-  - [token mint] (spec/payment/token_mint.md)
+- [Payment](spec/payment/payment.md)
+  - [burn](spec/payment/burn.md)
+  - [mint](spec/payment/mint.md)
+  - [coin](spec/payment/coin.md)
+  - [token id](spec/payment/token_id.md)
+  - [freeze token](spec/payment/freeze_token.md)
+  - [token mint](spec/payment/token_mint.md)
 
-- [Dao]
-  - [dao functions] (spec/dao/dao.md)
-  - [bulla] (spec/dao/bulla.md)
-  - [proposal] (spec/dao/proposal.md)
-  - [dao proposal] (spec/dao/dao_propose.md)
-  - [dao proposal burn] (spec/dao/dao_propose_burn.md)
-  - [mint] (spec/dao/mint.md)
-  - [vote] (spec/dao/vote.md)
-  - [vote burn] (spec/dao/vote_burn.md)
-  - [exec] (spec/dao/dao_exec.md)
+- [Dao](spec/dao/index.md)
+  - [dao functions](spec/dao/dao.md)
+  - [bulla](spec/dao/bulla.md)
+  - [proposal](spec/dao/proposal.md)
+  - [dao proposal](spec/dao/dao_propose.md)
+  - [dao proposal burn](spec/dao/dao_propose_burn.md)
+  - [mint](spec/dao/mint.md)
+  - [vote](spec/dao/vote.md)
+  - [vote burn](spec/dao/vote_burn.md)
+  - [exec](spec/dao/dao_exec.md)
 
-- [Proof of Stake]
-  - [burn] (spec/pos/burn.md)
-  - [mint] (spec/pos/mint.md)
-  - [lottery] (spec/pos/proposal.md)
+- [Proof of Stake](spec/pos/index.md)
+  - [burn](spec/pos/burn.md)
+  - [mint](spec/pos/mint.md)
+  - [lottery](spec/pos/proposal.md)
 
-- [Crypto]
-  - [commitment] (spec/crypto/commitment.md)
-  - [keypair] (spec/crypto/keypair.md)
-  - [Signature] (spec/crypto/signature.md)
-  - [hash] (spec/crypto/hash.md)
-  - [merkletree] (spec/crypto/merkletree.md)
-  - [note] (spec/crypto/note.md)
-  - [vrf] (spec/crypto/vrf.md)
+- [Crypto](spec/crypto/index.md)
+  - [commitment](spec/crypto/commitment.md)
+  - [keypair](spec/crypto/keypair.md)
+  - [Signature](spec/crypto/signature.md)
+  - [hash](spec/crypto/hash.md)
+  - [merkletree](spec/crypto/merkletree.md)
+  - [note](spec/crypto/note.md)
+  - [vrf](spec/crypto/vrf.md)
 
 
 # Misc

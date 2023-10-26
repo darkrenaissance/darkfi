@@ -34,9 +34,9 @@ $$ \mathcal{L}= \{X:W\in \mathcal{R}\} $$
 | $blind^{bulla}$          | bulla commitment blinding factor                       |
 | pos                      | bulla leaf position in the merkle tree                 |
 | path                     | path of the bulla leaf at position `pos`
-      |
+    |
 
 # circuit checks
 
-- $ proposal^{amount} > 0 $
-- $ proposerLimit <= value^{total} $
+- $proposal^{amount} > 0$
+- $proposerLimit <= value^{total}$
