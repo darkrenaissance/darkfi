@@ -39,7 +39,10 @@ use smol::{
     prelude::{AsyncRead, AsyncWrite},
 };
 
-use super::{server::IrcServer, Privmsg, SERVER_NAME};
+use super::{
+    server::{IrcServer, MAX_NICK_LEN},
+    Privmsg, SERVER_NAME,
+};
 
 const PENALTY_LIMIT: usize = 5;
 
@@ -208,10 +211,13 @@ impl Client {
                     // If successful, potentially decrypt it:
                     self.server.try_decrypt(&mut privmsg).await;
 
-                    // If we have this channel, or it's a DM to our nickname, forward
-                    // it to the client.
+                    // If we have this channel, or it's a DM, forward it to the client.
+                    // As a DM, we consider something that is < MAX_NICK_LEN, and does not
+                    // start with the '#' character. With ChaCha, the ciphertext should be
+                    // longer than our MAX_NICK_LEN, so in case it is garbled, it should be
+                    // skipped by this code.
                     let have_channel = self.channels.read().await.contains(&privmsg.channel);
-                    let msg_for_self = *self.nickname.read().await == privmsg.channel;
+                    let msg_for_self = !privmsg.channel.starts_with('#') && privmsg.channel.as_bytes().len() <= MAX_NICK_LEN;
 
                     if have_channel || msg_for_self {
                         // Add the nickname to the list of nicks on the channel, if it's a channel.
