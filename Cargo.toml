@@ -314,6 +314,8 @@ zk = [
 
 zkas = [
     "darkfi-serial",
+
+    "zk",
 ]
 # -----END LIBRARY FEATURES-----
 

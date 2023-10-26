@@ -8,7 +8,7 @@ JSONRPC = \
 	$(FAUCETD_JSONRPC)
 
 all: $(JSONRPC)
-	./generate_seminar_ics.py --table > src/development/seminars.md
+	./generate_seminar_ics.py --table > src/dev/seminars.md
 	mdbook build
 	cp -f theme/logo* book/
 	./generate_seminar_ics.py --ics
