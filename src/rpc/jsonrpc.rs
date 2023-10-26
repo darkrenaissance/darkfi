@@ -224,7 +224,7 @@ impl TryFrom<&JsonValue> for JsonRequest {
         let params = if map["params"].is_object() {
             JsonValue::Array(vec![map["params"].clone()])
         } else if map["params"].is_array() {
-            map["params"].clone().into()
+            map["params"].clone()
         } else {
             return Err(RpcError::InvalidJson(
                 "Request does not contain valid \"params\" field".to_string(),
