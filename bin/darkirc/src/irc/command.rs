@@ -261,7 +261,7 @@ impl Client {
         let nick = self.nickname.read().await.to_string();
         let tokens = args.split_ascii_whitespace();
         for channel in tokens {
-            if !channel.starts_with('#') || channel.as_bytes().len() > MAX_NICK_LEN {
+            if !channel.starts_with('#') {
                 self.penalty.fetch_add(1, SeqCst);
                 return Ok(vec![ReplyType::Server((
                     ERR_NEEDMOREPARAMS,
@@ -340,6 +340,10 @@ impl Client {
                 }
             }
         }
+
+        // Drop the locks as they're used in get_history()
+        drop(active_channels);
+        drop(server_channels);
 
         // Potentially extend the replies with channel history
         replies.append(&mut self.get_history(&channels).await.unwrap());
@@ -914,7 +918,7 @@ impl Client {
             }
         }
 
-        // Drop the server.channels write lock, it's used in get_history.
+        // Drop the write lock, it's used in get_history()
         drop(config_chans);
 
         // Potentially extend replies with history
