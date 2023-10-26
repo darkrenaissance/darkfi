@@ -175,7 +175,7 @@ impl Acceptor {
 
                 // Handle ErrorKind::Other
                 Err(e) if e.kind() == ErrorKind::Other => {
-                    if let Some(inner) = e.into_inner() {
+                    if let Some(inner) = std::error::Error::source(&e) {
                         if let Some(inner) = inner.downcast_ref::<async_rustls::rustls::Error>() {
                             error!(
                                 target: "net::acceptor::run_accept_loop()",
@@ -183,13 +183,13 @@ impl Acceptor {
                             );
                             continue
                         }
-
-                        error!(
-                            target: "net::acceptor::run_accept_loop()",
-                            "[P2P] Unhandled ErrorKind::Other error: {:?}", inner,
-                        );
-                        continue
                     }
+
+                    error!(
+                        target: "net::acceptor::run_accept_loop()",
+                        "[P2P] Unhandled ErrorKind::Other error: {:?}", e,
+                    );
+                    return Err(e.into())
                 }
 
                 // Errors we didn't handle above:
