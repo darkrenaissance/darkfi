@@ -157,10 +157,10 @@ impl Acceptor {
                         );
                         continue
                     }
-                    _ => {
+                    x => {
                         error!(
                             target: "net::acceptor::run_accept_loop()",
-                            "[P2P] Acceptor failed listening: {}", e,
+                            "[P2P] Acceptor failed listening: {} ({})", e, x,
                         );
                         error!(
                             target: "net::acceptor::run_accept_loop()",
@@ -172,6 +172,25 @@ impl Acceptor {
 
                 // In case a TLS handshake fails, we'll get this:
                 Err(e) if e.kind() == ErrorKind::UnexpectedEof => continue,
+
+                // Handle ErrorKind::Other
+                Err(e) if e.kind() == ErrorKind::Other => {
+                    if let Some(inner) = e.into_inner() {
+                        if let Some(inner) = inner.downcast_ref::<async_rustls::rustls::Error>() {
+                            error!(
+                                target: "net::acceptor::run_accept_loop()",
+                                "[P2P] rustls listener error: {:?}", inner,
+                            );
+                            continue
+                        }
+
+                        error!(
+                            target: "net::acceptor::run_accept_loop()",
+                            "[P2P] Unhandled ErrorKind::Other error: {:?}", inner,
+                        );
+                        continue
+                    }
+                }
 
                 // Errors we didn't handle above:
                 Err(e) => {
