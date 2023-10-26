@@ -56,3 +56,5 @@ pub use compiler::Compiler;
 /// Decoder module
 pub mod decoder;
 pub use decoder::ZkBinary;
+
+pub mod util;
