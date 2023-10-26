@@ -212,7 +212,7 @@ impl Client {
                     self.server.try_decrypt(&mut privmsg).await;
 
                     // If we have this channel, or it's a DM, forward it to the client.
-                    // As a DM, we consider something that is < MAX_NICK_LEN, and does not
+                    // As a DM, we consider something that is <= MAX_NICK_LEN, and does not
                     // start with the '#' character. With ChaCha, the ciphertext should be
                     // longer than our MAX_NICK_LEN, so in case it is garbled, it should be
                     // skipped by this code.

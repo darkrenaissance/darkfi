@@ -914,6 +914,9 @@ impl Client {
             }
         }
 
+        // Drop the server.channels write lock, it's used in get_history.
+        drop(config_chans);
+
         // Potentially extend replies with history
         autojoin_chans.insert(self.nickname.read().await.to_string());
         replies.append(&mut self.get_history(&autojoin_chans).await.unwrap());
