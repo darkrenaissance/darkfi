@@ -333,9 +333,13 @@ pub fn validate_pos_slot(
 /// A blockchain is considered valid, when every block is valid,
 /// based on validate_block checks.
 /// Be careful as this will try to load everything in memory.
-pub fn validate_blockchain(blockchain: &Blockchain, pow_target: Option<usize>) -> Result<()> {
+pub fn validate_blockchain(
+    blockchain: &Blockchain,
+    pow_threads: usize,
+    pow_target: usize,
+) -> Result<()> {
     // Generate a PoW module
-    let mut module = PoWModule::new(blockchain.clone(), None, pow_target)?;
+    let mut module = PoWModule::new(blockchain.clone(), pow_threads, pow_target)?;
     // We use block order store here so we have all blocks in order
     let blocks = blockchain.order.get_all()?;
     for (index, block) in blocks[1..].iter().enumerate() {

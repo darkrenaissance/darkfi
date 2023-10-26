@@ -70,8 +70,12 @@ pub mod float_10;
 pub struct ValidatorConfig {
     /// Helper structure to calculate time related operations
     pub time_keeper: TimeKeeper,
+    /// Currently configured finalization security threshold
+    pub finalization_threshold: usize,
+    /// Currently configured PoW miner number of threads to use
+    pub pow_threads: usize,
     /// Currently configured PoW target
-    pub pow_target: Option<usize>,
+    pub pow_target: usize,
     /// Genesis block
     pub genesis_block: BlockInfo,
     /// Total amount of minted tokens in genesis block
@@ -83,9 +87,12 @@ pub struct ValidatorConfig {
 }
 
 impl ValidatorConfig {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         time_keeper: TimeKeeper,
-        pow_target: Option<usize>,
+        finalization_threshold: usize,
+        pow_threads: usize,
+        pow_target: usize,
         genesis_block: BlockInfo,
         genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
@@ -93,6 +100,8 @@ impl ValidatorConfig {
     ) -> Self {
         Self {
             time_keeper,
+            finalization_threshold,
+            pow_threads,
             pow_target,
             genesis_block,
             genesis_txs_total,
@@ -150,6 +159,8 @@ impl Validator {
         let consensus = Consensus::new(
             blockchain.clone(),
             config.time_keeper,
+            config.finalization_threshold,
+            config.pow_threads,
             config.pow_target,
             testing_mode,
         )?;
@@ -527,7 +538,8 @@ impl Validator {
         &self,
         genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
-        pow_target: Option<usize>,
+        pow_threads: usize,
+        pow_target: usize,
     ) -> Result<()> {
         let blocks = self.blockchain.get_all()?;
 
@@ -546,7 +558,7 @@ impl Validator {
 
         // Create a time keeper and a PoW module to validate each block
         let mut time_keeper = self.consensus.time_keeper.clone();
-        let mut module = PoWModule::new(blockchain.clone(), None, pow_target)?;
+        let mut module = PoWModule::new(blockchain.clone(), pow_threads, pow_target)?;
 
         // Deploy native wasm contracts
         deploy_native_contracts(&overlay, &time_keeper, &faucet_pubkeys)?;

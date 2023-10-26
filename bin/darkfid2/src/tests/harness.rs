@@ -42,7 +42,8 @@ use crate::{
 };
 
 pub struct HarnessConfig {
-    pub pow_target: Option<usize>,
+    pub pow_threads: usize,
+    pub pow_target: usize,
     pub testing_node: bool,
     pub alice_initial: u64,
     pub bob_initial: u64,
@@ -82,6 +83,8 @@ impl Harness {
         let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
         let validator_config = ValidatorConfig::new(
             time_keeper,
+            3,
+            config.pow_threads,
             config.pow_target,
             genesis_block,
             genesis_txs_total,
@@ -136,8 +139,21 @@ impl Harness {
         let alice = &self.alice.validator.read().await;
         let bob = &self.bob.validator.read().await;
 
-        alice.validate_blockchain(genesis_txs_total, vec![], self.config.pow_target).await?;
-        bob.validate_blockchain(genesis_txs_total, vec![], self.config.pow_target).await?;
+        alice
+            .validate_blockchain(
+                genesis_txs_total,
+                vec![],
+                self.config.pow_threads,
+                self.config.pow_target,
+            )
+            .await?;
+        bob.validate_blockchain(
+            genesis_txs_total,
+            vec![],
+            self.config.pow_threads,
+            self.config.pow_target,
+        )
+        .await?;
 
         let alice_blockchain_len = alice.blockchain.len();
         assert_eq!(alice_blockchain_len, bob.blockchain.len());

@@ -30,7 +30,8 @@ use darkfi_sdk::{
     pasta::{group::ff::Field, pallas},
 };
 
-const POW_TARGET: Option<usize> = Some(10);
+const POW_THREADS: usize = 1;
+const POW_TARGET: usize = 10;
 
 struct Node {
     blockchain: Blockchain,
@@ -40,7 +41,7 @@ struct Node {
 impl Node {
     fn new() -> Result<Self> {
         let blockchain = Blockchain::new(&sled::Config::new().temporary(true).open()?)?;
-        let module = PoWModule::new(blockchain.clone(), None, POW_TARGET)?;
+        let module = PoWModule::new(blockchain.clone(), POW_THREADS, POW_TARGET)?;
         Ok(Self { blockchain, module })
     }
 }
@@ -63,8 +64,8 @@ impl Harness {
     }
 
     fn validate_chains(&self) -> Result<()> {
-        validate_blockchain(&self.alice.blockchain, POW_TARGET)?;
-        validate_blockchain(&self.bob.blockchain, POW_TARGET)?;
+        validate_blockchain(&self.alice.blockchain, POW_THREADS, POW_TARGET)?;
+        validate_blockchain(&self.bob.blockchain, POW_THREADS, POW_TARGET)?;
 
         assert_eq!(self.alice.blockchain.len(), self.bob.blockchain.len());
 

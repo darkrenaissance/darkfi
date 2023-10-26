@@ -45,8 +45,6 @@ use crate::{
 };
 
 // Note: We have combined some constants for better performance.
-/// Default number of threads to use for hashing
-const N_THREADS: usize = 4;
 /// Amount of max items(blocks) to use for next difficulty calculation.
 /// Must be >= 2 and == BUF_SIZE - DIFFICULTY_LAG.
 const DIFFICULTY_WINDOW: usize = 720;
@@ -71,9 +69,6 @@ const RETAINED: usize = 600;
 const CUT_BEGIN: usize = 60;
 /// Already known cutoff end index for this config
 const CUT_END: usize = 660;
-/// Default target block time, in seconds
-const DIFFICULTY_TARGET: usize = 20;
-// TODO: maybe add more difficulty targets (testnet, mainnet, etc)
 /// How many most recent blocks to use to verify new blocks' timestamp
 const BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW: usize = 60;
 /// Time limit in the future of what blocks can be
@@ -82,11 +77,9 @@ const BLOCK_FUTURE_TIME_LIMIT: u64 = 60 * 60 * 2;
 /// This struct represents the information required by the PoW algorithm
 #[derive(Clone)]
 pub struct PoWModule {
-    /// Number of threads to use for hashing,
-    /// if None provided will use N_THREADS
+    /// Number of threads to use for hashing
     pub threads: usize,
-    /// Target block time, in seconds,
-    /// if None provided will use DIFFICULTY_TARGET
+    /// Target block time, in seconds
     pub target: usize,
     /// Latest block timestamps ringbuffer
     pub timestamps: RingBuffer<u64, BUF_SIZE>,
@@ -100,14 +93,7 @@ pub struct PoWModule {
 }
 
 impl PoWModule {
-    pub fn new(
-        blockchain: Blockchain,
-        threads: Option<usize>,
-        target: Option<usize>,
-    ) -> Result<Self> {
-        let threads = if let Some(t) = threads { t } else { N_THREADS };
-        let target = if let Some(t) = target { t } else { DIFFICULTY_TARGET };
-
+    pub fn new(blockchain: Blockchain, threads: usize, target: usize) -> Result<Self> {
         // Retrieving last BUF_ZISE difficulties from blockchain to build the buffers
         let mut timestamps = RingBuffer::<u64, BUF_SIZE>::new();
         let mut difficulties = RingBuffer::<BigUint, BUF_SIZE>::new();
@@ -390,13 +376,15 @@ mod tests {
 
     use super::PoWModule;
 
+    const DEFAULT_TEST_THREADS: usize = 2;
     const DEFAULT_TEST_DIFFICULTY_TARGET: usize = 120;
 
     #[test]
     fn test_wide_difficulty() -> Result<()> {
         let sled_db = sled::Config::new().temporary(true).open()?;
         let blockchain = Blockchain::new(&sled_db)?;
-        let mut module = PoWModule::new(blockchain, None, Some(DEFAULT_TEST_DIFFICULTY_TARGET))?;
+        let mut module =
+            PoWModule::new(blockchain, DEFAULT_TEST_THREADS, DEFAULT_TEST_DIFFICULTY_TARGET)?;
 
         let output = Command::new("./script/research/pow/gen_wide_data.py").output().unwrap();
         let reader = Cursor::new(output.stdout);
@@ -429,7 +417,8 @@ mod tests {
         // Default setup
         let sled_db = sled::Config::new().temporary(true).open()?;
         let blockchain = Blockchain::new(&sled_db)?;
-        let module = PoWModule::new(blockchain, None, Some(DEFAULT_TEST_DIFFICULTY_TARGET))?;
+        let module =
+            PoWModule::new(blockchain, DEFAULT_TEST_THREADS, DEFAULT_TEST_DIFFICULTY_TARGET)?;
         let (_, recvr) = smol::channel::bounded(1);
         let genesis_block = BlockInfo::default();
 

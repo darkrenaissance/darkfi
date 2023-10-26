@@ -38,8 +38,6 @@ use crate::{
 // Consensus configuration
 /// Block/proposal maximum transactions
 pub const TXS_CAP: usize = 50;
-/// Fork size(length) after which it can be finalized
-const FINALIZATION_SECURITY_THRESSHOLD: usize = 3;
 
 /// This struct represents the information required by the consensus algorithm
 pub struct Consensus {
@@ -47,6 +45,8 @@ pub struct Consensus {
     pub blockchain: Blockchain,
     /// Helper structure to calculate time related operations
     pub time_keeper: TimeKeeper,
+    /// Fork size(length) after which it can be finalized
+    pub finalization_threshold: usize,
     /// Node is participating to consensus
     pub participating: bool,
     /// Last slot node check for finalization
@@ -64,13 +64,16 @@ impl Consensus {
     pub fn new(
         blockchain: Blockchain,
         time_keeper: TimeKeeper,
-        pow_target: Option<usize>,
+        finalization_threshold: usize,
+        pow_threads: usize,
+        pow_target: usize,
         testing_mode: bool,
     ) -> Result<Self> {
-        let module = PoWModule::new(blockchain.clone(), None, pow_target)?;
+        let module = PoWModule::new(blockchain.clone(), pow_threads, pow_target)?;
         Ok(Self {
             blockchain,
             time_keeper,
+            finalization_threshold,
             participating: false,
             checked_finalization: 0,
             forks: vec![],
@@ -393,7 +396,7 @@ impl Consensus {
     }
 
     /// Consensus finalization logic:
-    /// - If the current best fork has reached greater length than the security thresshold, and
+    /// - If the current best fork has reached greater length than the security threshold, and
     ///   no other fork exist with same rank, all proposals excluding the last one in that fork
     //    can be finalized (append to canonical blockchain).
     /// When best fork can be finalized, blocks(proposals) should be appended to canonical, excluding the
@@ -417,7 +420,7 @@ impl Consensus {
 
         // Check its length
         let length = fork.proposals.len();
-        if length < FINALIZATION_SECURITY_THRESSHOLD {
+        if length < self.finalization_threshold {
             debug!(target: "validator::consensus::finalization", "Nothing to finalize yet, best fork size: {}", length);
             return Ok(vec![])
         }
