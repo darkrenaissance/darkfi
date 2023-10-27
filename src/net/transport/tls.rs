@@ -196,8 +196,9 @@ impl TlsUpgrade {
         // On each instantiation, generate a new keypair and certificate.
         let keypair = ed25519_compact::KeyPair::generate();
         let keypair_pem = keypair.to_pem();
-        let secret_key = pkcs8_private_keys(&mut keypair_pem.as_bytes()).unwrap();
-        let secret_key = rustls::PrivateKey(secret_key[0].clone());
+        let mut binding = keypair_pem.as_bytes();
+        let secret_key = pkcs8_private_keys(&mut binding).next().unwrap().unwrap();
+        let secret_key = rustls::PrivateKey(secret_key.secret_pkcs8_der().to_vec());
 
         let altnames = vec![base32::encode(false, keypair.pk.as_slice())];
 
