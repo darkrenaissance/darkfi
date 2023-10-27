@@ -18,7 +18,6 @@
 
 use core::str::FromStr;
 
-use darkfi_money_contract::model::Coin;
 use darkfi_sdk::{
     crypto::{note::AeadEncryptedNote, pasta_prelude::*, MerkleNode, Nullifier, PublicKey},
     error::ContractError,
@@ -236,14 +235,8 @@ impl Default for DaoBlindAggregateVote {
 pub struct DaoExecParams {
     /// The proposal bulla
     pub proposal: DaoProposalBulla,
-    /// The output coin for the proposal recipient
-    pub coin_0: Coin,
-    /// The output coin for the change returned to DAO
-    pub coin_1: Coin,
     /// Aggregated blinds for the vote commitments
     pub blind_total_vote: DaoBlindAggregateVote,
-    /// Value commitment for all the inputs
-    pub input_value_commit: pallas::Point,
 }
 
 /// State update for `Dao::Exec`

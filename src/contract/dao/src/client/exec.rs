@@ -27,7 +27,7 @@ use rand::rngs::OsRng;
 
 use darkfi::{
     zk::{Proof, ProvingKey, Witness, ZkCircuit},
-    zkas::ZkBinary,
+    zkas::{util::export_witness_json, ZkBinary},
     Result,
 };
 
@@ -45,6 +45,7 @@ pub struct DaoExecCall {
     pub dao_serial: pallas::Base,
     pub input_value: u64,
     pub input_value_blind: pallas::Scalar,
+    pub input_user_data_blind: pallas::Base,
     pub hook_dao_exec: pallas::Base,
     pub signature_secret: SecretKey,
 }
@@ -153,7 +154,12 @@ impl DaoExecCall {
             Witness::Base(Value::known(self.hook_dao_exec)),
             Witness::Base(Value::known(user_spend_hook)),
             Witness::Base(Value::known(user_data)),
+            // DAO bulla spend check
+            Witness::Base(Value::known(self.input_user_data_blind)),
         ];
+
+        let input_user_data_enc = poseidon_hash([dao_bulla, self.input_user_data_blind]);
+        debug!(target: "dao", "input_user_data_enc: {:?}", input_user_data_enc);
 
         debug!(target: "dao", "proposal_bulla: {:?}", proposal_bulla);
         let public_inputs = vec![
@@ -169,7 +175,9 @@ impl DaoExecCall {
             self.hook_dao_exec,
             user_spend_hook,
             user_data,
+            input_user_data_enc,
         ];
+        export_witness_json("witness.json", &prover_witnesses, &public_inputs);
 
         let circuit = ZkCircuit::new(prover_witnesses, exec_zkbin);
         let input_proof = Proof::create(exec_pk, &[circuit], &public_inputs, &mut OsRng)
@@ -178,10 +186,7 @@ impl DaoExecCall {
 
         let params = DaoExecParams {
             proposal: proposal_bulla,
-            coin_0: coin_0.into(),
-            coin_1: coin_1.into(),
             blind_total_vote: DaoBlindAggregateVote { yes_vote_commit, all_vote_commit },
-            input_value_commit,
         };
 
         Ok((params, proofs))

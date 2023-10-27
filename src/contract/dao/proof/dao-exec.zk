@@ -40,6 +40,9 @@ witness "DaoExec" {
 	Base dao_spend_hook,
 	Base user_spend_hook,
 	Base user_data,
+
+    # Check input user_data_enc encodes the same DAO bulla
+	Base input_user_data_blind,
 }
 
 circuit "DaoExec" {
@@ -138,6 +141,11 @@ circuit "DaoExec" {
 	# Check public key matches too
 	# Create the input value commit
 	# Create the value commits
+
+    # The coin we are spending should have the encrypted DAO bulla
+    # Make sure it is the same as the DAO we are operating on.
+	input_user_data_enc = poseidon_hash(dao_bulla, input_user_data_blind);
+	constrain_instance(input_user_data_enc);
 
 	# NOTE: There is a vulnerability here where someone can create the exec
 	# transaction with a bad note so it cannot be decrypted by the receiver

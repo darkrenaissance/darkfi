@@ -72,7 +72,8 @@ impl TestHarness {
 
         let change_spend_hook = DAO_CONTRACT_ID.inner();
         let change_user_data = dao_bulla.inner();
-        let change_user_data_blind = pallas::Base::random(&mut OsRng);
+
+        let input_user_data_blind = pallas::Base::random(&mut OsRng);
 
         let coins: Vec<OwnCoin> = dao_wallet
             .unspent_money_coins
@@ -92,7 +93,8 @@ impl TestHarness {
             rcpt_user_data_blind,
             change_spend_hook,
             change_user_data,
-            change_user_data_blind,
+            // TODO (ERROR): incorrectly named
+            change_user_data_blind: input_user_data_blind,
             coins,
             tree,
             mint_zkbin: mint_zkbin.clone(),
@@ -131,6 +133,7 @@ impl TestHarness {
             dao_serial,
             input_value,
             input_value_blind,
+            input_user_data_blind,
             hook_dao_exec: DAO_CONTRACT_ID.inner(),
             signature_secret: exec_signature_secret,
         };

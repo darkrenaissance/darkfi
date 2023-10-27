@@ -56,8 +56,8 @@ pub enum DaoError {
     #[error("Exec call has invalid tx format")]
     ExecCallInvalidFormat,
 
-    #[error("Exec call mismatched outputs")]
-    ExecCallOutputsMismatch,
+    #[error("Exec call outputs.len() should be 2")]
+    ExecCallOutputsLenNot2,
 
     #[error("Exec call value commitment mismatch")]
     ExecCallValueMismatch,
@@ -81,7 +81,7 @@ impl From<DaoError> for ContractError {
             DaoError::CoinAlreadySpent => Self::Custom(10),
             DaoError::DoubleVote => Self::Custom(11),
             DaoError::ExecCallInvalidFormat => Self::Custom(12),
-            DaoError::ExecCallOutputsMismatch => Self::Custom(13),
+            DaoError::ExecCallOutputsLenNot2 => Self::Custom(13),
             DaoError::ExecCallValueMismatch => Self::Custom(14),
             DaoError::VoteCommitMismatch => Self::Custom(15),
         }
