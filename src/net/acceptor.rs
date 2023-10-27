@@ -157,6 +157,13 @@ impl Acceptor {
                         );
                         continue
                     }
+                    libc::ETIMEDOUT => {
+                        warn!(
+                            target: "net::acceptor::run_accept_loop()",
+                            "[P2P] Connection timed out in accept_loop"
+                        );
+                        continue
+                    }
                     x => {
                         error!(
                             target: "net::acceptor::run_accept_loop()",
