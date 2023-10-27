@@ -97,13 +97,14 @@ impl IrcServer {
                 // openssl x509 -req -in example.com.csr -signkey example.com.key -out example.com.crt
                 let f = File::open(expand_path(tls_secret.as_ref().unwrap())?)?;
                 let mut reader = BufReader::new(f);
-                let secret = &rustls_pemfile::pkcs8_private_keys(&mut reader)?[0];
-                let secret = rustls::PrivateKey(secret.clone());
+                let secret =
+                    &rustls_pemfile::pkcs8_private_keys(&mut reader).next().unwrap().unwrap();
+                let secret = rustls::PrivateKey(secret.secret_pkcs8_der().to_vec());
 
                 let f = File::open(expand_path(tls_cert.as_ref().unwrap())?)?;
                 let mut reader = BufReader::new(f);
-                let cert = &rustls_pemfile::certs(&mut reader)?[0];
-                let cert = rustls::Certificate(cert.clone());
+                let cert = &rustls_pemfile::certs(&mut reader).next().unwrap().unwrap();
+                let cert = rustls::Certificate(cert.to_vec());
 
                 let config = rustls::ServerConfig::builder()
                     .with_safe_defaults()
