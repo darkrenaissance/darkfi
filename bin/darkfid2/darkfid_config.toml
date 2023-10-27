@@ -66,7 +66,7 @@ inbound = ["tcp+tls://0.0.0.0:8242"]
 #seeds = []
 
 # Whitelisted network transports for outbound connections
-#allowed_transports = []
+#allowed_transports = ["tcp+tls"]
 
 # Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
 #transport_mixing = true
@@ -120,7 +120,7 @@ localnet = true
 #seeds = []
 
 # Whitelisted network transports for outbound connections
-#allowed_transports = []
+#allowed_transports = ["tcp+tls"]
 
 # Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
 #transport_mixing = true
@@ -192,30 +192,30 @@ testing_mode = false
 [testnet.sync_net]
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
-inbound = ["tls://0.0.0.0:8342"]
+inbound = ["tcp+tls://0.0.0.0:8342"]
 # IPv6 version:
-#inbound = ["tls://[::]:8342"]
+#inbound = ["tcp+tls://[::]:8342"]
 # Combined:
-#inbound = ["tls://0.0.0.0:8342", "tls://[::]:8342"]
+#inbound = ["tcp+tls://0.0.0.0:8342", "tcp+tls://[::]:8342"]
 
 # P2P external addresses the instance advertises so other peers can
 # reach us and connect to us, as long as inbound addrs are configured.
 # You can also use an IPv6 address
-#external_addrs = ["tls://XXX.XXX.XXX.XXX:8342"]
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8342"]
 # IPv6 version:
-#external_addrs = ["tls://[ipv6 address here]:8342"]
+#external_addrs = ["tcp+tls://[ipv6 address here]:8342"]
 # Combined:
-#external_addrs = ["tls://XXX.XXX.XXX.XXX:8342", "tls://[ipv6 address here]:8342"]
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8342", "tcp+tls://[ipv6 address here]:8342"]
 
 # Peer nodes to manually connect to
 #peers = []
 
 # Seed nodes to connect to for peer discovery and/or adversising our
 # own external addresses
-seeds = ["tls://lilith0.dark.fi:8342", "tls://lilith1.dark.fi:8342"]
+seeds = ["tcp+tls://lilith0.dark.fi:8342", "tcp+tls://lilith1.dark.fi:8342"]
 
 # Whitelisted network transports for outbound connections
-allowed_transports = ["tls"]
+allowed_transports = ["tcp+tls"]
 
 # Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
 #transport_mixing = true
@@ -256,30 +256,30 @@ localnet = false
 [testnet.consensus_net]
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
-inbound = ["tls://0.0.0.0:8341"]
+inbound = ["tcp+tls://0.0.0.0:8341"]
 # IPv6 version:
-#inbound = ["tls://[::]:8341"]
+#inbound = ["tcp+tls://[::]:8341"]
 # Combined:
-#inbound = ["tls://0.0.0.0:8341", "tls://[::]:8341"]
+#inbound = ["tcp+tls://0.0.0.0:8341", "tcp+tls://[::]:8341"]
 
 # P2P external addresses the instance advertises so other peers can
 # reach us and connect to us, as long as inbound addrs are configured.
 # You can also use an IPv6 address
-#external_addrs = ["tls://XXX.XXX.XXX.XXX:8341"]
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8341"]
 # IPv6 version:
-#external_addrs = ["tls://[ipv6 address here]:8341"]
+#external_addrs = ["tcp+tls://[ipv6 address here]:8341"]
 # Combined:
-#external_addrs = ["tls://XXX.XXX.XXX.XXX:8341", "tls://[ipv6 address here]:8341"]
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8341", "tcp+tls://[ipv6 address here]:8341"]
 
 # Peer nodes to manually connect to
 #peers = []
 
 # Seed nodes to connect to for peer discovery and/or adversising our
 # own external addresses
-seeds = ["tls://lilith0.dark.fi:8341", "tls://lilith1.dark.fi:8341"]
+seeds = ["tcp+tls://lilith0.dark.fi:8341", "tcp+tls://lilith1.dark.fi:8341"]
 
 # Whitelisted network transports for outbound connections
-allowed_transports = ["tls"]
+allowed_transports = ["tcp+tls"]
 
 # Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
 #transport_mixing = true
@@ -351,30 +351,30 @@ testing_mode = false
 [mainnet.sync_net]
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
-inbound = ["tls://0.0.0.0:8442"]
+inbound = ["tcp+tls://0.0.0.0:8442"]
 # IPv6 version:
-#inbound = ["tls://[::]:8442"]
+#inbound = ["tcp+tls://[::]:8442"]
 # Combined:
-#inbound = ["tls://0.0.0.0:8442", "tls://[::]:8442"]
+#inbound = ["tcp+tls://0.0.0.0:8442", "tcp+tls://[::]:8442"]
 
 # P2P external addresses the instance advertises so other peers can
 # reach us and connect to us, as long as inbound addrs are configured.
 # You can also use an IPv6 address
-#external_addrs = ["tls://XXX.XXX.XXX.XXX:8442"]
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8442"]
 # IPv6 version:
-#external_addrs = ["tls://[ipv6 address here]:8442"]
+#external_addrs = ["tcp+tls://[ipv6 address here]:8442"]
 # Combined:
-#external_addrs = ["tls://XXX.XXX.XXX.XXX:8442", "tls://[ipv6 address here]:8442"]
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8442", "tcp+tls://[ipv6 address here]:8442"]
 
 # Peer nodes to manually connect to
 #peers = []
 
 # Seed nodes to connect to for peer discovery and/or adversising our
 # own external addresses
-seeds = ["tls://lilith0.dark.fi:8442", "tls://lilith1.dark.fi:8442"]
+seeds = ["tcp+tls://lilith0.dark.fi:8442", "tcp+tls://lilith1.dark.fi:8442"]
 
 # Whitelisted network transports for outbound connections
-allowed_transports = ["tls"]
+allowed_transports = ["tcp+tls"]
 
 # Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
 #transport_mixing = true
@@ -415,30 +415,30 @@ localnet = false
 [mainnet.consensus_net]
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
-inbound = ["tls://0.0.0.0:8441"]
+inbound = ["tcp+tls://0.0.0.0:8441"]
 # IPv6 version:
-#inbound = ["tls://[::]:8441"]
+#inbound = ["tcp+tls://[::]:8441"]
 # Combined:
-#inbound = ["tls://0.0.0.0:8441", "tls://[::]:8441"]
+#inbound = ["tcp+tls://0.0.0.0:8441", "tcp+tls://[::]:8441"]
 
 # P2P external addresses the instance advertises so other peers can
 # reach us and connect to us, as long as inbound addrs are configured.
 # You can also use an IPv6 address
-#external_addrs = ["tls://XXX.XXX.XXX.XXX:8441"]
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8441"]
 # IPv6 version:
-#external_addrs = ["tls://[ipv6 address here]:8441"]
+#external_addrs = ["tcp+tls://[ipv6 address here]:8441"]
 # Combined:
-#external_addrs = ["tls://XXX.XXX.XXX.XXX:8441", "tls://[ipv6 address here]:8441"]
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8441", "tcp+tls://[ipv6 address here]:8441"]
 
 # Peer nodes to manually connect to
 #peers = []
 
 # Seed nodes to connect to for peer discovery and/or adversising our
 # own external addresses
-seeds = ["tls://lilith0.dark.fi:8441", "tls://lilith1.dark.fi:8441"]
+seeds = ["tcp+tls://lilith0.dark.fi:8441", "tcp+tls://lilith1.dark.fi:8441"]
 
 # Whitelisted network transports for outbound connections
-allowed_transports = ["tls"]
+allowed_transports = ["tcp+tls"]
 
 # Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
 #transport_mixing = true
