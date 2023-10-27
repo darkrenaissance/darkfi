@@ -615,6 +615,22 @@ Examples:
         else:
             print(f"You are now on \"{sys.argv[2]}\" workspace.")
         return 0
+    elif sys.argv[1] == "export":
+        if len(sys.argv) == 2:
+            path = "~/.local/darkfi"
+        else:
+            path = sys.argv[2]
+        if await api.export_to(path, server_name, port):
+            print(f"Exported tasks successfuly to {path}")
+        return 0
+    elif sys.argv[1] == "import":
+        if len(sys.argv) == 2:
+            path = "~/.local/darkfi"
+        else:
+            path = sys.argv[2]
+        if await api.import_from(path, server_name, port):
+            print(f"Imported tasks successfuly from {path}")
+        return 0
 
     try:
         id = int(sys.argv[1])
