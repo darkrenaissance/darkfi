@@ -56,6 +56,3 @@ pub use compiler::Compiler;
 /// Decoder module
 pub mod decoder;
 pub use decoder::ZkBinary;
-
-#[cfg(feature = "tinyjson")]
-pub mod util;
