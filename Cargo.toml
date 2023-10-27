@@ -53,46 +53,46 @@ members = [
 
 [dependencies]
 # Hard dependencies
-libc = "0.2.147"
+libc = "0.2.149"
 log = "0.4.20"
-thiserror = "1.0.47"
+thiserror = "1.0.50"
 
 # async-runtime
 async-recursion = {version = "1.0.5", optional = true}
-async-trait = {version = "0.1.73", optional = true}
-futures = {version = "0.3.28", optional = true}
+async-trait = {version = "0.1.74", optional = true}
+futures = {version = "0.3.29", optional = true}
 smol = {version = "1.3.0", optional = true}
 pin-project-lite = {version = "0.2.13", optional = true}
 
 # Networking
-async-rustls = {version = "0.4.0", features = ["dangerous_configuration"], optional = true}
+async-rustls = {version = "0.4.1", features = ["dangerous_configuration"], optional = true}
 
 # Pluggable Transports
-socket2 = {version = "0.5.3", features = ["all"], optional = true}
-arti-client = {version = "0.10.0", default-features = false, features = ["async-std", "rustls", "onion-service-client"], optional = true}
-tor-hscrypto = {version = "0.3.1", optional = true}
+socket2 = {version = "0.5.5", features = ["all"], optional = true}
+arti-client = {version = "0.10.2", default-features = false, features = ["async-std", "rustls", "onion-service-client"], optional = true}
+tor-hscrypto = {version = "0.3.3", optional = true}
 
 # TLS cert utilities
 ed25519-compact = {version = "2.0.4", optional = true}
-rcgen = {version = "0.11.1", optional = true}
-rustls-pemfile = {version = "1.0.3", optional = true}
+rcgen = {version = "0.11.3", optional = true}
+rustls-pemfile = {version = "2.0.0-alpha.1", optional = true}
 x509-parser = {version = "0.15.1", features = ["validate", "verify"], optional = true}
 
 # Encoding
 bs58 = {version = "0.5.0", optional = true}
-serde = {version = "1.0.188", features = ["derive"], optional = true}
+serde = {version = "1.0.190", features = ["derive"], optional = true}
 tinyjson = {version = "2.5.1", optional = true}
-semver = {version = "1.0.18", optional = true}
+semver = {version = "1.0.20", optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
-toml = {version = "0.7.6", optional = true}
+toml = {version = "0.8.5", optional = true}
 # Big float high precision arithmetics
-dashu = {version = "0.3.1", optional = true}
+dashu = {version = "0.4.0", optional = true}
 num-bigint = {version = "0.4.4", optional = true}
 
 # Utilities
 # TODO: check chrono usage and impl our own
-chrono = {version = "0.4.26", optional = true}
+chrono = {version = "0.4.31", optional = true}
 darkfi-serial = {path = "src/serial", optional = true}
 darkfi-derive = {path = "src/serial/derive", optional = true}
 lazy_static = {version = "1.4.0", optional = true}
@@ -103,16 +103,16 @@ simplelog = {version = "0.12.1", optional = true}
 
 # Crypto
 rand = {version = "0.8.5", optional = true}
-blake3 = {version = "1.4.1", features = ["rayon"], optional = true}
+blake3 = {version = "1.5.0", features = ["rayon"], optional = true}
 crypto_api_chachapoly = {version = "0.5.0", optional = true}
 halo2_proofs = {version = "0.3.0", features = ["circuit-params"], optional = true}
 halo2_gadgets = {version = "0.3.0", features = ["circuit-params"], optional = true}
 
 # Smart contract runtime
 darkfi-sdk = {path = "src/sdk", optional = true}
-wasmer = {version = "4.1.2", optional = true}
-wasmer-compiler-singlepass = {version = "4.1.2", optional = true}
-wasmer-middlewares = {version = "4.1.2", optional = true}
+wasmer = {version = "4.2.2", optional = true}
+wasmer-compiler-singlepass = {version = "4.2.2", optional = true}
+wasmer-middlewares = {version = "4.2.2", optional = true}
 
 # Wallet management
 rusqlite = {version = "0.29.0", features = ["sqlcipher"], optional = true}
@@ -129,11 +129,11 @@ randomx = {git = "https://github.com/darkrenaissance/RandomX", optional = true}
 libsqlite3-sys = {version = "*", features = ["bundled-sqlcipher"], optional = true}
 
 [dev-dependencies]
-clap = {version = "4.4.1", features = ["derive"]}
+clap = {version = "4.4.7", features = ["derive"]}
 halo2_proofs = {version = "0.3.0", features = ["dev-graph", "sanity-checks"]}
 halo2_gadgets = "0.3.0"
 plotters = "0.3.5"
-easy-parallel = "3.3.0"
+easy-parallel = "3.3.1"
 prettytable-rs = "0.10.0"
 
 # -----BEGIN LIBRARY FEATURES-----
@@ -322,6 +322,6 @@ zkas = [
 [patch.crates-io]
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
 halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
-arti-client = {git="https://gitlab.torproject.org/tpo/core/arti", rev="3fdadcc7509f60cfdfc51df2664aaf2f73bbd2f0"}
-tor-hscrypto = {git="https://gitlab.torproject.org/tpo/core/arti", rev="3fdadcc7509f60cfdfc51df2664aaf2f73bbd2f0"}
+arti-client = {git="https://gitlab.torproject.org/tpo/core/arti", rev="998b83af90571370d00951b31728788518210ac1"}
+tor-hscrypto = {git="https://gitlab.torproject.org/tpo/core/arti", rev="998b83af90571370d00951b31728788518210ac1"}
 blake2b_simd = {git="https://github.com/parazyd/blake2_simd", branch="impl-common"}
