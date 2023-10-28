@@ -9,12 +9,12 @@ homepage = "https://dark.fi"
 repository = "https://github.com/darkrenaissance/darkfi"
 
 [dependencies]
-libc = "0.2.147"
+libc = "0.2.149"
 darkfi = {path = "../../../", features = ["rpc"]}
 taud = {path = "../taud"}
 
 # Misc
-chrono = "0.4.26"
+chrono = "0.4.31"
 colored = "2.0.4"
 log = "0.4.20"
 prettytable-rs = "0.10.0"
@@ -25,6 +25,6 @@ textwrap = "0.16.0"
 url = "2.4.1"
 
 # Encoding and parsing
-clap = {version = "4.4.1", features = ["derive"]}
-serde = {version = "1.0.188", features = ["derive"]}
+clap = {version = "4.4.7", features = ["derive"]}
+serde = {version = "1.0.190", features = ["derive"]}
 tinyjson = "2.5.1"

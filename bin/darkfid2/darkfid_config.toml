@@ -7,10 +7,180 @@
 ## uncommenting, or by using the command-line.
 
 # JSON-RPC listen URL
-rpc_listen = "tcp://127.0.0.1:18340"
+rpc_listen = "tcp://127.0.0.1:8340"
+
+# Blockchain network to use
+network = "testnet"
+
+# Localnet blockchain network configuration
+[localnet]
+# Path to the blockchain database directory
+database = "~/.local/darkfi/darkfid_blockchain_localnet"
+
+# Finalization threshold, denominated by number of blocks
+threshold = 3
+
+# PoW miner number of threads to use
+pow_threads = 4
+
+# PoW block production target, in seconds
+pow_target = 10
+
+# Epoch duration, denominated by number of blocks/slots
+epoch_length = 10
+
+# PoS slot duration, in seconds
+slot_time = 10
+
+# Whitelisted faucet addresses
+faucet_pub = []
+
+# Participate in the consensus protocol
+consensus = true
+
+# Wallet address to receive consensus rewards.
+# This is a dummy one so the miner can start,
+# replace with your own one.
+recipient = "5ZHfYpt4mpJcwBNxfEyxLzeFJUEeoePs5NQ5jVEgHrMf"
+
+# Skip syncing process and start node right away
+skip_sync = true
+
+# Enable testing mode for local testing
+testing_mode = true
+
+## Localnet sync P2P network settings
+[localnet.sync_net]
+# P2P accept addresses the instance listens on for inbound connections
+inbound = ["tcp+tls://0.0.0.0:8242"]
+
+# P2P external addresses the instance advertises so other peers can
+# reach us and connect to us, as long as inbound addrs are configured.
+#external_addrs = []
+
+# Peer nodes to manually connect to
+#peers = []
+
+# Seed nodes to connect to for peer discovery and/or adversising our
+# own external addresses
+#seeds = []
+
+# Whitelisted network transports for outbound connections
+#allowed_transports = ["tcp+tls"]
+
+# Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
+#transport_mixing = true
+
+# Outbound connection slots number, this many connections will be
+# attempted. (This does not include manual connections)
+#outbound_connections = 8
+
+# Inbound connections slots number, this many active inbound connections
+# will be allowed. (This does not include manual or outbound connections)
+#inbound_connections = 0
+
+# Manual connections retry limit, 0 for forever looping
+#manual_attempt_limit = 0
+
+# Outbound connection timeout (in seconds)
+#outbound_connect_timeout = 10
+
+# Exchange versions (handshake) timeout (in seconds)
+#channel_handshake_timeout = 4
+
+# Ping-pong exchange execution interval (in seconds)
+#channel_heartbeat_interval = 10
+
+# Allow localnet hosts
+localnet = true
+
+# Delete a peer from hosts if they've been quarantined N times
+#hosts_quarantine_limit = 50
+
+# Cooling off time for peer discovery when unsuccessful
+#outbound_peer_discovery_cooloff_time = 30
+
+# Time between peer discovery attempts
+#outbound_peer_discovery_attempt_time = 5
+
+## Localnet consensus P2P network settings
+[localnet.consensus_net]
+# P2P accept addresses the instance listens on for inbound connections
+#inbound = ["tcp+tls://0.0.0.0:8241"]
+
+# P2P external addresses the instance advertises so other peers can
+# reach us and connect to us, as long as inbound addrs are configured.
+#external_addrs = []
+
+# Peer nodes to manually connect to
+#peers = []
+
+# Seed nodes to connect to for peer discovery and/or adversising our
+# own external addresses
+#seeds = []
+
+# Whitelisted network transports for outbound connections
+#allowed_transports = ["tcp+tls"]
+
+# Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
+#transport_mixing = true
+
+# Outbound connection slots number, this many connections will be
+# attempted. (This does not include manual connections)
+#outbound_connections = 8
+
+# Manual connections retry limit, 0 for forever looping
+#manual_attempt_limit = 0
+
+# Outbound connection timeout (in seconds)
+#outbound_connect_timeout = 10
+
+# Exchange versions (handshake) timeout (in seconds)
+#channel_handshake_timeout = 4
+
+# Ping-pong exchange execution interval (in seconds)
+#channel_heartbeat_interval = 10
+
+# Allow localnet hosts
+localnet = true
+
+# Delete a peer from hosts if they've been quarantined N times
+#hosts_quarantine_limit = 50
+
+# Cooling off time for peer discovery when unsuccessful
+#outbound_peer_discovery_cooloff_time = 30
+
+# Time between peer discovery attempts
+#outbound_peer_discovery_attempt_time = 5
+
+# Testnet blockchain network configuration
+[testnet]
+# Path to the blockchain database directory
+database = "~/.local/darkfi/darkfid_blockchain_testnet"
+
+# Finalization threshold, denominated by number of blocks
+threshold = 6
+
+# PoW miner number of threads to use
+pow_threads = 6
+
+# PoW block production target, in seconds
+pow_target = 90
+
+# Epoch duration, denominated by number of blocks/slots
+epoch_length = 10
+
+# PoS slot duration, in seconds
+slot_time = 90
+
+# Whitelisted faucet addresses
+faucet_pub = ["3ce5xa3PjuQGFtTaF7AvMJp7fGxqeGRJx7zj3LCwNCkP"]
 
 # Participate in the consensus protocol
 consensus = false
+
+# Wallet address to receive consensus rewards
+#recipient = "YOUR_WALLET_ADDRESS_HERE"
 
 # Skip syncing process and start node right away
 skip_sync = false
@@ -18,8 +188,8 @@ skip_sync = false
 # Enable testing mode for local testing
 testing_mode = false
 
-## Sync P2P network settings
-[sync_net]
+## Testnet sync P2P network settings
+[testnet.sync_net]
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
 inbound = ["tcp+tls://0.0.0.0:8342"]
@@ -42,7 +212,7 @@ inbound = ["tcp+tls://0.0.0.0:8342"]
 
 # Seed nodes to connect to for peer discovery and/or adversising our
 # own external addresses
-#seeds = ["tcp+tls://lilith0.dark.fi:8342", "tcp+tls://lilith1.dark.fi:8342"]
+seeds = ["tcp+tls://lilith0.dark.fi:8342", "tcp+tls://lilith1.dark.fi:8342"]
 
 # Whitelisted network transports for outbound connections
 allowed_transports = ["tcp+tls"]
@@ -71,13 +241,22 @@ outbound_connections = 8
 #channel_heartbeat_interval = 10
 
 # Allow localnet hosts
-#localnet = false
+localnet = false
 
-## Sync P2P network settings
-[consensus_net]
+# Delete a peer from hosts if they've been quarantined N times
+#hosts_quarantine_limit = 50
+
+# Cooling off time for peer discovery when unsuccessful
+#outbound_peer_discovery_cooloff_time = 30
+
+# Time between peer discovery attempts
+#outbound_peer_discovery_attempt_time = 5
+
+## Testnet consensus P2P network settings
+[testnet.consensus_net]
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
-#inbound = ["tcp+tls://0.0.0.0:8341"]
+inbound = ["tcp+tls://0.0.0.0:8341"]
 # IPv6 version:
 #inbound = ["tcp+tls://[::]:8341"]
 # Combined:
@@ -97,10 +276,10 @@ outbound_connections = 8
 
 # Seed nodes to connect to for peer discovery and/or adversising our
 # own external addresses
-#seeds = ["tcp+tls://lilith0.dark.fi:8341", "tcp+tls://lilith1.dark.fi:8341"]
+seeds = ["tcp+tls://lilith0.dark.fi:8341", "tcp+tls://lilith1.dark.fi:8341"]
 
 # Whitelisted network transports for outbound connections
-#allowed_transports = ["tcp+tls"]
+allowed_transports = ["tcp+tls"]
 
 # Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
 #transport_mixing = true
@@ -122,4 +301,172 @@ outbound_connections = 8
 #channel_heartbeat_interval = 10
 
 # Allow localnet hosts
-#localnet = false
+localnet = false
+
+# Delete a peer from hosts if they've been quarantined N times
+#hosts_quarantine_limit = 50
+
+# Cooling off time for peer discovery when unsuccessful
+#outbound_peer_discovery_cooloff_time = 30
+
+# Time between peer discovery attempts
+#outbound_peer_discovery_attempt_time = 5
+
+# Mainnet blockchain network configuration
+[mainnet]
+# Path to the blockchain database directory
+database = "~/.local/darkfi/darkfid_blockchain_mainnet"
+
+# Finalization threshold, denominated by number of blocks
+threshold = 11
+
+# PoW miner number of threads to use
+pow_threads = 8
+
+# PoW block production target, in seconds
+pow_target = 90
+
+# Epoch duration, denominated by number of blocks/slots
+epoch_length = 10
+
+# PoS slot duration, in seconds
+slot_time = 90
+
+# Whitelisted faucet addresses
+faucet_pub = []
+
+# Participate in the consensus protocol
+consensus = false
+
+# Wallet address to receive consensus rewards
+#recipient = "YOUR_WALLET_ADDRESS_HERE"
+
+# Skip syncing process and start node right away
+skip_sync = false
+
+# Enable testing mode for local testing
+testing_mode = false
+
+## Mainnet sync P2P network settings
+[mainnet.sync_net]
+# P2P accept addresses the instance listens on for inbound connections
+# You can also use an IPv6 address
+inbound = ["tcp+tls://0.0.0.0:8442"]
+# IPv6 version:
+#inbound = ["tcp+tls://[::]:8442"]
+# Combined:
+#inbound = ["tcp+tls://0.0.0.0:8442", "tcp+tls://[::]:8442"]
+
+# P2P external addresses the instance advertises so other peers can
+# reach us and connect to us, as long as inbound addrs are configured.
+# You can also use an IPv6 address
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8442"]
+# IPv6 version:
+#external_addrs = ["tcp+tls://[ipv6 address here]:8442"]
+# Combined:
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8442", "tcp+tls://[ipv6 address here]:8442"]
+
+# Peer nodes to manually connect to
+#peers = []
+
+# Seed nodes to connect to for peer discovery and/or adversising our
+# own external addresses
+seeds = ["tcp+tls://lilith0.dark.fi:8442", "tcp+tls://lilith1.dark.fi:8442"]
+
+# Whitelisted network transports for outbound connections
+allowed_transports = ["tcp+tls"]
+
+# Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
+#transport_mixing = true
+
+# Outbound connection slots number, this many connections will be
+# attempted. (This does not include manual connections)
+outbound_connections = 8
+
+# Inbound connections slots number, this many active inbound connections
+# will be allowed. (This does not include manual or outbound connections)
+#inbound_connections = 0
+
+# Manual connections retry limit, 0 for forever looping
+#manual_attempt_limit = 0
+
+# Outbound connection timeout (in seconds)
+#outbound_connect_timeout = 10
+
+# Exchange versions (handshake) timeout (in seconds)
+#channel_handshake_timeout = 4
+
+# Ping-pong exchange execution interval (in seconds)
+#channel_heartbeat_interval = 10
+
+# Allow localnet hosts
+localnet = false
+
+# Delete a peer from hosts if they've been quarantined N times
+#hosts_quarantine_limit = 50
+
+# Cooling off time for peer discovery when unsuccessful
+#outbound_peer_discovery_cooloff_time = 30
+
+# Time between peer discovery attempts
+#outbound_peer_discovery_attempt_time = 5
+
+## Mainnet consensus P2P network settings
+[mainnet.consensus_net]
+# P2P accept addresses the instance listens on for inbound connections
+# You can also use an IPv6 address
+inbound = ["tcp+tls://0.0.0.0:8441"]
+# IPv6 version:
+#inbound = ["tcp+tls://[::]:8441"]
+# Combined:
+#inbound = ["tcp+tls://0.0.0.0:8441", "tcp+tls://[::]:8441"]
+
+# P2P external addresses the instance advertises so other peers can
+# reach us and connect to us, as long as inbound addrs are configured.
+# You can also use an IPv6 address
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8441"]
+# IPv6 version:
+#external_addrs = ["tcp+tls://[ipv6 address here]:8441"]
+# Combined:
+#external_addrs = ["tcp+tls://XXX.XXX.XXX.XXX:8441", "tcp+tls://[ipv6 address here]:8441"]
+
+# Peer nodes to manually connect to
+#peers = []
+
+# Seed nodes to connect to for peer discovery and/or adversising our
+# own external addresses
+seeds = ["tcp+tls://lilith0.dark.fi:8441", "tcp+tls://lilith1.dark.fi:8441"]
+
+# Whitelisted network transports for outbound connections
+allowed_transports = ["tcp+tls"]
+
+# Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
+#transport_mixing = true
+
+# Outbound connection slots number, this many connections will be
+# attempted. (This does not include manual connections)
+#outbound_connections = 8
+
+# Manual connections retry limit, 0 for forever looping
+#manual_attempt_limit = 0
+
+# Outbound connection timeout (in seconds)
+#outbound_connect_timeout = 10
+
+# Exchange versions (handshake) timeout (in seconds)
+#channel_handshake_timeout = 4
+
+# Ping-pong exchange execution interval (in seconds)
+#channel_heartbeat_interval = 10
+
+# Allow localnet hosts
+localnet = false
+
+# Delete a peer from hosts if they've been quarantined N times
+#hosts_quarantine_limit = 50
+
+# Cooling off time for peer discovery when unsuccessful
+#outbound_peer_discovery_cooloff_time = 30
+
+# Time between peer discovery attempts
+#outbound_peer_discovery_attempt_time = 5

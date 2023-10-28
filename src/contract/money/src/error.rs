@@ -117,6 +117,18 @@ pub enum MoneyError {
 
     #[error("Missing nullifier in set")]
     MissingNullifier,
+
+    #[error("Call is executed after cutoff slot")]
+    PoWRewardCallAfterCutoffSlot,
+
+    #[error("Missing slot from db")]
+    PoWRewardMissingSlot,
+
+    #[error("Block extends unknown fork")]
+    PoWRewardExtendsUnknownFork,
+
+    #[error("Eta VRF proof couldn't be verified")]
+    PoWRewardErroneousVrfProof,
 }
 
 impl From<MoneyError> for ContractError {
@@ -154,6 +166,10 @@ impl From<MoneyError> for ContractError {
             MoneyError::PreviousCallInputMismatch => Self::Custom(30),
             MoneyError::GenesisCallNonGenesisSlot => Self::Custom(31),
             MoneyError::MissingNullifier => Self::Custom(32),
+            MoneyError::PoWRewardCallAfterCutoffSlot => Self::Custom(33),
+            MoneyError::PoWRewardMissingSlot => Self::Custom(34),
+            MoneyError::PoWRewardExtendsUnknownFork => Self::Custom(35),
+            MoneyError::PoWRewardErroneousVrfProof => Self::Custom(36),
         }
     }
 }

@@ -29,7 +29,7 @@ use std::{
 
 use darkfi::{util::time::Timestamp, Result};
 use darkfi_sdk::{
-    crypto::MerkleTree,
+    crypto::{pasta_prelude::Field, MerkleTree},
     num_traits::{One, Zero},
     pasta::{group::ff::FromUniformBytes, pallas},
 };
@@ -83,8 +83,9 @@ impl Transaction {
 #[derive(Clone, SerialEncodable)]
 /// A block's header
 struct BlockHeader {
-    /// The block's nonce. This value changes arbitrarily with mining.
-    nonce: u32,
+    /// The block's nonce, represented as a pallas::Base.
+    /// This value changes arbitrarily with mining.
+    nonce: pallas::Base,
     /// The hash of the previous block in the blockchain
     previous_hash: blake2b_simd::Hash,
     /// The block timestamp
@@ -107,11 +108,10 @@ impl Block {
     fn hash(&self) -> Result<blake2b_simd::Hash> {
         let mut hasher = blake2b_simd::Params::new().hash_length(HASH_LEN).to_state();
 
-        let mut len: usize = 0;
-        len += self.header.encode(&mut hasher)?;
-        len += self.header.txtree.root(0).unwrap().encode(&mut hasher)?;
-        len += self.txs.len().encode(&mut hasher)?;
-        len.encode(&mut hasher)?;
+        self.header.nonce.encode(&mut hasher)?;
+        self.header.previous_hash.encode(&mut hasher)?;
+        self.header.timestamp.encode(&mut hasher)?;
+        self.header.txtree.root(0).unwrap().encode(&mut hasher)?;
 
         Ok(hasher.finalize())
     }
@@ -223,7 +223,7 @@ fn main() -> Result<()> {
     // Construct the genesis block
     let mut genesis_block = Block {
         header: BlockHeader {
-            nonce: 0,
+            nonce: pallas::Base::ZERO,
             previous_hash: *GENESIS_HASH,
             timestamp: Timestamp::current_time().0,
             txtree: MerkleTree::new(1),
@@ -279,7 +279,7 @@ fn main() -> Result<()> {
         // The miner creates a block
         let mut miner_block = Block {
             header: BlockHeader {
-                nonce: 0,
+                nonce: pallas::Base::ZERO,
                 previous_hash: cur_block.hash()?,
                 timestamp: Timestamp::current_time().0,
                 txtree: MerkleTree::new(1),
@@ -308,9 +308,10 @@ fn main() -> Result<()> {
 
             handles.push(thread::spawn(move || {
                 println!("[#{}] [MINER] Initializing RandomX VM #{}...", n, t);
-                block.header.nonce = t as u32;
+                let mut miner_nonce = t as u32;
                 let vm = RandomXVM::new_fast(flags, &dataset).unwrap();
                 loop {
+                    block.header.nonce = pallas::Base::from(miner_nonce as u64);
                     if found_block.load(Ordering::SeqCst) {
                         println!("[#{}] [MINER] Block found, thread #{} exiting", n, t);
                         break
@@ -320,10 +321,10 @@ fn main() -> Result<()> {
                     let out_hash = BigUint::from_bytes_be(&out_hash);
                     if out_hash <= target {
                         found_block.store(true, Ordering::SeqCst);
-                        found_nonce.store(block.header.nonce, Ordering::SeqCst);
+                        found_nonce.store(miner_nonce, Ordering::SeqCst);
                         println!(
                             "[#{}] [MINER] Thread #{} found block using nonce {}",
-                            n, t, block.header.nonce
+                            n, t, miner_nonce
                         );
                         println!("[#{}] [MINER] Block hash {}", n, block.hash().unwrap().to_hex());
                         println!("[#{}] [MINER] RandomX output: 0x{:064x}", n, out_hash);
@@ -332,7 +333,7 @@ fn main() -> Result<()> {
 
                     // This means thread 0 will use nonces, 0, 4, 8, ...
                     // and thread 1 will use nonces, 1, 5, 9, ...
-                    block.header.nonce += N_THREADS as u32;
+                    miner_nonce += N_THREADS as u32;
                 }
             }));
         }
@@ -343,7 +344,7 @@ fn main() -> Result<()> {
         println!("[#{}] [MINER] Mining time: {:?}", n, mining_time.elapsed());
 
         // Set the valid mined nonce in the block that's being broadcasted
-        miner_block.header.nonce = found_nonce.load(Ordering::SeqCst);
+        miner_block.header.nonce = pallas::Base::from(found_nonce.load(Ordering::SeqCst) as u64);
 
         // Now the block is broadcasted to the network, and a node can verify it.
         // First we verify the block's timestamp. We take the last

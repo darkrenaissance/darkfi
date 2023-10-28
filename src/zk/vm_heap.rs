@@ -24,7 +24,9 @@ use halo2_gadgets::ecc::{
 use halo2_proofs::{
     circuit::{AssignedCell, Value},
     pasta::pallas,
+    plonk,
 };
+use log::error;
 
 use crate::{
     zkas::{decoder::ZkBinary, types::VarType},
@@ -88,26 +90,30 @@ pub enum HeapVar {
     Uint64(Value<u64>),
 }
 
-// TODO: Make this not panic (try_from)
-macro_rules! impl_from {
+macro_rules! impl_try_from {
     ($variant:ident, $fortype:ty) => {
-        impl From<HeapVar> for $fortype {
-            fn from(value: HeapVar) -> Self {
+        impl std::convert::TryFrom<HeapVar> for $fortype {
+            type Error = plonk::Error;
+
+            fn try_from(value: HeapVar) -> std::result::Result<Self, Self::Error> {
                 match value {
-                    HeapVar::$variant(v) => v,
-                    _ => unreachable!(),
+                    HeapVar::$variant(v) => Ok(v),
+                    x => {
+                        error!("Invalid TryFrom conversion {:?}", x);
+                        Err(plonk::Error::Synthesis)
+                    }
                 }
             }
         }
     };
 }
 
-impl_from!(EcPoint, Point<pallas::Affine, EccChip<OrchardFixedBases>>);
-impl_from!(EcNiPoint, NonIdentityPoint<pallas::Affine, EccChip<OrchardFixedBases>>);
-impl_from!(EcFixedPoint, FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>);
-impl_from!(EcFixedPointShort, FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>>);
-impl_from!(EcFixedPointBase, FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>>);
-impl_from!(Scalar, Value<pallas::Scalar>);
-impl_from!(Base, AssignedCell<pallas::Base, pallas::Base>);
-impl_from!(Uint32, Value<u32>);
-impl_from!(MerklePath, Value<[pallas::Base; 32]>);
+impl_try_from!(EcPoint, Point<pallas::Affine, EccChip<OrchardFixedBases>>);
+impl_try_from!(EcNiPoint, NonIdentityPoint<pallas::Affine, EccChip<OrchardFixedBases>>);
+impl_try_from!(EcFixedPoint, FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>>);
+impl_try_from!(EcFixedPointShort, FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>>);
+impl_try_from!(EcFixedPointBase, FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>>);
+impl_try_from!(Scalar, Value<pallas::Scalar>);
+impl_try_from!(Base, AssignedCell<pallas::Base, pallas::Base>);
+impl_try_from!(Uint32, Value<u32>);
+impl_try_from!(MerklePath, Value<[pallas::Base; 32]>);

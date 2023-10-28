@@ -22,55 +22,12 @@ use log::info;
 use smol::Executor;
 
 use darkfi::{
-    error::TxVerifyFailed,
     net::{P2p, P2pPtr, Settings, SESSION_ALL},
     rpc::jsonrpc::JsonSubscriber,
-    tx::Transaction,
     validator::ValidatorPtr,
-    Result,
 };
-use darkfi_consensus_contract::{
-    model::ConsensusGenesisStakeParamsV1, ConsensusFunction::GenesisStakeV1,
-};
-use darkfi_money_contract::{model::MoneyTokenMintParamsV1, MoneyFunction::GenesisMintV1};
-use darkfi_sdk::crypto::{CONSENSUS_CONTRACT_ID, MONEY_CONTRACT_ID};
-use darkfi_serial::deserialize;
 
 use crate::proto::{ProtocolBlock, ProtocolProposal, ProtocolSync, ProtocolTx};
-
-/// Auxiliary function to calculate the total amount of minted tokens in provided
-/// genesis transactions set. This includes both staked and normal tokens.
-/// If a non-genesis transaction is found, execution fails.
-pub fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
-    let mut total = 0;
-
-    for tx in txs {
-        // Transaction must contain a single Consensus::GenesisStake or Money::GenesisMint call
-        if tx.calls.len() != 1 {
-            return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
-        }
-        let call = &tx.calls[0];
-        let function = call.data[0];
-        if !(call.contract_id == *CONSENSUS_CONTRACT_ID || call.contract_id == *MONEY_CONTRACT_ID) ||
-            (call.contract_id == *CONSENSUS_CONTRACT_ID && function != GenesisStakeV1 as u8) ||
-            (call.contract_id == *MONEY_CONTRACT_ID && function != GenesisMintV1 as u8)
-        {
-            return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
-        }
-
-        let value = if function == GenesisStakeV1 as u8 {
-            let params: ConsensusGenesisStakeParamsV1 = deserialize(&call.data[1..])?;
-            params.input.value
-        } else {
-            let params: MoneyTokenMintParamsV1 = deserialize(&call.data[1..])?;
-            params.input.value
-        };
-
-        total += value;
-    }
-
-    Ok(total)
-}
 
 /// Auxiliary function to generate the sync P2P network and register all its protocols.
 pub async fn spawn_sync_p2p(

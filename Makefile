@@ -83,7 +83,7 @@ clippy: $(PROOFS_BIN) contracts
 	$(CARGO) clippy --release --all-features --workspace --tests
 
 fix: $(PROOFS_BIN) contracts
-	$(CARGO) clippy --release --all-features --fix --allow-dirty --workspace
+	$(CARGO) clippy --release --all-features --fix --allow-dirty --workspace --tests
 
 rustdoc: $(PROOFS_BIN) contracts
 	$(CARGO) doc --release --all-features --workspace --document-private-items --no-deps

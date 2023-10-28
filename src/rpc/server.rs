@@ -93,7 +93,7 @@ pub async fn accept(
     loop {
         let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
         let _ = read_from_stream(&mut stream, &mut buf, false).await?;
-        let val: JsonValue = String::from_utf8(buf)?.parse()?;
+        let val: JsonValue = String::from_utf8(buf)?.trim().parse()?;
         let req = JsonRequest::try_from(&val)?;
 
         debug!(target: "rpc::server", "{} --> {}", addr, val.stringify()?);

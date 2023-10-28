@@ -757,10 +757,10 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        heap[args[0].1].clone().into();
+                        heap[args[0].1].clone().try_into()?;
 
                     let rhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        heap[args[1].1].clone().into();
+                        heap[args[1].1].clone().try_into()?;
 
                     let ret = lhs.add(layouter.namespace(|| "EcAdd()"), &rhs)?;
 
@@ -774,12 +774,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: FixedPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        heap[args[1].1].clone().into();
+                        heap[args[1].1].clone().try_into()?;
 
                     let rhs = ScalarFixed::new(
                         ecc_chip.as_ref().unwrap().clone(),
                         layouter.namespace(|| "EcMul: ScalarFixed::new()"),
-                        heap[args[0].1].clone().into(),
+                        heap[args[0].1].clone().try_into()?,
                     )?;
 
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMul()"), rhs)?;
@@ -794,9 +794,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: NonIdentityPoint<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        heap[args[1].1].clone().into();
+                        heap[args[1].1].clone().try_into()?;
 
-                    let rhs: AssignedCell<Fp, Fp> = heap[args[0].1].clone().into();
+                    let rhs: AssignedCell<Fp, Fp> = heap[args[0].1].clone().try_into()?;
                     let rhs = ScalarVar::from_base(
                         ecc_chip.as_ref().unwrap().clone(),
                         layouter.namespace(|| "EcMulVarBase::from_base()"),
@@ -815,9 +815,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: FixedPointBaseField<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        heap[args[1].1].clone().into();
+                        heap[args[1].1].clone().try_into()?;
 
-                    let rhs: AssignedCell<Fp, Fp> = heap[args[0].1].clone().into();
+                    let rhs: AssignedCell<Fp, Fp> = heap[args[0].1].clone().try_into()?;
 
                     let ret = lhs.mul(layouter.namespace(|| "EcMulBase()"), rhs)?;
 
@@ -831,12 +831,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: FixedPointShort<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        heap[args[1].1].clone().into();
+                        heap[args[1].1].clone().try_into()?;
 
                     let rhs = ScalarFixedShort::new(
                         ecc_chip.as_ref().unwrap().clone(),
                         layouter.namespace(|| "EcMulShort: ScalarFixedShort::new()"),
-                        (heap[args[0].1].clone().into(), one.clone()),
+                        (heap[args[0].1].clone().try_into()?, one.clone()),
                     )?;
 
                     let (ret, _) = lhs.mul(layouter.namespace(|| "EcMulShort()"), rhs)?;
@@ -851,7 +851,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let point: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        heap[args[0].1].clone().into();
+                        heap[args[0].1].clone().try_into()?;
 
                     let ret = point.inner().x();
 
@@ -865,7 +865,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let point: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        heap[args[0].1].clone().into();
+                        heap[args[0].1].clone().try_into()?;
 
                     let ret = point.inner().y();
 
@@ -882,7 +882,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         Vec::with_capacity(args.len());
 
                     for idx in args {
-                        poseidon_message.push(heap[idx.1].clone().into());
+                        poseidon_message.push(heap[idx.1].clone().try_into()?);
                     }
 
                     macro_rules! poseidon_hash {
@@ -933,9 +933,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `MerkleRoot{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let leaf_pos = heap[args[0].1].clone().into();
-                    let merkle_path = heap[args[1].1].clone().into();
-                    let leaf = heap[args[2].1].clone().into();
+                    let leaf_pos = heap[args[0].1].clone().try_into()?;
+                    let merkle_path = heap[args[1].1].clone().try_into()?;
+                    let leaf = heap[args[2].1].clone().try_into()?;
 
                     let merkle_inputs = MerklePath::construct(
                         [config.merkle_chip_1().unwrap(), config.merkle_chip_2().unwrap()],
@@ -956,8 +956,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `BaseAdd{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs = &heap[args[0].1].clone().into();
-                    let rhs = &heap[args[1].1].clone().into();
+                    let lhs = &heap[args[0].1].clone().try_into()?;
+                    let rhs = &heap[args[1].1].clone().try_into()?;
 
                     let sum = arith_chip.as_ref().unwrap().add(
                         layouter.namespace(|| "BaseAdd()"),
@@ -974,8 +974,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `BaseSub{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs = &heap[args[0].1].clone().into();
-                    let rhs = &heap[args[1].1].clone().into();
+                    let lhs = &heap[args[0].1].clone().try_into()?;
+                    let rhs = &heap[args[1].1].clone().try_into()?;
 
                     let product = arith_chip.as_ref().unwrap().mul(
                         layouter.namespace(|| "BaseMul()"),
@@ -992,8 +992,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `BaseSub{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs = &heap[args[0].1].clone().into();
-                    let rhs = &heap[args[1].1].clone().into();
+                    let lhs = &heap[args[0].1].clone().try_into()?;
+                    let rhs = &heap[args[1].1].clone().try_into()?;
 
                     let difference = arith_chip.as_ref().unwrap().sub(
                         layouter.namespace(|| "BaseSub()"),
@@ -1044,14 +1044,14 @@ impl Circuit<pallas::Base> for ZkCircuit {
                         64 => {
                             rangecheck64_chip.as_ref().unwrap().copy_range_check(
                                 layouter.namespace(|| "copy range check 64"),
-                                arg.into(),
+                                arg.try_into()?,
                                 true,
                             )?;
                         }
                         253 => {
                             rangecheck253_chip.as_ref().unwrap().copy_range_check(
                                 layouter.namespace(|| "copy range check 253"),
-                                arg.into(),
+                                arg.try_into()?,
                                 true,
                             )?;
                         }
@@ -1067,8 +1067,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `LessThanStrict{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let a = heap[args[0].1].clone().into();
-                    let b = heap[args[1].1].clone().into();
+                    let a = heap[args[0].1].clone().try_into()?;
+                    let b = heap[args[1].1].clone().try_into()?;
 
                     lessthan_chip.as_ref().unwrap().copy_less_than(
                         layouter.namespace(|| "copy a<b check"),
@@ -1084,8 +1084,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `LessThanLoose{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let a = heap[args[0].1].clone().into();
-                    let b = heap[args[1].1].clone().into();
+                    let a = heap[args[0].1].clone().try_into()?;
+                    let b = heap[args[1].1].clone().try_into()?;
 
                     lessthan_chip.as_ref().unwrap().copy_less_than(
                         layouter.namespace(|| "copy a<b check"),
@@ -1101,7 +1101,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `BoolCheck{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let w = heap[args[0].1].clone().into();
+                    let w = heap[args[0].1].clone().try_into()?;
 
                     boolcheck_chip
                         .as_ref()
@@ -1114,9 +1114,9 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `CondSelect{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let cond: AssignedCell<Fp, Fp> = heap[args[0].1].clone().into();
-                    let lhs: AssignedCell<Fp, Fp> = heap[args[1].1].clone().into();
-                    let rhs: AssignedCell<Fp, Fp> = heap[args[2].1].clone().into();
+                    let cond: AssignedCell<Fp, Fp> = heap[args[0].1].clone().try_into()?;
+                    let lhs: AssignedCell<Fp, Fp> = heap[args[1].1].clone().try_into()?;
+                    let rhs: AssignedCell<Fp, Fp> = heap[args[2].1].clone().try_into()?;
 
                     let out: AssignedCell<Fp, Fp> =
                         condselect_chip.as_ref().unwrap().conditional_select(
@@ -1135,8 +1135,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `ZeroCondSelect{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs: AssignedCell<Fp, Fp> = heap[args[0].1].clone().into();
-                    let rhs: AssignedCell<Fp, Fp> = heap[args[1].1].clone().into();
+                    let lhs: AssignedCell<Fp, Fp> = heap[args[0].1].clone().try_into()?;
+                    let rhs: AssignedCell<Fp, Fp> = heap[args[1].1].clone().try_into()?;
 
                     let out: AssignedCell<Fp, Fp> = zerocond_chip.as_ref().unwrap().assign(
                         layouter.namespace(|| "zero_cond"),
@@ -1153,8 +1153,8 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `ConstrainEqualBase{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let lhs: AssignedCell<Fp, Fp> = heap[args[0].1].clone().into();
-                    let rhs: AssignedCell<Fp, Fp> = heap[args[1].1].clone().into();
+                    let lhs: AssignedCell<Fp, Fp> = heap[args[0].1].clone().try_into()?;
+                    let rhs: AssignedCell<Fp, Fp> = heap[args[1].1].clone().try_into()?;
 
                     layouter.assign_region(
                         || "constrain witnessed base equality",
@@ -1168,10 +1168,10 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     let args = &opcode.1;
 
                     let lhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        heap[args[0].1].clone().into();
+                        heap[args[0].1].clone().try_into()?;
 
                     let rhs: Point<pallas::Affine, EccChip<OrchardFixedBases>> =
-                        heap[args[1].1].clone().into();
+                        heap[args[1].1].clone().try_into()?;
 
                     lhs.constrain_equal(
                         layouter.namespace(|| "constrain ec point equality"),
@@ -1184,7 +1184,7 @@ impl Circuit<pallas::Base> for ZkCircuit {
                     trace!(target: "zk::vm", "Executing `ConstrainInstance{:?}` opcode", opcode.1);
                     let args = &opcode.1;
 
-                    let var: AssignedCell<Fp, Fp> = heap[args[0].1].clone().into();
+                    let var: AssignedCell<Fp, Fp> = heap[args[0].1].clone().try_into()?;
 
                     layouter.constrain_instance(
                         var.cell(),

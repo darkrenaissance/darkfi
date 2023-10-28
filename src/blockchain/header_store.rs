@@ -16,7 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::{MerkleNode, MerkleTree};
+use darkfi_sdk::{
+    blockchain::block_version,
+    crypto::MerkleTree,
+    pasta::{group::ff::Field, pallas},
+};
 
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
@@ -24,41 +28,54 @@ use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEn
 
 use crate::{util::time::Timestamp, Error, Result};
 
-use super::{block_store::BLOCK_VERSION, parse_record, SledDbOverlayPtr};
+use super::{parse_record, SledDbOverlayPtr};
 
-/// This struct represents a tuple of the form (version, previous, epoch, slot, timestamp, merkle_root).
+/// This struct represents a tuple of the form (version, previous, epoch, height, timestamp, nonce, merkle_root).
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Header {
     /// Block version
     pub version: u8,
     /// Previous block hash
     pub previous: blake3::Hash,
-    /// Epoch
+    /// Epoch number
     pub epoch: u64,
-    /// Slot UID
-    pub slot: u64,
+    /// Block/Slot height
+    pub height: u64,
     /// Block creation timestamp
     pub timestamp: Timestamp,
-    /// Root of the transaction hashes merkle tree
-    pub root: MerkleNode,
+    /// The block's nonce.
+    /// In PoW, this value changes arbitrarily with mining.
+    /// In PoS, we can use this value as our block producer ETA.
+    pub nonce: pallas::Base,
+    /// Merkle tree of the transactions contained in this block
+    pub tree: MerkleTree,
 }
 
 impl Header {
     pub fn new(
         previous: blake3::Hash,
         epoch: u64,
-        slot: u64,
+        height: u64,
         timestamp: Timestamp,
-        root: MerkleNode,
+        nonce: pallas::Base,
     ) -> Self {
-        let version = BLOCK_VERSION;
-        Self { version, previous, epoch, slot, timestamp, root }
+        let version = block_version(height);
+        let tree = MerkleTree::new(1);
+        Self { version, previous, epoch, height, timestamp, nonce, tree }
     }
 
-    /// Calculate the header hash
-    pub fn headerhash(&self) -> Result<blake3::Hash> {
+    /// Compute the header's hash
+    pub fn hash(&self) -> Result<blake3::Hash> {
         let mut hasher = blake3::Hasher::new();
-        self.encode(&mut hasher)?;
+
+        self.version.encode(&mut hasher)?;
+        self.previous.encode(&mut hasher)?;
+        self.epoch.encode(&mut hasher)?;
+        self.height.encode(&mut hasher)?;
+        self.timestamp.encode(&mut hasher)?;
+        self.nonce.encode(&mut hasher)?;
+        self.tree.root(0).unwrap().encode(&mut hasher)?;
+
         Ok(hasher.finalize())
     }
 }
@@ -71,7 +88,7 @@ impl Default for Header {
             0,
             0,
             Timestamp::current_time(),
-            MerkleTree::new(100).root(0).unwrap(),
+            pallas::Base::ZERO,
         )
     }
 }
@@ -100,8 +117,8 @@ impl HeaderStore {
 
     /// Generate the sled batch corresponding to an insert, so caller
     /// can handle the write operation.
-    /// The headers are hashed with BLAKE3 and this header hash is used as
-    /// the key, while value is the serialized [`Header`] itself.
+    /// The header's hash() function output is used as the key,
+    /// while value is the serialized [`Header`] itself.
     /// On success, the function returns the header hashes in the same
     /// order, along with the corresponding operation batch.
     pub fn insert_batch(&self, headers: &[Header]) -> Result<(sled::Batch, Vec<blake3::Hash>)> {
@@ -109,9 +126,8 @@ impl HeaderStore {
         let mut batch = sled::Batch::default();
 
         for header in headers {
-            let serialized = serialize(header);
-            let headerhash = blake3::hash(&serialized);
-            batch.insert(headerhash.as_bytes(), serialized);
+            let headerhash = header.hash()?;
+            batch.insert(headerhash.as_bytes(), serialize(header));
             ret.push(headerhash);
         }
 
@@ -171,17 +187,16 @@ impl HeaderStoreOverlay {
     }
 
     /// Insert a slice of [`Header`] into the overlay.
-    /// The headers are hashed with BLAKE3 and this headerhash is used as
-    /// the key, while value is the serialized [`Header`] itself.
+    /// The header's hash() function output is used as the key,
+    /// while value is the serialized [`Header`] itself.
     /// On success, the function returns the header hashes in the same order.
     pub fn insert(&self, headers: &[Header]) -> Result<Vec<blake3::Hash>> {
         let mut ret = Vec::with_capacity(headers.len());
         let mut lock = self.0.lock().unwrap();
 
         for header in headers {
-            let serialized = serialize(header);
-            let headerhash = blake3::hash(&serialized);
-            lock.insert(SLED_HEADER_TREE, headerhash.as_bytes(), &serialized)?;
+            let headerhash = header.hash()?;
+            lock.insert(SLED_HEADER_TREE, headerhash.as_bytes(), &serialize(header))?;
             ret.push(headerhash);
         }
 

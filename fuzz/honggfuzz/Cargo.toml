@@ -1,5 +1,5 @@
 [package]
-name = "darkfi-fuzz2"
+name = "darkfi-fuzz"
 version = "0.0.0"
 publish = false
 edition = "2021"
@@ -8,8 +8,8 @@ edition = "2021"
 cargo-fuzz = true
 
 [dependencies]
-honggfuzz = "0.5"
-bitcoin = "0.30.1"
+honggfuzz = "0.5.55"
+bitcoin = "0.31.0-rc2"
 
 [dependencies.darkfi]
 path = "../.."
@@ -44,5 +44,11 @@ doc = false
 [[bin]]
 name = "varint-differential"
 path = "src/varint_differential.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "zkas-compile"
+path = "src/zkas_compile.rs"
 test = false
 doc = false

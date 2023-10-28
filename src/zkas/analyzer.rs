@@ -186,6 +186,8 @@ impl Analyzer {
 
                     let mut rhs_inner = vec![];
                     for (inner_idx, i) in func.rhs.iter().enumerate() {
+                        // TODO: Implement cases where `i` is type Arg::Literal
+                        // TODO: Implement cases where `i` is type Arg::Func
                         if let Arg::Var(v) = i {
                             if let Some(var_ref) = self.lookup_var(&v.name) {
                                 let (var_type, ln, col) = match var_ref {
@@ -218,8 +220,20 @@ impl Analyzer {
                                 v.line,
                                 v.column,
                             ))
+                        } else if let Arg::Lit(l) = i {
+                            return Err(self.error.abort(
+                                &format!("Expected argument `{}` to be of type Variable. Literals are not yet supported in nested function calls.", l.name),
+                                l.line,
+                                l.column,
+                            ))
+                        } else if let Arg::Func(f) = i {
+                            return Err(self.error.abort(
+                                &format!("Expected argument `{}` to be of type Variable. Nested function calls are not yet supported beyond a depth of 1.", Opcode::name(&f.opcode)),
+                                f.line,
+                                0,
+                            ))
                         } else {
-                            unimplemented!()
+                            unreachable!();
                         }
                     }
 
@@ -253,7 +267,35 @@ impl Analyzer {
                 if let Arg::Lit(v) = arg {
                     // Match this literal type to a VarType for
                     // type checking.
+
                     let var_type = v.typ.to_vartype();
+                    // TODO: Refactor the Array type checks here and in the Arg::Var
+                    // section so that there is less repetition.
+                    // Validation for Array types
+                    if arg_types[0] == VarType::BaseArray {
+                        if var_type != VarType::Base {
+                            return Err(self.error.abort(
+                                &format!(
+                                    "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
+                                    VarType::Base,
+                                    var_type
+                                ),
+                                v.line,
+                                v.column,
+                            ))
+                        }
+                    } else if arg_types[0] == VarType::ScalarArray && var_type != VarType::Scalar {
+                        return Err(self.error.abort(
+                            &format!(
+                                "Incorrect argument type. Expected `{:?}`, got `{:?}`.",
+                                VarType::Scalar,
+                                var_type
+                            ),
+                            v.line,
+                            v.column,
+                        ))
+                    }
+                    // Validation for non-Array types
                     if var_type != arg_types[idx] {
                         return Err(self.error.abort(
                             &format!(
@@ -337,6 +379,14 @@ impl Analyzer {
             // result on the heap.
             if statement.typ == StatementType::Assign {
                 let mut var = statement.lhs.clone().unwrap();
+                // Since we are doing an assignment, ensure that there is a return type.
+                if return_types.is_empty() {
+                    return Err(self.error.abort(
+                        "Cannot perform assignment without a return type",
+                        var.line,
+                        var.column,
+                    ))
+                }
                 var.typ = return_types[0];
                 stmt.lhs = Some(var.clone());
                 heap.push(var.clone());

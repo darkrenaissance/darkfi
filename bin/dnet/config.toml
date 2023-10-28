@@ -1,0 +1,15 @@
+[[nodes]]
+name = "darkirc"
+host = "localhost"
+port = 26660
+
+[[nodes]]
+name = "taud"
+host = "localhost"
+port = 23330
+
+[[nodes]]
+name = "agorism"
+host = "agorism.dev"
+port = 26660
+

@@ -161,6 +161,10 @@ impl Channel {
         Ok(sub)
     }
 
+    pub fn is_stopped(&self) -> bool {
+        self.stopped.load(SeqCst)
+    }
+
     /// Sends a message across a channel. Calls `send_message` that creates
     /// a new payload and sends it over the network transport as a packet.
     /// Returns an error if something goes wrong.
@@ -288,7 +292,25 @@ impl Channel {
             });
 
             // Send result to our subscribers
-            self.message_subsystem.notify(&packet.command, &packet.payload).await;
+            match self.message_subsystem.notify(&packet.command, &packet.payload).await {
+                Ok(()) => {}
+                // If we're getting messages without dispatchers, it's spam.
+                Err(Error::MissingDispatcher) => {
+                    debug!(target: "net::channel::main_receive_loop()", "Stopping channel {:?}", self);
+
+                    // We will reject further connections from this peer
+                    self.session
+                        .upgrade()
+                        .unwrap()
+                        .p2p()
+                        .hosts()
+                        .mark_rejected(self.address())
+                        .await;
+
+                    return Err(Error::ChannelStopped)
+                }
+                Err(_) => unreachable!("You added a new error in notify()"),
+            }
         }
     }
 

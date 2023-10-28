@@ -1,19 +1,22 @@
+load('share.sage')
 load('beaver.sage')
-p = 10
+from random import randint
+
 
 party0_val = 3
 party1_val = 22
 public_scalar = 2
+source = Source(p)
 
 # additive share distribution, and communication of private values
-party0_random = random.randint(0,p)
-alpha1 = AuthenticatedShare(party0_random)
-alpha2 = AuthenticatedShare(party0_val - party0_random)
+party0_random = randint(0,p)
+alpha1 = AuthenticatedShare(party0_random, source, 0)
+alpha2 = AuthenticatedShare(party0_val - party0_random, source, 1)
 assert (alpha1.authenticated_open(alpha2) == party0_val)
 
-party1_random = random.randint(0,p)
-beta1 = AuthenticatedShare(party1_random)
-beta2 = AuthenticatedShare(party1_val - party1_random)
+party1_random = randint(0,p)
+beta1 = AuthenticatedShare(party1_random, source, 1)
+beta2 = AuthenticatedShare(party1_val - party1_random, source, 1)
 assert (beta1.authenticated_open(beta2) == party1_val)
 
 # mul_scalar by public scalar
@@ -59,11 +62,12 @@ assert (lhs == (party0_val - party1_val))
 mul_res = party0_val * party1_val
 
 s = Source(p)
-alpha1beta1_share = MultiplicationAuthenticatedShares(alpha1, beta1, s.triplet(0), 0)
-alpha2beta2_share = MultiplicationAuthenticatedShares(alpha2, beta2, s.triplet(1), 1)
-
-lhs_share = alpha1beta1_share*alpha2beta2_share
-rhs_share = alpha2beta2_share*alpha1beta1_share
+a1b1 = MultiplicationAuthenticatedShares(alpha1, beta1, s.triplet(0), 0)
+a2b2 = MultiplicationAuthenticatedShares(alpha2, beta2, s.triplet(1), 1)
+print('d1: {}'.format(a1b1.d))
+print('d2: {}'.format(a2b2.d))
+lhs_share = a1b1.mul(a2b2.d, a2b2.e)
+rhs_share = a2b2.mul(a1b1.d, a1b1.e)
 lhs = lhs_share.authenticated_open(rhs_share)
 
 assert (lhs == (party0_val * party1_val)), 'lhs: {}, rhs: {}'.format(lhs, party0_val * party1_val)

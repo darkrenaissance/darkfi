@@ -1,4 +1,4 @@
 Cargo.lock
 target/
 hfuzz_target/
-hfuzz_workspace/*/input/*
+hfuzz_workspace/

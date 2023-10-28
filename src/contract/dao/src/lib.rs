@@ -22,6 +22,7 @@ use darkfi_sdk::error::ContractError;
 
 /// Functions available in the contract
 #[repr(u8)]
+#[derive(PartialEq, Debug)]
 pub enum DaoFunction {
     Mint = 0x00,
     Propose = 0x01,

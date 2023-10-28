@@ -158,6 +158,9 @@ pub enum Error {
     #[error("Network operation failed")]
     NetworkOperationFailed,
 
+    #[error("Missing P2P message dispatcher")]
+    MissingDispatcher,
+
     #[cfg(feature = "arti-client")]
     #[error(transparent)]
     ArtiError(#[from] arti_client::Error),
@@ -279,6 +282,9 @@ pub enum Error {
     #[error("State transition failed")]
     StateTransitionError,
 
+    #[error("No forks exist")]
+    ForksNotFound,
+
     #[error("Check if proposal extends any existing fork chains failed")]
     ExtendedChainIndexNotFound,
 
@@ -321,6 +327,21 @@ pub enum Error {
     #[error("Proposal task stopped")]
     ProposalTaskStopped,
 
+    #[error("Miner task stopped")]
+    MinerTaskStopped,
+
+    #[error("Calculated total work is zero")]
+    PoWTotalWorkIsZero,
+
+    #[error("Erroneous cutoff calculation")]
+    PoWCuttofCalculationError,
+
+    #[error("Provided timestamp is invalid")]
+    PoWInvalidTimestamp,
+
+    #[error("Provided output hash is greater than current target")]
+    PoWInvalidOutHash,
+
     // ===============
     // Database errors
     // ===============
@@ -351,6 +372,9 @@ pub enum Error {
     #[error("Block {0} is invalid")]
     BlockIsInvalid(String),
 
+    #[error("Block version {0} is invalid")]
+    BlockVersionIsInvalid(u8),
+
     #[error("Block {0} already in database")]
     BlockAlreadyExists(String),
 
@@ -360,6 +384,12 @@ pub enum Error {
     #[error("Block with order number {0} not found in database")]
     BlockNumberNotFound(u64),
 
+    #[error("Block difficulty for height number {0} not found in database")]
+    BlockDifficultyNotFound(u64),
+
+    #[error("Block {0} contains 0 transactions")]
+    BlockContainsNoTransactions(String),
+
     #[error("Verifying slot missmatch")]
     VerifyingSlotMissmatch(),
 
@@ -368,6 +398,9 @@ pub enum Error {
 
     #[error("Slot {0} not found in database")]
     SlotNotFound(u64),
+
+    #[error("Block {0} slots not found in database")]
+    BlockSlotsNotFound(String),
 
     #[error("Future slot {0} was received")]
     FutureSlotReceived(u64),

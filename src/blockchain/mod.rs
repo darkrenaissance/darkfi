@@ -29,8 +29,8 @@ use crate::{tx::Transaction, Error, Result};
 /// Block related definitions and storage implementations
 pub mod block_store;
 pub use block_store::{
-    Block, BlockInfo, BlockOrderStore, BlockOrderStoreOverlay, BlockProducer, BlockStore,
-    BlockStoreOverlay,
+    Block, BlockDifficultyStore, BlockDifficultyStoreOverlay, BlockInfo, BlockOrderStore,
+    BlockOrderStoreOverlay, BlockStore, BlockStoreOverlay,
 };
 
 /// Header definition and storage implementation
@@ -39,7 +39,7 @@ pub use header_store::{Header, HeaderStore, HeaderStoreOverlay};
 
 /// Slots storage implementation
 pub mod slot_store;
-pub use slot_store::{validate_slot, SlotStore, SlotStoreOverlay};
+pub use slot_store::{BlocksSlotsStore, BlocksSlotsStoreOverlay, SlotStore, SlotStoreOverlay};
 
 /// Transactions related storage implementations
 pub mod tx_store;
@@ -64,6 +64,10 @@ pub struct Blockchain {
     pub order: BlockOrderStore,
     /// Slot sled tree
     pub slots: SlotStore,
+    /// Blocks Slots sled tree
+    pub blocks_slots: BlocksSlotsStore,
+    /// Block height difficulties sled tree,
+    pub difficulties: BlockDifficultyStore,
     /// Transactions sled tree
     pub transactions: TxStore,
     /// Pending transactions sled tree
@@ -83,6 +87,8 @@ impl Blockchain {
         let blocks = BlockStore::new(db)?;
         let order = BlockOrderStore::new(db)?;
         let slots = SlotStore::new(db)?;
+        let blocks_slots = BlocksSlotsStore::new(db)?;
+        let difficulties = BlockDifficultyStore::new(db)?;
         let transactions = TxStore::new(db)?;
         let pending_txs = PendingTxStore::new(db)?;
         let pending_txs_order = PendingTxOrderStore::new(db)?;
@@ -95,6 +101,8 @@ impl Blockchain {
             blocks,
             order,
             slots,
+            blocks_slots,
+            difficulties,
             transactions,
             pending_txs,
             pending_txs_order,
@@ -102,23 +110,6 @@ impl Blockchain {
             wasm_bincode,
         })
     }
-
-    /* TODO: FIXME: This should not be part of `Blockchain`
-    /// A blockchain is considered valid, when every block is valid,
-    /// based on validate_block checks.
-    /// Be careful as this will try to load everything in memory.
-    pub fn validate(&self) -> Result<()> {
-        // We use block order store here so we have all blocks in order
-        let blocks = self.order.get_all()?;
-        for (index, block) in blocks[1..].iter().enumerate() {
-            let full_blocks = self.get_blocks_by_hash(&[blocks[index].1, block.1])?;
-            let expected_reward = next_block_reward();
-            full_blocks[1].validate(&full_blocks[0], expected_reward)?;
-        }
-
-        Ok(())
-    }
-    */
 
     /// Insert a given [`BlockInfo`] into the blockchain database.
     /// This functions wraps all the logic of separating the block into specific
@@ -140,18 +131,26 @@ impl Blockchain {
         batches.push(headers_batch);
 
         // Store block
-        let blk: Block = Block::from(block.clone());
+        let blk: Block = Block::from_block_info(block)?;
         let (bocks_batch, block_hashes) = self.blocks.insert_batch(&[blk])?;
         let block_hash = block_hashes[0];
+        let block_hash_vec = [block_hash];
         trees.push(self.blocks.0.clone());
         batches.push(bocks_batch);
 
         // Store block order
-        let blocks_order_batch = self.order.insert_batch(&[block.header.slot], &[block_hash])?;
+        let blocks_order_batch =
+            self.order.insert_batch(&[block.header.height], &block_hash_vec)?;
         trees.push(self.order.0.clone());
         batches.push(blocks_order_batch);
 
-        // Store slot checkpoints
+        // Store block slots uids vector
+        let slots = block.slots.iter().map(|x| x.id).collect();
+        let blocks_slots_bactch = self.blocks_slots.insert_batch(&block_hash_vec, &[&slots])?;
+        trees.push(self.blocks_slots.0.clone());
+        batches.push(blocks_slots_bactch);
+
+        // Store block slots
         let slots_batch = self.slots.insert_batch(&block.slots)?;
         trees.push(self.slots.0.clone());
         batches.push(slots_batch);
@@ -164,7 +163,7 @@ impl Blockchain {
 
     /// Check if the given [`BlockInfo`] is in the database and all trees.
     pub fn has_block(&self, block: &BlockInfo) -> Result<bool> {
-        let blockhash = match self.order.get(&[block.header.slot], true) {
+        let blockhash = match self.order.get(&[block.header.height], true) {
             Ok(v) => v[0].unwrap(),
             Err(_) => return Ok(false),
         };
@@ -176,14 +175,23 @@ impl Blockchain {
             return Ok(false)
         }
 
+        // Check if we have block slots uids vector
+        let slots = match self.blocks_slots.get(&[blockhash], true) {
+            Ok(v) => v[0].clone().unwrap(),
+            Err(_) => return Ok(false),
+        };
+        let provided_block_slots: Vec<u64> = block.slots.iter().map(|x| x.id).collect();
+        if slots != provided_block_slots {
+            return Ok(false)
+        }
+
         // Check if we have all slots
-        let slots: Vec<u64> = block.slots.iter().map(|x| x.id).collect();
         if self.slots.get(&slots, true).is_err() {
             return Ok(false)
         }
 
         // Check provided info produces the same hash
-        Ok(blockhash == block.blockhash())
+        Ok(blockhash == block.hash()?)
     }
 
     /// Retrieve [`BlockInfo`]s by given hashes. Fails if any of them is not found.
@@ -207,10 +215,12 @@ impl Blockchain {
             let txs = self.transactions.get(&block.txs, true)?;
             let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
 
-            let slots = self.slots.get(&block.slots, true)?;
-            let slots = slots.iter().map(|x| x.clone().unwrap()).collect();
+            let slots = self.blocks_slots.get(&[block.hash()], true)?;
+            let slots = slots[0].clone().unwrap();
+            let slots = self.slots.get(&slots, true)?;
+            let block_slots = slots.iter().map(|x| x.clone().unwrap()).collect();
 
-            let info = BlockInfo::new(header, txs, block.producer.clone(), slots);
+            let info = BlockInfo::new(header, txs, block.signature, block_slots);
             ret.push(info);
         }
 
@@ -336,8 +346,8 @@ impl Blockchain {
         let txs_hashes: Vec<blake3::Hash> =
             txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
         let indexes = self.pending_txs_order.get_all()?;
-        // We could do indexes.iter().map(|x| txs_hashes.contains(x.1)).collect.map(|x| x.0).collect but this is faster
-        // since we don't do the second iteration
+        // We could do indexes.iter().map(|x| txs_hashes.contains(x.1)).collect.map(|x| x.0).collect
+        // but this is faster since we don't do the second iteration
         let mut removed_indexes = vec![];
         for index in indexes {
             if txs_hashes.contains(&index.1) {
@@ -402,6 +412,10 @@ pub struct BlockchainOverlay {
     pub order: BlockOrderStoreOverlay,
     /// Slots overlay
     pub slots: SlotStoreOverlay,
+    /// Blocks slots overlay
+    pub blocks_slots: BlocksSlotsStoreOverlay,
+    /// Block height difficulties overlay,
+    pub difficulties: BlockDifficultyStoreOverlay,
     /// Transactions overlay
     pub transactions: TxStoreOverlay,
     /// Contract states overlay
@@ -418,6 +432,8 @@ impl BlockchainOverlay {
         let blocks = BlockStoreOverlay::new(&overlay)?;
         let order = BlockOrderStoreOverlay::new(&overlay)?;
         let slots = SlotStoreOverlay::new(&overlay)?;
+        let blocks_slots = BlocksSlotsStoreOverlay::new(&overlay)?;
+        let difficulties = BlockDifficultyStoreOverlay::new(&overlay)?;
         let transactions = TxStoreOverlay::new(&overlay)?;
         let contracts = ContractStateStoreOverlay::new(&overlay)?;
         let wasm_bincode = WasmStoreOverlay::new(&overlay)?;
@@ -428,6 +444,8 @@ impl BlockchainOverlay {
             blocks,
             order,
             slots,
+            blocks_slots,
+            difficulties,
             transactions,
             contracts,
             wasm_bincode,
@@ -465,13 +483,18 @@ impl BlockchainOverlay {
         self.headers.insert(&[block.header.clone()])?;
 
         // Store block
-        let blk: Block = Block::from(block.clone());
+        let blk: Block = Block::from_block_info(block)?;
         let block_hash = self.blocks.insert(&[blk])?[0];
+        let block_hash_vec = [block_hash];
 
         // Store block order
-        self.order.insert(&[block.header.slot], &[block_hash])?;
+        self.order.insert(&[block.header.height], &block_hash_vec)?;
 
-        // Store slot checkpoints
+        // Store block slots uids vector
+        let slots = block.slots.iter().map(|x| x.id).collect();
+        self.blocks_slots.insert(&block_hash_vec, &[&slots])?;
+
+        // Store block slots
         self.slots.insert(&block.slots)?;
 
         Ok(block_hash)
@@ -479,7 +502,7 @@ impl BlockchainOverlay {
 
     /// Check if the given [`BlockInfo`] is in the database and all trees.
     pub fn has_block(&self, block: &BlockInfo) -> Result<bool> {
-        let blockhash = match self.order.get(&[block.header.slot], true) {
+        let blockhash = match self.order.get(&[block.header.height], true) {
             Ok(v) => v[0].unwrap(),
             Err(_) => return Ok(false),
         };
@@ -491,14 +514,23 @@ impl BlockchainOverlay {
             return Ok(false)
         }
 
+        // Check if we have block slots uids vector
+        let slots = match self.blocks_slots.get(&[blockhash], true) {
+            Ok(v) => v[0].clone().unwrap(),
+            Err(_) => return Ok(false),
+        };
+        let provided_block_slots: Vec<u64> = block.slots.iter().map(|x| x.id).collect();
+        if slots != provided_block_slots {
+            return Ok(false)
+        }
+
         // Check if we have all slots
-        let slots: Vec<u64> = block.slots.iter().map(|x| x.id).collect();
         if self.slots.get(&slots, true).is_err() {
             return Ok(false)
         }
 
         // Check provided info produces the same hash
-        Ok(blockhash == block.blockhash())
+        Ok(blockhash == block.hash()?)
     }
 
     /// Retrieve [`BlockInfo`]s by given hashes. Fails if any of them is not found.
@@ -522,10 +554,12 @@ impl BlockchainOverlay {
             let txs = self.transactions.get(&block.txs, true)?;
             let txs = txs.iter().map(|x| x.clone().unwrap()).collect();
 
-            let slots = self.slots.get(&block.slots, true)?;
-            let slots = slots.iter().map(|x| x.clone().unwrap()).collect();
+            let slots = self.blocks_slots.get(&[block.hash()], true)?;
+            let slots = slots[0].clone().unwrap();
+            let slots = self.slots.get(&slots, true)?;
+            let block_slots = slots.iter().map(|x| x.clone().unwrap()).collect();
 
-            let info = BlockInfo::new(header, txs, block.producer.clone(), slots);
+            let info = BlockInfo::new(header, txs, block.signature, block_slots);
             ret.push(info);
         }
 
@@ -552,6 +586,8 @@ impl BlockchainOverlay {
         let blocks = BlockStoreOverlay::new(&overlay)?;
         let order = BlockOrderStoreOverlay::new(&overlay)?;
         let slots = SlotStoreOverlay::new(&overlay)?;
+        let blocks_slots = BlocksSlotsStoreOverlay::new(&overlay)?;
+        let difficulties = BlockDifficultyStoreOverlay::new(&overlay)?;
         let transactions = TxStoreOverlay::new(&overlay)?;
         let contracts = ContractStateStoreOverlay::new(&overlay)?;
         let wasm_bincode = WasmStoreOverlay::new(&overlay)?;
@@ -562,6 +598,8 @@ impl BlockchainOverlay {
             blocks,
             order,
             slots,
+            blocks_slots,
+            difficulties,
             transactions,
             contracts,
             wasm_bincode,

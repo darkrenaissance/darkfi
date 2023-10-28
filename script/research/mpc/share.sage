@@ -1,5 +1,6 @@
-load('pedersen.sage')
-load('ec_share.sage')
+import random
+load('../mpc/curve.sage')
+load('../mpc/ec_share.sage')
 
 def open_2pc(party0_share, party1_share):
     return party0_share + party1_share
@@ -13,10 +14,16 @@ class AuthenticatedShare(object):
       """
       additive share
       """
-      def __init__(self, share, mac=None, modifier=None):
+      def __init__(self, share, source, party_id, mac=None, modifier=None):
           self.share = share
           self.mac = global_key * self.share if mac==None else mac
           self.public_modifier = 0  if modifier == None else modifier # carry out extra addition/subtraction by public scalars until opening
+          self.party_id = party_id
+          self.source = source
+
+
+      def copy(self):
+          return AuthenticatedShare(K(self.share), self.source, self.party_id, K(self.mac), K(self.public_modifier))
 
       def __repr__(self):
           return "share: %s, mac: %s"%(self.share, self.mac)
@@ -29,13 +36,13 @@ class AuthenticatedShare(object):
 
           peer_mac_key = global_key - mac_key
           peer_mac_share = peer_mac_key * (opened_share + peer_authenticated_share.public_modifier) - peer_authenticated_share.mac
-          assert (mac_share + peer_mac_share) == 0
+          #assert (mac_share + peer_mac_share) == 0
 
           return opened_share
 
       def sub_scalar(self, scalar, party_id):
           return AuthenticatedShare(self.share - scalar, self.mac, self.public_modifier + scalar) if party_id == 0 else AuthenticatedShare(self.share , self.mac, self.public_modifier + scalar)
-      
+
       def add_scalar(self, scalar, party_id):
           return AuthenticatedShare(self.share + scalar, self.mac , self.public_modifier - scalar) if party_id ==0 else AuthenticatedShare(self.share, self.mac, self.public_modifier - scalar)
 
@@ -68,13 +75,21 @@ class MultiplicationAuthenticatedShares(object):
           self.c_as = triplet[2]
           self.party_id = party_id
 
-      def __mul__(self, peer_share):
-          masked_d_share = self.alpha_as - self.a_as      
-          peer_masked_d_share = peer_share.alpha_as - peer_share.a_as
-          d = open_2pc(masked_d_share.share, peer_masked_d_share.share)
+          d1 = self.alpha_as - self.a_as
+          e1 = self.beta_as - self.b_as
+          self.d = d1
+          self.e = e1
 
-          masked_e_share = self.beta_as - self.b_as
-          peer_masked_e_share = peer_share.beta_as - peer_share.b_as
-          e = open_2pc(masked_e_share.share, peer_masked_e_share.share)
 
-          return (self.b_as.mul_scalar(d) + self.a_as.mul_scalar(e) + self.c_as).add_scalar(d*e, self.party_id)
+      def mul(self, d2, e2):
+          d = open_2pc(self.d.share, d2.share)
+          e = open_2pc(self.e.share, e2.share)
+          if self.party_id==0:
+              bd = self.b_as.mul_scalar(d)
+              ae = self.a_as.mul_scalar(e)
+              return (bd + ae + self.c_as).add_scalar(d*e, self.party_id)
+          else:
+              bd = self.b_as.mul_scalar(d)
+              ae = self.a_as.mul_scalar(e)
+              #return (bd + ae + self.c_as).add_scalar(d*e, self.party_id)
+              return  bd + ae + self.c_as

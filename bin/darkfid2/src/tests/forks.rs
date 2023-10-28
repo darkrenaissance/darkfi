@@ -16,7 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{blockchain::Blockchain, validator::consensus::Fork, Result};
+use darkfi::{
+    blockchain::Blockchain,
+    validator::{consensus::Fork, pow::PoWModule},
+    Result,
+};
 
 #[test]
 fn forks() -> Result<()> {
@@ -24,11 +28,12 @@ fn forks() -> Result<()> {
     let record0 = blake3::hash(b"Let there be dark!");
     let record1 = blake3::hash(b"Never skip brain day.");
 
-    // Create a temporary blockchain
+    // Create a temporary blockchain and a PoW module
     let blockchain = Blockchain::new(&sled::Config::new().temporary(true).open()?)?;
+    let module = PoWModule::new(blockchain.clone(), 2, 90)?;
 
     // Create a fork
-    let fork = Fork::new(&blockchain)?;
+    let fork = Fork::new(&blockchain, module)?;
 
     // Add a dummy record to fork
     fork.overlay.lock().unwrap().order.insert(&[0], &[record0])?;

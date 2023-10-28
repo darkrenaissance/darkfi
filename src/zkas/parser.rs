@@ -124,6 +124,10 @@ impl Parser {
         let mut ast_inner = IndexMap::new();
         let mut ast = IndexMap::new();
 
+        if self.tokens.is_empty() {
+            return Err(self.error.abort("Source file does not contain any valid tokens.", 0, 0))
+        }
+
         if self.tokens[0].token_type != TokenType::Symbol {
             return Err(self.error.abort(
                 "Source file does not start with a section. Expected `constant/witness/circuit`.",
@@ -153,7 +157,20 @@ impl Parser {
             return Err(self.error.abort("Source file does not start with k=n;", k.line, k.column))
         }
 
-        let declared_k = number.token.parse().unwrap();
+        // Ensure that the value for k can be parsed correctly into the token type.
+        // The below code catches cases where a large k value exceeding the bounds of the target
+        // type is supplied by the user. Without this check an integer overflow can occur.
+        let declared_k = match number.token.parse() {
+            Ok(v) => v,
+            Err(e) => {
+                return Err(self.error.abort(
+                    &format!("k param is invalid, max allowed is {}. Error: {}", MAX_K, e),
+                    number.line,
+                    number.column,
+                ))
+            }
+        };
+
         if declared_k > MAX_K {
             return Err(self.error.abort(
                 &format!("k param is too high, max allowed is {}", MAX_K),
@@ -430,7 +447,10 @@ impl Parser {
 
         // Tokens have been processed and ast is complete
 
-        let ns = namespace.unwrap();
+        let ns = match namespace {
+            Some(v) => v,
+            None => return Err(self.error.abort("Missing namespace in .zk source.", 0, 0)),
+        };
         ast.insert(ns.clone(), ast_inner);
 
         let constants = {
@@ -463,6 +483,11 @@ impl Parser {
 
     /// Routine checks on section structure
     fn check_section_structure(&self, section: &str, tokens: Vec<Token>) -> Result<()> {
+        // Offsets 0 and 1 are accessed directly below, so we need a length of at
+        // least 2 in order to avoid an index-out-of-bounds panic.
+        if tokens.len() < 2 {
+            return Err(self.error.abort("Insufficient number of tokens in section.", 0, 0))
+        }
         if tokens[0].token_type != TokenType::String {
             return Err(self.error.abort(
                 "Section declaration must start with a naming string.",
@@ -796,18 +821,40 @@ impl Parser {
                 continue
             }
 
-            let (mut left_paren, mut right_paren) = (0, 0);
+            let (mut left_paren, mut right_paren, mut left_bracket, mut right_bracket) =
+                (0, 0, 0, 0);
             for i in &statement {
                 match i.token.as_str() {
                     "(" => left_paren += 1,
                     ")" => right_paren += 1,
+                    "[" => left_bracket += 1,
+                    "]" => right_bracket += 1,
                     _ => {}
                 }
             }
 
-            if left_paren != right_paren || (left_paren == 0 || right_paren == 0) {
+            if (left_paren == 0 && right_paren == 0) && (left_bracket == 0 && right_bracket == 0) {
                 return Err(self.error.abort(
-                    "Incorrect number of left and right parenthesis for statement.",
+                    "Statement must include a function call or array initialization. No parentheses or square brackets present.",
+                    statement[0].line,
+                    statement[0].column,
+                ))
+            }
+
+            if (left_bracket != right_bracket) || (left_paren != right_paren) {
+                return Err(self.error.abort(
+                    "Parentheses or brackets are not matched.",
+                    statement[0].line,
+                    statement[0].column,
+                ))
+            }
+
+            // Is there a valid use-case for defining nested arrays? For now,
+            // if square brackets are present, raise an error unless there is
+            // exactly one pair.
+            if left_bracket > 1 {
+                return Err(self.error.abort(
+                    "Only one pair of brackets allowed for array declaration",
                     statement[0].line,
                     statement[0].column,
                 ))
@@ -867,11 +914,25 @@ impl Parser {
                 // assignment or a function call without a return value.
                 // Let's dig deeper to see what the statement's call is, and
                 // what it contains as arguments. With this we'll fill `rhs`.
-                // The arguments could be literal types, other variables, or
-                // even nested function calls.
+                // The arguments could be literal types, other variables, an
+                // array declaration, or even nested function calls.
                 // For now, we don't care if the params are valid, as this is
                 // the job of the semantic analyzer which comes after the
                 // parsing module.
+
+                // Array declaration.
+                // TODO: Support function calls in array declarations. Currently
+                // only literals can be used to construct an array.
+                // Check only left_bracket. Validation to check that the brackets
+                // are matched has already been performed above.
+                if left_bracket > 0 {
+                    return Err(self.error.abort(
+                        "Arrays are not implemented yet.",
+                        token.line,
+                        token.column,
+                    ))
+                    //let rhs = self.parse_array_assignment(&mut iter);
+                }
 
                 // The assumption here is that the current token is a function
                 // call, so we check if it's legit and start digging.
@@ -890,6 +951,19 @@ impl Parser {
                     ))
                 }
 
+                // At this stage of parsing, we should have assigned `stmt` a StatementType that is
+                // not a Noop. If we have failed to do so, we cannot proceed because Nooops must
+                // never be pased to the compiler. This can occur when multiple independent
+                // statements are passed on one line, or if a statement is not terminated by a
+                // semicolon.
+                if stmt.typ == StatementType::Noop {
+                    return Err(self.error.abort(
+                        "Statement is a NOOP; not allowed. (Did you miss a semicolon?)",
+                        token.line,
+                        token.column,
+                    ))
+                }
+
                 ret.push(stmt);
                 stmt = Statement::default();
             }
@@ -897,6 +971,27 @@ impl Parser {
 
         Ok(ret)
     }
+
+    // fn parse_array_assignment(
+    //     &self,
+    //     iter: &mut Peekable<std::slice::Iter<'_, Token>>,
+    // ) -> Result<Vec<Arg>> {
+    //     if let Some(next_token) = iter.peek() {
+    //         if next_token.token_type != TokenType::LeftBracket {
+    //             return Err(self.error.abort(
+    //                 "Invalid array assignment opening. Must start with a '['.",
+    //                 next_token.line,
+    //                 next_token.column,
+    //             ))
+    //         }
+    //         // Skip the opening parenthesis
+    //         iter.next();
+    //     } else {
+    //         // TODO: Use token line number and column
+    //         return Err(self.error.abort("Premature ending of statement.", 0, 0))
+    //     }
+    //     todo!();
+    // }
 
     fn parse_function_call(
         &self,
@@ -1011,7 +1106,18 @@ impl Parser {
                         break
                     }
 
-                    x => unimplemented!("{:#?}", x),
+                    // Note: Unimplemented symbols throw an error now instead of a panic.
+                    // This assists with fuzz testing as existing features can still be tested
+                    // without causing the fuzzer to choke due to the panic created
+                    // by unimplmented!().
+                    // x => unimplemented!("{:#?}", x),
+                    _ => {
+                        return Err(self.error.abort(
+                            "Character is illegal/unimplemented in this context",
+                            arg.line,
+                            arg.column,
+                        ))
+                    }
                 };
 
                 if sep.token_type == TokenType::RightParen {

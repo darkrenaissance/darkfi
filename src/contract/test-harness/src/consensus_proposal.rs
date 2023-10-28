@@ -54,7 +54,7 @@ impl TestHarness {
         let timer = Instant::now();
 
         // Proposals always extend genesis block
-        let fork_hash = self.genesis_block;
+        let fork_hash = self.genesis_block.hash()?;
 
         // Building Consensus::Propose params
         let proposal_call_debris = ConsensusProposalCallBuilder {
@@ -111,7 +111,7 @@ impl TestHarness {
 
         let timer = Instant::now();
 
-        wallet.validator.read().await.add_transactions(&[tx.clone()], slot, true).await?;
+        wallet.validator.read().await.add_test_producer_transaction(tx, slot, 2, true).await?;
         wallet.consensus_staked_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
@@ -138,9 +138,9 @@ impl TestHarness {
         ) = self.proposal(holder, slot, staked_oc).await?;
 
         for h in holders {
-            info!(target: "consensus", "[{h:?}] ===========================");
+            info!(target: "consensus", "[{h:?}] ================================");
             info!(target: "consensus", "[{h:?}] Executing {holder:?} proposal tx");
-            info!(target: "consensus", "[{h:?}] ===========================");
+            info!(target: "consensus", "[{h:?}] ================================");
             self.execute_proposal_tx(h, &proposal_tx, &proposal_params, current_slot).await?;
         }
 
@@ -157,5 +157,28 @@ impl TestHarness {
         assert!((staked_oc.note.value + REWARD) == rewarded_staked_oc.note.value);
 
         Ok(rewarded_staked_oc)
+    }
+
+    pub async fn execute_erroneous_proposal_tx(
+        &mut self,
+        holder: &Holder,
+        tx: &Transaction,
+        slot: u64,
+    ) -> Result<()> {
+        let wallet = self.holders.get_mut(holder).unwrap();
+        let tx_action_benchmark =
+            self.tx_action_benchmarks.get_mut(&TxAction::ConsensusProposal).unwrap();
+        let timer = Instant::now();
+
+        assert!(wallet
+            .validator
+            .read()
+            .await
+            .add_test_producer_transaction(tx, slot, 2, true)
+            .await
+            .is_err());
+        tx_action_benchmark.verify_times.push(timer.elapsed());
+
+        Ok(())
     }
 }

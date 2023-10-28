@@ -29,8 +29,9 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     model::{
-        MoneyStakeUpdateV1, MoneyTokenFreezeUpdateV1, MoneyTokenMintUpdateV1,
-        MoneyTransferUpdateV1, MoneyUnstakeUpdateV1,
+        MoneyGenesisMintUpdateV1, MoneyPoWRewardUpdateV1, MoneyStakeUpdateV1,
+        MoneyTokenFreezeUpdateV1, MoneyTokenMintUpdateV1, MoneyTransferUpdateV1,
+        MoneyUnstakeUpdateV1,
     },
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION, MONEY_CONTRACT_FAUCET_PUBKEYS,
@@ -55,6 +56,7 @@ use swap_v1::{
 mod genesis_mint_v1;
 use genesis_mint_v1::{
     money_genesis_mint_get_metadata_v1, money_genesis_mint_process_instruction_v1,
+    money_genesis_mint_process_update_v1,
 };
 
 /// `Money::TokenMint` functions
@@ -82,6 +84,13 @@ mod unstake_v1;
 use unstake_v1::{
     money_unstake_get_metadata_v1, money_unstake_process_instruction_v1,
     money_unstake_process_update_v1,
+};
+
+/// `Money::PoWReward` functions
+mod pow_reward_v1;
+use pow_reward_v1::{
+    money_pow_reward_get_metadata_v1, money_pow_reward_process_instruction_v1,
+    money_pow_reward_process_update_v1,
 };
 
 darkfi_sdk::define_contract!(
@@ -221,6 +230,11 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
             let metadata = money_unstake_get_metadata_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
         }
+
+        MoneyFunction::PoWRewardV1 => {
+            let metadata = money_pow_reward_get_metadata_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&metadata)?)
+        }
     }
 }
 
@@ -274,6 +288,11 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             let update_data = money_unstake_process_instruction_v1(cid, call_idx, calls)?;
             Ok(set_return_data(&update_data)?)
         }
+
+        MoneyFunction::PoWRewardV1 => {
+            let update_data = money_pow_reward_process_instruction_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&update_data)?)
+        }
     }
 }
 
@@ -296,9 +315,8 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
         }
 
         MoneyFunction::GenesisMintV1 => {
-            // FIXME: GenesisMint uses the same update as `TokenMintV1`
-            let update: MoneyTokenMintUpdateV1 = deserialize(&update_data[1..])?;
-            Ok(money_token_mint_process_update_v1(cid, update)?)
+            let update: MoneyGenesisMintUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(money_genesis_mint_process_update_v1(cid, update)?)
         }
 
         MoneyFunction::TokenMintV1 => {
@@ -319,6 +337,11 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
         MoneyFunction::UnstakeV1 => {
             let update: MoneyUnstakeUpdateV1 = deserialize(&update_data[1..])?;
             Ok(money_unstake_process_update_v1(cid, update)?)
+        }
+
+        MoneyFunction::PoWRewardV1 => {
+            let update: MoneyPoWRewardUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(money_pow_reward_process_update_v1(cid, update)?)
         }
     }
 }

@@ -22,16 +22,14 @@ use darkfi::{
     blockchain::{BlockInfo, Header},
     net::Settings,
     rpc::jsonrpc::JsonSubscriber,
+    tx::Transaction,
     util::time::TimeKeeper,
-    validator::{
-        consensus::{next_block_reward, pid::slot_pid_output},
-        Validator, ValidatorConfig,
-    },
+    validator::{pid::slot_pid_output, utils::genesis_txs_total, Validator, ValidatorConfig},
     Result,
 };
 use darkfi_contract_test_harness::{vks, Holder, TestHarness};
 use darkfi_sdk::{
-    blockchain::{PidOutput, PreviousSlot, Slot},
+    blockchain::{expected_reward, PidOutput, PreviousSlot, Slot, POS_START},
     pasta::{group::ff::Field, pallas},
 };
 use url::Url;
@@ -39,11 +37,13 @@ use url::Url;
 use crate::{
     proto::BlockInfoMessage,
     task::sync::sync_task,
-    utils::{genesis_txs_total, spawn_consensus_p2p, spawn_sync_p2p},
+    utils::{spawn_consensus_p2p, spawn_sync_p2p},
     Darkfid,
 };
 
 pub struct HarnessConfig {
+    pub pow_threads: usize,
+    pub pow_target: usize,
     pub testing_node: bool,
     pub alice_initial: u64,
     pub bob_initial: u64,
@@ -67,9 +67,13 @@ impl Harness {
         // Generate default genesis block
         let mut genesis_block = BlockInfo::default();
 
+        // Retrieve genesis producer transaction
+        let producer_tx = genesis_block.txs.pop().unwrap();
+
         // Append genesis transactions and calculate their total
         genesis_block.txs.push(genesis_stake_tx);
         genesis_block.txs.push(genesis_mint_tx);
+        genesis_block.txs.push(producer_tx);
         let genesis_txs_total = genesis_txs_total(&genesis_block.txs)?;
         genesis_block.slots[0].total_tokens = genesis_txs_total;
 
@@ -79,6 +83,9 @@ impl Harness {
         let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
         let validator_config = ValidatorConfig::new(
             time_keeper,
+            3,
+            config.pow_threads,
+            config.pow_target,
             genesis_block,
             genesis_txs_total,
             vec![],
@@ -132,8 +139,21 @@ impl Harness {
         let alice = &self.alice.validator.read().await;
         let bob = &self.bob.validator.read().await;
 
-        alice.validate_blockchain(genesis_txs_total, vec![]).await?;
-        bob.validate_blockchain(genesis_txs_total, vec![]).await?;
+        alice
+            .validate_blockchain(
+                genesis_txs_total,
+                vec![],
+                self.config.pow_threads,
+                self.config.pow_target,
+            )
+            .await?;
+        bob.validate_blockchain(
+            genesis_txs_total,
+            vec![],
+            self.config.pow_threads,
+            self.config.pow_target,
+        )
+        .await?;
 
         let alice_blockchain_len = alice.blockchain.len();
         assert_eq!(alice_blockchain_len, bob.blockchain.len());
@@ -158,18 +178,18 @@ impl Harness {
         Ok(())
     }
 
-    pub async fn generate_next_block(
+    pub async fn generate_next_pos_block(
         &self,
         previous: &BlockInfo,
         slots_count: usize,
     ) -> Result<BlockInfo> {
-        let previous_hash = previous.blockhash();
+        let previous_hash = previous.hash()?;
 
         // Generate empty slots
         let mut slots = Vec::with_capacity(slots_count);
         let mut previous_slot = previous.slots.last().unwrap().clone();
         for i in 0..slots_count {
-            let id = previous_slot.id + 1;
+            let id = if previous_slot.id < POS_START { POS_START } else { previous_slot.id + 1 };
             // First slot in the sequence has (at least) 1 previous slot producer
             let producers = if i == 0 { 1 } else { 0 };
             let previous = PreviousSlot::new(
@@ -182,7 +202,7 @@ impl Harness {
             let pid = PidOutput::new(f, error, sigma1, sigma2);
             let total_tokens = previous_slot.total_tokens + previous_slot.reward;
             // Only last slot in the sequence has a reward
-            let reward = if i == slots_count - 1 { next_block_reward() } else { 0 };
+            let reward = if i == slots_count - 1 { expected_reward(id) } else { 0 };
             let slot = Slot::new(id, previous, pid, pallas::Base::ZERO, total_tokens, reward);
             slots.push(slot.clone());
             previous_slot = slot;
@@ -193,16 +213,23 @@ impl Harness {
         timestamp.add(1);
 
         // Generate header
+        let height = slots.last().unwrap().id;
         let header = Header::new(
             previous_hash,
-            previous.header.epoch,
-            slots.last().unwrap().id,
+            self.alice.validator.read().await.consensus.time_keeper.slot_epoch(height),
+            height,
             timestamp,
-            previous.header.root,
+            previous.header.nonce,
         );
 
-        // Generate block
-        let block = BlockInfo::new(header, vec![], previous.producer.clone(), slots);
+        // Generate the block
+        let mut block = BlockInfo::new_empty(header, slots);
+
+        // Add transactions to the block
+        block.append_txs(vec![Transaction::default()])?;
+
+        // Attach signature
+        block.signature = previous.signature;
 
         Ok(block)
     }

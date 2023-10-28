@@ -20,7 +20,7 @@ use std::{io::Result, str::Chars};
 
 use super::error::ErrorEmitter;
 
-const SPECIAL_CHARS: [char; 7] = ['{', '}', '(', ')', ',', ';', '='];
+const SPECIAL_CHARS: [char; 9] = ['{', '}', '(', ')', '[', ']', ',', ';', '='];
 
 fn is_letter(ch: char) -> bool {
     ch.is_ascii_lowercase() || ch.is_ascii_uppercase() || ch == '_'
@@ -39,6 +39,8 @@ pub enum TokenType {
     RightBrace,
     LeftParen,
     RightParen,
+    LeftBracket,
+    RightBracket,
     Comma,
     Semicolon,
     Assign,
@@ -242,6 +244,14 @@ impl<'a> Lexer<'a> {
                     }
                     ')' => {
                         tokens.push(Token::new(")", TokenType::RightParen, lineno, column));
+                        continue
+                    }
+                    '[' => {
+                        tokens.push(Token::new("[", TokenType::LeftBracket, lineno, column));
+                        continue
+                    }
+                    ']' => {
+                        tokens.push(Token::new("]", TokenType::RightBracket, lineno, column));
                         continue
                     }
                     ',' => {

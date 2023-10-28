@@ -15,35 +15,26 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-
 use std::collections::HashSet;
 
 use async_trait::async_trait;
-use log::debug;
-use smol::lock::{Mutex, MutexGuard};
-use tinyjson::JsonValue;
-use url::Url;
-
 use darkfi::{
-    net,
+    net::P2pPtr,
     rpc::{
-        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult, JsonSubscriber},
+        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         p2p_method::HandlerP2p,
         server::RequestHandler,
+        util::JsonValue,
     },
     system::StoppableTaskPtr,
 };
+use log::debug;
+use smol::lock::MutexGuard;
 
-pub struct JsonRpcInterface {
-    pub addr: Url,
-    pub p2p: net::P2pPtr,
-    pub dnet_sub: JsonSubscriber,
-    /// JSON-RPC connection tracker
-    pub rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
-}
+use super::DarkIrc;
 
 #[async_trait]
-impl RequestHandler for JsonRpcInterface {
+impl RequestHandler for DarkIrc {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         debug!(target: "darkirc::rpc", "--> {}", req.stringify().unwrap());
 
@@ -51,7 +42,7 @@ impl RequestHandler for JsonRpcInterface {
             "ping" => self.pong(req.id, req.params).await,
             "dnet.switch" => self.dnet_switch(req.id, req.params).await,
             "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
-            // TODO: make this optional
+            // TODO: Make this optional
             "p2p.get_info" => self.p2p_get_info(req.id, req.params).await,
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
@@ -62,7 +53,7 @@ impl RequestHandler for JsonRpcInterface {
     }
 }
 
-impl JsonRpcInterface {
+impl DarkIrc {
     // RPCAPI:
     // Activate or deactivate dnet in the P2P stack.
     // By sending `true`, dnet will be activated, and by sending `false` dnet
@@ -104,8 +95,8 @@ impl JsonRpcInterface {
     }
 }
 
-impl HandlerP2p for JsonRpcInterface {
-    fn p2p(&self) -> net::P2pPtr {
+impl HandlerP2p for DarkIrc {
+    fn p2p(&self) -> P2pPtr {
         self.p2p.clone()
     }
 }

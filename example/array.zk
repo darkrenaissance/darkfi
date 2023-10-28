@@ -1,0 +1,26 @@
+k = 13;
+field = "pallas";
+
+constant "Array" {}
+
+witness "Array" {
+	Scalar foo,
+	Scalar bar,
+	Base baz,
+	Base fizz,
+}
+
+# This circuit is intended to be used in testing the zkas compilation pipeline.
+# When arrays are fully implemented, this code should produce no errors
+circuit "Array" {
+	array_scalar = [foo, bar];
+	hash1 = poseidon_hash(foo, bar);
+	hash2 = poseidon_hash(array_scalar);
+	constrain_equal_scalar(hash1, hash2);
+	
+	array_base = [baz, fizz];
+	hash3 = poseidon_hash(baz, fizz);
+	hash4 = poseidon_hash(array_base);
+	constrain_equal_base(hash3, hash4);
+}
+

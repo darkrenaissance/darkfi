@@ -20,3 +20,6 @@
 
 pub mod sync;
 pub use sync::sync_task;
+
+pub mod miner;
+pub use miner::miner_task;

@@ -36,9 +36,6 @@ pub mod geode;
 #[cfg(feature = "event-graph")]
 pub mod event_graph;
 
-#[cfg(feature = "event-graph")]
-pub mod event_graph2;
-
 #[cfg(feature = "net")]
 pub mod net;
 

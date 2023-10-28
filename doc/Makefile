@@ -8,12 +8,13 @@ JSONRPC = \
 	$(FAUCETD_JSONRPC)
 
 all: $(JSONRPC)
-	./generate_seminar_ics.py --table > src/development/seminars.md
+	./generate_seminar_ics.py --table > src/dev/seminars.md
 	mdbook build
 	cp -f theme/logo* book/
 	./generate_seminar_ics.py --ics
 	$(MAKE) -C ../ rustdoc
-	cp -r ../target/doc/* book/development/
+	cp -r ../target/doc/* book/dev/
+	./remove_chapter_nav_js.py
 
 $(DARKFID_JSONRPC):
 	@echo "# darkfid JSON-RPC API" > $@

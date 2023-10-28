@@ -24,7 +24,7 @@ use std::{
     },
 };
 
-use log::error;
+use log::{debug, error, warn};
 use smol::Executor;
 use url::Url;
 
@@ -107,6 +107,7 @@ impl Acceptor {
                 // These channels are the channels spawned below on listener.next().is_ok().
                 // After the notification, we reset the condvar and retry this loop to see
                 // if we can accept more connections, and if not - we'll be back here.
+                debug!(target: "net::acceptor::run_accept_loop()", "Reached incoming conn limit, waiting...");
                 cv.wait().await;
                 cv.reset();
                 continue
@@ -115,6 +116,12 @@ impl Acceptor {
             // Now we wait for a new connection.
             match listener.next().await {
                 Ok((stream, url)) => {
+                    // Check if we reject this peer
+                    if self.session.upgrade().unwrap().p2p().hosts().is_rejected(&url).await {
+                        debug!(target: "net::acceptor::run_accept_loop()", "Peer {} is rejected", url);
+                        continue
+                    }
+
                     // Create the new Channel.
                     let session = self.session.clone();
                     let channel = Channel::new(stream, url, session).await;
@@ -143,10 +150,24 @@ impl Acceptor {
                 // As per accept(2) recommendation:
                 Err(e) if e.raw_os_error().is_some() => match e.raw_os_error().unwrap() {
                     libc::EAGAIN | libc::ECONNABORTED | libc::EPROTO | libc::EINTR => continue,
-                    _ => {
+                    libc::ECONNRESET => {
+                        warn!(
+                            target: "net::acceptor::run_accept_loop()",
+                            "[P2P] Connection reset by peer in accept_loop"
+                        );
+                        continue
+                    }
+                    libc::ETIMEDOUT => {
+                        warn!(
+                            target: "net::acceptor::run_accept_loop()",
+                            "[P2P] Connection timed out in accept_loop"
+                        );
+                        continue
+                    }
+                    x => {
                         error!(
                             target: "net::acceptor::run_accept_loop()",
-                            "[P2P] Acceptor failed listening: {}", e,
+                            "[P2P] Acceptor failed listening: {} ({})", e, x,
                         );
                         error!(
                             target: "net::acceptor::run_accept_loop()",
@@ -158,6 +179,25 @@ impl Acceptor {
 
                 // In case a TLS handshake fails, we'll get this:
                 Err(e) if e.kind() == ErrorKind::UnexpectedEof => continue,
+
+                // Handle ErrorKind::Other
+                Err(e) if e.kind() == ErrorKind::Other => {
+                    if let Some(inner) = std::error::Error::source(&e) {
+                        if let Some(inner) = inner.downcast_ref::<async_rustls::rustls::Error>() {
+                            error!(
+                                target: "net::acceptor::run_accept_loop()",
+                                "[P2P] rustls listener error: {:?}", inner,
+                            );
+                            continue
+                        }
+                    }
+
+                    error!(
+                        target: "net::acceptor::run_accept_loop()",
+                        "[P2P] Unhandled ErrorKind::Other error: {:?}", e,
+                    );
+                    return Err(e.into())
+                }
 
                 // Errors we didn't handle above:
                 Err(e) => {

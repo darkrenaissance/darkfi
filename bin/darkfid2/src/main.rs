@@ -18,6 +18,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    str::FromStr,
     sync::Arc,
 };
 
@@ -36,11 +37,12 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
     },
     system::{StoppableTask, StoppableTaskPtr},
-    util::time::TimeKeeper,
-    validator::{Validator, ValidatorConfig, ValidatorPtr},
+    util::{path::expand_path, time::TimeKeeper},
+    validator::{utils::genesis_txs_total, Validator, ValidatorConfig, ValidatorPtr},
     Error, Result,
 };
-use darkfi_contract_test_harness::vks;
+use darkfi_sdk::crypto::PublicKey;
+use darkfi_serial::deserialize;
 
 #[cfg(test)]
 mod tests;
@@ -55,17 +57,23 @@ mod rpc_tx;
 
 /// Validator async tasks
 mod task;
-use task::sync::sync_task;
+use task::{miner_task, sync_task};
 
 /// P2P net protocols
 mod proto;
 
 /// Utility functions
 mod utils;
-use utils::{genesis_txs_total, spawn_consensus_p2p, spawn_sync_p2p};
+use utils::{spawn_consensus_p2p, spawn_sync_p2p};
 
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
+/// Note:
+/// If you change these don't forget to remove their corresponding database folder,
+/// since if it already has a genesis block, provided one is ignored.
+const GENESIS_BLOCK_LOCALNET: &str = include_str!("../genesis_block_localnet");
+const GENESIS_BLOCK_TESTNET: &str = include_str!("../genesis_block_testnet");
+const GENESIS_BLOCK_MAINNET: &str = include_str!("../genesis_block_mainnet");
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
@@ -79,25 +87,21 @@ struct Args {
     /// JSON-RPC listen URL
     rpc_listen: Url,
 
-    #[structopt(long)]
-    /// Participate in the consensus protocol
-    consensus: bool,
+    #[structopt(long, default_value = "testnet")]
+    /// Blockchain network to use
+    network: String,
 
-    #[structopt(long)]
-    /// Skip syncing process and start node right away
-    skip_sync: bool,
-
-    /// Syncing network settings
     #[structopt(flatten)]
-    sync_net: SettingsOpt,
+    /// Localnet blockchain network configuration
+    localnet: BlockchainNetwork,
 
-    /// Consensus network settings
     #[structopt(flatten)]
-    consensus_net: SettingsOpt,
+    /// Testnet blockchain network configuration
+    testnet: BlockchainNetwork,
 
-    #[structopt(long)]
-    /// Enable testing mode for local testing
-    testing_mode: bool,
+    #[structopt(flatten)]
+    /// Mainnet blockchain network configuration
+    mainnet: BlockchainNetwork,
 
     #[structopt(short, long)]
     /// Set log file to ouput into
@@ -106,6 +110,64 @@ struct Args {
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
     verbose: u8,
+}
+
+/// Defines a blockchain network configuration.
+/// Default values correspond to a local network.
+#[derive(Clone, Debug, serde::Deserialize, structopt::StructOpt, structopt_toml::StructOptToml)]
+#[structopt()]
+pub struct BlockchainNetwork {
+    #[structopt(long, default_value = "~/.local/darkfi/darkfid_blockchain_localnet")]
+    /// Path to blockchain database
+    pub database: String,
+
+    #[structopt(long, default_value = "3")]
+    /// Finalization threshold, denominated by number of blocks
+    pub threshold: usize,
+
+    #[structopt(long, default_value = "4")]
+    /// PoW miner number of threads to use
+    pub pow_threads: usize,
+
+    #[structopt(long, default_value = "10")]
+    /// PoW block production target, in seconds
+    pub pow_target: usize,
+
+    #[structopt(long, default_value = "10")]
+    /// Epoch duration, denominated by number of blocks/slots
+    pub epoch_length: u64,
+
+    #[structopt(long, default_value = "10")]
+    /// PoS slot duration, in seconds
+    pub slot_time: u64,
+
+    #[structopt(long)]
+    /// Whitelisted faucet public key (repeatable flag)
+    pub faucet_pub: Vec<String>,
+
+    #[structopt(long)]
+    /// Participate in the consensus protocol
+    pub consensus: bool,
+
+    #[structopt(long)]
+    /// Wallet address to receive consensus rewards
+    pub recipient: Option<String>,
+
+    #[structopt(long)]
+    /// Skip syncing process and start node right away
+    pub skip_sync: bool,
+
+    #[structopt(long)]
+    /// Enable testing mode for local testing
+    pub testing_mode: bool,
+
+    /// Syncing network settings
+    #[structopt(flatten)]
+    pub sync_net: SettingsOpt,
+
+    /// Consensus network settings
+    #[structopt(flatten)]
+    pub consensus_net: SettingsOpt,
 }
 
 /// Daemon structure
@@ -143,28 +205,46 @@ async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid", "Initializing DarkFi node...");
 
-    if args.testing_mode {
+    // Grab blockchain network configuration
+    let (blockchain_config, genesis_block) = match args.network.as_str() {
+        "localnet" => (args.localnet, GENESIS_BLOCK_LOCALNET),
+        "testnet" => (args.testnet, GENESIS_BLOCK_TESTNET),
+        "mainnet" => (args.mainnet, GENESIS_BLOCK_MAINNET),
+        _ => {
+            error!("Unsupported chain `{}`", args.network);
+            return Err(Error::UnsupportedChain)
+        }
+    };
+
+    if blockchain_config.testing_mode {
         info!(target: "darkfid", "Node is configured to run in testing mode!");
     }
 
-    // NOTE: everything is dummy for now
-    // FIXME: The VKS should only ever have to be generated on initial run.
-    //        Do not use the precompiles for actual production code.
+    // Parse the genesis block
+    let bytes = bs58::decode(&genesis_block.trim()).into_vec()?;
+    let genesis_block: BlockInfo = deserialize(&bytes)?;
+
     // Initialize or open sled database
-    let sled_db = sled::Config::new().temporary(true).open()?;
-    let (_, vks) = vks::read_or_gen_vks_and_pks()?;
-    vks::inject(&sled_db, &vks)?;
+    let db_path = expand_path(&blockchain_config.database)?;
+    let sled_db = sled::open(&db_path)?;
 
     // Initialize validator configuration
-    let genesis_block = BlockInfo::default();
     let genesis_txs_total = genesis_txs_total(&genesis_block.txs)?;
-    let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
+    let time_keeper = TimeKeeper::new(
+        genesis_block.header.timestamp,
+        blockchain_config.epoch_length,
+        blockchain_config.slot_time,
+        0,
+    );
     let config = ValidatorConfig::new(
         time_keeper,
+        blockchain_config.threshold,
+        blockchain_config.pow_threads,
+        blockchain_config.pow_target,
         genesis_block,
         genesis_txs_total,
         vec![],
-        args.testing_mode,
+        blockchain_config.testing_mode,
     );
 
     // Initialize validator
@@ -174,19 +254,25 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     let mut subscribers = HashMap::new();
     subscribers.insert("blocks", JsonSubscriber::new("blockchain.subscribe_blocks"));
     subscribers.insert("txs", JsonSubscriber::new("blockchain.subscribe_txs"));
-    if args.consensus {
+    if blockchain_config.consensus {
         subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
     }
 
     // Initialize syncing P2P network
     let sync_p2p =
-        spawn_sync_p2p(&args.sync_net.into(), &validator, &subscribers, ex.clone()).await;
+        spawn_sync_p2p(&blockchain_config.sync_net.into(), &validator, &subscribers, ex.clone())
+            .await;
 
     // Initialize consensus P2P network
-    let consensus_p2p = if args.consensus {
+    let consensus_p2p = if blockchain_config.consensus {
         Some(
-            spawn_consensus_p2p(&args.consensus_net.into(), &validator, &subscribers, ex.clone())
-                .await,
+            spawn_consensus_p2p(
+                &blockchain_config.consensus_net.into(),
+                &validator,
+                &subscribers,
+                ex.clone(),
+            )
+            .await,
         )
     } else {
         None
@@ -222,16 +308,16 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     sync_p2p.clone().start().await?;
 
     // Consensus protocol
-    if args.consensus {
-        info!("Starting consensus P2P network");
+    if blockchain_config.consensus {
+        info!(target: "darkfid", "Starting consensus P2P network");
         let consensus_p2p = consensus_p2p.clone().unwrap();
         consensus_p2p.clone().start().await?;
     } else {
-        info!("Not starting consensus P2P network");
+        info!(target: "darkfid", "Not starting consensus P2P network");
     }
 
     // Sync blockchain
-    if !args.skip_sync {
+    if !blockchain_config.skip_sync {
         sync_task(&darkfid).await?;
     } else {
         darkfid.validator.write().await.synced = true;
@@ -239,6 +325,38 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     // Clean node pending transactions
     darkfid.validator.write().await.purge_pending_txs().await?;
+
+    // Consensus protocol
+    let (consensus_task, consensus_sender) = if blockchain_config.consensus {
+        info!(target: "darkfid", "Starting consensus protocol task");
+        // Grab rewards recipient public key(address)
+        if blockchain_config.recipient.is_none() {
+            return Err(Error::ParseFailed("Recipient address missing"))
+        }
+        let recipient = match PublicKey::from_str(&blockchain_config.recipient.unwrap()) {
+            Ok(address) => address,
+            Err(_) => return Err(Error::InvalidAddress),
+        };
+
+        let (sender, recvr) = smol::channel::bounded(1);
+        let task = StoppableTask::new();
+        task.clone().start(
+            // Weird hack to prevent lifetimes hell
+            async move { miner_task(&darkfid, &recipient, &recvr).await },
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::MinerTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid", "Failed starting miner task: {}", e),
+                }
+            },
+            Error::MinerTaskStopped,
+            ex.clone(),
+        );
+        (Some(task), Some(sender))
+    } else {
+        info!(target: "darkfid", "Not participating in consensus");
+        (None, None)
+    };
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
@@ -251,9 +369,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid", "Stopping syncing P2P network...");
     sync_p2p.stop().await;
 
-    if args.consensus {
+    if blockchain_config.consensus {
         info!(target: "darkfid", "Stopping consensus P2P network...");
         consensus_p2p.unwrap().stop().await;
+
+        info!(target: "darkfid", "Stopping consensus task...");
+        // Send signal to spawned miner threads to stop
+        consensus_sender.unwrap().send(()).await?;
+        consensus_task.unwrap().stop().await;
     }
 
     info!(target: "darkfid", "Flushing sled database...");

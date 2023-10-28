@@ -2,7 +2,7 @@
 
 This directory contains files pertaining to fuzz testing with the [`honggfuzz` fuzzer](https://docs.rs/honggfuzz/latest/honggfuzz/).
 
-We're trying this tool out alongside libfuzzer (covered in `darkfi/fuzz/`).
+We're trying this tool out alongside libfuzzer (covered in `darkfi/fuzz/README.md`).
 
 ## Comparison to libfuzzer
 
@@ -23,6 +23,6 @@ cargo install honggfuzz
 cargo hfuzz build
 # Run
 cargo hfuzz run zkbinary-decode
+# Run `n` threads: brrrrrrrrrrrrr
+HFUZZ_RUN_ARGS="-n 24" cargo hfuzz run zkbinary-decode
 ```
-
-Further info: https://docs.rs/honggfuzz/latest/honggfuzz/#how-to-use-this-crate

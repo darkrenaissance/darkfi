@@ -241,17 +241,18 @@ impl MessageSubsystem {
 
     /// Transmits a payload to a dispatcher.
     /// Returns an error if the payload fails to transmit.
-    pub async fn notify(&self, command: &str, payload: &[u8]) {
+    pub async fn notify(&self, command: &str, payload: &[u8]) -> Result<()> {
         let Some(dispatcher) = self.dispatchers.lock().await.get(command).cloned() else {
             warn!(
                 target: "net::message_subscriber::notify",
                 "message_subscriber::notify: Command '{}' did not find a dispatcher",
                 command,
             );
-            return
+            return Err(Error::MissingDispatcher)
         };
 
         dispatcher.trigger(payload).await;
+        Ok(())
     }
 
     /// Concurrently transmits an error message across dispatchers.
@@ -298,7 +299,7 @@ mod tests {
             // 2. Publish data there
             let msg = MyVersionMessage(110);
             let payload = serialize(&msg);
-            subsystem.notify("verver", &payload).await;
+            subsystem.notify("verver", &payload).await.unwrap();
 
             // Receive:
             // 1. Do a get easy

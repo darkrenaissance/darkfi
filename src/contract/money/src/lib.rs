@@ -32,6 +32,7 @@ pub enum MoneyFunction {
     TokenFreezeV1 = 0x05,
     StakeV1 = 0x06,
     UnstakeV1 = 0x07,
+    PoWRewardV1 = 0x08,
 }
 
 impl TryFrom<u8> for MoneyFunction {
@@ -47,6 +48,7 @@ impl TryFrom<u8> for MoneyFunction {
             0x05 => Ok(Self::TokenFreezeV1),
             0x06 => Ok(Self::StakeV1),
             0x07 => Ok(Self::UnstakeV1),
+            0x08 => Ok(Self::PoWRewardV1),
             _ => Err(ContractError::InvalidFunction),
         }
     }

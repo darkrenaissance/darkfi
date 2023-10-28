@@ -18,8 +18,8 @@
 
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::PrimeField, MerkleNode, Nullifier, PublicKey,
-        TokenId,
+        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::PrimeField, MerkleNode, Nullifier,
+        PublicKey, TokenId,
     },
     error::ContractError,
     pasta::pallas,
@@ -92,7 +92,7 @@ pub struct Input {
     /// must have this value as its ID.
     pub spend_hook: pallas::Base,
     /// Encrypted user data field. An encrypted commitment to arbitrary data.
-    /// When spend hook is set (it is nonzero), then this field may be user
+    /// When spend hook is set (it is nonzero), then this field may be used
     /// to pass data to the invoked contract.
     pub user_data_enc: pallas::Base,
     /// Public key for the signature
@@ -158,6 +158,22 @@ pub struct MoneyTransferUpdateV1 {
     pub coins: Vec<Coin>,
 }
 
+/// Parameters for `Money::GenesisMint`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyGenesisMintParamsV1 {
+    /// Clear input
+    pub input: ClearInput,
+    /// Anonymous output
+    pub output: Output,
+}
+
+/// State update for `Money::GenesisMint`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyGenesisMintUpdateV1 {
+    /// The newly minted coin
+    pub coin: Coin,
+}
+
 /// Parameters for `Money::TokenMint`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyTokenMintParamsV1 {
@@ -188,6 +204,28 @@ pub struct MoneyTokenFreezeParamsV1 {
 pub struct MoneyTokenFreezeUpdateV1 {
     /// Mint authority public key
     pub signature_public: PublicKey,
+}
+
+/// Parameters for `Money::PoWReward`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyPoWRewardParamsV1 {
+    /// Clear input
+    pub input: ClearInput,
+    /// Anonymous output
+    pub output: Output,
+    /// Extending fork last proposal/block hash
+    pub fork_hash: blake3::Hash,
+    /// Extending fork second to last proposal/block hash
+    pub fork_previous_hash: blake3::Hash,
+    /// VRF proof for block rank calculation
+    pub vrf_proof: VrfProof,
+}
+
+/// State update for `Money::PoWReward`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyPoWRewardUpdateV1 {
+    /// The newly minted coin
+    pub coin: Coin,
 }
 
 /// Parameters for `Money::Stake`

@@ -18,13 +18,19 @@
 
 use std::sync::Arc;
 
-use darkfi_sdk::{blockchain::Slot, crypto::PublicKey};
+use darkfi_sdk::{
+    blockchain::{expected_reward, Slot},
+    crypto::PublicKey,
+};
 use darkfi_serial::serialize;
 use log::{debug, error, info, warn};
 use smol::lock::RwLock;
 
 use crate::{
-    blockchain::{BlockInfo, Blockchain, BlockchainOverlay},
+    blockchain::{
+        block_store::{BlockDifficulty, BlockInfo},
+        Blockchain, BlockchainOverlay,
+    },
     error::TxVerifyFailed,
     tx::Transaction,
     util::time::TimeKeeper,
@@ -33,21 +39,43 @@ use crate::{
 
 /// DarkFi consensus module
 pub mod consensus;
-use consensus::{next_block_reward, Consensus};
+use consensus::{Consensus, Proposal};
+
+/// DarkFi PoW module
+pub mod pow;
+use pow::PoWModule;
+
+/// DarkFi consensus PID controller
+pub mod pid;
 
 /// Verification functions
 pub mod verification;
-use verification::{verify_block, verify_genesis_block, verify_transactions};
+use verification::{
+    verify_block, verify_genesis_block, verify_producer_transaction, verify_proposal,
+    verify_transactions,
+};
+
+/// Validation functions
+pub mod validation;
 
 /// Helper utilities
 pub mod utils;
 use utils::deploy_native_contracts;
+
+/// Base 10 big float implementation for high precision arithmetics
+pub mod float_10;
 
 /// Configuration for initializing [`Validator`]
 #[derive(Clone)]
 pub struct ValidatorConfig {
     /// Helper structure to calculate time related operations
     pub time_keeper: TimeKeeper,
+    /// Currently configured finalization security threshold
+    pub finalization_threshold: usize,
+    /// Currently configured PoW miner number of threads to use
+    pub pow_threads: usize,
+    /// Currently configured PoW target
+    pub pow_target: usize,
     /// Genesis block
     pub genesis_block: BlockInfo,
     /// Total amount of minted tokens in genesis block
@@ -59,14 +87,27 @@ pub struct ValidatorConfig {
 }
 
 impl ValidatorConfig {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         time_keeper: TimeKeeper,
+        finalization_threshold: usize,
+        pow_threads: usize,
+        pow_target: usize,
         genesis_block: BlockInfo,
         genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
         testing_mode: bool,
     ) -> Self {
-        Self { time_keeper, genesis_block, genesis_txs_total, faucet_pubkeys, testing_mode }
+        Self {
+            time_keeper,
+            finalization_threshold,
+            pow_threads,
+            pow_target,
+            genesis_block,
+            genesis_txs_total,
+            faucet_pubkeys,
+            testing_mode,
+        }
     }
 }
 
@@ -115,7 +156,14 @@ impl Validator {
         overlay.lock().unwrap().overlay.lock().unwrap().apply()?;
 
         info!(target: "validator::new", "Initializing Consensus");
-        let consensus = Consensus::new(blockchain.clone(), config.time_keeper, testing_mode);
+        let consensus = Consensus::new(
+            blockchain.clone(),
+            config.time_keeper,
+            config.finalization_threshold,
+            config.pow_threads,
+            config.pow_target,
+            testing_mode,
+        )?;
 
         // Create the actual state
         let state =
@@ -246,7 +294,7 @@ impl Validator {
     /// The node retrieves a block and tries to add it if it doesn't
     /// already exists.
     pub async fn append_block(&mut self, block: &BlockInfo) -> Result<()> {
-        let block_hash = block.blockhash().to_string();
+        let block_hash = block.hash()?.to_string();
 
         // Check if block already exists
         if self.blockchain.has_block(block)? {
@@ -257,6 +305,38 @@ impl Validator {
         self.add_blocks(&[block.clone()]).await?;
         info!(target: "validator::append_block", "Block added: {}", block_hash);
         Ok(())
+    }
+
+    /// The node checks if proposals can be finalized.
+    /// If proposals are found, node appends them to canonical, excluding the
+    /// last one, and rebuild the finalized fork to contain the last one.
+    pub async fn finalization(&mut self) -> Result<Vec<BlockInfo>> {
+        info!(target: "validator::finalization", "Performing finalization check");
+
+        // Grab blocks that can be finalized
+        let mut finalized = self.consensus.finalization().await?;
+        if finalized.is_empty() {
+            info!(target: "validator::finalization", "No proposals can be finalized");
+            return Ok(vec![])
+        }
+
+        // Exclude last proposal
+        let last = finalized.pop().unwrap();
+
+        // Append finalized blocks
+        info!(target: "validator::finalization", "Finalizing {} proposals:", finalized.len());
+        for block in &finalized {
+            info!(target: "validator::finalization", "\t{}", block.hash()?);
+        }
+        self.add_blocks(&finalized).await?;
+
+        // Rebuild best fork using last proposal
+        self.consensus.forks = vec![];
+        self.consensus.generate_pow_slot()?;
+        self.consensus.append_proposal(&Proposal::new(last)?).await?;
+        info!(target: "validator::finalization", "Finalization completed!");
+
+        Ok(finalized)
     }
 
     // ==========================
@@ -279,24 +359,26 @@ impl Validator {
         // Retrieve last block
         let mut previous = &overlay.lock().unwrap().last_block()?;
 
-        // Create a time keeper to validate each block
+        // Create a time keeper and a PoW module to validate each block
         let mut time_keeper = self.consensus.time_keeper.clone();
+        let mut module = self.consensus.module.clone();
 
         // Keep track of all blocks transactions to remove them from pending txs store
         let mut removed_txs = vec![];
 
         // Validate and insert each block
         for block in blocks {
-            // Use block slot in time keeper
-            time_keeper.verifying_slot = block.header.slot;
+            // Use block height in time keeper
+            time_keeper.verifying_slot = block.header.height;
 
             // Retrieve expected reward
-            let expected_reward = next_block_reward();
+            let expected_reward = expected_reward(time_keeper.verifying_slot);
 
             // Verify block
             if verify_block(
                 &overlay,
                 &time_keeper,
+                &module,
                 block,
                 previous,
                 expected_reward,
@@ -307,8 +389,23 @@ impl Validator {
             {
                 error!(target: "validator::add_blocks", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-                return Err(Error::BlockIsInvalid(block.blockhash().to_string()))
+                return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
             };
+
+            // Update PoW module
+            if block.header.version == 1 {
+                // Generate block difficulty
+                let difficulty = module.next_difficulty()?;
+                let cummulative_difficulty =
+                    module.cummulative_difficulty.clone() + difficulty.clone();
+                let block_difficulty = BlockDifficulty::new(
+                    block.header.height,
+                    block.header.timestamp.0,
+                    difficulty,
+                    cummulative_difficulty,
+                );
+                module.append_difficulty(&overlay, block_difficulty)?;
+            }
 
             // Store block transactions
             for tx in &block.txs {
@@ -325,6 +422,9 @@ impl Validator {
         // Purge pending erroneous txs since canonical state has been changed
         self.blockchain.remove_pending_txs(&removed_txs)?;
         self.purge_pending_txs().await?;
+
+        // Update PoW module
+        self.consensus.module = module;
 
         Ok(())
     }
@@ -381,6 +481,56 @@ impl Validator {
         Ok(())
     }
 
+    /// Validate a producer `Transaction` and apply it if valid.
+    /// In case the transactions fail, ir will be returned to the caller.
+    /// The function takes a boolean called `write` which tells it to actually write
+    /// the state transitions to the database.
+    /// This should be only used for test purposes.
+    pub async fn add_test_producer_transaction(
+        &self,
+        tx: &Transaction,
+        verifying_slot: u64,
+        block_version: u8,
+        write: bool,
+    ) -> Result<()> {
+        debug!(target: "validator::add_test_producer_transaction", "Instantiating BlockchainOverlay");
+        let overlay = BlockchainOverlay::new(&self.blockchain)?;
+
+        // Generate a time keeper using transaction verifying slot
+        let time_keeper = TimeKeeper::new(
+            self.consensus.time_keeper.genesis_ts,
+            self.consensus.time_keeper.epoch_length,
+            self.consensus.time_keeper.slot_time,
+            verifying_slot,
+        );
+
+        // Verify transaction
+        let mut erroneous_txs = vec![];
+        if let Err(e) = verify_producer_transaction(&overlay, &time_keeper, tx, block_version).await
+        {
+            warn!(target: "validator::add_test_producer_transaction", "Transaction verification failed: {}", e);
+            erroneous_txs.push(tx.clone());
+        }
+
+        let lock = overlay.lock().unwrap();
+        let mut overlay = lock.overlay.lock().unwrap();
+        if !erroneous_txs.is_empty() {
+            warn!(target: "validator::add_test_producer_transaction", "Erroneous transactions found in set");
+            overlay.purge_new_trees()?;
+            return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
+        }
+
+        if !write {
+            debug!(target: "validator::add_test_producer_transaction", "Skipping apply of state updates because write=false");
+            overlay.purge_new_trees()?;
+            return Ok(())
+        }
+
+        debug!(target: "validator::add_test_producer_transaction", "Applying overlay changes");
+        overlay.apply()?;
+        Ok(())
+    }
+
     /// Retrieve all existing blocks and try to apply them
     /// to an in memory overlay to verify their correctness.
     /// Be careful as this will try to load everything in memory.
@@ -388,6 +538,8 @@ impl Validator {
         &self,
         genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
+        pow_threads: usize,
+        pow_target: usize,
     ) -> Result<()> {
         let blocks = self.blockchain.get_all()?;
 
@@ -404,8 +556,9 @@ impl Validator {
         // Set previous
         let mut previous = &blocks[0];
 
-        // Create a time keeper to validate each block
+        // Create a time keeper and a PoW module to validate each block
         let mut time_keeper = self.consensus.time_keeper.clone();
+        let mut module = PoWModule::new(blockchain.clone(), pow_threads, pow_target)?;
 
         // Deploy native wasm contracts
         deploy_native_contracts(&overlay, &time_keeper, &faucet_pubkeys)?;
@@ -415,16 +568,17 @@ impl Validator {
 
         // Validate and insert each block
         for block in &blocks[1..] {
-            // Use block slot in time keeper
-            time_keeper.verifying_slot = block.header.slot;
+            // Use block height in time keeper
+            time_keeper.verifying_slot = block.header.height;
 
             // Retrieve expected reward
-            let expected_reward = next_block_reward();
+            let expected_reward = expected_reward(time_keeper.verifying_slot);
 
             // Verify block
             if verify_block(
                 &overlay,
                 &time_keeper,
+                &module,
                 block,
                 previous,
                 expected_reward,
@@ -435,8 +589,13 @@ impl Validator {
             {
                 error!(target: "validator::validate_blockchain", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-                return Err(Error::BlockIsInvalid(block.blockhash().to_string()))
+                return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
             };
+
+            // Update PoW module
+            if block.header.version == 1 {
+                module.append(block.header.timestamp.0, &module.next_difficulty()?);
+            }
 
             // Use last inserted block as next iteration previous
             previous = block;

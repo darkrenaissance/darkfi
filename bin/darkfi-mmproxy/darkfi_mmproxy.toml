@@ -1,0 +1,2 @@
+# List of worker logins, comment out to allow anything.
+workers = ["x:x"]

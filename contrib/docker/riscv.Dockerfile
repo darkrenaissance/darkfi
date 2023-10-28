@@ -7,6 +7,8 @@
 ARG DEBIAN_VER=latest
 ARG SQL_VER=3420000
 ARG RUST_VER=nightly
+#TODO: only darkirc has been tested, have to check rest binaries to add deps and ports.
+ARG BINS=darkirc
 # When changing riscv target, don't forget to also update the linker
 ARG RISCV_TARGET=riscv64gc-unknown-linux-gnu
 ARG RISCV_LINKER=riscv64-linux-gnu-gcc
@@ -39,8 +41,8 @@ RUN wget -O install-rustup.sh https://sh.rustup.rs && \
     sh install-rustup.sh -yq --default-toolchain none && \
     rm install-rustup.sh
 ENV PATH "${PATH}:/root/.cargo/bin/"
-RUN rustup default "${RUST_VER}"
-RUN rustup target add "${RISCV_TARGET}"
+RUN rustup default ${RUST_VER}
+RUN rustup target add ${RISCV_TARGET}
 
 # Build binaries
 FROM builder as rust_builder
@@ -53,11 +55,15 @@ COPY . /opt/darkfi
 RUN echo 'ring = {git="https://github.com/aggstam/ring"} \n\
 rustls = {git="https://github.com/aggstam/rustls", branch="risc-v"} \n\
 rcgen = {git="https://github.com/aggstam/rcgen"} \n\
-' >> /opt/darkfi/Cargo.toml
+' >> Cargo.toml
+RUN sed -i Cargo.toml -e "s|0.11.3|0.11.1|g"
+# Add hacked dependencies into each crate that uses them
+RUN sed -i bin/darkirc/Cargo.toml \
+    -e "s|\[dependencies\]|\[dependencies\]\nring = \"0.16.20\"|g"
+RUN cargo update
 
 ENV RUSTFLAGS="-C linker=/bin/${RISCV_LINKER} -L/sqlite3/.libs/"
 ENV TARGET_PRFX="--target=" RUST_TARGET="${RISCV_TARGET}"
-#TODO: only darkirc and zkas have been tested, have to check rest binaries to add deps and ports.
 RUN make ${BINS} &&  mkdir compiled-bins && \
     (if [ -e zkas ]; then cp -a zkas compiled-bins/; fi;) && \
     (if [ -e darkfid ]; then cp -a darkfid compiled-bins/; fi;) && \

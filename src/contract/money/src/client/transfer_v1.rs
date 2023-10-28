@@ -145,6 +145,7 @@ pub struct TransferCallBuilder {
     /// User data for the change output
     pub change_user_data: pallas::Base,
     /// User data blind for the change output
+    // TODO (CRITICAL): this is wrongly labelled and used over several inputs
     pub change_user_data_blind: pallas::Base,
     /// Set of `OwnCoin` we're given to use in this builder
     pub coins: Vec<OwnCoin>,

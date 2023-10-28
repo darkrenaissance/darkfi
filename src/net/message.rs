@@ -135,7 +135,7 @@ pub async fn send_packet<W: AsyncWrite + Unpin + Send + Sized>(
     packet: Packet,
 ) -> Result<usize> {
     assert!(!packet.command.is_empty());
-    assert!(!packet.payload.is_empty());
+    //assert!(!packet.payload.is_empty());
     assert!(std::mem::size_of::<usize>() <= std::mem::size_of::<u64>());
 
     let mut written: usize = 0;

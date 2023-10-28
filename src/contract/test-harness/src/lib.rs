@@ -65,6 +65,7 @@ mod dao_vote;
 mod money_airdrop;
 mod money_genesis_mint;
 mod money_otc_swap;
+mod money_pow_reward;
 mod money_token;
 mod money_transfer;
 
@@ -108,6 +109,7 @@ pub enum TxAction {
     MoneyGenesisMint,
     MoneyTransfer,
     MoneyOtcSwap,
+    MoneyPoWReward,
     ConsensusGenesisStake,
     ConsensusStake,
     ConsensusProposal,
@@ -155,6 +157,9 @@ impl Wallet {
         let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
         let config = ValidatorConfig::new(
             time_keeper,
+            3,
+            1,
+            90,
             genesis_block.clone(),
             0,
             faucet_pubkeys.to_vec(),
@@ -198,7 +203,7 @@ pub struct TestHarness {
     pub holders: HashMap<Holder, Wallet>,
     pub proving_keys: HashMap<String, (ProvingKey, ZkBinary)>,
     pub tx_action_benchmarks: HashMap<TxAction, TxActionBenchmarks>,
-    pub genesis_block: blake3::Hash,
+    pub genesis_block: BlockInfo,
 }
 
 impl TestHarness {
@@ -255,6 +260,7 @@ impl TestHarness {
         tx_action_benchmarks.insert(TxAction::MoneyGenesisMint, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::MoneyOtcSwap, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::MoneyTransfer, TxActionBenchmarks::default());
+        tx_action_benchmarks.insert(TxAction::MoneyPoWReward, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::ConsensusGenesisStake, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::ConsensusStake, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::ConsensusProposal, TxActionBenchmarks::default());
@@ -266,12 +272,7 @@ impl TestHarness {
         tx_action_benchmarks.insert(TxAction::DaoVote, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::DaoExec, TxActionBenchmarks::default());
 
-        Ok(Self {
-            holders,
-            proving_keys,
-            tx_action_benchmarks,
-            genesis_block: genesis_block.blockhash(),
-        })
+        Ok(Self { holders, proving_keys, tx_action_benchmarks, genesis_block })
     }
 
     pub async fn execute_erroneous_txs(
@@ -454,11 +455,11 @@ impl TestHarness {
     pub async fn generate_slot(&self, id: u64) -> Result<Slot> {
         // We grab the genesis slot to generate slot
         // using same consensus parameters
-        let genesis_block = self.genesis_block;
+        let genesis_block = self.genesis_block.hash()?;
         let genesis_slot = self.get_slot_by_slot(0).await?;
         let previous = PreviousSlot::new(0, vec![genesis_block], vec![genesis_block], 0.0);
         let pid = PidOutput::new(0.0, 0.0, genesis_slot.pid.sigma1, genesis_slot.pid.sigma2);
-        let slot = Slot::new(id, previous, pid, genesis_slot.last_eta, 0, 0);
+        let slot = Slot::new(id, previous, pid, genesis_slot.last_nonce, 0, 0);
 
         // Store generated slot
         for wallet in self.holders.values() {

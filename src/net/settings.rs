@@ -89,7 +89,7 @@ impl Default for Settings {
             manual_attempt_limit: 0,
             outbound_connect_timeout: 15,
             channel_handshake_timeout: 10,
-            channel_heartbeat_interval: 10,
+            channel_heartbeat_interval: 30,
             localnet: false,
             hosts_quarantine_limit: 50,
             outbound_peer_discovery_cooloff_time: 30,
@@ -162,6 +162,7 @@ pub struct SettingsOpt {
     #[structopt(long = "transports")]
     pub allowed_transports: Vec<String>,
 
+    /// Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
     #[structopt(long)]
     pub transport_mixing: Option<bool>,
 
@@ -170,12 +171,15 @@ pub struct SettingsOpt {
     #[structopt(long)]
     pub localnet: bool,
 
+    /// Delete a peer from hosts if they've been quarantined N times
     #[structopt(skip)]
     pub hosts_quarantine_limit: Option<usize>,
 
+    /// Cooling off time for peer discovery when unsuccessful
     #[structopt(skip)]
     pub outbound_peer_discovery_cooloff_time: Option<u64>,
 
+    /// Time between peer discovery attempts
     #[structopt(skip)]
     pub outbound_peer_discovery_attempt_time: Option<u64>,
 }
@@ -199,7 +203,7 @@ impl From<SettingsOpt> for Settings {
             manual_attempt_limit: opt.manual_attempt_limit.unwrap_or(0),
             outbound_connect_timeout: opt.outbound_connect_timeout.unwrap_or(15),
             channel_handshake_timeout: opt.channel_handshake_timeout.unwrap_or(10),
-            channel_heartbeat_interval: opt.channel_heartbeat_interval.unwrap_or(10),
+            channel_heartbeat_interval: opt.channel_heartbeat_interval.unwrap_or(30),
             localnet: opt.localnet,
             hosts_quarantine_limit: opt.hosts_quarantine_limit.unwrap_or(15),
             outbound_peer_discovery_cooloff_time: opt

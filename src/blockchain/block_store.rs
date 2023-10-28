@@ -18,69 +18,68 @@
 
 use darkfi_sdk::{
     blockchain::Slot,
-    crypto::schnorr::Signature,
-    pasta::{group::ff::Field, pallas},
+    crypto::{
+        schnorr::{SchnorrSecret, Signature},
+        SecretKey,
+    },
+    pasta::{group::ff::FromUniformBytes, pallas},
 };
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
 
-use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{deserialize, serialize, Encodable, SerialDecodable, SerialEncodable};
+use num_bigint::BigUint;
+use rand::rngs::OsRng;
 
 use crate::{tx::Transaction, Error, Result};
 
-use super::{parse_record, parse_u64_key_record, validate_slot, Header, SledDbOverlayPtr};
+use super::{parse_record, parse_u64_key_record, Header, SledDbOverlayPtr};
 
-/// Block version number
-pub const BLOCK_VERSION: u8 = 1;
-
-/// Block magic bytes
-const BLOCK_MAGIC_BYTES: [u8; 4] = [0x11, 0x6d, 0x75, 0x1f];
-
-/// This struct represents a tuple of the form (`magic`, `header`, `txs`, `producer`, `slots`).
-/// The header and transactions are stored as hashes, while slots are stored as integers,
-/// serving as pointers to the actual data in the sled database.
+/// This struct represents a tuple of the form (`header`, `txs`, `signature`).
+/// The header and transactions are stored as hashes, serving as pointers to the actual data
+/// in the sled database.
+/// NOTE: This struct fields are considered final, as it represents a blockchain block.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Block {
-    /// Block magic bytes
-    pub magic: [u8; 4],
     /// Block header
     pub header: blake3::Hash,
     /// Trasaction hashes
     pub txs: Vec<blake3::Hash>,
-    /// Block producer info
-    pub producer: BlockProducer,
-    /// Slots up until this block
-    pub slots: Vec<u64>,
+    /// Block producer signature
+    pub signature: Signature,
 }
 
 impl Block {
-    pub fn new(
-        header: blake3::Hash,
-        txs: Vec<blake3::Hash>,
-        producer: BlockProducer,
-        slots: Vec<u64>,
-    ) -> Self {
-        let magic = BLOCK_MAGIC_BYTES;
-        Self { magic, header, txs, producer, slots }
+    pub fn new(header: blake3::Hash, txs: Vec<blake3::Hash>, signature: Signature) -> Self {
+        Self { header, txs, signature }
     }
 
-    /// Calculate the block hash
-    pub fn blockhash(&self) -> blake3::Hash {
-        blake3::hash(&serialize(self))
+    /// A block's hash is the same as the hash of its header
+    pub fn hash(&self) -> blake3::Hash {
+        self.header
+    }
+
+    /// Generate a `Block` from a `BlockInfo`
+    pub fn from_block_info(block_info: &BlockInfo) -> Result<Self> {
+        let header = block_info.header.hash()?;
+        let txs = block_info.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
+        let signature = block_info.signature;
+        Ok(Self { header, txs, signature })
     }
 }
 
-/// Structure representing full block data.
+/// Structure representing full block data, acting as
+/// a wrapper struct over `Block`, enabling us to include
+/// more information that might be used in different block
+/// version, without affecting the original struct.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct BlockInfo {
-    /// Block magic bytes
-    pub magic: [u8; 4],
     /// Block header data
     pub header: Header,
     /// Transactions payload
     pub txs: Vec<Transaction>,
-    /// Block producer info
-    pub producer: BlockProducer,
+    /// Block producer signature
+    pub signature: Signature,
     /// Slots payload
     pub slots: Vec<Slot>,
 }
@@ -88,12 +87,10 @@ pub struct BlockInfo {
 impl Default for BlockInfo {
     /// Represents the genesis block on current timestamp
     fn default() -> Self {
-        let magic = BLOCK_MAGIC_BYTES;
         Self {
-            magic,
             header: Header::default(),
-            txs: vec![],
-            producer: BlockProducer::default(),
+            txs: vec![Transaction::default()],
+            signature: Signature::dummy(),
             slots: vec![Slot::default()],
         }
     }
@@ -103,99 +100,61 @@ impl BlockInfo {
     pub fn new(
         header: Header,
         txs: Vec<Transaction>,
-        producer: BlockProducer,
+        signature: Signature,
         slots: Vec<Slot>,
     ) -> Self {
-        let magic = BLOCK_MAGIC_BYTES;
-        Self { magic, header, txs, producer, slots }
+        Self { header, txs, signature, slots }
     }
 
-    /// Calculate the block hash
-    pub fn blockhash(&self) -> blake3::Hash {
-        let block: Block = self.clone().into();
-        block.blockhash()
+    /// Generate an empty block for provided Header
+    /// and slots vector. Transactions and the producer
+    /// signature must be added after.
+    pub fn new_empty(header: Header, slots: Vec<Slot>) -> Self {
+        let txs = vec![];
+        let signature = Signature::dummy();
+        Self { header, txs, signature, slots }
     }
 
-    /// A block is considered valid when the following rules apply:
-    ///     1. Parent hash is equal to the hash of the previous block
-    ///     2. Timestamp increments previous block timestamp
-    ///     3. Slot increments previous block slot
-    ///     4. Slots vector is not empty and all its slots are valid
-    ///     5. Slot is the same as the slots vector last slot id
-    /// Additional validity rules can be applied.
-    pub fn validate(&self, previous: &Self, expected_reward: u64) -> Result<()> {
-        let error = Err(Error::BlockIsInvalid(self.blockhash().to_string()));
-        let previous_hash = previous.blockhash();
+    /// A block's hash is the same as the hash of its header
+    pub fn hash(&self) -> Result<blake3::Hash> {
+        self.header.hash()
+    }
 
-        // Check previous hash (1)
-        if self.header.previous != previous_hash {
-            return error
-        }
+    /// Compute the block's full hash
+    pub fn full_hash(&self) -> Result<blake3::Hash> {
+        let mut hasher = blake3::Hasher::new();
+        self.encode(&mut hasher)?;
+        Ok(hasher.finalize())
+    }
 
-        // Check timestamps are incremental (2)
-        if self.header.timestamp <= previous.header.timestamp {
-            return error
-        }
+    /// Append a transaction to the block. Also adds it to the Merkle tree.
+    pub fn append_tx(&mut self, tx: Transaction) -> Result<()> {
+        let mut buf = [0u8; 64];
+        buf[..blake3::OUT_LEN].copy_from_slice(tx.hash()?.as_bytes());
+        let leaf = pallas::Base::from_uniform_bytes(&buf);
 
-        // Check slots are incremental (3)
-        if self.header.slot <= previous.header.slot {
-            return error
-        }
+        self.header.tree.append(leaf.into());
+        self.txs.push(tx);
 
-        // Verify slots (4)
-        if self.slots.is_empty() {
-            return error
-        }
+        Ok(())
+    }
 
-        // Retrieve previous block last slot
-        let mut previous_slot = previous.slots.last().unwrap();
-
-        // Check if empty slots existed
-        if self.slots.len() > 1 {
-            // All slots exluding the last one must have reward value set to 0.
-            // Slots must already be in correct order (sorted by id).
-            for slot in &self.slots[..self.slots.len() - 1] {
-                validate_slot(
-                    slot,
-                    previous_slot,
-                    &previous_hash,
-                    &previous.header.previous,
-                    &previous.producer.eta,
-                    0,
-                )?;
-                previous_slot = slot;
-            }
-        }
-
-        validate_slot(
-            self.slots.last().unwrap(),
-            previous_slot,
-            &previous_hash,
-            &previous.header.previous,
-            &previous.producer.eta,
-            expected_reward,
-        )?;
-
-        // Check block slot is the last slot id (5)
-        if self.slots.last().unwrap().id != self.header.slot {
-            return error
+    /// Append a vector of transactions to the block. Also adds them to the
+    /// Merkle tree.
+    pub fn append_txs(&mut self, txs: Vec<Transaction>) -> Result<()> {
+        for tx in txs {
+            self.append_tx(tx)?;
         }
 
         Ok(())
     }
-}
 
-impl From<BlockInfo> for Block {
-    fn from(block_info: BlockInfo) -> Self {
-        let txs = block_info.txs.iter().map(|x| blake3::hash(&serialize(x))).collect();
-        let slots = block_info.slots.iter().map(|x| x.id).collect();
-        Self {
-            magic: block_info.magic,
-            header: block_info.header.headerhash().unwrap(),
-            txs,
-            producer: block_info.producer,
-            slots,
-        }
+    /// Sign block header using provided secret key
+    // TODO: sign more stuff?
+    pub fn sign(&mut self, secret_key: &SecretKey) -> Result<()> {
+        self.signature = secret_key.sign(&mut OsRng, &self.hash()?.as_bytes()[..]);
+
+        Ok(())
     }
 }
 
@@ -223,17 +182,16 @@ impl BlockStore {
 
     /// Generate the sled batch corresponding to an insert, so caller
     /// can handle the write operation.
-    /// The blocks are hashed with BLAKE3 and this block hash is used as
-    /// the key, while value is the serialized [`Block`] itself.
+    /// The block's hash() function output is used as the key,
+    /// while value is the serialized [`Block`] itself.
     /// On success, the function returns the block hashes in the same order.
     pub fn insert_batch(&self, blocks: &[Block]) -> Result<(sled::Batch, Vec<blake3::Hash>)> {
         let mut ret = Vec::with_capacity(blocks.len());
         let mut batch = sled::Batch::default();
 
         for block in blocks {
-            let serialized = serialize(block);
-            let blockhash = blake3::hash(&serialized);
-            batch.insert(blockhash.as_bytes(), serialized);
+            let blockhash = block.hash();
+            batch.insert(blockhash.as_bytes(), serialize(block));
             ret.push(blockhash);
         }
 
@@ -293,17 +251,16 @@ impl BlockStoreOverlay {
     }
 
     /// Insert a slice of [`Block`] into the overlay.
-    /// The block are hashed with BLAKE3 and this block hash is used as
-    /// the key, while value is the serialized [`Block`] itself.
+    /// The block's hash() function output is used as the key,
+    /// while value is the serialized [`Block`] itself.
     /// On success, the function returns the block hashes in the same order.
     pub fn insert(&self, blocks: &[Block]) -> Result<Vec<blake3::Hash>> {
         let mut ret = Vec::with_capacity(blocks.len());
         let mut lock = self.0.lock().unwrap();
 
         for block in blocks {
-            let serialized = serialize(block);
-            let blockhash = blake3::hash(&serialized);
-            lock.insert(SLED_BLOCK_TREE, blockhash.as_bytes(), &serialized)?;
+            let blockhash = block.hash();
+            lock.insert(SLED_BLOCK_TREE, blockhash.as_bytes(), &serialize(block))?;
             ret.push(blockhash);
         }
 
@@ -350,7 +307,7 @@ const SLED_BLOCK_ORDER_TREE: &[u8] = b"_block_order";
 
 /// The `BlockOrderStore` is a `sled` tree storing the order of the
 /// blockchain's blocks, where the key is the order number, and the value is
-/// the blocks' hash. [`BlockStore`] can be queried with this hash.
+/// the blocks' hash. [`BlockOrderStore`] can be queried with this order number.
 #[derive(Clone)]
 pub struct BlockOrderStore(pub sled::Tree);
 
@@ -545,28 +502,170 @@ impl BlockOrderStoreOverlay {
     }
 }
 
-/// This struct represents [`Block`] producer information.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct BlockProducer {
-    /// Block producer signature
-    pub signature: Signature,
-    /// Proposal transaction
-    pub proposal: Transaction,
-    /// Block producer ETA
-    pub eta: pallas::Base,
+/// Auxiliary structure used to keep track of block PoW difficulty information.
+/// Note: we only need height cummulative difficulty, but we also keep its actual
+/// difficulty, so we can verify the sequence and/or know specific block height
+/// difficulty, if ever needed.
+#[derive(Debug)]
+pub struct BlockDifficulty {
+    /// Block height number
+    pub height: u64,
+    /// Block creation timestamp
+    pub timestamp: u64,
+    /// Height difficulty
+    pub difficulty: BigUint,
+    /// Height cummulative difficulty (total + height difficulty)
+    pub cummulative_difficulty: BigUint,
 }
 
-impl BlockProducer {
-    pub fn new(signature: Signature, proposal: Transaction, eta: pallas::Base) -> Self {
-        Self { signature, proposal, eta }
+impl BlockDifficulty {
+    pub fn new(
+        height: u64,
+        timestamp: u64,
+        difficulty: BigUint,
+        cummulative_difficulty: BigUint,
+    ) -> Self {
+        Self { height, timestamp, difficulty, cummulative_difficulty }
     }
 }
 
-impl Default for BlockProducer {
-    fn default() -> Self {
-        let signature = Signature::dummy();
-        let proposal = Transaction::default();
-        let eta = pallas::Base::ZERO;
-        Self { signature, proposal, eta }
+// Note: Doing all the imports here as this might get obselete if
+// we implemented Encodable/Decodable for num_bigint::BigUint.
+impl darkfi_serial::Encodable for BlockDifficulty {
+    fn encode<S: std::io::Write>(&self, mut s: S) -> std::io::Result<usize> {
+        let mut len = 0;
+        len += self.height.encode(&mut s)?;
+        len += self.timestamp.encode(&mut s)?;
+        len += self.difficulty.to_bytes_be().encode(&mut s)?;
+        len += self.cummulative_difficulty.to_bytes_be().encode(&mut s)?;
+        Ok(len)
+    }
+}
+
+impl darkfi_serial::Decodable for BlockDifficulty {
+    fn decode<D: std::io::Read>(mut d: D) -> std::io::Result<Self> {
+        let height: u64 = darkfi_serial::Decodable::decode(&mut d)?;
+        let timestamp: u64 = darkfi_serial::Decodable::decode(&mut d)?;
+        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
+        let difficulty: BigUint = BigUint::from_bytes_be(&bytes);
+        let bytes: Vec<u8> = darkfi_serial::Decodable::decode(&mut d)?;
+        let cummulative_difficulty: BigUint = BigUint::from_bytes_be(&bytes);
+        let ret = Self { height, timestamp, difficulty, cummulative_difficulty };
+        Ok(ret)
+    }
+}
+
+/// [`BlockDifficulty`] sled tree
+const SLED_BLOCK_DIFFICULTY_TREE: &[u8] = b"_block_difficulty";
+
+/// The `BlockDifficultyStore` is a `sled` tree storing the difficulty information
+/// of the blockchain's blocks, where the key is the block height number, and the
+/// value is the blocks' hash. [`BlockDifficultyStore`] can be queried with this
+/// height number.
+#[derive(Clone)]
+pub struct BlockDifficultyStore(pub sled::Tree);
+
+impl BlockDifficultyStore {
+    /// Opens a new or existing `BlockDifficultyStore` on the given sled database.
+    pub fn new(db: &sled::Db) -> Result<Self> {
+        let tree = db.open_tree(SLED_BLOCK_DIFFICULTY_TREE)?;
+        Ok(Self(tree))
+    }
+
+    /// Insert a slice of [`BlockDifficulty`] into the store.
+    pub fn insert(&self, block_difficulties: &[BlockDifficulty]) -> Result<()> {
+        let batch = self.insert_batch(block_difficulties)?;
+        self.0.apply_batch(batch)?;
+        Ok(())
+    }
+
+    /// Generate the sled batch corresponding to an insert, so caller
+    /// can handle the write operation.
+    /// The block's height number is used as the key, while value is
+    //  the serialized [`BlockDifficulty`] itself.
+    pub fn insert_batch(&self, block_difficulties: &[BlockDifficulty]) -> Result<sled::Batch> {
+        let mut batch = sled::Batch::default();
+
+        for block_difficulty in block_difficulties {
+            batch.insert(&block_difficulty.height.to_be_bytes(), serialize(block_difficulty));
+        }
+
+        Ok(batch)
+    }
+
+    /// Fetch given block height numbers from the block difficulties store.
+    /// The resulting vector contains `Option`, which is `Some` if the block
+    /// height number was found in the block difficulties store, and otherwise
+    /// it is `None`, if it has not.
+    /// The second parameter is a boolean which tells the function to fail in
+    /// case at least one block height number was not found.
+    pub fn get(&self, heights: &[u64], strict: bool) -> Result<Vec<Option<BlockDifficulty>>> {
+        let mut ret = Vec::with_capacity(heights.len());
+
+        for height in heights {
+            if let Some(found) = self.0.get(height.to_be_bytes())? {
+                let block_difficulty = deserialize(&found)?;
+                ret.push(Some(block_difficulty));
+            } else {
+                if strict {
+                    return Err(Error::BlockDifficultyNotFound(*height))
+                }
+                ret.push(None);
+            }
+        }
+
+        Ok(ret)
+    }
+
+    /// Fetch the last N records from the block difficulties store, in order.
+    pub fn get_last_n(&self, n: usize) -> Result<Vec<BlockDifficulty>> {
+        // Build an iterator to retrieve last N records
+        let records = self.0.iter().rev().take(n);
+        // Since the iterator grabs in right -> left order,
+        // we deserialize found records, and push them in reverse order
+        let mut last_n = vec![];
+        for record in records {
+            last_n.insert(0, deserialize(&record?.1)?);
+        }
+
+        Ok(last_n)
+    }
+
+    /// Retrieve all blockdifficulties from the block difficulties store in
+    /// the form of a vector containing (`height`, `difficulty`) tuples.
+    /// Be careful as this will try to load everything in memory.
+    pub fn get_all(&self) -> Result<Vec<(u64, BlockDifficulty)>> {
+        let mut block_difficulties = vec![];
+
+        for record in self.0.iter() {
+            block_difficulties.push(parse_u64_key_record(record.unwrap())?);
+        }
+
+        Ok(block_difficulties)
+    }
+}
+
+/// Overlay structure over a [`BlockDifficultyStore`] instance.
+pub struct BlockDifficultyStoreOverlay(SledDbOverlayPtr);
+
+impl BlockDifficultyStoreOverlay {
+    pub fn new(overlay: &SledDbOverlayPtr) -> Result<Self> {
+        overlay.lock().unwrap().open_tree(SLED_BLOCK_DIFFICULTY_TREE)?;
+        Ok(Self(overlay.clone()))
+    }
+
+    /// Insert a slice of [`BlockDifficulty`] into the overlay.
+    pub fn insert(&self, block_difficulties: &[BlockDifficulty]) -> Result<()> {
+        let mut lock = self.0.lock().unwrap();
+
+        for block_difficulty in block_difficulties {
+            lock.insert(
+                SLED_BLOCK_DIFFICULTY_TREE,
+                &block_difficulty.height.to_be_bytes(),
+                &serialize(block_difficulty),
+            )?;
+        }
+
+        Ok(())
     }
 }

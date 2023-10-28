@@ -67,6 +67,9 @@ pub struct Args {
     #[structopt(long)]
     pub nickname: Option<String>,
 
+    #[structopt(long)]
+    pub skip_dag_sync: bool,
+
     // Whether to pipe notifications or not
     #[structopt(long)]
     pub piped: bool,
