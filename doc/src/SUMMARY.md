@@ -64,6 +64,10 @@
 - [Key Recovery Scheme](crypto/key-recovery.md)
 - [Reading maths books](crypto/reading-maths-books.md)
 
+# DEP
+
+- [DEP 0001: Version Message Info](dep/0001.md)
+
 # Specs
 
 - [Payment](spec/payment/payment.md)
