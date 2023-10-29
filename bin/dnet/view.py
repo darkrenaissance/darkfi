@@ -24,15 +24,10 @@ from scroll import ScrollBar, Scrollable
 from model import Model
 
 
-class NodeView(urwid.WidgetWrap):
-
-    def __init__(self, info):
-        self.type = "node"
-        self.name = info
-        self.text = urwid.Text(f"{self.name}")
-        super().__init__(self.text)
-        self._w = urwid.AttrWrap(self._w, None)
-        self.update_w()
+class DnetWidget(urwid.WidgetWrap):
+    def __init__(self, node_name, session):
+        self.node_name = node_name
+        self.session = session
 
     def selectable(self):
         return True
@@ -40,81 +35,33 @@ class NodeView(urwid.WidgetWrap):
     def keypress(self, size, key):
         return key
 
-    def update_w(self):
-        self._w.focus_attr = 'line'
-
-    def get_widget(self):
-        return "NodeView"
-
-    def get_name(self):
-        return self.name
-
-    def get_type(self):
-        return self.type
-
-class ConnectView(urwid.WidgetWrap):
-
-    def __init__(self, node, kind):
-        self.type = f"{kind}-connect"
-        self.name = (f"{node}", f"{kind}")
-        self.text = urwid.Text(f"  {kind}")
-        super().__init__(self.text)
+    def update(self, txt):
+        super().__init__(txt)
         self._w = urwid.AttrWrap(self._w, None)
-        self.update_w()
-
-    def selectable(self):
-        return True
-
-    def keypress(self, size, key):
-        return key
-
-    def update_w(self):
         self._w.focus_attr = 'line'
 
-    def get_widget(self):
-        return "ConnectView"
 
-    def get_name(self):
-        return self.name
+class Node(DnetWidget):
+    def set_txt(self):
+        txt = urwid.Text(f"{self.node_name}")
+        super().update(txt)
 
-    def get_type(self):
-        return self.type
 
-class SlotView(urwid.WidgetWrap):
+class Session(DnetWidget):
+    def set_txt(self):
+        txt = urwid.Text(f"  {self.session}")
+        super().update(txt)
 
-    def __init__(self, node, type, id, info):
-        self.id = id
-        self.type = type
-        self.name = (f"{node}", f"{id}")
-        self.addr = info
-        if len(id) == 1:
-            self.text = urwid.Text(f"    {id}: {self.addr}")
+
+class Slot(DnetWidget):
+    def set_txt(self, i, addr):
+        self.i = i
+        self.addr = addr
+        if len(self.i) == 1:
+            txt = urwid.Text(f"    {self.i}: {self.addr}")
         else:
-            self.text = urwid.Text(f"    {self.addr}")
-        super().__init__(self.text)
-        self._w = urwid.AttrWrap(self._w, None)
-        self.update_w()
-
-    def selectable(self):
-        return True
-
-    def keypress(self, size, key):
-        return key
-
-    def update_w(self):
-        self._w.focus_attr = 'line'
-
-    def get_widget(self):
-        return "SlotView"
-
-    def get_name(self):
-        return self.name
-
-    def get_addr(self):
-        return self.addr
-
-    def get_type(self):
-        return self.type
+            txt = urwid.Text(f"    {self.addr}")
+        super().update(txt)
 
 
 class View():
@@ -147,79 +94,81 @@ class View():
             evloop.call_soon(loop.draw_screen)
 
             for index, item in enumerate(self.listwalker.contents):
-                known_nodes.append(item.get_name())
+                known_nodes.append(item.node_name)
 
+            #-----------------------------------------------------------------
             # Render get_info()
-            for node, values in self.model.nodes.items():
-                if node in known_nodes:
+            #-----------------------------------------------------------------
+            for node_name, info in self.model.nodes.items():
+                if node_name in known_nodes:
                     continue
                 else:
-                    widget = NodeView(node)
-                    self.listwalker.contents.append(widget)
+                    node = Node(node_name, "node")
+                    node.set_txt()
+                    self.listwalker.contents.append(node)
 
-                    if values['outbound']:
-                        widget = ConnectView(node, "outbound")
-                        self.listwalker.contents.append(widget)
-                        for i, info in values['outbound'].items():
-                            widget = SlotView(node, "outbound", i, info)
-                            self.listwalker.contents.append(widget)
+                    if info['outbound']:
+                        session = Session(node_name, "outbound")
+                        session.set_txt()
+                        self.listwalker.contents.append(session)
+                        for i, addr in info['outbound'].items():
+                            slot = Slot(node_name, "outbound-slot")
+                            slot.set_txt(i, addr)
+                            self.listwalker.contents.append(slot)
 
-                    if values['inbound']:
-                        widget = ConnectView(node, "inbound")
-                        self.listwalker.contents.append(widget)
-                        for i, info in values['inbound'].items():
-                            widget = SlotView(node, "inbound", i, info)
-                            self.listwalker.contents.append(widget)
+                    if info['inbound']:
+                        session = Session(node_name, "inbound")
+                        session.set_txt()
+                        self.listwalker.contents.append(session)
+                        for i, addr in info['inbound'].items():
+                            slot = Slot(node_name, "inbound-slot")
+                            slot.set_txt(i, addr)
+                            self.listwalker.contents.append(slot)
 
-                    if values['manual']:
-                        widget = ConnectView(node, "manual")
-                        self.listwalker.contents.append(widget)
-                        for i, info in values['manual'].items():
-                            widget = SlotView(node, "manual", i, info)
-                            self.listwalker.contents.append(widget)
+                    if info['manual']:
+                        session = Session(node_name, "manual")
+                        session.set_txt()
+                        self.listwalker.contents.append(session)
+                        for i, addr in info['manual'].items():
+                            slot = Slot(node_name, "manual-slot")
+                            slot.set_txt(i, addr)
+                            self.listwalker.contents.append(slot)
 
-                    if values['seed']:
-                        widget = ConnectView(node, "seed")
-                        self.listwalker.contents.append(widget)
-                        for i, info in values['seed'].items():
-                            widget = SlotView(node, "seed", i, info)
-                            self.listwalker.contents.append(widget)
+                    if info['seed']:
+                        session = Session(node_name, "seed")
+                        session.set_txt()
+                        self.listwalker.contents.append(session)
+                        for i, info in info['seed'].items():
+                            slot = Slot(node_name, "seed-slot")
+                            slot.set_txt(i, addr)
+                            self.listwalker.contents.append(slot)
 
-
-            # Update outbound slot info
+           #-----------------------------------------------------------------
+           # Render subscribe_events() (left menu)
+           #-----------------------------------------------------------------
+            new_inbound = {}
             for index, item in enumerate(self.listwalker.contents):
-                if item.get_type() == "outbound":
-                    name = item.get_name()
-                    node = name[0]
-                    if name in self.model.nodes[node]['event']:
-                        value = self.model.nodes[node]['event'].get(name)
-                        widget = SlotView(node, "outbound", name[1], value)
-                        self.listwalker.contents[index] = widget
-
-            # Update new inbound connections
-            for index, item in enumerate(self.listwalker.contents):
-                if item.get_type() == "inbound":
-                    name = item.get_name()
-                    if name[1] not in known_inbound:
-                        known_inbound.append(name[1])
-            for node, value in self.model.nodes.items():
-                for id, addr in value['inbound'].items():
-                   if id in known_inbound:
-                       continue
-                   else:
-                       widget = SlotView(node, "inbound", id, addr)
-                       self.listwalker.contents.append(widget)
-
-            # Remove disconnected inbounds
-            for inbound in known_inbound:
-                for value in self.model.nodes.values():
-                    if inbound in value['inbound']:
+                # Update outbound slot info
+                if item.session == "outbound-slot":
+                    key = (f"{item.node_name}", f"{item.i}")
+                    if key in self.model.nodes[item.node_name]['event']:
+                        info = self.model.nodes[item.node_name]['event'].get(key)
+                        slot = Slot(item.node_name, item.session)
+                        slot.set_txt(item.i, info)
+                        self.listwalker.contents[index] = slot
+                # Get known inbounds
+                if item.session == "inbound-slot":
+                    if item.i not in known_inbound:
+                        known_inbound.append(item.i)
+                # Get unknown inbounds
+                inbound = self.model.nodes[item.node_name]['inbound']
+                for i, addr in inbound.items():
+                    if i in known_inbound:
                         continue
-                    for index, item in enumerate(self.listwalker.contents):
-                        name = item.get_name()
-                        if name[1] == id:
-                            del self.listwalker.contents[index]
-            
+                    else:
+                        new_inbound[i] = (addr, item.node_name)
+                # TODO: update new inbounds
+
 
     # Render subscribe_events() (right menu)
     async def render_info(self, evloop: asyncio.AbstractEventLoop,
@@ -234,34 +183,28 @@ class View():
             if focus_w[0] is None:
                 continue
             else:
-                match focus_w[0].get_widget():
-                    case "NodeView":
-                        # TODO: We will display additional node info here.
+                session = focus_w[0].session
+                if session == "node":
+                    continue
+                if session == "outbound":
+                    key = (focus_w[0].node_name, "outbound")
+                    info = self.model.nodes.get(focus_w[0].node_name)
+                    if key in info['event']:
+                        ev = info['event'].get(key)
                         self.pile.contents.append((
-                            urwid.Text(f""),
+                            urwid.Text(f" {ev}"),
                             self.pile.options()))
-                    case "ConnectView":
-                        name = focus_w[0].get_name()
-                        info = self.model.nodes.get(name[0])
-                        if name in info['event']:
-                            ev = info['event'].get(name)
-
-                            self.pile.contents.append((
-                                urwid.Text(f" {ev}"),
-                                self.pile.options()))
-                    case "SlotView":
-                        addr = focus_w[0].get_addr()
-                        name = focus_w[0].get_name()
-                        info = self.model.nodes.get(name[0])
-                        if addr in info['msgs']:
-                            msg = info['msgs'].get(addr)
-
-                            for m in msg:
-                                time = m[0]
-                                event = m[1]
-                                msg = m[2]
-
-                                self.pile.contents.append((urwid.Text(
-                                        f"{time}: {event}: {msg}"),
-                                        self.pile.options()))
-
+                if (session == "outbound-slot" or session == "inbound-slot"
+                        or session == "manual-slot" or session == "seed-slot"):
+                    addr = focus_w[0].addr
+                    node_name = focus_w[0].node_name
+                    info = self.model.nodes.get(node_name)
+                    if addr in info['msgs']:
+                        msg = info['msgs'].get(addr)
+                        for m in msg:
+                            time = m[0]
+                            event = m[1]
+                            msg = m[2]
+                            self.pile.contents.append((urwid.Text(
+                                    f"{time}: {event}: {msg}"),
+                                    self.pile.options()))
