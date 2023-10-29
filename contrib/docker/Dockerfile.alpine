@@ -1,7 +1,8 @@
-# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:alpine -f ./contrib/docker/Dockerfile.alpine --build-arg DONT_EXEC_TESTS=1
+# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:alpine -f ./contrib/docker/Dockerfile.alpine
 #   optionally with: --build-arg ALPINE_VER=3.18 --build-arg RUST_VER=nightly
+#   optionally with: --build-arg BINS="darkfid  darkfid2" --build-arg DONT_EXEC_TESTS=1
 
-ARG RUST_VER=nightly-2023-06-21  # 1.72 nightly stable
+ARG RUST_VER=nightly             # 1.72 nightly stable
 ARG ALPINE_VER=3.18              # 3.17
 
 FROM alpine:${ALPINE_VER} as rust_builder
@@ -30,6 +31,7 @@ FROM rust_builder as builder
 
 ARG DONT_EXEC_TESTS
 ARG RUST_VER
+ARG BINS
 
 WORKDIR /opt/darkfi
 
@@ -37,15 +39,23 @@ COPY . ./
 
 ARG RUSTFLAGS="-C target-feature=-crt-static"
 
+RUN  sed -i.bac1 's#let output = Command::new("git")#//let output = Command::new("git")#g' ./src/contract/test-harness/src/vks.rs
+
+RUN  sed -i.bac2 's#let mut path = PathBuf::from(String::from_utf8(output\[\.\.output.len() - 1\].to_vec())?);#let mut path = PathBuf::from("/opt/darkfi");#g' ./src/contract/test-harness/src/vks.rs
+
 RUN cargo update
 
 RUN make clean
 
 RUN rm -rf ./target/ zkas proof/*.bin
 
-RUN bash -c "if [ -z \"$DONT_EXEC_TESTS\" ]; then make -j test; fi"
+RUN bash -c "if [ -z \"$DONT_EXEC_TESTS\" ]; then make test; fi"
 
-RUN bash -c 'make -j all'
+RUN bash -c "make -j $BINS"
+
+RUN mkdir -p /opt/darkfi/compiled-bins
+
+RUN cp $(find . -maxdepth 1  -type f -executable) /opt/darkfi/compiled-bins
 
 # 3. stage
 FROM alpine:${ALPINE_VER}
@@ -54,8 +64,4 @@ RUN apk add --no-cache openssl ttf-opensans libgcc alsa-lib sqlite-libs
 
 WORKDIR /opt/darkfi
 
-
-COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
-   /opt/darkfi/darkirc /opt/darkfi/faucetd \
-   /opt/darkfi/zkas /opt/darkfi/vanityaddr \
-   /opt/darkfi/tau /opt/darkfi/taud   ./
+COPY --from=builder /opt/darkfi/compiled-bins/* ./

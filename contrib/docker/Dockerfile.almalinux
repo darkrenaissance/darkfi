@@ -1,7 +1,8 @@
-# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:almalinux -f ./contrib/docker/Dockerfile.almalinux --build-arg DONT_EXEC_TESTS=1
+# Use: docker build . --pull --no-cache --shm-size=196m -t darkfi:almalinux -f ./contrib/docker/Dockerfile.almalinux
 #   optionally with: --build-arg OS_VER=almalinux/8-minimal --build-arg RUST_VER=nightly
+#   optionally with: --build-arg BINS="darkfid  darkfid2" --build-arg DONT_EXEC_TESTS=1
 
-ARG RUST_VER=nightly-2023-06-21  # stable nightly beta 1.72
+ARG RUST_VER=nightly             # stable nightly beta 1.72
 ARG OS_VER=almalinux/9-minimal   # almalinux/8-minimal
 
 FROM ${OS_VER} as rust_builder
@@ -28,6 +29,7 @@ FROM rust_builder as builder
 
 ARG DONT_EXEC_TESTS
 ARG RUST_VER
+ARG BINS
 
 WORKDIR /opt/darkfi
 
@@ -35,13 +37,21 @@ COPY . /opt/darkfi
 
 RUN make clean
 
+RUN  sed -i.bac1 's#let output = Command::new("git")#//let output = Command::new("git")#g' ./src/contract/test-harness/src/vks.rs
+
+RUN  sed -i.bac2 's#let mut path = PathBuf::from(String::from_utf8(output\[\.\.output.len() - 1\].to_vec())?);#let mut path = PathBuf::from("/opt/darkfi");#g' ./src/contract/test-harness/src/vks.rs
+
 RUN cargo update
 
 RUN rm -rf ./target/ zkas proof/*.bin
 
-RUN bash -c "if [ -z \"$DONT_EXEC_TESTS\" ]; then make -j test; fi"
+RUN bash -c "if [ -z \"$DONT_EXEC_TESTS\" ]; then make test; fi"
 
-RUN bash -c 'make -j all'
+RUN bash -c "make $BINS"
+
+RUN mkdir -p /opt/darkfi/compiled-bins
+
+RUN cp $(find . -maxdepth 1  -type f -executable) /opt/darkfi/compiled-bins
 
 # 3. stage
 FROM ${OS_VER}
@@ -52,7 +62,4 @@ RUN microdnf -y install openssl lato-fonts alsa-lib\
 
 WORKDIR /opt/darkfi
 
-COPY --from=builder /opt/darkfi/drk /opt/darkfi/darkfid  \
-   /opt/darkfi/darkirc /opt/darkfi/faucetd \
-   /opt/darkfi/zkas /opt/darkfi/vanityaddr \
-   /opt/darkfi/tau /opt/darkfi/taud   ./
+COPY --from=builder /opt/darkfi/compiled-bins/* ./
