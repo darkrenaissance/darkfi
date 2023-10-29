@@ -38,8 +38,6 @@ class NodeView(urwid.WidgetWrap):
         return True
 
     def keypress(self, size, key):
-        #if key in ('q'):
-        #    raise urwid.ExitMainLoop()
         return key
 
     def update_w(self):

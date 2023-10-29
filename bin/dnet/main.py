@@ -106,6 +106,8 @@ class Dnetview:
         loop.run()
 
     def unhandled_input(self, key):
+        if isinstance(key, tuple):
+            return
         if key in ('q'):
             for task in asyncio.all_tasks():
                 task.cancel()
