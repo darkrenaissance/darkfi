@@ -72,6 +72,11 @@ class Model:
             id = channel["id"]
             url = channel["url"]
             self.nodes[name]['manual'][f"{id}"] = url
+    
+    def add_offline(self, node):
+        name = list(node.keys())[0]
+        values = list(node.values())[0]
+        self.nodes[name] = values
 
     def add_event(self, event):
         name = list(event.keys())[0]

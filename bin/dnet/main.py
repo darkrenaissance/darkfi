@@ -53,9 +53,13 @@ class Dnetview:
         while True:
             await asyncio.sleep(0.01)
             data = await rpc.reader.readline()
-            data = json.loads(data)
-            info[name] = data
-            await self.queue.put(info)
+            try:
+                data = json.loads(data)
+                info[name] = data
+                await self.queue.put(info)
+            except:
+                info[name] = {}
+                await self.queue.put(info)
 
         await rpc.dnet_switch(False)
         await rpc.stop()
@@ -79,13 +83,16 @@ class Dnetview:
         while True:
             info = await self.queue.get()
             values = list(info.values())[0]
-            method = values.get("method")
+            try:
+                method = values.get("method")
+            except:
+                self.model.add_offline(info)
+                continue
 
             if method == "dnet.subscribe_events":
                 self.model.add_event(info)
             else:
                 self.model.add_node(info)
-
             self.queue.task_done()
 
     def main(self):
@@ -101,7 +108,6 @@ class Dnetview:
 
         self.ev.create_task(self.start_connect_slots(nodes))
         self.ev.create_task(self.view.update_view(self.ev, loop))
-        self.ev.create_task(self.view.render_info(self.ev, loop))
 
         loop.run()
 
