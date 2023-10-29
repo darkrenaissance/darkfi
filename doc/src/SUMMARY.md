@@ -66,7 +66,7 @@
 
 # DEP
 
-- [DEP 0001](dep/0001.md)
+- [DEP 0001: Version Message Info](dep/0001.md)
 
 # Specs
 
