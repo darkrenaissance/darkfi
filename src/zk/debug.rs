@@ -62,6 +62,15 @@ pub fn zkas_type_checks(
     binary: &zkas::ZkBinary,
     instances: &Vec<pallas::Base>,
 ) -> Result<()> {
+    if circuit.witnesses.len() != binary.witnesses.len() {
+        error!(
+            "Wrong number of witnesses. Should be {}, but instead got {}.",
+            binary.witnesses.len(),
+            circuit.witnesses.len()
+        );
+        return Err(Error::WrongWitnessesCount)
+    }
+
     for (i, (circuit_witness, binary_witness)) in
         circuit.witnesses.iter().zip(binary.witnesses.iter()).enumerate()
     {
@@ -77,7 +86,7 @@ pub fn zkas_type_checks(
         };
         if !is_pass {
             error!(
-                "Incorrect witness type at index {}. Expected '{}', instead got '{}'.",
+                "Wrong witness type at index {}. Expected '{}', but instead got '{}'.",
                 i,
                 binary_witness.name(),
                 circuit_witness.name()
@@ -99,7 +108,7 @@ pub fn zkas_type_checks(
             instances_count,
             instances.len()
         );
-        return Err(Error::IncorrectPublicInputsCount)
+        return Err(Error::WrongPublicInputsCount)
     }
     Ok(())
 }

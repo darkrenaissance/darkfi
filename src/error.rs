@@ -200,8 +200,11 @@ pub enum Error {
     #[error("Wrong witness type at index: {0}")]
     WrongWitnessType(usize),
 
-    #[error("Incorrect public inputs count")]
-    IncorrectPublicInputsCount,
+    #[error("Wrong witnesses count")]
+    WrongWitnessesCount,
+
+    #[error("Wrong public inputs count")]
+    WrongPublicInputsCount,
 
     #[error("Unable to decrypt mint note: {0}")]
     NoteDecryptionFailed(String),
