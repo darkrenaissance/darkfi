@@ -9,8 +9,8 @@ $$ \mathcal{L} = \{X: (W,W) \in \mathcal{R}\} $$
 ## Burning a coin
 
 - Publish [coin](coin.md)'s `nullifier` to avoid double-spending.
-- [Commit](../crypto/commitment.md] to [coin](coin.md)'s `value` $(cm^{value}_x, cm^{value}_y)$
-- [Commit](../crypto/commitment.md] to [tokenId](token_id.md)
+- [Commit](../crypto/commitment.md) to [coin](coin.md)'s `value` $(cm^{value}_x, cm^{value}_y)$
+- [Commit](../crypto/commitment.md) to [tokenId](token_id.md)
 - Add [coin](coin.md) to [merkle tree](../crypto/merkletree.md), and set it's root `root` it as instance.
 - Set spendHook as instance
 - Calculate [$Signature^{public}$](../crypto/signature.md), and set it as instance.
@@ -19,10 +19,10 @@ $$ \mathcal{L} = \{X: (W,W) \in \mathcal{R}\} $$
 | Public Input         | Description                                                                                           |
 |----------------------|-------------------------------------------------------------------------------------------------------|
 | nullifier            | hash of $(sk||sn)$                                                                                    |
-| $cm^{value}_x$       | x coordinate of value point [commitment](../crypto/commitment.md]                                     |
-| $cm^{value}_y$       | y coordinate of value point [commitment](../crypto/commitment.md]                                     |
+| $cm^{value}_x$       | x coordinate of value point [commitment](../crypto/commitment.md)                                     |
+| $cm^{value}_y$       | y coordinate of value point [commitment](../crypto/commitment.md)                                     |
 | $cm^{token}$         | [commitment](../crypto/commitment.md] of [tokenId](token_id.md) as field element                      |
-| root                 | root of [coin](coin.md) [commitment](../crypto/commitment.md]s [merkle tree](../crypto/merkletree.md) |
+| root                 | root of [coin](coin.md) [commitment](../crypto/commitment.md)s [merkle tree](../crypto/merkletree.md) |
 | data                 | data read during execution of burn spendHook contract                                                 |
 | spendHook            | burn related contract                                                                                 |
 |$signature^{public}_x$| [signature](../crypto/signature.md) public x coordinate                                               |
@@ -33,12 +33,12 @@ $$ \mathcal{L} = \{X: (W,W) \in \mathcal{R}\} $$
 |----------------------|-------------------------------------------------------------------------------------------------------------------|
 | value                | burn value                                                                                                        |
 | token                | [tokenId](token_id.md)                                                                                            |
-| $blind^{value}$      | blinding term for burn value [commitment](../crypto/commitment.md]                                                |
-| $blind^{token}$      | blinding term for [tokenId](token_id.md) [commitment](../crypto/commitment.md]                                    |
+| $blind^{value}$      | blinding term for burn value [commitment](../crypto/commitment.md)                                                |
+| $blind^{token}$      | blinding term for [tokenId](token_id.md) [commitment](../crypto/commitment.md)                                    |
 | sn                   | serial number for burn [coin](coin.md)                                                                            |
 | spendHook            | contract related contract                                                                                         |
 | data                 | data read during spendHook execution                                                                              |
-| $blind^{data}$       | blinding term for data [commitment](../crypto/commitment.md]                                                      |
+| $blind^{data}$       | blinding term for data [commitment](../crypto/commitment.md)                                                      |
 | sk                   | [coin](coin.md) [private key](../crypto/keypair.md)                                                                                       |
 | pos                  | [coin](coin.md) [commitment](../crypto/commitment.md) leaf position in the [merkle tree](../crypto/merkletree.md) |
 | path                 | [coin](coin.md) [commitment](../crypto/commitment.md) path in the [merkle tree](../crypto/merkletree.md)          |
