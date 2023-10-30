@@ -315,7 +315,7 @@ def task_table(task):
             status = args
             if status == "pause":
                 status_verb = "paused"
-            elif status in ["start", "cancel"]:
+            elif status in ["start", "open"]:
                 status_verb = f"{status}ed"
             elif status == "stop":
                 status_verb = f"stopped"
@@ -407,8 +407,8 @@ async def change_task_status(refid, status, server_name, port):
         print(f"Paused task '{title}'")
     elif status == "stop":
         print(f"Completed task '{title}'")
-    elif status == "cancel":
-        print(f"Cancelled task '{title}'")
+    elif status == "open":
+        print(f"Opened task '{title}'")
 
     return 0
 
@@ -633,32 +633,50 @@ Examples:
         return 0
 
     try:
-        id = int(sys.argv[1])
-        refid = data[id]
+        id = sys.argv[1]
+        lines = id.split(',')
+        numbers = []
+        for line in lines:
+            if line == '':
+                continue
+            elif '-' in line:
+                t = line.split('-')
+                numbers += range(int(t[0]), int(t[1]) + 1)
+            else:
+                numbers.append(int(line))
+        refid = []
+        for i in numbers:
+            refid.append(data[i])
     except (ValueError, KeyError):
         print("error: invalid ID", file=sys.stderr)
         return -1
 
     args = sys.argv[2:]
 
-    if not args:
-        return await show_task(refid, server_name, port)
-
+    if not args :
+        for rid in refid:
+            await show_task(rid, server_name, port)
+        return 0
+    
     subcmd, args = args[0], args[1:]
 
     if subcmd == "modify":
-        if (errc := await modify_task(refid, args, server_name, port)) < 0:
-            return errc
-        time.sleep(0.1)
-        return await show_task(refid, server_name, port)
+        for rid in refid:
+            if (errc := await modify_task(rid, args, server_name, port)) < 0:
+                return errc
+            time.sleep(0.1)
+            await show_task(rid, server_name, port)
     elif subcmd in ["start", "pause", "stop", "open"]:
         status = subcmd
-        if (errc := await change_task_status(refid, status, server_name, port)) < 0:
-            return errc
+        for rid in refid:
+            if (errc := await change_task_status(rid, status, server_name, port)) < 0:
+                return errc
+            time.sleep(0.1)
     elif subcmd == "comment":
-        if (errc := await comment(refid, args, server_name, port)) < 0:
-            return errc
-        time.sleep(0.2)
+        for rid in refid:
+            if (errc := await comment(rid, args, server_name, port)) < 0:
+                return errc
+            time.sleep(0.1)
     else:
         print(f"error: unknown subcommand '{subcmd}'")
         return -1
