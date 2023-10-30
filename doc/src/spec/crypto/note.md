@@ -1,12 +1,14 @@
-# note
-coin is stream cipher encrypted with symmetric key `key` derived from shared key[^1].
+# Note
+
+note is stream cipher encrypted with symmetric key `key`, derived from shared key[^1].
 `key` = hash(sharedSecret, ephemeralKey)
-$sharedSecret = ephemeralSecret \mul publicKey$ where `publicKey` is recipient public key. based off diffie-hellman shared secret.
+$sharedSecret = ephemeralSecret * publicKey$ where `publicKey` is recipient public key. based off diffie-hellman shared secret.
 
-## payment note
-Note = (sn, value, tokenId, spendHook, data, blind^{value}, blind^{token}, memo)
+## Payment Note
 
-| note            | description                    |
+Note = (sn, value, tokenId, spendHook, data, $blind^{value}$, $blind^{token}$, memo)
+
+| Note            | Description                    |
 |-----------------|--------------------------------|
 | sn              | serial number sampled at random|
 | value           | payment value                  |
