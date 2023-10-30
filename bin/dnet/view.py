@@ -130,6 +130,12 @@ class View():
                slot.set_txt(i, addr)
                self.listwalker.contents.append(slot)
 
+    def draw_empty(self, node_name, info):
+       name = node_name + " (offline)" 
+       node = Node(name, "node")
+       node.set_txt()
+       self.listwalker.contents.append(node)
+
     #-----------------------------------------------------------------
     # Render subscribe_events() (left menu)
     #-----------------------------------------------------------------
@@ -152,6 +158,8 @@ class View():
     def fill_right_box(self):
         self.pile.contents.clear()
         focus_w = self.list.get_focus()
+        if focus_w[0] is None:
+            return
         session = focus_w[0].session
 
         if session == "outbound":
@@ -181,7 +189,7 @@ class View():
     async def update_view(self, evloop: asyncio.AbstractEventLoop,
                           loop: urwid.MainLoop):
         known_nodes = []
-        off_nodes = []
+        empty_nodes = []
         while True:
             await asyncio.sleep(0.1)
             # Redraw the screen
@@ -190,25 +198,31 @@ class View():
             for index, item in enumerate(self.listwalker.contents):
                 known_nodes.append(item.node_name)
 
-            for node_name, info in self.model.nodes.items():
-                if not info:
-                    off_nodes.append(node_name)
-                
-            # TODO:
-            # Right now we ignore info if it's in the set of known nodes.
-            # However, there are a few events that should trigger a redraw:
-            #   * a new inbound connection comes online
-            #   * a new node comes online (FIXME)
-            #   * a known node has gone offline
-            #   * a inbound connection has gone offline
-            #   * when RPC can't connect, display the node as offline.
+            # Draw get_info() -> called once
             for node_name, info in self.model.nodes.items():
                 if node_name in known_nodes:
                     continue
-                if node_name in off_nodes:
-                    continue
                 else:
                     self.draw_info(node_name, info)
-                
-            self.fill_left_box()
-            self.fill_right_box()
+            # TODO:
+            # There are a few events that should trigger a redraw:
+            #   * a new inbound connection comes online
+            #   * a inbound connection has gone offline
+            #   * a new node comes online (FIXME)
+            #   * when RPC can't connect, display the node as offline.
+
+            # Check for offline nodes
+            for node_name, info in self.model.nodes.items():
+                if not bool(info):
+                    if node_name in empty_nodes:
+                        continue
+                    else:
+                        empty_nodes.append(node_name)
+                        self.listwalker.contents.clear()
+                        self.draw_empty(node_name, info)
+                        for name, info in self.model.nodes.items():
+                            if name not in empty_nodes:
+                                self.draw_info(name, info)
+                # Only render info if the node is online
+                self.fill_left_box()
+                self.fill_right_box()

@@ -83,16 +83,16 @@ class Dnetview:
         while True:
             info = await self.queue.get()
             values = list(info.values())[0]
-            try:
-                method = values.get("method")
-            except:
-                self.model.add_offline(info)
-                continue
 
-            if method == "dnet.subscribe_events":
-                self.model.add_event(info)
+            if values:
+                method = values.get("method")
+                if method == "dnet.subscribe_events":
+                    self.model.add_event(info)
+                else:
+                    self.model.add_node(info)
             else:
-                self.model.add_node(info)
+                self.model.add_offline(info)
+
             self.queue.task_done()
 
     def main(self):
