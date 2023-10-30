@@ -515,6 +515,7 @@ SUBCOMMANDS:
     start      Start task(s).
     stop       Stop task(s).
     switch     Switch between configured workspaces.
+    show       List filtered tasks.
     help       Show this help text.
 
 Examples:
@@ -524,13 +525,16 @@ Examples:
     tau 1 modify @upgr due:1112 rank:none
     tau 1 modify -@up
     tau 1 modify -mol -xx
-    tau 2 start
+    tau 1,2 modify +dev @erto
+    tau 1-3 start
     tau 1 comment "this is an awesome comment"
     tau 2 pause
-    tau switch darkfi
-    tau archive         # current month's completed tasks
-    tau archive 1122    # completed tasks in Nov. 2022
-    tau archive 1 1122  # show info of task completed in Nov. 2022
+    tau show @erto state:start  # list started tasks that are assigned to 'erto'
+    tau show +dev project:zk    # list tasks with 'dev' tag project 'zk'
+    tau switch darkfi           # switch to configured 'darkfi' workspace
+    tau archive                 # current month's completed tasks
+    tau archive 1122            # completed tasks in Nov. 2022
+    tau archive 1 1122          # show info of task completed in Nov. 2022
 ''')
         return 0
     elif sys.argv[1] == "add":
