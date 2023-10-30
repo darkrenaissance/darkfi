@@ -65,6 +65,7 @@ use super::{
     tracer::ZkTracer,
 };
 use crate::zkas::{
+    self,
     types::{HeapType, LitType},
     Opcode, ZkBinary,
 };
@@ -273,17 +274,50 @@ impl ZkCircuit {
     pub fn new(witnesses: Vec<Witness>, circuit_code: &ZkBinary) -> Self {
         let constants = circuit_code.constants.iter().map(|x| x.1.clone()).collect();
         let literals = circuit_code.literals.clone();
-        Self {
+        let self_ = Self {
             constants,
             witnesses,
             literals,
             opcodes: circuit_code.opcodes.clone(),
             tracer: ZkTracer::new(true),
-        }
+        };
+        self_.check_witness_types(&circuit_code.witnesses);
+        self_
     }
 
     pub fn enable_trace(&mut self) {
         self.tracer.init();
+    }
+
+    // Temporary, should be moved into Proof::create() but then we need to store binary_witnesses
+    // inside ZkCircuit.
+    fn check_witness_types(&self, binary_witnesses: &Vec<zkas::VarType>) {
+        for (circuit_witness, binary_witness) in self.witnesses.iter().zip(binary_witnesses.iter())
+        {
+            let is_pass = match circuit_witness {
+                Witness::EcPoint(_) => *binary_witness == zkas::VarType::EcPoint,
+                Witness::EcNiPoint(_) => *binary_witness == zkas::VarType::EcNiPoint,
+                Witness::EcFixedPoint(_) => *binary_witness == zkas::VarType::EcFixedPoint,
+                Witness::Base(_) => *binary_witness == zkas::VarType::Base,
+                Witness::Scalar(_) => *binary_witness == zkas::VarType::Scalar,
+                Witness::MerklePath(_) => *binary_witness == zkas::VarType::MerklePath,
+                Witness::Uint32(_) => *binary_witness == zkas::VarType::Uint32,
+                Witness::Uint64(_) => *binary_witness == zkas::VarType::Uint64,
+            };
+            if is_pass {
+                // return Err(Error::IncorrectWitnessType)
+                panic!("incorrect type passed in");
+            }
+        }
+
+        // Count number of public instances
+        let mut instances_count = 0;
+        for opcode in &self.opcodes {
+            if let (Opcode::ConstrainInstance, _) = opcode {
+                instances_count += 1;
+            }
+        }
+        // if instances.len() != instances_count { ... }
     }
 }
 
