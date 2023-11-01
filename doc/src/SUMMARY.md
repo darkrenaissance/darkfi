@@ -102,7 +102,7 @@
   - [merkletree](spec/crypto/merkletree.md)
   - [note](spec/crypto/note.md)
   - [vrf](spec/crypto/vrf.md)
-
+  - [nullifier](spec/crypto/nullifier.md)
 
 # Misc
 
