@@ -146,6 +146,7 @@ impl RequestHandler for MiningProxy {
             "get_block_count" => self.monero_get_block_count(req.id, req.params).await,
             "getblockcount" => self.monero_get_block_count(req.id, req.params).await,
 
+            /*
             "on_get_block_hash" => self.monero_on_get_block_hash(req.id, req.params).await,
             "get_block_template" => self.monero_get_block_template(req.id, req.params).await,
             "submit_block" => self.monero_submit_block(req.id, req.params).await,
@@ -176,6 +177,7 @@ impl RequestHandler for MiningProxy {
             "calc_pow" => self.monero_calc_pow(req.id, req.params).await,
             "flush_cache" => self.monero_flush_cache(req.id, req.params).await,
             "add_aux_pow" => self.monero_add_aux_pow(req.id, req.params).await,
+            */
 
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }

@@ -21,12 +21,11 @@ use darkfi::rpc::{
     util::JsonValue,
 };
 use log::{debug, error};
-use surf::http::mime;
 
 use super::MiningProxy;
 
 impl MiningProxy {
-    pub async fn monero_get_block_count(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn monero_get_block_count(&self, id: u16, _params: JsonValue) -> JsonResult {
         debug!(target: "rpc::monero", "get_block_count()");
 
         let req_body = JsonRequest::new("get_block_count", vec![].into()).stringify().unwrap();
@@ -73,6 +72,7 @@ impl MiningProxy {
         JsonResponse::new(response_json, id).into()
     }
 
+    /*
     pub async fn monero_on_get_block_hash(&self, id: u16, params: JsonValue) -> JsonResult {
         todo!()
     }
@@ -196,4 +196,5 @@ impl MiningProxy {
     pub async fn monero_add_aux_pow(&self, id: u16, params: JsonValue) -> JsonResult {
         todo!()
     }
+    */
 }
