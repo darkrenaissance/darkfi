@@ -8,7 +8,7 @@ $$ \mathcal{L} = \{X: (W,W) \in \mathcal{R}\} $$
 
 ## Burning a coin
 
-- Publish [coin](coin.md)'s `nullifier` to avoid double-spending.
+- Publish [coin](coin.md)'s [nullifier](../crypto/nullifier.md) to avoid double-spending.
 - [Commit](../crypto/commitment.md) to [coin](coin.md)'s `value` $(cm^{value}_x, cm^{value}_y)$
 - [Commit](../crypto/commitment.md) to [tokenId](token_id.md)
 - Add [coin](coin.md) to [merkle tree](../crypto/merkletree.md), and set it's root `root` it as instance.
@@ -18,7 +18,7 @@ $$ \mathcal{L} = \{X: (W,W) \in \mathcal{R}\} $$
 
 | Public Input         | Description                                                                                           |
 |----------------------|-------------------------------------------------------------------------------------------------------|
-| nullifier            | hash of $(sk||sn)$                                                                                    |
+| nullifier            | coin [nullifier](../crypto/nullifier.md)                                                              |
 | $cm^{value}_x$       | x coordinate of value point [commitment](../crypto/commitment.md)                                     |
 | $cm^{value}_y$       | y coordinate of value point [commitment](../crypto/commitment.md)                                     |
 | $cm^{token}$         | [commitment](../crypto/commitment.md] of [tokenId](token_id.md) as field element                      |
