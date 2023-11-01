@@ -118,7 +118,7 @@ impl ProtocolProposal {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&proposal_copy, &exclude_list).await;
                     let enc_prop = JsonValue::String(base64::encode(&serialize(&proposal_copy)));
-                    self.subscriber.notify(vec![enc_prop]).await;
+                    self.subscriber.notify(vec![enc_prop].into()).await;
                 }
                 Err(e) => {
                     debug!(

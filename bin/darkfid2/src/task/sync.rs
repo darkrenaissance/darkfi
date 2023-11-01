@@ -73,7 +73,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
         // Notify subscriber
         for block in &response.blocks {
             let encoded_block = JsonValue::String(base64::encode(&serialize(block)));
-            notif_sub.notify(vec![encoded_block]).await;
+            notif_sub.notify(vec![encoded_block].into()).await;
         }
 
         let last_received = node.validator.read().await.blockchain.last()?;

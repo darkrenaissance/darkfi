@@ -155,13 +155,9 @@ pub struct JsonRequest {
 impl JsonRequest {
     /// Create a new [`JsonRequest`] object with the given method and parameters.
     /// The request ID is chosen randomly.
-    pub fn new(method: &str, params: Vec<JsonValue>) -> Self {
-        Self {
-            jsonrpc: "2.0",
-            id: OsRng::gen(&mut OsRng),
-            method: method.to_string(),
-            params: JsonValue::Array(params),
-        }
+    pub fn new(method: &str, params: JsonValue) -> Self {
+        assert!(params.is_object() || params.is_array());
+        Self { jsonrpc: "2.0", id: OsRng::gen(&mut OsRng), method: method.to_string(), params }
     }
 
     /// Convert the object into a JSON string
@@ -213,29 +209,23 @@ impl TryFrom<&JsonValue> for JsonRequest {
             ))
         }
 
-        if !map.contains_key("params")
-        /* || !map["params"].is_array() */
-        {
+        if !map.contains_key("params") {
             return Err(RpcError::InvalidJson(
                 "Request does not contain valid \"params\" field".to_string(),
             ))
         }
 
-        let params = if map["params"].is_object() {
-            JsonValue::Array(vec![map["params"].clone()])
-        } else if map["params"].is_array() {
-            map["params"].clone()
-        } else {
+        if !map["params"].is_object() && !map["params"].is_array() {
             return Err(RpcError::InvalidJson(
                 "Request does not contain valid \"params\" field".to_string(),
             ))
-        };
+        }
 
         Ok(Self {
             jsonrpc: "2.0",
             id: *map["id"].get::<f64>().unwrap() as u16,
             method: map["method"].get::<String>().unwrap().clone(),
-            params,
+            params: map["params"].clone(),
         })
     }
 }
@@ -254,7 +244,7 @@ pub struct JsonNotification {
 impl JsonNotification {
     /// Create a new [`JsonNotification`] object with the given method and parameters.
     pub fn new(method: &str, params: JsonValue) -> Self {
-        assert!(params.is_array());
+        assert!(params.is_object() || params.is_array());
         Self { jsonrpc: "2.0", method: method.to_string(), params }
     }
 
@@ -300,9 +290,15 @@ impl TryFrom<&JsonValue> for JsonNotification {
             ))
         }
 
-        if !map.contains_key("params") || !map["params"].is_array() {
+        if !map.contains_key("params") {
             return Err(RpcError::InvalidJson(
                 "Notification does not contain valid \"params\" field".to_string(),
+            ))
+        }
+
+        if !map["params"].is_object() && !map["params"].is_array() {
+            return Err(RpcError::InvalidJson(
+                "Request does not contain valid \"params\" field".to_string(),
             ))
         }
 
@@ -503,8 +499,8 @@ impl JsonSubscriber {
     }
 
     /// Send a notification to the subscriber with the given JSON object
-    pub async fn notify(&self, params: Vec<JsonValue>) {
-        let notification = JsonNotification::new(self.method, JsonValue::Array(params));
+    pub async fn notify(&self, params: JsonValue) {
+        let notification = JsonNotification::new(self.method, params);
         self.sub.notify(notification).await;
     }
 }

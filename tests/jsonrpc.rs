@@ -104,13 +104,13 @@ fn jsonrpc_reqrep() -> Result<()> {
         msleep(500).await;
 
         let client = RpcClient::new(endpoint, executor.clone()).await?;
-        let req = JsonRequest::new("ping", vec![]);
+        let req = JsonRequest::new("ping", vec![].into());
         let rep = client.request(req).await?;
 
         let rep = String::try_from(rep).unwrap();
         assert_eq!(&rep, "pong");
 
-        let req = JsonRequest::new("kill", vec![]);
+        let req = JsonRequest::new("kill", vec![].into());
         let rep = client.request(req).await?;
 
         let rep = String::try_from(rep).unwrap();

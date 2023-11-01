@@ -29,7 +29,7 @@ impl MiningProxy {
     pub async fn monero_get_block_count(&self, id: u16, params: JsonValue) -> JsonResult {
         debug!(target: "rpc::monero", "get_block_count()");
 
-        let req_body = JsonRequest::new("get_block_count", vec![]).stringify().unwrap();
+        let req_body = JsonRequest::new("get_block_count", vec![].into()).stringify().unwrap();
 
         let client = surf::Client::new();
         let mut response = client

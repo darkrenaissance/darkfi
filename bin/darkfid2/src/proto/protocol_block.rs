@@ -128,7 +128,7 @@ impl ProtocolBlock {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&block_copy, &exclude_list).await;
                     let encoded_block = JsonValue::String(base64::encode(&serialize(&block_copy)));
-                    self.subscriber.notify(vec![encoded_block]).await;
+                    self.subscriber.notify(vec![encoded_block].into()).await;
                 }
                 Err(e) => {
                     debug!(

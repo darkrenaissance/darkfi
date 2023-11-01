@@ -114,7 +114,7 @@ impl ProtocolTx {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&tx_copy, &exclude_list).await;
                     let encoded_tx = JsonValue::String(base64::encode(&serialize(&tx_copy)));
-                    self.subscriber.notify(vec![encoded_tx]).await;
+                    self.subscriber.notify(vec![encoded_tx].into()).await;
                 }
                 Err(e) => {
                     debug!(
