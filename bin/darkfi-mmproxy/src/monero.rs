@@ -16,12 +16,32 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::rpc::{jsonrpc::JsonResult, util::JsonValue};
+use darkfi::rpc::{
+    jsonrpc::{JsonRequest, JsonResult},
+    util::JsonValue,
+};
+use log::{debug, error};
+use surf::http::mime;
 
 use super::MiningProxy;
 
 impl MiningProxy {
     pub async fn monero_get_block_count(&self, id: u16, params: JsonValue) -> JsonResult {
+        debug!(target: "rpc::monero", "get_block_count()");
+
+        let req_body = JsonRequest::new("get_block_count", vec![]).stringify().unwrap();
+
+        let client = surf::Client::new();
+        let mut response = client
+            .get(&self.monerod_rpc)
+            .header("Content-Type", "application/json")
+            .body(req_body)
+            .send()
+            .await
+            .unwrap();
+
+        println!("{:?}", String::from_utf8_lossy(&response.body_bytes().await.unwrap()));
+
         todo!()
     }
 

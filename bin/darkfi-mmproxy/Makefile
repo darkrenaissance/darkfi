@@ -9,8 +9,8 @@ CARGO = cargo +nightly
 SRC = \
 	Cargo.toml \
 	../../Cargo.toml \
-	$(shell find src -type f) \
-	$(shell find ../../src -type f) \
+	$(shell find src -type f -name '*.rs') \
+	$(shell find ../../src -type f -name '*.rs') \
 
 BIN = ../../darkfi-mmproxy
 
