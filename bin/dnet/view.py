@@ -227,6 +227,10 @@ class View():
                 self.fill_left_box()
                 self.fill_right_box()
 
+                # Check that inbound dictionary exists to prevent a KeyError
+                if not 'inbound' in info:
+                    continue
+
                 # If a new inbound comes online, trigger a redraw.
                 for key in info['inbound'].keys():
                     if key not in live_inbound:
