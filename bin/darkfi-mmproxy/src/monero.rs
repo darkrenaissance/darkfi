@@ -17,7 +17,7 @@
  */
 
 use darkfi::rpc::{
-    jsonrpc::{JsonRequest, JsonResult},
+    jsonrpc::{ErrorCode::InternalError, JsonError, JsonRequest, JsonResponse, JsonResult},
     util::JsonValue,
 };
 use log::{debug, error};
@@ -32,17 +32,45 @@ impl MiningProxy {
         let req_body = JsonRequest::new("get_block_count", vec![].into()).stringify().unwrap();
 
         let client = surf::Client::new();
-        let mut response = client
+        let mut response = match client
             .get(&self.monerod_rpc)
             .header("Content-Type", "application/json")
             .body(req_body)
             .send()
             .await
-            .unwrap();
+        {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "rpc::monero::get_block_count", "Error sending RPC request to monerod: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
 
-        println!("{:?}", String::from_utf8_lossy(&response.body_bytes().await.unwrap()));
+        let response_bytes = match response.body_bytes().await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "rpc::monero::get_block_count", "Error reading monerod RPC response: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
 
-        todo!()
+        let response_string = match String::from_utf8(response_bytes) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "rpc::monero::get_block_count", "Error parsing monerod RPC response: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        let response_json: JsonValue = match response_string.parse() {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "rpc::monero::get_block_count", "Error parsing monerod RPC response: {}", e);
+                return JsonError::new(InternalError, None, id).into()
+            }
+        };
+
+        JsonResponse::new(response_json, id).into()
     }
 
     pub async fn monero_on_get_block_hash(&self, id: u16, params: JsonValue) -> JsonResult {
