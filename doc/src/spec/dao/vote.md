@@ -1,14 +1,19 @@
-# vote
+# Vote
 
 $$ X = (cm^{token}, proposal, cm^{vote^{yes}}_x, cm^{vote^{yes}}_y, cm^{vote^{all}}_x, cm^{vote^{all}}_y) $$
 
 $$ W = (proposal^{destination}_x, proposal^{destination}_y, proposal^{amount}, tokenId, blind^{proposal}, proposerLimit, quorum, approvalRatio_{quot}, approvalRatio_{base}, tokenId, pub_x, pub_y, blind^{bulla}, vote^{yes}, blind^{vote^{yes}}, vote^{value}, vote^{all}_{value}, blind^{vote^{all}_{value}}, blind^{token}) $$
 
-$$ \mathcal{L}= \{X:W\in \mathcal{R}\} $$
+$$ \mathcal{L}= \{X:(X,W)\in \mathcal{R}\} $$
 
-| public inputs       | Description                                |
+## Dao vote proof
+
+- Calculate, and reveal proposal token commitment
+-
+
+| Public inputs       | Description                                |
 |---------------------|--------------------------------------------|
-| $cm^{token}$        | proposal token commitment as field element |
+| $cm^{token}$        | [proposal](proposal.md) token [commitment](../crypto/commitment.md) as field element |
 | proposal            | proposal commitment as field element       |
 | $cm^{vote^{yes}}_x$ | yes vote commitment x coordinate           |
 | $cm^{vote^{yes}}_y$ | yes vote commitment y coordinate           |
@@ -36,6 +41,6 @@ $$ \mathcal{L}= \{X:W\in \mathcal{R}\} $$
 | $blind^{vote^{all}_{value}}$| blinding term for all votes commitments               |
 | $blind^{token}$             | governance token blinding term                        |
 
-# circuit checks
+# Circuit checks
 
-- validate that $vote^{yes}$ is either 0, or 1.
+- Validate that $vote^{yes}$ is either 0, or 1.

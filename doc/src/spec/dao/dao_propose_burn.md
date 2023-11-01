@@ -1,35 +1,43 @@
-# dao propose burn
+# Dao propose burn
 
 $$ X = (nullifier, cm^{value}_x, cm^{value}_y, cm^{token}, root,  signature^{public}_x, signature^{public}_y)$$
 
-$$ W = (sk, sn, spendHook[^1], data, value, tokenId, blind^{value}, blind^{token}, pos, path, signature^{secret}) $$
+$$ W = (sk, sn, spendHook, data, value, tokenId, blind^{value}, blind^{token}, pos, path, signature^{secret}) $$
 
-$$ \mathcal{L}= \{X:W\in \mathcal{R}\} $$
+$$ \mathcal{L}= \{X:(X,W)\in \mathcal{R}\} $$
 
-| Public Input         | Description                                             |
-|----------------------|---------------------------------------------------------|
-| nullifier            | hash of (sk||sn)                                        |
-| $cm^{value}_x$       | x coordinate of value point commitment                  |
-| $cm^{value}_y$       | y coordinate of value point commitment                  |
-| $cm^{token}$         | commitment of tokenId as field element                  |
-| root                 | root of commitments tree of coin commitments            |
-| data                 | data read during execution of burn spendHook contract   |
-| spendHook            | burn related contract                                   |
-|$signature^{public}_x$| signature public x coordinate                           |
-|$signature^{public}_y$| signature public y coordinate                           |
+## Burn dao proposal
+- Derive, and reveal [nullifier](../crypto/nullifier.md)
+- Calculate, and reveal value [commitment](../crypto/commitment.md)
+- Calculate, and reveal [token](../payment/token_id.md) [commitment](../crypto/commitment.md)
+- Add input [coin](../payment/coin.md) to [merkle tree](../crypto/merkletree.md), and reveal it's root.
+- Reveal associated spendHook contract.
+- Derive, and reveal [signature](../crypto/signature.md) public key [$signature^{public}$](../crypto/keypair.md)
 
-| witnesses            | Description                                          |
+
+| Public Input         | Description                                                                                 |
+|----------------------|---------------------------------------------------------------------------------------------|
+| nullifier            | dao's proposal [coin](../payment/coin.md) [nullifier](../crypto/nullifier.md)                                             |
+| $cm^{value}_x$       | x coordinate of value point [commitment](../crypto/commitment.md)                           |
+| $cm^{value}_y$       | y coordinate of value point [commitment](../crypto/commitment.md)                           |
+| $cm^{token}$         | [commitment](../crypto/commitment.md) of [tokenId](../payment/token_id.md) as field element |
+| root                 | root of commitments [merkle tree](../crypto/merkletree.md) of [coin](../payment/coin.md)s   |
+| data                 | data read during execution of burn spendHook contract                                       |
+| spendHook            | propose burn related contract                                                               |
+|$signature^{public}_x$| [signature](../crypto/signature.md) [public key](../crypto/keypair.md) x coordinate         |
+|$signature^{public}_y$| [signature](../crypto/signature.md) [public key](../crypto/keypair.md) y coordinate         |
+
+
+| Witnesses            | Description                                          |
 |----------------------|------------------------------------------------------|
-| sk                   | proposal coin secret key                             |
-| sn                   | proposal coin serial number                          |
-| spendHook            | burnt coin spendHook                                 |
+| sk                   | [proposal](proposal.md) [coin](../payment/coin.md) [secret key](../crypto/keypair.md     |
+| sn                   | [proposal](proposal.md) [coin](../payment/coin.md) serial number                          |
+| spendHook            | burn spendHook contract                                |
 | data                 | spendHook contract input data                        |
-| value                | proposal coin value                                  |
-| tokenId              | proposal token id                                    |
-| $blind^{value}$      | proposal value commitment blinding term              |
-| $blind^{token}$      | token commitment blinding term                       |
-| pos                  | proposal coin leaf position in merkle tree           |
-| path                 | proposal coin path in merkle tree                    |
-| $signature^{secret}$ | proposal signature secret                            |
-
-[^1]: why spend hook, and data aren't constrained here?
+| value                | [proposal](proposal.md) [coin](../payment/coin.md) value                                  |
+| tokenId              | [proposal](proposal.md) [coin](../payment/coin.md) [token id](../payment/token_id.md)                                    |
+| $blind^{value}$      | [proposal](proposal.md) value [commitment](../crypto/commitment.md) blinding term              |
+| $blind^{token}$      | [token](../payment/token_id.md) [commitment](../crypto/commitment.md) blinding term                       |
+| pos                  | [proposal](proposal.md) [coin](../payment/coin.md) leaf position in [merkle tree](../crypto/merkletree.md)           |
+| path                 | [proposal](proposal.md) [coin](../payment/coin.md) path in [merkle tree](../crypto/merkletree.md)                    |
+| $signature^{secret}$ | [proposal](proposal.md) [signature](../crypto/signature.md) [secret key](../crypto/keypair.md)                            |
