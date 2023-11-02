@@ -6,10 +6,10 @@ PREFIX = $(HOME)/.cargo
 # Cargo binary
 CARGO = cargo +nightly
 
-# Optional compile target
-#RUST_TARGET = x86_64-unknown-linux-musl
-# Uncomment this if the above is uncommented
-#TARGET_PRFX = --target=
+# Compile target for system binaries
+RUST_TARGET = $(shell rustc -Vv | grep '^host: ' | cut -d' ' -f2)
+# Uncomment when doing musl static builds
+#RUSTFLAGS = "-C target-feature=+crt-static -C link-self-contained=yes"
 
 # Binaries to be built
 BINS = \
@@ -32,7 +32,11 @@ PROOFS_BIN = $(PROOFS_SRC:=.bin)
 all: $(BINS)
 
 zkas:
-	$(MAKE) -C bin/zkas
+	$(MAKE) -C bin/zkas \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
 
 $(PROOFS_BIN): zkas $(PROOFS_SRC)
 	./zkas $(basename $@) -o $@
