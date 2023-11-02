@@ -9,7 +9,7 @@ CARGO = cargo +nightly
 # Compile target for system binaries
 RUST_TARGET = $(shell rustc -Vv | grep '^host: ' | cut -d' ' -f2)
 # Uncomment when doing musl static builds
-#RUSTFLAGS = "-C target-feature=+crt-static -C link-self-contained=yes"
+#RUSTFLAGS = -C target-feature=+crt-static -C link-self-contained=yes
 
 # Binaries to be built
 BINS = \

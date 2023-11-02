@@ -6,18 +6,21 @@ PREFIX = $(HOME)/.cargo
 # Cargo binary
 CARGO = cargo +nightly
 
+# Compile target
+RUST_TARGET = $(shell rustc -Vv | grep '^host: ' | cut -d' ' -f2)
+
 SRC = \
 	Cargo.toml \
 	../../../Cargo.toml \
-	$(shell find src -type f) \
-	$(shell find ../../../src -type f) \
+	$(shell find src -type f -name '*.rs') \
+	$(shell find ../../../src -type f -name '*.rs') \
 
 BIN = ../../../taud
 
 all: $(BIN)
 
 $(BIN): $(SRC)
-	$(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) --release --package taud
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --target=$(RUST_TARGET) --release --package taud
 	cp -f ../../../target/$(RUST_TARGET)/release/taud $@
 
 clean:
