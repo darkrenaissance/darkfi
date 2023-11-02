@@ -22,8 +22,6 @@ $$ \mathcal{L}= \{X:(X,W)\in \mathcal{R}\} $$
 | $cm^{value}_y$       | y coordinate of value point [commitment](../crypto/commitment.md)                           |
 | $cm^{token}$         | [commitment](../crypto/commitment.md) of [tokenId](../payment/token_id.md) as field element |
 | root                 | root of commitments [merkle tree](../crypto/merkletree.md) of [coin](../payment/coin.md)s   |
-| data                 | data read during execution of burn spendHook contract                                       |
-| spendHook            | propose burn related contract                                                               |
 |$signature^{public}_x$| [signature](../crypto/signature.md) [public key](../crypto/keypair.md) x coordinate         |
 |$signature^{public}_y$| [signature](../crypto/signature.md) [public key](../crypto/keypair.md) y coordinate         |
 
