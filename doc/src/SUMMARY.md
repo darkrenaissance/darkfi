@@ -79,7 +79,6 @@
   - [token mint](spec/payment/token_mint.md)
 
 - [Dao](spec/dao/index.md)
-  - [dao functions](spec/dao/dao.md)
   - [bulla](spec/dao/bulla.md)
   - [proposal](spec/dao/proposal.md)
   - [dao proposal](spec/dao/dao_propose.md)
