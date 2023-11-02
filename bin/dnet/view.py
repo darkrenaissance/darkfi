@@ -197,54 +197,91 @@ class View():
         while True:
             await asyncio.sleep(0.1)
             evloop.call_soon(loop.draw_screen)
+            
+            nodes = self.model.nodes.items()
 
+            # TODO: get_info() needs to be re-called when offline nodes
+            # come back online.
+
+            # Keep track of online nodes
             for index, item in enumerate(self.listwalker.contents):
-                live_nodes.append(item.node_name)
-                if item.session == "inbound-slot":
+                if item.node_name not in live_nodes:
+                    live_nodes.append(item.node_name)
+                if (item.session == "inbound-slot"
+                        and item.session not in live_inbound):
                     live_inbound.append(item.i)
 
-            # Draw get_info(). Called only once.
-            for node_name, info in self.model.nodes.items():
-                if node_name in live_nodes:
+            # Offline node
+            for name, info in nodes:
+                if bool(info):
                     continue
-                self.draw_info(node_name, info)
+                if name in dead_nodes:
+                    continue
+                if name in live_nodes:
+                    logging.debug(f"removing... {name}")
+                    live_nodes.remove(name)
+                dead_nodes.append(name)
 
-            # TODO: when RPC can't connect, display the node as offline.
-
-            # If a node goes offline, trigger a redraw.
-            for node_name, info in self.model.nodes.items():
-                if not bool(info):
-                    if node_name in dead_nodes:
+                # Trigger a redraw
+                self.listwalker.contents.clear()
+                self.draw_empty(name, info)
+                for name, info in nodes:
+                    if name in dead_nodes:
                         continue
-                    dead_nodes.append(node_name)
-                    self.listwalker.contents.clear()
-                    self.draw_empty(node_name, info)
-                    for name, info in self.model.nodes.items():
-                        if name not in dead_nodes:
-                            self.draw_info(name, info)
+                    logging.debug(live_nodes)
+                    logging.debug(f"offline redraw {name}")
+                    self.draw_info(name, info)
 
-                # Only render info if the node is online.
+            # Add a new node.
+            for name, info in nodes:
+                if name in live_nodes:
+                    continue
+                if name in dead_nodes:
+                    continue
+                self.draw_info(name, info)
+
+            # Online node event handling.
+            for name, info in nodes:
+                if name in dead_nodes:
+                    continue
+                # Update events
                 self.fill_left_box()
                 self.fill_right_box()
 
-                # Check that inbound dictionary exists to prevent a KeyError
-                if not 'inbound' in info:
-                    continue
-
-                # If a new inbound comes online, trigger a redraw.
+                # New inbound comes online.
                 for key in info['inbound'].keys():
-                    if key not in live_inbound:
-                        self.listwalker.contents.clear()
-                        for name, info in self.model.nodes.items():
+                    if key in live_inbound:
+                        continue
+                    self.listwalker.contents.clear()
+                    # Redraw all incl. dead nodes.
+                    for name, info in nodes:
+                        if bool(info):
+                            self.draw_info(name, info)
+                        else:
+                            if name in dead_nodes:
+                                continue
+                            dead_nodes.append(name)
+                            self.draw_empty(name, info)
+                            for name, info in nodes:
                                 self.draw_info(name, info)
 
-                    # If an inbound goes offline, trigger a redraw.
+                    # Inbound goes offline.
                     addr = info['inbound'].get(key)
-                    if not bool(addr):
-                        if key in dead_inbound:
-                            continue
-                        dead_inbound.append(key)
-                        self.listwalker.contents.clear()
-                        for name, info in self.model.nodes.items():
-                            if name not in dead_nodes:
+                    if bool(addr):
+                        continue
+                    if key in dead_inbound:
+                        continue
+                    dead_inbound.append(key)
+                    self.listwalker.contents.clear()
+                    # Redraw all incl. dead nodes.
+                    for name, info in nodes:
+                        if bool(info):
+                            self.draw_info(name, info)
+                        else:
+                            if name in dead_nodes:
+                                continue
+                            dead_nodes.append(name)
+                            self.draw_empty(name, info)
+                            for name, info in nodes:
                                 self.draw_info(name, info)
+

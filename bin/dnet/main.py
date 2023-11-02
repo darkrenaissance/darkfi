@@ -40,8 +40,9 @@ class Dnetview:
                 logging.debug(f"Started {name} RPC on port {port}")
                 break
             except Exception as e:
-                logging.debug(f"failed to connect {host}:{port} {e}")
-                pass
+                info[name] = {}
+                await self.queue.put(info)
+                continue
     
         data = await rpc._make_request("p2p.get_info", [])
         info[name] = data
@@ -51,7 +52,7 @@ class Dnetview:
         await rpc.dnet_subscribe_events()
 
         while True:
-            await asyncio.sleep(0.01)
+            await asyncio.sleep(0.1)
             data = await rpc.reader.readline()
             try:
                 data = json.loads(data)
