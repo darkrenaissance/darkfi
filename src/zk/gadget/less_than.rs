@@ -146,7 +146,7 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
             },
         )?;
 
-        self.less_than_range_check(layouter, a, a_offset, strict)?;
+        self.less_than_range_check(layouter, a, a_offset)?;
 
         Ok(())
     }
@@ -194,7 +194,7 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
             },
         )?;
 
-        self.less_than_range_check(layouter, a, a_offset, strict)?;
+        self.less_than_range_check(layouter, a, a_offset)?;
 
         Ok(())
     }
@@ -204,7 +204,6 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
         mut layouter: impl Layouter<pallas::Base>,
         a: AssignedCell<pallas::Base, pallas::Base>,
         a_offset: AssignedCell<pallas::Base, pallas::Base>,
-        strict: bool,
     ) -> Result<(), Error> {
         let range_a_chip =
             NativeRangeCheckChip::<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS>::construct(
@@ -215,13 +214,10 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
                 self.config.range_a_offset_config.clone(),
             );
 
-        range_a_chip.copy_range_check(layouter.namespace(|| "a copy_range_check"), a, strict)?;
+        range_a_chip.copy_range_check(layouter.namespace(|| "a copy_range_check"), a)?;
 
-        range_a_offset_chip.copy_range_check(
-            layouter.namespace(|| "a_offset copy_range_check"),
-            a_offset,
-            strict,
-        )?;
+        range_a_offset_chip
+            .copy_range_check(layouter.namespace(|| "a_offset copy_range_check"), a_offset)?;
 
         Ok(())
     }

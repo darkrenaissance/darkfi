@@ -1045,14 +1045,12 @@ impl Circuit<pallas::Base> for ZkCircuit {
                             rangecheck64_chip.as_ref().unwrap().copy_range_check(
                                 layouter.namespace(|| "copy range check 64"),
                                 arg.try_into()?,
-                                true,
                             )?;
                         }
                         253 => {
                             rangecheck253_chip.as_ref().unwrap().copy_range_check(
                                 layouter.namespace(|| "copy range check 253"),
                                 arg.try_into()?,
-                                true,
                             )?;
                         }
                         x => {

@@ -139,7 +139,6 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         region: &mut Region<'_, pallas::Base>,
         z_0: AssignedCell<pallas::Base, pallas::Base>,
         offset: usize,
-        strict: bool,
     ) -> Result<(), plonk::Error> {
         assert!(WINDOW_SIZE * NUM_WINDOWS < NUM_BITS + WINDOW_SIZE);
 
@@ -176,10 +175,8 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
 
         assert!(z_values.len() == NUM_WINDOWS + 1);
 
-        if strict {
-            // Constrain the remaining bits to be zero
-            region.constrain_constant(z_values.last().unwrap().cell(), pallas::Base::zero())?;
-        }
+        // Constrain the remaining bits to be zero
+        region.constrain_constant(z_values.last().unwrap().cell(), pallas::Base::zero())?;
 
         Ok(())
     }
@@ -188,13 +185,12 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         &self,
         mut layouter: impl Layouter<pallas::Base>,
         value: Value<pallas::Base>,
-        strict: bool,
     ) -> Result<(), plonk::Error> {
         layouter.assign_region(
             || format!("witness {}-bit native range check", NUM_BITS),
             |mut region: Region<'_, pallas::Base>| {
                 let z_0 = region.assign_advice(|| "z_0", self.config.z, 0, || value)?;
-                self.decompose(&mut region, z_0, 0, strict)?;
+                self.decompose(&mut region, z_0, 0)?;
                 Ok(())
             },
         )
@@ -204,13 +200,12 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         &self,
         mut layouter: impl Layouter<pallas::Base>,
         value: AssignedCell<pallas::Base, pallas::Base>,
-        strict: bool,
     ) -> Result<(), plonk::Error> {
         layouter.assign_region(
             || format!("copy {}-bit native range check", NUM_BITS),
             |mut region: Region<'_, pallas::Base>| {
                 let z_0 = value.copy_advice(|| "z_0", &mut region, self.config.z, 0)?;
-                self.decompose(&mut region, z_0, 0, strict)?;
+                self.decompose(&mut region, z_0, 0)?;
                 Ok(())
             },
         )
@@ -278,16 +273,12 @@ mod tests {
                     )?;
 
                     let a = assign_free_advice(layouter.namespace(|| "load a"), config.1, self.a)?;
-                    rangecheck_chip.copy_range_check(
-                        layouter.namespace(|| "copy a and range check"),
-                        a,
-                        true,
-                    )?;
+                    rangecheck_chip
+                        .copy_range_check(layouter.namespace(|| "copy a and range check"), a)?;
 
                     rangecheck_chip.witness_range_check(
                         layouter.namespace(|| "witness a and range check"),
                         self.a,
-                        true,
                     )?;
 
                     Ok(())
