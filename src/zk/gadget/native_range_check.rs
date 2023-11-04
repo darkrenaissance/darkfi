@@ -23,7 +23,7 @@ use halo2_proofs::{
         pallas,
     },
     plonk,
-    plonk::{Advice, Column, ConstraintSystem, Selector, TableColumn},
+    plonk::{Advice, Column, ConstraintSystem, Constraints, Selector, TableColumn},
     poly::Rotation,
 };
 
@@ -35,6 +35,7 @@ pub struct NativeRangeCheckConfig<
 > {
     pub z: Column<Advice>,
     pub s_rc: Selector,
+    pub s_short: Selector,
     pub k_values_table: TableColumn,
 }
 
@@ -78,7 +79,9 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         meta.enable_equality(z);
 
         let s_rc = meta.complex_selector();
+        let s_short = meta.complex_selector();
 
+        // Running sum decomposition
         meta.lookup(|meta| {
             let s_rc = meta.query_selector(s_rc);
             let z_curr = meta.query_advice(z, Rotation::cur());
@@ -89,7 +92,46 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
             vec![(s_rc * (z_curr - z_next * pallas::Base::from(1 << WINDOW_SIZE)), k_values_table)]
         });
 
-        NativeRangeCheckConfig { z, s_rc, k_values_table }
+        // Checks that are enabled if the last chunk is an `s`-bit value
+        // where `s < WINDOW_SIZE`:
+        //
+        //  |s_rc | s_short |                z                |
+        //  ---------------------------------------------------
+        //  |  1  |    0    |            last_chunk           |
+        //  |  0  |    1    |                0                |
+        //  |  0  |    0    | last_chunk << (WINDOW_SIZE - s) |
+
+        // Check that `shifted_last_chunk` is `WINDOW_SIZE` bits,
+        // where shifted_last_chunk = last_chunk << (WINDOW_SIZE - s)
+        //                          = last_chunk * 2^(WINDOW_SIZE - s)
+        meta.lookup(|meta| {
+            let s_short = meta.query_selector(s_short);
+            let shifted_last_chunk = meta.query_advice(z, Rotation::next());
+            vec![(s_short * shifted_last_chunk, k_values_table)]
+        });
+
+        // Check that `shifted_last_chunk = last_chunk << (WINDOW_SIZE - s)`
+        meta.create_gate("Short lookup bitshift", |meta| {
+            let two_pow_window_size = pallas::Base::from(1 << WINDOW_SIZE);
+            let s_short = meta.query_selector(s_short);
+            let last_chunk = meta.query_advice(z, Rotation::prev());
+            // Rotation::cur() is copy-constrained to be zero elsewhere in this gadget.
+            let shifted_last_chunk = meta.query_advice(z, Rotation::next());
+            // inv_two_pow_s = 1 >> s = 2^{-s}
+            let inv_two_pow_s = {
+                let s = NUM_BITS % WINDOW_SIZE;
+                pallas::Base::from(1 << s).invert().unwrap()
+            };
+
+            // shifted_last_chunk = last_chunk << (WINDOW_SIZE - s)
+            //                    = last_chunk * 2^WINDOW_SIZE * 2^{-s}
+            Constraints::with_selector(
+                s_short,
+                Some(last_chunk * two_pow_window_size * inv_two_pow_s - shifted_last_chunk),
+            )
+        });
+
+        NativeRangeCheckConfig { z, s_rc, s_short, k_values_table }
     }
 
     /// `k_values_table` should be reused across different chips
@@ -115,15 +157,8 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
     }
 
     fn decompose_value(value: &pallas::Base) -> Vec<[bool; WINDOW_SIZE]> {
-        let padding = (WINDOW_SIZE - NUM_BITS % WINDOW_SIZE) % WINDOW_SIZE;
-
-        let bits: Vec<bool> = value
-            .to_le_bits()
-            .into_iter()
-            .take(WINDOW_SIZE * NUM_WINDOWS)
-            // .chain(std::iter::repeat(false).take(padding))
-            .collect();
-        assert_eq!(bits.len(), NUM_BITS + padding);
+        let bits: Vec<bool> =
+            value.to_le_bits().into_iter().take(WINDOW_SIZE * NUM_WINDOWS).collect();
 
         bits.chunks_exact(WINDOW_SIZE)
             .map(|x| {
@@ -142,7 +177,11 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
     ) -> Result<(), plonk::Error> {
         assert!(WINDOW_SIZE * NUM_WINDOWS < NUM_BITS + WINDOW_SIZE);
 
-        // Enable selectors
+        // The number of bits in the last chunk.
+        let last_chunk_length = NUM_BITS - (WINDOW_SIZE * (NUM_WINDOWS - 1));
+        assert!(last_chunk_length > 0);
+
+        // Enable selectors for running sum decomposition
         for index in 0..NUM_WINDOWS {
             self.config.s_rc.enable(region, index + offset)?;
         }
@@ -151,8 +190,8 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         let mut z = z_0;
         let decomposed_chunks = z.value().map(Self::decompose_value).transpose_vec(NUM_WINDOWS);
 
-        let two_pow_k_inverse =
-            Value::known(pallas::Base::from(1 << WINDOW_SIZE as u64).invert().unwrap());
+        let two_pow_k = pallas::Base::from(1 << WINDOW_SIZE as u64);
+        let two_pow_k_inverse = Value::known(two_pow_k.invert().unwrap());
 
         for (i, chunk) in decomposed_chunks.iter().enumerate() {
             let z_next = {
@@ -177,6 +216,47 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
 
         // Constrain the remaining bits to be zero
         region.constrain_constant(z_values.last().unwrap().cell(), pallas::Base::zero())?;
+
+        // If the last chunk is `s` bits where `s < WINDOW_SIZE`,
+        // perform short range check
+        //
+        //  |s_rc | s_short |                z                |
+        //  ---------------------------------------------------
+        //  |  1  |    0    |            last_chunk           |
+        //  |  0  |    1    |                0                |
+        //  |  0  |    0    | last_chunk << (WINDOW_SIZE - s) |
+        //  |  0  |    0    |             1 >> s              |
+
+        if last_chunk_length < WINDOW_SIZE {
+            let s_short_offset = NUM_WINDOWS + offset;
+            self.config.s_short.enable(region, s_short_offset)?;
+
+            // 1 >> s = 2^{-s}
+            let inv_two_pow_s = pallas::Base::from(1 << last_chunk_length).invert().unwrap();
+            region.assign_advice_from_constant(
+                || "inv_two_pow_s",
+                self.config.z,
+                s_short_offset + 2,
+                inv_two_pow_s,
+            )?;
+
+            // shifted_last_chunk = last_chunk * 2^{WINDOW_SIZE-s}
+            //                    = last_chunk * 2^WINDOW_SIZE * inv_two_pow_s
+            let last_chunk = {
+                let chunk = decomposed_chunks.last().unwrap();
+                chunk.map(|c| {
+                    pallas::Base::from(c.iter().rev().fold(0, |acc, c| (acc << 1) + *c as u64))
+                })
+            };
+            let shifted_last_chunk =
+                last_chunk * Value::known(two_pow_k) * Value::known(inv_two_pow_s);
+            region.assign_advice(
+                || "shifted_last_chunk",
+                self.config.z,
+                s_short_offset + 1,
+                || shifted_last_chunk,
+            )?;
+        }
 
         Ok(())
     }
@@ -303,11 +383,8 @@ mod tests {
 
         let invalid_values = vec![
             -pallas::Base::one(),
-            // FIXME: 1 << 64 passes since it is a 64-bit value
             pallas::Base::from_u128(u64::MAX as u128 + 1),
             -pallas::Base::from_u128(u64::MAX as u128 + 1),
-            // FIXME: this test may pass non-deterministically
-            pallas::Base::from_u128(rand::random::<u128>()),
             // The following two are valid
             // 2 = -28948022309329048855892746252171976963363056481941560715954676764349967630335
             //-pallas::Base::from_str_vartime(
@@ -362,7 +439,6 @@ mod tests {
 
         let invalid_values = vec![
             -pallas::Base::one(),
-            // FIXME: 1 << 128 passes since it is a 129-bit value
             pallas::Base::from_u128(u128::MAX) + pallas::Base::one(),
             -pallas::Base::from_u128(u128::MAX) + pallas::Base::one(),
             -pallas::Base::from_u128(u128::MAX),
@@ -423,7 +499,6 @@ mod tests {
                 "28948022309329048855892746252171976963363056481941560715954676764349967630336",
             )
             .unwrap(),
-            // FIXME: 1 << 253 passes since it is a 255-bit value
             max_253 + pallas::Base::one(),
         ];
 
