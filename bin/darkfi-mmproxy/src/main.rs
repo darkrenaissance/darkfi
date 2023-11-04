@@ -67,7 +67,7 @@ struct Args {
     /// JSON-RPC server listen URL
     rpc_listen: Url,
 
-    #[structopt(long, default_value = "tcp://127.0.0.1:18081")]
+    #[structopt(long, default_value = "http://127.0.0.1:28081/json_rpc")]
     /// monerod JSON-RPC server listen URL
     monerod_rpc: Url,
 
@@ -100,6 +100,8 @@ impl Worker {
 }
 
 struct MiningProxy {
+    /// monerod RPC endpoint
+    monerod_rpc: Url,
     /// Worker logins
     logins: HashMap<String, String>,
     /// Workers UUIDs
@@ -111,8 +113,13 @@ struct MiningProxy {
 }
 
 impl MiningProxy {
-    fn new(logins: HashMap<String, String>, executor: Arc<Executor<'static>>) -> Self {
+    fn new(
+        monerod_rpc: Url,
+        logins: HashMap<String, String>,
+        executor: Arc<Executor<'static>>,
+    ) -> Self {
         Self {
+            monerod_rpc,
             logins,
             workers: Arc::new(RwLock::new(HashMap::new())),
             rpc_connections: Mutex::new(HashSet::new()),
@@ -137,6 +144,9 @@ impl RequestHandler for MiningProxy {
 
             // Monero daemon methods
             "get_block_count" => self.monero_get_block_count(req.id, req.params).await,
+            "getblockcount" => self.monero_get_block_count(req.id, req.params).await,
+
+            /*
             "on_get_block_hash" => self.monero_on_get_block_hash(req.id, req.params).await,
             "get_block_template" => self.monero_get_block_template(req.id, req.params).await,
             "submit_block" => self.monero_submit_block(req.id, req.params).await,
@@ -167,6 +177,7 @@ impl RequestHandler for MiningProxy {
             "calc_pow" => self.monero_calc_pow(req.id, req.params).await,
             "flush_cache" => self.monero_flush_cache(req.id, req.params).await,
             "add_aux_pow" => self.monero_add_aux_pow(req.id, req.params).await,
+            */
 
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
@@ -190,7 +201,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         logins.insert(user, pass);
     }
 
-    let mmproxy = Arc::new(MiningProxy::new(logins, ex.clone()));
+    let mmproxy = Arc::new(MiningProxy::new(args.monerod_rpc, logins, ex.clone()));
     let mmproxy_ = Arc::clone(&mmproxy);
 
     info!("Starting JSON-RPC server");

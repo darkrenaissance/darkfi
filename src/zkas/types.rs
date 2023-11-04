@@ -100,6 +100,25 @@ impl VarType {
             _ => None,
         }
     }
+
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Dummy => "Dummy",
+            Self::EcPoint => "EcPoint",
+            Self::EcFixedPoint => "EcFixedPoint",
+            Self::EcFixedPointShort => "EcFixedPointShort",
+            Self::EcFixedPointBase => "EcFixedPointBase",
+            Self::EcNiPoint => "EcNiPoint",
+            Self::Base => "Base",
+            Self::BaseArray => "BaseArray",
+            Self::Scalar => "Scalar",
+            Self::ScalarArray => "ScalarArray",
+            Self::MerklePath => "MerklePath",
+            Self::Uint32 => "Uint32",
+            Self::Uint64 => "Uint64",
+            Self::Any => "Any",
+        }
+    }
 }
 
 /// Literal types supported by the zkas VM

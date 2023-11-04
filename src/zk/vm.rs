@@ -263,9 +263,9 @@ pub struct ZkParams {
 #[derive(Clone)]
 pub struct ZkCircuit {
     constants: Vec<String>,
-    witnesses: Vec<Witness>,
+    pub(super) witnesses: Vec<Witness>,
     literals: Vec<(LitType, String)>,
-    opcodes: Vec<(Opcode, Vec<(HeapType, usize)>)>,
+    pub(super) opcodes: Vec<(Opcode, Vec<(HeapType, usize)>)>,
     pub tracer: ZkTracer,
 }
 

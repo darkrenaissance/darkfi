@@ -204,7 +204,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
             loop {
                 let event = dnet_sub.receive().await;
                 debug!("Got dnet event: {:?}", event);
-                dnet_sub_.notify(vec![event.into()]).await;
+                dnet_sub_.notify(vec![event.into()].into()).await;
             }
         },
         |res| async {

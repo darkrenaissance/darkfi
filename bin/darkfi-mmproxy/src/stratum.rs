@@ -97,7 +97,7 @@ impl MiningProxy {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         };
 
-        let Some(agent) = params["agent"].get::<String>() else {
+        let Some(_agent) = params["agent"].get::<String>() else {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         };
 
@@ -166,7 +166,7 @@ impl MiningProxy {
 
         // Spawn background task
         ka_task.start(
-            Self::keepalive_task(self.workers.clone(), uuid.clone(), ka_recv),
+            Self::keepalive_task(self.workers.clone(), uuid, ka_recv),
             move |_| async move { debug!("keepalive_task for {} exited", uuid) },
             Error::DetachedTaskStopped,
             self.executor.clone(),
@@ -175,7 +175,7 @@ impl MiningProxy {
         info!("Added worker {} ({})", login, uuid);
 
         // TODO: Send current job
-        return JsonResponse::new(
+        JsonResponse::new(
             JsonValue::Object(HashMap::from([(
                 "status".to_string(),
                 JsonValue::String("KEEPALIVED".to_string()),
@@ -201,19 +201,19 @@ impl MiningProxy {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        let Some(uuid) = params["id"].get::<String>() else {
+        let Some(_uuid) = params["id"].get::<String>() else {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         };
 
-        let Some(job_id) = params["job_id"].get::<String>() else {
+        let Some(_job_id) = params["job_id"].get::<String>() else {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         };
 
-        let Some(nonce) = params["nonce"].get::<String>() else {
+        let Some(_nonce) = params["nonce"].get::<String>() else {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         };
 
-        let Some(result) = params["result"].get::<String>() else {
+        let Some(_result) = params["result"].get::<String>() else {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         };
 
@@ -253,7 +253,7 @@ impl MiningProxy {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        return JsonResponse::new(
+        JsonResponse::new(
             JsonValue::Object(HashMap::from([(
                 "status".to_string(),
                 JsonValue::String("KEEPALIVED".to_string()),

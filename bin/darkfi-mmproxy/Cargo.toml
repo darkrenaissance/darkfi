@@ -15,6 +15,10 @@ darkfi-serial = {path = "../../src/serial", features = ["async"]}
 # Misc
 log = "0.4.20"
 
+# Monero
+monero = {version = "0.19.0", features = ["full"]}
+surf = "2.3.2"
+
 # Encoding
 url = "2.4.1"
 uuid = {version = "1.5.0", features = ["v4"]}

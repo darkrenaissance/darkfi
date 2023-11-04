@@ -93,3 +93,45 @@ $ make coverage
 ```
 
 You can then find the reports in `target/llvm-cov/html/index.html`
+
+## Static binary builds
+
+Using musl-libc, we should be able to produce statically linked
+binaries from our codebase. A short ssetup using a Debian system and
+`lxc` can be the following:
+
+**Setup the LXC container:**
+
+```
+# lxc-create -n xbuild-alpine -t alpine -- --release edge
+# lxc-start -n xbuild-alpine
+# lxc-attach -n xbuild-alpine
+```
+
+Inside the container, once attached, we have to install the required
+dependencies. We will have to use `rustup` to get the latest rust
+nightly, and we also have to compile `sqlcipher` on our own.
+
+```
+# apk add rustup git musl-dev make gcc openssl-dev openssl-libs-static tcl-dev zlib-static
+# wget -O sqlcipher.tar.gz https://github.com/sqlcipher/sqlcipher/archive/refs/tags/v4.5.5.tar.gz
+# tar xf sqlcipher.tar.gz
+# cd sqlcipher-4.5.5
+# ./confiogure --prefix=/usr/local --disable-shared --enable-static --enable-cross-thread-connections --enable-releasemode
+# make -j$(nproc)
+# make install
+# cd ~
+# rustup-init --default-toolchain nightly -y
+# source ~/.cargo/env
+# rustup target add wasm32-unknown-unknown --toolchain nightly
+```
+
+And now we should be able to build a statically linked binary:
+
+```
+# git clone https://github.com/darkrenaissance/darkfi -b master --depth 1
+# cd darkfi
+## Uncomment RUSTFLAGS in the main Makefile
+# sed -e 's,^#RUSTFLAGS ,RUSTFLAGS ,' -i Makefile
+# make darkirc
+```

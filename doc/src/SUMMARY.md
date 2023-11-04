@@ -79,7 +79,6 @@
   - [token mint](spec/payment/token_mint.md)
 
 - [Dao](spec/dao/index.md)
-  - [dao functions](spec/dao/dao.md)
   - [bulla](spec/dao/bulla.md)
   - [proposal](spec/dao/proposal.md)
   - [dao proposal](spec/dao/dao_propose.md)
@@ -102,7 +101,7 @@
   - [merkletree](spec/crypto/merkletree.md)
   - [note](spec/crypto/note.md)
   - [vrf](spec/crypto/vrf.md)
-
+  - [nullifier](spec/crypto/nullifier.md)
 
 # Misc
 

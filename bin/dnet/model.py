@@ -72,6 +72,11 @@ class Model:
             id = channel["id"]
             url = channel["url"]
             self.nodes[name]['manual'][f"{id}"] = url
+    
+    def add_offline(self, node):
+        name = list(node.keys())[0]
+        values = list(node.values())[0]
+        self.nodes[name] = values
 
     def add_event(self, event):
         name = list(event.keys())[0]
@@ -113,7 +118,7 @@ class Model:
                 addr = info["addr"]
                 id = info.get("channel_id")
                 inbound = self.nodes[name]['inbound']
-                del inbound[f"{id}"]
+                self.nodes[name]['inbound'][f"{id}"] = {}
                 logging.debug(f"{current_time}  inbound (disconnect): {addr}")
             case "outbound_slot_sleeping":
                 slot = info["slot"]

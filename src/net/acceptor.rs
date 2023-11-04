@@ -205,11 +205,14 @@ impl Acceptor {
                         target: "net::acceptor::run_accept_loop()",
                         "[P2P] Unhandled listener.next() error: {}", e,
                     );
+                    /*
                     error!(
                         target: "net::acceptor::run_accept_loop()",
                         "[P2P] Closing listener loop"
                     );
                     return Err(e.into())
+                    */
+                    continue
                 }
             }
         }

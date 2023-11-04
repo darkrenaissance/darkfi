@@ -315,7 +315,7 @@ def task_table(task):
             status = args
             if status == "pause":
                 status_verb = "paused"
-            elif status in ["start", "cancel"]:
+            elif status in ["start", "open"]:
                 status_verb = f"{status}ed"
             elif status == "stop":
                 status_verb = f"stopped"
@@ -407,8 +407,8 @@ async def change_task_status(refid, status, server_name, port):
         print(f"Paused task '{title}'")
     elif status == "stop":
         print(f"Completed task '{title}'")
-    elif status == "cancel":
-        print(f"Cancelled task '{title}'")
+    elif status == "open":
+        print(f"Opened task '{title}'")
 
     return 0
 
@@ -515,6 +515,7 @@ SUBCOMMANDS:
     start      Start task(s).
     stop       Stop task(s).
     switch     Switch between configured workspaces.
+    show       List filtered tasks.
     help       Show this help text.
 
 Examples:
@@ -524,13 +525,16 @@ Examples:
     tau 1 modify @upgr due:1112 rank:none
     tau 1 modify -@up
     tau 1 modify -mol -xx
-    tau 2 start
+    tau 1,2 modify +dev @erto
+    tau 1-3 start
     tau 1 comment "this is an awesome comment"
     tau 2 pause
-    tau switch darkfi
-    tau archive         # current month's completed tasks
-    tau archive 1122    # completed tasks in Nov. 2022
-    tau archive 1 1122  # show info of task completed in Nov. 2022
+    tau show @erto state:start  # list started tasks that are assigned to 'erto'
+    tau show +dev project:zk    # list tasks with 'dev' tag project 'zk'
+    tau switch darkfi           # switch to configured 'darkfi' workspace
+    tau archive                 # current month's completed tasks
+    tau archive 1122            # completed tasks in Nov. 2022
+    tau archive 1 1122          # show info of task completed in Nov. 2022
 ''')
         return 0
     elif sys.argv[1] == "add":
@@ -633,32 +637,50 @@ Examples:
         return 0
 
     try:
-        id = int(sys.argv[1])
-        refid = data[id]
+        id = sys.argv[1]
+        lines = id.split(',')
+        numbers = []
+        for line in lines:
+            if line == '':
+                continue
+            elif '-' in line:
+                t = line.split('-')
+                numbers += range(int(t[0]), int(t[1]) + 1)
+            else:
+                numbers.append(int(line))
+        refid = []
+        for i in numbers:
+            refid.append(data[i])
     except (ValueError, KeyError):
         print("error: invalid ID", file=sys.stderr)
         return -1
 
     args = sys.argv[2:]
 
-    if not args:
-        return await show_task(refid, server_name, port)
-
+    if not args :
+        for rid in refid:
+            await show_task(rid, server_name, port)
+        return 0
+    
     subcmd, args = args[0], args[1:]
 
     if subcmd == "modify":
-        if (errc := await modify_task(refid, args, server_name, port)) < 0:
-            return errc
-        time.sleep(0.1)
-        return await show_task(refid, server_name, port)
+        for rid in refid:
+            if (errc := await modify_task(rid, args, server_name, port)) < 0:
+                return errc
+            time.sleep(0.1)
+            await show_task(rid, server_name, port)
     elif subcmd in ["start", "pause", "stop", "open"]:
         status = subcmd
-        if (errc := await change_task_status(refid, status, server_name, port)) < 0:
-            return errc
+        for rid in refid:
+            if (errc := await change_task_status(rid, status, server_name, port)) < 0:
+                return errc
+            time.sleep(0.1)
     elif subcmd == "comment":
-        if (errc := await comment(refid, args, server_name, port)) < 0:
-            return errc
-        time.sleep(0.2)
+        for rid in refid:
+            if (errc := await comment(rid, args, server_name, port)) < 0:
+                return errc
+            time.sleep(0.1)
     else:
         print(f"error: unknown subcommand '{subcmd}'")
         return -1

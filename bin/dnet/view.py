@@ -40,6 +40,9 @@ class DnetWidget(urwid.WidgetWrap):
         self._w = urwid.AttrWrap(self._w, None)
         self._w.focus_attr = 'line'
 
+    def is_empty(self):
+        self.is_empty == True
+
 
 class Node(DnetWidget):
     def set_txt(self):
@@ -83,128 +86,165 @@ class View():
         columns = urwid.Columns([leftbox, rightbox], focus_column=0)
         self.ui = urwid.Frame(urwid.AttrWrap( columns, 'body' ))
 
+    #-----------------------------------------------------------------
+    # Render get_info()
+    #-----------------------------------------------------------------
+    def draw_info(self, node_name, info):
+       node = Node(node_name, "node")
+       node.set_txt()
+       self.listwalker.contents.append(node)
+
+       if info['outbound']:
+           session = Session(node_name, "outbound")
+           session.set_txt()
+           self.listwalker.contents.append(session)
+           for i, addr in info['outbound'].items():
+               slot = Slot(node_name, "outbound-slot")
+               slot.set_txt(i, addr)
+               self.listwalker.contents.append(slot)
+
+       if info['inbound']:
+           if any(info['inbound'].values()):
+               session = Session(node_name, "inbound")
+               session.set_txt()
+               self.listwalker.contents.append(session)
+               for i, addr in info['inbound'].items():
+                   if bool(addr):
+                       slot = Slot(node_name, "inbound-slot")
+                       slot.set_txt(i, addr)
+                       self.listwalker.contents.append(slot)
+
+       if info['manual']:
+           session = Session(node_name, "manual")
+           session.set_txt()
+           self.listwalker.contents.append(session)
+           for i, addr in info['manual'].items():
+               slot = Slot(node_name, "manual-slot")
+               slot.set_txt(i, addr)
+               self.listwalker.contents.append(slot)
+
+       if info['seed']:
+           session = Session(node_name, "seed")
+           session.set_txt()
+           self.listwalker.contents.append(session)
+           for i, info in info['seed'].items():
+               slot = Slot(node_name, "seed-slot")
+               slot.set_txt(i, addr)
+               self.listwalker.contents.append(slot)
+
+    def draw_empty(self, node_name, info):
+       name = node_name + " (offline)" 
+       node = Node(name, "node")
+       node.set_txt()
+       self.listwalker.contents.append(node)
+
+    #-----------------------------------------------------------------
+    # Render subscribe_events() (left menu)
+    #-----------------------------------------------------------------
+    def fill_left_box(self):
+        live_inbound = []
+        new_inbound= {}
+        for index, item in enumerate(self.listwalker.contents):
+            # Update outbound slot info
+            if item.session == "outbound-slot":
+                key = (f"{item.node_name}", f"{item.i}")
+                if key in self.model.nodes[item.node_name]['event']:
+                    info = self.model.nodes[item.node_name]['event'].get(key)
+                    slot = Slot(item.node_name, item.session)
+                    slot.set_txt(item.i, info)
+                    self.listwalker.contents[index] = slot
+
+    #-----------------------------------------------------------------
+    # Render subscribe_events() (right menu)
+    #-----------------------------------------------------------------
+    def fill_right_box(self):
+        self.pile.contents.clear()
+        focus_w = self.list.get_focus()
+        if focus_w[0] is None:
+            return
+        session = focus_w[0].session
+
+        if session == "outbound":
+            key = (focus_w[0].node_name, "outbound")
+            info = self.model.nodes.get(focus_w[0].node_name)
+            if key in info['event']:
+                ev = info['event'].get(key)
+                self.pile.contents.append((
+                    urwid.Text(f" {ev}"),
+                    self.pile.options()))
+
+        if (session == "outbound-slot" or session == "inbound-slot"
+                or session == "manual-slot" or session == "seed-slot"):
+            addr = focus_w[0].addr
+            node_name = focus_w[0].node_name
+            info = self.model.nodes.get(node_name)
+            if addr in info['msgs']:
+                msg = info['msgs'].get(addr)
+                for m in msg:
+                    time = m[0]
+                    event = m[1]
+                    msg = m[2]
+                    self.pile.contents.append((urwid.Text(
+                            f"{time}: {event}: {msg}"),
+                            self.pile.options()))
 
     async def update_view(self, evloop: asyncio.AbstractEventLoop,
                           loop: urwid.MainLoop):
-        known_nodes = []
-        known_inbound = []
+        live_nodes = []
+        dead_nodes = []
+        live_inbound = []
+        dead_inbound = []
         while True:
             await asyncio.sleep(0.1)
-            # Redraw the screen
             evloop.call_soon(loop.draw_screen)
 
             for index, item in enumerate(self.listwalker.contents):
-                known_nodes.append(item.node_name)
-
-            #-----------------------------------------------------------------
-            # Render get_info()
-            #-----------------------------------------------------------------
-            for node_name, info in self.model.nodes.items():
-                if node_name in known_nodes:
-                    continue
-                else:
-                    node = Node(node_name, "node")
-                    node.set_txt()
-                    self.listwalker.contents.append(node)
-
-                    if info['outbound']:
-                        session = Session(node_name, "outbound")
-                        session.set_txt()
-                        self.listwalker.contents.append(session)
-                        for i, addr in info['outbound'].items():
-                            slot = Slot(node_name, "outbound-slot")
-                            slot.set_txt(i, addr)
-                            self.listwalker.contents.append(slot)
-
-                    if info['inbound']:
-                        session = Session(node_name, "inbound")
-                        session.set_txt()
-                        self.listwalker.contents.append(session)
-                        for i, addr in info['inbound'].items():
-                            slot = Slot(node_name, "inbound-slot")
-                            slot.set_txt(i, addr)
-                            self.listwalker.contents.append(slot)
-
-                    if info['manual']:
-                        session = Session(node_name, "manual")
-                        session.set_txt()
-                        self.listwalker.contents.append(session)
-                        for i, addr in info['manual'].items():
-                            slot = Slot(node_name, "manual-slot")
-                            slot.set_txt(i, addr)
-                            self.listwalker.contents.append(slot)
-
-                    if info['seed']:
-                        session = Session(node_name, "seed")
-                        session.set_txt()
-                        self.listwalker.contents.append(session)
-                        for i, info in info['seed'].items():
-                            slot = Slot(node_name, "seed-slot")
-                            slot.set_txt(i, addr)
-                            self.listwalker.contents.append(slot)
-
-           #-----------------------------------------------------------------
-           # Render subscribe_events() (left menu)
-           #-----------------------------------------------------------------
-            new_inbound = {}
-            for index, item in enumerate(self.listwalker.contents):
-                # Update outbound slot info
-                if item.session == "outbound-slot":
-                    key = (f"{item.node_name}", f"{item.i}")
-                    if key in self.model.nodes[item.node_name]['event']:
-                        info = self.model.nodes[item.node_name]['event'].get(key)
-                        slot = Slot(item.node_name, item.session)
-                        slot.set_txt(item.i, info)
-                        self.listwalker.contents[index] = slot
-                # Get known inbounds
+                live_nodes.append(item.node_name)
                 if item.session == "inbound-slot":
-                    if item.i not in known_inbound:
-                        known_inbound.append(item.i)
-                # Get unknown inbounds
-                inbound = self.model.nodes[item.node_name]['inbound']
-                for i, addr in inbound.items():
-                    if i in known_inbound:
-                        continue
-                    else:
-                        new_inbound[i] = (addr, item.node_name)
-                # TODO: update new inbounds
+                    live_inbound.append(item.i)
 
-
-    # Render subscribe_events() (right menu)
-    async def render_info(self, evloop: asyncio.AbstractEventLoop,
-                          loop: urwid.MainLoop):
-        while True:
-            await asyncio.sleep(0.01)
-            # Redraw the screen
-            evloop.call_soon(loop.draw_screen)
-
-            self.pile.contents.clear()
-            focus_w = self.list.get_focus()
-            if focus_w[0] is None:
-                continue
-            else:
-                session = focus_w[0].session
-                if session == "node":
+            # Draw get_info(). Called only once.
+            for node_name, info in self.model.nodes.items():
+                if node_name in live_nodes:
                     continue
-                if session == "outbound":
-                    key = (focus_w[0].node_name, "outbound")
-                    info = self.model.nodes.get(focus_w[0].node_name)
-                    if key in info['event']:
-                        ev = info['event'].get(key)
-                        self.pile.contents.append((
-                            urwid.Text(f" {ev}"),
-                            self.pile.options()))
-                if (session == "outbound-slot" or session == "inbound-slot"
-                        or session == "manual-slot" or session == "seed-slot"):
-                    addr = focus_w[0].addr
-                    node_name = focus_w[0].node_name
-                    info = self.model.nodes.get(node_name)
-                    if addr in info['msgs']:
-                        msg = info['msgs'].get(addr)
-                        for m in msg:
-                            time = m[0]
-                            event = m[1]
-                            msg = m[2]
-                            self.pile.contents.append((urwid.Text(
-                                    f"{time}: {event}: {msg}"),
-                                    self.pile.options()))
+                self.draw_info(node_name, info)
+
+            # TODO: when RPC can't connect, display the node as offline.
+
+            # If a node goes offline, trigger a redraw.
+            for node_name, info in self.model.nodes.items():
+                if not bool(info):
+                    if node_name in dead_nodes:
+                        continue
+                    dead_nodes.append(node_name)
+                    self.listwalker.contents.clear()
+                    self.draw_empty(node_name, info)
+                    for name, info in self.model.nodes.items():
+                        if name not in dead_nodes:
+                            self.draw_info(name, info)
+
+                # Only render info if the node is online.
+                self.fill_left_box()
+                self.fill_right_box()
+
+                # Check that inbound dictionary exists to prevent a KeyError
+                if not 'inbound' in info:
+                    continue
+
+                # If a new inbound comes online, trigger a redraw.
+                for key in info['inbound'].keys():
+                    if key not in live_inbound:
+                        self.listwalker.contents.clear()
+                        for name, info in self.model.nodes.items():
+                                self.draw_info(name, info)
+
+                    # If an inbound goes offline, trigger a redraw.
+                    addr = info['inbound'].get(key)
+                    if not bool(addr):
+                        if key in dead_inbound:
+                            continue
+                        dead_inbound.append(key)
+                        self.listwalker.contents.clear()
+                        for name, info in self.model.nodes.items():
+                            if name not in dead_nodes:
+                                self.draw_info(name, info)

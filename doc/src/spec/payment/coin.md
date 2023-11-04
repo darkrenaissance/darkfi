@@ -1,8 +1,8 @@
-# coin
+# Coin
 
-field element commitment to $(pub_x, pub_y, value, token, sn, spendHook, data)$
+Field element commitment to $(pub_x, pub_y, value, token, sn, spendHook, data)$
 
-| coin array           | Description                                       |
+| Coin inputs          | Description                                       |
 |----------------------|---------------------------------------------------|
 | $pub_x$              | public key x coordinate                           |
 | $pub_y$              | public key y coordinate                           |

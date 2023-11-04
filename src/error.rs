@@ -197,6 +197,15 @@ pub enum Error {
     #[error("halo2 plonk error: {0}")]
     PlonkError(String),
 
+    #[error("Wrong witness type at index: {0}")]
+    WrongWitnessType(usize),
+
+    #[error("Wrong witnesses count")]
+    WrongWitnessesCount,
+
+    #[error("Wrong public inputs count")]
+    WrongPublicInputsCount,
+
     #[error("Unable to decrypt mint note: {0}")]
     NoteDecryptionFailed(String),
 

@@ -1,11 +1,11 @@
-# keypair
+# Keypair
 
-key pair over the elliptic curve finite field with generator `g`
+Key pair over the elliptic curve finite field with generator `g`
 
-## secret key
+## Secret key
 
-secret key `sk` is a finite field element over the elliptic curve.
+Secret key `sk` is a finite field element over the elliptic curve.
 
-## public key
+## Public key
 
-public key `pk` is a finite field element over the elliptic curve $g*sk$
+Public key `pk` is a finite field element over the elliptic curve: $g*sk$

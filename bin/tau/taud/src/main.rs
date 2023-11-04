@@ -468,7 +468,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             loop {
                 let event = dnet_sub.receive().await;
                 debug!("Got dnet event: {:?}", event);
-                json_sub_.notify(vec![event.into()]).await;
+                json_sub_.notify(vec![event.into()].into()).await;
             }
         },
         |res| async {

@@ -48,6 +48,21 @@ pub enum Witness {
     Uint64(Value<u64>),
 }
 
+impl Witness {
+    pub fn name(&self) -> &str {
+        match self {
+            Self::EcPoint(_) => "EcPoint",
+            Self::EcNiPoint(_) => "EcNiPoint",
+            Self::EcFixedPoint(_) => "EcFixedPoint",
+            Self::Base(_) => "Base",
+            Self::Scalar(_) => "Scalar",
+            Self::MerklePath(_) => "MerklePath",
+            Self::Uint32(_) => "Uint32",
+            Self::Uint64(_) => "Uint64",
+        }
+    }
+}
+
 pub enum Literal {
     Uint64(Value<u64>),
 }

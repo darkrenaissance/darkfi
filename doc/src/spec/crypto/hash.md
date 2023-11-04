@@ -1,5 +1,6 @@
-# hash
+# Hash
 
-required by signature scheme to be:
+Required by the signature scheme to be:
+
 - random-prefix preimage resistant.
 - random-prefix second-preimage resistant
