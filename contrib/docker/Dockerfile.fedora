@@ -48,7 +48,7 @@ RUN rm -rf ./target/ zkas proof/*.bin
 
 RUN bash -c "if [ -z \"$DONT_EXEC_TESTS\" ]; then make test; fi"
 
-RUN bash -c "make -j $BINS"
+RUN bash -c "make $BINS"
 
 RUN mkdir -p /opt/darkfi/compiled-bins
 

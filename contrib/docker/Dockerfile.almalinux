@@ -14,7 +14,10 @@ RUN microdnf -y install gcc gcc-c++ kernel-headers cmake jq wget \
   openssl-devel findutils fontconfig-devel \
   lato-fonts alsa-lib-devel python3-devel \
   perl-FindBin perl-File-Compare perl-lib sqlite-devel \
-  perl-interpreter epel-release sqlcipher-devel
+  perl-interpreter epel-release
+
+# epel-release needs to be installed first
+RUN microdnf install -y sqlcipher-devel
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 

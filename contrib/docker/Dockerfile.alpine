@@ -16,7 +16,9 @@ RUN apk add cmake jq wget clang curl gcc make llvm-dev \
   openssl-dev expat-dev freetype-dev libudev-zero-dev \
   libgudev-dev pkgconf clang-dev fontconfig-dev bash \
   ttf-opensans musl-dev alsa-lib-dev python3-dev perl sqlite-dev
+
 # sqlcipher seems to be in testing repo, The testing repository is only available on edge
+RUN apk add sqlcipher-dev --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing/
 
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}" --default-host $(uname -m)-unknown-linux-musl
 
@@ -51,7 +53,7 @@ RUN rm -rf ./target/ zkas proof/*.bin
 
 RUN bash -c "if [ -z \"$DONT_EXEC_TESTS\" ]; then make test; fi"
 
-RUN bash -c "make -j $BINS"
+RUN bash -c "make $BINS"
 
 RUN mkdir -p /opt/darkfi/compiled-bins
 
