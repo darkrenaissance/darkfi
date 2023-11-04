@@ -397,6 +397,21 @@ mod tests {
 
     // cargo test --release --all-features --lib native_range_check -- --nocapture
     #[test]
+    fn native_range_check_2() {
+        let k = 6;
+        const WINDOW_SIZE: usize = 5;
+        const NUM_BITS: usize = 2;
+        const NUM_WINDOWS: usize = 1;
+
+        // [0, 1, 2, 3]
+        let valid_values: Vec<_> = (0..(1 << NUM_BITS)).map(pallas::Base::from).collect();
+        // [4, 5, 6, ..., 32]
+        let invalid_values: Vec<_> =
+            ((1 << NUM_BITS)..=(1 << WINDOW_SIZE)).map(pallas::Base::from).collect();
+        test_circuit!(k, WINDOW_SIZE, NUM_BITS, NUM_WINDOWS, valid_values, invalid_values);
+    }
+
+    #[test]
     fn native_range_check_64() {
         let k = 6;
         const WINDOW_SIZE: usize = 3;
