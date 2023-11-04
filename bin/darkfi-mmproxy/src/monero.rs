@@ -16,32 +16,35 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::rpc::{
-    jsonrpc::{ErrorCode::InternalError, JsonError, JsonRequest, JsonResponse, JsonResult},
-    util::JsonValue,
+use darkfi::{
+    rpc::{
+        jsonrpc::{
+            ErrorCode::{InternalError, InvalidParams},
+            JsonError, JsonRequest, JsonResponse, JsonResult,
+        },
+        util::JsonValue,
+    },
+    Error, Result,
 };
 use log::{debug, error};
 
 use super::MiningProxy;
 
 impl MiningProxy {
-    pub async fn monero_get_block_count(&self, id: u16, _params: JsonValue) -> JsonResult {
-        debug!(target: "rpc::monero", "get_block_count()");
-
-        let req_body = JsonRequest::new("get_block_count", vec![].into()).stringify().unwrap();
-
+    async fn oneshot_request(&self, req: JsonRequest) -> Result<JsonValue> {
         let client = surf::Client::new();
+
         let mut response = match client
             .get(&self.monerod_rpc)
             .header("Content-Type", "application/json")
-            .body(req_body)
+            .body(req.stringify().unwrap())
             .send()
             .await
         {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "rpc::monero::get_block_count", "Error sending RPC request to monerod: {}", e);
-                return JsonError::new(InternalError, None, id).into()
+                error!(target: "rpc::monero::oneshot_request", "Error sending RPC request to monerod: {}", e);
+                return Err(Error::ParseFailed("Failed sending monerod RPC request"))
             }
         };
 
@@ -49,7 +52,7 @@ impl MiningProxy {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "rpc::monero::get_block_count", "Error reading monerod RPC response: {}", e);
-                return JsonError::new(InternalError, None, id).into()
+                return Err(Error::ParseFailed("Failed reading monerod RPC reponse"))
             }
         };
 
@@ -57,7 +60,7 @@ impl MiningProxy {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "rpc::monero::get_block_count", "Error parsing monerod RPC response: {}", e);
-                return JsonError::new(InternalError, None, id).into()
+                return Err(Error::ParseFailed("Failed parsing monerod RPC reponse"))
             }
         };
 
@@ -65,18 +68,57 @@ impl MiningProxy {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "rpc::monero::get_block_count", "Error parsing monerod RPC response: {}", e);
-                return JsonError::new(InternalError, None, id).into()
+                return Err(Error::ParseFailed("Failed parsing monerod RPC reponse"))
             }
         };
 
-        JsonResponse::new(response_json, id).into()
+        Ok(response_json)
+    }
+
+    pub async fn monero_get_block_count(&self, id: u16, _params: JsonValue) -> JsonResult {
+        debug!(target: "rpc::monero", "get_block_count()");
+
+        let req = JsonRequest::new("get_block_count", vec![].into());
+        let rep = match self.oneshot_request(req).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "rpc::monero::get_block_count", "{}", e);
+                return JsonError::new(InternalError, Some(e.to_string()), id).into()
+            }
+        };
+
+        JsonResponse::new(rep, id).into()
+    }
+
+    pub async fn monero_on_get_block_hash(&self, id: u16, params: JsonValue) -> JsonResult {
+        debug!(target: "rpc::monero", "on_get_block_hash()");
+
+        let Some(params) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+
+        if !params.len() != 1 || params[0].is_number() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let Some(block_height) = params[0].get::<f64>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+
+        let req =
+            JsonRequest::new("on_get_block_hash", vec![JsonValue::Number(*block_height)].into());
+        let rep = match self.oneshot_request(req).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "rpc::monero::get_block_count", "{}", e);
+                return JsonError::new(InternalError, Some(e.to_string()), id).into()
+            }
+        };
+
+        JsonResponse::new(rep, id).into()
     }
 
     /*
-    pub async fn monero_on_get_block_hash(&self, id: u16, params: JsonValue) -> JsonResult {
-        todo!()
-    }
-
     pub async fn monero_get_block_template(&self, id: u16, params: JsonValue) -> JsonResult {
         todo!()
     }
