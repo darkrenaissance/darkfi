@@ -280,7 +280,7 @@ mod tests {
     };
 
     macro_rules! test_circuit {
-        ($window_size:expr, $num_bits:expr, $num_windows:expr) => {
+        ($k: expr, $window_size:expr, $num_bits:expr, $num_windows:expr, $valid_pairs:expr, $invalid_pairs:expr) => {
             #[derive(Default)]
             struct LessThanCircuit {
                 a: Value<pallas::Base>,
@@ -352,13 +352,38 @@ mod tests {
                     Ok(())
                 }
             }
+
+            use plotters::prelude::*;
+            let circuit = LessThanCircuit {
+                a: Value::known(pallas::Base::zero()),
+                b: Value::known(pallas::Base::one()),
+            };
+            let file_name = format!("target/lessthan_check_{:?}_circuit_layout.png", $num_bits);
+            let root = BitMapBackend::new(file_name.as_str(), (3840, 2160)).into_drawing_area();
+            CircuitLayout::default().render($k, &circuit, &root).unwrap();
+
+            for (a, b) in $valid_pairs {
+                println!("{:?} bit (valid) {:?} < {:?} check", $num_bits, a, b);
+                let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
+                let prover = MockProver::run($k, &circuit, vec![]).unwrap();
+                prover.assert_satisfied();
+            }
+
+            for (a, b) in $invalid_pairs {
+                println!("{:?} bit (invalid) {:?} < {:?} check", $num_bits, a, b);
+                let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
+                let prover = MockProver::run($k, &circuit, vec![]).unwrap();
+                assert!(prover.verify().is_err())
+            }
         };
     }
 
     #[test]
     fn less_than_64() {
-        test_circuit!(3, 64, 22);
         let k = 5;
+        const WINDOW_SIZE: usize = 3;
+        const NUM_OF_BITS: usize = 64;
+        const NUM_OF_WINDOWS: usize = 22;
 
         let valid_pairs = [
             (pallas::Base::from(13), pallas::Base::from(15)),
@@ -375,35 +400,15 @@ mod tests {
             (pallas::Base::ONE, pallas::Base::ZERO),
             (pallas::Base::from(u64::MAX), pallas::Base::from(u64::MAX)),
         ];
-
-        use plotters::prelude::*;
-        let circuit = LessThanCircuit {
-            a: Value::known(pallas::Base::zero()),
-            b: Value::known(pallas::Base::one()),
-        };
-        let root = BitMapBackend::new("target/lessthan_circuit_layout.png", (3840, 2160))
-            .into_drawing_area();
-        CircuitLayout::default().render(k, &circuit, &root).unwrap();
-
-        for (a, b) in valid_pairs {
-            println!("64 bit (valid) {:?} < {:?} check", a, b);
-            let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
-            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-            prover.assert_satisfied();
-        }
-
-        for (a, b) in invalid_pairs {
-            println!("64 bit (invalid) {:?} < {:?} check", a, b);
-            let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
-            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-            assert!(prover.verify().is_err())
-        }
+        test_circuit!(k, WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS, valid_pairs, invalid_pairs);
     }
 
     #[test]
     fn less_than_253() {
-        test_circuit!(3, 253, 85);
         let k = 7;
+        const WINDOW_SIZE: usize = 3;
+        const NUM_OF_BITS: usize = 253;
+        const NUM_OF_WINDOWS: usize = 85;
 
         const P_MINUS_1: pallas::Base = pallas::Base::from_raw([
             0x992d30ed00000000,
@@ -447,18 +452,6 @@ mod tests {
             (MAX_253 + pallas::Base::ONE, MAX_253 + pallas::Base::from(2)),
         ];
 
-        for (a, b) in valid_pairs {
-            println!("253 bit (valid) {:?} < {:?} check", a, b);
-            let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
-            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-            prover.assert_satisfied();
-        }
-
-        for (a, b) in invalid_pairs {
-            println!("253 bit (invalid) {:?} < {:?} check", a, b);
-            let circuit = LessThanCircuit { a: Value::known(a), b: Value::known(b) };
-            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-            assert!(prover.verify().is_err())
-        }
+        test_circuit!(k, WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS, valid_pairs, invalid_pairs);
     }
 }
