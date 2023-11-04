@@ -40,6 +40,7 @@ pub struct LessThanConfig<
     const NUM_OF_WINDOWS: usize,
 > {
     pub s_lt: Selector,
+    pub s_leq: Selector,
     pub a: Column<Advice>,
     pub b: Column<Advice>,
     pub a_offset: Column<Advice>,
@@ -89,6 +90,7 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
         k_values_table: TableColumn,
     ) -> LessThanConfig<WINDOW_SIZE, NUM_OF_BITS, NUM_OF_WINDOWS> {
         let s_lt = meta.selector();
+        let s_leq = meta.selector();
 
         meta.enable_equality(a);
         meta.enable_equality(b);
@@ -113,6 +115,7 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
 
         let config = LessThanConfig {
             s_lt,
+            s_leq,
             a,
             b,
             a_offset,
@@ -121,15 +124,23 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
             k_values_table,
         };
 
-        meta.create_gate("a_offset - 2^m + b - a", |meta| {
+        meta.create_gate("a_offset", |meta| {
             let s_lt = meta.query_selector(config.s_lt);
+            let s_leq = meta.query_selector(config.s_leq);
             let a = meta.query_advice(config.a, Rotation::cur());
             let b = meta.query_advice(config.b, Rotation::cur());
             let a_offset = meta.query_advice(config.a_offset, Rotation::cur());
             let two_pow_m =
                 Expression::Constant(pallas::Base::from(2).pow([NUM_OF_BITS as u64, 0, 0, 0]));
-            // a_offset - 2^m + b - a = 0
-            vec![s_lt * (a_offset - two_pow_m + b - a)]
+
+            // If strict, a_offset = a + 2^m - b
+            let strict_check =
+                s_lt * (a_offset.clone() - two_pow_m.clone() + b.clone() - a.clone());
+            // If leq, a_offset = a + 2^m - b - 1
+            let leq_check =
+                s_leq * (a_offset - two_pow_m + b - a + Expression::Constant(pallas::Base::one()));
+
+            vec![strict_check, leq_check]
         });
 
         config
@@ -148,7 +159,7 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
             |mut region: Region<'_, pallas::Base>| {
                 let a = region.assign_advice(|| "a", self.config.a, offset, || a)?;
                 let b = region.assign_advice(|| "b", self.config.b, offset, || b)?;
-                let a_offset = self.less_than(region, a.clone(), b.clone(), offset)?;
+                let a_offset = self.less_than(region, a.clone(), b.clone(), offset, strict)?;
                 Ok((a, b, a_offset))
             },
         )?;
@@ -196,7 +207,7 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
             |mut region: Region<'_, pallas::Base>| {
                 let a = a.copy_advice(|| "a", &mut region, self.config.a, offset)?;
                 let b = b.copy_advice(|| "b", &mut region, self.config.b, offset)?;
-                let a_offset = self.less_than(region, a.clone(), b.clone(), offset)?;
+                let a_offset = self.less_than(region, a.clone(), b.clone(), offset, strict)?;
                 Ok((a, b, a_offset))
             },
         )?;
@@ -235,13 +246,21 @@ impl<const WINDOW_SIZE: usize, const NUM_OF_BITS: usize, const NUM_OF_WINDOWS: u
         a: AssignedCell<pallas::Base, pallas::Base>,
         b: AssignedCell<pallas::Base, pallas::Base>,
         offset: usize,
+        strict: bool,
     ) -> Result<AssignedCell<pallas::Base, pallas::Base>, Error> {
-        // enable `less_than` selector
-        self.config.s_lt.enable(&mut region, offset)?;
+        if strict {
+            // enable `less_than` selector
+            self.config.s_lt.enable(&mut region, offset)?;
+        } else {
+            self.config.s_leq.enable(&mut region, offset)?;
+        }
 
-        // assign `a + offset`
         let two_pow_m = pallas::Base::from(2).pow([NUM_OF_BITS as u64, 0, 0, 0]);
-        let a_offset = a.value().zip(b.value()).map(|(a, b)| *a + (two_pow_m - b));
+        let a_offset = if strict {
+            a.value().zip(b.value()).map(|(a, b)| *a + (two_pow_m - b))
+        } else {
+            a.value().zip(b.value()).map(|(a, b)| *a + (two_pow_m - b) - pallas::Base::one())
+        };
         let a_offset =
             region.assign_advice(|| "a_offset", self.config.a_offset, offset, || a_offset)?;
 
