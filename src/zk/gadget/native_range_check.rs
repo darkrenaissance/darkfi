@@ -120,8 +120,8 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         let bits: Vec<bool> = value
             .to_le_bits()
             .into_iter()
-            .take(NUM_BITS)
-            .chain(std::iter::repeat(false).take(padding))
+            .take(WINDOW_SIZE * NUM_WINDOWS)
+            // .chain(std::iter::repeat(false).take(padding))
             .collect();
         assert_eq!(bits.len(), NUM_BITS + padding);
 
@@ -290,6 +290,7 @@ mod tests {
     // cargo test --release --all-features --lib native_range_check -- --nocapture
     #[test]
     fn native_range_check_64() {
+        // FIXME: constrains values to be 22 * 3 = 66 bits, not 64 bits
         test_circuit!(3, 64, 22);
         let k = 6;
 
@@ -302,8 +303,10 @@ mod tests {
 
         let invalid_values = vec![
             -pallas::Base::one(),
+            // FIXME: 1 << 64 passes since it is a 64-bit value
             pallas::Base::from_u128(u64::MAX as u128 + 1),
             -pallas::Base::from_u128(u64::MAX as u128 + 1),
+            // FIXME: this test may pass non-deterministically
             pallas::Base::from_u128(rand::random::<u128>()),
             // The following two are valid
             // 2 = -28948022309329048855892746252171976963363056481941560715954676764349967630335
@@ -346,6 +349,7 @@ mod tests {
 
     #[test]
     fn native_range_check_128() {
+        // FIXME: constrains values to be 43 * 3 = 129 bits, not 128 bits
         test_circuit!(3, 128, 43);
         let k = 7;
 
@@ -358,6 +362,7 @@ mod tests {
 
         let invalid_values = vec![
             -pallas::Base::one(),
+            // FIXME: 1 << 128 passes since it is a 129-bit value
             pallas::Base::from_u128(u128::MAX) + pallas::Base::one(),
             -pallas::Base::from_u128(u128::MAX) + pallas::Base::one(),
             -pallas::Base::from_u128(u128::MAX),
@@ -391,17 +396,19 @@ mod tests {
 
     #[test]
     fn native_range_check_253() {
+        // FIXME: constrains values to be 85 * 3 = 255 bits, not 253 bits
         test_circuit!(3, 253, 85);
         let k = 8;
+        // 2^253 - 1
+        let max_253 = pallas::Base::from_str_vartime(
+            "14474011154664524427946373126085988481658748083205070504932198000989141204991",
+        )
+        .unwrap();
 
         let valid_values = vec![
             pallas::Base::zero(),
             pallas::Base::one(),
-            // 2^253 - 1
-            pallas::Base::from_str_vartime(
-                "14474011154664524427946373126085988481658748083205070504932198000989141204991",
-            )
-            .unwrap(),
+            max_253,
             // 2^253 / 2
             pallas::Base::from_str_vartime(
                 "7237005577332262213973186563042994240829374041602535252466099000494570602496",
@@ -416,6 +423,8 @@ mod tests {
                 "28948022309329048855892746252171976963363056481941560715954676764349967630336",
             )
             .unwrap(),
+            // FIXME: 1 << 253 passes since it is a 255-bit value
+            max_253 + pallas::Base::one(),
         ];
 
         use plotters::prelude::*;
