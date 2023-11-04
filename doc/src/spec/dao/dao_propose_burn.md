@@ -28,7 +28,7 @@ $$ \mathcal{L}= \{X:(X,W)\in \mathcal{R}\} $$
 
 | Witnesses            | Description                                          |
 |----------------------|------------------------------------------------------|
-| sk                   | [proposal](proposal.md) [coin](../payment/coin.md) [secret key](../crypto/keypair.md     |
+| sk                   | [proposal](proposal.md) [coin](../payment/coin.md) [secret key](../crypto/keypair.md)     |
 | sn                   | [proposal](proposal.md) [coin](../payment/coin.md) serial number                          |
 | spendHook            | burn spendHook contract                                |
 | data                 | spendHook contract input data                        |

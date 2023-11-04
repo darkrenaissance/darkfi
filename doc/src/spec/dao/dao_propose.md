@@ -40,8 +40,7 @@ $$ \mathcal{L}= \{X:(X,W)\in \mathcal{R}\} $$
 | $pub_y$                  | [proposal](proposal.md) [public key](../crypto/keypair.md) y coordinate                       |
 | $blind^{bulla}$          | [bulla](bulla.md) [commitment](../crypto/commitment.md) blinding factor                       |
 | pos                      | [bulla](bulla.md) leaf position in the [merkle tree](../crypto/merkletree.md)                 |
-| path                     | path of the [bulla](bulla.md) leaf at position `pos`
-    |
+| path                     | path of the [bulla](bulla.md) leaf at pos |
 
 # Circuit checks
 
