@@ -16,6 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+//! Given two values:
+//!     - `a`, a NUM_OF_BITS-length value and
+//!     - `b`, an arbitrary field element,
+//! this gadget constrains them in the following way:
+//!     - in `strict` mode, `a` is constrained to be strictly less than `b`;
+//!     - else, `a` is constrained to be less than or equal to `b`.
+
 use halo2_proofs::{
     arithmetic::Field,
     circuit::{AssignedCell, Chip, Layouter, Region, Value},
@@ -338,6 +345,7 @@ mod tests {
             (pallas::Base::from(13), pallas::Base::from(15)),
             (pallas::Base::ZERO, pallas::Base::from(u64::MAX)),
             (pallas::Base::ONE, pallas::Base::from(rand::random::<u64>())),
+            (pallas::Base::from(u64::MAX), pallas::Base::from(u64::MAX) + pallas::Base::ONE),
         ];
 
         let invalid_pairs = [
@@ -347,7 +355,6 @@ mod tests {
             (pallas::Base::ONE, pallas::Base::ONE),
             (pallas::Base::ONE, pallas::Base::ZERO),
             (pallas::Base::from(u64::MAX), pallas::Base::from(u64::MAX)),
-            //FIXME: (pallas::Base::from(u64::MAX), pallas::Base::from(u64::MAX) + pallas::Base::ONE),
         ];
 
         use plotters::prelude::*;
@@ -403,7 +410,7 @@ mod tests {
             ),
             (MAX_253 - pallas::Base::from(2), MAX_253 - pallas::Base::ONE),
             (MAX_253 - pallas::Base::ONE, MAX_253),
-            (MAX_253, MAX_253 + pallas::Base::ONE), // <-- Is this legit??
+            (MAX_253, MAX_253 + pallas::Base::ONE),
         ];
 
         let invalid_pairs = [
