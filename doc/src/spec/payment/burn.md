@@ -9,9 +9,9 @@ $$ \mathcal{L} = \{X: (W,W) \in \mathcal{R}\} $$
 ## Burning a coin
 
 - Publish [coin](coin.md)'s [nullifier](../crypto/nullifier.md) to avoid double-spending.
-- [Commit](../crypto/commitment.md) to [coin](coin.md)'s `value` $(cm^{value}_x, cm^{value}_y)$
+- [Commit](../crypto/commitment.md) to [coin](coin.md)'s value $(cm^{value}_x, cm^{value}_y)$
 - [Commit](../crypto/commitment.md) to [tokenId](token_id.md)
-- Add [coin](coin.md) to [merkle tree](../crypto/merkletree.md), and set it's root `root` it as instance.
+- Add [coin](coin.md) to [merkle tree](../crypto/merkletree.md), and set it's root it as instance.
 - Set spendHook as instance
 - Calculate [$Signature^{public}$](../crypto/signature.md), and set it as instance.
 
@@ -27,7 +27,6 @@ $$ \mathcal{L} = \{X: (W,W) \in \mathcal{R}\} $$
 | spendHook            | burn related contract                                                                                 |
 |$signature^{public}_x$| [signature](../crypto/signature.md) public x coordinate                                               |
 |$signature^{public}_y$| [signature](../crypto/signature.md) public y coordinate                                               |
-
 
 | Witnesses            | Description                                                                                                       |
 |----------------------|-------------------------------------------------------------------------------------------------------------------|
@@ -46,4 +45,4 @@ $$ \mathcal{L} = \{X: (W,W) \in \mathcal{R}\} $$
 
 # Circuit checks
 
-- If the [coin](coin.md) has `value` zero, then [coin](coin.md) is set to zero, with leaf position 0 in the [sparse merkle tree](../crypto/merkletree.md), the aim is prevent burning zero value [coin](coin.md)s.
+- If the [coin](coin.md) has value zero, then [coin](coin.md) is set to zero, with leaf position 0 in the [sparse merkle tree](../crypto/merkletree.md), the aim is prevent burning zero value [coin](coin.md)s.
