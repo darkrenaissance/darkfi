@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::collections::HashMap;
+
 use darkfi::{
     rpc::{
         jsonrpc::{
@@ -118,11 +120,58 @@ impl MiningProxy {
         JsonResponse::new(rep, id).into()
     }
 
-    /*
     pub async fn monero_get_block_template(&self, id: u16, params: JsonValue) -> JsonResult {
-        todo!()
+        debug!(target: "rpc::monero", "get_block_template()");
+
+        if !params.is_object() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let params = params.get::<HashMap<String, JsonValue>>().unwrap();
+
+        if !params.contains_key("wallet_address") || !params.contains_key("reserve_size") {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        let Some(wallet_address) = params["wallet_address"].get::<String>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+
+        let Some(reserve_size) = params["reserve_size"].get::<f64>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+
+        // Create request
+        let req = JsonRequest::new(
+            "get_block_template",
+            HashMap::from([
+                ("wallet_address".to_string(), (*wallet_address).clone().into()),
+                ("reserve_size".to_string(), (*reserve_size).into()),
+            ])
+            .into(),
+        );
+
+        let rep = match self.oneshot_request(req).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "rpc::monero::get_block_template", "{}", e);
+                return JsonError::new(InternalError, Some(e.to_string()), id).into()
+            }
+        };
+
+        // TODO: Now we have to modify the block template.
+        // * reserve_size has to be the size of the data we want to put in the block
+        // * blocktemplate_blob has the reserved bytes, they're in the tx_extra field
+        //   of the coinbase tx, which is then hashed with other transactions into
+        //   merkle root hash which is what's in the blockhashing_blob
+        // * When blocktemplate_blob is modified, blockhashing_blob has to be updated too
+        // * The coinbase tx from monerod should be replaced with the one we create
+        //   containing the merged mining data/info
+
+        JsonResponse::new(rep, id).into()
     }
 
+    /*
     pub async fn monero_submit_block(&self, id: u16, params: JsonValue) -> JsonResult {
         todo!()
     }
