@@ -34,6 +34,8 @@ use monero::blockdata::transaction::{ExtraField, RawExtraField, SubField::MergeM
 use super::MiningProxy;
 
 impl MiningProxy {
+    /// Perform a oneshot HTTP JSON-RPC request to the set monerod endpoint.
+    /// This is a single request-reply which we disconnect after recieving the reply.
     pub async fn oneshot_request(&self, req: JsonRequest) -> Result<JsonValue> {
         let client = surf::Client::new();
 
@@ -78,9 +80,12 @@ impl MiningProxy {
         Ok(response_json)
     }
 
+    /// Look up how many blocks are in the longest chain known to the node.
+    /// <https://www.getmonero.org/resources/developer-guides/daemon-rpc.html#get_block_count>
     pub async fn monero_get_block_count(&self, id: u16, _params: JsonValue) -> JsonResult {
         debug!(target: "rpc::monero", "get_block_count()");
 
+        // This request can just passthrough
         let req = JsonRequest::new("get_block_count", vec![].into());
         let rep = match self.oneshot_request(req).await {
             Ok(v) => v,
@@ -93,6 +98,8 @@ impl MiningProxy {
         JsonResponse::new(rep, id).into()
     }
 
+    /// Look up a block's hash by its height.
+    /// <https://www.getmonero.org/resources/developer-guides/daemon-rpc.html#on_get_block_hash>
     pub async fn monero_on_get_block_hash(&self, id: u16, params: JsonValue) -> JsonResult {
         debug!(target: "rpc::monero", "on_get_block_hash()");
 
@@ -121,6 +128,8 @@ impl MiningProxy {
         JsonResponse::new(rep, id).into()
     }
 
+    /// Get a block template on which mining a new block.
+    /// <https://www.getmonero.org/resources/developer-guides/daemon-rpc.html#get_block_template>
     pub async fn monero_get_block_template(&self, id: u16, params: JsonValue) -> JsonResult {
         debug!(target: "rpc::monero", "get_block_template()");
 
@@ -145,17 +154,24 @@ impl MiningProxy {
         // The MergeMining tag and anything else going into ExtraField should
         // be done here, so we can pass the correct reserve_size.
 
-        // Create the Merge Mining Tag
+        // Create the Merge Mining Tag: (`depth`, `merkle_root`)
         let mm_tag = MergeMining(Some(monero::VarInt(32)), monero::Hash([0_u8; 32]));
-        let tx_extra: RawExtraField = ExtraField(vec![mm_tag]).into();
-        let reserve_size = tx_extra.0.len();
 
-        // Create request
+        // Construct tx_extra from all the extra fields we have to add to the coinbase
+        // transaction in the block we're mining.
+        let tx_extra: RawExtraField = ExtraField(vec![mm_tag]).into();
+
+        // Create request. Usually, xmrig will just request a job, so this endpoint
+        // isn't really used through JSON-RPC. We use it from other methods, which
+        // should then include the proper wallet address to plug in. The wallet
+        // address can be set in mmproxy's config or via CLI flags.
+        //
+        // `reserve_size` is overridden with the size of `tx_extra` created above.
         let req = JsonRequest::new(
             "get_block_template",
             HashMap::from([
                 ("wallet_address".to_string(), (*wallet_address).clone().into()),
-                ("reserve_size".to_string(), (reserve_size as f64).into()),
+                ("reserve_size".to_string(), (tx_extra.0.len() as f64).into()),
             ])
             .into(),
         );
@@ -181,7 +197,7 @@ impl MiningProxy {
         )
         .unwrap();
 
-        // Modify the coinbase tx
+        // Modify the coinbase tx with our additional merge mining data
         block_template.miner_tx.prefix.extra = tx_extra;
 
         // Replace the blocktemplate blob
