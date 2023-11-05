@@ -1761,6 +1761,7 @@ dependencies = [
  "darkfi-serial",
  "easy-parallel",
  "epee-encoding",
+ "hex",
  "log",
  "monero",
  "serde",

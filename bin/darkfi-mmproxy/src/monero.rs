@@ -29,6 +29,7 @@ use darkfi::{
     Error, Result,
 };
 use log::{debug, error};
+use monero::blockdata::transaction::{ExtraField, RawExtraField, SubField::MergeMining};
 
 use super::MiningProxy;
 
@@ -137,21 +138,30 @@ impl MiningProxy {
             return JsonError::new(InvalidParams, None, id).into()
         };
 
-        let Some(reserve_size) = params["reserve_size"].get::<f64>() else {
+        let Some(_reserve_size) = params["reserve_size"].get::<f64>() else {
             return JsonError::new(InvalidParams, None, id).into()
         };
+
+        // The MergeMining tag and anything else going into ExtraField should
+        // be done here, so we can pass the correct reserve_size.
+
+        // Create the Merge Mining Tag
+        let mm_tag = MergeMining(Some(monero::VarInt(32)), monero::Hash([0_u8; 32]));
+        let tx_extra: RawExtraField = ExtraField(vec![mm_tag]).into();
+        let reserve_size = tx_extra.0.len();
 
         // Create request
         let req = JsonRequest::new(
             "get_block_template",
             HashMap::from([
                 ("wallet_address".to_string(), (*wallet_address).clone().into()),
-                ("reserve_size".to_string(), (*reserve_size).into()),
+                ("reserve_size".to_string(), (reserve_size as f64).into()),
             ])
             .into(),
         );
 
-        let rep = match self.oneshot_request(req).await {
+        // Get block template from monerod
+        let mut rep = match self.oneshot_request(req).await {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "rpc::monero::get_block_template", "{}", e);
@@ -159,15 +169,30 @@ impl MiningProxy {
             }
         };
 
-        // TODO: Now we have to modify the block template.
+        // Now we have to modify the block template:
         // * reserve_size has to be the size of the data we want to put in the block
         // * blocktemplate_blob has the reserved bytes, they're in the tx_extra field
-        //   of the coinbase tx, which is then hashed with other transactions into
-        //   merkle root hash which is what's in the blockhashing_blob
-        // * When blocktemplate_blob is modified, blockhashing_blob has to be updated too
-        // * The coinbase tx from monerod should be replaced with the one we create
-        //   containing the merged mining data/info
+        //   of the coinbase tx, which is then hashed with other txs into Merkle root
+        //   which is what's in the blockhashing_blob
 
+        // Deserialize the block template
+        let mut block_template = monero::consensus::deserialize::<monero::Block>(
+            &hex::decode(rep["result"]["blocktemplate_blob"].get::<String>().unwrap()).unwrap(),
+        )
+        .unwrap();
+
+        // Modify the coinbase tx
+        block_template.miner_tx.prefix.extra = tx_extra;
+
+        // Replace the blocktemplate blob
+        rep["result"]["blocktemplate_blob"] =
+            JsonValue::String(hex::encode(monero::consensus::serialize(&block_template)));
+
+        // Replace the blockhashing blob
+        rep["result"]["blockhashing_blob"] =
+            JsonValue::String(hex::encode(&block_template.serialize_hashable()));
+
+        // Pass the modified response to the client
         JsonResponse::new(rep, id).into()
     }
 

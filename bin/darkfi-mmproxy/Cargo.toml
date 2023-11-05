@@ -21,6 +21,7 @@ monero = {version = "0.19.0", features = ["full"]}
 surf = "2.3.2"
 
 # Encoding
+hex = "0.4.3"
 url = "2.4.1"
 uuid = {version = "1.5.0", features = ["v4"]}
 
