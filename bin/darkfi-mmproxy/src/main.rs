@@ -64,7 +64,7 @@ struct Args {
     config: Option<String>,
 
     #[structopt(long, default_value = "tcp://127.0.0.1:3333")]
-    /// JSON-RPC server listen URL
+    /// mmproxy JSON-RPC server listen URL
     rpc_listen: Url,
 
     #[structopt(long)]
@@ -80,11 +80,10 @@ struct Args {
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
-#[serde(default)]
 #[structopt()]
 struct Monerod {
-    #[structopt(long)]
-    /// Coinbase wallet address
+    #[structopt(long, default_value = "")]
+    /// Mining reward wallet address
     wallet_address: String,
 
     #[structopt(long, default_value = "http://127.0.0.1:28081/json_rpc")]
@@ -125,18 +124,27 @@ struct MiningProxy {
 }
 
 impl MiningProxy {
-    fn new(
+    async fn new(
         monerod: Monerod,
         logins: HashMap<String, String>,
         executor: Arc<Executor<'static>>,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        let self_ = Self {
             monerod,
             logins,
             workers: Arc::new(RwLock::new(HashMap::new())),
             rpc_connections: Mutex::new(HashSet::new()),
             executor,
+        };
+
+        // Test that monerod is reachable
+        let req = JsonRequest::new("get_block_count", vec![].into());
+        if let Err(e) = self_.oneshot_request(req).await {
+            error!("Could not reach monerod: {}", e);
+            return Err(Error::Custom("Could not reach monerod".to_string()))
         }
+
+        Ok(self_)
     }
 }
 
@@ -215,7 +223,13 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         logins.insert(user, pass);
     }
 
-    let mmproxy = Arc::new(MiningProxy::new(args.monerod, logins, ex.clone()));
+    if args.monerod.wallet_address.is_empty() {
+        error!("Wallet address empty. Please set it in your config.");
+        return Err(Error::Custom("Wallet address empty".to_string()))
+    }
+
+    info!("Instantiating MiningProxy with wallet: {}", args.monerod.wallet_address);
+    let mmproxy = Arc::new(MiningProxy::new(args.monerod, logins, ex.clone()).await?);
     let mmproxy_ = Arc::clone(&mmproxy);
 
     info!("Starting JSON-RPC server");

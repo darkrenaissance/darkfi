@@ -34,7 +34,7 @@ use monero::blockdata::transaction::{ExtraField, RawExtraField, SubField::MergeM
 use super::MiningProxy;
 
 impl MiningProxy {
-    async fn oneshot_request(&self, req: JsonRequest) -> Result<JsonValue> {
+    pub async fn oneshot_request(&self, req: JsonRequest) -> Result<JsonValue> {
         let client = surf::Client::new();
 
         let mut response = match client
