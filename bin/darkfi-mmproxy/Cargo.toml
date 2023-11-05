@@ -16,6 +16,7 @@ darkfi-serial = {path = "../../src/serial", features = ["async"]}
 log = "0.4.20"
 
 # Monero
+epee-encoding = {version = "0.5.0", features = ["derive"]}
 monero = {version = "0.19.0", features = ["full"]}
 surf = "2.3.2"
 

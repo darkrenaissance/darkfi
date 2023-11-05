@@ -67,10 +67,6 @@ struct Args {
     /// JSON-RPC server listen URL
     rpc_listen: Url,
 
-    #[structopt(long, default_value = "http://127.0.0.1:28081/json_rpc")]
-    /// monerod JSON-RPC server listen URL
-    monerod_rpc: Url,
-
     #[structopt(long)]
     /// List of worker logins
     workers: Vec<String>,
@@ -78,6 +74,22 @@ struct Args {
     #[structopt(long)]
     /// Set log file output
     log: Option<String>,
+
+    #[structopt(flatten)]
+    monerod: Monerod,
+}
+
+#[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
+#[serde(default)]
+#[structopt()]
+struct Monerod {
+    #[structopt(long)]
+    /// Coinbase wallet address
+    wallet_address: String,
+
+    #[structopt(long, default_value = "http://127.0.0.1:28081/json_rpc")]
+    /// monerod JSON-RPC server listen URL
+    monerod_rpc: Url,
 }
 
 struct Worker {
@@ -100,8 +112,8 @@ impl Worker {
 }
 
 struct MiningProxy {
-    /// monerod RPC endpoint
-    monerod_rpc: Url,
+    /// monerod settings
+    monerod: Monerod,
     /// Worker logins
     logins: HashMap<String, String>,
     /// Workers UUIDs
@@ -114,12 +126,12 @@ struct MiningProxy {
 
 impl MiningProxy {
     fn new(
-        monerod_rpc: Url,
+        monerod: Monerod,
         logins: HashMap<String, String>,
         executor: Arc<Executor<'static>>,
     ) -> Self {
         Self {
-            monerod_rpc,
+            monerod,
             logins,
             workers: Arc::new(RwLock::new(HashMap::new())),
             rpc_connections: Mutex::new(HashSet::new()),
@@ -202,7 +214,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         logins.insert(user, pass);
     }
 
-    let mmproxy = Arc::new(MiningProxy::new(args.monerod_rpc, logins, ex.clone()));
+    let mmproxy = Arc::new(MiningProxy::new(args.monerod, logins, ex.clone()));
     let mmproxy_ = Arc::clone(&mmproxy);
 
     info!("Starting JSON-RPC server");

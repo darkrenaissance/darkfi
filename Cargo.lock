@@ -1760,6 +1760,7 @@ dependencies = [
  "darkfi",
  "darkfi-serial",
  "easy-parallel",
+ "epee-encoding",
  "log",
  "monero",
  "serde",
@@ -2565,6 +2566,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e08b6c6ab82d70f08844964ba10c7babb716de2ecaeab9be5717918a5177d3af"
 dependencies = [
  "darling 0.20.3",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.38",
+]
+
+[[package]]
+name = "epee-encoding"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c44bd9e53829522aae4d3b3a42f9be2e33c1030122fa8e28aba9be3b6385d4f7"
+dependencies = [
+ "epee-encoding-derive",
+ "sealed",
+ "thiserror",
+]
+
+[[package]]
+name = "epee-encoding-derive"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "753b6b75774680e9ba43edd3f41f1c30715008a079a31285e06aeffd5dd3fb2f"
+dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.38",

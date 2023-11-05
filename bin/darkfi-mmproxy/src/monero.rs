@@ -35,7 +35,7 @@ impl MiningProxy {
         let client = surf::Client::new();
 
         let mut response = match client
-            .get(&self.monerod_rpc)
+            .get(&self.monerod.monerod_rpc)
             .header("Content-Type", "application/json")
             .body(req.stringify().unwrap())
             .send()
