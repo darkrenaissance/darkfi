@@ -421,6 +421,8 @@ async def comment(refid, args, server_name, port):
     if not await api.add_task_comment(refid, comment, server_name, port):
         return -1
 
+    # Two json rpcs back to back cause Unexpected EOF error
+    time.sleep(0.1)
     task = await api.fetch_task(refid, server_name, port)
     assert task is not None
     title = task["title"]
@@ -699,7 +701,6 @@ Examples:
         for rid in refid:
             if (errc := await comment(rid, args, server_name, port)) < 0:
                 return errc
-            time.sleep(0.1)
     else:
         print(f"error: unknown subcommand '{subcmd}'")
         return -1
