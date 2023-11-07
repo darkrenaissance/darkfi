@@ -474,6 +474,7 @@ def map_ids(task_ids, ref_ids):
 
 async def main():
     val = str('127.0.0.1:23330')
+    allowed_states = ["start", "pause", "stop", "open"]
 
     for i in range(1, len(sys.argv)):
         if sys.argv[i] == "-e":
@@ -614,6 +615,9 @@ Examples:
             await show_active_tasks(workspace, server_name, port)
         return 0
     elif sys.argv[1] == "switch":
+        if not len(sys.argv) == 3:
+            print("Error: you must provide workspace name")
+            return 0
         if not await api.switch_workspace(sys.argv[2], server_name, port):
             print(f"Error: Workspace \"{sys.argv[2]}\" is not configured.")
         else:
@@ -638,26 +642,38 @@ Examples:
 
     try:
         id = sys.argv[1]
-        lines = id.split(',')
-        numbers = []
-        for line in lines:
-            if line == '':
-                continue
-            elif '-' in line:
-                t = line.split('-')
-                numbers += range(int(t[0]), int(t[1]) + 1)
+        subcommands = ["modify", "comment"]
+        if any(id in ls for ls in [allowed_states, subcommands]):
+            user_input = input("This command has no filter, and will modify all tasks. Are you sure? [y/N] ")
+            if user_input.lower() in ['y', 'yes']:
+                refid = list(refids)
+                args = sys.argv[1:]
             else:
-                numbers.append(int(line))
-        refid = []
-        for i in numbers:
-            refid.append(data[i])
+                print("Command prevented from running.")
+                exit(-1)
+        else:
+            lines = id.split(',')
+            numbers = []
+            for line in lines:
+                if line == '':
+                    continue
+                elif '-' in line:
+                    t = line.split('-')
+                    numbers += range(int(t[0]), int(t[1]) + 1)
+                else:
+                    numbers.append(int(line))
+            refid = []
+            for i in numbers:
+                refid.append(data[i])
+            args = sys.argv[2:]
     except (ValueError, KeyError):
         print("error: invalid ID", file=sys.stderr)
         return -1
+    except EOFError:
+        print('\nOperation is cancelled')
+        return -1
 
-    args = sys.argv[2:]
-
-    if not args :
+    if not args:
         for rid in refid:
             await show_task(rid, server_name, port)
         return 0
@@ -665,12 +681,15 @@ Examples:
     subcmd, args = args[0], args[1:]
 
     if subcmd == "modify":
+        if not args:
+            print("Error: modify subcommand must have at least one argument.")
+            exit(-1)
         for rid in refid:
             if (errc := await modify_task(rid, args, server_name, port)) < 0:
                 return errc
             time.sleep(0.1)
             await show_task(rid, server_name, port)
-    elif subcmd in ["start", "pause", "stop", "open"]:
+    elif subcmd in allowed_states:
         status = subcmd
         for rid in refid:
             if (errc := await change_task_status(rid, status, server_name, port)) < 0:
