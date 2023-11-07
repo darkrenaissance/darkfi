@@ -94,7 +94,7 @@ class View():
        node.set_txt()
        self.listwalker.contents.append(node)
 
-       if info['outbound']:
+       if 'outbound' in info and info['outbound']:
            session = Session(node_name, "outbound")
            session.set_txt()
            self.listwalker.contents.append(session)
@@ -103,7 +103,7 @@ class View():
                slot.set_txt(i, addr)
                self.listwalker.contents.append(slot)
 
-       if info['inbound']:
+       if 'inbound' in info and info['inbound']:
            if any(info['inbound'].values()):
                session = Session(node_name, "inbound")
                session.set_txt()
@@ -114,7 +114,7 @@ class View():
                        slot.set_txt(i, addr)
                        self.listwalker.contents.append(slot)
 
-       if info['manual']:
+       if 'manual' in info and info['manual']:
            session = Session(node_name, "manual")
            session.set_txt()
            self.listwalker.contents.append(session)
@@ -123,7 +123,7 @@ class View():
                slot.set_txt(i, addr)
                self.listwalker.contents.append(slot)
 
-       if info['seed']:
+       if 'seed' in info and info['seed']:
            session = Session(node_name, "seed")
            session.set_txt()
            self.listwalker.contents.append(session)
@@ -226,10 +226,6 @@ class View():
                 # Only render info if the node is online.
                 self.fill_left_box()
                 self.fill_right_box()
-
-                # Check that inbound dictionary exists to prevent a KeyError
-                if not 'inbound' in info:
-                    continue
 
                 # If a new inbound comes online, trigger a redraw.
                 for key in info['inbound'].keys():

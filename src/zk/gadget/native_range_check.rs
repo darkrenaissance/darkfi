@@ -23,7 +23,7 @@ use halo2_proofs::{
         pallas,
     },
     plonk,
-    plonk::{Advice, Column, ConstraintSystem, Selector, TableColumn},
+    plonk::{Advice, Column, ConstraintSystem, Constraints, Selector, TableColumn},
     poly::Rotation,
 };
 
@@ -35,6 +35,7 @@ pub struct NativeRangeCheckConfig<
 > {
     pub z: Column<Advice>,
     pub s_rc: Selector,
+    pub s_short: Selector,
     pub k_values_table: TableColumn,
 }
 
@@ -78,7 +79,9 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         meta.enable_equality(z);
 
         let s_rc = meta.complex_selector();
+        let s_short = meta.complex_selector();
 
+        // Running sum decomposition
         meta.lookup(|meta| {
             let s_rc = meta.query_selector(s_rc);
             let z_curr = meta.query_advice(z, Rotation::cur());
@@ -89,7 +92,46 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
             vec![(s_rc * (z_curr - z_next * pallas::Base::from(1 << WINDOW_SIZE)), k_values_table)]
         });
 
-        NativeRangeCheckConfig { z, s_rc, k_values_table }
+        // Checks that are enabled if the last chunk is an `s`-bit value
+        // where `s < WINDOW_SIZE`:
+        //
+        //  |s_rc | s_short |                z                |
+        //  ---------------------------------------------------
+        //  |  1  |    0    |            last_chunk           |
+        //  |  0  |    1    |                0                |
+        //  |  0  |    0    | last_chunk << (WINDOW_SIZE - s) |
+
+        // Check that `shifted_last_chunk` is `WINDOW_SIZE` bits,
+        // where shifted_last_chunk = last_chunk << (WINDOW_SIZE - s)
+        //                          = last_chunk * 2^(WINDOW_SIZE - s)
+        meta.lookup(|meta| {
+            let s_short = meta.query_selector(s_short);
+            let shifted_last_chunk = meta.query_advice(z, Rotation::next());
+            vec![(s_short * shifted_last_chunk, k_values_table)]
+        });
+
+        // Check that `shifted_last_chunk = last_chunk << (WINDOW_SIZE - s)`
+        meta.create_gate("Short lookup bitshift", |meta| {
+            let two_pow_window_size = pallas::Base::from(1 << WINDOW_SIZE);
+            let s_short = meta.query_selector(s_short);
+            let last_chunk = meta.query_advice(z, Rotation::prev());
+            // Rotation::cur() is copy-constrained to be zero elsewhere in this gadget.
+            let shifted_last_chunk = meta.query_advice(z, Rotation::next());
+            // inv_two_pow_s = 1 >> s = 2^{-s}
+            let inv_two_pow_s = {
+                let s = NUM_BITS % WINDOW_SIZE;
+                pallas::Base::from(1 << s).invert().unwrap()
+            };
+
+            // shifted_last_chunk = last_chunk << (WINDOW_SIZE - s)
+            //                    = last_chunk * 2^WINDOW_SIZE * 2^{-s}
+            Constraints::with_selector(
+                s_short,
+                Some(last_chunk * two_pow_window_size * inv_two_pow_s - shifted_last_chunk),
+            )
+        });
+
+        NativeRangeCheckConfig { z, s_rc, s_short, k_values_table }
     }
 
     /// `k_values_table` should be reused across different chips
@@ -115,15 +157,8 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
     }
 
     fn decompose_value(value: &pallas::Base) -> Vec<[bool; WINDOW_SIZE]> {
-        let padding = (WINDOW_SIZE - NUM_BITS % WINDOW_SIZE) % WINDOW_SIZE;
-
-        let bits: Vec<bool> = value
-            .to_le_bits()
-            .into_iter()
-            .take(NUM_BITS)
-            .chain(std::iter::repeat(false).take(padding))
-            .collect();
-        assert_eq!(bits.len(), NUM_BITS + padding);
+        let bits: Vec<bool> =
+            value.to_le_bits().into_iter().take(WINDOW_SIZE * NUM_WINDOWS).collect();
 
         bits.chunks_exact(WINDOW_SIZE)
             .map(|x| {
@@ -139,11 +174,14 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         region: &mut Region<'_, pallas::Base>,
         z_0: AssignedCell<pallas::Base, pallas::Base>,
         offset: usize,
-        strict: bool,
     ) -> Result<(), plonk::Error> {
         assert!(WINDOW_SIZE * NUM_WINDOWS < NUM_BITS + WINDOW_SIZE);
 
-        // Enable selectors
+        // The number of bits in the last chunk.
+        let last_chunk_length = NUM_BITS - (WINDOW_SIZE * (NUM_WINDOWS - 1));
+        assert!(last_chunk_length > 0);
+
+        // Enable selectors for running sum decomposition
         for index in 0..NUM_WINDOWS {
             self.config.s_rc.enable(region, index + offset)?;
         }
@@ -152,8 +190,8 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         let mut z = z_0;
         let decomposed_chunks = z.value().map(Self::decompose_value).transpose_vec(NUM_WINDOWS);
 
-        let two_pow_k_inverse =
-            Value::known(pallas::Base::from(1 << WINDOW_SIZE as u64).invert().unwrap());
+        let two_pow_k = pallas::Base::from(1 << WINDOW_SIZE as u64);
+        let two_pow_k_inverse = Value::known(two_pow_k.invert().unwrap());
 
         for (i, chunk) in decomposed_chunks.iter().enumerate() {
             let z_next = {
@@ -176,9 +214,48 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
 
         assert!(z_values.len() == NUM_WINDOWS + 1);
 
-        if strict {
-            // Constrain the remaining bits to be zero
-            region.constrain_constant(z_values.last().unwrap().cell(), pallas::Base::zero())?;
+        // Constrain the remaining bits to be zero
+        region.constrain_constant(z_values.last().unwrap().cell(), pallas::Base::zero())?;
+
+        // If the last chunk is `s` bits where `s < WINDOW_SIZE`,
+        // perform short range check
+        //
+        //  |s_rc | s_short |                z                |
+        //  ---------------------------------------------------
+        //  |  1  |    0    |            last_chunk           |
+        //  |  0  |    1    |                0                |
+        //  |  0  |    0    | last_chunk << (WINDOW_SIZE - s) |
+        //  |  0  |    0    |             1 >> s              |
+
+        if last_chunk_length < WINDOW_SIZE {
+            let s_short_offset = NUM_WINDOWS + offset;
+            self.config.s_short.enable(region, s_short_offset)?;
+
+            // 1 >> s = 2^{-s}
+            let inv_two_pow_s = pallas::Base::from(1 << last_chunk_length).invert().unwrap();
+            region.assign_advice_from_constant(
+                || "inv_two_pow_s",
+                self.config.z,
+                s_short_offset + 2,
+                inv_two_pow_s,
+            )?;
+
+            // shifted_last_chunk = last_chunk * 2^{WINDOW_SIZE-s}
+            //                    = last_chunk * 2^WINDOW_SIZE * inv_two_pow_s
+            let last_chunk = {
+                let chunk = decomposed_chunks.last().unwrap();
+                chunk.map(|c| {
+                    pallas::Base::from(c.iter().rev().fold(0, |acc, c| (acc << 1) + *c as u64))
+                })
+            };
+            let shifted_last_chunk =
+                last_chunk * Value::known(two_pow_k) * Value::known(inv_two_pow_s);
+            region.assign_advice(
+                || "shifted_last_chunk",
+                self.config.z,
+                s_short_offset + 1,
+                || shifted_last_chunk,
+            )?;
         }
 
         Ok(())
@@ -188,13 +265,12 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         &self,
         mut layouter: impl Layouter<pallas::Base>,
         value: Value<pallas::Base>,
-        strict: bool,
     ) -> Result<(), plonk::Error> {
         layouter.assign_region(
             || format!("witness {}-bit native range check", NUM_BITS),
             |mut region: Region<'_, pallas::Base>| {
                 let z_0 = region.assign_advice(|| "z_0", self.config.z, 0, || value)?;
-                self.decompose(&mut region, z_0, 0, strict)?;
+                self.decompose(&mut region, z_0, 0)?;
                 Ok(())
             },
         )
@@ -204,13 +280,12 @@ impl<const WINDOW_SIZE: usize, const NUM_BITS: usize, const NUM_WINDOWS: usize>
         &self,
         mut layouter: impl Layouter<pallas::Base>,
         value: AssignedCell<pallas::Base, pallas::Base>,
-        strict: bool,
     ) -> Result<(), plonk::Error> {
         layouter.assign_region(
             || format!("copy {}-bit native range check", NUM_BITS),
             |mut region: Region<'_, pallas::Base>| {
                 let z_0 = value.copy_advice(|| "z_0", &mut region, self.config.z, 0)?;
-                self.decompose(&mut region, z_0, 0, strict)?;
+                self.decompose(&mut region, z_0, 0)?;
                 Ok(())
             },
         )
@@ -229,7 +304,7 @@ mod tests {
     };
 
     macro_rules! test_circuit {
-        ($window_size:expr, $num_bits:expr, $num_windows:expr) => {
+        ($k: expr, $window_size:expr, $num_bits: expr, $num_windows:expr, $valid_values:expr, $invalid_values:expr) => {
             #[derive(Default)]
             struct RangeCheckCircuit {
                 a: Value<pallas::Base>,
@@ -278,29 +353,70 @@ mod tests {
                     )?;
 
                     let a = assign_free_advice(layouter.namespace(|| "load a"), config.1, self.a)?;
-                    rangecheck_chip.copy_range_check(
-                        layouter.namespace(|| "copy a and range check"),
-                        a,
-                        true,
-                    )?;
+                    rangecheck_chip
+                        .copy_range_check(layouter.namespace(|| "copy a and range check"), a)?;
 
                     rangecheck_chip.witness_range_check(
                         layouter.namespace(|| "witness a and range check"),
                         self.a,
-                        true,
                     )?;
 
                     Ok(())
                 }
+            }
+
+            use plotters::prelude::*;
+            let circuit = RangeCheckCircuit { a: Value::known(pallas::Base::one()) };
+            let file_name = format!("target/native_range_check_{:?}_circuit_layout.png", $num_bits);
+            let root = BitMapBackend::new(file_name.as_str(), (3840, 2160)).into_drawing_area();
+            root.fill(&WHITE).unwrap();
+            let root = root
+                .titled(
+                    format!("{:?}-bit Native Range Check Circuit Layout", $num_bits).as_str(),
+                    ("sans-serif", 60),
+                )
+                .unwrap();
+            CircuitLayout::default().render($k, &circuit, &root).unwrap();
+
+            for i in $valid_values {
+                println!("{:?}-bit (valid) range check for {:?}", $num_bits, i);
+                let circuit = RangeCheckCircuit { a: Value::known(i) };
+                let prover = MockProver::run($k, &circuit, vec![]).unwrap();
+                prover.assert_satisfied();
+                println!("Constraints satisfied");
+            }
+
+            for i in $invalid_values {
+                println!("{:?}-bit (invalid) range check for {:?}", $num_bits, i);
+                let circuit = RangeCheckCircuit { a: Value::known(i) };
+                let prover = MockProver::run($k, &circuit, vec![]).unwrap();
+                assert!(prover.verify().is_err());
             }
         };
     }
 
     // cargo test --release --all-features --lib native_range_check -- --nocapture
     #[test]
-    fn native_range_check_64() {
-        test_circuit!(3, 64, 22);
+    fn native_range_check_2() {
         let k = 6;
+        const WINDOW_SIZE: usize = 5;
+        const NUM_BITS: usize = 2;
+        const NUM_WINDOWS: usize = 1;
+
+        // [0, 1, 2, 3]
+        let valid_values: Vec<_> = (0..(1 << NUM_BITS)).map(pallas::Base::from).collect();
+        // [4, 5, 6, ..., 32]
+        let invalid_values: Vec<_> =
+            ((1 << NUM_BITS)..=(1 << WINDOW_SIZE)).map(pallas::Base::from).collect();
+        test_circuit!(k, WINDOW_SIZE, NUM_BITS, NUM_WINDOWS, valid_values, invalid_values);
+    }
+
+    #[test]
+    fn native_range_check_64() {
+        let k = 6;
+        const WINDOW_SIZE: usize = 3;
+        const NUM_BITS: usize = 64;
+        const NUM_WINDOWS: usize = 22;
 
         let valid_values = vec![
             pallas::Base::zero(),
@@ -313,7 +429,6 @@ mod tests {
             -pallas::Base::one(),
             pallas::Base::from_u128(u64::MAX as u128 + 1),
             -pallas::Base::from_u128(u64::MAX as u128 + 1),
-            pallas::Base::from_u128(rand::random::<u128>()),
             // The following two are valid
             // 2 = -28948022309329048855892746252171976963363056481941560715954676764349967630335
             //-pallas::Base::from_str_vartime(
@@ -326,37 +441,15 @@ mod tests {
             //)
             //.unwrap(),
         ];
-
-        use plotters::prelude::*;
-        let circuit = RangeCheckCircuit { a: Value::known(pallas::Base::one()) };
-        let root =
-            BitMapBackend::new("target/native_range_check_64_circuit_layout.png", (3840, 2160))
-                .into_drawing_area();
-        root.fill(&WHITE).unwrap();
-        let root =
-            root.titled("64-bit Native Range Check Circuit Layout", ("sans-serif", 60)).unwrap();
-        CircuitLayout::default().render(k, &circuit, &root).unwrap();
-
-        for i in valid_values {
-            println!("64-bit (valid) range check for {:?}", i);
-            let circuit = RangeCheckCircuit { a: Value::known(i) };
-            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-            prover.assert_satisfied();
-            println!("Constraints satisfied");
-        }
-
-        for i in invalid_values {
-            println!("64-bit (invalid) range check for {:?}", i);
-            let circuit = RangeCheckCircuit { a: Value::known(i) };
-            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-            assert!(prover.verify().is_err());
-        }
+        test_circuit!(k, WINDOW_SIZE, NUM_BITS, NUM_WINDOWS, valid_values, invalid_values);
     }
 
     #[test]
     fn native_range_check_128() {
-        test_circuit!(3, 128, 43);
         let k = 7;
+        const WINDOW_SIZE: usize = 3;
+        const NUM_BITS: usize = 128;
+        const NUM_WINDOWS: usize = 43;
 
         let valid_values = vec![
             pallas::Base::zero(),
@@ -371,46 +464,26 @@ mod tests {
             -pallas::Base::from_u128(u128::MAX) + pallas::Base::one(),
             -pallas::Base::from_u128(u128::MAX),
         ];
-
-        use plotters::prelude::*;
-        let circuit = RangeCheckCircuit { a: Value::known(pallas::Base::one()) };
-        let root =
-            BitMapBackend::new("target/native_range_check_128_circuit_layout.png", (3840, 2160))
-                .into_drawing_area();
-        root.fill(&WHITE).unwrap();
-        let root =
-            root.titled("128-bit Native Range Check Circuit Layout", ("sans-serif", 60)).unwrap();
-        CircuitLayout::default().render(k, &circuit, &root).unwrap();
-
-        for i in valid_values {
-            println!("128-bit (valid) range check for {:?}", i);
-            let circuit = RangeCheckCircuit { a: Value::known(i) };
-            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-            prover.assert_satisfied();
-            println!("Constraints satisfied");
-        }
-
-        for i in invalid_values {
-            println!("128-bit (invalid) range check for {:?}", i);
-            let circuit = RangeCheckCircuit { a: Value::known(i) };
-            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-            assert!(prover.verify().is_err());
-        }
+        test_circuit!(k, WINDOW_SIZE, NUM_BITS, NUM_WINDOWS, valid_values, invalid_values);
     }
 
     #[test]
     fn native_range_check_253() {
-        test_circuit!(3, 253, 85);
         let k = 8;
+        const WINDOW_SIZE: usize = 3;
+        const NUM_BITS: usize = 253;
+        const NUM_WINDOWS: usize = 85;
+
+        // 2^253 - 1
+        let max_253 = pallas::Base::from_str_vartime(
+            "14474011154664524427946373126085988481658748083205070504932198000989141204991",
+        )
+        .unwrap();
 
         let valid_values = vec![
             pallas::Base::zero(),
             pallas::Base::one(),
-            // 2^253 - 1
-            pallas::Base::from_str_vartime(
-                "14474011154664524427946373126085988481658748083205070504932198000989141204991",
-            )
-            .unwrap(),
+            max_253,
             // 2^253 / 2
             pallas::Base::from_str_vartime(
                 "7237005577332262213973186563042994240829374041602535252466099000494570602496",
@@ -425,31 +498,8 @@ mod tests {
                 "28948022309329048855892746252171976963363056481941560715954676764349967630336",
             )
             .unwrap(),
+            max_253 + pallas::Base::one(),
         ];
-
-        use plotters::prelude::*;
-        let circuit = RangeCheckCircuit { a: Value::known(pallas::Base::one()) };
-        let root =
-            BitMapBackend::new("target/native_range_check_253_circuit_layout.png", (3840, 2160))
-                .into_drawing_area();
-        root.fill(&WHITE).unwrap();
-        let root =
-            root.titled("253-bit Native Range Check Circuit Layout", ("sans-serif", 60)).unwrap();
-        CircuitLayout::default().render(k, &circuit, &root).unwrap();
-
-        for i in valid_values {
-            println!("253-bit (valid) range check for {:?}", i);
-            let circuit = RangeCheckCircuit { a: Value::known(i) };
-            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-            prover.assert_satisfied();
-            println!("Constraints satisfied");
-        }
-
-        for i in invalid_values {
-            println!("253-bit (invalid) range check for {:?}", i);
-            let circuit = RangeCheckCircuit { a: Value::known(i) };
-            let prover = MockProver::run(k, &circuit, vec![]).unwrap();
-            assert!(prover.verify().is_err());
-        }
+        test_circuit!(k, WINDOW_SIZE, NUM_BITS, NUM_WINDOWS, valid_values, invalid_values);
     }
 }

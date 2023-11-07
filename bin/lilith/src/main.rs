@@ -69,10 +69,6 @@ struct Args {
     /// JSON-RPC listen URL
     pub rpc_listen: Url,
 
-    #[structopt(long)]
-    /// Accept addresses (URL without port)
-    pub accept_addrs: Vec<Url>,
-
     #[structopt(short, long)]
     /// Configuration file to use
     pub config: Option<String>,
@@ -126,8 +122,8 @@ impl Spawn {
 /// Defines the network-specific settings
 #[derive(Clone)]
 struct NetInfo {
-    /// Specific port the network will use
-    pub port: u16,
+    /// Accept addresses the network will use
+    pub accept_addrs: Vec<Url>,
     /// Other seeds to connect to
     pub seeds: Vec<Url>,
     /// Manual peers to connect to
@@ -308,13 +304,18 @@ fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
             for net in map["network"].as_table().unwrap() {
                 info!(target: "lilith", "Found configuration for network: {}", net.0);
                 let table = net.1.as_table().unwrap();
-                if !table.contains_key("port") {
-                    warn!(target: "lilith", "Network port is mandatory, skipping network.");
+                if !table.contains_key("accept_addrs") {
+                    warn!(target: "lilith", "Network accept addrs are mandatory, skipping network.");
                     continue
                 }
 
                 let name = net.0.to_string();
-                let port = table["port"].as_integer().unwrap().try_into().unwrap();
+                let accept_addrs: Vec<Url> = table["accept_addrs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|x| Url::parse(x.as_str().unwrap()).unwrap())
+                    .collect();
 
                 let mut seeds = vec![];
                 if table.contains_key("seeds") {
@@ -354,7 +355,7 @@ fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
                     semver::Version::parse(option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0"))?
                 };
 
-                let net_info = NetInfo { port, seeds, peers, version, localnet };
+                let net_info = NetInfo { accept_addrs, seeds, peers, version, localnet };
                 ret.insert(name, net_info);
             }
         }
@@ -366,17 +367,14 @@ fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
 async fn spawn_net(
     name: String,
     info: &NetInfo,
-    accept_addrs: &[Url],
     saved_hosts: &HashSet<Url>,
     ex: Arc<Executor<'static>>,
 ) -> Result<Spawn> {
     let mut listen_urls = vec![];
 
     // Configure listen addrs for this network
-    for url in accept_addrs {
-        let mut url = url.clone();
-        url.set_port(Some(info.port))?;
-        listen_urls.push(url);
+    for url in &info.accept_addrs {
+        listen_urls.push(url.clone());
     }
 
     // P2P network settings
@@ -441,7 +439,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         match spawn_net(
             name.to_string(),
             info,
-            &args.accept_addrs,
             saved_hosts.get(name).unwrap_or(&HashSet::new()),
             ex.clone(),
         )

@@ -12,7 +12,7 @@ $$ \mathcal{L}= \{X:(X,W)\in \mathcal{R}\} $$
 
 - Derive, and reveal [bulla](bulla.md)
 - Derive, and reveal [proposal](proposal.md) input [coin](../payment/coin.md)
-- Calculate, and  Reveal yes-vote 0/1 for no/yes [commitment](../crypto/commitment.md) $=vote^{yes}vote^{all^}$
+- Calculate, and  Reveal yes-vote 0/1 for no/yes [commitment](../crypto/commitment.md): $vote^{yes}*vote^{all}$
 - Reveal all-vote value [commitment](../crypto/commitment.md)
 - Calculate, and reveal [proposal](proposal.md) coin value [commitment](../crypto/commitment.md)
 - Reveal dao execution spendHook

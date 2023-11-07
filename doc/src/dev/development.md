@@ -97,7 +97,7 @@ You can then find the reports in `target/llvm-cov/html/index.html`
 ## Static binary builds
 
 Using musl-libc, we should be able to produce statically linked
-binaries from our codebase. A short ssetup using a Debian system and
+binaries from our codebase. A short setup using a Debian system and
 `lxc` can be the following:
 
 **Setup the LXC container:**
@@ -117,7 +117,7 @@ nightly, and we also have to compile `sqlcipher` on our own.
 # wget -O sqlcipher.tar.gz https://github.com/sqlcipher/sqlcipher/archive/refs/tags/v4.5.5.tar.gz
 # tar xf sqlcipher.tar.gz
 # cd sqlcipher-4.5.5
-# ./confiogure --prefix=/usr/local --disable-shared --enable-static --enable-cross-thread-connections --enable-releasemode
+# ./configure --prefix=/usr/local --disable-shared --enable-static --enable-cross-thread-connections --enable-releasemode
 # make -j$(nproc)
 # make install
 # cd ~

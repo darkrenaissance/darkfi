@@ -64,12 +64,8 @@ struct Args {
     config: Option<String>,
 
     #[structopt(long, default_value = "tcp://127.0.0.1:3333")]
-    /// JSON-RPC server listen URL
+    /// mmproxy JSON-RPC server listen URL
     rpc_listen: Url,
-
-    #[structopt(long, default_value = "http://127.0.0.1:28081/json_rpc")]
-    /// monerod JSON-RPC server listen URL
-    monerod_rpc: Url,
 
     #[structopt(long)]
     /// List of worker logins
@@ -78,6 +74,21 @@ struct Args {
     #[structopt(long)]
     /// Set log file output
     log: Option<String>,
+
+    #[structopt(flatten)]
+    monerod: Monerod,
+}
+
+#[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
+#[structopt()]
+struct Monerod {
+    #[structopt(long, default_value = "")]
+    /// Mining reward wallet address
+    wallet_address: String,
+
+    #[structopt(long, default_value = "http://127.0.0.1:28081/json_rpc")]
+    /// monerod JSON-RPC server listen URL
+    monerod_rpc: Url,
 }
 
 struct Worker {
@@ -100,8 +111,8 @@ impl Worker {
 }
 
 struct MiningProxy {
-    /// monerod RPC endpoint
-    monerod_rpc: Url,
+    /// monerod settings
+    monerod: Monerod,
     /// Worker logins
     logins: HashMap<String, String>,
     /// Workers UUIDs
@@ -113,18 +124,27 @@ struct MiningProxy {
 }
 
 impl MiningProxy {
-    fn new(
-        monerod_rpc: Url,
+    async fn new(
+        monerod: Monerod,
         logins: HashMap<String, String>,
         executor: Arc<Executor<'static>>,
-    ) -> Self {
-        Self {
-            monerod_rpc,
+    ) -> Result<Self> {
+        let self_ = Self {
+            monerod,
             logins,
             workers: Arc::new(RwLock::new(HashMap::new())),
             rpc_connections: Mutex::new(HashSet::new()),
             executor,
+        };
+
+        // Test that monerod is reachable
+        let req = JsonRequest::new("get_block_count", vec![].into());
+        if let Err(e) = self_.oneshot_request(req).await {
+            error!("Could not reach monerod: {}", e);
+            return Err(Error::Custom("Could not reach monerod".to_string()))
         }
+
+        Ok(self_)
     }
 }
 
@@ -145,10 +165,12 @@ impl RequestHandler for MiningProxy {
             // Monero daemon methods
             "get_block_count" => self.monero_get_block_count(req.id, req.params).await,
             "getblockcount" => self.monero_get_block_count(req.id, req.params).await,
+            "on_get_block_hash" => self.monero_on_get_block_hash(req.id, req.params).await,
+            "on_getblockhash" => self.monero_on_get_block_hash(req.id, req.params).await,
+            "get_block_template" => self.monero_get_block_template(req.id, req.params).await,
+            "getblocktemplate" => self.monero_get_block_template(req.id, req.params).await,
 
             /*
-            "on_get_block_hash" => self.monero_on_get_block_hash(req.id, req.params).await,
-            "get_block_template" => self.monero_get_block_template(req.id, req.params).await,
             "submit_block" => self.monero_submit_block(req.id, req.params).await,
             "generateblocks" => self.monero_generateblocks(req.id, req.params).await,
             "get_last_block_header" => self.monero_get_last_block_header(req.id, req.params).await,
@@ -201,7 +223,13 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         logins.insert(user, pass);
     }
 
-    let mmproxy = Arc::new(MiningProxy::new(args.monerod_rpc, logins, ex.clone()));
+    if args.monerod.wallet_address.is_empty() {
+        error!("Wallet address empty. Please set it in your config.");
+        return Err(Error::Custom("Wallet address empty".to_string()))
+    }
+
+    info!("Instantiating MiningProxy with wallet: {}", args.monerod.wallet_address);
+    let mmproxy = Arc::new(MiningProxy::new(args.monerod, logins, ex.clone()).await?);
     let mmproxy_ = Arc::clone(&mmproxy);
 
     info!("Starting JSON-RPC server");

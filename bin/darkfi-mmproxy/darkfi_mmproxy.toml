@@ -1,2 +1,20 @@
 # List of worker logins, comment out to allow anything.
 workers = ["x:x"]
+
+[monerod]
+# Testnet seed:
+# sequence atlas unveil summon pebbles tuesday beer rudely snake
+# rockets different fuselage woven tagged bested dented vegan hover
+# rapid fawns obvious muppet randomly seasons randomly
+#
+# monero-wallet-cli \
+#   --testnet \
+#   --generate-new-wallet wallet_01.bin \
+#   --restore-deterministic-wallet \
+#   --electrum-seed="$SEED"
+#   --password "" \
+#   --log-file wallet_01.log
+wallet_address = "9wviCeWe2D8XS82k2ovp5EUYLzBt9pYNW2LXUFsZiv8S3Mt21FZ5qQaAroko1enzw3eGr9qC7X1D7Geoo2RrAotYPwq9Gm"
+
+# monerod RPC address
+monerod_rpc = "http://127.0.0.1:28081/json_rpc"

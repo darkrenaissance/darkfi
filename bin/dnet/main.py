@@ -40,8 +40,9 @@ class Dnetview:
                 logging.debug(f"Started {name} RPC on port {port}")
                 break
             except Exception as e:
-                logging.debug(f"failed to connect {host}:{port} {e}")
-                pass
+                info[name] = {}
+                await self.queue.put(info)
+                continue
     
         data = await rpc._make_request("p2p.get_info", [])
         info[name] = data
