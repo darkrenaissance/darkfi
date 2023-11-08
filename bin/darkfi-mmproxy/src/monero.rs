@@ -256,11 +256,25 @@ impl MiningProxy {
         JsonResponse::new(rep, id).into()
     }
 
-    /*
+    /// Generate a block and specify the address to receive the coinbase reward.
+    /// <https://www.getmonero.org/resources/developer-guides/daemon-rpc.html#generateblocks>
     pub async fn monero_generateblocks(&self, id: u16, params: JsonValue) -> JsonResult {
-        todo!()
+        debug!(target: "rpc::monero", "generateblocks()");
+
+        // This request can just passthrough
+        let req = JsonRequest::new("generateblocks", params);
+        let rep = match self.oneshot_request(req).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "rpc::monero::generateblocks", "[RPC] {}", e);
+                return JsonError::new(InternalError, Some(e.to_string()), id).into()
+            }
+        };
+
+        JsonResponse::new(rep, id).into()
     }
 
+    /*
     pub async fn monero_get_last_block_header(&self, id: u16, params: JsonValue) -> JsonResult {
         todo!()
     }

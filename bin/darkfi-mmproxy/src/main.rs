@@ -171,9 +171,9 @@ impl RequestHandler for MiningProxy {
             "getblocktemplate" => self.monero_get_block_template(req.id, req.params).await,
             "submit_block" => self.monero_submit_block(req.id, req.params).await,
             "submitblock" => self.monero_submit_block(req.id, req.params).await,
+            "generateblocks" => self.monero_generateblocks(req.id, req.params).await,
 
             /*
-            "generateblocks" => self.monero_generateblocks(req.id, req.params).await,
             "get_last_block_header" => self.monero_get_last_block_header(req.id, req.params).await,
             "get_block_header_by_hash" => self.monero_get_block_header_by_hash(req.id, req.params).await,
             "get_block_header_by_height" => self.monero_get_block_header_by_height(req.id, req.params).await,
