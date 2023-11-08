@@ -40,14 +40,15 @@ class DnetWidget(urwid.WidgetWrap):
         self._w = urwid.AttrWrap(self._w, None)
         self._w.focus_attr = 'line'
 
-    def is_empty(self):
-        self.is_empty == True
-
 
 class Node(DnetWidget):
-    def set_txt(self):
-        txt = urwid.Text(f"{self.node_name}")
-        super().update(txt)
+    def set_txt(self, is_empty: bool):
+        if is_empty:
+            txt = urwid.Text(f"{self.node_name} (offline)")
+            super().update(txt)
+        else:
+            txt = urwid.Text(f"{self.node_name}")
+            super().update(txt)
 
 
 class Session(DnetWidget):
@@ -91,7 +92,7 @@ class View():
     #-----------------------------------------------------------------
     def draw_info(self, node_name, info):
        node = Node(node_name, "node")
-       node.set_txt()
+       node.set_txt(False)
        self.listwalker.contents.append(node)
 
        if 'outbound' in info and info['outbound']:
@@ -133,9 +134,8 @@ class View():
                self.listwalker.contents.append(slot)
 
     def draw_empty(self, node_name, info):
-       name = node_name + " (offline)" 
-       node = Node(name, "node")
-       node.set_txt()
+       node = Node(node_name, "node")
+       node.set_txt(True)
        self.listwalker.contents.append(node)
 
     #-----------------------------------------------------------------
@@ -192,55 +192,65 @@ class View():
                           loop: urwid.MainLoop):
         live_nodes = []
         dead_nodes = []
+        reborn_nodes = []
+        redead_nodes = []
+        known_nodes = []
         live_inbound = []
         dead_inbound = []
+
         while True:
             await asyncio.sleep(0.1)
+
+            nodes = self.model.nodes.items()
+            listw = self.listwalker.contents
             evloop.call_soon(loop.draw_screen)
 
-            for index, item in enumerate(self.listwalker.contents):
-                live_nodes.append(item.node_name)
-                if item.session == "inbound-slot":
-                    live_inbound.append(item.i)
+            # TODO: reimplement events handling.
 
-            # Draw get_info(). Called only once.
-            for node_name, info in self.model.nodes.items():
-                if node_name in live_nodes:
-                    continue
-                self.draw_info(node_name, info)
+            for index, item in enumerate(listw):
+                # Keep track of known nodes.
+                if item.node_name not in known_nodes:
+                    logging.debug("Appending to known nodes...")
+                    known_nodes.append(item.node_name)
 
-            # TODO: when RPC can't connect, display the node as offline.
+            for name, info in nodes:
+                # 1. Sort nodes into lists.
+                if bool(info) and name not in live_nodes:
+                    logging.debug("Online node we do not know.")
+                    live_nodes.append(name)
+                if not bool(info) and name not in dead_nodes:
+                    logging.debug("Offline node we do not know.")
+                    dead_nodes.append(name)
+                if bool(info) and name in dead_nodes:
+                    logging.debug("Dead node came online.")
+                    if name not in reborn_nodes:
+                        reborn_nodes.append(name)
+                if not bool(info) and name in live_nodes:
+                    logging.debug("Online node went offline.")
+                    if name not in redead_nodes:
+                        redead_nodes.append(name)
 
-            # If a node goes offline, trigger a redraw.
-            for node_name, info in self.model.nodes.items():
-                if not bool(info):
-                    if node_name in dead_nodes:
-                        continue
-                    dead_nodes.append(node_name)
-                    self.listwalker.contents.clear()
-                    self.draw_empty(node_name, info)
-                    for name, info in self.model.nodes.items():
-                        if name not in dead_nodes:
-                            self.draw_info(name, info)
+                # 1. Display nodes according to list.
+                if name in live_nodes and name not in known_nodes:
+                    logging.debug("Drawing unknown live node.")
+                    self.draw_info(name, info)
+                if name in dead_nodes and name not in known_nodes:
+                    logging.debug("Drawing unknown dead node.")
+                    self.draw_empty(name, info)
+                if name in reborn_nodes and name in known_nodes:
+                    logging.debug("Removing reborn node from known nodes.")
+                    dead_nodes.clear()
+                    reborn_nodes.clear()
+                    known_nodes.clear()
+                    listw.clear()
+                if name in redead_nodes and name in known_nodes:
+                    logging.debug("Removing redead node from known nodes.")
+                    live_nodes.clear()
+                    redead_nodes.clear()
+                    known_nodes.clear()
+                    listw.clear()
 
-                # Only render info if the node is online.
-                self.fill_left_box()
-                self.fill_right_box()
-
-                # If a new inbound comes online, trigger a redraw.
-                for key in info['inbound'].keys():
-                    if key not in live_inbound:
-                        self.listwalker.contents.clear()
-                        for name, info in self.model.nodes.items():
-                                self.draw_info(name, info)
-
-                    # If an inbound goes offline, trigger a redraw.
-                    addr = info['inbound'].get(key)
-                    if not bool(addr):
-                        if key in dead_inbound:
-                            continue
-                        dead_inbound.append(key)
-                        self.listwalker.contents.clear()
-                        for name, info in self.model.nodes.items():
-                            if name not in dead_nodes:
-                                self.draw_info(name, info)
+                # 3. Handle events on nodes we know.
+                if bool(info) and name in known_nodes:
+                    self.fill_left_box()
+                    self.fill_right_box()
