@@ -118,6 +118,29 @@ pub async fn accept(
                 }
             }
 
+            JsonResult::SubscriberWithReply(subscriber, reply) => {
+                // Write the response
+                debug!(target: "rpc::server", "{} <-- {}", addr, reply.stringify()?);
+                if let Err(e) = write_to_stream(&mut stream, &reply.into()).await {
+                    return Err(e)
+                }
+
+                // Start the subscriber loop
+                let subscription = subscriber.sub.subscribe().await;
+                loop {
+                    // Listen for notifications
+                    let notification = subscription.receive().await;
+
+                    // Push notification
+                    debug!(target: "rpc::server", "{} <-- {}", addr, notification.stringify()?);
+                    let notification = JsonResult::Notification(notification);
+                    if let Err(e) = write_to_stream(&mut stream, &notification).await {
+                        subscription.unsubscribe().await;
+                        return Err(e)
+                    }
+                }
+            }
+
             JsonResult::Request(_) | JsonResult::Notification(_) => {
                 unreachable!("Should never happen")
             }

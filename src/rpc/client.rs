@@ -123,7 +123,7 @@ impl RpcClient {
 
         // Handle the response
         match reply {
-            JsonResult::Response(rep) => {
+            JsonResult::Response(rep) | JsonResult::SubscriberWithReply(_, rep) => {
                 debug!(target: "rpc::client", "<-- {}", rep.stringify()?);
 
                 // Check if the IDs match
@@ -205,7 +205,7 @@ impl RpcClient {
                     return Err(Error::JsonRpcError((e.error.code, e.error.message)))
                 }
 
-                JsonResult::Response(r) => {
+                JsonResult::Response(r) | JsonResult::SubscriberWithReply(_, r) => {
                     debug!(target: "rpc::client", "<-- {}", r.stringify()?);
                     let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
                     return Err(Error::JsonRpcError((e.error.code, e.error.message)))
