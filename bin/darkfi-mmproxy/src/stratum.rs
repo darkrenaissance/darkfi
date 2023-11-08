@@ -27,6 +27,7 @@ use darkfi::{
     Error, Result,
 };
 use log::{debug, error, info, warn};
+use rand::{rngs::OsRng, Rng};
 use smol::{channel, lock::RwLock};
 use uuid::Uuid;
 
@@ -159,7 +160,7 @@ impl MiningProxy {
         let ka_task = StoppableTask::new();
 
         // Create worker
-        let worker = Worker::new(job_sub, ka_send, ka_task.clone());
+        let worker = Worker::new(job_sub.clone(), ka_send, ka_task.clone());
 
         // Insert into connections map
         self.workers.write().await.insert(uuid, worker);
@@ -174,15 +175,34 @@ impl MiningProxy {
 
         info!("Added worker {} ({})", login, uuid);
 
-        // TODO: Send current job
-        JsonResponse::new(
-            JsonValue::Object(HashMap::from([(
-                "status".to_string(),
-                JsonValue::String("KEEPALIVED".to_string()),
-            )])),
-            id,
-        )
-        .into()
+        // Get block template for mining
+        let gbt_params: JsonValue = HashMap::from([
+            ("wallet_address".to_string(), self.monerod.wallet_address.clone().into()),
+            ("reserve_size".to_string(), (0_f64).into()),
+        ])
+        .into();
+
+        let block_template = match self.monero_get_block_template(OsRng.gen(), gbt_params).await {
+            JsonResult::Response(resp) => {
+                resp.result.get::<HashMap<String, JsonValue>>().unwrap().clone()
+            }
+            _ => {
+                error!("[STRATUM] Failed getting block template from monerod");
+                return JsonError::new(ErrorCode::InternalError, None, id).into()
+            }
+        };
+
+        // Send the job to the worker
+        let mut workers = self.workers.write().await;
+        let worker = workers.get_mut(&uuid).unwrap();
+        let blob = block_template["blockhashing_blob"].get::<String>().unwrap();
+        let target = block_template["wide_difficulty"].get::<String>().unwrap();
+        if let Err(e) = worker.send_job(blob.clone(), target.clone()).await {
+            error!("[STRATUM] Failed sending job to {}: {}", uuid, e);
+            return JsonError::new(ErrorCode::InternalError, None, id).into()
+        }
+
+        job_sub.into()
     }
 
     pub async fn stratum_submit(&self, id: u16, params: JsonValue) -> JsonResult {

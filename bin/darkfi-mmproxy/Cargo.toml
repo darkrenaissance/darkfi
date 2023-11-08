@@ -14,6 +14,7 @@ darkfi-serial = {path = "../../src/serial", features = ["async"]}
 
 # Misc
 log = "0.4.20"
+rand = "0.8.5"
 
 # Monero
 epee-encoding = {version = "0.5.0", features = ["derive"]}
