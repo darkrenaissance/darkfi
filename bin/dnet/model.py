@@ -53,11 +53,11 @@ class Model:
 
         for i, id in enumerate(info["outbound_slots"]):
             if id == 0:
-                outbounds = self.nodes[name]['outbound'][f"{i}"] = "none"
+                outbounds = self.nodes[name]['outbound'][f"{i}"] = ["none", 0]
                 continue
             assert id in channel_lookup
             url = channel_lookup[id]["url"]
-            outbounds = self.nodes[name]['outbound'][f"{i}"] = url
+            outbounds = self.nodes[name]['outbound'][f"{i}"] = [url, id]
 
         for channel in channels:
             if channel["session"] != "seed":
@@ -122,26 +122,26 @@ class Model:
                 logging.debug(f"{current_time}  inbound (disconnect): {addr}")
             case "outbound_slot_sleeping":
                 slot = info["slot"]
+                event = self.nodes[name]['event']
+                event[(f"{name}", f"{slot}")] = ["sleeping", 0]
                 logging.debug(f"{current_time}  slot {slot}: sleeping")
-                self.nodes[name]['event'][(f"{name}", f"{slot}")] = "sleeping"
             case "outbound_slot_connecting":
                 slot = info["slot"]
                 addr = info["addr"]
                 event = self.nodes[name]['event']
-                event[(f"{name}", f"{slot}")] = f"connecting: addr={addr}"
+                event[(f"{name}", f"{slot}")] = [f"connecting: addr={addr}", 0]
                 logging.debug(f"{current_time}  slot {slot}: connecting   addr={addr}")
             case "outbound_slot_connected":
                 slot = info["slot"]
                 addr = info["addr"]
-                channel_id = info["channel_id"]
-                event = self.nodes[name]['event']
-                event[(f"{name}", f"{slot}")] = f"connected: addr={addr}"
+                id = info["channel_id"]
+                self.nodes[name]['outbound'][f"{slot}"] = [addr, id]
                 logging.debug(f"{current_time}  slot {slot}: connected    addr={addr}")
             case "outbound_slot_disconnected":
                 slot = info["slot"]
                 err = info["err"]
                 event = self.nodes[name]['event']
-                event[(f"{name}", f"{slot}")] = f"disconnected: {err}"
+                event[(f"{name}", f"{slot}")] = [f"disconnected: {err}", 0]
                 logging.debug(f"{current_time}  slot {slot}: disconnected err='{err}'")
             case "outbound_peer_discovery":
                 attempt = info["attempt"]

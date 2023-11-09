@@ -26,6 +26,7 @@ use darkfi::{
     rpc::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult, JsonSubscriber},
         server::{listen_and_serve, RequestHandler},
+        util::JsonValue,
     },
     system::{StoppableTask, StoppableTaskPtr},
     Error, Result,
@@ -94,6 +95,8 @@ struct Monerod {
 struct Worker {
     /// JSON-RPC notification subscriber, used to send job notifications
     job_sub: JsonSubscriber,
+    /// Current job ID for the worker
+    job_id: Uuid,
     /// Keepalive sender channel, pinged from stratum keepalived
     ka_send: channel::Sender<()>,
     /// Background keepalive task reference
@@ -106,7 +109,24 @@ impl Worker {
         ka_send: channel::Sender<()>,
         ka_task: StoppableTaskPtr,
     ) -> Self {
-        Self { job_sub, ka_send, ka_task }
+        Self { job_sub, job_id: Uuid::new_v4(), ka_send, ka_task }
+    }
+
+    async fn send_job(&mut self, blob: String, target: String) -> Result<()> {
+        // Update job id
+        self.job_id = Uuid::new_v4();
+
+        let params: JsonValue = HashMap::from([
+            ("blob".to_string(), blob.into()),
+            ("job_id".to_string(), self.job_id.to_string().into()),
+            ("target".to_string(), target.into()),
+        ])
+        .into();
+
+        info!("Sending mining job notification to worker");
+        self.job_sub.notify(params).await;
+
+        Ok(())
     }
 }
 
@@ -169,10 +189,11 @@ impl RequestHandler for MiningProxy {
             "on_getblockhash" => self.monero_on_get_block_hash(req.id, req.params).await,
             "get_block_template" => self.monero_get_block_template(req.id, req.params).await,
             "getblocktemplate" => self.monero_get_block_template(req.id, req.params).await,
+            "submit_block" => self.monero_submit_block(req.id, req.params).await,
+            "submitblock" => self.monero_submit_block(req.id, req.params).await,
+            "generateblocks" => self.monero_generateblocks(req.id, req.params).await,
 
             /*
-            "submit_block" => self.monero_submit_block(req.id, req.params).await,
-            "generateblocks" => self.monero_generateblocks(req.id, req.params).await,
             "get_last_block_header" => self.monero_get_last_block_header(req.id, req.params).await,
             "get_block_header_by_hash" => self.monero_get_block_header_by_hash(req.id, req.params).await,
             "get_block_header_by_height" => self.monero_get_block_header_by_height(req.id, req.params).await,

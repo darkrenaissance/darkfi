@@ -28,7 +28,7 @@ use darkfi::{
     },
     Error, Result,
 };
-use log::{debug, error};
+use log::{debug, error, info};
 use monero::blockdata::transaction::{ExtraField, RawExtraField, SubField::MergeMining};
 
 use super::MiningProxy;
@@ -48,7 +48,7 @@ impl MiningProxy {
         {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "rpc::monero::oneshot_request", "Error sending RPC request to monerod: {}", e);
+                error!(target: "rpc::monero::oneshot_request", "[RPC] Error sending RPC request to monerod: {}", e);
                 return Err(Error::ParseFailed("Failed sending monerod RPC request"))
             }
         };
@@ -56,7 +56,7 @@ impl MiningProxy {
         let response_bytes = match response.body_bytes().await {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "rpc::monero::get_block_count", "Error reading monerod RPC response: {}", e);
+                error!(target: "rpc::monero::get_block_count", "[RPC] Error reading monerod RPC response: {}", e);
                 return Err(Error::ParseFailed("Failed reading monerod RPC reponse"))
             }
         };
@@ -64,7 +64,7 @@ impl MiningProxy {
         let response_string = match String::from_utf8(response_bytes) {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "rpc::monero::get_block_count", "Error parsing monerod RPC response: {}", e);
+                error!(target: "rpc::monero::get_block_count", "[RPC] Error parsing monerod RPC response: {}", e);
                 return Err(Error::ParseFailed("Failed parsing monerod RPC reponse"))
             }
         };
@@ -72,7 +72,7 @@ impl MiningProxy {
         let response_json: JsonValue = match response_string.parse() {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "rpc::monero::get_block_count", "Error parsing monerod RPC response: {}", e);
+                error!(target: "rpc::monero::get_block_count", "[RPC] Error parsing monerod RPC response: {}", e);
                 return Err(Error::ParseFailed("Failed parsing monerod RPC reponse"))
             }
         };
@@ -90,7 +90,7 @@ impl MiningProxy {
         let rep = match self.oneshot_request(req).await {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "rpc::monero::get_block_count", "{}", e);
+                error!(target: "rpc::monero::get_block_count", "[RPC] {}", e);
                 return JsonError::new(InternalError, Some(e.to_string()), id).into()
             }
         };
@@ -120,7 +120,7 @@ impl MiningProxy {
         let rep = match self.oneshot_request(req).await {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "rpc::monero::get_block_count", "{}", e);
+                error!(target: "rpc::monero::get_block_count", "[RPC] {}", e);
                 return JsonError::new(InternalError, Some(e.to_string()), id).into()
             }
         };
@@ -180,7 +180,7 @@ impl MiningProxy {
         let mut rep = match self.oneshot_request(req).await {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "rpc::monero::get_block_template", "{}", e);
+                error!(target: "rpc::monero::get_block_template", "[RPC] {}", e);
                 return JsonError::new(InternalError, Some(e.to_string()), id).into()
             }
         };
@@ -212,15 +212,69 @@ impl MiningProxy {
         JsonResponse::new(rep, id).into()
     }
 
-    /*
+    /// Submit a mined block to the network
+    /// <https://www.getmonero.org/resources/developer-guides/daemon-rpc.html#submit_block>
     pub async fn monero_submit_block(&self, id: u16, params: JsonValue) -> JsonResult {
-        todo!()
+        debug!(target: "rpc::monero", "submit_block()");
+
+        let Some(params_vec) = params.get::<Vec<JsonValue>>() else {
+            return JsonError::new(InvalidParams, None, id).into()
+        };
+
+        if params_vec.is_empty() {
+            return JsonError::new(InvalidParams, None, id).into()
+        }
+
+        // Deserialize the block blob(s) to make sure it's a valid block
+        for element in params_vec.iter() {
+            let Some(block_hex) = element.get::<String>() else {
+                return JsonError::new(InvalidParams, None, id).into()
+            };
+
+            let Ok(block_bytes) = hex::decode(block_hex) else {
+                return JsonError::new(InvalidParams, None, id).into()
+            };
+
+            let Ok(block) = monero::consensus::deserialize::<monero::Block>(&block_bytes) else {
+                return JsonError::new(InvalidParams, None, id).into()
+            };
+
+            info!("[RPC] Got submitted Monero block id {}", block.id());
+        }
+
+        // Now when all the blocks submitted are valid, we'll just forward them to
+        // monerod to submit onto the network.
+        let req = JsonRequest::new("submit_block", params);
+        let rep = match self.oneshot_request(req).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "rpc::monero::submit_block", "[RPC] {}", e);
+                return JsonError::new(InternalError, Some(e.to_string()), id).into()
+            }
+        };
+
+        JsonResponse::new(rep, id).into()
     }
 
+    /// Generate a block and specify the address to receive the coinbase reward.
+    /// <https://www.getmonero.org/resources/developer-guides/daemon-rpc.html#generateblocks>
     pub async fn monero_generateblocks(&self, id: u16, params: JsonValue) -> JsonResult {
-        todo!()
+        debug!(target: "rpc::monero", "generateblocks()");
+
+        // This request can just passthrough
+        let req = JsonRequest::new("generateblocks", params);
+        let rep = match self.oneshot_request(req).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "rpc::monero::generateblocks", "[RPC] {}", e);
+                return JsonError::new(InternalError, Some(e.to_string()), id).into()
+            }
+        };
+
+        JsonResponse::new(rep, id).into()
     }
 
+    /*
     pub async fn monero_get_last_block_header(&self, id: u16, params: JsonValue) -> JsonResult {
         todo!()
     }

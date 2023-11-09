@@ -40,14 +40,15 @@ class DnetWidget(urwid.WidgetWrap):
         self._w = urwid.AttrWrap(self._w, None)
         self._w.focus_attr = 'line'
 
-    def is_empty(self):
-        self.is_empty == True
-
 
 class Node(DnetWidget):
-    def set_txt(self):
-        txt = urwid.Text(f"{self.node_name}")
-        super().update(txt)
+    def set_txt(self, is_empty: bool):
+        if is_empty:
+            txt = urwid.Text(f"{self.node_name} (offline)")
+            super().update(txt)
+        else:
+            txt = urwid.Text(f"{self.node_name}")
+            super().update(txt)
 
 
 class Session(DnetWidget):
@@ -59,10 +60,12 @@ class Session(DnetWidget):
 class Slot(DnetWidget):
     def set_txt(self, i, addr):
         self.i = i
-        self.addr = addr
         if len(self.i) == 1:
+            self.addr = addr[0]
+            self.id = addr[1]
             txt = urwid.Text(f"    {self.i}: {self.addr}")
         else:
+            self.addr = addr
             txt = urwid.Text(f"    {self.addr}")
         super().update(txt)
 
@@ -91,7 +94,7 @@ class View():
     #-----------------------------------------------------------------
     def draw_info(self, node_name, info):
        node = Node(node_name, "node")
-       node.set_txt()
+       node.set_txt(False)
        self.listwalker.contents.append(node)
 
        if 'outbound' in info and info['outbound']:
@@ -133,9 +136,8 @@ class View():
                self.listwalker.contents.append(slot)
 
     def draw_empty(self, node_name, info):
-       name = node_name + " (offline)" 
-       node = Node(name, "node")
-       node.set_txt()
+       node = Node(node_name, "node")
+       node.set_txt(True)
        self.listwalker.contents.append(node)
 
     #-----------------------------------------------------------------
@@ -192,55 +194,89 @@ class View():
                           loop: urwid.MainLoop):
         live_nodes = []
         dead_nodes = []
-        live_inbound = []
-        dead_inbound = []
+        known_nodes = []
+        known_inbound = []
+        known_outbound = []
+        refresh = False
+
         while True:
             await asyncio.sleep(0.1)
+
+            nodes = self.model.nodes.items()
+            listw = self.listwalker.contents
             evloop.call_soon(loop.draw_screen)
 
-            for index, item in enumerate(self.listwalker.contents):
-                live_nodes.append(item.node_name)
-                if item.session == "inbound-slot":
-                    live_inbound.append(item.i)
+            for index, item in enumerate(listw):
+                # Keep track of known nodes.
+                if item.node_name not in known_nodes:
+                    known_nodes.append(item.node_name)
+                # Keep track of known inbounds.
+                if (item.session == "inbound-slot"
+                        and item.i not in known_inbound):
+                    known_inbound.append(item.i)
+                # Keep track of known outbounds.
+                if (item.session == "outbound-slot"
+                        and item.id not in known_outbound
+                        and not item.id == 0):
+                    known_outbound.append(item.id)
 
-            # Draw get_info(). Called only once.
-            for node_name, info in self.model.nodes.items():
-                if node_name in live_nodes:
-                    continue
-                self.draw_info(node_name, info)
+            for name, info in nodes:
+                # 1. Sort nodes into lists.
+                if bool(info) and name not in live_nodes:
+                    live_nodes.append(name)
+                if not bool(info) and name not in dead_nodes:
+                    dead_nodes.append(name)
+                if bool(info) and name in dead_nodes:
+                    logging.debug("Refresh: dead node online.")
+                    refresh = True
+                if not bool(info) and name in live_nodes:
+                    logging.debug("Refresh: online node offline.")
+                    refresh = True
 
-            # TODO: when RPC can't connect, display the node as offline.
+                # 2. Display nodes according to list.
+                if name in live_nodes and name not in known_nodes:
+                    self.draw_info(name, info)
+                if name in dead_nodes and name not in known_nodes:
+                    self.draw_empty(name, info)
+                if refresh:
+                    logging.debug("Refresh initiated.")
+                    await asyncio.sleep(0.1)
+                    known_outbound.clear()
+                    known_inbound.clear()
+                    known_nodes.clear()
+                    live_nodes.clear()
+                    dead_nodes.clear()
+                    refresh = False
+                    listw.clear()
+                    logging.debug("Refresh complete.")
 
-            # If a node goes offline, trigger a redraw.
-            for node_name, info in self.model.nodes.items():
-                if not bool(info):
-                    if node_name in dead_nodes:
-                        continue
-                    dead_nodes.append(node_name)
-                    self.listwalker.contents.clear()
-                    self.draw_empty(node_name, info)
-                    for name, info in self.model.nodes.items():
-                        if name not in dead_nodes:
-                            self.draw_info(name, info)
-
-                # Only render info if the node is online.
-                self.fill_left_box()
-                self.fill_right_box()
-
-                # If a new inbound comes online, trigger a redraw.
-                for key in info['inbound'].keys():
-                    if key not in live_inbound:
-                        self.listwalker.contents.clear()
-                        for name, info in self.model.nodes.items():
-                                self.draw_info(name, info)
-
-                    # If an inbound goes offline, trigger a redraw.
-                    addr = info['inbound'].get(key)
-                    if not bool(addr):
-                        if key in dead_inbound:
-                            continue
-                        dead_inbound.append(key)
-                        self.listwalker.contents.clear()
-                        for name, info in self.model.nodes.items():
-                            if name not in dead_nodes:
-                                self.draw_info(name, info)
+                # 3. Handle events on nodes we know.
+                if bool(info) and name in known_nodes:
+                    self.fill_left_box()
+                    self.fill_right_box()
+                    if 'inbound' in info:
+                        for key in info['inbound'].keys():
+                            # New inbound online.
+                            if key not in known_inbound:
+                                addr = info['inbound'].get(key)
+                                if bool(addr):
+                                    logging.debug(f"Refresh: inbound {key} online")
+                                    refresh = True
+                            # Known inbound offline.
+                            for key in known_inbound:
+                                addr = info['inbound'].get(key)
+                                if bool(addr):
+                                    continue
+                                logging.debug(f"Refresh: inbound {key} offline")
+                                refresh = True
+                    # New outbound online.
+                    if 'outbound' in info:
+                        for i, info in info['outbound'].items():
+                            addr = info[0]
+                            id = info[1]
+                            if id == 0:
+                                continue
+                            if id in known_outbound:
+                                continue
+                            logging.debug(f"Outbound {key} came online.")
+                            refresh = True
