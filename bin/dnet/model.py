@@ -133,9 +133,8 @@ class Model:
             case "outbound_slot_connected":
                 slot = info["slot"]
                 addr = info["addr"]
-                channel_id = info["channel_id"]
-                event = self.nodes[name]['event']
-                event[(f"{name}", f"{slot}")] = f"connected: addr={addr}"
+                id = info["channel_id"]
+                self.nodes[name]['outbound'][f"{slot}"] = addr
                 logging.debug(f"{current_time}  slot {slot}: connected    addr={addr}")
             case "outbound_slot_disconnected":
                 slot = info["slot"]

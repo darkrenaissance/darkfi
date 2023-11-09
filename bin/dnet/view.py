@@ -192,11 +192,12 @@ class View():
                           loop: urwid.MainLoop):
         live_nodes = []
         dead_nodes = []
-        reborn_nodes = []
-        redead_nodes = []
+
         known_nodes = []
-        live_inbound = []
-        dead_inbound = []
+        known_inbound = []
+        known_outbound = []
+
+        refresh = False
 
         while True:
             await asyncio.sleep(0.1)
@@ -205,6 +206,12 @@ class View():
             listw = self.listwalker.contents
             evloop.call_soon(loop.draw_screen)
 
+            #logging.debug(f"known nodes {known_nodes}")
+            #logging.debug(f"live_nodes {live_nodes}")
+            #logging.debug(f"dead nodes {dead_nodes}")
+            #logging.debug(f"live inbound {live_inbound}")
+            #logging.debug(f"known inbound {known_inbound}")
+            #logging.debug(f"known outbound {known_outbound}")
             # TODO: reimplement events handling.
 
             for index, item in enumerate(listw):
@@ -212,6 +219,15 @@ class View():
                 if item.node_name not in known_nodes:
                     logging.debug("Appending to known nodes...")
                     known_nodes.append(item.node_name)
+                # Keep track of known inbounds.
+                if (item.session == "inbound-slot"
+                        and item.i not in known_inbound):
+                    logging.debug(f"Appending {item.i} to known inbound...")
+                    known_inbound.append(item.i)
+                ## Keep track of known outbounds.
+                #if (item.session == "outbound-slot"
+                #        and item.session not in known_outbound):
+                #    known_outbound.append(item.i)
 
             for name, info in nodes:
                 # 1. Sort nodes into lists.
@@ -223,34 +239,45 @@ class View():
                     dead_nodes.append(name)
                 if bool(info) and name in dead_nodes:
                     logging.debug("Dead node came online.")
-                    if name not in reborn_nodes:
-                        reborn_nodes.append(name)
+                    refresh = True
                 if not bool(info) and name in live_nodes:
                     logging.debug("Online node went offline.")
-                    if name not in redead_nodes:
-                        redead_nodes.append(name)
+                    refresh = True
 
-                # 1. Display nodes according to list.
+                # 2. Display nodes according to list.
                 if name in live_nodes and name not in known_nodes:
                     logging.debug("Drawing unknown live node.")
                     self.draw_info(name, info)
                 if name in dead_nodes and name not in known_nodes:
                     logging.debug("Drawing unknown dead node.")
                     self.draw_empty(name, info)
-                if name in reborn_nodes and name in known_nodes:
-                    logging.debug("Removing reborn node from known nodes.")
-                    dead_nodes.clear()
-                    reborn_nodes.clear()
+                if refresh:
+                    known_inbound.clear()
                     known_nodes.clear()
-                    listw.clear()
-                if name in redead_nodes and name in known_nodes:
-                    logging.debug("Removing redead node from known nodes.")
                     live_nodes.clear()
-                    redead_nodes.clear()
-                    known_nodes.clear()
+                    dead_nodes.clear()
+                    refresh = False
                     listw.clear()
 
                 # 3. Handle events on nodes we know.
                 if bool(info) and name in known_nodes:
                     self.fill_left_box()
                     self.fill_right_box()
+
+                    if 'inbound' in info:
+                        for key in info['inbound'].keys():
+                            if key not in known_inbound:
+                                logging.debug(f"Inbound {key} came online")
+                                refresh = True
+                            addr = info['inbound'].get(key)
+                            if bool(addr):
+                                continue
+                            logging.debug(f"Inbound {key} went offline")
+                            refresh = True
+
+                    # TODO
+                    #if 'outbound' in info:
+                    #    for key in info['outbound'].keys():
+                    #        if key in known_outbound:
+                    #            continue
+                    #        logging.debug(f"Outbound {key} came online.")
