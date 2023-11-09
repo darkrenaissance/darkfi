@@ -203,8 +203,13 @@ async fn getblocktemplate(endpoint: &Url, wallet_address: &monero::Address) -> R
     // Modify the coinbase tx with our additional merge mining data
     block_template.miner_tx.prefix.extra = tx_extra;
 
-    // TODO: Get the difficulty target
-    let target = "b88d0600".to_string();
+    // Get the difficulty target
+    let target = rep["result"]["wide_difficulty"]
+        .get::<String>()
+        .unwrap()
+        .strip_prefix("0x")
+        .unwrap()
+        .to_string();
 
     // Get the remaining metadata
     let height = *rep["result"]["height"].get::<f64>().unwrap();
