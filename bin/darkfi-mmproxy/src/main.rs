@@ -24,9 +24,8 @@ use std::{
 use darkfi::{
     async_daemonize, cli_desc,
     rpc::{
-        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult, JsonSubscriber},
+        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
         server::{listen_and_serve, RequestHandler},
-        util::JsonValue,
     },
     system::{StoppableTask, StoppableTaskPtr},
     Error, Result,
@@ -35,8 +34,8 @@ use darkfi_serial::async_trait;
 use log::{error, info};
 use serde::Deserialize;
 use smol::{
-    channel,
     lock::{Mutex, MutexGuard, RwLock},
+    net::TcpStream,
     stream::StreamExt,
     Executor,
 };
@@ -46,7 +45,6 @@ use url::Url;
 use uuid::Uuid;
 
 mod error;
-mod monero;
 mod stratum;
 
 const CONFIG_FILE: &str = "darkfi_mmproxy.toml";
@@ -77,66 +75,28 @@ struct Args {
     log: Option<String>,
 
     #[structopt(flatten)]
-    monerod: Monerod,
+    monerod: MonerodArgs,
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[structopt()]
-struct Monerod {
-    #[structopt(long, default_value = "")]
+struct MonerodArgs {
+    #[structopt(long, default_value = "mainnet")]
     /// Mining reward wallet address
-    wallet_address: String,
+    network: String,
 
     #[structopt(long, default_value = "http://127.0.0.1:28081/json_rpc")]
     /// monerod JSON-RPC server listen URL
-    monerod_rpc: Url,
-}
-
-struct Worker {
-    /// JSON-RPC notification subscriber, used to send job notifications
-    job_sub: JsonSubscriber,
-    /// Current job ID for the worker
-    job_id: Uuid,
-    /// Keepalive sender channel, pinged from stratum keepalived
-    ka_send: channel::Sender<()>,
-    /// Background keepalive task reference
-    ka_task: StoppableTaskPtr,
-}
-
-impl Worker {
-    fn new(
-        job_sub: JsonSubscriber,
-        ka_send: channel::Sender<()>,
-        ka_task: StoppableTaskPtr,
-    ) -> Self {
-        Self { job_sub, job_id: Uuid::new_v4(), ka_send, ka_task }
-    }
-
-    async fn send_job(&mut self, blob: String, target: String) -> Result<()> {
-        // Update job id
-        self.job_id = Uuid::new_v4();
-
-        let params: JsonValue = HashMap::from([
-            ("blob".to_string(), blob.into()),
-            ("job_id".to_string(), self.job_id.to_string().into()),
-            ("target".to_string(), target.into()),
-        ])
-        .into();
-
-        info!("Sending mining job notification to worker");
-        self.job_sub.notify(params).await;
-
-        Ok(())
-    }
+    rpc: Url,
 }
 
 struct MiningProxy {
-    /// monerod settings
-    monerod: Monerod,
-    /// Worker logins
-    logins: HashMap<String, String>,
+    /// monerod network type
+    monerod_network: monero::Network,
+    /// monerod RPC address
+    monerod_rpc: Url,
     /// Workers UUIDs
-    workers: Arc<RwLock<HashMap<Uuid, Worker>>>,
+    workers: Arc<RwLock<HashMap<Uuid, stratum::Worker>>>,
     /// JSON-RPC connection tracker
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     /// Main async executor reference
@@ -144,27 +104,29 @@ struct MiningProxy {
 }
 
 impl MiningProxy {
-    async fn new(
-        monerod: Monerod,
-        logins: HashMap<String, String>,
-        executor: Arc<Executor<'static>>,
-    ) -> Result<Self> {
-        let self_ = Self {
-            monerod,
-            logins,
-            workers: Arc::new(RwLock::new(HashMap::new())),
-            rpc_connections: Mutex::new(HashSet::new()),
-            executor,
+    async fn new(monerod: MonerodArgs, executor: Arc<Executor<'static>>) -> Result<Self> {
+        let monerod_network = match monerod.network.as_str() {
+            "mainnet" => monero::Network::Mainnet,
+            "testnet" => monero::Network::Testnet,
+            _ => {
+                error!("Invalid Monero network \"{}\"", monerod.network);
+                return Err(Error::Custom("Invalid Monero network".to_string()))
+            }
         };
 
-        // Test that monerod is reachable
-        let req = JsonRequest::new("get_block_count", vec![].into());
-        if let Err(e) = self_.oneshot_request(req).await {
-            error!("Could not reach monerod: {}", e);
-            return Err(Error::Custom("Could not reach monerod".to_string()))
+        // Test that monerod RPC is reachable
+        match TcpStream::connect(monerod.rpc.socket_addrs(|| None)?[0]).await {
+            Ok(_) => {}
+            Err(e) => {
+                error!("Failed connecting to monerod RPC: {}", e);
+                return Err(e.into())
+            }
         }
 
-        Ok(self_)
+        let workers = Arc::new(RwLock::new(HashMap::new()));
+        let rpc_connections = Mutex::new(HashSet::new());
+
+        Ok(Self { monerod_network, monerod_rpc: monerod.rpc, workers, rpc_connections, executor })
     }
 }
 
@@ -182,46 +144,6 @@ impl RequestHandler for MiningProxy {
             "submit" => self.stratum_submit(req.id, req.params).await,
             "keepalived" => self.stratum_keepalived(req.id, req.params).await,
 
-            // Monero daemon methods
-            "get_block_count" => self.monero_get_block_count(req.id, req.params).await,
-            "getblockcount" => self.monero_get_block_count(req.id, req.params).await,
-            "on_get_block_hash" => self.monero_on_get_block_hash(req.id, req.params).await,
-            "on_getblockhash" => self.monero_on_get_block_hash(req.id, req.params).await,
-            "get_block_template" => self.monero_get_block_template(req.id, req.params).await,
-            "getblocktemplate" => self.monero_get_block_template(req.id, req.params).await,
-            "submit_block" => self.monero_submit_block(req.id, req.params).await,
-            "submitblock" => self.monero_submit_block(req.id, req.params).await,
-            "generateblocks" => self.monero_generateblocks(req.id, req.params).await,
-
-            /*
-            "get_last_block_header" => self.monero_get_last_block_header(req.id, req.params).await,
-            "get_block_header_by_hash" => self.monero_get_block_header_by_hash(req.id, req.params).await,
-            "get_block_header_by_height" => self.monero_get_block_header_by_height(req.id, req.params).await,
-            "get_block_headers_range" => self.monero_get_block_headers_range(req.id, req.params).await,
-            "get_block" => self.monero_get_block(req.id, req.params).await,
-            "get_connections" => self.monero_get_connections(req.id, req.params).await,
-            "get_info" => self.monero_get_info(req.id, req.params).await,
-            "hard_fork_info" => self.monero_hard_fork_info(req.id, req.params).await,
-            "set_bans" => self.monero_set_bans(req.id, req.params).await,
-            "get_bans" => self.monero_get_bans(req.id, req.params).await,
-            "banned" => self.monero_banned(req.id, req.params).await,
-            "flush_txpool" => self.monero_flush_txpool(req.id, req.params).await,
-            "get_output_histogram" => self.monero_get_output_histogram(req.id, req.params).await,
-            "get_version" => self.monero_get_version(req.id, req.params).await,
-            "get_coinbase_tx_sum" => self.monero_get_coinbase_tx_sum(req.id, req.params).await,
-            "get_fee_estimate" => self.monero_get_fee_estimate(req.id, req.params).await,
-            "get_alternate_chains" => self.monero_get_alternate_chains(req.id, req.params).await,
-            "relay_tx" => self.monero_relay_tx(req.id, req.params).await,
-            "sync_info" => self.monero_sync_info(req.id, req.params).await,
-            "get_txpool_backlog" => self.monero_get_txpool_backlog(req.id, req.params).await,
-            "get_output_distribution" => self.monero_get_output_distribution(req.id, req.params).await,
-            "get_miner_data" => self.monero_get_miner_data(req.id, req.params).await,
-            "prune_blockchain" => self.monero_prune_blockchain(req.id, req.params).await,
-            "calc_pow" => self.monero_calc_pow(req.id, req.params).await,
-            "flush_cache" => self.monero_flush_cache(req.id, req.params).await,
-            "add_aux_pow" => self.monero_add_aux_pow(req.id, req.params).await,
-            */
-
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
@@ -234,23 +156,8 @@ impl RequestHandler for MiningProxy {
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!("Starting DarkFi x Monero merge mining proxy...");
-    // Parse worker logins
-    let mut logins = HashMap::new();
-    for worker in args.workers {
-        let mut split = worker.split(':');
-        let user = split.next().unwrap().to_string();
-        let pass = split.next().unwrap().to_string();
-        info!("Whitelisting worker \"{}:{}\"", user, pass);
-        logins.insert(user, pass);
-    }
 
-    if args.monerod.wallet_address.is_empty() {
-        error!("Wallet address empty. Please set it in your config.");
-        return Err(Error::Custom("Wallet address empty".to_string()))
-    }
-
-    info!("Instantiating MiningProxy with wallet: {}", args.monerod.wallet_address);
-    let mmproxy = Arc::new(MiningProxy::new(args.monerod, logins, ex.clone()).await?);
+    let mmproxy = Arc::new(MiningProxy::new(args.monerod, ex.clone()).await?);
     let mmproxy_ = Arc::clone(&mmproxy);
 
     info!("Starting JSON-RPC server");

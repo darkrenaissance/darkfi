@@ -1,6 +1,10 @@
 #!/bin/sh
 set -e
 
+# RandomX activation height:
+# Mainnet: 1978433
+# Testnet: 1308737
+
 MONERO_VERSION="0.18"
 
 MONEROD_BIN="./monero/build/Linux/release-v${MONERO_VERSION}/release/bin/monerod"
@@ -10,5 +14,5 @@ if ! [ -f "$MONEROD_BIN" ]; then
 	exit 1
 fi
 
-"${MONEROD_BIN}" --testnet --fixed-difficulty 2 \
-	--offline --hide-my-port --log-level 4
+"${MONEROD_BIN}" --regtest --fixed-difficulty 1 \
+	--offline --log-level 0 --keep-fakechain

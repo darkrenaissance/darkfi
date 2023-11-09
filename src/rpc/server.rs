@@ -121,9 +121,7 @@ pub async fn accept(
             JsonResult::SubscriberWithReply(subscriber, reply) => {
                 // Write the response
                 debug!(target: "rpc::server", "{} <-- {}", addr, reply.stringify()?);
-                if let Err(e) = write_to_stream(&mut stream, &reply.into()).await {
-                    return Err(e)
-                }
+                write_to_stream(&mut stream, &reply.into()).await?;
 
                 // Start the subscriber loop
                 let subscription = subscriber.sub.subscribe().await;
