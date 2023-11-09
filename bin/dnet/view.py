@@ -278,5 +278,5 @@ class View():
                                 continue
                             if id in known_outbound:
                                 continue
-                            logging.debug(f"Outbound {key} came online.")
+                            logging.debug(f"Outbound {i}, {addr} came online.")
                             refresh = True
