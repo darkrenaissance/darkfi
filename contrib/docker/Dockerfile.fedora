@@ -57,7 +57,7 @@ RUN cp $(find . -maxdepth 1  -type f -executable) /opt/darkfi/compiled-bins
 # 3. stage
 FROM ${OS_VER}
 
-RUN dnf -y install openssl lato-fonts alsa-lib \
+RUN dnf -y install openssl lato-fonts alsa-lib sqlcipher \
   && dnf clean all \
   && rm -rf /var/cache/dnf
 

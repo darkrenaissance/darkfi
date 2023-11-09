@@ -59,8 +59,8 @@ RUN cp $(find . -maxdepth 1  -type f -executable) /opt/darkfi/compiled-bins
 # 3. stage
 FROM ${OS_VER}
 
-RUN microdnf -y install openssl lato-fonts alsa-lib\
-  && microdnf clean all \
+RUN microdnf -y install openssl lato-fonts alsa-lib epel-release \
+  && microdnf install -y sqlcipher && microdnf clean all \
   && rm -rf /var/cache/dnf
 
 WORKDIR /opt/darkfi

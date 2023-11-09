@@ -62,7 +62,9 @@ RUN cp $(find . -maxdepth 1  -type f -executable) /opt/darkfi/compiled-bins
 # 3. stage
 FROM alpine:${ALPINE_VER}
 
-RUN apk add --no-cache openssl ttf-opensans libgcc alsa-lib sqlite-libs
+RUN apk add --no-cache openssl ttf-opensans libgcc alsa-lib sqlite-libs libstdc++
+
+RUN apk add --no-cache sqlcipher-libs --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing/
 
 WORKDIR /opt/darkfi
 

@@ -55,7 +55,7 @@ RUN cp $(find . -maxdepth 1  -type f -executable) /opt/darkfi/compiled-bins
 FROM debian:${OS_VER}
 
 RUN apt-get -y update && apt-get install -y openssl fonts-lato libout123-0 libmpg123-0 libasound2 libsqlite3-0 \
-  && apt-get clean && rm -rf /var/lib/apt/lists/*
+  sqlcipher && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/darkfi
 
