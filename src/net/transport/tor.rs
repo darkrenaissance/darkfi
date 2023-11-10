@@ -20,8 +20,13 @@ use std::time::Duration;
 
 use arti_client::{config::BoolOrAuto, DataStream, StreamPrefs, TorClient};
 use log::debug;
+use smol::lock::OnceCell;
+use tor_rtcompat::PreferredRuntime;
 
 use crate::{system::timeout::timeout, Result};
+
+/// A static for `TorClient` reusability
+static TOR_CLIENT: OnceCell<TorClient<PreferredRuntime>> = OnceCell::new();
 
 /// Tor Dialer implementation
 #[derive(Debug, Clone)]
@@ -41,8 +46,16 @@ impl TorDialer {
         conn_timeout: Option<Duration>,
     ) -> Result<DataStream> {
         debug!(target: "net::tor::do_dial", "Dialing {}:{} with Tor...", host, port);
-        debug!(target: "net::tor::do_dial", "Bootstrapping...");
-        let client = TorClient::builder().create_bootstrapped().await?;
+
+        // Initialize or fetch the static TOR_CLIENT that should be reused in
+        // the Tor dialer
+        let client = TOR_CLIENT
+            .get_or_try_init(|| async {
+                debug!(target: "net::tor::do_dial", "Bootstrapping...");
+                TorClient::builder().create_bootstrapped().await
+            })
+            .await?;
+
         let mut stream_prefs = StreamPrefs::new();
         stream_prefs.connect_to_onion_services(BoolOrAuto::Explicit(true));
 

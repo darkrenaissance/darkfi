@@ -70,7 +70,8 @@ async-rustls = {version = "0.4.1", features = ["dangerous_configuration"], optio
 # Pluggable Transports
 socket2 = {version = "0.5.5", features = ["all"], optional = true}
 arti-client = {version = "0.10.2", default-features = false, features = ["async-std", "error_detail", "rustls", "onion-service-client"], optional = true}
-tor-error = {version = "0.5.4"}
+tor-error = {version = "0.5.4", optional = true}
+tor-rtcompat = {version = "0.9.5", features = ["async-std", "rustls"], optional = true}
 tor-hscrypto = {version = "0.3.4", optional = true}
 
 # TLS cert utilities
@@ -215,7 +216,7 @@ event-graph = [
 
 p2p-unix = []
 p2p-tcp = ["socket2"]
-p2p-tor = ["arti-client", "tor-hscrypto", "libsqlite3-sys"]
+p2p-tor = ["arti-client", "tor-hscrypto", "tor-error", "tor-rtcompat", "libsqlite3-sys"]
 p2p-nym = []
 
 net = [
