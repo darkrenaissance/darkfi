@@ -347,6 +347,10 @@ impl ProtocolEventGraph {
 
             // At this point we should have it in our DAG.
             // This code panics if this is not the case.
+            debug!(
+                target: "event_graph::protocol::handle_event_req()",
+                "Fetching event {} from DAG", event_id,
+            );
             let event = self.event_graph.dag.get(event_id.as_bytes()).unwrap().unwrap();
             let event: Event = deserialize_async(&event).await.unwrap();
 
