@@ -56,6 +56,9 @@ class Session(DnetWidget):
         txt = urwid.Text(f"  {self.session}")
         super().update(txt)
 
+    def is_lilith(self):
+        return True
+
 
 class Slot(DnetWidget):
     def set_txt(self, i, addr):
@@ -68,7 +71,7 @@ class Slot(DnetWidget):
             self.addr = addr
             txt = urwid.Text(f"    {self.addr}")
         super().update(txt)
-
+    
 
 class View():
     palette = [
@@ -88,6 +91,13 @@ class View():
         leftbox = urwid.LineBox(self.list)
         columns = urwid.Columns([leftbox, rightbox], focus_column=0)
         self.ui = urwid.Frame(urwid.AttrWrap( columns, 'body' ))
+        self.known_outbound = []
+        self.known_inbound = []
+        self.known_nodes = []
+        self.live_nodes = []
+        self.dead_nodes = []
+        self.refresh = False
+
 
     #-----------------------------------------------------------------
     # Render get_info()
@@ -134,6 +144,13 @@ class View():
                slot = Slot(node_name, "seed-slot")
                slot.set_txt(i, addr)
                self.listwalker.contents.append(slot)
+
+       if 'name' in info and info['name']:
+           spawn = info.get('name')
+           session = Session(node_name, spawn)
+           session.is_lilith()
+           session.set_txt()  
+           self.listwalker.contents.append(session)
 
     def draw_empty(self, node_name, info):
        node = Node(node_name, "node")
@@ -189,94 +206,103 @@ class View():
                     self.pile.contents.append((urwid.Text(
                             f"{time}: {event}: {msg}"),
                             self.pile.options()))
+        
+    # Sort nodes into lists.
+    def sort(self, nodes):
+        for name, info in nodes:
+            if bool(info) and name not in self.live_nodes:
+                self.live_nodes.append(name)
+            if not bool(info) and name not in self.dead_nodes:
+                self.dead_nodes.append(name)
+            if bool(info) and name in self.dead_nodes:
+                logging.debug("Refresh: dead node online.")
+                self.refresh = True
+            if not bool(info) and name in self.live_nodes:
+                logging.debug("Refresh: online node offline.")
+                self.refresh = True
 
+    # Display nodes according to list.
+    async def draw(self, nodes):
+        for name, info in nodes:
+            if name in self.live_nodes and name not in self.known_nodes:
+                self.draw_info(name, info)
+            if name in self.dead_nodes and name not in self.known_nodes:
+                self.draw_empty(name, info)
+            if self.refresh:
+                logging.debug("Refresh initiated.")
+                await asyncio.sleep(0.1)
+                self.known_outbound.clear()
+                self.known_inbound.clear()
+                self.known_nodes.clear()
+                self.live_nodes.clear()
+                self.dead_nodes.clear()
+                refresh = False
+                listw.clear()
+                logging.debug("Refresh complete.")
+
+    # Handle events.
+    def events(self, nodes):
+        for name, info in nodes:
+            if bool(info) and name in self.known_nodes:
+                self.fill_left_box()
+                self.fill_right_box()
+
+                if 'inbound' in info:
+                    for key in info['inbound'].keys():
+                        # New inbound online.
+                        if key not in self.known_inbound:
+                            addr = info['inbound'].get(key)
+                            if bool(addr):
+                                logging.debug(f"Refresh: inbound {key} online")
+                                refresh = True
+                        # Known inbound offline.
+                        for key in self.known_inbound:
+                            addr = info['inbound'].get(key)
+                            if bool(addr):
+                                continue
+                            logging.debug(f"Refresh: inbound {key} offline")
+                            self.refresh = True
+
+                # New outbound online.
+                if 'outbound' in info:
+                    for i, info in info['outbound'].items():
+                        addr = info[0]
+                        id = info[1]
+                        if id == 0:
+                            continue
+                        if id in self.known_outbound:
+                            continue
+                        logging.debug(f"Outbound {i}, {addr} came online.")
+                        self.refresh = True
+    
     async def update_view(self, evloop: asyncio.AbstractEventLoop,
                           loop: urwid.MainLoop):
-        live_nodes = []
-        dead_nodes = []
-        known_nodes = []
-        known_inbound = []
-        known_outbound = []
-        refresh = False
-
         while True:
             await asyncio.sleep(0.1)
 
             nodes = self.model.nodes.items()
+            liliths = self.model.liliths.items()
             listw = self.listwalker.contents
             evloop.call_soon(loop.draw_screen)
 
             for index, item in enumerate(listw):
                 # Keep track of known nodes.
-                if item.node_name not in known_nodes:
-                    known_nodes.append(item.node_name)
+                if item.node_name not in self.known_nodes:
+                    self.known_nodes.append(item.node_name)
                 # Keep track of known inbounds.
                 if (item.session == "inbound-slot"
-                        and item.i not in known_inbound):
-                    known_inbound.append(item.i)
+                        and item.i not in self.known_inbound):
+                    self.known_inbound.append(item.i)
                 # Keep track of known outbounds.
                 if (item.session == "outbound-slot"
-                        and item.id not in known_outbound
+                        and item.id not in self.known_outbound
                         and not item.id == 0):
-                    known_outbound.append(item.id)
+                    self.known_outbound.append(item.id)
 
-            for name, info in nodes:
-                # 1. Sort nodes into lists.
-                if bool(info) and name not in live_nodes:
-                    live_nodes.append(name)
-                if not bool(info) and name not in dead_nodes:
-                    dead_nodes.append(name)
-                if bool(info) and name in dead_nodes:
-                    logging.debug("Refresh: dead node online.")
-                    refresh = True
-                if not bool(info) and name in live_nodes:
-                    logging.debug("Refresh: online node offline.")
-                    refresh = True
+            self.sort(nodes)
+            self.sort(liliths)
+            
+            await self.draw(nodes)
+            await self.draw(liliths)
 
-                # 2. Display nodes according to list.
-                if name in live_nodes and name not in known_nodes:
-                    self.draw_info(name, info)
-                if name in dead_nodes and name not in known_nodes:
-                    self.draw_empty(name, info)
-                if refresh:
-                    logging.debug("Refresh initiated.")
-                    await asyncio.sleep(0.1)
-                    known_outbound.clear()
-                    known_inbound.clear()
-                    known_nodes.clear()
-                    live_nodes.clear()
-                    dead_nodes.clear()
-                    refresh = False
-                    listw.clear()
-                    logging.debug("Refresh complete.")
-
-                # 3. Handle events on nodes we know.
-                if bool(info) and name in known_nodes:
-                    self.fill_left_box()
-                    self.fill_right_box()
-                    if 'inbound' in info:
-                        for key in info['inbound'].keys():
-                            # New inbound online.
-                            if key not in known_inbound:
-                                addr = info['inbound'].get(key)
-                                if bool(addr):
-                                    logging.debug(f"Refresh: inbound {key} online")
-                                    refresh = True
-                            # Known inbound offline.
-                            for key in known_inbound:
-                                addr = info['inbound'].get(key)
-                                if bool(addr):
-                                    continue
-                                logging.debug(f"Refresh: inbound {key} offline")
-                                refresh = True
-                    # New outbound online.
-                    if 'outbound' in info:
-                        for i, info in info['outbound'].items():
-                            addr = info[0]
-                            id = info[1]
-                            if id == 0:
-                                continue
-                            if id in known_outbound:
-                                continue
-                            logging.debug(f"Outbound {i}, {addr} came online.")
-                            refresh = True
+            self.events(nodes)

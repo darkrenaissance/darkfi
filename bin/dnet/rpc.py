@@ -73,5 +73,3 @@ class JsonRpc:
 
     async def dnet_subscribe_events(self):
         return await self._subscribe("dnet.subscribe_events", [])
-
-

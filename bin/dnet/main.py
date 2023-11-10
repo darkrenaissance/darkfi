@@ -32,8 +32,13 @@ class Dnetview:
         self.model = Model()
         self.view = View(self.model)
 
-    async def subscribe(self, rpc, name, host, port):
+    async def subscribe(self, rpc, node):
+        name = node['name']
+        host = node['host']
+        port = node['port']
+        type = node['type']
         info = {}
+
         while True:
             try:
                 await rpc.start(host, port)
@@ -44,27 +49,34 @@ class Dnetview:
                 await self.queue.put(info)
                 continue
     
-        data = await rpc._make_request("p2p.get_info", [])
-        info[name] = data
+        if type == "NORMAL":
+            data = await rpc._make_request("p2p.get_info", [])
+            info[name] = data
 
-        await self.queue.put(info)
-        await rpc.dnet_switch(True)
-        await rpc.dnet_subscribe_events()
+            await self.queue.put(info)
+            await rpc.dnet_switch(True)
+            await rpc.dnet_subscribe_events()
+            
+            while True:
+                await asyncio.sleep(0.01)
+                data = await rpc.reader.readline()
+                try:
+                    data = json.loads(data)
+                    info[name] = data
+                    await self.queue.put(info)
+                except:
+                    info[name] = {}
+                    await self.queue.put(info)
 
-        while True:
-            await asyncio.sleep(0.01)
-            data = await rpc.reader.readline()
-            try:
-                data = json.loads(data)
-                info[name] = data
-                await self.queue.put(info)
-            except:
-                info[name] = {}
-                await self.queue.put(info)
-
-        await rpc.dnet_switch(False)
-        await rpc.stop()
+            await rpc.dnet_switch(False)
     
+        if type == "LILITH":
+            data = await rpc._make_request("spawns", [])
+            info[name] = data
+            await self.queue.put(info)
+
+        await rpc.stop()
+
     def get_config(self):
         with open("config.toml") as f:
             cfg = toml.load(f)
@@ -76,8 +88,7 @@ class Dnetview:
             for i, node in enumerate(nodes):
                 rpc = JsonRpc()
                 subscribe = tg.create_task(self.subscribe(
-                            rpc, node['name'], node['host'],
-                            node['port']))
+                            rpc, node))
                 nodes = tg.create_task(self.update_info())
 
     async def update_info(self):
@@ -85,15 +96,20 @@ class Dnetview:
             info = await self.queue.get()
             values = list(info.values())[0]
 
-            if values:
-                method = values.get("method")
-                if method == "dnet.subscribe_events":
-                    self.model.add_event(info)
-                else:
-                    self.model.add_node(info)
-            else:
+            if not values:
                 self.model.add_offline(info)
 
+            if 'result' in values:
+                result = values.get('result')
+                if 'spawns' in result:
+                    self.model.add_lilith(info)
+                if 'channels' in result:
+                    self.model.add_node(info)
+
+            if 'params' in values:
+                self.model.add_event(info)
+
+            logging.debug(self.model.liliths)
             self.queue.task_done()
 
     def main(self):
