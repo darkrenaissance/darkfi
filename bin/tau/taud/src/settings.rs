@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use serde::Deserialize;
 use structopt::StructOpt;
-use structopt_toml::StructOptToml;
+use structopt_toml::{serde::Deserialize, StructOptToml};
 use url::Url;
 
 use darkfi::net::settings::SettingsOpt;
