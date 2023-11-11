@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    fs::remove_dir_all,
-    sync::{Arc, OnceLock},
-};
+use std::sync::{Arc, OnceLock};
 
 use darkfi::{
     async_daemonize, cli_desc,
@@ -171,12 +168,8 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     //
     // RPC interface
     //
-    let rpc_interface = Arc::new(JsonRpcInterface::new(
-        "Alolymous".to_string(),
-        event_graph.clone(),
-        seen.clone(),
-        p2p.clone(),
-    ));
+    let rpc_interface =
+        Arc::new(JsonRpcInterface::new("Alolymous".to_string(), event_graph.clone(), p2p.clone()));
     let rpc_task = StoppableTask::new();
     let rpc_interface_ = rpc_interface.clone();
     rpc_task.clone().start(
@@ -204,8 +197,6 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
 
     // stop p2p
     p2p.stop().await;
-
-    remove_dir_all(datastore_path).unwrap_or(());
 
     Ok(())
 }

@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, sync::OnceLock};
+use std::collections::HashSet;
 
 use async_trait::async_trait;
 use log::{debug, error, info};
@@ -39,7 +39,6 @@ use genevd::GenEvent;
 pub struct JsonRpcInterface {
     _nickname: String,
     event_graph: EventGraphPtr,
-    seen: OnceLock<sled::Tree>,
     p2p: net::P2pPtr,
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 }
@@ -63,13 +62,8 @@ impl RequestHandler for JsonRpcInterface {
 }
 
 impl JsonRpcInterface {
-    pub fn new(
-        _nickname: String,
-        event_graph: EventGraphPtr,
-        seen: OnceLock<sled::Tree>,
-        p2p: net::P2pPtr,
-    ) -> Self {
-        Self { _nickname, event_graph, seen, p2p, rpc_connections: Mutex::new(HashSet::new()) }
+    pub fn new(_nickname: String, event_graph: EventGraphPtr, p2p: net::P2pPtr) -> Self {
+        Self { _nickname, event_graph, p2p, rpc_connections: Mutex::new(HashSet::new()) }
     }
 
     // RPCAPI:
@@ -130,20 +124,10 @@ impl JsonRpcInterface {
     // <-- {"jsonrpc": "2.0", "result": [task_id, ...], "id": 1}
     async fn list(&self, id: u16, _params: JsonValue) -> JsonResult {
         debug!("Fetching all events");
-        let mut sevents = vec![];
-
-        ////////////////////
-        // get history
-        ////////////////////
+        let mut seen_events = vec![];
         let dag_events = self.event_graph.order_events().await;
-        let seen_events = self.seen.get().unwrap();
 
         for event_id in dag_events.iter() {
-            // If it was seen, skip
-            if seen_events.contains_key(event_id.as_bytes()).unwrap() {
-                continue
-            }
-
             // Get the event from the DAG
             let event = self.event_graph.dag_get(event_id).await.unwrap().unwrap();
 
@@ -157,11 +141,10 @@ impl JsonRpcInterface {
             };
 
             info!("Marking event {} as seen", event_id);
-            seen_events.insert(event_id.as_bytes(), &[]).unwrap();
-            sevents.push(genevent);
+            seen_events.push(genevent);
         }
 
-        let ser = darkfi_serial::serialize(&sevents);
+        let ser = darkfi_serial::serialize(&seen_events);
         let enc = JsonValue::String(base64::encode(&ser));
 
         JsonResponse::new(enc, id).into()
