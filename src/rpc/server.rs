@@ -81,6 +81,7 @@ pub async fn accept(
     addr: Url,
     rh: Arc<impl RequestHandler + 'static>,
     conn_limit: Option<usize>,
+    ex: Arc<smol::Executor<'_>>,
 ) -> Result<()> {
     // If there's a connection limit set, we will refuse connections
     // after this point.
@@ -93,6 +94,9 @@ pub async fn accept(
             return Err(Error::RpcConnectionsExhausted)
         }
     }
+
+    // We'll hold our background tasks here
+    let tasks = Arc::new(Mutex::new(HashSet::new()));
 
     loop {
         let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
@@ -110,23 +114,40 @@ pub async fn accept(
 
         match rep {
             JsonResult::Subscriber(subscriber) => {
-                // Subscribe to the inner method subscriber
-                let subscription = subscriber.sub.subscribe().await;
-                loop {
-                    // Listen for notifications
-                    let notification = subscription.receive().await;
+                let task = StoppableTask::new();
+                tasks.lock().await.insert(task.clone());
 
-                    // Push notification
-                    debug!(target: "rpc::server", "{} <-- {}", addr, notification.stringify()?);
-                    let notification = JsonResult::Notification(notification);
+                // Clone what needs to go in the background
+                let task_ = task.clone();
+                let addr_ = addr.clone();
+                let tasks_ = tasks.clone();
+                let writer_ = writer.clone();
 
-                    let mut writer_lock = writer.lock().await;
-                    if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
-                        subscription.unsubscribe().await;
-                        return Err(e)
-                    }
-                    drop(writer_lock);
-                }
+                // Detach the subscriber so we can multiplex further requests
+                task.clone().start(
+                    async move {
+                        // Subscribe to the inner method subscriber
+                        let subscription = subscriber.sub.subscribe().await;
+                        loop {
+                            // Listen for notifications
+                            let notification = subscription.receive().await;
+
+                            // Push notification
+                            debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify()?);
+                            let notification = JsonResult::Notification(notification);
+
+                            let mut writer_lock = writer_.lock().await;
+                            if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
+                                subscription.unsubscribe().await;
+                                return Err(e)
+                            }
+                            drop(writer_lock);
+                        }
+                    },
+                    move |_| async move { tasks_.lock().await.remove(&task_); },
+                    Error::DetachedTaskStopped,
+                    ex.clone(),
+                );
             }
 
             JsonResult::SubscriberWithReply(subscriber, reply) => {
@@ -136,24 +157,41 @@ pub async fn accept(
                 write_to_stream(&mut writer_lock, &reply.into()).await?;
                 drop(writer_lock);
 
-                // Start the subscriber loop
-                let subscription = subscriber.sub.subscribe().await;
-                loop {
-                    // Listen for notifications
-                    let notification = subscription.receive().await;
+                let task = StoppableTask::new();
+                tasks.lock().await.insert(task.clone());
 
-                    // Push notification
-                    debug!(target: "rpc::server", "{} <-- {}", addr, notification.stringify()?);
-                    let notification = JsonResult::Notification(notification);
+                // Clone what needs to go in the background
+                let task_ = task.clone();
+                let addr_ = addr.clone();
+                let tasks_ = tasks.clone();
+                let writer_ = writer.clone();
 
-                    let mut writer_lock = writer.lock().await;
-                    if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
-                        subscription.unsubscribe().await;
-                        drop(writer_lock);
-                        return Err(e)
-                    }
-                    drop(writer_lock);
-                }
+                // Detach the subscriber so we can multiplex further requests
+                task.clone().start(
+                    async move {
+                        // Start the subscriber loop
+                        let subscription = subscriber.sub.subscribe().await;
+                        loop {
+                            // Listen for notifications
+                            let notification = subscription.receive().await;
+
+                            // Push notification
+                            debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify()?);
+                            let notification = JsonResult::Notification(notification);
+
+                            let mut writer_lock = writer_.lock().await;
+                            if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
+                                subscription.unsubscribe().await;
+                                drop(writer_lock);
+                                return Err(e)
+                            }
+                            drop(writer_lock);
+                        }
+                    },
+                    move |_| async move { tasks_.lock().await.remove(&task_); },
+                    Error::DetachedTaskStopped,
+                    ex.clone(),
+                );
             }
 
             JsonResult::Request(_) | JsonResult::Notification(_) => {
@@ -197,8 +235,9 @@ async fn run_accept_loop(
 
                 let task = StoppableTask::new();
                 let task_ = task.clone();
+                let ex_ = ex.clone();
                 task.clone().start(
-                    accept(reader, writer, url.clone(), rh.clone(), conn_limit),
+                    accept(reader, writer, url.clone(), rh.clone(), conn_limit, ex_),
                     |_| async move {
                         rh_.clone().unmark_connection(task_.clone()).await;
                     },
