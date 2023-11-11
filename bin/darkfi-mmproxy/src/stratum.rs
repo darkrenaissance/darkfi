@@ -423,19 +423,7 @@ impl MiningProxy {
         // Check valid login. We will parse the username as a Monero
         // address, and validate that it corresponds to the network
         // we're mining on.
-        let addr_bytes = match bs58::decode(login).into_vec() {
-            Ok(v) => v,
-            Err(e) => {
-                return JsonError::new(
-                    RpcError::InvalidWorkerLogin.into(),
-                    Some(format!("Invalid Monero address login: {}", e)),
-                    id,
-                )
-                .into()
-            }
-        };
-
-        let addr = match monero::Address::from_bytes(&addr_bytes) {
+        let addr = match monero::Address::from_str(login) {
             Ok(v) => v,
             Err(e) => {
                 return JsonError::new(
