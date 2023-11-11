@@ -115,6 +115,7 @@ pub async fn accept(
         match rep {
             JsonResult::Subscriber(subscriber) => {
                 let task = StoppableTask::new();
+                debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
                 tasks.lock().await.insert(task.clone());
 
                 // Clone what needs to go in the background
@@ -144,7 +145,13 @@ pub async fn accept(
                             drop(writer_lock);
                         }
                     },
-                    move |_| async move { tasks_.lock().await.remove(&task_); },
+                    move |_| async move {
+                        debug!(
+                            target: "rpc::server",
+                            "Removing background task {} from map", task_.task_id,
+                        );
+                        tasks_.lock().await.remove(&task_);
+                    },
                     Error::DetachedTaskStopped,
                     ex.clone(),
                 );
@@ -158,6 +165,7 @@ pub async fn accept(
                 drop(writer_lock);
 
                 let task = StoppableTask::new();
+                debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
                 tasks.lock().await.insert(task.clone());
 
                 // Clone what needs to go in the background
@@ -188,7 +196,13 @@ pub async fn accept(
                             drop(writer_lock);
                         }
                     },
-                    move |_| async move { tasks_.lock().await.remove(&task_); },
+                    move |_| async move {
+                        debug!(
+                            target: "rpc::server",
+                            "Removing background task {} from map", task_.task_id,
+                        );
+                        tasks_.lock().await.remove(&task_);
+                    },
                     Error::DetachedTaskStopped,
                     ex.clone(),
                 );
