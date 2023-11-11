@@ -20,7 +20,10 @@ use std::{collections::HashSet, io::ErrorKind, sync::Arc};
 
 use async_trait::async_trait;
 use log::{debug, error, info};
-use smol::lock::MutexGuard;
+use smol::{
+    io::{ReadHalf, WriteHalf},
+    lock::{Mutex, MutexGuard},
+};
 use tinyjson::JsonValue;
 use url::Url;
 
@@ -73,7 +76,8 @@ pub trait RequestHandler: Sync + Send {
 /// Accept function that should run inside a loop for accepting incoming
 /// JSON-RPC requests and passing them to the [`RequestHandler`].
 pub async fn accept(
-    mut stream: Box<dyn PtStream>,
+    reader: Arc<Mutex<ReadHalf<Box<dyn PtStream>>>>,
+    writer: Arc<Mutex<WriteHalf<Box<dyn PtStream>>>>,
     addr: Url,
     rh: Arc<impl RequestHandler + 'static>,
     conn_limit: Option<usize>,
@@ -92,7 +96,11 @@ pub async fn accept(
 
     loop {
         let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
-        let _ = read_from_stream(&mut stream, &mut buf, false).await?;
+
+        let mut reader_lock = reader.lock().await;
+        let _ = read_from_stream(&mut reader_lock, &mut buf, false).await?;
+        drop(reader_lock);
+
         let val: JsonValue = String::from_utf8(buf)?.trim().parse()?;
         let req = JsonRequest::try_from(&val)?;
 
@@ -111,17 +119,22 @@ pub async fn accept(
                     // Push notification
                     debug!(target: "rpc::server", "{} <-- {}", addr, notification.stringify()?);
                     let notification = JsonResult::Notification(notification);
-                    if let Err(e) = write_to_stream(&mut stream, &notification).await {
+
+                    let mut writer_lock = writer.lock().await;
+                    if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
                         subscription.unsubscribe().await;
                         return Err(e)
                     }
+                    drop(writer_lock);
                 }
             }
 
             JsonResult::SubscriberWithReply(subscriber, reply) => {
                 // Write the response
                 debug!(target: "rpc::server", "{} <-- {}", addr, reply.stringify()?);
-                write_to_stream(&mut stream, &reply.into()).await?;
+                let mut writer_lock = writer.lock().await;
+                write_to_stream(&mut writer_lock, &reply.into()).await?;
+                drop(writer_lock);
 
                 // Start the subscriber loop
                 let subscription = subscriber.sub.subscribe().await;
@@ -132,10 +145,14 @@ pub async fn accept(
                     // Push notification
                     debug!(target: "rpc::server", "{} <-- {}", addr, notification.stringify()?);
                     let notification = JsonResult::Notification(notification);
-                    if let Err(e) = write_to_stream(&mut stream, &notification).await {
+
+                    let mut writer_lock = writer.lock().await;
+                    if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
                         subscription.unsubscribe().await;
+                        drop(writer_lock);
                         return Err(e)
                     }
+                    drop(writer_lock);
                 }
             }
 
@@ -145,12 +162,16 @@ pub async fn accept(
 
             JsonResult::Response(ref v) => {
                 debug!(target: "rpc::server", "{} <-- {}", addr, v.stringify()?);
-                write_to_stream(&mut stream, &rep).await?;
+                let mut writer_lock = writer.lock().await;
+                write_to_stream(&mut writer_lock, &rep).await?;
+                drop(writer_lock);
             }
 
             JsonResult::Error(ref v) => {
                 debug!(target: "rpc::server", "{} <-- {}", addr, v.stringify()?);
-                write_to_stream(&mut stream, &rep).await?;
+                let mut writer_lock = writer.lock().await;
+                write_to_stream(&mut writer_lock, &rep).await?;
+                drop(writer_lock);
             }
         }
     }
@@ -169,10 +190,15 @@ async fn run_accept_loop(
             Ok((stream, url)) => {
                 let rh_ = rh.clone();
                 info!(target: "rpc::server", "[RPC] Server accepted conn from {}", url);
+
+                let (reader, writer) = smol::io::split(stream);
+                let reader = Arc::new(Mutex::new(reader));
+                let writer = Arc::new(Mutex::new(writer));
+
                 let task = StoppableTask::new();
                 let task_ = task.clone();
                 task.clone().start(
-                    accept(stream, url.clone(), rh.clone(), conn_limit),
+                    accept(reader, writer, url.clone(), rh.clone(), conn_limit),
                     |_| async move {
                         rh_.clone().unmark_connection(task_.clone()).await;
                     },
