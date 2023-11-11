@@ -134,8 +134,6 @@ impl MiningProxy {
 #[rustfmt::skip]
 impl RequestHandler for MiningProxy {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        error!(target: "mmproxy::rpc", "--> {}", req.stringify().unwrap());
-
         match req.method.as_str() {
             "ping" => self.pong(req.id, req.params).await,
 
