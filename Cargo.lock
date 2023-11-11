@@ -3064,6 +3064,43 @@ dependencies = [
 ]
 
 [[package]]
+name = "genev"
+version = "0.4.1"
+dependencies = [
+ "clap 4.4.7",
+ "darkfi",
+ "darkfi-serial",
+ "genevd",
+ "log",
+ "simplelog",
+ "smol",
+ "tinyjson",
+ "url",
+]
+
+[[package]]
+name = "genevd"
+version = "0.4.1"
+dependencies = [
+ "async-trait",
+ "blake3",
+ "darkfi",
+ "darkfi-serial",
+ "easy-parallel",
+ "log",
+ "serde",
+ "signal-hook",
+ "signal-hook-async-std",
+ "simplelog",
+ "sled",
+ "smol",
+ "structopt",
+ "structopt-toml",
+ "tinyjson",
+ "url",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"

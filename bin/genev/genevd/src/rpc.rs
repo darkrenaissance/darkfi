@@ -16,34 +16,30 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, sync::Arc};
+use std::{collections::HashSet, sync::OnceLock};
 
 use async_trait::async_trait;
-use log::debug;
+use log::{debug, error, info};
 use smol::lock::{Mutex, MutexGuard};
 use tinyjson::JsonValue;
 
 use darkfi::{
-    event_graph::{
-        model::{Event, EventId, ModelPtr},
-        protocol_event::SeenPtr,
-    },
+    event_graph::{proto::EventPut, Event, EventGraphPtr},
     net,
     rpc::{
         jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
         server::RequestHandler,
     },
     system::StoppableTaskPtr,
-    util::{encoding::base64, time::Timestamp},
+    util::encoding::base64,
 };
-use darkfi_serial::deserialize;
+use darkfi_serial::{deserialize, deserialize_async_partial, serialize_async};
 use genevd::GenEvent;
 
 pub struct JsonRpcInterface {
     _nickname: String,
-    missed_events: Arc<Mutex<Vec<Event<GenEvent>>>>,
-    model: ModelPtr<GenEvent>,
-    seen: SeenPtr<EventId>,
+    event_graph: EventGraphPtr,
+    seen: OnceLock<sled::Tree>,
     p2p: net::P2pPtr,
     rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
 }
@@ -69,19 +65,11 @@ impl RequestHandler for JsonRpcInterface {
 impl JsonRpcInterface {
     pub fn new(
         _nickname: String,
-        missed_events: Arc<Mutex<Vec<Event<GenEvent>>>>,
-        model: ModelPtr<GenEvent>,
-        seen: SeenPtr<EventId>,
+        event_graph: EventGraphPtr,
+        seen: OnceLock<sled::Tree>,
         p2p: net::P2pPtr,
     ) -> Self {
-        Self {
-            _nickname,
-            missed_events,
-            model,
-            seen,
-            p2p,
-            rpc_connections: Mutex::new(HashSet::new()),
-        }
+        Self { _nickname, event_graph, seen, p2p, rpc_connections: Mutex::new(HashSet::new()) }
     }
 
     // RPCAPI:
@@ -122,18 +110,15 @@ impl JsonRpcInterface {
         let dec = base64::decode(b64).unwrap();
         let genevent: GenEvent = deserialize(&dec).unwrap();
 
-        let event = Event {
-            previous_event_hash: self.model.lock().await.get_head_hash().unwrap(),
-            action: genevent,
-            timestamp: Timestamp::current_time(),
-        };
+        // Build a DAG event and return it.
+        let event = Event::new(serialize_async(&genevent).await, self.event_graph.clone()).await;
 
-        if !self.seen.push(&event.hash()).await {
-            let json = JsonValue::Boolean(false);
-            return JsonResponse::new(json, id).into()
+        if let Err(e) = self.event_graph.dag_insert(event.clone()).await {
+            error!("Failed inserting new event to DAG: {}", e);
+        } else {
+            // Otherwise, broadcast it
+            self.p2p.broadcast(&EventPut(event)).await;
         }
-
-        self.p2p.broadcast(&event).await;
 
         let json = JsonValue::Boolean(true);
         JsonResponse::new(json, id).into()
@@ -144,10 +129,39 @@ impl JsonRpcInterface {
     // --> {"jsonrpc": "2.0", "method": "list", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": [task_id, ...], "id": 1}
     async fn list(&self, id: u16, _params: JsonValue) -> JsonResult {
-        debug!("fetching all events");
-        let msd = self.missed_events.lock().await.clone();
+        debug!("Fetching all events");
+        let mut sevents = vec![];
 
-        let ser = darkfi_serial::serialize(&msd);
+        ////////////////////
+        // get history
+        ////////////////////
+        let dag_events = self.event_graph.order_events().await;
+        let seen_events = self.seen.get().unwrap();
+
+        for event_id in dag_events.iter() {
+            // If it was seen, skip
+            if seen_events.contains_key(event_id.as_bytes()).unwrap() {
+                continue
+            }
+
+            // Get the event from the DAG
+            let event = self.event_graph.dag_get(event_id).await.unwrap().unwrap();
+
+            // Try to deserialize it. (Here we skip errors)
+            let genevent: GenEvent = match deserialize_async_partial(event.content()).await {
+                Ok((v, _)) => v,
+                Err(e) => {
+                    error!("Failed deserializing incoming event: {}", e);
+                    continue
+                }
+            };
+
+            info!("Marking event {} as seen", event_id);
+            seen_events.insert(event_id.as_bytes(), &[]).unwrap();
+            sevents.push(genevent);
+        }
+
+        let ser = darkfi_serial::serialize(&sevents);
         let enc = JsonValue::String(base64::encode(&ser));
 
         JsonResponse::new(enc, id).into()

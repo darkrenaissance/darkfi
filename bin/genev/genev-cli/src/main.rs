@@ -86,7 +86,7 @@ fn main() -> Result<()> {
                         println!("=============================");
                         println!(
                             "- nickname: {}, title: {}, text: {}",
-                            event.action.nick, event.action.title, event.action.text
+                            event.nick, event.title, event.text
                         );
                     }
                 }

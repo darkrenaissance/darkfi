@@ -16,24 +16,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::{
+    fs::remove_dir_all,
+    sync::{Arc, OnceLock},
+};
 
 use darkfi::{
     async_daemonize, cli_desc,
-    event_graph::{
-        events_queue::EventsQueue,
-        model::{Event, EventId, Model},
-        protocol_event::{ProtocolEvent, Seen, SeenPtr},
-        view::{View, ViewPtr},
-    },
-    net::{self, settings::SettingsOpt},
+    event_graph::{proto::ProtocolEventGraph, EventGraph, EventGraphPtr, NULL_ID},
+    net::{settings::SettingsOpt, P2p, SESSION_ALL},
     rpc::server::{listen_and_serve, RequestHandler},
-    system::StoppableTask,
+    system::{sleep, StoppableTask},
+    util::path::expand_path,
     Error, Result,
 };
-use genevd::GenEvent;
-use log::{error, info};
-use smol::{lock::Mutex, stream::StreamExt};
+use log::{debug, error, info};
+use smol::{lock::RwLock, stream::StreamExt};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -58,9 +56,16 @@ struct Args {
     #[structopt(flatten)]
     pub net: SettingsOpt,
 
+    /// Sets Datastore Path
+    #[structopt(long, default_value = "~/.local/darkfi/genev")]
+    pub datastore: String,
+
     #[structopt(short, long)]
     /// Set log file to ouput into
     log: Option<String>,
+
+    #[structopt(long)]
+    pub skip_dag_sync: bool,
 
     #[structopt(short, parse(from_occurrences))]
     /// Increase verbosity (-vvv supported)
@@ -68,53 +73,48 @@ struct Args {
 }
 
 async fn start_sync_loop(
-    view: ViewPtr<GenEvent>,
-    seen: SeenPtr<EventId>,
-    missed_events: Arc<Mutex<Vec<Event<GenEvent>>>>,
+    event_graph: EventGraphPtr,
+    last_sent: RwLock<blake3::Hash>,
+    seen: OnceLock<sled::Tree>,
 ) -> Result<()> {
+    let incoming = event_graph.event_sub.clone().subscribe().await;
+    let seen_events = seen.get().unwrap();
     loop {
-        let event = view.lock().await.process().await?;
-        if !seen.push(&event.hash()).await {
+        let event = incoming.receive().await;
+        let event_id = event.id();
+        if *last_sent.read().await == event_id {
             continue
         }
 
-        info!("new event: {:?}", event);
-        missed_events.lock().await.push(event.clone());
+        if seen_events.contains_key(event_id.as_bytes()).unwrap() {
+            continue
+        }
+
+        debug!("new event: {:?}", event);
     }
 }
 
 async_daemonize!(realmain);
-async fn realmain(args: Args, executor: Arc<smol::Executor<'static>>) -> Result<()> {
+async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Result<()> {
     ////////////////////
     // Initialize the base structures
     ////////////////////
-    let events_queue = EventsQueue::<GenEvent>::new();
-    let model = Arc::new(Mutex::new(Model::new(events_queue.clone())));
-    let view = Arc::new(Mutex::new(View::new(events_queue)));
-    let model_clone = model.clone();
+    info!("Instantiating event DAG");
+    // Create datastore path if not there already.
+    let datastore_path = expand_path(&settings.datastore)?;
 
-    ////////////////////
-    // P2p setup
-    ////////////////////
-    // Buffers
-    let seen_event = Seen::new();
-    let seen_inv = Seen::new();
+    let sled_db = sled::open(datastore_path.clone())?;
+    let p2p = P2p::new(settings.net.into(), executor.clone()).await;
+    let event_graph =
+        EventGraph::new(p2p.clone(), sled_db.clone(), "genevd_dag", 1, executor.clone()).await?;
 
-    // Check the version
-    let net_settings = args.net.clone();
-
-    // New p2p
-    let p2p = net::P2p::new(net_settings.into(), executor.clone()).await;
-    let p2p2 = p2p.clone();
-
-    // Register the protocol_event
+    info!("Registering EventGraph P2P protocol");
+    let event_graph_ = Arc::clone(&event_graph);
     let registry = p2p.protocol_registry();
     registry
-        .register(net::SESSION_ALL, move |channel, p2p| {
-            let seen_event = seen_event.clone();
-            let seen_inv = seen_inv.clone();
-            let model = model.clone();
-            async move { ProtocolEvent::init(channel, p2p, model, seen_event, seen_inv).await }
+        .register(SESSION_ALL, move |channel, _| {
+            let event_graph_ = event_graph_.clone();
+            async move { ProtocolEventGraph::init(event_graph_, channel).await.unwrap() }
         })
         .await;
 
@@ -122,16 +122,42 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'static>>) -> Result<
     info!(target: "genevd", "Starting P2P network");
     p2p.clone().start().await?;
 
+    info!(target: "genevd", "Waiting for some P2P connections...");
+    sleep(5).await;
+
+    // We'll attempt to sync 5 times
+    if !settings.skip_dag_sync {
+        for i in 1..=6 {
+            info!("Syncing event DAG (attempt #{})", i);
+            match event_graph.dag_sync().await {
+                Ok(()) => break,
+                Err(e) => {
+                    if i == 6 {
+                        error!("Failed syncing DAG. Exiting.");
+                        p2p.stop().await;
+                        return Err(Error::DagSyncFailed)
+                    } else {
+                        // TODO: Maybe at this point we should prune or something?
+                        // TODO: Or maybe just tell the user to delete the DAG from FS.
+                        error!("Failed syncing DAG ({}), retrying in 10s...", e);
+                        sleep(10).await;
+                    }
+                }
+            }
+        }
+    }
+
     ////////////////////
     // Listner
     ////////////////////
-    let seen_ids = Seen::new();
-    let missed_events = Arc::new(Mutex::new(vec![]));
+    let last_sent = RwLock::new(NULL_ID);
+    let seen = OnceLock::new();
+    seen.set(sled_db.open_tree("genevdb").unwrap()).unwrap();
 
     info!(target: "genevd", "Starting sync loop task");
     let sync_loop_task = StoppableTask::new();
     sync_loop_task.clone().start(
-        start_sync_loop(view, seen_ids.clone(), missed_events.clone()),
+        start_sync_loop(event_graph.clone(), last_sent, seen.clone()),
         |res| async {
             match res {
                 Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
@@ -147,15 +173,14 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'static>>) -> Result<
     //
     let rpc_interface = Arc::new(JsonRpcInterface::new(
         "Alolymous".to_string(),
-        missed_events.clone(),
-        model_clone,
-        seen_ids.clone(),
+        event_graph.clone(),
+        seen.clone(),
         p2p.clone(),
     ));
     let rpc_task = StoppableTask::new();
     let rpc_interface_ = rpc_interface.clone();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, rpc_interface, None, executor.clone()),
+        listen_and_serve(settings.rpc_listen, rpc_interface, None, executor.clone()),
         |res| async move {
             match res {
                 Ok(()) | Err(Error::RpcServerStopped) => rpc_interface_.stop_connections().await,
@@ -178,7 +203,9 @@ async fn realmain(args: Args, executor: Arc<smol::Executor<'static>>) -> Result<
     sync_loop_task.stop().await;
 
     // stop p2p
-    p2p2.stop().await;
+    p2p.stop().await;
+
+    remove_dir_all(datastore_path).unwrap_or(());
 
     Ok(())
 }

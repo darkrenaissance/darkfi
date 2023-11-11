@@ -17,7 +17,6 @@
  */
 
 use darkfi::{
-    event_graph::model::Event,
     rpc::{client::RpcClient, jsonrpc::JsonRequest},
     util::encoding::base64,
     Result,
@@ -40,7 +39,7 @@ impl Gen {
     pub async fn add(&self, event: GenEvent) -> Result<()> {
         let event = JsonValue::String(base64::encode(&serialize(&event)));
 
-        let req = JsonRequest::new("add", vec![event]);
+        let req = JsonRequest::new("add", JsonValue::Array([event].to_vec()));
         let rep = self.rpc_client.request(req).await?;
 
         debug!("Got reply: {:?}", rep);
@@ -48,14 +47,14 @@ impl Gen {
     }
 
     /// Get current open tasks ids.
-    pub async fn list(&self) -> Result<Vec<Event<GenEvent>>> {
-        let req = JsonRequest::new("list", vec![]);
+    pub async fn list(&self) -> Result<Vec<GenEvent>> {
+        let req = JsonRequest::new("list", JsonValue::Array([].to_vec()));
         let rep = self.rpc_client.request(req).await?;
 
         debug!("reply: {:?}", rep);
 
         let bytes: Vec<u8> = base64::decode(rep.get::<String>().unwrap()).unwrap();
-        let events: Vec<Event<GenEvent>> = deserialize(&bytes)?;
+        let events: Vec<GenEvent> = deserialize(&bytes)?;
 
         Ok(events)
     }
