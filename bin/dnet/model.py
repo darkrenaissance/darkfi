@@ -160,19 +160,15 @@ class Model:
         spawns = info['spawns']
 
         self.liliths[key] = {}
-        self.liliths[key]['name'] = {}
-        self.liliths[key]['hosts'] = {}
-        self.liliths[key]['urls'] = {}
+        self.liliths[key]['spawns'] = {}
         
-        for spawn in spawns:
+        for (i, spawn) in enumerate(spawns):
             name = spawn['name']
             urls = spawn['urls']
             hosts = spawn['hosts']
-            
-            self.liliths[key]['name'] = name
-            self.liliths[key]['urls'] = urls
-            self.liliths[key]['hosts'] = hosts
-        
+            spawn = self.liliths[key]['spawns'][name] = {}
+            spawn['urls'] = urls
+            spawn['hosts'] = hosts
 
     def __repr__(self):
         return f'{self.nodes}'

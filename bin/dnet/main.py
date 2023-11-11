@@ -109,7 +109,6 @@ class Dnetview:
             if 'params' in values:
                 self.model.add_event(info)
 
-            logging.debug(self.model.liliths)
             self.queue.task_done()
 
     def main(self):

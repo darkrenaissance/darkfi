@@ -56,18 +56,22 @@ class Session(DnetWidget):
         txt = urwid.Text(f"  {self.session}")
         super().update(txt)
 
-    def is_lilith(self):
-        return True
-
 
 class Slot(DnetWidget):
     def set_txt(self, i, addr):
         self.i = i
-        if len(self.i) == 1:
+        if self.session == "outbound-slot":
             self.addr = addr[0]
             self.id = addr[1]
             txt = urwid.Text(f"    {self.i}: {self.addr}")
-        else:
+
+        if self.session == "spawn-slot":
+            self.id = addr
+            txt = urwid.Text(f"    {addr}")
+
+        if (self.session == "manual-slot"
+            or self.session == "seed-slot"
+            or self.session == "inbound-slot"):
             self.addr = addr
             txt = urwid.Text(f"    {self.addr}")
         super().update(txt)
@@ -87,6 +91,7 @@ class View():
         rightbox = urwid.LineBox(scroll)
         self.listbox_content = []
         self.listwalker = urwid.SimpleListWalker(self.listbox_content)
+        self.listw = self.listwalker.contents
         self.list = urwid.ListBox(self.listwalker)
         leftbox = urwid.LineBox(self.list)
         columns = urwid.Columns([leftbox, rightbox], focus_column=0)
@@ -98,64 +103,69 @@ class View():
         self.dead_nodes = []
         self.refresh = False
 
-
     #-----------------------------------------------------------------
     # Render get_info()
     #-----------------------------------------------------------------
     def draw_info(self, node_name, info):
-       node = Node(node_name, "node")
-       node.set_txt(False)
-       self.listwalker.contents.append(node)
+        if 'spawns' in info and info['spawns']:
+            self.draw_lilith(node_name, info)
+            return
 
-       if 'outbound' in info and info['outbound']:
-           session = Session(node_name, "outbound")
-           session.set_txt()
-           self.listwalker.contents.append(session)
-           for i, addr in info['outbound'].items():
-               slot = Slot(node_name, "outbound-slot")
-               slot.set_txt(i, addr)
-               self.listwalker.contents.append(slot)
+        node = Node(node_name, "node")
+        node.set_txt(False)
+        self.listw.append(node)
+        
+        if 'outbound' in info and info['outbound']:
+            session = Session(node_name, "outbound")
+            session.set_txt()
+            self.listw.append(session)
+            for i, addr in info['outbound'].items():
+                slot = Slot(node_name, "outbound-slot")
+                slot.set_txt(i, addr)
+                self.listw.append(slot)
 
-       if 'inbound' in info and info['inbound']:
-           if any(info['inbound'].values()):
-               session = Session(node_name, "inbound")
-               session.set_txt()
-               self.listwalker.contents.append(session)
-               for i, addr in info['inbound'].items():
-                   if bool(addr):
-                       slot = Slot(node_name, "inbound-slot")
-                       slot.set_txt(i, addr)
-                       self.listwalker.contents.append(slot)
+        if 'inbound' in info and info['inbound']:
+            if any(info['inbound'].values()):
+                session = Session(node_name, "inbound")
+                session.set_txt()
+                self.listw.append(session)
+                for i, addr in info['inbound'].items():
+                    if bool(addr):
+                        slot = Slot(node_name, "inbound-slot")
+                        slot.set_txt(i, addr)
+                        self.listw.append(slot)
 
-       if 'manual' in info and info['manual']:
-           session = Session(node_name, "manual")
-           session.set_txt()
-           self.listwalker.contents.append(session)
-           for i, addr in info['manual'].items():
-               slot = Slot(node_name, "manual-slot")
-               slot.set_txt(i, addr)
-               self.listwalker.contents.append(slot)
+        if 'manual' in info and info['manual']:
+            session = Session(node_name, "manual")
+            session.set_txt()
+            self.listw.append(session)
+            for i, addr in info['manual'].items():
+                slot = Slot(node_name, "manual-slot")
+                slot.set_txt(i, addr)
+                self.listw.append(slot)
 
-       if 'seed' in info and info['seed']:
-           session = Session(node_name, "seed")
-           session.set_txt()
-           self.listwalker.contents.append(session)
-           for i, info in info['seed'].items():
-               slot = Slot(node_name, "seed-slot")
-               slot.set_txt(i, addr)
-               self.listwalker.contents.append(slot)
+        if 'seed' in info and info['seed']:
+            session = Session(node_name, "seed")
+            session.set_txt()
+            self.listw.append(session)
+            for i, info in info['seed'].items():
+                slot = Slot(node_name, "seed-slot")
+                slot.set_txt(i, addr)
+                self.listw.append(slot)
 
-       if 'name' in info and info['name']:
-           spawn = info.get('name')
-           session = Session(node_name, spawn)
-           session.is_lilith()
-           session.set_txt()  
-           self.listwalker.contents.append(session)
+    def draw_lilith(self, node_name, info):
+        node = Node(node_name, "lilith-node")
+        node.set_txt(False)
+        self.listw.append(node)
+        for (i, key) in enumerate(info['spawns'].keys()):
+            slot = Slot(node_name, "spawn-slot")
+            slot.set_txt(i, key)
+            self.listw.append(slot)
 
     def draw_empty(self, node_name, info):
-       node = Node(node_name, "node")
-       node.set_txt(True)
-       self.listwalker.contents.append(node)
+        node = Node(node_name, "node")
+        node.set_txt(True)
+        self.listw.append(node)
 
     #-----------------------------------------------------------------
     # Render subscribe_events() (left menu)
@@ -163,7 +173,7 @@ class View():
     def fill_left_box(self):
         live_inbound = []
         new_inbound= {}
-        for index, item in enumerate(self.listwalker.contents):
+        for index, item in enumerate(self.listw):
             # Update outbound slot info
             if item.session == "outbound-slot":
                 key = (f"{item.node_name}", f"{item.i}")
@@ -171,7 +181,7 @@ class View():
                     info = self.model.nodes[item.node_name]['event'].get(key)
                     slot = Slot(item.node_name, item.session)
                     slot.set_txt(item.i, info)
-                    self.listwalker.contents[index] = slot
+                    self.listw[index] = slot
 
     #-----------------------------------------------------------------
     # Render subscribe_events() (right menu)
@@ -197,6 +207,7 @@ class View():
             addr = focus_w[0].addr
             node_name = focus_w[0].node_name
             info = self.model.nodes.get(node_name)
+
             if addr in info['msgs']:
                 msg = info['msgs'].get(addr)
                 for m in msg:
@@ -206,7 +217,34 @@ class View():
                     self.pile.contents.append((urwid.Text(
                             f"{time}: {event}: {msg}"),
                             self.pile.options()))
-        
+
+        if session == "spawn-slot":
+            node_name = focus_w[0].node_name
+            spawn_name = focus_w[0].id
+            lilith = self.model.liliths.get(node_name)
+            spawns = lilith.get('spawns')
+            info = spawns.get(spawn_name)
+
+            if info['urls']:
+                urls = info['urls']
+                self.pile.contents.append((urwid.Text(
+                    f"Accept addrs:"),
+                    self.pile.options()))
+                for url in urls:
+                    self.pile.contents.append((urwid.Text(
+                        f"  {url}"),
+                        self.pile.options()))
+
+            if info['hosts']:
+                hosts = info['hosts']
+                self.pile.contents.append((urwid.Text(
+                    f"Hosts:"),
+                    self.pile.options()))
+                for host in hosts:
+                    self.pile.contents.append((urwid.Text(
+                        f"  {host}"),
+                        self.pile.options()))
+
     # Sort nodes into lists.
     def sort(self, nodes):
         for name, info in nodes:
@@ -237,7 +275,7 @@ class View():
                 self.live_nodes.clear()
                 self.dead_nodes.clear()
                 refresh = False
-                listw.clear()
+                self.listw.clear()
                 logging.debug("Refresh complete.")
 
     # Handle events.
@@ -282,10 +320,9 @@ class View():
 
             nodes = self.model.nodes.items()
             liliths = self.model.liliths.items()
-            listw = self.listwalker.contents
             evloop.call_soon(loop.draw_screen)
 
-            for index, item in enumerate(listw):
+            for index, item in enumerate(self.listw):
                 # Keep track of known nodes.
                 if item.node_name not in self.known_nodes:
                     self.known_nodes.append(item.node_name)
