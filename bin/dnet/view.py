@@ -286,20 +286,22 @@ class View():
                 self.fill_right_box()
 
                 if 'inbound' in info:
+                    # New inbound online.
                     for key in info['inbound'].keys():
-                        # New inbound online.
                         if key not in self.known_inbound:
                             addr = info['inbound'].get(key)
-                            if bool(addr):
-                                logging.debug(f"Refresh: inbound {key} online")
-                                self.refresh = True
-                        # Known inbound offline.
-                        for key in self.known_inbound:
-                            addr = info['inbound'].get(key)
-                            if bool(addr):
+                            if not bool(addr) or not addr == None:
                                 continue
-                            logging.debug(f"Refresh: inbound {key} offline")
+                            logging.debug(f"Refresh: inbound {key} online")
                             self.refresh = True
+
+                    # Known inbound offline.
+                    for key in self.known_inbound:
+                        addr = info['inbound'].get(key)
+                        if bool(addr) or addr == None:
+                            continue
+                        logging.debug(f"Refresh: inbound {key} offline")
+                        self.refresh = True
 
                 # New outbound online.
                 if 'outbound' in info:
