@@ -19,10 +19,7 @@
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet, VecDeque},
-    sync::{
-        atomic::{AtomicBool, Ordering::SeqCst},
-        Arc,
-    },
+    sync::Arc,
     time::UNIX_EPOCH,
 };
 
@@ -31,7 +28,7 @@ use darkfi_serial::{deserialize_async, serialize_async};
 use log::{debug, error, info};
 use num_bigint::BigUint;
 use smol::{
-    lock::{Mutex, RwLock},
+    lock::{OnceCell, RwLock},
     Executor,
 };
 
@@ -86,10 +83,8 @@ pub struct EventGraph {
     /// or not. Additionally it is also used when we broadcast the
     /// `TipRep` message telling peers about our unreferenced tips.
     broadcasted_ids: RwLock<HashSet<blake3::Hash>>,
-    /// Marker telling us if we consider the DAG synced
-    dag_synced: AtomicBool,
     /// DAG Pruning Task
-    prune_task: Mutex<Option<StoppableTaskPtr>>,
+    prune_task: OnceCell<StoppableTaskPtr>,
     /// Event subscriber, this notifies whenever an event is
     /// inserted into the DAG
     pub event_sub: SubscriberPtr<Event>,
@@ -115,8 +110,7 @@ impl EventGraph {
             dag: dag.clone(),
             unreferenced_tips,
             broadcasted_ids,
-            dag_synced: AtomicBool::new(false),
-            prune_task: Mutex::new(None),
+            prune_task: OnceCell::new(),
             event_sub,
         });
 
@@ -138,18 +132,20 @@ impl EventGraph {
         *self_.unreferenced_tips.write().await = self_.find_unreferenced_tips().await;
 
         // Spawn the DAG pruning task
-        let self__ = self_.clone();
-        let prune_task = StoppableTask::new();
-        *self_.prune_task.lock().await = Some(prune_task.clone());
+        if days_rotation > 0 {
+            let self__ = self_.clone();
+            let prune_task = StoppableTask::new();
+            let _ = self_.prune_task.set(prune_task.clone()).await;
 
-        prune_task.clone().start(
-            self_.clone().dag_prune(days_rotation),
-            |_| async move {
-                self__.clone()._handle_stop(sled_db).await;
-            },
-            Error::DetachedTaskStopped,
-            ex.clone(),
-        );
+            prune_task.clone().start(
+                self_.clone().dag_prune(days_rotation),
+                |_| async move {
+                    self__.clone()._handle_stop(sled_db).await;
+                },
+                Error::DetachedTaskStopped,
+                ex.clone(),
+            );
+        }
 
         Ok(self_)
     }
@@ -404,7 +400,6 @@ impl EventGraph {
         }
 
         info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] DAG synced successfully!");
-        self.dag_synced.store(true, SeqCst);
         Ok(())
     }
 
@@ -417,9 +412,6 @@ impl EventGraph {
         debug!(target: "event_graph::dag_prune()", "Spawned background DAG pruning task");
 
         loop {
-            if days_rotation == 0 {
-                return Ok(())
-            }
             // Find the next rotation timestamp:
             let next_rotation = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
 
