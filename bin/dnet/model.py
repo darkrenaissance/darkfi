@@ -118,7 +118,6 @@ class Model:
             case 'inbound_disconnected':
                 addr = info['addr']
                 id = info.get('channel_id')
-                inbound = self.nodes[name]['inbound']
                 self.nodes[name]['inbound'][f'{id}'] = {}
                 logging.debug(f'{current_time}  inbound (disconnect): {addr}')
             case 'outbound_slot_sleeping':

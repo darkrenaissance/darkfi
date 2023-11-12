@@ -274,7 +274,7 @@ class View():
                 self.known_nodes.clear()
                 self.live_nodes.clear()
                 self.dead_nodes.clear()
-                refresh = False
+                self.refresh = False
                 self.listw.clear()
                 logging.debug("Refresh complete.")
 
@@ -292,7 +292,7 @@ class View():
                             addr = info['inbound'].get(key)
                             if bool(addr):
                                 logging.debug(f"Refresh: inbound {key} online")
-                                refresh = True
+                                self.refresh = True
                         # Known inbound offline.
                         for key in self.known_inbound:
                             addr = info['inbound'].get(key)
