@@ -504,6 +504,7 @@ impl EventGraph {
 
     /// Get the current set of unreferenced tips in the DAG.
     async fn get_unreferenced_tips(&self) -> [blake3::Hash; N_EVENT_PARENTS] {
+        // TODO: return vec of all instead of N_EVENT_PARENTS
         let unreferenced_tips = self.unreferenced_tips.read().await;
 
         let mut tips = [NULL_ID; N_EVENT_PARENTS];
