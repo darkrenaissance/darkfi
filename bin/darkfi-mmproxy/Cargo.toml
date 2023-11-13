@@ -13,15 +13,15 @@ darkfi = {path = "../../", features = ["async-daemonize", "async-serial", "syste
 darkfi-serial = {path = "../../src/serial", features = ["async"]}
 
 # Misc
+blake3 = "1.5.0"
 log = "0.4.20"
-rand = "0.8.5"
 
 # Monero
-epee-encoding = {version = "0.5.0", features = ["derive"]}
 monero = {version = "0.19.0", features = ["full"]}
 surf = "2.3.2"
 
 # Encoding
+bs58 = "0.5.0"
 hex = "0.4.3"
 url = "2.4.1"
 uuid = {version = "1.5.0", features = ["v4"]}
@@ -34,6 +34,6 @@ simplelog = "0.12.1"
 smol = "1.3.0"
 
 # Argument parsing
-serde = {version = "1.0.190", features = ["derive"]}
+serde = {version = "1.0.192", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"

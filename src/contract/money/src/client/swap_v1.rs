@@ -36,8 +36,8 @@ use rand::rngs::OsRng;
 use crate::{
     client::{
         transfer_v1::{
-            create_transfer_burn_proof, create_transfer_mint_proof, TransactionBuilderInputInfo,
-            TransactionBuilderOutputInfo,
+            create_transfer_burn_proof, create_transfer_mint_proof, TransferCallInput,
+            TransferCallOutput,
         },
         MoneyNote, OwnCoin,
     },
@@ -110,17 +110,20 @@ impl SwapCallBuilder {
         let leaf_position = self.coin.leaf_position;
         let merkle_path = self.tree.witness(leaf_position, 0).unwrap();
 
-        let input = TransactionBuilderInputInfo {
+        let input = TransferCallInput {
             leaf_position,
             merkle_path,
             secret: self.coin.secret,
             note: self.coin.note.clone(),
+            user_data_blind: self.user_data_blind_send,
         };
 
-        let output = TransactionBuilderOutputInfo {
+        let output = TransferCallOutput {
             value: self.value_recv,
             token_id: self.token_id_recv,
             public_key: self.pubkey,
+            spend_hook: pallas::Base::ZERO,
+            user_data: pallas::Base::ZERO,
         };
 
         // Now we fill this with necessary stuff
@@ -138,7 +141,6 @@ impl SwapCallBuilder {
             &input,
             self.value_blinds[0],
             self.token_blinds[0],
-            self.user_data_blind_send,
             signature_secret,
         )?;
 

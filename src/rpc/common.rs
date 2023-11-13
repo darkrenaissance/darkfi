@@ -18,7 +18,7 @@
 
 use std::time::Duration;
 
-use smol::io::{AsyncReadExt, AsyncWriteExt};
+use smol::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
 
 use super::jsonrpc::*;
 use crate::{error::RpcError, net::transport::PtStream, system::io_timeout, Result};
@@ -29,7 +29,7 @@ pub(super) const READ_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Internal read function that reads from the active stream into a buffer.
 pub(super) async fn read_from_stream(
-    stream: &mut Box<dyn PtStream>,
+    reader: &mut ReadHalf<Box<dyn PtStream>>,
     buf: &mut Vec<u8>,
     with_timeout: bool,
 ) -> Result<usize> {
@@ -40,7 +40,7 @@ pub(super) async fn read_from_stream(
 
         // Lame we have to duplicate this code, but it is what it is.
         if with_timeout {
-            match io_timeout(READ_TIMEOUT, stream.read(&mut buf[total_read..])).await {
+            match io_timeout(READ_TIMEOUT, reader.read(&mut buf[total_read..])).await {
                 Ok(0) if total_read == 0 => {
                     return Err(
                         RpcError::ConnectionClosed("Connection closed cleanly".to_string()).into()
@@ -57,7 +57,7 @@ pub(super) async fn read_from_stream(
                 Err(e) => return Err(RpcError::IoError(e.kind()).into()),
             }
         } else {
-            match stream.read(&mut buf[total_read..]).await {
+            match reader.read(&mut buf[total_read..]).await {
                 Ok(0) if total_read == 0 => {
                     return Err(
                         RpcError::ConnectionClosed("Connection closed cleanly".to_string()).into()
@@ -83,7 +83,7 @@ pub(super) async fn read_from_stream(
 
 /// Internal write function that writes a JSON-RPC object to the active stream.
 pub(super) async fn write_to_stream(
-    stream: &mut Box<dyn PtStream>,
+    writer: &mut WriteHalf<Box<dyn PtStream>>,
     object: &JsonResult,
 ) -> Result<()> {
     let object_str = match object {
@@ -97,7 +97,7 @@ pub(super) async fn write_to_stream(
     // As we're a line-based protocol, we append the '\n' char at
     // the end of the JSON string.
     for i in [object_str.as_bytes(), &[b'\n']] {
-        if let Err(e) = stream.write_all(i).await {
+        if let Err(e) = writer.write_all(i).await {
             return Err(e.into())
         }
     }

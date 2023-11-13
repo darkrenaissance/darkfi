@@ -36,7 +36,7 @@ pub struct StoppableTask {
     barrier: CondVar,
 
     /// Used so we can keep StoppableTask in HashMap/HashSet
-    task_id: u32,
+    pub task_id: u32,
 }
 
 /// A task that can be prematurely stopped at any time.

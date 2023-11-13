@@ -86,20 +86,23 @@ impl RpcClient {
 
     /// Internal function that loops on a given stream and multiplexes the data
     async fn reqrep_loop(
-        mut stream: Box<dyn PtStream>,
+        stream: Box<dyn PtStream>,
         rep_send: channel::Sender<JsonResult>,
         req_recv: channel::Receiver<(JsonRequest, bool)>,
     ) -> Result<()> {
         debug!(target: "rpc::client::reqrep_loop()", "Starting reqrep loop");
+
+        let (mut reader, mut writer) = smol::io::split(stream);
+
         loop {
             let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
 
             let (request, with_timeout) = req_recv.recv().await?;
 
             let request = JsonResult::Request(request);
-            write_to_stream(&mut stream, &request).await?;
+            write_to_stream(&mut writer, &request).await?;
 
-            let _ = read_from_stream(&mut stream, &mut buf, with_timeout).await?;
+            let _ = read_from_stream(&mut reader, &mut buf, with_timeout).await?;
             let val: JsonValue = String::from_utf8(buf)?.parse()?;
             let rep = JsonResult::try_from_value(&val)?;
             rep_send.send(rep).await?;
@@ -123,7 +126,7 @@ impl RpcClient {
 
         // Handle the response
         match reply {
-            JsonResult::Response(rep) => {
+            JsonResult::Response(rep) | JsonResult::SubscriberWithReply(_, rep) => {
                 debug!(target: "rpc::client", "<-- {}", rep.stringify()?);
 
                 // Check if the IDs match
@@ -205,7 +208,7 @@ impl RpcClient {
                     return Err(Error::JsonRpcError((e.error.code, e.error.message)))
                 }
 
-                JsonResult::Response(r) => {
+                JsonResult::Response(r) | JsonResult::SubscriberWithReply(_, r) => {
                     debug!(target: "rpc::client", "<-- {}", r.stringify()?);
                     let e = JsonError::new(ErrorCode::InvalidReply, None, req_id);
                     return Err(Error::JsonRpcError((e.error.code, e.error.message)))

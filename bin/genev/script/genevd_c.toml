@@ -1,5 +1,8 @@
 ## JSON-RPC listen URL
-rpc_listen="tcp://127.0.0.1:28872"
+rpc_listen = "tcp://127.0.0.1:28872"
+
+## Sets Datastore Path
+datastore = "/tmp/genev_test/datastore/node3"
 
 ## Current display name
 #nickname="NICKNAME"
@@ -10,19 +13,22 @@ rpc_listen="tcp://127.0.0.1:28872"
 inbound = ["tcp://127.0.0.1:28884"]
 
 ## Connection slots
-outbound_connections=8
+outbound_connections = 8
+
+## Inbound connection slots
+inbound_connections = 4
 
 ## P2P external addresses
-external_addr = ["tcp://127.0.0.1:28884"]
+external_addrs = ["tcp://127.0.0.1:28884"]
 
 ## Peers to connect to
 #peers = ["tls://127.0.0.1:28881"]
 
 ## Seed nodes to connect to
-seeds=["tcp://127.0.0.1:28881"]
+seeds = ["tcp://127.0.0.1:28881"]
 
 # Prefered transports for outbound connections
-outbound_transports = ["tcp"]
+allowed_transports = ["tcp"]
 
 ## these are the default configuration for the p2p network
 #manual_attempt_limit=0

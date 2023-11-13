@@ -69,7 +69,7 @@ impl TestHarness {
             rcpt_user_data_blind: pallas::Base::random(&mut OsRng),
             change_spend_hook: change_spend_hook.unwrap_or(pallas::Base::ZERO),
             change_user_data: change_user_data.unwrap_or(pallas::Base::ZERO),
-            change_user_data_blind: pallas::Base::random(&mut OsRng),
+            input_user_data_blind: pallas::Base::random(&mut OsRng),
             coins: vec![],
             tree: faucet.money_merkle_tree.clone(),
             mint_zkbin: mint_zkbin.clone(),

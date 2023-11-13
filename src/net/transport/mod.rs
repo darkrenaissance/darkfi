@@ -16,7 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use log::warn;
 use std::time::Duration;
+use tor_error::ErrorReport;
 
 use async_trait::async_trait;
 use smol::io::{AsyncRead, AsyncWrite};
@@ -214,7 +216,18 @@ impl Dialer {
             DialerVariant::Tor(dialer) => {
                 let host = self.endpoint.host_str().unwrap();
                 let port = self.endpoint.port().unwrap();
-                let stream = dialer.do_dial(host, port, timeout).await?;
+                // Extract error reports (i.e. very detailed debugging)
+                // from arti-client in order to help debug Tor connections.
+                // https://docs.rs/arti-client/latest/arti_client/#reporting-arti-errors
+                // https://gitlab.torproject.org/tpo/core/arti/-/issues/1086
+                let result = match dialer.do_dial(host, port, timeout).await {
+                    Ok(stream) => Ok(stream),
+                    Err(err) => {
+                        warn!("{}", err.report());
+                        Err(err)
+                    }
+                };
+                let stream = result?;
                 Ok(Box::new(stream))
             }
 
@@ -222,7 +235,18 @@ impl Dialer {
             DialerVariant::TorTls(dialer) => {
                 let host = self.endpoint.host_str().unwrap();
                 let port = self.endpoint.port().unwrap();
-                let stream = dialer.do_dial(host, port, timeout).await?;
+                // Extract error reports (i.e. very detailed debugging)
+                // from arti-client in order to help debug Tor connections.
+                // https://docs.rs/arti-client/latest/arti_client/#reporting-arti-errors
+                // https://gitlab.torproject.org/tpo/core/arti/-/issues/1086
+                let result = match dialer.do_dial(host, port, timeout).await {
+                    Ok(stream) => Ok(stream),
+                    Err(err) => {
+                        warn!("{}", err.report());
+                        Err(err)
+                    }
+                };
+                let stream = result?;
                 let tlsupgrade = tls::TlsUpgrade::new();
                 let stream = tlsupgrade.upgrade_dialer_tls(stream).await?;
                 Ok(Box::new(stream))

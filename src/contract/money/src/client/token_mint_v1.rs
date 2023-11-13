@@ -33,7 +33,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{
-        transfer_v1::{TransactionBuilderClearInputInfo, TransactionBuilderOutputInfo},
+        transfer_v1::{TransferCallClearInput, TransferCallOutput},
         MoneyNote,
     },
     model::{ClearInput, Coin, MoneyTokenMintParamsV1, Output},
@@ -98,16 +98,18 @@ impl TokenMintCallBuilder {
         // The mint authority pubkey is used to derive the token ID.
         let token_id = TokenId::derive(self.mint_authority.secret);
 
-        let input = TransactionBuilderClearInputInfo {
+        let input = TransferCallClearInput {
             value: self.amount,
             token_id,
             signature_secret: self.mint_authority.secret,
         };
 
-        let output = TransactionBuilderOutputInfo {
+        let output = TransferCallOutput {
             value: self.amount,
             token_id,
             public_key: self.recipient,
+            spend_hook: pallas::Base::ZERO,
+            user_data: pallas::Base::ZERO,
         };
 
         // We just create the pedersen commitment blinds here. We simply
@@ -170,7 +172,7 @@ impl TokenMintCallBuilder {
 pub fn create_token_mint_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
-    output: &TransactionBuilderOutputInfo,
+    output: &TransferCallOutput,
     mint_authority: &Keypair,
     value_blind: pallas::Scalar,
     token_blind: pallas::Base,

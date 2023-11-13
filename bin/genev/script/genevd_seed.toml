@@ -1,5 +1,8 @@
 ## JSON-RPC listen URL
-rpc_listen="tcp://127.0.0.1:28880"
+rpc_listen = "tcp://127.0.0.1:28880"
+
+## Sets Datastore Path
+datastore = "/tmp/genev_test/datastore/seed"
 
 ## Current display name
 #nickname="NICKNAME"
@@ -12,6 +15,9 @@ inbound = ["tcp://127.0.0.1:28881"]
 ## Connection slots
 # outbound_connections=8
 
+## Inbound connection slots
+inbound_connections = 4
+
 ## P2P external addresses
 # external_addr = ["tls://127.0.0.1:28881"]
 
@@ -22,7 +28,7 @@ inbound = ["tcp://127.0.0.1:28881"]
 # seeds=["tls://lilith0.dark.fi:28881", "tls://lilith1.dark.fi:28881"]
 
 # Prefered transports for outbound connections
-outbound_transports = ["tcp"]
+allowed_transports = ["tcp"]
 
 ## these are the default configuration for the p2p network
 #manual_attempt_limit=0
@@ -30,5 +36,3 @@ outbound_transports = ["tcp"]
 #connect_timeout_seconds=10
 #channel_handshake_seconds=4
 #channel_heartbeat_seconds=10
-
-

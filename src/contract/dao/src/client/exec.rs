@@ -26,7 +26,7 @@ use log::debug;
 use rand::rngs::OsRng;
 
 use darkfi::{
-    zk::{Proof, ProvingKey, Witness, ZkCircuit},
+    zk::{export_witness_json, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
@@ -104,6 +104,14 @@ impl DaoExecCall {
             user_spend_hook,
             user_data,
         ]);
+        debug!("created coin {:?}", coin_0);
+        debug!("  proposal_dest_x: {:?}", proposal_dest_x);
+        debug!("  proposal_dest_y: {:?}", proposal_dest_y);
+        debug!("  proposal_amount: {:?}", proposal_amount);
+        debug!("  proposal.token_id: {:?}", self.proposal.token_id.inner());
+        debug!("  user_serial: {:?}", self.user_serial);
+        debug!("  user_spend_hook: {:?}", user_spend_hook);
+        debug!("  user_data: {:?}", user_data);
 
         let coin_1 = poseidon_hash::<7>([
             dao_pub_x,
@@ -114,6 +122,14 @@ impl DaoExecCall {
             self.hook_dao_exec,
             dao_bulla,
         ]);
+        debug!("created coin {:?}", coin_1);
+        debug!("  dao_pub_x: {:?}", dao_pub_x);
+        debug!("  dao_pub_y: {:?}", dao_pub_y);
+        debug!("  change: {:?}", change);
+        debug!("  proposal.token_id: {:?}", self.proposal.token_id.inner());
+        debug!("  dao_serial: {:?}", self.dao_serial);
+        debug!("  hook_dao_exec: {:?}", self.hook_dao_exec);
+        debug!("  dao_bulla: {:?}", dao_bulla);
 
         let yes_vote_commit = pedersen_commitment_u64(self.yes_vote_value, self.yes_vote_blind);
         let yes_vote_commit_coords = yes_vote_commit.to_affine().coordinates().unwrap();

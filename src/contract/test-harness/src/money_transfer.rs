@@ -65,7 +65,7 @@ impl TestHarness {
         // TODO: verify this is correct
         let change_spend_hook = pallas::Base::zero();
         let change_user_data = pallas::Base::zero();
-        let change_user_data_blind = pallas::Base::random(&mut OsRng);
+        let input_user_data_blind = pallas::Base::random(&mut OsRng);
 
         let builder = TransferCallBuilder {
             keypair: wallet.keypair,
@@ -77,7 +77,7 @@ impl TestHarness {
             rcpt_user_data_blind,
             change_spend_hook,
             change_user_data,
-            change_user_data_blind,
+            input_user_data_blind,
             coins: owncoins.to_owned(),
             tree: wallet.money_merkle_tree.clone(),
             mint_zkbin: mint_zkbin.clone(),

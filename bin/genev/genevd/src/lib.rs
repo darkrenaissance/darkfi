@@ -16,7 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::event_graph::EventMsg;
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
 #[derive(SerialEncodable, SerialDecodable, Clone, Debug)]
@@ -24,14 +23,4 @@ pub struct GenEvent {
     pub nick: String,
     pub title: String,
     pub text: String,
-}
-
-impl EventMsg for GenEvent {
-    fn new() -> Self {
-        Self {
-            nick: "groot".to_string(),
-            title: "I am groot".to_string(),
-            text: "I am groot!!".to_string(),
-        }
-    }
 }

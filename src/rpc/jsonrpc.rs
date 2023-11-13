@@ -92,6 +92,7 @@ pub enum JsonResult {
     Notification(JsonNotification),
     /// Subscriber is a special object that yields a channel
     Subscriber(JsonSubscriber),
+    SubscriberWithReply(JsonSubscriber, JsonResponse),
     Request(JsonRequest),
 }
 
@@ -134,6 +135,12 @@ impl From<JsonNotification> for JsonResult {
 impl From<JsonSubscriber> for JsonResult {
     fn from(sub: JsonSubscriber) -> Self {
         Self::Subscriber(sub)
+    }
+}
+
+impl From<(JsonSubscriber, JsonResponse)> for JsonResult {
+    fn from(tuple: (JsonSubscriber, JsonResponse)) -> Self {
+        Self::SubscriberWithReply(tuple.0, tuple.1)
     }
 }
 

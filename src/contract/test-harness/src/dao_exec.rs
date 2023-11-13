@@ -30,7 +30,10 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{pasta_prelude::Field, MerkleNode, SecretKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
+    crypto::{
+        pasta_prelude::Field, pedersen_commitment_u64, MerkleNode, SecretKey, DAO_CONTRACT_ID,
+        MONEY_CONTRACT_ID,
+    },
     pasta::pallas,
     ContractCall,
 };
@@ -93,8 +96,7 @@ impl TestHarness {
             rcpt_user_data_blind,
             change_spend_hook,
             change_user_data,
-            // TODO (ERROR): incorrectly named
-            change_user_data_blind: input_user_data_blind,
+            input_user_data_blind,
             coins,
             tree,
             mint_zkbin: mint_zkbin.clone(),
@@ -117,6 +119,10 @@ impl TestHarness {
             input_value += input.note.value;
             input_value_blind += blind;
         }
+        assert_eq!(
+            pedersen_commitment_u64(input_value, input_value_blind),
+            xfer_debris.params.inputs.iter().map(|input| input.value_commit).sum()
+        );
 
         // First output is change, second output is recipient.
         let dao_serial = xfer_debris.minted_coins[0].note.serial;
