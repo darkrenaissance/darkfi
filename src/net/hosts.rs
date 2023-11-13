@@ -196,6 +196,8 @@ impl Hosts {
 
     /// Quarantine a peer. If they've been quarantined for 50 times, forget them.
     pub async fn quarantine(&self, url: &Url) {
+        debug!(target: "net::hosts::quarantine()", "Attempted to quarantine {}", url);
+        /*
         debug!(target: "net::hosts::remove()", "Quarantining peer {}", url);
         // Remove from main hosts set
         self.addrs.write().await.remove(url);
@@ -212,6 +214,7 @@ impl Hosts {
             debug!(target: "net::hosts::remove()", "Added peer {} to quarantine", url);
             q.insert(url.clone(), 0);
         }
+        */
     }
 
     /// Check if a given peer should be rejected
