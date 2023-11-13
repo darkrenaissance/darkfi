@@ -94,7 +94,7 @@ impl ProtocolAddress {
             // TODO: We might want to close the channel here if we're getting
             // corrupted addresses.
             // Validate addreses length
-            if addrs_msg.addrs.len() > self.settings.outbound_connections {
+            if addrs_msg.addrs.len() > 2 * self.settings.outbound_connections {
                 continue
             }
 
@@ -128,10 +128,22 @@ impl ProtocolAddress {
                 continue
             }
 
-            let addrs = self
+            // First we grab address with the requested transports
+            let mut addrs = self
                 .hosts
                 .fetch_n_random_with_schemes(&get_addrs_msg.transports, get_addrs_msg.max)
                 .await;
+
+            // Then we grab addresses without the requested transports
+            // to fill a 2 * max length vector.
+            let remain = 2 * get_addrs_msg.max - get_addrs_msg.max;
+            addrs.append(
+                &mut self
+                    .hosts
+                    .fetch_n_random_excluding_schemes(&get_addrs_msg.transports, remain)
+                    .await,
+            );
+
             debug!(
                 target: "net::protocol_address::handle_receive_get_addrs()",
                 "Sending {} addresses to {}", addrs.len(), self.channel.address(),

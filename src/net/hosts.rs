@@ -296,8 +296,26 @@ impl Hosts {
         urls.iter().map(|&url| url.clone()).collect()
     }
 
+    /// Get up to n random peers that don't match the given transport schemes from the hosts set.
+    pub async fn fetch_n_random_excluding_schemes(&self, schemes: &[String], n: u32) -> Vec<Url> {
+        let n = n as usize;
+        if n == 0 {
+            return vec![]
+        }
+
+        // Retrieve all peers not corresponding to that transport schemes
+        let hosts = self.fetch_exluding_schemes(schemes, None).await;
+        if hosts.is_empty() {
+            return hosts
+        }
+
+        // Grab random ones
+        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
+        urls.iter().map(|&url| url.clone()).collect()
+    }
+
     /// Get up to limit peers that match the given transport schemes from the hosts set.
-    /// If limit was not provided, return all peers.
+    /// If limit was not provided, return all matching peers.
     pub async fn fetch_with_schemes(&self, schemes: &[String], limit: Option<usize>) -> Vec<Url> {
         let addrs = self.addrs.read().await;
         let mut limit = match limit {
@@ -324,6 +342,50 @@ impl Hosts {
         if ret.is_empty() {
             for addr in self.quarantine.read().await.keys() {
                 if schemes.contains(&addr.scheme().to_string()) {
+                    ret.push(addr.clone());
+                    limit -= 1;
+                    if limit == 0 {
+                        break
+                    }
+                }
+            }
+        }
+
+        ret
+    }
+
+    /// Get up to limit peers that don't match the given transport schemes from the hosts set.
+    /// If limit was not provided, return all matching peers.
+    pub async fn fetch_exluding_schemes(
+        &self,
+        schemes: &[String],
+        limit: Option<usize>,
+    ) -> Vec<Url> {
+        let addrs = self.addrs.read().await;
+        let mut limit = match limit {
+            Some(l) => l.min(addrs.len()),
+            None => addrs.len(),
+        };
+        let mut ret = vec![];
+
+        if limit == 0 {
+            return ret
+        }
+
+        for addr in addrs.iter() {
+            if !schemes.contains(&addr.scheme().to_string()) {
+                ret.push(addr.clone());
+                limit -= 1;
+                if limit == 0 {
+                    return ret
+                }
+            }
+        }
+
+        // If we didn't find any, pick some from the quarantine zone
+        if ret.is_empty() {
+            for addr in self.quarantine.read().await.keys() {
+                if !schemes.contains(&addr.scheme().to_string()) {
                     ret.push(addr.clone());
                     limit -= 1;
                     if limit == 0 {

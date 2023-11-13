@@ -59,7 +59,10 @@ impl_p2p_message!(PongMessage, "pong");
 /// Requests address of outbound connecction.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct GetAddrsMessage {
-    /// Maximum number of addresses to receive
+    /// Maximum number of addresses with preferred
+    /// transports to receive. Response vector will
+    /// also containg addresses without the preferred
+    /// transports, so its size will be 2 * max.
     pub max: u32,
     /// Preferred addresses transports
     pub transports: Vec<String>,
