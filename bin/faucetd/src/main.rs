@@ -556,7 +556,7 @@ impl Faucetd {
             rcpt_user_data_blind: pallas::Base::random(&mut OsRng),
             change_spend_hook: pallas::Base::zero(),
             change_user_data: pallas::Base::zero(),
-            change_user_data_blind: pallas::Base::random(&mut OsRng),
+            input_user_data_blind: pallas::Base::random(&mut OsRng),
             coins: vec![],
             tree: self.merkle_tree.clone(),
             mint_zkbin,
