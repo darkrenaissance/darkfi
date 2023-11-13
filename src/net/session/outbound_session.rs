@@ -360,7 +360,7 @@ impl Slot {
         macro_rules! mix_transport {
             ($a:expr, $b:expr) => {
                 if transports.contains(&$a.to_string()) && transport_mixing {
-                    let mut a_to_b = p2p.hosts().fetch_with_schemes(&[$b.to_string()]).await;
+                    let mut a_to_b = p2p.hosts().fetch_with_schemes(&[$b.to_string()], None).await;
                     for addr in a_to_b.iter_mut() {
                         addr.set_scheme($a).unwrap();
                         hosts.push(addr.clone());
@@ -374,7 +374,7 @@ impl Slot {
         mix_transport!("nym+tls", "tcp+tls");
 
         // And now the actual requested transports
-        for addr in p2p.hosts().fetch_with_schemes(transports).await {
+        for addr in p2p.hosts().fetch_with_schemes(transports, None).await {
             hosts.push(addr);
         }
 
