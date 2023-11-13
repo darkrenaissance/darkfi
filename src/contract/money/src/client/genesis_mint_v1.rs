@@ -30,10 +30,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{
-        transfer_v1::{
-            create_transfer_mint_proof, TransactionBuilderClearInputInfo,
-            TransactionBuilderOutputInfo,
-        },
+        transfer_v1::{create_transfer_mint_proof, TransferCallClearInput, TransferCallOutput},
         MoneyNote,
     },
     model::{ClearInput, Coin, MoneyTokenMintParamsV1, Output},
@@ -85,16 +82,18 @@ impl GenesisMintCallBuilder {
         // Only DARK_TOKEN_ID can be minted on genesis slot.
         let token_id = *DARK_TOKEN_ID;
 
-        let input = TransactionBuilderClearInputInfo {
+        let input = TransferCallClearInput {
             value: self.amount,
             token_id,
             signature_secret: self.keypair.secret,
         };
 
-        let output = TransactionBuilderOutputInfo {
+        let output = TransferCallOutput {
             value: self.amount,
             token_id,
             public_key: self.keypair.public,
+            spend_hook: pallas::Base::ZERO,
+            user_data: pallas::Base::ZERO,
         };
 
         // We just create the commitment blinds here. We simply encofce

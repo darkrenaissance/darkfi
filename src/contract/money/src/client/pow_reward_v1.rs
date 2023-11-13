@@ -34,10 +34,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{
-        transfer_v1::{
-            create_transfer_mint_proof, TransactionBuilderClearInputInfo,
-            TransactionBuilderOutputInfo,
-        },
+        transfer_v1::{create_transfer_mint_proof, TransferCallClearInput, TransferCallOutput},
         MoneyNote,
     },
     model::{ClearInput, Coin, MoneyPoWRewardParamsV1, Output},
@@ -97,10 +94,15 @@ impl PoWRewardCallBuilder {
         // Only DARK_TOKEN_ID can be minted as PoW reward.
         let token_id = *DARK_TOKEN_ID;
 
-        let input =
-            TransactionBuilderClearInputInfo { value, token_id, signature_secret: self.secret };
+        let input = TransferCallClearInput { value, token_id, signature_secret: self.secret };
 
-        let output = TransactionBuilderOutputInfo { value, token_id, public_key: self.recipient };
+        let output = TransferCallOutput {
+            value,
+            token_id,
+            public_key: self.recipient,
+            spend_hook: pallas::Base::ZERO,
+            user_data: pallas::Base::ZERO,
+        };
 
         // We just create the commitment blinds here. We simply encofce
         // that the clear input and the anon output have the same commitments.
