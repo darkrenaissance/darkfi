@@ -19,19 +19,19 @@ Depending on your setup you may need to install a virtual environment
 for Python. Do so as follows:
 
 ```shell
-% python -m venv env
+% python -m venv python-venv
 ```
 
 Then install the requirements:
 
 ```shell
-% env/bin/pip install -r requirements.txt
+% python-venv/bin/pip install -r requirements.txt
 ```
 
 Run dnet:
 
 ```shell
-% env/bin/python main.py
+% python-venv/bin/python main.py
 ```
 
 ### Without a venv
