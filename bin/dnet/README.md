@@ -19,7 +19,7 @@ Depending on your setup you may need to install a virtual environment
 for Python. Do so as follows:
 
 ```shell
-% python -m venv python-venv
+% python -m venv python-env
 % source python-env/bin/activate
 ```
 
