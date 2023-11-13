@@ -20,19 +20,26 @@ for Python. Do so as follows:
 
 ```shell
 % python -m venv python-venv
-% python-env/bin/activate
+% source python-env/bin/activate
 ```
 
 Then install the requirements:
 
 ```shell
-% python-venv/bin/pip install -r requirements.txt
+% pip install -r requirements.txt
 ```
 
 Run dnet:
 
 ```shell
-% python-venv/bin/python main.py
+% python main.py
+```
+
+You will need to reactivate the venv in your current terminal session
+each time you use `dnet` as follows:
+
+```shell
+% source python-env/bin/activate
 ```
 
 ### Without a venv
