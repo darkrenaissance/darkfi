@@ -136,7 +136,7 @@ impl ProtocolAddress {
 
             // Then we grab addresses without the requested transports
             // to fill a 2 * max length vector.
-            let remain = 2 * get_addrs_msg.max - addrs.len();
+            let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
             addrs.append(
                 &mut self
                     .hosts
