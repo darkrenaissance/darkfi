@@ -10,7 +10,7 @@
 .#*
 *.profraw
 *_original
-.python-venv
+python-venv
 
 /vendor/*
 /target/*
