@@ -35,4 +35,4 @@ class IRC:
         if resp.find('PING') != -1:                      
             self.irc.send(bytes('PONG ' + msg + '\r\n', "UTF-8")) 
  
-        return resp
+        return resp.strip()
