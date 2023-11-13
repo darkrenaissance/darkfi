@@ -20,6 +20,7 @@ for Python. Do so as follows:
 
 ```shell
 % python -m venv python-venv
+% python-env/bin/activate
 ```
 
 Then install the requirements:
