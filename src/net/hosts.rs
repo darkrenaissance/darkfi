@@ -267,7 +267,7 @@ impl Hosts {
         self.addrs.read().await.iter().cloned().collect()
     }
 
-    /// Get up to n random hosts from the hosts set.
+    /// Get up to n random peers from the hosts set.
     pub async fn fetch_n_random(&self, n: u32) -> Vec<Url> {
         let n = n as usize;
         if n == 0 {
@@ -275,8 +275,25 @@ impl Hosts {
         }
         let addrs = self.addrs.read().await;
         let urls = addrs.iter().choose_multiple(&mut OsRng, n.min(addrs.len()));
-        let urls = urls.iter().map(|&url| url.clone()).collect();
-        urls
+        urls.iter().map(|&url| url.clone()).collect()
+    }
+
+    /// Get up to n random peers that match the given transport schemes from the hosts set.
+    pub async fn fetch_n_random_with_schemes(&self, schemes: &[String], n: u32) -> Vec<Url> {
+        let n = n as usize;
+        if n == 0 {
+            return vec![]
+        }
+
+        // Retrieve all peers corresponding to that transport schemes
+        let hosts = self.fetch_with_schemes(schemes, None).await;
+        if hosts.is_empty() {
+            return hosts
+        }
+
+        // Grab random ones
+        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
+        urls.iter().map(|&url| url.clone()).collect()
     }
 
     /// Get up to limit peers that match the given transport schemes from the hosts set.

@@ -57,10 +57,12 @@ pub struct PongMessage {
 impl_p2p_message!(PongMessage, "pong");
 
 /// Requests address of outbound connecction.
-#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct GetAddrsMessage {
     /// Maximum number of addresses to receive
     pub max: u32,
+    /// Preferred addresses transports
+    pub transports: Vec<String>,
 }
 impl_p2p_message!(GetAddrsMessage, "getaddr");
 

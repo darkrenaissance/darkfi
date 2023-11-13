@@ -93,7 +93,10 @@ impl ProtocolBase for ProtocolSeed {
         self.send_self_address().await?;
 
         // Send get address message
-        let get_addr = GetAddrsMessage { max: self.settings.outbound_connections as u32 };
+        let get_addr = GetAddrsMessage {
+            max: self.settings.outbound_connections as u32,
+            transports: self.settings.allowed_transports.clone(),
+        };
         self.channel.send(&get_addr).await?;
 
         // Receive addresses

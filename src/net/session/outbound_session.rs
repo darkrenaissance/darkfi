@@ -529,7 +529,10 @@ impl PeerDiscovery {
                     state: "getaddr",
                 });
 
-                let get_addrs = GetAddrsMessage { max: p2p.settings().outbound_connections as u32 };
+                let get_addrs = GetAddrsMessage {
+                    max: p2p.settings().outbound_connections as u32,
+                    transports: p2p.settings().allowed_transports.clone(),
+                };
                 p2p.broadcast(&get_addrs).await;
 
                 // Wait for a hosts store update event
