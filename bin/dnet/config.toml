@@ -2,14 +2,10 @@
 name = "darkirc"
 host = "localhost"
 port = 26660
+type = "NORMAL"
 
 [[nodes]]
-name = "taud"
+name = "lilith"
 host = "localhost"
-port = 23330
-
-[[nodes]]
-name = "agorism"
-host = "agorism.dev"
-port = 26660
-
+port = 18927
+type = "LILITH"
