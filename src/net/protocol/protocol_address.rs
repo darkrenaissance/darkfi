@@ -93,11 +93,6 @@ impl ProtocolAddress {
 
             // TODO: We might want to close the channel here if we're getting
             // corrupted addresses.
-            // Validate addreses length
-            if addrs_msg.addrs.len() > 2 * self.settings.outbound_connections {
-                continue
-            }
-
             self.hosts.store(&addrs_msg.addrs).await;
         }
     }
