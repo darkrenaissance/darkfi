@@ -53,7 +53,8 @@ If you don't require a venv, install the requirements and run dnet as follows:
 
 ## Usage
 
-Navigate up and down using the arrow keys. Type `q` to quit.
+Navigate up and down using the arrow keys. Scroll the message log using
+`PageUp` and `PageDown`. Type `q` to quit.
 
 ## Config
 
