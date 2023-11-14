@@ -35,6 +35,10 @@ use crate::{
 /// Atomic pointer to hosts object
 pub type HostsPtr = Arc<Hosts>;
 
+// An array containing all possible local host strings
+// TODO: This could perhaps be more exhaustive?
+pub const LOCAL_HOST_STRS: [&str; 2] = ["localhost", "localhost.localdomain"];
+
 /// Manages a store of network addresses
 pub struct Hosts {
     /// Set of stored addresses
@@ -93,6 +97,41 @@ impl Hosts {
         Ok(sub)
     }
 
+    // Verify whether a URL is local.
+    // NOTE: This function is stateless and not specific to
+    // `Hosts`. For this reason, it might make more sense
+    // to move this function to a more appropriate location
+    // in the codebase.
+    pub async fn is_local_host(&self, url: Url) -> bool {
+        // Reject Urls without host strings.
+        if url.host_str().is_none() {
+            return false
+        }
+
+        // We do this hack in order to parse IPs properly.
+        // https://github.com/whatwg/url/issues/749
+        let addr = Url::parse(&url.as_str().replace(url.scheme(), "http")).unwrap();
+        // Filter private IP ranges
+        match addr.host().unwrap() {
+            url::Host::Ipv4(ip) => {
+                if !ip.is_global() {
+                    return true
+                }
+            }
+            url::Host::Ipv6(ip) => {
+                if !ip.is_global() {
+                    return true
+                }
+            }
+            url::Host::Domain(d) => {
+                if LOCAL_HOST_STRS.contains(&d) {
+                    return true
+                }
+            }
+        }
+        false
+    }
+
     /// Filter given addresses based on certain rulesets and validity.
     async fn filter_addresses(&self, addrs: &[Url]) -> Vec<Url> {
         debug!(target: "net::hosts::filter_addresses()", "Filtering addrs: {:?}", addrs);
@@ -120,7 +159,7 @@ impl Hosts {
                 // Our own external addresses should never enter the hosts set.
                 for ext in &self.settings.external_addrs {
                     if host_str == ext.host_str().unwrap() {
-                        continue 'addr_loop;
+                        continue 'addr_loop
                     }
                 }
             }
@@ -132,26 +171,8 @@ impl Hosts {
             // Filter non-global ranges if we're not allowing localnet.
             // Should never be allowed in production, so we don't really care
             // about some of them (e.g. 0.0.0.0, or broadcast, etc.).
-            if !localnet {
-                // Filter private IP ranges
-                match addr.host().unwrap() {
-                    url::Host::Ipv4(ip) => {
-                        if !ip.is_global() {
-                            continue
-                        }
-                    }
-                    url::Host::Ipv6(ip) => {
-                        if !ip.is_global() {
-                            continue
-                        }
-                    }
-                    url::Host::Domain(d) => {
-                        // TODO: This could perhaps be more exhaustive?
-                        if d == "localhost" {
-                            continue
-                        }
-                    }
-                }
+            if !localnet && self.is_local_host(addr).await {
+                continue
             }
 
             match addr_.scheme() {
@@ -210,27 +231,27 @@ impl Hosts {
         }
     }
 
-    /// Check if a given peer should be rejected
+    /// Check if a given peer (URL) is in the set of rejected hosts
     pub async fn is_rejected(&self, peer: &Url) -> bool {
+        // Skip lookup for UNIX sockets and localhost connections
+        // as they should never belong to the list of rejected URLs.
         let Some(hostname) = peer.host_str() else { return false };
 
-        // Don't reject localhost.
-        // This however allows any Tor and Nym connections.
-        if hostname == "127.0.0.1" || hostname == "[::1]" {
+        if self.is_local_host(peer.clone()).await {
             return false
         }
 
         self.rejected.read().await.contains(hostname)
     }
 
-    /// Mark a peer as rejected
+    /// Mark a peer as rejected by adding it to the set of rejected URLs.
     pub async fn mark_rejected(&self, peer: &Url) {
         // We ignore UNIX sockets here so we will just work
         // with stuff that has host_str().
         if let Some(hostname) = peer.host_str() {
-            // Don't reject localhost.
+            // Localhost connections should not be rejected
             // This however allows any Tor and Nym connections.
-            if hostname == "127.0.0.1" || hostname == "[::1]" {
+            if self.is_local_host(peer.clone()).await {
                 return
             }
 
@@ -457,7 +478,6 @@ mod tests {
 
             let local_hosts = vec![
                 Url::parse("tcp://localhost:3921").unwrap(),
-                Url::parse("tcp://127.0.0.1:23957").unwrap(),
                 Url::parse("tor://[::1]:21481").unwrap(),
                 Url::parse("tcp://192.168.10.65:311").unwrap(),
                 Url::parse("tcp+tls://0.0.0.0:2312").unwrap(),
@@ -475,6 +495,43 @@ mod tests {
             assert!(hosts.contains(&remote_hosts[0]).await);
             assert!(hosts.contains(&remote_hosts[1]).await);
             assert!(!hosts.contains(&remote_hosts[2]).await);
+        });
+    }
+
+    #[test]
+    fn test_is_local_host() {
+        smol::block_on(async {
+            let settings = Settings {
+                localnet: false,
+                external_addrs: vec![
+                    Url::parse("tcp://foo.bar:123").unwrap(),
+                    Url::parse("tcp://lol.cat:321").unwrap(),
+                ],
+                ..Default::default()
+            };
+            let hosts = Hosts::new(Arc::new(settings.clone()));
+
+            let local_hosts: Vec<Url> = vec![
+                Url::parse("tcp://localhost").unwrap(),
+                Url::parse("tcp://127.0.0.1").unwrap(),
+                Url::parse("tcp+tls://[::1]").unwrap(),
+                Url::parse("tcp://localhost.localdomain").unwrap(),
+                Url::parse("tcp://192.168.10.65").unwrap(),
+            ];
+            for host in local_hosts {
+                eprintln!("{}", host);
+                assert!(hosts.is_local_host(host).await);
+            }
+            let remote_hosts: Vec<Url> = vec![
+                Url::parse("https://dyne.org").unwrap(),
+                Url::parse("tcp://77.168.10.65:2222").unwrap(),
+                Url::parse("tcp://[2345:0425:2CA1:0000:0000:0567:5673:23b5]").unwrap(),
+                Url::parse("http://eweiibe6tdjsdprb4px6rqrzzcsi22m4koia44kc5pcjr7nec2rlxyad.onion")
+                    .unwrap(),
+            ];
+            for host in remote_hosts {
+                assert!(!(hosts.is_local_host(host).await))
+            }
         });
     }
 }
