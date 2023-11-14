@@ -115,6 +115,11 @@ impl Hosts {
                 continue
             }
 
+            if self.is_rejected(addr_).await {
+                debug!(target: "net::hosts::filter_addresses()", "Peer {} is rejected", addr_);
+                continue
+            }
+
             let host_str = addr_.host_str().unwrap();
 
             if !localnet {
@@ -196,8 +201,6 @@ impl Hosts {
 
     /// Quarantine a peer. If they've been quarantined for 50 times, forget them.
     pub async fn quarantine(&self, url: &Url) {
-        debug!(target: "net::hosts::quarantine()", "Attempted to quarantine {}", url);
-        /*
         debug!(target: "net::hosts::remove()", "Quarantining peer {}", url);
         // Remove from main hosts set
         self.addrs.write().await.remove(url);
@@ -207,14 +210,14 @@ impl Hosts {
             *retries += 1;
             debug!(target: "net::hosts::quarantine()", "Peer {} quarantined {} times", url, retries);
             if *retries == self.settings.hosts_quarantine_limit {
-                debug!(target: "net::hosts::quarantine()", "Deleting peer {}", url);
+                debug!(target: "net::hosts::quarantine()", "Banning peer {}", url);
                 q.remove(url);
+                self.mark_rejected(url).await;
             }
         } else {
             debug!(target: "net::hosts::remove()", "Added peer {} to quarantine", url);
             q.insert(url.clone(), 0);
         }
-        */
     }
 
     /// Check if a given peer should be rejected
