@@ -99,7 +99,7 @@ impl Hosts {
         let mut ret = vec![];
         let localnet = self.settings.localnet;
 
-        for addr_ in addrs {
+        'addr_loop: for addr_ in addrs {
             // Validate that the format is `scheme://host_str:port`
             if addr_.host_str().is_none() ||
                 addr_.port().is_none() ||
@@ -117,16 +117,11 @@ impl Hosts {
             let host_str = addr_.host_str().unwrap();
 
             if !localnet {
-                // Our own addresses should never enter the hosts set.
-                let mut got_own = false;
+                // Our own external addresses should never enter the hosts set.
                 for ext in &self.settings.external_addrs {
                     if host_str == ext.host_str().unwrap() {
-                        got_own = true;
-                        break
+                        continue 'addr_loop;
                     }
-                }
-                if got_own {
-                    continue
                 }
             }
 
