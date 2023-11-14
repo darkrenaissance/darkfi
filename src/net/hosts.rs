@@ -78,13 +78,7 @@ impl Hosts {
 
         if !filtered_addrs.is_empty() {
             let mut addrs_map = self.addrs.write().await;
-            let mut quarantine = self.quarantine.write().await;
             for addr in filtered_addrs {
-                // We assume this was called for a valid peer, and/or we managed
-                // to successfully connect. So we'll also remove them from the
-                // quarantine zone if they're there.
-                quarantine.remove(&addr);
-
                 debug!(target: "net::hosts::store()", "Inserting {}", addr);
                 addrs_map.insert(addr);
             }
@@ -199,7 +193,8 @@ impl Hosts {
         self.quarantine.write().await.remove(url);
     }
 
-    /// Quarantine a peer. If they've been quarantined for 50 times, forget them.
+    /// Quarantine a peer.
+    /// If they've been quarantined for more than a configured limit, forget them.
     pub async fn quarantine(&self, url: &Url) {
         debug!(target: "net::hosts::remove()", "Quarantining peer {}", url);
         // Remove from main hosts set
