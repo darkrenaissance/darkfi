@@ -1,60 +1,47 @@
 # Set-up a Tor-enabled darkirc node
 
-NOTE: Unstable/not private
-
 ## Step 1: Install Tor and Launch a Hidden Service
 [Install Tor](https://darkrenaissance.github.io/darkfi/clients/tor_inbound.html).
 
 Note your `.onion` address and the ports you used while setting up the
 Hidden Service.
 
-## Step 2: Configure Network Settings
-
-Tor requires specific timeout settings in order to maintain a stable
-connection.
-
-To configure these settings, modify `src/net/settings.rs`. For now, this must be done 
-manually before building the binary.
-
-Locate the section beginning with the line: 
-```rust
-impl Default for Settings {
-```
-
-Then modify:
-
-```rust
-outbound_connect_timeout: 60,
-channel_handshake_timeout: 55,
-channel_heartbeat_interval: 90,
-hosts_quarantine_limit: 10,
-outbound_peer_discovery_cooloff_time: 60,
-```
-
-## Build and run darkirc
+## Step 2: Build and run darkirc
 
 In the main repository: `make BINS="darkirc"`.
 
 The binary will create a configuration file at `~/.config/darkirc/darkirc_config.toml`.
 
-## Modify the DarkIRC configuration file
+## Step 3: Configure Network Settings
+
+Tor requires specific timeout settings in order to maintain a stable
+connection.
+
+Ensure the config file contains the following:
+
+_If you notice some settings are not present in the file, simply add them._
 
 ```toml
-...
+outbound_connect_timeout = 60
+channel_handshake_timeout = 55
+channel_heartbeat_interval = 90
+hosts_quarantine_limit = 10
+outbound_peer_discovery_cooloff_time = 60
+
 allowed_transports = ["tor", "tor+tls"]
-...
 external_addr = ["tor://youraddress.onion:your-port"]
-...
+
+# inbound settings
 inbound = ["tcp://127.0.0.1:your-port"]
-...
+inbound_connections = 8
 ```
 
 This configuration allows your node to send and receive traffic only via Tor.
 
-The settings `external_addr` and `inbound` are optional, but enabling them
-will increase the strength and reliability of the network.
+The settings under `inbound settings`, but enabling them will increase the strength and 
+reliability of the network.
 
-## Run darkirc and connect to the network
+## Step 4: Connect
 
 Run `./darkirc`. Welcome to the dark forest.
 
