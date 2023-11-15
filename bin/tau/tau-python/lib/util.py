@@ -1,5 +1,6 @@
 import random, time
-from datetime import UTC, datetime
+from datetime import timezone, datetime
+UTC = timezone.utc
 
 def random_blob_idx():
     return "%030x" % random.randrange(16**30)
