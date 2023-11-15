@@ -8,18 +8,15 @@ Hidden Service.
 
 ## Step 2: Build and run darkirc
 
-In the main repository: `make BINS="darkirc"`.
-
-The binary will create a configuration file at `~/.config/darkirc/darkirc_config.toml`.
+In the main repository: `make BINS="darkirc"`. Then run `./darkirc`. This will create 
+a configuration file at `~/.config/darkirc/darkirc_config.toml`.
 
 ## Step 3: Configure Network Settings
 
-Tor requires specific timeout settings in order to maintain a stable
-connection.
+Change the following settings in the configuration file created in Step 2.
 
-Ensure the config file contains the following:
-
-_If you notice some settings are not present in the file, simply add them._
+As you modify the file, if you notice some settings are missing, simply add them.
+Some settings may be commented-out by default.
 
 ```toml
 # connection settings
@@ -34,6 +31,7 @@ external_addr = ["tor://youraddress.onion:your-port"]
 
 # seeds
 seeds = [
+    # These addresses are commented-out by default
     "tor://rwjgdy7bs4e3eamgltccea7p5yzz3alfi2vps2xefnihurbmpd3b7hqd.onion:5262",
     "tor://f5mldz3utfrj5esn7vy7osa6itusotix6nsjhv4uirshkcvgglb3xdqd.onion:5262",
 ]
@@ -45,8 +43,8 @@ inbound_connections = 8
 
 This configuration allows your node to send and receive traffic only via Tor.
 
-The settings under `inbound settings`, but enabling them will increase the strength and 
-reliability of the network.
+The settings under `inbound settings` are optional, but enabling them will 
+increase the strength and reliability of the network.
 
 ## Step 4: Connect
 
@@ -56,6 +54,10 @@ Run `./darkirc`. Welcome to the dark forest.
 
 Run `darkirc -vv` for verbose debugging. This will show detailed errors including
 tor connection issues.
+
+### Connection issues
+
+Review the configuration file for any mistakes. Check for duplicated variables.
 
 ### DagSync spam
 
