@@ -149,7 +149,7 @@ async def channel_listen(host, port, nick, chan):
                     topics = CHANS[chan]["topics"]
                     if len(topics) == 0:
                         reply = f"PRIVMSG {chan} :No topics"
-                        logging.info("%s: Send: %s", chan reply)
+                        logging.info("%s: Send: %s", chan, reply)
                         writer.write((reply + "\r\n").encode("utf-8"))
                         await writer.drain()
                         continue
@@ -160,12 +160,12 @@ async def channel_listen(host, port, nick, chan):
                         del topics[topic-1]
                         CHANS[chan]["topics"] = topics
                         reply = f"PRIVMSG {chan} :Removed topic {topic}"
-                        logging.info("%s: Send: %s", chan reply)
+                        logging.info("%s: Send: %s", chan, reply)
                         writer.write((reply + "\r\n").encode("utf-8"))
                         await writer.drain()
                     except:
                         reply = f"PRIVMSG {chan} :Topic not found"
-                        logging.info("%s: Send: %s", chan reply)
+                        logging.info("%s: Send: %s", chan, reply)
                         writer.write((reply + "\r\n").encode("utf-8"))
                         await writer.drain()
 
