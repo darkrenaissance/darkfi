@@ -22,6 +22,7 @@ Ensure the config file contains the following:
 _If you notice some settings are not present in the file, simply add them._
 
 ```toml
+# connection settings
 outbound_connect_timeout = 60
 channel_handshake_timeout = 55
 channel_heartbeat_interval = 90
@@ -30,6 +31,12 @@ outbound_peer_discovery_cooloff_time = 60
 
 allowed_transports = ["tor", "tor+tls"]
 external_addr = ["tor://youraddress.onion:your-port"]
+
+# seeds
+seeds = [
+    "tor://rwjgdy7bs4e3eamgltccea7p5yzz3alfi2vps2xefnihurbmpd3b7hqd.onion:5262",
+    "tor://f5mldz3utfrj5esn7vy7osa6itusotix6nsjhv4uirshkcvgglb3xdqd.onion:5262",
+]
 
 # inbound settings
 inbound = ["tcp://127.0.0.1:your-port"]
