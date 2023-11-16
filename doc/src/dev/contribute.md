@@ -36,18 +36,28 @@ or need to be maintained:
 * **Documentation:** general documentation and code docs (cargo doc). This is a very 
   important work for example [overview](https://darkrenaissance.github.io/darkfi/arch/overview.html) 
   page is out of date.
-* **Tooling:** Such as the `drk` tool. right now 
-  we're adding [DAO functionality](https://github.com/darkrenaissance/darkfi/blob/master/src/contract/dao/wallet.sql) 
-  to it.
+* **TODO** and **FIXME** are throughout the codebase. Find your favourite one and begin hacking.
+* **Tooling:** Creating new tools or improving existing ones.
 * **Tests:** Throughout the project there are either broken or commented out unit tests, they need to be fixed.
 * **Cleanup:** General code cleanup. for example flattening headers and improving things like in 
   [this commit](https://github.com/darkrenaissance/darkfi/commit/9cd9c3113eed1b5f0bcad2ee449ef926d0908d55).
 * **Python bindings:** Help ensure coverage and cleanup the Python bindings in `src/sdk/python/`.
-* **Events System:** We need to fix IRCD, we will need to implement the 
-  [events](https://darkrenaissance.github.io/darkfi/misc/event_graph/event_graph.html) system.
+    ** The event graph could have Python bindings but involves some tricky part integrating Python and Rust async.
+* **Events System:** See the
+  [event graph](https://darkrenaissance.github.io/darkfi/misc/event_graph/event_graph.html) system.
+  We need extra review of the code and improvement of the design. This is a good submodule to begin working on.
+* **DHT:** Currently this is broken and needs fixing.
 * **p2p Network:** this is a good place to start reviewing the code and suggesting improvements.
   For example maintaining network resiliency. You can also look at apps like darkirc, and the event graph subsystem,
   and see how to make them more reliable. See also the task manager tau.
+    * Implement resource manager.
+    * Improve hosts strategy using a white list, grey list and black list.
+* Harder **crypto** tasks:
+    * DAO note verifiable encryption
+    * Generalize DAO proposals by committing to a set of coins rather than a single one.
+    * Add proposal_type field and proposal_data.
+    * Money viewing keys
+* Eth-DarkFi bridge or atomic swaps. Atomic swaps is probably better since it's trustless and p2p.
 
 ## Fuzz testing
 
