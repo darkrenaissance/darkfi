@@ -214,8 +214,8 @@ impl Dialer {
 
             #[cfg(feature = "p2p-tor")]
             DialerVariant::Tor(dialer) => {
-                let host = self.endpoint.host_str().unwrap();
-                let port = self.endpoint.port().unwrap();
+                let host = self.endpoint.host_str().ok_or(Error::InvalidDialerScheme)?;
+                let port = self.endpoint.port().ok_or(Error::InvalidDialerScheme)?;
                 // Extract error reports (i.e. very detailed debugging)
                 // from arti-client in order to help debug Tor connections.
                 // https://docs.rs/arti-client/latest/arti_client/#reporting-arti-errors
@@ -233,8 +233,8 @@ impl Dialer {
 
             #[cfg(feature = "p2p-tor")]
             DialerVariant::TorTls(dialer) => {
-                let host = self.endpoint.host_str().unwrap();
-                let port = self.endpoint.port().unwrap();
+                let host = self.endpoint.host_str().ok_or(Error::InvalidDialerScheme)?;
+                let port = self.endpoint.port().ok_or(Error::InvalidDialerScheme)?;
                 // Extract error reports (i.e. very detailed debugging)
                 // from arti-client in order to help debug Tor connections.
                 // https://docs.rs/arti-client/latest/arti_client/#reporting-arti-errors
