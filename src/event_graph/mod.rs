@@ -124,8 +124,7 @@ impl EventGraph {
                 target: "event_graph::new()",
                 "[EVENTGRAPH] DAG does not contain current genesis, pruning existing data",
             );
-            dag.clear()?;
-            self_.dag_insert(current_genesis).await?;
+            self_.dag_prune(current_genesis).await?;
         }
 
         // Find the unreferenced tips in the current DAG state.
@@ -138,7 +137,7 @@ impl EventGraph {
             let _ = self_.prune_task.set(prune_task.clone()).await;
 
             prune_task.clone().start(
-                self_.clone().dag_prune(days_rotation),
+                self_.clone().dag_prune_task(days_rotation),
                 |_| async move {
                     self__.clone()._handle_stop(sled_db).await;
                 },
@@ -403,13 +402,46 @@ impl EventGraph {
         Ok(())
     }
 
+    /// Atomically prune the DAG and insert the given event as genesis.
+    async fn dag_prune(&self, genesis_event: Event) -> Result<()> {
+        debug!(target: "event_graph::dag_prune()", "Pruning DAG...");
+
+        // Acquire exclusive locks to unreferenced_tips and broadcasted_ids while
+        // this operation is happening. We do this to ensure that during the pruning
+        // operation, no other operations are able to access the intermediate state
+        // which could lead to producing the wrong state after pruning.
+        let mut unreferenced_tips = self.unreferenced_tips.write().await;
+        let mut broadcasted_ids = self.broadcasted_ids.write().await;
+
+        // Atomically clear the DAG and write the new genesis event.
+        let mut batch = sled::Batch::default();
+        for key in self.dag.iter().keys() {
+            batch.remove(key.unwrap());
+        }
+        batch.insert(genesis_event.id().as_bytes(), serialize_async(&genesis_event).await);
+
+        debug!(target: "event_graph::dag_prune()", "Applying batch...");
+        if let Err(e) = self.dag.apply_batch(batch) {
+            panic!("Failed pruning DAG, sled apply_batch error: {}", e);
+        }
+
+        // Clear unreferenced tips and bcast ids
+        *unreferenced_tips = HashSet::from([genesis_event.id()]);
+        *broadcasted_ids = HashSet::new();
+        drop(unreferenced_tips);
+        drop(broadcasted_ids);
+
+        debug!(target: "event_graph::dag_prune()", "DAG pruned successfully");
+        Ok(())
+    }
+
     /// Background task periodically pruning the DAG.
-    async fn dag_prune(self: Arc<Self>, days_rotation: u64) -> Result<()> {
+    async fn dag_prune_task(self: Arc<Self>, days_rotation: u64) -> Result<()> {
         // The DAG should periodically be pruned. This can be a configurable
         // parameter. By pruning, we should deterministically replace the
         // genesis event (can use a deterministic timestamp) and drop everything
         // in the DAG, leaving just the new genesis event.
-        debug!(target: "event_graph::dag_prune()", "Spawned background DAG pruning task");
+        debug!(target: "event_graph::dag_prune_task()", "Spawned background DAG pruning task");
 
         loop {
             // Find the next rotation timestamp:
@@ -424,14 +456,12 @@ impl EventGraph {
 
             // Sleep until it's time to rotate.
             let s = UNIX_EPOCH.elapsed().unwrap().as_secs() - next_rotation;
-            debug!(target: "event_graph::dag_prune()", "Sleeping {}s until next DAG prune", s);
+            debug!(target: "event_graph::dag_prune_task()", "Sleeping {}s until next DAG prune", s);
             sleep(s).await;
-            debug!(target: "event_graph::dag_prune()", "Rotation period reached. Pruning DAG");
+            debug!(target: "event_graph::dag_prune_task()", "Rotation period reached");
 
-            *self.unreferenced_tips.write().await = HashSet::new();
-            self.dag.clear()?;
-            self.dag_insert(current_genesis).await?;
-            debug!(target: "event_graph::dag_prune()", "DAG pruned successfully");
+            // Trigger DAG prune
+            self.dag_prune(current_genesis).await?;
         }
     }
 
