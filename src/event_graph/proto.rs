@@ -280,9 +280,9 @@ impl ProtocolEventGraph {
                 // At this point we should've got all the events.
                 // We should add them to the DAG.
                 // TODO: FIXME: Also validate these events.
-                for event in received_events.iter().rev() {
-                    self.event_graph.dag_insert(event.clone()).await.unwrap();
-                }
+                let received_events_rev: Vec<Event> =
+                    received_events.iter().rev().cloned().collect();
+                self.event_graph.dag_insert(&received_events_rev).await.unwrap();
             } // <-- !missing_parents.is_empty()
 
             // If we're here, we have all the parents, and we can now
@@ -291,7 +291,7 @@ impl ProtocolEventGraph {
                 target: "event_graph::protocol::handle_event_put()",
                 "Got all parents necessary for insertion",
             );
-            self.event_graph.dag_insert(event.clone()).await.unwrap();
+            self.event_graph.dag_insert(&[event.clone()]).await.unwrap();
 
             // Relay the event to other peers.
             self.event_graph
