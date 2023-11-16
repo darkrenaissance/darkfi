@@ -37,6 +37,9 @@ or need to be maintained:
   important work for example [overview](https://darkrenaissance.github.io/darkfi/arch/overview.html) 
   page is out of date.
 * **TODO** and **FIXME** are throughout the codebase. Find your favourite one and begin hacking.
+    * DarkIRC encrypted DMs to nonexistant users should not be allowed.
+    * Currently closing DarkIRC with ctrl-c stalls in `p2p.stop()`. This should be fixed.
+    * Add `log = path` and `log_level = debug` config setting to DarkIRC
 * **Tooling:** Creating new tools or improving existing ones.
 * **Tests:** Throughout the project there are either broken or commented out unit tests, they need to be fixed.
 * **Cleanup:** General code cleanup. for example flattening headers and improving things like in 
