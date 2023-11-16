@@ -41,8 +41,8 @@ or need to be maintained:
 * **Tests:** Throughout the project there are either broken or commented out unit tests, they need to be fixed.
 * **Cleanup:** General code cleanup. for example flattening headers and improving things like in 
   [this commit](https://github.com/darkrenaissance/darkfi/commit/9cd9c3113eed1b5f0bcad2ee449ef926d0908d55).
-* **Python bindings:** Help ensure coverage and cleanup the Python bindings in `src/sdk/python/`.
-    ** The event graph could have Python bindings but involves some tricky part integrating Python and Rust async.
+* **Python bindings:** Help ensure wider coverage and cleanup the Python bindings in `src/sdk/python/`.
+    * The event graph could have Python bindings but involves some tricky part integrating Python and Rust async.
 * **Events System:** See the
   [event graph](https://darkrenaissance.github.io/darkfi/misc/event_graph/event_graph.html) system.
   We need extra review of the code and improvement of the design. This is a good submodule to begin working on.
