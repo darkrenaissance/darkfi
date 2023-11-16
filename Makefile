@@ -57,7 +57,11 @@ faucetd: contracts
 	$(MAKE) -C bin/faucetd
 
 darkirc:
-	$(MAKE) -C bin/darkirc
+	$(MAKE) -C bin/darkirc \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
 
 genev:
 	$(MAKE) -C bin/genev/genev-cli
