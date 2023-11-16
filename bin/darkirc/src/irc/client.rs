@@ -20,7 +20,7 @@ use std::{
     collections::{HashMap, HashSet},
     sync::{
         atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst},
-        Arc, OnceLock,
+        Arc,
     },
 };
 
@@ -34,7 +34,7 @@ use futures::FutureExt;
 use log::{debug, error, warn};
 use smol::{
     io::{self, AsyncBufReadExt, AsyncWriteExt, BufReader},
-    lock::RwLock,
+    lock::{OnceCell, RwLock},
     net::SocketAddr,
     prelude::{AsyncRead, AsyncWrite},
 };
@@ -86,7 +86,7 @@ pub struct Client {
     pub caps: RwLock<HashMap<String, bool>>,
     /// Set of seen messages for the user
     /// TODO: It grows indefinitely, needs to be pruned.
-    pub seen: OnceLock<sled::Tree>,
+    pub seen: OnceCell<sled::Tree>,
 }
 
 impl Client {
@@ -111,7 +111,7 @@ impl Client {
             nickname: RwLock::new(String::from("*")),
             realname: RwLock::new(String::from("*")),
             caps: RwLock::new(caps),
-            seen: OnceLock::new(),
+            seen: OnceCell::new(),
         })
     }
 
@@ -163,8 +163,10 @@ impl Client {
                                 error!("[IRC CLIENT] Failed inserting new event to DAG: {}", e);
                             } else {
                                 // We sent this, so it should be considered seen.
-                                debug!("Marking event {} as seen", event_id);
-                                self.seen.get().unwrap().insert(event_id.as_bytes(), &[]).unwrap();
+                                if let Err(e) = self.mark_seen(&event_id).await {
+                                    error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({}) failed: {}", event_id, e);
+                                    return Err(e)
+                                }
 
                                 // Otherwise, broadcast it
                                 self.server.darkirc.p2p.broadcast(&EventPut(event)).await;
@@ -195,8 +197,13 @@ impl Client {
                     }
 
                     // If this event was seen, skip it
-                    if self.seen.get().unwrap().contains_key(event_id.as_bytes()).unwrap() {
-                        continue
+                    match self.is_seen(&event_id).await {
+                        Ok(true) => continue,
+                        Ok(false) => {},
+                        Err(e) => {
+                            error!("[IRC CLIENT] (multiplex_connection) self.is_seen({}) failed: {}", event_id, e);
+                            return Err(e)
+                        }
                     }
 
                     // Try to deserialize the `Event`'s content into a `Privmsg`
@@ -238,8 +245,10 @@ impl Client {
                         }
 
                         // Mark the message as seen for this USER
-                        debug!("Marking event {} as seen", event_id);
-                        self.seen.get().unwrap().insert(event_id.as_bytes(), &[]).unwrap();
+                        if let Err(e) = self.mark_seen(&event_id).await {
+                            error!("[IRC CLIENT] (multiplex_connection) self.mark_seen({}) failed: {}", event_id, e);
+                            return Err(e)
+                        }
                     }
                 }
             }
@@ -360,5 +369,34 @@ impl Client {
         }
 
         Ok(None)
+    }
+
+    /// Atomically mark a message as seen for this client.
+    pub async fn mark_seen(&self, event_id: &blake3::Hash) -> Result<()> {
+        let db = self
+            .seen
+            .get_or_init(|| async {
+                let u = self.username.read().await.to_string();
+                self.server.darkirc.sled.open_tree(format!("darkirc_user_{}", u)).unwrap()
+            })
+            .await;
+
+        debug!("Marking event {} as seen", event_id);
+        let mut batch = sled::Batch::default();
+        batch.insert(event_id.as_bytes(), &[]);
+        Ok(db.apply_batch(batch)?)
+    }
+
+    /// Check if a message was already marked seen for this client.
+    pub async fn is_seen(&self, event_id: &blake3::Hash) -> Result<bool> {
+        let db = self
+            .seen
+            .get_or_init(|| async {
+                let u = self.username.read().await.to_string();
+                self.server.darkirc.sled.open_tree(format!("darkirc_user_{}", u)).unwrap()
+            })
+            .await;
+
+        Ok(db.contains_key(event_id.as_bytes())?)
     }
 }

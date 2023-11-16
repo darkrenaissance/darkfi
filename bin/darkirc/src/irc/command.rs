@@ -54,7 +54,7 @@ use std::{collections::HashSet, sync::atomic::Ordering::SeqCst};
 
 use darkfi::Result;
 use darkfi_serial::deserialize_async_partial;
-use log::{debug, error, info};
+use log::{error, info};
 
 use super::{
     client::{Client, ReplyType},
@@ -823,11 +823,6 @@ impl Client {
         *self.username.write().await = username.to_string();
         *self.realname.write().await = realname.to_string();
 
-        // The username is now set, we can open the sled tree for seen messages
-        self.seen
-            .set(self.server.darkirc.sled.open_tree(format!("darkirc_user_{}", username)).unwrap())
-            .unwrap();
-
         // If the nickname is set, we can complete the registration
         if nick != "*" {
             self.registered.store(true, SeqCst);
@@ -935,15 +930,21 @@ impl Client {
             return Ok(vec![])
         }
 
+        // Fetch and order all the events from the DAG
         let dag_events = self.server.darkirc.event_graph.order_events().await;
-        let seen_events = self.seen.get().unwrap();
 
+        // Here we'll hold the events in order we'll push to the client
         let mut replies = vec![];
 
         for event_id in dag_events.iter() {
             // If it was seen, skip
-            if seen_events.contains_key(event_id.as_bytes()).unwrap() {
-                continue
+            match self.is_seen(event_id).await {
+                Ok(true) => continue,
+                Ok(false) => {}
+                Err(e) => {
+                    error!("[IRC CLIENT] (get_history) self.is_seen({}) failed: {}", event_id, e);
+                    return Err(e)
+                }
             }
 
             // Get the event from the DAG
@@ -965,8 +966,10 @@ impl Client {
 
             let msg = format!("PRIVMSG {} :{}", privmsg.channel, privmsg.msg);
             replies.push(ReplyType::Client((privmsg.nick, msg)));
-            debug!("Marking event {} as seen", event_id);
-            seen_events.insert(event_id.as_bytes(), &[]).unwrap();
+            if let Err(e) = self.mark_seen(event_id).await {
+                error!("[IRC CLIENT] (get_history) self.mark_seen({}) failed: {}", event_id, e);
+                return Err(e)
+            }
         }
 
         Ok(replies)
