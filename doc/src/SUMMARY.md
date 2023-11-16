@@ -105,6 +105,7 @@
 
 # Misc
 
+- [tor-darkirc](misc/tor-darkirc.md)
 - [vanityaddr](misc/vanityaddr.md)
 - [IRCd Specification](misc/ircd/specification.md)
 - [tau](misc/tau.md)
