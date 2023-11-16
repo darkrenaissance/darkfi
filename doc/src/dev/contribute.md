@@ -50,8 +50,10 @@ or need to be maintained:
 * **p2p Network:** this is a good place to start reviewing the code and suggesting improvements.
   For example maintaining network resiliency. You can also look at apps like darkirc, and the event graph subsystem,
   and see how to make them more reliable. See also the task manager tau.
-    * Implement resource manager.
+    * Implement resource manager. See its implementation in libp2p for inspiration.
     * Improve hosts strategy using a white list, grey list and black list.
+      See [p2p Network: Common Mitigations](arch/p2p-network.md#common-mitigations) item called
+      *White, gray and black lists*.
 * Harder **crypto** tasks:
     * DAO note verifiable encryption
     * Generalize DAO proposals by committing to a set of coins rather than a single one.
