@@ -107,7 +107,7 @@ impl JsonRpcInterface {
         // Build a DAG event and return it.
         let event = Event::new(serialize_async(&genevent).await, self.event_graph.clone()).await;
 
-        if let Err(e) = self.event_graph.dag_insert(event.clone()).await {
+        if let Err(e) = self.event_graph.dag_insert(&[event.clone()]).await {
             error!("Failed inserting new event to DAG: {}", e);
         } else {
             // Otherwise, broadcast it
