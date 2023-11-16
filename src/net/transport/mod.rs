@@ -193,6 +193,11 @@ impl Dialer {
     }
 
     /// Dial an instantiated [`Dialer`]. This creates a connection and returns a stream.
+
+    /// The Tor-based Dialer variants can panic: this is intended. There exists validation
+    /// for hosts and ports in other parts of the codebase. A panic occurring here
+    /// likely indicates a configuration issue on the part of the user. It is preferable
+    /// in this case that the user is alerted to this problem via a panic.
     pub async fn dial(&self, timeout: Option<Duration>) -> Result<Box<dyn PtStream>> {
         match &self.variant {
             #[cfg(feature = "p2p-tcp")]
@@ -214,8 +219,8 @@ impl Dialer {
 
             #[cfg(feature = "p2p-tor")]
             DialerVariant::Tor(dialer) => {
-                let host = self.endpoint.host_str().ok_or(Error::InvalidDialerScheme)?;
-                let port = self.endpoint.port().ok_or(Error::InvalidDialerScheme)?;
+                let host = self.endpoint.host_str().unwrap();
+                let port = self.endpoint.port().unwrap();
                 // Extract error reports (i.e. very detailed debugging)
                 // from arti-client in order to help debug Tor connections.
                 // https://docs.rs/arti-client/latest/arti_client/#reporting-arti-errors
@@ -233,8 +238,8 @@ impl Dialer {
 
             #[cfg(feature = "p2p-tor")]
             DialerVariant::TorTls(dialer) => {
-                let host = self.endpoint.host_str().ok_or(Error::InvalidDialerScheme)?;
-                let port = self.endpoint.port().ok_or(Error::InvalidDialerScheme)?;
+                let host = self.endpoint.host_str().unwrap();
+                let port = self.endpoint.port().unwrap();
                 // Extract error reports (i.e. very detailed debugging)
                 // from arti-client in order to help debug Tor connections.
                 // https://docs.rs/arti-client/latest/arti_client/#reporting-arti-errors
