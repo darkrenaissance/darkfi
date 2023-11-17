@@ -363,6 +363,30 @@ pub struct TransferCallBuilder {
 // low level api mixing concerns - owncoin, select, and build
 // unable to specify exact structure of tx (multiple outputs, clear and anon inputs)
 
+/// Select coins from `coins` of at least `min_value` in total.
+/// Different strategies can be used. This function uses the dumb strategy
+/// of selecting coins until we reach `min_value`.
+pub fn select_coins(coins: Vec<OwnCoin>, min_value: u64) -> Result<Vec<OwnCoin>> {
+    let mut total_value = 0;
+    let mut selected = vec![];
+
+    for coin in coins {
+        if total_value >= min_value {
+            break
+        }
+
+        total_value += coin.note.value;
+        selected.push(coin);
+    }
+
+    if total_value < min_value {
+        error!("Not enough value to build tx inputs");
+        return Err(ClientFailed::NotEnoughValue(total_value).into())
+    }
+
+    Ok(selected)
+}
+
 impl TransferCallBuilder {
     pub fn build(self) -> Result<TransferCallDebris> {
         debug!("Building Money::TransferV1 contract call");
@@ -395,14 +419,10 @@ impl TransferCallBuilder {
 
             clear_inputs.push(input);
         } else {
+            spent_coins = select_coins(self.coins, self.value)?;
+
             let mut inputs_value = 0;
-
-            for coin in self.coins.iter() {
-                if inputs_value >= self.value {
-                    debug!("inputs_value >= value");
-                    break
-                }
-
+            for coin in spent_coins.iter() {
                 let leaf_position = coin.leaf_position;
                 let merkle_path = self.tree.witness(leaf_position, 0).unwrap();
                 inputs_value += coin.note.value;
@@ -416,12 +436,6 @@ impl TransferCallBuilder {
                 };
 
                 inputs.push(input);
-                spent_coins.push(coin.clone());
-            }
-
-            if inputs_value < self.value {
-                error!("Not enough value to build tx inputs");
-                return Err(ClientFailed::NotEnoughValue(inputs_value).into())
             }
 
             if inputs_value > self.value {
