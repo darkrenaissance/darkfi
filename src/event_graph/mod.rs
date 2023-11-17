@@ -89,7 +89,6 @@ pub struct EventGraph {
     /// inserted into the DAG
     pub event_sub: SubscriberPtr<Event>,
     days_rotation: u64,
-    genesis: Event,
 }
 
 impl EventGraph {
@@ -117,7 +116,6 @@ impl EventGraph {
             prune_task: OnceCell::new(),
             event_sub,
             days_rotation,
-            genesis: current_genesis.clone(),
         });
 
         // Check if we have it in our DAG.
@@ -154,10 +152,6 @@ impl EventGraph {
 
     pub fn days_rotation(&self) -> u64 {
         self.days_rotation
-    }
-
-    pub fn genesis(&self) -> Event {
-        self.genesis.clone()
     }
 
     async fn _handle_stop(&self, sled_db: sled::Db) {
