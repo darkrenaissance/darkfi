@@ -42,6 +42,7 @@ python-venv
 /darkwikid
 /zktool
 /riscv-bins
+/static-bins
 
 # tags, ctags, rusty-tags
 TAGS
