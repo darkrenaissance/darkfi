@@ -20,7 +20,6 @@ use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet, VecDeque},
     sync::Arc,
-    time::UNIX_EPOCH,
 };
 
 use async_recursion::async_recursion;
@@ -35,7 +34,7 @@ use smol::{
 use crate::{
     net::P2pPtr,
     system::{sleep, timeout::timeout, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr},
-    Error, Result,
+    Error, Result, event_graph::util::seconds_until_next_rotation,
 };
 
 /// An event graph event
@@ -460,7 +459,8 @@ impl EventGraph {
             };
 
             // Sleep until it's time to rotate.
-            let s = UNIX_EPOCH.elapsed().unwrap().as_secs() - next_rotation;
+            let s = seconds_until_next_rotation(next_rotation);
+            
             debug!(target: "event_graph::dag_prune_task()", "Sleeping {}s until next DAG prune", s);
             sleep(s).await;
             debug!(target: "event_graph::dag_prune_task()", "Rotation period reached");
