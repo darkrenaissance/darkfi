@@ -32,9 +32,10 @@ use smol::{
 };
 
 use crate::{
+    event_graph::util::seconds_until_next_rotation,
     net::P2pPtr,
     system::{sleep, timeout::timeout, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr},
-    Error, Result, event_graph::util::seconds_until_next_rotation,
+    Error, Result,
 };
 
 /// An event graph event
@@ -460,7 +461,7 @@ impl EventGraph {
 
             // Sleep until it's time to rotate.
             let s = seconds_until_next_rotation(next_rotation);
-            
+
             debug!(target: "event_graph::dag_prune_task()", "Sleeping {}s until next DAG prune", s);
             sleep(s).await;
             debug!(target: "event_graph::dag_prune_task()", "Rotation period reached");

@@ -67,10 +67,10 @@ pub(super) fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: 
         (rotations_since_start * rotation_period - days_passed).try_into().unwrap();
 
     // Get the timestamp for the next rotation
-    if days_until_next_rotation == 0 { 
+    if days_until_next_rotation == 0 {
         // If there are 0 days until the next rotation, we want
         // to rotate tomorrow, at midnight. This is a special case.
-        return midnight_timestamp(1);
+        return midnight_timestamp(1)
     }
     midnight_timestamp(days_until_next_rotation)
 }
@@ -80,7 +80,7 @@ pub(super) fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: 
 /// `next_rotation` here represents a timestamp in UNIX epoch format.
 pub(super) fn seconds_until_next_rotation(next_rotation: u64) -> u64 {
     // Store `now` in a variable in order to avoid a TOCTOU error.
-    // There may be a drift of one second between this panic check and 
+    // There may be a drift of one second between this panic check and
     // the return value if we get unlucky.
     let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
     if next_rotation < now {
@@ -114,7 +114,7 @@ mod tests {
         let expected = midnight_timestamp(4);
         assert_eq!(next_rotation_timestamp(starting_point, rotation_period), expected);
 
-        // When starting from today with a rotation period of 1 (day), 
+        // When starting from today with a rotation period of 1 (day),
         // we should get tomorrow's timestamp.
         // This is a special case.
         let midnight_today: u64 = midnight_timestamp(0);
@@ -140,7 +140,7 @@ mod tests {
         // The amount of time in seconds between rotations.
         let rotation_interval = days_rotation * 86400u64;
         let next_rotation_timestamp = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
-        let s = seconds_until_next_rotation(next_rotation_timestamp); 
+        let s = seconds_until_next_rotation(next_rotation_timestamp);
         assert!(s < rotation_interval);
     }
 }
