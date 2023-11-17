@@ -88,6 +88,8 @@ pub struct EventGraph {
     /// Event subscriber, this notifies whenever an event is
     /// inserted into the DAG
     pub event_sub: SubscriberPtr<Event>,
+    days_rotation: u64,
+    genesis: Event,
 }
 
 impl EventGraph {
@@ -105,6 +107,8 @@ impl EventGraph {
         let broadcasted_ids = RwLock::new(HashSet::new());
         let event_sub = Subscriber::new();
 
+        // Create the current genesis event based on the `days_rotation`
+        let current_genesis = Self::generate_genesis(days_rotation);
         let self_ = Arc::new(Self {
             p2p,
             dag: dag.clone(),
@@ -112,10 +116,9 @@ impl EventGraph {
             broadcasted_ids,
             prune_task: OnceCell::new(),
             event_sub,
+            days_rotation,
+            genesis: current_genesis.clone(),
         });
-
-        // Create the current genesis event based on the `days_rotation`
-        let current_genesis = Self::generate_genesis(days_rotation);
 
         // Check if we have it in our DAG.
         // If not, we can prune the DAG and insert this new genesis event.
@@ -147,6 +150,14 @@ impl EventGraph {
         }
 
         Ok(self_)
+    }
+
+    pub fn days_rotation(&self) -> u64 {
+        self.days_rotation
+    }
+
+    pub fn genesis(&self) -> Event {
+        self.genesis.clone()
     }
 
     async fn _handle_stop(&self, sled_db: sled::Db) {

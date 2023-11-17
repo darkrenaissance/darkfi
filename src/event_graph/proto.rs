@@ -142,6 +142,14 @@ impl ProtocolEventGraph {
                  target: "event_graph::protocol::handle_event_put()",
                  "Got EventPut: {} [{}]", event.id(), self.channel.address(),
             );
+            // Check if event is older than the previous rotation period
+            if event.timestamp < self.event_graph.genesis().timestamp {
+                debug!(
+                    target: "event_graph::protocol::handle_event_put()",
+                    "Event {} is older than genesis. Event timestamp: `{}`. Genesis timestamp: `{}`",
+                event.id(), event.timestamp, self.event_graph.genesis().timestamp
+                );
+            }
 
             // We received an event. Check if we already have it in our DAG.
             // Also check if we have the event's parents. In the case we do
