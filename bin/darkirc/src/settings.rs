@@ -106,7 +106,7 @@ pub fn parse_configured_contacts(data: &toml::Value) -> Result<HashMap<String, I
     };
 
     let Some(secret) = parse_dm_chacha_secret(data)? else {
-        return Err(ParseFailed("You have specified some contacts but you did not set up a valid chacha secret for yourself.  You can generate a keypair with: darkirc --gen-chacha-keypair and then add that to ~/.config/darkfi/darkirc_config.toml"))
+        return Err(ParseFailed("You have specified some contacts but you did not set up a valid chacha secret for yourself.  You can generate a keypair with: 'darkirc --gen-chacha-keypair' and then add that keypair to your config toml file."))
     };
 
     for (name, items) in contacts {
