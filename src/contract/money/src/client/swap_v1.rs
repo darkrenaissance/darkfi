@@ -36,8 +36,8 @@ use rand::rngs::OsRng;
 use crate::{
     client::{
         transfer_v1::{
-            create_transfer_burn_proof, create_transfer_mint_proof, TransferCallInput,
-            TransferCallOutput,
+            proof::{create_transfer_burn_proof, create_transfer_mint_proof},
+            TransferCallInput, TransferCallOutput,
         },
         MoneyNote, OwnCoin,
     },
