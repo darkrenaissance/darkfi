@@ -36,7 +36,7 @@ Although price oracle can be challenging in anonymous exchange, renegade[^1] dar
 
 ## variable redemption price.
 
-Pegging redemption price to 1 dollar is good for the time being for storing value in a low volatility coin as long as the dollar is holding value while can't be maintained for any fiat currency at time or erosion of dollar hegemony, alternatively redemption price can be set by feedback loop similar to Rai[^2] can help Nun hold value during times of high inflation of fiat currency.
+Pegging redemption price to 1 dollar is good for the time being for storing value in a low volatility coin as long as the dollar is holding value, this assumption can't be maintained for any fiat currency at time of erosion of dollar hegemony, alternatively redemption price can be set by feedback loop similar to Rai[^2] can help Nun hold value during times of high inflation of fiat currency.
 
 [^1]: https://www.renegade.fi/whitepaper.pdf
 [^2]: https://raw.githubusercontent.com/reflexer-labs/whitepapers/master/English/rai-english.pdf
