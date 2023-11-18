@@ -11,6 +11,24 @@ Collateral backed stablecoin with low volatility redemption price (based-off Dai
 
 In order for the Nun governing Dao community to vote on proposals using [Darkfi dao](https://darkrenaissance.github.io/darkfi/spec/dao/index.html), it's needed to commit to protocol proposal statements hash, or collateral vault contract call data, otherwise passed proposals could be faked.
 
+## Blind auction
+
+### Initialization
+
+Auction initiate contract for storing commitment to auction duration, bids, bid opening time limit, winning proof.
+
+### Bid commitment
+
+Bidders commit to bid x as through homomorphically encrypted commitment with blind term r as cm(x,r).
+
+### Bid opening
+
+Opening bid x, and bliding term r with the Auctioneer using it's public key
+
+### winning proof
+
+Bids can be sorted by homomorphic property $cm_{i,j}$ = $\frac{cm_i}{cm_j}$ = $cm(x_i-x_j)$, the order can serve as winning zk proof.
+
 ## Price oracle
 
 Although price oracle can be challenging in anonymous exchange, renegade[^1] dark pool reveal price midpoint pair at match phase, and can be used as price oracle.
