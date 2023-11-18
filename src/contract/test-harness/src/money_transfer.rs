@@ -18,15 +18,14 @@
 
 use std::time::Instant;
 
-use darkfi::{tx::Transaction, zk::halo2::Field, Result};
+use darkfi::{tx::Transaction, Result};
 use darkfi_money_contract::{
-    client::{transfer_v1::TransferCallBuilder, OwnCoin},
+    client::{transfer_v1::make_transfer_call, OwnCoin},
     model::MoneyTransferParamsV1,
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{MerkleNode, TokenId, MONEY_CONTRACT_ID},
-    pasta::pallas,
     ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
@@ -57,44 +56,25 @@ impl TestHarness {
 
         let timer = Instant::now();
 
-        // We're just going to be using a zero spend-hook and user-data
-        let rcpt_spend_hook = pallas::Base::zero();
-        let rcpt_user_data = pallas::Base::zero();
-        let rcpt_user_data_blind = pallas::Base::random(&mut OsRng);
-
-        // TODO: verify this is correct
-        let change_spend_hook = pallas::Base::zero();
-        let change_user_data = pallas::Base::zero();
-        let input_user_data_blind = pallas::Base::random(&mut OsRng);
-
-        let builder = TransferCallBuilder {
-            keypair: wallet.keypair,
-            recipient: rcpt,
-            value: amount,
+        let (params, secrets, spent_coins) = make_transfer_call(
+            wallet.keypair,
+            rcpt,
+            amount,
             token_id,
-            rcpt_spend_hook,
-            rcpt_user_data,
-            rcpt_user_data_blind,
-            change_spend_hook,
-            change_user_data,
-            input_user_data_blind,
-            coins: owncoins.to_owned(),
-            tree: wallet.money_merkle_tree.clone(),
-            mint_zkbin: mint_zkbin.clone(),
-            mint_pk: mint_pk.clone(),
-            burn_zkbin: burn_zkbin.clone(),
-            burn_pk: burn_pk.clone(),
-            clear_input: false,
-        };
-
-        let debris = builder.build()?;
+            owncoins.to_owned(),
+            wallet.money_merkle_tree.clone(),
+            mint_zkbin.clone(),
+            mint_pk.clone(),
+            burn_zkbin.clone(),
+            burn_pk.clone(),
+        )?;
 
         let mut data = vec![MoneyFunction::TransferV1 as u8];
-        debris.params.encode(&mut data)?;
+        params.encode(&mut data)?;
         let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
-        let proofs = vec![debris.proofs];
+        let proofs = vec![secrets.proofs];
         let mut tx = Transaction { calls, proofs, signatures: vec![] };
-        let sigs = tx.create_sigs(&mut OsRng, &debris.signature_secrets)?;
+        let sigs = tx.create_sigs(&mut OsRng, &secrets.signature_secrets)?;
         tx.signatures = vec![sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());
 
@@ -106,7 +86,7 @@ impl TestHarness {
         let size = std::mem::size_of_val(&*base58);
         tx_action_benchmark.broadcasted_sizes.push(size);
 
-        Ok((tx, debris.params, debris.spent_coins))
+        Ok((tx, params, spent_coins))
     }
 
     pub async fn execute_transfer_tx(

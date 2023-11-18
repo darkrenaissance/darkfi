@@ -40,48 +40,35 @@ use crate::{
     model::{ClearInput, Coin, Input, MoneyTransferParamsV1, Output},
 };
 
-// TODO: split this into secret and non-secret squads
-/// Output metadata claimed from building a `Money::Transfer` call
-pub struct TransferCallDebris {
-    /// The parameters for `Money::Transfer` respective to this call
-    pub params: MoneyTransferParamsV1,
-    /// The ZK proofs created in this builder
-    pub proofs: Vec<Proof>,
-    /// The ephemeral secret keys created for signing
-    pub signature_secrets: Vec<SecretKey>,
-    /// The coins that have been spent in this builder
-    // TODO: this is duplicate field, use params.inputs instead
-    pub spent_coins: Vec<OwnCoin>,
-    /// The coins that have been minted in this builder
-    // TODO: this is duplicate field, use params.outputs instead
-    pub minted_coins: Vec<OwnCoin>,
-
-    // TODO: should we maybe pass these into the builder explicitly?
-    /// The value blinds created for the inputs
-    pub input_value_blinds: Vec<pallas::Scalar>,
-    /// The value blinds created for the outputs
-    pub output_value_blinds: Vec<pallas::Scalar>,
-}
-
-impl TransferCallDebris {
-    // TODO: implement these methods
-    // fn spent_coins()
-    // fn minted_coins()
-}
-
-struct TransferCallSecrets {
+pub struct TransferCallSecrets {
     /// The ZK proofs created in this builder
     pub proofs: Vec<Proof>,
     /// The ephemeral secret keys created for signing
     pub signature_secrets: Vec<SecretKey>,
 
+    /// Decrypted notes associated with each output
     pub output_notes: Vec<MoneyNote>,
 
-    // TODO: should we maybe pass these into the builder explicitly?
     /// The value blinds created for the inputs
     pub input_value_blinds: Vec<pallas::Scalar>,
     /// The value blinds created for the outputs
     pub output_value_blinds: Vec<pallas::Scalar>,
+}
+
+impl TransferCallSecrets {
+    pub fn minted_coins(&self, params: &MoneyTransferParamsV1) -> Vec<OwnCoin> {
+        let mut minted_coins = vec![];
+        for (output, output_note) in params.outputs.iter().zip(self.output_notes.iter()) {
+            minted_coins.push(OwnCoin {
+                coin: output.coin,
+                note: output_note.clone(),
+                secret: SecretKey::from(pallas::Base::ZERO),
+                nullifier: Nullifier::from(pallas::Base::ZERO),
+                leaf_position: 0.into(),
+            });
+        }
+        minted_coins
+    }
 }
 
 pub struct TransferMintRevealed {
@@ -131,7 +118,6 @@ impl TransferBurnRevealed {
     }
 }
 
-// TODO: these names are wrong, should be Transfer..., also drop Info suffix
 pub struct TransferCallClearInput {
     pub value: u64,
     pub token_id: TokenId,
@@ -157,7 +143,7 @@ pub struct TransferCallOutput {
 }
 
 /// Struct holding necessary information to build a `Money::TransferV1` contract call.
-pub struct TransferCallBuilder2 {
+pub struct TransferCallBuilder {
     /// Clear inputs
     pub clear_inputs: Vec<TransferCallClearInput>,
     /// Anonymous inputs
@@ -174,7 +160,7 @@ pub struct TransferCallBuilder2 {
     pub burn_pk: ProvingKey,
 }
 
-impl TransferCallBuilder2 {
+impl TransferCallBuilder {
     fn compute_remainder_blind(
         clear_inputs: &[ClearInput],
         input_blinds: &[pallas::Scalar],
@@ -197,7 +183,7 @@ impl TransferCallBuilder2 {
         total
     }
 
-    fn build(self) -> Result<(MoneyTransferParamsV1, TransferCallSecrets)> {
+    pub fn build(self) -> Result<(MoneyTransferParamsV1, TransferCallSecrets)> {
         debug!("Building Money::TransferV1 contract call");
         assert!(self.clear_inputs.len() + self.inputs.len() > 0);
 
@@ -321,52 +307,10 @@ impl TransferCallBuilder2 {
     }
 }
 
-/// Struct holding necessary information to build a `Money::TransferV1` contract call.
-pub struct TransferCallBuilder {
-    /// Caller's keypair
-    pub keypair: Keypair,
-    /// Recipient's public key
-    pub recipient: PublicKey,
-    /// Amount that we want to send to the recipient
-    pub value: u64,
-    /// Token ID that we want to send to the recipient
-    pub token_id: TokenId,
-    /// Spend hook for the recipient's output
-    pub rcpt_spend_hook: pallas::Base,
-    /// User data for the recipient's output
-    pub rcpt_user_data: pallas::Base,
-    /// User data blind for the recipient's output
-    pub rcpt_user_data_blind: pallas::Base,
-    /// Spend hook for the change output
-    pub change_spend_hook: pallas::Base,
-    /// User data for the change output
-    pub change_user_data: pallas::Base,
-    /// User data blind for inputs
-    pub input_user_data_blind: pallas::Base,
-    /// Set of `OwnCoin` we're given to use in this builder
-    pub coins: Vec<OwnCoin>,
-    /// Merkle tree of coins used to create inclusion proofs
-    pub tree: MerkleTree,
-    /// `Mint_V1` zkas circuit ZkBinary
-    pub mint_zkbin: ZkBinary,
-    /// Proving key for the `Mint_V1` zk circuit
-    pub mint_pk: ProvingKey,
-    /// `Burn_V1` zkas circuit ZkBinary
-    pub burn_zkbin: ZkBinary,
-    /// Proving key for the `Burn_V1` zk circuit
-    pub burn_pk: ProvingKey,
-    /// Marks if we want to build clear inputs instead of anonymous inputs
-    pub clear_input: bool,
-}
-
-// cannot use different select_coins() algos
-// low level api mixing concerns - owncoin, select, and build
-// unable to specify exact structure of tx (multiple outputs, clear and anon inputs)
-
 /// Select coins from `coins` of at least `min_value` in total.
 /// Different strategies can be used. This function uses the dumb strategy
 /// of selecting coins until we reach `min_value`.
-pub fn select_coins(coins: Vec<OwnCoin>, min_value: u64) -> Result<Vec<OwnCoin>> {
+pub fn select_coins(coins: Vec<OwnCoin>, min_value: u64) -> Result<(Vec<OwnCoin>, u64)> {
     let mut total_value = 0;
     let mut selected = vec![];
 
@@ -384,117 +328,106 @@ pub fn select_coins(coins: Vec<OwnCoin>, min_value: u64) -> Result<Vec<OwnCoin>>
         return Err(ClientFailed::NotEnoughValue(total_value).into())
     }
 
-    Ok(selected)
+    let change_value = total_value - min_value;
+
+    Ok((selected, change_value))
 }
 
-impl TransferCallBuilder {
-    pub fn build(self) -> Result<TransferCallDebris> {
-        debug!("Building Money::TransferV1 contract call");
-        assert!(self.value != 0);
-        assert!(self.token_id.inner() != pallas::Base::zero());
-        if !self.clear_input {
-            assert!(!self.coins.is_empty());
-        }
+/// Make a simple anonymous transfer call.
+///
+/// * `keypair`: Caller's keypair
+/// * `recipient`: Recipient's public key
+/// * `value`: Amount that we want to send to the recipient
+/// * `token_id`: Token ID that we want to send to the recipient
+/// * `coins`: Set of `OwnCoin` we're given to use in this builder
+/// * `tree`: Merkle tree of coins used to create inclusion proofs
+/// * `mint_zkbin`: `Mint_V1` zkas circuit ZkBinary
+/// * `mint_pk`: Proving key for the `Mint_V1` zk circuit
+/// * `burn_zkbin`: `Burn_V1` zkas circuit ZkBinary
+/// * `burn_pk`: Proving key for the `Burn_V1` zk circuit
+///
+/// Returns a tuple of:
+///
+/// * The actual call data
+/// * Secret values such as blinds
+/// * A list of the spent coins
+pub fn make_transfer_call(
+    keypair: Keypair,
+    recipient: PublicKey,
+    value: u64,
+    token_id: TokenId,
+    coins: Vec<OwnCoin>,
+    tree: MerkleTree,
+    mint_zkbin: ZkBinary,
+    mint_pk: ProvingKey,
+    burn_zkbin: ZkBinary,
+    burn_pk: ProvingKey,
+) -> Result<(MoneyTransferParamsV1, TransferCallSecrets, Vec<OwnCoin>)> {
+    debug!("Building Money::TransferV1 contract call");
+    assert_ne!(value, 0);
+    assert_ne!(token_id.inner(), pallas::Base::ZERO);
+    assert!(!coins.is_empty());
 
-        // Ensure the coins given to us are all of the same token ID.
-        // The money contract base transfer doesn't allow conversions.
-        for coin in self.coins.iter() {
-            assert_eq!(self.token_id, coin.note.token_id);
-        }
-
-        let mut clear_inputs = vec![];
-        let mut inputs = vec![];
-        let mut outputs = vec![];
-
-        //let mut change_outputs = vec![];
-        let mut spent_coins = vec![];
-        let mut minted_coins = vec![];
-
-        if self.clear_input {
-            let input = TransferCallClearInput {
-                value: self.value,
-                token_id: self.token_id,
-                signature_secret: self.keypair.secret,
-            };
-
-            clear_inputs.push(input);
-        } else {
-            spent_coins = select_coins(self.coins, self.value)?;
-
-            let mut inputs_value = 0;
-            for coin in spent_coins.iter() {
-                let leaf_position = coin.leaf_position;
-                let merkle_path = self.tree.witness(leaf_position, 0).unwrap();
-                inputs_value += coin.note.value;
-
-                let input = TransferCallInput {
-                    leaf_position,
-                    merkle_path,
-                    secret: coin.secret,
-                    note: coin.note.clone(),
-                    user_data_blind: self.input_user_data_blind,
-                };
-
-                inputs.push(input);
-            }
-
-            if inputs_value > self.value {
-                let return_value = inputs_value - self.value;
-                outputs.push(TransferCallOutput {
-                    value: return_value,
-                    token_id: self.token_id,
-                    public_key: self.keypair.public,
-                    spend_hook: self.change_spend_hook,
-                    user_data: self.change_user_data,
-                });
-            }
-        }
-        debug!("Selected inputs");
-
-        outputs.push(TransferCallOutput {
-            value: self.value,
-            token_id: self.token_id,
-            public_key: self.recipient,
-            spend_hook: self.rcpt_spend_hook,
-            user_data: self.rcpt_user_data,
-        });
-
-        assert!(clear_inputs.len() + inputs.len() > 0);
-
-        let xfer_builder = TransferCallBuilder2 {
-            clear_inputs,
-            inputs,
-            outputs,
-            mint_zkbin: self.mint_zkbin,
-            mint_pk: self.mint_pk,
-            burn_zkbin: self.burn_zkbin,
-            burn_pk: self.burn_pk,
-        };
-        let (params, secrets) = xfer_builder.build()?;
-
-        for (output, output_note) in params.outputs.iter().zip(secrets.output_notes.iter()) {
-            minted_coins.push(OwnCoin {
-                coin: output.coin,
-                note: output_note.clone(),
-                secret: SecretKey::from(pallas::Base::ZERO),
-                nullifier: Nullifier::from(pallas::Base::ZERO),
-                leaf_position: 0.into(),
-            });
-        }
-
-        // Now we should have all the params, zk proofs, and signature secrets.
-        // We return it all and let the caller deal with it.
-        let debris = TransferCallDebris {
-            params,
-            proofs: secrets.proofs,
-            signature_secrets: secrets.signature_secrets,
-            spent_coins,
-            minted_coins,
-            input_value_blinds: secrets.input_value_blinds,
-            output_value_blinds: secrets.output_value_blinds,
-        };
-        Ok(debris)
+    // Ensure the coins given to us are all of the same token ID.
+    // The money contract base transfer doesn't allow conversions.
+    for coin in &coins {
+        assert_eq!(token_id, coin.note.token_id);
     }
+
+    let mut inputs = vec![];
+    let mut outputs = vec![];
+
+    let (spent_coins, change_value) = select_coins(coins, value)?;
+
+    for coin in spent_coins.iter() {
+        let leaf_position = coin.leaf_position;
+        let merkle_path = tree.witness(leaf_position, 0).unwrap();
+
+        let input = TransferCallInput {
+            leaf_position,
+            merkle_path,
+            secret: coin.secret,
+            note: coin.note.clone(),
+            user_data_blind: pallas::Base::random(&mut OsRng),
+        };
+
+        inputs.push(input);
+    }
+    debug!("Selected inputs");
+
+    outputs.push(TransferCallOutput {
+        value,
+        token_id,
+        public_key: recipient,
+        spend_hook: pallas::Base::ZERO,
+        user_data: pallas::Base::ZERO,
+    });
+
+    if change_value > 0 {
+        outputs.push(TransferCallOutput {
+            value: change_value,
+            token_id,
+            public_key: keypair.public,
+            spend_hook: pallas::Base::ZERO,
+            user_data: pallas::Base::ZERO,
+        });
+    }
+
+    assert!(!inputs.is_empty());
+
+    let xfer_builder = TransferCallBuilder {
+        clear_inputs: vec![],
+        inputs,
+        outputs,
+        mint_zkbin,
+        mint_pk,
+        burn_zkbin,
+        burn_pk,
+    };
+
+    let (params, secrets) = xfer_builder.build()?;
+
+    Ok((params, secrets, spent_coins))
 }
 
 pub fn create_transfer_burn_proof(
@@ -621,26 +554,4 @@ pub fn create_transfer_mint_proof(
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;
 
     Ok((proof, public_inputs))
-}
-
-fn compute_remainder_blind(
-    clear_inputs: &[ClearInput],
-    input_blinds: &[pallas::Scalar],
-    output_blinds: &[pallas::Scalar],
-) -> pallas::Scalar {
-    let mut total = pallas::Scalar::zero();
-
-    for input in clear_inputs {
-        total += input.value_blind;
-    }
-
-    for input_blind in input_blinds {
-        total += input_blind;
-    }
-
-    for output_blind in output_blinds {
-        total -= output_blind;
-    }
-
-    total
 }

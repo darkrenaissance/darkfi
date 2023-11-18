@@ -71,8 +71,8 @@ pub(crate) fn dao_exec_get_metadata(
         DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string(),
         vec![
             dao_exec_params.proposal.inner(),
-            money_xfer_params.outputs[1].coin.inner(),
             money_xfer_params.outputs[0].coin.inner(),
+            money_xfer_params.outputs[1].coin.inner(),
             *yes_vote_coords.x(),
             *yes_vote_coords.y(),
             *all_vote_coords.x(),

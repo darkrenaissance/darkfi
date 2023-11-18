@@ -20,7 +20,7 @@ use std::time::Instant;
 
 use darkfi::{tx::Transaction, zk::halo2::Field, Result};
 use darkfi_money_contract::{
-    client::{transfer_v1::TransferCallBuilder, OwnCoin},
+    client::{transfer_v1 as xfer, OwnCoin},
     model::MoneyTransferParamsV1,
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
@@ -42,8 +42,6 @@ impl TestHarness {
         holder: &Holder,
         rcpt_spend_hook: Option<pallas::Base>,
         rcpt_user_data: Option<pallas::Base>,
-        change_spend_hook: Option<pallas::Base>,
-        change_user_data: Option<pallas::Base>,
     ) -> Result<(Transaction, MoneyTransferParamsV1)> {
         let recipient = self.holders.get(holder).unwrap().keypair.public;
         let faucet = self.holders.get(&Holder::Faucet).unwrap();
@@ -59,34 +57,34 @@ impl TestHarness {
 
         let timer = Instant::now();
 
-        let builder = TransferCallBuilder {
-            keypair: faucet.keypair,
-            recipient,
-            value,
-            token_id: *DARK_TOKEN_ID,
-            rcpt_spend_hook: rcpt_spend_hook.unwrap_or(pallas::Base::ZERO),
-            rcpt_user_data: rcpt_user_data.unwrap_or(pallas::Base::ZERO),
-            rcpt_user_data_blind: pallas::Base::random(&mut OsRng),
-            change_spend_hook: change_spend_hook.unwrap_or(pallas::Base::ZERO),
-            change_user_data: change_user_data.unwrap_or(pallas::Base::ZERO),
-            input_user_data_blind: pallas::Base::random(&mut OsRng),
-            coins: vec![],
-            tree: faucet.money_merkle_tree.clone(),
+        let xfer_builder = xfer::TransferCallBuilder {
+            clear_inputs: vec![xfer::TransferCallClearInput {
+                value,
+                token_id: *DARK_TOKEN_ID,
+                signature_secret: faucet.keypair.secret,
+            }],
+            inputs: vec![],
+            outputs: vec![xfer::TransferCallOutput {
+                value,
+                token_id: *DARK_TOKEN_ID,
+                public_key: recipient,
+                spend_hook: rcpt_spend_hook.unwrap_or(pallas::Base::ZERO),
+                user_data: rcpt_user_data.unwrap_or(pallas::Base::ZERO),
+            }],
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
             burn_zkbin: burn_zkbin.clone(),
             burn_pk: burn_pk.clone(),
-            clear_input: true,
         };
 
-        let debris = builder.build()?;
+        let (params, secrets) = xfer_builder.build()?;
 
         let mut data = vec![MoneyFunction::TransferV1 as u8];
-        debris.params.encode(&mut data)?;
+        params.encode(&mut data)?;
         let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
-        let proofs = vec![debris.proofs];
+        let proofs = vec![secrets.proofs];
         let mut tx = Transaction { calls, proofs, signatures: vec![] };
-        let sigs = tx.create_sigs(&mut OsRng, &debris.signature_secrets)?;
+        let sigs = tx.create_sigs(&mut OsRng, &secrets.signature_secrets)?;
         tx.signatures = vec![sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());
 
@@ -98,7 +96,7 @@ impl TestHarness {
         let size = std::mem::size_of_val(&*base58);
         tx_action_benchmark.broadcasted_sizes.push(size);
 
-        Ok((tx, debris.params))
+        Ok((tx, params))
     }
 
     pub async fn execute_airdrop_native_tx(
@@ -131,8 +129,7 @@ impl TestHarness {
         info!(target: "consensus", "[Faucet] ==============================");
         info!(target: "consensus", "[Faucet] Building {holder:?} airdrop tx");
         info!(target: "consensus", "[Faucet] ==============================");
-        let (airdrop_tx, airdrop_params) =
-            self.airdrop_native(value, holder, None, None, None, None)?;
+        let (airdrop_tx, airdrop_params) = self.airdrop_native(value, holder, None, None)?;
 
         for h in holders {
             info!(target: "consensus", "[{h:?}] ===============================");

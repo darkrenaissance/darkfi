@@ -26,7 +26,7 @@ use log::debug;
 use rand::rngs::OsRng;
 
 use darkfi::{
-    zk::{export_witness_json, Proof, ProvingKey, Witness, ZkCircuit},
+    zk::{Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };

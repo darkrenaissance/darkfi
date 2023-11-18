@@ -54,7 +54,7 @@ fn money_integration() -> Result<()> {
 
         info!("[Faucet] Building Alice airdrop tx");
         let (airdrop_tx, airdrop_params) =
-            th.airdrop_native(ALICE_NATIVE_AIRDROP, &Holder::Alice, None, None, None, None)?;
+            th.airdrop_native(ALICE_NATIVE_AIRDROP, &Holder::Alice, None, None)?;
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing Alice airdrop tx");
