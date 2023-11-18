@@ -109,7 +109,7 @@ topic = "/b/"
 ## It is also recommended to paste the public key here as a comment in
 ## order to be able to easily reference it for sharing.
 ##
-## You can generate a keypair with: darkirc --gen-keypair
+## You can generate a keypair with: darkirc --gen-chacha-keypair
 ## and replace the secret key below with the generated one.
 ## **You should never share this secret key with anyone**
 #[crypto]
