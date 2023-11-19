@@ -127,13 +127,13 @@ fn mint_pay_swap() -> Result<()> {
                 .await?;
         }
 
-        // Alice should now have one OwnCoin with the change from the above transaction.
-        let alice_oc = th.gather_owncoin_at_index(&Holder::Alice, &transfer_params.outputs, 0)?;
-        alice_owncoins.push(alice_oc);
-
-        // Bob should now have this new one.
-        let bob_oc = th.gather_owncoin_at_index(&Holder::Bob, &transfer_params.outputs, 1)?;
+        // Bob should now have a new OwnCoin.
+        let bob_oc = th.gather_owncoin_at_index(&Holder::Bob, &transfer_params.outputs, 0)?;
         bob_owncoins.push(bob_oc);
+
+        // Alice should now have one OwnCoin with the change from the above transfer.
+        let alice_oc = th.gather_owncoin_at_index(&Holder::Alice, &transfer_params.outputs, 1)?;
+        alice_owncoins.push(alice_oc);
 
         assert!(alice_owncoins.len() == 1);
         assert!(bob_owncoins.len() == 2);
@@ -171,11 +171,11 @@ fn mint_pay_swap() -> Result<()> {
         }
 
         // Alice should now have two OwnCoins
-        let alice_oc = th.gather_owncoin_at_index(&Holder::Alice, &transfer_params.outputs, 1)?;
+        let alice_oc = th.gather_owncoin_at_index(&Holder::Alice, &transfer_params.outputs, 0)?;
         alice_owncoins.push(alice_oc);
 
         // Bob should have two with the change from the above tx
-        let bob_oc = th.gather_owncoin_at_index(&Holder::Bob, &transfer_params.outputs, 0)?;
+        let bob_oc = th.gather_owncoin_at_index(&Holder::Bob, &transfer_params.outputs, 1)?;
         bob_owncoins.push(bob_oc);
 
         assert!(alice_owncoins.len() == 2);
@@ -324,6 +324,8 @@ fn mint_pay_swap() -> Result<()> {
             th.execute_otc_swap_tx(holder, &otc_swap_tx, &otc_swap_params, current_slot, write)
                 .await?;
         }
+
+        assert_eq!(otc_swap_params.outputs.len(), 2);
 
         // Alice should now have Bob's BOB tokens
         let alice_oc = th.gather_owncoin_at_index(&Holder::Alice, &otc_swap_params.outputs, 0)?;
