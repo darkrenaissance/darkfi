@@ -18,8 +18,8 @@
 
 use darkfi_sdk::{
     crypto::{
-        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::PrimeField, MerkleNode, Nullifier,
-        PublicKey, TokenId,
+        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::PrimeField, poseidon_hash,
+        MerkleNode, Nullifier, PublicKey, TokenId,
     },
     error::ContractError,
     pasta::pallas,
@@ -53,6 +53,32 @@ impl Coin {
     /// Convert the `Coin` type into 32 raw bytes
     pub fn to_bytes(&self) -> [u8; 32] {
         self.0.to_repr()
+    }
+}
+
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct CoinParams {
+    pub public_key: PublicKey,
+    pub value: u64,
+    pub token_id: TokenId,
+    pub serial: pallas::Base,
+    pub spend_hook: pallas::Base,
+    pub user_data: pallas::Base,
+}
+
+impl CoinParams {
+    pub fn to_coin(&self) -> Coin {
+        let (pub_x, pub_y) = self.public_key.xy();
+        let coin = poseidon_hash([
+            pub_x,
+            pub_y,
+            pallas::Base::from(self.value),
+            self.token_id.inner(),
+            self.serial,
+            self.spend_hook,
+            self.user_data,
+        ]);
+        Coin(coin)
     }
 }
 

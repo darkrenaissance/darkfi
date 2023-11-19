@@ -33,7 +33,7 @@ use log::debug;
 use rand::rngs::OsRng;
 
 use super::{TransferCallInput, TransferCallOutput};
-use crate::model::Coin;
+use crate::model::{Coin, CoinParams};
 
 pub struct TransferMintRevealed {
     pub coin: Coin,
@@ -92,23 +92,22 @@ pub fn create_transfer_burn_proof(
 ) -> Result<(Proof, TransferBurnRevealed)> {
     let nullifier = Nullifier::from(poseidon_hash([input.secret.inner(), input.note.serial]));
     let public_key = PublicKey::from_secret(input.secret);
-    let (pub_x, pub_y) = public_key.xy();
 
     let signature_public = PublicKey::from_secret(signature_secret);
 
-    let coin = poseidon_hash([
-        pub_x,
-        pub_y,
-        pallas::Base::from(input.note.value),
-        input.note.token_id.inner(),
-        input.note.serial,
-        input.note.spend_hook,
-        input.note.user_data,
-    ]);
+    let coin = CoinParams {
+        public_key,
+        value: input.note.value,
+        token_id: input.note.token_id,
+        serial: input.note.serial,
+        spend_hook: input.note.spend_hook,
+        user_data: input.note.user_data,
+    }
+    .to_coin();
 
     let merkle_root = {
         let position: u64 = input.leaf_position.into();
-        let mut current = MerkleNode::from(coin);
+        let mut current = MerkleNode::from(coin.inner());
         for (level, sibling) in input.merkle_path.iter().enumerate() {
             let level = level as u8;
             current = if position & (1 << level) == 0 {
@@ -170,23 +169,16 @@ pub fn create_transfer_mint_proof(
     let token_commit = poseidon_hash([output.token_id.inner(), token_blind]);
     let (pub_x, pub_y) = output.public_key.xy();
 
-    let coin = Coin::from(poseidon_hash([
-        pub_x,
-        pub_y,
-        pallas::Base::from(output.value),
-        output.token_id.inner(),
+    let coin = CoinParams {
+        public_key: output.public_key,
+        value: output.value,
+        token_id: output.token_id,
         serial,
         spend_hook,
         user_data,
-    ]));
-    debug!("Created coin {:?}", coin);
-    debug!("  pub_x: {:?}", pub_x);
-    debug!("  pub_y: {:?}", pub_y);
-    debug!("  value: {:?}", pallas::Base::from(output.value));
-    debug!("  token_id: {:?}", output.token_id.inner());
-    debug!("  serial: {:?}", serial);
-    debug!("  spend_hook: {:?}", spend_hook);
-    debug!("  user_data: {:?}", user_data);
+    };
+    debug!("Created coin: {:?}", coin);
+    let coin = coin.to_coin();
 
     let public_inputs = TransferMintRevealed { coin, value_commit, token_commit };
 
