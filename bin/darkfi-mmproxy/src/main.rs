@@ -153,7 +153,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!("Starting DarkFi x Monero merge mining proxy...");
 
     let mmproxy = Arc::new(MiningProxy::new(args.monerod, ex.clone()).await?);
-    let mmproxy_ = Arc::clone(&mmproxy);
 
     info!("Starting JSON-RPC server");
     let rpc_task = StoppableTask::new();
@@ -161,7 +160,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         listen_and_serve(args.rpc_listen, mmproxy.clone(), None, ex.clone()),
         |res| async move {
             match res {
-                Ok(()) | Err(Error::RpcServerStopped) => mmproxy_.stop_connections().await,
+                Ok(()) | Err(Error::RpcServerStopped) => mmproxy.stop_connections().await,
                 Err(e) => error!("Failed stopping JSON-RPC server: {}", e),
             }
         },

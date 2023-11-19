@@ -347,6 +347,8 @@ impl MiningProxy {
 
             // In case it's the same job, we'll wait and try again
             if worker.mining_job.job_id == mining_job.job_id {
+                // Drop the workers lock before sleeping.
+                drop(workers_ptr);
                 match timeout(POLL_INTERVAL, submit_recv.recv()).await {
                     Ok(_) => continue,
                     Err(_) => continue,
@@ -366,7 +368,7 @@ impl MiningProxy {
                 break
             }
 
-            debug!(target: "stratum::job_task", "Dropped workers write lock");
+            // Drop the workers lock before sleeping.
             drop(workers_ptr);
 
             // Now poll or wait for a trigger for a new job.
