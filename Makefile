@@ -18,6 +18,7 @@ BINS = \
 	darkfid2 \
 	faucetd \
 	darkirc \
+	darkfi-mmproxy \
 	genev/genev-cli \
 	genev/genevd \
 	lilith \

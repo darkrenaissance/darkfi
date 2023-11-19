@@ -105,8 +105,46 @@ pub async fn accept(
         let _ = read_from_stream(&mut reader_lock, &mut buf, false).await?;
         drop(reader_lock);
 
-        let val: JsonValue = String::from_utf8(buf)?.trim().parse()?;
-        let req = JsonRequest::try_from(&val)?;
+        let read_string = match String::from_utf8(buf) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    target: "rpc::server::accept()",
+                    "[RPC SERVER] Failed parsing string from read buffer: {}", e,
+                );
+                return Err(e.into())
+            }
+        };
+
+        // Implementation note:
+        // When using this JSON-RPC server with XMRig, an issue arises.
+        // XMRig tends to send something we do not parse as a line in
+        // read_from_stream(), so as a stop-gap hack we do this:
+        let line = read_string.trim().lines().take(1).next().unwrap();
+
+        // Parse the line as JSON
+        let val: JsonValue = match line.parse() {
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    target: "rpc::server::accept()",
+                    "[RPC SERVER] Failed parsing JSON string: {}", e,
+                );
+                return Err(e.into())
+            }
+        };
+
+        // Cast to JsonRequest
+        let req = match JsonRequest::try_from(&val) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    target: "rpc::server::accept()",
+                    "[RPC SERVER] Failed casting JSON to a JsonRequest: {}", e,
+                );
+                return Err(e.into())
+            }
+        };
 
         debug!(target: "rpc::server", "{} --> {}", addr, val.stringify()?);
 
@@ -115,8 +153,6 @@ pub async fn accept(
         match rep {
             JsonResult::Subscriber(subscriber) => {
                 let task = StoppableTask::new();
-                debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
-                tasks.lock().await.insert(task.clone());
 
                 // Clone what needs to go in the background
                 let task_ = task.clone();
@@ -155,6 +191,9 @@ pub async fn accept(
                     Error::DetachedTaskStopped,
                     ex.clone(),
                 );
+
+                debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
+                tasks.lock().await.insert(task.clone());
             }
 
             JsonResult::SubscriberWithReply(subscriber, reply) => {
@@ -165,9 +204,6 @@ pub async fn accept(
                 drop(writer_lock);
 
                 let task = StoppableTask::new();
-                debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
-                tasks.lock().await.insert(task.clone());
-
                 // Clone what needs to go in the background
                 let task_ = task.clone();
                 let addr_ = addr.clone();
@@ -206,6 +242,9 @@ pub async fn accept(
                     Error::DetachedTaskStopped,
                     ex.clone(),
                 );
+
+                debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
+                tasks.lock().await.insert(task.clone());
             }
 
             JsonResult::Request(_) | JsonResult::Notification(_) => {
