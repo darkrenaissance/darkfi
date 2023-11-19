@@ -31,6 +31,7 @@ use darkfi::{
 };
 use log::{debug, error, info, warn};
 use monero::blockdata::transaction::{ExtraField, RawExtraField, SubField::MergeMining};
+use num_bigint::BigUint;
 use smol::{channel, lock::RwLock};
 use url::Url;
 use uuid::Uuid;
@@ -203,13 +204,28 @@ async fn getblocktemplate(endpoint: &Url, wallet_address: &monero::Address) -> R
     // Modify the coinbase tx with our additional merge mining data
     block_template.miner_tx.prefix.extra = tx_extra;
 
-    // Get the difficulty target
-    let target = rep["result"]["wide_difficulty"]
+    // Decode the difficulty and calculate the mining target
+    let mut difficulty_hex = rep["result"]["wide_difficulty"]
         .get::<String>()
         .unwrap()
         .strip_prefix("0x")
         .unwrap()
         .to_string();
+
+    // Needed because hex::decode doesn't accept odd-length
+    if difficulty_hex.len() % 2 == 0 {
+        difficulty_hex = format!("0{}", difficulty_hex);
+    }
+
+    // TODO: Check if this is little or big-endian
+    let difficulty_raw = hex::decode(&difficulty_hex).unwrap();
+    let difficulty = BigUint::from_radix_le(&difficulty_raw, 16).unwrap();
+
+    // Calculate the target
+    let target = (BigUint::from_bytes_be(&[0xFF; 32]) / &difficulty).to_str_radix(16);
+
+    info!(target: "stratum::getblocktemplate", "[STRATUM] Difficulty: {}", difficulty_hex);
+    info!(target: "stratum::getblocktemplate", "[STRATUM] Target: {}", target);
 
     // Get the remaining metadata
     let height = *rep["result"]["height"].get::<f64>().unwrap();
