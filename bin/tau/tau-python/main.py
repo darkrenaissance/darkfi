@@ -167,13 +167,14 @@ async def show_deactive_tasks(month_ts, workspace, server_name, port):
 def list_tasks(tasks, workspace, filters):
     print(f"Workspace: {workspace}")
     headers = ["ID", "Title", "Status", "Project",
-               "Tags", "assign", "Rank", "Due"]
+               "Tags", "assign", "Rank", "Due", "RefID"]
     table_rows = []
     for id, task in enumerate(tasks, 1):
         if task is None:
             continue
         if is_filtered(task, filters):
             continue
+        ref_id = task["ref_id"][:6]
         title = task["title"]
         status = task["state"]
         # project = task["project"] if task["project"] is not None else ""
@@ -197,6 +198,7 @@ def list_tasks(tasks, workspace, filters):
             assign =    Fore.GREEN + str(assign)     + Style.RESET_ALL
             rank =      Fore.GREEN + str(rank)       + Style.RESET_ALL
             due =       Fore.GREEN + str(due)        + Style.RESET_ALL
+            ref_id =    Fore.GREEN + str(ref_id)     + Style.RESET_ALL
         elif status == "pause":
             id =        Fore.YELLOW + str(id)        + Style.RESET_ALL
             title =     Fore.YELLOW + str(title)     + Style.RESET_ALL
@@ -206,6 +208,7 @@ def list_tasks(tasks, workspace, filters):
             assign =    Fore.YELLOW + str(assign)    + Style.RESET_ALL
             rank =      Fore.YELLOW + str(rank)      + Style.RESET_ALL
             due =       Fore.YELLOW + str(due)       + Style.RESET_ALL
+            ref_id =    Fore.YELLOW + str(ref_id)    + Style.RESET_ALL
         elif status == "stop":
             id =        Fore.RED + str(id)           + Style.RESET_ALL
             title =     Fore.RED + str(title)        + Style.RESET_ALL
@@ -215,6 +218,7 @@ def list_tasks(tasks, workspace, filters):
             assign =    Fore.RED + str(assign)       + Style.RESET_ALL
             rank =      Fore.RED + str(rank)         + Style.RESET_ALL
             due =       Fore.RED + str(due)          + Style.RESET_ALL
+            ref_id =    Fore.RED + str(ref_id)       + Style.RESET_ALL
         else:
             #id =       Style.DIM  + str(id)         + Style.RESET_ALL
             #title =    Style.DIM  + str(title)      + Style.RESET_ALL
@@ -224,6 +228,7 @@ def list_tasks(tasks, workspace, filters):
             #assign =   Style.DIM  + str(assign)     + Style.RESET_ALL
             rank =      Style.DIM  + str(rank)       + Style.RESET_ALL
             due =       Style.DIM  + str(due)        + Style.RESET_ALL
+            #ref_id =   Style.DIM  + str(ref_id)     + Style.RESET_ALL
 
         rank_value = task["rank"] if task["rank"] is not None else 0
         row = [
@@ -235,6 +240,7 @@ def list_tasks(tasks, workspace, filters):
             assign,
             rank,
             due,
+            ref_id
         ]
         table_rows.append((rank_value, row))
 
