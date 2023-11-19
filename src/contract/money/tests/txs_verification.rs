@@ -132,13 +132,13 @@ fn txs_verification() -> Result<()> {
 
         th.assert_trees(&HOLDERS);
 
-        // Alice should now have one OwnCoin with the change from the above transaction.
-        let alice_oc = th.gather_owncoin(&Holder::Alice, &txs_params[0].outputs[0], None)?;
-        alice_owncoins.push(alice_oc);
-
-        // Bob should now have this new one.
-        let bob_oc = th.gather_owncoin(&Holder::Bob, &txs_params[0].outputs[1], None)?;
+        // Bob should now have the new OwnCoin.
+        let bob_oc = th.gather_owncoin(&Holder::Bob, &txs_params[0].outputs[0], None)?;
         bob_owncoins.push(bob_oc);
+
+        // Alice should now have one OwnCoin with the change from the above transaction.
+        let alice_oc = th.gather_owncoin(&Holder::Alice, &txs_params[0].outputs[1], None)?;
+        alice_owncoins.push(alice_oc);
 
         assert!(alice_owncoins.len() == 1);
         assert!(bob_owncoins.len() == 1);
