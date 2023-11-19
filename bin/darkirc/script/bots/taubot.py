@@ -36,7 +36,7 @@ while True:
                 cmd = event['action']
                 if cmd == "add_task":
                     user = task['owner']
-                    id = task['id']
+                    refid = task['ref_id'][:6]
                     title = task['title']
                     assigned = ", ".join(task['assign'])
 
@@ -45,15 +45,15 @@ while True:
                         channel = args.alt_chan
 
                     if len(assigned) > 0:
-                        notification = f"{user} added task ({id}): {title}. assigned to {assigned}"
+                        notification = f"{user} added task ({refid}): {title}. assigned to {assigned}"
                     else:
-                        notification = f"{user} added task ({id}): {title}"
+                        notification = f"{user} added task ({refid}): {title}"
                     # print(notification)
                     ircc.send(channel, notification)
                 elif cmd == "state":
                     user = event['author']
                     state = event['content']
-                    id = task['id']
+                    refid = task['ref_id'][:6]
                     title = task['title']
 
                     project = task['project'] if task['project'] is not None else []
@@ -61,37 +61,37 @@ while True:
                         channel = args.alt_chan
 
                     if state == "start":
-                        notification = f"{user} started task ({id}): {title}"
+                        notification = f"{user} started task ({refid}): {title}"
                     elif state == "pause":
-                        notification = f"{user} paused task ({id}): {title}"
+                        notification = f"{user} paused task ({refid}): {title}"
                     elif state == "stop":
-                        notification = f"{user} stopped task ({id}): {title}"
+                        notification = f"{user} stopped task ({refid}): {title}"
                     elif state == "cancel":
-                        notification = f"{user} canceled task ({id}): {title}"
+                        notification = f"{user} canceled task ({refid}): {title}"
                     # print(notification)
                     ircc.send(channel, notification)
                 elif cmd == "comment":
                     user = event['author']
-                    id = task['id']
+                    refid = task['ref_id'][:6]
                     title = task['title']
                     
                     project = task['project'] if task['project'] is not None else []
                     if args.skip in project or '+' + args.skip in task['tags'] or args.skip_workspace in task['workspace']:
                         channel = args.alt_chan
 
-                    notification = f"{user} commented on task ({id}): {title}"
+                    notification = f"{user} commented on task ({refid}): {title}"
                     # print(notification)
                     ircc.send(channel, notification)
                 elif cmd == "assign":
                     user = event['author']
                     assignees = event['content']
-                    id = task['id']
+                    refid = task['ref_id'][:6]
                     title = task['title']
 
                     project = task['project'] if task['project'] is not None else []
                     if args.skip in project or '+' + args.skip in task['tags'] or args.skip_workspace in task['workspace']:
                         channel = args.alt_chan
 
-                    notification = f"{user} reassigned task ({id}): {title} to {assignees}"
+                    notification = f"{user} reassigned task ({refid}): {title} to {assignees}"
                     # print(notification)
                     ircc.send(channel, notification)
