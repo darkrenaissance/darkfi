@@ -63,6 +63,13 @@ darkirc:
 		RUST_TARGET="$(RUST_TARGET)" \
 		RUSTFLAGS="$(RUSTFLAGS)"
 
+darkfi-mmproxy:
+	$(MAKE) -C bin/darkfi-mmproxy \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
+
 genev:
 	$(MAKE) -C bin/genev/genev-cli
 
@@ -110,6 +117,7 @@ clean:
 	$(MAKE) -C bin/zkas clean
 	$(MAKE) -C bin/darkfid clean
 	$(MAKE) -C bin/darkfid2 clean
+	$(MAKE) -C bin/darkfi-mmproxy clean
 	$(MAKE) -C bin/faucetd clean
 	$(MAKE) -C bin/darkirc clean
 	$(MAKE) -C bin/genev/genev-cli clean

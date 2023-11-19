@@ -6,6 +6,9 @@ PREFIX = $(HOME)/.cargo
 # Cargo binary
 CARGO = cargo +nightly
 
+# Compile target
+RUST_TARGET = $(shell rustc -Vv | grep '^host: ' | cut  -d' ' -f2)
+
 SRC = \
 	Cargo.toml \
 	../../Cargo.toml \
@@ -17,7 +20,7 @@ BIN = ../../darkfi-mmproxy
 all: $(BIN)
 
 $(BIN): $(SRC)
-	$(CARGO) build $(TARGET_PRFX)$(RUST_TARGET) --release --package darkfi-mmproxy
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --target=$(RUST_TARGET) --release --package darkfi-mmproxy
 	cp -f ../../target/$(RUST_TARGET)/release/darkfi-mmproxy $@
 
 clean:

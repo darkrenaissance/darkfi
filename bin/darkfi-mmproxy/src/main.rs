@@ -115,12 +115,9 @@ impl MiningProxy {
         };
 
         // Test that monerod RPC is reachable
-        match TcpStream::connect(monerod.rpc.socket_addrs(|| None)?[0]).await {
-            Ok(_) => {}
-            Err(e) => {
-                error!("Failed connecting to monerod RPC: {}", e);
-                return Err(e.into())
-            }
+        if let Err(e) = TcpStream::connect(monerod.rpc.socket_addrs(|| None)?[0]).await {
+            error!("Failed connecting to monerod RPC: {}", e);
+            return Err(e.into())
         }
 
         let workers = Arc::new(RwLock::new(HashMap::new()));
