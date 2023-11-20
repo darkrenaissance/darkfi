@@ -77,7 +77,6 @@ _Tasks are in no particular order. Use common sense._
   * Update https://darkrenaissance.github.io/darkfi/misc/event_graph/event_graph.html
     and make it the specification for the `eventgraph` implementation implementation
 5. Rework `drk` (the wallet CLI) to work standalone and make it work with the new `darkfid`
-  * Don't accept coins with existing serial
 6. Make `tau` stable
 7. Make `darkirc` stable
 8. Make `lilith` stable, there is currently some bug that causes connection refusals
@@ -89,15 +88,25 @@ _Tasks are in no particular order. Use common sense._
 14. Implement cross-chain atomic swaps (XMR, ETH, anything applicable)
 15. Rework the connection algo for p2p to use black list, grey and white list
   * https://eprint.iacr.org/2019/411.pdf (Section 2.2)
+  * See also [P2P Network: Common Mitigations](arch/p2p-network.md#common-mitigations)
 16. Create a P2P stack test harness in order to be able to easily simulate network
     behaviour
   * Possibly we can create a dummy p2p which can simulate network connections and routing traffic.
     We can use this to model network behaviour.
-17. Implement address/secretkey differentiation (https://en.bitcoin.it/wiki/Wallet_import_format)
+17. Implement address/secretkey differentiation
+  * See [WIF](https://en.bitcoin.it/wiki/Wallet_import_format)
 18. Fix bugs and issues in the DAO implementation
 19. Perform thorough review of all contracts and their functionalities
 20. Randomize outputs in `Money::*`, and potentially elsewhere where applicable
+  * This is so the change output isn't always in the same predictable place, and makes identifying
+    which output is the change impossible.
 21. Document contracts in the manner of https://darkrenaissance.github.io/darkfi/arch/consensus/stake.html
+22. Serial used in money coins
+  * One solution is: don't accept coins with existing serial in drk.
+  * We should construct a scheme to derive the serial, evaluate how simple changing the crypto is.
+  * Malicious users could send you a coin which is unspendable. A poorly implemented wallet would
+    accept such a coin, and if spent then you would be unable to spend the other coin sharing the same
+    serial in your wallet.
 
 99. resource manager for p2p (DoS protection, disconnect bad nodes)
 
