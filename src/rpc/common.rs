@@ -49,7 +49,15 @@ pub(super) async fn read_from_stream(
                 Ok(0) => break, // Finished reading
                 Ok(n) => {
                     total_read += n;
-                    if buf[total_read - 1] == b'\n' {
+                    if buf[total_read - 1] == b'\n' || buf[total_read - 1] == b'\r' {
+                        // Check for '\n' or '\r' character
+                        break
+                    }
+                    if total_read >= 2 &&
+                        buf[total_read - 2] == b'\r' &&
+                        buf[total_read - 1] == b'\n'
+                    {
+                        // Handle '\r\n' sequence
                         break
                     }
                 }
@@ -66,7 +74,15 @@ pub(super) async fn read_from_stream(
                 Ok(0) => break, // Finished reading
                 Ok(n) => {
                     total_read += n;
-                    if buf[total_read - 1] == b'\n' {
+                    if buf[total_read - 1] == b'\n' || buf[total_read - 1] == b'\r' {
+                        // Check for '\n' or '\r' character
+                        break
+                    }
+                    if total_read >= 2 &&
+                        buf[total_read - 2] == b'\r' &&
+                        buf[total_read - 1] == b'\n'
+                    {
+                        // Handle '\r\n' sequence
                         break
                     }
                 }
@@ -94,9 +110,8 @@ pub(super) async fn write_to_stream(
         _ => unreachable!(),
     };
 
-    // As we're a line-based protocol, we append the '\n' char at
-    // the end of the JSON string.
-    for i in [object_str.as_bytes(), &[b'\n']] {
+    // As we're a line-based protocol, we append CRLF to the end of the JSON string.
+    for i in [object_str.as_bytes(), &[b'\r', b'\n']] {
         if let Err(e) = writer.write_all(i).await {
             return Err(e.into())
         }
