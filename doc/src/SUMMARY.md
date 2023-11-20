@@ -19,7 +19,7 @@
 
 # Developer Doc
 
-- [Development](dev/development.md)
+- [Development](dev/dev.md)
   - [Contribute](dev/contribute.md)
   - [Learn](dev/learn.md)
   - [API Rustdoc](dev/rustdoc.md)
