@@ -57,7 +57,7 @@ darkfid2: contracts
 faucetd: contracts
 	$(MAKE) -C bin/faucetd
 
-darkirc:
+darkirc: zkas
 	$(MAKE) -C bin/darkirc \
 		PREFIX="$(PREFIX)" \
 		CARGO="$(CARGO)" \
