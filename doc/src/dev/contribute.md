@@ -64,6 +64,42 @@ or need to be maintained:
     * Money viewing keys
 * Eth-DarkFi bridge or atomic swaps. Atomic swaps is probably better since it's trustless and p2p.
 
+## Mainnet tasks
+
+1. Finish `darkfid` with PoW and research and implement XMR merge mining
+2. Make `darkfi-mmproxy` stable and implement what is needed for DarkFi x Monero merge mining
+3. Finish dnetview
+4. Make `eventgraph` stable and implement proper unit and integration tests
+  * Unit tests should test pieces of the eventgraph code
+  * Integration tests should simulate a P2P network and ensure deterministic state after a simulated run
+5. Rework `drk` (the wallet CLI) to work standalone and make it work with the new `darkfid`
+6. Make `tau` stable
+7. Make `darkirc` stable
+8. Make `lilith` stable, there is currently some bug that causes connection refusals
+9. Implement transaction fees logic
+10. Implement contracts deployment logic
+11. Revisit **all** the code inside `src/runtime/` and make sure it's safe
+12. Implement verifiable encryption for `DAO` payments
+13. `DAO` should be able to perform arbitrary contract calls, it should act as a voted multisig
+14. Implement cross-chain atomic swaps (XMR, ETH, anything applicable)
+
+|  Task #  |  Assignee  |
+|----------|------------|
+| **1.**   |            |
+| **2.**   | `brawndo`  |
+| **3.**   |            |
+| **4.**   |            |
+| **5.**   |            |
+| **6.**   |            |
+| **7.**   |            |
+| **8.**   | `brawndo`  |
+| **9.**   | `brawndo`  |
+| **10.**  | `brawndo`  |
+| **11.**  |            |
+| **12.**  |            |
+| **13.**  |            |
+| **14.**  |            |
+
 ## Fuzz testing
 
 Fuzz testing is a method to find important bugs in software. It becomes more 
