@@ -18,7 +18,7 @@
 
 use std::time::Duration;
 
-use smol::io::{AsyncReadExt, AsyncWriteExt, ReadHalf, WriteHalf};
+use smol::io::{AsyncReadExt, AsyncWriteExt, BufReader, ReadHalf, WriteHalf};
 
 use super::jsonrpc::*;
 use crate::{error::RpcError, net::transport::PtStream, system::io_timeout, Result};
@@ -28,63 +28,67 @@ pub(super) const MAX_BUF_SIZE: usize = 1024 * 8192; // 8M
 pub(super) const READ_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Internal read function that reads from the active stream into a buffer.
+/// Reading stops upon reaching CRLF or LF, or when `MAX_BUF_SIZE` is reached.
 pub(super) async fn read_from_stream(
-    reader: &mut ReadHalf<Box<dyn PtStream>>,
+    reader: &mut BufReader<ReadHalf<Box<dyn PtStream>>>,
     buf: &mut Vec<u8>,
     with_timeout: bool,
 ) -> Result<usize> {
     let mut total_read = 0;
+
+    // Intermediate buffer we use to read byte-by-byte.
+    let mut tmpbuf = [0_u8];
 
     while total_read < MAX_BUF_SIZE {
         buf.resize(total_read + INIT_BUF_SIZE, 0);
 
         // Lame we have to duplicate this code, but it is what it is.
         if with_timeout {
-            match io_timeout(READ_TIMEOUT, reader.read(&mut buf[total_read..])).await {
+            match io_timeout(READ_TIMEOUT, reader.read(&mut tmpbuf)).await {
                 Ok(0) if total_read == 0 => {
                     return Err(
                         RpcError::ConnectionClosed("Connection closed cleanly".to_string()).into()
                     )
                 }
                 Ok(0) => break, // Finished reading
-                Ok(n) => {
-                    total_read += n;
-                    if buf[total_read - 1] == b'\n' || buf[total_read - 1] == b'\r' {
-                        // Check for '\n' or '\r' character
+                Ok(_) => {
+                    // When we reach '\n', pop a possible '\r' from the buffer and bail.
+                    if tmpbuf[0] == b'\n' {
+                        if buf[total_read - 1] == b'\r' {
+                            buf.pop();
+                            total_read -= 1;
+                        }
                         break
                     }
-                    if total_read >= 2 &&
-                        buf[total_read - 2] == b'\r' &&
-                        buf[total_read - 1] == b'\n'
-                    {
-                        // Handle '\r\n' sequence
-                        break
-                    }
+
+                    // Copy the read byte to the destination buffer.
+                    buf[total_read] = tmpbuf[0];
+                    total_read += 1;
                 }
 
                 Err(e) => return Err(RpcError::IoError(e.kind()).into()),
             }
         } else {
-            match reader.read(&mut buf[total_read..]).await {
+            match reader.read(&mut tmpbuf).await {
                 Ok(0) if total_read == 0 => {
                     return Err(
                         RpcError::ConnectionClosed("Connection closed cleanly".to_string()).into()
                     )
                 }
                 Ok(0) => break, // Finished reading
-                Ok(n) => {
-                    total_read += n;
-                    if buf[total_read - 1] == b'\n' || buf[total_read - 1] == b'\r' {
-                        // Check for '\n' or '\r' character
+                Ok(_) => {
+                    // When we reach '\n', pop a possible '\r' from the buffer and bail.
+                    if tmpbuf[0] == b'\n' {
+                        if buf[total_read - 1] == b'\r' {
+                            buf.pop();
+                            total_read -= 1;
+                        }
                         break
                     }
-                    if total_read >= 2 &&
-                        buf[total_read - 2] == b'\r' &&
-                        buf[total_read - 1] == b'\n'
-                    {
-                        // Handle '\r\n' sequence
-                        break
-                    }
+
+                    // Copy the read byte to the destination buffer.
+                    buf[total_read] = tmpbuf[0];
+                    total_read += 1;
                 }
 
                 Err(e) => return Err(RpcError::IoError(e.kind()).into()),
@@ -92,7 +96,7 @@ pub(super) async fn read_from_stream(
         }
     }
 
-    // Truncate buffer to actual data size
+    // Trunacate buffer to actual data size
     buf.truncate(total_read);
     Ok(total_read)
 }

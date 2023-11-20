@@ -21,7 +21,7 @@ use std::{collections::HashSet, io::ErrorKind, sync::Arc};
 use async_trait::async_trait;
 use log::{debug, error, info};
 use smol::{
-    io::{ReadHalf, WriteHalf},
+    io::{BufReader, ReadHalf, WriteHalf},
     lock::{Mutex, MutexGuard},
 };
 use tinyjson::JsonValue;
@@ -75,8 +75,9 @@ pub trait RequestHandler: Sync + Send {
 
 /// Accept function that should run inside a loop for accepting incoming
 /// JSON-RPC requests and passing them to the [`RequestHandler`].
+#[allow(clippy::type_complexity)]
 pub async fn accept(
-    reader: Arc<Mutex<ReadHalf<Box<dyn PtStream>>>>,
+    reader: Arc<Mutex<BufReader<ReadHalf<Box<dyn PtStream>>>>>,
     writer: Arc<Mutex<WriteHalf<Box<dyn PtStream>>>>,
     addr: Url,
     rh: Arc<impl RequestHandler + 'static>,
@@ -105,7 +106,7 @@ pub async fn accept(
         let _ = read_from_stream(&mut reader_lock, &mut buf, false).await?;
         drop(reader_lock);
 
-        let read_string = match String::from_utf8(buf) {
+        let line = match String::from_utf8(buf) {
             Ok(v) => v,
             Err(e) => {
                 error!(
@@ -116,14 +117,8 @@ pub async fn accept(
             }
         };
 
-        // Implementation note:
-        // When using this JSON-RPC server with XMRig, an issue arises.
-        // XMRig tends to send something we do not parse as a line in
-        // read_from_stream(), so as a stop-gap hack we do this:
-        let line = read_string.trim().lines().take(1).next().unwrap();
-
         // Parse the line as JSON
-        let val: JsonValue = match line.parse() {
+        let val: JsonValue = match line.trim().parse() {
             Ok(v) => v,
             Err(e) => {
                 error!(
@@ -283,7 +278,7 @@ async fn run_accept_loop(
                 info!(target: "rpc::server", "[RPC] Server accepted conn from {}", url);
 
                 let (reader, writer) = smol::io::split(stream);
-                let reader = Arc::new(Mutex::new(reader));
+                let reader = Arc::new(Mutex::new(BufReader::new(reader)));
                 let writer = Arc::new(Mutex::new(writer));
 
                 let task = StoppableTask::new();

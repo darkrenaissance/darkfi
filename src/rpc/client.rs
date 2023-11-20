@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 use log::{debug, error};
-use smol::{channel, Executor};
+use smol::{channel, io::BufReader, Executor};
 use tinyjson::JsonValue;
 use url::Url;
 
@@ -92,7 +92,8 @@ impl RpcClient {
     ) -> Result<()> {
         debug!(target: "rpc::client::reqrep_loop()", "Starting reqrep loop");
 
-        let (mut reader, mut writer) = smol::io::split(stream);
+        let (reader, mut writer) = smol::io::split(stream);
+        let mut reader = BufReader::new(reader);
 
         loop {
             let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
