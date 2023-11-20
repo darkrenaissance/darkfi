@@ -9,7 +9,8 @@ homepage = "https://dark.fi"
 repository = "https://github.com/darkrenaissance/darkfi"
 
 [dependencies]
-darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "util", "system", "rpc"]}
+darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "util", "system", "rpc", "zk"]}
+darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {path = "../../src/serial", features = ["async"]}
 libc = "0.2.150"
 

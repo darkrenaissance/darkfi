@@ -17,9 +17,17 @@ SRC = \
 
 BIN = ../../darkirc
 
+ZKAS = ../../zkas
+
+ZKSRC = $(shell find proof -type f -name '*.zk')
+ZKBIN = $(ZKSRC:=.bin)
+
 all: $(BIN)
 
-$(BIN): $(SRC)
+$(ZKBIN): $(ZKAS) $(ZKSRC)
+	$(ZKAS) $(basename $@) -o $@
+
+$(BIN): $(ZKBIN) $(SRC)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --target=$(RUST_TARGET) --release --package darkirc
 	cp -f ../../target/$(RUST_TARGET)/release/darkirc $@
 
