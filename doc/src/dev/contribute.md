@@ -87,10 +87,12 @@ _Tasks are in no particular order. Use common sense._
 12. Implement verifiable encryption for `DAO` payments
 13. `DAO` should be able to perform arbitrary contract calls, it should act as a voted multisig
 14. Implement cross-chain atomic swaps (XMR, ETH, anything applicable)
-15. Rework the connection algo for p2p to use black list, grey and white list<C-y>
+15. Rework the connection algo for p2p to use black list, grey and white list
   * https://eprint.iacr.org/2019/411.pdf (Section 2.2)
 16. Create a P2P stack test harness in order to be able to easily simulate network
     behaviour
+  * Possibly we can create a dummy p2p which can simulate network connections and routing traffic.
+    We can use this to model network behaviour.
 17. Implement address/secretkey differentiation (https://en.bitcoin.it/wiki/Wallet_import_format)
 18. Fix bugs and issues in the DAO implementation
 19. Perform thorough review of all contracts and their functionalities
@@ -113,9 +115,16 @@ _Tasks are in no particular order. Use common sense._
 | **9.**   | `brawndo`  |
 | **10.**  | `brawndo`  |
 | **11.**  |            |
-| **12.**  |            |
-| **13.**  |            |
+| **12.**  | `B1-66ER`  |
+| **13.**  | `B1-66ER`  |
 | **14.**  |            |
+| **15.**  |            |
+| **16.**  |            |
+| **17.**  |            |
+| **18.**  | `B1-66ER`  |
+| **19.**  | `B1-66ER`  |
+| **20.**  |            |
+| **21.**  | `B1-66ER`  |
 
 ## Fuzz testing
 
