@@ -66,13 +66,18 @@ or need to be maintained:
 
 ## Mainnet tasks
 
+_Tasks are in no particular order. Use common sense._
+
 1. Finish `darkfid` with PoW and research and implement XMR merge mining
 2. Make `darkfi-mmproxy` stable and implement what is needed for DarkFi x Monero merge mining
 3. Finish dnetview
 4. Make `eventgraph` stable and implement proper unit and integration tests
   * Unit tests should test pieces of the eventgraph code
   * Integration tests should simulate a P2P network and ensure deterministic state after a simulated run
+  * Update https://darkrenaissance.github.io/darkfi/misc/event_graph/event_graph.html
+    and make it the specification for the `eventgraph` implementation implementation
 5. Rework `drk` (the wallet CLI) to work standalone and make it work with the new `darkfid`
+  * Don't accept coins with existing serial
 6. Make `tau` stable
 7. Make `darkirc` stable
 8. Make `lilith` stable, there is currently some bug that causes connection refusals
@@ -82,6 +87,18 @@ or need to be maintained:
 12. Implement verifiable encryption for `DAO` payments
 13. `DAO` should be able to perform arbitrary contract calls, it should act as a voted multisig
 14. Implement cross-chain atomic swaps (XMR, ETH, anything applicable)
+15. Rework the connection algo for p2p to use black list, grey and white list<C-y>
+  * https://eprint.iacr.org/2019/411.pdf (Section 2.2)
+16. Create a P2P stack test harness in order to be able to easily simulate network
+    behaviour
+17. Implement address/secretkey differentiation (https://en.bitcoin.it/wiki/Wallet_import_format)
+18. Fix bugs and issues in the DAO implementation
+19. Perform thorough review of all contracts and their functionalities
+20. Randomize outputs in `Money::*`, and potentially elsewhere where applicable
+21. Document contracts in the manner of https://darkrenaissance.github.io/darkfi/arch/consensus/stake.html
+
+99. resource manager for p2p (DoS protection, disconnect bad nodes)
+
 
 |  Task #  |  Assignee  |
 |----------|------------|
