@@ -111,6 +111,7 @@ _Tasks are in no particular order. Use common sense._
   * Malicious users could send you a coin which is unspendable. A poorly implemented wallet would
     accept such a coin, and if spent then you would be unable to spend the other coin sharing the same
     serial in your wallet.
+23. Separate mining logic from darkfid into a new program and communicate over RPC
 
 99. resource manager for p2p (DoS protection, disconnect bad nodes)
 
@@ -138,6 +139,8 @@ _Tasks are in no particular order. Use common sense._
 | **19.**  | `B1-66ER`  |
 | **20.**  |            |
 | **21.**  | `B1-66ER`  |
+| **22.**  | `B1-66ER`  |
+| **23.**  | `upgrayedd`|
 
 ## Fuzz testing
 
