@@ -29,7 +29,7 @@ use log::{debug, error, warn};
 use crate::{
     blockchain::{BlockInfo, BlockchainOverlayPtr},
     error::TxVerifyFailed,
-    runtime::vm_runtime::Runtime,
+    runtime::vm_runtime::{Runtime, GAS_LIMIT},
     tx::Transaction,
     util::time::TimeKeeper,
     validator::{
@@ -204,10 +204,11 @@ pub async fn verify_producer_transaction(
     let tx_hash = tx.hash()?;
     debug!(target: "validator::verification::verify_producer_transaction", "Validating proposal transaction {}", tx_hash);
 
-    // Transaction must contain a single call
-    if tx.calls.len() != 1 {
+    // Producer transactions must contain a single, non-empty call 
+    if tx.calls.len() != 1 || tx.calls[0].data.is_empty() {
         return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
+
 
     // Verify call based on version
     let call = &tx.calls[0];
