@@ -36,11 +36,14 @@ or need to be maintained:
 * **Documentation:** general documentation and code docs (cargo doc). This is a very 
   important work for example [overview](https://darkrenaissance.github.io/darkfi/arch/overview.html) 
   page is out of date.
+    * We need a tutorial on writing smart contracts.
 * **TODO** and **FIXME** are throughout the codebase. Find your favourite one and begin hacking.
     * DarkIRC encrypted DMs to nonexistant users should not be allowed.
     * Currently closing DarkIRC with ctrl-c stalls in `p2p.stop()`. This should be fixed.
     * Add `log = path` and `log_level = debug` config setting to DarkIRC
 * **Tooling:** Creating new tools or improving existing ones.
+    * Improve the ZK tooling. For example tools to work with txs, smart contracts and ZK proofs.
+    * Also document zkrunner and other tools.
 * **Tests:** Throughout the project there are either broken or commented out unit tests, they need to be fixed.
 * **Cleanup:** General code cleanup. for example flattening headers and improving things like in 
   [this commit](https://github.com/darkrenaissance/darkfi/commit/9cd9c3113eed1b5f0bcad2ee449ef926d0908d55).
@@ -62,6 +65,7 @@ or need to be maintained:
     * Generalize DAO proposals by committing to a set of coins rather than a single one.
     * Add proposal_type field and proposal_data.
     * Money viewing keys
+    * Method to `export_public_inputs(calldata, "public.json")`
 * Eth-DarkFi bridge or atomic swaps. Atomic swaps is probably better since it's trustless and p2p.
 
 ## Mainnet tasks
