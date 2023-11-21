@@ -25,9 +25,8 @@ use tinyjson::JsonValue;
 use url::Url;
 
 use darkfi::{
-    impl_p2p_message,
     net::{
-        ChannelPtr, Message, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
+        ChannelPtr, MessageSubscription, P2pPtr, ProtocolBase, ProtocolBasePtr,
         ProtocolJobsManager, ProtocolJobsManagerPtr,
     },
     rpc::jsonrpc::JsonSubscriber,
@@ -36,16 +35,10 @@ use darkfi::{
     validator::ValidatorPtr,
     Result,
 };
-use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
-
-/// Auxiliary [`Transaction`] wrapper structure used for messaging.
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-struct TransactionMessage(Transaction);
-
-impl_p2p_message!(TransactionMessage, "tx");
+use darkfi_serial::serialize;
 
 pub struct ProtocolTx {
-    tx_sub: MessageSubscription<TransactionMessage>,
+    tx_sub: MessageSubscription<Transaction>,
     jobsman: ProtocolJobsManagerPtr,
     validator: ValidatorPtr,
     p2p: P2pPtr,
@@ -65,9 +58,9 @@ impl ProtocolTx {
             "Adding ProtocolTx to the protocol registry"
         );
         let msg_subsystem = channel.message_subsystem();
-        msg_subsystem.add_dispatch::<TransactionMessage>().await;
+        msg_subsystem.add_dispatch::<Transaction>().await;
 
-        let tx_sub = channel.subscribe_msg::<TransactionMessage>().await?;
+        let tx_sub = channel.subscribe_msg::<Transaction>().await?;
 
         Ok(Arc::new(Self {
             tx_sub,
@@ -110,7 +103,7 @@ impl ProtocolTx {
             let tx_copy = (*tx).clone();
 
             // Nodes use unconfirmed_txs vector as seen_txs pool.
-            match self.validator.write().await.append_tx(&tx_copy.0).await {
+            match self.validator.write().await.append_tx(&tx_copy).await {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&tx_copy, &exclude_list).await;
                     let encoded_tx = JsonValue::String(base64::encode(&serialize(&tx_copy)));

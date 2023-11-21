@@ -162,3 +162,9 @@ impl Transaction {
         Ok(hasher.finalize())
     }
 }
+
+#[cfg(feature = "net")]
+use crate::net::Message;
+
+#[cfg(feature = "net")]
+crate::impl_p2p_message!(Transaction, "tx");
