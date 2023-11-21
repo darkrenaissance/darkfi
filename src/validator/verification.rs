@@ -219,7 +219,7 @@ pub async fn verify_producer_transaction(
             }
         }
         2 => {
-            // Version 1 blocks must contain a Consensus::Proposal(0x02) call
+            // Version 2 blocks must contain a Consensus::Proposal(0x02) call
             if call.contract_id != *CONSENSUS_CONTRACT_ID || call.data[0] != 0x02 {
                 return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
             }
