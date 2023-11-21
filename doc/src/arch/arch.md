@@ -28,7 +28,7 @@ gantt
     dateFormat  DD-MM-YYYY
     axisFormat  %m-%y
     section Phases
-    Dcon0            :done, d0, 02-01-2023, 120d
+    Dcon0            :done, d0, 06-01-2023, 120d
     Dcon1            :done, d1, after d0,   120d
     Dcon2            :done, d2, after d1,   120d
     Dcon3            :done, d3, after d2,   60d
