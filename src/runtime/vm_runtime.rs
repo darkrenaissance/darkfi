@@ -360,7 +360,6 @@ impl Runtime {
         };
 
         debug!(target: "runtime::vm_runtime", "wasm executed successfully");
-        debug!(target: "runtime::vm_runtime", "Contract returned: {:?}", ret[0]);
 
         let env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = ContractSection::Null;
@@ -369,9 +368,27 @@ impl Runtime {
             None => Vec::new(),
         };
 
-        let retval = match ret[0] {
-            Value::I64(v) => v,
-            _ => unreachable!("Got unexpected result from ret: {:?}", ret),
+        // Determine the return value of the wasm function. At this stage,
+        // it is assumed that the contract completed successful given
+        // that validation has been performed above.
+        let retval: i64 = match ret.len() {
+            0 => {
+                // Return a success value if there is no return value from
+                // the contract.
+                debug!(target: "runtime::vm_runtime", "Contract has no return value (expected)");
+                entrypoint::SUCCESS
+            }
+            _ => {
+                match ret[0] {
+                    Value::I64(v) => {
+                        debug!(target: "runtime::vm_runtime", "Contract returned: {:?}", ret[0]);
+                        v
+                    }
+                    // The only supported return type is i64, so panic if another
+                    // value is returned.
+                    _ => unreachable!("Got unexpected result return value: {:?}", ret),
+                }
+            }
         };
 
         match retval {
@@ -476,7 +493,7 @@ impl Runtime {
     /// of metering points.
     fn gas_used(&mut self) -> u64 {
         let remaining_points = get_remaining_points(&mut self.store, &self.instance);
-        
+
         match remaining_points {
             MeteringPoints::Remaining(rem) => {
                 if rem > GAS_LIMIT {
@@ -485,7 +502,7 @@ impl Runtime {
                     unreachable!("Remaining wasm points exceed GAS_LIMIT");
                 }
                 GAS_LIMIT - rem
-            },
+            }
             MeteringPoints::Exhausted => GAS_LIMIT + 1,
         }
     }
