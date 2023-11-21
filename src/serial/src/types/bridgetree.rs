@@ -45,7 +45,7 @@ impl AsyncEncodable for bridgetree::Position {
 impl Decodable for bridgetree::Position {
     fn decode<D: Read>(mut d: D) -> Result<Self> {
         let dec: u64 = Decodable::decode(&mut d)?;
-        Ok(Self::try_from(dec).unwrap())
+        Ok(Self::from(dec))
     }
 }
 
@@ -54,7 +54,7 @@ impl Decodable for bridgetree::Position {
 impl AsyncDecodable for bridgetree::Position {
     async fn decode_async<D: AsyncRead + Unpin + Send>(d: &mut D) -> Result<Self> {
         let dec: u64 = AsyncDecodable::decode_async(d).await?;
-        Ok(Self::try_from(dec).unwrap())
+        Ok(Self::from(dec))
     }
 }
 

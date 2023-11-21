@@ -105,7 +105,7 @@ impl TryFrom<u64> for Float10 {
     type Error = crate::Error;
 
     fn try_from(value: u64) -> Result<Self, Self::Error> {
-        Ok(Self(FBig::try_from(value)?))
+        Ok(Self(FBig::from(value)))
     }
 }
 
@@ -113,6 +113,6 @@ impl TryFrom<i64> for Float10 {
     type Error = crate::Error;
 
     fn try_from(value: i64) -> Result<Self, Self::Error> {
-        Ok(Self(FBig::try_from(value)?))
+        Ok(Self(FBig::from(value)))
     }
 }

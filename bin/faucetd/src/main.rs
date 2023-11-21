@@ -184,7 +184,7 @@ pub struct Faucetd {
     validator_state: ValidatorStatePtr,
     keypair: Keypair,
     _wallet: WalletPtr,
-    merkle_tree: MerkleTree,
+    _merkle_tree: MerkleTree,
     airdrop_timeout: i64,
     airdrop_limit: u64,
     airdrop_map: AirdropMap,
@@ -217,7 +217,7 @@ impl Faucetd {
         limit: u64,
     ) -> Result<Self> {
         // Here we initialize the wallet for the money contract.
-        let merkle_tree = Self::initialize_wallet(wallet.clone()).await?;
+        let _merkle_tree = Self::initialize_wallet(wallet.clone()).await?;
 
         // This is kinda bad, but whatever. The hashmaps hold proving keys for
         // the money contract. We keep it under RwLock in case we want to add
@@ -276,7 +276,7 @@ impl Faucetd {
             validator_state,
             keypair,
             _wallet: wallet,
-            merkle_tree,
+            _merkle_tree,
             airdrop_timeout: timeout,
             airdrop_limit: limit,
             airdrop_map: Arc::new(Mutex::new(HashMap::new())),

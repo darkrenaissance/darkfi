@@ -77,6 +77,7 @@ pub fn select_coins(coins: Vec<OwnCoin>, min_value: u64) -> Result<(Vec<OwnCoin>
 /// * The actual call data
 /// * Secret values such as blinds
 /// * A list of the spent coins
+#[allow(clippy::too_many_arguments)]
 pub fn make_transfer_call(
     keypair: Keypair,
     recipient: PublicKey,

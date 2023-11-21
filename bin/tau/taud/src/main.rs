@@ -131,10 +131,7 @@ fn try_decrypt_task(encrypt_task: &EncryptedTask, chacha_box: &ChaChaBox) -> Tau
     }
 
     // Try extracting the nonce
-    let nonce = match bytes[0..24].try_into() {
-        Ok(v) => v,
-        Err(_) => return Err(TaudError::DecryptionError("Invalid nonce".to_string())),
-    };
+    let nonce = bytes[0..24].into();
 
     // Take the remaining ciphertext
     let message = &bytes[24..];
