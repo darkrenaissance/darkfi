@@ -20,13 +20,13 @@ doctest = false
 [workspace]
 members = [
     "bin/zkas",
-    "bin/darkfid",
+    #"bin/darkfid",
     "bin/darkfid2",
     "bin/darkfi-mmproxy",
     #"bin/drk",
-    "bin/faucetd",
+    #"bin/faucetd",
     #"bin/fud/fu",
-    "bin/fud/fud",
+    #"bin/fud/fud",
     "bin/genev/genevd",
     "bin/genev/genev-cli",
     "bin/darkirc",

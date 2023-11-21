@@ -11,8 +11,8 @@ edition = "2021"
 [dependencies]
 # Darkfi
 darkfi = {path = "../../", features = ["async-daemonize", "bs58"]}
-darkfi-consensus-contract = {path = "../../src/contract/consensus"}
-darkfi-money-contract = {path = "../../src/contract/money"}
+darkfi_consensus_contract = {path = "../../src/contract/consensus"}
+darkfi_money_contract = {path = "../../src/contract/money"}
 darkfi-contract-test-harness = {path = "../../src/contract/test-harness"}
 darkfi-sdk = {path = "../../src/sdk"}
 darkfi-serial = {path = "../../src/serial"}

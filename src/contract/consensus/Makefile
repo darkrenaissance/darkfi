@@ -25,6 +25,10 @@ PROOFS_BIN = $(PROOFS_SRC:=.bin)
 
 # wasm source files
 WASM_SRC = \
+	Cargo.toml \
+	../../../Cargo.toml \
+	../../../src/sdk/Cargo.toml \
+	../../../src/serial/Cargo.toml \
 	$(shell find src -type f -name '*.rs') \
 	$(shell find ../../sdk -type f -name '*.rs') \
 	$(shell find ../../serial -type f -name '*.rs')

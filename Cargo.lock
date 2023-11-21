@@ -1709,76 +1709,22 @@ dependencies = [
 ]
 
 [[package]]
-name = "darkfi-consensus-contract"
-version = "0.4.1"
-dependencies = [
- "blake3",
- "bs58",
- "chacha20poly1305",
- "darkfi",
- "darkfi-contract-test-harness",
- "darkfi-money-contract",
- "darkfi-sdk",
- "darkfi-serial",
- "getrandom 0.2.11",
- "halo2_proofs",
- "log",
- "rand 0.8.5",
- "simplelog",
- "sled",
- "smol",
- "thiserror",
-]
-
-[[package]]
 name = "darkfi-contract-test-harness"
 version = "0.4.1"
 dependencies = [
  "blake3",
  "bs58",
  "darkfi",
- "darkfi-consensus-contract",
- "darkfi-dao-contract",
- "darkfi-deployooor-contract",
- "darkfi-money-contract",
  "darkfi-sdk",
  "darkfi-serial",
+ "darkfi_consensus_contract",
+ "darkfi_dao_contract",
+ "darkfi_deployooor_contract",
+ "darkfi_money_contract",
  "log",
  "rand 0.8.5",
  "simplelog",
  "sled",
-]
-
-[[package]]
-name = "darkfi-dao-contract"
-version = "0.4.1"
-dependencies = [
- "bs58",
- "chacha20poly1305",
- "darkfi",
- "darkfi-contract-test-harness",
- "darkfi-money-contract",
- "darkfi-sdk",
- "darkfi-serial",
- "getrandom 0.2.11",
- "halo2_proofs",
- "log",
- "rand 0.8.5",
- "simplelog",
- "sled",
- "smol",
- "thiserror",
-]
-
-[[package]]
-name = "darkfi-deployooor-contract"
-version = "0.4.1"
-dependencies = [
- "async-trait",
- "darkfi-sdk",
- "darkfi-serial",
- "getrandom 0.2.11",
- "thiserror",
 ]
 
 [[package]]
@@ -1824,27 +1770,6 @@ dependencies = [
  "surf",
  "url",
  "uuid",
-]
-
-[[package]]
-name = "darkfi-money-contract"
-version = "0.4.1"
-dependencies = [
- "blake3",
- "bs58",
- "chacha20poly1305",
- "darkfi",
- "darkfi-contract-test-harness",
- "darkfi-sdk",
- "darkfi-serial",
- "getrandom 0.2.11",
- "halo2_proofs",
- "log",
- "rand 0.8.5",
- "simplelog",
- "sled",
- "smol",
- "thiserror",
 ]
 
 [[package]]
@@ -1896,27 +1821,78 @@ dependencies = [
 ]
 
 [[package]]
-name = "darkfid"
+name = "darkfi_consensus_contract"
 version = "0.4.1"
 dependencies = [
- "async-trait",
  "blake3",
  "bs58",
+ "chacha20poly1305",
  "darkfi",
+ "darkfi-contract-test-harness",
  "darkfi-sdk",
  "darkfi-serial",
- "easy-parallel",
+ "darkfi_money_contract",
+ "getrandom 0.2.11",
+ "halo2_proofs",
  "log",
- "serde",
- "signal-hook",
- "signal-hook-async-std",
+ "rand 0.8.5",
  "simplelog",
  "sled",
  "smol",
- "structopt",
- "structopt-toml",
- "tinyjson",
- "url",
+ "thiserror",
+]
+
+[[package]]
+name = "darkfi_dao_contract"
+version = "0.4.1"
+dependencies = [
+ "bs58",
+ "chacha20poly1305",
+ "darkfi",
+ "darkfi-contract-test-harness",
+ "darkfi-sdk",
+ "darkfi-serial",
+ "darkfi_money_contract",
+ "getrandom 0.2.11",
+ "halo2_proofs",
+ "log",
+ "rand 0.8.5",
+ "simplelog",
+ "sled",
+ "smol",
+ "thiserror",
+]
+
+[[package]]
+name = "darkfi_deployooor_contract"
+version = "0.4.1"
+dependencies = [
+ "async-trait",
+ "darkfi-sdk",
+ "darkfi-serial",
+ "getrandom 0.2.11",
+ "thiserror",
+]
+
+[[package]]
+name = "darkfi_money_contract"
+version = "0.4.1"
+dependencies = [
+ "blake3",
+ "bs58",
+ "chacha20poly1305",
+ "darkfi",
+ "darkfi-contract-test-harness",
+ "darkfi-sdk",
+ "darkfi-serial",
+ "getrandom 0.2.11",
+ "halo2_proofs",
+ "log",
+ "rand 0.8.5",
+ "simplelog",
+ "sled",
+ "smol",
+ "thiserror",
 ]
 
 [[package]]
@@ -1927,11 +1903,11 @@ dependencies = [
  "blake3",
  "bs58",
  "darkfi",
- "darkfi-consensus-contract",
  "darkfi-contract-test-harness",
- "darkfi-money-contract",
  "darkfi-sdk",
  "darkfi-serial",
+ "darkfi_consensus_contract",
+ "darkfi_money_contract",
  "easy-parallel",
  "log",
  "num-bigint",
@@ -2704,33 +2680,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "25cbce373ec4653f1a01a31e8a5e5ec0c622dc27ff9c4e6606eefef5cbbed4a5"
 
 [[package]]
-name = "faucetd"
-version = "0.4.1"
-dependencies = [
- "async-trait",
- "blake3",
- "chrono",
- "darkfi",
- "darkfi-money-contract",
- "darkfi-sdk",
- "darkfi-serial",
- "easy-parallel",
- "log",
- "rand 0.8.5",
- "rusqlite",
- "serde",
- "signal-hook",
- "signal-hook-async-std",
- "simplelog",
- "sled",
- "smol",
- "structopt",
- "structopt-toml",
- "tinyjson",
- "url",
-]
-
-[[package]]
 name = "fdeflate"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2912,27 +2861,6 @@ checksum = "04412b8935272e3a9bae6f48c7bfff74c2911f60525404edfdd28e49884c3bfb"
 dependencies = [
  "libc",
  "winapi",
-]
-
-[[package]]
-name = "fud"
-version = "0.4.1"
-dependencies = [
- "async-trait",
- "blake3",
- "darkfi",
- "darkfi-serial",
- "easy-parallel",
- "log",
- "serde",
- "signal-hook",
- "signal-hook-async-std",
- "simplelog",
- "smol",
- "structopt",
- "structopt-toml",
- "tinyjson",
- "url",
 ]
 
 [[package]]

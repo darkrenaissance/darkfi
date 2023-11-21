@@ -68,19 +68,19 @@ pub fn deploy_native_contracts(
         (
             "Money Contract",
             *MONEY_CONTRACT_ID,
-            include_bytes!("../contract/money/money_contract.wasm").to_vec(),
+            include_bytes!("../contract/money/darkfi_money_contract.wasm").to_vec(),
             money_contract_deploy_payload,
         ),
         (
             "DAO Contract",
             *DAO_CONTRACT_ID,
-            include_bytes!("../contract/dao/dao_contract.wasm").to_vec(),
+            include_bytes!("../contract/dao/darkfi_dao_contract.wasm").to_vec(),
             dao_contract_deploy_payload,
         ),
         (
             "Consensus Contract",
             *CONSENSUS_CONTRACT_ID,
-            include_bytes!("../contract/consensus/consensus_contract.wasm").to_vec(),
+            include_bytes!("../contract/consensus/darkfi_consensus_contract.wasm").to_vec(),
             consensus_contract_deploy_payload,
         ),
     ];
