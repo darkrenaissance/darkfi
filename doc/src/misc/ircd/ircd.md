@@ -101,9 +101,6 @@ following commands (there is an assumption that `irc_listen` in the
 /quit
 ```
 
-<u><b>Note</b></u>: if you have other IRC servers added in your client
-then you probably know this but you can ommit `-autoconnect` part. 
-
 This will set up the server, save the settings, and exit weechat.
 You are now ready to begin using the chat. Simply start weechat
 and everything should work.
@@ -114,6 +111,10 @@ anonymous chat.
 
 You can change your nickname using `/nick foo`, and navigate channels
 using F5/F6 or ALT+X where X is the channel number displayed.
+
+Channels can be moved around using `/buffer move N` where N is the new
+position of the buffer in the list. Use `/layout store` to save the
+current layout of the buffers.
 
 ## Network-level privacy
 
