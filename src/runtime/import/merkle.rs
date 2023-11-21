@@ -50,37 +50,33 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             // - coins (as Vec<MerkleNode>) (the coins being added into the Merkle tree)
             let mut buf_reader = Cursor::new(buf);
             // FIXME: There's a type DbHandle=u32, but this should maybe be renamed
-            let db_info: u32 = match Decodable::decode(&mut buf_reader) {
+            let db_info_index: u32 = match Decodable::decode(&mut buf_reader) {
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "runtime::merkle", "Failed to decode db_info DbHandle: {}", e);
                     return -2
                 }
             };
+            let db_info_index = db_info_index as usize;
 
-            let db_roots: u32 = match Decodable::decode(&mut buf_reader) {
+            let db_roots_index: u32 = match Decodable::decode(&mut buf_reader) {
                 Ok(v) => v,
                 Err(e) => {
                     error!(target: "runtime::merkle", "Failed to decode db_roots DbHandle: {}", e);
                     return -2
                 }
             };
+            let db_roots_index = db_roots_index as usize;
 
-            let db_info = db_info as usize;
-            let db_roots = db_roots as usize;
             let db_handles = env.db_handles.borrow();
             let n_dbs = db_handles.len();
 
-            if n_dbs <= db_info || n_dbs <= db_roots {
+            if n_dbs <= db_info_index || n_dbs <= db_roots_index {
                 error!(target: "runtime::merkle", "Requested DbHandle that is out of bounds");
                 return -2
             }
-
-            let info_handle_idx = db_info;
-            let db_info = &db_handles[info_handle_idx];
-
-            let roots_handle_idx = db_roots;
-            let db_roots = &db_handles[roots_handle_idx];
+            let db_info = &db_handles[db_info_index];
+            let db_roots = &db_handles[db_roots_index];
 
             if db_info.contract_id != env.contract_id || db_roots.contract_id != env.contract_id {
                 error!(target: "runtime::merkle", "Unauthorized to write to DbHandle");

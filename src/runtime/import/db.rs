@@ -223,15 +223,14 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
 
     let mut buf_reader = Cursor::new(buf);
 
-    // FIXME: There's a type DbHandle=u32, but this should maybe be renamed
-    let db_handle: u32 = match Decodable::decode(&mut buf_reader) {
+    let db_handle_index: u32 = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
             error!(target: "runtime::db::db_set()", "Failed to decode DbHandle: {}", e);
             return DB_SET_FAILED
         }
     };
-    let db_handle = db_handle as usize;
+    let db_handle_index = db_handle_index as usize;
 
     let key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
@@ -258,13 +257,12 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
 
     let db_handles = env.db_handles.borrow();
 
-    if db_handles.len() <= db_handle {
+    if db_handles.len() <= db_handle_index {
         error!(target: "runtime::db::db_set()", "Requested DbHandle that is out of bounds");
         return DB_SET_FAILED
     }
 
-    let handle_idx = db_handle;
-    let db_handle = &db_handles[handle_idx];
+    let db_handle = &db_handles[db_handle_index];
 
     if db_handle.contract_id != env.contract_id {
         error!(target: "runtime::db::db_set()", "Unauthorized to write to DbHandle");
@@ -314,15 +312,14 @@ pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
 
     let mut buf_reader = Cursor::new(buf);
 
-    // FIXME: There's a type DbHandle=u32, but this should maybe be renamed
-    let db_handle: u32 = match Decodable::decode(&mut buf_reader) {
+    let db_handle_index: u32 = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
             error!(target: "runtime::db::db_del()", "Failed to decode DbHandle: {}", e);
             return DB_DEL_FAILED
         }
     };
-    let db_handle = db_handle as usize;
+    let db_handle_index = db_handle_index as usize;
 
     let key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
@@ -341,13 +338,12 @@ pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
 
     let db_handles = env.db_handles.borrow();
 
-    if db_handles.len() <= db_handle {
+    if db_handles.len() <= db_handle_index {
         error!(target: "runtime::db::db_del()", "Requested DbHandle that is out of bounds");
         return DB_DEL_FAILED
     }
 
-    let handle_idx = db_handle;
-    let db_handle = &db_handles[handle_idx];
+    let db_handle = &db_handles[db_handle_index];
 
     if db_handle.contract_id != env.contract_id {
         error!(target: "runtime::db::db_del()", "Unauthorized to write to DbHandle");
@@ -390,15 +386,14 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
 
     let mut buf_reader = Cursor::new(buf);
 
-    // FIXME: There's a type DbHandle=u32, but this should maybe be renamed
-    let db_handle: u32 = match Decodable::decode(&mut buf_reader) {
+    let db_handle_index: u32 = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
             error!(target: "runtime::db::db_get()", "Failed to decode DbHandle: {}", e);
             return DB_GET_FAILED.into()
         }
     };
-    let db_handle = db_handle as usize;
+    let db_handle_index = db_handle_index as usize;
 
     let key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
@@ -417,13 +412,12 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
 
     let db_handles = env.db_handles.borrow();
 
-    if db_handles.len() <= db_handle {
+    if db_handles.len() <= db_handle_index {
         error!(target: "runtime::db::db_get()", "Requested DbHandle that is out of bounds");
         return DB_GET_FAILED.into()
     }
 
-    let handle_idx = db_handle;
-    let db_handle = &db_handles[handle_idx];
+    let db_handle = &db_handles[db_handle_index];
 
     let ret =
         match env.blockchain.lock().unwrap().overlay.lock().unwrap().get(&db_handle.tree, &key) {
@@ -473,15 +467,14 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
 
     let mut buf_reader = Cursor::new(buf);
 
-    // FIXME: There's a type DbHandle=u32, but this should maybe be renamed
-    let db_handle: u32 = match Decodable::decode(&mut buf_reader) {
+    let db_handle_index: u32 = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
             error!(target: "runtime::db::db_contains_key()", "Failed to decode DbHandle: {}", e);
             return DB_CONTAINS_KEY_FAILED
         }
     };
-    let db_handle = db_handle as usize;
+    let db_handle_index = db_handle_index as usize;
 
     let key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
@@ -500,13 +493,12 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
 
     let db_handles = env.db_handles.borrow();
 
-    if db_handles.len() <= db_handle {
+    if db_handles.len() <= db_handle_index {
         error!(target: "runtime::db::db_contains_key()", "Requested DbHandle that is out of bounds");
         return DB_CONTAINS_KEY_FAILED
     }
 
-    let handle_idx = db_handle;
-    let db_handle = &db_handles[handle_idx];
+    let db_handle = &db_handles[db_handle_index];
 
     match env.blockchain.lock().unwrap().overlay.lock().unwrap().contains_key(&db_handle.tree, &key)
     {
