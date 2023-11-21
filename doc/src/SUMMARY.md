@@ -16,6 +16,7 @@
 - [DAO](testnet/dao.md)
 - [ircd](misc/ircd/ircd.md)
 	- [Private Message](misc/ircd/private_message.md)
+	- [Local Deployment](misc/ircd/local_deploy.md)
 
 # Developer Doc
 
