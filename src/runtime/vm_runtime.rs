@@ -115,9 +115,13 @@ impl Env {
     }
 }
 
+/// Define a wasm runtime.
 pub struct Runtime {
+    /// A wasm instance
     pub instance: Instance,
+    /// A wasm store (global state)
     pub store: Store,
+    // Wrapper for [`Env`], defined above.
     pub ctx: FunctionEnv<Env>,
 }
 
@@ -137,7 +141,7 @@ impl Runtime {
         // https://docs.rs/wasmparser/latest/wasmparser/enum.Operator.html
         let cost_function = |_operator: &Operator| -> u64 { 1 };
 
-        // `Metering` needs to be conigured with a limit and a cost function.
+        // `Metering` needs to be configured with a limit and a cost function.
         // For each `Operator`, the metering middleware will call the cost
         // function and subtract the cost from the remaining points.
         let metering = Arc::new(Metering::new(GAS_LIMIT, cost_function));
@@ -312,12 +316,18 @@ impl Runtime {
         Ok(())
     }
 
+    /// Call a contract method and supply a payload.
     fn call(&mut self, section: ContractSection, payload: &[u8]) -> Result<Vec<u8>> {
         debug!(target: "runtime::vm_runtime", "Calling {} method", section.name());
 
         let env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = section;
+        // Verify contract's return data is empty, or quit.
         assert!(env_mut.contract_return_data.take().is_none());
+
+        // This should already be clear, or the assert call above
+        // would prevent the code from reaching this point.
+        // Clear anyway, to be safe.
         env_mut.contract_return_data.set(None);
         // Clear the logs
         let _ = env_mut.logs.take();
@@ -462,6 +472,8 @@ impl Runtime {
         }
     }
 
+    /// Calculate the remaining gas using wasm's concept
+    /// of metering points.
     fn gas_used(&mut self) -> u64 {
         let remaining_points = get_remaining_points(&mut self.store, &self.instance);
 
@@ -471,6 +483,10 @@ impl Runtime {
         }
     }
 
+    // Return a message informing the user whether there is any
+    // gas remaining. Values equal to GAS_LIMIT are not considered
+    // to be exhausted. e.g. Using 100/100 gas should not give a 
+    // 'gas exhausted' message.
     fn gas_info(&mut self) -> String {
         let gas_used = self.gas_used();
 
