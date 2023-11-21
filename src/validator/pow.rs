@@ -112,6 +112,11 @@ impl PoWModule {
             cummulative_difficulty = difficulty.cummulative_difficulty;
         }
 
+        // If a fixed difficulty has been set, assert its greater than zero
+        if let Some(diff) = &fixed_difficulty {
+            assert!(diff > &BigUint::zero());
+        }
+
         Ok(Self {
             threads,
             target,
