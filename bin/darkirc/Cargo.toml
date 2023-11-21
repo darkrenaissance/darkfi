@@ -8,6 +8,15 @@ license = "AGPL-3.0-only"
 homepage = "https://dark.fi"
 repository = "https://github.com/darkrenaissance/darkfi"
 
+[lib]
+name = "darkirc"
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[[bin]]
+name = "darkirc"
+path = "src/main.rs"
+
 [dependencies]
 darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "util", "system", "rpc", "zk"]}
 darkfi-sdk = {path = "../../src/sdk", features = ["async"]}

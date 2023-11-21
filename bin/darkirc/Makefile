@@ -24,7 +24,7 @@ SRC = \
 	$(shell find src -type f -name '*.rs') \
 	$(shell find ../../src -type f -name '*.rs') \
 
-BIN = $(shell grep '^name = ' Cargo.toml | cut -d' ' -f3 | tr -d '"')
+BIN = $(shell grep '^name = ' Cargo.toml | sed 1q | cut -d' ' -f3 | tr -d '"')
 
 all: $(BIN)
 
@@ -45,11 +45,12 @@ $(BIN): $(PROOFS_BIN) $(SRC)
 # - rustup target add i686-linux-android
 $(BIN).android64:
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) ndk -t arm64-v8a -o ./jniLibs build --release --package $(BIN)
-	cp -f ../../target/aarch64-linux-android/release/$(BIN) $(BIN).$@
+	cp -f ../../target/aarch64-linux-android/release/$(BIN) $@
 
-$(BIN).android32:
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) ndk -t armeabi-v7a -o ./jniLibs build --release --package $(BIN)
-	cp -f ../../target/armv7-linux-androideabi/release/$(BIN) $(BIN).$@
+# UNTESTED:
+#$(BIN).android32:
+#	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) ndk -t armeabi-v7a -o ./jniLibs build --release --package $(BIN)
+#	cp -f ../../target/armv7-linux-androideabi/release/$(BIN) $(BIN).$@
 
 clean:
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(RUST_TARGET) --release --package $(BIN)
