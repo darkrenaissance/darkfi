@@ -476,16 +476,23 @@ impl Runtime {
     /// of metering points.
     fn gas_used(&mut self) -> u64 {
         let remaining_points = get_remaining_points(&mut self.store, &self.instance);
-
+        
         match remaining_points {
-            MeteringPoints::Remaining(rem) => GAS_LIMIT - rem,
+            MeteringPoints::Remaining(rem) => {
+                if rem > GAS_LIMIT {
+                    // This should never occur, but catch it explicitly to avoid
+                    // potential underflow issues when calculating `remaining_points`.
+                    unreachable!("Remaining wasm points exceed GAS_LIMIT");
+                }
+                GAS_LIMIT - rem
+            },
             MeteringPoints::Exhausted => GAS_LIMIT + 1,
         }
     }
 
     // Return a message informing the user whether there is any
     // gas remaining. Values equal to GAS_LIMIT are not considered
-    // to be exhausted. e.g. Using 100/100 gas should not give a 
+    // to be exhausted. e.g. Using 100/100 gas should not give a
     // 'gas exhausted' message.
     fn gas_info(&mut self) -> String {
         let gas_used = self.gas_used();
