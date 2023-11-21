@@ -93,6 +93,7 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i
 
     // TODO: Disabled until cursor_remaining feature is available on master.
     // Then enable #![feature(cursor_remaining)] in src/lib.rs
+    // unstable feature, open issue https://github.com/rust-lang/rust/issues/86369
     /*if !buf_reader.is_empty() {
         error!(target: "runtime::db::db_init()", "Trailing bytes in argument stream");
         return DB_DEL_FAILED
@@ -180,6 +181,7 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
 
     // TODO: Disabled until cursor_remaining feature is available on master.
     // Then enable #![feature(cursor_remaining)] in src/lib.rs
+    // unstable feature, open issue https://github.com/rust-lang/rust/issues/86369
     /*if !buf_reader.is_empty() {
         error!(target: "runtime::db::db_lookup()", "Trailing bytes in argument stream");
         return DB_LOOKUP_FAILED
@@ -248,8 +250,9 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
         }
     };
 
-    // Disabled until cursor_remaining feature is available on master.
-    // TODO: Then enable #![feature(cursor_remaining)] in src/lib.rs
+    // TODO: Disabled until cursor_remaining feature is available on master.
+    // Then enable #![feature(cursor_remaining)] in src/lib.rs
+    // unstable feature, open issue https://github.com/rust-lang/rust/issues/86369
     /*if !buf_reader.is_empty() {
         error!(target: "runtime::db::db_set()", "Trailing bytes in argument stream");
         return DB_DEL_FAILED
@@ -331,6 +334,7 @@ pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
 
     // TODO: Disabled until cursor_remaining feature is available on master.
     // Then enable #![feature(cursor_remaining)] in src/lib.rs
+    // unstable feature, open issue https://github.com/rust-lang/rust/issues/86369
     /*if !buf_reader.is_empty() {
         error!(target: "runtime::db::db_del()", "Trailing bytes in argument stream");
         return DB_DEL_FAILED
@@ -405,6 +409,7 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i6
 
     // TODO: Disabled until cursor_remaining feature is available on master.
     // Then enable #![feature(cursor_remaining)] in src/lib.rs
+    // unstable feature, open issue https://github.com/rust-lang/rust/issues/86369
     /*if !buf_reader.is_empty() {
         error!(target: "runtime::db::db_get()", "Trailing bytes in argument stream");
         return DB_GET_FAILED.into()
@@ -486,6 +491,7 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
 
     // TODO: Disabled until cursor_remaining feature is available on master.
     // Then enable #![feature(cursor_remaining)] in src/lib.rs
+    // unstable feature, open issue https://github.com/rust-lang/rust/issues/86369
     /*if !buf_reader.is_empty() {
         error!(target: "runtime::db::db_contains_key()", "Trailing bytes in argument stream");
         return DB_CONTAINS_KEY_FAILED
