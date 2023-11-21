@@ -24,6 +24,7 @@
   - [Contribute](dev/contribute.md)
   - [Learn](dev/learn.md)
   - [API Rustdoc](dev/rustdoc.md)
+  - [Native Contracts](dev/native_contracts.md)
   - [Seminars](dev/seminars.md)
 - [Architecture](arch/arch.md)
   - [Overview](arch/overview.md)
