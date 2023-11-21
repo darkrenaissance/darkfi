@@ -24,6 +24,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::serialize;
 use log::{debug, error, info, warn};
+use num_bigint::BigUint;
 use smol::lock::RwLock;
 
 use crate::{
@@ -76,6 +77,8 @@ pub struct ValidatorConfig {
     pub pow_threads: usize,
     /// Currently configured PoW target
     pub pow_target: usize,
+    /// Optional fixed difficulty, for testing purposes
+    pub pow_fixed_difficulty: Option<BigUint>,
     /// Genesis block
     pub genesis_block: BlockInfo,
     /// Total amount of minted tokens in genesis block
@@ -93,6 +96,7 @@ impl ValidatorConfig {
         finalization_threshold: usize,
         pow_threads: usize,
         pow_target: usize,
+        pow_fixed_difficulty: Option<BigUint>,
         genesis_block: BlockInfo,
         genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
@@ -103,6 +107,7 @@ impl ValidatorConfig {
             finalization_threshold,
             pow_threads,
             pow_target,
+            pow_fixed_difficulty,
             genesis_block,
             genesis_txs_total,
             faucet_pubkeys,
@@ -162,6 +167,7 @@ impl Validator {
             config.finalization_threshold,
             config.pow_threads,
             config.pow_target,
+            config.pow_fixed_difficulty,
             testing_mode,
         )?;
 
@@ -540,6 +546,7 @@ impl Validator {
         faucet_pubkeys: Vec<PublicKey>,
         pow_threads: usize,
         pow_target: usize,
+        pow_fixed_difficulty: Option<BigUint>,
     ) -> Result<()> {
         let blocks = self.blockchain.get_all()?;
 
@@ -558,7 +565,8 @@ impl Validator {
 
         // Create a time keeper and a PoW module to validate each block
         let mut time_keeper = self.consensus.time_keeper.clone();
-        let mut module = PoWModule::new(blockchain.clone(), pow_threads, pow_target)?;
+        let mut module =
+            PoWModule::new(blockchain.clone(), pow_threads, pow_target, pow_fixed_difficulty)?;
 
         // Deploy native wasm contracts
         deploy_native_contracts(&overlay, &time_keeper, &faucet_pubkeys)?;

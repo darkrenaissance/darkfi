@@ -30,7 +30,7 @@ fn forks() -> Result<()> {
 
     // Create a temporary blockchain and a PoW module
     let blockchain = Blockchain::new(&sled::Config::new().temporary(true).open()?)?;
-    let module = PoWModule::new(blockchain.clone(), 2, 90)?;
+    let module = PoWModule::new(blockchain.clone(), 2, 90, None)?;
 
     // Create a fork
     let fork = Fork::new(&blockchain, module)?;

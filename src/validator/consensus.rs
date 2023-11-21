@@ -23,6 +23,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
 use log::{debug, error, info};
+use num_bigint::BigUint;
 
 use crate::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header},
@@ -67,9 +68,11 @@ impl Consensus {
         finalization_threshold: usize,
         pow_threads: usize,
         pow_target: usize,
+        pow_fixed_difficulty: Option<BigUint>,
         testing_mode: bool,
     ) -> Result<Self> {
-        let module = PoWModule::new(blockchain.clone(), pow_threads, pow_target)?;
+        let module =
+            PoWModule::new(blockchain.clone(), pow_threads, pow_target, pow_fixed_difficulty)?;
         Ok(Self {
             blockchain,
             time_keeper,

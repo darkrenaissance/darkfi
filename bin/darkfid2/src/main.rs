@@ -133,6 +133,10 @@ pub struct BlockchainNetwork {
     /// PoW block production target, in seconds
     pub pow_target: usize,
 
+    #[structopt(long)]
+    /// Optional fixed PoW difficulty, used for testing
+    pub pow_fixed_difficulty: Option<usize>,
+
     #[structopt(long, default_value = "10")]
     /// Epoch duration, denominated by number of blocks/slots
     pub epoch_length: u64,
@@ -236,11 +240,18 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         blockchain_config.slot_time,
         0,
     );
+    let pow_fixed_difficulty = if let Some(diff) = blockchain_config.pow_fixed_difficulty {
+        info!(target: "darkfid", "Node is configured to run with fixed PoW difficulty: {}", diff);
+        Some(diff.into())
+    } else {
+        None
+    };
     let config = ValidatorConfig::new(
         time_keeper,
         blockchain_config.threshold,
         blockchain_config.pow_threads,
         blockchain_config.pow_target,
+        pow_fixed_difficulty,
         genesis_block,
         genesis_txs_total,
         vec![],

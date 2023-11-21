@@ -26,6 +26,9 @@ pow_threads = 4
 # PoW block production target, in seconds
 pow_target = 10
 
+# Optional fixed PoW difficulty, used for testing
+pow_fixed_difficulty = 1
+
 # Epoch duration, denominated by number of blocks/slots
 epoch_length = 10
 

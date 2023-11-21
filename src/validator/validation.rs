@@ -20,6 +20,7 @@ use darkfi_sdk::{
     blockchain::{block_version, expected_reward, Slot},
     pasta::{group::ff::Field, pallas},
 };
+use num_bigint::BigUint;
 
 use crate::{
     blockchain::{BlockInfo, Blockchain},
@@ -337,9 +338,11 @@ pub fn validate_blockchain(
     blockchain: &Blockchain,
     pow_threads: usize,
     pow_target: usize,
+    pow_fixed_difficulty: Option<BigUint>,
 ) -> Result<()> {
     // Generate a PoW module
-    let mut module = PoWModule::new(blockchain.clone(), pow_threads, pow_target)?;
+    let mut module =
+        PoWModule::new(blockchain.clone(), pow_threads, pow_target, pow_fixed_difficulty)?;
     // We use block order store here so we have all blocks in order
     let blocks = blockchain.order.get_all()?;
     for (index, block) in blocks[1..].iter().enumerate() {

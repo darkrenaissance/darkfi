@@ -76,8 +76,8 @@ pub fn init_logger() {
     // We check this error so we can execute same file tests in parallel,
     // otherwise second one fails to init logger here.
     if simplelog::TermLogger::init(
-        //simplelog::LevelFilter::Info,
-        simplelog::LevelFilter::Debug,
+        simplelog::LevelFilter::Info,
+        //simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
@@ -160,6 +160,7 @@ impl Wallet {
             3,
             1,
             90,
+            None,
             genesis_block.clone(),
             0,
             faucet_pubkeys.to_vec(),

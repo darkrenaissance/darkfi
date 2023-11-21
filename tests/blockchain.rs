@@ -41,7 +41,7 @@ struct Node {
 impl Node {
     fn new() -> Result<Self> {
         let blockchain = Blockchain::new(&sled::Config::new().temporary(true).open()?)?;
-        let module = PoWModule::new(blockchain.clone(), POW_THREADS, POW_TARGET)?;
+        let module = PoWModule::new(blockchain.clone(), POW_THREADS, POW_TARGET, None)?;
         Ok(Self { blockchain, module })
     }
 }
@@ -64,8 +64,8 @@ impl Harness {
     }
 
     fn validate_chains(&self) -> Result<()> {
-        validate_blockchain(&self.alice.blockchain, POW_THREADS, POW_TARGET)?;
-        validate_blockchain(&self.bob.blockchain, POW_THREADS, POW_TARGET)?;
+        validate_blockchain(&self.alice.blockchain, POW_THREADS, POW_TARGET, None)?;
+        validate_blockchain(&self.bob.blockchain, POW_THREADS, POW_TARGET, None)?;
 
         assert_eq!(self.alice.blockchain.len(), self.bob.blockchain.len());
 

@@ -81,6 +81,8 @@ pub struct PoWModule {
     pub threads: usize,
     /// Target block time, in seconds
     pub target: usize,
+    /// Optional fixed difficulty
+    pub fixed_difficulty: Option<BigUint>,
     /// Latest block timestamps ringbuffer
     pub timestamps: RingBuffer<u64, BUF_SIZE>,
     /// Latest block cummulative difficulties ringbuffer
@@ -93,7 +95,12 @@ pub struct PoWModule {
 }
 
 impl PoWModule {
-    pub fn new(blockchain: Blockchain, threads: usize, target: usize) -> Result<Self> {
+    pub fn new(
+        blockchain: Blockchain,
+        threads: usize,
+        target: usize,
+        fixed_difficulty: Option<BigUint>,
+    ) -> Result<Self> {
         // Retrieving last BUF_ZISE difficulties from blockchain to build the buffers
         let mut timestamps = RingBuffer::<u64, BUF_SIZE>::new();
         let mut difficulties = RingBuffer::<BigUint, BUF_SIZE>::new();
@@ -105,11 +112,20 @@ impl PoWModule {
             cummulative_difficulty = difficulty.cummulative_difficulty;
         }
 
-        Ok(Self { threads, target, timestamps, difficulties, cummulative_difficulty })
+        Ok(Self {
+            threads,
+            target,
+            fixed_difficulty,
+            timestamps,
+            difficulties,
+            cummulative_difficulty,
+        })
     }
 
     /// Compute the next mining difficulty, based on current ring buffers.
     /// If ring buffers contain 2 or less items, difficulty 1 is returned.
+    /// If a fixed difficulty has been set, this function will always
+    /// return that after first 2 difficulties.
     pub fn next_difficulty(&self) -> Result<BigUint> {
         // Retrieve first DIFFICULTY_WINDOW timestamps from the ring buffer
         let mut timestamps: Vec<u64> =
@@ -119,6 +135,11 @@ impl PoWModule {
         let length = timestamps.len();
         if length < 2 {
             return Ok(BigUint::one())
+        }
+
+        // If a fixed difficulty has been set, return that
+        if let Some(diff) = &self.fixed_difficulty {
+            return Ok(diff.clone())
         }
 
         // Sort the timestamps vector
@@ -384,7 +405,7 @@ mod tests {
         let sled_db = sled::Config::new().temporary(true).open()?;
         let blockchain = Blockchain::new(&sled_db)?;
         let mut module =
-            PoWModule::new(blockchain, DEFAULT_TEST_THREADS, DEFAULT_TEST_DIFFICULTY_TARGET)?;
+            PoWModule::new(blockchain, DEFAULT_TEST_THREADS, DEFAULT_TEST_DIFFICULTY_TARGET, None)?;
 
         let output = Command::new("./script/research/pow/gen_wide_data.py").output().unwrap();
         let reader = Cursor::new(output.stdout);
@@ -418,7 +439,7 @@ mod tests {
         let sled_db = sled::Config::new().temporary(true).open()?;
         let blockchain = Blockchain::new(&sled_db)?;
         let module =
-            PoWModule::new(blockchain, DEFAULT_TEST_THREADS, DEFAULT_TEST_DIFFICULTY_TARGET)?;
+            PoWModule::new(blockchain, DEFAULT_TEST_THREADS, DEFAULT_TEST_DIFFICULTY_TARGET, None)?;
         let (_, recvr) = smol::channel::bounded(1);
         let genesis_block = BlockInfo::default();
 

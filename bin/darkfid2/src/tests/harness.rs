@@ -32,6 +32,7 @@ use darkfi_sdk::{
     blockchain::{expected_reward, PidOutput, PreviousSlot, Slot, POS_START},
     pasta::{group::ff::Field, pallas},
 };
+use num_bigint::BigUint;
 use url::Url;
 
 use crate::{
@@ -44,6 +45,7 @@ use crate::{
 pub struct HarnessConfig {
     pub pow_threads: usize,
     pub pow_target: usize,
+    pub pow_fixed_difficulty: Option<BigUint>,
     pub testing_node: bool,
     pub alice_initial: u64,
     pub bob_initial: u64,
@@ -86,6 +88,7 @@ impl Harness {
             3,
             config.pow_threads,
             config.pow_target,
+            config.pow_fixed_difficulty.clone(),
             genesis_block,
             genesis_txs_total,
             vec![],
@@ -145,6 +148,7 @@ impl Harness {
                 vec![],
                 self.config.pow_threads,
                 self.config.pow_target,
+                self.config.pow_fixed_difficulty.clone(),
             )
             .await?;
         bob.validate_blockchain(
@@ -152,6 +156,7 @@ impl Harness {
             vec![],
             self.config.pow_threads,
             self.config.pow_target,
+            self.config.pow_fixed_difficulty.clone(),
         )
         .await?;
 
