@@ -1,5 +1,5 @@
 [package]
-name = "darkfi-money-contract"
+name = "darkfi_money_contract"
 version = "0.4.1"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
 license = "AGPL-3.0-only"

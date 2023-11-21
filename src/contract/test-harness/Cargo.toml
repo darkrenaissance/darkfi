@@ -9,10 +9,10 @@ edition = "2021"
 darkfi = {path = "../../../", features = ["validator"]}
 darkfi-sdk = {path = "../../../src/sdk"}
 darkfi-serial = {path = "../../../src/serial", features = ["crypto"]}
-darkfi-dao-contract = {path = "../dao", features = ["client", "no-entrypoint"]}
-darkfi-money-contract = {path = "../money", features = ["client", "no-entrypoint"]}
-darkfi-consensus-contract = {path = "../consensus", features = ["client", "no-entrypoint"]}
-darkfi-deployooor-contract = {path = "../deployooor", features = ["client", "no-entrypoint"]}
+darkfi_dao_contract = {path = "../dao", features = ["client", "no-entrypoint"]}
+darkfi_money_contract = {path = "../money", features = ["client", "no-entrypoint"]}
+darkfi_consensus_contract = {path = "../consensus", features = ["client", "no-entrypoint"]}
+darkfi_deployooor_contract = {path = "../deployooor", features = ["client", "no-entrypoint"]}
 
 blake3 = "1.5.0"
 bs58 = "0.5.0"
