@@ -103,7 +103,7 @@ pub async fn accept(
         let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
 
         let mut reader_lock = reader.lock().await;
-        let _ = read_from_stream(&mut reader_lock, &mut buf, false).await?;
+        let _ = read_from_stream(&mut reader_lock, &mut buf).await?;
         drop(reader_lock);
 
         let line = match String::from_utf8(buf) {
@@ -165,13 +165,13 @@ pub async fn accept(
                             let notification = subscription.receive().await;
 
                             // Push notification
-                            debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify()?);
+                            debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify().unwrap());
                             let notification = JsonResult::Notification(notification);
 
                             let mut writer_lock = writer_.lock().await;
                             if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
                                 subscription.unsubscribe().await;
-                                return Err(e)
+                                return Err(e.into())
                             }
                             drop(writer_lock);
                         }
@@ -215,14 +215,14 @@ pub async fn accept(
                             let notification = subscription.receive().await;
 
                             // Push notification
-                            debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify()?);
+                            debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify().unwrap());
                             let notification = JsonResult::Notification(notification);
 
                             let mut writer_lock = writer_.lock().await;
                             if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
                                 subscription.unsubscribe().await;
                                 drop(writer_lock);
-                                return Err(e)
+                                return Err(e.into())
                             }
                             drop(writer_lock);
                         }

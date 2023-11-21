@@ -16,12 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Duration;
+use std::{io, time::Duration};
 
 use smol::io::{AsyncReadExt, AsyncWriteExt, BufReader, ReadHalf, WriteHalf};
 
 use super::jsonrpc::*;
-use crate::{error::RpcError, net::transport::PtStream, system::io_timeout, Result};
+use crate::net::transport::PtStream;
 
 pub(super) const INIT_BUF_SIZE: usize = 4096; // 4K
 pub(super) const MAX_BUF_SIZE: usize = 1024 * 8192; // 8M
@@ -32,8 +32,7 @@ pub(super) const READ_TIMEOUT: Duration = Duration::from_secs(30);
 pub(super) async fn read_from_stream(
     reader: &mut BufReader<ReadHalf<Box<dyn PtStream>>>,
     buf: &mut Vec<u8>,
-    with_timeout: bool,
-) -> Result<usize> {
+) -> io::Result<usize> {
     let mut total_read = 0;
 
     // Intermediate buffer we use to read byte-by-byte.
@@ -42,61 +41,29 @@ pub(super) async fn read_from_stream(
     while total_read < MAX_BUF_SIZE {
         buf.resize(total_read + INIT_BUF_SIZE, 0);
 
-        // Lame we have to duplicate this code, but it is what it is.
-        if with_timeout {
-            match io_timeout(READ_TIMEOUT, reader.read(&mut tmpbuf)).await {
-                Ok(0) if total_read == 0 => {
-                    return Err(
-                        RpcError::ConnectionClosed("Connection closed cleanly".to_string()).into()
-                    )
-                }
-                Ok(0) => break, // Finished reading
-                Ok(_) => {
-                    // When we reach '\n', pop a possible '\r' from the buffer and bail.
-                    if tmpbuf[0] == b'\n' {
-                        if buf[total_read - 1] == b'\r' {
-                            buf.pop();
-                            total_read -= 1;
-                        }
-                        break
+        match reader.read(&mut tmpbuf).await {
+            Ok(0) if total_read == 0 => return Err(io::ErrorKind::ConnectionAborted.into()),
+            Ok(0) => break, // Finished reading
+            Ok(_) => {
+                // When we reach '\n', pop a possible '\r' from the buffer and bail.
+                if tmpbuf[0] == b'\n' {
+                    if buf[total_read - 1] == b'\r' {
+                        buf.pop();
+                        total_read -= 1;
                     }
-
-                    // Copy the read byte to the destination buffer.
-                    buf[total_read] = tmpbuf[0];
-                    total_read += 1;
+                    break
                 }
 
-                Err(e) => return Err(RpcError::IoError(e.kind()).into()),
+                // Copy the read byte to the destination buffer.
+                buf[total_read] = tmpbuf[0];
+                total_read += 1;
             }
-        } else {
-            match reader.read(&mut tmpbuf).await {
-                Ok(0) if total_read == 0 => {
-                    return Err(
-                        RpcError::ConnectionClosed("Connection closed cleanly".to_string()).into()
-                    )
-                }
-                Ok(0) => break, // Finished reading
-                Ok(_) => {
-                    // When we reach '\n', pop a possible '\r' from the buffer and bail.
-                    if tmpbuf[0] == b'\n' {
-                        if buf[total_read - 1] == b'\r' {
-                            buf.pop();
-                            total_read -= 1;
-                        }
-                        break
-                    }
 
-                    // Copy the read byte to the destination buffer.
-                    buf[total_read] = tmpbuf[0];
-                    total_read += 1;
-                }
-
-                Err(e) => return Err(RpcError::IoError(e.kind()).into()),
-            }
+            Err(e) => return Err(e),
         }
     }
 
-    // Trunacate buffer to actual data size
+    // Truncate buffer to actual data size
     buf.truncate(total_read);
     Ok(total_read)
 }
@@ -105,21 +72,21 @@ pub(super) async fn read_from_stream(
 pub(super) async fn write_to_stream(
     writer: &mut WriteHalf<Box<dyn PtStream>>,
     object: &JsonResult,
-) -> Result<()> {
+) -> io::Result<()> {
     let object_str = match object {
-        JsonResult::Notification(v) => v.stringify()?,
-        JsonResult::Response(v) => v.stringify()?,
-        JsonResult::Error(v) => v.stringify()?,
-        JsonResult::Request(v) => v.stringify()?,
+        JsonResult::Notification(v) => v.stringify().unwrap(),
+        JsonResult::Response(v) => v.stringify().unwrap(),
+        JsonResult::Error(v) => v.stringify().unwrap(),
+        JsonResult::Request(v) => v.stringify().unwrap(),
         _ => unreachable!(),
     };
 
     // As we're a line-based protocol, we append CRLF to the end of the JSON string.
     for i in [object_str.as_bytes(), &[b'\r', b'\n']] {
-        if let Err(e) = writer.write_all(i).await {
-            return Err(e.into())
-        }
+        writer.write_all(i).await?
     }
+
+    writer.flush().await?;
 
     Ok(())
 }
