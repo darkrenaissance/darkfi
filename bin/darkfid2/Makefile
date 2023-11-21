@@ -4,7 +4,7 @@
 PREFIX = $(HOME)/.cargo
 
 # Cargo binary
-CARGO = cargo +nightly
+CARGO = cargo
 
 SRC = \
 	Cargo.toml \
