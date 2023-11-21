@@ -45,7 +45,7 @@ use crate::{
 const MEMORY: &str = "memory";
 
 /// Gas limit for a contract
-const GAS_LIMIT: u64 = 400_000_000;
+pub const GAS_LIMIT: u64 = 400_000_000;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum ContractSection {

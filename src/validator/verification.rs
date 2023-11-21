@@ -204,11 +204,10 @@ pub async fn verify_producer_transaction(
     let tx_hash = tx.hash()?;
     debug!(target: "validator::verification::verify_producer_transaction", "Validating proposal transaction {}", tx_hash);
 
-    // Producer transactions must contain a single, non-empty call 
+    // Producer transactions must contain a single, non-empty call
     if tx.calls.len() != 1 || tx.calls[0].data.is_empty() {
         return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
-
 
     // Verify call based on version
     let call = &tx.calls[0];
@@ -336,6 +335,21 @@ pub async fn verify_transaction(
 ) -> Result<()> {
     let tx_hash = tx.hash()?;
     debug!(target: "validator::verification::verify_transaction", "Validating transaction {}", tx_hash);
+
+    // Ensure that the number of transaction calls does not exceed the
+    // maximum limit.
+    // As of now, each opcode is worth 1 gas. Each tx call will contain at
+    // least one opcode. Therefore, if a transaction has a number of calls
+    // that exceeds the GAS_LIMIT (defined by the [`Runtime`]), it is
+    // guaranteed to run out gas and ultimately fail.
+    // Instead of wasting time executing all those calls, we can reject
+    // the transaction early.
+    // Note: this limit could be reduced as each call is likely to contain
+    // much more than one opcode.
+    if tx.calls.len() as u64 > GAS_LIMIT {
+        error!(target: "validator::verification::verify_transaction", "Transaction contains too many calls");
+        return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+    }
 
     // Table of public inputs used for ZK proof verification
     let mut zkp_table = vec![];
