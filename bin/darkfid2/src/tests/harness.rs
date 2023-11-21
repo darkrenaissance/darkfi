@@ -46,7 +46,7 @@ pub struct HarnessConfig {
     pub pow_threads: usize,
     pub pow_target: usize,
     pub pow_fixed_difficulty: Option<BigUint>,
-    pub testing_node: bool,
+    pub pos_testing_mode: bool,
     pub alice_initial: u64,
     pub bob_initial: u64,
 }
@@ -92,7 +92,7 @@ impl Harness {
             genesis_block,
             genesis_txs_total,
             vec![],
-            config.testing_node,
+            config.pos_testing_mode,
         );
 
         // Generate validators using pregenerated vks

@@ -39,7 +39,7 @@ async fn sync_pos_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
         pow_threads,
         pow_target,
         pow_fixed_difficulty: pow_fixed_difficulty.clone(),
-        testing_node: true,
+        pos_testing_mode: true,
         alice_initial: 1000,
         bob_initial: 500,
     };

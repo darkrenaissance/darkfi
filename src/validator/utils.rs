@@ -107,7 +107,7 @@ pub fn deploy_native_contracts(
 pub fn block_rank(
     block: &BlockInfo,
     previous_previous: &BlockInfo,
-    testing_mode: bool,
+    pos_testing_mode: bool,
 ) -> Result<u64> {
     // Genesis block has rank 0
     if block.header.height == 0 {
@@ -120,7 +120,7 @@ pub fn block_rank(
     let nonce = u64::from_be_bytes(nonce);
 
     // First 2 blocks or testing ones have rank equal to their nonce
-    if block.header.height < 3 || testing_mode {
+    if block.header.height < 3 || pos_testing_mode {
         return Ok(nonce)
     }
 

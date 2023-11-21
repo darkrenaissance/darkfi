@@ -85,8 +85,8 @@ pub struct ValidatorConfig {
     pub genesis_txs_total: u64,
     /// Whitelisted faucet pubkeys (testnet stuff)
     pub faucet_pubkeys: Vec<PublicKey>,
-    /// Flag to enable testing mode
-    pub testing_mode: bool,
+    /// Flag to enable PoS testing mode
+    pub pos_testing_mode: bool,
 }
 
 impl ValidatorConfig {
@@ -100,7 +100,7 @@ impl ValidatorConfig {
         genesis_block: BlockInfo,
         genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
-        testing_mode: bool,
+        pos_testing_mode: bool,
     ) -> Self {
         Self {
             time_keeper,
@@ -111,7 +111,7 @@ impl ValidatorConfig {
             genesis_block,
             genesis_txs_total,
             faucet_pubkeys,
-            testing_mode,
+            pos_testing_mode,
         }
     }
 }
@@ -127,14 +127,14 @@ pub struct Validator {
     pub consensus: Consensus,
     /// Flag signalling node has finished initial sync
     pub synced: bool,
-    /// Flag to enable testing mode
-    pub testing_mode: bool,
+    /// Flag to enable PoS testing mode
+    pub pos_testing_mode: bool,
 }
 
 impl Validator {
     pub async fn new(db: &sled::Db, config: ValidatorConfig) -> Result<ValidatorPtr> {
         info!(target: "validator::new", "Initializing Validator");
-        let testing_mode = config.testing_mode;
+        let pos_testing_mode = config.pos_testing_mode;
 
         info!(target: "validator::new", "Initializing Blockchain");
         let blockchain = Blockchain::new(db)?;
@@ -168,12 +168,12 @@ impl Validator {
             config.pow_threads,
             config.pow_target,
             config.pow_fixed_difficulty,
-            testing_mode,
+            pos_testing_mode,
         )?;
 
         // Create the actual state
         let state =
-            Arc::new(RwLock::new(Self { blockchain, consensus, synced: false, testing_mode }));
+            Arc::new(RwLock::new(Self { blockchain, consensus, synced: false, pos_testing_mode }));
         info!(target: "validator::new", "Finished initializing validator");
 
         Ok(state)
@@ -388,7 +388,7 @@ impl Validator {
                 block,
                 previous,
                 expected_reward,
-                self.testing_mode,
+                self.pos_testing_mode,
             )
             .await
             .is_err()
@@ -590,7 +590,7 @@ impl Validator {
                 block,
                 previous,
                 expected_reward,
-                self.testing_mode,
+                self.pos_testing_mode,
             )
             .await
             .is_err()

@@ -162,8 +162,8 @@ pub struct BlockchainNetwork {
     pub skip_sync: bool,
 
     #[structopt(long)]
-    /// Enable testing mode for local testing
-    pub testing_mode: bool,
+    /// Enable PoS testing mode for local testing
+    pub pos_testing_mode: bool,
 
     /// Syncing network settings
     #[structopt(flatten)]
@@ -220,8 +220,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         }
     };
 
-    if blockchain_config.testing_mode {
-        info!(target: "darkfid", "Node is configured to run in testing mode!");
+    if blockchain_config.pos_testing_mode {
+        info!(target: "darkfid", "Node is configured to run in PoS testing mode!");
     }
 
     // Parse the genesis block
@@ -255,7 +255,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         genesis_block,
         genesis_txs_total,
         vec![],
-        blockchain_config.testing_mode,
+        blockchain_config.pos_testing_mode,
     );
 
     // Initialize validator
