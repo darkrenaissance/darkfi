@@ -25,6 +25,11 @@ use wasmer::{FunctionEnvMut, WasmPtr};
 
 use crate::runtime::vm_runtime::{ContractSection, Env};
 
+/// Adds data to merkle tree. The tree, database connection, and new data to add is
+/// read from `ptr` at offset specified by `len`.
+/// Returns `0` on success; otherwise, returns a negative error-code corresponding to a
+/// [`ContractError`] (defined in the SDK).
+/// See also the method `merkle_add` in `sdk/src/merkle.rs`.
 pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
     let env = ctx.data();
     match env.contract_section {
