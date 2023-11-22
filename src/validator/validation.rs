@@ -48,7 +48,7 @@ pub fn validate_block(
 /// A PoW block is considered valid when the following rules apply:
 ///     1. Block version is equal to 1
 ///     2. Parent hash is equal to the hash of the previous block
-///     3. Block heigh increments previous block height by 1
+///     3. Block height increments previous block height by 1
 ///     4. Timestamp is valid based on PoWModule validation
 ///     5. Block hash is valid based on PoWModule validation
 ///     6. Slots vector contains a single valid slot
@@ -120,8 +120,8 @@ pub fn validate_pow_block(
 ///     4. Slot total tokens represent the total network tokens
 ///        up until this slot
 ///     5. Slot previous error value correspond to previous slot one
-///     6. Slot previous has only 1 producer(the miner)
-///     7. PID output for this slot is correct(zero)
+///     6. Slot previous has only 1 producer (the miner)
+///     7. PID output for this slot is correct (zero)
 ///     8. Slot last nonce is the expected one
 ///     9. Slot reward value is the expected one
 /// Additional validity rules can be applied.
@@ -271,7 +271,7 @@ pub fn validate_pos_block(
 ///     3. Forks follow previous block sequence
 ///     4. Slot total tokens represent the total network tokens
 ///        up until this slot
-///     5. Slot previous error value correspond to previous slot one
+///     5. Slot previous error value corresponds to previous slot
 ///     6. PID output for this slot is correct
 ///     7. Slot last nonce(eta) is the expected one
 ///     8. Slot reward value is the expected one
@@ -318,7 +318,7 @@ pub fn validate_pos_slot(
         return error
     }
 
-    // Check nonce(eta) is the expected one (7)
+    // Check nonce (eta) is the expected one (7)
     if &slot.last_nonce != last_nonce {
         return error
     }
