@@ -119,7 +119,7 @@ pub fn validate_pow_block(
 ///     3. Forks follow previous block sequence
 ///     4. Slot total tokens represent the total network tokens
 ///        up until this slot
-///     5. Slot previous error value correspond to previous slot one
+///     5. Slot's 'previous error' value matches the PID error of the previous slot
 ///     6. Slot previous has only 1 producer (the miner)
 ///     7. PID output for this slot is correct (zero)
 ///     8. Slot last nonce is the expected one
@@ -271,7 +271,7 @@ pub fn validate_pos_block(
 ///     3. Forks follow previous block sequence
 ///     4. Slot total tokens represent the total network tokens
 ///        up until this slot
-///     5. Slot previous error value corresponds to previous slot
+///     5. Slot's 'previous error' value matches the PID error of the previous slot
 ///     6. PID output for this slot is correct
 ///     7. Slot last nonce(eta) is the expected one
 ///     8. Slot reward value is the expected one
