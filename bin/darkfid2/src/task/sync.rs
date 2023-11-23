@@ -16,9 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{system::sleep, util::encoding::base64, Result};
+use darkfi::{system::sleep, util::encoding::base64};
 use darkfi_serial::serialize;
-use log::{debug, info, warn};
+use log::{debug, info, warn, error};
 use tinyjson::JsonValue;
 
 use crate::{
@@ -27,7 +27,7 @@ use crate::{
 };
 
 /// async task used for block syncing
-pub async fn sync_task(node: &Darkfid) -> Result<()> {
+pub async fn sync_task(node: &Darkfid) {
     info!(target: "darkfid::task::sync_task", "Starting blockchain sync...");
     // Block until at least node is connected to at least one peer
     loop {
@@ -44,7 +44,13 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
     // Communication setup
     let msg_subsystem = channel.message_subsystem();
     msg_subsystem.add_dispatch::<SyncResponse>().await;
-    let block_response_sub = channel.subscribe_msg::<SyncResponse>().await?;
+    let block_response_sub = match channel.subscribe_msg::<SyncResponse>().await {
+        Err(why) => {
+            // if there is Error::NetworkOperationFailed returns at dispatcher subscription attempt
+            panic!("darkiid2::task::sync_task channel subscribe_msg failed at dispatcher subscription: {:?}", why);
+        },
+        Ok(value) => value
+    };
     let notif_sub = node.subscribers.get("blocks").unwrap();
 
     // TODO: make this parallel and use a head selection method,
@@ -55,20 +61,36 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
     // Node sends the last known block hash of the canonical blockchain
     // and loops until the response is the same block (used to utilize
     // batch requests).
-    let mut last = node.validator.read().await.blockchain.last()?;
+    let mut last = match node.validator.read().await.blockchain.last() {
+        Err(why) => {
+            panic!("darkfid::task::sync_task attempting to retrive last block at empty BlockOrderStore sledTree: {:?}", why)
+        },
+        Ok(value) => value
+    };
     info!(target: "darkfid::task::sync_task", "Last known block: {:?} - {:?}", last.0, last.1);
     loop {
         // Node creates a `SyncRequest` and sends it
         let request = SyncRequest { slot: last.0, block: last.1 };
-        channel.send(&request).await?;
+        if let Err(why) = channel.send(&request).await {
+            error!(target: "darkfid::task::sync_task", "request send failure: {:}", why);
+            sleep(10).await;
+            continue;
+        }
 
         // TODO: add a timeout here to retry
         // Node waits for response
-        let response = block_response_sub.receive().await?;
+        let response = match block_response_sub.receive().await {
+            Err(why) => {
+                panic!("darkfid::task::sync_task block_response_sub receive error at recv_queue recv: {:?}", why)
+            },
+            Ok(value) => value
+        };
 
         // Verify and store retrieved blocks
         debug!(target: "darkfid::task::sync_task", "Processing received blocks");
-        node.validator.write().await.add_blocks(&response.blocks).await?;
+        if let Err(why) = node.validator.write().await.add_blocks(&response.blocks).await {
+            panic!("darkfid::task::sync_task block validation failed: {:?}", why)
+        };
 
         // Notify subscriber
         for block in &response.blocks {
@@ -76,7 +98,12 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
             notif_sub.notify(vec![encoded_block].into()).await;
         }
 
-        let last_received = node.validator.read().await.blockchain.last()?;
+        let last_received = match node.validator.read().await.blockchain.last() {
+            Err(why) => {
+                panic!("darkfid::task::sync_task attempting to retrive last block at empty BlockOrderStore sledTree: {:?}", why)
+            },
+            Ok(value) => value
+        };
         info!(target: "darkfid::task::sync_task", "Last received block: {:?} - {:?}", last_received.0, last_received.1);
 
         if last == last_received {
@@ -88,5 +115,4 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
 
     node.validator.write().await.synced = true;
     info!(target: "darkfid::task::sync_task", "Blockchain synced!");
-    Ok(())
 }

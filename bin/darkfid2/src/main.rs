@@ -329,7 +329,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     // Sync blockchain
     if !blockchain_config.skip_sync {
-        sync_task(&darkfid).await?;
+        sync_task(&darkfid).await;
     } else {
         darkfid.validator.write().await.synced = true;
     }
