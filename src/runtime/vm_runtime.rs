@@ -347,6 +347,11 @@ impl Runtime {
         debug!(target: "runtime::vm_runtime", "Getting {} function", section.name());
         let entrypoint = self.instance.exports.get_function(section.name())?;
 
+        // Call the entrypoint. On success, `call` returns a WASM [`Value`]. (The
+        // value may be empty.) This value functions similarly to a UNIX exit code.
+        // The following section is intended to unwrap the exit code and handle fatal
+        // errors in the Wasmer runtime. The value itself and the return data of the
+        // contract are processed later.
         debug!(target: "runtime::vm_runtime", "Executing wasm");
         let ret = match entrypoint.call(&mut self.store, &[Value::I32(0_i32)]) {
             Ok(retvals) => {
@@ -365,6 +370,7 @@ impl Runtime {
 
         debug!(target: "runtime::vm_runtime", "wasm executed successfully");
 
+        // Move the contract's return data into `retdata`.
         let env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = ContractSection::Null;
         let retdata = match env_mut.contract_return_data.take() {
@@ -372,9 +378,8 @@ impl Runtime {
             None => Vec::new(),
         };
 
-        // Determine the return value of the wasm function. At this stage,
-        // it is assumed that the contract completed successful given
-        // that validation has been performed above.
+        // Determine the return value of the contract call. If ret is empty,
+        // assumed that the contract call was successful.
         let retval: i64 = match ret.len() {
             0 => {
                 // Return a success value if there is no return value from
