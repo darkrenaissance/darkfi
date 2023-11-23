@@ -15,6 +15,9 @@ engine that makes everything run.
 
 ### Using a venv
 
+Dnet requires Python 3.12.0. Make sure Python is installed and on the
+latest version.
+
 Depending on your setup you may need to install a virtual environment
 for Python. Do so as follows:
 
