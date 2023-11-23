@@ -20,8 +20,6 @@ use darkfi::{system::sleep, util::encoding::base64};
 use darkfi_serial::serialize;
 use log::{debug, info, warn, error};
 use tinyjson::JsonValue;
-use std::time::Duration;
-use async_std::future;
 
 use crate::{
     proto::{SyncRequest, SyncResponse},
@@ -76,34 +74,21 @@ pub async fn sync_task(node: &Darkfid) {
         if let Err(why) = channel.send(&request).await {
             error!(target: "darkfid::task::sync_task", "request send failure: {:}", why);
             sleep(10).await;
-            // try to resend
             continue;
         }
 
-
-        let mut counter = 0;
-        let mut response_result;
+        // TODO: add a timeout here to retry
         // Node waits for response
-        loop {
-            let timeout_response_result = future::timeout(Duration::from_millis(10), block_response_sub.receive()).await;
-            response_result = timeout_response_result.unwrap();
-            if response_result.is_ok() {
-                break
-            } else {
-                sleep(10).await;
-                counter +=1;
-            }
-            if counter == 10 {
-                panic!("darkfid::task::sync_task block_response_sub receive error at recv_queue recv")
-            }
+        let response = match block_response_sub.receive().await {
+            Err(why) => {
+                panic!("darkfid::task::sync_task block_response_sub receive error at recv_queue recv: {:?}", why)
+            },
+            Ok(value) => value
         };
-        // safe to unwrap at this point, if returned error after retries it should had  paniced.
-        let response = response_result.unwrap();
 
         // Verify and store retrieved blocks
         debug!(target: "darkfid::task::sync_task", "Processing received blocks");
         if let Err(why) = node.validator.write().await.add_blocks(&response.blocks).await {
-            // nothing to do if the requested block verification fails.
             panic!("darkfid::task::sync_task block validation failed: {:?}", why)
         };
 
