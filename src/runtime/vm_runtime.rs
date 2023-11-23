@@ -318,9 +318,9 @@ impl Runtime {
         Ok(())
     }
 
-    /// Call a contract method using a supplied payload. Returns a Vector of bytes
-    /// corresponding to the result data of the call. For calls that do not return
-    /// any data, an empty Vector is returned.
+    /// Call a contract method defined by a [`ContractSection`] using a supplied
+    /// payload. Returns a Vector of bytes corresponding to the result data of the call.
+    /// For calls that do not return any data, an empty Vector is returned.
     fn call(&mut self, section: ContractSection, payload: &[u8]) -> Result<Vec<u8>> {
         debug!(target: "runtime::vm_runtime", "Calling {} method", section.name());
 
@@ -378,7 +378,7 @@ impl Runtime {
             None => Vec::new(),
         };
 
-        // Determine the return value of the contract call. If ret is empty,
+        // Determine the return value of the contract call. If `ret` is empty,
         // assumed that the contract call was successful.
         let retval: i64 = match ret.len() {
             0 => {
