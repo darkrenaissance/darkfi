@@ -118,11 +118,11 @@ _Tasks are in no particular order. Use common sense._
 
 |  Task #  |  Assignee  |
 |----------|------------|
-| **1.**   |            |
+| **1.**   | `upgrayedd`|
 | **2.**   | `brawndo`  |
 | **3.**   |            |
-| **4.**   |            |
-| **5.**   |            |
+| **4.**   | `upgrayedd`|
+| **5.**   | `upgrayedd`|
 | **6.**   |            |
 | **7.**   |            |
 | **8.**   | `brawndo`  |
