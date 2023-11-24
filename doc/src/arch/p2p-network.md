@@ -114,3 +114,20 @@ Apps should be able to configure:
 * Reject hosts, for example based off current overall resource utilization or the host addr.
 * Accounting abstraction for scoring connections.
 
+## Swarming
+
+TODO: research how this is handled on bittorrent. How do we lookup nodes in the swarm? Does the network maintain routing tables?
+Is this done through a DHT like Kademlia?
+
+Swarming means more efficient downloading of data specific to a certain subset. A new p2p instance is spawned with a
+clean hosts table. This subnetwork is self contained.
+
+An application is for example DarkIRC where everyday a new event graph is spawned. With swarming, you would connect to nodes
+maintaining this particular day's event graph.
+
+The feature allows overlaying multiple different features in a single network such as tau, darkirc and so on. New networks require
+nodes to bootstrap, but with swarming, we reduce all these networks to a single bootstrap. The overlay network maintaining the
+routing tables is a kind of decentralized lilith which keeps track of all the swarms.
+
+Possibly a post-mainnet feature depending on the scale of architectural changes or new code required in the net submodule.
+
