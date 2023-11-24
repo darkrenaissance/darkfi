@@ -487,6 +487,9 @@ pub enum Error {
     #[error("Event is not found in tree: {0}")]
     EventNotFound(String),
 
+    #[error("Event is invalid")]
+    EventIsInvalid,
+
     // ====================
     // Miscellaneous errors
     // ====================

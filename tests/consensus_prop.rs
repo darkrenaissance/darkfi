@@ -29,7 +29,7 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use halo2_proofs::dev::MockProver;
-use log::info;
+use log::{info, warn};
 use rand::rngs::OsRng;
 
 pub const SECRET_KEY_PREFIX: pallas::Base = pallas::Base::from_raw([4, 0, 0, 0]);
@@ -46,14 +46,21 @@ pub const HEADSTART: pallas::Base = pallas::Base::from_raw([
 
 #[test]
 fn consensus_prop() -> Result<()> {
-    simplelog::TermLogger::init(
+    let mut cfg = simplelog::ConfigBuilder::new();
+    // We check this error so we can execute same file tests in parallel,
+    // otherwise second one fails to init logger here.
+    if simplelog::TermLogger::init(
         simplelog::LevelFilter::Info,
+        //simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
-        simplelog::ConfigBuilder::new().build(),
+        cfg.build(),
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
     )
-    .unwrap();
+    .is_err()
+    {
+        warn!(target: "test_harness", "Logger already initialized");
+    }
 
     let input_serial = pallas::Base::from(pallas::Base::from(10));
     //let input_serial = pallas::Base::from(pallas::Base::from(2));

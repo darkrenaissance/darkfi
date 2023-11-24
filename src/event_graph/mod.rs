@@ -18,7 +18,7 @@
 
 use std::{
     cmp::Ordering,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     sync::Arc,
 };
 
@@ -26,6 +26,7 @@ use async_recursion::async_recursion;
 use darkfi_serial::{deserialize_async, serialize_async};
 use log::{debug, error, info};
 use num_bigint::BigUint;
+use sled_overlay::SledTreeOverlay;
 use smol::{
     lock::{OnceCell, RwLock},
     Executor,
@@ -48,7 +49,7 @@ use proto::{EventRep, EventReq, TipRep, TipReq, REPLY_TIMEOUT};
 
 /// Utility functions
 mod util;
-use util::{days_since, next_rotation_timestamp, DAY};
+use util::{generate_genesis, next_rotation_timestamp};
 
 #[cfg(test)]
 mod tests;
@@ -76,7 +77,7 @@ pub struct EventGraph {
     /// Sled tree containing the DAG
     dag: sled::Tree,
     /// The set of unreferenced DAG tips
-    unreferenced_tips: RwLock<HashSet<blake3::Hash>>,
+    unreferenced_tips: RwLock<BTreeMap<u64, HashSet<blake3::Hash>>>,
     /// A `HashSet` containg event IDs and their 1-level parents.
     /// These come from the events we've sent out using `EventPut`.
     /// They are used with `EventReq` to decide if we should reply
@@ -88,7 +89,12 @@ pub struct EventGraph {
     /// Event subscriber, this notifies whenever an event is
     /// inserted into the DAG
     pub event_sub: SubscriberPtr<Event>,
+    /// Current genesis event
+    current_genesis: RwLock<Event>,
+    /// Currently configured DAG rotation, in days
     days_rotation: u64,
+    /// Flag signalling DAG has finished initial sync
+    synced: RwLock<bool>,
 }
 
 impl EventGraph {
@@ -102,12 +108,12 @@ impl EventGraph {
         ex: Arc<Executor<'_>>,
     ) -> Result<EventGraphPtr> {
         let dag = sled_db.open_tree(dag_tree_name)?;
-        let unreferenced_tips = RwLock::new(HashSet::new());
+        let unreferenced_tips = RwLock::new(BTreeMap::new());
         let broadcasted_ids = RwLock::new(HashSet::new());
         let event_sub = Subscriber::new();
 
         // Create the current genesis event based on the `days_rotation`
-        let current_genesis = Self::generate_genesis(days_rotation);
+        let current_genesis = generate_genesis(days_rotation);
         let self_ = Arc::new(Self {
             p2p,
             dag: dag.clone(),
@@ -115,7 +121,9 @@ impl EventGraph {
             broadcasted_ids,
             prune_task: OnceCell::new(),
             event_sub,
+            current_genesis: RwLock::new(current_genesis.clone()),
             days_rotation,
+            synced: RwLock::new(false),
         });
 
         // Check if we have it in our DAG.
@@ -159,29 +167,11 @@ impl EventGraph {
         sled_db.flush_async().await.unwrap();
     }
 
-    /// Generate a deterministic genesis event corresponding to the DAG's configuration.
-    fn generate_genesis(days_rotation: u64) -> Event {
-        // Days rotation is u64 except zero
-        let genesis_days_rotation = if days_rotation == 0 { 1 } else { days_rotation };
-
-        // First check how many days passed since initial genesis.
-        let days_passed = days_since(INITIAL_GENESIS);
-
-        // Calculate the number of days_rotation intervals since INITIAL_GENESIS
-        let rotations_since_genesis = days_passed / genesis_days_rotation;
-
-        // Calculate the timestamp of the most recent event
-        let timestamp =
-            INITIAL_GENESIS + (rotations_since_genesis * genesis_days_rotation * DAY as u64);
-
-        Event { timestamp, content: GENESIS_CONTENTS.to_vec(), parents: [NULL_ID; N_EVENT_PARENTS] }
-    }
-
     /// Sync the DAG from connected peers
     pub async fn dag_sync(&self) -> Result<()> {
         // We do an optimistic sync where we ask all our connected peers for
-        // the DAG tips (unreferenced events)  and then we accept the ones we
-        // see the most times.
+        // the latest layer DAG tips (unreferenced events) and then we accept
+        // the ones we see the most times.
         // * Compare received tips with local ones, identify which we are missing.
         // * Request these from peers
         // * Recursively request these backward
@@ -202,8 +192,8 @@ impl EventGraph {
             "[EVENTGRAPH] Syncing DAG from {} peers...", communicated_peers,
         );
 
-        // Here we keep track of the tips and how many time we've seen them.
-        let mut tips: HashMap<blake3::Hash, usize> = HashMap::new();
+        // Here we keep track of the tips, their layers and how many time we've seen them.
+        let mut tips: HashMap<blake3::Hash, (u64, usize)> = HashMap::new();
 
         // Let's first ask all of our peers for their tips and collect them
         // in our hashmap above.
@@ -246,11 +236,13 @@ impl EventGraph {
             let peer_tips = &peer_tips.0;
 
             // Note down the seen tips
-            for tip in peer_tips {
-                if let Some(seen_tip) = tips.get_mut(tip) {
-                    *seen_tip += 1;
-                } else {
-                    tips.insert(*tip, 1);
+            for (layer, layer_tips) in peer_tips {
+                for tip in layer_tips {
+                    if let Some(seen_tip) = tips.get_mut(tip) {
+                        seen_tip.1 += 1;
+                    } else {
+                        tips.insert(*tip, (*layer, 1));
+                    }
                 }
             }
         }
@@ -264,24 +256,25 @@ impl EventGraph {
             return Err(Error::DagSyncFailed)
         }
 
-        // We know the number of peers we've communicated with.
-        // Arbitrarily, let's not consider events we only got once.
-        // TODO: This should be more sensible depending on the peer number.
+        // We know the number of peers we've communicated with,
+        // so we will consider events we saw at more that 2/3 of
+        // of those peers.
+        let consideration_threshold = communicated_peers * 2 / 3;
         let mut considered_tips = HashSet::new();
-        for (tip, amount) in tips.iter() {
-            if amount > &1 {
+        for (tip, (_, amount)) in tips.iter() {
+            if amount > &consideration_threshold {
                 considered_tips.insert(*tip);
             }
         }
         drop(tips);
 
         // Now begin fetching the events backwards.
-        let mut missing_parents = vec![];
+        let mut missing_parents = HashSet::new();
         for tip in considered_tips.iter() {
             assert!(tip != &NULL_ID);
 
             if !self.dag.contains_key(tip.as_bytes()).unwrap() {
-                missing_parents.push(*tip);
+                missing_parents.insert(*tip);
             }
         }
 
@@ -291,7 +284,8 @@ impl EventGraph {
         }
 
         info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] Fetching events");
-        let mut received_events = vec![];
+        let mut received_events: BTreeMap<u64, Vec<Event>> = BTreeMap::new();
+        let mut received_events_hashes = HashSet::new();
         while !missing_parents.is_empty() {
             for parent_id in missing_parents.clone().iter() {
                 let mut found_event = false;
@@ -363,9 +357,15 @@ impl EventGraph {
                         "Got correct parent event {}", parent_id,
                     );
 
-                    received_events.push(parent.clone());
-                    let pos = missing_parents.iter().position(|id| id == &parent.id()).unwrap();
-                    missing_parents.remove(pos);
+                    if let Some(layer_events) = received_events.get_mut(&parent.layer) {
+                        layer_events.push(parent.clone());
+                    } else {
+                        let layer_events = vec![parent.clone()];
+                        received_events.insert(parent.layer, layer_events);
+                    }
+                    received_events_hashes.insert(*parent_id);
+
+                    missing_parents.remove(parent_id);
                     found_event = true;
 
                     // See if we have the upper parents
@@ -374,12 +374,15 @@ impl EventGraph {
                             continue
                         }
 
-                        if !self.dag.contains_key(upper_parent.as_bytes()).unwrap() {
+                        if !missing_parents.contains(upper_parent) &&
+                            !received_events_hashes.contains(upper_parent) &&
+                            !self.dag.contains_key(upper_parent.as_bytes()).unwrap()
+                        {
                             debug!(
                                 target: "event_graph::dag_sync()",
                                 "Found upper missing parent event{}", upper_parent,
                             );
-                            missing_parents.push(*upper_parent);
+                            missing_parents.insert(*upper_parent);
                         }
                     }
 
@@ -398,10 +401,15 @@ impl EventGraph {
 
         // At this point we should've got all the events.
         // We should add them to the DAG.
-        // TODO: FIXME: Also validate these events.
-        // TODO: FIXME: This insert should also be atomic, dag_insert might need a rewrite
-        let received_events_rev: Vec<Event> = received_events.iter().rev().cloned().collect();
-        self.dag_insert(&received_events_rev).await.unwrap();
+        let mut events = vec![];
+        for (_, tips) in received_events {
+            for tip in tips {
+                events.push(tip);
+            }
+        }
+        self.dag_insert(&events).await?;
+
+        *self.synced.write().await = true;
 
         info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] DAG synced successfully!");
         Ok(())
@@ -411,12 +419,14 @@ impl EventGraph {
     async fn dag_prune(&self, genesis_event: Event) -> Result<()> {
         debug!(target: "event_graph::dag_prune()", "Pruning DAG...");
 
-        // Acquire exclusive locks to unreferenced_tips and broadcasted_ids while
-        // this operation is happening. We do this to ensure that during the pruning
-        // operation, no other operations are able to access the intermediate state
-        // which could lead to producing the wrong state after pruning.
+        // Acquire exclusive locks to unreferenced_tips, broadcasted_ids and
+        // current_genesis while this operation is happening. We do this to
+        // ensure that during the pruning operation, no other operations are
+        // able to access the intermediate state which could lead to producing
+        // the wrong state after pruning.
         let mut unreferenced_tips = self.unreferenced_tips.write().await;
         let mut broadcasted_ids = self.broadcasted_ids.write().await;
+        let mut current_genesis = self.current_genesis.write().await;
 
         // Atomically clear the DAG and write the new genesis event.
         let mut batch = sled::Batch::default();
@@ -431,10 +441,13 @@ impl EventGraph {
         }
 
         // Clear unreferenced tips and bcast ids
-        *unreferenced_tips = HashSet::from([genesis_event.id()]);
+        *unreferenced_tips = BTreeMap::new();
+        unreferenced_tips.insert(0, HashSet::from([genesis_event.id()]));
+        *current_genesis = genesis_event;
         *broadcasted_ids = HashSet::new();
         drop(unreferenced_tips);
         drop(broadcasted_ids);
+        drop(current_genesis);
 
         debug!(target: "event_graph::dag_prune()", "DAG pruned successfully");
         Ok(())
@@ -457,6 +470,7 @@ impl EventGraph {
                 timestamp: next_rotation,
                 content: GENESIS_CONTENTS.to_vec(),
                 parents: [NULL_ID; N_EVENT_PARENTS],
+                layer: 0,
             };
 
             // Sleep until it's time to rotate.
@@ -472,6 +486,9 @@ impl EventGraph {
     }
 
     /// Atomically insert given events into the DAG and return the event IDs.
+    /// All provided events must be valid. An overlay is used over the DAG tree,
+    /// temporary writting each event in order. After all events have been
+    /// validated and inserted successfully, we write the overlay to sled.
     /// This will append the new events into the unreferenced tips set, and
     /// remove the events' parents from it. It will also append the events'
     /// level-1 parents to the `broadcasted_ids` set, so the P2P protocol
@@ -479,6 +496,11 @@ impl EventGraph {
     /// TODO: The `broadcasted_ids` set should periodically be pruned, when
     /// some sensible time has passed after broadcasting the event.
     pub async fn dag_insert(&self, events: &[Event]) -> Result<Vec<blake3::Hash>> {
+        // Sanity check
+        if events.is_empty() {
+            return Ok(vec![])
+        }
+
         // Acquire exclusive locks to `unreferenced_tips and broadcasted_ids`
         let mut unreferenced_tips = self.unreferenced_tips.write().await;
         let mut broadcasted_ids = self.broadcasted_ids.write().await;
@@ -486,17 +508,51 @@ impl EventGraph {
         // Here we keep the IDs to return
         let mut ids = Vec::with_capacity(events.len());
 
-        // Create an atomic batch
-        let mut batch = sled::Batch::default();
+        // Create an overlay over the DAG tree
+        let mut overlay = SledTreeOverlay::new(&self.dag);
 
-        // Iterate over given events
+        // Grab genesis timestamp
+        let genesis_timestamp = self.current_genesis.read().await.timestamp;
+
+        // Iterate over given events to validate them and
+        // write them to the overlay
         for event in events {
             let event_id = event.id();
             debug!(
                 target: "event_graph::dag_insert()",
                 "Inserting event {} into the DAG", event_id,
             );
+
+            if !event
+                .validate(&self.dag, genesis_timestamp, self.days_rotation, Some(&overlay))
+                .await?
+            {
+                error!(target: "event_graph::dag_insert()", "Event {} is invalid!", event_id);
+                return Err(Error::EventIsInvalid)
+            }
+
             let event_se = serialize_async(event).await;
+
+            // Add the event to the overlay
+            overlay.insert(event_id.as_bytes(), &event_se)?;
+
+            // Note down the event ID to return
+            ids.push(event_id);
+        }
+
+        // Aggregate changes into a single batch
+        let batch = overlay.aggregate().unwrap();
+
+        // Atomically apply the batch.
+        // Panic if something is corrupted.
+        if let Err(e) = self.dag.apply_batch(batch) {
+            panic!("Failed applying dag_insert batch to sled: {}", e);
+        }
+
+        // Iterate over given events to update references and
+        // send out notifications about them
+        for event in events {
+            let event_id = event.id();
 
             // Update the unreferenced DAG tips set
             debug!(
@@ -509,31 +565,36 @@ impl EventGraph {
                         target: "event_graph::dag_insert()",
                         "Removing {} from unreferenced_tips", parent_id,
                     );
-                    unreferenced_tips.remove(parent_id);
+
+                    // Iterate over unreferenced tips in previous layers
+                    // and remove the parent
+                    // NOTE: this might be too exhaustive, but the
+                    // assumption is that previous layers unreferenced
+                    // tips will be few.
+                    for (layer, tips) in unreferenced_tips.iter_mut() {
+                        if layer >= &event.layer {
+                            break
+                        }
+                        tips.remove(parent_id);
+                    }
                     broadcasted_ids.insert(*parent_id);
                 }
             }
+            unreferenced_tips.retain(|_, tips| !tips.is_empty());
             debug!(
                 target: "event_graph::dag_insert()",
                 "Adding {} to unreferenced tips", event_id,
             );
-            unreferenced_tips.insert(event_id);
 
-            // Add the event to the atomic batch
-            batch.insert(event_id.as_bytes(), event_se);
+            if let Some(layer_tips) = unreferenced_tips.get_mut(&event.layer) {
+                layer_tips.insert(event_id);
+            } else {
+                let mut layer_tips = HashSet::new();
+                layer_tips.insert(event_id);
+                unreferenced_tips.insert(event.layer, layer_tips);
+            }
 
-            // Note down the event ID to return
-            ids.push(event_id);
-        }
-
-        // Atomically apply the batch.
-        // Panic if something is corrupted.
-        if let Err(e) = self.dag.apply_batch(batch) {
-            panic!("Failed applying dag_insert batch to sled: {}", e);
-        }
-
-        // Send out notifications about the new events
-        for event in events {
+            // Send out notifications about the new event
             self.event_sub.notify(event.clone()).await;
         }
 
@@ -552,8 +613,33 @@ impl EventGraph {
         Ok(Some(event))
     }
 
-    /// Find the unreferenced tips in the current DAG state.
-    async fn find_unreferenced_tips(&self) -> HashSet<blake3::Hash> {
+    /// Get next layer along with its N_EVENT_PARENTS from the unreferenced
+    /// tips of the DAG. Since tips are mapped by their layer, we go backwards
+    /// until we fill the vector, ensuring we always use latest layers tips as
+    /// parents.
+    async fn get_next_layer_with_parents(&self) -> (u64, [blake3::Hash; N_EVENT_PARENTS]) {
+        let unreferenced_tips = self.unreferenced_tips.read().await;
+
+        let mut parents = [NULL_ID; N_EVENT_PARENTS];
+        let mut index = 0;
+        'outer: for (_, tips) in unreferenced_tips.iter().rev() {
+            for tip in tips.iter() {
+                parents[index] = *tip;
+                index += 1;
+                if index >= N_EVENT_PARENTS {
+                    break 'outer
+                }
+            }
+        }
+
+        let next_layer = unreferenced_tips.last_key_value().unwrap().0 + 1;
+
+        assert!(parents.iter().any(|x| x != &NULL_ID));
+        (next_layer, parents)
+    }
+
+    /// Find the unreferenced tips in the current DAG state, mapped by their layers.
+    async fn find_unreferenced_tips(&self) -> BTreeMap<u64, HashSet<blake3::Hash>> {
         // First get all the event IDs
         let mut tips = HashSet::new();
         for iter_elem in self.dag.iter() {
@@ -562,6 +648,7 @@ impl EventGraph {
             tips.insert(id);
         }
 
+        // Iterate again to find unreferenced IDs
         for iter_elem in self.dag.iter() {
             let (_, event) = iter_elem.unwrap();
             let event: Event = deserialize_async(&event).await.unwrap();
@@ -570,26 +657,26 @@ impl EventGraph {
             }
         }
 
-        tips
-    }
-
-    /// Get the current set of unreferenced tips in the DAG.
-    async fn get_unreferenced_tips(&self) -> [blake3::Hash; N_EVENT_PARENTS] {
-        // TODO: return vec of all instead of N_EVENT_PARENTS
-        let unreferenced_tips = self.unreferenced_tips.read().await;
-
-        let mut tips = [NULL_ID; N_EVENT_PARENTS];
-        for (i, tip) in unreferenced_tips.iter().take(N_EVENT_PARENTS).enumerate() {
-            tips[i] = *tip
+        // Build the layers map
+        let mut map: BTreeMap<u64, HashSet<blake3::Hash>> = BTreeMap::new();
+        for tip in tips {
+            let bytes = self.dag.get(tip.as_bytes()).unwrap().unwrap();
+            let event: Event = deserialize_async(&bytes).await.unwrap();
+            if let Some(layer_tips) = map.get_mut(&event.layer) {
+                layer_tips.insert(tip);
+            } else {
+                let mut layer_tips = HashSet::new();
+                layer_tips.insert(tip);
+                map.insert(event.layer, layer_tips);
+            }
         }
 
-        assert!(tips.iter().any(|x| x != &NULL_ID));
-        tips
+        map
     }
 
     /// Internal function used for DAG sorting.
     async fn get_unreferenced_tips_sorted(&self) -> [blake3::Hash; N_EVENT_PARENTS] {
-        let tips = self.get_unreferenced_tips().await;
+        let (_, tips) = self.get_next_layer_with_parents().await;
 
         // Convert the hash to BigUint for sorting
         let mut sorted: Vec<_> =
