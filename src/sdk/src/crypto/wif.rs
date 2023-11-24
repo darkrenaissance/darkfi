@@ -108,3 +108,21 @@ impl TryInto<SecretKey> for String {
         Ok(sk.unwrap())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::crypto::{wif::WIF, SecretKey};
+    #[test]
+    fn test_sk_towif() {
+        let sk_bytes: [u8; 32] = [0; 32];
+        let sk_str = std::str::from_utf8(&sk_bytes).unwrap();
+        let sk = SecretKey::from_bytes(sk_bytes).unwrap();
+        let wif = WIF::from(sk);
+
+        let sk_res = match wif.try_into() {
+            Err(why) => panic!("{:?}", why),
+            Ok(value) => value,
+        };
+        assert!(sk == sk_res);
+    }
+}
