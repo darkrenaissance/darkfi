@@ -35,3 +35,4 @@
 /vanityaddr
 
 *.rusty-tags.emacs
+/tags
