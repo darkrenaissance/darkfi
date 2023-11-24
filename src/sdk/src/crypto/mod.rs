@@ -77,6 +77,10 @@ pub mod pasta_prelude {
     };
 }
 
+/// Wallet Import Format
+pub mod wif;
+pub use wif::WIF;
+
 #[macro_export]
 macro_rules! fp_from_bs58 {
     ($ty:ident) => {
