@@ -203,6 +203,7 @@ event-graph = [
     "num-bigint",
     "rand",
     "sled",
+    "sled-overlay",
     "smol",
     "tinyjson",
 

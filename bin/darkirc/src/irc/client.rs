@@ -359,11 +359,8 @@ impl Client {
             self.server.try_encrypt(&mut privmsg).await;
 
             // Build a DAG event and return it.
-            let event = Event::new(
-                serialize_async(&privmsg).await,
-                self.server.darkirc.event_graph.clone(),
-            )
-            .await;
+            let event =
+                Event::new(serialize_async(&privmsg).await, &self.server.darkirc.event_graph).await;
 
             return Ok(Some(event))
         }

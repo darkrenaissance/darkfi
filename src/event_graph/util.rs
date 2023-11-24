@@ -18,6 +18,8 @@
 
 use std::time::UNIX_EPOCH;
 
+use crate::event_graph::{Event, GENESIS_CONTENTS, INITIAL_GENESIS, NULL_ID, N_EVENT_PARENTS};
+
 /// Seconds in a day
 pub(super) const DAY: i64 = 86400;
 
@@ -87,6 +89,29 @@ pub(super) fn seconds_until_next_rotation(next_rotation: u64) -> u64 {
         panic!("Next rotation timestamp is in the past");
     }
     next_rotation - now
+}
+
+/// Generate a deterministic genesis event corresponding to the DAG's configuration.
+pub(super) fn generate_genesis(days_rotation: u64) -> Event {
+    // Days rotation is u64 except zero
+    let genesis_days_rotation = if days_rotation == 0 { 1 } else { days_rotation };
+
+    // First check how many days passed since initial genesis.
+    let days_passed = days_since(INITIAL_GENESIS);
+
+    // Calculate the number of days_rotation intervals since INITIAL_GENESIS
+    let rotations_since_genesis = days_passed / genesis_days_rotation;
+
+    // Calculate the timestamp of the most recent event
+    let timestamp =
+        INITIAL_GENESIS + (rotations_since_genesis * genesis_days_rotation * DAY as u64);
+
+    Event {
+        timestamp,
+        content: GENESIS_CONTENTS.to_vec(),
+        parents: [NULL_ID; N_EVENT_PARENTS],
+        layer: 0,
+    }
 }
 
 #[cfg(test)]

@@ -170,7 +170,7 @@ async fn start_sync_loop(
                     // Build a DAG event and return it.
                     let event = Event::new(
                         serialize_async(&encrypted_task).await,
-                        event_graph.clone(),
+                        &event_graph,
                     )
                     .await;
                     // Update the last sent event.
