@@ -16,6 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use std::convert::TryInto;
+
+use pasta_curves::group::ff::PrimeField;
+use sha2::{Digest, Sha256};
+
 use crate::{
     crypto::{
         constants::{MAINNET_ADDRS_PREFIX, TESTNET_ADDRS_PREFIX},
@@ -23,27 +28,33 @@ use crate::{
     },
     error::ContractError,
 };
-use bs58;
-use pasta_curves::group::ff::PrimeField;
-use sha256;
-use std::convert::TryInto;
+
+fn double_sha256(input: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(input);
+    let first = hasher.finalize();
+
+    let mut hasher = Sha256::new();
+    hasher.update(first);
+    hasher.finalize().into()
+}
 
 #[derive(Clone, Debug)]
-pub struct WIF(String);
+pub struct Wif(String);
 
-/// wallet import format https://en.bitcoin.it/wiki/Wallet_import_format
-/// encodes pallas-curve base private key to base58 string.
-impl WIF {
+/// Wallet import format <https://en.bitcoin.it/wiki/Wallet_import_format>
+/// Encodes pallas-curve base field secret key to base58 string.
+impl Wif {
     /// Get inner wrapped object
     pub fn inner(&self) -> String {
         self.0.clone()
     }
 }
 
-/// convert `SecretKey` to wallet import format `WIF`
-impl From<SecretKey> for WIF {
+/// Convert `SecretKey` to wallet import format `Wif`
+impl From<&SecretKey> for Wif {
     /// Initialize WIF from `SecretKey`
-    fn from(secretkey: SecretKey) -> Self {
+    fn from(secretkey: &SecretKey) -> Self {
         // address to bytes
         let address: [u8; 32] = secretkey.inner().to_repr();
         // address prefix
@@ -58,23 +69,19 @@ impl From<SecretKey> for WIF {
         extended_addrs_prefix.copy_from_slice(&prefix);
         extended_addrs_main.copy_from_slice(&address);
         // extended address checksum
-        let checksum: [u8; 4] = {
-            let first_digest: String = sha256::digest_bytes(&extended_addrs);
-            let second_digest: &[u8] = &sha256::digest(first_digest).into_bytes();
-            [second_digest[0], second_digest[1], second_digest[2], second_digest[3]]
-        };
+        let checksum: [u8; 4] = double_sha256(&extended_addrs)[0..4].try_into().unwrap();
         let mut full_address: [u8; 37] = [0; 37];
         let (full_address_left, full_address_right) =
             full_address.split_at_mut(extended_addrs.len());
         full_address_left.copy_from_slice(&extended_addrs);
         full_address_right.copy_from_slice(&checksum);
-        WIF(bs58::encode(full_address).into_string())
+        Wif(bs58::encode(full_address).into_string())
     }
 }
 
 /// convert wallet import format `WIF` to `SecretKey`
-impl From<WIF> for SecretKey {
-    fn from(wif: WIF) -> Self {
+impl From<Wif> for SecretKey {
+    fn from(wif: Wif) -> Self {
         let full_address: Vec<u8> = bs58::decode(wif.0).into_vec().unwrap();
         // extract prefix
         // TODO set secret key type mainnet/testnet
@@ -88,13 +95,9 @@ impl From<WIF> for SecretKey {
         let wif_checksum: [u8; 4] =
             full_address[33..37].try_into().expect("slice with incorrect length");
         // validate checksum
-        let checksum: [u8; 4] = {
-            let first_digest: String = sha256::digest_bytes(&extended_addrs);
-            let second_digest: &[u8] = &sha256::digest(first_digest).into_bytes();
-            [second_digest[0], second_digest[1], second_digest[2], second_digest[3]]
-        };
+        let checksum: [u8; 4] = double_sha256(&extended_addrs)[0..4].try_into().unwrap();
         assert!(wif_checksum == checksum);
-        let sk: Result<SecretKey, ContractError> = SecretKey::from_bytes(addrs).into();
+        let sk: Result<SecretKey, ContractError> = SecretKey::from_bytes(addrs);
         sk.unwrap()
     }
 }
@@ -116,26 +119,23 @@ impl TryInto<SecretKey> for String {
         let wif_checksum: [u8; 4] =
             full_address[33..37].try_into().expect("slice with incorrect length");
         // validate checksum
-        let checksum: [u8; 4] = {
-            let first_digest: String = sha256::digest_bytes(&extended_addrs);
-            let second_digest: &[u8] = &sha256::digest(first_digest).into_bytes();
-            [second_digest[0], second_digest[1], second_digest[2], second_digest[3]]
-        };
+        let checksum: [u8; 4] = double_sha256(&extended_addrs)[0..4].try_into().unwrap();
         assert!(wif_checksum == checksum);
-        let sk: Result<SecretKey, ContractError> = SecretKey::from_bytes(addrs).into();
+        let sk: Result<SecretKey, ContractError> = SecretKey::from_bytes(addrs);
         Ok(sk.unwrap())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::crypto::{wif::WIF, SecretKey};
+    use super::*;
+
     #[test]
     fn test_sk_towif() {
         let sk_bytes: [u8; 32] = [0; 32];
-        let sk_str = std::str::from_utf8(&sk_bytes).unwrap();
+        let _sk_str = std::str::from_utf8(&sk_bytes).unwrap();
         let sk = SecretKey::from_bytes(sk_bytes).unwrap();
-        let wif = WIF::from(sk);
+        let wif = Wif::from(&sk);
 
         let sk_res = match wif.try_into() {
             Err(why) => panic!("{:?}", why),
