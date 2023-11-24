@@ -112,43 +112,40 @@ pub(crate) fn deploy_process_instruction_v1(
             }
         };
 
-        match payload {
-            ExportSection(v) => {
-                for element in v.into_iter_with_offsets() {
-                    let (_, element) = match element {
-                        Ok(v) => v,
-                        Err(e) => {
-                            msg!("[DeployV1] Error: Failed parsing WASM payload: {}", e);
-                            return Err(DeployError::WasmBincodeInvalid.into())
-                        }
-                    };
-
-                    if element.name == "memory" && element.kind == Memory {
-                        found_memory = true;
-                        continue
+        if let ExportSection(v) = payload {
+            for element in v.into_iter_with_offsets() {
+                let (_, element) = match element {
+                    Ok(v) => v,
+                    Err(e) => {
+                        msg!("[DeployV1] Error: Failed parsing WASM payload: {}", e);
+                        return Err(DeployError::WasmBincodeInvalid.into())
                     }
+                };
 
-                    if element.name == "__initialize" && element.kind == Func {
-                        found_initialize = true;
-                        continue
-                    }
+                if element.name == "memory" && element.kind == Memory {
+                    found_memory = true;
+                    continue
+                }
 
-                    if element.name == "__entrypoint" && element.kind == Func {
-                        found_entrypoint = true;
-                        continue
-                    }
+                if element.name == "__initialize" && element.kind == Func {
+                    found_initialize = true;
+                    continue
+                }
 
-                    if element.name == "__update" && element.kind == Func {
-                        found_update = true;
-                        continue
-                    }
+                if element.name == "__entrypoint" && element.kind == Func {
+                    found_entrypoint = true;
+                    continue
+                }
 
-                    if element.name == "__metadata" && element.kind == Func {
-                        found_metadata = true;
-                    }
+                if element.name == "__update" && element.kind == Func {
+                    found_update = true;
+                    continue
+                }
+
+                if element.name == "__metadata" && element.kind == Func {
+                    found_metadata = true;
                 }
             }
-            _ => {}
         }
     }
 
