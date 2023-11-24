@@ -133,7 +133,6 @@ mod tests {
     #[test]
     fn test_sk_towif() {
         let sk_bytes: [u8; 32] = [0; 32];
-        let _sk_str = std::str::from_utf8(&sk_bytes).unwrap();
         let sk = SecretKey::from_bytes(sk_bytes).unwrap();
         let wif = Wif::from(&sk);
 
