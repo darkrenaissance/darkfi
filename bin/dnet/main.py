@@ -15,12 +15,13 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import sys, toml, json, urwid, asyncio, logging
+import sys, toml, json, urwid, asyncio, logging, util
 
+from os.path import exists, join
+from pathlib import Path
 from model import Model
 from rpc import JsonRpc
 from view import View
-
 
 class Dnetview:
 
@@ -28,7 +29,15 @@ class Dnetview:
         self.ev = asyncio.new_event_loop()
         asyncio.set_event_loop(self.ev)
         self.queue = asyncio.Queue()
-        self.config = self.get_config()
+
+        os = util.get_os()
+        config_path = util.user_config_dir('darkfi', os)
+
+        suffix = '.toml'
+        filename = 'dnet_config'
+        path = join(config_path, filename + suffix)
+        self.config = util.spawn_config(path)
+
         self.model = Model()
         self.view = View(self.model)
 
@@ -42,15 +51,15 @@ class Dnetview:
         while True:
             try:
                 await rpc.start(host, port)
-                logging.debug(f"Started {name} RPC on port {port}")
+                logging.debug(f'Started {name} RPC on port {port}')
                 break
             except Exception as e:
                 info[name] = {}
                 await self.queue.put(info)
                 continue
     
-        if type == "NORMAL":
-            data = await rpc._make_request("p2p.get_info", [])
+        if type == 'NORMAL':
+            data = await rpc._make_request('p2p.get_info', [])
             info[name] = data
 
             await self.queue.put(info)
@@ -70,18 +79,13 @@ class Dnetview:
 
             await rpc.dnet_switch(False)
     
-        if type == "LILITH":
-            data = await rpc._make_request("spawns", [])
+        if type == 'LILITH':
+            data = await rpc._make_request('spawns', [])
             info[name] = data
             await self.queue.put(info)
 
         await rpc.stop()
 
-    def get_config(self):
-        with open("config.toml") as f:
-            cfg = toml.load(f)
-            return cfg
-    
     async def start_connect_slots(self, nodes):
         tasks = []
         async with asyncio.TaskGroup() as tg:
@@ -115,7 +119,7 @@ class Dnetview:
         logging.basicConfig(filename='dnet.log',
                             encoding='utf-8',
                             level=logging.DEBUG)
-        nodes = self.config.get("nodes")
+        nodes = self.config.get('nodes')
 
         loop = urwid.MainLoop(self.view.ui, self.view.palette,
                               unhandled_input=self.unhandled_input,
