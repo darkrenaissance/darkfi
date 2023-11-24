@@ -20,8 +20,8 @@ import logging
 import asyncio
 import datetime as dt
 
-from scroll import ScrollBar, Scrollable
-from model import Model
+from src.scroll import ScrollBar, Scrollable
+from src.model import Model
 
 
 class DnetWidget(urwid.WidgetWrap):

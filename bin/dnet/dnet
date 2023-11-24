@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 # This file is part of DarkFi (https://dark.fi)
 #
 # Copyright (C) 2020-2023 Dyne.org foundation
@@ -15,13 +17,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-import sys, toml, json, urwid, asyncio, logging, util
+import sys, toml, json, urwid, asyncio, logging
+import src.util
 
 from os.path import exists, join
 from pathlib import Path
-from model import Model
-from rpc import JsonRpc
-from view import View
+from src.model import Model
+from src.rpc import JsonRpc
+from src.view import View
 
 class Dnetview:
 
@@ -30,13 +33,13 @@ class Dnetview:
         asyncio.set_event_loop(self.ev)
         self.queue = asyncio.Queue()
 
-        os = util.get_os()
-        config_path = util.user_config_dir('darkfi', os)
+        os = src.util.get_os()
+        config_path = src.util.user_config_dir('darkfi', os)
 
         suffix = '.toml'
         filename = 'dnet_config'
         path = join(config_path, filename + suffix)
-        self.config = util.spawn_config(path)
+        self.config = src.util.spawn_config(path)
 
         self.model = Model()
         self.view = View(self.model)

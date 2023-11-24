@@ -41,7 +41,7 @@ def spawn_config(path):
             cfg = toml.load(f)
             return cfg
     else:
-        with open('config.toml') as f:
+        with open('dnet_config.toml') as f:
             cfg = toml.load(f)
         with open(path, 'w') as f:
             toml.dump(cfg, f)
