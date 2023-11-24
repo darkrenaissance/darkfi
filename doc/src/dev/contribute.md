@@ -49,6 +49,7 @@ or need to be maintained:
   [this commit](https://github.com/darkrenaissance/darkfi/commit/9cd9c3113eed1b5f0bcad2ee449ef926d0908d55).
 * **Python bindings:** Help ensure wider coverage and cleanup the Python bindings in `src/sdk/python/`.
     * The event graph could have Python bindings but involves some tricky part integrating Python and Rust async.
+    * Bindings for txs, calls and so on. Make a tool in Python for working with various contract params.
 * **Events System:** See the
   [event graph](https://darkrenaissance.github.io/darkfi/misc/event_graph/event_graph.html) system.
   We need extra review of the code and improvement of the design. This is a good submodule to begin working on.
@@ -112,6 +113,7 @@ _Tasks are in no particular order. Use common sense._
     accept such a coin, and if spent then you would be unable to spend the other coin sharing the same
     serial in your wallet.
 23. Separate mining logic from darkfid into a new program and communicate over RPC
+24. Python utility tool (swiss army knife) for working with txs, contract calls and params.
 
 99. resource manager for p2p (DoS protection, disconnect bad nodes)
 
