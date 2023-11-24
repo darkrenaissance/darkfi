@@ -1872,6 +1872,7 @@ dependencies = [
  "darkfi-serial",
  "getrandom 0.2.11",
  "thiserror",
+ "wasmparser 0.118.0",
 ]
 
 [[package]]
@@ -7593,7 +7594,7 @@ dependencies = [
  "thiserror",
  "wasmer-types",
  "wasmer-vm",
- "wasmparser",
+ "wasmparser 0.95.0",
  "winapi",
 ]
 
@@ -7710,6 +7711,16 @@ checksum = "f2ea896273ea99b15132414be1da01ab0d8836415083298ecaffbe308eaac87a"
 dependencies = [
  "indexmap 1.9.3",
  "url",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.118.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ebbb91574de0011ded32b14db12777e7dd5e9ea2f9d7317a1ab51a9495c75924"
+dependencies = [
+ "indexmap 2.1.0",
+ "semver 1.0.20",
 ]
 
 [[package]]
