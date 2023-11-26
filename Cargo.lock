@@ -782,7 +782,8 @@ dependencies = [
 [[package]]
 name = "blake2b_simd"
 version = "1.0.2"
-source = "git+https://github.com/parazyd/blake2_simd?branch=impl-common#035b663023e49606c2d26411a22b222fb64e27eb"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23285ad32269793932e830392f2fe2f83e26488fd3ec778883a93c8323735780"
 dependencies = [
  "arrayref",
  "arrayvec",
@@ -1811,7 +1812,6 @@ name = "darkfi-serial"
 version = "0.4.1"
 dependencies = [
  "async-trait",
- "blake2b_simd",
  "blake3",
  "bridgetree",
  "darkfi-derive",
