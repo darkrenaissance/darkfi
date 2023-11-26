@@ -22,10 +22,10 @@ use std::{
 };
 
 pub use async_trait::async_trait;
-use futures_lite::{
-    io::Cursor, AsyncReadExt as FutAsyncReadExt, AsyncWriteExt as FutAsyncWriteExt,
+pub use futures_lite::{
+    io::Cursor, AsyncRead, AsyncReadExt as FutAsyncReadExt, AsyncWrite,
+    AsyncWriteExt as FutAsyncWriteExt,
 };
-pub use futures_lite::{AsyncRead, AsyncWrite};
 
 use crate::{endian, VarInt};
 

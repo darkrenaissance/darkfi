@@ -29,7 +29,7 @@ mod async_lib;
 #[cfg(feature = "async")]
 pub use async_lib::{
     async_trait, deserialize_async, deserialize_async_partial, serialize_async, AsyncDecodable,
-    AsyncEncodable, AsyncRead, AsyncWrite,
+    AsyncEncodable, AsyncRead, AsyncWrite, FutAsyncReadExt, FutAsyncWriteExt,
 };
 
 mod endian;
