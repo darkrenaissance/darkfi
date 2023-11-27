@@ -1877,6 +1877,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "darkfi_dummy_contract"
+version = "0.4.1"
+dependencies = [
+ "darkfi",
+ "darkfi-sdk",
+ "getrandom 0.2.11",
+ "simplelog",
+ "sled",
+]
+
+[[package]]
 name = "darkfi_money_contract"
 version = "0.4.1"
 dependencies = [

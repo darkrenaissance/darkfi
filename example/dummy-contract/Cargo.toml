@@ -1,0 +1,30 @@
+[package]
+name = "darkfi_dummy_contract"
+version = "0.4.1"
+authors = ["Dyne.org foundation <foundation@dyne.org>"]
+license = "AGPL-3.0-only"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+darkfi-sdk = {path = "../../src/sdk"}
+
+# We need to disable random using "custom" which makes the crate a noop
+# so the wasm32-unknown-unknown target is enabled.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.2.8", features = ["custom"] }
+
+[dev-dependencies]
+sled = "0.34.7"
+darkfi = {path = "../../", features = ["wasm-runtime"]}
+simplelog = "0.12.1"
+
+[[example]]
+name = "runtime"
+path = "src/runtime.rs"
+
+[features]
+default = []
+no-entrypoint = []
