@@ -3,6 +3,19 @@
 # Cargo binary
 CARGO = cargo +nightly
 
+# Compile target for system binaries
+RUST_TARGET = $(shell rustc -Vv | grep '^host: ' | cut -d' ' -f2)
+# Uncomment when doing musl static builds
+#RUSTFLAGS = -C target-feature=+crt-static -C link-self-contained=yes
+
+# wasm build target
+WASM_TARGET = wasm32-unknown-unknown
+
+# Cargo package name
+PKGNAME = $(shell grep '^name = ' Cargo.toml | cut -d' ' -f3 | tr -d '"')
+# wasm contract binary
+WASM_BIN = $(PKGNAME:=.wasm)
+
 # zkas compiler binary
 ZKAS = ../../../zkas
 
@@ -12,42 +25,50 @@ PROOFS_BIN = $(PROOFS_SRC:=.bin)
 
 # wasm source files
 WASM_SRC = \
-	$(shell find src -type f) \
+	Cargo.toml \
+	../../../Cargo.toml \
+	../../../src/sdk/Cargo.toml \
+	../../../src/serial/Cargo.toml \
+	$(shell find src -type f -name '*.rs') \
 	$(shell find ../../sdk -type f -name '*.rs') \
 	$(shell find ../../serial -type f -name '*.rs')
 
-# wasm contract binary
-WASM_BIN = consensus_contract.wasm
-
-# Just compile the tests
-NO_RUN = "--no-run"
-
 all: $(WASM_BIN)
-
-$(WASM_BIN): $(WASM_SRC) $(PROOFS_BIN)
-	$(CARGO) build --release --package darkfi-consensus-contract --target wasm32-unknown-unknown
-	cp -f ../../../target/wasm32-unknown-unknown/release/darkfi_consensus_contract.wasm $@
 
 $(PROOFS_BIN): $(ZKAS) $(PROOFS_SRC)
 	$(ZKAS) $(basename $@) -o $@
 
+$(WASM_BIN): $(WASM_SRC) $(PROOFS_BIN)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --target=$(WASM_TARGET) \
+	--release --package $(PKGNAME)
+	cp -f ../../../target/$(WASM_TARGET)/release/$@ $@
+
 test-stake-unstake: all
-	$(CARGO) test --release --features=no-entrypoint,client \
-		--package darkfi-consensus-contract \
-		--test stake_unstake $(ARGS)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
+		--release --package $(PKGNAME) \
+		--features=no-entrypoint,client \
+		--test stake_unstake
 
 test-genesis-stake-unstake: all
-	$(CARGO) test --release --features=no-entrypoint,client \
-		--package darkfi-consensus-contract \
-		--test genesis_stake_unstake $(ARGS)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
+		--release --package $(PKGNAME) \
+		--features=no-entrypoint,client \
+		--test genesis_stake_unstake
 
 test: test-genesis-stake-unstake test-stake-unstake
 
-test-no-run:
-	$(MAKE) test-genesis-stake-unstake ARGS=$(NO_RUN)
-	$(MAKE) test-stake-unstake ARGS=$(NO_RUN)
+clippy: all
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(WASM_TARGET) \
+		--release --package $(PKGNAME)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(RUST_TARGET) \
+		--release --package $(PKGNAME) \
+		--features=no-entrypoint,client --tests
 
 clean:
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(WASM_TARGET) \
+		--release --package $(PKGNAME)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(RUST_TARGET) \
+		--release --package $(PKGNAME)
 	rm -f $(PROOFS_BIN) $(WASM_BIN)
 
-.PHONY: all test-genesis-stake-unstake test-stake-unstake test clean
+.PHONY: all test-genesis-stake-unstake test-stake-unstake test clippy clean

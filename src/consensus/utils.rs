@@ -23,7 +23,7 @@ use log::debug;
 use super::Float10;
 
 pub fn fbig2ibig(f: Float10) -> IBig {
-    let rad = IBig::try_from(10).unwrap();
+    let rad = IBig::from(10);
     let sig = f.repr().significand();
     let exp = f.repr().exponent();
 

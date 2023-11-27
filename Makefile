@@ -11,28 +11,26 @@ RUST_TARGET = $(shell rustc -Vv | grep '^host: ' | cut -d' ' -f2)
 # Uncomment when doing musl static builds
 #RUSTFLAGS = -C target-feature=+crt-static -C link-self-contained=yes
 
-# Binaries to be built
+# List of zkas circuits to compile, used for tests
+PROOFS_SRC = $(shell find proof -type f -name '*.zk')
+PROOFS_BIN = $(PROOFS_SRC:=.bin)
+
+# List of all binaries built
 BINS = \
 	zkas \
-	darkfid \
 	darkfid2 \
-	faucetd \
+	darkfi-mmproxy \
 	darkirc \
-	genev/genev-cli \
-	genev/genevd \
+	genev \
+	genevd \
 	lilith \
-	tau/tau-cli \
-	tau/taud \
+	taud \
 	vanityaddr
-
-# ZK proofs to compile with zkas
-PROOFS_SRC = $(shell find proof -type f -name '*.zk') example/simple.zk
-PROOFS_BIN = $(PROOFS_SRC:=.bin)
 
 all: $(BINS)
 
 zkas:
-	$(MAKE) -C bin/zkas \
+	$(MAKE) -C bin/$@ \
 		PREFIX="$(PREFIX)" \
 		CARGO="$(CARGO)" \
 		RUST_TARGET="$(RUST_TARGET)" \
@@ -43,93 +41,112 @@ $(PROOFS_BIN): zkas $(PROOFS_SRC)
 
 contracts: zkas
 	$(MAKE) -C src/contract/money
-	$(MAKE) -C src/contract/dao
 	$(MAKE) -C src/contract/consensus
+	$(MAKE) -C src/contract/dao
 	$(MAKE) -C src/contract/deployooor
 
-darkfid: $(PROOFS_BIN) contracts
-	$(MAKE) -C bin/darkfid
-
 darkfid2: contracts
-	$(MAKE) -C bin/darkfid2
+	$(MAKE) -C bin/$@ \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
 
-faucetd: contracts
-	$(MAKE) -C bin/faucetd
+darkfi-mmproxy:
+	$(MAKE) -C bin/$@ \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
 
-darkirc:
-	$(MAKE) -C bin/darkirc
+darkirc: zkas
+	$(MAKE) -C bin/$@ \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
 
 genev:
-	$(MAKE) -C bin/genev/genev-cli
+	$(MAKE) -C bin/genev/genev-cli \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
 
 genevd:
-	$(MAKE) -C bin/genev/genevd
+	$(MAKE) -C bin/genev/genevd \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
 
 lilith:
-	$(MAKE) -C bin/lilith
-
-tau:
-	$(MAKE) -C bin/tau/tau-cli
+	$(MAKE) -C bin/$@ \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
 
 taud:
-	$(MAKE) -C bin/tau/taud
+	$(MAKE) -C bin/tau/$@ \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
 
 vanityaddr:
-	$(MAKE) -C bin/vanityaddr
+	$(MAKE) -C bin/$@ \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
+
+# -- END OF BINS --
 
 fmt:
-	$(CARGO) fmt
+	$(CARGO) fmt --all
 
-check: $(PROOFS_BIN) contracts
-	$(CARGO) hack check --release --feature-powerset --workspace
+check: contracts $(PROOFS_BIN)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) hack check --target=$(RUST_TARGET) \
+		--release --feature-powerset --workspace
 
-clippy: $(PROOFS_BIN) contracts
-	$(CARGO) clippy --release --all-features --workspace --tests
+clippy: contracts $(PROOFS_BIN)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(RUST_TARGET) \
+		--release --all-features --workspace --tests
 
-fix: $(PROOFS_BIN) contracts
-	$(CARGO) clippy --release --all-features --fix --allow-dirty --workspace --tests
+fix: contracts $(PROOFS_BIN)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(RUST_TARGET) \
+		--release --all-features --workspace --tests --fix --allow-dirty
 
-rustdoc: $(PROOFS_BIN) contracts
-	$(CARGO) doc --release --all-features --workspace --document-private-items --no-deps
+rustdoc: contracts $(PROOFS_BIN)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) doc --target=$(RUST_TARGET) \
+		--release --all-features --workspace --document-private-items --no-deps
 
-test: $(PROOFS_BIN) contracts
-	$(CARGO) test --release --all-features --workspace
+test: contracts $(PROOFS_BIN)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
+		--release --all-features --workspace
 
-coverage: $(PROOFS_BIN) contracts
-	$(CARGO) llvm-cov --release --all-features --workspace --html
+coverage: contracts $(PROOFS_BIN)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) llvm-cov --target=$(RUST_TARGET) \
+		--release --all-features --workspace --html
 
 clean:
 	$(MAKE) -C src/contract/money clean
-	$(MAKE) -C src/contract/dao clean
 	$(MAKE) -C src/contract/consensus clean
+	$(MAKE) -C src/contract/dao clean
 	$(MAKE) -C src/contract/deployooor clean
 	$(MAKE) -C bin/zkas clean
-	$(MAKE) -C bin/darkfid clean
 	$(MAKE) -C bin/darkfid2 clean
-	$(MAKE) -C bin/faucetd clean
+	$(MAKE) -C bin/darkfi-mmproxy clean
 	$(MAKE) -C bin/darkirc clean
 	$(MAKE) -C bin/genev/genev-cli clean
 	$(MAKE) -C bin/genev/genevd clean
 	$(MAKE) -C bin/lilith clean
-	$(MAKE) -C bin/tau/tau-cli clean
 	$(MAKE) -C bin/tau/taud clean
 	$(MAKE) -C bin/vanityaddr clean
-	rm -f $(PROOFS_BIN)
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(RUST_TARGET) --release
 
 distclean: clean
-	$(CARGO) clean
 	rm -rf target
 
-install: $(BINS)
-	@for i in $(BINS); \
-	do \
-		$(MAKE) -C bin/$$i install; \
-	done;
-
-uninstall:
-	for i in $(BINS); \
-	do \
-		$(MAKE) -C bin/$$i uninstall; \
-	done;
-
-.PHONY: all contracts check fix fmt clippy rustdoc test coverage distclean clean install uninstall $(BINS)
+.PHONY: all $(BINS) fmt check clippy fix rustdoc test coverage clean distclean

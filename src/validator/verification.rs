@@ -125,7 +125,7 @@ pub async fn verify_block(
     block: &BlockInfo,
     previous: &BlockInfo,
     expected_reward: u64,
-    testing_mode: bool,
+    pos_testing_mode: bool,
 ) -> Result<()> {
     let block_hash = block.hash()?.to_string();
     debug!(target: "validator::verification::verify_block", "Validating block {}", block_hash);
@@ -158,8 +158,9 @@ pub async fn verify_block(
     // Since an overlay is used, original database is not affected.
     overlay.lock().unwrap().slots.insert(&[block.slots.last().unwrap().clone()])?;
 
-    // Verify proposal transaction if not in testing mode
-    if !testing_mode {
+    // Verify proposal transaction.
+    // For PoS blocks(version 2) verify if not in PoS testing mode.
+    if block.header.version != 2 || !pos_testing_mode {
         let tx = block.txs.last().unwrap();
         let public_key =
             verify_producer_transaction(overlay, time_keeper, tx, block.header.version).await?;
@@ -204,8 +205,8 @@ pub async fn verify_producer_transaction(
     let tx_hash = tx.hash()?;
     debug!(target: "validator::verification::verify_producer_transaction", "Validating proposal transaction {}", tx_hash);
 
-    // Transaction must contain a single call
-    if tx.calls.len() != 1 {
+    // Producer transactions must contain a single, non-empty call
+    if tx.calls.len() != 1 || tx.calls[0].data.is_empty() {
         return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
 
@@ -219,7 +220,7 @@ pub async fn verify_producer_transaction(
             }
         }
         2 => {
-            // Version 1 blocks must contain a Consensus::Proposal(0x02) call
+            // Version 2 blocks must contain a Consensus::Proposal(0x02) call
             if call.contract_id != *CONSENSUS_CONTRACT_ID || call.data[0] != 0x02 {
                 return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
             }
@@ -553,7 +554,7 @@ pub async fn verify_pow_proposal(
         &proposal.block,
         &previous,
         expected_reward,
-        consensus.testing_mode,
+        consensus.pos_testing_mode,
     )
     .await
     .is_err()
@@ -644,7 +645,7 @@ pub async fn verify_pos_proposal(
         &proposal.block,
         &previous,
         expected_reward,
-        consensus.testing_mode,
+        consensus.pos_testing_mode,
     )
     .await
     .is_err()

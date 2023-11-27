@@ -109,7 +109,7 @@ fn main() {
     // zkSNARK things
     let signal_zkbin = include_bytes!("../signal.zk.bin");
     let rln_zkbin = ZkBinary::decode(signal_zkbin).unwrap();
-    let rln_empty_circuit = ZkCircuit::new(empty_witnesses(&rln_zkbin), rln_zkbin.clone());
+    let rln_empty_circuit = ZkCircuit::new(empty_witnesses(&rln_zkbin).unwrap(), &rln_zkbin);
 
     print!("[Interaction] Building Proving key... ");
     let now = Instant::now();
@@ -143,7 +143,7 @@ fn main() {
     // Build a circuit with these witnesses
     print!("[Interaction] Creating ZK proof... ");
     let now = Instant::now();
-    let rln_circuit = ZkCircuit::new(witnesses, rln_zkbin.clone());
+    let rln_circuit = ZkCircuit::new(witnesses, &rln_zkbin);
     let proof = Proof::create(&rln_pk, &[rln_circuit], &public_inputs, &mut OsRng).unwrap();
     println!("[{:?}]", now.elapsed());
 
@@ -187,7 +187,7 @@ fn main() {
     // Build a circuit with these witnesses
     print!("[Interaction] Creating ZK proof... ");
     let now = Instant::now();
-    let rln_circuit = ZkCircuit::new(witnesses, rln_zkbin);
+    let rln_circuit = ZkCircuit::new(witnesses, &rln_zkbin);
     let proof = Proof::create(&rln_pk, &[rln_circuit], &public_inputs, &mut OsRng).unwrap();
     println!("[{:?}]", now.elapsed());
 
@@ -213,7 +213,7 @@ fn main() {
     // Create a slash proof
     let slash_zkbin = include_bytes!("../slash.zk.bin");
     let slash_zkbin = ZkBinary::decode(slash_zkbin).unwrap();
-    let slash_empty_circuit = ZkCircuit::new(empty_witnesses(&slash_zkbin), slash_zkbin.clone());
+    let slash_empty_circuit = ZkCircuit::new(empty_witnesses(&slash_zkbin).unwrap(), &slash_zkbin);
 
     print!("[Slash] Building Proving key... ");
     let now = Instant::now();
@@ -243,7 +243,7 @@ fn main() {
 
     print!("[Slash] Creating ZK proof... ");
     let now = Instant::now();
-    let slash_circuit = ZkCircuit::new(witnesses, slash_zkbin);
+    let slash_circuit = ZkCircuit::new(witnesses, &slash_zkbin);
     let proof = Proof::create(&slash_pk, &[slash_circuit], &public_inputs, &mut OsRng).unwrap();
     println!("[{:?}]", now.elapsed());
 

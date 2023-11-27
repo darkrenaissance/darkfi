@@ -103,7 +103,7 @@ fn encrypt_task(
     chacha_box: &ChaChaBox,
     rng: &mut OsRng,
 ) -> TaudResult<EncryptedTask> {
-    debug!("start encrypting task");
+    debug!(target: "taud", "start encrypting task");
 
     let nonce = ChaChaBox::generate_nonce(rng);
     let payload = &serialize(task)[..];
@@ -119,7 +119,7 @@ fn encrypt_task(
 }
 
 fn try_decrypt_task(encrypt_task: &EncryptedTask, chacha_box: &ChaChaBox) -> TaudResult<TaskInfo> {
-    debug!("start decrypting task");
+    debug!(target: "taud", "start decrypting task");
 
     let bytes = match bs58::decode(&encrypt_task.payload).into_vec() {
         Ok(v) => v,
@@ -131,10 +131,7 @@ fn try_decrypt_task(encrypt_task: &EncryptedTask, chacha_box: &ChaChaBox) -> Tau
     }
 
     // Try extracting the nonce
-    let nonce = match bytes[0..24].try_into() {
-        Ok(v) => v,
-        Err(_) => return Err(TaudError::DecryptionError("Invalid nonce".to_string())),
-    };
+    let nonce = bytes[0..24].into();
 
     // Take the remaining ciphertext
     let message = &bytes[24..];
@@ -163,12 +160,13 @@ async fn start_sync_loop(
 
     loop {
         select! {
+            // Process message from Tau client
             task_event = broadcast_rcv.recv().fuse() => {
                 let tk = task_event.map_err(Error::from)?;
                 if workspaces.contains_key(&tk.workspace) {
                     let chacha_box = workspaces.get(&tk.workspace).unwrap();
                     let encrypted_task = encrypt_task(&tk, chacha_box, &mut OsRng)?;
-                    info!(target: "tau", "Send the task: ref: {}", tk.ref_id);
+                    info!(target: "taud", "Send the task: ref: {}", tk.ref_id);
                     // Build a DAG event and return it.
                     let event = Event::new(
                         serialize_async(&encrypted_task).await,
@@ -181,8 +179,8 @@ async fn start_sync_loop(
 
                     // If it fails for some reason, for now, we just note it
                     // and pass.
-                    if let Err(e) = event_graph.dag_insert(event.clone()).await {
-                        error!("[IRC CLIENT] Failed inserting new event to DAG: {}", e);
+                    if let Err(e) = event_graph.dag_insert(&[event.clone()]).await {
+                        error!(target: "taud", "Failed inserting new event to DAG: {}", e);
                     } else {
                         // We sent this, so it should be considered seen.
                         // TODO: should we save task on send or on receive?
@@ -195,6 +193,7 @@ async fn start_sync_loop(
                     }
                 }
             }
+            // Process message from the network. These should only be EncryptedTask.
             task_event = incoming.receive().fuse() => {
                 let event_id = task_event.id();
                 if *last_sent.read().await == event_id {
@@ -205,11 +204,11 @@ async fn start_sync_loop(
                     continue
                 }
 
-                // Try to deserialize the `Event`'s content into a `Privmsg`
+                // Try to deserialize the `Event`'s content into a `EncryptedTask`
                 let enc_task: EncryptedTask = match deserialize_async_partial(task_event.content()).await {
                     Ok((v, _)) => v,
                     Err(e) => {
-                        error!("[TAUD] Failed deserializing incoming EncryptedTask event: {}", e);
+                        error!(target: "taud", "[TAUD] Failed deserializing incoming EncryptedTask event: {}", e);
                         continue
                     }
                 };
@@ -229,12 +228,12 @@ async fn on_receive_task(
     for (workspace, chacha_box) in workspaces.iter() {
         let task = try_decrypt_task(task, chacha_box);
         if let Err(e) = task {
-            debug!("unable to decrypt the task: {}", e);
+            debug!(target: "taud", "Unable to decrypt the task: {}", e);
             continue
         }
 
         let mut task = task.unwrap();
-        info!(target: "tau", "Save the task: ref: {}", task.ref_id);
+        info!(target: "taud", "Save the task: ref: {}", task.ref_id);
         task.workspace = workspace.clone();
         if piped {
             // if we can't load the task then it's a new task.
@@ -293,14 +292,14 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             remove_dir_all(datastore_path).unwrap_or(());
             println!("Local data removed successfully.");
         } else {
-            error!("Unexpected Value: {}", confirm);
+            error!(target: "taud", "Unexpected Value: {}", confirm);
         }
 
         return Ok(())
     }
 
     if nickname.is_none() {
-        error!("Provide a nickname in config file");
+        error!(target: "taud", "Provide a nickname in config file");
         return Ok(())
     }
 
@@ -325,7 +324,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             let workspace = workspace.to_lowercase();
             let workspace = workspace.trim();
             if workspace.is_empty() && workspace.len() < 3 {
-                error!("Wrong workspace try again");
+                error!(target: "taud", "Wrong workspace try again");
                 continue
             }
             let secret_key = SecretKey::generate(&mut OsRng);
@@ -342,7 +341,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
     let workspaces = Arc::new(get_workspaces(&settings)?);
 
     if workspaces.is_empty() {
-        error!("Please add at least one workspace to the config file.");
+        error!(target: "taud", "Please add at least one workspace to the config file.");
         println!("Run `$ taud --generate` to generate new workspace.");
         return Ok(())
     }
@@ -385,13 +384,13 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
                 Ok(()) => break,
                 Err(e) => {
                     if i == 6 {
-                        error!("Failed syncing DAG. Exiting.");
+                        error!(target: "taud", "Failed syncing DAG. Exiting.");
                         p2p.stop().await;
                         return Err(Error::DagSyncFailed)
                     } else {
                         // TODO: Maybe at this point we should prune or something?
                         // TODO: Or maybe just tell the user to delete the DAG from FS.
-                        error!("Failed syncing DAG ({}), retrying in 10s...", e);
+                        error!(target: "taud", "Failed syncing DAG ({}), retrying in 10s...", e);
                         sleep(10).await;
                     }
                 }
@@ -428,7 +427,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
         // Potentially decrypt the privmsg
         on_receive_task(&enc_task, &datastore_path, &workspaces, false).await.unwrap();
 
-        debug!("Marking event {} as seen", event_id);
+        debug!(target: "taud", "Marking event {} as seen", event_id);
         seen_events.insert(event_id.as_bytes(), &[]).unwrap();
     }
 
@@ -467,7 +466,7 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
             let dnet_sub = p2p_.dnet_subscribe().await;
             loop {
                 let event = dnet_sub.receive().await;
-                debug!("Got dnet event: {:?}", event);
+                debug!(target: "taud", "Got dnet event: {:?}", event);
                 json_sub_.notify(vec![event.into()].into()).await;
             }
         },

@@ -20,13 +20,13 @@ doctest = false
 [workspace]
 members = [
     "bin/zkas",
-    "bin/darkfid",
+    #"bin/darkfid",
     "bin/darkfid2",
     "bin/darkfi-mmproxy",
     #"bin/drk",
-    "bin/faucetd",
+    #"bin/faucetd",
     #"bin/fud/fu",
-    "bin/fud/fud",
+    #"bin/fud/fud",
     "bin/genev/genevd",
     "bin/genev/genev-cli",
     "bin/darkirc",
@@ -69,7 +69,7 @@ async-rustls = {version = "0.4.1", features = ["dangerous_configuration"], optio
 
 # Pluggable Transports
 socket2 = {version = "0.5.5", features = ["all"], optional = true}
-arti-client = {version = "0.10.2", default-features = false, features = ["async-std", "error_detail", "rustls", "onion-service-client"], optional = true}
+arti-client = {version = "0.11.0", default-features = false, features = ["async-std", "error_detail", "rustls", "onion-service-client"], optional = true}
 tor-error = {version = "0.5.4", optional = true}
 tor-rtcompat = {version = "0.9.5", features = ["async-std", "rustls"], optional = true}
 tor-hscrypto = {version = "0.3.4", optional = true}
@@ -319,7 +319,3 @@ zkas = [
 [patch.crates-io]
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
 halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
-# arti-client = {git="https://gitlab.torproject.org/tpo/core/arti", rev="029eac8fe7f51e5bbaf65d9c8355cd7504668b9a"}
-# tor-hscrypto = {git="https://gitlab.torproject.org/tpo/core/arti", rev="029eac8fe7f51e5bbaf65d9c8355cd7504668b9a"}
-# tor-error = {git="https://gitlab.torproject.org/tpo/core/arti", rev="029eac8fe7f51e5bbaf65d9c8355cd7504668b9a"}
-blake2b_simd = {git="https://github.com/parazyd/blake2_simd", branch="impl-common"}

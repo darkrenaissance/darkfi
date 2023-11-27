@@ -45,6 +45,9 @@ use irc::server::IrcServer;
 /// Cryptography utilities
 mod crypto;
 
+// RLN
+//mod rln;
+
 /// JSON-RPC methods
 mod rpc;
 
@@ -108,7 +111,7 @@ struct Args {
 pub struct DarkIrc {
     /// P2P network pointer
     p2p: P2pPtr,
-    /// Sled DB (also used in event_graph)
+    /// Sled DB (also used in event_graph and for RLN)
     sled: sled::Db,
     /// Event Graph instance
     event_graph: EventGraphPtr,

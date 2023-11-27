@@ -25,9 +25,8 @@ use darkfi_dao_contract::{
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
 use darkfi_money_contract::{
-    client::{transfer_v1::TransferCallBuilder, OwnCoin},
-    model::MoneyTransferParamsV1,
-    MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    client::transfer_v1 as xfer, model::MoneyTransferParamsV1, MoneyFunction,
+    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
@@ -66,67 +65,80 @@ impl TestHarness {
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoExec).unwrap();
         let timer = Instant::now();
 
+        let input_user_data_blind = pallas::Base::random(&mut OsRng);
         // TODO: FIXME: This is not checked anywhere!
         let exec_signature_secret = SecretKey::random(&mut OsRng);
 
-        let rcpt_spend_hook = pallas::Base::ZERO;
-        let rcpt_user_data = pallas::Base::ZERO;
-        let rcpt_user_data_blind = pallas::Base::random(&mut OsRng);
-
-        let change_spend_hook = DAO_CONTRACT_ID.inner();
-        let change_user_data = dao_bulla.inner();
-
-        let input_user_data_blind = pallas::Base::random(&mut OsRng);
-
-        let coins: Vec<OwnCoin> = dao_wallet
+        let coins = dao_wallet
             .unspent_money_coins
             .iter()
             .filter(|x| x.note.token_id == proposal.token_id)
             .cloned()
             .collect();
+        let (spent_coins, change_value) = xfer::select_coins(coins, proposal.amount)?;
         let tree = dao_wallet.money_merkle_tree.clone();
 
-        let xfer_builder = TransferCallBuilder {
-            keypair: dao_wallet.keypair,
-            recipient: proposal.dest,
-            value: proposal.amount,
-            token_id: proposal.token_id,
-            rcpt_spend_hook,
-            rcpt_user_data,
-            rcpt_user_data_blind,
-            change_spend_hook,
-            change_user_data,
-            input_user_data_blind,
-            coins,
-            tree,
+        let mut inputs = vec![];
+        for coin in &spent_coins {
+            let leaf_position = coin.leaf_position;
+            let merkle_path = tree.witness(leaf_position, 0).unwrap();
+
+            inputs.push(xfer::TransferCallInput {
+                leaf_position,
+                merkle_path,
+                secret: coin.secret,
+                note: coin.note.clone(),
+                user_data_blind: input_user_data_blind,
+            });
+        }
+
+        let xfer_builder = xfer::TransferCallBuilder {
+            clear_inputs: vec![],
+            inputs,
+            outputs: vec![
+                xfer::TransferCallOutput {
+                    value: proposal.amount,
+                    token_id: proposal.token_id,
+                    public_key: proposal.dest,
+                    spend_hook: pallas::Base::ZERO,
+                    user_data: pallas::Base::ZERO,
+                },
+                xfer::TransferCallOutput {
+                    value: change_value,
+                    token_id: proposal.token_id,
+                    public_key: dao_wallet.keypair.public,
+                    spend_hook: DAO_CONTRACT_ID.inner(),
+                    user_data: dao_bulla.inner(),
+                },
+            ],
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
             burn_zkbin: burn_zkbin.clone(),
             burn_pk: burn_pk.clone(),
-            clear_input: false,
         };
 
-        let xfer_debris = xfer_builder.build()?;
+        let (xfer_params, xfer_secrets) = xfer_builder.build()?;
         let mut data = vec![MoneyFunction::TransferV1 as u8];
-        xfer_debris.params.encode(&mut data)?;
+        xfer_params.encode(&mut data)?;
         let xfer_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
         // We need to extract stuff from the inputs and outputs that we'll also
         // use in the DAO::Exec call. This DAO API needs to be better.
         let mut input_value = 0;
         let mut input_value_blind = pallas::Scalar::ZERO;
-        for (input, blind) in xfer_debris.spent_coins.iter().zip(xfer_debris.input_value_blinds) {
+        for (input, blind) in spent_coins.iter().zip(xfer_secrets.input_value_blinds.iter()) {
             input_value += input.note.value;
             input_value_blind += blind;
         }
         assert_eq!(
             pedersen_commitment_u64(input_value, input_value_blind),
-            xfer_debris.params.inputs.iter().map(|input| input.value_commit).sum()
+            xfer_params.inputs.iter().map(|input| input.value_commit).sum()
         );
 
         // First output is change, second output is recipient.
-        let dao_serial = xfer_debris.minted_coins[0].note.serial;
-        let user_serial = xfer_debris.minted_coins[1].note.serial;
+        let minted_coins = xfer_secrets.minted_coins(&xfer_params);
+        let user_serial = minted_coins[0].note.serial;
+        let dao_serial = minted_coins[1].note.serial;
 
         let exec_builder = DaoExecCall {
             proposal: proposal.clone(),
@@ -151,10 +163,10 @@ impl TestHarness {
 
         let mut tx = Transaction {
             calls: vec![xfer_call, exec_call],
-            proofs: vec![xfer_debris.proofs, exec_proofs],
+            proofs: vec![xfer_secrets.proofs, exec_proofs],
             signatures: vec![],
         };
-        let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_debris.signature_secrets)?;
+        let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_secrets.signature_secrets)?;
         let exec_sigs = tx.create_sigs(&mut OsRng, &[exec_signature_secret])?;
         tx.signatures = vec![xfer_sigs, exec_sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());
@@ -167,7 +179,7 @@ impl TestHarness {
         let size = std::mem::size_of_val(&*base58);
         tx_action_benchmark.broadcasted_sizes.push(size);
 
-        Ok((tx, xfer_debris.params, exec_params))
+        Ok((tx, xfer_params, exec_params))
     }
 
     pub async fn execute_dao_exec_tx(

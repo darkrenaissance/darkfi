@@ -36,18 +36,113 @@ or need to be maintained:
 * **Documentation:** general documentation and code docs (cargo doc). This is a very 
   important work for example [overview](https://darkrenaissance.github.io/darkfi/arch/overview.html) 
   page is out of date.
-* **Tooling:** Such as the `drk` tool. right now 
-  we're adding [DAO functionality](https://github.com/darkrenaissance/darkfi/blob/master/src/contract/dao/wallet.sql) 
-  to it.
+    * We need a tutorial on writing smart contracts.
+* **TODO** and **FIXME** are throughout the codebase. Find your favourite one and begin hacking.
+    * DarkIRC encrypted DMs to nonexistant users should not be allowed.
+    * Currently closing DarkIRC with ctrl-c stalls in `p2p.stop()`. This should be fixed.
+    * Add `log = path` and `log_level = debug` config setting to DarkIRC
+* **Tooling:** Creating new tools or improving existing ones.
+    * Improve the ZK tooling. For example tools to work with txs, smart contracts and ZK proofs.
+    * Also document zkrunner and other tools.
 * **Tests:** Throughout the project there are either broken or commented out unit tests, they need to be fixed.
 * **Cleanup:** General code cleanup. for example flattening headers and improving things like in 
   [this commit](https://github.com/darkrenaissance/darkfi/commit/9cd9c3113eed1b5f0bcad2ee449ef926d0908d55).
-* **Python bindings:** Help ensure coverage and cleanup the Python bindings in `src/sdk/python/`.
-* **Events System:** We need to fix IRCD, we will need to implement the 
-  [events](https://darkrenaissance.github.io/darkfi/misc/event_graph/event_graph.html) system.
+* **Python bindings:** Help ensure wider coverage and cleanup the Python bindings in `src/sdk/python/`.
+    * The event graph could have Python bindings but involves some tricky part integrating Python and Rust async.
+    * Bindings for txs, calls and so on. Make a tool in Python for working with various contract params.
+* **Events System:** See the
+  [event graph](https://darkrenaissance.github.io/darkfi/misc/event_graph/event_graph.html) system.
+  We need extra review of the code and improvement of the design. This is a good submodule to begin working on.
+* **DHT:** Currently this is broken and needs fixing.
 * **p2p Network:** this is a good place to start reviewing the code and suggesting improvements.
   For example maintaining network resiliency. You can also look at apps like darkirc, and the event graph subsystem,
   and see how to make them more reliable. See also the task manager tau.
+    * Implement resource manager. See its implementation in libp2p for inspiration.
+    * Improve hosts strategy using a white list, grey list and black list.
+      See [p2p Network: Common Mitigations](arch/p2p-network.md#common-mitigations) item called
+      *White, gray and black lists*.
+* Harder **crypto** tasks:
+    * DAO note verifiable encryption
+    * Generalize DAO proposals by committing to a set of coins rather than a single one.
+    * Add proposal_type field and proposal_data.
+    * Money viewing keys
+    * Method to `export_public_inputs(calldata, "public.json")`
+* Eth-DarkFi bridge or atomic swaps. Atomic swaps is probably better since it's trustless and p2p.
+
+## Mainnet tasks
+
+_Tasks are in no particular order. Use common sense._
+
+1. Finish `darkfid` with PoW and research and implement XMR merge mining
+2. Make `darkfi-mmproxy` stable and implement what is needed for DarkFi x Monero merge mining
+3. Finish dnetview
+4. Make `eventgraph` stable and implement proper unit and integration tests
+  * Unit tests should test pieces of the eventgraph code
+  * Integration tests should simulate a P2P network and ensure deterministic state after a simulated run
+  * Update https://darkrenaissance.github.io/darkfi/misc/event_graph/event_graph.html
+    and make it the specification for the `eventgraph` implementation implementation
+5. Rework `drk` (the wallet CLI) to work standalone and make it work with the new `darkfid`
+6. Make `tau` stable
+7. Make `darkirc` stable
+8. Make `lilith` stable, there is currently some bug that causes connection refusals
+9. Implement transaction fees logic
+10. Implement contracts deployment logic
+11. Revisit **all** the code inside `src/runtime/` and make sure it's safe
+12. Implement verifiable encryption for `DAO` payments
+13. `DAO` should be able to perform arbitrary contract calls, it should act as a voted multisig
+14. Implement cross-chain atomic swaps (XMR, ETH, anything applicable)
+15. Rework the connection algo for p2p to use black list, grey and white list
+  * https://eprint.iacr.org/2019/411.pdf (Section 2.2)
+  * See also [P2P Network: Common Mitigations](arch/p2p-network.md#common-mitigations)
+16. Create a P2P stack test harness in order to be able to easily simulate network
+    behaviour
+  * Possibly we can create a dummy p2p which can simulate network connections and routing traffic.
+    We can use this to model network behaviour.
+17. Implement address/secretkey differentiation
+  * See [WIF](https://en.bitcoin.it/wiki/Wallet_import_format)
+18. Fix bugs and issues in the DAO implementation
+19. Perform thorough review of all contracts and their functionalities
+20. Randomize outputs in `Money::*`, and potentially elsewhere where applicable
+  * This is so the change output isn't always in the same predictable place, and makes identifying
+    which output is the change impossible.
+21. Document contracts in the manner of https://darkrenaissance.github.io/darkfi/arch/consensus/stake.html
+22. Serial used in money coins
+  * One solution is: don't accept coins with existing serial in drk.
+  * We should construct a scheme to derive the serial, evaluate how simple changing the crypto is.
+  * Malicious users could send you a coin which is unspendable. A poorly implemented wallet would
+    accept such a coin, and if spent then you would be unable to spend the other coin sharing the same
+    serial in your wallet.
+23. Separate mining logic from darkfid into a new program and communicate over RPC
+24. Python utility tool (swiss army knife) for working with txs, contract calls and params.
+
+99. resource manager for p2p (DoS protection, disconnect bad nodes)
+
+
+|  Task #  |  Assignee  |
+|----------|------------|
+| **1.**   | `upgrayedd`|
+| **2.**   | `brawndo`  |
+| **3.**   |            |
+| **4.**   | `upgrayedd`|
+| **5.**   | `upgrayedd`|
+| **6.**   |            |
+| **7.**   |            |
+| **8.**   | `brawndo`  |
+| **9.**   | `brawndo`  |
+| **10.**  | `brawndo`  |
+| **11.**  |            |
+| **12.**  | `B1-66ER`  |
+| **13.**  | `B1-66ER`  |
+| **14.**  |            |
+| **15.**  |            |
+| **16.**  |            |
+| **17.**  |            |
+| **18.**  | `B1-66ER`  |
+| **19.**  | `B1-66ER`  |
+| **20.**  |            |
+| **21.**  | `B1-66ER`  |
+| **22.**  | `B1-66ER`  |
+| **23.**  | `upgrayedd`|
 
 ## Fuzz testing
 

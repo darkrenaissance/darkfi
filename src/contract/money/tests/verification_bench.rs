@@ -55,7 +55,7 @@ fn alice2alice_random_amounts() -> Result<()> {
         info!(target: "money", "[Faucet] Building Alice's airdrop");
         info!(target: "money", "[Faucet] ========================");
         let (airdrop_tx, airdrop_params) =
-            th.airdrop_native(ALICE_AIRDROP, &Holder::Alice, None, None, None, None)?;
+            th.airdrop_native(ALICE_AIRDROP, &Holder::Alice, None, None)?;
 
         for holder in &HOLDERS {
             info!(target: "money", "[{holder:?}] ==========================");

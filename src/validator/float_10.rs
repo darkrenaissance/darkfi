@@ -112,7 +112,7 @@ impl TryFrom<u64> for Float10 {
     type Error = crate::Error;
 
     fn try_from(value: u64) -> Result<Self, Self::Error> {
-        Ok(Self(FBig::try_from(value)?))
+        Ok(Self(FBig::from(value)))
     }
 }
 
@@ -120,7 +120,7 @@ impl TryFrom<i64> for Float10 {
     type Error = crate::Error;
 
     fn try_from(value: i64) -> Result<Self, Self::Error> {
-        Ok(Self(FBig::try_from(value)?))
+        Ok(Self(FBig::from(value)))
     }
 }
 
@@ -148,7 +148,7 @@ lazy_static! {
 // Utility functions
 /// Convert a Float10 to [`dashu::integer::IBig`].
 pub fn fbig2ibig(f: Float10) -> IBig {
-    let rad = IBig::try_from(10).unwrap();
+    let rad = IBig::from(10);
     let sig = f.repr().significand();
     let exp = f.repr().exponent();
 

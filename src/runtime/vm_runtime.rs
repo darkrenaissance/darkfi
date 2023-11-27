@@ -115,9 +115,13 @@ impl Env {
     }
 }
 
+/// Define a wasm runtime.
 pub struct Runtime {
+    /// A wasm instance
     pub instance: Instance,
+    /// A wasm store (global state)
     pub store: Store,
+    // Wrapper for [`Env`], defined above.
     pub ctx: FunctionEnv<Env>,
 }
 
@@ -137,7 +141,7 @@ impl Runtime {
         // https://docs.rs/wasmparser/latest/wasmparser/enum.Operator.html
         let cost_function = |_operator: &Operator| -> u64 { 1 };
 
-        // `Metering` needs to be conigured with a limit and a cost function.
+        // `Metering` needs to be configured with a limit and a cost function.
         // For each `Operator`, the metering middleware will call the cost
         // function and subtract the cost from the remaining points.
         let metering = Arc::new(Metering::new(GAS_LIMIT, cost_function));
@@ -299,7 +303,9 @@ impl Runtime {
         Ok(Self { instance, store, ctx })
     }
 
-    /// Perform a sanity check of the WASM bincode
+    /// Perform a sanity check of the WASM bincode. In particular, ensure that it contains
+    /// all the necessary symbols for executing contracts, including sections for
+    /// Deploy, Exec, Update, and Metadata.
     pub fn sanity_check(&self) -> Result<()> {
         debug!(target: "runtime::vm_runtime", "Performing sanity check on wasm bincode");
 
@@ -312,12 +318,20 @@ impl Runtime {
         Ok(())
     }
 
+    /// Call a contract method defined by a [`ContractSection`] using a supplied
+    /// payload. Returns a Vector of bytes corresponding to the result data of the call.
+    /// For calls that do not return any data, an empty Vector is returned.
     fn call(&mut self, section: ContractSection, payload: &[u8]) -> Result<Vec<u8>> {
         debug!(target: "runtime::vm_runtime", "Calling {} method", section.name());
 
         let env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = section;
+        // Verify contract's return data is empty, or quit.
         assert!(env_mut.contract_return_data.take().is_none());
+
+        // This should already be clear, or the assert call above
+        // would prevent the code from reaching this point.
+        // Clear anyway, to be safe.
         env_mut.contract_return_data.set(None);
         // Clear the logs
         let _ = env_mut.logs.take();
@@ -333,6 +347,11 @@ impl Runtime {
         debug!(target: "runtime::vm_runtime", "Getting {} function", section.name());
         let entrypoint = self.instance.exports.get_function(section.name())?;
 
+        // Call the entrypoint. On success, `call` returns a WASM [`Value`]. (The
+        // value may be empty.) This value functions similarly to a UNIX exit code.
+        // The following section is intended to unwrap the exit code and handle fatal
+        // errors in the Wasmer runtime. The value itself and the return data of the
+        // contract are processed later.
         debug!(target: "runtime::vm_runtime", "Executing wasm");
         let ret = match entrypoint.call(&mut self.store, &[Value::I32(0_i32)]) {
             Ok(retvals) => {
@@ -350,8 +369,8 @@ impl Runtime {
         };
 
         debug!(target: "runtime::vm_runtime", "wasm executed successfully");
-        debug!(target: "runtime::vm_runtime", "Contract returned: {:?}", ret[0]);
 
+        // Move the contract's return data into `retdata`.
         let env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = ContractSection::Null;
         let retdata = match env_mut.contract_return_data.take() {
@@ -359,11 +378,31 @@ impl Runtime {
             None => Vec::new(),
         };
 
-        let retval = match ret[0] {
-            Value::I64(v) => v,
-            _ => unreachable!("Got unexpected result from ret: {:?}", ret),
+        // Determine the return value of the contract call. If `ret` is empty,
+        // assumed that the contract call was successful.
+        let retval: i64 = match ret.len() {
+            0 => {
+                // Return a success value if there is no return value from
+                // the contract.
+                debug!(target: "runtime::vm_runtime", "Contract has no return value (expected)");
+                entrypoint::SUCCESS
+            }
+            _ => {
+                match ret[0] {
+                    Value::I64(v) => {
+                        debug!(target: "runtime::vm_runtime", "Contract returned: {:?}", ret[0]);
+                        v
+                    }
+                    // The only supported return type is i64, so panic if another
+                    // value is returned.
+                    _ => unreachable!("Got unexpected result return value: {:?}", ret),
+                }
+            }
         };
 
+        // Check the integer return value of the call. A value of `entrypoint::SUCCESS` (i.e. zero)
+        // corresponds to a successful contract call; in this case, we return the contract's
+        // result data. Otherwise, map the integer return value to a [`ContractError`].
         match retval {
             entrypoint::SUCCESS => Ok(retdata),
             // FIXME: we should be able to see the error returned from the contract
@@ -426,7 +465,7 @@ impl Runtime {
         Ok(())
     }
 
-    /// This funcion runs when someone wants to execute a smart contract.
+    /// This function runs when someone wants to execute a smart contract.
     /// The runtime will look for an `ENTRYPOINT` symbol in the wasm code, and
     /// execute it if found. A payload is also passed as an instruction that can
     /// be used inside the vm by the runtime.
@@ -455,6 +494,7 @@ impl Runtime {
         self.call(ContractSection::Metadata, payload)
     }
 
+    /// Prints the wasm contract logs.
     fn print_logs(&self) {
         let logs = self.ctx.as_ref(&self.store).logs.borrow();
         for msg in logs.iter() {
@@ -462,15 +502,28 @@ impl Runtime {
         }
     }
 
+    /// Calculate the remaining gas using wasm's concept
+    /// of metering points.
     fn gas_used(&mut self) -> u64 {
         let remaining_points = get_remaining_points(&mut self.store, &self.instance);
 
         match remaining_points {
-            MeteringPoints::Remaining(rem) => GAS_LIMIT - rem,
+            MeteringPoints::Remaining(rem) => {
+                if rem > GAS_LIMIT {
+                    // This should never occur, but catch it explicitly to avoid
+                    // potential underflow issues when calculating `remaining_points`.
+                    unreachable!("Remaining wasm points exceed GAS_LIMIT");
+                }
+                GAS_LIMIT - rem
+            }
             MeteringPoints::Exhausted => GAS_LIMIT + 1,
         }
     }
 
+    // Return a message informing the user whether there is any
+    // gas remaining. Values equal to GAS_LIMIT are not considered
+    // to be exhausted. e.g. Using 100/100 gas should not give a
+    // 'gas exhausted' message.
     fn gas_info(&mut self) -> String {
         let gas_used = self.gas_used();
 
@@ -481,7 +534,7 @@ impl Runtime {
         }
     }
 
-    /// Set the memory page size
+    /// Set the memory page size. Returns the previous memory size.
     fn set_memory_page_size(&mut self, pages: u32) -> Result<Pages> {
         // Grab memory by value
         let memory = self.take_memory();
@@ -510,7 +563,7 @@ impl Runtime {
     }
 
     /// Serialize contract payload to the format accepted by the runtime functions.
-    /// We keep the same payload as a slice of bytes, and prepend it with a ContractId,
+    /// We keep the same payload as a slice of bytes, and prepend it with a [`ContractId`],
     /// and then a little-endian u64 to tell the payload's length.
     fn serialize_payload(cid: &ContractId, payload: &[u8]) -> Vec<u8> {
         let ser_cid = serialize(cid);

@@ -57,7 +57,8 @@ pub(super) fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: 
     let days_passed = days_since(starting_timestamp);
 
     // Find out how many rotation periods have occurred since
-    // the starting point
+    // the starting point.
+    // Note: when rotation_period = 1, rotations_since_start = days_passed
     let rotations_since_start = (days_passed + rotation_period - 1) / rotation_period;
 
     // Find out the number of days until the next rotation. Panic if result is beyond the range
@@ -66,11 +67,32 @@ pub(super) fn next_rotation_timestamp(starting_timestamp: u64, rotation_period: 
         (rotations_since_start * rotation_period - days_passed).try_into().unwrap();
 
     // Get the timestamp for the next rotation
+    if days_until_next_rotation == 0 {
+        // If there are 0 days until the next rotation, we want
+        // to rotate tomorrow, at midnight. This is a special case.
+        return midnight_timestamp(1)
+    }
     midnight_timestamp(days_until_next_rotation)
+}
+
+/// Calculate the time in seconds until the next_rotation, given
+/// as a timestamp.
+/// `next_rotation` here represents a timestamp in UNIX epoch format.
+pub(super) fn seconds_until_next_rotation(next_rotation: u64) -> u64 {
+    // Store `now` in a variable in order to avoid a TOCTOU error.
+    // There may be a drift of one second between this panic check and
+    // the return value if we get unlucky.
+    let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
+    if next_rotation < now {
+        panic!("Next rotation timestamp is in the past");
+    }
+    next_rotation - now
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::event_graph::INITIAL_GENESIS;
+
     use super::*;
 
     #[test]
@@ -91,6 +113,13 @@ mod tests {
         // So the next rotation should be 4 days from now.
         let expected = midnight_timestamp(4);
         assert_eq!(next_rotation_timestamp(starting_point, rotation_period), expected);
+
+        // When starting from today with a rotation period of 1 (day),
+        // we should get tomorrow's timestamp.
+        // This is a special case.
+        let midnight_today: u64 = midnight_timestamp(0);
+        let midnight_tomorrow = midnight_today + 86400u64; // add a day, in seconds
+        assert_eq!(midnight_tomorrow, next_rotation_timestamp(midnight_today, 1));
     }
 
     #[test]
@@ -103,5 +132,15 @@ mod tests {
     #[should_panic]
     fn test_next_rotation_timestamp_panics_on_division_by_zero() {
         next_rotation_timestamp(0, 0);
+    }
+
+    #[test]
+    fn test_seconds_until_next_rotation_is_within_rotation_interval() {
+        let days_rotation = 1u64;
+        // The amount of time in seconds between rotations.
+        let rotation_interval = days_rotation * 86400u64;
+        let next_rotation_timestamp = next_rotation_timestamp(INITIAL_GENESIS, days_rotation);
+        let s = seconds_until_next_rotation(next_rotation_timestamp);
+        assert!(s < rotation_interval);
     }
 }

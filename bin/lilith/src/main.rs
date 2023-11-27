@@ -17,7 +17,7 @@
  */
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     path::Path,
     process::exit,
     sync::Arc,
@@ -28,7 +28,7 @@ use futures::future::join_all;
 use log::{debug, error, info, warn};
 use semver::Version;
 use smol::{
-    lock::{Mutex, MutexGuard},
+    lock::{Mutex, MutexGuard, RwLock},
     stream::StreamExt,
     Executor,
 };
@@ -147,21 +147,47 @@ impl Lilith {
     /// for a specific P2P network.
     async fn periodic_purge(name: String, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
         info!(target: "lilith", "Starting periodic host purge task for \"{}\"", name);
-        loop {
-            // We'll pick up to PROBE_HOSTS_N hosts every PURGE_PERIOD and try to
-            // connect to them. If we can't reach them, remove them from our set.
-            sleep(PURGE_PERIOD).await;
-            debug!(target: "lilith", "[{}] Picking random hosts from db", name);
 
-            let lottery_winners = p2p.clone().hosts().fetch_n_random(PROBE_HOSTS_N).await;
-            let win_str: Vec<&str> = lottery_winners.iter().map(|x| x.as_str()).collect();
-            debug!(target: "lilith", "[{}] Got: {:?}", name, win_str);
+        // Initialize a growable ring buffer(VecDeque) to store known hosts
+        let ring_buffer = Arc::new(RwLock::new(VecDeque::<Url>::new()));
+        loop {
+            // Wait for next purge period
+            sleep(PURGE_PERIOD).await;
+            debug!(target: "lilith", "[{}] The Purge has started...", name);
+
+            // Check if new hosts exist and add them to the end of the ring buffer
+            let mut lock = ring_buffer.write().await;
+            let hosts = p2p.clone().hosts().fetch_all().await;
+            if hosts.len() != lock.len() {
+                // Since hosts are stored in a HashSet we have to check all of them
+                for host in hosts {
+                    if !lock.contains(&host) {
+                        lock.push_back(host);
+                    }
+                }
+            }
+
+            // Pick first up to PROBE_HOSTS_N hosts from the ring buffer
+            let mut purgers = vec![];
+            let mut index = 0;
+            while index <= PROBE_HOSTS_N {
+                match lock.pop_front() {
+                    Some(host) => purgers.push(host),
+                    None => break,
+                };
+                index += 1;
+            }
+
+            // Try to connect to them. If we can't reach them, remove them from our set.
+            let purgers_str: Vec<&str> = purgers.iter().map(|x| x.as_str()).collect();
+            debug!(target: "lilith", "[{}] Got: {:?}", name, purgers_str);
 
             let mut tasks = vec![];
 
-            for host in &lottery_winners {
+            for host in &purgers {
                 let p2p_ = p2p.clone();
                 let ex_ = ex.clone();
+                let ring_buffer_ = ring_buffer.clone();
                 tasks.push(async move {
                     let session_out = p2p_.session_outbound();
                     let session_weak = Arc::downgrade(&session_out);
@@ -190,6 +216,8 @@ impl Lilith {
                                 Ok(()) => {
                                     debug!(target: "lilith", "Handshake success! Stopping channel.");
                                     channel.stop().await;
+                                    // Push host back to the ring buffer
+                                    ring_buffer_.write().await.push_back(host.clone());
                                 }
                                 Err(e) => {
                                     debug!(target: "lilith", "Handshake failure! {}", e);

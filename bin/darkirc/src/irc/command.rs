@@ -19,7 +19,7 @@
 //! IRC command implemenatations
 //!
 //! These try to follow the RFCs, modified in order for our P2P stack.
-//! Copied from https://simple.wikipedia.org/wiki/List_of_Internet_Relay_Chat_commands
+//! Copied from <https://simple.wikipedia.org/wiki/List_of_Internet_Relay_Chat_commands>
 //!
 //! Unimplemented commands:
 //! * `AWAY`
@@ -54,7 +54,7 @@ use std::{collections::HashSet, sync::atomic::Ordering::SeqCst};
 
 use darkfi::Result;
 use darkfi_serial::deserialize_async_partial;
-use log::{debug, error, info};
+use log::{error, info};
 
 use super::{
     client::{Client, ReplyType},
@@ -354,7 +354,7 @@ impl Client {
     /// `LIST [<channels> [<server>]]`
     ///
     /// List all channels on the server. If the list `<channels>` is given, it
-    /// will return the channel topics. If <server> is given, the command will
+    /// will return the channel topics. If `<server>` is given, the command will
     /// be sent to `<server>` for evaluation.
     pub async fn handle_cmd_list(&self, _args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
@@ -431,7 +431,7 @@ impl Client {
 
     /// `MOTD [<server>]`
     ///
-    /// Returns the message of the day on <server> or the current server if
+    /// Returns the message of the day on `<server>` or the current server if
     /// it is not stated.
     pub async fn handle_cmd_motd(&self, _args: &str) -> Result<Vec<ReplyType>> {
         let nick = self.nickname.read().await.to_string();
@@ -448,8 +448,8 @@ impl Client {
 
     /// `NAMES [<channel>]`
     ///
-    /// Returns a list of who is on the list of <channel>, by channel name.
-    /// If <channel> is not used, all users are shown. They are grouped by
+    /// Returns a list of who is on the list of `<channel>`, by channel name.
+    /// If `<channel>` is not used, all users are shown. They are grouped by
     /// channel name with all users who are not on a channel being shown as
     /// part of channel "*".
     pub async fn handle_cmd_names(&self, args: &str) -> Result<Vec<ReplyType>> {
@@ -563,7 +563,7 @@ impl Client {
 
     /// `PART <channel>`
     ///
-    /// Causes a user to leave the channel <channel>.
+    /// Causes a user to leave the channel `<channel>`.
     pub async fn handle_cmd_part(&self, args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
@@ -635,7 +635,7 @@ impl Client {
 
     /// `PRIVMSG <msgtarget> <message>`
     ///
-    /// Sends <message> to <msgtarget>. The target is usually a user or
+    /// Sends `<message>` to `<msgtarget>`. The target is usually a user or
     /// a channel.
     pub async fn handle_cmd_privmsg(&self, args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
@@ -703,8 +703,8 @@ impl Client {
 
     /// `TOPIC <channel> [<topic>]`
     ///
-    /// Used to get the channel topic on <channel>. If <topic> is given, it
-    /// sets the channel topic to <topic>.
+    /// Used to get the channel topic on `<channel>`. If `<topic>` is given, it
+    /// sets the channel topic to `<topic>`.
     pub async fn handle_cmd_topic(&self, args: &str) -> Result<Vec<ReplyType>> {
         if !self.registered.load(SeqCst) {
             self.penalty.fetch_add(1, SeqCst);
@@ -762,7 +762,7 @@ impl Client {
     ///
     /// This command is used at the beginning of a connection to specify the
     /// username, hostname, real name, and the initial user modes of the
-    /// connecting client. <realname> may contain spaces, and thus must be
+    /// connecting client. `<realname>` may contain spaces, and thus must be
     /// prefixed with a colon.
     pub async fn handle_cmd_user(&self, args: &str) -> Result<Vec<ReplyType>> {
         if self.registered.load(SeqCst) {
@@ -822,11 +822,6 @@ impl Client {
 
         *self.username.write().await = username.to_string();
         *self.realname.write().await = realname.to_string();
-
-        // The username is now set, we can open the sled tree for seen messages
-        self.seen
-            .set(self.server.darkirc.sled.open_tree(format!("darkirc_user_{}", username)).unwrap())
-            .unwrap();
 
         // If the nickname is set, we can complete the registration
         if nick != "*" {
@@ -935,15 +930,21 @@ impl Client {
             return Ok(vec![])
         }
 
+        // Fetch and order all the events from the DAG
         let dag_events = self.server.darkirc.event_graph.order_events().await;
-        let seen_events = self.seen.get().unwrap();
 
+        // Here we'll hold the events in order we'll push to the client
         let mut replies = vec![];
 
         for event_id in dag_events.iter() {
             // If it was seen, skip
-            if seen_events.contains_key(event_id.as_bytes()).unwrap() {
-                continue
+            match self.is_seen(event_id).await {
+                Ok(true) => continue,
+                Ok(false) => {}
+                Err(e) => {
+                    error!("[IRC CLIENT] (get_history) self.is_seen({}) failed: {}", event_id, e);
+                    return Err(e)
+                }
             }
 
             // Get the event from the DAG
@@ -965,8 +966,10 @@ impl Client {
 
             let msg = format!("PRIVMSG {} :{}", privmsg.channel, privmsg.msg);
             replies.push(ReplyType::Client((privmsg.nick, msg)));
-            debug!("Marking event {} as seen", event_id);
-            seen_events.insert(event_id.as_bytes(), &[]).unwrap();
+            if let Err(e) = self.mark_seen(event_id).await {
+                error!("[IRC CLIENT] (get_history) self.mark_seen({}) failed: {}", event_id, e);
+                return Err(e)
+            }
         }
 
         Ok(replies)

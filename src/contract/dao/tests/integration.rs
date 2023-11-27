@@ -104,8 +104,6 @@ fn integration_test() -> Result<()> {
             &Holder::Dao,
             Some(DAO_CONTRACT_ID.inner()),           // spend_hook
             Some(dao_mint_params.dao_bulla.inner()), // user_data
-            None,
-            None,
         )?;
 
         for holder in &HOLDERS {
@@ -317,8 +315,8 @@ fn integration_test() -> Result<()> {
         th.assert_trees(&HOLDERS);
 
         // Gather the coins
-        th.gather_owncoin(&Holder::Dao, &xfer_params.outputs[0], None)?;
-        th.gather_owncoin(&Holder::Rachel, &xfer_params.outputs[1], None)?;
+        th.gather_owncoin(&Holder::Rachel, &xfer_params.outputs[0], None)?;
+        th.gather_owncoin(&Holder::Dao, &xfer_params.outputs[1], None)?;
 
         let rachel_wallet = th.holders.get(&Holder::Rachel).unwrap();
         assert!(rachel_wallet.unspent_money_coins[0].note.value == PROPOSAL_AMOUNT);

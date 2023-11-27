@@ -25,7 +25,7 @@ import asyncio
 class JsonRpc:
 
     async def start(self, host, port):
-        #logging.info(f"trying to connect to {host}:{port}")
+        logging.info(f"trying to connect to {host}:{port}")
         reader, writer = await asyncio.open_connection(host, port)
         self.reader = reader
         self.writer = writer

@@ -35,6 +35,10 @@ use crate::{
 /// Atomic pointer to hosts object
 pub type HostsPtr = Arc<Hosts>;
 
+// An array containing all possible local host strings
+// TODO: This could perhaps be more exhaustive?
+pub const LOCAL_HOST_STRS: [&str; 2] = ["localhost", "localhost.localdomain"];
+
 /// Manages a store of network addresses
 pub struct Hosts {
     /// Set of stored addresses
@@ -78,13 +82,7 @@ impl Hosts {
 
         if !filtered_addrs.is_empty() {
             let mut addrs_map = self.addrs.write().await;
-            let mut quarantine = self.quarantine.write().await;
             for addr in filtered_addrs {
-                // We assume this was called for a valid peer, and/or we managed
-                // to successfully connect. So we'll also remove them from the
-                // quarantine zone if they're there.
-                quarantine.remove(&addr);
-
                 debug!(target: "net::hosts::store()", "Inserting {}", addr);
                 addrs_map.insert(addr);
             }
@@ -99,13 +97,48 @@ impl Hosts {
         Ok(sub)
     }
 
+    // Verify whether a URL is local.
+    // NOTE: This function is stateless and not specific to
+    // `Hosts`. For this reason, it might make more sense
+    // to move this function to a more appropriate location
+    // in the codebase.
+    pub async fn is_local_host(&self, url: Url) -> bool {
+        // Reject Urls without host strings.
+        if url.host_str().is_none() {
+            return false
+        }
+
+        // We do this hack in order to parse IPs properly.
+        // https://github.com/whatwg/url/issues/749
+        let addr = Url::parse(&url.as_str().replace(url.scheme(), "http")).unwrap();
+        // Filter private IP ranges
+        match addr.host().unwrap() {
+            url::Host::Ipv4(ip) => {
+                if !ip.is_global() {
+                    return true
+                }
+            }
+            url::Host::Ipv6(ip) => {
+                if !ip.is_global() {
+                    return true
+                }
+            }
+            url::Host::Domain(d) => {
+                if LOCAL_HOST_STRS.contains(&d) {
+                    return true
+                }
+            }
+        }
+        false
+    }
+
     /// Filter given addresses based on certain rulesets and validity.
     async fn filter_addresses(&self, addrs: &[Url]) -> Vec<Url> {
         debug!(target: "net::hosts::filter_addresses()", "Filtering addrs: {:?}", addrs);
         let mut ret = vec![];
         let localnet = self.settings.localnet;
 
-        for addr_ in addrs {
+        'addr_loop: for addr_ in addrs {
             // Validate that the format is `scheme://host_str:port`
             if addr_.host_str().is_none() ||
                 addr_.port().is_none() ||
@@ -115,19 +148,19 @@ impl Hosts {
                 continue
             }
 
+            if self.is_rejected(addr_).await {
+                debug!(target: "net::hosts::filter_addresses()", "Peer {} is rejected", addr_);
+                continue
+            }
+
             let host_str = addr_.host_str().unwrap();
 
             if !localnet {
-                // Our own addresses should never enter the hosts set.
-                let mut got_own = false;
+                // Our own external addresses should never enter the hosts set.
                 for ext in &self.settings.external_addrs {
                     if host_str == ext.host_str().unwrap() {
-                        got_own = true;
-                        break
+                        continue 'addr_loop
                     }
-                }
-                if got_own {
-                    continue
                 }
             }
 
@@ -138,26 +171,8 @@ impl Hosts {
             // Filter non-global ranges if we're not allowing localnet.
             // Should never be allowed in production, so we don't really care
             // about some of them (e.g. 0.0.0.0, or broadcast, etc.).
-            if !localnet {
-                // Filter private IP ranges
-                match addr.host().unwrap() {
-                    url::Host::Ipv4(ip) => {
-                        if !ip.is_global() {
-                            continue
-                        }
-                    }
-                    url::Host::Ipv6(ip) => {
-                        if !ip.is_global() {
-                            continue
-                        }
-                    }
-                    url::Host::Domain(d) => {
-                        // TODO: This could perhaps be more exhaustive?
-                        if d == "localhost" {
-                            continue
-                        }
-                    }
-                }
+            if !localnet && self.is_local_host(addr).await {
+                continue
             }
 
             match addr_.scheme() {
@@ -194,7 +209,8 @@ impl Hosts {
         self.quarantine.write().await.remove(url);
     }
 
-    /// Quarantine a peer. If they've been quarantined for 50 times, forget them.
+    /// Quarantine a peer.
+    /// If they've been quarantined for more than a configured limit, forget them.
     pub async fn quarantine(&self, url: &Url) {
         debug!(target: "net::hosts::remove()", "Quarantining peer {}", url);
         // Remove from main hosts set
@@ -205,8 +221,9 @@ impl Hosts {
             *retries += 1;
             debug!(target: "net::hosts::quarantine()", "Peer {} quarantined {} times", url, retries);
             if *retries == self.settings.hosts_quarantine_limit {
-                debug!(target: "net::hosts::quarantine()", "Deleting peer {}", url);
+                debug!(target: "net::hosts::quarantine()", "Banning peer {}", url);
                 q.remove(url);
+                self.mark_rejected(url).await;
             }
         } else {
             debug!(target: "net::hosts::remove()", "Added peer {} to quarantine", url);
@@ -214,27 +231,27 @@ impl Hosts {
         }
     }
 
-    /// Check if a given peer should be rejected
+    /// Check if a given peer (URL) is in the set of rejected hosts
     pub async fn is_rejected(&self, peer: &Url) -> bool {
+        // Skip lookup for UNIX sockets and localhost connections
+        // as they should never belong to the list of rejected URLs.
         let Some(hostname) = peer.host_str() else { return false };
 
-        // Don't reject localhost.
-        // This however allows any Tor and Nym connections.
-        if hostname == "127.0.0.1" || hostname == "[::1]" {
+        if self.is_local_host(peer.clone()).await {
             return false
         }
 
         self.rejected.read().await.contains(hostname)
     }
 
-    /// Mark a peer as rejected
+    /// Mark a peer as rejected by adding it to the set of rejected URLs.
     pub async fn mark_rejected(&self, peer: &Url) {
         // We ignore UNIX sockets here so we will just work
         // with stuff that has host_str().
         if let Some(hostname) = peer.host_str() {
-            // Don't reject localhost.
+            // Localhost connections should not be rejected
             // This however allows any Tor and Nym connections.
-            if hostname == "127.0.0.1" || hostname == "[::1]" {
+            if self.is_local_host(peer.clone()).await {
                 return
             }
 
@@ -264,23 +281,74 @@ impl Hosts {
         self.addrs.read().await.iter().cloned().collect()
     }
 
-    /// Get up to n random hosts from the hosts set.
+    /// Get up to n random peers from the hosts set.
     pub async fn fetch_n_random(&self, n: u32) -> Vec<Url> {
         let n = n as usize;
+        if n == 0 {
+            return vec![]
+        }
         let addrs = self.addrs.read().await;
         let urls = addrs.iter().choose_multiple(&mut OsRng, n.min(addrs.len()));
-        let urls = urls.iter().map(|&url| url.clone()).collect();
-        urls
+        urls.iter().map(|&url| url.clone()).collect()
     }
 
-    /// Get all peers that match the given transport schemes from the hosts set.
-    /// TODO: add a limit: usize argument
-    pub async fn fetch_with_schemes(&self, schemes: &[String]) -> Vec<Url> {
+    /// Get up to n random peers that match the given transport schemes from the hosts set.
+    pub async fn fetch_n_random_with_schemes(&self, schemes: &[String], n: u32) -> Vec<Url> {
+        let n = n as usize;
+        if n == 0 {
+            return vec![]
+        }
+
+        // Retrieve all peers corresponding to that transport schemes
+        let hosts = self.fetch_with_schemes(schemes, None).await;
+        if hosts.is_empty() {
+            return hosts
+        }
+
+        // Grab random ones
+        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
+        urls.iter().map(|&url| url.clone()).collect()
+    }
+
+    /// Get up to n random peers that don't match the given transport schemes from the hosts set.
+    pub async fn fetch_n_random_excluding_schemes(&self, schemes: &[String], n: u32) -> Vec<Url> {
+        let n = n as usize;
+        if n == 0 {
+            return vec![]
+        }
+
+        // Retrieve all peers not corresponding to that transport schemes
+        let hosts = self.fetch_exluding_schemes(schemes, None).await;
+        if hosts.is_empty() {
+            return hosts
+        }
+
+        // Grab random ones
+        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
+        urls.iter().map(|&url| url.clone()).collect()
+    }
+
+    /// Get up to limit peers that match the given transport schemes from the hosts set.
+    /// If limit was not provided, return all matching peers.
+    pub async fn fetch_with_schemes(&self, schemes: &[String], limit: Option<usize>) -> Vec<Url> {
+        let addrs = self.addrs.read().await;
+        let mut limit = match limit {
+            Some(l) => l.min(addrs.len()),
+            None => addrs.len(),
+        };
         let mut ret = vec![];
 
-        for addr in self.addrs.read().await.iter() {
+        if limit == 0 {
+            return ret
+        }
+
+        for addr in addrs.iter() {
             if schemes.contains(&addr.scheme().to_string()) {
                 ret.push(addr.clone());
+                limit -= 1;
+                if limit == 0 {
+                    return ret
+                }
             }
         }
 
@@ -289,6 +357,54 @@ impl Hosts {
             for addr in self.quarantine.read().await.keys() {
                 if schemes.contains(&addr.scheme().to_string()) {
                     ret.push(addr.clone());
+                    limit -= 1;
+                    if limit == 0 {
+                        break
+                    }
+                }
+            }
+        }
+
+        ret
+    }
+
+    /// Get up to limit peers that don't match the given transport schemes from the hosts set.
+    /// If limit was not provided, return all matching peers.
+    pub async fn fetch_exluding_schemes(
+        &self,
+        schemes: &[String],
+        limit: Option<usize>,
+    ) -> Vec<Url> {
+        let addrs = self.addrs.read().await;
+        let mut limit = match limit {
+            Some(l) => l.min(addrs.len()),
+            None => addrs.len(),
+        };
+        let mut ret = vec![];
+
+        if limit == 0 {
+            return ret
+        }
+
+        for addr in addrs.iter() {
+            if !schemes.contains(&addr.scheme().to_string()) {
+                ret.push(addr.clone());
+                limit -= 1;
+                if limit == 0 {
+                    return ret
+                }
+            }
+        }
+
+        // If we didn't find any, pick some from the quarantine zone
+        if ret.is_empty() {
+            for addr in self.quarantine.read().await.keys() {
+                if !schemes.contains(&addr.scheme().to_string()) {
+                    ret.push(addr.clone());
+                    limit -= 1;
+                    if limit == 0 {
+                        break
+                    }
                 }
             }
         }
@@ -362,7 +478,6 @@ mod tests {
 
             let local_hosts = vec![
                 Url::parse("tcp://localhost:3921").unwrap(),
-                Url::parse("tcp://127.0.0.1:23957").unwrap(),
                 Url::parse("tor://[::1]:21481").unwrap(),
                 Url::parse("tcp://192.168.10.65:311").unwrap(),
                 Url::parse("tcp+tls://0.0.0.0:2312").unwrap(),
@@ -380,6 +495,43 @@ mod tests {
             assert!(hosts.contains(&remote_hosts[0]).await);
             assert!(hosts.contains(&remote_hosts[1]).await);
             assert!(!hosts.contains(&remote_hosts[2]).await);
+        });
+    }
+
+    #[test]
+    fn test_is_local_host() {
+        smol::block_on(async {
+            let settings = Settings {
+                localnet: false,
+                external_addrs: vec![
+                    Url::parse("tcp://foo.bar:123").unwrap(),
+                    Url::parse("tcp://lol.cat:321").unwrap(),
+                ],
+                ..Default::default()
+            };
+            let hosts = Hosts::new(Arc::new(settings.clone()));
+
+            let local_hosts: Vec<Url> = vec![
+                Url::parse("tcp://localhost").unwrap(),
+                Url::parse("tcp://127.0.0.1").unwrap(),
+                Url::parse("tcp+tls://[::1]").unwrap(),
+                Url::parse("tcp://localhost.localdomain").unwrap(),
+                Url::parse("tcp://192.168.10.65").unwrap(),
+            ];
+            for host in local_hosts {
+                eprintln!("{}", host);
+                assert!(hosts.is_local_host(host).await);
+            }
+            let remote_hosts: Vec<Url> = vec![
+                Url::parse("https://dyne.org").unwrap(),
+                Url::parse("tcp://77.168.10.65:2222").unwrap(),
+                Url::parse("tcp://[2345:0425:2CA1:0000:0000:0567:5673:23b5]").unwrap(),
+                Url::parse("http://eweiibe6tdjsdprb4px6rqrzzcsi22m4koia44kc5pcjr7nec2rlxyad.onion")
+                    .unwrap(),
+            ];
+            for host in remote_hosts {
+                assert!(!(hosts.is_local_host(host).await))
+            }
         });
     }
 }

@@ -244,8 +244,12 @@ impl IrcServer {
 
         conn_task.clone().start(
             async move { client.multiplex_connection(stream).await },
-            move |_| async move {
-                info!("[IRC SERVER] Disconnected client from {}", peer_addr);
+            move |res| async move {
+                match res {
+                    Ok(()) => info!("[IRC SERVER] Disconnected client from {}", peer_addr),
+                    Err(e) => error!("[IRC SERVER] Disconnected client from {}: {}", peer_addr, e),
+                }
+
                 self.clone().clients.lock().await.remove(&port);
             },
             Error::ChannelStopped,

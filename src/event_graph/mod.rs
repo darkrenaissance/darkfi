@@ -20,7 +20,6 @@ use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet, VecDeque},
     sync::Arc,
-    time::UNIX_EPOCH,
 };
 
 use async_recursion::async_recursion;
@@ -33,6 +32,7 @@ use smol::{
 };
 
 use crate::{
+    event_graph::util::seconds_until_next_rotation,
     net::P2pPtr,
     system::{sleep, timeout::timeout, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr},
     Error, Result,
@@ -88,6 +88,7 @@ pub struct EventGraph {
     /// Event subscriber, this notifies whenever an event is
     /// inserted into the DAG
     pub event_sub: SubscriberPtr<Event>,
+    days_rotation: u64,
 }
 
 impl EventGraph {
@@ -105,6 +106,8 @@ impl EventGraph {
         let broadcasted_ids = RwLock::new(HashSet::new());
         let event_sub = Subscriber::new();
 
+        // Create the current genesis event based on the `days_rotation`
+        let current_genesis = Self::generate_genesis(days_rotation);
         let self_ = Arc::new(Self {
             p2p,
             dag: dag.clone(),
@@ -112,10 +115,8 @@ impl EventGraph {
             broadcasted_ids,
             prune_task: OnceCell::new(),
             event_sub,
+            days_rotation,
         });
-
-        // Create the current genesis event based on the `days_rotation`
-        let current_genesis = Self::generate_genesis(days_rotation);
 
         // Check if we have it in our DAG.
         // If not, we can prune the DAG and insert this new genesis event.
@@ -124,8 +125,7 @@ impl EventGraph {
                 target: "event_graph::new()",
                 "[EVENTGRAPH] DAG does not contain current genesis, pruning existing data",
             );
-            dag.clear()?;
-            self_.dag_insert(current_genesis).await?;
+            self_.dag_prune(current_genesis).await?;
         }
 
         // Find the unreferenced tips in the current DAG state.
@@ -138,7 +138,7 @@ impl EventGraph {
             let _ = self_.prune_task.set(prune_task.clone()).await;
 
             prune_task.clone().start(
-                self_.clone().dag_prune(days_rotation),
+                self_.clone().dag_prune_task(days_rotation),
                 |_| async move {
                     self__.clone()._handle_stop(sled_db).await;
                 },
@@ -148,6 +148,10 @@ impl EventGraph {
         }
 
         Ok(self_)
+    }
+
+    pub fn days_rotation(&self) -> u64 {
+        self.days_rotation
     }
 
     async fn _handle_stop(&self, sled_db: sled::Db) {
@@ -395,21 +399,54 @@ impl EventGraph {
         // At this point we should've got all the events.
         // We should add them to the DAG.
         // TODO: FIXME: Also validate these events.
-        for event in received_events.iter().rev() {
-            self.dag_insert(event.clone()).await.unwrap();
-        }
+        // TODO: FIXME: This insert should also be atomic, dag_insert might need a rewrite
+        let received_events_rev: Vec<Event> = received_events.iter().rev().cloned().collect();
+        self.dag_insert(&received_events_rev).await.unwrap();
 
         info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] DAG synced successfully!");
         Ok(())
     }
 
+    /// Atomically prune the DAG and insert the given event as genesis.
+    async fn dag_prune(&self, genesis_event: Event) -> Result<()> {
+        debug!(target: "event_graph::dag_prune()", "Pruning DAG...");
+
+        // Acquire exclusive locks to unreferenced_tips and broadcasted_ids while
+        // this operation is happening. We do this to ensure that during the pruning
+        // operation, no other operations are able to access the intermediate state
+        // which could lead to producing the wrong state after pruning.
+        let mut unreferenced_tips = self.unreferenced_tips.write().await;
+        let mut broadcasted_ids = self.broadcasted_ids.write().await;
+
+        // Atomically clear the DAG and write the new genesis event.
+        let mut batch = sled::Batch::default();
+        for key in self.dag.iter().keys() {
+            batch.remove(key.unwrap());
+        }
+        batch.insert(genesis_event.id().as_bytes(), serialize_async(&genesis_event).await);
+
+        debug!(target: "event_graph::dag_prune()", "Applying batch...");
+        if let Err(e) = self.dag.apply_batch(batch) {
+            panic!("Failed pruning DAG, sled apply_batch error: {}", e);
+        }
+
+        // Clear unreferenced tips and bcast ids
+        *unreferenced_tips = HashSet::from([genesis_event.id()]);
+        *broadcasted_ids = HashSet::new();
+        drop(unreferenced_tips);
+        drop(broadcasted_ids);
+
+        debug!(target: "event_graph::dag_prune()", "DAG pruned successfully");
+        Ok(())
+    }
+
     /// Background task periodically pruning the DAG.
-    async fn dag_prune(self: Arc<Self>, days_rotation: u64) -> Result<()> {
+    async fn dag_prune_task(self: Arc<Self>, days_rotation: u64) -> Result<()> {
         // The DAG should periodically be pruned. This can be a configurable
         // parameter. By pruning, we should deterministically replace the
         // genesis event (can use a deterministic timestamp) and drop everything
         // in the DAG, leaving just the new genesis event.
-        debug!(target: "event_graph::dag_prune()", "Spawned background DAG pruning task");
+        debug!(target: "event_graph::dag_prune_task()", "Spawned background DAG pruning task");
 
         loop {
             // Find the next rotation timestamp:
@@ -423,54 +460,88 @@ impl EventGraph {
             };
 
             // Sleep until it's time to rotate.
-            let s = UNIX_EPOCH.elapsed().unwrap().as_secs() - next_rotation;
-            debug!(target: "event_graph::dag_prune()", "Sleeping {}s until next DAG prune", s);
-            sleep(s).await;
-            debug!(target: "event_graph::dag_prune()", "Rotation period reached. Pruning DAG");
+            let s = seconds_until_next_rotation(next_rotation);
 
-            *self.unreferenced_tips.write().await = HashSet::new();
-            self.dag.clear()?;
-            self.dag_insert(current_genesis).await?;
-            debug!(target: "event_graph::dag_prune()", "DAG pruned successfully");
+            debug!(target: "event_graph::dag_prune_task()", "Sleeping {}s until next DAG prune", s);
+            sleep(s).await;
+            debug!(target: "event_graph::dag_prune_task()", "Rotation period reached");
+
+            // Trigger DAG prune
+            self.dag_prune(current_genesis).await?;
         }
     }
 
-    /// Insert an event into the DAG.
-    /// This will append the new event into the unreferenced tips set, and
-    /// remove the event's parents from it. It will also append the event's
+    /// Atomically insert given events into the DAG and return the event IDs.
+    /// This will append the new events into the unreferenced tips set, and
+    /// remove the events' parents from it. It will also append the events'
     /// level-1 parents to the `broadcasted_ids` set, so the P2P protocol
     /// knows that any requests for them are actually legitimate.
     /// TODO: The `broadcasted_ids` set should periodically be pruned, when
     /// some sensible time has passed after broadcasting the event.
-    pub async fn dag_insert(&self, event: Event) -> Result<blake3::Hash> {
-        let event_id = event.id();
-        debug!(target: "event_graph::dag_insert()", "Inserting event {} into the DAG", event_id);
-        let s_event = serialize_async(&event).await;
-
-        // Update the unreferenced DAG tips set
+    pub async fn dag_insert(&self, events: &[Event]) -> Result<Vec<blake3::Hash>> {
+        // Acquire exclusive locks to `unreferenced_tips and broadcasted_ids`
         let mut unreferenced_tips = self.unreferenced_tips.write().await;
-        let mut bcast_ids = self.broadcasted_ids.write().await;
+        let mut broadcasted_ids = self.broadcasted_ids.write().await;
 
-        for parent_id in event.parents.iter() {
-            if parent_id != &NULL_ID {
-                unreferenced_tips.remove(parent_id);
-                bcast_ids.insert(*parent_id);
+        // Here we keep the IDs to return
+        let mut ids = Vec::with_capacity(events.len());
+
+        // Create an atomic batch
+        let mut batch = sled::Batch::default();
+
+        // Iterate over given events
+        for event in events {
+            let event_id = event.id();
+            debug!(
+                target: "event_graph::dag_insert()",
+                "Inserting event {} into the DAG", event_id,
+            );
+            let event_se = serialize_async(event).await;
+
+            // Update the unreferenced DAG tips set
+            debug!(
+                target: "event_graph::dag_insert()",
+                "Event {} parents {:#?}", event_id, event.parents,
+            );
+            for parent_id in event.parents.iter() {
+                if parent_id != &NULL_ID {
+                    debug!(
+                        target: "event_graph::dag_insert()",
+                        "Removing {} from unreferenced_tips", parent_id,
+                    );
+                    unreferenced_tips.remove(parent_id);
+                    broadcasted_ids.insert(*parent_id);
+                }
             }
+            debug!(
+                target: "event_graph::dag_insert()",
+                "Adding {} to unreferenced tips", event_id,
+            );
+            unreferenced_tips.insert(event_id);
+
+            // Add the event to the atomic batch
+            batch.insert(event_id.as_bytes(), event_se);
+
+            // Note down the event ID to return
+            ids.push(event_id);
         }
-        unreferenced_tips.insert(event_id);
 
-        self.dag.insert(event_id.as_bytes(), s_event).unwrap();
+        // Atomically apply the batch.
+        // Panic if something is corrupted.
+        if let Err(e) = self.dag.apply_batch(batch) {
+            panic!("Failed applying dag_insert batch to sled: {}", e);
+        }
 
-        // We hold the write locks until this point because we insert the event
-        // into the database above, so we don't want anything to read these until
-        // that insertion is complete.
+        // Send out notifications about the new events
+        for event in events {
+            self.event_sub.notify(event.clone()).await;
+        }
+
+        // Drop the exclusive locks
         drop(unreferenced_tips);
-        drop(bcast_ids);
+        drop(broadcasted_ids);
 
-        // Notify about the event on the event subscriber
-        self.event_sub.notify(event).await;
-
-        Ok(event_id)
+        Ok(ids)
     }
 
     /// Fetch an event from the DAG
@@ -504,6 +575,7 @@ impl EventGraph {
 
     /// Get the current set of unreferenced tips in the DAG.
     async fn get_unreferenced_tips(&self) -> [blake3::Hash; N_EVENT_PARENTS] {
+        // TODO: return vec of all instead of N_EVENT_PARENTS
         let unreferenced_tips = self.unreferenced_tips.read().await;
 
         let mut tips = [NULL_ID; N_EVENT_PARENTS];

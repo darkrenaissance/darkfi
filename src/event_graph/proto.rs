@@ -30,7 +30,7 @@ use darkfi_serial::{async_trait, deserialize_async, SerialDecodable, SerialEncod
 use log::{debug, error, trace, warn};
 use smol::Executor;
 
-use super::{Event, EventGraphPtr, NULL_ID};
+use super::{Event, EventGraph, EventGraphPtr, NULL_ID};
 use crate::{impl_p2p_message, net::*, system::timeout::timeout, Error, Result};
 
 /// Malicious behaviour threshold. If the threshold is reached, we will
@@ -142,6 +142,22 @@ impl ProtocolEventGraph {
                  target: "event_graph::protocol::handle_event_put()",
                  "Got EventPut: {} [{}]", event.id(), self.channel.address(),
             );
+            // Check if the event is older than the genesis event. If so, we should
+            // not include it in our Dag.
+            // The genesis event marks the last time the Dag has been pruned of old
+            // events. The pruning interval is defined by the days_rotation field
+            // of [`EventGraph`].
+            // TODO it would be better to store/cache this instead of calculating
+            // on every broadcast/relay.
+            let genesis_timestamp =
+                EventGraph::generate_genesis(self.event_graph.days_rotation()).timestamp;
+            if event.timestamp < genesis_timestamp {
+                debug!(
+                    target: "event_graph::protocol::handle_event_put()",
+                    "Event {} is older than genesis. Event timestamp: `{}`. Genesis timestamp: `{}`",
+                event.id(), event.timestamp, genesis_timestamp
+                );
+            }
 
             // We received an event. Check if we already have it in our DAG.
             // Also check if we have the event's parents. In the case we do
@@ -280,9 +296,9 @@ impl ProtocolEventGraph {
                 // At this point we should've got all the events.
                 // We should add them to the DAG.
                 // TODO: FIXME: Also validate these events.
-                for event in received_events.iter().rev() {
-                    self.event_graph.dag_insert(event.clone()).await.unwrap();
-                }
+                let received_events_rev: Vec<Event> =
+                    received_events.iter().rev().cloned().collect();
+                self.event_graph.dag_insert(&received_events_rev).await.unwrap();
             } // <-- !missing_parents.is_empty()
 
             // If we're here, we have all the parents, and we can now
@@ -291,7 +307,7 @@ impl ProtocolEventGraph {
                 target: "event_graph::protocol::handle_event_put()",
                 "Got all parents necessary for insertion",
             );
-            self.event_graph.dag_insert(event.clone()).await.unwrap();
+            self.event_graph.dag_insert(&[event.clone()]).await.unwrap();
 
             // Relay the event to other peers.
             self.event_graph
@@ -353,6 +369,22 @@ impl ProtocolEventGraph {
             );
             let event = self.event_graph.dag.get(event_id.as_bytes()).unwrap().unwrap();
             let event: Event = deserialize_async(&event).await.unwrap();
+
+            // Check if the event is older than the genesis event. If so, something
+            // has gone wrong. The event should have been pruned during the last
+            // rotation.
+            // TODO it would be better to store/cache this instead of calculating
+            // on every broadcast/relay.
+            let genesis_timestamp =
+                EventGraph::generate_genesis(self.event_graph.days_rotation()).timestamp;
+            if event.timestamp < genesis_timestamp {
+                error!(
+                    target: "event_graph::protocol::handle_event_req()",
+                    "Requested event {} is older than previous rotation period. It should have been pruned.
+                Event timestamp: `{}`. Genesis timestamp: `{}`",
+                event.id(), event.timestamp, genesis_timestamp
+                );
+            }
 
             // Now let's get the upper level of event IDs. When we reply, we could
             // get requests for those IDs as well.

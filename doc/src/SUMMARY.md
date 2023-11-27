@@ -16,13 +16,15 @@
 - [DAO](testnet/dao.md)
 - [ircd](misc/ircd/ircd.md)
 	- [Private Message](misc/ircd/private_message.md)
+	- [Local Deployment](misc/ircd/local_deploy.md)
 
 # Developer Doc
 
-- [Development](dev/development.md)
+- [Development](dev/dev.md)
   - [Contribute](dev/contribute.md)
   - [Learn](dev/learn.md)
   - [API Rustdoc](dev/rustdoc.md)
+  - [Native Contracts](dev/native_contracts.md)
   - [Seminars](dev/seminars.md)
 - [Architecture](arch/arch.md)
   - [Overview](arch/overview.md)
@@ -105,6 +107,7 @@
 
 # Misc
 
+- [tor-darkirc](misc/tor-darkirc.md)
 - [vanityaddr](misc/vanityaddr.md)
 - [IRCd Specification](misc/ircd/specification.md)
 - [tau](misc/tau.md)

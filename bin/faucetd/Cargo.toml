@@ -15,7 +15,7 @@ chrono = "0.4.31"
 darkfi = {path = "../../", features = ["async-daemonize", "validator"]}
 darkfi-serial = {path = "../../src/serial"}
 darkfi-sdk = {path = "../../src/sdk"}
-darkfi-money-contract = {path = "../../src/contract/money", features = ["no-entrypoint", "client"]}
+darkfi_money_contract = {path = "../../src/contract/money", features = ["no-entrypoint", "client"]}
 log = "0.4.20"
 rand = "0.8.5"
 rusqlite = "0.29.0"

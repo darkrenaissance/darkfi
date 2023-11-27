@@ -40,6 +40,12 @@ pub(crate) fn drk_log(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) {
     }
 }
 
+/// Writes data to the `contract_return_data` field of [`Env`]. The data will
+/// be read from `ptr` at a memory offset specified by `len`.
+/// Returns `0` on success, otherwise returns a positive error code
+/// corresponding to a [`ContractError`]. Note that this is in contrast to other
+/// methods in this file that return negative error codes or else return positive
+/// integers that correspond to success states.
 pub(crate) fn set_return_data(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
     let env = ctx.data();
     match env.contract_section {
@@ -65,6 +71,9 @@ pub(crate) fn set_return_data(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
     }
 }
 
+/// Appends a new object to the objects store. The data for the object is read from
+/// `ptr`. Returns an index corresponding to the new object's index in the objects
+/// store. (This index is equal to the last index in the store.)
 pub(crate) fn put_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
     let env = ctx.data();
     let memory_view = env.memory_view(&ctx);
@@ -100,6 +109,8 @@ pub(crate) fn put_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: 
     obj_idx as i64
 }
 
+/// Retrieve an object from the object store specified by the index `idx`. The object's
+/// data is written to `ptr`. Returns `0` on success and an error code otherwise.
 pub(crate) fn get_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, idx: u32) -> i64 {
     // Get the slice, where we will read the size of the buffer
 
@@ -132,6 +143,8 @@ pub(crate) fn get_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, idx: 
     0
 }
 
+// Returns the size (number of bytes) of an object in the object store
+// specified by index `idx`.
 pub(crate) fn get_object_size(ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
     // Get the slice, where we will read the size of the buffer
 
@@ -170,7 +183,9 @@ pub(crate) fn get_verifying_slot_epoch(ctx: FunctionEnvMut<Env>) -> u64 {
     ctx.data().time_keeper.verifying_slot_epoch()
 }
 
-/// Will return requested slot from `SlotStore`.
+/// Copies the data of requested slot from `SlotStore` into the VM by appending
+/// the data to the VM's object store. On success, returns the index of the new object in
+/// the object store. Otherwise, returns an error code (negative value).
 pub(crate) fn get_slot(ctx: FunctionEnvMut<Env>, slot: u64) -> i64 {
     let env = ctx.data();
 

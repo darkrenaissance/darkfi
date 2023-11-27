@@ -24,6 +24,7 @@ darkfi-serial = {path = "../serial", features = ["crypto"]}
 
 # Encoding
 bs58 = "0.5.0"
+sha2 = "0.10.8"
 
 # Cryptography
 blake2b_simd = "1.0.2"

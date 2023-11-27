@@ -19,17 +19,17 @@
 use std::sync::Arc;
 
 use log::{debug, error};
-use smol::{channel, Executor};
+use smol::{channel, io::BufReader, Executor};
 use tinyjson::JsonValue;
 use url::Url;
 
 use super::{
-    common::{read_from_stream, write_to_stream, INIT_BUF_SIZE},
+    common::{read_from_stream, write_to_stream, INIT_BUF_SIZE, READ_TIMEOUT},
     jsonrpc::*,
 };
 use crate::{
     net::transport::{Dialer, PtStream},
-    system::{StoppableTask, StoppableTaskPtr, SubscriberPtr},
+    system::{io_timeout, StoppableTask, StoppableTaskPtr, SubscriberPtr},
     Error, Result,
 };
 
@@ -92,7 +92,8 @@ impl RpcClient {
     ) -> Result<()> {
         debug!(target: "rpc::client::reqrep_loop()", "Starting reqrep loop");
 
-        let (mut reader, mut writer) = smol::io::split(stream);
+        let (reader, mut writer) = smol::io::split(stream);
+        let mut reader = BufReader::new(reader);
 
         loop {
             let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
@@ -102,7 +103,12 @@ impl RpcClient {
             let request = JsonResult::Request(request);
             write_to_stream(&mut writer, &request).await?;
 
-            let _ = read_from_stream(&mut reader, &mut buf, with_timeout).await?;
+            if with_timeout {
+                let _ = io_timeout(READ_TIMEOUT, read_from_stream(&mut reader, &mut buf)).await?;
+            } else {
+                let _ = read_from_stream(&mut reader, &mut buf).await?;
+            }
+
             let val: JsonValue = String::from_utf8(buf)?.parse()?;
             let rep = JsonResult::try_from_value(&val)?;
             rep_send.send(rep).await?;

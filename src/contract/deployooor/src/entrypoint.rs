@@ -58,10 +58,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // Set up a database tree for arbitrary data
     let info_db = match db_lookup(cid, DEPLOY_CONTRACT_INFO_TREE) {
         Ok(v) => v,
-        Err(_) => {
-            let info_db = db_init(cid, DEPLOY_CONTRACT_INFO_TREE)?;
-            info_db
-        }
+        Err(_) => db_init(cid, DEPLOY_CONTRACT_INFO_TREE)?,
     };
 
     // Set up a database to hold the set of locked contracts

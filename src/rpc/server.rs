@@ -21,7 +21,7 @@ use std::{collections::HashSet, io::ErrorKind, sync::Arc};
 use async_trait::async_trait;
 use log::{debug, error, info};
 use smol::{
-    io::{ReadHalf, WriteHalf},
+    io::{BufReader, ReadHalf, WriteHalf},
     lock::{Mutex, MutexGuard},
 };
 use tinyjson::JsonValue;
@@ -75,8 +75,9 @@ pub trait RequestHandler: Sync + Send {
 
 /// Accept function that should run inside a loop for accepting incoming
 /// JSON-RPC requests and passing them to the [`RequestHandler`].
+#[allow(clippy::type_complexity)]
 pub async fn accept(
-    reader: Arc<Mutex<ReadHalf<Box<dyn PtStream>>>>,
+    reader: Arc<Mutex<BufReader<ReadHalf<Box<dyn PtStream>>>>>,
     writer: Arc<Mutex<WriteHalf<Box<dyn PtStream>>>>,
     addr: Url,
     rh: Arc<impl RequestHandler + 'static>,
@@ -102,11 +103,43 @@ pub async fn accept(
         let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
 
         let mut reader_lock = reader.lock().await;
-        let _ = read_from_stream(&mut reader_lock, &mut buf, false).await?;
+        let _ = read_from_stream(&mut reader_lock, &mut buf).await?;
         drop(reader_lock);
 
-        let val: JsonValue = String::from_utf8(buf)?.trim().parse()?;
-        let req = JsonRequest::try_from(&val)?;
+        let line = match String::from_utf8(buf) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    target: "rpc::server::accept()",
+                    "[RPC SERVER] Failed parsing string from read buffer: {}", e,
+                );
+                return Err(e.into())
+            }
+        };
+
+        // Parse the line as JSON
+        let val: JsonValue = match line.trim().parse() {
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    target: "rpc::server::accept()",
+                    "[RPC SERVER] Failed parsing JSON string: {}", e,
+                );
+                return Err(e.into())
+            }
+        };
+
+        // Cast to JsonRequest
+        let req = match JsonRequest::try_from(&val) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    target: "rpc::server::accept()",
+                    "[RPC SERVER] Failed casting JSON to a JsonRequest: {}", e,
+                );
+                return Err(e.into())
+            }
+        };
 
         debug!(target: "rpc::server", "{} --> {}", addr, val.stringify()?);
 
@@ -115,8 +148,6 @@ pub async fn accept(
         match rep {
             JsonResult::Subscriber(subscriber) => {
                 let task = StoppableTask::new();
-                debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
-                tasks.lock().await.insert(task.clone());
 
                 // Clone what needs to go in the background
                 let task_ = task.clone();
@@ -134,13 +165,13 @@ pub async fn accept(
                             let notification = subscription.receive().await;
 
                             // Push notification
-                            debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify()?);
+                            debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify().unwrap());
                             let notification = JsonResult::Notification(notification);
 
                             let mut writer_lock = writer_.lock().await;
                             if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
                                 subscription.unsubscribe().await;
-                                return Err(e)
+                                return Err(e.into())
                             }
                             drop(writer_lock);
                         }
@@ -155,6 +186,9 @@ pub async fn accept(
                     Error::DetachedTaskStopped,
                     ex.clone(),
                 );
+
+                debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
+                tasks.lock().await.insert(task.clone());
             }
 
             JsonResult::SubscriberWithReply(subscriber, reply) => {
@@ -165,9 +199,6 @@ pub async fn accept(
                 drop(writer_lock);
 
                 let task = StoppableTask::new();
-                debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
-                tasks.lock().await.insert(task.clone());
-
                 // Clone what needs to go in the background
                 let task_ = task.clone();
                 let addr_ = addr.clone();
@@ -184,14 +215,14 @@ pub async fn accept(
                             let notification = subscription.receive().await;
 
                             // Push notification
-                            debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify()?);
+                            debug!(target: "rpc::server", "{} <-- {}", addr_, notification.stringify().unwrap());
                             let notification = JsonResult::Notification(notification);
 
                             let mut writer_lock = writer_.lock().await;
                             if let Err(e) = write_to_stream(&mut writer_lock, &notification).await {
                                 subscription.unsubscribe().await;
                                 drop(writer_lock);
-                                return Err(e)
+                                return Err(e.into())
                             }
                             drop(writer_lock);
                         }
@@ -206,6 +237,9 @@ pub async fn accept(
                     Error::DetachedTaskStopped,
                     ex.clone(),
                 );
+
+                debug!(target: "rpc::server", "Adding background task {} to map", task.task_id);
+                tasks.lock().await.insert(task.clone());
             }
 
             JsonResult::Request(_) | JsonResult::Notification(_) => {
@@ -244,7 +278,7 @@ async fn run_accept_loop(
                 info!(target: "rpc::server", "[RPC] Server accepted conn from {}", url);
 
                 let (reader, writer) = smol::io::split(stream);
-                let reader = Arc::new(Mutex::new(reader));
+                let reader = Arc::new(Mutex::new(BufReader::new(reader)));
                 let writer = Arc::new(Mutex::new(writer));
 
                 let task = StoppableTask::new();

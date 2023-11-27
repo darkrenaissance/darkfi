@@ -25,6 +25,10 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
+use wasmparser::{
+    ExternalKind::{Func, Memory},
+    Payload::ExportSection,
+};
 
 use crate::{
     error::DeployError,
@@ -83,6 +87,71 @@ pub(crate) fn deploy_process_instruction_v1(
             msg!("[DeployV1] Error: Contract is locked. Cannot redeploy.");
             return Err(DeployError::ContractLocked.into())
         }
+    }
+
+    // Then validate the wasm binary
+    if let Err(e) = wasmparser::validate(&params.wasm_bincode) {
+        msg!("[DeployV1] Error: Failed to validate WASM binary: {}", e);
+        return Err(DeployError::WasmBincodeInvalid.into())
+    }
+
+    // And find all the necessary exports/symbols
+    let mut found_memory = false;
+    let mut found_initialize = false;
+    let mut found_entrypoint = false;
+    let mut found_update = false;
+    let mut found_metadata = false;
+
+    let parser = wasmparser::Parser::new(0);
+    for payload in parser.parse_all(&params.wasm_bincode) {
+        let payload = match payload {
+            Ok(v) => v,
+            Err(e) => {
+                msg!("[DeployV1] Error: Failed parsing WASM payload: {}", e);
+                return Err(DeployError::WasmBincodeInvalid.into())
+            }
+        };
+
+        if let ExportSection(v) = payload {
+            for element in v.into_iter_with_offsets() {
+                let (_, element) = match element {
+                    Ok(v) => v,
+                    Err(e) => {
+                        msg!("[DeployV1] Error: Failed parsing WASM payload: {}", e);
+                        return Err(DeployError::WasmBincodeInvalid.into())
+                    }
+                };
+
+                if element.name == "memory" && element.kind == Memory {
+                    found_memory = true;
+                    continue
+                }
+
+                if element.name == "__initialize" && element.kind == Func {
+                    found_initialize = true;
+                    continue
+                }
+
+                if element.name == "__entrypoint" && element.kind == Func {
+                    found_entrypoint = true;
+                    continue
+                }
+
+                if element.name == "__update" && element.kind == Func {
+                    found_update = true;
+                    continue
+                }
+
+                if element.name == "__metadata" && element.kind == Func {
+                    found_metadata = true;
+                }
+            }
+        }
+    }
+
+    if !found_memory || !found_initialize || !found_entrypoint || !found_update || !found_metadata {
+        msg!("[DeployV1] Error: Failed to find all symbols");
+        return Err(DeployError::WasmBincodeInvalid.into())
     }
 
     let update = DeployUpdateV1 { contract_id };

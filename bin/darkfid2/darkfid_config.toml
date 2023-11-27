@@ -26,6 +26,9 @@ pow_threads = 4
 # PoW block production target, in seconds
 pow_target = 10
 
+# Optional fixed PoW difficulty, used for testing
+pow_fixed_difficulty = 1
+
 # Epoch duration, denominated by number of blocks/slots
 epoch_length = 10
 
@@ -46,8 +49,8 @@ recipient = "5ZHfYpt4mpJcwBNxfEyxLzeFJUEeoePs5NQ5jVEgHrMf"
 # Skip syncing process and start node right away
 skip_sync = true
 
-# Enable testing mode for local testing
-testing_mode = true
+# Enable PoS testing mode for local testing
+pos_testing_mode = true
 
 ## Localnet sync P2P network settings
 [localnet.sync_net]
@@ -185,8 +188,8 @@ consensus = false
 # Skip syncing process and start node right away
 skip_sync = false
 
-# Enable testing mode for local testing
-testing_mode = false
+# Enable PoS testing mode for local testing
+pos_testing_mode = false
 
 ## Testnet sync P2P network settings
 [testnet.sync_net]
@@ -344,8 +347,8 @@ consensus = false
 # Skip syncing process and start node right away
 skip_sync = false
 
-# Enable testing mode for local testing
-testing_mode = false
+# Enable PoS testing mode for local testing
+pos_testing_mode = false
 
 ## Mainnet sync P2P network settings
 [mainnet.sync_net]

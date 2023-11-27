@@ -25,6 +25,9 @@ pub enum DeployError {
 
     #[error("Contract does not exist.")]
     ContractNonExistent,
+
+    #[error("WASM bincode invalid.")]
+    WasmBincodeInvalid,
 }
 
 impl From<DeployError> for ContractError {
@@ -32,6 +35,7 @@ impl From<DeployError> for ContractError {
         match e {
             DeployError::ContractLocked => Self::Custom(1),
             DeployError::ContractNonExistent => Self::Custom(2),
+            DeployError::WasmBincodeInvalid => Self::Custom(3),
         }
     }
 }

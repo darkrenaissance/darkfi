@@ -30,7 +30,9 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{
-        transfer_v1::{create_transfer_mint_proof, TransferCallClearInput, TransferCallOutput},
+        transfer_v1::{
+            proof::create_transfer_mint_proof, TransferCallClearInput, TransferCallOutput,
+        },
         MoneyNote,
     },
     model::{ClearInput, Coin, MoneyTokenMintParamsV1, Output},

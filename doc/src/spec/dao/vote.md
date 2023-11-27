@@ -12,7 +12,7 @@ $$ \mathcal{L}= \{X:(X,W)\in \mathcal{R}\} $$
 
 - Calculate, and reveal [proposal](proposal.md) [token](../payment/token_id.md) [commitment](../crypto/commitment.md) to vote on
 - Derive, and reveal [proposal](proposal.md)
-- Calculate, and  Reveal yes-vote 0/1 for no/yes [commitment](../crypto/commitment.md) $=vote^{yes}vote^{all^}$
+- Calculate, and  Reveal yes-vote 0/1 for no/yes [commitment](../crypto/commitment.md) $=vote^{yes}*vote^{all^}$
 - Reveal all-vote value [commitment](../crypto/commitment.md)
 
 

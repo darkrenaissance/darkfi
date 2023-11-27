@@ -68,19 +68,19 @@ pub fn deploy_native_contracts(
         (
             "Money Contract",
             *MONEY_CONTRACT_ID,
-            include_bytes!("../contract/money/money_contract.wasm").to_vec(),
+            include_bytes!("../contract/money/darkfi_money_contract.wasm").to_vec(),
             money_contract_deploy_payload,
         ),
         (
             "DAO Contract",
             *DAO_CONTRACT_ID,
-            include_bytes!("../contract/dao/dao_contract.wasm").to_vec(),
+            include_bytes!("../contract/dao/darkfi_dao_contract.wasm").to_vec(),
             dao_contract_deploy_payload,
         ),
         (
             "Consensus Contract",
             *CONSENSUS_CONTRACT_ID,
-            include_bytes!("../contract/consensus/consensus_contract.wasm").to_vec(),
+            include_bytes!("../contract/consensus/darkfi_consensus_contract.wasm").to_vec(),
             consensus_contract_deploy_payload,
         ),
     ];
@@ -107,7 +107,7 @@ pub fn deploy_native_contracts(
 pub fn block_rank(
     block: &BlockInfo,
     previous_previous: &BlockInfo,
-    testing_mode: bool,
+    pos_testing_mode: bool,
 ) -> Result<u64> {
     // Genesis block has rank 0
     if block.header.height == 0 {
@@ -120,7 +120,7 @@ pub fn block_rank(
     let nonce = u64::from_be_bytes(nonce);
 
     // First 2 blocks or testing ones have rank equal to their nonce
-    if block.header.height < 3 || testing_mode {
+    if block.header.height < 3 || pos_testing_mode {
         return Ok(nonce)
     }
 

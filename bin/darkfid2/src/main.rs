@@ -133,6 +133,10 @@ pub struct BlockchainNetwork {
     /// PoW block production target, in seconds
     pub pow_target: usize,
 
+    #[structopt(long)]
+    /// Optional fixed PoW difficulty, used for testing
+    pub pow_fixed_difficulty: Option<usize>,
+
     #[structopt(long, default_value = "10")]
     /// Epoch duration, denominated by number of blocks/slots
     pub epoch_length: u64,
@@ -158,8 +162,8 @@ pub struct BlockchainNetwork {
     pub skip_sync: bool,
 
     #[structopt(long)]
-    /// Enable testing mode for local testing
-    pub testing_mode: bool,
+    /// Enable PoS testing mode for local testing
+    pub pos_testing_mode: bool,
 
     /// Syncing network settings
     #[structopt(flatten)]
@@ -216,8 +220,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         }
     };
 
-    if blockchain_config.testing_mode {
-        info!(target: "darkfid", "Node is configured to run in testing mode!");
+    if blockchain_config.pos_testing_mode {
+        info!(target: "darkfid", "Node is configured to run in PoS testing mode!");
     }
 
     // Parse the genesis block
@@ -236,15 +240,22 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         blockchain_config.slot_time,
         0,
     );
+    let pow_fixed_difficulty = if let Some(diff) = blockchain_config.pow_fixed_difficulty {
+        info!(target: "darkfid", "Node is configured to run with fixed PoW difficulty: {}", diff);
+        Some(diff.into())
+    } else {
+        None
+    };
     let config = ValidatorConfig::new(
         time_keeper,
         blockchain_config.threshold,
         blockchain_config.pow_threads,
         blockchain_config.pow_target,
+        pow_fixed_difficulty,
         genesis_block,
         genesis_txs_total,
         vec![],
-        blockchain_config.testing_mode,
+        blockchain_config.pos_testing_mode,
     );
 
     // Initialize validator

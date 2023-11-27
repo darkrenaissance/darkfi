@@ -113,7 +113,32 @@ impl ProtocolAddress {
                 "Received GetAddrs({}) message from {}", get_addrs_msg.max, self.channel.address(),
             );
 
-            let addrs = self.hosts.fetch_n_random(get_addrs_msg.max).await;
+            // Validate transports length
+            // TODO: Verify this limit. It should be the max number of all our allowed transports,
+            //       plus their mixing.
+            if get_addrs_msg.transports.len() > 20 {
+                // TODO: Should this error out, effectively ending the connection?
+                let addrs_msg = AddrsMessage { addrs: vec![] };
+                self.channel.send(&addrs_msg).await?;
+                continue
+            }
+
+            // First we grab address with the requested transports
+            let mut addrs = self
+                .hosts
+                .fetch_n_random_with_schemes(&get_addrs_msg.transports, get_addrs_msg.max)
+                .await;
+
+            // Then we grab addresses without the requested transports
+            // to fill a 2 * max length vector.
+            let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
+            addrs.append(
+                &mut self
+                    .hosts
+                    .fetch_n_random_excluding_schemes(&get_addrs_msg.transports, remain)
+                    .await,
+            );
+
             debug!(
                 target: "net::protocol_address::handle_receive_get_addrs()",
                 "Sending {} addresses to {}", addrs.len(), self.channel.address(),
@@ -160,7 +185,10 @@ impl ProtocolBase for ProtocolAddress {
         self.jobsman.spawn(self.clone().handle_receive_get_addrs(), ex).await;
 
         // Send get_address message.
-        let get_addrs = GetAddrsMessage { max: self.settings.outbound_connections as u32 };
+        let get_addrs = GetAddrsMessage {
+            max: self.settings.outbound_connections as u32,
+            transports: self.settings.allowed_transports.clone(),
+        };
         self.channel.send(&get_addrs).await?;
 
         debug!(target: "net::protocol_address::start()", "END => address={}", self.channel.address());

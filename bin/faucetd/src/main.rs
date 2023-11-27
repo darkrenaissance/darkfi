@@ -27,8 +27,9 @@ use async_trait::async_trait;
 use chrono::Utc;
 use darkfi_money_contract::{
     client::{
-        transfer_v1::TransferCallBuilder, MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_PUBLIC,
-        MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
+        transfer_v1::{TransferCallBuilder, TransferCallClearInput, TransferCallOutput},
+        MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE,
+        MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
     },
     MoneyFunction::TransferV1 as MoneyTransfer,
     MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
@@ -183,7 +184,7 @@ pub struct Faucetd {
     validator_state: ValidatorStatePtr,
     keypair: Keypair,
     _wallet: WalletPtr,
-    merkle_tree: MerkleTree,
+    _merkle_tree: MerkleTree,
     airdrop_timeout: i64,
     airdrop_limit: u64,
     airdrop_map: AirdropMap,
@@ -216,7 +217,7 @@ impl Faucetd {
         limit: u64,
     ) -> Result<Self> {
         // Here we initialize the wallet for the money contract.
-        let merkle_tree = Self::initialize_wallet(wallet.clone()).await?;
+        let _merkle_tree = Self::initialize_wallet(wallet.clone()).await?;
 
         // This is kinda bad, but whatever. The hashmaps hold proving keys for
         // the money contract. We keep it under RwLock in case we want to add
@@ -275,7 +276,7 @@ impl Faucetd {
             validator_state,
             keypair,
             _wallet: wallet,
-            merkle_tree,
+            _merkle_tree,
             airdrop_timeout: timeout,
             airdrop_limit: limit,
             airdrop_map: Arc::new(Mutex::new(HashMap::new())),
@@ -547,26 +548,26 @@ impl Faucetd {
 
         // Create money contract transfer params and proofs
         let builder = TransferCallBuilder {
-            keypair: self.keypair,
-            recipient: pubkey,
-            value: amount,
-            token_id: *DARK_TOKEN_ID,
-            rcpt_spend_hook: pallas::Base::zero(),
-            rcpt_user_data: pallas::Base::zero(),
-            rcpt_user_data_blind: pallas::Base::random(&mut OsRng),
-            change_spend_hook: pallas::Base::zero(),
-            change_user_data: pallas::Base::zero(),
-            change_user_data_blind: pallas::Base::random(&mut OsRng),
-            coins: vec![],
-            tree: self.merkle_tree.clone(),
-            mint_zkbin,
-            mint_pk,
-            burn_zkbin,
-            burn_pk,
-            clear_input: true,
+            clear_inputs: vec![TransferCallClearInput {
+                value: amount,
+                token_id: *DARK_TOKEN_ID,
+                signature_secret: self.keypair.secret,
+            }],
+            inputs: vec![],
+            outputs: vec![TransferCallOutput {
+                value: amount,
+                token_id: *DARK_TOKEN_ID,
+                public_key: pubkey,
+                spend_hook: pallas::Base::ZERO,
+                user_data: pallas::Base::ZERO,
+            }],
+            mint_zkbin: mint_zkbin.clone(),
+            mint_pk: mint_pk.clone(),
+            burn_zkbin: burn_zkbin.clone(),
+            burn_pk: burn_pk.clone(),
         };
 
-        let debris = match builder.build() {
+        let (params, secrets) = match builder.build() {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "faucetd", "Failed to build transfer tx params: {}", e);
@@ -576,11 +577,11 @@ impl Faucetd {
 
         // Build transaction
         let mut data = vec![MoneyTransfer as u8];
-        debris.params.encode(&mut data).unwrap();
+        params.encode(&mut data).unwrap();
         let calls = vec![ContractCall { contract_id: cid, data }];
-        let proofs = vec![debris.proofs];
+        let proofs = vec![secrets.proofs];
         let mut tx = Transaction { calls, proofs, signatures: vec![] };
-        let sigs = tx.create_sigs(&mut OsRng, &debris.signature_secrets).unwrap();
+        let sigs = tx.create_sigs(&mut OsRng, &secrets.signature_secrets).unwrap();
         tx.signatures = vec![sigs];
 
         // Safety check to see if the transaction is actually valid.

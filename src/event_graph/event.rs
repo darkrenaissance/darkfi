@@ -34,7 +34,7 @@ pub struct Event {
 }
 
 impl Event {
-    /// Create a new event with the given data and an [`EventGraph`] reference.
+    /// Create a new event with the given data and an `EventGraph` reference.
     /// The timestamp of the event will be the current time, and the parents
     /// will be `N_EVENT_PARENTS` from the current event graph unreferenced tips.
     /// The parents can also include NULL, but this should be handled by the rest

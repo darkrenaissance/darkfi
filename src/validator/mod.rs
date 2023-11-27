@@ -24,6 +24,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::serialize;
 use log::{debug, error, info, warn};
+use num_bigint::BigUint;
 use smol::lock::RwLock;
 
 use crate::{
@@ -76,14 +77,16 @@ pub struct ValidatorConfig {
     pub pow_threads: usize,
     /// Currently configured PoW target
     pub pow_target: usize,
+    /// Optional fixed difficulty, for testing purposes
+    pub pow_fixed_difficulty: Option<BigUint>,
     /// Genesis block
     pub genesis_block: BlockInfo,
     /// Total amount of minted tokens in genesis block
     pub genesis_txs_total: u64,
     /// Whitelisted faucet pubkeys (testnet stuff)
     pub faucet_pubkeys: Vec<PublicKey>,
-    /// Flag to enable testing mode
-    pub testing_mode: bool,
+    /// Flag to enable PoS testing mode
+    pub pos_testing_mode: bool,
 }
 
 impl ValidatorConfig {
@@ -93,20 +96,22 @@ impl ValidatorConfig {
         finalization_threshold: usize,
         pow_threads: usize,
         pow_target: usize,
+        pow_fixed_difficulty: Option<BigUint>,
         genesis_block: BlockInfo,
         genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
-        testing_mode: bool,
+        pos_testing_mode: bool,
     ) -> Self {
         Self {
             time_keeper,
             finalization_threshold,
             pow_threads,
             pow_target,
+            pow_fixed_difficulty,
             genesis_block,
             genesis_txs_total,
             faucet_pubkeys,
-            testing_mode,
+            pos_testing_mode,
         }
     }
 }
@@ -122,14 +127,14 @@ pub struct Validator {
     pub consensus: Consensus,
     /// Flag signalling node has finished initial sync
     pub synced: bool,
-    /// Flag to enable testing mode
-    pub testing_mode: bool,
+    /// Flag to enable PoS testing mode
+    pub pos_testing_mode: bool,
 }
 
 impl Validator {
     pub async fn new(db: &sled::Db, config: ValidatorConfig) -> Result<ValidatorPtr> {
         info!(target: "validator::new", "Initializing Validator");
-        let testing_mode = config.testing_mode;
+        let pos_testing_mode = config.pos_testing_mode;
 
         info!(target: "validator::new", "Initializing Blockchain");
         let blockchain = Blockchain::new(db)?;
@@ -162,12 +167,13 @@ impl Validator {
             config.finalization_threshold,
             config.pow_threads,
             config.pow_target,
-            testing_mode,
+            config.pow_fixed_difficulty,
+            pos_testing_mode,
         )?;
 
         // Create the actual state
         let state =
-            Arc::new(RwLock::new(Self { blockchain, consensus, synced: false, testing_mode }));
+            Arc::new(RwLock::new(Self { blockchain, consensus, synced: false, pos_testing_mode }));
         info!(target: "validator::new", "Finished initializing validator");
 
         Ok(state)
@@ -382,7 +388,7 @@ impl Validator {
                 block,
                 previous,
                 expected_reward,
-                self.testing_mode,
+                self.pos_testing_mode,
             )
             .await
             .is_err()
@@ -540,6 +546,7 @@ impl Validator {
         faucet_pubkeys: Vec<PublicKey>,
         pow_threads: usize,
         pow_target: usize,
+        pow_fixed_difficulty: Option<BigUint>,
     ) -> Result<()> {
         let blocks = self.blockchain.get_all()?;
 
@@ -558,7 +565,8 @@ impl Validator {
 
         // Create a time keeper and a PoW module to validate each block
         let mut time_keeper = self.consensus.time_keeper.clone();
-        let mut module = PoWModule::new(blockchain.clone(), pow_threads, pow_target)?;
+        let mut module =
+            PoWModule::new(blockchain.clone(), pow_threads, pow_target, pow_fixed_difficulty)?;
 
         // Deploy native wasm contracts
         deploy_native_contracts(&overlay, &time_keeper, &faucet_pubkeys)?;
@@ -582,7 +590,7 @@ impl Validator {
                 block,
                 previous,
                 expected_reward,
-                self.testing_mode,
+                self.pos_testing_mode,
             )
             .await
             .is_err()

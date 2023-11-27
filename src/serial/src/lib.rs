@@ -29,7 +29,7 @@ mod async_lib;
 #[cfg(feature = "async")]
 pub use async_lib::{
     async_trait, deserialize_async, deserialize_async_partial, serialize_async, AsyncDecodable,
-    AsyncEncodable, AsyncRead, AsyncWrite,
+    AsyncEncodable, AsyncRead, AsyncWrite, FutAsyncReadExt, FutAsyncWriteExt,
 };
 
 mod endian;
@@ -785,7 +785,34 @@ mod tests {
     #[test]
     fn serialize_vector_test() {
         assert_eq!(serialize(&vec![1u8, 2, 3]), vec![3u8, 1, 2, 3]);
-        // TODO: test vectors of more interesting objects
+        assert_eq!(serialize(&vec![1u16, 2u16]), vec![2u8, 1, 0, 2, 0]);
+        assert_eq!(serialize(&vec![256u16, 5000u16]), vec![2u8, 0, 1, 136, 19]);
+        assert_eq!(
+            serialize(&vec![1u32, 256u32, 5000u32]),
+            vec![3u8, 1, 0, 0, 0, 0, 1, 0, 0, 136, 19, 0, 0]
+        );
+        assert_eq!(
+            serialize(&vec![1u64, 256u64, 5000u64, 500000u64]),
+            vec![
+                4u8, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 136, 19, 0, 0, 0, 0, 0, 0, 32,
+                161, 7, 0, 0, 0, 0, 0
+            ]
+        );
+        assert_eq!(serialize(&vec![-1i8]), vec![1u8, 255]);
+        assert_eq!(serialize(&vec![1i8, -2i8, -3i8]), vec![3u8, 1, 254, 253]);
+        assert_eq!(serialize(&vec![-1i32]), vec![1u8, 255, 255, 255, 255]);
+        assert_eq!(serialize(&vec![-1i32, -256]), vec![2u8, 255, 255, 255, 255, 0, 255, 255, 255]);
+        assert_eq!(
+            serialize(&vec![-1i32, -2i32, -3i32]),
+            vec![3u8, 255, 255, 255, 255, 254, 255, 255, 255, 253, 255, 255, 255]
+        );
+        assert_eq!(
+            serialize(&vec![-1i64, -256i64, -5000i64, -500000i64]),
+            vec![
+                4u8, 255, 255, 255, 255, 255, 255, 255, 255, 0, 255, 255, 255, 255, 255, 255, 255,
+                120, 236, 255, 255, 255, 255, 255, 255, 224, 94, 248, 255, 255, 255, 255, 255
+            ]
+        );
     }
 
     #[test]
@@ -817,7 +844,8 @@ mod tests {
         assert_eq!(deserialize(&[0xA0u8, 0x0D, 0xAB, 0xCD]).ok(), Some(0xCDAB0DA0u32));
         let failure32: Result<u32, Error> = deserialize(&[1u8, 2, 3]);
         assert!(failure32.is_err());
-        // TODO: test negative numbers
+
+        assert_eq!(deserialize(&[0x78u8, 0xec, 0xff, 0xff]).ok(), Some(-5000i32));
         assert_eq!(deserialize(&[0xABu8, 0xCD, 0, 0]).ok(), Some(0xCDABi32));
         assert_eq!(deserialize(&[0xA0u8, 0x0D, 0xAB, 0x2D]).ok(), Some(0x2DAB0DA0i32));
         let failurei32: Result<i32, Error> = deserialize(&[1u8, 2, 3]);
@@ -831,7 +859,10 @@ mod tests {
         );
         let failure64: Result<u64, Error> = deserialize(&[1u8, 2, 3, 4, 5, 6, 7]);
         assert!(failure64.is_err());
-        // TODO: test negative numbers
+        assert_eq!(
+            deserialize(&[0xe0, 0x5e, 0xf8, 0xff, 0xff, 0xff, 0xff, 0xff]).ok(),
+            Some(-500000i64)
+        );
         assert_eq!(deserialize(&[0xABu8, 0xCD, 0, 0, 0, 0, 0, 0]).ok(), Some(0xCDABi64));
         assert_eq!(
             deserialize(&[0xA0u8, 0x0D, 0xAB, 0xCD, 0x99, 0, 0, 0x99]).ok(),
@@ -852,12 +883,6 @@ mod tests {
             deserialize(&[6u8, 0x41, 0x6e, 0x64, 0x72, 0x65, 0x77]).ok(),
             Some("Andrew".to_string())
         );
-        /*
-        assert_eq!(
-            deserialize(&[6u8, 0x41, 0x6e, 0x64, 0x72, 0x65, 0x77]).ok(),
-            Some(::std::borrow::Cow::Borrowed("Andrew"))
-        );
-        */
     }
 
     #[test]

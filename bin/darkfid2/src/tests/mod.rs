@@ -34,10 +34,12 @@ async fn sync_pos_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     // Initialize harness in testing mode
     let pow_threads = 2;
     let pow_target = 90;
+    let pow_fixed_difficulty = None;
     let config = HarnessConfig {
         pow_threads,
         pow_target,
-        testing_node: true,
+        pow_fixed_difficulty: pow_fixed_difficulty.clone(),
+        pos_testing_mode: true,
         alice_initial: 1000,
         bob_initial: 500,
     };
@@ -73,7 +75,15 @@ async fn sync_pos_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let genesis_txs_total = th.config.alice_initial + th.config.bob_initial;
     let alice = &th.alice.validator.read().await;
     let charlie = &charlie.validator.read().await;
-    charlie.validate_blockchain(genesis_txs_total, vec![], pow_threads, pow_target).await?;
+    charlie
+        .validate_blockchain(
+            genesis_txs_total,
+            vec![],
+            pow_threads,
+            pow_target,
+            pow_fixed_difficulty,
+        )
+        .await?;
     assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
     assert_eq!(alice.blockchain.slots.len(), charlie.blockchain.slots.len());
 

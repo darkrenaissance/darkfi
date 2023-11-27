@@ -186,8 +186,7 @@ pub struct SettingsOpt {
 
 impl From<SettingsOpt> for Settings {
     fn from(opt: SettingsOpt) -> Self {
-        let version = option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0");
-        let app_version = semver::Version::parse(version).unwrap();
+        let def = Settings::default();
 
         Self {
             node_id: opt.node_id,
@@ -195,23 +194,31 @@ impl From<SettingsOpt> for Settings {
             external_addrs: opt.external_addrs,
             peers: opt.peers,
             seeds: opt.seeds,
-            app_version,
+            app_version: def.app_version,
             allowed_transports: opt.allowed_transports,
-            transport_mixing: opt.transport_mixing.unwrap_or(false),
-            outbound_connections: opt.outbound_connections.unwrap_or(0),
-            inbound_connections: opt.inbound_connections.unwrap_or(0),
-            manual_attempt_limit: opt.manual_attempt_limit.unwrap_or(0),
-            outbound_connect_timeout: opt.outbound_connect_timeout.unwrap_or(15),
-            channel_handshake_timeout: opt.channel_handshake_timeout.unwrap_or(10),
-            channel_heartbeat_interval: opt.channel_heartbeat_interval.unwrap_or(30),
+            transport_mixing: opt.transport_mixing.unwrap_or(def.transport_mixing),
+            outbound_connections: opt.outbound_connections.unwrap_or(def.outbound_connections),
+            inbound_connections: opt.inbound_connections.unwrap_or(def.inbound_connections),
+            manual_attempt_limit: opt.manual_attempt_limit.unwrap_or(def.manual_attempt_limit),
+            outbound_connect_timeout: opt
+                .outbound_connect_timeout
+                .unwrap_or(def.outbound_connect_timeout),
+            channel_handshake_timeout: opt
+                .channel_handshake_timeout
+                .unwrap_or(def.channel_handshake_timeout),
+            channel_heartbeat_interval: opt
+                .channel_heartbeat_interval
+                .unwrap_or(def.channel_heartbeat_interval),
             localnet: opt.localnet,
-            hosts_quarantine_limit: opt.hosts_quarantine_limit.unwrap_or(15),
+            hosts_quarantine_limit: opt
+                .hosts_quarantine_limit
+                .unwrap_or(def.hosts_quarantine_limit),
             outbound_peer_discovery_cooloff_time: opt
                 .outbound_peer_discovery_cooloff_time
-                .unwrap_or(30),
+                .unwrap_or(def.outbound_peer_discovery_cooloff_time),
             outbound_peer_discovery_attempt_time: opt
                 .outbound_peer_discovery_attempt_time
-                .unwrap_or(5),
+                .unwrap_or(def.outbound_peer_discovery_attempt_time),
         }
     }
 }

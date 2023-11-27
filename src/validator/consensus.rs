@@ -23,6 +23,7 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
 use log::{debug, error, info};
+use num_bigint::BigUint;
 
 use crate::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header},
@@ -55,8 +56,8 @@ pub struct Consensus {
     pub forks: Vec<Fork>,
     /// Canonical blockchain PoW module state
     pub module: PoWModule,
-    /// Flag to enable testing mode
-    pub testing_mode: bool,
+    /// Flag to enable PoS testing mode
+    pub pos_testing_mode: bool,
 }
 
 impl Consensus {
@@ -67,9 +68,11 @@ impl Consensus {
         finalization_threshold: usize,
         pow_threads: usize,
         pow_target: usize,
-        testing_mode: bool,
+        pow_fixed_difficulty: Option<BigUint>,
+        pos_testing_mode: bool,
     ) -> Result<Self> {
-        let module = PoWModule::new(blockchain.clone(), pow_threads, pow_target)?;
+        let module =
+            PoWModule::new(blockchain.clone(), pow_threads, pow_target, pow_fixed_difficulty)?;
         Ok(Self {
             blockchain,
             time_keeper,
@@ -78,7 +81,7 @@ impl Consensus {
             checked_finalization: 0,
             forks: vec![],
             module,
-            testing_mode,
+            pos_testing_mode,
         })
     }
 
@@ -211,7 +214,7 @@ impl Consensus {
         let (mut fork, index) = verify_proposal(self, proposal).await?;
 
         // Append proposal to the fork
-        fork.append_proposal(proposal.hash, self.testing_mode)?;
+        fork.append_proposal(proposal.hash, self.pos_testing_mode)?;
 
         // Update fork slots based on proposal version
         match proposal.block.header.version {
@@ -363,7 +366,7 @@ impl Consensus {
                 block,
                 previous,
                 expected_reward,
-                self.testing_mode,
+                self.pos_testing_mode,
             )
             .await
             .is_err()
@@ -483,9 +486,13 @@ impl Fork {
     }
 
     /// Auxiliary function to append a proposal and recalculate current fork rank
-    pub fn append_proposal(&mut self, proposal: blake3::Hash, testing_mode: bool) -> Result<()> {
+    pub fn append_proposal(
+        &mut self,
+        proposal: blake3::Hash,
+        pos_testing_mode: bool,
+    ) -> Result<()> {
         self.proposals.push(proposal);
-        self.rank = self.rank(testing_mode)?;
+        self.rank = self.rank(pos_testing_mode)?;
 
         Ok(())
     }
@@ -634,7 +641,7 @@ impl Fork {
     }
 
     /// Auxiliarry function to compute fork's rank, assuming all proposals are valid.
-    pub fn rank(&self, testing_mode: bool) -> Result<u64> {
+    pub fn rank(&self, pos_testing_mode: bool) -> Result<u64> {
         // If the fork is empty its rank is 0
         if self.proposals.is_empty() {
             return Ok(0)
@@ -656,7 +663,7 @@ impl Fork {
             } else {
                 proposal.clone()
             };
-            sum += block_rank(proposal, &previous_previous, testing_mode)?;
+            sum += block_rank(proposal, &previous_previous, pos_testing_mode)?;
         }
 
         // Use fork(proposals) length as a multiplier to compute the actual fork rank

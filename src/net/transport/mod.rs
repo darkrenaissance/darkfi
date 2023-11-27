@@ -193,6 +193,11 @@ impl Dialer {
     }
 
     /// Dial an instantiated [`Dialer`]. This creates a connection and returns a stream.
+
+    /// The Tor-based Dialer variants can panic: this is intended. There exists validation
+    /// for hosts and ports in other parts of the codebase. A panic occurring here
+    /// likely indicates a configuration issue on the part of the user. It is preferable
+    /// in this case that the user is alerted to this problem via a panic.
     pub async fn dial(&self, timeout: Option<Duration>) -> Result<Box<dyn PtStream>> {
         match &self.variant {
             #[cfg(feature = "p2p-tcp")]

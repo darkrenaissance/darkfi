@@ -31,6 +31,7 @@ use darkfi::{
 };
 use log::{debug, error, info, warn};
 use monero::blockdata::transaction::{ExtraField, RawExtraField, SubField::MergeMining};
+use num_bigint::BigUint;
 use smol::{channel, lock::RwLock};
 use url::Url;
 use uuid::Uuid;
@@ -179,6 +180,7 @@ async fn getblocktemplate(endpoint: &Url, wallet_address: &monero::Address) -> R
     );
 
     // Get block template from monerod
+    info!(target: "stratum::getblocktemplate", "[STRATUM] Sending getblocktemplate to monero");
     let rep = match monerod_request(endpoint, req).await {
         Ok(v) => v,
         Err(e) => {
@@ -203,13 +205,31 @@ async fn getblocktemplate(endpoint: &Url, wallet_address: &monero::Address) -> R
     // Modify the coinbase tx with our additional merge mining data
     block_template.miner_tx.prefix.extra = tx_extra;
 
-    // Get the difficulty target
-    let target = rep["result"]["wide_difficulty"]
+    // Decode the difficulty and calculate the mining target
+    let mut difficulty_hex = rep["result"]["wide_difficulty"]
         .get::<String>()
         .unwrap()
         .strip_prefix("0x")
         .unwrap()
         .to_string();
+
+    // Needed because hex::decode doesn't accept odd-length
+    if difficulty_hex.len() % 2 != 0 {
+        difficulty_hex = format!("0{}", difficulty_hex);
+    }
+
+    let difficulty_raw = hex::decode(&difficulty_hex).unwrap();
+    let difficulty = BigUint::from_radix_be(&difficulty_raw, 16).unwrap();
+
+    // Calculate the target. XMRig expects the 64 least significant bits.
+    let target_raw = BigUint::from_bytes_be(&[0xFF; 32]) / &difficulty;
+    // This iterator is ordered least significant first
+    let target_lsb: u64 = target_raw.iter_u64_digits().take(1).next().unwrap();
+    let target = hex::encode(target_lsb.to_be_bytes());
+    assert!(target.len() == 16);
+
+    info!(target: "stratum::getblocktemplate", "[STRATUM] Difficulty: {}", difficulty_hex);
+    info!(target: "stratum::getblocktemplate", "[STRATUM] Target: {}", target);
 
     // Get the remaining metadata
     let height = *rep["result"]["height"].get::<f64>().unwrap();
@@ -287,7 +307,7 @@ impl MiningProxy {
         const POLL_INTERVAL: Duration = Duration::from_secs(60);
 
         // Comfy wait for settling the Stratum login RPC call
-        sleep(2).await;
+        sleep(5).await;
 
         // In this loop, we'll be getting the block template for mining.
         // At the beginning of the loop, we'll perform a getblocktemplate,
@@ -297,7 +317,10 @@ impl MiningProxy {
         // order to get the next mining job.
         loop {
             // Get the workers lock and the worker reference
+            debug!(target: "stratum::job_task", "Acquiring workers write lock...");
             let mut workers_ptr = workers.write().await;
+            debug!(target: "stratum::job_task", "Acquired workers write lock");
+
             let Some(worker) = workers_ptr.get_mut(&uuid) else {
                 info!(
                     target: "stratum::job_task",
@@ -324,6 +347,8 @@ impl MiningProxy {
 
             // In case it's the same job, we'll wait and try again
             if worker.mining_job.job_id == mining_job.job_id {
+                // Drop the workers lock before sleeping.
+                drop(workers_ptr);
                 match timeout(POLL_INTERVAL, submit_recv.recv()).await {
                     Ok(_) => continue,
                     Err(_) => continue,
@@ -343,6 +368,7 @@ impl MiningProxy {
                 break
             }
 
+            // Drop the workers lock before sleeping.
             drop(workers_ptr);
 
             // Now poll or wait for a trigger for a new job.
@@ -572,54 +598,79 @@ impl MiningProxy {
         if !params.contains_key("id") ||
             !params.contains_key("job_id") ||
             !params.contains_key("nonce") ||
-            !params.contains_key("result")
+            !params.contains_key("result") ||
+            !params.contains_key("algo")
         {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
         // Validate all the parameters
         let Some(worker_uuid) = params["id"].get::<String>() else {
-            return JsonError::new(InvalidParams, Some("Invalid \"id\" field".to_string()), id)
+            error!(target: "stratum::submit", "[STRATUM] Missing \"id\" field for stratum::submit");
+            return JsonError::new(InvalidParams, Some("Missing \"id\" field".to_string()), id)
                 .into()
         };
 
         let Ok(worker_uuid) = Uuid::try_from(worker_uuid.as_str()) else {
+            error!(target: "stratum::submit", "[STRATUM] Invalid \"id\" field for stratum::submit");
             return JsonError::new(InvalidParams, Some("Invalid \"id\" field".to_string()), id)
                 .into()
         };
 
         let Some(job_id) = params["job_id"].get::<String>() else {
-            return JsonError::new(InvalidParams, Some("Invalid \"job_id\" field".to_string()), id)
+            error!(target: "stratum::submit", "[STRATUM] Missing \"job_id\" field for stratum::submit");
+            return JsonError::new(InvalidParams, Some("Missing \"job_id\" field".to_string()), id)
                 .into()
         };
 
         let Ok(job_id) = blake3::Hash::from_str(job_id) else {
+            error!(target: "stratum::submit", "[STRATUM] Invalid \"job_id\" field for stratum::submit");
             return JsonError::new(InvalidParams, Some("Invalid \"job_id\" field".to_string()), id)
                 .into()
         };
 
         let Some(nonce) = params["nonce"].get::<String>() else {
-            return JsonError::new(InvalidParams, Some("Invalid \"nonce\" field".to_string()), id)
+            error!(target: "stratum::submit", "[STRATUM] Missing \"nonce\" field for stratum::submit");
+            return JsonError::new(InvalidParams, Some("Missing \"nonce\" field".to_string()), id)
                 .into()
         };
 
         let Ok(nonce) = u32::from_str_radix(nonce, 16) else {
+            error!(target: "stratum::submit", "[STRATUM] Invalid \"nonce\" field for stratum::submit");
             return JsonError::new(InvalidParams, Some("Invalid \"nonce\" field".to_string()), id)
                 .into()
         };
 
         let Some(_result) = params["result"].get::<String>() else {
+            error!(target: "stratum::submit", "[STRATUM] Missing \"result\" field for stratum::submit");
             return JsonError::new(InvalidParams, Some("Invalid \"result\" field".to_string()), id)
                 .into()
         };
 
+        let Some(algo) = params["algo"].get::<String>() else {
+            error!(target: "stratum::submit", "[STRATUM] Missing \"algo\" field for stratum::submit");
+            return JsonError::new(InvalidParams, Some("Missing \"algo\" field".to_string()), id)
+                .into()
+        };
+
+        if algo != RANDOMX_ALGO {
+            error!(target: "stratum::submit", "[STRATUM] Invalid \"algo\" field for stratum::submit");
+            return JsonError::new(InvalidParams, Some("Invalid \"algo\" field".to_string()), id)
+                .into()
+        }
+
         // Get the worker reference and confirm this is submitted for the current job
+        debug!(target: "stratum::submit", "Acquiring workers read lock...");
         let workers_ptr = self.workers.read().await;
+        debug!(target: "stratum::submit", "Acquired workers read lock");
+
         let Some(worker) = workers_ptr.get(&worker_uuid) else {
+            error!(target: "stratum::submit", "[STRATUM] Unknown worker UUID for stratum::submit");
             return JsonError::new(InvalidParams, Some("Unknown worker UUID".to_string()), id).into()
         };
 
         if worker.mining_job.job_id != job_id {
+            error!(target: "stratum::submit", "[STRATUM] Job ID mismatch for stratum::submit");
             return JsonError::new(InvalidParams, Some("Job ID mismatch".to_string()), id).into()
         }
 
