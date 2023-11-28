@@ -2,48 +2,64 @@
 
 ## Common Structures
 
-### EventId
+### Event
 
-```rust
-type EventId = [u8; 32];
-```
+Representation of an event in the Event Graph.
+This is either sent when a new event is created, or in response to `EventReq`.
 
-## inv
+| Description   | Data Type      	   | Comments           		    |
+|-------------- | -------------------- | ------------------------------ |
+| timestamp	  	| `u64`                | Timestamp of the event    	    |
+| content	  	| `Vec<u8>`            | Content of the event    	    |
+| parents	  	| `u64`                | Parent nodes in the event DAG  |
 
-Inventory vectors are used for notifying other nodes about objects they have or data which is being requested.
+Receiving an event with missing parents, the node will issue `EventReq`
+requesting the missing parent from a peer.
 
-| Description   | Data Type      	   | Comments           		|
-|-------------- | -------------------- | -------------------------- |
-| invs	  	  	| `Vec<EventId>`       | Inventory items    		|
+### Event ID
 
-Upon receiving an unknown inventory object, a node will issue `getevent`.
+Is [blake3::Hash](https://docs.rs/blake3/latest/blake3/struct.Hash.html) 
+of the event, we use those IDs to request and reply 
+events and tips (tips being childless events in the graph).
 
-## getevent
 
-Requests event data from a node.
+## P2P Messages
 
-| Description   | Data Type      	   | Comments           		|
-|-------------- | -------------------- | -------------------------- |
-| invs	  	  	| `Vec<EventId>`       | Inventory items    		|
+### EventPut
 
-## event
-
-Event object data. This is either sent when a new event is created, or in response to `getevent`.
-
-| Description   | Data Type      	   | Comments           		|
-|-------------- | -------------------- | -------------------------- |
-| parents	  	| `Vec<EventId>`       | Parent events      		|
-| timestamp 	| `u64`                | Event timestamp    		|
-| action    	| `T`                  | Event specific data      	|
-
-## syncevent
-
-This message is sent at fixed intervals when connecting to the network.
-It uses this message to synchronize with the current network state.
-
-Once updated, a node uses the messages above to stay synchronized.
+This message serves as a container of the event being published on 
+the network.
 
 | Description   | Data Type      	   | Comments           		|
 |-------------- | -------------------- | -------------------------- |
-| invs	  	  	| `Vec<EventId>`       | Inventory items    		|
+| EventPut	  	| `Event`              | Event data.         		|
 
+### EventReq
+
+Requests event data from a peer.
+
+| Description   | Data Type      	   | Comments           		   |
+|-------------- | -------------------- | ----------------------------- |
+| EventReq	  	| `EventId`            | Request event using its ID.   |
+
+### EventRep
+
+Replys back the requested event's data.
+
+| Description   | Data Type      	   | Comments           		|
+|-------------- | -------------------- | -------------------------- |
+| EventRep	  	| `Event`              | Reply event data.     		|
+
+### TipReq
+
+Requests tips from connected peers.
+We use this message as first step into syncing asking connected peers 
+for their DAG's tips.
+
+### TipRep
+
+Replys back our DAG tips' IDs.
+
+| Description   | Data Type      	   | Comments      |
+|-------------- | -------------------- | ------------- |
+| TipRep	  	| `Vec<EventId>`       | Event IDs.    |
