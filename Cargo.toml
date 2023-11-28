@@ -49,7 +49,6 @@ members = [
     "src/contract/deployooor",
 
     #"example/dchat",
-    "example/dummy-contract",
 ]
 
 [dependencies]

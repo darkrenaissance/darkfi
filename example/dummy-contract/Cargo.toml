@@ -5,6 +5,8 @@ authors = ["Dyne.org foundation <foundation@dyne.org>"]
 license = "AGPL-3.0-only"
 edition = "2021"
 
+[workspace]
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
