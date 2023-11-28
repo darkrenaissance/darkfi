@@ -114,7 +114,7 @@ _Tasks are in no particular order. Use common sense._
     serial in your wallet.
 23. Separate mining logic from darkfid into a new program and communicate over RPC
 24. Python utility tool (swiss army knife) for working with txs, contract calls and params.
-
+25. Python event viewer to inspect and debug the event graph.
 99. resource manager for p2p (DoS protection, disconnect bad nodes)
 
 
@@ -122,7 +122,7 @@ _Tasks are in no particular order. Use common sense._
 |----------|------------|
 | **1.**   | `upgrayedd`|
 | **2.**   | `brawndo`  |
-| **3.**   |            |
+| **3.**   | `lain`     |
 | **4.**   | `upgrayedd`|
 | **5.**   | `upgrayedd`|
 | **6.**   |            |
@@ -134,8 +134,8 @@ _Tasks are in no particular order. Use common sense._
 | **12.**  | `B1-66ER`  |
 | **13.**  | `B1-66ER`  |
 | **14.**  |            |
-| **15.**  |            |
-| **16.**  |            |
+| **15.**  | `lain`     |
+| **16.**  | `lain`     |
 | **17.**  |            |
 | **18.**  | `B1-66ER`  |
 | **19.**  | `B1-66ER`  |
@@ -143,6 +143,8 @@ _Tasks are in no particular order. Use common sense._
 | **21.**  | `B1-66ER`  |
 | **22.**  | `B1-66ER`  |
 | **23.**  | `upgrayedd`|
+| **24.**  |            |
+| **25.**  | `lain`     |
 
 ## Fuzz testing
 
