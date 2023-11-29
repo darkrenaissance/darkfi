@@ -42,11 +42,5 @@ pub(crate) const L_ORCHARD_SCALAR: usize = 255;
 /// $\ell_\mathsf{value}$
 pub(crate) const L_VALUE: usize = 64;
 
-/// main-net wallet import format prefix
-pub const MAINNET_ADDRS_PREFIX: [u8; 1] = [0x80];
-
-/// test-net wallet import format prefix
-pub const TESTNET_ADDRS_PREFIX: [u8; 1] = [0x01];
-
 /// WIF checksum length
 pub const WIF_CHECKSUM_LEN: usize = 4;
