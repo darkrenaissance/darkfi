@@ -23,13 +23,16 @@ use std::{
 
 use log::debug;
 use rand::{prelude::IteratorRandom, rngs::OsRng};
-use smol::lock::RwLock;
+use smol::{lock::RwLock, Executor};
 use url::Url;
 
-use super::settings::SettingsPtr;
+use super::{
+    connector::Connector, p2p::P2pPtr, protocol::ProtocolVersion, session::Session,
+    settings::SettingsPtr,
+};
 use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
-    Result,
+    Error, Result,
 };
 
 /// Atomic pointer to hosts object
@@ -42,6 +45,7 @@ pub const LOCAL_HOST_STRS: [&str; 2] = ["localhost", "localhost.localdomain"];
 /// Manages a store of network addresses
 pub struct Hosts {
     /// Set of stored addresses
+    // addrs: RwLock<HashMap<Url, usize>>
     addrs: RwLock<HashSet<Url>>,
 
     /// Set of stored addresses that are quarantined.
@@ -203,6 +207,51 @@ impl Hosts {
         ret
     }
 
+    async fn probe_node(&self, host: &Url, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
+        let p2p_ = p2p.clone();
+        let ex_ = ex.clone();
+        let session_out = p2p_.session_outbound();
+        let session_weak = Arc::downgrade(&session_out);
+
+        let connector = Connector::new(p2p_.settings(), session_weak);
+        debug!(target: "net::hosts::probe_node()", "Connecting to {}", host);
+        match connector.connect(host).await {
+            Ok((_url, channel)) => {
+                debug!(target: "net::hosts::probe_node()", "Connected successfully!");
+                let proto_ver = ProtocolVersion::new(
+                    channel.clone(),
+                    p2p_.settings().clone(),
+                    p2p_.hosts().clone(),
+                )
+                .await;
+
+                let handshake_task = session_out.perform_handshake_protocols(
+                    proto_ver,
+                    channel.clone(),
+                    ex_.clone(),
+                );
+
+                channel.clone().start(ex_.clone());
+
+                match handshake_task.await {
+                    Ok(()) => {
+                        debug!(target: "net::hosts::probe_node()", "Handshake success! Stopping channel.");
+                        channel.stop().await;
+                        Ok(())
+                    }
+                    Err(e) => {
+                        debug!(target: "net::hosts::probe_node()", "Handshake failure! {}", e);
+                        Err(Error::ConnectFailed)
+                    }
+                }
+            }
+
+            Err(e) => {
+                debug!(target: "net::hosts::probe_node()", "Failed to connect to {}, ({})", host, e);
+                Err(Error::ConnectFailed)
+            }
+        }
+    }
     pub async fn remove(&self, url: &Url) {
         debug!(target: "net::hosts::remove()", "Removing peer {}", url);
         self.addrs.write().await.remove(url);
