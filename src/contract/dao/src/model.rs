@@ -28,6 +28,7 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 #[cfg(feature = "client")]
 use darkfi_serial::async_trait;
 
+use darkfi_sdk::crypto::{ShareAddress, ShareAddressType};
 /// A `DaoBulla` represented in the state
 #[derive(Debug, Copy, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct DaoBulla(pallas::Base);
@@ -64,6 +65,17 @@ impl std::hash::Hash for DaoBulla {
 darkfi_sdk::fp_from_bs58!(DaoBulla);
 darkfi_sdk::fp_to_bs58!(DaoBulla);
 darkfi_sdk::ty_from_fp!(DaoBulla);
+
+impl TryInto<DaoBulla> for ShareAddress {
+    type Error = String;
+    fn try_into(self) -> Result<DaoBulla, Self::Error> {
+        if self.prefix != ShareAddressType::DaoBulla {
+            return Err("wrong prefix".to_string())
+        }
+        let sk: Result<DaoBulla, ContractError> = DaoBulla::from_bytes(self.raw);
+        Ok(sk.unwrap())
+    }
+}
 
 /// A `DaoProposalBulla` represented in the state
 #[derive(Debug, Copy, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
