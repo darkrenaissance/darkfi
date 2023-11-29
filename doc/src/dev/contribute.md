@@ -115,6 +115,8 @@ _Tasks are in no particular order. Use common sense._
 23. Separate mining logic from darkfid into a new program and communicate over RPC
 24. Python utility tool (swiss army knife) for working with txs, contract calls and params.
 25. Python event viewer to inspect and debug the event graph.
+26. Fix `protocol_address` for anonymity. There is a loop sending self addr constantly. We should
+    have this mixed with a bunch of random addrs to avoid leaking our own addr.
 99. resource manager for p2p (DoS protection, disconnect bad nodes)
 
 
