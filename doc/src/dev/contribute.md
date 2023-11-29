@@ -80,7 +80,7 @@ _Tasks are in no particular order. Use common sense._
   * Unit tests should test pieces of the eventgraph code
   * Integration tests should simulate a P2P network and ensure deterministic state after a simulated run
   * Update https://darkrenaissance.github.io/darkfi/misc/event_graph/event_graph.html
-    and make it the specification for the `eventgraph` implementation implementation
+    and make it the specification for the `eventgraph` implementation.
 5. Rework `drk` (the wallet CLI) to work standalone and make it work with the new `darkfid`
 6. Make `tau` stable
 7. Make `darkirc` stable
@@ -125,8 +125,8 @@ _Tasks are in no particular order. Use common sense._
 | **3.**   | `lain`     |
 | **4.**   | `upgrayedd`|
 | **5.**   | `upgrayedd`|
-| **6.**   |            |
-| **7.**   |            |
+| **6.**   | `dasman`   |
+| **7.**   | `dasman`   |
 | **8.**   | `brawndo`  |
 | **9.**   | `brawndo`  |
 | **10.**  | `brawndo`  |
