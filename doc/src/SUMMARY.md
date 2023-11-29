@@ -43,7 +43,7 @@
   - [P2P Network](arch/p2p-network.md)
   - [Services](arch/services.md)
   - [Smart Contracts](arch/sc/sc.md)
-  - [Transaction lifetime](arch/sc/tx-lifetime.md)
+    - [Transaction lifetime](arch/sc/tx-lifetime.md)
 - [zkas](zkas/index.md)
   - [Bincode](zkas/bincode.md)
   - [zkVM](zkas/zkvm.md)
@@ -69,6 +69,7 @@
 # DEP
 
 - [DEP 0001: Version Message Info](dep/0001.md)
+- [DEP 0002: Smart Contract Composability](dep/0002.md)
 
 # Specs
 
