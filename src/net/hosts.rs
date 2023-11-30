@@ -115,7 +115,22 @@ impl Hosts {
         if !filtered_addrs.is_empty() {
             let mut greylist = self.greylist.write().await;
             for addr in filtered_addrs {
-                debug!(target: "net::hosts::store()", "Inserting {}. Last seen {:?}", addr, last_seen);
+                debug!(target: "net::hosts::store2()", "Inserting {}. Last seen {:?}", addr, last_seen);
+
+                // Remove oldest element if the greylist reaches max size.
+                if greylist.len() == 5000 {
+                    // Last element in vector should have the oldest timestamp.
+                    // TODO: Test this
+                    let removed_entry = greylist.pop();
+                    match removed_entry {
+                        Some(e) => {
+                            debug!(target: "net::hosts::store2()", "Greylist reached max size. Removed host {}", e.0);
+                        }
+                        // TODO: greylist is empty.
+                        None => {}
+                    }
+                }
+
                 greylist.push((addr, last_seen));
 
                 // Sort the list by last_seen.
@@ -238,10 +253,10 @@ impl Hosts {
         ret
     }
 
-    // Periodically probe random peers on the greylist. If a peer is responsive,
-    // update the last_seen field and add it to the whitelist. Otherwise,
-    // remove it from the greylist.
-    // TODO: Should we also remove it from the greylist?
+    // Probe random peers on the greylist. If a peer is responsive, update the last_seen field and
+    // add it to the whitelist. Called periodically.
+    // If a node does not respond, remove it from the greylist.
+    // TODO: Should we also remove whitelisted nodes from the greylist?
     async fn refresh_greylist(&self, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
         let mut greylist = self.greylist.write().await;
         let mut whitelist = self.whitelist.write().await;
@@ -267,6 +282,19 @@ impl Hosts {
                             .unwrap()
                             .as_secs();
 
+                        // Remove oldest element if the whitelist reaches max size.
+                        if whitelist.len() == 1000 {
+                            // Last element in vector should have the oldest timestamp.
+                            // TODO: Test this
+                            let removed_entry = whitelist.pop();
+                            match removed_entry {
+                                Some(e) => {
+                                    debug!(target: "net::hosts::refresh_greylist()", "Whitelist reached max size. Removed host {}", e.0);
+                                }
+                                // TODO: whitelist is empty.
+                                None => {}
+                            }
+                        }
                         whitelist.push((url.clone(), last_seen));
 
                         // Sort the list by last_seen.
