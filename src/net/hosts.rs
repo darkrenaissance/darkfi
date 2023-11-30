@@ -23,7 +23,7 @@ use std::{
 };
 
 use log::debug;
-use rand::{prelude::IteratorRandom, rngs::OsRng, seq::SliceRandom};
+use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
 use smol::{lock::RwLock, Executor};
 use url::Url;
 
@@ -256,60 +256,53 @@ impl Hosts {
     // Probe random peers on the greylist. If a peer is responsive, update the last_seen field and
     // add it to the whitelist. Called periodically.
     // If a node does not respond, remove it from the greylist.
-    // TODO: Should we also remove whitelisted nodes from the greylist?
     async fn refresh_greylist(&self, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
         let mut greylist = self.greylist.write().await;
         let mut whitelist = self.whitelist.write().await;
 
-        // Randomly select an entry from the grey list.
-        let entry: Option<&(Url, u64)> = greylist.choose(&mut rand::thread_rng());
+        // Randomly select an entry from the greylist.
+        let position = rand::thread_rng().gen_range(0..greylist.len());
+        let entry = &greylist[position];
+        let url = &entry.0;
 
-        match entry {
-            Some(entry) => {
-                // Keep note of its position. TODO: This will return false if it doesn't find
-                // anything or panic if the list is > MAX usize.
-                let position = greylist.iter().position(|e| e == entry).unwrap();
-                let url = &entry.0;
+        // Probe node to see if it's active.
+        let result: Result<()> = self.probe_node(url, p2p.clone(), ex.clone()).await;
 
-                // Probe node to see if it's active.
-                let result: Result<()> = self.probe_node(url, p2p.clone(), ex.clone()).await;
+        match result {
+            // Peer is responsive. Update last_seen and add it to the whitelist.
+            Ok(()) => {
+                let last_seen =
+                    SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
 
-                match result {
-                    // Peer is responsive. Update last_seen and add it to the whitelist.
-                    Ok(()) => {
-                        let last_seen = SystemTime::now()
-                            .duration_since(SystemTime::UNIX_EPOCH)
-                            .unwrap()
-                            .as_secs();
-
-                        // Remove oldest element if the whitelist reaches max size.
-                        if whitelist.len() == 1000 {
-                            // Last element in vector should have the oldest timestamp.
-                            // TODO: Test this
-                            let removed_entry = whitelist.pop();
-                            match removed_entry {
-                                Some(e) => {
-                                    debug!(target: "net::hosts::refresh_greylist()", "Whitelist reached max size. Removed host {}", e.0);
-                                }
-                                // TODO: whitelist is empty.
-                                None => {}
-                            }
+                // Remove oldest element if the whitelist reaches max size.
+                if whitelist.len() == 1000 {
+                    // Last element in vector should have the oldest timestamp.
+                    // TODO: Test this
+                    let removed_entry = whitelist.pop();
+                    match removed_entry {
+                        Some(e) => {
+                            debug!(target: "net::hosts::refresh_greylist()", "Whitelist reached max size. Removed host {}", e.0);
                         }
-                        whitelist.push((url.clone(), last_seen));
-
-                        // Sort the list by last_seen.
-                        whitelist.sort_unstable_by_key(|entry| entry.1);
-                    }
-                    // Peer is not responsive. Remove it from the greylist.
-                    Err(e) => {
-                        debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removing from greylist {}", url, e);
-                        greylist.remove(position);
+                        // TODO: whitelist is empty.
+                        None => {}
                     }
                 }
+                // Append it to the whitelist.
+                debug!(target: "net::hosts::refresh_greylist()", "Adding peer {} to whitelist", url);
+                whitelist.push((url.clone(), last_seen));
+
+                // Sort whitelist by last_seen.
+                whitelist.sort_unstable_by_key(|entry| entry.1);
+
+                // Remove whitelisted peer from the greylist.
+                debug!(target: "net::hosts::refresh_greylist()", "Removing whitelisted peer {} to greylist", url);
+                greylist.remove(position);
             }
-            // TODO...
-            // greylist is empty
-            None => {}
+            // Peer is not responsive. Remove it from the greylist.
+            Err(e) => {
+                debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removing from greylist {}", url, e);
+                greylist.remove(position);
+            }
         }
 
         Ok(())
