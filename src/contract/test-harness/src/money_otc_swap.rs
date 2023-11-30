@@ -171,7 +171,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyOtcSwap).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.read().await.add_transactions(&[tx.clone()], slot, true).await?;
+        wallet.validator.add_transactions(&[tx.clone()], slot, true).await?;
         if append {
             for output in &params.outputs {
                 wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));

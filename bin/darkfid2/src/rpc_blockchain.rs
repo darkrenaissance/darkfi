@@ -59,7 +59,7 @@ impl Darkfid {
             Err(_) => return JsonError::new(ParseError, None, id).into(),
         };
 
-        let blocks = match self.validator.read().await.blockchain.get_blocks_by_slot(&[slot]) {
+        let blocks = match self.validator.blockchain.get_blocks_by_slot(&[slot]) {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "darkfid::rpc::blockchain_get_slot", "Failed fetching block by slot: {}", e);
@@ -100,7 +100,7 @@ impl Darkfid {
             Err(_) => return JsonError::new(ParseError, None, id).into(),
         };
 
-        let txs = match self.validator.read().await.blockchain.transactions.get(&[tx_hash], true) {
+        let txs = match self.validator.blockchain.transactions.get(&[tx_hash], true) {
             Ok(txs) => txs,
             Err(e) => {
                 error!(target: "darkfid::rpc::blockchain_get_tx", "Failed fetching tx by hash: {}", e);
@@ -133,7 +133,7 @@ impl Darkfid {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let blockchain = { self.validator.read().await.blockchain.clone() };
+        let blockchain = self.validator.blockchain.clone();
         let Ok(last_slot) = blockchain.last() else {
             return JsonError::new(InternalError, None, id).into()
         };
@@ -226,7 +226,7 @@ impl Darkfid {
             }
         };
 
-        let blockchain = { self.validator.read().await.blockchain.clone() };
+        let blockchain = self.validator.blockchain.clone();
 
         let Ok(zkas_db) = blockchain.contracts.lookup(
             &blockchain.sled_db,

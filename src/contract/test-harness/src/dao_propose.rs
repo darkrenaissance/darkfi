@@ -131,7 +131,7 @@ impl TestHarness {
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoPropose).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.read().await.add_transactions(&[tx.clone()], slot, true).await?;
+        wallet.validator.add_transactions(&[tx.clone()], slot, true).await?;
         wallet.dao_proposals_tree.append(MerkleNode::from(params.proposal_bulla.inner()));
 
         let prop_leaf_pos = wallet.dao_proposals_tree.mark().unwrap();

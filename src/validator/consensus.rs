@@ -24,14 +24,17 @@ use darkfi_sdk::{
 use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
 use log::{debug, error, info};
 use num_bigint::BigUint;
+use smol::lock::RwLock;
 
 use crate::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay, BlockchainOverlayPtr, Header},
     tx::Transaction,
     util::time::{TimeKeeper, Timestamp},
     validator::{
-        pid::slot_pid_output, pow::PoWModule, utils::block_rank, verify_block, verify_proposal,
-        verify_transactions,
+        pid::slot_pid_output,
+        pow::PoWModule,
+        utils::{best_forks_indexes, block_rank, find_extended_fork_index, previous_slot_info},
+        verify_block, verify_proposal, verify_transactions,
     },
     Error, Result,
 };
@@ -51,11 +54,11 @@ pub struct Consensus {
     /// Node is participating to consensus
     pub participating: bool,
     /// Last slot node check for finalization
-    pub checked_finalization: u64,
+    pub checked_finalization: RwLock<u64>,
     /// Fork chains containing block proposals
-    pub forks: Vec<Fork>,
+    pub forks: RwLock<Vec<Fork>>,
     /// Canonical blockchain PoW module state
-    pub module: PoWModule,
+    pub module: RwLock<PoWModule>,
     /// Flag to enable PoS testing mode
     pub pos_testing_mode: bool,
 }
@@ -71,71 +74,68 @@ impl Consensus {
         pow_fixed_difficulty: Option<BigUint>,
         pos_testing_mode: bool,
     ) -> Result<Self> {
-        let module =
-            PoWModule::new(blockchain.clone(), pow_threads, pow_target, pow_fixed_difficulty)?;
+        let module = RwLock::new(PoWModule::new(
+            blockchain.clone(),
+            pow_threads,
+            pow_target,
+            pow_fixed_difficulty,
+        )?);
         Ok(Self {
             blockchain,
             time_keeper,
             finalization_threshold,
             participating: false,
-            checked_finalization: 0,
-            forks: vec![],
+            checked_finalization: RwLock::new(0),
+            forks: RwLock::new(vec![]),
             module,
             pos_testing_mode,
         })
     }
 
     /// Generate next hot/live PoW slot for all current forks.
-    pub fn generate_pow_slot(&mut self) -> Result<()> {
+    pub async fn generate_pow_slot(&self) -> Result<()> {
+        // Grab a lock over current forks
+        let mut forks = self.forks.write().await;
+
         // If no forks exist, create a new one as a basis to extend
-        if self.forks.is_empty() {
-            self.forks.push(Fork::new(&self.blockchain, self.module.clone())?);
+        if forks.is_empty() {
+            forks.push(Fork::new(&self.blockchain, self.module.read().await.clone())?);
         }
 
-        for fork in self.forks.iter_mut() {
+        for fork in forks.iter_mut() {
             fork.generate_pow_slot()?;
         }
+
+        // Drop forks lock
+        drop(forks);
 
         Ok(())
     }
 
     /// Generate current hot/live PoS slot for all current forks.
-    pub fn generate_pos_slot(&mut self) -> Result<()> {
+    pub async fn generate_pos_slot(&self) -> Result<()> {
+        // Grab a lock over current forks
+        let mut forks = self.forks.write().await;
+
         // Grab current slot id
         let id = self.time_keeper.current_slot();
 
         // If no forks exist, create a new one as a basis to extend
-        if self.forks.is_empty() {
-            self.forks.push(Fork::new(&self.blockchain, self.module.clone())?);
+        if forks.is_empty() {
+            forks.push(Fork::new(&self.blockchain, self.module.read().await.clone())?);
         }
 
         // Grab previous slot information
-        let (producers, last_hashes, second_to_last_hashes) = self.previous_slot_info(id - 1)?;
+        let (producers, last_hashes, second_to_last_hashes) = previous_slot_info(&forks, id - 1)?;
 
-        for fork in self.forks.iter_mut() {
+        for fork in forks.iter_mut() {
             fork.generate_pos_slot(id, producers, &last_hashes, &second_to_last_hashes)?;
         }
 
+        // Drop forks lock
+        drop(forks);
+
         Ok(())
-    }
-
-    /// Retrieve previous slot producers, last proposal hashes,
-    /// and their second to last hashes, from all current forks.
-    fn previous_slot_info(&self, slot: u64) -> Result<(u64, Vec<blake3::Hash>, Vec<blake3::Hash>)> {
-        let mut producers = 0;
-        let mut last_hashes = vec![];
-        let mut second_to_last_hashes = vec![];
-
-        for fork in &self.forks {
-            let last_proposal = fork.last_proposal()?;
-            if last_proposal.block.header.height == slot {
-                producers += 1;
-            }
-            last_hashes.push(last_proposal.hash);
-            second_to_last_hashes.push(last_proposal.block.header.previous);
-        }
-
-        Ok((producers, last_hashes, second_to_last_hashes))
     }
 
     /// Generate an unsigned block for provided fork, containing all
@@ -207,7 +207,7 @@ impl Consensus {
 
     /// Given a proposal, the node verifys it and finds which fork it extends.
     /// If the proposal extends the canonical blockchain, a new fork chain is created.
-    pub async fn append_proposal(&mut self, proposal: &Proposal) -> Result<()> {
+    pub async fn append_proposal(&self, proposal: &Proposal) -> Result<()> {
         info!(target: "validator::consensus::append_proposal", "Appending proposal {}", proposal.hash);
 
         // Verify proposal and grab corresponding fork
@@ -233,63 +233,18 @@ impl Consensus {
 
         // If a fork index was found, replace forks with the mutated one,
         // otherwise push the new fork.
+        let mut lock = self.forks.write().await;
         match index {
             Some(i) => {
-                self.forks[i] = fork;
+                lock[i] = fork;
             }
             None => {
-                self.forks.push(fork);
+                lock.push(fork);
             }
         }
+        drop(lock);
 
         Ok(())
-    }
-
-    /// Auxiliary function to find current best ranked forks indexes.
-    pub fn best_forks_indexes(&self) -> Result<Vec<usize>> {
-        // Check if node has any forks
-        if self.forks.is_empty() {
-            return Err(Error::ForksNotFound)
-        }
-
-        // Find the best ranked forks
-        let mut best = 0;
-        let mut indexes = vec![];
-        for (f_index, fork) in self.forks.iter().enumerate() {
-            let rank = fork.rank;
-
-            // Fork ranks lower that current best
-            if rank < best {
-                continue
-            }
-
-            // Fork has same rank as current best
-            if rank == best {
-                indexes.push(f_index);
-                continue
-            }
-
-            // Fork ranks higher that current best
-            best = rank;
-            indexes = vec![f_index];
-        }
-
-        Ok(indexes)
-    }
-
-    /// Given a proposal, find the index of the fork chain it extends, along with the specific
-    /// extended proposal index.
-    fn find_extended_fork_index(&self, proposal: &Proposal) -> Result<(usize, usize)> {
-        for (f_index, fork) in self.forks.iter().enumerate() {
-            // Traverse fork proposals sequence in reverse
-            for (p_index, p_hash) in fork.proposals.iter().enumerate().rev() {
-                if &proposal.block.header.previous == p_hash {
-                    return Ok((f_index, p_index))
-                }
-            }
-        }
-
-        Err(Error::ExtendedChainIndexNotFound)
     }
 
     /// Given a proposal, find the fork chain it extends, and return its full clone.
@@ -298,8 +253,11 @@ impl Consensus {
     /// a new fork is created. Additionally, we return the fork index if a new fork
     /// was not created, so caller can replace the fork.
     pub async fn find_extended_fork(&self, proposal: &Proposal) -> Result<(Fork, Option<usize>)> {
+        // Grab a lock over current forks
+        let forks = self.forks.read().await;
+
         // Check if proposal extends any fork
-        let found = self.find_extended_fork_index(proposal);
+        let found = find_extended_fork_index(&forks, proposal);
         if found.is_err() {
             // Check if proposal extends canonical
             let (last_slot, last_block) = self.blockchain.last()?;
@@ -310,20 +268,20 @@ impl Consensus {
             }
 
             // Check if we have an empty fork to use
-            for (f_index, fork) in self.forks.iter().enumerate() {
+            for (f_index, fork) in forks.iter().enumerate() {
                 if fork.proposals.is_empty() {
-                    return Ok((self.forks[f_index].full_clone()?, Some(f_index)))
+                    return Ok((forks[f_index].full_clone()?, Some(f_index)))
                 }
             }
 
             // Generate a new fork extending canonical
-            let mut fork = Fork::new(&self.blockchain, self.module.clone())?;
+            let mut fork = Fork::new(&self.blockchain, self.module.read().await.clone())?;
             if proposal.block.header.height < POS_START {
                 fork.generate_pow_slot()?;
             } else {
                 let id = self.time_keeper.current_slot();
                 let (producers, last_hashes, second_to_last_hashes) =
-                    self.previous_slot_info(id - 1)?;
+                    previous_slot_info(&forks, id - 1)?;
                 fork.generate_pos_slot(id, producers, &last_hashes, &second_to_last_hashes)?;
             }
 
@@ -331,14 +289,14 @@ impl Consensus {
         }
 
         let (f_index, p_index) = found.unwrap();
-        let original_fork = &self.forks[f_index];
+        let original_fork = &forks[f_index];
         // Check if proposal extends fork at last proposal
         if p_index == (original_fork.proposals.len() - 1) {
             return Ok((original_fork.full_clone()?, Some(f_index)))
         }
 
         // Rebuild fork
-        let mut fork = Fork::new(&self.blockchain, self.module.clone())?;
+        let mut fork = Fork::new(&self.blockchain, self.module.read().await.clone())?;
         fork.proposals = original_fork.proposals[..p_index + 1].to_vec();
 
         // Retrieve proposals blocks from original fork
@@ -391,9 +349,12 @@ impl Consensus {
         } else {
             let id = time_keeper.verifying_slot;
             let (producers, last_hashes, second_to_last_hashes) =
-                self.previous_slot_info(id - 1)?;
+                previous_slot_info(&forks, id - 1)?;
             fork.generate_pos_slot(id, producers, &last_hashes, &second_to_last_hashes)?;
         }
+
+        // Drop forks lock
+        drop(forks);
 
         Ok((fork, None))
     }
@@ -404,14 +365,15 @@ impl Consensus {
     //    can be finalized (append to canonical blockchain).
     /// When best fork can be finalized, blocks(proposals) should be appended to canonical, excluding the
     /// last one, and fork should be rebuilt.
-    pub async fn finalization(&mut self) -> Result<Vec<BlockInfo>> {
+    pub async fn finalization(&self) -> Result<Vec<BlockInfo>> {
         // Set last slot finalization check occured to current slot
         let slot = self.time_keeper.current_slot();
         debug!(target: "validator::consensus::finalization", "Started finalization check for slot: {}", slot);
-        self.checked_finalization = slot;
+        *self.checked_finalization.write().await = slot;
 
         // Grab best forks
-        let forks_indexes = self.best_forks_indexes()?;
+        let forks = self.forks.read().await;
+        let forks_indexes = best_forks_indexes(&forks)?;
         // Check if multiple forks with same rank were found
         if forks_indexes.len() > 1 {
             debug!(target: "validator::consensus::finalization", "Multiple best ranked forks were found");
@@ -419,7 +381,7 @@ impl Consensus {
         }
 
         // Grag the actual best fork
-        let fork = &self.forks[forks_indexes[0]];
+        let fork = &forks[forks_indexes[0]];
 
         // Check its length
         let length = fork.proposals.len();
@@ -430,6 +392,9 @@ impl Consensus {
 
         // Grab finalized blocks
         let finalized = fork.overlay.lock().unwrap().get_blocks_by_hash(&fork.proposals)?;
+
+        // Drop forks lock
+        drop(forks);
 
         Ok(finalized)
     }

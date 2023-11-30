@@ -77,7 +77,7 @@ impl TestHarness {
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoMint).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.read().await.add_transactions(&[tx.clone()], slot, true).await?;
+        wallet.validator.add_transactions(&[tx.clone()], slot, true).await?;
         wallet.dao_merkle_tree.append(MerkleNode::from(params.dao_bulla.inner()));
         let leaf_pos = wallet.dao_merkle_tree.mark().unwrap();
         wallet.dao_leafs.insert(params.dao_bulla, leaf_pos);

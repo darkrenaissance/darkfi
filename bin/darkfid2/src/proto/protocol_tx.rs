@@ -92,7 +92,7 @@ impl ProtocolTx {
             };
 
             // Check if node has finished syncing its blockchain
-            if !self.validator.read().await.synced {
+            if !*self.validator.synced.read().await {
                 debug!(
                     target: "validator::protocol_tx::handle_receive_tx",
                     "Node still syncing blockchain, skipping..."
@@ -103,7 +103,7 @@ impl ProtocolTx {
             let tx_copy = (*tx).clone();
 
             // Nodes use unconfirmed_txs vector as seen_txs pool.
-            match self.validator.write().await.append_tx(&tx_copy).await {
+            match self.validator.append_tx(&tx_copy).await {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&tx_copy, &exclude_list).await;
                     let encoded_tx = JsonValue::String(base64::encode(&serialize(&tx_copy)));

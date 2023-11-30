@@ -116,12 +116,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyPoWReward).unwrap();
         let timer = Instant::now();
 
-        wallet
-            .validator
-            .read()
-            .await
-            .add_test_producer_transaction(tx, block_height, 1, true)
-            .await?;
+        wallet.validator.add_test_producer_transaction(tx, block_height, 1, true).await?;
         wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
@@ -141,8 +136,6 @@ impl TestHarness {
 
         assert!(wallet
             .validator
-            .read()
-            .await
             .add_test_producer_transaction(tx, block_height, 1, true)
             .await
             .is_err());

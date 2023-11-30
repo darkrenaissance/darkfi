@@ -111,7 +111,7 @@ impl TestHarness {
 
         let timer = Instant::now();
 
-        wallet.validator.read().await.add_test_producer_transaction(tx, slot, 2, true).await?;
+        wallet.validator.add_test_producer_transaction(tx, slot, 2, true).await?;
         wallet.consensus_staked_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
@@ -170,13 +170,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusProposal).unwrap();
         let timer = Instant::now();
 
-        assert!(wallet
-            .validator
-            .read()
-            .await
-            .add_test_producer_transaction(tx, slot, 2, true)
-            .await
-            .is_err());
+        assert!(wallet.validator.add_test_producer_transaction(tx, slot, 2, true).await.is_err());
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())

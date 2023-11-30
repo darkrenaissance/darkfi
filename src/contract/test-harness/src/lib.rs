@@ -290,8 +290,6 @@ impl TestHarness {
 
         let erroneous_txs = wallet
             .validator
-            .read()
-            .await
             .add_transactions(txs, slot, false)
             .await
             .err()
@@ -447,8 +445,7 @@ impl TestHarness {
 
     pub async fn get_slot_by_slot(&self, slot: u64) -> Result<Slot> {
         let faucet = self.holders.get(&Holder::Faucet).unwrap();
-        let slot =
-            faucet.validator.read().await.blockchain.get_slots_by_id(&[slot])?[0].clone().unwrap();
+        let slot = faucet.validator.blockchain.get_slots_by_id(&[slot])?[0].clone().unwrap();
 
         Ok(slot)
     }
@@ -464,7 +461,7 @@ impl TestHarness {
 
         // Store generated slot
         for wallet in self.holders.values() {
-            wallet.validator.write().await.receive_test_slot(&slot).await?;
+            wallet.validator.receive_test_slot(&slot).await?;
         }
 
         Ok(slot)

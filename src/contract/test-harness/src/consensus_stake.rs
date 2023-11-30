@@ -55,7 +55,7 @@ impl TestHarness {
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::ConsensusStake).unwrap();
 
-        let epoch = wallet.validator.read().await.consensus.time_keeper.slot_epoch(slot);
+        let epoch = wallet.validator.consensus.time_keeper.slot_epoch(slot);
         let timer = Instant::now();
 
         // Building Money::Stake params
@@ -138,7 +138,7 @@ impl TestHarness {
 
         let timer = Instant::now();
 
-        wallet.validator.read().await.add_transactions(&[tx.clone()], slot, true).await?;
+        wallet.validator.add_transactions(&[tx.clone()], slot, true).await?;
         wallet.consensus_staked_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 

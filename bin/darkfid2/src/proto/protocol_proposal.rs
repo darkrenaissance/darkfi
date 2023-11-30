@@ -95,7 +95,7 @@ impl ProtocolProposal {
             };
 
             // Check if node has finished syncing its blockchain
-            if !self.validator.read().await.synced {
+            if !*self.validator.synced.read().await {
                 debug!(
                     target: "validator::protocol_proposal::handle_receive_proposal",
                     "Node still syncing blockchain, skipping..."
@@ -104,7 +104,7 @@ impl ProtocolProposal {
             }
 
             // Check if node started participating in consensus.
-            if !self.validator.read().await.consensus.participating {
+            if !self.validator.consensus.participating {
                 debug!(
                     target: "validator::protocol_proposal::handle_receive_proposal",
                     "Node is not participating in consensus, skipping..."
@@ -114,7 +114,7 @@ impl ProtocolProposal {
 
             let proposal_copy = (*proposal).clone();
 
-            match self.validator.write().await.consensus.append_proposal(&proposal_copy.0).await {
+            match self.validator.consensus.append_proposal(&proposal_copy.0).await {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&proposal_copy, &exclude_list).await;
                     let enc_prop = JsonValue::String(base64::encode(&serialize(&proposal_copy)));

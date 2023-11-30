@@ -117,7 +117,7 @@ impl ValidatorConfig {
 }
 
 /// Atomic pointer to validator.
-pub type ValidatorPtr = Arc<RwLock<Validator>>;
+pub type ValidatorPtr = Arc<Validator>;
 
 /// This struct represents a DarkFi validator node.
 pub struct Validator {
@@ -126,7 +126,7 @@ pub struct Validator {
     /// Hot/Live data used by the consensus algorithm
     pub consensus: Consensus,
     /// Flag signalling node has finished initial sync
-    pub synced: bool,
+    pub synced: RwLock<bool>,
     /// Flag to enable PoS testing mode
     pub pos_testing_mode: bool,
 }
@@ -173,7 +173,7 @@ impl Validator {
 
         // Create the actual state
         let state =
-            Arc::new(RwLock::new(Self { blockchain, consensus, synced: false, pos_testing_mode }));
+            Arc::new(Self { blockchain, consensus, synced: RwLock::new(false), pos_testing_mode });
         info!(target: "validator::new", "Finished initializing validator");
 
         Ok(state)
@@ -181,7 +181,7 @@ impl Validator {
 
     /// The node retrieves a transaction, validates its state transition,
     /// and appends it to the pending txs store.
-    pub async fn append_tx(&mut self, tx: &Transaction) -> Result<()> {
+    pub async fn append_tx(&self, tx: &Transaction) -> Result<()> {
         let tx_hash = blake3::hash(&serialize(tx));
 
         // Check if we have already seen this tx
@@ -198,12 +198,15 @@ impl Validator {
         let tx_vec = [tx.clone()];
         let mut valid = false;
 
+        // Grab a lock over current consensus forks state
+        let mut forks = self.consensus.forks.write().await;
+
         // Generate a time keeper for current slot
         let time_keeper = self.consensus.time_keeper.current();
 
         // If node participates in consensus and holds any forks, iterate over them
         // to verify transaction validity in their overlays
-        for fork in self.consensus.forks.iter_mut() {
+        for fork in forks.iter_mut() {
             // Clone forks' overlay
             let overlay = fork.overlay.lock().unwrap().full_clone()?;
 
@@ -225,6 +228,9 @@ impl Validator {
             valid = true
         }
 
+        // Drop forks lock
+        drop(forks);
+
         // Return error if transaction is not valid for canonical or any fork
         if !valid {
             return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
@@ -238,7 +244,7 @@ impl Validator {
     }
 
     /// The node removes invalid transactions from the pending txs store.
-    pub async fn purge_pending_txs(&mut self) -> Result<()> {
+    pub async fn purge_pending_txs(&self) -> Result<()> {
         info!(target: "validator::purge_pending_txs", "Removing invalid transactions from pending transactions store...");
 
         // Check if any pending transactions exist
@@ -247,6 +253,9 @@ impl Validator {
             info!(target: "validator::purge_pending_txs", "No pending transactions found");
             return Ok(())
         }
+
+        // Grab a lock over current consensus forks state
+        let mut forks = self.consensus.forks.write().await;
 
         // Generate a time keeper for current slot
         let time_keeper = self.consensus.time_keeper.current();
@@ -259,7 +268,7 @@ impl Validator {
 
             // If node participates in consensus and holds any forks, iterate over them
             // to verify transaction validity in their overlays
-            for fork in self.consensus.forks.iter_mut() {
+            for fork in forks.iter_mut() {
                 // Clone forks' overlay
                 let overlay = fork.overlay.lock().unwrap().full_clone()?;
 
@@ -287,6 +296,9 @@ impl Validator {
             }
         }
 
+        // Drop forks lock
+        drop(forks);
+
         if removed_txs.is_empty() {
             info!(target: "validator::purge_pending_txs", "No erroneous transactions found");
             return Ok(())
@@ -299,7 +311,7 @@ impl Validator {
 
     /// The node retrieves a block and tries to add it if it doesn't
     /// already exists.
-    pub async fn append_block(&mut self, block: &BlockInfo) -> Result<()> {
+    pub async fn append_block(&self, block: &BlockInfo) -> Result<()> {
         let block_hash = block.hash()?.to_string();
 
         // Check if block already exists
@@ -316,7 +328,7 @@ impl Validator {
     /// The node checks if proposals can be finalized.
     /// If proposals are found, node appends them to canonical, excluding the
     /// last one, and rebuild the finalized fork to contain the last one.
-    pub async fn finalization(&mut self) -> Result<Vec<BlockInfo>> {
+    pub async fn finalization(&self) -> Result<Vec<BlockInfo>> {
         info!(target: "validator::finalization", "Performing finalization check");
 
         // Grab blocks that can be finalized
@@ -337,8 +349,8 @@ impl Validator {
         self.add_blocks(&finalized).await?;
 
         // Rebuild best fork using last proposal
-        self.consensus.forks = vec![];
-        self.consensus.generate_pow_slot()?;
+        *self.consensus.forks.write().await = vec![];
+        self.consensus.generate_pow_slot().await?;
         self.consensus.append_proposal(&Proposal::new(last)?).await?;
         info!(target: "validator::finalization", "Finalization completed!");
 
@@ -358,7 +370,7 @@ impl Validator {
     // ==========================
 
     /// Validate a set of [`BlockInfo`] in sequence and apply them if all are valid.
-    pub async fn add_blocks(&mut self, blocks: &[BlockInfo]) -> Result<()> {
+    pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
         debug!(target: "validator::add_blocks", "Instantiating BlockchainOverlay");
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
@@ -367,7 +379,7 @@ impl Validator {
 
         // Create a time keeper and a PoW module to validate each block
         let mut time_keeper = self.consensus.time_keeper.clone();
-        let mut module = self.consensus.module.clone();
+        let mut module = self.consensus.module.read().await.clone();
 
         // Keep track of all blocks transactions to remove them from pending txs store
         let mut removed_txs = vec![];
@@ -430,7 +442,7 @@ impl Validator {
         self.purge_pending_txs().await?;
 
         // Update PoW module
-        self.consensus.module = module;
+        *self.consensus.module.write().await = module;
 
         Ok(())
     }
@@ -449,10 +461,11 @@ impl Validator {
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
         // Generate a time keeper using transaction verifying slot
+        let current_time_keeper = &self.consensus.time_keeper;
         let time_keeper = TimeKeeper::new(
-            self.consensus.time_keeper.genesis_ts,
-            self.consensus.time_keeper.epoch_length,
-            self.consensus.time_keeper.slot_time,
+            current_time_keeper.genesis_ts,
+            current_time_keeper.epoch_length,
+            current_time_keeper.slot_time,
             verifying_slot,
         );
 
@@ -480,7 +493,7 @@ impl Validator {
 
     /// Append to canonical state received slot.
     /// This should be only used for test purposes.
-    pub async fn receive_test_slot(&mut self, slot: &Slot) -> Result<()> {
+    pub async fn receive_test_slot(&self, slot: &Slot) -> Result<()> {
         debug!(target: "validator::receive_test_slot", "Appending slot to ledger");
         self.blockchain.slots.insert(&[slot.clone()])?;
 
@@ -503,10 +516,11 @@ impl Validator {
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
         // Generate a time keeper using transaction verifying slot
+        let current_time_keeper = &self.consensus.time_keeper;
         let time_keeper = TimeKeeper::new(
-            self.consensus.time_keeper.genesis_ts,
-            self.consensus.time_keeper.epoch_length,
-            self.consensus.time_keeper.slot_time,
+            current_time_keeper.genesis_ts,
+            current_time_keeper.epoch_length,
+            current_time_keeper.slot_time,
             verifying_slot,
         );
 

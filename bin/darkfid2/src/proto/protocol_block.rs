@@ -102,7 +102,7 @@ impl ProtocolBlock {
             };
 
             // Check if node has finished syncing its blockchain
-            if !self.validator.read().await.synced {
+            if !*self.validator.synced.read().await {
                 debug!(
                     target: "validator::protocol_block::handle_receive_block",
                     "Node still syncing blockchain, skipping..."
@@ -114,7 +114,7 @@ impl ProtocolBlock {
             // Consensus-mode enabled nodes have already performed these steps,
             // during proposal finalization. They still listen to this sub,
             // in case they go out of sync and become a none-consensus node.
-            if self.validator.read().await.consensus.participating {
+            if self.validator.consensus.participating {
                 debug!(
                     target: "validator::protocol_block::handle_receive_block",
                     "Node is participating in consensus, skipping..."
@@ -124,7 +124,7 @@ impl ProtocolBlock {
 
             let block_copy = (*block).clone();
 
-            match self.validator.write().await.append_block(&block_copy.0).await {
+            match self.validator.append_block(&block_copy.0).await {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&block_copy, &exclude_list).await;
                     let encoded_block = JsonValue::String(base64::encode(&serialize(&block_copy)));

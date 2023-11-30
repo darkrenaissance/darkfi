@@ -99,7 +99,7 @@ impl ProtocolSync {
             };
 
             // Check if node has finished syncing its blockchain
-            if !self.validator.read().await.synced {
+            if !*self.validator.synced.read().await {
                 debug!(
                     target: "validator::protocol_sync::handle_receive_request",
                     "Node still syncing blockchain, skipping..."
@@ -108,7 +108,7 @@ impl ProtocolSync {
             }
 
             let key = request.slot;
-            let blocks = match self.validator.read().await.blockchain.get_blocks_after(key, BATCH) {
+            let blocks = match self.validator.blockchain.get_blocks_after(key, BATCH) {
                 Ok(v) => v,
                 Err(e) => {
                     error!(

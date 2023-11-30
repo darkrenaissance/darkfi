@@ -585,7 +585,7 @@ pub async fn verify_pos_proposal(
     let time_keeper = consensus.time_keeper.current();
 
     // Node have already checked for finalization in this slot (1)
-    if time_keeper.verifying_slot <= consensus.checked_finalization {
+    if time_keeper.verifying_slot <= *consensus.checked_finalization.read().await {
         warn!(target: "validator::verification::verify_pos_proposal", "Proposal received after finalization sync period.");
         return Err(Error::ProposalAfterFinalizationError)
     }

@@ -55,7 +55,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
     // Node sends the last known block hash of the canonical blockchain
     // and loops until the response is the same block (used to utilize
     // batch requests).
-    let mut last = node.validator.read().await.blockchain.last()?;
+    let mut last = node.validator.blockchain.last()?;
     info!(target: "darkfid::task::sync_task", "Last known block: {:?} - {:?}", last.0, last.1);
     loop {
         // Node creates a `SyncRequest` and sends it
@@ -68,7 +68,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
 
         // Verify and store retrieved blocks
         debug!(target: "darkfid::task::sync_task", "Processing received blocks");
-        node.validator.write().await.add_blocks(&response.blocks).await?;
+        node.validator.add_blocks(&response.blocks).await?;
 
         // Notify subscriber
         for block in &response.blocks {
@@ -76,7 +76,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
             notif_sub.notify(vec![encoded_block].into()).await;
         }
 
-        let last_received = node.validator.read().await.blockchain.last()?;
+        let last_received = node.validator.blockchain.last()?;
         info!(target: "darkfid::task::sync_task", "Last received block: {:?} - {:?}", last_received.0, last_received.1);
 
         if last == last_received {
@@ -86,7 +86,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
         last = last_received;
     }
 
-    node.validator.write().await.synced = true;
+    *node.validator.synced.write().await = true;
     info!(target: "darkfid::task::sync_task", "Blockchain synced!");
     Ok(())
 }

@@ -34,6 +34,7 @@ use crate::{
     runtime::vm_runtime::Runtime,
     tx::Transaction,
     util::time::TimeKeeper,
+    validator::consensus::{Fork, Proposal},
     Error, Result,
 };
 
@@ -220,4 +221,73 @@ pub fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
     }
 
     Ok(total)
+}
+
+/// Retrieve previous slot producers, last proposal hashes,
+/// and their second to last hashes, from all provided forks.
+pub fn previous_slot_info(
+    forks: &Vec<Fork>,
+    slot: u64,
+) -> Result<(u64, Vec<blake3::Hash>, Vec<blake3::Hash>)> {
+    let mut producers = 0;
+    let mut last_hashes = vec![];
+    let mut second_to_last_hashes = vec![];
+
+    for fork in forks {
+        let last_proposal = fork.last_proposal()?;
+        if last_proposal.block.header.height == slot {
+            producers += 1;
+        }
+        last_hashes.push(last_proposal.hash);
+        second_to_last_hashes.push(last_proposal.block.header.previous);
+    }
+
+    Ok((producers, last_hashes, second_to_last_hashes))
+}
+
+/// Given a proposal, find the index of the fork chain it extends, along with the specific
+/// extended proposal index.
+pub fn find_extended_fork_index(forks: &[Fork], proposal: &Proposal) -> Result<(usize, usize)> {
+    for (f_index, fork) in forks.iter().enumerate() {
+        // Traverse fork proposals sequence in reverse
+        for (p_index, p_hash) in fork.proposals.iter().enumerate().rev() {
+            if &proposal.block.header.previous == p_hash {
+                return Ok((f_index, p_index))
+            }
+        }
+    }
+
+    Err(Error::ExtendedChainIndexNotFound)
+}
+
+/// Auxiliary function to find best ranked forks indexes.
+pub fn best_forks_indexes(forks: &[Fork]) -> Result<Vec<usize>> {
+    // Check if node has any forks
+    if forks.is_empty() {
+        return Err(Error::ForksNotFound)
+    }
+
+    // Find the best ranked forks
+    let mut best = 0;
+    let mut indexes = vec![];
+    for (f_index, fork) in forks.iter().enumerate() {
+        let rank = fork.rank;
+
+        // Fork ranks lower that current best
+        if rank < best {
+            continue
+        }
+
+        // Fork has same rank as current best
+        if rank == best {
+            indexes.push(f_index);
+            continue
+        }
+
+        // Fork ranks higher that current best
+        best = rank;
+        indexes = vec![f_index];
+    }
+
+    Ok(indexes)
 }

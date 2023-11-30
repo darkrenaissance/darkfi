@@ -139,8 +139,8 @@ impl Harness {
 
     pub async fn validate_chains(&self, total_blocks: usize, total_slots: usize) -> Result<()> {
         let genesis_txs_total = self.config.alice_initial + self.config.bob_initial;
-        let alice = &self.alice.validator.read().await;
-        let bob = &self.bob.validator.read().await;
+        let alice = &self.alice.validator;
+        let bob = &self.bob.validator;
 
         alice
             .validate_blockchain(
@@ -178,7 +178,7 @@ impl Harness {
         }
 
         // and then add it to her chain
-        self.alice.validator.write().await.add_blocks(blocks).await?;
+        self.alice.validator.add_blocks(blocks).await?;
 
         Ok(())
     }
@@ -221,7 +221,7 @@ impl Harness {
         let height = slots.last().unwrap().id;
         let header = Header::new(
             previous_hash,
-            self.alice.validator.read().await.consensus.time_keeper.slot_epoch(height),
+            self.alice.validator.consensus.time_keeper.slot_epoch(height),
             height,
             timestamp,
             previous.header.nonce,
@@ -279,10 +279,10 @@ pub async fn generate_node(
     if !skip_sync {
         sync_task(&node).await?;
     } else {
-        node.validator.write().await.synced = true;
+        *node.validator.synced.write().await = true;
     }
 
-    node.validator.write().await.purge_pending_txs().await?;
+    node.validator.purge_pending_txs().await?;
 
     Ok(node)
 }

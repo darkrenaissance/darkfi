@@ -331,11 +331,11 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     if !blockchain_config.skip_sync {
         sync_task(&darkfid).await?;
     } else {
-        darkfid.validator.write().await.synced = true;
+        *darkfid.validator.synced.write().await = true;
     }
 
     // Clean node pending transactions
-    darkfid.validator.write().await.purge_pending_txs().await?;
+    darkfid.validator.purge_pending_txs().await?;
 
     // Consensus protocol
     let (consensus_task, consensus_sender) = if blockchain_config.consensus {

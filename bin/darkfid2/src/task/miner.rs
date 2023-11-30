@@ -22,6 +22,7 @@ use darkfi::{
     validator::{
         consensus::{Fork, Proposal},
         pow::PoWModule,
+        utils::best_forks_indexes,
     },
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
@@ -84,7 +85,7 @@ async fn miner_loop(
 ) -> Result<()> {
     // Grab zkas proving keys and bin for PoWReward transaction
     info!(target: "darkfid::task::miner_task", "Generating zkas bin and proving keys...");
-    let blockchain = node.validator.read().await.blockchain.clone();
+    let blockchain = node.validator.blockchain.clone();
     let (zkbin, _) = blockchain.contracts.get_zkas(
         &blockchain.sled_db,
         &MONEY_CONTRACT_ID,
@@ -102,7 +103,7 @@ async fn miner_loop(
 
     // Generate a new fork to be able to extend
     info!(target: "darkfid::task::miner_task", "Generating new empty fork...");
-    node.validator.write().await.consensus.generate_pow_slot()?;
+    node.validator.consensus.generate_pow_slot().await?;
 
     info!(target: "darkfid::task::miner_task", "Miner loop starts!");
     // Miner loop
@@ -116,15 +117,14 @@ async fn miner_loop(
         next_block.sign(&secret)?;
 
         // Verify it
-        node.validator.read().await.consensus.module.verify_current_block(&next_block)?;
+        node.validator.consensus.module.read().await.verify_current_block(&next_block)?;
 
         // Append the mined block as a proposal
         let proposal = Proposal::new(next_block)?;
-        let mut lock = node.validator.write().await;
-        lock.consensus.append_proposal(&proposal).await?;
+        node.validator.consensus.append_proposal(&proposal).await?;
 
         // Check if we can finalize anything and broadcast them
-        let finalized = lock.finalization().await?;
+        let finalized = node.validator.finalization().await?;
         if !finalized.is_empty() {
             for block in finalized {
                 let message = BlockInfoMessage::from(&block);
@@ -142,11 +142,12 @@ async fn generate_next_block(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
 ) -> Result<(BlockInfo, PoWModule)> {
-    let lock = node.validator.read().await;
+    // Grab a lock over nodes' current forks
+    let forks = node.validator.consensus.forks.read().await;
 
     // Grab best current fork
-    let fork_index = lock.consensus.best_forks_indexes()?[0];
-    let fork = &lock.consensus.forks[fork_index];
+    let fork_index = best_forks_indexes(&forks)?[0];
+    let fork = &forks[fork_index];
 
     // Generate new signing key for next block
     let height = fork.slots.last().unwrap().id;
@@ -159,9 +160,13 @@ async fn generate_next_block(
     // Generate reward transaction
     let tx = generate_pow_transaction(fork, secret, recipient, zkbin, pk)?;
 
-    // Mine next block proposal
-    let next_block = lock.consensus.generate_unsigned_block(fork, tx).await?;
-    let module = lock.consensus.forks[fork_index].module.clone();
+    // Generate next block proposal
+    let next_block = node.validator.consensus.generate_unsigned_block(fork, tx).await?;
+    let module = fork.module.clone();
+
+    // Drop forks lock
+    drop(forks);
+
     Ok((next_block, module))
 }
 

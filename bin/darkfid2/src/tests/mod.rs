@@ -46,7 +46,7 @@ async fn sync_pos_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let th = Harness::new(config, &ex).await?;
 
     // Retrieve genesis block
-    let previous = th.alice.validator.read().await.blockchain.last_block()?;
+    let previous = th.alice.validator.blockchain.last_block()?;
 
     // Generate next block
     let block1 = th.generate_next_pos_block(&previous, 1).await?;
@@ -73,8 +73,8 @@ async fn sync_pos_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
         generate_node(&th.vks, &th.validator_config, &sync_settings, None, &ex, false).await?;
     // Verify node synced
     let genesis_txs_total = th.config.alice_initial + th.config.bob_initial;
-    let alice = &th.alice.validator.read().await;
-    let charlie = &charlie.validator.read().await;
+    let alice = &th.alice.validator;
+    let charlie = &charlie.validator;
     charlie
         .validate_blockchain(
             genesis_txs_total,
