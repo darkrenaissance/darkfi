@@ -44,6 +44,7 @@
   - [Services](arch/services.md)
   - [Smart Contracts](arch/sc/sc.md)
     - [Transaction lifetime](arch/sc/tx-lifetime.md)
+  - [DAO](arch/dao.md)
 - [zkas](zkas/index.md)
   - [Bincode](zkas/bincode.md)
   - [zkVM](zkas/zkvm.md)
