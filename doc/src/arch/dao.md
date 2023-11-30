@@ -107,3 +107,18 @@ proposal where voting passed the threshold and so on.
 Assuming both contracts validate successfully, the funds are transferred out
 of the DAO treasury.
 
+## Generalizing DAO Calling Mechanism
+
+Currently the calling params for a contract is just a big binary blob.
+The idea is we introduce some kind of ABI.
+
+Then the DAO proposal would commit to some part of those params that
+we are interested in.
+
+In the final step of `DAO::exec()`, only these params would be checked.
+For more info see
+[DEP 0002](https://darkrenaissance.github.io/darkfi/dep/0002.html).
+
+This would be one way to enable composability, but by no means is it the
+only way.
+
