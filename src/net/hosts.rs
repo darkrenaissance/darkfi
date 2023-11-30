@@ -19,10 +19,11 @@
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
+    time::SystemTime,
 };
 
 use log::debug;
-use rand::{prelude::IteratorRandom, rngs::OsRng};
+use rand::{prelude::IteratorRandom, rngs::OsRng, seq::SliceRandom};
 use smol::{lock::RwLock, Executor};
 use url::Url;
 
@@ -44,8 +45,13 @@ pub const LOCAL_HOST_STRS: [&str; 2] = ["localhost", "localhost.localdomain"];
 
 /// Manages a store of network addresses
 pub struct Hosts {
+    // Intermediary node list that is periodically probed and updated to whitelist.
+    greylist: RwLock<Vec<(Url, u64)>>,
+
+    // Recently seen nodes.
+    whitelist: RwLock<Vec<(Url, u64)>>,
+
     /// Set of stored addresses
-    // addrs: RwLock<HashMap<Url, usize>>
     addrs: RwLock<HashSet<Url>>,
 
     /// Set of stored addresses that are quarantined.
@@ -69,6 +75,8 @@ impl Hosts {
     /// Create a new hosts list>
     pub fn new(settings: SettingsPtr) -> HostsPtr {
         Arc::new(Self {
+            whitelist: RwLock::new(Vec::new()),
+            greylist: RwLock::new(Vec::new()),
             addrs: RwLock::new(HashSet::new()),
             quarantine: RwLock::new(HashMap::new()),
             rejected: RwLock::new(HashSet::new()),
@@ -89,6 +97,29 @@ impl Hosts {
             for addr in filtered_addrs {
                 debug!(target: "net::hosts::store()", "Inserting {}", addr);
                 addrs_map.insert(addr);
+            }
+        }
+
+        self.store_subscriber.notify(filtered_addrs_len).await;
+        debug!(target: "net::hosts::store()", "hosts::store() [END]");
+    }
+
+    // Append hosts to the greylist. Called after a successful version exchange.
+    pub async fn store2(&self, addrs: &[Url]) {
+        debug!(target: "net::hosts::store2()", "hosts::store2() [START]");
+
+        let last_seen = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+        let filtered_addrs = self.filter_addresses(addrs).await;
+        let filtered_addrs_len = filtered_addrs.len();
+
+        if !filtered_addrs.is_empty() {
+            let mut greylist = self.greylist.write().await;
+            for addr in filtered_addrs {
+                debug!(target: "net::hosts::store()", "Inserting {}. Last seen {:?}", addr, last_seen);
+                greylist.push((addr, last_seen));
+
+                // Sort the list by last_seen.
+                greylist.sort_unstable_by_key(|entry| entry.1);
             }
         }
 
@@ -205,6 +236,55 @@ impl Hosts {
         }
 
         ret
+    }
+
+    // Periodically probe random peers on the greylist. If a peer is responsive,
+    // update the last_seen field and add it to the whitelist. Otherwise,
+    // remove it from the greylist.
+    // TODO: Should we also remove it from the greylist?
+    async fn refresh_greylist(&self, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
+        let mut greylist = self.greylist.write().await;
+        let mut whitelist = self.whitelist.write().await;
+
+        // Randomly select an entry from the grey list.
+        let entry: Option<&(Url, u64)> = greylist.choose(&mut rand::thread_rng());
+
+        match entry {
+            Some(entry) => {
+                // Keep note of its position. TODO: This will return false if it doesn't find
+                // anything or panic if the list is > MAX usize.
+                let position = greylist.iter().position(|e| e == entry).unwrap();
+                let url = &entry.0;
+
+                // Probe node to see if it's active.
+                let result: Result<()> = self.probe_node(url, p2p.clone(), ex.clone()).await;
+
+                match result {
+                    // Peer is responsive. Update last_seen and add it to the whitelist.
+                    Ok(()) => {
+                        let last_seen = SystemTime::now()
+                            .duration_since(SystemTime::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs();
+
+                        whitelist.push((url.clone(), last_seen));
+
+                        // Sort the list by last_seen.
+                        whitelist.sort_unstable_by_key(|entry| entry.1);
+                    }
+                    // Peer is not responsive. Remove it from the greylist.
+                    Err(e) => {
+                        debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removing from greylist {}", url, e);
+                        greylist.remove(position);
+                    }
+                }
+            }
+            // TODO...
+            // greylist is empty
+            None => {}
+        }
+
+        Ok(())
     }
 
     async fn probe_node(&self, host: &Url, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
