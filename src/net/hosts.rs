@@ -104,45 +104,73 @@ impl Hosts {
         debug!(target: "net::hosts::store()", "hosts::store() [END]");
     }
 
+    // Store the address in the whitelist if we don't have it.
+    // Otherwise, update the last_seen field.
+    // TODO: test the performance of this method. It might be costly.
+    pub async fn whitelist_store_or_update(&self, addr: &Url, last_seen: u64) {
+        debug!(target: "net::hosts::whitelist_store_or_update()", "hosts::whitelist_store_or_update() [START]");
+        if !self.whitelist_contains(addr).await {
+            self.whitelist_store(addr, last_seen).await;
+        } else {
+            let index = self.get_whitelist_index_at_addr(addr).await;
+            self.whitelist_update_last_seen(addr, last_seen, index).await;
+        }
+    }
+
+    // Update the last_seen field for a Url on the whitelist.
+    pub async fn whitelist_update(&self, addr: &Url, last_seen: u64) {
+        let index = self.get_whitelist_index_at_addr(addr).await;
+        self.whitelist_update_last_seen(addr, last_seen, index).await;
+    }
+
     // Append host to the greylist. Called on learning of a new peer.
-    pub async fn store_greylist(&self, addr: &Url, last_seen: u64) {
-        debug!(target: "net::hosts::store_greylist()", "hosts::store_greylist() [START]");
+    pub async fn greylist_store(&self, addr: &Url, last_seen: u64) {
+        debug!(target: "net::hosts::greylist_store()", "hosts::greylist_store() [START]");
 
         let mut greylist = self.greylist.write().await;
 
-        debug!(target: "net::hosts::store_greylist()", "Inserting {}. Last seen {:?}", addr, last_seen);
+        debug!(target: "net::hosts::greylist_store()", "Inserting {}. Last seen {:?}", addr, last_seen);
 
         // Remove oldest element if the greylist reaches max size.
         if greylist.len() == 5000 {
             let last_entry = greylist.pop().unwrap();
-            debug!(target: "net::hosts::store_greylist()", "Greylist reached max size. Removed {:?}", last_entry);
+            debug!(target: "net::hosts::greylist_store()", "Greylist reached max size. Removed {:?}", last_entry);
         }
         greylist.push((addr.clone(), last_seen));
 
         // Sort the list by last_seen.
         greylist.sort_unstable_by_key(|entry| entry.1);
 
-        debug!(target: "net::hosts::store_greylist()", "hosts::store_greylist() [END]");
+        debug!(target: "net::hosts::greylist_store()", "hosts::greylist_store() [END]");
     }
 
     // Append host to the whitelist. Called after a successful interaction with an online peer.
-    pub async fn store_whitelist(&self, addr: &Url, last_seen: u64) {
-        debug!(target: "net::hosts::store_whitelist()", "hosts::store_whitelist() [START]");
+    pub async fn whitelist_store(&self, addr: &Url, last_seen: u64) {
+        debug!(target: "net::hosts::whitelist_store()", "hosts::whitelist_store() [START]");
 
         let mut whitelist = self.whitelist.write().await;
 
-        debug!(target: "net::hosts::store_whitelist()", "Inserting {}. Last seen {:?}", addr, last_seen);
+        debug!(target: "net::hosts::whitelist_store()", "Inserting {}. Last seen {:?}", addr, last_seen);
 
         // Remove oldest element if the whitelist reaches max size.
         if whitelist.len() == 1000 {
             let last_entry = whitelist.pop().unwrap();
-            debug!(target: "net::hosts::store_whitelist()", "Whitelist reached max size. Removed {:?}", last_entry);
+            debug!(target: "net::hosts::whitelist_store()", "Whitelist reached max size. Removed {:?}", last_entry);
         }
         whitelist.push((addr.clone(), last_seen));
 
         // Sort the list by last_seen.
         whitelist.sort_unstable_by_key(|entry| entry.1);
-        debug!(target: "net::hosts::store_whitelist()", "hosts::store_greylist() [END]");
+        debug!(target: "net::hosts::whitelist_store()", "hosts::greylist_store() [END]");
+    }
+
+    // Update the last_seen field of a peer on the whitelist.
+    pub async fn whitelist_update_last_seen(&self, addr: &Url, last_seen: u64, index: usize) {
+        debug!(target: "net::hosts::update_last_seen()", "hosts::update_last_seen() [START]");
+
+        let mut whitelist = self.whitelist.write().await;
+
+        whitelist[index] = (addr.clone(), last_seen);
     }
 
     pub async fn subscribe_store(&self) -> Result<Subscription<usize>> {
@@ -450,6 +478,18 @@ impl Hosts {
             return true
         }
         return false
+    }
+
+    // Get the index for a given addr on the whitelist.
+    pub async fn get_whitelist_index_at_addr(&self, addr: &Url) -> usize {
+        let whitelist = self.whitelist.read().await;
+        for (i, (url, _time)) in whitelist.iter().enumerate() {
+            if url == addr {
+                return i
+            }
+        }
+        // TODO: FIXME: This should never happen.
+        return 0
     }
 
     /// Check if host is already in the set
@@ -760,7 +800,7 @@ mod tests {
     }
 
     #[test]
-    fn test_store_greylist() {
+    fn test_greylist_store() {
         smol::block_on(async {
             let settings = Settings {
                 localnet: false,
@@ -778,7 +818,7 @@ mod tests {
             let last_seen =
                 SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
 
-            hosts.store_greylist(&url, last_seen).await;
+            hosts.greylist_store(&url, last_seen).await;
 
             assert!(!hosts.is_empty_greylist().await);
             assert!(hosts.greylist_contains(&url).await);
@@ -786,7 +826,7 @@ mod tests {
     }
 
     #[test]
-    fn test_store_whitelist() {
+    fn test_whitelist_store() {
         smol::block_on(async {
             let settings = Settings {
                 localnet: false,
@@ -804,7 +844,7 @@ mod tests {
             let last_seen =
                 SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
 
-            hosts.store_whitelist(&url, last_seen).await;
+            hosts.whitelist_store(&url, last_seen).await;
 
             assert!(!hosts.is_empty_whitelist().await);
             assert!(hosts.whitelist_contains(&url).await);
