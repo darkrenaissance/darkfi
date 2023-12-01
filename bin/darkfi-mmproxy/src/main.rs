@@ -16,39 +16,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::sync::Arc;
 
-use darkfi::{
-    async_daemonize, cli_desc,
-    rpc::{
-        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResult},
-        server::{listen_and_serve, RequestHandler},
-    },
-    system::{StoppableTask, StoppableTaskPtr},
-    Error, Result,
-};
-use darkfi_serial::async_trait;
-use log::{error, info};
+use darkfi::{async_daemonize, cli_desc, rpc::util::JsonValue, Error, Result};
+use log::{debug, error, info};
 use serde::Deserialize;
-use smol::{
-    lock::{Mutex, MutexGuard, RwLock},
-    net::TcpStream,
-    stream::StreamExt,
-    Executor,
-};
+use smol::{net::TcpStream, stream::StreamExt, Executor};
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
+use surf::StatusCode;
 use url::Url;
-use uuid::Uuid;
-
-mod error;
-mod stratum;
 
 const CONFIG_FILE: &str = "darkfi_mmproxy.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfi_mmproxy.toml");
+
+/// Monero RPC functions
+mod monerod;
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
@@ -62,13 +45,9 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
-    #[structopt(long, default_value = "tcp://127.0.0.1:3333")]
-    /// mmproxy JSON-RPC server listen URL
-    rpc_listen: Url,
-
-    #[structopt(long)]
-    /// List of worker logins
-    workers: Vec<String>,
+    #[structopt(long, default_value = "http://127.0.0.1:3333")]
+    // mmproxy daemon listen URL
+    listen: Url,
 
     #[structopt(long)]
     /// Set log file output
@@ -82,35 +61,31 @@ struct Args {
 #[structopt()]
 struct MonerodArgs {
     #[structopt(long, default_value = "mainnet")]
-    /// Mining reward wallet address
+    /// Monero network type (mainnet/testnet)
     network: String,
 
-    #[structopt(long, default_value = "http://127.0.0.1:28081/json_rpc")]
+    #[structopt(long, default_value = "http://127.0.0.1:18081")]
     /// monerod JSON-RPC server listen URL
     rpc: Url,
 }
 
+/// Mining proxy state
 struct MiningProxy {
     /// monerod network type
     monerod_network: monero::Network,
     /// monerod RPC address
     monerod_rpc: Url,
-    /// Workers UUIDs
-    workers: Arc<RwLock<HashMap<Uuid, stratum::Worker>>>,
-    /// JSON-RPC connection tracker
-    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
-    /// Main async executor reference
-    executor: Arc<Executor<'static>>,
 }
 
 impl MiningProxy {
-    async fn new(monerod: MonerodArgs, executor: Arc<Executor<'static>>) -> Result<Self> {
-        let monerod_network = match monerod.network.as_str() {
+    /// Instantiate `MiningProxy` state
+    async fn new(monerod: MonerodArgs) -> Result<Self> {
+        let monerod_network = match monerod.network.to_lowercase().as_str() {
             "mainnet" => monero::Network::Mainnet,
             "testnet" => monero::Network::Testnet,
             _ => {
                 error!("Invalid Monero network \"{}\"", monerod.network);
-                return Err(Error::Custom("Invalid Monero network".to_string()))
+                return Err(Error::Custom(format!("Invalid Monero network \"{}\"", monerod.network)))
             }
         };
 
@@ -120,60 +95,84 @@ impl MiningProxy {
             return Err(e.into())
         }
 
-        let workers = Arc::new(RwLock::new(HashMap::new()));
-        let rpc_connections = Mutex::new(HashSet::new());
-
-        Ok(Self { monerod_network, monerod_rpc: monerod.rpc, workers, rpc_connections, executor })
-    }
-}
-
-#[async_trait]
-#[rustfmt::skip]
-impl RequestHandler for MiningProxy {
-    async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        match req.method.as_str() {
-            "ping" => self.pong(req.id, req.params).await,
-
-            // Stratum methods
-            "login" => self.stratum_login(req.id, req.params).await,
-            "submit" => self.stratum_submit(req.id, req.params).await,
-            "keepalived" => self.stratum_keepalived(req.id, req.params).await,
-
-            _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
-        }
-    }
-
-    async fn connections_mut(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
-        self.rpc_connections.lock().await
+        Ok(Self { monerod_network, monerod_rpc: monerod.rpc })
     }
 }
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
-    info!("Starting DarkFi x Monero merge mining proxy...");
+    info!("Starting DarkFi x Monero merge mining proxy");
 
-    let mmproxy = Arc::new(MiningProxy::new(args.monerod, ex.clone()).await?);
+    let mmproxy = Arc::new(MiningProxy::new(args.monerod).await?);
+    let mut app = tide::with_state(mmproxy);
 
-    info!("Starting JSON-RPC server");
-    let rpc_task = StoppableTask::new();
-    rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, mmproxy.clone(), None, ex.clone()),
-        |res| async move {
-            match res {
-                Ok(()) | Err(Error::RpcServerStopped) => mmproxy.stop_connections().await,
-                Err(e) => error!("Failed stopping JSON-RPC server: {}", e),
+    // monerod `/getheight` endpoint proxy
+    app.at("/getheight").get(|req: tide::Request<Arc<MiningProxy>>| async move {
+        let mmproxy = req.state();
+        let return_data = mmproxy.monerod_get_height().await?;
+        let return_data = return_data.stringify()?;
+        debug!(target: "monerod::getheight", "<-- {}", return_data);
+        Ok(return_data)
+    });
+
+    // monerod `/getinfo` endpoint proxy
+    app.at("/getinfo").get(|req: tide::Request<Arc<MiningProxy>>| async move {
+        let mmproxy = req.state();
+        let return_data = mmproxy.monerod_get_info().await?;
+        let return_data = return_data.stringify()?;
+        debug!(target: "monerod::getinfo", "<-- {}", return_data);
+        Ok(return_data)
+    });
+
+    // monerod `/json_rpc` endpoint proxy
+    app.at("/json_rpc").post(|mut req: tide::Request<Arc<MiningProxy>>| async move {
+        let json_str: JsonValue = match req.body_string().await {
+            Ok(v) => v.parse()?,
+            Err(e) => return Err(e),
+        };
+
+        let JsonValue::Object(ref request) = json_str else {
+            return Err(surf::Error::new(
+                StatusCode::BadRequest,
+                Error::Custom("Invalid JSONRPC request".to_string()),
+            ))
+        };
+
+        if !request.contains_key("method") || !request["method"].is_string() {
+            return Err(surf::Error::new(
+                StatusCode::BadRequest,
+                Error::Custom("Invalid JSONRPC request".to_string()),
+            ))
+        }
+
+        let mmproxy = req.state();
+        let method = request["method"].get::<String>().unwrap();
+
+        // For XMRig we only have to handle 2 methods:
+        let return_data = match method.as_str() {
+            "getblocktemplate" => mmproxy.monerod_getblocktemplate(&json_str).await?,
+            "submitblock" => mmproxy.monerod_submit_block(&json_str).await?,
+            _ => {
+                return Err(surf::Error::new(
+                    StatusCode::BadRequest,
+                    Error::Custom("Invalid JSONRPC request".to_string()),
+                ))
             }
-        },
-        Error::RpcServerStopped,
-        ex.clone(),
-    );
+        };
 
-    info!("Merge mining proxy ready, waiting for connections...");
+        let return_data = return_data.stringify()?;
+        let log_tgt = format!("monerod::{}", method);
+        debug!(target: &log_tgt,  "<-- {}", return_data);
+        Ok(return_data)
+    });
+
+    ex.spawn(async move { app.listen(args.listen).await.unwrap() }).detach();
+    info!("Merge mining proxy ready, waiting for connections");
 
     // Signal handling for graceful termination.
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
-    info!("Caught termination signal, cleaning up and exiting...");
+    info!("Caught termination signal, cleaning up and exiting");
 
     Ok(())
 }

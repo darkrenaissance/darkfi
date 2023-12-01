@@ -1,3 +1,6 @@
+# darkfi-mmproxy daemon listen URL
+#listen = "http://127.0.0.1:3333"
+
 [monerod]
 # Monero network to use (mainnet/testnet)
 network = "mainnet"

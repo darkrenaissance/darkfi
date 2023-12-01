@@ -18,7 +18,10 @@ log = "0.4.20"
 
 # Monero
 monero = {version = "0.19.0", features = ["full"]}
+
+# HTTP RPC
 surf = "2.3.2"
+tide = "0.17.0-beta.1"
 
 # Encoding
 bs58 = "0.5.0"
