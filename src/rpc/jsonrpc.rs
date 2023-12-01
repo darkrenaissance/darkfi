@@ -377,6 +377,12 @@ impl TryFrom<&JsonValue> for JsonResponse {
             ))
         }
 
+        if !map.contains_key("result") {
+            return Err(RpcError::InvalidJson(
+                "Response does not contain valid \"result\" field".to_string(),
+            ))
+        }
+
         Ok(Self {
             jsonrpc: "2.0",
             id: *map["id"].get::<f64>().unwrap() as u16,
