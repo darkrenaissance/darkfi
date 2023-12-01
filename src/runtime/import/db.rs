@@ -29,6 +29,7 @@ use darkfi_serial::{deserialize, serialize, Decodable};
 use log::{debug, error, info};
 use wasmer::{FunctionEnvMut, WasmPtr};
 
+use super::acl::acl_allow;
 use crate::{
     blockchain::contract_store::SMART_CONTRACT_ZKAS_DB_NAME,
     runtime::vm_runtime::{ContractSection, Env},
@@ -37,6 +38,7 @@ use crate::{
 };
 
 /// Internal wasm runtime API for sled trees
+#[derive(PartialEq)]
 pub struct DbHandle {
     pub contract_id: ContractId,
     pub tree: [u8; 32],
@@ -48,80 +50,120 @@ impl DbHandle {
     }
 }
 
-/// Only deploy() can call this. Creates a new database instance for this contract.
-pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+/// Create a new database instance for the calling contract.
+///
+/// This function expects to receive a pointer from which a `ContractId`
+/// and the `db_name` will be read.
+///
+/// This function should **only** be allowed in `ContractSection::Deploy`, as that
+/// is called when a contract is being (re)deployed and databases have to be created.
+pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i32 {
     let env = ctx.data();
+    let cid = &env.contract_id;
 
-    // Exit as soon as possible
-    if env.contract_section != ContractSection::Deploy {
-        error!(target: "runtime::db::db_init()", "db_init called in unauthorized section");
+    // Enforce function ACL
+    if let Err(e) = acl_allow(env, &[ContractSection::Deploy]) {
+        error!(target: "runtime::db::db_init", "[wasm-runtime] [Contract:{}] db_init ACL denied: {}", cid, e);
+        // TODO: FIXME: We have to fix up the errors used within runtime and the sdk
         return CALLER_ACCESS_DENIED
     }
 
-    let memory_view = env.memory_view(&ctx);
+    // Enforce the ptr_len is no more than 64 bytes.
+    if ptr_len > 64 {
+        error!(target: "runtime::db::db_init", "[wasm-runtime] [Contract:{}] db_init ptr len is >64", cid);
+        return DB_INIT_FAILED
+    }
+
+    // This takes lock of the blockchain overlay reference in the wasm env
     let contracts = &env.blockchain.lock().unwrap().contracts;
-    let contract_id = &env.contract_id;
 
-    let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
-        error!(target: "runtime::db::db_init()", "Failed to make slice from ptr");
+    // Create a mem slice of the wasm VM memory
+    let memory_view = env.memory_view(&ctx);
+    let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
+        error!(target: "runtime::db::db_init", "[wasm-runtime] [Contract:{}] Failed to make slice from ptr", cid);
         return DB_INIT_FAILED
     };
 
-    let mut buf = vec![0_u8; len as usize];
+    // Allocate a buffer and copy all the data from the pointer into the buffer
+    let mut buf = vec![0_u8; ptr_len as usize];
     if let Err(e) = mem_slice.read_slice(&mut buf) {
-        error!(target: "runtime::db::db_init()", "Failed to read from memory slice: {}", e);
+        error!(target: "runtime::db::db_init", "[wasm-runtime] [Contract:{}] Failed to read memory slice: {}", cid, e);
         return DB_INIT_FAILED
     };
 
+    // Once the data is copied, we'll attempt to deserialize it into the objects
+    // we're expecting.
     let mut buf_reader = Cursor::new(buf);
 
-    let cid: ContractId = match Decodable::decode(&mut buf_reader) {
+    let read_cid: ContractId = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "runtime::db::db_init()", "Failed to decode ContractId: {}", e);
+            error!(target: "runtime::db::db_init", "[wasm-runtime] [Contract:{}] Failed decoding ContractId: {}", cid, e);
             return DB_INIT_FAILED
         }
     };
 
-    let db_name: String = match Decodable::decode(&mut buf_reader) {
+    let read_db_name: String = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "runtime::db::db_init()", "Failed to decode db_name: {}", e);
+            error!(target: "runtime::db::db_init", "[wasm-runtime] [Contract:{}] Failed decoding db_name: {}", cid, e);
             return DB_INIT_FAILED
         }
     };
 
-    // TODO: Disabled until cursor_remaining feature is available on master.
-    // Then enable #![feature(cursor_remaining)] in src/lib.rs
-    // unstable feature, open issue https://github.com/rust-lang/rust/issues/86369
-    /*if !buf_reader.is_empty() {
-        error!(target: "runtime::db::db_init()", "Trailing bytes in argument stream");
-        return DB_DEL_FAILED
-    }*/
+    // Make sure we've read the entire buffer
+    if buf_reader.position() != ptr_len as u64 {
+        error!(target: "runtime::db::db_init", "[wasm-runtime] [Contract:{}] Trailing bytes in argument stream", cid);
+        return DB_INIT_FAILED
+    }
 
-    if db_name == SMART_CONTRACT_ZKAS_DB_NAME {
-        error!(target: "runtime::db::db_init()", "Attempted to lookup zkas db");
+    // We cannot allow initializing the special zkas db:
+    if read_db_name == SMART_CONTRACT_ZKAS_DB_NAME {
+        error!(target: "runtime::db::db_init", "[wasm-runtime] [Contract:{}] Attempted to init zkas db", cid);
         return CALLER_ACCESS_DENIED
     }
 
-    if &cid != contract_id {
-        error!(target: "runtime::db::db_init()", "Unauthorized ContractId for db_init");
+    // Nor can we allow another contract to initialize a db for someone else:
+    if cid != &read_cid {
+        error!(target: "runtime::db::db_init", "[wasm-runtime] [Contract:{}] Unauthorized ContractId for db_init", cid);
         return CALLER_ACCESS_DENIED
     }
 
-    let tree_handle = match contracts.init(&cid, &db_name) {
+    // Now try to initialize the tree. If this returns an error,
+    // it usually means that this DB was already initialized.
+    // An alternative error might happen if something in sled fails,
+    // for this we should take care to stop the node or do something to
+    // be able to gracefully recover.
+    // (src/blockchain/contract_store.rs holds this init() function)
+    let tree_handle = match contracts.init(&read_cid, &read_db_name) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "runtime::db::db_init()", "Failed to init db: {}", e);
+            error!(target: "runtime::db::db_init", "[wasm-runtime] [Contract:{}] Failed to init db: {}", cid, e);
             return DB_INIT_FAILED
         }
     };
 
-    // TODO: Make sure we don't duplicate the DbHandle in the vec.
-    //       It should behave like an ordered set.
+    // Create the DbHandle
+    let db_handle = DbHandle::new(read_cid, tree_handle);
     let mut db_handles = env.db_handles.borrow_mut();
-    db_handles.push(DbHandle::new(cid, tree_handle));
-    (db_handles.len() - 1) as i32
+
+    // Make sure we don't duplicate the DbHandle in the vec.
+    // It's not really an issue, but it's better to be pedantic.
+    if db_handles.contains(&db_handle) {
+        error!(target: "runtime::db::db_init", "[wasm-runtime] [Contract:{}] DbHandle initialized twice during execution", cid);
+        return DB_INIT_FAILED
+    }
+
+    match db_handles.len().try_into() {
+        Ok(db_handle_idx) => {
+            db_handles.push(db_handle);
+            db_handle_idx
+        }
+        Err(_) => {
+            error!(target: "runtime::db::db_init", "[wasm-runtime] [Contract:{}] Too many open DbHandles", cid);
+            DB_INIT_FAILED
+        }
+    }
 }
 
 /// Everyone can call this. Lookups up a database handle from its name.

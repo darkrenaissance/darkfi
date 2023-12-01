@@ -16,14 +16,25 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/// Access control for host functions
-mod acl;
+use crate::{
+    runtime::vm_runtime::{ContractSection, Env},
+    Error, Result,
+};
 
-/// Host functions for interacting with db backend
-pub(crate) mod db;
+/// Return an error if the current Env section is not in the sections list.
+pub(super) fn acl_allow(env: &Env, sections: &[ContractSection]) -> Result<()> {
+    if !sections.contains(&env.contract_section) {
+        return Err(Error::WasmFunctionAclDenied)
+    }
 
-/// Host functions for merkle tree functions
-pub(crate) mod merkle;
+    Ok(())
+}
 
-/// Host functions for utilities
-pub(crate) mod util;
+/// Return an error if the current Env section is in the sections list.
+pub(super) fn acl_deny(env: &Env, sections: &[ContractSection]) -> Result<()> {
+    if sections.contains(&env.contract_section) {
+        return Err(Error::WasmFunctionAclDenied)
+    }
+
+    Ok(())
+}

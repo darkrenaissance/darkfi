@@ -481,6 +481,10 @@ pub enum Error {
     #[error("contract execution error")]
     ContractExecError(u64),
 
+    #[cfg(feature = "wasm-runtime")]
+    #[error("wasm function ACL denied")]
+    WasmFunctionAclDenied,
+
     // ====================
     // Event Graph errors
     // ====================

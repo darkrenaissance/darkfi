@@ -35,12 +35,11 @@ pub const DB_CONTAINS_KEY_FAILED: i32 = -5;
 pub const DB_SET_FAILED: i32 = -6;
 pub const DB_DEL_FAILED: i32 = -7;
 
-/// Only deploy() can call this. Creates a new database instance for this contract.
+/// Create a new database instance for the given contract.
+/// This should be called in the `init_contract()` section to create any databases
+/// that the contract might need or use.
 ///
-/// ```
-///     type DbHandle = u32;
-///     db_init(db_name) -> DbHandle
-/// ```
+/// Returns a `DbHandle` which provides methods for reading and writing.
 pub fn db_init(contract_id: ContractId, db_name: &str) -> GenericResult<DbHandle> {
     unsafe {
         let mut len = 0;
