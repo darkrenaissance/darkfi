@@ -70,3 +70,7 @@ Then dynamically in the program code, the params can be serialized/deserialized
 and inspected via this ABI overlay. This enables dynamic calls provided by
 users to be supported in an elegant and simple way.
 
+The ABI also aids in debugging since when the overlay is loaded, then calldata
+can be inspected. Then we can inspect txs in Python, with exported ABIs saved
+as JSON files per contract documenting each function's params.
+
