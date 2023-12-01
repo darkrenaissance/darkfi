@@ -13,6 +13,12 @@ This section of the book documents smart contract development.
     * This could be used to build the param args like in python with `**kwargs`.
 * Backtrace accessible by functions, so they can check the parent caller.
 
+Other stuff (interesting but low priority):
+
+* [Polymorphism](https://ligolang.org/docs/advanced/polymorphism/?lang=jsligo)
+* [Dynamic entrypoints](https://ligolang.org/docs/advanced/dynamic-entrypoints/?lang=jsligo)
+* [Tezos style inter-contract-calls](https://ligolang.org/docs/tutorials/inter-contract-calls/?lang=jsligo)
+
 ## Invoking Contracts
 
 In Solana and Ethereum, when invoking a contract, the call happens directly
