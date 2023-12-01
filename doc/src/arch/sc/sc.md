@@ -51,3 +51,11 @@ call `invoke()` exactly `n` times.
 If this doesn't happen, then there's a mismatch and the call fails with an
 error.
 
+This logic is handled completely inside the contract without needing host
+functions.
+
+The downside is that the entire calldata for a smart contract is bundled
+in a tx, and isn't generated on the fly. This makes tx size bigger.
+However since we need ZK proofs, I expect the calldata would need to
+bundle the proofs for all invoked calls anyway.
+
