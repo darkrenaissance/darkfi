@@ -59,3 +59,14 @@ in a tx, and isn't generated on the fly. This makes tx size bigger.
 However since we need ZK proofs, I expect the calldata would need to
 bundle the proofs for all invoked calls anyway.
 
+## ABI
+
+We can do this in Rust through clever use of the serializer. Basically there
+is a special overlay provided for a Model which describes its layout.
+The layout saves the field names and types. Later this can be provided
+via a macro.
+
+Then dynamically in the program code, the params can be serialized/deserialized
+and inspected via this ABI overlay. This enables dynamic calls provided by
+users to be supported in an elegant and simple way.
+
