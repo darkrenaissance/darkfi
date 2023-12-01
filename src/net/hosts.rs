@@ -104,42 +104,45 @@ impl Hosts {
         debug!(target: "net::hosts::store()", "hosts::store() [END]");
     }
 
-    // Append hosts to the greylist. Called after a successful version exchange.
-    pub async fn store2(&self, addrs: &[Url]) {
-        debug!(target: "net::hosts::store2()", "hosts::store2() [START]");
+    // Append host to the greylist. Called on learning of a new peer.
+    pub async fn store_greylist(&self, addr: &Url, last_seen: u64) {
+        debug!(target: "net::hosts::store_greylist()", "hosts::store_greylist() [START]");
 
-        let last_seen = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-        let filtered_addrs = self.filter_addresses(addrs).await;
-        let filtered_addrs_len = filtered_addrs.len();
+        let mut greylist = self.greylist.write().await;
 
-        if !filtered_addrs.is_empty() {
-            let mut greylist = self.greylist.write().await;
-            for addr in filtered_addrs {
-                debug!(target: "net::hosts::store2()", "Inserting {}. Last seen {:?}", addr, last_seen);
+        debug!(target: "net::hosts::store_greylist()", "Inserting {}. Last seen {:?}", addr, last_seen);
 
-                // Remove oldest element if the greylist reaches max size.
-                if greylist.len() == 5000 {
-                    // Last element in vector should have the oldest timestamp.
-                    // TODO: Test this
-                    let removed_entry = greylist.pop();
-                    match removed_entry {
-                        Some(e) => {
-                            debug!(target: "net::hosts::store2()", "Greylist reached max size. Removed host {}", e.0);
-                        }
-                        // TODO: greylist is empty.
-                        None => {}
-                    }
-                }
-
-                greylist.push((addr, last_seen));
-
-                // Sort the list by last_seen.
-                greylist.sort_unstable_by_key(|entry| entry.1);
-            }
+        // Remove oldest element if the greylist reaches max size.
+        if greylist.len() == 5000 {
+            let last_entry = greylist.pop().unwrap();
+            debug!(target: "net::hosts::store_greylist()", "Greylist reached max size. Removed {:?}", last_entry);
         }
+        greylist.push((addr.clone(), last_seen));
 
-        self.store_subscriber.notify(filtered_addrs_len).await;
-        debug!(target: "net::hosts::store()", "hosts::store() [END]");
+        // Sort the list by last_seen.
+        greylist.sort_unstable_by_key(|entry| entry.1);
+
+        debug!(target: "net::hosts::store_greylist()", "hosts::store_greylist() [END]");
+    }
+
+    // Append host to the whitelist. Called after a successful interaction with an online peer.
+    pub async fn store_whitelist(&self, addr: &Url, last_seen: u64) {
+        debug!(target: "net::hosts::store_whitelist()", "hosts::store_whitelist() [START]");
+
+        let mut whitelist = self.whitelist.write().await;
+
+        debug!(target: "net::hosts::store_whitelist()", "Inserting {}. Last seen {:?}", addr, last_seen);
+
+        // Remove oldest element if the whitelist reaches max size.
+        if whitelist.len() == 1000 {
+            let last_entry = whitelist.pop().unwrap();
+            debug!(target: "net::hosts::store_whitelist()", "Whitelist reached max size. Removed {:?}", last_entry);
+        }
+        whitelist.push((addr.clone(), last_seen));
+
+        // Sort the list by last_seen.
+        whitelist.sort_unstable_by_key(|entry| entry.1);
+        debug!(target: "net::hosts::store_whitelist()", "hosts::store_greylist() [END]");
     }
 
     pub async fn subscribe_store(&self) -> Result<Subscription<usize>> {
@@ -254,8 +257,8 @@ impl Hosts {
     }
 
     // Probe random peers on the greylist. If a peer is responsive, update the last_seen field and
-    // add it to the whitelist. Called periodically.
-    // If a node does not respond, remove it from the greylist.
+    // add it to the whitelist. If a node does not respond, remove it from the greylist.
+    // Called periodically.
     async fn refresh_greylist(&self, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
         let mut greylist = self.greylist.write().await;
         let mut whitelist = self.whitelist.write().await;
@@ -546,6 +549,48 @@ impl Hosts {
         ret
     }
 
+    pub async fn whitelist_fetch_with_schemes(
+        &self,
+        schemes: &[String],
+        limit: Option<usize>,
+    ) -> Vec<Url> {
+        let whitelist = self.whitelist.read().await;
+        let mut limit = match limit {
+            Some(l) => l.min(whitelist.len()),
+            None => whitelist.len(),
+        };
+        let mut ret = vec![];
+
+        if limit == 0 {
+            return ret
+        }
+
+        for (addr, _last_seen) in whitelist.iter() {
+            if schemes.contains(&addr.scheme().to_string()) {
+                ret.push(addr.clone());
+                limit -= 1;
+                if limit == 0 {
+                    return ret
+                }
+            }
+        }
+
+        // If we didn't find any, pick some from the greylist
+        if ret.is_empty() {
+            for (addr, _last_seen) in self.greylist.read().await.iter() {
+                if schemes.contains(&addr.scheme().to_string()) {
+                    ret.push(addr.clone());
+                    limit -= 1;
+                    if limit == 0 {
+                        break
+                    }
+                }
+            }
+        }
+
+        ret
+    }
+
     /// Get up to limit peers that don't match the given transport schemes from the hosts set.
     /// If limit was not provided, return all matching peers.
     pub async fn fetch_exluding_schemes(
@@ -594,6 +639,7 @@ impl Hosts {
 #[cfg(test)]
 mod tests {
     use super::{super::settings::Settings, *};
+    use std::time::SystemTime;
 
     #[test]
     fn test_store_localnet() {
@@ -714,50 +760,7 @@ mod tests {
     }
 
     #[test]
-    fn test_store2_localnet() {
-        smol::block_on(async {
-            let settings = Settings {
-                localnet: true,
-                external_addrs: vec![
-                    Url::parse("tcp://foo.bar:123").unwrap(),
-                    Url::parse("tcp://lol.cat:321").unwrap(),
-                ],
-                ..Default::default()
-            };
-
-            let hosts = Hosts::new(Arc::new(settings.clone()));
-            hosts.store2(&settings.external_addrs).await;
-            for i in settings.external_addrs {
-                assert!(hosts.greylist_contains(&i).await);
-            }
-
-            let local_hosts = vec![
-                Url::parse("tcp://localhost:3921").unwrap(),
-                Url::parse("tcp://127.0.0.1:23957").unwrap(),
-                Url::parse("tcp://[::1]:21481").unwrap(),
-                Url::parse("tcp://192.168.10.65:311").unwrap(),
-                Url::parse("tcp://0.0.0.0:2312").unwrap(),
-                Url::parse("tcp://255.255.255.255:2131").unwrap(),
-            ];
-            hosts.store2(&local_hosts).await;
-            for i in local_hosts {
-                assert!(hosts.greylist_contains(&i).await);
-            }
-
-            let remote_hosts = vec![
-                Url::parse("tcp://dark.fi:80").unwrap(),
-                Url::parse("tcp://top.kek:111").unwrap(),
-                Url::parse("tcp://milady.fren:401").unwrap(),
-            ];
-            hosts.store2(&remote_hosts).await;
-            for i in remote_hosts {
-                assert!(hosts.greylist_contains(&i).await);
-            }
-        });
-    }
-
-    #[test]
-    fn test_store2() {
+    fn test_store_greylist() {
         smol::block_on(async {
             let settings = Settings {
                 localnet: false,
@@ -769,28 +772,42 @@ mod tests {
             };
 
             let hosts = Hosts::new(Arc::new(settings.clone()));
-            hosts.store2(&settings.external_addrs).await;
             assert!(hosts.is_empty_greylist().await);
 
-            let local_hosts = vec![
-                Url::parse("tcp://localhost:3921").unwrap(),
-                Url::parse("tor://[::1]:21481").unwrap(),
-                Url::parse("tcp://192.168.10.65:311").unwrap(),
-                Url::parse("tcp+tls://0.0.0.0:2312").unwrap(),
-                Url::parse("tcp://255.255.255.255:2131").unwrap(),
-            ];
-            hosts.store2(&local_hosts).await;
-            assert!(hosts.is_empty_greylist().await);
+            let url = Url::parse("tcp://milady.worldorder:123").unwrap();
+            let last_seen =
+                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
 
-            let remote_hosts = vec![
-                Url::parse("tcp://dark.fi:80").unwrap(),
-                Url::parse("tcp://http.cat:401").unwrap(),
-                Url::parse("tcp://foo.bar:111").unwrap(),
-            ];
-            hosts.store2(&remote_hosts).await;
-            assert!(hosts.greylist_contains(&remote_hosts[0]).await);
-            assert!(hosts.greylist_contains(&remote_hosts[1]).await);
-            assert!(!hosts.greylist_contains(&remote_hosts[2]).await);
+            hosts.store_greylist(&url, last_seen).await;
+
+            assert!(!hosts.is_empty_greylist().await);
+            assert!(hosts.greylist_contains(&url).await);
+        });
+    }
+
+    #[test]
+    fn test_store_whitelist() {
+        smol::block_on(async {
+            let settings = Settings {
+                localnet: false,
+                external_addrs: vec![
+                    Url::parse("tcp://foo.bar:123").unwrap(),
+                    Url::parse("tcp://lol.cat:321").unwrap(),
+                ],
+                ..Default::default()
+            };
+
+            let hosts = Hosts::new(Arc::new(settings.clone()));
+            assert!(hosts.is_empty_whitelist().await);
+
+            let url = Url::parse("tcp://dark.renaissance:333").unwrap();
+            let last_seen =
+                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+
+            hosts.store_whitelist(&url, last_seen).await;
+
+            assert!(!hosts.is_empty_whitelist().await);
+            assert!(hosts.whitelist_contains(&url).await);
         });
     }
 }
