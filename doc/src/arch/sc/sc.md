@@ -5,6 +5,7 @@ This section of the book documents smart contract development.
 ## Wishlist
 
 * Explicit FunctionId
+    * NOTE: we use the word 'call' everywhere already. Maybe CallId?
 * Invoke function from another function
 * Function params use an ABI which is introspectable
     * This could be done using a separate schema which is loaded.
@@ -59,6 +60,10 @@ in a tx, and isn't generated on the fly. This makes tx size bigger.
 However since we need ZK proofs, I expect the calldata would need to
 bundle the proofs for all invoked calls anyway.
 
+Essentially the entire program trace is created ahead of time by the "prover",
+and then the verifier simply checks the trace for correctness. This can be
+done in parallel since we have all the data ahead of time.
+
 ## ABI
 
 We can do this in Rust through clever use of the serializer. Basically there
@@ -73,4 +78,35 @@ users to be supported in an elegant and simple way.
 The ABI also aids in debugging since when the overlay is loaded, then calldata
 can be inspected. Then we can inspect txs in Python, with exported ABIs saved
 as JSON files per contract documenting each function's params.
+
+## Events
+
+Custom apps will need to subscribe to blockchain txs, and be able to respond
+to certain events. In Ethereum, there is a custom mechanism called
+[events](https://docs.soliditylang.org/en/latest/abi-spec.html#events).
+This allows smart contracts to
+[return values to the UI](https://ethereum.stackexchange.com/questions/56879/can-anyone-explain-what-is-the-main-purpose-of-events-in-solidity-and-when-to-us).
+Events are indexed in the database.
+
+An equivalent mechanism in DarkFi, may be the ability to emit events which
+wallets can subscribe to. As for storing them an indexed DB, we already offer
+that functionality with `db_set()` during the update phase.
+
+The emitted event could consist of the ContractId/FunctionId, an optional list
+of topics, and a binary blob.
+
+Alternatively, wallets would have to listen to all calls of a specific
+FunctionId. This allows wallets to only subscribe to some specific aspect of
+those calls.
+
+Solana by contrast allows the RPC to subscribe to accounts directly. The
+equivalent in our case, is subscribing to `db_set()` calls. Wallets can also
+receive these state changes and reflect them in their UI.
+An [EventEmitter](https://github.com/solana-labs/solana/issues/14076)
+was recently added to Solana.
+
+Adding an explicit event emitter allows sending specific events used for
+wallets. This makes dev on the UI side much easier.
+Additionally the cost is low since any events emitted with no subscribers
+for that contract or not matching the filter will just be immediately dropped.
 
