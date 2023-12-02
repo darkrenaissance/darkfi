@@ -14,7 +14,7 @@
 #irc_tls_secret = "/etc/letsencrypt/darkirc/privkey.pem"
 
 ## Sets Datastore Path
-#datastore = "~/.local/darkfi/darkirc"
+#datastore = "~/.local/darkfi/darkirc_db"
 
 ## List of channels to autojoin for new client connections
 autojoin = [
