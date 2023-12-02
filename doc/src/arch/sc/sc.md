@@ -102,15 +102,19 @@ update(A)
 However with the model described, instead would be:
 
 ```
+process(B) ->
+update(B) ->
 process(A) ->
-invoke(B) ->
-    process(B) ->
 update(A)
-update(B)
 ```
 
-State changes occur linearly after all `process()` calls have passed
-successfully.
+which simulates the previous trace.
+
+~~State changes occur linearly after all `process()` calls have passed
+successfully.~~
+
+NOTE: we can iterate depth first through the tree to simulate the normal
+calling pattern.
 
 An upside of this strict separation, is that it makes reentrancy attacks
 impossible. Say for example we have this code:
@@ -161,16 +165,19 @@ an attack occurring.
 
 ### Communication Between Contracts
 
-Given the above discussion, how can we then have an interaction which performs
-some action which the parent caller may depend on?
+NOTE: just iterate depth first through the leaves then parents, and we simulate
+the normal expected calling pattern.
 
-One way is that `process()` which produces a `StateUpdate` for `update()` could
+~~Given the above discussion, how can we then have an interaction which performs
+some action which the parent caller may depend on?~~
+
+~~One way is that `process()` which produces a `StateUpdate` for `update()` could
 also return arbitrary data which is usable by the parent caller. This arbitrary
 data could include info on the state change (such as `StateUpdate` directly) or
-info on the execution path that was performed.
+info on the execution path that was performed.~~
 
-The parent caller can then use this information in lieu of a directly state
-change.
+~~The parent caller can then use this information in lieu of a directly state
+change.~~
 
 ## ABI
 
