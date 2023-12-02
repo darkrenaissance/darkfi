@@ -307,7 +307,8 @@ impl Slot {
             let transports = &self.p2p().settings().allowed_transports;
 
             // Find a whitelisted address to connect to. We also do peer discovery here if needed.
-            let addr = if let Some(addr) = self.whitelist_fetch_address_with_lock(transports).await {
+            let addr = if let Some(addr) = self.whitelist_fetch_address_with_lock(transports).await
+            {
                 addr
             } else {
                 dnetev!(self, OutboundSlotSleeping, {
@@ -392,6 +393,14 @@ impl Slot {
             }
 
             self.channel_id.store(channel.info.id, Ordering::Relaxed);
+
+            // Randomly select a peer on the greylist and probe it.
+            // TODO: put this somewhere better.
+            // TODO: This frequency of this call can be set in net::Settings.
+            // Right now we are just doing at the same frequency of outbound_connect_timeout.
+            let p2p = self.p2p();
+            let ex = self.p2p().executor();
+            hosts.refresh_greylist(p2p, ex).await;
 
             // Wait for channel to close
             stop_sub.receive().await;

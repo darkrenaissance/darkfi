@@ -33,7 +33,7 @@ use super::{
 };
 use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
-    Error, Result,
+    Result,
 };
 
 /// Atomic pointer to hosts object
@@ -287,7 +287,7 @@ impl Hosts {
     // Probe random peers on the greylist. If a peer is responsive, update the last_seen field and
     // add it to the whitelist. If a node does not respond, remove it from the greylist.
     // Called periodically.
-    async fn refresh_greylist(&self, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
+    pub async fn refresh_greylist(&self, p2p: P2pPtr, ex: Arc<Executor<'_>>) {
         let mut greylist = self.greylist.write().await;
         let mut whitelist = self.whitelist.write().await;
 
@@ -297,49 +297,38 @@ impl Hosts {
         let url = &entry.0;
 
         // Probe node to see if it's active.
-        let result: Result<()> = self.probe_node(url, p2p.clone(), ex.clone()).await;
+        let online: bool = self.probe_node(url, p2p.clone(), ex.clone()).await;
 
-        match result {
+        if online {
             // Peer is responsive. Update last_seen and add it to the whitelist.
-            Ok(()) => {
-                let last_seen =
-                    SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+            let last_seen =
+                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
 
-                // Remove oldest element if the whitelist reaches max size.
-                if whitelist.len() == 1000 {
-                    // Last element in vector should have the oldest timestamp.
-                    // TODO: Test this
-                    let removed_entry = whitelist.pop();
-                    match removed_entry {
-                        Some(e) => {
-                            debug!(target: "net::hosts::refresh_greylist()", "Whitelist reached max size. Removed host {}", e.0);
-                        }
-                        // TODO: whitelist is empty.
-                        None => {}
-                    }
-                }
-                // Append it to the whitelist.
-                debug!(target: "net::hosts::refresh_greylist()", "Adding peer {} to whitelist", url);
-                whitelist.push((url.clone(), last_seen));
-
-                // Sort whitelist by last_seen.
-                whitelist.sort_unstable_by_key(|entry| entry.1);
-
-                // Remove whitelisted peer from the greylist.
-                debug!(target: "net::hosts::refresh_greylist()", "Removing whitelisted peer {} to greylist", url);
-                greylist.remove(position);
+            // Remove oldest element if the whitelist reaches max size.
+            if whitelist.len() == 1000 {
+                // Last element in vector should have the oldest timestamp.
+                // This should never crash as only returns None when whitelist len() == 0.
+                let entry = whitelist.pop().unwrap();
+                debug!(target: "net::hosts::refresh_greylist()", "Whitelist reached max size. Removed host {}", entry.0);
             }
+            // Append to the whitelist.
+            debug!(target: "net::hosts::refresh_greylist()", "Adding peer {} to whitelist", url);
+            whitelist.push((url.clone(), last_seen));
+
+            // Sort whitelist by last_seen.
+            whitelist.sort_unstable_by_key(|entry| entry.1);
+
+            // Remove whitelisted peer from the greylist.
+            debug!(target: "net::hosts::refresh_greylist()", "Removing whitelisted peer {} from greylist", url);
+            greylist.remove(position);
+        } else {
             // Peer is not responsive. Remove it from the greylist.
-            Err(e) => {
-                debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removing from greylist {}", url, e);
-                greylist.remove(position);
-            }
+            debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removing from greylist", url);
+            greylist.remove(position);
         }
-
-        Ok(())
     }
 
-    async fn probe_node(&self, host: &Url, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
+    async fn probe_node(&self, host: &Url, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> bool {
         let p2p_ = p2p.clone();
         let ex_ = ex.clone();
         let session_out = p2p_.session_outbound();
@@ -369,18 +358,18 @@ impl Hosts {
                     Ok(()) => {
                         debug!(target: "net::hosts::probe_node()", "Handshake success! Stopping channel.");
                         channel.stop().await;
-                        Ok(())
+                        return true
                     }
                     Err(e) => {
                         debug!(target: "net::hosts::probe_node()", "Handshake failure! {}", e);
-                        Err(Error::ConnectFailed)
+                        return false
                     }
                 }
             }
 
             Err(e) => {
                 debug!(target: "net::hosts::probe_node()", "Failed to connect to {}, ({})", host, e);
-                Err(Error::ConnectFailed)
+                return false
             }
         }
     }
