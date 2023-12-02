@@ -77,6 +77,13 @@ pub struct AddrsMessage {
 }
 impl_p2p_message!(AddrsMessage, "addr");
 
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct AddrsMessage2 {
+    pub addrs: Vec<(Url, u64)>,
+}
+
+impl_p2p_message!(AddrsMessage2, "addr2");
+
 /// Requests version information of outbound connection.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct VersionMessage {

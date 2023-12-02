@@ -23,7 +23,7 @@
 //! with an error, or times out.
 //!
 //! If a seed node connects successfully, it runs a version exchange protocol,
-//! stores the channel in the p2p list of channels, and discoonnects, removing
+//! stores the channel in the p2p list of channels, and disconnects, removing
 //! the channel from the channel list.
 //!
 //! The channel is registered using the [`Session::register_channel()`] trait

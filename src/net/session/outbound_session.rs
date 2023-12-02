@@ -557,9 +557,9 @@ impl Slot {
                 if transports.contains(&$a.to_string()) && transport_mixing {
                     let mut a_to_b =
                         p2p.hosts().whitelist_fetch_with_schemes(&[$b.to_string()], None).await;
-                    for addr in a_to_b.iter_mut() {
+                    for (addr, last_seen) in a_to_b.iter_mut() {
                         addr.set_scheme($a).unwrap();
-                        hosts.push(addr.clone());
+                        hosts.push((addr.clone(), last_seen.clone()));
                     }
                 }
             };
@@ -570,8 +570,8 @@ impl Slot {
         mix_transport!("nym+tls", "tcp+tls");
 
         // And now the actual requested transports
-        for addr in p2p.hosts().whitelist_fetch_with_schemes(transports, None).await {
-            hosts.push(addr);
+        for (addr, last_seen) in p2p.hosts().whitelist_fetch_with_schemes(transports, None).await {
+            hosts.push((addr, last_seen));
         }
 
         // Randomize hosts list. Do not try to connect in a deterministic order.
@@ -579,7 +579,7 @@ impl Slot {
         hosts.shuffle(&mut OsRng);
 
         // Try to find an unused host in the set.
-        for host in hosts.iter() {
+        for (host, _last_seen) in hosts.iter() {
             // Check if we already have this connection established
             if p2p.exists(host).await {
                 trace!(

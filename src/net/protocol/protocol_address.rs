@@ -26,7 +26,7 @@ use super::{
     super::{
         channel::ChannelPtr,
         hosts::HostsPtr,
-        message::{AddrsMessage, GetAddrsMessage},
+        message::{AddrsMessage, AddrsMessage2, GetAddrsMessage},
         message_subscriber::MessageSubscription,
         p2p::P2pPtr,
         session::SESSION_OUTBOUND,
@@ -165,6 +165,127 @@ impl ProtocolAddress {
     }
 }
 
+// New protocol that sends and receives whitelist info instead of Vec<Url>.
+// AddrMessage is of the format Vec<(Url, u64)>. On receiving GetAddr, nodes send AddrMessage
+// with whitelisted nodes. On receiving an AddrMessage, nodes enter the info into their greylists.
+// The format of GetAddrMessage remains the same.
+pub struct ProtocolAddress2 {
+    channel: ChannelPtr,
+    addrs_sub: MessageSubscription<AddrsMessage2>,
+    get_addrs_sub: MessageSubscription<GetAddrsMessage>,
+    hosts: HostsPtr,
+    settings: SettingsPtr,
+    jobsman: ProtocolJobsManagerPtr,
+}
+
+const PROTO_NAME2: &str = "ProtocolAddress2";
+
+impl ProtocolAddress2 {
+    pub async fn init2(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
+        let settings = p2p.settings();
+        let hosts = p2p.hosts();
+
+        // Creates a subscription to address message
+        let addrs_sub =
+            channel.subscribe_msg::<AddrsMessage2>().await.expect("Missing addrs dispatcher!");
+
+        // Creates a subscription to get-address message
+        let get_addrs_sub =
+            channel.subscribe_msg::<GetAddrsMessage>().await.expect("Missing getaddrs dispatcher!");
+
+        Arc::new(Self {
+            channel: channel.clone(),
+            addrs_sub,
+            get_addrs_sub,
+            hosts,
+            jobsman: ProtocolJobsManager::new(PROTO_NAME2, channel),
+            settings,
+        })
+    }
+
+    // When we learn of a new address, append it to the greylist.
+    async fn handle_receive_addrs2(self: Arc<Self>) -> Result<()> {
+        debug!(
+            target: "net::protocol_address::handle_receive_addrs2()",
+            "[START] address={}", self.channel.address(),
+        );
+
+        loop {
+            let addrs_msg = self.addrs_sub.receive().await?;
+            debug!(
+                target: "net::protocol_address::handle_receive_addrs2()",
+                "Received {} addrs from {}", addrs_msg.addrs.len(), self.channel.address(),
+            );
+
+            self.hosts.greylist_store(&addrs_msg.addrs).await;
+        }
+    }
+
+    async fn handle_receive_get_addrs2(self: Arc<Self>) -> Result<()> {
+        debug!(
+            target: "net::protocol_address::handle_receive_get_addrs()",
+            "[START] address={}", self.channel.address(),
+        );
+
+        loop {
+            let get_addrs_msg = self.get_addrs_sub.receive().await?;
+
+            debug!(
+                target: "net::protocol_address::handle_receive_get_addrs()",
+                "Received GetAddrs({}) message from {}", get_addrs_msg.max, self.channel.address(),
+            );
+
+            // Validate transports length
+            // TODO: Verify this limit. It should be the max number of all our allowed transports,
+            //       plus their mixing.
+            if get_addrs_msg.transports.len() > 20 {
+                // TODO: Should this error out, effectively ending the connection?
+                let addrs_msg = AddrsMessage2 { addrs: vec![] };
+                self.channel.send(&addrs_msg).await?;
+                continue
+            }
+
+            // First we grab address with the requested transports
+            let mut addrs = self
+                .hosts
+                .whitelist_fetch_n_random_with_schemes(&get_addrs_msg.transports, get_addrs_msg.max)
+                .await;
+
+            // Then we grab addresses without the requested transports
+            // to fill a 2 * max length vector.
+            let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
+            addrs.append(
+                &mut self
+                    .hosts
+                    .whitelist_fetch_n_random_excluding_schemes(&get_addrs_msg.transports, remain)
+                    .await,
+            );
+
+            debug!(
+                target: "net::protocol_address::handle_receive_get_addrs()",
+                "Sending {} addresses to {}", addrs.len(), self.channel.address(),
+            );
+
+            let addrs_msg = AddrsMessage2 { addrs };
+            self.channel.send(&addrs_msg).await?;
+        }
+    }
+
+    async fn send_my_addrs2(self: Arc<Self>) -> Result<()> {
+        debug!(
+            target: "net::protocol_address::send_my_addrs()",
+            "[START] address={}", self.channel.address(),
+        );
+
+        // FIXME: Revisit this. Why do we keep sending it?
+        loop {
+            let ext_addr_msg = AddrsMessage { addrs: self.settings.external_addrs.clone() };
+            self.channel.send(&ext_addr_msg).await?;
+            sleep(900).await;
+        }
+    }
+}
+
 #[async_trait]
 impl ProtocolBase for ProtocolAddress {
     /// Starts the address protocol. Runs receive address and get address
@@ -194,8 +315,41 @@ impl ProtocolBase for ProtocolAddress {
         debug!(target: "net::protocol_address::start()", "END => address={}", self.channel.address());
         Ok(())
     }
-
     fn name(&self) -> &'static str {
         PROTO_NAME
+    }
+}
+
+#[async_trait]
+impl ProtocolBase for ProtocolAddress2 {
+    // TODO
+    async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
+        debug!(target: "net::protocol_address::start()", "START => address={}", self.channel.address());
+
+        let type_id = self.channel.session_type_id();
+
+        self.jobsman.clone().start(ex.clone());
+
+        // If it's an outbound session + has an extern_addr, send our address.
+        if type_id == SESSION_OUTBOUND && !self.settings.external_addrs.is_empty() {
+            self.jobsman.clone().spawn(self.clone().send_my_addrs2(), ex.clone()).await;
+        }
+
+        self.jobsman.clone().spawn(self.clone().handle_receive_addrs2(), ex.clone()).await;
+        self.jobsman.spawn(self.clone().handle_receive_get_addrs2(), ex).await;
+
+        // Send get_address message.
+        let get_addrs = GetAddrsMessage {
+            max: self.settings.outbound_connections as u32,
+            transports: self.settings.allowed_transports.clone(),
+        };
+        self.channel.send(&get_addrs).await?;
+
+        debug!(target: "net::protocol_address::start()", "END => address={}", self.channel.address());
+        Ok(())
+    }
+
+    fn name(&self) -> &'static str {
+        PROTO_NAME2
     }
 }
