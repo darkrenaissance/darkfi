@@ -54,7 +54,7 @@ struct Args {
     pub net: SettingsOpt,
 
     /// Sets Datastore Path
-    #[structopt(long, default_value = "~/.local/darkfi/genev")]
+    #[structopt(long, default_value = "~/.local/darkfi/genev_db")]
     pub datastore: String,
 
     #[structopt(short, long)]

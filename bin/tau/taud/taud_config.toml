@@ -5,7 +5,7 @@
 #rpc_listen="tcp://127.0.0.1:23330"
 
 ## Datastore Path
-#datastore = "~/.local/darkfi/tau"
+#datastore = "~/.local/darkfi/taud_db"
 
 ## Current display name
 #nickname = "NICKNAME"
