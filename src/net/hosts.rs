@@ -949,32 +949,51 @@ mod tests {
         });
     }
 
-    // TODO: reimplement this
-    //#[test]
-    //fn test_greylist_store() {
-    //    smol::block_on(async {
-    //        let settings = Settings {
-    //            localnet: false,
-    //            external_addrs: vec![
-    //                Url::parse("tcp://foo.bar:123").unwrap(),
-    //                Url::parse("tcp://lol.cat:321").unwrap(),
-    //            ],
-    //            ..Default::default()
-    //        };
+    #[test]
+    fn test_greylist_store() {
+        let last_seen =
+            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
 
-    //        let hosts = Hosts::new(Arc::new(settings.clone()));
-    //        assert!(hosts.is_empty_greylist().await);
+        smol::block_on(async {
+            let settings = Settings {
+                localnet: false,
+                external_addrs: vec![
+                    Url::parse("tcp://foo.bar:123").unwrap(),
+                    Url::parse("tcp://lol.cat:321").unwrap(),
+                ],
+                ..Default::default()
+            };
 
-    //        let url = Url::parse("tcp://milady.worldorder:123").unwrap();
-    //        let last_seen =
-    //            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+            let hosts = Hosts::new(Arc::new(settings.clone()));
+            let mut external_addrs = vec![];
+            for addr in settings.external_addrs {
+                external_addrs.push((addr, last_seen))
+            }
 
-    //        hosts.greylist_store(&url, last_seen).await;
+            hosts.greylist_store(&external_addrs).await;
+            assert!(hosts.is_empty_greylist().await);
 
-    //        assert!(!hosts.is_empty_greylist().await);
-    //        assert!(hosts.greylist_contains(&url).await);
-    //    });
-    //}
+            let local_hosts = vec![
+                (Url::parse("tcp://localhost:3921").unwrap(), last_seen),
+                (Url::parse("tor://[::1]:21481").unwrap(), last_seen),
+                (Url::parse("tcp://192.168.10.65:311").unwrap(), last_seen),
+                (Url::parse("tcp+tls://0.0.0.0:2312").unwrap(), last_seen),
+                (Url::parse("tcp://255.255.255.255:2131").unwrap(), last_seen),
+            ];
+            hosts.greylist_store(&local_hosts).await;
+            assert!(hosts.is_empty_greylist().await);
+
+            let remote_hosts = vec![
+                (Url::parse("tcp://dark.fi:80").unwrap(), last_seen),
+                (Url::parse("tcp://http.cat:401").unwrap(), last_seen),
+                (Url::parse("tcp://foo.bar:111").unwrap(), last_seen),
+            ];
+            hosts.greylist_store(&remote_hosts).await;
+            assert!(hosts.greylist_contains(&remote_hosts[0].0).await);
+            assert!(hosts.greylist_contains(&remote_hosts[1].0).await);
+            assert!(!hosts.greylist_contains(&remote_hosts[2].0).await);
+        });
+    }
 
     #[test]
     fn test_whitelist_store() {
