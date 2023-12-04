@@ -12,7 +12,7 @@ crate-type = ["cdylib", "rlib"]
 darkfi-sdk = { path = "../../sdk" }
 darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
 thiserror = "1.0.50"
-wasmparser = "0.118.0"
+wasmparser = "0.118.1"
 
 async-trait = { version = "0.1.74", optional = true }
 
