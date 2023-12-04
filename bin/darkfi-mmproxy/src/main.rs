@@ -45,16 +45,23 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
-    #[structopt(long, default_value = "http://127.0.0.1:3333")]
-    // mmproxy daemon listen URL
-    listen: Url,
-
     #[structopt(long)]
     /// Set log file output
     log: Option<String>,
 
     #[structopt(flatten)]
+    mmproxy: MmproxyArgs,
+
+    #[structopt(flatten)]
     monerod: MonerodArgs,
+}
+
+#[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
+#[structopt()]
+struct MmproxyArgs {
+    #[structopt(long, default_value = "http://127.0.0.1:3333")]
+    /// darkfi-mmproxy JSON-RPC server listen URL
+    rpc: Url,
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
@@ -166,7 +173,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Ok(return_data)
     });
 
-    ex.spawn(async move { app.listen(args.listen).await.unwrap() }).detach();
+    ex.spawn(async move { app.listen(args.mmproxy.rpc).await.unwrap() }).detach();
     info!("Merge mining proxy ready, waiting for connections");
 
     // Signal handling for graceful termination.
