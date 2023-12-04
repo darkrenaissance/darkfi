@@ -25,143 +25,91 @@ use darkfi::{
     },
     Error, Result,
 };
-use log::{debug, error};
+use log::{debug, error, info};
 use monero::blockdata::transaction::{ExtraField, RawExtraField, SubField::MergeMining};
 
 use super::MiningProxy;
 
-impl MiningProxy {
-    /// Perform a JSON-RPC GET request to monerod's endpoint with the given method
-    async fn monero_get_request(&self, method: &str) -> Result<JsonValue> {
-        let endpoint = format!("{}{}", self.monero_rpc, method);
-        debug!(target: "monerod::monero_get_request", "--> {}", endpoint);
+/// Types of requests that can be sent to monerod
+pub(crate) enum MonerodRequest {
+    Get(String),
+    Post(JsonRequest),
+}
 
-        let mut rep = match surf::get(&endpoint).await {
-            Ok(v) => v,
-            Err(e) => {
-                error!(
-                    target: "monerod::monero_get_request",
-                    "Failed sending GET request to monerod: {}", e,
-                );
-                return Err(Error::Custom(format!("Failed sending GET request to monerod: {}", e)))
+impl MiningProxy {
+    /// Perform a JSON-RPC request to monerod's endpoint with the given method
+    pub(crate) async fn monero_request(&self, req: MonerodRequest) -> Result<JsonValue> {
+        let mut rep = match req {
+            MonerodRequest::Get(method) => {
+                let endpoint = format!("{}{}", self.monero_rpc, method);
+
+                match surf::get(&endpoint).await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        let e = format!("Failed sending monerod GET request: {}", e);
+                        error!(target: "monerod::monero_request", "{}", e);
+                        return Err(Error::Custom(e))
+                    }
+                }
+            }
+            MonerodRequest::Post(data) => {
+                let endpoint = format!("{}json_rpc", self.monero_rpc);
+                let client = surf::Client::new();
+
+                match client
+                    .get(endpoint)
+                    .header("Content-Type", "application/json")
+                    .body(data.stringify().unwrap())
+                    .send()
+                    .await
+                {
+                    Ok(v) => v,
+                    Err(e) => {
+                        let e = format!("Failed sending monerod POST request: {}", e);
+                        error!(target: "monerod::monero_request", "{}", e);
+                        return Err(Error::Custom(e))
+                    }
+                }
             }
         };
 
-        let json_str: JsonValue = match rep.body_string().await {
+        let json_rep: JsonValue = match rep.body_string().await {
             Ok(v) => match v.parse() {
                 Ok(v) => v,
                 Err(e) => {
-                    error!(
-                        target: "monerod::monero_get_request",
-                        "Failed parsing JSON body string from monerod GET request response: {}", e,
-                    );
-                    return Err(Error::Custom(format!(
-                        "Failed parsing JSON body string from monerod GET request response: {}",
-                        e
-                    )))
+                    let e = format!("Failed parsing JSON string from monerod response: {}", e);
+                    error!(target: "monerod::monero_request", "{}", e);
+                    return Err(Error::Custom(e))
                 }
             },
             Err(e) => {
-                error!(
-                   target: "monerod::monero_get_request",
-                   "Failed parsing body string from monerod GET request response: {}", e,
-                );
-                return Err(Error::Custom(format!(
-                    "Failed parsing body string from monerod GET request response: {}",
-                    e
-                )))
+                let e = format!("Failed parsing body string from monerod response:  {}", e);
+                error!(target: "monerod::monero_request", "{}", e);
+                return Err(Error::Custom(e))
             }
         };
 
-        Ok(json_str)
+        Ok(json_rep)
     }
 
-    /// Perform a JSON-RPC POST request to monerod's endpoint with the given method
-    /// and JSON-RPC request
-    pub async fn monero_post_request(&self, req: JsonRequest) -> Result<JsonValue> {
-        let endpoint = format!("{}json_rpc", self.monero_rpc);
-        debug!(target: "monerod::monero_post_request", "--> {}", endpoint);
-
-        let client = surf::Client::new();
-
-        let mut response = match client
-            .get(endpoint)
-            .header("Content-Type", "application/json")
-            .body(req.stringify()?)
-            .send()
-            .await
-        {
-            Ok(v) => v,
-            Err(e) => {
-                error!(
-                    target: "monerod::monero_post_request",
-                    "Failed sending monerod RPC POST request: {}", e,
-                );
-                return Err(Error::Custom(format!("Failed sending monerod RPC POST request: {}", e)))
-            }
-        };
-
-        let response_bytes = match response.body_bytes().await {
-            Ok(v) => v,
-            Err(e) => {
-                error!(
-                    target: "monerod::monero_post_request",
-                    "Failed decoding monerod RPC POST response body: {}", e,
-                );
-                return Err(Error::Custom(format!(
-                    "Failed decoding monerod RPC POST response body: {}",
-                    e,
-                )))
-            }
-        };
-
-        let response_string = match String::from_utf8(response_bytes) {
-            Ok(v) => v,
-            Err(e) => {
-                error!(
-                    target: "monerod::monero_post_request",
-                    "Failed decoding UTF8 string from monerod RPC POST response body: {}", e,
-                );
-                return Err(Error::Custom(format!(
-                    "Failed decoding UTF8 string from monerod RPC POST response body: {}",
-                    e,
-                )))
-            }
-        };
-
-        let response_json: JsonValue = match response_string.parse() {
-            Ok(v) => v,
-            Err(e) => {
-                error!(
-                    target: "monerod::monero_post_request",
-                    "Failed parsing JSON string from monerod RPC POST response body: {}", e,
-                );
-                return Err(Error::Custom(format!(
-                    "Failed parsing JSON string from monerod RPC POST response body: {}",
-                    e
-                )))
-            }
-        };
-
-        Ok(response_json)
-    }
-
-    /// Proxy the `getheight` RPC request
+    /// Proxy the `/getheight` RPC request
     pub async fn monerod_get_height(&self) -> Result<JsonValue> {
-        let rep = self.monero_get_request("getheight").await?;
+        info!(target: "monerod::getheight", "Proxying /getheight request");
+        let rep = self.monero_request(MonerodRequest::Get("getheight".to_string())).await?;
         Ok(rep)
     }
 
-    /// Proxy the `getinfo` RPC request
+    /// Proxy the `/getinfo` RPC request
     pub async fn monerod_get_info(&self) -> Result<JsonValue> {
-        let rep = self.monero_get_request("getinfo").await?;
+        info!(target: "monerod::getinfo", "Proxying /getinfo request");
+        let rep = self.monero_request(MonerodRequest::Get("getinfo".to_string())).await?;
         Ok(rep)
     }
 
     /// Proxy the `submitblock` RPC request
     pub async fn monerod_submit_block(&self, req: &JsonValue) -> Result<JsonValue> {
+        info!(target: "monerod::submitblock", "Proxying submitblock request");
         let request = JsonRequest::try_from(req)?;
-        debug!(target: "monerod::submitblock", "--> {}", req.stringify()?);
 
         if !request.params.is_array() {
             return Err(Error::Custom("Invalid request".to_string()))
@@ -178,15 +126,15 @@ impl MiningProxy {
             );
         }
 
-        let response = self.monero_post_request(request).await?;
+        let response = self.monero_request(MonerodRequest::Post(request)).await?;
         Ok(response)
     }
 
     /// Perform the `getblocktemplate` request and modify it with the necessary
     /// merge mining data.
     pub async fn monerod_getblocktemplate(&self, req: &JsonValue) -> Result<JsonValue> {
+        info!(target: "monerod::getblocktemplate", "Proxying getblocktemplate request");
         let mut request = JsonRequest::try_from(req)?;
-        debug!(target: "monerod::getblocktemplate", "--> {}", req.stringify()?);
 
         if !request.params.is_object() {
             return Err(Error::Custom("Invalid request".to_string()))
@@ -214,6 +162,8 @@ impl MiningProxy {
         }
 
         // Create the Merge Mining data
+        // TODO: This is where we're gonna include the necessary DarkFi data
+        // that has to end up in Monero blocks.
         let mm_tag = MergeMining(Some(monero::VarInt(32)), monero::Hash([0_u8; 32]));
 
         // Construct `tx_extra` from all the extra fields we have to add to
@@ -228,7 +178,7 @@ impl MiningProxy {
         params.remove("extra_nonce");
 
         // Perform the `getblocktemplate` call:
-        let gbt_response = self.monero_post_request(request).await?;
+        let gbt_response = self.monero_request(MonerodRequest::Post(request)).await?;
         debug!(target: "monerod::getblocktemplate", "Got {}", gbt_response.stringify()?);
         let mut gbt_response = JsonResponse::try_from(&gbt_response)?;
         let gbt_result: &mut HashMap<String, JsonValue> = gbt_response.result.get_mut().unwrap();

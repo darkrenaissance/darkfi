@@ -39,6 +39,7 @@ const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfi_mmproxy.toml");
 
 /// Monero RPC functions
 mod monerod;
+use monerod::MonerodRequest;
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
@@ -110,8 +111,8 @@ impl MiningProxy {
         // with the matching network
         let self_ = Self { monero_network, monero_rpc: monerod.monero_rpc };
 
-        let req = JsonRequest::new("get_info", vec![].into());
-        let rep: JsonResponse = match self_.monero_post_request(req).await {
+        let req = JsonRequest::new("getinfo", vec![].into());
+        let rep: JsonResponse = match self_.monero_request(MonerodRequest::Post(req)).await {
             Ok(v) => JsonResponse::try_from(&v)?,
             Err(e) => {
                 error!("Failed connecting to monerod RPC: {}", e);
@@ -157,8 +158,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let mmproxy = Arc::new(MiningProxy::new(args.monerod).await?);
     let mut app = tide::with_state(mmproxy);
 
-    // monerod `/getheight` endpoint proxy
+    // monerod `/getheight` endpoint proxy [HTTP GET]
     app.at("/getheight").get(|req: tide::Request<Arc<MiningProxy>>| async move {
+        debug!(target: "monerod::getheight", "--> /getheight");
         let mmproxy = req.state();
         let return_data = mmproxy.monerod_get_height().await?;
         let return_data = return_data.stringify()?;
@@ -166,8 +168,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Ok(return_data)
     });
 
-    // monerod `/getinfo` endpoint proxy
+    // monerod `/getinfo` endpoint proxy [HTTP GET]
     app.at("/getinfo").get(|req: tide::Request<Arc<MiningProxy>>| async move {
+        debug!(target: "monerod::getinfo", "--> /getinfo");
         let mmproxy = req.state();
         let return_data = mmproxy.monerod_get_info().await?;
         let return_data = return_data.stringify()?;
@@ -175,11 +178,23 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Ok(return_data)
     });
 
-    // monerod `/json_rpc` endpoint proxy
+    // monerod `/json_rpc` endpoint proxy [HTTP POST]
     app.at("/json_rpc").post(|mut req: tide::Request<Arc<MiningProxy>>| async move {
-        let json_str: JsonValue = match req.body_string().await {
-            Ok(v) => v.parse()?,
-            Err(e) => return Err(e),
+        let body_string = match req.body_string().await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "monerod::json_rpc", "Failed reading request body: {}", e);
+                return Err(surf::Error::new(StatusCode::BadRequest, Error::Custom(e.to_string())))
+            }
+        };
+        debug!(target: "monerod::json_rpc", "--> {}", body_string);
+
+        let json_str: JsonValue = match body_string.parse() {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "monerod::json_rpc", "Failed parsing JSON body: {}", e);
+                return Err(surf::Error::new(StatusCode::BadRequest, Error::Custom(e.to_string())))
+            }
         };
 
         let JsonValue::Object(ref request) = json_str else {
@@ -197,10 +212,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         }
 
         let mmproxy = req.state();
-        let method = request["method"].get::<String>().unwrap();
 
         // For XMRig we only have to handle 2 methods:
-        let return_data = match method.as_str() {
+        let return_data: JsonValue = match request["method"].get::<String>().unwrap().as_str() {
             "getblocktemplate" => mmproxy.monerod_getblocktemplate(&json_str).await?,
             "submitblock" => mmproxy.monerod_submit_block(&json_str).await?,
             _ => {
@@ -212,8 +226,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         };
 
         let return_data = return_data.stringify()?;
-        let log_tgt = format!("monerod::{}", method);
-        debug!(target: &log_tgt,  "<-- {}", return_data);
+        debug!(target: "monerod::json_rpc",  "<-- {}", return_data);
         Ok(return_data)
     });
 
