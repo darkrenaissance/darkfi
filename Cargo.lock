@@ -4018,8 +4018,7 @@ dependencies = [
 [[package]]
 name = "monero"
 version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fdf671c5fd0fa1f1dcc2495b6ca97a83f0aa6b2a737957e773d34c6c6bac0659"
+source = "git+https://github.com/parazyd/monero-rs?branch=blockhashing_blob-fix#3b7ddd075610cbff9a6692ec3e72f7ee88a628f1"
 dependencies = [
  "base58-monero",
  "curve25519-dalek 4.1.1",

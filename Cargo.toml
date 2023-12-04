@@ -319,3 +319,4 @@ zkas = [
 [patch.crates-io]
 halo2_proofs = {git="https://github.com/parazyd/halo2", branch="v4"}
 halo2_gadgets = {git="https://github.com/parazyd/halo2", branch="v4"}
+monero = {git="https://github.com/parazyd/monero-rs", branch="blockhashing_blob-fix"}

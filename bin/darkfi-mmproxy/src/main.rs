@@ -61,7 +61,7 @@ struct Args {
 struct MmproxyArgs {
     #[structopt(long, default_value = "http://127.0.0.1:3333")]
     /// darkfi-mmproxy JSON-RPC server listen URL
-    rpc: Url,
+    mmproxy_rpc: Url,
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
@@ -69,40 +69,43 @@ struct MmproxyArgs {
 struct MonerodArgs {
     #[structopt(long, default_value = "mainnet")]
     /// Monero network type (mainnet/testnet)
-    network: String,
+    monero_network: String,
 
     #[structopt(long, default_value = "http://127.0.0.1:18081")]
     /// monerod JSON-RPC server listen URL
-    rpc: Url,
+    monero_rpc: Url,
 }
 
 /// Mining proxy state
 struct MiningProxy {
-    /// monerod network type
-    monerod_network: monero::Network,
-    /// monerod RPC address
-    monerod_rpc: Url,
+    /// Monero network type
+    monero_network: monero::Network,
+    /// Monero RPC address
+    monero_rpc: Url,
 }
 
 impl MiningProxy {
     /// Instantiate `MiningProxy` state
     async fn new(monerod: MonerodArgs) -> Result<Self> {
-        let monerod_network = match monerod.network.to_lowercase().as_str() {
+        let monero_network = match monerod.monero_network.to_lowercase().as_str() {
             "mainnet" => monero::Network::Mainnet,
             "testnet" => monero::Network::Testnet,
             _ => {
-                error!("Invalid Monero network \"{}\"", monerod.network);
-                return Err(Error::Custom(format!("Invalid Monero network \"{}\"", monerod.network)))
+                error!("Invalid Monero network \"{}\"", monerod.monero_network);
+                return Err(Error::Custom(format!(
+                    "Invalid Monero network \"{}\"",
+                    monerod.monero_network
+                )))
             }
         };
 
         // Test that monerod RPC is reachable
-        if let Err(e) = TcpStream::connect(monerod.rpc.socket_addrs(|| None)?[0]).await {
+        if let Err(e) = TcpStream::connect(monerod.monero_rpc.socket_addrs(|| None)?[0]).await {
             error!("Failed connecting to monerod RPC: {}", e);
             return Err(e.into())
         }
 
-        Ok(Self { monerod_network, monerod_rpc: monerod.rpc })
+        Ok(Self { monero_network, monero_rpc: monerod.monero_rpc })
     }
 }
 
@@ -173,7 +176,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         Ok(return_data)
     });
 
-    ex.spawn(async move { app.listen(args.mmproxy.rpc).await.unwrap() }).detach();
+    ex.spawn(async move { app.listen(args.mmproxy.mmproxy_rpc).await.unwrap() }).detach();
     info!("Merge mining proxy ready, waiting for connections");
 
     // Signal handling for graceful termination.

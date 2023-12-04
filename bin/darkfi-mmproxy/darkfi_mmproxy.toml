@@ -9,13 +9,13 @@
 #[mmproxy]
 # darkfi-mmproxy daemon listen URL.
 # This is where XMRig can connect to with a daemon (solomining) endpoint.
-#rpc = "http://127.0.0.1:3333"
+#mmproxy_rpc = "http://127.0.0.1:3333"
 
 #[monerod]
 # monerod RPC address.
 # This is the monerod endpoint which is proxied by mmproxy.
-#rpc = "http://127.0.0.1:18081"
+#monero_rpc = "http://127.0.0.1:18081"
 
 # Monero network to use (mainnet/testnet)
 # Used to validate miner reward addresses.
-#network = "mainnet"
+#monero_network = "mainnet"

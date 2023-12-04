@@ -33,7 +33,7 @@ use super::MiningProxy;
 impl MiningProxy {
     /// Perform a JSON-RPC GET request to monerod's endpoint with the given method
     async fn monero_get_request(&self, method: &str) -> Result<JsonValue> {
-        let endpoint = format!("{}{}", self.monerod_rpc, method);
+        let endpoint = format!("{}{}", self.monero_rpc, method);
         debug!(target: "monerod::monero_get_request", "--> {}", endpoint);
 
         let mut rep = match surf::get(&endpoint).await {
@@ -79,7 +79,7 @@ impl MiningProxy {
     /// Perform a JSON-RPC POST request to monerod's endpoint with the given method
     /// and JSON-RPC request
     pub async fn monero_post_request(&self, req: JsonRequest) -> Result<JsonValue> {
-        let endpoint = format!("{}json_rpc", self.monerod_rpc);
+        let endpoint = format!("{}json_rpc", self.monero_rpc);
         debug!(target: "monerod::monero_post_request", "--> {}", endpoint);
 
         let client = surf::Client::new();
@@ -161,6 +161,23 @@ impl MiningProxy {
     /// Proxy the `submitblock` RPC request
     pub async fn monerod_submit_block(&self, req: &JsonValue) -> Result<JsonValue> {
         let request = JsonRequest::try_from(req)?;
+        debug!(target: "monerod::submitblock", "--> {}", req.stringify()?);
+
+        if !request.params.is_array() {
+            return Err(Error::Custom("Invalid request".to_string()))
+        }
+
+        for block in request.params.get::<Vec<JsonValue>>().unwrap() {
+            let Some(block) = block.get::<String>() else {
+                return Err(Error::Custom("Invalid request".to_string()))
+            };
+
+            debug!(
+                target: "monerod::submitblock", "{:#?}",
+                monero::consensus::deserialize::<monero::Block>(&hex::decode(block).unwrap()).unwrap(),
+            );
+        }
+
         let response = self.monero_post_request(request).await?;
         Ok(response)
     }
@@ -169,13 +186,14 @@ impl MiningProxy {
     /// merge mining data.
     pub async fn monerod_getblocktemplate(&self, req: &JsonValue) -> Result<JsonValue> {
         let mut request = JsonRequest::try_from(req)?;
+        debug!(target: "monerod::getblocktemplate", "--> {}", req.stringify()?);
 
         if !request.params.is_object() {
             return Err(Error::Custom("Invalid request".to_string()))
         }
 
         let params: &mut HashMap<String, JsonValue> = request.params.get_mut().unwrap();
-        if !params.contains_key("wallet_address") || !params.contains_key("reserve_size") {
+        if !params.contains_key("wallet_address") {
             return Err(Error::Custom("Invalid request".to_string()))
         }
 
@@ -187,7 +205,7 @@ impl MiningProxy {
             return Err(Error::Custom("Invalid request".to_string()))
         };
 
-        if wallet_address.network != self.monerod_network {
+        if wallet_address.network != self.monero_network {
             return Err(Error::Custom("Monero network address mismatch".to_string()))
         }
 
@@ -203,10 +221,15 @@ impl MiningProxy {
         let tx_extra: RawExtraField = ExtraField(vec![mm_tag]).into();
 
         // Modify the params `reserve_size` to fit our Merge Mining data
-        *params.get_mut("reserve_size").unwrap() = (tx_extra.0.len() as f64).into();
+        debug!(target: "monerod::getblocktemplate", "Inserting \"reserve_size\":{}", tx_extra.0.len());
+        params.insert("reserve_size".to_string(), (tx_extra.0.len() as f64).into());
+
+        // Remove `extra_nonce` from the request, XMRig tends to send this in daemon-mode
+        params.remove("extra_nonce");
 
         // Perform the `getblocktemplate` call:
         let gbt_response = self.monero_post_request(request).await?;
+        debug!(target: "monerod::getblocktemplate", "Got {}", gbt_response.stringify()?);
         let mut gbt_response = JsonResponse::try_from(&gbt_response)?;
         let gbt_result: &mut HashMap<String, JsonValue> = gbt_response.result.get_mut().unwrap();
 
