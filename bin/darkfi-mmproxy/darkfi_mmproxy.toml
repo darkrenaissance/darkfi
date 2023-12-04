@@ -6,12 +6,12 @@
 ## The default values are left commented. They can be overridden either by
 ## uncommenting, or by using the command-line.
 
-[mmproxy]
+#[mmproxy]
 # darkfi-mmproxy daemon listen URL.
 # This is where XMRig can connect to with a daemon (solomining) endpoint.
 #rpc = "http://127.0.0.1:3333"
 
-[monerod]
+#[monerod]
 # monerod RPC address.
 # This is the monerod endpoint which is proxied by mmproxy.
 #rpc = "http://127.0.0.1:18081"
