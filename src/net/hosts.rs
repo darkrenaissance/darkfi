@@ -181,6 +181,16 @@ impl Hosts {
         whitelist[index] = (addr.clone(), last_seen);
     }
 
+    pub async fn whitelist_downgrade(&self, addr: &Url, last_seen: u64) {
+        // Remove this item from the whitelist.
+        let mut whitelist = self.whitelist.write().await;
+        let index = whitelist.iter().position(|x| *x == (addr.clone(), last_seen)).unwrap();
+        whitelist.remove(index);
+
+        // Add it to the greylist.
+        self.greylist_store(&[(addr.clone(), last_seen)]).await;
+    }
+
     pub async fn subscribe_store(&self) -> Result<Subscription<usize>> {
         let sub = self.store_subscriber.clone().subscribe().await;
         Ok(sub)
@@ -951,8 +961,7 @@ mod tests {
 
     #[test]
     fn test_greylist_store() {
-        let last_seen =
-            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+        let last_seen = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
 
         smol::block_on(async {
             let settings = Settings {

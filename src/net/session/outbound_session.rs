@@ -298,7 +298,7 @@ impl Slot {
         loop {
             // Activate the slot
             debug!(
-                target: "net::outbound_session::try_connect()",
+                target: "net::outbound_session::try_connect2()",
                 "[P2P] Finding a host to connect to for outbound slot #{}",
                 self.slot,
             );
@@ -307,24 +307,24 @@ impl Slot {
             let transports = &self.p2p().settings().allowed_transports;
 
             // Find a whitelisted address to connect to. We also do peer discovery here if needed.
-            let addr = if let Some(addr) = self.whitelist_fetch_address_with_lock(transports).await
-            {
-                addr
-            } else {
-                dnetev!(self, OutboundSlotSleeping, {
-                    slot: self.slot,
-                });
+            let (addr, last_seen) =
+                if let Some(addr) = self.whitelist_fetch_address_with_lock(transports).await {
+                    addr
+                } else {
+                    dnetev!(self, OutboundSlotSleeping, {
+                        slot: self.slot,
+                    });
 
-                self.wakeup_self.reset();
-                // Peer discovery
-                self.session().wakeup_peer_discovery();
-                // Wait to be woken up by peer discovery
-                self.wakeup_self.wait().await;
-                continue
-            };
+                    self.wakeup_self.reset();
+                    // Peer discovery
+                    self.session().wakeup_peer_discovery();
+                    // Wait to be woken up by peer discovery
+                    self.wakeup_self.wait().await;
+                    continue
+                };
 
             info!(
-                target: "net::outbound_session::try_connect()",
+                target: "net::outbound_session::try_connect2()",
                 "[P2P] Connecting outbound slot #{} [{}]",
                 self.slot, addr,
             );
@@ -334,27 +334,28 @@ impl Slot {
                 addr: addr.clone(),
             });
 
-            let (addr_final, channel) = match self.try_connect(addr.clone()).await {
-                Ok(connect_info) => connect_info,
-                Err(err) => {
-                    error!(
-                        target: "net::outbound_session",
-                        "[P2P] Outbound slot #{} connection failed: {}",
-                        self.slot, err,
-                    );
+            let (addr_final, channel) =
+                match self.try_connect2(addr.clone(), last_seen.clone()).await {
+                    Ok(connect_info) => connect_info,
+                    Err(err) => {
+                        error!(
+                            target: "net::outbound_session",
+                            "[P2P] Outbound slot #{} connection failed: {}",
+                            self.slot, err,
+                        );
 
-                    dnetev!(self, OutboundSlotDisconnected, {
-                        slot: self.slot,
-                        err: err.to_string()
-                    });
+                        dnetev!(self, OutboundSlotDisconnected, {
+                            slot: self.slot,
+                            err: err.to_string()
+                        });
 
-                    self.channel_id.store(0, Ordering::Relaxed);
-                    continue
-                }
-            };
+                        self.channel_id.store(0, Ordering::Relaxed);
+                        continue
+                    }
+                };
 
             info!(
-                target: "net::outbound_session::try_connect()",
+                target: "net::outbound_session::try_connect2()",
                 "[P2P] Outbound slot #{} connected [{}]",
                 self.slot, addr_final
             );
@@ -431,6 +432,35 @@ impl Slot {
 
                 // At this point we failed to connect. We'll quarantine this peer now.
                 self.p2p().hosts().quarantine(&addr).await;
+
+                // Remove connection from pending
+                self.p2p().remove_pending(&addr).await;
+
+                // Notify that channel processing failed
+                self.session().channel_subscriber.notify(Err(Error::ConnectFailed)).await;
+
+                Err(Error::ConnectFailed)
+            }
+        }
+    }
+
+    async fn try_connect2(&self, addr: Url, last_seen: u64) -> Result<(Url, ChannelPtr)> {
+        let parent = Arc::downgrade(&self.session());
+        let connector = Connector::new(self.p2p().settings(), parent);
+
+        match connector.connect(&addr).await {
+            Ok((addr_final, channel)) => Ok((addr_final, channel)),
+
+            Err(e) => {
+                error!(
+                    target: "net::outbound_session::try_connect2()",
+                    "[P2P] Unable to connect outbound slot #{} [{}]: {}",
+                    self.slot, addr, e
+                );
+
+                // At this point we failed to connect.
+                // Remove this item from the whitelist and add it to the greylist.
+                self.p2p().hosts().whitelist_downgrade(&addr, last_seen).await;
 
                 // Remove connection from pending
                 self.p2p().remove_pending(&addr).await;
@@ -542,7 +572,7 @@ impl Slot {
     }
 
     // Gets addresses from the whitelist.
-    async fn whitelist_fetch_address_with_lock(&self, transports: &[String]) -> Option<Url> {
+    async fn whitelist_fetch_address_with_lock(&self, transports: &[String]) -> Option<(Url, u64)> {
         let p2p = self.p2p();
 
         // Collect hosts
@@ -579,7 +609,7 @@ impl Slot {
         hosts.shuffle(&mut OsRng);
 
         // Try to find an unused host in the set.
-        for (host, _last_seen) in hosts.iter() {
+        for (host, last_seen) in hosts.iter() {
             // Check if we already have this connection established
             if p2p.exists(host).await {
                 trace!(
@@ -615,7 +645,7 @@ impl Slot {
                 "Found valid host '{}",
                 host
             );
-            return Some(host.clone())
+            return Some((host.clone(), last_seen.clone()))
         }
 
         None
