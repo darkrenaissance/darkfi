@@ -16,12 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use darkfi::{async_daemonize, cli_desc, rpc::util::JsonValue, Error, Result};
+use darkfi::{
+    async_daemonize, cli_desc,
+    rpc::{
+        jsonrpc::{JsonRequest, JsonResponse},
+        util::JsonValue,
+    },
+    Error, Result,
+};
 use log::{debug, error, info};
 use serde::Deserialize;
-use smol::{net::TcpStream, stream::StreamExt, Executor};
+use smol::{stream::StreamExt, Executor};
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use surf::StatusCode;
@@ -99,13 +106,47 @@ impl MiningProxy {
             }
         };
 
-        // Test that monerod RPC is reachable
-        if let Err(e) = TcpStream::connect(monerod.monero_rpc.socket_addrs(|| None)?[0]).await {
-            error!("Failed connecting to monerod RPC: {}", e);
-            return Err(e.into())
+        // Test that monerod RPC is reachable and is configured
+        // with the matching network
+        let self_ = Self { monero_network, monero_rpc: monerod.monero_rpc };
+
+        let req = JsonRequest::new("get_info", vec![].into());
+        let rep: JsonResponse = match self_.monero_post_request(req).await {
+            Ok(v) => JsonResponse::try_from(&v)?,
+            Err(e) => {
+                error!("Failed connecting to monerod RPC: {}", e);
+                return Err(e)
+            }
+        };
+
+        let Some(result) = rep.result.get::<HashMap<String, JsonValue>>() else {
+            error!("Invalid response from monerod RPC");
+            return Err(Error::Custom("Invalid response from monerod RPC".to_string()))
+        };
+
+        let nettype = result.get("nettype").unwrap().get::<String>().unwrap();
+
+        let mut xmr_is_mainnet = false;
+        let mut xmr_is_testnet = false;
+
+        match nettype.as_str() {
+            // Here we allow fakechain, which we get with monerod --regtest
+            "mainnet" | "fakechain" => xmr_is_mainnet = true,
+            "testnet" => xmr_is_testnet = true,
+            _ => unimplemented!("Missing handler for network {}", nettype),
         }
 
-        Ok(Self { monero_network, monero_rpc: monerod.monero_rpc })
+        if xmr_is_mainnet && !(monero_network == monero::Network::Mainnet) {
+            error!("mmproxy requested testnet, but monerod is mainnet");
+            return Err(Error::Custom("Monero network mismatch".to_string()))
+        }
+
+        if xmr_is_testnet && !(monero_network == monero::Network::Testnet) {
+            error!("mmproxy requested mainnet, but monerod is testnet");
+            return Err(Error::Custom("Monero network mismatch".to_string()))
+        }
+
+        Ok(self_)
     }
 }
 
