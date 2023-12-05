@@ -295,6 +295,18 @@ impl Slot {
     // Looks up whitelisted addresses. Tries to connect to them.
     // On success, updates the whitelist last_seen field.
     async fn run2(self: Arc<Self>) {
+        // This is the main outbound connection loop where we try to establish
+        // a connection in the slot. The `try_connect` function will block in
+        // case the connection was sucessfully established. If it fails, then
+        // we will wait for a defined number of seconds and try to fill the
+        // slot again. This function should never exit during the lifetime of
+        // the P2P network, as it is supposed to represent an outbound slot we
+        // want to fill.
+        // The actual connection logic and peer selection is in `try_connect`.
+        // If the connection is successful, `try_connect` will wait for a stop
+        // signal and then exit. Once it exits, we'll run `try_connect` again
+        // and attempt to fill the slot with another peer.
+        let hosts = self.p2p().hosts();
         loop {
             // Activate the slot
             debug!(
@@ -307,21 +319,22 @@ impl Slot {
             let transports = &self.p2p().settings().allowed_transports;
 
             // Find a whitelisted address to connect to. We also do peer discovery here if needed.
-            let (addr, last_seen) =
-                if let Some(addr) = self.whitelist_fetch_address_with_lock(transports).await {
-                    addr
-                } else {
-                    dnetev!(self, OutboundSlotSleeping, {
-                        slot: self.slot,
-                    });
+            let (addr, last_seen) = if let Some(addr) =
+                hosts.whitelist_fetch_address_with_lock(self.p2p(), transports).await
+            {
+                addr
+            } else {
+                dnetev!(self, OutboundSlotSleeping, {
+                    slot: self.slot,
+                });
 
-                    self.wakeup_self.reset();
-                    // Peer discovery
-                    self.session().wakeup_peer_discovery();
-                    // Wait to be woken up by peer discovery
-                    self.wakeup_self.wait().await;
-                    continue
-                };
+                self.wakeup_self.reset();
+                // Peer discovery
+                self.session().wakeup_peer_discovery();
+                // Wait to be woken up by peer discovery
+                self.wakeup_self.wait().await;
+                continue
+            };
 
             info!(
                 target: "net::outbound_session::try_connect2()",
@@ -360,13 +373,12 @@ impl Slot {
                 self.slot, addr_final
             );
 
-            let hosts = self.p2p().hosts();
-            let last_seen =
-                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
-
             // Update the last_seen field for this whitelisted peer.
             // TODO: This peer should also be flagged as an "anchor" because we have been
             // able to establish a connection to it to it.
+            let last_seen =
+                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+
             hosts.whitelist_update(&addr_final, last_seen).await;
 
             dnetev!(self, OutboundSlotConnected, {
@@ -399,9 +411,8 @@ impl Slot {
             // TODO: put this somewhere better.
             // TODO: This frequency of this call can be set in net::Settings.
             // Right now we are just doing at the same frequency of outbound_connect_timeout.
-            let p2p = self.p2p();
             let ex = self.p2p().executor();
-            hosts.refresh_greylist(p2p, ex).await;
+            hosts.refresh_greylist(self.p2p(), ex).await;
 
             // Wait for channel to close
             stop_sub.receive().await;
@@ -460,7 +471,7 @@ impl Slot {
 
                 // At this point we failed to connect.
                 // Remove this item from the whitelist and add it to the greylist.
-                self.p2p().hosts().whitelist_downgrade(&addr, last_seen).await;
+                self.p2p().hosts().whitelist_downgrade(&addr).await;
 
                 // Remove connection from pending
                 self.p2p().remove_pending(&addr).await;
@@ -566,86 +577,6 @@ impl Slot {
                 host
             );
             return Some(host.clone())
-        }
-
-        None
-    }
-
-    // Gets addresses from the whitelist.
-    async fn whitelist_fetch_address_with_lock(&self, transports: &[String]) -> Option<(Url, u64)> {
-        let p2p = self.p2p();
-
-        // Collect hosts
-        let mut hosts = vec![];
-
-        // If transport mixing is enabled, then for example we're allowed to
-        // use tor:// to connect to tcp:// and tor+tls:// to connect to tcp+tls://.
-        // However, **do not** mix tor:// and tcp+tls://, nor tor+tls:// and tcp://.
-        let transport_mixing = p2p.settings().transport_mixing;
-        macro_rules! mix_transport {
-            ($a:expr, $b:expr) => {
-                if transports.contains(&$a.to_string()) && transport_mixing {
-                    let mut a_to_b =
-                        p2p.hosts().whitelist_fetch_with_schemes(&[$b.to_string()], None).await;
-                    for (addr, last_seen) in a_to_b.iter_mut() {
-                        addr.set_scheme($a).unwrap();
-                        hosts.push((addr.clone(), last_seen.clone()));
-                    }
-                }
-            };
-        }
-        mix_transport!("tor", "tcp");
-        mix_transport!("tor+tls", "tcp+tls");
-        mix_transport!("nym", "tcp");
-        mix_transport!("nym+tls", "tcp+tls");
-
-        // And now the actual requested transports
-        for (addr, last_seen) in p2p.hosts().whitelist_fetch_with_schemes(transports, None).await {
-            hosts.push((addr, last_seen));
-        }
-
-        // Randomize hosts list. Do not try to connect in a deterministic order.
-        // This is healthier for multiple slots to not compete for the same addrs.
-        hosts.shuffle(&mut OsRng);
-
-        // Try to find an unused host in the set.
-        for (host, last_seen) in hosts.iter() {
-            // Check if we already have this connection established
-            if p2p.exists(host).await {
-                trace!(
-                    target: "net::outbound_session::whitelist_fetch_address_with_lock()",
-                    "Host '{}' exists so skipping",
-                    host
-                );
-                continue
-            }
-
-            // Check if we already have this configured as a manual peer
-            if p2p.settings().peers.contains(host) {
-                trace!(
-                    target: "net::outbound_session::whitelist_fetch_address_with_lock()",
-                    "Host '{}' configured as manual peer so skipping",
-                    host
-                );
-                continue
-            }
-
-            // Obtain a lock on this address to prevent duplicate connection
-            if !p2p.add_pending(host).await {
-                trace!(
-                    target: "net::outbound_session::whitelist_fetch_address_with_lock()",
-                    "Host '{}' pending so skipping",
-                    host
-                );
-                continue
-            }
-
-            trace!(
-                target: "net::outbound_session::whitelist_fetch_address_with_lock()",
-                "Found valid host '{}",
-                host
-            );
-            return Some((host.clone(), last_seen.clone()))
         }
 
         None

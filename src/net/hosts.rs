@@ -22,8 +22,12 @@ use std::{
     time::SystemTime,
 };
 
-use log::debug;
-use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
+use log::{debug, trace};
+use rand::{
+    prelude::{IteratorRandom, SliceRandom},
+    rngs::OsRng,
+    Rng,
+};
 use smol::{lock::RwLock, Executor};
 use url::Url;
 
@@ -104,6 +108,88 @@ impl Hosts {
         debug!(target: "net::hosts::store()", "hosts::store() [END]");
     }
 
+    // Gets addresses from the whitelist.
+    pub async fn whitelist_fetch_address_with_lock(
+        &self,
+        p2p: P2pPtr,
+        transports: &[String],
+    ) -> Option<(Url, u64)> {
+        // Collect hosts
+        let mut hosts = vec![];
+
+        // If transport mixing is enabled, then for example we're allowed to
+        // use tor:// to connect to tcp:// and tor+tls:// to connect to tcp+tls://.
+        // However, **do not** mix tor:// and tcp+tls://, nor tor+tls:// and tcp://.
+        let transport_mixing = self.settings.transport_mixing;
+        macro_rules! mix_transport {
+            ($a:expr, $b:expr) => {
+                if transports.contains(&$a.to_string()) && transport_mixing {
+                    let mut a_to_b =
+                        self.whitelist_fetch_with_schemes(&[$b.to_string()], None).await;
+                    for (addr, last_seen) in a_to_b.iter_mut() {
+                        addr.set_scheme($a).unwrap();
+                        hosts.push((addr.clone(), last_seen.clone()));
+                    }
+                }
+            };
+        }
+        mix_transport!("tor", "tcp");
+        mix_transport!("tor+tls", "tcp+tls");
+        mix_transport!("nym", "tcp");
+        mix_transport!("nym+tls", "tcp+tls");
+
+        // And now the actual requested transports
+        for (addr, last_seen) in self.whitelist_fetch_with_schemes(transports, None).await {
+            hosts.push((addr, last_seen));
+        }
+
+        // Randomize hosts list. Do not try to connect in a deterministic order.
+        // This is healthier for multiple slots to not compete for the same addrs.
+        hosts.shuffle(&mut OsRng);
+
+        // Try to find an unused host in the set.
+        for (host, last_seen) in hosts.iter() {
+            // Check if we already have this connection established
+            if p2p.exists(host).await {
+                trace!(
+                    target: "net::hosts::whitelist_fetch_address_with_lock()",
+                    "Host '{}' exists so skipping",
+                    host
+                );
+                continue
+            }
+
+            // Check if we already have this configured as a manual peer
+            if self.settings.peers.contains(host) {
+                trace!(
+                    target: "net::hosts::whitelist_fetch_address_with_lock()",
+                    "Host '{}' configured as manual peer so skipping",
+                    host
+                );
+                continue
+            }
+
+            // Obtain a lock on this address to prevent duplicate connection
+            if !p2p.add_pending(host).await {
+                trace!(
+                    target: "net::hosts::whitelist_fetch_address_with_lock()",
+                    "Host '{}' pending so skipping",
+                    host
+                );
+                continue
+            }
+
+            trace!(
+                target: "net::hosts::whitelist_fetch_address_with_lock()",
+                "Found valid host '{}",
+                host
+            );
+            return Some((host.clone(), last_seen.clone()))
+        }
+
+        None
+    }
+
     // Store the address in the whitelist if we don't have it.
     // Otherwise, update the last_seen field.
     // TODO: test the performance of this method. It might be costly.
@@ -181,14 +267,32 @@ impl Hosts {
         whitelist[index] = (addr.clone(), last_seen);
     }
 
-    pub async fn whitelist_downgrade(&self, addr: &Url, last_seen: u64) {
+    pub async fn whitelist_downgrade(&self, addr: &Url) {
+        // First lookup the entry using its addr.
+        let mut index = 0;
+        let mut entry = vec![];
+
+        let whitelist = self.whitelist.read().await;
+        for (i, (url, time)) in whitelist.iter().enumerate() {
+            if url == addr {
+                index = i;
+                entry.push((url.clone(), time.clone()));
+            }
+        }
+
+        // TODO: This is for testing purposes.
+        assert!(entry.len() == 1);
+
         // Remove this item from the whitelist.
         let mut whitelist = self.whitelist.write().await;
-        let index = whitelist.iter().position(|x| *x == (addr.clone(), last_seen)).unwrap();
-        whitelist.remove(index);
+        let index = whitelist.iter().position(|x| *x == entry[0]);
+        // This should never fail since the entry exists.
+        whitelist.remove(index.unwrap());
 
         // Add it to the greylist.
-        self.greylist_store(&[(addr.clone(), last_seen)]).await;
+        let addr = entry[0].0.clone();
+        let last_seen = entry[0].1.clone();
+        self.greylist_store(&[(addr, last_seen)]).await;
     }
 
     pub async fn subscribe_store(&self) -> Result<Subscription<usize>> {
