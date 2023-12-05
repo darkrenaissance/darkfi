@@ -112,6 +112,59 @@ impl<'a, T> IntoIterator for &'a DarkTree<T> {
     }
 }
 
+struct DarkTreeIterMut<'a, T> {
+    children: &'a mut [DarkTree<T>],
+    parent: Option<Box<DarkTreeIterMut<'a, T>>>,
+    parent_leaf: Option<&'a mut DarkLeaf<T>>,
+}
+
+impl<T> Default for DarkTreeIterMut<'_, T> {
+    fn default() -> Self {
+        DarkTreeIterMut { children: &mut [], parent: None, parent_leaf: None }
+    }
+}
+
+impl<'a, T> Iterator for DarkTreeIterMut<'a, T> {
+    type Item = &'a mut DarkLeaf<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let children = mem::take(&mut self.children);
+        match children.split_first_mut() {
+            None => match self.parent.take() {
+                Some(parent) => {
+                    // Grab parent's leaf
+                    let parent_leaf = mem::take(&mut self.parent_leaf);
+                    *self = *parent;
+                    parent_leaf
+                }
+                None => None,
+            },
+            Some((first, rest)) => {
+                // Setup simplings iteration
+                self.children = rest;
+
+                // Iterate over tree's children/sub-trees
+                *self = DarkTreeIterMut {
+                    children: first.children.as_mut_slice(),
+                    parent: Some(Box::new(mem::take(self))),
+                    parent_leaf: Some(&mut first.leaf),
+                };
+                self.next()
+            }
+        }
+    }
+}
+
+impl<'a, T> IntoIterator for &'a mut DarkTree<T> {
+    type Item = &'a mut DarkLeaf<T>;
+
+    type IntoIter = DarkTreeIterMut<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter_mut()
+    }
+}
+
 struct DarkTreeIntoIter<T> {
     children: VecDeque<DarkTree<T>>,
     parent: Option<Box<DarkTreeIntoIter<T>>>,
@@ -167,58 +220,5 @@ impl<T> IntoIterator for DarkTree<T> {
         children.push_back(self);
 
         DarkTreeIntoIter { children, parent: None }
-    }
-}
-
-struct DarkTreeIterMut<'a, T> {
-    children: &'a mut [DarkTree<T>],
-    parent: Option<Box<DarkTreeIterMut<'a, T>>>,
-    parent_leaf: Option<&'a mut DarkLeaf<T>>,
-}
-
-impl<T> Default for DarkTreeIterMut<'_, T> {
-    fn default() -> Self {
-        DarkTreeIterMut { children: &mut [], parent: None, parent_leaf: None }
-    }
-}
-
-impl<'a, T> Iterator for DarkTreeIterMut<'a, T> {
-    type Item = &'a mut DarkLeaf<T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let children = mem::take(&mut self.children);
-        match children.split_first_mut() {
-            None => match self.parent.take() {
-                Some(parent) => {
-                    // Grab parent's leaf
-                    let parent_leaf = mem::take(&mut self.parent_leaf);
-                    *self = *parent;
-                    parent_leaf
-                }
-                None => None,
-            },
-            Some((first, rest)) => {
-                // Setup simplings iteration
-                self.children = rest;
-
-                // Iterate over tree's children/sub-trees
-                *self = DarkTreeIterMut {
-                    children: first.children.as_mut_slice(),
-                    parent: Some(Box::new(mem::take(self))),
-                    parent_leaf: Some(&mut first.leaf),
-                };
-                self.next()
-            }
-        }
-    }
-}
-
-impl<'a, T> IntoIterator for &'a mut DarkTree<T> {
-    type Item = &'a mut DarkLeaf<T>;
-
-    type IntoIter = DarkTreeIterMut<'a, T>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter_mut()
     }
 }
