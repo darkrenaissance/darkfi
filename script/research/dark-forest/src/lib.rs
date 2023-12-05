@@ -227,11 +227,6 @@ impl<T> Default for DarkTreeIntoIter<T> {
 impl<T> Iterator for DarkTreeIntoIter<T> {
     type Item = DarkLeaf<T>;
 
-    /// Grab next item iterator visits, and return
-    /// its mutable reference, or recursively
-    /// create and continue iteration on current
-    /// leaf's children.
-
     /// Move next item iterator visits from the tree
     /// to the iterator consumer, if it has no children.
     /// Otherwise recursively create and continue iteration
