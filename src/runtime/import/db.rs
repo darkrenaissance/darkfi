@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::Cursor;
+use std::{io::Cursor, ops::Index};
 
 use darkfi_sdk::{
     crypto::ContractId,
@@ -166,58 +166,66 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) 
     }
 }
 
-/// Everyone can call this. Lookups up a database handle from its name.
+/// Lookup a database handle from its name. If it does not exist, push it to the Vector of
+/// db_handles.
+/// Returns the index of the DbHandle in the db_handles Vector.
+/// This function can be called from any [`ContractSection`].
 pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
     let env = ctx.data();
+    let cid = &env.contract_id;
 
-    match env.contract_section {
-        ContractSection::Deploy |
-        ContractSection::Exec |
-        ContractSection::Update |
-        ContractSection::Metadata => {
-            // pass
-        }
-
-        _ => {
-            error!(target: "runtime::db::db_lookup()", "db_lookup called in unauthorized section");
-            return CALLER_ACCESS_DENIED
-        }
+    // Enforce function ACL
+    if let Err(e) = acl_allow(
+        env,
+        &[
+            ContractSection::Deploy,
+            ContractSection::Exec,
+            ContractSection::Metadata,
+            ContractSection::Update,
+        ],
+    ) {
+        error!(target: "runtime::db::db_lookup", "[wasm-runtime] [Contract:{}] db_init ACL denied: {}", cid, e);
+        // TODO: FIXME: We have to fix up the errors used within runtime and the sdk
+        return CALLER_ACCESS_DENIED
     }
 
+    // Read memory location that contains the ContractId and DB name
     let memory_view = env.memory_view(&ctx);
     let contracts = &env.blockchain.lock().unwrap().contracts;
 
     let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
-        error!(target: "runtime::db::db_lookup()", "Failed to make slice from ptr");
+        error!(target: "runtime::db::db_lookup", "[wasm-runtime] [Contract:{}] Failed to make slice from ptr.", cid);
         return DB_LOOKUP_FAILED
     };
 
     let mut buf = vec![0_u8; len as usize];
     if let Err(e) = mem_slice.read_slice(&mut buf) {
-        error!(target: "runtime::db::db_lookup()", "Failed to read from memory slice: {}", e);
+        error!(target: "runtime::db::db_lookup", "[wasm-runtime] [Contract:{}] Failed to read from memory slice: {}", cid, e);
         return DB_LOOKUP_FAILED
     };
 
     let mut buf_reader = Cursor::new(buf);
 
+    // Decode ContractId from memory
     let cid: ContractId = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "runtime::db::db_lookup()", "Failed to decode ContractId: {}", e);
+            error!(target: "runtime::db::db_lookup", "[wasm-runtime] [Contract:{}] Failed to decode ContractId: {}", cid, e);
             return DB_LOOKUP_FAILED
         }
     };
 
+    // Decode DB name from memory
     let db_name: String = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "runtime::db::db_lookup()", "Failed to decode db_name: {}", e);
+            error!(target: "runtime::db::db_lookup", "[wasm-runtime] [Contract:{}] Failed to decode db_name: {}", cid, e);
             return DB_LOOKUP_FAILED
         }
     };
 
     if db_name == SMART_CONTRACT_ZKAS_DB_NAME {
-        error!(target: "runtime::db::db_lookup()", "Attempted to lookup zkas db");
+        error!(target: "runtime::db::db_lookup", "[wasm-runtime] [Contract:{}] Attempted to lookup zkas db", cid);
         return CALLER_ACCESS_DENIED
     }
 
@@ -229,16 +237,31 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
         return DB_LOOKUP_FAILED
     }*/
 
+    // Lookup contract state
     let tree_handle = match contracts.lookup(&cid, &db_name) {
         Ok(v) => v,
         Err(_) => return DB_LOOKUP_FAILED,
     };
 
-    // TODO: Make sure we don't duplicate the DbHandle in the vec.
-    //       It should behave like an ordered set.
+    // Create the DbHandle
+    let db_handle = DbHandle::new(cid, tree_handle);
     let mut db_handles = env.db_handles.borrow_mut();
-    db_handles.push(DbHandle::new(cid, tree_handle));
-    (db_handles.len() - 1) as i32
+
+    // Make sure we don't duplicate the DbHandle in the vec.
+    if let Some(index) = db_handles.iter().position(|x| x == &db_handle) {
+        return index as i32
+    }
+
+    match db_handles.len().try_into() {
+        Ok(db_handle_idx) => {
+            db_handles.push(db_handle);
+            db_handle_idx
+        }
+        Err(_) => {
+            error!(target: "runtime::db::db_lookup", "[wasm-runtime] [Contract:{}] Too many open DbHandles", cid);
+            DB_INIT_FAILED
+        }
+    }
 }
 
 /// Set a value within the transaction.
