@@ -20,16 +20,46 @@ use crate::DarkTree;
 
 /// Gereate a predefined [`DarkTree`] along with its
 /// expected traversal order.
+///
+/// Tree structure:
+///                        22
+///           /             |            \
+///          10            14            21
+///      /  /  \   \      /  \      /     |   \
+///     2   4   6   9    12  13    17    18   20
+///    / \  |   |  / \   |        /  \         |
+///   0  1  3   5 7   8  11      15  16       19
+///
+/// Expected traversal order is indicated by each leaf's number
 fn generate_tree() -> (DarkTree<i32>, Vec<i32>) {
     let tree = DarkTree::new(
-        5,
+        22,
         vec![
-            DarkTree::new(4, vec![DarkTree::new(3, vec![]), DarkTree::new(2, vec![])]),
-            DarkTree::new(1, vec![DarkTree::new(0, vec![])]),
+            DarkTree::new(
+                10,
+                vec![
+                    DarkTree::new(2, vec![DarkTree::new(0, vec![]), DarkTree::new(1, vec![])]),
+                    DarkTree::new(4, vec![DarkTree::new(3, vec![])]),
+                    DarkTree::new(6, vec![DarkTree::new(5, vec![])]),
+                    DarkTree::new(9, vec![DarkTree::new(7, vec![]), DarkTree::new(8, vec![])]),
+                ],
+            ),
+            DarkTree::new(
+                14,
+                vec![DarkTree::new(12, vec![DarkTree::new(11, vec![])]), DarkTree::new(13, vec![])],
+            ),
+            DarkTree::new(
+                21,
+                vec![
+                    DarkTree::new(17, vec![DarkTree::new(15, vec![]), DarkTree::new(16, vec![])]),
+                    DarkTree::new(18, vec![]),
+                    DarkTree::new(20, vec![DarkTree::new(19, vec![])]),
+                ],
+            ),
         ],
     );
 
-    let traversal_order = vec![3, 2, 4, 0, 1, 5];
+    let traversal_order = (0..23).collect();
 
     (tree, traversal_order)
 }
@@ -124,11 +154,49 @@ fn test_darktree_mut_iterator() {
     assert_eq!(
         tree,
         DarkTree::new(
-            7,
+            24,
             vec![
-                DarkTree::new(6, vec![DarkTree::new(5, vec![]), DarkTree::new(4, vec![]),]),
-                DarkTree::new(3, vec![DarkTree::new(2, vec![]),]),
-            ]
+                DarkTree::new(
+                    12,
+                    vec![
+                        DarkTree::new(4, vec![DarkTree::new(2, vec![]), DarkTree::new(3, vec![]),]),
+                        DarkTree::new(6, vec![DarkTree::new(5, vec![]),]),
+                        DarkTree::new(8, vec![DarkTree::new(7, vec![]),]),
+                        DarkTree::new(
+                            11,
+                            vec![DarkTree::new(9, vec![]), DarkTree::new(10, vec![]),]
+                        ),
+                    ]
+                ),
+                DarkTree::new(
+                    16,
+                    vec![
+                        DarkTree::new(14, vec![DarkTree::new(13, vec![]),]),
+                        DarkTree::new(15, vec![]),
+                    ]
+                ),
+                DarkTree::new(
+                    23,
+                    vec![
+                        DarkTree::new(
+                            19,
+                            vec![DarkTree::new(17, vec![]), DarkTree::new(18, vec![]),]
+                        ),
+                        DarkTree::new(20, vec![]),
+                        DarkTree::new(22, vec![DarkTree::new(21, vec![]),]),
+                    ]
+                ),
+            ],
         )
     );
+
+    let traversal_order: Vec<i32> = (2..25).collect();
+
+    // Use [`DarkTree`] iterator to collect current
+    // data, in order
+    let nums: Vec<i32> = tree.iter().map(|x| x.data).collect();
+
+    // Verify iterator collected the data in the expected
+    // traversal order.
+    assert_eq!(nums, traversal_order);
 }
