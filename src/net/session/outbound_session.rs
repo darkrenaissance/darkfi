@@ -172,7 +172,7 @@ impl Slot {
 
         self.process.clone().start(
             async move {
-                self.run().await;
+                self.run2().await;
                 unreachable!();
             },
             // Ignore stop handler

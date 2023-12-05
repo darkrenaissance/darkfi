@@ -682,6 +682,11 @@ impl Hosts {
         self.addrs.read().await.iter().cloned().collect()
     }
 
+    /// Return all known whitelisted hosts
+    pub async fn whitelist_fetch_all(&self) -> Vec<(Url, u64)> {
+        self.whitelist.read().await.iter().cloned().collect()
+    }
+
     /// Get up to n random peers from the hosts set.
     pub async fn fetch_n_random(&self, n: u32) -> Vec<Url> {
         let n = n as usize;
