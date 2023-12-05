@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::VecDeque, iter::FusedIterator, mem, slice::Iter};
+use std::{collections::VecDeque, iter::FusedIterator, mem};
 
 #[cfg(test)]
 mod tests;
