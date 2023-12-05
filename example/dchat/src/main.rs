@@ -19,7 +19,9 @@
 use std::{error, fs::File, io::stdin};
 
 // ANCHOR: daemon_deps
+
 use async_std::sync::{Arc, Mutex};
+use darkfi::{async_daemonize, system::StoppableTaskPtr};
 use easy_parallel::Parallel;
 use smol::Executor;
 // ANCHOR_END: daemon_deps
@@ -125,19 +127,19 @@ impl Dchat {
 
     // ANCHOR: start
     async fn start(&mut self, ex: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "dchat", "Dchat::start() [START]");
+        //debug!(target: "dchat", "Dchat::start() [START]");
 
-        let ex2 = ex.clone();
+        //let ex2 = ex.clone();
 
-        self.register_protocol(self.recv_msgs.clone()).await?;
-        self.p2p.clone().start(ex.clone()).await?;
-        ex2.spawn(self.p2p.clone().run(ex.clone())).detach();
+        //self.register_protocol(self.recv_msgs.clone()).await?;
+        //self.p2p.clone().start(ex.clone()).await?;
+        //ex2.spawn(self.p2p.clone().run(ex.clone())).detach();
 
-        self.menu().await?;
+        //self.menu().await?;
 
-        self.p2p.stop().await;
+        //self.p2p.stop().await;
 
-        debug!(target: "dchat", "Dchat::start() [STOP]");
+        //debug!(target: "dchat", "Dchat::start() [STOP]");
         Ok(())
     }
     // ANCHOR_END: start
@@ -220,49 +222,50 @@ fn bob() -> Result<AppSettings> {
 // ANCHOR_END: bob
 
 // ANCHOR: main
-#[async_std::main]
-async fn main() -> Result<()> {
-    let settings: Result<AppSettings> = match std::env::args().nth(1) {
-        Some(id) => match id.as_str() {
-            "a" => alice(),
-            "b" => bob(),
-            _ => Err(ErrorMissingSpecifier.into()),
-        },
-        None => Err(ErrorMissingSpecifier.into()),
-    };
+async_daemonize!(realmain);
+async fn realmain() -> Result<()> {
+    //let settings: Result<AppSettings> = match std::env::args().nth(1) {
+    //    Some(id) => match id.as_str() {
+    //        "a" => alice(),
+    //        "b" => bob(),
+    //        _ => Err(ErrorMissingSpecifier.into()),
+    //    },
+    //    None => Err(ErrorMissingSpecifier.into()),
+    //};
 
-    let settings = settings?.clone();
+    //let settings = settings?.clone();
 
-    let p2p = net::P2p::new(settings.net).await;
+    //let p2p = net::P2p::new(settings.net).await;
 
-    let ex = Arc::new(Executor::new());
-    let ex2 = ex.clone();
-    let ex3 = ex2.clone();
+    //let ex = Arc::new(Executor::new());
+    //let ex2 = ex.clone();
+    //let ex3 = ex2.clone();
 
-    let msgs: DchatMsgsBuffer = Arc::new(Mutex::new(vec![DchatMsg { msg: String::new() }]));
+    //let msgs: DchatMsgsBuffer = Arc::new(Mutex::new(vec![DchatMsg { msg: String::new() }]));
 
-    let mut dchat = Dchat::new(p2p.clone(), msgs);
+    //let mut dchat = Dchat::new(p2p.clone(), msgs);
 
-    // ANCHOR: json_init
-    let accept_addr = settings.accept_addr.clone();
-    let rpc = Arc::new(JsonRpcInterface { addr: accept_addr.clone(), p2p });
-    let _ex = ex.clone();
-    ex.spawn(async move { listen_and_serve(accept_addr.clone(), rpc, _ex).await }).detach();
-    // ANCHOR_END: json_init
+    //// ANCHOR: json_init
+    //let accept_addr = settings.accept_addr.clone();
+    //let rpc = Arc::new(JsonRpcInterface { addr: accept_addr.clone(), p2p });
+    //let _ex = ex.clone();
+    //ex.spawn(async move { listen_and_serve(accept_addr.clone(), rpc, _ex).await }).detach();
+    //// ANCHOR_END: json_init
 
-    let nthreads = std::thread::available_parallelism().unwrap().get();
-    let (signal, shutdown) = smol::channel::unbounded::<()>();
+    //let nthreads = std::thread::available_parallelism().unwrap().get();
+    //let (signal, shutdown) = smol::channel::unbounded::<()>();
 
-    let (_, result) = Parallel::new()
-        .each(0..nthreads, |_| smol::future::block_on(ex2.run(shutdown.recv())))
-        .finish(|| {
-            smol::future::block_on(async move {
-                dchat.start(ex3).await?;
-                drop(signal);
-                Ok(())
-            })
-        });
+    //let (_, result) = Parallel::new()
+    //    .each(0..nthreads, |_| smol::future::block_on(ex2.run(shutdown.recv())))
+    //    .finish(|| {
+    //        smol::future::block_on(async move {
+    //            dchat.start(ex3).await?;
+    //            drop(signal);
+    //            Ok(())
+    //        })
+    //    });
 
-    result
+    //result
+    Ok(())
 }
 // ANCHOR_END: main
