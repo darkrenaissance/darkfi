@@ -26,9 +26,9 @@ fn generate_tree() -> (DarkTree<i32>, Vec<i32>) {
             DarkTree::new(1, vec![DarkTree::new(0, vec![])]),
         ],
     );
-    
+
     let traversal_order = vec![3, 2, 4, 0, 1, 5];
-    
+
     (tree, traversal_order)
 }
 
@@ -51,21 +51,21 @@ fn test_darktree_traversal_order() {
         assert_eq!(leaf.data, traversal_order[index]);
         index += 1;
     }
-    
+
     index = 0;
     for leaf in &mut tree {
         assert_eq!(leaf.data, traversal_order[index]);
         index += 1;
     }
-    
+
     for (index, leaf) in tree.iter_mut().enumerate() {
         assert_eq!(leaf.data, traversal_order[index]);
     }
-    
+
     for (index, leaf) in tree.iter().enumerate() {
         assert_eq!(leaf.data, traversal_order[index]);
     }
-    
+
     for (index, leaf) in tree.into_iter().enumerate() {
         assert_eq!(leaf.data, traversal_order[index]);
     }
