@@ -168,7 +168,8 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) 
 
 /// Lookup a database handle from its name. If it does not exist, push it to the Vector of
 /// db_handles.
-/// Returns the index of the DbHandle in the db_handles Vector.
+/// Returns the index of the DbHandle in the db_handles Vector on success. Otherwise, returns
+/// a negative error value.
 /// This function can be called from any [`ContractSection`].
 pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i32 {
     let env = ctx.data();
@@ -184,7 +185,7 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32
             ContractSection::Update,
         ],
     ) {
-        error!(target: "runtime::db::db_lookup", "[wasm-runtime] [Contract:{}] db_init ACL denied: {}", cid, e);
+        error!(target: "runtime::db::db_lookup", "[wasm-runtime] [Contract:{}] db_lookup ACL denied: {}", cid, e);
         // TODO: FIXME: We have to fix up the errors used within runtime and the sdk
         return CALLER_ACCESS_DENIED
     }
@@ -269,45 +270,50 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32
     }
 }
 
-/// Set a value within the transaction.
-pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+/// Set a value within the transaction. `ptr` must contain the DbHandle index and
+/// the key-value pair. The DbHandle must match the ContractId.
+/// This function can be called only from the Deploy or Update [`ContractSection`].
+/// Returns `0` on success, otherwise returns a (negative) error value.
+pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i32 {
     let env = ctx.data();
 
-    if env.contract_section != ContractSection::Deploy &&
-        env.contract_section != ContractSection::Update
-    {
-        error!(target: "runtime::db::db_set()", "db_set called in unauthorized section");
+    if let Err(e) = acl_allow(env, &[ContractSection::Deploy, ContractSection::Update]) {
+        error!(target: "runtime::db::db_set", "[wasm-runtime] db_set ACL denied: {}", e);
+        // TODO: FIXME: We have to fix up the errors used within runtime and the sdk
         return CALLER_ACCESS_DENIED
     }
 
+    // Ensure that it is possible to read from the memory that this function needs
     let memory_view = env.memory_view(&ctx);
 
-    let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
-        error!(target: "runtime::db::db_set()", "Failed to make slice from ptr");
+    let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
+        error!(target: "runtime::db::db_set", "Failed to make slice from ptr");
         return DB_SET_FAILED
     };
 
-    let mut buf = vec![0_u8; len as usize];
+    let mut buf = vec![0_u8; ptr_len as usize];
     if let Err(e) = mem_slice.read_slice(&mut buf) {
-        error!(target: "runtime::db::db_set()", "Failed to read from memory slice: {}", e);
+        error!(target: "runtime::db::db_set", "Failed to read from memory slice: {}", e);
         return DB_SET_FAILED
     };
 
     let mut buf_reader = Cursor::new(buf);
 
+    // Decode DbHandle index
     let db_handle_index: u32 = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "runtime::db::db_set()", "Failed to decode DbHandle: {}", e);
+            error!(target: "runtime::db::db_set", "Failed to decode DbHandle: {}", e);
             return DB_SET_FAILED
         }
     };
     let db_handle_index = db_handle_index as usize;
 
+    // Decode key and value
     let key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "runtime::db::db_set()", "Failed to decode key vec: {}", e);
+            error!(target: "runtime::db::db_set", "Failed to decode key vec: {}", e);
             return DB_SET_FAILED
         }
     };
@@ -315,33 +321,35 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
     let value: Vec<u8> = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "runtime::db::db_set()", "Failed to decode value vec: {}", e);
+            error!(target: "runtime::db::db_set", "Failed to decode value vec: {}", e);
             return DB_SET_FAILED
         }
     };
 
-    // TODO: Disabled until cursor_remaining feature is available on master.
-    // Then enable #![feature(cursor_remaining)] in src/lib.rs
-    // unstable feature, open issue https://github.com/rust-lang/rust/issues/86369
-    /*if !buf_reader.is_empty() {
-        error!(target: "runtime::db::db_set()", "Trailing bytes in argument stream");
-        return DB_DEL_FAILED
-    }*/
-
-    let db_handles = env.db_handles.borrow();
-
-    if db_handles.len() <= db_handle_index {
-        error!(target: "runtime::db::db_set()", "Requested DbHandle that is out of bounds");
+    // Make sure we've read the entire buffer
+    if buf_reader.position() != ptr_len as u64 {
+        error!(target: "runtime::db::db_set", "[wasm-runtime] Trailing bytes in argument stream");
         return DB_SET_FAILED
     }
 
+    let db_handles = env.db_handles.borrow();
+
+    // Check DbHandle index is within bounds
+    if db_handles.len() <= db_handle_index {
+        error!(target: "runtime::db::db_set", "Requested DbHandle that is out of bounds");
+        return DB_SET_FAILED
+    }
+
+    // Retrive DbHandle using the index
     let db_handle = &db_handles[db_handle_index];
 
+    // Validate that the DbHandle matches the contract ID
     if db_handle.contract_id != env.contract_id {
-        error!(target: "runtime::db::db_set()", "Unauthorized to write to DbHandle");
+        error!(target: "runtime::db::db_set", "Unauthorized to write to DbHandle");
         return CALLER_ACCESS_DENIED
     }
 
+    // Insert key-value pair into the database corresponding to this contract
     if env
         .blockchain
         .lock()
@@ -352,7 +360,7 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
         .insert(&db_handle.tree, &key, &value)
         .is_err()
     {
-        error!(target: "runtime::db::db_set()", "Couldn't insert to db_handle tree");
+        error!(target: "runtime::db::db_set", "Couldn't insert to db_handle tree");
         return DB_SET_FAILED
     }
 
