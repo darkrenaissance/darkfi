@@ -170,7 +170,7 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) 
 /// db_handles.
 /// Returns the index of the DbHandle in the db_handles Vector.
 /// This function can be called from any [`ContractSection`].
-pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i32 {
     let env = ctx.data();
     let cid = &env.contract_id;
 
@@ -189,16 +189,22 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
         return CALLER_ACCESS_DENIED
     }
 
+    // Enforce the ptr_len is no more than 64 bytes.
+    if ptr_len > 64 {
+        error!(target: "runtime::db::db_lookup", "[wasm-runtime] db_lookup ptr len is >64");
+        return DB_LOOKUP_FAILED
+    }
+
     // Read memory location that contains the ContractId and DB name
     let memory_view = env.memory_view(&ctx);
     let contracts = &env.blockchain.lock().unwrap().contracts;
 
-    let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
+    let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
         error!(target: "runtime::db::db_lookup", "[wasm-runtime] [Contract:{}] Failed to make slice from ptr.", cid);
         return DB_LOOKUP_FAILED
     };
 
-    let mut buf = vec![0_u8; len as usize];
+    let mut buf = vec![0_u8; ptr_len as usize];
     if let Err(e) = mem_slice.read_slice(&mut buf) {
         error!(target: "runtime::db::db_lookup", "[wasm-runtime] [Contract:{}] Failed to read from memory slice: {}", cid, e);
         return DB_LOOKUP_FAILED
@@ -224,18 +230,16 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
         }
     };
 
+    // Make sure we've read the entire buffer
+    if buf_reader.position() != ptr_len as u64 {
+        error!(target: "runtime::db::db_lookup", "[wasm-runtime] Trailing bytes in argument stream");
+        return DB_LOOKUP_FAILED
+    }
+
     if db_name == SMART_CONTRACT_ZKAS_DB_NAME {
         error!(target: "runtime::db::db_lookup", "[wasm-runtime] [Contract:{}] Attempted to lookup zkas db", cid);
         return CALLER_ACCESS_DENIED
     }
-
-    // TODO: Disabled until cursor_remaining feature is available on master.
-    // Then enable #![feature(cursor_remaining)] in src/lib.rs
-    // unstable feature, open issue https://github.com/rust-lang/rust/issues/86369
-    /*if !buf_reader.is_empty() {
-        error!(target: "runtime::db::db_lookup()", "Trailing bytes in argument stream");
-        return DB_LOOKUP_FAILED
-    }*/
 
     // Lookup contract state
     let tree_handle = match contracts.lookup(&cid, &db_name) {
@@ -247,11 +251,12 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) ->
     let db_handle = DbHandle::new(cid, tree_handle);
     let mut db_handles = env.db_handles.borrow_mut();
 
-    // Make sure we don't duplicate the DbHandle in the vec.
+    // Make sure we don't duplicate the DbHandle in the vec
     if let Some(index) = db_handles.iter().position(|x| x == &db_handle) {
         return index as i32
     }
 
+    // Push the new DbHandle to the Vec of opened DbHandles
     match db_handles.len().try_into() {
         Ok(db_handle_idx) => {
             db_handles.push(db_handle);
