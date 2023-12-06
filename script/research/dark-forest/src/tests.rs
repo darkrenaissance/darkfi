@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::DarkTree;
+use crate::{DarkLeaf, DarkTree};
 
 /// Gereate a predefined [`DarkTree`] along with its
 /// expected traversal order.
@@ -32,7 +32,7 @@ use crate::DarkTree;
 ///
 /// Expected traversal order is indicated by each leaf's number
 fn generate_tree() -> (DarkTree<i32>, Vec<i32>) {
-    let tree = DarkTree::new(
+    let mut tree = DarkTree::new(
         22,
         vec![
             DarkTree::new(
@@ -58,6 +58,8 @@ fn generate_tree() -> (DarkTree<i32>, Vec<i32>) {
             ),
         ],
     );
+
+    tree.index();
 
     let traversal_order = (0..23).collect();
 
@@ -150,44 +152,220 @@ fn test_darktree_mut_iterator() {
     }
 
     // Verify performed mutation actually happened
-    // on original tree.
+    // on original tree. Additionally we verify all
+    // indexes are the expected one.
     assert_eq!(
         tree,
-        DarkTree::new(
-            24,
-            vec![
-                DarkTree::new(
-                    12,
-                    vec![
-                        DarkTree::new(4, vec![DarkTree::new(2, vec![]), DarkTree::new(3, vec![]),]),
-                        DarkTree::new(6, vec![DarkTree::new(5, vec![]),]),
-                        DarkTree::new(8, vec![DarkTree::new(7, vec![]),]),
-                        DarkTree::new(
-                            11,
-                            vec![DarkTree::new(9, vec![]), DarkTree::new(10, vec![]),]
-                        ),
-                    ]
-                ),
-                DarkTree::new(
-                    16,
-                    vec![
-                        DarkTree::new(14, vec![DarkTree::new(13, vec![]),]),
-                        DarkTree::new(15, vec![]),
-                    ]
-                ),
-                DarkTree::new(
-                    23,
-                    vec![
-                        DarkTree::new(
-                            19,
-                            vec![DarkTree::new(17, vec![]), DarkTree::new(18, vec![]),]
-                        ),
-                        DarkTree::new(20, vec![]),
-                        DarkTree::new(22, vec![DarkTree::new(21, vec![]),]),
-                    ]
-                ),
+        DarkTree {
+            leaf: DarkLeaf {
+                data: 24,
+                index: 22,
+                parent_index: None,
+                children_indexes: vec![10, 14, 21]
+            },
+            children: vec![
+                DarkTree {
+                    leaf: DarkLeaf {
+                        data: 12,
+                        index: 10,
+                        parent_index: Some(22),
+                        children_indexes: vec![2, 4, 6, 9]
+                    },
+                    children: vec![
+                        DarkTree {
+                            leaf: DarkLeaf {
+                                data: 4,
+                                index: 2,
+                                parent_index: Some(10),
+                                children_indexes: vec![0, 1]
+                            },
+                            children: vec![
+                                DarkTree {
+                                    leaf: DarkLeaf {
+                                        data: 2,
+                                        index: 0,
+                                        parent_index: Some(2),
+                                        children_indexes: vec![]
+                                    },
+                                    children: vec![],
+                                },
+                                DarkTree {
+                                    leaf: DarkLeaf {
+                                        data: 3,
+                                        index: 1,
+                                        parent_index: Some(2),
+                                        children_indexes: vec![]
+                                    },
+                                    children: vec![],
+                                },
+                            ]
+                        },
+                        DarkTree {
+                            leaf: DarkLeaf {
+                                data: 6,
+                                index: 4,
+                                parent_index: Some(10),
+                                children_indexes: vec![3]
+                            },
+                            children: vec![DarkTree {
+                                leaf: DarkLeaf {
+                                    data: 5,
+                                    index: 3,
+                                    parent_index: Some(4),
+                                    children_indexes: vec![]
+                                },
+                                children: vec![],
+                            },],
+                        },
+                        DarkTree {
+                            leaf: DarkLeaf {
+                                data: 8,
+                                index: 6,
+                                parent_index: Some(10),
+                                children_indexes: vec![5]
+                            },
+                            children: vec![DarkTree {
+                                leaf: DarkLeaf {
+                                    data: 7,
+                                    index: 5,
+                                    parent_index: Some(6),
+                                    children_indexes: vec![]
+                                },
+                                children: vec![],
+                            },],
+                        },
+                        DarkTree {
+                            leaf: DarkLeaf {
+                                data: 11,
+                                index: 9,
+                                parent_index: Some(10),
+                                children_indexes: vec![7, 8]
+                            },
+                            children: vec![
+                                DarkTree {
+                                    leaf: DarkLeaf {
+                                        data: 9,
+                                        index: 7,
+                                        parent_index: Some(9),
+                                        children_indexes: vec![]
+                                    },
+                                    children: vec![],
+                                },
+                                DarkTree {
+                                    leaf: DarkLeaf {
+                                        data: 10,
+                                        index: 8,
+                                        parent_index: Some(9),
+                                        children_indexes: vec![]
+                                    },
+                                    children: vec![],
+                                },
+                            ],
+                        },
+                    ],
+                },
+                DarkTree {
+                    leaf: DarkLeaf {
+                        data: 16,
+                        index: 14,
+                        parent_index: Some(22),
+                        children_indexes: vec![12, 13]
+                    },
+                    children: vec![
+                        DarkTree {
+                            leaf: DarkLeaf {
+                                data: 14,
+                                index: 12,
+                                parent_index: Some(14),
+                                children_indexes: vec![11]
+                            },
+                            children: vec![DarkTree {
+                                leaf: DarkLeaf {
+                                    data: 13,
+                                    index: 11,
+                                    parent_index: Some(12),
+                                    children_indexes: vec![]
+                                },
+                                children: vec![],
+                            },],
+                        },
+                        DarkTree {
+                            leaf: DarkLeaf {
+                                data: 15,
+                                index: 13,
+                                parent_index: Some(14),
+                                children_indexes: vec![]
+                            },
+                            children: vec![],
+                        },
+                    ],
+                },
+                DarkTree {
+                    leaf: DarkLeaf {
+                        data: 23,
+                        index: 21,
+                        parent_index: Some(22),
+                        children_indexes: vec![17, 18, 20]
+                    },
+                    children: vec![
+                        DarkTree {
+                            leaf: DarkLeaf {
+                                data: 19,
+                                index: 17,
+                                parent_index: Some(21),
+                                children_indexes: vec![15, 16]
+                            },
+                            children: vec![
+                                DarkTree {
+                                    leaf: DarkLeaf {
+                                        data: 17,
+                                        index: 15,
+                                        parent_index: Some(17),
+                                        children_indexes: vec![]
+                                    },
+                                    children: vec![],
+                                },
+                                DarkTree {
+                                    leaf: DarkLeaf {
+                                        data: 18,
+                                        index: 16,
+                                        parent_index: Some(17),
+                                        children_indexes: vec![]
+                                    },
+                                    children: vec![],
+                                },
+                            ],
+                        },
+                        DarkTree {
+                            leaf: DarkLeaf {
+                                data: 20,
+                                index: 18,
+                                parent_index: Some(21),
+                                children_indexes: vec![]
+                            },
+                            children: vec![],
+                        },
+                        DarkTree {
+                            leaf: DarkLeaf {
+                                data: 22,
+                                index: 20,
+                                parent_index: Some(21),
+                                children_indexes: vec![19]
+                            },
+                            children: vec![DarkTree {
+                                leaf: DarkLeaf {
+                                    data: 21,
+                                    index: 19,
+                                    parent_index: Some(20),
+                                    children_indexes: vec![]
+                                },
+                                children: vec![],
+                            },],
+                        },
+                    ],
+                },
             ],
-        )
+        }
     );
 
     let traversal_order: Vec<i32> = (2..25).collect();

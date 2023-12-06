@@ -45,9 +45,24 @@ struct DarkLeaf<T> {
 }
 
 impl<T> DarkLeaf<T> {
-    /// Every leaf is initiated using default indexes.
+    /// Every [`DarkLeaf`] is initiated using default indexes.
     fn new(data: T) -> DarkLeaf<T> {
         Self { data, index: 0, parent_index: None, children_indexes: vec![] }
+    }
+
+    /// Set [`DarkLeaf`]'s index
+    fn set_index(&mut self, index: usize) {
+        self.index = index;
+    }
+
+    /// Set [`DarkLeaf`]'s parent index
+    fn set_parent_index(&mut self, parent_index: Option<usize>) {
+        self.parent_index = parent_index;
+    }
+
+    /// Set [`DarkLeaf`]'s children index
+    fn set_children_indexes(&mut self, children_indexes: Vec<usize>) {
+        self.children_indexes = children_indexes;
     }
 }
 
@@ -70,6 +85,37 @@ impl<T> DarkTree<T> {
     fn new(data: T, children: Vec<DarkTree<T>>) -> DarkTree<T> {
         let leaf = DarkLeaf::new(data);
         Self { leaf, children }
+    }
+
+    /// Set [`DarkTree`]'s leaf parent and children indexes,
+    /// and trigger the setup of its children indexes
+    fn set_parent_children_indexes(&mut self, parent_index: Option<usize>) {
+        // Set our leafs parent index
+        self.leaf.set_parent_index(parent_index);
+
+        // Now recursively, we setup nodes children indexes and keep
+        // their index in our own children index list
+        let mut children_indexes = vec![];
+        for child in &mut self.children {
+            child.set_parent_children_indexes(Some(self.leaf.index));
+            children_indexes.push(child.leaf.index);
+        }
+
+        // Set our leafs children indexes
+        self.leaf.set_children_indexes(children_indexes);
+    }
+
+    /// Setup [`DarkTree`]'s leafs indexes, based on DFS post-order
+    /// traversal order. This call assumes it was triggered for the
+    /// root of the tree, which has no parent index.
+    fn index(&mut self) {
+        // First we setup each leafs index
+        for (index, leaf) in self.iter_mut().enumerate() {
+            leaf.set_index(index);
+        }
+
+        // Now we trigger recursion to setup each nodes rest indexes
+        self.set_parent_children_indexes(None);
     }
 
     /// Immutably iterate through the tree, using DFS post-order
