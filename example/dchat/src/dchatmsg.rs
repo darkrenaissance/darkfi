@@ -17,13 +17,11 @@
  */
 
 // ANCHOR: msg
-use async_std::sync::{Arc, Mutex};
+use smol::lock::Mutex;
+use std::sync::Arc;
 
 use darkfi::{impl_p2p_message, net::Message};
-use darkfi_serial::{
-    async_trait, AsyncDecodable, AsyncEncodable, Decodable, Encodable, SerialDecodable,
-    SerialEncodable, VarInt,
-};
+use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
 pub type DchatMsgsBuffer = Arc<Mutex<Vec<DchatMsg>>>;
 

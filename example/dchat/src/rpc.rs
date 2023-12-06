@@ -19,7 +19,6 @@
 use async_trait::async_trait;
 use darkfi::system::StoppableTaskPtr;
 use log::debug;
-use serde_json::{json, Value};
 use std::collections::HashSet;
 //use darkfi::system::
 use smol::lock::{Mutex, MutexGuard};
@@ -28,8 +27,9 @@ use url::Url;
 use darkfi::{
     net,
     rpc::{
-        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
+        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult, JsonSubscriber},
         server::RequestHandler,
+        util::JsonValue,
     },
 };
 
@@ -38,37 +38,22 @@ pub struct JsonRpcInterface {
     pub addr: Url,
     pub p2p: net::P2pPtr,
     pub rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    pub dnet_sub: JsonSubscriber,
 }
 // ANCHOR_END: jsonrpc
 
 #[async_trait]
 impl RequestHandler for JsonRpcInterface {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        //debug!(target: "darkirc::rpc", "--> {}", req.stringify().unwrap());
-
-        match req.method.as_str() {
-            "ping" => self.pong(req.id, req.params).await,
-            //"dnet.switch" => self.dnet_switch(req.id, req.params).await,
-            //"dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
-            //// TODO: Make this optional
-            //"p2p.get_info" => self.p2p_get_info(req.id, req.params).await,
-            _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
-        }
-
-        //if req.params.as_array().is_none() {
-        //    return JsonError::new(ErrorCode::InvalidRequest, None, req.id).into()
-        //}
-
-        //debug!(target: "RPC", "--> {}", serde_json::to_string(&req).unwrap());
+        debug!(target: "dchat::rpc", "--> {}", req.stringify().unwrap());
 
         // ANCHOR: req_match
-        // TODO
-        //match req.method.as_str() {
-        //    //Some("ping") => self.pong(req.id, req.params).await,
-        //    // Some("dnet_switch") => self.dnet_switch(req.id, req.params).await,
-        //    // Some("dnet_info") => self.dnet_info(req.id, req.params).await,
-        //    Some(_) | None => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
-        //}
+        match req.method.as_str() {
+            "ping" => self.pong(req.id, req.params).await,
+            "dnet.switch" => self.dnet_switch(req.id, req.params).await,
+            "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
+            _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+        }
         // ANCHOR_END: req_match
     }
     async fn connections_mut(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
@@ -78,47 +63,42 @@ impl RequestHandler for JsonRpcInterface {
 
 impl JsonRpcInterface {
     // RPCAPI:
-    // Replies to a ping method.
-    // --> {"jsonrpc": "2.0", "method": "ping", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", "result": "pong", "id": 42}
-    // ANCHOR: pong
-    //async fn pong(&self, id: Value, _params: Value) -> JsonResult {
-    //    JsonResponse::new(json!("pong"), id).into()
-    //}
-    // ANCHOR_END: pong
-
-    // RPCAPI:
     // Activate or deactivate dnet in the P2P stack.
     // By sending `true`, dnet will be activated, and by sending `false` dnet will
     // be deactivated. Returns `true` on success.
     //
     // --> {"jsonrpc": "2.0", "method": "dnet_switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    //async fn dnet_switch(&self, id: Value, params: Value) -> JsonResult {
-    //    let params = params.as_array().unwrap();
+    async fn dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if params.len() != 1 || !params[0].is_bool() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
 
-    //    if params.len() != 1 && params[0].as_bool().is_none() {
-    //        return JsonError::new(ErrorCode::InvalidParams, None, id).into()
-    //    }
+        let switch = params[0].get::<bool>().unwrap();
 
-    //    if params[0].as_bool().unwrap() {
-    //        self.p2p.dnet_enable().await;
-    //    } else {
-    //        self.p2p.dnet_disable().await;
-    //    }
+        if *switch {
+            self.p2p.dnet_enable().await;
+        } else {
+            self.p2p.dnet_disable().await;
+        }
 
-    //    JsonResponse::new(json!(true), id).into()
-    //}
-
-    // RPCAPI:
-    // Retrieves P2P network information.
+        JsonResponse::new(JsonValue::Boolean(true), id).into()
+    }
     //
-    // --> {"jsonrpc": "2.0", "method": "dnet_info", "params": [], "id": 42}
-    // <-- {"jsonrpc": "2.0", result": {"nodeID": [], "nodeinfo": [], "id": 42}
-    // ANCHOR: dnet_info
-    //async fn dnet_info(&self, id: Value, _params: Value) -> JsonResult {
-    //    let dnet_info = self.p2p.dnet_info().await;
-    //    JsonResponse::new(net::P2p::map_dnet_info(dnet_info), id).into()
-    //}
-    // ANCHOR_END: dnet_info
+    // RPCAPI:
+    // Initializes a subscription to p2p dnet events.
+    // Once a subscription is established, `darkirc` will send JSON-RPC notifications of
+    // new network events to the subscriber.
+    //
+    // --> {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "method": "dnet.subscribe_events", "params": [`event`]}
+    pub async fn dnet_subscribe_events(&self, id: u16, params: JsonValue) -> JsonResult {
+        let params = params.get::<Vec<JsonValue>>().unwrap();
+        if !params.is_empty() {
+            return JsonError::new(ErrorCode::InvalidParams, None, id).into()
+        }
+
+        self.dnet_sub.clone().into()
+    }
 }

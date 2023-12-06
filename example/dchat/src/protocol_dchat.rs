@@ -17,11 +17,11 @@
  */
 
 // ANCHOR: protocol_dchat
-use async_std::sync::Arc;
 use async_trait::async_trait;
 use darkfi::{net, Result};
 use log::debug;
 use smol::Executor;
+use std::sync::Arc;
 
 use crate::dchatmsg::{DchatMsg, DchatMsgsBuffer};
 

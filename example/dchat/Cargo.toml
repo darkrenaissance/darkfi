@@ -1,6 +1,6 @@
 [package]
 name = "dchat"
-version = "0.4.1"
+version = "0.4.2"
 homepage = "https://dark.fi"
 description = "Demo chat app used to document DarkFi networking code"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
@@ -10,16 +10,14 @@ edition = "2021"
 
 # ANCHOR: darkfi
 [dependencies]
-darkfi = {path = "../../", features = ["net", "rpc", "async_daemonize"]}
+darkfi = {path = "../../", features = ["net", "rpc"]}
 darkfi-serial = {path = "../../src/serial"}
 # ANCHOR_END: darkfi
 
 # ANCHOR: dependencies
-async-std = "1.12.0"
 async-trait = "0.1.74"
 easy-parallel = "3.3.1"
 smol = "1.3.0"
-
 log = "0.4.20"
 simplelog = "0.12.1"
 url = "2.5.0"

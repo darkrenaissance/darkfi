@@ -1,4 +1,4 @@
-/* This file is part of DarkFi (https://dark.fi)
+/* This file is part of Darkfi (https://dark.fi)
  *
  * Copyright (C) 2020-2023 Dyne.org foundation
  *
@@ -19,17 +19,24 @@
 use std::{error, fs::File, io::stdin};
 
 // ANCHOR: daemon_deps
-
-use async_std::sync::{Arc, Mutex};
-use darkfi::{async_daemonize, system::StoppableTaskPtr};
+use darkfi::system::StoppableTask;
 use easy_parallel::Parallel;
-use smol::Executor;
+use smol::{lock::Mutex, Executor};
+use std::{collections::HashSet, sync::Arc};
 // ANCHOR_END: daemon_deps
-use log::debug;
+
+use log::{debug, error};
 use simplelog::WriteLogger;
 use url::Url;
 
-use darkfi::{net, net::Settings, rpc::server::listen_and_serve};
+use darkfi::{
+    net,
+    net::Settings,
+    rpc::{
+        jsonrpc::JsonSubscriber,
+        server::{listen_and_serve, RequestHandler},
+    },
+};
 
 use crate::{
     dchat_error::ErrorMissingSpecifier,
@@ -44,6 +51,7 @@ pub mod protocol_dchat;
 pub mod rpc;
 
 // ANCHOR: error
+pub type DarkfiError = darkfi::Error;
 pub type Error = Box<dyn error::Error>;
 pub type Result<T> = std::result::Result<T, Error>;
 // ANCHOR_END: error
@@ -126,20 +134,17 @@ impl Dchat {
     // ANCHOR_END: register_protocol
 
     // ANCHOR: start
-    async fn start(&mut self, ex: Arc<Executor<'_>>) -> Result<()> {
-        //debug!(target: "dchat", "Dchat::start() [START]");
+    async fn start(&mut self) -> Result<()> {
+        debug!(target: "dchat", "Dchat::start() [START]");
 
-        //let ex2 = ex.clone();
+        self.register_protocol(self.recv_msgs.clone()).await?;
+        self.p2p.clone().start().await?;
 
-        //self.register_protocol(self.recv_msgs.clone()).await?;
-        //self.p2p.clone().start(ex.clone()).await?;
-        //ex2.spawn(self.p2p.clone().run(ex.clone())).detach();
+        self.menu().await?;
 
-        //self.menu().await?;
+        self.p2p.stop().await;
 
-        //self.p2p.stop().await;
-
-        //debug!(target: "dchat", "Dchat::start() [STOP]");
+        debug!(target: "dchat", "Dchat::start() [STOP]");
         Ok(())
     }
     // ANCHOR_END: start
@@ -222,50 +227,88 @@ fn bob() -> Result<AppSettings> {
 // ANCHOR_END: bob
 
 // ANCHOR: main
-async_daemonize!(realmain);
-async fn realmain() -> Result<()> {
-    //let settings: Result<AppSettings> = match std::env::args().nth(1) {
-    //    Some(id) => match id.as_str() {
-    //        "a" => alice(),
-    //        "b" => bob(),
-    //        _ => Err(ErrorMissingSpecifier.into()),
-    //    },
-    //    None => Err(ErrorMissingSpecifier.into()),
-    //};
+fn main() -> Result<()> {
+    smol::block_on(async {
+        let settings: Result<AppSettings> = match std::env::args().nth(1) {
+            Some(id) => match id.as_str() {
+                "a" => alice(),
+                "b" => bob(),
+                _ => Err(ErrorMissingSpecifier.into()),
+            },
+            None => Err(ErrorMissingSpecifier.into()),
+        };
 
-    //let settings = settings?.clone();
+        let settings = settings?.clone();
+        let ex = Arc::new(Executor::new());
+        let p2p = net::P2p::new(settings.net, ex.clone()).await;
+        let msgs: DchatMsgsBuffer = Arc::new(Mutex::new(vec![DchatMsg { msg: String::new() }]));
+        let mut dchat = Dchat::new(p2p.clone(), msgs);
 
-    //let p2p = net::P2p::new(settings.net).await;
+        // ANCHOR: dnet_sub
+        let dnet_sub = JsonSubscriber::new("dnet.subscribe_events");
+        let dnet_sub_ = dnet_sub.clone();
+        let p2p_ = p2p.clone();
+        let dnet_task = StoppableTask::new();
+        dnet_task.clone().start(
+            async move {
+                let dnet_sub = p2p_.dnet_subscribe().await;
+                loop {
+                    let event = dnet_sub.receive().await;
+                    //debug!("Got dnet event: {:?}", event);
+                    dnet_sub_.notify(vec![event.into()].into()).await;
+                }
+            },
+            |res| async {
+                match res {
+                    Ok(()) | Err(DarkfiError::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => panic!("{}", e),
+                }
+            },
+            DarkfiError::DetachedTaskStopped,
+            ex.clone(),
+        );
+        // ANCHOR_END: dnet_sub
 
-    //let ex = Arc::new(Executor::new());
-    //let ex2 = ex.clone();
-    //let ex3 = ex2.clone();
+        // ANCHOR: json_init
+        let accept_addr = settings.accept_addr.clone();
 
-    //let msgs: DchatMsgsBuffer = Arc::new(Mutex::new(vec![DchatMsg { msg: String::new() }]));
+        let rpc_connections = Mutex::new(HashSet::new());
+        let rpc = Arc::new(JsonRpcInterface {
+            addr: accept_addr.clone(),
+            p2p,
+            rpc_connections,
+            dnet_sub,
+        });
+        let _ex = ex.clone();
 
-    //let mut dchat = Dchat::new(p2p.clone(), msgs);
+        let rpc_task = StoppableTask::new();
+        rpc_task.clone().start(
+            listen_and_serve(accept_addr.clone(), rpc.clone(), None, ex.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(DarkfiError::RpcServerStopped) => rpc.stop_connections().await,
+                    Err(e) => error!("Failed stopping JSON-RPC server: {}", e),
+                }
+            },
+            DarkfiError::RpcServerStopped,
+            ex.clone(),
+        );
+        // ANCHOR_END: json_init
 
-    //// ANCHOR: json_init
-    //let accept_addr = settings.accept_addr.clone();
-    //let rpc = Arc::new(JsonRpcInterface { addr: accept_addr.clone(), p2p });
-    //let _ex = ex.clone();
-    //ex.spawn(async move { listen_and_serve(accept_addr.clone(), rpc, _ex).await }).detach();
-    //// ANCHOR_END: json_init
+        let nthreads = std::thread::available_parallelism().unwrap().get();
+        let (signal, shutdown) = smol::channel::unbounded::<()>();
 
-    //let nthreads = std::thread::available_parallelism().unwrap().get();
-    //let (signal, shutdown) = smol::channel::unbounded::<()>();
+        let (_, result) = Parallel::new()
+            .each(0..nthreads, |_| smol::future::block_on(ex.run(shutdown.recv())))
+            .finish(|| {
+                smol::future::block_on(async move {
+                    dchat.start().await?;
+                    drop(signal);
+                    Ok(())
+                })
+            });
 
-    //let (_, result) = Parallel::new()
-    //    .each(0..nthreads, |_| smol::future::block_on(ex2.run(shutdown.recv())))
-    //    .finish(|| {
-    //        smol::future::block_on(async move {
-    //            dchat.start(ex3).await?;
-    //            drop(signal);
-    //            Ok(())
-    //        })
-    //    });
-
-    //result
-    Ok(())
+        result
+    })
 }
 // ANCHOR_END: main
