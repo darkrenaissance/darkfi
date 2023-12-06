@@ -368,55 +368,57 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
 }
 
 /// Remove a key from the database.
-pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+/// This function can be called only from the Deploy or Update [`ContractSection`].
+/// Returns `0` on success, otherwise returns a (negative) error value.
+pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i32 {
     let env = ctx.data();
 
-    if env.contract_section != ContractSection::Deploy &&
-        env.contract_section != ContractSection::Update
-    {
-        error!(target: "runtime::db::db_del()", "db_del called in unauthorized section");
+    if let Err(e) = acl_allow(env, &[ContractSection::Deploy, ContractSection::Update]) {
+        error!(target: "runtime::db::db_del", "[wasm-runtime] db_del ACL denied: {}", e);
+        // TODO: FIXME: We have to fix up the errors used within runtime and the sdk
         return CALLER_ACCESS_DENIED
     }
 
+    // Ensure that it is possible to read from the memory that this function needs
     let memory_view = env.memory_view(&ctx);
 
-    let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
-        error!(target: "runtime::db::db_del()", "Failed to make slice from ptr");
+    let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
+        error!(target: "runtime::db::db_del", "Failed to make slice from ptr");
         return DB_DEL_FAILED
     };
 
-    let mut buf = vec![0_u8; len as usize];
+    let mut buf = vec![0_u8; ptr_len as usize];
     if let Err(e) = mem_slice.read_slice(&mut buf) {
-        error!(target: "runtime::db::db_del()", "Failed to read from memory slice: {}", e);
+        error!(target: "runtime::db::db_del", "Failed to read from memory slice: {}", e);
         return DB_DEL_FAILED
     };
 
     let mut buf_reader = Cursor::new(buf);
 
+    // Decode DbHandle index
     let db_handle_index: u32 = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "runtime::db::db_del()", "Failed to decode DbHandle: {}", e);
+            error!(target: "runtime::db::db_del", "Failed to decode DbHandle: {}", e);
             return DB_DEL_FAILED
         }
     };
     let db_handle_index = db_handle_index as usize;
 
+    // Decode key corresponding to the value that will be deleted
     let key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "runtime::db::db_del()", "Failed to decode key vec: {}", e);
+            error!(target: "runtime::db::db_del", "Failed to decode key vec: {}", e);
             return DB_DEL_FAILED
         }
     };
 
-    // TODO: Disabled until cursor_remaining feature is available on master.
-    // Then enable #![feature(cursor_remaining)] in src/lib.rs
-    // unstable feature, open issue https://github.com/rust-lang/rust/issues/86369
-    /*if !buf_reader.is_empty() {
-        error!(target: "runtime::db::db_del()", "Trailing bytes in argument stream");
-        return DB_DEL_FAILED
-    }*/
+    // Make sure we've read the entire buffer
+    if buf_reader.position() != ptr_len as u64 {
+        error!(target: "runtime::db::db_del", "[wasm-runtime] Trailing bytes in argument stream");
+        return DB_SET_FAILED
+    }
 
     let db_handles = env.db_handles.borrow();
 
@@ -425,13 +427,16 @@ pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
         return DB_DEL_FAILED
     }
 
+    // Retrive DbHandle using the index
     let db_handle = &db_handles[db_handle_index];
 
+    // Validate that the DbHandle matches the contract ID
     if db_handle.contract_id != env.contract_id {
         error!(target: "runtime::db::db_del()", "Unauthorized to write to DbHandle");
         return CALLER_ACCESS_DENIED
     }
 
+    // Remove key-value pair from the database corresponding to this contract
     if env.blockchain.lock().unwrap().overlay.lock().unwrap().remove(&db_handle.tree, &key).is_err()
     {
         error!(target: "runtime::db::db_del()", "Couldn't remove key from db_handle tree");
@@ -441,84 +446,96 @@ pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i3
     DB_SUCCESS
 }
 
-/// Will read a key from the key-value store.
-pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
+/// Reads a key from the key-value store.
+/// Thie function can be called from the Deploy, Exec, or Metadata [`ContractSection`].
+/// On success, returns the length of the `objects` Vector in the environment.
+/// Otherwise, returns a negative error code.
+pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let env = ctx.data();
 
-    if env.contract_section != ContractSection::Deploy &&
-        env.contract_section != ContractSection::Exec &&
-        env.contract_section != ContractSection::Metadata
+    if let Err(e) =
+        acl_allow(env, &[ContractSection::Deploy, ContractSection::Exec, ContractSection::Metadata])
     {
-        error!(target: "runtime::db::db_get()", "db_get called in unauthorized section");
+        error!(target: "runtime::db::db_get", "[wasm-runtime] db_get ACL denied: {}", e);
+        // TODO: FIXME: We have to fix up the errors used within runtime and the sdk
         return CALLER_ACCESS_DENIED.into()
     }
 
+    // Ensure that it is possible to read memory
     let memory_view = env.memory_view(&ctx);
 
-    let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
-        error!(target: "runtime::db::db_get()", "Failed to make slice from ptr");
+    let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
+        error!(target: "runtime::db::db_get", "Failed to make slice from ptr");
         return DB_GET_FAILED.into()
     };
 
-    let mut buf = vec![0_u8; len as usize];
+    let mut buf = vec![0_u8; ptr_len as usize];
     if let Err(e) = mem_slice.read_slice(&mut buf) {
-        error!(target: "runtime::db::db_get()", "Failed to read from memory slice: {}", e);
+        error!(target: "runtime::db::db_get", "Failed to read from memory slice: {}", e);
         return DB_GET_FAILED.into()
     };
 
     let mut buf_reader = Cursor::new(buf);
 
+    // Decode DbHandle index
     let db_handle_index: u32 = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "runtime::db::db_get()", "Failed to decode DbHandle: {}", e);
+            error!(target: "runtime::db::db_get", "Failed to decode DbHandle: {}", e);
             return DB_GET_FAILED.into()
         }
     };
     let db_handle_index = db_handle_index as usize;
 
+    // Decode key for key-value pair that we wish to retrieve
     let key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "runtime::db::db_get()", "Failed to decode key from vec: {}", e);
+            error!(target: "runtime::db::db_get", "Failed to decode key from vec: {}", e);
             return DB_GET_FAILED.into()
         }
     };
 
-    // TODO: Disabled until cursor_remaining feature is available on master.
-    // Then enable #![feature(cursor_remaining)] in src/lib.rs
-    // unstable feature, open issue https://github.com/rust-lang/rust/issues/86369
-    /*if !buf_reader.is_empty() {
-        error!(target: "runtime::db::db_get()", "Trailing bytes in argument stream");
-        return DB_GET_FAILED.into()
-    }*/
-
-    let db_handles = env.db_handles.borrow();
-
-    if db_handles.len() <= db_handle_index {
-        error!(target: "runtime::db::db_get()", "Requested DbHandle that is out of bounds");
+    // Make sure there are no trailing bytes in the buffer. This means we've used all data that was
+    // supplied.
+    if buf_reader.position() != ptr_len as u64 {
+        error!(target: "runtime::db::db_get", "[wasm-runtime] Trailing bytes in argument stream");
         return DB_GET_FAILED.into()
     }
 
+    let db_handles = env.db_handles.borrow();
+
+    // Ensure that the index is within bounds
+    if db_handles.len() <= db_handle_index {
+        error!(target: "runtime::db::db_get", "Requested DbHandle that is out of bounds");
+        return DB_GET_FAILED.into()
+    }
+
+    // Get DbHandle using db_handle_index
     let db_handle = &db_handles[db_handle_index];
 
+    // Retrieve data using the `key`
     let ret =
         match env.blockchain.lock().unwrap().overlay.lock().unwrap().get(&db_handle.tree, &key) {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "runtime::db::db_get()", "Internal error getting from tree: {}", e);
+                error!(target: "runtime::db::db_get", "Internal error getting from tree: {}", e);
                 return DB_GET_FAILED.into()
             }
         };
 
+    // Return error if the data is empty
     let Some(return_data) = ret else {
-        debug!(target: "runtime::db::db_get()", "returned empty vec");
+        debug!(target: "runtime::db::db_get", "Return data is empty");
         return -127
     };
 
-    // Copy Vec<u8> to the VM
+    // Copy the data (Vec<u8>) to the VM by pushing it to the objects Vector.
     let mut objects = env.objects.borrow_mut();
     objects.push(return_data.to_vec());
+
+    // Return the length of the objects Vector. This is the location of the data that was retrieved
+    // and pushed
     (objects.len() - 1) as i64
 }
 
