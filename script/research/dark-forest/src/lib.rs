@@ -74,25 +74,75 @@ impl<T> DarkLeaf<T> {
 /// where when we iterate through the tree, we first process tree
 /// node's children, and then the node itself, recursively.
 /// Based on this, initial tree node (leaf), known as the root,
-/// will always show up at the end of iteration.
+/// will always show up at the end of iteration. It is advised
+/// to always execute .build() after finishing setting up the
+/// Tree, to properly index it and check its integrity.
 #[derive(Debug, PartialEq)]
 struct DarkTree<T> {
     /// This tree's leaf information, along with its data
     leaf: DarkLeaf<T>,
     /// Vector containing all tree's branches(children tree)
     children: Vec<DarkTree<T>>,
+    /// Optional max capacity of the tree, including all children
+    /// nodes recursively from the root. None indicates no
+    /// capacity restrictions. This is enforced by the root,
+    /// so children nodes don't have to set it up. If children
+    /// nodes children(recursively) make us exceed that capacity,
+    /// we will be able to catch it using .check_capacity() or
+    /// .integrity_check().
+    capacity: Option<usize>,
 }
 
 impl<T> DarkTree<T> {
     /// Initialize a [`DarkTree`], using provided data to
     /// generate its root.
-    fn new(data: T, children: Vec<DarkTree<T>>) -> DarkTree<T> {
+    fn new(data: T, children: Vec<DarkTree<T>>, capacity: Option<usize>) -> DarkTree<T> {
         let leaf = DarkLeaf::new(data);
-        Self { leaf, children }
+        Self { leaf, children, capacity }
+    }
+
+    /// Build the [`DarkTree`] indexes and perform an
+    /// integrity check on them. This should be used
+    /// after we have appended all child nodes, so we
+    /// don't have to call .index() and .integrity_check()
+    /// manually.
+    fn build(&mut self) -> DarkTreeResult<()> {
+        self.index();
+        self.integrity_check()
+    }
+
+    /// Return the count of all [`DarkTree`] leafs.
+    fn len(&self) -> usize {
+        self.iter().count()
+    }
+
+    /// Check if configured capacity have been exceeded.
+    fn check_capacity(&self) -> DarkTreeResult<()> {
+        if let Some(capacity) = self.capacity {
+            if self.len() >= capacity {
+                return Err(DarkTreeError::CapacityExceeded)
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Append a new child node to the [`DarkTree`],
+    /// if capacity has not been exceeded. This call
+    /// doesn't update the indexes, so either .index()
+    /// or .build() must be called after it.
+    fn append(&mut self, child: DarkTree<T>) -> DarkTreeResult<()> {
+        // Check current capacity
+        self.check_capacity()?;
+
+        // Append the new child
+        self.children.push(child);
+
+        Ok(())
     }
 
     /// Set [`DarkTree`]'s leaf parent and children indexes,
-    /// and trigger the setup of its children indexes
+    /// and trigger the setup of its children indexes.
     fn set_parent_children_indexes(&mut self, parent_index: Option<usize>) {
         // Set our leafs parent index
         self.leaf.set_parent_index(parent_index);
@@ -123,7 +173,7 @@ impl<T> DarkTree<T> {
     }
 
     /// Verify [`DarkTree`]'s leaf parent and children indexes validity,
-    /// and trigger the check of its children indexes
+    /// and trigger the check of its children indexes.
     fn check_parent_children_indexes(&self, parent_index: Option<usize>) -> DarkTreeResult<()> {
         // Check our leafs parent index
         if self.leaf.parent_index != parent_index {
@@ -147,18 +197,22 @@ impl<T> DarkTree<T> {
     }
 
     /// Verify current [`DarkTree`]'s leafs indexes validity,
-    /// based on DFS post-order traversal order. This call
+    /// based on DFS post-order traversal order. Additionally,
+    /// check that capacity has not been exceeded. This call
     /// assumes it was triggered for the root of the tree,
     /// which has no parent index.
     fn integrity_check(&self) -> DarkTreeResult<()> {
-        // First we check each leaf index
+        // Check current capacity
+        self.check_capacity()?;
+
+        // Check each leaf index
         for (index, leaf) in self.iter().enumerate() {
             if index != leaf.index {
                 return Err(DarkTreeError::InvalidLeafIndex(leaf.index, index))
             }
         }
 
-        // Now we trigger recursion to check each nodes rest indexes
+        // Trigger recursion to check each nodes rest indexes
         self.check_parent_children_indexes(None)
     }
 

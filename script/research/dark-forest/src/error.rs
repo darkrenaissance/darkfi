@@ -30,4 +30,7 @@ pub enum DarkTreeError {
 
     #[error("Invalid DarkLeaf children index found for leaf: {0}")]
     InvalidLeafChildrenIndexes(usize),
+
+    #[error("DarkTree capacity have been exceeded")]
+    CapacityExceeded,
 }
