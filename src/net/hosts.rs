@@ -525,17 +525,12 @@ impl Hosts {
         let session_out = p2p_.session_outbound();
         let session_weak = Arc::downgrade(&session_out);
 
-        let connector = Connector::new(p2p_.settings(), session_weak);
+        let connector = Connector::new(self.settings.clone(), session_weak);
         debug!(target: "net::hosts::probe_node()", "Connecting to {}", host);
         match connector.connect(host).await {
             Ok((_url, channel)) => {
                 debug!(target: "net::hosts::probe_node()", "Connected successfully!");
-                let proto_ver = ProtocolVersion::new(
-                    channel.clone(),
-                    p2p_.settings().clone(),
-                    p2p_.hosts().clone(),
-                )
-                .await;
+                let proto_ver = ProtocolVersion::new(channel.clone(), self.settings.clone()).await;
 
                 let handshake_task = session_out.perform_handshake_protocols(
                     proto_ver,
@@ -556,7 +551,7 @@ impl Hosts {
                         return false
                     }
                 }
-            }
+            }                   
 
             Err(e) => {
                 debug!(target: "net::hosts::probe_node()", "Failed to connect to {}, ({})", host, e);

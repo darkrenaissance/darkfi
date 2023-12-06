@@ -38,13 +38,12 @@ pub struct ProtocolVersion {
     version_sub: MessageSubscription<VersionMessage>,
     verack_sub: MessageSubscription<VerackMessage>,
     settings: SettingsPtr,
-    hosts: HostsPtr,
 }
 
 impl ProtocolVersion {
     /// Create a new version protocol. Makes a version and version ack
     /// subscription, then adds them to a version protocol instance.
-    pub async fn new(channel: ChannelPtr, settings: SettingsPtr, hosts: HostsPtr) -> Arc<Self> {
+    pub async fn new(channel: ChannelPtr, settings: SettingsPtr) -> Arc<Self> {
         // Creates a versi5on subscription
         let version_sub =
             channel.subscribe_msg::<VersionMessage>().await.expect("Missing version dispatcher!");
@@ -53,7 +52,7 @@ impl ProtocolVersion {
         let verack_sub =
             channel.subscribe_msg::<VerackMessage>().await.expect("Missing verack dispatcher!");
 
-        Arc::new(Self { channel, version_sub, verack_sub, settings, hosts })
+        Arc::new(Self { channel, version_sub, verack_sub, settings })
     }
 
     /// Start version information exchange. Start the timer. Send version
@@ -79,7 +78,7 @@ impl ProtocolVersion {
             );
 
             // Remove from hosts
-            self.hosts.remove(self.channel.address()).await;
+            //self.hosts.remove(self.channel.address()).await;
             self.channel.stop().await;
             return Err(Error::ChannelTimeout)
         }
@@ -153,7 +152,7 @@ impl ProtocolVersion {
                 self.channel.address(),
             );
 
-            self.hosts.remove(self.channel.address()).await;
+            //self.hosts.remove(self.channel.address()).await;
             self.channel.stop().await;
             return Err(Error::ChannelStopped)
         }

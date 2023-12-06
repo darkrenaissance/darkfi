@@ -200,7 +200,7 @@ impl Lilith {
                             let proto_ver = ProtocolVersion::new(
                                 channel.clone(),
                                 p2p_.settings().clone(),
-                                p2p_.hosts().clone(),
+                                //p2p_.hosts().clone(),
                             )
                             .await;
 
