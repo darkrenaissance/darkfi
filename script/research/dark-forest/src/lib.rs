@@ -18,6 +18,10 @@
 
 use std::{collections::VecDeque, iter::FusedIterator, mem};
 
+/// Error handling
+mod error;
+use error::{DarkTreeError, DarkTreeResult};
+
 #[cfg(test)]
 mod tests;
 
@@ -116,6 +120,46 @@ impl<T> DarkTree<T> {
 
         // Now we trigger recursion to setup each nodes rest indexes
         self.set_parent_children_indexes(None);
+    }
+
+    /// Verify [`DarkTree`]'s leaf parent and children indexes validity,
+    /// and trigger the check of its children indexes
+    fn check_parent_children_indexes(&self, parent_index: Option<usize>) -> DarkTreeResult<()> {
+        // Check our leafs parent index
+        if self.leaf.parent_index != parent_index {
+            return Err(DarkTreeError::InvalidLeafParentIndex(self.leaf.index))
+        }
+
+        // Now recursively, we check nodes children indexes and keep
+        // their index in our own children index list
+        let mut children_indexes = vec![];
+        for child in &self.children {
+            child.check_parent_children_indexes(Some(self.leaf.index))?;
+            children_indexes.push(child.leaf.index);
+        }
+
+        // Check our leafs children indexes
+        if self.leaf.children_indexes != children_indexes {
+            return Err(DarkTreeError::InvalidLeafChildrenIndexes(self.leaf.index))
+        }
+
+        Ok(())
+    }
+
+    /// Verify current [`DarkTree`]'s leafs indexes validity,
+    /// based on DFS post-order traversal order. This call
+    /// assumes it was triggered for the root of the tree,
+    /// which has no parent index.
+    fn integrity_check(&self) -> DarkTreeResult<()> {
+        // First we check each leaf index
+        for (index, leaf) in self.iter().enumerate() {
+            if index != leaf.index {
+                return Err(DarkTreeError::InvalidLeafIndex(leaf.index, index))
+            }
+        }
+
+        // Now we trigger recursion to check each nodes rest indexes
+        self.check_parent_children_indexes(None)
     }
 
     /// Immutably iterate through the tree, using DFS post-order

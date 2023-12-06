@@ -10,3 +10,4 @@ edition = "2021"
 [workspace]
 
 [dependencies]
+thiserror = "1.0.50"

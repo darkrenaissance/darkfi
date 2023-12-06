@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{DarkLeaf, DarkTree};
+use crate::{DarkLeaf, DarkTree, DarkTreeResult};
 
 /// Gereate a predefined [`DarkTree`] along with its
 /// expected traversal order.
@@ -31,7 +31,7 @@ use crate::{DarkLeaf, DarkTree};
 ///   0  1  3   5 7   8  11      15  16       19
 ///
 /// Expected traversal order is indicated by each leaf's number
-fn generate_tree() -> (DarkTree<i32>, Vec<i32>) {
+fn generate_tree() -> DarkTreeResult<(DarkTree<i32>, Vec<i32>)> {
     let mut tree = DarkTree::new(
         22,
         vec![
@@ -60,15 +60,16 @@ fn generate_tree() -> (DarkTree<i32>, Vec<i32>) {
     );
 
     tree.index();
+    tree.integrity_check()?;
 
     let traversal_order = (0..23).collect();
 
-    (tree, traversal_order)
+    Ok((tree, traversal_order))
 }
 
 #[test]
-pub fn test_darktree_iterator() {
-    let (tree, traversal_order) = generate_tree();
+pub fn test_darktree_iterator() -> DarkTreeResult<()> {
+    let (tree, traversal_order) = generate_tree()?;
 
     // Use [`DarkTree`] iterator to collect current
     // data, in order
@@ -82,11 +83,14 @@ pub fn test_darktree_iterator() {
     // data from it, returns the expected one, as per
     // expected traversal order.
     assert_eq!(tree.iter().nth(1).unwrap().data, traversal_order[1]);
+
+    // Thanks for reading
+    Ok(())
 }
 
 #[test]
-fn test_darktree_traversal_order() {
-    let (mut tree, traversal_order) = generate_tree();
+fn test_darktree_traversal_order() -> DarkTreeResult<()> {
+    let (mut tree, traversal_order) = generate_tree()?;
 
     // Loop using the fusion immutable iterator,
     // verifying we grab the correct [`DarkLeaf`]
@@ -131,11 +135,14 @@ fn test_darktree_traversal_order() {
     for (index, leaf) in tree.into_iter().enumerate() {
         assert_eq!(leaf.data, traversal_order[index]);
     }
+
+    // Thanks for reading
+    Ok(())
 }
 
 #[test]
-fn test_darktree_mut_iterator() {
-    let (mut tree, _) = generate_tree();
+fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
+    let (mut tree, _) = generate_tree()?;
 
     // Loop using [`DarkTree`] .iter_mut() mutable
     // iterator, grabing a mutable reference over a
@@ -377,4 +384,7 @@ fn test_darktree_mut_iterator() {
     // Verify iterator collected the data in the expected
     // traversal order.
     assert_eq!(nums, traversal_order);
+
+    // Thanks for reading
+    Ok(())
 }
