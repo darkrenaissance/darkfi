@@ -370,7 +370,7 @@ impl ProtocolEventGraph {
             let event = self.event_graph.dag.get(event_id.as_bytes()).unwrap().unwrap();
             let event: Event = deserialize_async(&event).await.unwrap();
 
-            // Check if the event is older than the genesis event. If so, something
+            // Check if the incoming event is older than the genesis event. If so, something
             // has gone wrong. The event should have been pruned during the last
             // rotation.
             // TODO it would be better to store/cache this instead of calculating
@@ -380,7 +380,7 @@ impl ProtocolEventGraph {
             if event.timestamp < genesis_timestamp {
                 error!(
                     target: "event_graph::protocol::handle_event_req()",
-                    "Requested event {} is older than previous rotation period. It should have been pruned.
+                    "Requested event by peer {} is older than previous rotation period. It should have been pruned.
                 Event timestamp: `{}`. Genesis timestamp: `{}`",
                 event.id(), event.timestamp, genesis_timestamp
                 );
