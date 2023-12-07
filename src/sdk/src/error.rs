@@ -83,6 +83,12 @@ pub enum ContractError {
 
     #[error("Error retrieving system time")]
     GetSystemTimeFailed,
+
+    // Provide feedback when the data sent is too large. For example,
+    // if a user tries to send > u32::MAX bytes, we can limit the
+    // size and present this error.
+    #[error("Data too large")]
+    DataTooLarge,
 }
 
 /// Builtin return values occupy the upper 32 bits
@@ -111,6 +117,7 @@ pub const DB_DEL_FAILED: i64 = to_builtin!(16);
 pub const SMT_INVALID_LEAF: i64 = to_builtin!(17);
 pub const SMT_INVALID_PATH_NODES: i64 = to_builtin!(18);
 pub const GET_SYSTEM_TIME_FAILED: i64 = to_builtin!(19);
+pub const DATA_TOO_LARGE: i64 = to_builtin!(20);
 
 impl From<ContractError> for i64 {
     fn from(err: ContractError) -> Self {
@@ -133,6 +140,7 @@ impl From<ContractError> for i64 {
             ContractError::SmtInvalidLeaf => SMT_INVALID_LEAF,
             ContractError::SmtInvalidPathNodes => SMT_INVALID_PATH_NODES,
             ContractError::GetSystemTimeFailed => GET_SYSTEM_TIME_FAILED,
+            ContractError::DataTooLarge => DATA_TOO_LARGE,
             ContractError::Custom(error) => {
                 if error == 0 {
                     CUSTOM_ZERO
@@ -166,6 +174,7 @@ impl From<i64> for ContractError {
             SMT_INVALID_LEAF => Self::SmtInvalidLeaf,
             SMT_INVALID_PATH_NODES => Self::SmtInvalidPathNodes,
             GET_SYSTEM_TIME_FAILED => Self::GetSystemTimeFailed,
+            DATA_TOO_LARGE => Self::DataTooLarge,
             _ => Self::Custom(error as u32),
         }
     }

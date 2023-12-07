@@ -21,17 +21,31 @@ use super::{
     error::{ContractError, GenericResult},
 };
 
+/// Calls the `set_return_data` WASM function. Returns Ok(()) on success.
+/// Otherwise, convert the i64 error code into a [`ContractError`].
 pub fn set_return_data(data: &[u8]) -> Result<(), ContractError> {
-    unsafe {
-        match set_return_data_(data.as_ptr(), data.len() as u32) {
-            0 => Ok(()),
-            errcode => Err(ContractError::from(errcode)),
-        }
+    // Ensure that the number of bytes fits within the u32 data type.
+    match u32::try_from(data.len()) {
+        Ok(len) => {
+            unsafe {
+                match set_return_data_(data.as_ptr(), len) {
+                    0 => Ok(()),
+                    errcode => Err(ContractError::from(errcode)),
+                }
+            }
+        },
+        Err(_) => Err(ContractError::DataTooLarge),
     }
 }
 
-pub fn put_object_bytes(data: &[u8]) -> i64 {
-    unsafe { put_object_bytes_(data.as_ptr(), data.len() as u32) }
+pub fn put_object_bytes(data: &[u8]) -> Result<i64, ContractError> {
+    // Ensure that the number of bytes fits within the u32 data type.
+    match u32::try_from(data.len()) {
+        Ok(len) => {
+            unsafe { Ok(put_object_bytes_(data.as_ptr(), len)) }
+        },
+        Err(_) => Err(ContractError::DataTooLarge),
+    }
 }
 
 pub fn get_object_bytes(data: &mut [u8], object_index: u32) -> i64 {
@@ -43,7 +57,10 @@ pub fn get_object_size(object_index: u32) -> i64 {
 }
 
 /// Auxiliary function to parse db_get and get_slot return value.
+/// If either of these functions returns a negative integer error code,
+/// convert it into a [`ContractError`].
 pub(crate) fn parse_ret(ret: i64) -> GenericResult<Option<Vec<u8>>> {
+    // Negative values represent an error code.
     if ret < 0 {
         match ret {
             CALLER_ACCESS_DENIED => return Err(ContractError::CallerAccessDenied),
@@ -53,7 +70,15 @@ pub(crate) fn parse_ret(ret: i64) -> GenericResult<Option<Vec<u8>>> {
         }
     }
 
-    let obj = ret as u32;
+    // Ensure that the returned value fits into the u32 datatype.
+    // Note that any negative cases should be caught by the `unimplemented`
+    // match arm above.
+    let obj = match u32::try_from(ret) {
+        Ok(obj) => obj,
+        Err(_) => {
+            return Err(ContractError::SetRetvalError)
+        }
+    };
     let obj_size = get_object_size(obj);
     let mut buf = vec![0u8; obj_size as usize];
     get_object_bytes(&mut buf, obj);
