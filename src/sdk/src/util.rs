@@ -26,12 +26,10 @@ use super::{
 pub fn set_return_data(data: &[u8]) -> Result<(), ContractError> {
     // Ensure that the number of bytes fits within the u32 data type.
     match u32::try_from(data.len()) {
-        Ok(len) => {
-            unsafe {
-                match set_return_data_(data.as_ptr(), len) {
-                    0 => Ok(()),
-                    errcode => Err(ContractError::from(errcode)),
-                }
+        Ok(len) => unsafe {
+            match set_return_data_(data.as_ptr(), len) {
+                0 => Ok(()),
+                errcode => Err(ContractError::from(errcode)),
             }
         },
         Err(_) => Err(ContractError::DataTooLarge),
@@ -41,9 +39,7 @@ pub fn set_return_data(data: &[u8]) -> Result<(), ContractError> {
 pub fn put_object_bytes(data: &[u8]) -> Result<i64, ContractError> {
     // Ensure that the number of bytes fits within the u32 data type.
     match u32::try_from(data.len()) {
-        Ok(len) => {
-            unsafe { Ok(put_object_bytes_(data.as_ptr(), len)) }
-        },
+        Ok(len) => unsafe { Ok(put_object_bytes_(data.as_ptr(), len)) },
         Err(_) => Err(ContractError::DataTooLarge),
     }
 }
@@ -75,9 +71,7 @@ pub(crate) fn parse_ret(ret: i64) -> GenericResult<Option<Vec<u8>>> {
     // match arm above.
     let obj = match u32::try_from(ret) {
         Ok(obj) => obj,
-        Err(_) => {
-            return Err(ContractError::SetRetvalError)
-        }
+        Err(_) => return Err(ContractError::SetRetvalError),
     };
     let obj_size = get_object_size(obj);
     let mut buf = vec![0u8; obj_size as usize];
