@@ -16,7 +16,7 @@ _Relevant code for this section can be found in src/runtime and src/sdk/src/._
 ### Smart Contracts
 
 Smart contracts can only interact with Wasm via functions that map to
-one of four 'contract sections'. They are:
+one of four 'contract sections' (see also the `ContractSection` enum). They are:
 
 * `initialize`
 * `entrypoint`
@@ -56,10 +56,6 @@ be followed to reduce potential bugs.
 The [Wasm functions](https://docs.rs/wasmer/latest/wasmer/#functions) are configured 
 in `src/runtime/vm_runtime.rs` and stored in the Wasmer Instance as function imports. 
 
-These functions return either an `i32` or `i64` (i.e. something expressible by a `wasmer::Value`).
-In general, a return type of `i32` type signals an exit code with no return value and a
-return type of `i64` means both an exit code and some data will be returned.
-
 Exit codes should follow this convention:
 
 * Negative value --> An error has occurred.
@@ -75,15 +71,15 @@ Relevant code:
 
 ### Type Casting
 
-In some cases, `i64` return values are be truncated to `i32` values by calling code.
-When this occurs, it should be the case that the `i64` type was used only for
-compatibility with the Wasm runtime and that the 'real' value being returned
-fits within the `i32` type.
+In most cases, `i64` is the return type for functions that interface with the wasm runtime.
+It should be understood that the values stored in these datatypes are `u32`. 
+
+Any conversion between types should be done with extreme care
+to avoid issues such as integer overflow, underflow, or truncation. Return values
+should be checked and errors should be handled properly. Further work is needed
+to ensure that the code returns an error or panics if a value is found to be outside
+of the range of `u32`.
 
 Note also that [`wasmer::Value`s do not actually have a concept of being 
 "signed"](https://docs.rs/wasmer/latest/wasmer/enum.Value.html#variants) (i.e. negative).
-That is, despite being noted as e.g. `i32`, the value itself is conceptually closer to `u32`.
 
-For the above reasons, any conversion between types should be done with extreme care
-to avoid issues such as integer overflow, underflow, or truncation. Return values
-should be checked and errors should be handled properly.
