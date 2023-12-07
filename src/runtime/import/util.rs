@@ -194,14 +194,14 @@ pub(crate) fn get_slot(ctx: FunctionEnvMut<Env>, slot: u64) -> i64 {
         env.contract_section != ContractSection::Metadata
     {
         error!(target: "runtime::db::db_get_slot()", "db_get_slot called in unauthorized section");
-        return CALLER_ACCESS_DENIED.into()
+        return CALLER_ACCESS_DENIED
     }
 
     let ret = match env.blockchain.lock().unwrap().slots.get_by_id(slot) {
         Ok(v) => v,
         Err(e) => {
             error!(target: "runtime::db::db_get_slot()", "Internal error getting from slots tree: {}", e);
-            return DB_GET_FAILED.into()
+            return DB_GET_FAILED
         }
     };
 

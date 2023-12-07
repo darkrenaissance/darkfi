@@ -57,7 +57,7 @@ impl DbHandle {
 ///
 /// This function should **only** be allowed in `ContractSection::Deploy`, as that
 /// is called when a contract is being (re)deployed and databases have to be created.
-pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i32 {
+pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let env = ctx.data();
     let cid = &env.contract_id;
 
@@ -171,7 +171,7 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) 
 /// Returns the index of the DbHandle in the db_handles Vector on success. Otherwise, returns
 /// a negative error value.
 /// This function can be called from any [`ContractSection`].
-pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i32 {
+pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let env = ctx.data();
     let cid = &env.contract_id;
 
@@ -254,7 +254,7 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32
 
     // Make sure we don't duplicate the DbHandle in the vec
     if let Some(index) = db_handles.iter().position(|x| x == &db_handle) {
-        return index as i32
+        return index as i64
     }
 
     // Push the new DbHandle to the Vec of opened DbHandles
@@ -274,7 +274,7 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32
 /// the key-value pair. The DbHandle must match the ContractId.
 /// This function can be called only from the Deploy or Update [`ContractSection`].
 /// Returns `0` on success, otherwise returns a (negative) error value.
-pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i32 {
+pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let env = ctx.data();
 
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy, ContractSection::Update]) {
@@ -370,7 +370,7 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
 /// Remove a key from the database.
 /// This function can be called only from the Deploy or Update [`ContractSection`].
 /// Returns `0` on success, otherwise returns a (negative) error value.
-pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i32 {
+pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let env = ctx.data();
 
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy, ContractSection::Update]) {
@@ -458,7 +458,7 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
     {
         error!(target: "runtime::db::db_get", "[wasm-runtime] db_get ACL denied: {}", e);
         // TODO: FIXME: We have to fix up the errors used within runtime and the sdk
-        return CALLER_ACCESS_DENIED.into()
+        return CALLER_ACCESS_DENIED
     }
 
     // Ensure that it is possible to read memory
@@ -466,13 +466,13 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
 
     let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
         error!(target: "runtime::db::db_get", "Failed to make slice from ptr");
-        return DB_GET_FAILED.into()
+        return DB_GET_FAILED
     };
 
     let mut buf = vec![0_u8; ptr_len as usize];
     if let Err(e) = mem_slice.read_slice(&mut buf) {
         error!(target: "runtime::db::db_get", "Failed to read from memory slice: {}", e);
-        return DB_GET_FAILED.into()
+        return DB_GET_FAILED
     };
 
     let mut buf_reader = Cursor::new(buf);
@@ -482,7 +482,7 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
         Ok(v) => v,
         Err(e) => {
             error!(target: "runtime::db::db_get", "Failed to decode DbHandle: {}", e);
-            return DB_GET_FAILED.into()
+            return DB_GET_FAILED
         }
     };
     let db_handle_index = db_handle_index as usize;
@@ -492,7 +492,7 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
         Ok(v) => v,
         Err(e) => {
             error!(target: "runtime::db::db_get", "Failed to decode key from vec: {}", e);
-            return DB_GET_FAILED.into()
+            return DB_GET_FAILED
         }
     };
 
@@ -500,7 +500,7 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
     // supplied.
     if buf_reader.position() != ptr_len as u64 {
         error!(target: "runtime::db::db_get", "[wasm-runtime] Trailing bytes in argument stream");
-        return DB_GET_FAILED.into()
+        return DB_GET_FAILED
     }
 
     let db_handles = env.db_handles.borrow();
@@ -508,7 +508,7 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
     // Ensure that the index is within bounds
     if db_handles.len() <= db_handle_index {
         error!(target: "runtime::db::db_get", "Requested DbHandle that is out of bounds");
-        return DB_GET_FAILED.into()
+        return DB_GET_FAILED
     }
 
     // Get DbHandle using db_handle_index
@@ -520,7 +520,7 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
             Ok(v) => v,
             Err(e) => {
                 error!(target: "runtime::db::db_get", "Internal error getting from tree: {}", e);
-                return DB_GET_FAILED.into()
+                return DB_GET_FAILED
             }
         };
 
@@ -543,7 +543,7 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
 /// This function can be called by any [`ContractSection`].
 /// Returns `1` if the key is found. Returns `0` if the key is not found and there are no errors.
 /// Otherwise, returns a (negative) error code.
-pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i32 {
+pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let env = ctx.data();
 
     if let Err(e) = acl_allow(
@@ -616,7 +616,7 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
     // Lookup key parameter in the database
     match env.blockchain.lock().unwrap().overlay.lock().unwrap().contains_key(&db_handle.tree, &key)
     {
-        Ok(v) => i32::from(v), // <- 0=false, 1=true
+        Ok(v) => i64::from(v), // <- 0=false, 1=true. Convert bool to i64.
         Err(e) => {
             error!(target: "runtime::db::db_contains_key", "[wasm-runtime] sled.tree.contains_key failed: {}", e);
             DB_CONTAINS_KEY_FAILED
@@ -627,7 +627,7 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
 /// Given a zkas circuit, create a VerifyingKey and insert them both into the db.
 /// This function can called only from the Deploy [`ContractSection`].
 /// Returns `0` on success, otherwise returns a (negative) error code.
-pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i32 {
+pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let env = ctx.data();
 
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy]) {

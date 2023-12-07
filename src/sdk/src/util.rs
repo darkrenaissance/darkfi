@@ -45,7 +45,7 @@ pub fn get_object_size(object_index: u32) -> i64 {
 /// Auxiliary function to parse db_get and get_slot return value.
 pub(crate) fn parse_ret(ret: i64) -> GenericResult<Option<Vec<u8>>> {
     if ret < 0 {
-        match ret as i32 {
+        match ret {
             CALLER_ACCESS_DENIED => return Err(ContractError::CallerAccessDenied),
             DB_GET_FAILED => return Err(ContractError::DbGetFailed),
             -127 => return Ok(None),

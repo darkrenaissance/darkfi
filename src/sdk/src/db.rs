@@ -26,14 +26,14 @@ use super::{
 
 pub type DbHandle = u32;
 
-pub const DB_SUCCESS: i32 = 0;
-pub const CALLER_ACCESS_DENIED: i32 = -1;
-pub const DB_INIT_FAILED: i32 = -2;
-pub const DB_LOOKUP_FAILED: i32 = -3;
-pub const DB_GET_FAILED: i32 = -4;
-pub const DB_CONTAINS_KEY_FAILED: i32 = -5;
-pub const DB_SET_FAILED: i32 = -6;
-pub const DB_DEL_FAILED: i32 = -7;
+pub const DB_SUCCESS: i64 = 0;
+pub const CALLER_ACCESS_DENIED: i64 = -1;
+pub const DB_INIT_FAILED: i64 = -2;
+pub const DB_LOOKUP_FAILED: i64 = -3;
+pub const DB_GET_FAILED: i64 = -4;
+pub const DB_CONTAINS_KEY_FAILED: i64 = -5;
+pub const DB_SET_FAILED: i64 = -6;
+pub const DB_DEL_FAILED: i64 = -7;
 
 /// Create a new database instance for the given contract.
 /// This should be called in the `init_contract()` section to create any databases
@@ -184,12 +184,12 @@ pub fn zkas_db_set(bincode: &[u8]) -> GenericResult<()> {
 }
 
 extern "C" {
-    fn db_init_(ptr: *const u8, len: u32) -> i32;
-    fn db_lookup_(ptr: *const u8, len: u32) -> i32;
+    fn db_init_(ptr: *const u8, len: u32) -> i64;
+    fn db_lookup_(ptr: *const u8, len: u32) -> i64;
     fn db_get_(ptr: *const u8, len: u32) -> i64;
-    fn db_contains_key_(ptr: *const u8, len: u32) -> i32;
-    fn db_set_(ptr: *const u8, len: u32) -> i32;
-    fn db_del_(ptr: *const u8, len: u32) -> i32;
+    fn db_contains_key_(ptr: *const u8, len: u32) -> i64;
+    fn db_set_(ptr: *const u8, len: u32) -> i64;
+    fn db_del_(ptr: *const u8, len: u32) -> i64;
 
-    fn zkas_db_set_(ptr: *const u8, len: u32) -> i32;
+    fn zkas_db_set_(ptr: *const u8, len: u32) -> i64;
 }
