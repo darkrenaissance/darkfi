@@ -651,21 +651,22 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
         return DB_SET_FAILED
     };
 
-    let mut buf_reader = Cursor::new(buf);
-
-    // Decode zkas_bincode from memory
-    let zkas_bincode: Vec<u8> = match Decodable::decode(&mut buf_reader) {
-        Ok(v) => v,
+    // Deserialize the ZkBinary bytes from the buffer
+    let zkbin_bytes: Vec<u8> = match deserialize(&buf) {
+        Ok(zkbin) => zkbin,
         Err(e) => {
-            error!(target: "runtime::db::zkas_db_set", "[wasm-runtime] Failed to decode zkas bincode bytes: {}", e);
+            error!(target: "runtime::db::zkas_db_set", "[wasm-runtime] Could not deserialize bytes from buffer: {}", e);
             return DB_SET_FAILED
         }
     };
 
-    // Make sure that we're actually working on legitimate bincode.
-    let Ok(zkbin) = ZkBinary::decode(&zkas_bincode) else {
-        error!(target: "runtime::db::zkas_db_set", "[wasm-runtime] Invalid zkas bincode passed to function");
-        return DB_SET_FAILED
+    // Validate the bytes by decoding them into the ZkBinary format
+    let zkbin = match ZkBinary::decode(&zkbin_bytes) {
+        Ok(zkbin) => zkbin,
+        Err(e) => {
+            error!(target: "runtime::db::zkas_db_set", "[wasm-runtime] Invalid zkas bincode passed to function: {}", e);
+            return DB_SET_FAILED
+        }
     };
 
     // Because of `Runtime::Deploy`, we should be sure that the zkas db is index zero.
@@ -695,7 +696,7 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
                 let (existing_zkbin, _): (Vec<u8>, Vec<u8>) =
                     deserialize(&bytes).expect("deserialize tuple");
 
-                if existing_zkbin == zkas_bincode {
+                if existing_zkbin == zkbin_bytes {
                     debug!(target: "runtime::db::zkas_db_set", "[wasm-runtime] Existing zkas bincode is the same. Skipping.");
                     return DB_SUCCESS
                 }
@@ -728,7 +729,7 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
 
     // Insert the key-value pair into the database.
     let key = serialize(&zkbin.namespace);
-    let value = serialize(&(zkas_bincode, vk_buf));
+    let value = serialize(&(zkbin_bytes, vk_buf));
     if env
         .blockchain
         .lock()
