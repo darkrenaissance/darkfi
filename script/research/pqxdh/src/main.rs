@@ -16,12 +16,18 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-//! https://signal.org/docs/specifications/x3dh/x3dh.pdf
-//! https://signal.org/docs/specifications/doubleratchet/doubleratchet.pdf
+//! <https://signal.org/docs/specifications/x3dh/x3dh.pdf>
+//! <https://signal.org/docs/specifications/pqxdh/pqxdh.pdf>
+//! <https://signal.org/docs/specifications/doubleratchet/doubleratchet.pdf>
+
 use std::collections::{HashMap, VecDeque};
 
 use aes_gcm_siv::{AeadInPlace, Aes256GcmSiv, KeyInit};
 use digest::Update;
+use kyber_kem::{
+    kem_decrypt_1024, kem_encrypt_1024, kem_keypair_1024,
+    params::{KYBER1024_CT_BYTES, KYBER1024_PK_BYTES},
+};
 use rand::rngs::OsRng;
 use sha2::Sha256;
 use x25519_dalek::{PublicKey as X25519PublicKey, StaticSecret as X25519SecretKey};
@@ -40,7 +46,7 @@ const AEAD_TAG_SIZE: usize = 16;
 const MESSAGE_KEY_CONSTANT: u8 = 0x01;
 const CHAIN_KEY_CONSTANT: u8 = 0x02;
 
-const X3DH_INIT_INFO: &[u8] = b"x3dh_double_ratchet_init";
+const PQXDH_INIT_INFO: &[u8] = b"pqxdh_CURVE25519_SHA-512_CRYSTALS-KYBER-1024";
 
 const BLANK_NONCE: &[u8] = &[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
@@ -61,13 +67,22 @@ impl Server {
             // The server should provide one one-time prekey if one exists,
             // and then delete it. If all of the one-time prekeys have been
             // deleted, the bundle will not contain a one-time prekey.
-            let onetime_prekey = keyset.onetime_prekeys.pop_front();
+            let opk = keyset.opk.pop_front();
+            let opk_sig = keyset.opk_sigs.pop_front();
+
+            let pqopk = keyset.pqopk.pop_front();
+            let pqopk_sig = keyset.pqopk_sigs.pop_front();
 
             return Some(Bundle {
-                identity_key: *ik,
-                signed_prekey: keyset.signed_prekey,
-                prekey_signature: keyset.prekey_signature,
-                onetime_prekey,
+                ik: *ik,
+                spk: keyset.spk,
+                spk_sig: keyset.spk_sig,
+                opk,
+                opk_sig,
+                pqspk: keyset.pqspk,
+                pqspk_sig: keyset.pqspk_sig,
+                pqopk,
+                pqopk_sig,
             })
         }
 
@@ -77,24 +92,52 @@ impl Server {
 
 /// The set of elliptic curve public keys sent uploaded to a server
 struct Keyset {
-    pub signed_prekey: X25519PublicKey,
-    pub prekey_signature: [u8; 64],
-    pub onetime_prekeys: VecDeque<X25519PublicKey>,
+    /// Signed prekey
+    pub spk: X25519PublicKey,
+    /// Signed prekey signature
+    pub spk_sig: [u8; 64],
+    /// Set of one-time prekeys
+    pub opk: VecDeque<X25519PublicKey>,
+    /// Set of one-time prekey signatures
+    pub opk_sigs: VecDeque<[u8; 64]>,
+    /// Last-resort post-quantum prekey
+    pub pqspk: [u8; KYBER1024_PK_BYTES],
+    /// Last-resort post-quantum prekey signature
+    pub pqspk_sig: [u8; 64],
+    /// Set of post-quantum one-time prekeys
+    pub pqopk: VecDeque<[u8; KYBER1024_PK_BYTES]>,
+    /// Set of post-quantum one-time prekey signatures
+    pub pqopk_sigs: VecDeque<[u8; 64]>,
 }
 
 /// The bundle is a structure returned by the server when requesting
 /// it for a certain identity key
 struct Bundle {
-    pub identity_key: X25519PublicKey,
-    pub signed_prekey: X25519PublicKey,
-    pub prekey_signature: [u8; 64],
-    pub onetime_prekey: Option<X25519PublicKey>,
+    /// Identity key
+    pub ik: X25519PublicKey,
+    /// Signed prekey
+    pub spk: X25519PublicKey,
+    /// Signed prekey signature
+    pub spk_sig: [u8; 64],
+    /// One-time prekey
+    pub opk: Option<X25519PublicKey>,
+    /// One-time prekey signature
+    pub opk_sig: Option<[u8; 64]>,
+    /// Last-resort post-quantum prekey
+    pub pqspk: [u8; KYBER1024_PK_BYTES],
+    /// Last-resort post-quantum prekey signature
+    pub pqspk_sig: [u8; 64],
+    /// Post-quantum one-time prekey
+    pub pqopk: Option<[u8; KYBER1024_PK_BYTES]>,
+    /// Post-quantum one-time prekey signature
+    pub pqopk_sig: Option<[u8; 64]>,
 }
 
 /// Initial message sent from Alice to Bob (see below how it's used)
 struct InitialMessage {
-    pub identity_key: X25519PublicKey,
-    pub ephemeral_key: X25519PublicKey,
+    pub ik: X25519PublicKey,
+    pub ek: X25519PublicKey,
+    pub pqkem_ciphertext: [u8; KYBER1024_CT_BYTES],
     pub prekey_used: Option<X25519PublicKey>,
     pub ciphertext: Vec<u8>,
 }
@@ -428,19 +471,19 @@ fn main() {
     // The "server" contains published identity keys and prekeys.
     let mut server = Server::default();
 
-    // The X3DH protocol has three phases:
+    // The PQXDH protocol has three phases:
     // 1. Bob publishes his identity key and prekeys to a server.
     // 2. Alice fetches a "prekey bundle" from the server, and uses
     //    it to send an initial message to Bob.
     // 3. Bob receives and processes Alice's initial message.
 
     // Alice's identity key `IK_A`
-    let alice_ik_secret = X25519SecretKey::random_from_rng(OsRng);
-    let alice_ik_public = X25519PublicKey::from(&alice_ik_secret);
+    let ik_a_secret = X25519SecretKey::random_from_rng(OsRng);
+    let ik_a_public = X25519PublicKey::from(&ik_a_secret);
 
     // Bob's identity key `IK_B`
-    let bob_ik_secret = X25519SecretKey::random_from_rng(OsRng);
-    let bob_ik_public = X25519PublicKey::from(&bob_ik_secret);
+    let ik_b_secret = X25519SecretKey::random_from_rng(OsRng);
+    let ik_b_public = X25519PublicKey::from(&ik_b_secret);
 
     // Bob only needs to upload his identity key to the server once.
     // However, Bob may upload new one-time prekeys at other times
@@ -451,32 +494,57 @@ fn main() {
     // and prekey signature will replace the previous values.
 
     // Bob's signed prekey `SPK_B`
-    let bob_spk_secret = X25519SecretKey::random_from_rng(OsRng);
-    let bob_public_spk = X25519PublicKey::from(&bob_spk_secret);
+    let spk_b_secret = X25519SecretKey::random_from_rng(OsRng);
+    let spk_b_public = X25519PublicKey::from(&spk_b_secret);
 
     // Bob's prekey signature `Sig(IK_b, Encode(SPK_B))`
     let nonce = [0_u8; 64];
-    let bob_spk_signature = bob_ik_secret.xeddsa_sign(&bob_public_spk.to_bytes(), &nonce);
+    let spk_b_sig = ik_b_secret.xeddsa_sign(&spk_b_public.to_bytes(), &nonce);
 
     // A set of Bob's one-time prekeys `(OPK_B1, OPK_B2, OPK_B3, ...)`
-    let mut bob_opk_secrets = vec![
-        X25519SecretKey::random_from_rng(OsRng),
-        X25519SecretKey::random_from_rng(OsRng),
-        X25519SecretKey::random_from_rng(OsRng),
-    ];
-    let mut bob_opk_publics = VecDeque::new();
-    bob_opk_publics.push_back(X25519PublicKey::from(&bob_opk_secrets[0]));
-    bob_opk_publics.push_back(X25519PublicKey::from(&bob_opk_secrets[1]));
-    bob_opk_publics.push_back(X25519PublicKey::from(&bob_opk_secrets[2]));
+    let mut opk_b_secrets = VecDeque::new();
+    let mut opk_b_pubkeys = VecDeque::new();
+    let mut opk_b_sigs = VecDeque::new();
 
-    let bob_keyset = Keyset {
-        signed_prekey: bob_public_spk,
-        prekey_signature: bob_spk_signature,
-        onetime_prekeys: bob_opk_publics.clone(),
-    };
+    for _ in 0..5 {
+        let opk_secret = X25519SecretKey::random_from_rng(OsRng);
+        let opk_public = X25519PublicKey::from(&opk_secret);
+        let opk_sig = ik_b_secret.xeddsa_sign(&opk_public.to_bytes(), &nonce);
+        opk_b_secrets.push_back(opk_secret);
+        opk_b_pubkeys.push_back(opk_public);
+        opk_b_sigs.push_back(opk_sig);
+    }
+
+    // Bob's last-resort PQSPK
+    let (_pqspk_b_secret, pqspk_b_public) = kem_keypair_1024(&mut OsRng);
+    let pqspk_b_sig = ik_b_secret.xeddsa_sign(&pqspk_b_public, &nonce);
+
+    // A set of Bob's post-quantum one-time prekeys `(PQOPK_B1, PQOPK_B2, ...)`
+    let mut pqopk_b_secrets = VecDeque::new();
+    let mut pqopk_b_pubkeys = VecDeque::new();
+    let mut pqopk_b_sigs = VecDeque::new();
+
+    for _ in 0..5 {
+        let (pqopk_secret, pqopk_public) = kem_keypair_1024(&mut OsRng);
+        let pqopk_sig = ik_b_secret.xeddsa_sign(&pqopk_public, &nonce);
+        pqopk_b_secrets.push_back(pqopk_secret);
+        pqopk_b_pubkeys.push_back(pqopk_public);
+        pqopk_b_sigs.push_back(pqopk_sig);
+    }
 
     // Bob uploads his keyset to the server.
-    server.upload(bob_ik_public, bob_keyset);
+    let bob_keyset = Keyset {
+        spk: spk_b_public,
+        spk_sig: spk_b_sig,
+        opk: opk_b_pubkeys,
+        opk_sigs: opk_b_sigs,
+        pqspk: pqspk_b_public,
+        pqspk_sig: pqspk_b_sig,
+        pqopk: pqopk_b_pubkeys,
+        pqopk_sigs: pqopk_b_sigs,
+    };
+
+    server.upload(ik_b_public, bob_keyset);
 
     // To perform an X3DH key agreement with Bob, Alice contacts the server
     // and fetches a "prekey bundle" containing the following values:
@@ -484,34 +552,48 @@ fn main() {
     // * Bob's signed prekey `SPK_B`
     // * Bob's prekey signature `Sig(IK_B, Encode(SPK_B))`
     // * (Optionally) Bob's one-time prekey `OPK_B`
-    let bob_keyset = server.fetch(&bob_ik_public).unwrap();
+    // * (Optionally) Bob's one-time prekey signature `Sig(IK_B, Encode(OPK_B))`
+    // * Bob's last-resort post-quantum prekey `PQSPK_B`
+    // * Bob's last-resort post-quantum prekey signature `Sig(IK_B, Encode(PQSPK_B))`
+    // * (Optionally) Bob's post-quantum one-time prekey `PQOPK_B`
+    // * (Optionally) Bob's post-quantum one-time prekey signature `Sig(IK_B, Encode(PQOPK_B))`
+    let bob_keyset = server.fetch(&ik_b_public).unwrap();
 
-    // Alice verifies the prekey signature and aborts the protocol if
-    // verification fails.
-
+    // Alice verifies the bundle and aborts the protocol on failure
+    // (Here we assume we did get one-time prekeys)
+    assert!(bob_keyset.ik == ik_b_public);
+    assert!(bob_keyset.ik.xeddsa_verify(&bob_keyset.spk.to_bytes(), &bob_keyset.spk_sig));
     assert!(bob_keyset
-        .identity_key
-        .xeddsa_verify(&bob_keyset.signed_prekey.to_bytes(), &bob_keyset.prekey_signature));
+        .ik
+        .xeddsa_verify(&bob_keyset.opk.unwrap().to_bytes(), &bob_keyset.opk_sig.unwrap()));
+    assert!(bob_keyset.ik.xeddsa_verify(&bob_keyset.pqspk, &bob_keyset.pqspk_sig));
+    assert!(bob_keyset
+        .ik
+        .xeddsa_verify(&bob_keyset.pqopk.unwrap(), &bob_keyset.pqopk_sig.unwrap()));
 
     // Alice then generates an ephemeral keypair with public key `EK_A`
-    let alice_ek_secret = X25519SecretKey::random_from_rng(OsRng);
-    let alice_ek_public = X25519PublicKey::from(&alice_ek_secret);
+    let ek_a_secret = X25519SecretKey::random_from_rng(OsRng);
+    let ek_a_public = X25519PublicKey::from(&ek_a_secret);
+
+    // Additionally, she generates a pqkem encapsulated shared secret.
+    // This done either with PQOPK or PQSPK, preferably PQOPK if available.
+    let (ct, ss) = kem_encrypt_1024(bob_keyset.pqopk.unwrap(), &mut OsRng);
 
     // If the bundle does _not_ contain a one-time prekey, she calculates:
     // DH1 = DH(IK_A, SPK_B)
     // DH2 = DH(EK_A, IK_B)
     // DH3 = DH(EK_A, SPK_B)
-    // SK = KDF(DH1 || DH2 || DH3)
+    // SK = KDF(DH1 || DH2 || DH3 || SS)
     // If the bundle _does_ contain a one-time prekey, additionally she
     // does another dh:
     // DH4 = DH(EK_A, OPK_B)
-    // SK = KDF(DH1 || DH2 || DH3 || DH4)
-    let dh1 = alice_ik_secret.diffie_hellman(&bob_keyset.signed_prekey);
-    let dh2 = alice_ek_secret.diffie_hellman(&bob_keyset.identity_key);
-    let dh3 = alice_ek_secret.diffie_hellman(&bob_keyset.signed_prekey);
+    // SK = KDF(DH1 || DH2 || DH3 || DH4 || SS)
+    let dh1 = ik_a_secret.diffie_hellman(&bob_keyset.spk);
+    let dh2 = ek_a_secret.diffie_hellman(&bob_keyset.ik);
+    let dh3 = ek_a_secret.diffie_hellman(&bob_keyset.spk);
     let mut dh4 = None;
-    if let Some(opk) = bob_keyset.onetime_prekey {
-        dh4 = Some(alice_ek_secret.diffie_hellman(&opk));
+    if let Some(opk) = bob_keyset.opk {
+        dh4 = Some(ek_a_secret.diffie_hellman(&opk));
     }
 
     // KDF represents 32 bytes of output from the HKDF algorithm with inputs:
@@ -529,15 +611,16 @@ fn main() {
     if let Some(ref opk_dh) = dh4 {
         ikm.extend_from_slice(&opk_dh.to_bytes());
     }
+    ikm.extend_from_slice(&ss);
 
     let hkdf = Hkdf::<Sha256>::new(&salt, &ikm);
     let mut sk = [0u8; 32];
-    hkdf.expand(X3DH_INIT_INFO, &mut sk).unwrap();
+    hkdf.expand(PQXDH_INIT_INFO, &mut sk).unwrap();
 
     // After calculating SK, Alice deletes her ephemeral private key and the
-    // DH outputs.
+    // DH outputs, the shared secret SS, and the ciphertext CT.
     // TODO: Actually erase
-    drop(alice_ek_secret);
+    drop(ek_a_secret);
     drop(dh1);
     drop(dh2);
     drop(dh3);
@@ -546,11 +629,14 @@ fn main() {
     // Alice then calculates an "associated data" byte sequence AD that
     // contains identity information for both parties:
     // AD = Encode(IK_A) || Encode(IK_B)
+    // If pqkem does not incorporate PQPK_B into the ciphertext, Alice must
+    // also append EncodeKEM(PQPK_B) to AD.
     // Alice may optionally append additional info to AD, such as Alice
     // and Bob's usernames, certificates, or other identifying information.
-    let mut ad = Vec::with_capacity(64);
-    ad.extend_from_slice(&alice_ik_public.to_bytes());
-    ad.extend_from_slice(&bob_ik_public.to_bytes());
+    let mut ad = Vec::with_capacity(64 + KYBER1024_PK_BYTES);
+    ad.extend_from_slice(&ik_a_public.to_bytes());
+    ad.extend_from_slice(&bob_keyset.ik.to_bytes());
+    ad.extend_from_slice(&bob_keyset.pqopk.unwrap());
 
     // Alice then sends Bob an initial message containing:
     // - Alice's identity key IK_A
@@ -568,9 +654,10 @@ fn main() {
         .unwrap();
 
     let initial_message = InitialMessage {
-        identity_key: alice_ik_public,
-        ephemeral_key: alice_ek_public,
-        prekey_used: bob_keyset.onetime_prekey,
+        ik: ik_a_public,
+        ek: ek_a_public,
+        pqkem_ciphertext: ct,
+        prekey_used: bob_keyset.opk,
         ciphertext,
     };
 
@@ -585,19 +672,22 @@ fn main() {
     // previous section to derive SK, and then deletes the DH values.
     let mut onetime_prekey = None;
     if let Some(opk_used) = initial_message.prekey_used {
-        for i in bob_opk_secrets.clone() {
+        for i in opk_b_secrets.clone() {
             if X25519PublicKey::from(&i.clone()) == opk_used {
                 onetime_prekey = Some(i);
             }
         }
     }
 
-    let dh1 = bob_spk_secret.diffie_hellman(&initial_message.identity_key);
-    let dh2 = bob_ik_secret.diffie_hellman(&initial_message.ephemeral_key);
-    let dh3 = bob_spk_secret.diffie_hellman(&initial_message.ephemeral_key);
+    // Bob decrypts the PQ ciphertext
+    let ss_b = kem_decrypt_1024(initial_message.pqkem_ciphertext, pqopk_b_secrets[0]);
+
+    let dh1 = spk_b_secret.diffie_hellman(&initial_message.ik);
+    let dh2 = ik_b_secret.diffie_hellman(&initial_message.ek);
+    let dh3 = spk_b_secret.diffie_hellman(&initial_message.ek);
     let mut dh4 = None;
     if let Some(ref opk) = onetime_prekey {
-        dh4 = Some(opk.diffie_hellman(&initial_message.ephemeral_key));
+        dh4 = Some(opk.diffie_hellman(&initial_message.ek));
     }
 
     let salt = [0u8; 32];
@@ -608,19 +698,21 @@ fn main() {
     if let Some(ref opk_dh) = dh4 {
         ikm.extend_from_slice(&opk_dh.to_bytes());
     }
+    ikm.extend_from_slice(&ss_b);
 
     // TODO: Erase ephemeral data
 
     let hkdf = Hkdf::<Sha256>::new(&salt, &ikm);
     let mut sk2 = [0u8; 32];
-    hkdf.expand(X3DH_INIT_INFO, &mut sk2).unwrap();
+    hkdf.expand(PQXDH_INIT_INFO, &mut sk2).unwrap();
     assert_eq!(sk, sk2); // Just to confirm everything's correct
 
     // Bob then constructs the AD byte sequence using IK_A and IK_B
     // as Alice did above.
-    let mut ad = Vec::with_capacity(64);
-    ad.extend_from_slice(&initial_message.identity_key.to_bytes());
-    ad.extend_from_slice(&bob_ik_public.to_bytes());
+    let mut ad = Vec::with_capacity(64 + KYBER1024_PK_BYTES);
+    ad.extend_from_slice(&initial_message.ik.to_bytes());
+    ad.extend_from_slice(&ik_b_public.to_bytes());
+    ad.extend_from_slice(&bob_keyset.pqopk.unwrap());
 
     // Finally, Bob attempts to decrypt the initial ciphertext using SK and AD.
     // If the initial ciphertext fails to decrypt, Bob aborts the protocol and
@@ -640,7 +732,7 @@ fn main() {
     // forward secrecy. Bob may then continue using SK or keys derived from SK
     // within the post-X3DH protocol for communication with Alice.
     if let Some(opk) = onetime_prekey {
-        bob_opk_secrets.retain(|x| x.to_bytes() != opk.to_bytes());
+        opk_b_secrets.retain(|x| x.to_bytes() != opk.to_bytes());
     }
 
     // =======================+
@@ -666,13 +758,13 @@ fn main() {
 
     // The X3DH secret becomes the HKDF salt, and the ikm is the DH output
     // of Alice's DH secret and Bob's SPK_B.
-    let hkdf_ikm = alice_dh_secret.diffie_hellman(&bob_keyset.signed_prekey);
+    let hkdf_ikm = alice_dh_secret.diffie_hellman(&bob_keyset.spk);
     let (root_key, chain_key_send, next_header_key_send) = kdf_rk(sk, hkdf_ikm.to_bytes());
 
     // TODO: We're using SK here as the initial header encryption keys. Perhaps it's not safe?
     let mut ars = DoubleRatchetSessionState {
         dh_sending: alice_dh_secret,
-        dh_remote: bob_keyset.signed_prekey,
+        dh_remote: bob_keyset.spk,
         root_key,
         chain_key_send,
         chain_key_recv: [0u8; 32],
@@ -688,7 +780,7 @@ fn main() {
 
     // Bob:
     let mut brs = DoubleRatchetSessionState {
-        dh_sending: bob_spk_secret,
+        dh_sending: spk_b_secret,
         dh_remote: X25519PublicKey::from([0u8; 32]),
         root_key: sk,
         chain_key_send: [0u8; 32],
