@@ -24,6 +24,7 @@ BINS = \
 	genev \
 	genevd \
 	lilith \
+	swapd \
 	taud \
 	vanityaddr
 
@@ -87,6 +88,13 @@ lilith:
 		RUST_TARGET="$(RUST_TARGET)" \
 		RUSTFLAGS="$(RUSTFLAGS)"
 
+swapd:
+	$(MAKE) -C bin/$@ \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
+
 taud:
 	$(MAKE) -C bin/tau/$@ \
 		PREFIX="$(PREFIX)" \
@@ -142,6 +150,7 @@ clean:
 	$(MAKE) -C bin/genev/genev-cli clean
 	$(MAKE) -C bin/genev/genevd clean
 	$(MAKE) -C bin/lilith clean
+	$(MAKE) -C bin/swapd clean
 	$(MAKE) -C bin/tau/taud clean
 	$(MAKE) -C bin/vanityaddr clean
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(RUST_TARGET) --release

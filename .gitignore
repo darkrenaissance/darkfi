@@ -28,6 +28,9 @@
 /bin/lilith/lilith
 /lilith
 
+/bin/swapd/swapd
+/swapd
+
 /bin/tau/taud/taud
 /taud
 
