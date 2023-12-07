@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::{sync::Arc, time::SystemTime};
 
 use async_trait::async_trait;
 use log::debug;
@@ -26,7 +26,7 @@ use super::{
     super::{
         channel::ChannelPtr,
         hosts::HostsPtr,
-        message::{AddrsMessage, GetAddrsMessage},
+        message::{AddrsMessage, AddrsMessage2, GetAddrsMessage},
         message_subscriber::MessageSubscription,
         p2p::P2pPtr,
         settings::SettingsPtr,
@@ -40,7 +40,7 @@ pub struct ProtocolSeed {
     channel: ChannelPtr,
     hosts: HostsPtr,
     settings: SettingsPtr,
-    addr_sub: MessageSubscription<AddrsMessage>,
+    addr_sub: MessageSubscription<AddrsMessage2>,
 }
 
 const PROTO_NAME: &str = "ProtocolSeed";
@@ -53,7 +53,7 @@ impl ProtocolSeed {
 
         // Create a subscription to address message
         let addr_sub =
-            channel.subscribe_msg::<AddrsMessage>().await.expect("Missing addr dispatcher!");
+            channel.subscribe_msg::<AddrsMessage2>().await.expect("Missing addr dispatcher!");
 
         Arc::new(Self { channel, hosts, settings, addr_sub })
     }
@@ -68,13 +68,21 @@ impl ProtocolSeed {
             return Ok(())
         }
 
-        let addrs = self.settings.external_addrs.clone();
+        // We set last_seen to now. TODO: ponder this a bit more. We're just reading external addrs
+        // from settings- that doesn't mean they will be reachable.
+        let mut addrs = vec![];
+        for addr in self.settings.external_addrs.clone() {
+            let last_seen =
+                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+            addrs.push((addr, last_seen));
+        }
+
         debug!(
             target: "net::protocol_seed::send_self_address()",
             "ext_addrs={:?}, dest={}", addrs, self.channel.address(),
         );
 
-        let ext_addr_msg = AddrsMessage { addrs };
+        let ext_addr_msg = AddrsMessage2 { addrs };
         self.channel.send(&ext_addr_msg).await?;
         debug!(target: "net::protocol_seed::send_self_address()", "[END]");
         Ok(())
@@ -105,7 +113,7 @@ impl ProtocolBase for ProtocolSeed {
             target: "net::protocol_seed::start()",
             "Received {} addrs from {}", addrs_msg.addrs.len(), self.channel.address(),
         );
-        self.hosts.store(&addrs_msg.addrs).await;
+        self.hosts.greylist_store(&addrs_msg.addrs).await;
 
         debug!(target: "net::protocol_seed::start()", "END => address={}", self.channel.address());
         Ok(())

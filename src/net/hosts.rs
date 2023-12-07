@@ -551,7 +551,7 @@ impl Hosts {
                         return false
                     }
                 }
-            }                   
+            }
 
             Err(e) => {
                 debug!(target: "net::hosts::probe_node()", "Failed to connect to {}, ({})", host, e);
