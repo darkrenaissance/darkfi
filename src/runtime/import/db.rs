@@ -539,115 +539,132 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
     (objects.len() - 1) as i64
 }
 
-/// Everyone can call this. Will check if a given db contains given key.
-pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+/// Check if a database contains a given key.
+/// This function can be called by any [`ContractSection`].
+/// Returns `1` if the key is found. Returns `0` if the key is not found and there are no errors.
+/// Otherwise, returns a (negative) error code.
+pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i32 {
     let env = ctx.data();
 
-    if env.contract_section != ContractSection::Deploy &&
-        env.contract_section != ContractSection::Exec &&
-        env.contract_section != ContractSection::Update &&
-        env.contract_section != ContractSection::Metadata
-    {
-        error!(target: "runtime::db::db_contains_key()", "db_contains_key called in unauthorized section");
+    if let Err(e) = acl_allow(
+        env,
+        &[
+            ContractSection::Deploy,
+            ContractSection::Exec,
+            ContractSection::Metadata,
+            ContractSection::Update,
+        ],
+    ) {
+        error!(target: "runtime::db::db_contains_key", "[wasm-runtime] db_contains_key ACL denied: {}", e);
+        // TODO: FIXME: We have to fix up the errors used within runtime and the sdk
         return CALLER_ACCESS_DENIED
     }
 
+    // Ensure memory is readable
     let memory_view = env.memory_view(&ctx);
 
-    let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
-        error!(target: "runtime::db::db_contains_key()", "Failed to make slice from ptr");
+    let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
+        error!(target: "runtime::db::db_contains_key()", "[wasm-runtime] Failed to make slice from ptr");
         return DB_CONTAINS_KEY_FAILED
     };
 
-    let mut buf = vec![0_u8; len as usize];
+    let mut buf = vec![0_u8; ptr_len as usize];
     if let Err(e) = mem_slice.read_slice(&mut buf) {
-        error!(target: "runtime::db::db_contains_key()", "Failed to read from memory slice: {}", e);
+        error!(target: "runtime::db::db_contains_key()", "[wasm-runtime] Failed to read from memory slice: {}", e);
         return DB_CONTAINS_KEY_FAILED
     };
 
     let mut buf_reader = Cursor::new(buf);
 
+    // Decode DbHandle index
     let db_handle_index: u32 = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "runtime::db::db_contains_key()", "Failed to decode DbHandle: {}", e);
+            error!(target: "runtime::db::db_contains_key()", "[wasm-runtime] Failed to decode DbHandle: {}", e);
             return DB_CONTAINS_KEY_FAILED
         }
     };
     let db_handle_index = db_handle_index as usize;
 
+    // Decode key
     let key: Vec<u8> = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "runtime::db::db_contains_key()", "Failed to decode key vec: {}", e);
+            error!(target: "runtime::db::db_contains_key()", "[wasm-runtime] Failed to decode key vec: {}", e);
             return DB_CONTAINS_KEY_FAILED
         }
     };
 
-    // TODO: Disabled until cursor_remaining feature is available on master.
-    // Then enable #![feature(cursor_remaining)] in src/lib.rs
-    // unstable feature, open issue https://github.com/rust-lang/rust/issues/86369
-    /*if !buf_reader.is_empty() {
-        error!(target: "runtime::db::db_contains_key()", "Trailing bytes in argument stream");
-        return DB_CONTAINS_KEY_FAILED
-    }*/
-
-    let db_handles = env.db_handles.borrow();
-
-    if db_handles.len() <= db_handle_index {
-        error!(target: "runtime::db::db_contains_key()", "Requested DbHandle that is out of bounds");
+    // Make sure there are no trailing bytes in the buffer. This means we've used all data that was
+    // supplied.
+    if buf_reader.position() != ptr_len as u64 {
+        error!(target: "runtime::db::db_contains_key", "[wasm-runtime] Trailing bytes in argument stream");
         return DB_CONTAINS_KEY_FAILED
     }
 
+    let db_handles = env.db_handles.borrow();
+
+    // Ensure DbHandle index is within bounds
+    if db_handles.len() <= db_handle_index {
+        error!(target: "runtime::db::db_contains_key", "[wasm-runtime] Requested DbHandle that is out of bounds");
+        return DB_CONTAINS_KEY_FAILED
+    }
+
+    // Retrieve DbHandle using the index
     let db_handle = &db_handles[db_handle_index];
 
+    // Lookup key parameter in the database
     match env.blockchain.lock().unwrap().overlay.lock().unwrap().contains_key(&db_handle.tree, &key)
     {
         Ok(v) => i32::from(v), // <- 0=false, 1=true
         Err(e) => {
-            error!(target: "runtime::db::db_contains_key()", "sled.tree.contains_key failed: {}", e);
+            error!(target: "runtime::db::db_contains_key", "[wasm-runtime] sled.tree.contains_key failed: {}", e);
             DB_CONTAINS_KEY_FAILED
         }
     }
 }
 
-/// Only `deploy()` can call this. Given a zkas circuit, create a VerifyingKey and insert
-/// them both into the db.
-pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i32 {
+/// Given a zkas circuit, create a VerifyingKey and insert them both into the db.
+/// This function can called only from the Deploy [`ContractSection`].
+/// Returns `0` on success, otherwise returns a (negative) error code.
+pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i32 {
     let env = ctx.data();
 
-    if env.contract_section != ContractSection::Deploy {
-        error!(target: "runtime::db::zkas_db_set()", "zkas_db_set called in unauthorized section");
+    if let Err(e) = acl_allow(env, &[ContractSection::Deploy]) {
+        error!(target: "runtime::db::zkas_db_set", "[wasm-runtime] zkas_db_set ACL denied: {}", e);
+        // TODO: FIXME: We have to fix up the errors used within runtime and the sdk
         return CALLER_ACCESS_DENIED
     }
 
     let memory_view = env.memory_view(&ctx);
     let contract_id = &env.contract_id;
 
-    let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
-        error!(target: "runtime::db::zkas_db_set()", "Failed to make slice from ptr");
+    // Ensure that the memory is readable
+    let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
+        error!(target: "runtime::db::zkas_db_set", "[wasm-runtime] Failed to make slice from ptr");
         return DB_SET_FAILED
     };
 
-    let mut buf = vec![0u8; len as usize];
+    let mut buf = vec![0u8; ptr_len as usize];
     if let Err(e) = mem_slice.read_slice(&mut buf) {
-        error!(target: "runtime::db::zkas_db_set()", "Failed to read from memory slice: {}", e);
+        error!(target: "runtime::db::zkas_db_set", "[wasm-runtime] Failed to read from memory slice: {}", e);
         return DB_SET_FAILED
     };
 
     let mut buf_reader = Cursor::new(buf);
 
+    // Decode zkas_bincode from memory
     let zkas_bincode: Vec<u8> = match Decodable::decode(&mut buf_reader) {
         Ok(v) => v,
         Err(e) => {
-            error!(target: "runtime::db::zkas_db_set()", "Failed to decode zkas bincode bytes: {}", e);
+            error!(target: "runtime::db::zkas_db_set", "[wasm-runtime] Failed to decode zkas bincode bytes: {}", e);
             return DB_SET_FAILED
         }
     };
 
     // Make sure that we're actually working on legitimate bincode.
     let Ok(zkbin) = ZkBinary::decode(&zkas_bincode) else {
-        error!(target: "runtime::db::zkas_db_set()", "Invalid zkas bincode passed to function");
+        error!(target: "runtime::db::zkas_db_set", "[wasm-runtime] Invalid zkas bincode passed to function");
         return DB_SET_FAILED
     };
 
@@ -656,7 +673,7 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
     let db_handle = &db_handles[0];
     // Redundant check
     if &db_handle.contract_id != contract_id {
-        error!(target: "runtime::db::zkas_db_set()", "Internal error, zkas db at index 0 incorrect");
+        error!(target: "runtime::db::zkas_db_set", "[wasm-runtime] Internal error, zkas db at index 0 incorrect");
         return DB_SET_FAILED
     }
 
@@ -679,23 +696,23 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
                     deserialize(&bytes).expect("deserialize tuple");
 
                 if existing_zkbin == zkas_bincode {
-                    debug!(target: "runtime::db::zkas_db_set()", "Existing zkas bincode is the same. Skipping.");
+                    debug!(target: "runtime::db::zkas_db_set", "[wasm-runtime] Existing zkas bincode is the same. Skipping.");
                     return DB_SUCCESS
                 }
             }
         }
         Err(e) => {
-            error!(target: "runtime::db::zkas_db_set()", "Internal error getting from tree: {}", e);
+            error!(target: "runtime::db::zkas_db_set", "[wasm-runtime] Internal error getting from tree: {}", e);
             return DB_SET_FAILED
         }
     };
 
     // We didn't find any existing bincode, so let's create a new VerifyingKey and write it all.
-    info!(target: "runtime::db::zkas_db_set()", "Creating VerifyingKey for {} zkas circuit", zkbin.namespace);
+    info!(target: "runtime::db::zkas_db_set", "[wasm-runtime] Creating VerifyingKey for {} zkas circuit", zkbin.namespace);
     let witnesses = match empty_witnesses(&zkbin) {
         Ok(w) => w,
         Err(e) => {
-            error!(target: "runtime::db::zkas_db_set()", "Failed to create empty witnesses: {}", e);
+            error!(target: "runtime::db::zkas_db_set", "[wasm-runtime] Failed to create empty witnesses: {}", e);
             return DB_SET_FAILED
         }
     };
@@ -705,10 +722,11 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
     let vk = VerifyingKey::build(zkbin.k, &circuit);
     let mut vk_buf = vec![];
     if let Err(e) = vk.write(&mut vk_buf) {
-        error!(target: "runtime::db::zkas_db_set()", "Failed to serialize VerifyingKey: {}", e);
+        error!(target: "runtime::db::zkas_db_set", "[wasm-runtime] Failed to serialize VerifyingKey: {}", e);
         return DB_SET_FAILED
     }
 
+    // Insert the key-value pair into the database.
     let key = serialize(&zkbin.namespace);
     let value = serialize(&(zkas_bincode, vk_buf));
     if env
@@ -721,7 +739,7 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
         .insert(&db_handle.tree, &key, &value)
         .is_err()
     {
-        error!(target: "runtime::db::zkas_db_set()", "Couldn't insert to db_handle tree");
+        error!(target: "runtime::db::zkas_db_set()", "[wasm-runtime] Couldn't insert to db_handle tree");
         return DB_SET_FAILED
     }
 
