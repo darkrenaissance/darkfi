@@ -20,34 +20,25 @@ use async_trait::async_trait;
 use darkfi::system::StoppableTaskPtr;
 use log::debug;
 use std::collections::HashSet;
-//use darkfi::system::
-use smol::lock::{Mutex, MutexGuard};
-use url::Url;
+use smol::lock::MutexGuard;
 
-use darkfi::{
-    net,
-    rpc::{
-        jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult, JsonSubscriber},
-        server::RequestHandler,
-        util::JsonValue,
-    },
+use darkfi::rpc::{
+    jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
+    server::RequestHandler,
+    util::JsonValue,
 };
 
-// ANCHOR: jsonrpc
-pub struct JsonRpcInterface {
-    pub p2p: net::P2pPtr,
-    pub rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
-    pub dnet_sub: JsonSubscriber,
-}
-// ANCHOR_END: jsonrpc
+use crate::{dchatmsg::DchatMsg, Dchat};
 
 #[async_trait]
-impl RequestHandler for JsonRpcInterface {
+impl RequestHandler for Dchat {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         debug!(target: "dchat::rpc", "--> {}", req.stringify().unwrap());
 
         // ANCHOR: req_match
         match req.method.as_str() {
+            "send" => self.send(req.id, req.params).await,
+            "recv" => self.recv(req.id).await,
             "ping" => self.pong(req.id, req.params).await,
             "dnet.switch" => self.dnet_switch(req.id, req.params).await,
             "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
@@ -60,7 +51,29 @@ impl RequestHandler for JsonRpcInterface {
     }
 }
 
-impl JsonRpcInterface {
+impl Dchat {
+    // RPCAPI:
+    // TODO
+    // --> {"jsonrpc": "2.0", "method": "send", "params": [true], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
+    async fn send(&self, id: u16, params: JsonValue) -> JsonResult {
+        let msg = params[0].get::<String>().unwrap().to_string();
+        let dchatmsg = DchatMsg { msg };
+        self.p2p.broadcast(&dchatmsg).await;
+        JsonResponse::new(JsonValue::Boolean(true), id).into()
+    }
+
+    // RPCAPI:
+    // TODO
+    // --> {"jsonrpc": "2.0", "method": "inbox", "params": [true], "id": 42}
+    // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
+    async fn recv(&self, id: u16) -> JsonResult {
+        let buffer = self.recv_msgs.lock().await;
+        let msgs: Vec<JsonValue> =
+            buffer.iter().map(|x| JsonValue::String(x.msg.clone())).collect();
+        JsonResponse::new(JsonValue::Array(msgs), id).into()
+    }
+
     // RPCAPI:
     // Activate or deactivate dnet in the P2P stack.
     // By sending `true`, dnet will be activated, and by sending `false` dnet will

@@ -16,20 +16,19 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use easy_parallel::Parallel;
-use log::{debug, error, info, warn};
-use smol::{lock::Mutex, stream::StreamExt, Executor};
-use std::{collections::HashSet, error, fs::File, io::stdin, sync::Arc};
+use log::{debug, error, info};
+use smol::{lock::Mutex, stream::StreamExt};
+use std::{collections::HashSet, sync::Arc};
 use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc, net,
-    net::{settings::SettingsOpt, Settings},
+    net::settings::SettingsOpt,
     rpc::{
         jsonrpc::JsonSubscriber,
         server::{listen_and_serve, RequestHandler},
     },
-    system::StoppableTask,
+    system::{StoppableTask, StoppableTaskPtr},
     util::path::get_config_path,
     Error, Result,
 };
@@ -37,10 +36,8 @@ use darkfi::{
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 
 use crate::{
-    dchat_error::ErrorMissingSpecifier,
     dchatmsg::{DchatMsg, DchatMsgsBuffer},
     protocol_dchat::ProtocolDchat,
-    rpc::JsonRpcInterface,
 };
 
 pub mod dchat_error;
@@ -51,6 +48,7 @@ pub mod rpc;
 const CONFIG_FILE: &str = "dchat_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../dchat_config.toml");
 
+// ANCHOR: args
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
 #[structopt(name = "dchat", about = cli_desc!())]
@@ -75,60 +73,35 @@ struct Args {
     #[structopt(flatten)]
     net: SettingsOpt,
 }
+// ANCHOR_END: args
 
 // ANCHOR: dchat
 struct Dchat {
     p2p: net::P2pPtr,
     recv_msgs: DchatMsgsBuffer,
+    pub rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+    pub dnet_sub: JsonSubscriber,
 }
 // ANCHOR_END: dchat
 
 impl Dchat {
-    fn new(p2p: net::P2pPtr, recv_msgs: DchatMsgsBuffer) -> Self {
-        Self { p2p, recv_msgs }
-    }
-
-    // ANCHOR: send
-    async fn send(&self, msg: String) -> Result<()> {
-        let dchatmsg = DchatMsg { msg };
-        self.p2p.broadcast(&dchatmsg).await;
-        Ok(())
-    }
-    // ANCHOR_END: send
-}
-
-// ANCHOR: app_settings
-#[derive(Clone, Debug)]
-struct AppSettings {
-    accept_addr: Url,
-    net: Settings,
-}
-
-impl AppSettings {
-    pub fn new(accept_addr: Url, net: Settings) -> Self {
-        Self { accept_addr, net }
+    fn new(
+        p2p: net::P2pPtr,
+        recv_msgs: DchatMsgsBuffer,
+        rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
+        dnet_sub: JsonSubscriber,
+    ) -> Self {
+        Self { p2p, recv_msgs, rpc_connections, dnet_sub }
     }
 }
+
+// ANCHOR: main
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     let cfg_path = get_config_path(args.config, CONFIG_FILE)?;
-    let toml_contents = std::fs::read_to_string(cfg_path)?;
+    let _toml_contents = std::fs::read_to_string(cfg_path)?;
 
-    // ANCHOR: dchat
     let p2p = net::P2p::new(args.net.into(), ex.clone()).await;
-    let msgs: DchatMsgsBuffer = Arc::new(Mutex::new(vec![DchatMsg { msg: String::new() }]));
-    let dchat = Dchat::new(p2p.clone(), msgs.clone());
-
-    // ANCHOR: register_protocol
-    info!("Registering Dchat protocol");
-    let registry = p2p.protocol_registry();
-    registry
-        .register(!net::session::SESSION_SEED, move |channel, _p2p| {
-            let msgs_ = msgs.clone();
-            async move { ProtocolDchat::init(channel, msgs_).await }
-        })
-        .await;
-    // ANCHOR_END: register_protocol
 
     // ANCHOR: dnet
     info!("Starting dnet subs task");
@@ -157,17 +130,18 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // ANCHOR_end: dnet
 
     // ANCHOR: rpc
-    //info!("Starting JSON-RPC server");
+    info!("Starting JSON-RPC server");
+    let msgs: DchatMsgsBuffer = Arc::new(Mutex::new(vec![DchatMsg { msg: String::new() }]));
     let rpc_connections = Mutex::new(HashSet::new());
-    let rpc = Arc::new(JsonRpcInterface { p2p: p2p.clone(), rpc_connections, dnet_sub });
+    let dchat = Arc::new(Dchat::new(p2p.clone(), msgs.clone(), rpc_connections, dnet_sub));
     let _ex = ex.clone();
 
     let rpc_task = StoppableTask::new();
     rpc_task.clone().start(
-        listen_and_serve(args.rpc_listen, rpc.clone(), None, ex.clone()),
+        listen_and_serve(args.rpc_listen, dchat.clone(), None, ex.clone()),
         |res| async move {
             match res {
-                Ok(()) | Err(Error::RpcServerStopped) => rpc.stop_connections().await,
+                Ok(()) | Err(Error::RpcServerStopped) => dchat.stop_connections().await,
                 Err(e) => error!("Failed stopping JSON-RPC server: {}", e),
             }
         },
@@ -176,10 +150,23 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     );
     // ANCHOR_end: rpc
 
+    // ANCHOR: register_protocol
+    info!("Registering Dchat protocol");
+    let registry = p2p.protocol_registry();
+    registry
+        .register(!net::session::SESSION_SEED, move |channel, _p2p| {
+            let msgs_ = msgs.clone();
+            async move { ProtocolDchat::init(channel, msgs_).await }
+        })
+        .await;
+    // ANCHOR_END: register_protocol
+
+    // ANCHOR: p2p_start
     info!("Starting P2P network");
     p2p.clone().start().await?;
+    // ANCHOR_END: p2p_start
 
-    // Signal handling for graceful termination.
+    // ANCHOR: shutdown
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
@@ -192,6 +179,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     dnet_task.stop().await;
 
     info!("Shut down successfully");
+    // ANCHOR_END: shutdown
     Ok(())
 }
-//// ANCHOR: main
+// ANCHOR_END: main
