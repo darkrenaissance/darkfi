@@ -26,10 +26,10 @@ use darkfi::{
     },
     system::StoppableTaskPtr,
 };
-use darkfi_serial::async_trait;
+use darkfi_serial::async_trait; 
 use smol::lock::MutexGuard;
 
-use super::Swapd;
+use crate::swapd::Swapd;
 
 #[async_trait]
 impl RequestHandler for Swapd {

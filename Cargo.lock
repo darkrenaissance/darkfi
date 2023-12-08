@@ -6339,18 +6339,13 @@ dependencies = [
 name = "swapd"
 version = "0.4.1"
 dependencies = [
- "darkfi",
- "darkfi-serial",
  "easy-parallel",
- "log",
  "serde",
- "signal-hook",
- "signal-hook-async-std",
  "simplelog",
- "sled",
  "smol",
  "structopt",
  "structopt-toml",
+ "tokio",
  "url",
 ]
 
@@ -6644,6 +6639,16 @@ name = "tinyvec_macros"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
+
+[[package]]
+name = "tokio"
+version = "1.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d0c014766411e834f7af5b8f4cf46257aab4036ca95e9d2c144a10f59ad6f5b9"
+dependencies = [
+ "backtrace",
+ "pin-project-lite 0.2.13",
+]
 
 [[package]]
 name = "toml"

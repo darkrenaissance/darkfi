@@ -35,54 +35,12 @@ use url::Url;
 const CONFIG_FILE: &str = "swapd.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../swapd.toml");
 
-/// JSON-RPC server methods
-mod rpc;
-
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
 #[structopt(name = "darkfi-mmproxy", about = cli_desc!())]
 struct Args {
-    #[structopt(short, parse(from_occurrences))]
-    /// Increase verbosity (-vvv supported)
-    verbose: u8,
-
-    #[structopt(short, long)]
-    /// Configuration file to use
-    config: Option<String>,
-
-    #[structopt(long)]
-    /// Set log file output
-    log: Option<String>,
-
     #[structopt(flatten)]
     swapd: SwapdArgs,
-}
-
-#[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
-#[structopt()]
-struct SwapdArgs {
-    #[structopt(long, default_value = "tcp://127.0.0.1:52821")]
-    /// darkfi-swapd JSON-RPC listen URL
-    swapd_rpc: Url,
-
-    #[structopt(long, default_value = "~/.local/darkfi/swapd")]
-    /// Path to swapd's filesystem database
-    swapd_db: String,
-}
-
-/// Swapd daemon state
-struct Swapd {
-    /// Main reference to the swapd filesystem databaase
-    _sled_db: sled::Db,
-    /// JSON-RPC connection tracker
-    rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
-}
-
-impl Swapd {
-    /// Instantiate `Swapd` state
-    async fn new(_swapd_args: &SwapdArgs, sled_db: sled::Db) -> Result<Self> {
-        Ok(Self { _sled_db: sled_db, rpc_connections: Mutex::new(HashSet::new()) })
-    }
 }
 
 async_daemonize!(realmain);
