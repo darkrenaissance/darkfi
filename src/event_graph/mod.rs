@@ -94,7 +94,7 @@ pub struct EventGraph {
     /// Currently configured DAG rotation, in days
     days_rotation: u64,
     /// Flag signalling DAG has finished initial sync
-    synced: RwLock<bool>,
+    pub synced: RwLock<bool>,
 }
 
 impl EventGraph {
