@@ -2,7 +2,7 @@
 ///
 /// the implementation of this trait must hold a signing key for
 /// chain A and chain B.
-pub(crate) trait ChainA {
+pub(crate) trait Initiator {
     // initiates the swap by locking funds on chain A
     fn handle_counterparty_keys_received(&self);
 
@@ -17,7 +17,7 @@ pub(crate) trait ChainA {
 }
 
 /// the chain that is the counterparty to the swap; ie. the second-mover
-pub(crate) trait ChainB {
+pub(crate) trait Follower {
     // handle the swap initiation by locking funds on chain B
     fn handle_counterparty_funds_locked(&self);
 

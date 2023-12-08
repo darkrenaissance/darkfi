@@ -1,5 +1,5 @@
-use crate::protocol::traits::{ChainA, ChainB};
-use tokio::sync::mpsc::{channel, Receiver, Sender};
+use crate::protocol::traits::Initiator;
+use tokio::sync::mpsc::Receiver;
 
 enum Event {
     ReceivedCounterpartyKeys,
@@ -9,17 +9,34 @@ enum Event {
 }
 
 struct Swap {
-    chain_a: Box<dyn ChainA>,
-    chain_b: Box<dyn ChainB>,
+    handler: Box<dyn Initiator>,
     event_rx: Receiver<Event>,
 }
 
 impl Swap {
-    fn new(chain_a: Box<dyn ChainA>, chain_b: Box<dyn ChainB>, event_rx: Receiver<Event>) -> Self {
-        Self { chain_a, chain_b, event_rx }
+    fn new(handler: Box<dyn Initiator>, event_rx: Receiver<Event>) -> Self {
+        Self { handler, event_rx }
     }
 
-    fn run(&mut self) {
-        loop {}
+    async fn run(&mut self) {
+        loop {
+            match self.event_rx.recv().await {
+                Some(Event::ReceivedCounterpartyKeys) => {
+                    self.handler.handle_counterparty_keys_received();
+                }
+                Some(Event::CounterpartyFundsLocked) => {
+                    self.handler.handle_counterparty_funds_locked();
+                }
+                Some(Event::CounterpartyFundsClaimed) => {
+                    self.handler.handle_counterparty_funds_claimed();
+                }
+                Some(Event::ShouldRefund) => {
+                    self.handler.handle_should_refund();
+                }
+                None => {
+                    break;
+                }
+            }
+        }
     }
 }

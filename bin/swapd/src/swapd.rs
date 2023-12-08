@@ -9,18 +9,18 @@ use url::Url;
 
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[structopt()]
-struct SwapdArgs {
+pub struct SwapdArgs {
     #[structopt(long, default_value = "tcp://127.0.0.1:52821")]
     /// darkfi-swapd JSON-RPC listen URL
-    swapd_rpc: Url,
+    pub swapd_rpc: Url,
 
     #[structopt(long, default_value = "~/.local/darkfi/swapd")]
     /// Path to swapd's filesystem database
-    swapd_db: String,
+    pub swapd_db: String,
 }
 
 /// Swapd daemon state
-pub(crate) struct Swapd {
+pub struct Swapd {
     /// Main reference to the swapd filesystem databaase
     _sled_db: sled::Db,
     /// JSON-RPC connection tracker
@@ -29,7 +29,7 @@ pub(crate) struct Swapd {
 
 impl Swapd {
     /// Instantiate `Swapd` state
-    async fn new(_swapd_args: &SwapdArgs, sled_db: sled::Db) -> Result<Self> {
+    pub async fn new(_swapd_args: &SwapdArgs, sled_db: sled::Db) -> Result<Self> {
         Ok(Self { _sled_db: sled_db, rpc_connections: Mutex::new(HashSet::new()) })
     }
 }

@@ -6339,9 +6339,15 @@ dependencies = [
 name = "swapd"
 version = "0.4.1"
 dependencies = [
+ "darkfi",
+ "darkfi-serial",
  "easy-parallel",
+ "log",
  "serde",
+ "signal-hook",
+ "signal-hook-async-std",
  "simplelog",
+ "sled",
  "smol",
  "structopt",
  "structopt-toml",

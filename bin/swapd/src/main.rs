@@ -16,21 +16,22 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, sync::Arc};
+use std::sync::Arc;
 
 use darkfi::{
     async_daemonize, cli_desc,
     rpc::server::{listen_and_serve, RequestHandler},
-    system::{StoppableTask, StoppableTaskPtr},
+    system::StoppableTask,
     util::path::expand_path,
     Error, Result,
 };
 use log::{error, info};
 use serde::Deserialize;
-use smol::{fs, lock::Mutex, stream::StreamExt, Executor};
+use smol::{fs, stream::StreamExt, Executor};
 use structopt::StructOpt;
 use structopt_toml::StructOptToml;
-use url::Url;
+
+use swapd::{Swapd, SwapdArgs};
 
 const CONFIG_FILE: &str = "swapd.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../swapd.toml");
@@ -39,6 +40,18 @@ const CONFIG_FILE_CONTENTS: &str = include_str!("../swapd.toml");
 #[serde(default)]
 #[structopt(name = "darkfi-mmproxy", about = cli_desc!())]
 struct Args {
+    #[structopt(short, parse(from_occurrences))]
+    /// Increase verbosity (-vvv supported)
+    verbose: u8,
+
+    #[structopt(short, long)]
+    /// Configuration file to use
+    config: Option<String>,
+
+    #[structopt(long)]
+    /// Set log file output
+    log: Option<String>,
+
     #[structopt(flatten)]
     swapd: SwapdArgs,
 }
