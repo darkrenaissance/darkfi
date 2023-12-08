@@ -35,7 +35,6 @@ use darkfi::{
 
 // ANCHOR: jsonrpc
 pub struct JsonRpcInterface {
-    pub addr: Url,
     pub p2p: net::P2pPtr,
     pub rpc_connections: Mutex<HashSet<StoppableTaskPtr>>,
     pub dnet_sub: JsonSubscriber,
