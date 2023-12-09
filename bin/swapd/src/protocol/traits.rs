@@ -1,19 +1,47 @@
+use crate::protocol::swap_creator::Swap;
+use darkfi_serial::async_trait;
+use ethers::prelude::*;
+use eyre::Result;
+
+// TODO: make Address/U256 generic; these are ethers-specific right now
+#[derive(Debug)]
+pub(crate) struct InitiateSwapArgs {
+    pub(crate) claim_commitment: [u8; 32],
+    pub(crate) refund_commitment: [u8; 32],
+    pub(crate) claimer: Address,
+    pub(crate) timeout_duration_1: U256,
+    pub(crate) timeout_duration_2: U256,
+    pub(crate) asset: Address,
+    pub(crate) value: U256,
+    pub(crate) nonce: U256,
+}
+
+#[derive(Debug)]
+pub(crate) struct HandleCounterpartyKeysReceivedResult {
+    pub(crate) contract_swap_id: [u8; 32],
+    pub(crate) contract_swap: Swap,
+}
+
 /// the chain that initiates the swap; ie. the first-mover
 ///
 /// the implementation of this trait must hold a signing key for
 /// chain A and chain B.
+#[async_trait]
 pub(crate) trait Initiator {
     // initiates the swap by locking funds on chain A
-    fn handle_counterparty_keys_received(&self);
+    async fn handle_counterparty_keys_received(
+        &self,
+        args: InitiateSwapArgs,
+    ) -> Result<HandleCounterpartyKeysReceivedResult>;
 
     // handles the counterparty locking funds
-    fn handle_counterparty_funds_locked(&self);
+    async fn handle_counterparty_funds_locked(&self, swap: Swap) -> Result<()>;
 
     // handles the counterparty claiming funds
-    fn handle_counterparty_funds_claimed(&self);
+    async fn handle_counterparty_funds_claimed(&self);
 
     // handles the timeout cases where we need to refund funds
-    fn handle_should_refund(&self);
+    async fn handle_should_refund(&self);
 }
 
 /// the chain that is the counterparty to the swap; ie. the second-mover
