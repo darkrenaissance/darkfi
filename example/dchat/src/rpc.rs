@@ -18,11 +18,13 @@
 
 use async_trait::async_trait;
 use darkfi::system::StoppableTaskPtr;
+use darkfi::net::P2pPtr;
 use log::debug;
-use std::collections::HashSet;
 use smol::lock::MutexGuard;
+use std::collections::HashSet;
 
 use darkfi::rpc::{
+    p2p_method::HandlerP2p,
     jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
     server::RequestHandler,
     util::JsonValue,
@@ -40,6 +42,7 @@ impl RequestHandler for Dchat {
             "send" => self.send(req.id, req.params).await,
             "recv" => self.recv(req.id).await,
             "ping" => self.pong(req.id, req.params).await,
+            "p2p.get_info" => self.p2p_get_info(req.id, req.params).await,
             "dnet.switch" => self.dnet_switch(req.id, req.params).await,
             "dnet.subscribe_events" => self.dnet_subscribe_events(req.id, req.params).await,
             _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
@@ -112,5 +115,11 @@ impl Dchat {
         }
 
         self.dnet_sub.clone().into()
+    }
+}
+
+impl HandlerP2p for Dchat {
+    fn p2p(&self) -> P2pPtr {
+        self.p2p.clone()
     }
 }

@@ -53,7 +53,7 @@ const CONFIG_FILE_CONTENTS: &str = include_str!("../dchat_config.toml");
 #[serde(default)]
 #[structopt(name = "dchat", about = cli_desc!())]
 struct Args {
-    #[structopt(long, default_value = "tcp://127.0.0.1:55054")]
+    #[structopt(long, default_value = "tcp://127.0.0.1:51054")]
     /// RPC server listen address
     rpc_listen: Url,
 
@@ -130,7 +130,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // ANCHOR_end: dnet
 
     // ANCHOR: rpc
-    info!("Starting JSON-RPC server");
+    info!("Starting JSON-RPC server on port {}", args.rpc_listen);
     let msgs: DchatMsgsBuffer = Arc::new(Mutex::new(vec![DchatMsg { msg: String::new() }]));
     let rpc_connections = Mutex::new(HashSet::new());
     let dchat = Arc::new(Dchat::new(p2p.clone(), msgs.clone(), rpc_connections, dnet_sub));
