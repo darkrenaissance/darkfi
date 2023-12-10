@@ -53,11 +53,10 @@ pub struct Hosts {
     greylist: RwLock<Vec<(Url, u64)>>,
 
     // Recently seen nodes.
-    whitelist: RwLock<Vec<(Url, u64)>>,
+    pub whitelist: RwLock<Vec<(Url, u64)>>,
 
-    /// Set of stored addresses
-    addrs: RwLock<HashSet<Url>>,
-
+    ///// Set of stored addresses
+    //addrs: RwLock<HashSet<Url>>,
     /// Set of stored addresses that are quarantined.
     /// We quarantine peers we've been unable to connect to, but we keep them
     /// around so we can potentially try them again, up to n tries. This should
@@ -81,7 +80,7 @@ impl Hosts {
         Arc::new(Self {
             whitelist: RwLock::new(Vec::new()),
             greylist: RwLock::new(Vec::new()),
-            addrs: RwLock::new(HashSet::new()),
+            //addrs: RwLock::new(HashSet::new()),
             quarantine: RwLock::new(HashMap::new()),
             rejected: RwLock::new(HashSet::new()),
             store_subscriber: Subscriber::new(),
@@ -89,24 +88,24 @@ impl Hosts {
         })
     }
 
-    /// Append given addrs to the known set.
-    pub async fn store(&self, addrs: &[Url]) {
-        debug!(target: "net::hosts::store()", "hosts::store() [START]");
+    ///// Append given addrs to the known set.
+    //pub async fn store(&self, addrs: &[Url]) {
+    //    debug!(target: "net::hosts::store()", "hosts::store() [START]");
 
-        let filtered_addrs = self.filter_addresses(addrs).await;
-        let filtered_addrs_len = filtered_addrs.len();
+    //    let filtered_addrs = self.filter_addresses(addrs).await;
+    //    let filtered_addrs_len = filtered_addrs.len();
 
-        if !filtered_addrs.is_empty() {
-            let mut addrs_map = self.addrs.write().await;
-            for addr in filtered_addrs {
-                debug!(target: "net::hosts::store()", "Inserting {}", addr);
-                addrs_map.insert(addr);
-            }
-        }
+    //    if !filtered_addrs.is_empty() {
+    //        let mut addrs_map = self.addrs.write().await;
+    //        for addr in filtered_addrs {
+    //            debug!(target: "net::hosts::store()", "Inserting {}", addr);
+    //            addrs_map.insert(addr);
+    //        }
+    //    }
 
-        self.store_subscriber.notify(filtered_addrs_len).await;
-        debug!(target: "net::hosts::store()", "hosts::store() [END]");
-    }
+    //    self.store_subscriber.notify(filtered_addrs_len).await;
+    //    debug!(target: "net::hosts::store()", "hosts::store() [END]");
+    //}
 
     // Gets addresses from the whitelist.
     pub async fn whitelist_fetch_address_with_lock(
@@ -519,7 +518,34 @@ impl Hosts {
         }
     }
 
-    async fn probe_node(&self, host: &Url, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> bool {
+    pub async fn refresh_whitelist(&self, url: &Url, p2p: P2pPtr, ex: Arc<Executor<'_>>) {
+        let mut whitelist = self.whitelist.write().await;
+
+        // Probe node to see if it's active.
+        let online: bool = self.probe_node(url, p2p.clone(), ex.clone()).await;
+
+        if online {
+            // Peer is responsive. Update last_seen and add it to the whitelist.
+            let last_seen =
+                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+
+            // Remove oldest element if the whitelist reaches max size.
+            if whitelist.len() == 1000 {
+                // Last element in vector should have the oldest timestamp.
+                // This should never crash as only returns None when whitelist len() == 0.
+                let entry = whitelist.pop().unwrap();
+                debug!(target: "net::hosts::refresh_whitelist()", "Whitelist reached max size. Removed host {}", entry.0);
+            }
+            // Append to the whitelist.
+            debug!(target: "net::hosts::refresh_whitelist()", "Adding peer {} to whitelist", url);
+            whitelist.push((url.clone(), last_seen));
+
+            // Sort whitelist by last_seen.
+            whitelist.sort_unstable_by_key(|entry| entry.1);
+        }
+    }
+
+    pub async fn probe_node(&self, host: &Url, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> bool {
         let p2p_ = p2p.clone();
         let ex_ = ex.clone();
         let session_out = p2p_.session_outbound();
@@ -559,33 +585,33 @@ impl Hosts {
             }
         }
     }
-    pub async fn remove(&self, url: &Url) {
-        debug!(target: "net::hosts::remove()", "Removing peer {}", url);
-        self.addrs.write().await.remove(url);
-        self.quarantine.write().await.remove(url);
-    }
+    //pub async fn remove(&self, url: &Url) {
+    //    debug!(target: "net::hosts::remove()", "Removing peer {}", url);
+    //    self.addrs.write().await.remove(url);
+    //    self.quarantine.write().await.remove(url);
+    //}
 
-    /// Quarantine a peer.
-    /// If they've been quarantined for more than a configured limit, forget them.
-    pub async fn quarantine(&self, url: &Url) {
-        debug!(target: "net::hosts::remove()", "Quarantining peer {}", url);
-        // Remove from main hosts set
-        self.addrs.write().await.remove(url);
+    ///// Quarantine a peer.
+    ///// If they've been quarantined for more than a configured limit, forget them.
+    //pub async fn quarantine(&self, url: &Url) {
+    //    debug!(target: "net::hosts::remove()", "Quarantining peer {}", url);
+    //    // Remove from main hosts set
+    //    self.addrs.write().await.remove(url);
 
-        let mut q = self.quarantine.write().await;
-        if let Some(retries) = q.get_mut(url) {
-            *retries += 1;
-            debug!(target: "net::hosts::quarantine()", "Peer {} quarantined {} times", url, retries);
-            if *retries == self.settings.hosts_quarantine_limit {
-                debug!(target: "net::hosts::quarantine()", "Banning peer {}", url);
-                q.remove(url);
-                self.mark_rejected(url).await;
-            }
-        } else {
-            debug!(target: "net::hosts::remove()", "Added peer {} to quarantine", url);
-            q.insert(url.clone(), 0);
-        }
-    }
+    //    let mut q = self.quarantine.write().await;
+    //    if let Some(retries) = q.get_mut(url) {
+    //        *retries += 1;
+    //        debug!(target: "net::hosts::quarantine()", "Peer {} quarantined {} times", url, retries);
+    //        if *retries == self.settings.hosts_quarantine_limit {
+    //            debug!(target: "net::hosts::quarantine()", "Banning peer {}", url);
+    //            q.remove(url);
+    //            self.mark_rejected(url).await;
+    //        }
+    //    } else {
+    //        debug!(target: "net::hosts::remove()", "Added peer {} to quarantine", url);
+    //        q.insert(url.clone(), 0);
+    //    }
+    //}
 
     /// Check if a given peer (URL) is in the set of rejected hosts
     pub async fn is_rejected(&self, peer: &Url) -> bool {
@@ -622,10 +648,10 @@ impl Hosts {
         }
     }
 
-    /// Check if the host list is empty.
-    pub async fn is_empty(&self) -> bool {
-        self.addrs.read().await.is_empty()
-    }
+    ///// Check if the host list is empty.
+    //pub async fn is_empty(&self) -> bool {
+    //    self.addrs.read().await.is_empty()
+    //}
 
     // Check if the greylist is empty.
     pub async fn is_empty_greylist(&self) -> bool {
@@ -667,49 +693,49 @@ impl Hosts {
         return 0
     }
 
-    /// Check if host is already in the set
-    pub async fn contains(&self, addr: &Url) -> bool {
-        self.addrs.read().await.contains(addr)
-    }
+    ///// Check if host is already in the set
+    //pub async fn contains(&self, addr: &Url) -> bool {
+    //    self.addrs.read().await.contains(addr)
+    //}
 
-    /// Return all known hosts
-    pub async fn fetch_all(&self) -> Vec<Url> {
-        self.addrs.read().await.iter().cloned().collect()
-    }
+    ///// Return all known hosts
+    //pub async fn fetch_all(&self) -> Vec<Url> {
+    //    self.addrs.read().await.iter().cloned().collect()
+    //}
 
     /// Return all known whitelisted hosts
     pub async fn whitelist_fetch_all(&self) -> Vec<(Url, u64)> {
         self.whitelist.read().await.iter().cloned().collect()
     }
 
-    /// Get up to n random peers from the hosts set.
-    pub async fn fetch_n_random(&self, n: u32) -> Vec<Url> {
-        let n = n as usize;
-        if n == 0 {
-            return vec![]
-        }
-        let addrs = self.addrs.read().await;
-        let urls = addrs.iter().choose_multiple(&mut OsRng, n.min(addrs.len()));
-        urls.iter().map(|&url| url.clone()).collect()
-    }
+    ///// Get up to n random peers from the hosts set.
+    //pub async fn fetch_n_random(&self, n: u32) -> Vec<Url> {
+    //    let n = n as usize;
+    //    if n == 0 {
+    //        return vec![]
+    //    }
+    //    let addrs = self.addrs.read().await;
+    //    let urls = addrs.iter().choose_multiple(&mut OsRng, n.min(addrs.len()));
+    //    urls.iter().map(|&url| url.clone()).collect()
+    //}
 
-    /// Get up to n random peers that match the given transport schemes from the hosts set.
-    pub async fn fetch_n_random_with_schemes(&self, schemes: &[String], n: u32) -> Vec<Url> {
-        let n = n as usize;
-        if n == 0 {
-            return vec![]
-        }
+    ///// Get up to n random peers that match the given transport schemes from the hosts set.
+    //pub async fn fetch_n_random_with_schemes(&self, schemes: &[String], n: u32) -> Vec<Url> {
+    //    let n = n as usize;
+    //    if n == 0 {
+    //        return vec![]
+    //    }
 
-        // Retrieve all peers corresponding to that transport schemes
-        let hosts = self.fetch_with_schemes(schemes, None).await;
-        if hosts.is_empty() {
-            return hosts
-        }
+    //    // Retrieve all peers corresponding to that transport schemes
+    //    let hosts = self.fetch_with_schemes(schemes, None).await;
+    //    if hosts.is_empty() {
+    //        return hosts
+    //    }
 
-        // Grab random ones
-        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
-        urls.iter().map(|&url| url.clone()).collect()
-    }
+    //    // Grab random ones
+    //    let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
+    //    urls.iter().map(|&url| url.clone()).collect()
+    //}
 
     pub async fn whitelist_fetch_n_random_with_schemes(
         &self,
@@ -732,23 +758,23 @@ impl Hosts {
         urls.iter().map(|&url| url.clone()).collect()
     }
 
-    /// Get up to n random peers that don't match the given transport schemes from the hosts set.
-    pub async fn fetch_n_random_excluding_schemes(&self, schemes: &[String], n: u32) -> Vec<Url> {
-        let n = n as usize;
-        if n == 0 {
-            return vec![]
-        }
+    ///// Get up to n random peers that don't match the given transport schemes from the hosts set.
+    //pub async fn fetch_n_random_excluding_schemes(&self, schemes: &[String], n: u32) -> Vec<Url> {
+    //    let n = n as usize;
+    //    if n == 0 {
+    //        return vec![]
+    //    }
 
-        // Retrieve all peers not corresponding to that transport schemes
-        let hosts = self.fetch_exluding_schemes(schemes, None).await;
-        if hosts.is_empty() {
-            return hosts
-        }
+    //    // Retrieve all peers not corresponding to that transport schemes
+    //    let hosts = self.fetch_exluding_schemes(schemes, None).await;
+    //    if hosts.is_empty() {
+    //        return hosts
+    //    }
 
-        // Grab random ones
-        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
-        urls.iter().map(|&url| url.clone()).collect()
-    }
+    //    // Grab random ones
+    //    let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
+    //    urls.iter().map(|&url| url.clone()).collect()
+    //}
 
     pub async fn whitelist_fetch_n_random_excluding_schemes(
         &self,
@@ -771,45 +797,45 @@ impl Hosts {
         urls.iter().map(|&url| url.clone()).collect()
     }
 
-    /// Get up to limit peers that match the given transport schemes from the hosts set.
-    /// If limit was not provided, return all matching peers.
-    pub async fn fetch_with_schemes(&self, schemes: &[String], limit: Option<usize>) -> Vec<Url> {
-        let addrs = self.addrs.read().await;
-        let mut limit = match limit {
-            Some(l) => l.min(addrs.len()),
-            None => addrs.len(),
-        };
-        let mut ret = vec![];
+    ///// Get up to limit peers that match the given transport schemes from the hosts set.
+    ///// If limit was not provided, return all matching peers.
+    //pub async fn fetch_with_schemes(&self, schemes: &[String], limit: Option<usize>) -> Vec<Url> {
+    //    let addrs = self.addrs.read().await;
+    //    let mut limit = match limit {
+    //        Some(l) => l.min(addrs.len()),
+    //        None => addrs.len(),
+    //    };
+    //    let mut ret = vec![];
 
-        if limit == 0 {
-            return ret
-        }
+    //    if limit == 0 {
+    //        return ret
+    //    }
 
-        for addr in addrs.iter() {
-            if schemes.contains(&addr.scheme().to_string()) {
-                ret.push(addr.clone());
-                limit -= 1;
-                if limit == 0 {
-                    return ret
-                }
-            }
-        }
+    //    for addr in addrs.iter() {
+    //        if schemes.contains(&addr.scheme().to_string()) {
+    //            ret.push(addr.clone());
+    //            limit -= 1;
+    //            if limit == 0 {
+    //                return ret
+    //            }
+    //        }
+    //    }
 
-        // If we didn't find any, pick some from the quarantine zone
-        if ret.is_empty() {
-            for addr in self.quarantine.read().await.keys() {
-                if schemes.contains(&addr.scheme().to_string()) {
-                    ret.push(addr.clone());
-                    limit -= 1;
-                    if limit == 0 {
-                        break
-                    }
-                }
-            }
-        }
+    //    // If we didn't find any, pick some from the quarantine zone
+    //    if ret.is_empty() {
+    //        for addr in self.quarantine.read().await.keys() {
+    //            if schemes.contains(&addr.scheme().to_string()) {
+    //                ret.push(addr.clone());
+    //                limit -= 1;
+    //                if limit == 0 {
+    //                    break
+    //                }
+    //            }
+    //        }
+    //    }
 
-        ret
-    }
+    //    ret
+    //}
 
     pub async fn whitelist_fetch_with_schemes(
         &self,
@@ -853,49 +879,49 @@ impl Hosts {
         ret
     }
 
-    /// Get up to limit peers that don't match the given transport schemes from the hosts set.
-    /// If limit was not provided, return all matching peers.
-    pub async fn fetch_exluding_schemes(
-        &self,
-        schemes: &[String],
-        limit: Option<usize>,
-    ) -> Vec<Url> {
-        let addrs = self.addrs.read().await;
-        let mut limit = match limit {
-            Some(l) => l.min(addrs.len()),
-            None => addrs.len(),
-        };
-        let mut ret = vec![];
+    ///// Get up to limit peers that don't match the given transport schemes from the hosts set.
+    ///// If limit was not provided, return all matching peers.
+    //pub async fn fetch_exluding_schemes(
+    //    &self,
+    //    schemes: &[String],
+    //    limit: Option<usize>,
+    //) -> Vec<Url> {
+    //    let addrs = self.addrs.read().await;
+    //    let mut limit = match limit {
+    //        Some(l) => l.min(addrs.len()),
+    //        None => addrs.len(),
+    //    };
+    //    let mut ret = vec![];
 
-        if limit == 0 {
-            return ret
-        }
+    //    if limit == 0 {
+    //        return ret
+    //    }
 
-        for addr in addrs.iter() {
-            if !schemes.contains(&addr.scheme().to_string()) {
-                ret.push(addr.clone());
-                limit -= 1;
-                if limit == 0 {
-                    return ret
-                }
-            }
-        }
+    //    for addr in addrs.iter() {
+    //        if !schemes.contains(&addr.scheme().to_string()) {
+    //            ret.push(addr.clone());
+    //            limit -= 1;
+    //            if limit == 0 {
+    //                return ret
+    //            }
+    //        }
+    //    }
 
-        // If we didn't find any, pick some from the quarantine zone
-        if ret.is_empty() {
-            for addr in self.quarantine.read().await.keys() {
-                if !schemes.contains(&addr.scheme().to_string()) {
-                    ret.push(addr.clone());
-                    limit -= 1;
-                    if limit == 0 {
-                        break
-                    }
-                }
-            }
-        }
+    //    // If we didn't find any, pick some from the quarantine zone
+    //    if ret.is_empty() {
+    //        for addr in self.quarantine.read().await.keys() {
+    //            if !schemes.contains(&addr.scheme().to_string()) {
+    //                ret.push(addr.clone());
+    //                limit -= 1;
+    //                if limit == 0 {
+    //                    break
+    //                }
+    //            }
+    //        }
+    //    }
 
-        ret
-    }
+    //    ret
+    //}
 
     pub async fn whitelist_fetch_excluding_schemes(
         &self,
@@ -945,86 +971,86 @@ mod tests {
     use super::{super::settings::Settings, *};
     use std::time::SystemTime;
 
-    #[test]
-    fn test_store_localnet() {
-        smol::block_on(async {
-            let settings = Settings {
-                localnet: true,
-                external_addrs: vec![
-                    Url::parse("tcp://foo.bar:123").unwrap(),
-                    Url::parse("tcp://lol.cat:321").unwrap(),
-                ],
-                ..Default::default()
-            };
+    //#[test]
+    //fn test_store_localnet() {
+    //    smol::block_on(async {
+    //        let settings = Settings {
+    //            localnet: true,
+    //            external_addrs: vec![
+    //                Url::parse("tcp://foo.bar:123").unwrap(),
+    //                Url::parse("tcp://lol.cat:321").unwrap(),
+    //            ],
+    //            ..Default::default()
+    //        };
 
-            let hosts = Hosts::new(Arc::new(settings.clone()));
-            hosts.store(&settings.external_addrs).await;
-            for i in settings.external_addrs {
-                assert!(hosts.contains(&i).await);
-            }
+    //        let hosts = Hosts::new(Arc::new(settings.clone()));
+    //        hosts.store(&settings.external_addrs).await;
+    //        for i in settings.external_addrs {
+    //            assert!(hosts.contains(&i).await);
+    //        }
 
-            let local_hosts = vec![
-                Url::parse("tcp://localhost:3921").unwrap(),
-                Url::parse("tcp://127.0.0.1:23957").unwrap(),
-                Url::parse("tcp://[::1]:21481").unwrap(),
-                Url::parse("tcp://192.168.10.65:311").unwrap(),
-                Url::parse("tcp://0.0.0.0:2312").unwrap(),
-                Url::parse("tcp://255.255.255.255:2131").unwrap(),
-            ];
-            hosts.store(&local_hosts).await;
-            for i in local_hosts {
-                assert!(hosts.contains(&i).await);
-            }
+    //        let local_hosts = vec![
+    //            Url::parse("tcp://localhost:3921").unwrap(),
+    //            Url::parse("tcp://127.0.0.1:23957").unwrap(),
+    //            Url::parse("tcp://[::1]:21481").unwrap(),
+    //            Url::parse("tcp://192.168.10.65:311").unwrap(),
+    //            Url::parse("tcp://0.0.0.0:2312").unwrap(),
+    //            Url::parse("tcp://255.255.255.255:2131").unwrap(),
+    //        ];
+    //        hosts.store(&local_hosts).await;
+    //        for i in local_hosts {
+    //            assert!(hosts.contains(&i).await);
+    //        }
 
-            let remote_hosts = vec![
-                Url::parse("tcp://dark.fi:80").unwrap(),
-                Url::parse("tcp://top.kek:111").unwrap(),
-                Url::parse("tcp://http.cat:401").unwrap(),
-            ];
-            hosts.store(&remote_hosts).await;
-            for i in remote_hosts {
-                assert!(hosts.contains(&i).await);
-            }
-        });
-    }
+    //        let remote_hosts = vec![
+    //            Url::parse("tcp://dark.fi:80").unwrap(),
+    //            Url::parse("tcp://top.kek:111").unwrap(),
+    //            Url::parse("tcp://http.cat:401").unwrap(),
+    //        ];
+    //        hosts.store(&remote_hosts).await;
+    //        for i in remote_hosts {
+    //            assert!(hosts.contains(&i).await);
+    //        }
+    //    });
+    //}
 
-    #[test]
-    fn test_store() {
-        smol::block_on(async {
-            let settings = Settings {
-                localnet: false,
-                external_addrs: vec![
-                    Url::parse("tcp://foo.bar:123").unwrap(),
-                    Url::parse("tcp://lol.cat:321").unwrap(),
-                ],
-                ..Default::default()
-            };
+    //#[test]
+    //fn test_store() {
+    //    smol::block_on(async {
+    //        let settings = Settings {
+    //            localnet: false,
+    //            external_addrs: vec![
+    //                Url::parse("tcp://foo.bar:123").unwrap(),
+    //                Url::parse("tcp://lol.cat:321").unwrap(),
+    //            ],
+    //            ..Default::default()
+    //        };
 
-            let hosts = Hosts::new(Arc::new(settings.clone()));
-            hosts.store(&settings.external_addrs).await;
-            assert!(hosts.is_empty().await);
+    //        let hosts = Hosts::new(Arc::new(settings.clone()));
+    //        hosts.store(&settings.external_addrs).await;
+    //        assert!(hosts.is_empty().await);
 
-            let local_hosts = vec![
-                Url::parse("tcp://localhost:3921").unwrap(),
-                Url::parse("tor://[::1]:21481").unwrap(),
-                Url::parse("tcp://192.168.10.65:311").unwrap(),
-                Url::parse("tcp+tls://0.0.0.0:2312").unwrap(),
-                Url::parse("tcp://255.255.255.255:2131").unwrap(),
-            ];
-            hosts.store(&local_hosts).await;
-            assert!(hosts.is_empty().await);
+    //        let local_hosts = vec![
+    //            Url::parse("tcp://localhost:3921").unwrap(),
+    //            Url::parse("tor://[::1]:21481").unwrap(),
+    //            Url::parse("tcp://192.168.10.65:311").unwrap(),
+    //            Url::parse("tcp+tls://0.0.0.0:2312").unwrap(),
+    //            Url::parse("tcp://255.255.255.255:2131").unwrap(),
+    //        ];
+    //        hosts.store(&local_hosts).await;
+    //        assert!(hosts.is_empty().await);
 
-            let remote_hosts = vec![
-                Url::parse("tcp://dark.fi:80").unwrap(),
-                Url::parse("tcp://http.cat:401").unwrap(),
-                Url::parse("tcp://foo.bar:111").unwrap(),
-            ];
-            hosts.store(&remote_hosts).await;
-            assert!(hosts.contains(&remote_hosts[0]).await);
-            assert!(hosts.contains(&remote_hosts[1]).await);
-            assert!(!hosts.contains(&remote_hosts[2]).await);
-        });
-    }
+    //        let remote_hosts = vec![
+    //            Url::parse("tcp://dark.fi:80").unwrap(),
+    //            Url::parse("tcp://http.cat:401").unwrap(),
+    //            Url::parse("tcp://foo.bar:111").unwrap(),
+    //        ];
+    //        hosts.store(&remote_hosts).await;
+    //        assert!(hosts.contains(&remote_hosts[0]).await);
+    //        assert!(hosts.contains(&remote_hosts[1]).await);
+    //        assert!(!hosts.contains(&remote_hosts[2]).await);
+    //    });
+    //}
 
     #[test]
     fn test_is_local_host() {

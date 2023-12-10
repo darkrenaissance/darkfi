@@ -115,7 +115,7 @@ impl SeedSyncSession {
         }
 
         // Seed process complete
-        if self.p2p().hosts().is_empty().await {
+        if self.p2p().hosts().is_empty_greylist().await {
             warn!(target: "net::session::seedsync_session", "[P2P] Hosts pool empty after seeding");
         }
 
