@@ -69,20 +69,20 @@ pub struct GetAddrsMessage {
 }
 impl_p2p_message!(GetAddrsMessage, "getaddr");
 
-/// Sends address information to inbound connection.
-/// Response to `GetAddrsMessage`.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct AddrsMessage {
-    pub addrs: Vec<Url>,
-}
-impl_p2p_message!(AddrsMessage, "addr");
+///// Sends address information to inbound connection.
+///// Response to `GetAddrsMessage`.
+//#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+//pub struct AddrsMessage {
+//    pub addrs: Vec<Url>,
+//}
+//impl_p2p_message!(AddrsMessage, "addr");
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct AddrsMessage2 {
+pub struct AddrsMessage {
     pub addrs: Vec<(Url, u64)>,
 }
 
-impl_p2p_message!(AddrsMessage2, "addr2");
+impl_p2p_message!(AddrsMessage, "addr");
 
 /// Requests version information of outbound connection.
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]

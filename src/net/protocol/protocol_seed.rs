@@ -26,7 +26,7 @@ use super::{
     super::{
         channel::ChannelPtr,
         hosts::HostsPtr,
-        message::{AddrsMessage, AddrsMessage2, GetAddrsMessage},
+        message::{AddrsMessage, GetAddrsMessage},
         message_subscriber::MessageSubscription,
         p2p::P2pPtr,
         settings::SettingsPtr,
@@ -40,7 +40,7 @@ pub struct ProtocolSeed {
     channel: ChannelPtr,
     hosts: HostsPtr,
     settings: SettingsPtr,
-    addr_sub: MessageSubscription<AddrsMessage2>,
+    addr_sub: MessageSubscription<AddrsMessage>,
 }
 
 const PROTO_NAME: &str = "ProtocolSeed";
@@ -53,7 +53,7 @@ impl ProtocolSeed {
 
         // Create a subscription to address message
         let addr_sub =
-            channel.subscribe_msg::<AddrsMessage2>().await.expect("Missing addr dispatcher!");
+            channel.subscribe_msg::<AddrsMessage>().await.expect("Missing addr dispatcher!");
 
         Arc::new(Self { channel, hosts, settings, addr_sub })
     }
@@ -82,7 +82,7 @@ impl ProtocolSeed {
             "ext_addrs={:?}, dest={}", addrs, self.channel.address(),
         );
 
-        let ext_addr_msg = AddrsMessage2 { addrs };
+        let ext_addr_msg = AddrsMessage { addrs };
         self.channel.send(&ext_addr_msg).await?;
         debug!(target: "net::protocol_seed::send_self_address()", "[END]");
         Ok(())

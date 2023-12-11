@@ -26,7 +26,7 @@ use super::{
     super::{
         channel::ChannelPtr,
         hosts::HostsPtr,
-        message::{AddrsMessage, AddrsMessage2, GetAddrsMessage},
+        message::{AddrsMessage, GetAddrsMessage},
         message_subscriber::MessageSubscription,
         p2p::P2pPtr,
         session::SESSION_OUTBOUND,
@@ -171,7 +171,7 @@ use crate::{system::sleep, Result};
 // The format of GetAddrMessage remains the same.
 pub struct ProtocolAddress {
     channel: ChannelPtr,
-    addrs_sub: MessageSubscription<AddrsMessage2>,
+    addrs_sub: MessageSubscription<AddrsMessage>,
     get_addrs_sub: MessageSubscription<GetAddrsMessage>,
     hosts: HostsPtr,
     settings: SettingsPtr,
@@ -187,7 +187,7 @@ impl ProtocolAddress {
 
         // Creates a subscription to address message
         let addrs_sub =
-            channel.subscribe_msg::<AddrsMessage2>().await.expect("Missing addrs dispatcher!");
+            channel.subscribe_msg::<AddrsMessage>().await.expect("Missing addrs dispatcher!");
 
         // Creates a subscription to get-address message
         let get_addrs_sub =
@@ -240,7 +240,7 @@ impl ProtocolAddress {
             //       plus their mixing.
             if get_addrs_msg.transports.len() > 20 {
                 // TODO: Should this error out, effectively ending the connection?
-                let addrs_msg = AddrsMessage2 { addrs: vec![] };
+                let addrs_msg = AddrsMessage { addrs: vec![] };
                 self.channel.send(&addrs_msg).await?;
                 continue
             }
@@ -266,24 +266,26 @@ impl ProtocolAddress {
                 "Sending {} addresses to {}", addrs.len(), self.channel.address(),
             );
 
-            let addrs_msg = AddrsMessage2 { addrs };
+            let addrs_msg = AddrsMessage { addrs };
             self.channel.send(&addrs_msg).await?;
         }
     }
 
-    async fn send_my_addrs(self: Arc<Self>) -> Result<()> {
-        debug!(
-            target: "net::protocol_address::send_my_addrs()",
-            "[START] address={}", self.channel.address(),
-        );
+    // We ignore this method for now as it's not part of the new protocol.
+    // TODO: evaluate whether we need to reimplement this.
+    //async fn send_my_addrs(self: Arc<Self>) -> Result<()> {
+    //    debug!(
+    //        target: "net::protocol_address::send_my_addrs()",
+    //        "[START] address={}", self.channel.address(),
+    //    );
 
-        // FIXME: Revisit this. Why do we keep sending it?
-        loop {
-            let ext_addr_msg = AddrsMessage { addrs: self.settings.external_addrs.clone() };
-            self.channel.send(&ext_addr_msg).await?;
-            sleep(900).await;
-        }
-    }
+    //    // FIXME: Revisit this. Why do we keep sending it?
+    //    loop {
+    //        let ext_addr_msg = AddrsMessage { addrs: self.settings.external_addrs.clone() };
+    //        self.channel.send(&ext_addr_msg).await?;
+    //        sleep(900).await;
+    //    }
+    //}
 }
 
 #[async_trait]
@@ -297,10 +299,10 @@ impl ProtocolBase for ProtocolAddress {
 
         self.jobsman.clone().start(ex.clone());
 
-        // If it's an outbound session + has an extern_addr, send our address.
-        if type_id == SESSION_OUTBOUND && !self.settings.external_addrs.is_empty() {
-            self.jobsman.clone().spawn(self.clone().send_my_addrs(), ex.clone()).await;
-        }
+        //// If it's an outbound session + has an extern_addr, send our address.
+        //if type_id == SESSION_OUTBOUND && !self.settings.external_addrs.is_empty() {
+        //    self.jobsman.clone().spawn(self.clone().send_my_addrs(), ex.clone()).await;
+        //}
 
         self.jobsman.clone().spawn(self.clone().handle_receive_addrs(), ex.clone()).await;
         self.jobsman.spawn(self.clone().handle_receive_get_addrs(), ex).await;
