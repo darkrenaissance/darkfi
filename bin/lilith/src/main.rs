@@ -144,7 +144,7 @@ struct Lilith {
 }
 
 impl Lilith {
-    async fn periodic_cleanse(name: String, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
+    async fn refresh_whitelist(name: String, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
         info!(target: "lilith", "Starting periodic host cleanse task for \"{}\"", name);
 
         // Initialize a growable ring buffer(VecDeque) to store known hosts
@@ -185,11 +185,65 @@ impl Lilith {
 
             for host in &cleansers {
                 let p2p_ = p2p.clone();
+                let hosts = p2p_.hosts();
                 let ex_ = ex.clone();
                 let ring_buffer_ = ring_buffer.clone();
 
                 tasks.push(async move {
-                    p2p_.hosts().refresh_whitelist(&host, p2p_.clone(), ex_.clone()).await;
+                    let mut whitelist = hosts.whitelist.write().await;
+
+                    let session_out = p2p_.session_outbound();
+                    let session_weak = Arc::downgrade(&session_out);
+
+                    let connector = Connector::new(p2p_.settings().clone(), session_weak);
+                    debug!(target: "lilith", "Connecting to {}", host);
+                    match connector.connect(host).await {
+                        Ok((_url, channel)) => {
+                            debug!(target: "lilith", "Connected successfully!");
+                            let proto_ver = ProtocolVersion::new(channel.clone(), p2p_.settings().clone()).await;
+
+                            let handshake_task = session_out.perform_handshake_protocols(
+                                proto_ver,
+                                channel.clone(),
+                                ex_.clone(),
+                            );
+
+                            channel.clone().start(ex_.clone());
+
+                            match handshake_task.await {
+                                Ok(()) => {
+                                    debug!(target: "lilith", "Handshake success! Stopping channel.");
+                                    channel.stop().await;
+
+                                    // Peer is responsive. Update last_seen and add it to the whitelist.
+                                    let last_seen =
+                                        SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+
+                                    // Remove oldest element if the whitelist reaches max size.
+                                    if whitelist.len() == 1000 {
+                                        // Last element in vector should have the oldest timestamp.
+                                        // This should never crash as only returns None when whitelist len() == 0.
+                                        let entry = whitelist.pop().unwrap();
+                                        debug!(target: "lilith", "Whitelist reached max size. Removed host {}", entry.0);
+                                    }
+                                    // Append to the whitelist.
+                                    debug!(target: "lilith", "Adding peer {} to whitelist", host);
+                                    whitelist.push((host.clone(), last_seen));
+
+                                    // Sort whitelist by last_seen.
+                                    whitelist.sort_unstable_by_key(|entry| entry.1);
+                                }
+                                Err(e) => {
+                                    debug!(target: "lilith", "Handshake failure! {}", e);
+                                }
+                            }
+                        }
+
+                        Err(e) => {
+                            debug!(target: "lilith", "Failed to connect to {}, ({})", host, e);
+                        }
+                    }
+
                 });
             }
 
@@ -746,7 +800,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         let name = network.name.clone();
         let task = StoppableTask::new();
         task.clone().start(
-            Lilith::periodic_cleanse(name.clone(), network.p2p.clone(), ex.clone()),
+            Lilith::refresh_whitelist(name.clone(), network.p2p.clone(), ex.clone()),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }

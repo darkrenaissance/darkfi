@@ -518,73 +518,73 @@ impl Hosts {
     //    }
     //}
 
-    pub async fn refresh_whitelist(&self, url: &Url, p2p: P2pPtr, ex: Arc<Executor<'_>>) {
-        let mut whitelist = self.whitelist.write().await;
+    //pub async fn refresh_whitelist(&self, url: &Url, p2p: P2pPtr, ex: Arc<Executor<'_>>) {
+    //    let mut whitelist = self.whitelist.write().await;
 
-        // Probe node to see if it's active.
-        let online: bool = self.probe_node(url, p2p.clone(), ex.clone()).await;
+    //    // Probe node to see if it's active.
+    //    let online: bool = self.probe_node(url, p2p.clone(), ex.clone()).await;
 
-        if online {
-            // Peer is responsive. Update last_seen and add it to the whitelist.
-            let last_seen =
-                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+    //    if online {
+    //        // Peer is responsive. Update last_seen and add it to the whitelist.
+    //        let last_seen =
+    //            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
 
-            // Remove oldest element if the whitelist reaches max size.
-            if whitelist.len() == 1000 {
-                // Last element in vector should have the oldest timestamp.
-                // This should never crash as only returns None when whitelist len() == 0.
-                let entry = whitelist.pop().unwrap();
-                debug!(target: "net::hosts::refresh_whitelist()", "Whitelist reached max size. Removed host {}", entry.0);
-            }
-            // Append to the whitelist.
-            debug!(target: "net::hosts::refresh_whitelist()", "Adding peer {} to whitelist", url);
-            whitelist.push((url.clone(), last_seen));
+    //        // Remove oldest element if the whitelist reaches max size.
+    //        if whitelist.len() == 1000 {
+    //            // Last element in vector should have the oldest timestamp.
+    //            // This should never crash as only returns None when whitelist len() == 0.
+    //            let entry = whitelist.pop().unwrap();
+    //            debug!(target: "net::hosts::refresh_whitelist()", "Whitelist reached max size. Removed host {}", entry.0);
+    //        }
+    //        // Append to the whitelist.
+    //        debug!(target: "net::hosts::refresh_whitelist()", "Adding peer {} to whitelist", url);
+    //        whitelist.push((url.clone(), last_seen));
 
-            // Sort whitelist by last_seen.
-            whitelist.sort_unstable_by_key(|entry| entry.1);
-        }
-    }
+    //        // Sort whitelist by last_seen.
+    //        whitelist.sort_unstable_by_key(|entry| entry.1);
+    //    }
+    //}
 
-    pub async fn probe_node(&self, host: &Url, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> bool {
-        let p2p_ = p2p.clone();
-        let ex_ = ex.clone();
-        let session_out = p2p_.session_outbound();
-        let session_weak = Arc::downgrade(&session_out);
+    //pub async fn probe_node(&self, host: &Url, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> bool {
+    //    let p2p_ = p2p.clone();
+    //    let ex_ = ex.clone();
+    //    let session_out = p2p_.session_outbound();
+    //    let session_weak = Arc::downgrade(&session_out);
 
-        let connector = Connector::new(self.settings.clone(), session_weak);
-        debug!(target: "net::hosts::probe_node()", "Connecting to {}", host);
-        match connector.connect(host).await {
-            Ok((_url, channel)) => {
-                debug!(target: "net::hosts::probe_node()", "Connected successfully!");
-                let proto_ver = ProtocolVersion::new(channel.clone(), self.settings.clone()).await;
+    //    let connector = Connector::new(self.settings.clone(), session_weak);
+    //    debug!(target: "net::hosts::probe_node()", "Connecting to {}", host);
+    //    match connector.connect(host).await {
+    //        Ok((_url, channel)) => {
+    //            debug!(target: "net::hosts::probe_node()", "Connected successfully!");
+    //            let proto_ver = ProtocolVersion::new(channel.clone(), self.settings.clone()).await;
 
-                let handshake_task = session_out.perform_handshake_protocols(
-                    proto_ver,
-                    channel.clone(),
-                    ex_.clone(),
-                );
+    //            let handshake_task = session_out.perform_handshake_protocols(
+    //                proto_ver,
+    //                channel.clone(),
+    //                ex_.clone(),
+    //            );
 
-                channel.clone().start(ex_.clone());
+    //            channel.clone().start(ex_.clone());
 
-                match handshake_task.await {
-                    Ok(()) => {
-                        debug!(target: "net::hosts::probe_node()", "Handshake success! Stopping channel.");
-                        channel.stop().await;
-                        return true
-                    }
-                    Err(e) => {
-                        debug!(target: "net::hosts::probe_node()", "Handshake failure! {}", e);
-                        return false
-                    }
-                }
-            }
+    //            match handshake_task.await {
+    //                Ok(()) => {
+    //                    debug!(target: "net::hosts::probe_node()", "Handshake success! Stopping channel.");
+    //                    channel.stop().await;
+    //                    return true
+    //                }
+    //                Err(e) => {
+    //                    debug!(target: "net::hosts::probe_node()", "Handshake failure! {}", e);
+    //                    return false
+    //                }
+    //            }
+    //        }
 
-            Err(e) => {
-                debug!(target: "net::hosts::probe_node()", "Failed to connect to {}, ({})", host, e);
-                return false
-            }
-        }
-    }
+    //        Err(e) => {
+    //            debug!(target: "net::hosts::probe_node()", "Failed to connect to {}, ({})", host, e);
+    //            return false
+    //        }
+    //    }
+    //}
     //pub async fn remove(&self, url: &Url) {
     //    debug!(target: "net::hosts::remove()", "Removing peer {}", url);
     //    self.addrs.write().await.remove(url);
