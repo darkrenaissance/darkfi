@@ -50,7 +50,7 @@ pub const LOCAL_HOST_STRS: [&str; 2] = ["localhost", "localhost.localdomain"];
 /// Manages a store of network addresses
 pub struct Hosts {
     // Intermediary node list that is periodically probed and updated to whitelist.
-    greylist: RwLock<Vec<(Url, u64)>>,
+    pub greylist: RwLock<Vec<(Url, u64)>>,
 
     // Recently seen nodes.
     pub whitelist: RwLock<Vec<(Url, u64)>>,
@@ -474,49 +474,49 @@ impl Hosts {
 
         ret
     }
-    // Probe random peers on the greylist. If a peer is responsive, update the last_seen field and
-    // add it to the whitelist. If a node does not respond, remove it from the greylist.
-    // Called periodically.
-    pub async fn refresh_greylist(&self, p2p: P2pPtr, ex: Arc<Executor<'_>>) {
-        let mut greylist = self.greylist.write().await;
-        let mut whitelist = self.whitelist.write().await;
+    //// Probe random peers on the greylist. If a peer is responsive, update the last_seen field and
+    //// add it to the whitelist. If a node does not respond, remove it from the greylist.
+    //// Called periodically.
+    //pub async fn refresh_greylist(&self, p2p: P2pPtr, ex: Arc<Executor<'_>>) {
+    //    let mut greylist = self.greylist.write().await;
+    //    let mut whitelist = self.whitelist.write().await;
 
-        // Randomly select an entry from the greylist.
-        let position = rand::thread_rng().gen_range(0..greylist.len());
-        let entry = &greylist[position];
-        let url = &entry.0;
+    //    // Randomly select an entry from the greylist.
+    //    let position = rand::thread_rng().gen_range(0..greylist.len());
+    //    let entry = &greylist[position];
+    //    let url = &entry.0;
 
-        // Probe node to see if it's active.
-        let online: bool = self.probe_node(url, p2p.clone(), ex.clone()).await;
+    //    // Probe node to see if it's active.
+    //    let online: bool = self.probe_node(url, p2p.clone(), ex.clone()).await;
 
-        if online {
-            // Peer is responsive. Update last_seen and add it to the whitelist.
-            let last_seen =
-                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+    //    if online {
+    //        // Peer is responsive. Update last_seen and add it to the whitelist.
+    //        let last_seen =
+    //            SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
 
-            // Remove oldest element if the whitelist reaches max size.
-            if whitelist.len() == 1000 {
-                // Last element in vector should have the oldest timestamp.
-                // This should never crash as only returns None when whitelist len() == 0.
-                let entry = whitelist.pop().unwrap();
-                debug!(target: "net::hosts::refresh_greylist()", "Whitelist reached max size. Removed host {}", entry.0);
-            }
-            // Append to the whitelist.
-            debug!(target: "net::hosts::refresh_greylist()", "Adding peer {} to whitelist", url);
-            whitelist.push((url.clone(), last_seen));
+    //        // Remove oldest element if the whitelist reaches max size.
+    //        if whitelist.len() == 1000 {
+    //            // Last element in vector should have the oldest timestamp.
+    //            // This should never crash as only returns None when whitelist len() == 0.
+    //            let entry = whitelist.pop().unwrap();
+    //            debug!(target: "net::hosts::refresh_greylist()", "Whitelist reached max size. Removed host {}", entry.0);
+    //        }
+    //        // Append to the whitelist.
+    //        debug!(target: "net::hosts::refresh_greylist()", "Adding peer {} to whitelist", url);
+    //        whitelist.push((url.clone(), last_seen));
 
-            // Sort whitelist by last_seen.
-            whitelist.sort_unstable_by_key(|entry| entry.1);
+    //        // Sort whitelist by last_seen.
+    //        whitelist.sort_unstable_by_key(|entry| entry.1);
 
-            // Remove whitelisted peer from the greylist.
-            debug!(target: "net::hosts::refresh_greylist()", "Removing whitelisted peer {} from greylist", url);
-            greylist.remove(position);
-        } else {
-            // Peer is not responsive. Remove it from the greylist.
-            debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removing from greylist", url);
-            greylist.remove(position);
-        }
-    }
+    //        // Remove whitelisted peer from the greylist.
+    //        debug!(target: "net::hosts::refresh_greylist()", "Removing whitelisted peer {} from greylist", url);
+    //        greylist.remove(position);
+    //    } else {
+    //        // Peer is not responsive. Remove it from the greylist.
+    //        debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removing from greylist", url);
+    //        greylist.remove(position);
+    //    }
+    //}
 
     pub async fn refresh_whitelist(&self, url: &Url, p2p: P2pPtr, ex: Arc<Executor<'_>>) {
         let mut whitelist = self.whitelist.write().await;

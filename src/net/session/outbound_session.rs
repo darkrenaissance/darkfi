@@ -36,7 +36,11 @@ use std::{
 
 use async_trait::async_trait;
 use log::{debug, error, info, trace, warn};
-use rand::{prelude::SliceRandom, rngs::OsRng};
+use rand::{
+    prelude::{IteratorRandom, SliceRandom},
+    rngs::OsRng,
+    Rng,
+};
 use smol::lock::Mutex;
 use url::Url;
 
@@ -45,8 +49,10 @@ use super::{
         channel::ChannelPtr,
         connector::Connector,
         dnet::{self, dnetev, DnetEvent},
+        hosts::HostsPtr,
         message::GetAddrsMessage,
         p2p::{P2p, P2pPtr},
+        protocol::ProtocolVersion,
     },
     Session, SessionBitFlag, SESSION_OUTBOUND,
 };
@@ -310,7 +316,7 @@ impl Slot {
         loop {
             // Activate the slot
             debug!(
-                target: "net::outbound_session::try_connect2()",
+                target: "net::outbound_session::try_connect()",
                 "[P2P] Finding a host to connect to for outbound slot #{}",
                 self.slot,
             );
@@ -337,7 +343,7 @@ impl Slot {
             };
 
             info!(
-                target: "net::outbound_session::try_connect2()",
+                target: "net::outbound_session::try_connect()",
                 "[P2P] Connecting outbound slot #{} [{}]",
                 self.slot, addr,
             );
@@ -368,7 +374,7 @@ impl Slot {
                 };
 
             info!(
-                target: "net::outbound_session::try_connect2()",
+                target: "net::outbound_session::try_connect()",
                 "[P2P] Outbound slot #{} connected [{}]",
                 self.slot, addr_final
             );
@@ -407,12 +413,12 @@ impl Slot {
 
             self.channel_id.store(channel.info.id, Ordering::Relaxed);
 
-            // Randomly select a peer on the greylist and probe it.
-            // TODO: put this somewhere better.
-            // TODO: This frequency of this call can be set in net::Settings.
-            // Right now we are just doing at the same frequency of outbound_connect_timeout.
-            let ex = self.p2p().executor();
-            hosts.refresh_greylist(self.p2p(), ex).await;
+            //// Randomly select a peer on the greylist and probe it.
+            //// TODO: put this somewhere better.
+            //// TODO: This frequency of this call can be set in net::Settings.
+            //// Right now we are just doing at the same frequency of outbound_connect_timeout.
+            //let ex = self.p2p().executor();
+            //hosts.refresh_greylist(self.p2p(), ex).await;
 
             // Wait for channel to close
             stop_sub.receive().await;
@@ -464,7 +470,7 @@ impl Slot {
 
             Err(e) => {
                 error!(
-                    target: "net::outbound_session::try_connect2()",
+                    target: "net::outbound_session::try_connect()",
                     "[P2P] Unable to connect outbound slot #{} [{}]: {}",
                     self.slot, addr, e
                 );
@@ -773,5 +779,151 @@ impl PeerDiscovery {
     }
     fn p2p(&self) -> P2pPtr {
         self.session().p2p()
+    }
+}
+
+// TODO: better naming
+// NOTE: in monero this is called "greylist housekeeping" but that's a bit verbose.
+struct GreylistRefinery {
+    process: StoppableTaskPtr,
+    //wakeup_self: CondVar,
+    session: LazyWeak<OutboundSession>,
+}
+
+impl GreylistRefinery {
+    fn new() -> Arc<Self> {
+        Arc::new(Self {
+            process: StoppableTask::new(),
+            //wakeup_self: CondVar::new(),
+            session: LazyWeak::new(),
+        })
+    }
+
+    //async fn start(self: Arc<Self>) {
+    //    let ex = self.p2p().executor();
+    //    self.process.clone().start(
+    //        async move {
+    //            self.run().await;
+    //            unreachable!();
+    //        },
+    //        // Ignore stop handler
+    //        |_| async {},
+    //        Error::NetworkServiceStopped,
+    //        ex,
+    //    );
+    //}
+    async fn stop(self: Arc<Self>) {
+        self.process.stop().await
+    }
+
+    //// Randomly select a peer on the greylist and probe it.
+    //// TODO: This frequency of this call can be set in net::Settings.
+    async fn run(self: Arc<Self>) {
+        loop {
+            let p2p = self.p2p();
+            let hosts = p2p.hosts();
+            let session = self.session();
+            let greylist = hosts.greylist.read().await;
+
+            //// Randomly select an entry from the greylist.
+            let position = rand::thread_rng().gen_range(0..greylist.len());
+            let entry = &greylist[position];
+            let url = &entry.0;
+
+            let parent = Arc::downgrade(&self.session());
+
+            let mut greylist = hosts.greylist.write().await;
+            let mut whitelist = hosts.whitelist.write().await;
+
+            let connector = Connector::new(p2p.settings(), parent);
+            debug!(target: "net::greylist_refinery::run()", "Connecting to {}", url);
+            match connector.connect(url).await {
+                Ok((_url, channel)) => {
+                    debug!(target: "net::greylist_refinery::run()", "Connected successfully!");
+                    let proto_ver = ProtocolVersion::new(channel.clone(), p2p.settings()).await;
+
+                    let handshake_task = session.perform_handshake_protocols(
+                        proto_ver,
+                        channel.clone(),
+                        p2p.executor(),
+                    );
+
+                    channel.clone().start(p2p.executor());
+
+                    match handshake_task.await {
+                        Ok(()) => {
+                            debug!(target: "net::greylist_refinery::run()", "Handshake success! Stopping channel.");
+                            channel.stop().await;
+
+                            // Peer is responsive. Update last_seen and add it to the whitelist.
+                            let last_seen = SystemTime::now()
+                                .duration_since(SystemTime::UNIX_EPOCH)
+                                .unwrap()
+                                .as_secs();
+
+                            // Remove oldest element if the whitelist reaches max size.
+                            if whitelist.len() == 1000 {
+                                // Last element in vector should have the oldest timestamp.
+                                // This should never crash as only returns None when whitelist len() == 0.
+                                let entry = whitelist.pop().unwrap();
+                                debug!(target: "net::greylist_refinery::run()", "Whitelist reached max size. Removed host {}", entry.0);
+                            }
+
+                            // Append to the whitelist.
+                            debug!(target: "net::greylist_refinery::run()", "Adding peer {} to whitelist", url);
+                            whitelist.push((url.clone(), last_seen));
+
+                            // Sort whitelist by last_seen.
+                            whitelist.sort_unstable_by_key(|entry| entry.1);
+
+                            // Remove whitelisted peer from the greylist.
+                            debug!(target: "net::greylist_refinery::run()", "Removing whitelisted peer {} from greylist", url);
+                            greylist.remove(position);
+                        }
+                        Err(e) => {
+                            debug!(target: "net::hosts::probe_node()", "Handshake failure! {}", e);
+                            // Peer is not responsive. Remove it from the greylist.
+                            greylist.remove(position);
+                            debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removed from greylist", url);
+                        }
+                    }
+                }
+
+                Err(e) => {
+                    debug!(target: "net::hosts::probe_node()", "Failed to connect to {}, ({})", url, e);
+                    // Peer is not responsive. Remove it from the greylist.
+                    greylist.remove(position);
+                    debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removed from greylist", url);
+                }
+            }
+
+            // TODO: create a custom net setting for this timer
+            sleep(p2p.settings().outbound_peer_discovery_attempt_time).await;
+        }
+    }
+
+    //async fn wait(&self) -> bool {
+    //    let wakeup_start = Instant::now();
+    //    self.wakeup_self.wait().await;
+    //    let wakeup_end = Instant::now();
+
+    //    let epsilon = Duration::from_millis(200);
+    //    wakeup_end - wakeup_start <= epsilon
+    //}
+
+    //fn notify(&self) {
+    //    self.wakeup_self.notify()
+    //}
+
+    fn session(&self) -> OutboundSessionPtr {
+        self.session.upgrade()
+    }
+
+    fn p2p(&self) -> P2pPtr {
+        self.session().p2p()
+    }
+
+    fn hosts(&self) -> HostsPtr {
+        self.session().p2p().hosts()
     }
 }
