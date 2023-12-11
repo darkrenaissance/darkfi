@@ -36,9 +36,7 @@ use std::{
 
 use async_trait::async_trait;
 use log::{debug, error, info, warn};
-use rand::{
-    Rng,
-};
+use rand::Rng;
 use smol::lock::Mutex;
 use url::Url;
 
@@ -89,6 +87,7 @@ impl OutboundSession {
             greylist_refinery: GreylistRefinery::new(),
         });
         self_.peer_discovery.session.init(self_.clone());
+        self_.greylist_refinery.session.init(self_.clone());
         self_
     }
 
@@ -249,25 +248,24 @@ impl Slot {
                 addr: addr.clone(),
             });
 
-            let (addr_final, channel) =
-                match self.try_connect(addr.clone()).await {
-                    Ok(connect_info) => connect_info,
-                    Err(err) => {
-                        error!(
-                            target: "net::outbound_session",
-                            "[P2P] Outbound slot #{} connection failed: {}",
-                            self.slot, err,
-                        );
+            let (addr_final, channel) = match self.try_connect(addr.clone()).await {
+                Ok(connect_info) => connect_info,
+                Err(err) => {
+                    error!(
+                        target: "net::outbound_session",
+                        "[P2P] Outbound slot #{} connection failed: {}",
+                        self.slot, err,
+                    );
 
-                        dnetev!(self, OutboundSlotDisconnected, {
-                            slot: self.slot,
-                            err: err.to_string()
-                        });
+                    dnetev!(self, OutboundSlotDisconnected, {
+                        slot: self.slot,
+                        err: err.to_string()
+                    });
 
-                        self.channel_id.store(0, Ordering::Relaxed);
-                        continue
-                    }
-                };
+                    self.channel_id.store(0, Ordering::Relaxed);
+                    continue
+                }
+            };
 
             info!(
                 target: "net::outbound_session::try_connect()",
@@ -365,7 +363,6 @@ impl Slot {
         Ok(())
     }
 
-    ///// TODO: this method should go in hosts
     fn notify(&self) {
         self.wakeup_self.notify()
     }
@@ -571,10 +568,7 @@ struct GreylistRefinery {
 
 impl GreylistRefinery {
     fn new() -> Arc<Self> {
-        Arc::new(Self {
-            process: StoppableTask::new(),
-            session: LazyWeak::new(),
-        })
+        Arc::new(Self { process: StoppableTask::new(), session: LazyWeak::new() })
     }
 
     async fn start(self: Arc<Self>) {
@@ -598,85 +592,90 @@ impl GreylistRefinery {
     //// Randomly select a peer on the greylist and probe it.
     //// TODO: This frequency of this call can be set in net::Settings.
     async fn run(self: Arc<Self>) {
+        debug!(target: "net::greylist_refinery::run()", "START");
         loop {
             let p2p = self.p2p();
             let hosts = p2p.hosts();
             let session = self.session();
             let greylist = hosts.greylist.read().await;
 
-            //// Randomly select an entry from the greylist.
-            let position = rand::thread_rng().gen_range(0..greylist.len());
-            let entry = &greylist[position];
-            let url = &entry.0;
+            if !hosts.is_empty_greylist().await {
+                debug!(target: "net::greylist_refinery::run()", "Starting refinery process");
+                //// Randomly select an entry from the greylist.
+                let position = rand::thread_rng().gen_range(0..greylist.len());
+                let entry = &greylist[position];
+                let url = &entry.0;
 
-            let parent = Arc::downgrade(&self.session());
+                let parent = Arc::downgrade(&self.session());
 
-            let mut greylist = hosts.greylist.write().await;
-            let mut whitelist = hosts.whitelist.write().await;
+                let mut greylist = hosts.greylist.write().await;
+                let mut whitelist = hosts.whitelist.write().await;
 
-            let connector = Connector::new(p2p.settings(), parent);
-            debug!(target: "net::greylist_refinery::run()", "Connecting to {}", url);
-            match connector.connect(url).await {
-                Ok((_url, channel)) => {
-                    debug!(target: "net::greylist_refinery::run()", "Connected successfully!");
-                    let proto_ver = ProtocolVersion::new(channel.clone(), p2p.settings()).await;
+                let connector = Connector::new(p2p.settings(), parent);
+                debug!(target: "net::greylist_refinery::run()", "Connecting to {}", url);
+                match connector.connect(url).await {
+                    Ok((_url, channel)) => {
+                        debug!(target: "net::greylist_refinery::run()", "Connected successfully!");
+                        let proto_ver = ProtocolVersion::new(channel.clone(), p2p.settings()).await;
 
-                    let handshake_task = session.perform_handshake_protocols(
-                        proto_ver,
-                        channel.clone(),
-                        p2p.executor(),
-                    );
+                        let handshake_task = session.perform_handshake_protocols(
+                            proto_ver,
+                            channel.clone(),
+                            p2p.executor(),
+                        );
 
-                    channel.clone().start(p2p.executor());
+                        channel.clone().start(p2p.executor());
 
-                    match handshake_task.await {
-                        Ok(()) => {
-                            debug!(target: "net::greylist_refinery::run()", "Handshake success! Stopping channel.");
-                            channel.stop().await;
+                        match handshake_task.await {
+                            Ok(()) => {
+                                debug!(target: "net::greylist_refinery::run()", "Handshake success! Stopping channel.");
+                                channel.stop().await;
 
-                            // Peer is responsive. Update last_seen and add it to the whitelist.
-                            let last_seen = SystemTime::now()
-                                .duration_since(SystemTime::UNIX_EPOCH)
-                                .unwrap()
-                                .as_secs();
+                                // Peer is responsive. Update last_seen and add it to the whitelist.
+                                let last_seen = SystemTime::now()
+                                    .duration_since(SystemTime::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs();
 
-                            // Remove oldest element if the whitelist reaches max size.
-                            if whitelist.len() == 1000 {
-                                // Last element in vector should have the oldest timestamp.
-                                // This should never crash as only returns None when whitelist len() == 0.
-                                let entry = whitelist.pop().unwrap();
-                                debug!(target: "net::greylist_refinery::run()", "Whitelist reached max size. Removed host {}", entry.0);
+                                // Remove oldest element if the whitelist reaches max size.
+                                if whitelist.len() == 1000 {
+                                    // Last element in vector should have the oldest timestamp.
+                                    // This should never crash as only returns None when whitelist len() == 0.
+                                    let entry = whitelist.pop().unwrap();
+                                    debug!(target: "net::greylist_refinery::run()", "Whitelist reached max size. Removed host {}", entry.0);
+                                }
+
+                                // Append to the whitelist.
+                                debug!(target: "net::greylist_refinery::run()", "Adding peer {} to whitelist", url);
+                                whitelist.push((url.clone(), last_seen));
+
+                                // Sort whitelist by last_seen.
+                                whitelist.sort_unstable_by_key(|entry| entry.1);
+
+                                // Remove whitelisted peer from the greylist.
+                                debug!(target: "net::greylist_refinery::run()", "Removing whitelisted peer {} from greylist", url);
+                                greylist.remove(position);
                             }
-
-                            // Append to the whitelist.
-                            debug!(target: "net::greylist_refinery::run()", "Adding peer {} to whitelist", url);
-                            whitelist.push((url.clone(), last_seen));
-
-                            // Sort whitelist by last_seen.
-                            whitelist.sort_unstable_by_key(|entry| entry.1);
-
-                            // Remove whitelisted peer from the greylist.
-                            debug!(target: "net::greylist_refinery::run()", "Removing whitelisted peer {} from greylist", url);
-                            greylist.remove(position);
-                        }
-                        Err(e) => {
-                            debug!(target: "net::hosts::probe_node()", "Handshake failure! {}", e);
-                            // Peer is not responsive. Remove it from the greylist.
-                            greylist.remove(position);
-                            debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removed from greylist", url);
+                            Err(e) => {
+                                debug!(target: "net::hosts::probe_node()", "Handshake failure! {}", e);
+                                // Peer is not responsive. Remove it from the greylist.
+                                greylist.remove(position);
+                                debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removed from greylist", url);
+                            }
                         }
                     }
-                }
 
-                Err(e) => {
-                    debug!(target: "net::hosts::probe_node()", "Failed to connect to {}, ({})", url, e);
-                    // Peer is not responsive. Remove it from the greylist.
-                    greylist.remove(position);
-                    debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removed from greylist", url);
+                    Err(e) => {
+                        debug!(target: "net::hosts::probe_node()", "Failed to connect to {}, ({})", url, e);
+                        // Peer is not responsive. Remove it from the greylist.
+                        greylist.remove(position);
+                        debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removed from greylist", url);
+                    }
                 }
             }
 
             // TODO: create a custom net setting for this timer
+            debug!(target: "net::greylist_refinery::run()", "Sleeping...");
             sleep(p2p.settings().outbound_peer_discovery_attempt_time).await;
         }
     }

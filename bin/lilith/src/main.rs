@@ -21,7 +21,7 @@ use std::{
     path::Path,
     process::exit,
     sync::Arc,
-    time::{SystemTime},
+    time::SystemTime,
 };
 
 use async_trait::async_trait;
@@ -145,14 +145,15 @@ struct Lilith {
 
 impl Lilith {
     async fn refresh_whitelist(name: String, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
-        info!(target: "lilith", "Starting periodic host cleanse task for \"{}\"", name);
+        info!(target: "lilith", "Starting refresh whitelist task for \"{}\"", name);
 
         // Initialize a growable ring buffer(VecDeque) to store known hosts
         let ring_buffer = Arc::new(RwLock::new(VecDeque::<Url>::new()));
+
         loop {
             // Wait for next purge period
             sleep(CLEANSE_PERIOD).await;
-            debug!(target: "lilith", "[{}] The Cleanse has started...", name);
+            debug!(target: "lilith", "[{}] Refresh whitelist() started...", name);
 
             // Check if new hosts exist and add them to the end of the ring buffer
             let mut lock = ring_buffer.write().await;

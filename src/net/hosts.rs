@@ -26,10 +26,7 @@ use rand::{
 use smol::lock::RwLock;
 use url::Url;
 
-use super::{
-    p2p::P2pPtr, 
-    settings::SettingsPtr,
-};
+use super::{p2p::P2pPtr, settings::SettingsPtr};
 use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
     Result,
