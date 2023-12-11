@@ -21,7 +21,7 @@ use std::{
     path::Path,
     process::exit,
     sync::Arc,
-    time::{Duration, Instant, SystemTime},
+    time::{SystemTime},
 };
 
 use async_trait::async_trait;
@@ -102,7 +102,7 @@ impl Spawn {
             .whitelist_fetch_all()
             .await
             .iter()
-            .map(|(addr, url)| JsonValue::String(addr.to_string()))
+            .map(|(addr, _url)| JsonValue::String(addr.to_string()))
             .collect()
     }
 
@@ -187,7 +187,6 @@ impl Lilith {
                 let p2p_ = p2p.clone();
                 let hosts = p2p_.hosts();
                 let ex_ = ex.clone();
-                let ring_buffer_ = ring_buffer.clone();
 
                 tasks.push(async move {
                     let mut whitelist = hosts.whitelist.write().await;
@@ -251,102 +250,6 @@ impl Lilith {
         }
     }
 
-    ///// Internal task to run a periodic purge of unreachable hosts
-    ///// for a specific P2P network.
-    //async fn periodic_purge(name: String, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
-    //    info!(target: "lilith", "Starting periodic host purge task for \"{}\"", name);
-
-    //    // Initialize a growable ring buffer(VecDeque) to store known hosts
-    //    let ring_buffer = Arc::new(RwLock::new(VecDeque::<Url>::new()));
-    //    loop {
-    //        // Wait for next purge period
-    //        sleep(PURGE_PERIOD).await;
-    //        debug!(target: "lilith", "[{}] The Purge has started...", name);
-
-    //        // Check if new hosts exist and add them to the end of the ring buffer
-    //        let mut lock = ring_buffer.write().await;
-    //        let hosts = p2p.clone().hosts().whitelist_fetch_all().await;
-    //        if hosts.len() != lock.len() {
-    //            // Since hosts are stored in a HashSet we have to check all of them
-    //            for host in hosts {
-    //                if !lock.contains(&host) {
-    //                    lock.push_back(host);
-    //                }
-    //            }
-    //        }
-
-    //        // Pick first up to PROBE_HOSTS_N hosts from the ring buffer
-    //        let mut purgers = vec![];
-    //        let mut index = 0;
-    //        while index <= PROBE_HOSTS_N {
-    //            match lock.pop_front() {
-    //                Some(host) => purgers.push(host),
-    //                None => break,
-    //            };
-    //            index += 1;
-    //        }
-
-    //        // Try to connect to them. If we can't reach them, remove them from our set.
-    //        let purgers_str: Vec<&str> = purgers.iter().map(|x| x.as_str()).collect();
-    //        debug!(target: "lilith", "[{}] Got: {:?}", name, purgers_str);
-
-    //        let mut tasks = vec![];
-
-    //        for host in &purgers {
-    //            let p2p_ = p2p.clone();
-    //            let ex_ = ex.clone();
-    //            let ring_buffer_ = ring_buffer.clone();
-    //            tasks.push(async move {
-    //                let session_out = p2p_.session_outbound();
-    //                let session_weak = Arc::downgrade(&session_out);
-
-    //                let connector = Connector::new(p2p_.settings(), session_weak);
-    //                debug!(target: "lilith", "Connecting to {}", host);
-    //                match connector.connect(host).await {
-    //                    Ok((_url, channel)) => {
-    //                        debug!(target: "lilith", "Connected successfully!");
-    //                        let proto_ver = ProtocolVersion::new(
-    //                            channel.clone(),
-    //                            p2p_.settings().clone(),
-    //                            //p2p_.hosts().clone(),
-    //                        )
-    //                        .await;
-
-    //                        let handshake_task = session_out.perform_handshake_protocols(
-    //                            proto_ver,
-    //                            channel.clone(),
-    //                            ex_.clone(),
-    //                        );
-
-    //                        channel.clone().start(ex_.clone());
-
-    //                        match handshake_task.await {
-    //                            Ok(()) => {
-    //                                debug!(target: "lilith", "Handshake success! Stopping channel.");
-    //                                channel.stop().await;
-    //                                // Push host back to the ring buffer
-    //                                ring_buffer_.write().await.push_back(host.clone());
-    //                            }
-    //                            Err(e) => {
-    //                                debug!(target: "lilith", "Handshake failure! {}", e);
-    //                                p2p_.hosts().remove(host).await;
-    //                            }
-    //                        }
-    //                    }
-
-    //                    Err(e) => {
-    //                        debug!(target: "lilith", "Failed to connect to {}, removing from set ({})", host, e);
-    //                        // Remove from hosts set
-    //                        p2p_.hosts().remove(host).await;
-    //                    }
-    //                }
-    //            });
-    //        }
-
-    //        join_all(tasks).await;
-    //    }
-    //}
-
     // RPCAPI:
     // Returns all spawned networks names with their node addresses.
     // --> {"jsonrpc": "2.0", "method": "spawns", "params": [], "id": 42}
@@ -378,40 +281,6 @@ impl RequestHandler for Lilith {
         self.rpc_connections.lock().await
     }
 }
-
-///// Attempt to read existing hosts tsv
-//fn load_hosts(path: &Path, networks: &[&str]) -> HashMap<String, HashSet<Url>> {
-//    let mut saved_hosts = HashMap::new();
-//
-//    let contents = load_file(path);
-//    if let Err(e) = contents {
-//        warn!(target: "lilith", "Failed retrieving saved hosts: {}", e);
-//        return saved_hosts
-//    }
-//
-//    for line in contents.unwrap().lines() {
-//        let data: Vec<&str> = line.split('\t').collect();
-//        if networks.contains(&data[0]) {
-//            let mut hosts = match saved_hosts.get(data[0]) {
-//                Some(hosts) => hosts.clone(),
-//                None => HashSet::new(),
-//            };
-//
-//            let url = match Url::parse(data[1]) {
-//                Ok(u) => u,
-//                Err(e) => {
-//                    warn!(target: "lilith", "Skipping malformed url: {} ({})", data[1], e);
-//                    continue
-//                }
-//            };
-//
-//            hosts.insert(url);
-//            saved_hosts.insert(data[0].to_string(), hosts);
-//        }
-//    }
-//
-//    saved_hosts
-//}
 
 fn load_hosts(path: &Path, networks: &[&str]) -> HashMap<String, Vec<(Url, u64)>> {
     let mut saved_hosts = HashMap::new();
@@ -453,23 +322,6 @@ fn load_hosts(path: &Path, networks: &[&str]) -> HashMap<String, Vec<(Url, u64)>
 
     saved_hosts
 }
-
-//async fn save_hosts(path: &Path, networks: &[Spawn]) {
-//    let mut tsv = String::new();
-//
-//    for spawn in networks {
-//        for host in spawn.p2p.hosts().fetch_all().await {
-//            tsv.push_str(&format!("{}\t{}\n", spawn.name, host.as_str()));
-//        }
-//    }
-//
-//    if !tsv.eq("") {
-//        info!(target: "lilith", "Saving current hosts of spawned networks to: {:?}", path);
-//        if let Err(e) = save_file(path, &tsv) {
-//            error!(target: "lilith", "Failed saving hosts: {}", e);
-//        }
-//    }
-//}
 
 async fn save_hosts(path: &Path, networks: &[Spawn]) {
     let mut tsv = String::new();
@@ -558,55 +410,6 @@ fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
     Ok(ret)
 }
 
-//async fn spawn_net(
-//    name: String,
-//    info: &NetInfo,
-//    saved_hosts: Vec<(Url, u64)>,
-//    ex: Arc<Executor<'static>>,
-//) -> Result<Spawn> {
-//    let mut listen_urls = vec![];
-//
-//    // Configure listen addrs for this network
-//    for url in &info.accept_addrs {
-//        listen_urls.push(url.clone());
-//    }
-//
-//    // P2P network settings
-//    let settings = net::Settings {
-//        inbound_addrs: listen_urls.clone(),
-//        seeds: info.seeds.clone(),
-//        peers: info.peers.clone(),
-//        outbound_connections: 0,
-//        outbound_connect_timeout: 30,
-//        inbound_connections: 512,
-//        app_version: info.version.clone(),
-//        localnet: info.localnet,
-//        allowed_transports: vec![
-//            "tcp".to_string(),
-//            "tcp+tls".to_string(),
-//            "tor".to_string(),
-//            "tor+tls".to_string(),
-//            "nym".to_string(),
-//            "nym+tls".to_string(),
-//        ],
-//        ..Default::default()
-//    };
-//
-//    // Create P2P instance
-//    let p2p = P2p::new(settings, ex.clone()).await;
-//
-//    // Fill db with cached hosts
-//    let hosts: Vec<(Url, u64)> = saved_hosts.iter().cloned().collect();
-//    p2p.hosts().greylist_store(&hosts).await;
-//
-//    let addrs_str: Vec<&str> = listen_urls.iter().map(|x| x.as_str()).collect();
-//    info!(target: "lilith", "Starting seed network node for \"{}\" on {:?}", name, addrs_str);
-//    p2p.clone().start().await?;
-//
-//    let spawn = Spawn { name, p2p };
-//    Ok(spawn)
-//}
-//
 async fn spawn_net(
     name: String,
     info: &NetInfo,
@@ -655,104 +458,6 @@ async fn spawn_net(
     let spawn = Spawn { name, p2p };
     Ok(spawn)
 }
-
-//async_daemonize!(realmain);
-//async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
-//    // Pick up network settings from the TOML config
-//    let cfg_path = get_config_path(args.config, CONFIG_FILE)?;
-//    let toml_contents = std::fs::read_to_string(cfg_path)?;
-//    let configured_nets = parse_configured_networks(&toml_contents)?;
-//
-//    if configured_nets.is_empty() {
-//        error!(target: "lilith", "No networks are enabled in config");
-//        exit(1);
-//    }
-//
-//    // Retrieve any saved hosts for configured networks
-//    let net_names: Vec<&str> = configured_nets.keys().map(|x| x.as_str()).collect();
-//    let saved_hosts = load_hosts(&expand_path(&args.hosts_file)?, &net_names);
-//
-//    // Spawn configured networks
-//    let mut networks = vec![];
-//    for (name, info) in &configured_nets {
-//        // TODO: Here we could actually differentiate between network versions
-//        // e.g. p2p_v3, p2p_v4, etc. Therefore we can spawn multiple networks
-//        // and they would all be version-checked, so we avoid mismatches when
-//        // seeding peers.
-//        match spawn_net(
-//            name.to_string(),
-//            info,
-//            saved_hosts.get(name).unwrap_or(&HashSet::new()),
-//            ex.clone(),
-//        )
-//        .await
-//        {
-//            Ok(spawn) => networks.push(spawn),
-//            Err(e) => {
-//                error!(target: "lilith", "Failed to start P2P network seed for \"{}\": {}", name, e);
-//                exit(1);
-//            }
-//        }
-//    }
-//
-//    // Set up main daemon and background tasks
-//    let lilith = Arc::new(Lilith { networks, rpc_connections: Mutex::new(HashSet::new()) });
-//    let mut periodic_tasks = HashMap::new();
-//    for network in &lilith.networks {
-//        let name = network.name.clone();
-//        let task = StoppableTask::new();
-//        task.clone().start(
-//            Lilith::periodic_purge(name.clone(), network.p2p.clone(), ex.clone()),
-//            |res| async move {
-//                match res {
-//                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-//                    Err(e) => error!(target: "lilith", "Failed starting periodic task for \"{}\": {}", name, e),
-//                }
-//            },
-//            Error::DetachedTaskStopped,
-//            ex.clone(),
-//        );
-//        periodic_tasks.insert(network.name.clone(), task);
-//    }
-//
-//    // JSON-RPC server
-//    info!(target: "lilith", "Starting JSON-RPC server on {}", args.rpc_listen);
-//    let lilith_ = lilith.clone();
-//    let rpc_task = StoppableTask::new();
-//    rpc_task.clone().start(
-//        listen_and_serve(args.rpc_listen, lilith.clone(), None, ex.clone()),
-//        |res| async move {
-//            match res {
-//                Ok(()) | Err(Error::RpcServerStopped) => lilith_.stop_connections().await,
-//                Err(e) => error!(target: "lilith", "Failed starting JSON-RPC server: {}", e),
-//            }
-//        },
-//        Error::RpcServerStopped,
-//        ex.clone(),
-//    );
-//
-//    // Signal handling for graceful termination.
-//    let (signals_handler, signals_task) = SignalHandler::new(ex)?;
-//    signals_handler.wait_termination(signals_task).await?;
-//    info!(target: "lilith", "Caught termination signal, cleaning up and exiting...");
-//
-//    // Save in-memory hosts to tsv file
-//    save_hosts(&expand_path(&args.hosts_file)?, &lilith.networks).await;
-//
-//    info!(target: "lilith", "Stopping JSON-RPC server...");
-//    rpc_task.stop().await;
-//
-//    // Cleanly stop p2p networks
-//    for spawn in &lilith.networks {
-//        info!(target: "lilith", "Stopping \"{}\" periodic task", spawn.name);
-//        periodic_tasks.get(&spawn.name).unwrap().stop().await;
-//        info!(target: "lilith", "Stopping \"{}\" P2P", spawn.name);
-//        spawn.p2p.stop().await;
-//    }
-//
-//    info!(target: "lilith", "Bye!");
-//    Ok(())
-//}
 
 async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {

@@ -24,7 +24,6 @@ use smol::Executor;
 
 use super::super::{
     channel::ChannelPtr,
-    hosts::HostsPtr,
     message::{VerackMessage, VersionMessage},
     message_subscriber::MessageSubscription,
     settings::SettingsPtr,
