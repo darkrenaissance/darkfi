@@ -74,6 +74,8 @@ pub struct OutboundSession {
     slots: Mutex<Vec<Arc<Slot>>>,
     /// Peer discovery task
     peer_discovery: Arc<PeerDiscovery>,
+    /// Greylist refinery task
+    greylist_refinery: Arc<GreylistRefinery>,
 }
 
 impl OutboundSession {
@@ -84,6 +86,7 @@ impl OutboundSession {
             channel_subscriber: Subscriber::new(),
             slots: Mutex::new(Vec::new()),
             peer_discovery: PeerDiscovery::new(),
+            greylist_refinery: GreylistRefinery::new(),
         });
         self_.peer_discovery.session.init(self_.clone());
         self_
@@ -105,6 +108,7 @@ impl OutboundSession {
         }
 
         self.peer_discovery.clone().start().await;
+        self.greylist_refinery.clone().start().await;
     }
 
     /// Stops the outbound session.
@@ -116,6 +120,7 @@ impl OutboundSession {
         }
 
         self.peer_discovery.clone().stop().await;
+        self.greylist_refinery.clone().stop().await;
     }
 
     pub async fn slot_info(&self) -> Vec<u32> {
@@ -561,7 +566,6 @@ impl PeerDiscovery {
 // NOTE: in monero this is called "greylist housekeeping" but that's a bit verbose.
 struct GreylistRefinery {
     process: StoppableTaskPtr,
-    //wakeup_self: CondVar,
     session: LazyWeak<OutboundSession>,
 }
 
@@ -569,24 +573,24 @@ impl GreylistRefinery {
     fn new() -> Arc<Self> {
         Arc::new(Self {
             process: StoppableTask::new(),
-            //wakeup_self: CondVar::new(),
             session: LazyWeak::new(),
         })
     }
 
-    //async fn start(self: Arc<Self>) {
-    //    let ex = self.p2p().executor();
-    //    self.process.clone().start(
-    //        async move {
-    //            self.run().await;
-    //            unreachable!();
-    //        },
-    //        // Ignore stop handler
-    //        |_| async {},
-    //        Error::NetworkServiceStopped,
-    //        ex,
-    //    );
-    //}
+    async fn start(self: Arc<Self>) {
+        let ex = self.p2p().executor();
+        self.process.clone().start(
+            async move {
+                self.run().await;
+                unreachable!();
+            },
+            // Ignore stop handler
+            |_| async {},
+            Error::NetworkServiceStopped,
+            ex,
+        );
+    }
+
     async fn stop(self: Arc<Self>) {
         self.process.stop().await
     }
@@ -677,19 +681,6 @@ impl GreylistRefinery {
         }
     }
 
-    //async fn wait(&self) -> bool {
-    //    let wakeup_start = Instant::now();
-    //    self.wakeup_self.wait().await;
-    //    let wakeup_end = Instant::now();
-
-    //    let epsilon = Duration::from_millis(200);
-    //    wakeup_end - wakeup_start <= epsilon
-    //}
-
-    //fn notify(&self) {
-    //    self.wakeup_self.notify()
-    //}
-
     fn session(&self) -> OutboundSessionPtr {
         self.session.upgrade()
     }
@@ -697,8 +688,4 @@ impl GreylistRefinery {
     fn p2p(&self) -> P2pPtr {
         self.session().p2p()
     }
-
-    //fn hosts(&self) -> HostsPtr {
-    //    self.session().p2p().hosts()
-    //}
 }
