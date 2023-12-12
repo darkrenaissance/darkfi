@@ -174,11 +174,11 @@ least two anchor nodes.
 
 ### Scope of the update
 
-* Refactor `src/hosts.rs` to store two Vec<(Url, u64)> instead of single
-Hashset<Url>, replacing the host list and its associated methods with
+* Refactor `src/hosts.rs` to store two `Vec<(Url, u64)>` instead of single
+`Hashset<Url>`, replacing the host list and its associated methods with
 a whitelist and a greylist. [STATUS: COMPLETE- testing]
 
-* Create a GreylistRefinery protocol in OutboundSession (renamed from
+* Create a `GreylistRefinery` protocol in `OutboundSession` (renamed from
 Monero's "greylist housekeeping" for succinctness) that periodically
 selects random peers from its greylist and pings them. If a peer is
 responsive, update the `last_seen` field and add it to the whitelist,
@@ -202,7 +202,7 @@ greylist. [STATUS: INCOMPLETE/ FIXME]
 receiving get_addr, fetch an address from the whitelist. [STATUS COMPLETE
 - testing].
 
-* ProtocolSeed: Sends our address to the seed node, and on receiving
+* ProtocolSeed: Send our address to the seed node, and on receiving
 addresses, append them to the whitelist. [STATUS: INCOMPLETE/ FIXME]
 
 * Create a new list in `hosts.rs` called `anchorlist`. OutboundSession
