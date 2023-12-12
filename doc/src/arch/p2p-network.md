@@ -131,3 +131,83 @@ routing tables is a kind of decentralized lilith which keeps track of all the sw
 
 Possibly a post-mainnet feature depending on the scale of architectural changes or new code required in the net submodule.
 
+### Proposed update
+
+#### Monero p2p recap
+
+In Monero, each node maintains a peer list consisting of two parts,
+a whitelist and a greylist. White/ greylists contain a `last_seen`
+data field, a timestamp of the last time the peer was interacted with.
+
+The lists are ordered chronologically according to `last_seen`, with the
+most recently seen peers at the top of the list. The whitelist max size
+is 1000. The greylist max size is 5000. If the number of peers in these
+lists reach this maximum, then the peers with the oldest `last_seen`
+fields are removed from the list.
+
+Each time a node receives info about a set of peers, the info is inserted
+into its greylist. To discover peers, nodes exchange `SYN` messages
+to their neighbors. Upon receiving a `SYN` message, peers reply with
+a message with the top 250 peers from their whitelist. The requester
+inserts the received peer data into its greylist.
+
+Nodes update their whitelist and greylist through a mechanism called
+"greylist housekeeping", which periodically pings randomly selected peers
+from its greylist. If a peer is responsive, then it is promoted to the
+whitelist with an updated `last_seen` field, otherwise it is removed
+from the greylist.
+
+To handle idle connections, nodes check connections through the
+`IDLE_HANDSHAKE` protocol. Nodes iterate through their connections, send a
+`SYN` message, and update the last seen fields of the connection if they
+receive a response. Otherwise, they drop the associated connection and
+select another peer from the whitelist. The disconnected peer stays on
+the whitelist.
+
+Nodes broadcast messages to connections choosen from their whitelist. If
+not enough peers from the whitelist are currently online, then a node
+will establish connections from its greylist. Nodes to which previous
+connections were established are classified as anchor nodes, and stored
+in the white list. Monero ensures that every node is connected to at
+least two anchor nodes.
+
+
+#### Scope of the update
+
+* Refactor `src/hosts.rs` to store two Vec<(Url, u64)> instead of single
+Hashset<Url>, replacing the host list and its associated methods with
+a whitelist and a greylist. [STATUS: COMPLETE- testing]
+
+* Create a GreylistRefinery protocol in OutboundSession (renamed from
+Monero's "greylist housekeeping" for succinctness) that periodically
+selects random peers from its greylist and pings them. If a peer is
+responsive, update the `last_seen` field and add it to the whitelist,
+otherwise remove it from the greylist. [STATUS: COMPLETE- testing]
+
+* Lilith currently checks connections on the host list using a method
+called `periodic_purge` that gets hosts from the host list, copies them to
+a local ring buffer, and periodically handshakes the connections. If the
+handshake fails, Lilith removes the host from the hostlist. This protocol
+has been replaced by a method called `whitelist_cleansing`. Like the
+prior method, `whitelist_cleansing` pulls connections from the whitelist,
+copies them to a ring buffer and handshakes them periodically. If they
+respond, the `last_seen` is updated, otherwise nothing happens. This is
+loosely based on Monero's `IDLE_HANDSHAKE` protocol. [STATUS: COMPLETE/
+REEVALUATE - testing]
+
+* SeedsyncSession: on receiving whitelisted peers, append them to
+greylist. [STATUS: INCOMPLETE/ FIXME]
+
+* ProtocolAddress: On receiving an address, append it to the greylist. On
+receiving get_addr, fetch an address from the whitelist. [STATUS COMPLETE
+- testing].
+
+* ProtocolSeed: Sends our address to the seed node, and on receiving
+addresses, append them to the whitelist. [STATUS: INCOMPLETE/ FIXME]
+
+* Create a new list in `hosts.rs` called `anchorlist`. OutboundSession
+first tries to connect to address in the `anchorlist` on start(). [STATUS:
+TODO]
+
+* Potentially create a new Protocol to send the top 250 nodes from the
+whitelist (Monero `SYN` exchange). [STATUS: TODO/ EVALUATE]
