@@ -648,6 +648,8 @@ impl GreylistRefinery {
                                 // Sort whitelist by last_seen.
                                 whitelist.sort_unstable_by_key(|entry| entry.1);
 
+                                debug!(target: "net::greylist_refinery::run()", "Sorted whitelist: {:?}", whitelist);
+
                                 // Remove whitelisted peer from the greylist.
                                 debug!(target: "net::greylist_refinery::run()", "Removing whitelisted peer {} from greylist", url);
                                 greylist.remove(position);

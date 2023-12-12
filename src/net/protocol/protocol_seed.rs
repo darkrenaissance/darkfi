@@ -70,6 +70,7 @@ impl ProtocolSeed {
 
         // We set last_seen to now. TODO: ponder this a bit more. We're just reading external addrs
         // from settings- that doesn't mean they will be reachable.
+        // Perhaps this should just send a standard Addr...
         let mut addrs = vec![];
         for addr in self.settings.external_addrs.clone() {
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();

@@ -231,6 +231,8 @@ impl Lilith {
 
                                     // Sort whitelist by last_seen.
                                     whitelist.sort_unstable_by_key(|entry| entry.1);
+
+                                    debug!(target: "lilith", "Sorted whitelist: {:?}", whitelist)
                                 }
                                 Err(e) => {
                                     debug!(target: "lilith", "Handshake failure! {}", e);

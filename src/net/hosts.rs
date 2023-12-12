@@ -197,6 +197,8 @@ impl Hosts {
 
             // Sort the list by last_seen.
             greylist.sort_unstable_by_key(|entry| entry.1);
+            
+            debug!(target: "net::hosts::greylist_store()", "Sorted greylist: {:?}", greylist)
         }
 
         self.store_subscriber.notify(filtered_addrs_len).await;
@@ -220,7 +222,9 @@ impl Hosts {
 
         // Sort the list by last_seen.
         whitelist.sort_unstable_by_key(|entry| entry.1);
-        debug!(target: "net::hosts::whitelist_store()", "hosts::greylist_store() [END]");
+        
+        debug!(target: "net::hosts::whitelistt_store()", "Sorted whitelist: {:?}", whitelist);
+        debug!(target: "net::hosts::whitelist_store()", "hosts::whitelist_store() [END]");
     }
 
     // Update the last_seen field of a peer on the whitelist.
