@@ -176,13 +176,13 @@ least two anchor nodes.
 
 * Refactor `src/hosts.rs` to store two `Vec<(Url, u64)>` instead of single
 `Hashset<Url>`, replacing the host list and its associated methods with
-a whitelist and a greylist. [STATUS: COMPLETE- testing]
+a whitelist and a greylist. [STATUS: COMPLETE/ TESTING]
 
 * Create a `GreylistRefinery` protocol in `OutboundSession` (renamed from
 Monero's "greylist housekeeping" for succinctness) that periodically
 selects random peers from its greylist and pings them. If a peer is
 responsive, update the `last_seen` field and add it to the whitelist,
-otherwise remove it from the greylist. [STATUS: COMPLETE- testing]
+otherwise remove it from the greylist. [STATUS: COMPLETE/ TESTING]
 
 * Lilith currently checks connections on the host list using a method
 called `periodic_purge` that gets hosts from the host list, copies them to
@@ -193,14 +193,14 @@ prior method, `whitelist_cleansing` pulls connections from the whitelist,
 copies them to a ring buffer and handshakes them periodically. If they
 respond, the `last_seen` is updated, otherwise nothing happens. This is
 loosely based on Monero's `IDLE_HANDSHAKE` protocol. [STATUS: COMPLETE/
-REEVALUATE - testing]
+REEVALUATE/ TESTING]
 
 * SeedsyncSession: on receiving whitelisted peers, append them to
 greylist. [STATUS: INCOMPLETE/ FIXME]
 
 * ProtocolAddress: On receiving an address, append it to the greylist. On
-receiving get_addr, fetch an address from the whitelist. [STATUS COMPLETE
-- testing].
+receiving get_addr, fetch an address from the whitelist. [STATUS COMPLETE/
+TESTING].
 
 * ProtocolSeed: Send our address to the seed node, and on receiving
 addresses, append them to the whitelist. [STATUS: INCOMPLETE/ FIXME]
