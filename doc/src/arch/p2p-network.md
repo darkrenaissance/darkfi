@@ -131,9 +131,9 @@ routing tables is a kind of decentralized lilith which keeps track of all the sw
 
 Possibly a post-mainnet feature depending on the scale of architectural changes or new code required in the net submodule.
 
-### Proposed update
+## Proposed update
 
-#### Monero p2p recap
+### Monero p2p recap
 
 In Monero, each node maintains a peer list consisting of two parts,
 a whitelist and a greylist. White/ greylists contain a `last_seen`
@@ -172,7 +172,7 @@ in the white list. Monero ensures that every node is connected to at
 least two anchor nodes.
 
 
-#### Scope of the update
+### Scope of the update
 
 * Refactor `src/hosts.rs` to store two Vec<(Url, u64)> instead of single
 Hashset<Url>, replacing the host list and its associated methods with
