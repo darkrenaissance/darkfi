@@ -597,7 +597,7 @@ impl Hosts {
 #[cfg(test)]
 mod tests {
     use super::{super::settings::Settings, *};
-    use std::time::SystemTime;
+    use std::time::UNIX_EPOCH;
 
     #[test]
     fn test_is_local_host() {
@@ -638,7 +638,7 @@ mod tests {
 
     #[test]
     fn test_greylist_store() {
-        let last_seen = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+        let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
         smol::block_on(async {
             let settings = Settings {
@@ -697,8 +697,7 @@ mod tests {
             assert!(hosts.is_empty_whitelist().await);
 
             let url = Url::parse("tcp://dark.renaissance:333").unwrap();
-            let last_seen =
-                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
             hosts.whitelist_store(&url, last_seen).await;
 

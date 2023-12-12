@@ -21,7 +21,7 @@ use std::{
     path::Path,
     process::exit,
     sync::Arc,
-    time::SystemTime,
+    time::UNIX_EPOCH,
 };
 
 use async_trait::async_trait;
@@ -216,8 +216,7 @@ impl Lilith {
                                     channel.stop().await;
 
                                     // Peer is responsive. Update last_seen and add it to the whitelist.
-                                    let last_seen =
-                                        SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                                    let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
                                     // Remove oldest element if the whitelist reaches max size.
                                     if whitelist.len() == 1000 {

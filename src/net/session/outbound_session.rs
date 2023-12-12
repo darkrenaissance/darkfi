@@ -31,7 +31,7 @@ use std::{
         atomic::{AtomicU32, Ordering},
         Arc, Weak,
     },
-    time::{Duration, Instant, SystemTime},
+    time::{Duration, Instant, UNIX_EPOCH},
 };
 
 use async_trait::async_trait;
@@ -276,8 +276,7 @@ impl Slot {
             // Update the last_seen field for this whitelisted peer.
             // TODO: This peer should also be flagged as an "anchor" because we have been
             // able to establish a connection to it to it.
-            let last_seen =
-                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
             hosts.whitelist_update(&addr_final, last_seen).await;
 
@@ -632,10 +631,7 @@ impl GreylistRefinery {
                                 channel.stop().await;
 
                                 // Peer is responsive. Update last_seen and add it to the whitelist.
-                                let last_seen = SystemTime::now()
-                                    .duration_since(SystemTime::UNIX_EPOCH)
-                                    .unwrap()
-                                    .as_secs();
+                                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
                                 // Remove oldest element if the whitelist reaches max size.
                                 if whitelist.len() == 1000 {

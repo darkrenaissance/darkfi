@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{sync::Arc, time::SystemTime};
+use std::{sync::Arc, time::UNIX_EPOCH};
 
 use async_trait::async_trait;
 use log::debug;
@@ -72,8 +72,7 @@ impl ProtocolSeed {
         // from settings- that doesn't mean they will be reachable.
         let mut addrs = vec![];
         for addr in self.settings.external_addrs.clone() {
-            let last_seen =
-                SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
             addrs.push((addr, last_seen));
         }
 
