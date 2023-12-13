@@ -62,6 +62,6 @@ impl Swapd {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        return JsonResponse::new(params[0].clone(), id).into()
+        JsonResponse::new(params[0].clone(), id).into()
     }
 }

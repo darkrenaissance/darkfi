@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{io::Cursor, ops::Index};
+use std::io::Cursor;
 
 use darkfi_sdk::{
     crypto::ContractId,
