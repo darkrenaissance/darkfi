@@ -17,15 +17,14 @@
  */
 
 use async_trait::async_trait;
-use darkfi::system::StoppableTaskPtr;
-use darkfi::net::P2pPtr;
+use darkfi::{net::P2pPtr, system::StoppableTaskPtr};
 use log::debug;
 use smol::lock::MutexGuard;
 use std::collections::HashSet;
 
 use darkfi::rpc::{
-    p2p_method::HandlerP2p,
     jsonrpc::{ErrorCode, JsonError, JsonRequest, JsonResponse, JsonResult},
+    p2p_method::HandlerP2p,
     server::RequestHandler,
     util::JsonValue,
 };
