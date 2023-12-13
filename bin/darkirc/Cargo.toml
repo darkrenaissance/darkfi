@@ -21,7 +21,7 @@ path = "src/main.rs"
 darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "util", "system", "rpc", "zk"]}
 darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {path = "../../src/serial", features = ["async"]}
-libc = "0.2.150"
+libc = "0.2.151"
 
 # Event Graph DB
 sled = "0.34.7"

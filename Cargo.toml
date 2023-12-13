@@ -54,7 +54,7 @@ members = [
 
 [dependencies]
 # Hard dependencies
-libc = "0.2.150"
+libc = "0.2.151"
 log = "0.4.20"
 thiserror = "1.0.50"
 
