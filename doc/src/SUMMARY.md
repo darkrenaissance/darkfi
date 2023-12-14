@@ -108,6 +108,34 @@
   - [vrf](spec/crypto/vrf.md)
   - [nullifier](spec/crypto/nullifier.md)
 
+# P2P API Tutorial
+
+- [P2P API Tutorial](learn/dchat/dchat.md)
+ - [Deployment](learn/dchat/deployment/part-1.md)
+   - [Getting started](learn/dchat/deployment/getting-started.md)
+   - [Writing a daemon](learn/dchat/deployment/writing-a-daemon.md)
+   - [Sessions](learn/dchat/deployment/sessions.md)
+   - [Settings](learn/dchat/deployment/settings.md)
+   - [Start-Run-Stop](learn/dchat/deployment/start-stop.md)
+   - [Seed](learn/dchat/deployment/seed-node.md)
+   - [Deploy](learn/dchat/deployment/deploy.md)
+ - [Creating dchat](learn/dchat/creating-dchat/part-2.md)
+   - [Message](learn/dchat/creating-dchat/message.md)
+   - [Understanding Protocols](learn/dchat/creating-dchat/protocols.md)
+   - [ProtocolDchat](learn/dchat/creating-dchat/protocol-dchat.md)
+   - [Register protocol](learn/dchat/creating-dchat/register-protocol.md)
+   - [Sending messages](learn/dchat/creating-dchat/sending-messages.md)
+   - [Slap on a UI](learn/dchat/creating-dchat/ui.md)
+   - [Using dchat](learn/dchat/creating-dchat/using-dchat.md)
+ - [Net tools](learn/dchat/network-tools/part-3.md)
+   - [RPC interface](learn/dchat/network-tools/rpc.md)
+   - [Accept addr](learn/dchat/network-tools/accept-addr.md)
+   - [Adding methods](learn/dchat/network-tools/pong.md)
+   - [RPC server](learn/dchat/network-tools/server.md)
+   - [get_info](learn/dchat/network-tools/get-info.md)
+   - [Using dnetview](learn/dchat/network-tools/using-dnetview.md)
+   - [Debugging](learn/dchat/network-tools/debug.md)
+
 # Misc
 
 - [tor-darkirc](misc/tor-darkirc.md)
