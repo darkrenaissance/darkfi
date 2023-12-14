@@ -1,7 +1,8 @@
-use crate::protocol::{
-    swap_creator::{Swap, SwapCreator},
-    traits::{HandleCounterpartyKeysReceivedResult, InitiateSwapArgs, Initiator},
+use crate::{
+    ethereum::swap_creator::{Swap, SwapCreator},
+    protocol::traits::{HandleCounterpartyKeysReceivedResult, InitiateSwapArgs, Initiator},
 };
+
 use darkfi_serial::async_trait;
 use ethers::prelude::*;
 use eyre::{ensure, Result, WrapErr as _};

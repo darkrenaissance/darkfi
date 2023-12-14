@@ -1,4 +1,4 @@
-use crate::protocol::swap_creator::Swap;
+use crate::ethereum::swap_creator::Swap; // TODO: shouldn't depend on this
 use darkfi_serial::async_trait;
 use ethers::prelude::*;
 use eyre::Result;

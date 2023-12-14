@@ -1,3 +1,4 @@
+mod ethereum;
 mod protocol;
 mod rpc;
 pub(crate) mod swapd;
