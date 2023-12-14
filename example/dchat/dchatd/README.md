@@ -1,6 +1,6 @@
 # Dchat
 
-A demo chat program to document DarkFi net
+A simple chat program to document DarkFi net
 code. Tutorial can be found in the [DarkFi
 book](https://darkrenaissance.github.io/darkfi/learn/writing-a-p2p-app.html).
 
