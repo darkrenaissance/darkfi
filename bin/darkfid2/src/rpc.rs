@@ -68,6 +68,9 @@ impl RequestHandler for Darkfid {
             "blockchain.subscribe_proposals" => {
                 return self.blockchain_subscribe_proposals(req.id, req.params).await
             }
+            "merge_mining_get_chain_id" => {
+                return self.merge_mining_get_chain_id(req.id, req.params).await
+            }
 
             // ===================
             // Transaction methods
