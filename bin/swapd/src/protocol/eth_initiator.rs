@@ -6,12 +6,19 @@ use darkfi_serial::async_trait;
 use ethers::prelude::*;
 use eyre::{ensure, Result, WrapErr as _};
 
-pub(crate) struct EthInitiator<M: Middleware> {
+/// Implemented on top of the non-initiating chain
+pub(crate) trait OtherChainClient {
+    fn claim_funds(&self, our_secret: [u8; 32], counterparty_secret: [u8; 32]) -> Result<()>;
+}
+
+pub(crate) struct EthInitiator<M: Middleware, C: OtherChainClient> {
     contract: SwapCreator<M>,
+    other_chain_client: C,
+    secret: [u8; 32],
 }
 
 #[async_trait]
-impl<M: Middleware + 'static> Initiator for EthInitiator<M> {
+impl<M: Middleware + 'static, C: OtherChainClient + Send + Sync> Initiator for EthInitiator<M, C> {
     async fn handle_counterparty_keys_received(
         &self,
         args: InitiateSwapArgs,
@@ -140,11 +147,23 @@ impl<M: Middleware + 'static> Initiator for EthInitiator<M> {
         Ok(())
     }
 
-    async fn handle_counterparty_funds_claimed(&self) {
-        // ...
+    async fn handle_counterparty_funds_claimed(&self, counterparty_secret: [u8; 32]) -> Result<()> {
+        self.other_chain_client.claim_funds(self.secret, counterparty_secret)
     }
 
-    async fn handle_should_refund(&self) {
-        // ...
+    async fn handle_should_refund(&self, swap: super::swap_creator::Swap) -> Result<()> {
+        let tx = self.contract.refund(swap, self.secret);
+
+        let receipt = tx
+            .send()
+            .await
+            .wrap_err("failed to submit transaction")?
+            .await
+            .wrap_err("failed to await pending transaction")?
+            .ok_or_else(|| eyre::eyre!("no receipt?"))?;
+
+        ensure!(receipt.status == Some(U64::from(1)), "`refund` transaction failed: {:?}", receipt);
+
+        Ok(())
     }
 }

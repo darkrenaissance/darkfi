@@ -8,15 +8,16 @@ use super::traits::HandleCounterpartyKeysReceivedResult;
 enum Event {
     ReceivedCounterpartyKeys(InitiateSwapArgs),
     CounterpartyFundsLocked,
-    CounterpartyFundsClaimed,
+    CounterpartyFundsClaimed([u8; 32]),
     ShouldRefund,
 }
 
 #[derive(Debug)]
 enum State {
     WaitingForCounterpartyKeys,
-    WaitingForCounterpartyFundsLocked(HandleCounterpartyKeysReceivedResult),
+    WaitingForCounterpartyFundsLocked,
     WaitingForCounterpartyFundsClaimed,
+    Completed,
 }
 
 struct Swap {
@@ -31,21 +32,21 @@ impl Swap {
     }
 
     async fn run(&mut self) -> Result<()> {
+        let mut contract_swap_info: Option<HandleCounterpartyKeysReceivedResult> = None;
+
         loop {
             match self.event_rx.recv().await {
                 Some(Event::ReceivedCounterpartyKeys(args)) => {
-                    match self.state {
-                        State::WaitingForCounterpartyKeys => {}
-                        _ => {
-                            return Err(eyre!(
-                                "unexpected event: {:?}",
-                                Event::ReceivedCounterpartyKeys(args)
-                            ));
-                        }
+                    if !matches!(self.state, State::WaitingForCounterpartyKeys) {
+                        return Err(eyre!(
+                            "unexpected event: {:?}",
+                            Event::ReceivedCounterpartyKeys(args)
+                        ));
                     }
 
-                    let res = self.handler.handle_counterparty_keys_received(args).await?;
-                    self.state = State::WaitingForCounterpartyFundsLocked(res);
+                    contract_swap_info =
+                        Some(self.handler.handle_counterparty_keys_received(args).await?);
+                    self.state = State::WaitingForCounterpartyFundsLocked;
                 }
                 Some(Event::CounterpartyFundsLocked) => {
                     let state = std::mem::replace(
@@ -53,23 +54,51 @@ impl Swap {
                         State::WaitingForCounterpartyFundsClaimed,
                     );
 
-                    let input = match state {
-                        State::WaitingForCounterpartyFundsLocked(res) => res,
-                        _ => {
-                            return Err(eyre!(
-                                "unexpected event: {:?}",
-                                Event::CounterpartyFundsLocked
-                            ));
-                        }
-                    };
+                    if !matches!(state, State::WaitingForCounterpartyFundsLocked) {
+                        return Err(eyre!("unexpected event: {:?}", Event::CounterpartyFundsLocked));
+                    }
 
-                    self.handler.handle_counterparty_funds_locked(input.contract_swap).await?;
+                    self.handler
+                        .handle_counterparty_funds_locked(
+                            contract_swap_info
+                                .as_ref()
+                                .expect("contract swap info must be set")
+                                .contract_swap
+                                .clone(),
+                        )
+                        .await?;
                 }
-                Some(Event::CounterpartyFundsClaimed) => {
-                    self.handler.handle_counterparty_funds_claimed().await;
+                Some(Event::CounterpartyFundsClaimed(counterparty_secret)) => {
+                    let state = std::mem::replace(&mut self.state, State::Completed);
+
+                    if !matches!(state, State::WaitingForCounterpartyFundsClaimed) {
+                        return Err(eyre!(
+                            "unexpected event: {:?}",
+                            Event::CounterpartyFundsClaimed(counterparty_secret)
+                        ));
+                    }
+
+                    self.handler.handle_counterparty_funds_claimed(counterparty_secret).await?;
                 }
                 Some(Event::ShouldRefund) => {
-                    self.handler.handle_should_refund().await;
+                    let state = std::mem::replace(&mut self.state, State::Completed);
+
+                    match state {
+                        State::WaitingForCounterpartyFundsLocked |
+                        State::WaitingForCounterpartyFundsClaimed => {}
+                        _ => {
+                            return Err(eyre!("unexpected event: {:?}", Event::ShouldRefund));
+                        }
+                    }
+                    self.handler
+                        .handle_should_refund(
+                            contract_swap_info
+                                .as_ref()
+                                .expect("contract swap info must be set")
+                                .contract_swap
+                                .clone(),
+                        )
+                        .await?;
                 }
                 None => {
                     break;

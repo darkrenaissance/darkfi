@@ -26,6 +26,8 @@ pub(crate) struct HandleCounterpartyKeysReceivedResult {
 ///
 /// the implementation of this trait must hold a signing key for
 /// chain A and chain B.
+///
+/// TODO: [`Swap`] should be a non-chain-specific type
 #[async_trait]
 pub(crate) trait Initiator {
     // initiates the swap by locking funds on chain A
@@ -38,10 +40,10 @@ pub(crate) trait Initiator {
     async fn handle_counterparty_funds_locked(&self, swap: Swap) -> Result<()>;
 
     // handles the counterparty claiming funds
-    async fn handle_counterparty_funds_claimed(&self);
+    async fn handle_counterparty_funds_claimed(&self, counterparty_secret: [u8; 32]) -> Result<()>;
 
     // handles the timeout cases where we need to refund funds
-    async fn handle_should_refund(&self);
+    async fn handle_should_refund(&self, swap: Swap) -> Result<()>;
 }
 
 /// the chain that is the counterparty to the swap; ie. the second-mover
