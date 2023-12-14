@@ -40,25 +40,35 @@ fn generate_tree() -> DarkTreeResult<(DarkTree<i32>, Vec<i32>)> {
                 vec![
                     DarkTree::new(
                         2,
-                        vec![DarkTree::new(0, vec![], None), DarkTree::new(1, vec![], None)],
+                        vec![
+                            DarkTree::new(0, vec![], None, None),
+                            DarkTree::new(1, vec![], None, None),
+                        ],
+                        None,
                         None,
                     ),
-                    DarkTree::new(4, vec![DarkTree::new(3, vec![], None)], None),
-                    DarkTree::new(6, vec![DarkTree::new(5, vec![], None)], None),
+                    DarkTree::new(4, vec![DarkTree::new(3, vec![], None, None)], None, None),
+                    DarkTree::new(6, vec![DarkTree::new(5, vec![], None, None)], None, None),
                     DarkTree::new(
                         9,
-                        vec![DarkTree::new(7, vec![], None), DarkTree::new(8, vec![], None)],
+                        vec![
+                            DarkTree::new(7, vec![], None, None),
+                            DarkTree::new(8, vec![], None, None),
+                        ],
+                        None,
                         None,
                     ),
                 ],
+                None,
                 None,
             ),
             DarkTree::new(
                 14,
                 vec![
-                    DarkTree::new(12, vec![DarkTree::new(11, vec![], None)], None),
-                    DarkTree::new(13, vec![], None),
+                    DarkTree::new(12, vec![DarkTree::new(11, vec![], None, None)], None, None),
+                    DarkTree::new(13, vec![], None, None),
                 ],
+                None,
                 None,
             ),
             DarkTree::new(
@@ -66,15 +76,21 @@ fn generate_tree() -> DarkTreeResult<(DarkTree<i32>, Vec<i32>)> {
                 vec![
                     DarkTree::new(
                         17,
-                        vec![DarkTree::new(15, vec![], None), DarkTree::new(16, vec![], None)],
+                        vec![
+                            DarkTree::new(15, vec![], None, None),
+                            DarkTree::new(16, vec![], None, None),
+                        ],
+                        None,
                         None,
                     ),
-                    DarkTree::new(18, vec![], None),
-                    DarkTree::new(20, vec![DarkTree::new(19, vec![], None)], None),
+                    DarkTree::new(18, vec![], None, None),
+                    DarkTree::new(20, vec![DarkTree::new(19, vec![], None, None)], None, None),
                 ],
+                None,
                 None,
             ),
         ],
+        None,
         None,
     );
 
@@ -178,7 +194,7 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
 
     // Verify performed mutation actually happened
     // on original tree. Additionally we verify all
-    // indexes are the expected one.
+    // indexes are the expected ones.
     assert_eq!(
         tree,
         DarkTree {
@@ -213,7 +229,8 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                                         children_indexes: vec![]
                                     },
                                     children: vec![],
-                                    capacity: None,
+                                    min_capacity: 1,
+                                    max_capacity: None,
                                 },
                                 DarkTree {
                                     leaf: DarkLeaf {
@@ -223,10 +240,12 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                                         children_indexes: vec![]
                                     },
                                     children: vec![],
-                                    capacity: None,
+                                    min_capacity: 1,
+                                    max_capacity: None,
                                 },
                             ],
-                            capacity: None,
+                            min_capacity: 1,
+                            max_capacity: None,
                         },
                         DarkTree {
                             leaf: DarkLeaf {
@@ -243,9 +262,11 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                                     children_indexes: vec![]
                                 },
                                 children: vec![],
-                                capacity: None,
+                                min_capacity: 1,
+                                max_capacity: None,
                             },],
-                            capacity: None,
+                            min_capacity: 1,
+                            max_capacity: None,
                         },
                         DarkTree {
                             leaf: DarkLeaf {
@@ -262,9 +283,11 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                                     children_indexes: vec![]
                                 },
                                 children: vec![],
-                                capacity: None,
+                                min_capacity: 1,
+                                max_capacity: None,
                             },],
-                            capacity: None,
+                            min_capacity: 1,
+                            max_capacity: None,
                         },
                         DarkTree {
                             leaf: DarkLeaf {
@@ -282,7 +305,8 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                                         children_indexes: vec![]
                                     },
                                     children: vec![],
-                                    capacity: None,
+                                    min_capacity: 1,
+                                    max_capacity: None,
                                 },
                                 DarkTree {
                                     leaf: DarkLeaf {
@@ -292,13 +316,16 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                                         children_indexes: vec![]
                                     },
                                     children: vec![],
-                                    capacity: None,
+                                    min_capacity: 1,
+                                    max_capacity: None,
                                 },
                             ],
-                            capacity: None,
+                            min_capacity: 1,
+                            max_capacity: None,
                         },
                     ],
-                    capacity: None,
+                    min_capacity: 1,
+                    max_capacity: None,
                 },
                 DarkTree {
                     leaf: DarkLeaf {
@@ -323,9 +350,11 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                                     children_indexes: vec![]
                                 },
                                 children: vec![],
-                                capacity: None,
+                                min_capacity: 1,
+                                max_capacity: None,
                             },],
-                            capacity: None,
+                            min_capacity: 1,
+                            max_capacity: None,
                         },
                         DarkTree {
                             leaf: DarkLeaf {
@@ -335,10 +364,12 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                                 children_indexes: vec![]
                             },
                             children: vec![],
-                            capacity: None,
+                            min_capacity: 1,
+                            max_capacity: None,
                         },
                     ],
-                    capacity: None,
+                    min_capacity: 1,
+                    max_capacity: None,
                 },
                 DarkTree {
                     leaf: DarkLeaf {
@@ -364,7 +395,8 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                                         children_indexes: vec![]
                                     },
                                     children: vec![],
-                                    capacity: None,
+                                    min_capacity: 1,
+                                    max_capacity: None,
                                 },
                                 DarkTree {
                                     leaf: DarkLeaf {
@@ -374,10 +406,12 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                                         children_indexes: vec![]
                                     },
                                     children: vec![],
-                                    capacity: None,
+                                    min_capacity: 1,
+                                    max_capacity: None,
                                 },
                             ],
-                            capacity: None,
+                            min_capacity: 1,
+                            max_capacity: None,
                         },
                         DarkTree {
                             leaf: DarkLeaf {
@@ -387,7 +421,8 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                                 children_indexes: vec![]
                             },
                             children: vec![],
-                            capacity: None,
+                            min_capacity: 1,
+                            max_capacity: None,
                         },
                         DarkTree {
                             leaf: DarkLeaf {
@@ -404,15 +439,19 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                                     children_indexes: vec![]
                                 },
                                 children: vec![],
-                                capacity: None,
+                                min_capacity: 1,
+                                max_capacity: None,
                             },],
-                            capacity: None,
+                            min_capacity: 1,
+                            max_capacity: None,
                         },
                     ],
-                    capacity: None,
+                    min_capacity: 1,
+                    max_capacity: None,
                 },
             ],
-            capacity: None,
+            min_capacity: 1,
+            max_capacity: None,
         }
     );
 
@@ -431,48 +470,95 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
 }
 
 #[test]
+pub fn test_darktree_min_capacity() -> DarkTreeResult<()> {
+    // Generate a new [`DarkTree`] with min capacity 0
+    let mut tree = DarkTree::new(0, vec![], Some(0), None);
+
+    // Verify that min capacity was properly setup to 1
+    assert_eq!(
+        tree,
+        DarkTree {
+            leaf: DarkLeaf { data: 0, index: 0, parent_index: None, children_indexes: vec![] },
+            children: vec![],
+            min_capacity: 1,
+            max_capacity: None
+        }
+    );
+
+    // Verify that building it will succeed, as capacity
+    // would have ben setup to 1
+    assert!(tree.build().is_ok());
+
+    // Generate a new [`DarkTree`] manually with
+    // min capacity 0
+    let mut tree = DarkTree {
+        leaf: DarkLeaf { data: 0, index: 0, parent_index: None, children_indexes: vec![] },
+        children: vec![],
+        min_capacity: 0,
+        max_capacity: None,
+    };
+
+    // Verify that building it will fail
+    assert!(tree.build().is_err());
+
+    // Thanks for reading
+    Ok(())
+}
+
+#[test]
 pub fn test_darktree_max_capacity() -> DarkTreeResult<()> {
-    // Generate a new [`DarkTree`] with capacity 2
-    let mut tree = DarkTree::new(0, vec![], Some(2));
+    // Generate a new [`DarkTree`] with max capacity 2
+    let mut tree = DarkTree::new(0, vec![], None, Some(2));
 
     // Append a new node
-    tree.append(DarkTree::new(1, vec![], None))?;
+    tree.append(DarkTree::new(1, vec![], None, None))?;
 
     // Try to append a new node
-    assert!(tree.append(DarkTree::new(2, vec![], None)).is_err());
+    assert!(tree.append(DarkTree::new(2, vec![], None, None)).is_err());
 
-    // Generate a new [`DarkTree`] with capacity 2
-    let mut new_tree = DarkTree::new(3, vec![], Some(2));
+    // Generate a new [`DarkTree`] with max capacity 2
+    let mut new_tree = DarkTree::new(3, vec![], None, Some(2));
 
     // Append the previous tree as a new node
     new_tree.append(tree)?;
 
-    // Check that capacity has been exceeded
-    assert!(new_tree.check_capacity().is_err());
+    // Check that max capacity has been exceeded
+    assert!(new_tree.check_max_capacity().is_err());
 
     // Generate a new [`DarkTree`] manually with
-    // capacity 1
+    // max capacity 1
     let mut tree = DarkTree {
         leaf: DarkLeaf { data: 0, index: 0, parent_index: None, children_indexes: vec![] },
         children: vec![
             DarkTree {
                 leaf: DarkLeaf { data: 0, index: 0, parent_index: None, children_indexes: vec![] },
                 children: vec![],
-                capacity: None,
+                min_capacity: 1,
+                max_capacity: None,
             },
             DarkTree {
                 leaf: DarkLeaf { data: 0, index: 0, parent_index: None, children_indexes: vec![] },
                 children: vec![],
-                capacity: None,
+                min_capacity: 1,
+                max_capacity: None,
             },
             DarkTree {
                 leaf: DarkLeaf { data: 0, index: 0, parent_index: None, children_indexes: vec![0] },
                 children: vec![],
-                capacity: None,
+                min_capacity: 1,
+                max_capacity: None,
             },
         ],
-        capacity: Some(1),
+        min_capacity: 1,
+        max_capacity: Some(1),
     };
+
+    // Verify that building it will fail
+    assert!(tree.build().is_err());
+
+    // Generate a new [`DarkTree`] with max capacity 0,
+    // which is less that current min capacity 1
+    let mut tree = DarkTree::new(0, vec![], None, Some(0));
 
     // Verify that building it will fail
     assert!(tree.build().is_err());

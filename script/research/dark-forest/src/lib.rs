@@ -83,6 +83,14 @@ struct DarkTree<T> {
     leaf: DarkLeaf<T>,
     /// Vector containing all tree's branches(children tree)
     children: Vec<DarkTree<T>>,
+    /// Min capacity of the tree, including all children nodes
+    /// recursively from the root. Since root is always present,
+    /// min capacity must always be >= 1. This is enforced by
+    /// the root, so children nodes don't have to set it up.
+    /// If children nodes children(recursively) make us not exceed
+    /// that min capacity, we will be able to catch it using
+    /// .check_min_capacity() or .integrity_check().
+    min_capacity: usize,
     /// Optional max capacity of the tree, including all children
     /// nodes recursively from the root. None indicates no
     /// capacity restrictions. This is enforced by the root,
@@ -90,15 +98,30 @@ struct DarkTree<T> {
     /// nodes children(recursively) make us exceed that capacity,
     /// we will be able to catch it using .check_capacity() or
     /// .integrity_check().
-    capacity: Option<usize>,
+    max_capacity: Option<usize>,
 }
 
 impl<T> DarkTree<T> {
     /// Initialize a [`DarkTree`], using provided data to
     /// generate its root.
-    fn new(data: T, children: Vec<DarkTree<T>>, capacity: Option<usize>) -> DarkTree<T> {
+    fn new(
+        data: T,
+        children: Vec<DarkTree<T>>,
+        min_capacity: Option<usize>,
+        max_capacity: Option<usize>,
+    ) -> DarkTree<T> {
+        // Setup min capacity
+        let min_capacity = if let Some(min_capacity) = min_capacity {
+            if min_capacity == 0 {
+                1
+            } else {
+                min_capacity
+            }
+        } else {
+            1
+        };
         let leaf = DarkLeaf::new(data);
-        Self { leaf, children, capacity }
+        Self { leaf, children, min_capacity, max_capacity }
     }
 
     /// Build the [`DarkTree`] indexes and perform an
@@ -116,11 +139,20 @@ impl<T> DarkTree<T> {
         self.iter().count()
     }
 
-    /// Check if configured capacity have been exceeded.
-    fn check_capacity(&self) -> DarkTreeResult<()> {
-        if let Some(capacity) = self.capacity {
-            if self.len() >= capacity {
-                return Err(DarkTreeError::CapacityExceeded)
+    /// Check if configured min capacity have been exceeded.
+    fn check_min_capacity(&self) -> DarkTreeResult<()> {
+        if self.len() < self.min_capacity {
+            return Err(DarkTreeError::MinCapacityNotExceeded)
+        }
+
+        Ok(())
+    }
+
+    /// Check if configured max capacity have been exceeded.
+    fn check_max_capacity(&self) -> DarkTreeResult<()> {
+        if let Some(max_capacity) = self.max_capacity {
+            if self.len() >= max_capacity {
+                return Err(DarkTreeError::MaxCapacityExceeded)
             }
         }
 
@@ -128,12 +160,12 @@ impl<T> DarkTree<T> {
     }
 
     /// Append a new child node to the [`DarkTree`],
-    /// if capacity has not been exceeded. This call
+    /// if max capacity has not been exceeded. This call
     /// doesn't update the indexes, so either .index()
     /// or .build() must be called after it.
     fn append(&mut self, child: DarkTree<T>) -> DarkTreeResult<()> {
-        // Check current capacity
-        self.check_capacity()?;
+        // Check current max capacity
+        self.check_max_capacity()?;
 
         // Append the new child
         self.children.push(child);
@@ -198,12 +230,29 @@ impl<T> DarkTree<T> {
 
     /// Verify current [`DarkTree`]'s leafs indexes validity,
     /// based on DFS post-order traversal order. Additionally,
-    /// check that capacity has not been exceeded. This call
-    /// assumes it was triggered for the root of the tree,
-    /// which has no parent index.
+    /// check that min and max capacities have been properly
+    /// configured, min capacity has been exceeded and max
+    /// capacity has not. This call assumes it was triggered
+    /// for the root of the tree, which has no parent index.
     fn integrity_check(&self) -> DarkTreeResult<()> {
-        // Check current capacity
-        self.check_capacity()?;
+        // Check current min capacity is valid
+        if self.min_capacity < 1 {
+            return Err(DarkTreeError::InvalidMinCapacity(self.min_capacity))
+        }
+
+        // Check currect max capacity is not less than
+        // current min capacity
+        if let Some(max_capacity) = self.max_capacity {
+            if self.min_capacity > max_capacity {
+                return Err(DarkTreeError::InvalidMaxCapacity(max_capacity, self.min_capacity))
+            }
+        }
+
+        // Check current min capacity
+        self.check_min_capacity()?;
+
+        // Check current max capacity
+        self.check_max_capacity()?;
 
         // Check each leaf index
         for (index, leaf) in self.iter().enumerate() {
