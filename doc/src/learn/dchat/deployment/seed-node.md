@@ -11,9 +11,8 @@ cargo build --all-features --package dchatd
 On first run, it will create a config file from the defaults we specified
 earlier. Run it as follows:
 
-```bash`
+```bash
 ./dchatd
-
 ```
 It should output the following:
 

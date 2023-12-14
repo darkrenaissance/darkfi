@@ -16,5 +16,3 @@ the p2p network, in particular:
 
 The source code for this tutorial can be found at
 [example/dchat](https://github.com/darkrenaissance/darkfi/tree/master/example/dchat).
-
-TODO: `dchat-cli` is currently only partially implemented.

@@ -1,7 +1,7 @@
 # Accept addr
 
-To deploy the `RequestHandler` and start receiving `JSON-RPC` requests,
-we'll need to configure a `JSON-RPC` accept address.
+To start receiving `JSON-RPC` requests, we'll need to configure a
+`JSON-RPC` accept address.
 
 We'll add a `rpc_listen` address to our `Args` struct. It will look
 like this:
