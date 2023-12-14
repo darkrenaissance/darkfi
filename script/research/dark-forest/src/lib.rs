@@ -31,8 +31,11 @@ mod tests;
 /// These indexes are only here to enable referencing
 /// connected nodes, and are *not* used as pointers by the
 /// tree. Creator must ensure they are properly setup.
-#[derive(Debug, PartialEq)]
-struct DarkLeaf<T> {
+#[derive(Clone, Debug, PartialEq)]
+struct DarkLeaf<T>
+where
+    T: Clone,
+{
     /// Data holded by this leaf
     data: T,
     /// Index showcasing this leaf's position, when all
@@ -48,7 +51,7 @@ struct DarkLeaf<T> {
     children_indexes: Vec<usize>,
 }
 
-impl<T> DarkLeaf<T> {
+impl<T: std::clone::Clone> DarkLeaf<T> {
     /// Every [`DarkLeaf`] is initiated using default indexes.
     fn new(data: T) -> DarkLeaf<T> {
         Self { data, index: 0, parent_index: None, children_indexes: vec![] }
@@ -78,7 +81,7 @@ impl<T> DarkLeaf<T> {
 /// to always execute .build() after finishing setting up the
 /// Tree, to properly index it and check its integrity.
 #[derive(Debug, PartialEq)]
-struct DarkTree<T> {
+struct DarkTree<T: std::clone::Clone> {
     /// This tree's leaf information, along with its data
     leaf: DarkLeaf<T>,
     /// Vector containing all tree's branches(children tree)
@@ -96,12 +99,12 @@ struct DarkTree<T> {
     /// capacity restrictions. This is enforced by the root,
     /// so children nodes don't have to set it up. If children
     /// nodes children(recursively) make us exceed that capacity,
-    /// we will be able to catch it using .check_capacity() or
+    /// we will be able to catch it using .check_max_capacity() or
     /// .integrity_check().
     max_capacity: Option<usize>,
 }
 
-impl<T> DarkTree<T> {
+impl<T: std::clone::Clone> DarkTree<T> {
     /// Initialize a [`DarkTree`], using provided data to
     /// generate its root.
     fn new(
@@ -134,12 +137,20 @@ impl<T> DarkTree<T> {
         self.integrity_check()
     }
 
+    /// Build the [`DarkTree`] using .build() and
+    /// then produce a flattened vector containing
+    /// all the leafs in DFS post-order traversal order.
+    fn build_vec(&mut self) -> DarkTreeResult<Vec<DarkLeaf<T>>> {
+        self.build()?;
+        Ok(self.iter().cloned().collect())
+    }
+
     /// Return the count of all [`DarkTree`] leafs.
     fn len(&self) -> usize {
         self.iter().count()
     }
 
-    /// Check if configured min capacity have been exceeded.
+    /// Check if configured min capacity have not been exceeded.
     fn check_min_capacity(&self) -> DarkTreeResult<()> {
         if self.len() < self.min_capacity {
             return Err(DarkTreeError::MinCapacityNotExceeded)
@@ -151,7 +162,7 @@ impl<T> DarkTree<T> {
     /// Check if configured max capacity have been exceeded.
     fn check_max_capacity(&self) -> DarkTreeResult<()> {
         if let Some(max_capacity) = self.max_capacity {
-            if self.len() >= max_capacity {
+            if self.len() > max_capacity {
                 return Err(DarkTreeError::MaxCapacityExceeded)
             }
         }
@@ -165,7 +176,11 @@ impl<T> DarkTree<T> {
     /// or .build() must be called after it.
     fn append(&mut self, child: DarkTree<T>) -> DarkTreeResult<()> {
         // Check current max capacity
-        self.check_max_capacity()?;
+        if let Some(max_capacity) = self.max_capacity {
+            if self.len() + 1 > max_capacity {
+                return Err(DarkTreeError::MaxCapacityExceeded)
+            }
+        }
 
         // Append the new child
         self.children.push(child);
@@ -280,18 +295,18 @@ impl<T> DarkTree<T> {
 
 /// Immutable iterator of a [`DarkTree`], performing DFS post-order
 /// traversal on the Tree leafs.
-struct DarkTreeIter<'a, T> {
+struct DarkTreeIter<'a, T: std::clone::Clone> {
     children: &'a [DarkTree<T>],
     parent: Option<Box<DarkTreeIter<'a, T>>>,
 }
 
-impl<T> Default for DarkTreeIter<'_, T> {
+impl<T: std::clone::Clone> Default for DarkTreeIter<'_, T> {
     fn default() -> Self {
         DarkTreeIter { children: &[], parent: None }
     }
 }
 
-impl<'a, T> Iterator for DarkTreeIter<'a, T> {
+impl<'a, T: std::clone::Clone> Iterator for DarkTreeIter<'a, T> {
     type Item = &'a DarkLeaf<T>;
 
     /// Grab next item iterator visits and return
@@ -324,13 +339,13 @@ impl<'a, T> Iterator for DarkTreeIter<'a, T> {
     }
 }
 
-impl<T> FusedIterator for DarkTreeIter<'_, T> {}
+impl<T: std::clone::Clone> FusedIterator for DarkTreeIter<'_, T> {}
 
 /// Define fusion iteration behavior, allowing
 /// us to use the [`DarkTreeIter`] iterator in
 /// loops directly, without using .iter() method
 /// of [`DarkTree`].
-impl<'a, T> IntoIterator for &'a DarkTree<T> {
+impl<'a, T: std::clone::Clone> IntoIterator for &'a DarkTree<T> {
     type Item = &'a DarkLeaf<T>;
 
     type IntoIter = DarkTreeIter<'a, T>;
@@ -342,19 +357,19 @@ impl<'a, T> IntoIterator for &'a DarkTree<T> {
 
 /// Mutable iterator of a [`DarkTree`], performing DFS post-order
 /// traversal on the Tree leafs.
-struct DarkTreeIterMut<'a, T> {
+struct DarkTreeIterMut<'a, T: std::clone::Clone> {
     children: &'a mut [DarkTree<T>],
     parent: Option<Box<DarkTreeIterMut<'a, T>>>,
     parent_leaf: Option<&'a mut DarkLeaf<T>>,
 }
 
-impl<T> Default for DarkTreeIterMut<'_, T> {
+impl<T: std::clone::Clone> Default for DarkTreeIterMut<'_, T> {
     fn default() -> Self {
         DarkTreeIterMut { children: &mut [], parent: None, parent_leaf: None }
     }
 }
 
-impl<'a, T> Iterator for DarkTreeIterMut<'a, T> {
+impl<'a, T: std::clone::Clone> Iterator for DarkTreeIterMut<'a, T> {
     type Item = &'a mut DarkLeaf<T>;
 
     /// Grab next item iterator visits and return
@@ -393,7 +408,7 @@ impl<'a, T> Iterator for DarkTreeIterMut<'a, T> {
 /// us to use the [`DarkTreeIterMut`] iterator
 /// in loops directly, without using .iter_mut()
 /// method of [`DarkTree`].
-impl<'a, T> IntoIterator for &'a mut DarkTree<T> {
+impl<'a, T: std::clone::Clone> IntoIterator for &'a mut DarkTree<T> {
     type Item = &'a mut DarkLeaf<T>;
 
     type IntoIter = DarkTreeIterMut<'a, T>;
@@ -406,18 +421,18 @@ impl<'a, T> IntoIterator for &'a mut DarkTree<T> {
 /// Special iterator of a [`DarkTree`], performing DFS post-order
 /// traversal on the Tree leafs, consuming each leaf. Since this
 /// iterator consumes the tree, it becomes unusable after it's moved.
-struct DarkTreeIntoIter<T> {
+struct DarkTreeIntoIter<T: std::clone::Clone> {
     children: VecDeque<DarkTree<T>>,
     parent: Option<Box<DarkTreeIntoIter<T>>>,
 }
 
-impl<T> Default for DarkTreeIntoIter<T> {
+impl<T: std::clone::Clone> Default for DarkTreeIntoIter<T> {
     fn default() -> Self {
         DarkTreeIntoIter { children: Default::default(), parent: None }
     }
 }
 
-impl<T> Iterator for DarkTreeIntoIter<T> {
+impl<T: std::clone::Clone> Iterator for DarkTreeIntoIter<T> {
     type Item = DarkLeaf<T>;
 
     /// Move next item iterator visits from the tree
@@ -453,13 +468,13 @@ impl<T> Iterator for DarkTreeIntoIter<T> {
     }
 }
 
-impl<T> FusedIterator for DarkTreeIntoIter<T> {}
+impl<T: std::clone::Clone> FusedIterator for DarkTreeIntoIter<T> {}
 
 /// Define fusion iteration behavior, allowing
 /// us to use the [`DarkTreeIntoIter`] .into_iter()
 /// method, to consume the [`DarkTree`] and iterate
 /// over it.
-impl<T> IntoIterator for DarkTree<T> {
+impl<T: std::clone::Clone> IntoIterator for DarkTree<T> {
     type Item = DarkLeaf<T>;
 
     type IntoIter = DarkTreeIntoIter<T>;
@@ -470,4 +485,86 @@ impl<T> IntoIterator for DarkTree<T> {
 
         DarkTreeIntoIter { children, parent: None }
     }
+}
+
+/// Auxiliary function to verify provided [`DarkLeaf`] slice is
+/// properly bounded and its members indexes are valid.
+fn dark_leaf_vec_integrity_check<T: std::clone::Clone>(
+    leafs: &[DarkLeaf<T>],
+    min_capacity: Option<usize>,
+    max_capacity: Option<usize>,
+) -> DarkTreeResult<()> {
+    // Setup min capacity
+    let min_capacity = if let Some(min_capacity) = min_capacity {
+        if min_capacity == 0 {
+            1
+        } else {
+            min_capacity
+        }
+    } else {
+        1
+    };
+
+    // Check currect max capacity is not less than
+    // current min capacity
+    if let Some(max_capacity) = max_capacity {
+        if min_capacity > max_capacity {
+            return Err(DarkTreeError::InvalidMaxCapacity(max_capacity, min_capacity))
+        }
+    }
+
+    // Check if min capacity have been not exceeded
+    if leafs.len() < min_capacity {
+        return Err(DarkTreeError::MinCapacityNotExceeded)
+    }
+
+    // Check if max capacity have been exceeded
+    if let Some(max_capacity) = max_capacity {
+        if leafs.len() > max_capacity {
+            return Err(DarkTreeError::MaxCapacityExceeded)
+        }
+    }
+
+    // Check each leaf indexes
+    for (index, leaf) in leafs.iter().enumerate() {
+        // Check our own index is same as traversal index
+        if index != leaf.index {
+            return Err(DarkTreeError::InvalidLeafIndex(leaf.index, index))
+        }
+
+        // Check our parent index corresponds to correct
+        // leaf in the vector
+        if let Some(parent_index) = leaf.parent_index {
+            let parent = &leafs[parent_index];
+            if parent_index != parent.index {
+                return Err(DarkTreeError::InvalidLeafParentIndex(leaf.index))
+            }
+
+            // Parent must have our index in their children
+            if !parent.children_indexes.contains(&leaf.index) {
+                return Err(DarkTreeError::InvalidLeafChildrenIndexes(parent.index))
+            }
+        }
+
+        // Check our children indexes correspond to the
+        // correct leafs in the vector
+        for child_index in &leaf.children_indexes {
+            let child = &leafs[*child_index];
+            if child_index != &child.index {
+                return Err(DarkTreeError::InvalidLeafChildrenIndexes(leaf.index))
+            }
+
+            // Children must have its parent set to us
+            match child.parent_index {
+                Some(parent_index) => {
+                    if parent_index != leaf.index {
+                        return Err(DarkTreeError::InvalidLeafParentIndex(child.index))
+                    }
+                }
+                None => return Err(DarkTreeError::InvalidLeafParentIndex(child.index)),
+            }
+        }
+    }
+
+    Ok(())
 }
