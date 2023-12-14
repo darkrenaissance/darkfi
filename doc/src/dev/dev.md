@@ -96,6 +96,8 @@ You can then find the reports in `target/llvm-cov/html/index.html`
 
 ## Static binary builds
 
+### Using LXC
+
 Using musl-libc, we should be able to produce statically linked
 binaries from our codebase. A short setup using a Debian system and
 `lxc` can be the following:
@@ -134,4 +136,16 @@ And now we should be able to build a statically linked binary:
 ## Uncomment RUSTFLAGS in the main Makefile
 # sed -e 's,^#RUSTFLAGS ,RUSTFLAGS ,' -i Makefile
 # make darkirc
+```
+
+### Native
+
+In certain cases, it might also be possible to build natively by
+installing the musl toolchain:
+
+```
+$ rustup target add x86_64-unknown-linux-musl --toolchain nightly
+## Uncomment RUSTFLAGS in the main Makefile
+$ sed -e 's,^#RUSTFLAGS ,RUSTFLAGS ,' -i Makefile
+$ make RUST_TARGET=x86_64-unknown-linux-musl darkirc
 ```
