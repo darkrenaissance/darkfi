@@ -11,3 +11,5 @@ This section will cover:
 * The `MessageSubsystem`
 * `MessageSubscription`
 * `Channel`
+* `JSON-RPC` `RequestHandler`
+* `StoppableTask`

@@ -6,4 +6,4 @@ introduce a number of key concepts:
 * p2p daemons
 * Inbound, outbound, manual and seed nodes
 * Understanding `Sessions`
-* `p2p.start()`, `p2p.run()` and `p2p.stop()`
+* `p2p.start` and `p2p.stop`
