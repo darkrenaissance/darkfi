@@ -6,79 +6,56 @@ will need to configure them using `net` type called
 This type consists of several settings that allow you to configure nodes
 in different ways.
 
-You would usually configure `Settings` using a config file or command
-line inputs. On dchat we are keeping things ultra simple. We pass a
-command line flag that is either `a` or `b`. If we pass `a` we will
-initialize the `Settings` for an inbound node. If we pass `b` we will
-initialize an outbound node.
+To do this, we'll create a default `dchatd_config.toml` file at the
+place specified in `CONFIG_FILE_CONTENTS`.
 
-Here's how that works. We define two methods called `alice()` and
-`bob()`. `alice()` returns the `Settings` that will create an inbound
-node. bob() return the `Settings` for an outbound node.
+```toml
+# dchatd toml
 
-We also implement logging that outputs to `/tmp/alice.log` and `/tmp/bob.log`
-so we can access the debug output of our nodes. We store this info in a
-log file because we don't want it interfering with our terminal UI when
-we eventually build it.
+[net]
+## P2P accept addresses Required for inbound nodes.
+inbound=["tcp://127.0.0.1:51554"]
 
-This is a function that returns the settings to create Alice, an
-inbound node:
+## P2P external addresses. Required for inbound nodes.
+external_addr=["tcp://127.0.0.1:51554"]
 
-```rust
-fn alice() -> Result<Settings> {
-   let log_level = simplelog::LevelFilter::Debug;
-   let log_config = simplelog::Config::default();
+## Seed nodes to connect to. Required for inbound and outbound nodes.
+seeds=["tcp://127.0.0.1:50515"]
 
-   let log_path = "/tmp/alice.log";
-   let file = File::create(log_path).unwrap();
-   WriteLogger::init(log_level, log_config, file)?;
+## Outbound connect slots. Required for outbound nodes.
+outbound_connections = 5
 
-   let seed = Url::parse("tcp://127.0.0.1:55555").unwrap();
-   let inbound = Url::parse("tcp://127.0.0.1:55554").unwrap();
-   let ext_addr = Url::parse("tcp://127.0.0.1:55554").unwrap();
-
-   let settings = Settings {
-       inbound: Some(inbound),
-       external_addr: Some(ext_addr),
-       seeds: vec![seed],
-       ..Default::default()
-   };
-
-   Ok(settings)
-}
 ```
 
-This is a function that returns the settings to create Bob, an
-outbound node:
+Inbound nodes specify an external address and an inbound address: this is
+where it will receive connections. Outbound nodes specify the number of
+outbound connection slots, which is the number of outbound connections
+the node will try to make, and seed addresses from which it can receive
+information about other nodes it can connect to. If all of these settings
+are enabled, the node is both inbound and outbound, i.e. a full node.
+
+Next, we add `SettingsOpt` to our `Args` struct. This will allow us to
+read the fields specified in TOML as the darkfi `net` type, `Settings`.
 
 ```rust
-fn bob() -> Result<Settings> {
-   let log_level = simplelog::LevelFilter::Debug;
-   let log_config = simplelog::Config::default();
+#[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
+#[serde(default)]
+#[structopt(name = "dchat", about = cli_desc!())]
+struct Args {
+    #[structopt(short, long)]
+    /// Configuration file to use
+    config: Option<String>,
 
-   let log_path = "/tmp/bob.log";
-   let file = File::create(log_path).unwrap();
-   WriteLogger::init(log_level, log_config, file)?;
+    #[structopt(short, long)]
+    /// Set log file to ouput into
+    log: Option<String>,
 
-   let seed = Url::parse("tcp://127.0.0.1:55555").unwrap();
+    #[structopt(short, parse(from_occurrences))]
+    /// Increase verbosity (-vvv supported)
+    verbose: u8,
 
-   let settings = Settings {
-       inbound: None,
-       outbound_connections: 5,
-       seeds: vec![seed],
-       ..Default::default()
-   };
-
-   Ok(settings)
+    /// P2P network settings
+    #[structopt(flatten)]
+    net: SettingsOpt,
 }
 ```
-
-Both outbound and inbound nodes specify a seed address to connect to. The
-inbound node also specifies an external address and an inbound address:
-this is where it will receive connections. The outbound node specifies
-the number of outbound connection slots, which is the number of outbound
-connections the node will try to make.
-
-These are the only settings we need to think about. For the rest, we
-use the network defaults.
-
