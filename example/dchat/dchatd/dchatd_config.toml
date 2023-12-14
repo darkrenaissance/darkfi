@@ -10,3 +10,5 @@
 ## Seed nodes to connect to. Required for inbound and outbound nodes.
 seeds=["tcp://127.0.0.1:55555"]
 
+## Outbound connect slots. Required for outbound nodes.
+outbound_connections = 5
