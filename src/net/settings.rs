@@ -68,6 +68,8 @@ pub struct Settings {
     pub outbound_peer_discovery_cooloff_time: u64,
     /// Time between peer discovery attempts
     pub outbound_peer_discovery_attempt_time: u64,
+    /// Advertise our external address
+    pub advertise: bool,
 }
 
 impl Default for Settings {
@@ -94,6 +96,7 @@ impl Default for Settings {
             hosts_quarantine_limit: 50,
             outbound_peer_discovery_cooloff_time: 30,
             outbound_peer_discovery_attempt_time: 5,
+            advertise: true,
         }
     }
 }
@@ -182,6 +185,11 @@ pub struct SettingsOpt {
     /// Time between peer discovery attempts
     #[structopt(skip)]
     pub outbound_peer_discovery_attempt_time: Option<u64>,
+
+    /// Advertise our external address
+    #[serde(default)]
+    #[structopt(long)]
+    pub advertise: bool,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -219,6 +227,7 @@ impl From<SettingsOpt> for Settings {
             outbound_peer_discovery_attempt_time: opt
                 .outbound_peer_discovery_attempt_time
                 .unwrap_or(def.outbound_peer_discovery_attempt_time),
+            advertise: opt.advertise,
         }
     }
 }
