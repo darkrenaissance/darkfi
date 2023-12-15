@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::{sync::Arc, time::UNIX_EPOCH};
 
 use async_trait::async_trait;
 use log::debug;
@@ -29,6 +29,7 @@ use super::{
         message::{AddrsMessage, GetAddrsMessage},
         message_subscriber::MessageSubscription,
         p2p::P2pPtr,
+        session::{OutboundSessionPtr, SESSION_OUTBOUND},
         settings::SettingsPtr,
     },
     protocol_base::{ProtocolBase, ProtocolBasePtr},
@@ -48,6 +49,8 @@ pub struct ProtocolAddress {
     get_addrs_sub: MessageSubscription<GetAddrsMessage>,
     hosts: HostsPtr,
     settings: SettingsPtr,
+    // We require this to access ping_self() method.
+    session: OutboundSessionPtr,
     jobsman: ProtocolJobsManagerPtr,
 }
 
@@ -60,6 +63,7 @@ impl ProtocolAddress {
     pub async fn init(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let settings = p2p.settings();
         let hosts = p2p.hosts();
+        let session = p2p.session_outbound();
 
         // Creates a subscription to address message
         let addrs_sub =
@@ -75,6 +79,7 @@ impl ProtocolAddress {
             get_addrs_sub,
             hosts,
             jobsman: ProtocolJobsManager::new(PROTO_NAME, channel),
+            session,
             settings,
         })
     }
@@ -84,14 +89,14 @@ impl ProtocolAddress {
     /// received addresses to the greylist.
     async fn handle_receive_addrs(self: Arc<Self>) -> Result<()> {
         debug!(
-            target: "net::protocol_address::handle_receive_addrs2()",
+            target: "net::protocol_address::handle_receive_addrs()",
             "[START] address={}", self.channel.address(),
         );
 
         loop {
             let addrs_msg = self.addrs_sub.receive().await?;
             debug!(
-                target: "net::protocol_address::handle_receive_addrs2()",
+                target: "net::protocol_address::handle_receive_addrs()",
                 "Received {} addrs from {}", addrs_msg.addrs.len(), self.channel.address(),
             );
 
@@ -151,21 +156,23 @@ impl ProtocolAddress {
         }
     }
 
-    // We ignore this method for now as it's not part of the new protocol.
-    // TODO: evaluate whether we need to reimplement this.
-    //async fn send_my_addrs(self: Arc<Self>) -> Result<()> {
-    //    debug!(
-    //        target: "net::protocol_address::send_my_addrs()",
-    //        "[START] address={}", self.channel.address(),
-    //    );
+    async fn send_my_addrs(self: Arc<Self>) -> Result<()> {
+        debug!(
+            target: "net::protocol_address::send_my_addrs()",
+            "[START] address={}", self.channel.address(),
+        );
 
-    //    // FIXME: Revisit this. Why do we keep sending it?
-    //    loop {
-    //        let ext_addr_msg = AddrsMessage { addrs: self.settings.external_addrs.clone() };
-    //        self.channel.send(&ext_addr_msg).await?;
-    //        sleep(900).await;
-    //    }
-    //}
+        // See if we can do a version exchange with ourself.
+        if self.session.ping_node(self.channel.address()).await {
+            // We're online. Broadcast our address.
+            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+            let addrs = vec![(self.channel.address().clone(), last_seen)];
+            let addrs_msg = AddrsMessage { addrs };
+            self.channel.send(&addrs_msg).await?;
+        }
+
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -175,14 +182,18 @@ impl ProtocolBase for ProtocolAddress {
     async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::protocol_address::start()", "START => address={}", self.channel.address());
 
-        //let type_id = self.channel.session_type_id();
+        let type_id = self.channel.session_type_id();
 
         self.jobsman.clone().start(ex.clone());
 
-        //// If it's an outbound session + has an extern_addr, send our address.
-        //if type_id == SESSION_OUTBOUND && !self.settings.external_addrs.is_empty() {
-        //    self.jobsman.clone().spawn(self.clone().send_my_addrs(), ex.clone()).await;
-        //}
+        // If it's an outbound session, we have an extern_addr, and address advertising
+        // is enabled, send our address.
+        if type_id == SESSION_OUTBOUND &&
+            !self.settings.external_addrs.is_empty() &&
+            self.settings.advertise
+        {
+            self.jobsman.clone().spawn(self.clone().send_my_addrs(), ex.clone()).await;
+        }
 
         self.jobsman.clone().spawn(self.clone().handle_receive_addrs(), ex.clone()).await;
         self.jobsman.spawn(self.clone().handle_receive_get_addrs(), ex).await;

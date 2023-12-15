@@ -29,6 +29,7 @@ use super::{
         message::{AddrsMessage, GetAddrsMessage},
         message_subscriber::MessageSubscription,
         p2p::P2pPtr,
+        session::OutboundSessionPtr,
         settings::SettingsPtr,
     },
     protocol_base::{ProtocolBase, ProtocolBasePtr},
@@ -41,6 +42,8 @@ pub struct ProtocolSeed {
     hosts: HostsPtr,
     settings: SettingsPtr,
     addr_sub: MessageSubscription<AddrsMessage>,
+    // We require this to access ping_self() method.
+    session: OutboundSessionPtr,
 }
 
 const PROTO_NAME: &str = "ProtocolSeed";
@@ -50,12 +53,13 @@ impl ProtocolSeed {
     pub async fn init(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let hosts = p2p.hosts();
         let settings = p2p.settings();
+        let session = p2p.session_outbound();
 
         // Create a subscription to address message
         let addr_sub =
             channel.subscribe_msg::<AddrsMessage>().await.expect("Missing addr dispatcher!");
 
-        Arc::new(Self { channel, hosts, settings, addr_sub })
+        Arc::new(Self { channel, hosts, settings, addr_sub, session })
     }
 
     /// Sends own external addresses over a channel. Imports own external addresses
@@ -68,13 +72,19 @@ impl ProtocolSeed {
             return Ok(())
         }
 
-        // We set last_seen to now. TODO: ponder this a bit more. We're just reading external addrs
-        // from settings- that doesn't mean they will be reachable.
-        // Perhaps this should just send a standard Addr...
+        // Do nothing if advertise is set to false
+        if self.settings.advertise {
+            return Ok(())
+        }
+
         let mut addrs = vec![];
         for addr in self.settings.external_addrs.clone() {
-            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-            addrs.push((addr, last_seen));
+            // See if we can do a version exchange with ourself.
+            if self.session.ping_node(&addr).await {
+                // We're online. Update last_seen and broadcast our address.
+                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                addrs.push((addr, last_seen));
+            }
         }
 
         debug!(
@@ -97,6 +107,7 @@ impl ProtocolBase for ProtocolSeed {
     async fn start(self: Arc<Self>, _ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::protocol_seed::start()", "START => address={}", self.channel.address());
 
+        // TODO: only do this if "advertise" is true
         // Send own address to the seed server
         self.send_self_address().await?;
 

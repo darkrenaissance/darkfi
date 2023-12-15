@@ -134,10 +134,50 @@ impl OutboundSession {
     fn wakeup_peer_discovery(&self) {
         self.peer_discovery.notify()
     }
+
     async fn wakeup_slots(&self) {
         let slots = &*self.slots.lock().await;
         for slot in slots {
             slot.notify();
+        }
+    }
+
+    // Ping a node to check it's online.
+    // TODO: make this an actual ping-pong method, rather than a version exchange.
+    pub async fn ping_node(&self, addr: &Url) -> bool {
+        let p2p = self.p2p();
+        let session = &self.p2p().session_outbound();
+        let parent = Arc::downgrade(session);
+        let connector = Connector::new(p2p.settings(), parent);
+
+        debug!(target: "net::outbound_session::ping_node()", "Attempting to connect to {}", addr);
+        match connector.connect(addr).await {
+            Ok((_url, channel)) => {
+                debug!(target: "net::outbound_session::ping_node()", "Connected successfully!");
+                let proto_ver = ProtocolVersion::new(channel.clone(), p2p.settings()).await;
+
+                let handshake_task =
+                    session.perform_handshake_protocols(proto_ver, channel.clone(), p2p.executor());
+
+                channel.clone().start(p2p.executor());
+
+                match handshake_task.await {
+                    Ok(()) => {
+                        debug!(target: "net::outbound_sesion::ping_node()", "Handshake success! Stopping channel.");
+                        channel.stop().await;
+                        true
+                    }
+                    Err(e) => {
+                        debug!(target: "net::outbound_session::ping_node()", "Handshake failure! {}", e);
+                        false
+                    }
+                }
+            }
+
+            Err(e) => {
+                debug!(target: "net::outbound_sesion::ping_node()", "Failed to connect to {}, ({})", addr, e);
+                false
+            }
         }
     }
 }
@@ -605,70 +645,37 @@ impl GreylistRefinery {
                 let entry = &greylist[position];
                 let url = &entry.0;
 
-                let parent = Arc::downgrade(&self.session());
+                //let parent = Arc::downgrade(&self.session());
 
                 let mut greylist = hosts.greylist.write().await;
                 let mut whitelist = hosts.whitelist.write().await;
 
-                let connector = Connector::new(p2p.settings(), parent);
-                debug!(target: "net::greylist_refinery::run()", "Connecting to {}", url);
-                match connector.connect(url).await {
-                    Ok((_url, channel)) => {
-                        debug!(target: "net::greylist_refinery::run()", "Connected successfully!");
-                        let proto_ver = ProtocolVersion::new(channel.clone(), p2p.settings()).await;
-
-                        let handshake_task = session.perform_handshake_protocols(
-                            proto_ver,
-                            channel.clone(),
-                            p2p.executor(),
-                        );
-
-                        channel.clone().start(p2p.executor());
-
-                        match handshake_task.await {
-                            Ok(()) => {
-                                debug!(target: "net::greylist_refinery::run()", "Handshake success! Stopping channel.");
-                                channel.stop().await;
-
-                                // Peer is responsive. Update last_seen and add it to the whitelist.
-                                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-
-                                // Remove oldest element if the whitelist reaches max size.
-                                if whitelist.len() == 1000 {
-                                    // Last element in vector should have the oldest timestamp.
-                                    // This should never crash as only returns None when whitelist len() == 0.
-                                    let entry = whitelist.pop().unwrap();
-                                    debug!(target: "net::greylist_refinery::run()", "Whitelist reached max size. Removed host {}", entry.0);
-                                }
-
-                                // Append to the whitelist.
-                                debug!(target: "net::greylist_refinery::run()", "Adding peer {} to whitelist", url);
-                                whitelist.push((url.clone(), last_seen));
-
-                                // Sort whitelist by last_seen.
-                                whitelist.sort_unstable_by_key(|entry| entry.1);
-
-                                debug!(target: "net::greylist_refinery::run()", "Sorted whitelist: {:?}", whitelist);
-
-                                // Remove whitelisted peer from the greylist.
-                                debug!(target: "net::greylist_refinery::run()", "Removing whitelisted peer {} from greylist", url);
-                                greylist.remove(position);
-                            }
-                            Err(e) => {
-                                debug!(target: "net::hosts::probe_node()", "Handshake failure! {}", e);
-                                // Peer is not responsive. Remove it from the greylist.
-                                greylist.remove(position);
-                                debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removed from greylist", url);
-                            }
-                        }
+                if session.ping_node(url).await {
+                    // Peer is responsive. Update last_seen and add it to the whitelist.
+                    let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                    // Remove oldest element if the whitelist reaches max size.
+                    if whitelist.len() == 1000 {
+                        // Last element in vector should have the oldest timestamp.
+                        // This should never crash as only returns None when whitelist len() == 0.
+                        let entry = whitelist.pop().unwrap();
+                        debug!(target: "net::greylist_refinery::run()", "Whitelist reached max size. Removed host {}", entry.0);
                     }
 
-                    Err(e) => {
-                        debug!(target: "net::hosts::probe_node()", "Failed to connect to {}, ({})", url, e);
-                        // Peer is not responsive. Remove it from the greylist.
-                        greylist.remove(position);
-                        debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removed from greylist", url);
-                    }
+                    // Append to the whitelist.
+                    debug!(target: "net::greylist_refinery::run()", "Adding peer {} to whitelist", url);
+                    whitelist.push((url.clone(), last_seen));
+
+                    // Sort whitelist by last_seen.
+                    whitelist.sort_unstable_by_key(|entry| entry.1);
+
+                    debug!(target: "net::greylist_refinery::run()", "Sorted whitelist: {:?}", whitelist);
+
+                    // Remove whitelisted peer from the greylist.
+                    debug!(target: "net::greylist_refinery::run()", "Removing whitelisted peer {} from greylist", url);
+                    greylist.remove(position);
+                } else {
+                    greylist.remove(position);
+                    debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removed from greylist", url);
                 }
             }
 
