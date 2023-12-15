@@ -25,8 +25,8 @@ use error::{DarkTreeError, DarkTreeResult};
 #[cfg(test)]
 mod tests;
 
-/// This struct represents a Leaf of a [`DarkTree`],
-/// holding this tree node data, along with positional
+/// This struct represents the information hold by a
+/// [`DarkTreeLeaf`], namely its data, along with positional
 /// indexes information, based on tree's traversal order.
 /// These indexes are only here to enable referencing
 /// connected nodes, and are *not* used as pointers by the
@@ -38,9 +38,6 @@ where
 {
     /// Data holded by this leaf
     data: T,
-    /// Index showcasing this leaf's position, when all
-    /// leafs are in order.
-    index: usize,
     /// Index showcasing this leaf's parent tree, when all
     /// leafs are in order. None indicates that this leaf
     /// has no parent.
@@ -51,25 +48,41 @@ where
     children_indexes: Vec<usize>,
 }
 
-impl<T: std::clone::Clone> DarkLeaf<T> {
-    /// Every [`DarkLeaf`] is initiated using default indexes.
-    fn new(data: T) -> DarkLeaf<T> {
-        Self { data, index: 0, parent_index: None, children_indexes: vec![] }
+/// This struct represents a Leaf of a [`DarkTree`],
+/// holding this tree node data, along with its positional
+/// index, based on tree's traversal order.
+#[derive(Clone, Debug, PartialEq)]
+struct DarkTreeLeaf<T>
+where
+    T: Clone,
+{
+    /// Index showcasing this leaf's position, when all
+    /// leafs are in order.
+    index: usize,
+    /// Leaf's data, along with its parent and children
+    /// indexes information.
+    info: DarkLeaf<T>,
+}
+
+impl<T: std::clone::Clone> DarkTreeLeaf<T> {
+    /// Every [`DarkTreeLeaf`] is initiated using default indexes.
+    fn new(data: T) -> DarkTreeLeaf<T> {
+        Self { index: 0, info: DarkLeaf { data, parent_index: None, children_indexes: vec![] } }
     }
 
-    /// Set [`DarkLeaf`]'s index
+    /// Set [`DarkTreeLeaf`]'s index
     fn set_index(&mut self, index: usize) {
         self.index = index;
     }
 
-    /// Set [`DarkLeaf`]'s parent index
+    /// Set [`DarkTreeLeaf`]'s parent index
     fn set_parent_index(&mut self, parent_index: Option<usize>) {
-        self.parent_index = parent_index;
+        self.info.parent_index = parent_index;
     }
 
-    /// Set [`DarkLeaf`]'s children index
+    /// Set [`DarkTreeLeaf`]'s children index
     fn set_children_indexes(&mut self, children_indexes: Vec<usize>) {
-        self.children_indexes = children_indexes;
+        self.info.children_indexes = children_indexes;
     }
 }
 
@@ -83,7 +96,7 @@ impl<T: std::clone::Clone> DarkLeaf<T> {
 #[derive(Debug, PartialEq)]
 struct DarkTree<T: std::clone::Clone> {
     /// This tree's leaf information, along with its data
-    leaf: DarkLeaf<T>,
+    leaf: DarkTreeLeaf<T>,
     /// Vector containing all tree's branches(children tree)
     children: Vec<DarkTree<T>>,
     /// Min capacity of the tree, including all children nodes
@@ -123,7 +136,7 @@ impl<T: std::clone::Clone> DarkTree<T> {
         } else {
             1
         };
-        let leaf = DarkLeaf::new(data);
+        let leaf = DarkTreeLeaf::new(data);
         Self { leaf, children, min_capacity, max_capacity }
     }
 
@@ -142,7 +155,7 @@ impl<T: std::clone::Clone> DarkTree<T> {
     /// all the leafs in DFS post-order traversal order.
     fn build_vec(&mut self) -> DarkTreeResult<Vec<DarkLeaf<T>>> {
         self.build()?;
-        Ok(self.iter().cloned().collect())
+        Ok(self.iter().cloned().map(|x| x.info).collect())
     }
 
     /// Return the count of all [`DarkTree`] leafs.
@@ -223,7 +236,7 @@ impl<T: std::clone::Clone> DarkTree<T> {
     /// and trigger the check of its children indexes.
     fn check_parent_children_indexes(&self, parent_index: Option<usize>) -> DarkTreeResult<()> {
         // Check our leafs parent index
-        if self.leaf.parent_index != parent_index {
+        if self.leaf.info.parent_index != parent_index {
             return Err(DarkTreeError::InvalidLeafParentIndex(self.leaf.index))
         }
 
@@ -236,7 +249,7 @@ impl<T: std::clone::Clone> DarkTree<T> {
         }
 
         // Check our leafs children indexes
-        if self.leaf.children_indexes != children_indexes {
+        if self.leaf.info.children_indexes != children_indexes {
             return Err(DarkTreeError::InvalidLeafChildrenIndexes(self.leaf.index))
         }
 
@@ -307,7 +320,7 @@ impl<T: std::clone::Clone> Default for DarkTreeIter<'_, T> {
 }
 
 impl<'a, T: std::clone::Clone> Iterator for DarkTreeIter<'a, T> {
-    type Item = &'a DarkLeaf<T>;
+    type Item = &'a DarkTreeLeaf<T>;
 
     /// Grab next item iterator visits and return
     /// its immutable reference, or recursively
@@ -346,7 +359,7 @@ impl<T: std::clone::Clone> FusedIterator for DarkTreeIter<'_, T> {}
 /// loops directly, without using .iter() method
 /// of [`DarkTree`].
 impl<'a, T: std::clone::Clone> IntoIterator for &'a DarkTree<T> {
-    type Item = &'a DarkLeaf<T>;
+    type Item = &'a DarkTreeLeaf<T>;
 
     type IntoIter = DarkTreeIter<'a, T>;
 
@@ -360,7 +373,7 @@ impl<'a, T: std::clone::Clone> IntoIterator for &'a DarkTree<T> {
 struct DarkTreeIterMut<'a, T: std::clone::Clone> {
     children: &'a mut [DarkTree<T>],
     parent: Option<Box<DarkTreeIterMut<'a, T>>>,
-    parent_leaf: Option<&'a mut DarkLeaf<T>>,
+    parent_leaf: Option<&'a mut DarkTreeLeaf<T>>,
 }
 
 impl<T: std::clone::Clone> Default for DarkTreeIterMut<'_, T> {
@@ -370,7 +383,7 @@ impl<T: std::clone::Clone> Default for DarkTreeIterMut<'_, T> {
 }
 
 impl<'a, T: std::clone::Clone> Iterator for DarkTreeIterMut<'a, T> {
-    type Item = &'a mut DarkLeaf<T>;
+    type Item = &'a mut DarkTreeLeaf<T>;
 
     /// Grab next item iterator visits and return
     /// its mutable reference, or recursively
@@ -409,7 +422,7 @@ impl<'a, T: std::clone::Clone> Iterator for DarkTreeIterMut<'a, T> {
 /// in loops directly, without using .iter_mut()
 /// method of [`DarkTree`].
 impl<'a, T: std::clone::Clone> IntoIterator for &'a mut DarkTree<T> {
-    type Item = &'a mut DarkLeaf<T>;
+    type Item = &'a mut DarkTreeLeaf<T>;
 
     type IntoIter = DarkTreeIterMut<'a, T>;
 
@@ -433,7 +446,7 @@ impl<T: std::clone::Clone> Default for DarkTreeIntoIter<T> {
 }
 
 impl<T: std::clone::Clone> Iterator for DarkTreeIntoIter<T> {
-    type Item = DarkLeaf<T>;
+    type Item = DarkTreeLeaf<T>;
 
     /// Move next item iterator visits from the tree
     /// to the iterator consumer, if it has no children.
@@ -475,7 +488,7 @@ impl<T: std::clone::Clone> FusedIterator for DarkTreeIntoIter<T> {}
 /// method, to consume the [`DarkTree`] and iterate
 /// over it.
 impl<T: std::clone::Clone> IntoIterator for DarkTree<T> {
-    type Item = DarkLeaf<T>;
+    type Item = DarkTreeLeaf<T>;
 
     type IntoIter = DarkTreeIntoIter<T>;
 
@@ -527,41 +540,23 @@ fn dark_leaf_vec_integrity_check<T: std::clone::Clone>(
 
     // Check each leaf indexes
     for (index, leaf) in leafs.iter().enumerate() {
-        // Check our own index is same as traversal index
-        if index != leaf.index {
-            return Err(DarkTreeError::InvalidLeafIndex(leaf.index, index))
-        }
-
-        // Check our parent index corresponds to correct
-        // leaf in the vector
+        // Parent must have our index in their children
         if let Some(parent_index) = leaf.parent_index {
-            let parent = &leafs[parent_index];
-            if parent_index != parent.index {
-                return Err(DarkTreeError::InvalidLeafParentIndex(leaf.index))
-            }
-
-            // Parent must have our index in their children
-            if !parent.children_indexes.contains(&leaf.index) {
-                return Err(DarkTreeError::InvalidLeafChildrenIndexes(parent.index))
+            if !leafs[parent_index].children_indexes.contains(&index) {
+                return Err(DarkTreeError::InvalidLeafChildrenIndexes(parent_index))
             }
         }
 
-        // Check our children indexes correspond to the
-        // correct leafs in the vector
+        // Children must have its parent set to us
         for child_index in &leaf.children_indexes {
-            let child = &leafs[*child_index];
-            if child_index != &child.index {
-                return Err(DarkTreeError::InvalidLeafChildrenIndexes(leaf.index))
-            }
-
             // Children must have its parent set to us
-            match child.parent_index {
+            match leafs[*child_index].parent_index {
                 Some(parent_index) => {
-                    if parent_index != leaf.index {
-                        return Err(DarkTreeError::InvalidLeafParentIndex(child.index))
+                    if parent_index != index {
+                        return Err(DarkTreeError::InvalidLeafParentIndex(*child_index))
                     }
                 }
-                None => return Err(DarkTreeError::InvalidLeafParentIndex(child.index)),
+                None => return Err(DarkTreeError::InvalidLeafParentIndex(*child_index)),
             }
         }
     }

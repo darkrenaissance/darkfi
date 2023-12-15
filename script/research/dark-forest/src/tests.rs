@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use crate::{dark_leaf_vec_integrity_check, DarkLeaf, DarkTree, DarkTreeResult};
+use crate::{dark_leaf_vec_integrity_check, DarkLeaf, DarkTree, DarkTreeLeaf, DarkTreeResult};
 
 /// Gereate a predefined [`DarkTree`] along with its
 /// expected traversal order.
@@ -107,7 +107,7 @@ pub fn test_darktree_iterator() -> DarkTreeResult<()> {
 
     // Use [`DarkTree`] iterator to collect current
     // data, in order
-    let nums: Vec<i32> = tree.iter().map(|x| x.data).collect();
+    let nums: Vec<i32> = tree.iter().map(|x| x.info.data).collect();
 
     // Verify iterator collected the data in the expected
     // traversal order.
@@ -116,7 +116,7 @@ pub fn test_darktree_iterator() -> DarkTreeResult<()> {
     // Verify using iterator indexing methods to retrieve
     // data from it, returns the expected one, as per
     // expected traversal order.
-    assert_eq!(tree.iter().nth(1).unwrap().data, traversal_order[1]);
+    assert_eq!(tree.iter().nth(1).unwrap().info.data, traversal_order[1]);
 
     // Thanks for reading
     Ok(())
@@ -127,47 +127,47 @@ fn test_darktree_traversal_order() -> DarkTreeResult<()> {
     let (mut tree, traversal_order) = generate_tree()?;
 
     // Loop using the fusion immutable iterator,
-    // verifying we grab the correct [`DarkLeaf`]
+    // verifying we grab the correct [`DarkTreeLeaf`]
     // immutable reference, as per expected
     // traversal order.
     let mut index = 0;
     for leaf in &tree {
-        assert_eq!(leaf.data, traversal_order[index]);
+        assert_eq!(leaf.info.data, traversal_order[index]);
         index += 1;
     }
 
     // Loop using the fusion mutable iterator,
-    // verifying we grab the correct [`DarkLeaf`]
+    // verifying we grab the correct [`DarkTreeLeaf`]
     // mutable reference, as per expected traversal
     // order.
     index = 0;
     for leaf in &mut tree {
-        assert_eq!(leaf.data, traversal_order[index]);
+        assert_eq!(leaf.info.data, traversal_order[index]);
         index += 1;
     }
 
     // Loop using [`DarkTree`] .iter_mut() mutable
-    // iterator, verifying we grab the correct [`DarkLeaf`]
+    // iterator, verifying we grab the correct [`DarkTreeLeaf`]
     // mutable reference, as per expected traversal
     // order.
     for (index, leaf) in tree.iter_mut().enumerate() {
-        assert_eq!(leaf.data, traversal_order[index]);
+        assert_eq!(leaf.info.data, traversal_order[index]);
     }
 
     // Loop using [`DarkTree`] .iter() immutable
-    // iterator, verifying we grab the correct [`DarkLeaf`]
+    // iterator, verifying we grab the correct [`DarkTreeLeaf`]
     // immutable reference, as per expected traversal
     // order.
     for (index, leaf) in tree.iter().enumerate() {
-        assert_eq!(leaf.data, traversal_order[index]);
+        assert_eq!(leaf.info.data, traversal_order[index]);
     }
 
     // Loop using [`DarkTree`] .into_iter() iterator,
     // which consumes (moves) the tree, verifying we
-    // collect the correct [`DarkLeaf`], as per expected
+    // collect the correct [`DarkTreeLeaf`], as per expected
     // traversal order.
     for (index, leaf) in tree.into_iter().enumerate() {
-        assert_eq!(leaf.data, traversal_order[index]);
+        assert_eq!(leaf.info.data, traversal_order[index]);
     }
 
     // Thanks for reading
@@ -180,16 +180,16 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
 
     // Loop using [`DarkTree`] .iter_mut() mutable
     // iterator, grabing a mutable reference over a
-    // [`DarkLeaf`], and mutating its inner data.
+    // [`DarkTreeLeaf`], and mutating its inner data.
     for leaf in tree.iter_mut() {
-        leaf.data += 1;
+        leaf.info.data += 1;
     }
 
     // Loop using the fusion mutable iterator,
     // grabing a mutable reference over a
-    // [`DarkLeaf`], and mutating its inner data.
+    // [`DarkTreeLeaf`], and mutating its inner data.
     for leaf in &mut tree {
-        leaf.data += 1;
+        leaf.info.data += 1;
     }
 
     // Verify performed mutation actually happened
@@ -198,46 +198,52 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
     assert_eq!(
         tree,
         DarkTree {
-            leaf: DarkLeaf {
-                data: 24,
+            leaf: DarkTreeLeaf {
                 index: 22,
-                parent_index: None,
-                children_indexes: vec![10, 14, 21]
+                info: DarkLeaf { data: 24, parent_index: None, children_indexes: vec![10, 14, 21] },
             },
             children: vec![
                 DarkTree {
-                    leaf: DarkLeaf {
-                        data: 12,
+                    leaf: DarkTreeLeaf {
                         index: 10,
-                        parent_index: Some(22),
-                        children_indexes: vec![2, 4, 6, 9]
+                        info: DarkLeaf {
+                            data: 12,
+                            parent_index: Some(22),
+                            children_indexes: vec![2, 4, 6, 9],
+                        },
                     },
                     children: vec![
                         DarkTree {
-                            leaf: DarkLeaf {
-                                data: 4,
+                            leaf: DarkTreeLeaf {
                                 index: 2,
-                                parent_index: Some(10),
-                                children_indexes: vec![0, 1]
+                                info: DarkLeaf {
+                                    data: 4,
+                                    parent_index: Some(10),
+                                    children_indexes: vec![0, 1],
+                                },
                             },
                             children: vec![
                                 DarkTree {
-                                    leaf: DarkLeaf {
-                                        data: 2,
+                                    leaf: DarkTreeLeaf {
                                         index: 0,
-                                        parent_index: Some(2),
-                                        children_indexes: vec![]
+                                        info: DarkLeaf {
+                                            data: 2,
+                                            parent_index: Some(2),
+                                            children_indexes: vec![],
+                                        },
                                     },
                                     children: vec![],
                                     min_capacity: 1,
                                     max_capacity: None,
                                 },
                                 DarkTree {
-                                    leaf: DarkLeaf {
-                                        data: 3,
+                                    leaf: DarkTreeLeaf {
                                         index: 1,
-                                        parent_index: Some(2),
-                                        children_indexes: vec![]
+                                        info: DarkLeaf {
+                                            data: 3,
+                                            parent_index: Some(2),
+                                            children_indexes: vec![],
+                                        },
                                     },
                                     children: vec![],
                                     min_capacity: 1,
@@ -248,18 +254,22 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                             max_capacity: None,
                         },
                         DarkTree {
-                            leaf: DarkLeaf {
-                                data: 6,
+                            leaf: DarkTreeLeaf {
                                 index: 4,
-                                parent_index: Some(10),
-                                children_indexes: vec![3]
+                                info: DarkLeaf {
+                                    data: 6,
+                                    parent_index: Some(10),
+                                    children_indexes: vec![3],
+                                },
                             },
                             children: vec![DarkTree {
-                                leaf: DarkLeaf {
-                                    data: 5,
+                                leaf: DarkTreeLeaf {
                                     index: 3,
-                                    parent_index: Some(4),
-                                    children_indexes: vec![]
+                                    info: DarkLeaf {
+                                        data: 5,
+                                        parent_index: Some(4),
+                                        children_indexes: vec![],
+                                    },
                                 },
                                 children: vec![],
                                 min_capacity: 1,
@@ -269,18 +279,22 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                             max_capacity: None,
                         },
                         DarkTree {
-                            leaf: DarkLeaf {
-                                data: 8,
+                            leaf: DarkTreeLeaf {
                                 index: 6,
-                                parent_index: Some(10),
-                                children_indexes: vec![5]
+                                info: DarkLeaf {
+                                    data: 8,
+                                    parent_index: Some(10),
+                                    children_indexes: vec![5],
+                                },
                             },
                             children: vec![DarkTree {
-                                leaf: DarkLeaf {
-                                    data: 7,
+                                leaf: DarkTreeLeaf {
                                     index: 5,
-                                    parent_index: Some(6),
-                                    children_indexes: vec![]
+                                    info: DarkLeaf {
+                                        data: 7,
+                                        parent_index: Some(6),
+                                        children_indexes: vec![],
+                                    },
                                 },
                                 children: vec![],
                                 min_capacity: 1,
@@ -290,30 +304,36 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                             max_capacity: None,
                         },
                         DarkTree {
-                            leaf: DarkLeaf {
-                                data: 11,
+                            leaf: DarkTreeLeaf {
                                 index: 9,
-                                parent_index: Some(10),
-                                children_indexes: vec![7, 8]
+                                info: DarkLeaf {
+                                    data: 11,
+                                    parent_index: Some(10),
+                                    children_indexes: vec![7, 8],
+                                },
                             },
                             children: vec![
                                 DarkTree {
-                                    leaf: DarkLeaf {
-                                        data: 9,
+                                    leaf: DarkTreeLeaf {
                                         index: 7,
-                                        parent_index: Some(9),
-                                        children_indexes: vec![]
+                                        info: DarkLeaf {
+                                            data: 9,
+                                            parent_index: Some(9),
+                                            children_indexes: vec![],
+                                        },
                                     },
                                     children: vec![],
                                     min_capacity: 1,
                                     max_capacity: None,
                                 },
                                 DarkTree {
-                                    leaf: DarkLeaf {
-                                        data: 10,
+                                    leaf: DarkTreeLeaf {
                                         index: 8,
-                                        parent_index: Some(9),
-                                        children_indexes: vec![]
+                                        info: DarkLeaf {
+                                            data: 10,
+                                            parent_index: Some(9),
+                                            children_indexes: vec![],
+                                        },
                                     },
                                     children: vec![],
                                     min_capacity: 1,
@@ -328,26 +348,32 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                     max_capacity: None,
                 },
                 DarkTree {
-                    leaf: DarkLeaf {
-                        data: 16,
+                    leaf: DarkTreeLeaf {
                         index: 14,
-                        parent_index: Some(22),
-                        children_indexes: vec![12, 13]
+                        info: DarkLeaf {
+                            data: 16,
+                            parent_index: Some(22),
+                            children_indexes: vec![12, 13],
+                        },
                     },
                     children: vec![
                         DarkTree {
-                            leaf: DarkLeaf {
-                                data: 14,
+                            leaf: DarkTreeLeaf {
                                 index: 12,
-                                parent_index: Some(14),
-                                children_indexes: vec![11]
+                                info: DarkLeaf {
+                                    data: 14,
+                                    parent_index: Some(14),
+                                    children_indexes: vec![11],
+                                },
                             },
                             children: vec![DarkTree {
-                                leaf: DarkLeaf {
-                                    data: 13,
+                                leaf: DarkTreeLeaf {
                                     index: 11,
-                                    parent_index: Some(12),
-                                    children_indexes: vec![]
+                                    info: DarkLeaf {
+                                        data: 13,
+                                        parent_index: Some(12),
+                                        children_indexes: vec![],
+                                    },
                                 },
                                 children: vec![],
                                 min_capacity: 1,
@@ -357,11 +383,13 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                             max_capacity: None,
                         },
                         DarkTree {
-                            leaf: DarkLeaf {
-                                data: 15,
+                            leaf: DarkTreeLeaf {
                                 index: 13,
-                                parent_index: Some(14),
-                                children_indexes: vec![]
+                                info: DarkLeaf {
+                                    data: 15,
+                                    parent_index: Some(14),
+                                    children_indexes: vec![],
+                                },
                             },
                             children: vec![],
                             min_capacity: 1,
@@ -372,38 +400,46 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                     max_capacity: None,
                 },
                 DarkTree {
-                    leaf: DarkLeaf {
-                        data: 23,
+                    leaf: DarkTreeLeaf {
                         index: 21,
-                        parent_index: Some(22),
-                        children_indexes: vec![17, 18, 20]
+                        info: DarkLeaf {
+                            data: 23,
+                            parent_index: Some(22),
+                            children_indexes: vec![17, 18, 20],
+                        },
                     },
                     children: vec![
                         DarkTree {
-                            leaf: DarkLeaf {
-                                data: 19,
+                            leaf: DarkTreeLeaf {
                                 index: 17,
-                                parent_index: Some(21),
-                                children_indexes: vec![15, 16]
+                                info: DarkLeaf {
+                                    data: 19,
+                                    parent_index: Some(21),
+                                    children_indexes: vec![15, 16],
+                                },
                             },
                             children: vec![
                                 DarkTree {
-                                    leaf: DarkLeaf {
-                                        data: 17,
+                                    leaf: DarkTreeLeaf {
                                         index: 15,
-                                        parent_index: Some(17),
-                                        children_indexes: vec![]
+                                        info: DarkLeaf {
+                                            data: 17,
+                                            parent_index: Some(17),
+                                            children_indexes: vec![],
+                                        },
                                     },
                                     children: vec![],
                                     min_capacity: 1,
                                     max_capacity: None,
                                 },
                                 DarkTree {
-                                    leaf: DarkLeaf {
-                                        data: 18,
+                                    leaf: DarkTreeLeaf {
                                         index: 16,
-                                        parent_index: Some(17),
-                                        children_indexes: vec![]
+                                        info: DarkLeaf {
+                                            data: 18,
+                                            parent_index: Some(17),
+                                            children_indexes: vec![],
+                                        },
                                     },
                                     children: vec![],
                                     min_capacity: 1,
@@ -414,29 +450,35 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
                             max_capacity: None,
                         },
                         DarkTree {
-                            leaf: DarkLeaf {
-                                data: 20,
+                            leaf: DarkTreeLeaf {
                                 index: 18,
-                                parent_index: Some(21),
-                                children_indexes: vec![]
+                                info: DarkLeaf {
+                                    data: 20,
+                                    parent_index: Some(21),
+                                    children_indexes: vec![],
+                                },
                             },
                             children: vec![],
                             min_capacity: 1,
                             max_capacity: None,
                         },
                         DarkTree {
-                            leaf: DarkLeaf {
-                                data: 22,
+                            leaf: DarkTreeLeaf {
                                 index: 20,
-                                parent_index: Some(21),
-                                children_indexes: vec![19]
+                                info: DarkLeaf {
+                                    data: 22,
+                                    parent_index: Some(21),
+                                    children_indexes: vec![19]
+                                },
                             },
                             children: vec![DarkTree {
-                                leaf: DarkLeaf {
-                                    data: 21,
+                                leaf: DarkTreeLeaf {
                                     index: 19,
-                                    parent_index: Some(20),
-                                    children_indexes: vec![]
+                                    info: DarkLeaf {
+                                        data: 21,
+                                        parent_index: Some(20),
+                                        children_indexes: vec![],
+                                    },
                                 },
                                 children: vec![],
                                 min_capacity: 1,
@@ -459,7 +501,7 @@ fn test_darktree_mut_iterator() -> DarkTreeResult<()> {
 
     // Use [`DarkTree`] iterator to collect current
     // data, in order
-    let nums: Vec<i32> = tree.iter().map(|x| x.data).collect();
+    let nums: Vec<i32> = tree.iter().map(|x| x.info.data).collect();
 
     // Verify iterator collected the data in the expected
     // traversal order.
@@ -478,7 +520,10 @@ pub fn test_darktree_min_capacity() -> DarkTreeResult<()> {
     assert_eq!(
         tree,
         DarkTree {
-            leaf: DarkLeaf { data: 0, index: 0, parent_index: None, children_indexes: vec![] },
+            leaf: DarkTreeLeaf {
+                index: 0,
+                info: DarkLeaf { data: 0, parent_index: None, children_indexes: vec![] },
+            },
             children: vec![],
             min_capacity: 1,
             max_capacity: None
@@ -492,7 +537,10 @@ pub fn test_darktree_min_capacity() -> DarkTreeResult<()> {
     // Generate a new [`DarkTree`] manually with
     // min capacity 0
     let mut tree = DarkTree {
-        leaf: DarkLeaf { data: 0, index: 0, parent_index: None, children_indexes: vec![] },
+        leaf: DarkTreeLeaf {
+            index: 0,
+            info: DarkLeaf { data: 0, parent_index: None, children_indexes: vec![] },
+        },
         children: vec![],
         min_capacity: 0,
         max_capacity: None,
@@ -531,22 +579,34 @@ pub fn test_darktree_max_capacity() -> DarkTreeResult<()> {
     // Generate a new [`DarkTree`] manually with
     // max capacity 1
     let mut tree = DarkTree {
-        leaf: DarkLeaf { data: 0, index: 0, parent_index: None, children_indexes: vec![] },
+        leaf: DarkTreeLeaf {
+            index: 0,
+            info: DarkLeaf { data: 0, parent_index: None, children_indexes: vec![] },
+        },
         children: vec![
             DarkTree {
-                leaf: DarkLeaf { data: 0, index: 0, parent_index: None, children_indexes: vec![] },
+                leaf: DarkTreeLeaf {
+                    index: 0,
+                    info: DarkLeaf { data: 0, parent_index: None, children_indexes: vec![] },
+                },
                 children: vec![],
                 min_capacity: 1,
                 max_capacity: None,
             },
             DarkTree {
-                leaf: DarkLeaf { data: 0, index: 0, parent_index: None, children_indexes: vec![] },
+                leaf: DarkTreeLeaf {
+                    index: 0,
+                    info: DarkLeaf { data: 0, parent_index: None, children_indexes: vec![] },
+                },
                 children: vec![],
                 min_capacity: 1,
                 max_capacity: None,
             },
             DarkTree {
-                leaf: DarkLeaf { data: 0, index: 0, parent_index: None, children_indexes: vec![0] },
+                leaf: DarkTreeLeaf {
+                    index: 0,
+                    info: DarkLeaf { data: 0, parent_index: None, children_indexes: vec![0] },
+                },
                 children: vec![],
                 min_capacity: 1,
                 max_capacity: None,
@@ -604,9 +664,9 @@ pub fn test_darktree_flattened_vec() -> DarkTreeResult<()> {
     // corresponding to a [`DarkTree`] with a 2 children,
     // with erroneous indexes
     let vec = vec![
-        DarkLeaf { data: 0, index: 0, parent_index: Some(2), children_indexes: vec![] },
-        DarkLeaf { data: 0, index: 1, parent_index: Some(2), children_indexes: vec![] },
-        DarkLeaf { data: 0, index: 2, parent_index: None, children_indexes: vec![0, 2] },
+        DarkLeaf { data: 0, parent_index: Some(2), children_indexes: vec![] },
+        DarkLeaf { data: 0, parent_index: Some(2), children_indexes: vec![] },
+        DarkLeaf { data: 0, parent_index: None, children_indexes: vec![0, 2] },
     ];
 
     // Verify vector integrity will fail
