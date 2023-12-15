@@ -48,6 +48,7 @@ impl RequestHandler for Dchat {
         }
         // ANCHOR_END: req_match
     }
+
     async fn connections_mut(&self) -> MutexGuard<'_, HashSet<StoppableTaskPtr>> {
         self.rpc_connections.lock().await
     }
