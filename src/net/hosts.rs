@@ -197,7 +197,7 @@ impl Hosts {
 
             // Sort the list by last_seen.
             greylist.sort_unstable_by_key(|entry| entry.1);
-            
+
             debug!(target: "net::hosts::greylist_store()", "Sorted greylist: {:?}", greylist)
         }
 
@@ -222,8 +222,8 @@ impl Hosts {
 
         // Sort the list by last_seen.
         whitelist.sort_unstable_by_key(|entry| entry.1);
-        
-        debug!(target: "net::hosts::whitelistt_store()", "Sorted whitelist: {:?}", whitelist);
+
+        debug!(target: "net::hosts::whitelist_store()", "Sorted whitelist: {:?}", whitelist);
         debug!(target: "net::hosts::whitelist_store()", "hosts::whitelist_store() [END]");
     }
 
