@@ -13,9 +13,10 @@ async-trait = "0.1.74"
 log = "0.4.20"
 url = "2.5.0"
 [dependencies]
-# darkfi
+# ANCHOR: darkfi
 darkfi = {path = "../../../", features = ["net", "toml", "system", "async-daemonize", "rpc"]}
 darkfi-serial = {path = "../../../src/serial"}
+# ANCHOR_END: darkfi
 
 # daemon
 easy-parallel = "3.3.1"
