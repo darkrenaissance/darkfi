@@ -156,19 +156,43 @@ impl ProtocolAddress {
         }
     }
 
+    // If it's an outbound session, we have an extern_addr, and address advertising
+    // is enabled, send our address.
     async fn send_my_addrs(self: Arc<Self>) -> Result<()> {
+        debug!(target: "net::protocol_address::send_my_addrs()", "[START]");
+        let type_id = self.channel.session_type_id();
+
+        if type_id != SESSION_OUTBOUND {
+            debug!(target: "net::protocol_address::send_my_addrs()", "Externaladdr not configured. Stopping");
+            return Ok(())
+        }
+
+        if self.settings.external_addrs.is_empty() {
+            debug!(target: "net::protocol_address::send_my_addrs()", "Externaladdr not configured. Stopping");
+            return Ok(())
+        }
+
+        // Do nothing if advertise is set to false
+        if self.settings.advertise == false {
+            debug!(target: "net::protocol_address::send_my_addrs()", "Advertise is false. Stopping");
+            return Ok(())
+        }
+
         debug!(
             target: "net::protocol_address::send_my_addrs()",
             "[START] address={}", self.channel.address(),
         );
 
         // See if we can do a version exchange with ourself.
+        debug!(target: "net::protocol_address", "Attempting to ping self");
         if self.session.ping_node(self.channel.address()).await {
             // We're online. Broadcast our address.
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
             let addrs = vec![(self.channel.address().clone(), last_seen)];
             let addrs_msg = AddrsMessage { addrs };
             self.channel.send(&addrs_msg).await?;
+        } else {
+            debug!(target: "net::protocol_address", "Ping self failed");
         }
 
         Ok(())
@@ -182,18 +206,9 @@ impl ProtocolBase for ProtocolAddress {
     async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::protocol_address::start()", "START => address={}", self.channel.address());
 
-        let type_id = self.channel.session_type_id();
-
         self.jobsman.clone().start(ex.clone());
 
-        // If it's an outbound session, we have an extern_addr, and address advertising
-        // is enabled, send our address.
-        if type_id == SESSION_OUTBOUND &&
-            !self.settings.external_addrs.is_empty() &&
-            self.settings.advertise
-        {
-            self.jobsman.clone().spawn(self.clone().send_my_addrs(), ex.clone()).await;
-        }
+        self.jobsman.clone().spawn(self.clone().send_my_addrs(), ex.clone()).await;
 
         self.jobsman.clone().spawn(self.clone().handle_receive_addrs(), ex.clone()).await;
         self.jobsman.spawn(self.clone().handle_receive_get_addrs(), ex).await;
