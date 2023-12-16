@@ -87,7 +87,7 @@ impl OutboundSession {
             greylist_refinery: GreylistRefinery::new(),
         });
         self_.peer_discovery.session.init(self_.clone());
-        self_.greylist_refinery.session.init(self_.clone());
+        //self_.greylist_refinery.session.init(self_.clone());
         self_
     }
 
@@ -107,7 +107,7 @@ impl OutboundSession {
         }
 
         self.peer_discovery.clone().start().await;
-        self.greylist_refinery.clone().start().await;
+        //self.greylist_refinery.clone().start().await;
     }
 
     /// Stops the outbound session.
@@ -318,7 +318,8 @@ impl Slot {
             // able to establish a connection to it to it.
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
-            hosts.whitelist_update(&addr_final, last_seen).await;
+            // TODO: FIXME: unwrap
+            hosts.whitelist_store_or_update(&addr_final, last_seen).await.unwrap();
 
             dnetev!(self, OutboundSlotConnected, {
                 slot: self.slot,

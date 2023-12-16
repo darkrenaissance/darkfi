@@ -65,36 +65,41 @@ impl ProtocolSeed {
     /// Sends own external addresses over a channel. Imports own external addresses
     /// from settings, then adds those addresses to an addrs message and sends it
     /// out over the channel.
-    pub async fn send_self_address(&self) -> Result<()> {
-        debug!(target: "net::protocol_seed::send_self_address()", "[START]");
+    pub async fn send_my_addrs(&self) -> Result<()> {
+        debug!(target: "net::protocol_seed::send_my_addrs()", "[START]");
         // Do nothing if external addresses are not configured
         if self.settings.external_addrs.is_empty() {
+            debug!(target: "net::protocol_seed::send_my_addrs()",
+            "Externaladdr not configured. Stopping");
             return Ok(())
         }
 
         // Do nothing if advertise is set to false
-        if self.settings.advertise {
+        if self.settings.advertise == false {
+            debug!(target: "net::protocol_seed::send_my_addrs()",
+            "Advertise is false. Stopping");
             return Ok(())
         }
 
         let mut addrs = vec![];
         for addr in self.settings.external_addrs.clone() {
+            debug!(target: "net::protocol_seed::send_my_addrs()", "Attempting to ping self");
+
             // See if we can do a version exchange with ourself.
             if self.session.ping_node(&addr).await {
                 // We're online. Update last_seen and broadcast our address.
                 let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
                 addrs.push((addr, last_seen));
+            } else {
+                debug!(target: "net::protocol_seed::send_my_addrs()", "Ping self failed");
+                return Ok(())
             }
         }
-
-        debug!(
-            target: "net::protocol_seed::send_self_address()",
-            "ext_addrs={:?}, dest={}", addrs, self.channel.address(),
-        );
-
+        debug!(target: "net::protocol_seed::send_my_addrs()", "Broadcasting address");
         let ext_addr_msg = AddrsMessage { addrs };
         self.channel.send(&ext_addr_msg).await?;
-        debug!(target: "net::protocol_seed::send_self_address()", "[END]");
+        debug!(target: "net::protocol_seed::send_my_addrs()", "[END]");
+
         Ok(())
     }
 }
@@ -107,9 +112,8 @@ impl ProtocolBase for ProtocolSeed {
     async fn start(self: Arc<Self>, _ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::protocol_seed::start()", "START => address={}", self.channel.address());
 
-        // TODO: only do this if "advertise" is true
         // Send own address to the seed server
-        self.send_self_address().await?;
+        self.send_my_addrs().await?;
 
         // Send get address message
         let get_addr = GetAddrsMessage {
@@ -124,7 +128,11 @@ impl ProtocolBase for ProtocolSeed {
             target: "net::protocol_seed::start()",
             "Received {} addrs from {}", addrs_msg.addrs.len(), self.channel.address(),
         );
-        self.hosts.greylist_store(&addrs_msg.addrs).await;
+        debug!(
+            target: "net::protocol_seed::start()",
+            "Appending to greylist...",
+        );
+        self.hosts.greylist_store_or_update(&addrs_msg.addrs).await?;
 
         debug!(target: "net::protocol_seed::start()", "END => address={}", self.channel.address());
         Ok(())

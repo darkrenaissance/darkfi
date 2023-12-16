@@ -100,7 +100,12 @@ impl ProtocolAddress {
                 "Received {} addrs from {}", addrs_msg.addrs.len(), self.channel.address(),
             );
 
-            self.hosts.greylist_store(&addrs_msg.addrs).await;
+            debug!(
+                target: "net::protocol_address::handle_receive_addrs()",
+                "Appending to greylist...",
+            );
+
+            self.hosts.greylist_store_or_update(&addrs_msg.addrs).await?;
         }
     }
 
@@ -163,18 +168,21 @@ impl ProtocolAddress {
         let type_id = self.channel.session_type_id();
 
         if type_id != SESSION_OUTBOUND {
-            debug!(target: "net::protocol_address::send_my_addrs()", "Externaladdr not configured. Stopping");
+            debug!(target: "net::protocol_address::send_my_addrs()",
+            "Not an outbound session. Stopping");
             return Ok(())
         }
 
         if self.settings.external_addrs.is_empty() {
-            debug!(target: "net::protocol_address::send_my_addrs()", "Externaladdr not configured. Stopping");
+            debug!(target: "net::protocol_address::send_my_addrs()",
+            "External addr not configured. Stopping");
             return Ok(())
         }
 
         // Do nothing if advertise is set to false
         if self.settings.advertise == false {
-            debug!(target: "net::protocol_address::send_my_addrs()", "Advertise is false. Stopping");
+            debug!(target: "net::protocol_address::send_my_addrs()",
+            "Advertise is false. Stopping");
             return Ok(())
         }
 
@@ -183,19 +191,39 @@ impl ProtocolAddress {
             "[START] address={}", self.channel.address(),
         );
 
-        // See if we can do a version exchange with ourself.
-        debug!(target: "net::protocol_address", "Attempting to ping self");
-        if self.session.ping_node(self.channel.address()).await {
-            // We're online. Broadcast our address.
-            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-            let addrs = vec![(self.channel.address().clone(), last_seen)];
-            let addrs_msg = AddrsMessage { addrs };
-            self.channel.send(&addrs_msg).await?;
-        } else {
-            debug!(target: "net::protocol_address", "Ping self failed");
+        let mut addrs = vec![];
+        for addr in self.settings.external_addrs.clone() {
+            debug!(target: "net::protocol_seed::send_my_addrs()", "Attempting to ping self");
+
+            // See if we can do a version exchange with ourself.
+            if self.session.ping_node(&addr).await {
+                // We're online. Update last_seen and broadcast our address.
+                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                addrs.push((addr, last_seen));
+            } else {
+                debug!(target: "net::protocol_seed::send_my_addrs()", "Ping self failed");
+                return Ok(())
+            }
         }
+        //// See if we can do a version exchange with ourself.
+        debug!(target: "net::protocol_address::send_my_addrs()", "Broadcasting address");
+        let ext_addr_msg = AddrsMessage { addrs };
+        self.channel.send(&ext_addr_msg).await?;
+        debug!(target: "net::protocol_address::send_my_addrs()", "[END]");
 
         Ok(())
+        //debug!(target: "net::protocol_address", "Attempting to ping self");
+        //if self.session.ping_node(self.channel.address()).await {
+        //    // We're online. Broadcast our address.
+        //    let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        //    let addrs = vec![(self.channel.address().clone(), last_seen)];
+        //    let addrs_msg = AddrsMessage { addrs };
+        //    self.channel.send(&addrs_msg).await?;
+        //} else {
+        //    debug!(target: "net::protocol_address", "Ping self failed");
+        //}
+
+        //Ok(())
     }
 }
 

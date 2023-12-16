@@ -29,7 +29,7 @@ use url::Url;
 use super::{p2p::P2pPtr, settings::SettingsPtr};
 use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
-    Result,
+    Error, Result,
 };
 
 /// Atomic pointer to hosts object
@@ -158,47 +158,77 @@ impl Hosts {
     // Store the address in the whitelist if we don't have it.
     // Otherwise, update the last_seen field.
     // TODO: test the performance of this method. It might be costly.
-    pub async fn whitelist_store_or_update(&self, addr: &Url, last_seen: u64) {
-        debug!(target: "net::hosts::whitelist_store_or_update()", "hosts::whitelist_store_or_update() [START]");
+    pub async fn whitelist_store_or_update(&self, addr: &Url, last_seen: u64) -> Result<()> {
+        debug!(target: "net::hosts::whitelist_store_or_update()",
+        "hosts::whitelist_store_or_update() [START]");
+
         if !self.whitelist_contains(addr).await {
             self.whitelist_store(addr, last_seen).await;
         } else {
-            let index = self.get_whitelist_index_at_addr(addr).await;
+            let index = self.get_whitelist_index_at_addr(addr).await?;
             self.whitelist_update_last_seen(addr, last_seen, index).await;
         }
+        Ok(())
     }
 
     // Update the last_seen field for a Url on the whitelist.
-    pub async fn whitelist_update(&self, addr: &Url, last_seen: u64) {
-        let index = self.get_whitelist_index_at_addr(addr).await;
+    pub async fn whitelist_update(&self, addr: &Url, last_seen: u64) -> Result<()> {
+        let index = self.get_whitelist_index_at_addr(addr).await?;
         self.whitelist_update_last_seen(addr, last_seen, index).await;
+        Ok(())
+    }
+
+    pub async fn greylist_store_or_update(&self, addrs: &[(Url, u64)]) -> Result<()> {
+        debug!(target: "net::hosts::greylist_store_or_update()",
+        "hosts::greylist_store_or_update() [START]");
+
+        for (addr, last_seen) in addrs {
+            if !self.greylist_contains(addr).await {
+                debug!(target: "net::greylist_store_or_update()", "New greylist candidate found!");
+                // TODO: clean this up: greylist_store one item at a time
+                self.greylist_store(&[(addr.clone(), last_seen.clone())]).await;
+            } else {
+                debug!(target: "net::greylist_store_or_update()",
+                "Existing greylist entry found. Updating last_seen...");
+
+                let index = self.get_greylist_index_at_addr(addr).await?;
+                self.greylist_update_last_seen(addr, last_seen.clone(), index).await;
+            }
+        }
+        Ok(())
     }
 
     // Append host to the greylist. Called on learning of a new peer.
     pub async fn greylist_store(&self, addrs: &[(Url, u64)]) {
         debug!(target: "net::hosts::greylist_store()", "hosts::greylist_store() [START]");
 
+        debug!(target: "net::hosts::greylist_store()", "Filtering addresses...");
         let filtered_addrs = self.filter_addresses(addrs).await;
         let filtered_addrs_len = filtered_addrs.len();
 
+        debug!(target: "net::hosts::greylist_store()", "Filtered addresses.");
         if !filtered_addrs.is_empty() {
+            debug!(target: "net::hosts::greylist_store()", "Starting greylist write...");
             let mut greylist = self.greylist.write().await;
+            debug!(target: "net::hosts::greylist_store()", "Achieved write lock on greylist!");
 
             // Remove oldest element if the greylist reaches max size.
             if greylist.len() == 5000 {
                 let last_entry = greylist.pop().unwrap();
                 debug!(target: "net::hosts::greylist_store()", "Greylist reached max size. Removed {:?}", last_entry);
+            } else {
+                for (addr, last_seen) in filtered_addrs {
+                    debug!(target: "net::hosts::greylist_store()", "Inserting {}", addr);
+                    greylist.push((addr.clone(), last_seen.clone()))
+                }
+
+                // Sort the list by last_seen.
+                greylist.sort_unstable_by_key(|entry| entry.1);
+
+                debug!(target: "net::hosts::greylist_store()", "Sorted greylist: {:?}", greylist)
             }
-
-            for (addr, last_seen) in filtered_addrs {
-                debug!(target: "net::hosts::greylist_store()", "Inserting {}", addr);
-                greylist.push((addr.clone(), last_seen.clone()))
-            }
-
-            // Sort the list by last_seen.
-            greylist.sort_unstable_by_key(|entry| entry.1);
-
-            debug!(target: "net::hosts::greylist_store()", "Sorted greylist: {:?}", greylist)
+        } else {
+            debug!(target: "net::hosts::greylist_store()", "Empty address message...")
         }
 
         self.store_subscriber.notify(filtered_addrs_len).await;
@@ -234,6 +264,16 @@ impl Hosts {
         let mut whitelist = self.whitelist.write().await;
 
         whitelist[index] = (addr.clone(), last_seen);
+    }
+
+    // Update the last_seen field of a peer on the greylist.
+    pub async fn greylist_update_last_seen(&self, addr: &Url, last_seen: u64, index: usize) {
+        debug!(target: "net::hosts::greylist_update_last_seen()", 
+               "hosts::greylist_update_last_seen() [START]");
+
+        let mut greylist = self.greylist.write().await;
+
+        greylist[index] = (addr.clone(), last_seen);
     }
 
     pub async fn whitelist_downgrade(&self, addr: &Url) {
@@ -438,17 +478,26 @@ impl Hosts {
     }
 
     /// Get the index for a given addr on the whitelist.
-    pub async fn get_whitelist_index_at_addr(&self, addr: &Url) -> usize {
+    pub async fn get_whitelist_index_at_addr(&self, addr: &Url) -> Result<(usize)> {
         let whitelist = self.whitelist.read().await;
         for (i, (url, _time)) in whitelist.iter().enumerate() {
             if url == addr {
-                return i
+                return Ok(i)
             }
         }
-        // TODO: FIXME: This should never happen.
-        return 0
+        return Err(Error::InvalidIndex)
     }
 
+    /// Get the index for a given addr on the greylist.
+    pub async fn get_greylist_index_at_addr(&self, addr: &Url) -> Result<(usize)> {
+        let greylist = self.greylist.read().await;
+        for (i, (url, _time)) in greylist.iter().enumerate() {
+            if url == addr {
+                return Ok(i)
+            }
+        }
+        return Err(Error::InvalidIndex)
+    }
     /// Return all known whitelisted hosts
     pub async fn whitelist_fetch_all(&self) -> Vec<(Url, u64)> {
         self.whitelist.read().await.iter().cloned().collect()
