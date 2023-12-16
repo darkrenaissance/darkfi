@@ -8,6 +8,8 @@ use ethers::prelude::*;
 use eyre::{ensure, Result, WrapErr as _};
 
 /// Implemented on top of the non-initiating chain
+///
+/// Can probably become an extension trait eventually
 pub(crate) trait OtherChainClient {
     fn claim_funds(&self, our_secret: [u8; 32], counterparty_secret: [u8; 32]) -> Result<()>;
 }

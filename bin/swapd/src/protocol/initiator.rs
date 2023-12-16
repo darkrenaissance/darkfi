@@ -5,11 +5,12 @@ use tokio::sync::mpsc::Receiver;
 use super::traits::HandleCounterpartyKeysReceivedResult;
 
 #[derive(Debug)]
-enum Event {
+pub(crate) enum Event {
     ReceivedCounterpartyKeys(InitiateSwapArgs),
     CounterpartyFundsLocked,
     CounterpartyFundsClaimed([u8; 32]),
-    ShouldRefund,
+    AlmostTimeout1,
+    PastTimeout2,
 }
 
 #[derive(Debug)]
@@ -80,16 +81,38 @@ impl Swap {
 
                     self.handler.handle_counterparty_funds_claimed(counterparty_secret).await?;
                 }
-                Some(Event::ShouldRefund) => {
-                    let state = std::mem::replace(&mut self.state, State::Completed);
-
-                    match state {
+                Some(Event::AlmostTimeout1) => {
+                    match self.state {
                         State::WaitingForCounterpartyFundsLocked |
                         State::WaitingForCounterpartyFundsClaimed => {}
                         _ => {
-                            return Err(eyre!("unexpected event: {:?}", Event::ShouldRefund));
+                            return Err(eyre!("unexpected event: {:?}", Event::AlmostTimeout1));
                         }
                     }
+
+                    // we're almost at timeout 1, and the counterparty hasn't locked,
+                    // so we need to refund
+                    if matches!(self.state, State::WaitingForCounterpartyFundsLocked) {
+                        self.handler
+                            .handle_should_refund(
+                                contract_swap_info
+                                    .as_ref()
+                                    .expect("contract swap info must be set")
+                                    .contract_swap
+                                    .clone(),
+                            )
+                            .await?;
+
+                        let _ = std::mem::replace(&mut self.state, State::Completed);
+                    }
+                }
+                Some(Event::PastTimeout2) => {
+                    if !matches!(self.state, State::WaitingForCounterpartyFundsClaimed) {
+                        return Err(eyre!("unexpected event: {:?}", Event::PastTimeout2));
+                    }
+
+                    // we're past timeout 2, and the counterparty hasn't claimed,
+                    // so we need to refund
                     self.handler
                         .handle_should_refund(
                             contract_swap_info
@@ -99,6 +122,8 @@ impl Swap {
                                 .clone(),
                         )
                         .await?;
+
+                    let _ = std::mem::replace(&mut self.state, State::Completed);
                 }
                 None => {
                     break;
