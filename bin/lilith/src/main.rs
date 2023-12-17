@@ -17,19 +17,17 @@
  */
 
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     path::Path,
     process::exit,
     sync::Arc,
-    time::UNIX_EPOCH,
 };
 
 use async_trait::async_trait;
-use futures::future::join_all;
 use log::{debug, error, info, warn};
 use semver::Version;
 use smol::{
-    lock::{Mutex, MutexGuard, RwLock},
+    lock::{Mutex, MutexGuard},
     stream::StreamExt,
     Executor,
 };
@@ -41,12 +39,12 @@ use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
-    net::{self, connector::Connector, protocol::ProtocolVersion, session::Session, P2p, P2pPtr},
+    net::{self, P2p, P2pPtr},
     rpc::{
         jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
     },
-    system::{sleep, StoppableTask, StoppableTaskPtr},
+    system::{StoppableTask, StoppableTaskPtr},
     util::{
         file::{load_file, save_file},
         path::{expand_path, get_config_path},
@@ -56,11 +54,6 @@ use darkfi::{
 
 const CONFIG_FILE: &str = "lilith_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../lilith_config.toml");
-
-/// Period in which the peer purge happens (in seconds)
-const CLEANSE_PERIOD: u64 = 60;
-/// Amount of hosts to try each purge iteration
-const PROBE_HOSTS_N: u32 = 10;
 
 #[derive(Clone, Debug, serde::Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
