@@ -34,8 +34,7 @@ use super::{
     },
     protocol_base::{ProtocolBase, ProtocolBasePtr},
 };
-use crate::Result;
-use crate::net::hosts::refinery::ping_node;
+use crate::{net::hosts::refinery::ping_node, Result};
 
 /// Implements the seed protocol
 pub struct ProtocolSeed {

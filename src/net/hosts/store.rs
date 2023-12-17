@@ -475,7 +475,7 @@ impl Hosts {
     }
 
     /// Get the index for a given addr on the whitelist.
-    pub async fn get_whitelist_index_at_addr(&self, addr: &Url) -> Result<(usize)> {
+    pub async fn get_whitelist_index_at_addr(&self, addr: &Url) -> Result<usize> {
         let whitelist = self.whitelist.read().await;
         for (i, (url, _time)) in whitelist.iter().enumerate() {
             if url == addr {
@@ -486,7 +486,7 @@ impl Hosts {
     }
 
     /// Get the index for a given addr on the greylist.
-    pub async fn get_greylist_index_at_addr(&self, addr: &Url) -> Result<(usize)> {
+    pub async fn get_greylist_index_at_addr(&self, addr: &Url) -> Result<usize> {
         let greylist = self.greylist.read().await;
         for (i, (url, _time)) in greylist.iter().enumerate() {
             if url == addr {

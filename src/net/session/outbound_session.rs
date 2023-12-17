@@ -36,7 +36,6 @@ use std::{
 
 use async_trait::async_trait;
 use log::{debug, error, info, warn};
-use rand::Rng;
 use smol::lock::Mutex;
 use url::Url;
 
@@ -47,7 +46,6 @@ use super::{
         dnet::{self, dnetev, DnetEvent},
         message::GetAddrsMessage,
         p2p::{P2p, P2pPtr},
-        protocol::ProtocolVersion,
     },
     Session, SessionBitFlag, SESSION_OUTBOUND,
 };

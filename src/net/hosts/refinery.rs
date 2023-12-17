@@ -16,36 +16,21 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    collections::HashSet,
-    sync::{Arc, Weak},
-    time::UNIX_EPOCH,
-};
+use std::{sync::Arc, time::UNIX_EPOCH};
 
-use log::{debug, trace, warn};
-use rand::{
-    prelude::{IteratorRandom, SliceRandom},
-    rngs::OsRng,
-};
-
+use log::{debug, warn};
 use rand::Rng;
-use smol::lock::RwLock;
 use url::Url;
 
-use super::super::{
-    p2p::{P2p, P2pPtr},
-    settings::SettingsPtr,
-};
+use super::super::p2p::P2pPtr;
 use crate::{
     net::{
         connector::Connector,
         protocol::ProtocolVersion,
         session::{Session, SessionWeakPtr},
     },
-    system::{
-        sleep, LazyWeak, StoppableTask, StoppableTaskPtr, Subscriber, SubscriberPtr, Subscription,
-    },
-    Error, Result,
+    system::{sleep, StoppableTask, StoppableTaskPtr},
+    Error,
 };
 
 //// Probe random peers on the greylist. If a peer is responsive, update the last_seen field and
@@ -87,7 +72,6 @@ impl GreylistRefinery {
         debug!(target: "net::refinery::run()", "START");
         loop {
             let hosts = self.p2p.hosts();
-            let session = self.p2p.session_outbound();
 
             if hosts.is_empty_greylist().await {
                 warn!(target: "net::refinery::run()", "Greylist is empty. Aborting");
