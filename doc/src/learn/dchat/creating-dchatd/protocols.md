@@ -52,6 +52,8 @@ method `register` which passes a protocol constructor and a session
 for. The `ProtocolRegistry` then spawns new protocols for different channels
 depending on the session.
 
+TODO: document which protocols are included or excluded depending on the session.
+
 **ProtocolJobsManager**
 
 An asynchronous job manager that spawns and stops tasks. Its main
