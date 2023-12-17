@@ -144,114 +144,6 @@ struct Lilith {
 }
 
 impl Lilith {
-    async fn refresh_whitelist(name: String, p2p: P2pPtr, ex: Arc<Executor<'_>>) -> Result<()> {
-        info!(target: "lilith", "Starting refresh whitelist task for \"{}\"", name);
-
-        // Initialize a growable ring buffer(VecDeque) to store known hosts
-        let ring_buffer = Arc::new(RwLock::new(VecDeque::<Url>::new()));
-
-        loop {
-            // Wait for next purge period
-            sleep(CLEANSE_PERIOD).await;
-            debug!(target: "lilith", "[{}] Refresh whitelist() started...", name);
-
-            // Check if new hosts exist and add them to the end of the ring buffer
-            let mut lock = ring_buffer.write().await;
-            let hosts = p2p.clone().hosts().whitelist_fetch_all().await;
-            if hosts.len() != lock.len() {
-                // Since hosts are stored in a HashSet we have to check all of them
-                for (addr, _last_seen) in hosts {
-                    if !lock.contains(&addr) {
-                        lock.push_back(addr);
-                    }
-                }
-            }
-
-            // Pick first up to PROBE_HOSTS_N hosts from the ring buffer
-            let mut cleansers = vec![];
-            let mut index = 0;
-            while index <= PROBE_HOSTS_N {
-                match lock.pop_front() {
-                    Some(host) => cleansers.push(host),
-                    None => break,
-                };
-                index += 1;
-            }
-
-            // Try to connect to them. If we establish a connection, update the last_seen() field.
-            let cleansers_str: Vec<&str> = cleansers.iter().map(|x| x.as_str()).collect();
-            debug!(target: "lilith", "[{}] Got: {:?}", name, cleansers_str);
-
-            let mut tasks = vec![];
-
-            for host in &cleansers {
-                let p2p_ = p2p.clone();
-                let hosts = p2p_.hosts();
-                let ex_ = ex.clone();
-
-                tasks.push(async move {
-                    let mut whitelist = hosts.whitelist.write().await;
-
-                    let session_out = p2p_.session_outbound();
-                    let session_weak = Arc::downgrade(&session_out);
-
-                    let connector = Connector::new(p2p_.settings().clone(), session_weak);
-                    debug!(target: "lilith", "Connecting to {}", host);
-                    match connector.connect(host).await {
-                        Ok((_url, channel)) => {
-                            debug!(target: "lilith", "Connected successfully!");
-                            let proto_ver = ProtocolVersion::new(channel.clone(), p2p_.settings().clone()).await;
-
-                            let handshake_task = session_out.perform_handshake_protocols(
-                                proto_ver,
-                                channel.clone(),
-                                ex_.clone(),
-                            );
-
-                            channel.clone().start(ex_.clone());
-
-                            match handshake_task.await {
-                                Ok(()) => {
-                                    debug!(target: "lilith", "Handshake success! Stopping channel.");
-                                    channel.stop().await;
-
-                                    // Peer is responsive. Update last_seen and add it to the whitelist.
-                                    let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-
-                                    // Remove oldest element if the whitelist reaches max size.
-                                    if whitelist.len() == 1000 {
-                                        // Last element in vector should have the oldest timestamp.
-                                        // This should never crash as only returns None when whitelist len() == 0.
-                                        let entry = whitelist.pop().unwrap();
-                                        debug!(target: "lilith", "Whitelist reached max size. Removed host {}", entry.0);
-                                    }
-                                    // Append to the whitelist.
-                                    debug!(target: "lilith", "Adding peer {} to whitelist", host);
-                                    whitelist.push((host.clone(), last_seen));
-
-                                    // Sort whitelist by last_seen.
-                                    whitelist.sort_unstable_by_key(|entry| entry.1);
-
-                                    debug!(target: "lilith", "Sorted whitelist: {:?}", whitelist)
-                                }
-                                Err(e) => {
-                                    debug!(target: "lilith", "Handshake failure! {}", e);
-                                }
-                            }
-                        }
-
-                        Err(e) => {
-                            debug!(target: "lilith", "Failed to connect to {}, ({})", host, e);
-                        }
-                    }
-
-                });
-            }
-
-            join_all(tasks).await;
-        }
-    }
-
     // RPCAPI:
     // Returns all spawned networks names with their node addresses.
     // --> {"jsonrpc": "2.0", "method": "spawns", "params": [], "id": 42}
@@ -330,6 +222,7 @@ async fn save_hosts(path: &Path, networks: &[Spawn]) {
 
     for spawn in networks {
         for (host, last_seen) in spawn.p2p.hosts().whitelist_fetch_all().await {
+            debug!(target: "lilith", "save_hosts {} {}", host, last_seen);
             tsv.push_str(&format!("{}\t{}\t{}\n", spawn.name, host.as_str(), last_seen));
         }
     }
@@ -451,7 +344,7 @@ async fn spawn_net(
 
     // Fill db with cached hosts
     let hosts: Vec<(Url, u64)> = saved_hosts.iter().cloned().collect();
-    p2p.hosts().greylist_store(&hosts).await;
+    p2p.hosts().greylist_store_or_update(&hosts).await?;
 
     let addrs_str: Vec<&str> = listen_urls.iter().map(|x| x.as_str()).collect();
     info!(target: "lilith", "Starting seed network node for \"{}\" on {:?}", name, addrs_str);
@@ -500,25 +393,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         }
     }
 
-    // Set up main daemon and background tasks
+    // Set up main daemon
     let lilith = Arc::new(Lilith { networks, rpc_connections: Mutex::new(HashSet::new()) });
-    let mut periodic_tasks = HashMap::new();
-    for network in &lilith.networks {
-        let name = network.name.clone();
-        let task = StoppableTask::new();
-        task.clone().start(
-            Lilith::refresh_whitelist(name.clone(), network.p2p.clone(), ex.clone()),
-            |res| async move {
-                match res {
-                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
-                    Err(e) => error!(target: "lilith", "Failed starting periodic task for \"{}\": {}", name, e),
-                }
-            },
-            Error::DetachedTaskStopped,
-            ex.clone(),
-        );
-        periodic_tasks.insert(network.name.clone(), task);
-    }
 
     // JSON-RPC server
     info!(target: "lilith", "Starting JSON-RPC server on {}", args.rpc_listen);
@@ -549,8 +425,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     // Cleanly stop p2p networks
     for spawn in &lilith.networks {
-        info!(target: "lilith", "Stopping \"{}\" periodic task", spawn.name);
-        periodic_tasks.get(&spawn.name).unwrap().stop().await;
         info!(target: "lilith", "Stopping \"{}\" P2P", spawn.name);
         spawn.p2p.stop().await;
     }
