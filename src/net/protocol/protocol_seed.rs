@@ -43,7 +43,6 @@ pub struct ProtocolSeed {
     settings: SettingsPtr,
     addr_sub: MessageSubscription<AddrsMessage>,
     // We require this to access ping_self() method.
-    session: OutboundSessionPtr,
     p2p: P2pPtr,
 }
 
@@ -60,7 +59,7 @@ impl ProtocolSeed {
         let addr_sub =
             channel.subscribe_msg::<AddrsMessage>().await.expect("Missing addr dispatcher!");
 
-        Arc::new(Self { channel, hosts, settings, addr_sub, session, p2p })
+        Arc::new(Self { channel, hosts, settings, addr_sub, p2p })
     }
 
     /// Sends own external addresses over a channel. Imports own external addresses
@@ -87,9 +86,7 @@ impl ProtocolSeed {
             debug!(target: "net::protocol_seed::send_my_addrs()", "Attempting to ping self");
 
             // See if we can do a version exchange with ourself.
-            let parent = Arc::downgrade(&self.session);
-            // See if we can do a version exchange with ourself.
-            if ping_node(&addr, self.p2p.clone(), parent).await {
+            if ping_node(&addr, self.p2p.clone()).await {
                 // We're online. Update last_seen and broadcast our address.
                 let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
                 addrs.push((addr, last_seen));

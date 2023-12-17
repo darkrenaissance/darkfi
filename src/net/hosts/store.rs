@@ -18,7 +18,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 
-use log::{debug, trace};
+use log::{debug, trace, warn};
 use rand::{
     prelude::{IteratorRandom, SliceRandom},
     rngs::OsRng,
@@ -525,6 +525,8 @@ impl Hosts {
         // Retrieve all peers corresponding to that transport schemes
         let hosts = self.whitelist_fetch_with_schemes(schemes, None).await;
         if hosts.is_empty() {
+            warn!(target: "store::whitelist_fetch_n_random_with_schemes",
+                  "Whitelist is empty! Exiting...");
             return hosts
         }
 
@@ -547,6 +549,8 @@ impl Hosts {
         // Retrieve all peers not corresponding to that transport schemes
         let hosts = self.whitelist_fetch_excluding_schemes(schemes, None).await;
         if hosts.is_empty() {
+            warn!(target: "store::whitelist_fetch_n_random_excluding_schemes",
+                  "Whitelist is empty! Exiting...");
             return hosts
         }
 
@@ -646,7 +650,7 @@ impl Hosts {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::settings::Settings, *};
+    use super::{super::super::settings::Settings, *};
     use std::time::UNIX_EPOCH;
 
     #[test]

@@ -18,7 +18,7 @@
 
 // cargo +nightly test --release --all-features --lib p2p -- --include-ignored
 
-use std::{sync::Arc, time::SystemTime};
+use std::sync::Arc;
 
 use log::info;
 use rand::{prelude::SliceRandom, Rng};
@@ -31,7 +31,7 @@ use crate::{
 };
 
 // Number of nodes to spawn and number of peers each node connects to
-const N_NODES: usize = 5;
+const N_NODES: usize = 1;
 const N_CONNS: usize = 2;
 
 // TODO: test whitelist propagation between peers
@@ -88,7 +88,7 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
     let seed_addr = Url::parse(&format!("tcp://127.0.0.1:{}", 51505)).unwrap();
 
     let mut p2p_instances = vec![];
-    let mut rng = rand::thread_rng();
+    //let mut rng = rand::thread_rng();
 
     info!("Initializing seed network");
     let settings = Settings {
@@ -110,6 +110,15 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
 
     info!("Initializing outbound nodes");
     for i in 0..N_NODES {
+        // Everyone will connect to N_CONNS random peers.
+        let mut peers = vec![];
+        //for _ in 0..N_CONNS {
+        //    let mut port = 13200 + i;
+        //    while port == 13200 + i {
+        //        port = 13200 + rng.gen_range(0..N_NODES);
+        //    }
+        //    peers.push(Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap());
+        //}
         let settings = Settings {
             localnet: true,
             inbound_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", 13200 + i)).unwrap()],
@@ -118,7 +127,7 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
             outbound_connect_timeout: 10,
             inbound_connections: usize::MAX,
             seeds: vec![seed_addr.clone()],
-            peers: vec![],
+            peers,
             allowed_transports: vec!["tcp".to_string()],
             node_id: i.to_string(),
             //advertise: true,

@@ -30,7 +30,10 @@ use url::Url;
 use super::{
     channel::ChannelPtr,
     dnet::DnetEvent,
-    hosts::store::{Hosts, HostsPtr},
+    hosts::{
+        refinery::{GreylistRefinery, GreylistRefineryPtr},
+        store::{Hosts, HostsPtr},
+    },
     message::Message,
     protocol::{protocol_registry::ProtocolRegistry, register_default_protocols},
     session::{
@@ -81,6 +84,9 @@ pub struct P2p {
     pub dnet_enabled: Mutex<bool>,
     /// The subscriber for which we can give dnet info over
     dnet_subscriber: SubscriberPtr<DnetEvent>,
+
+    // Greylist refinery process
+    greylist_refinery: Arc<GreylistRefinery>,
 }
 
 impl P2p {
@@ -111,12 +117,15 @@ impl P2p {
 
             dnet_enabled: Mutex::new(false),
             dnet_subscriber: Subscriber::new(),
+
+            greylist_refinery: GreylistRefinery::new(),
         });
 
         self_.session_manual.p2p.init(self_.clone());
         self_.session_inbound.p2p.init(self_.clone());
         self_.session_outbound.p2p.init(self_.clone());
 
+        self_.greylist_refinery.p2p.init(self_.clone());
         register_default_protocols(self_.clone()).await;
 
         self_
@@ -142,6 +151,9 @@ impl P2p {
         // Start the outbound session
         self.session_outbound().start().await;
 
+        info!(target: "net::p2p::start()", "Starting greylist refinery process");
+        self.greylist_refinery.clone().start().await;
+
         info!(target: "net::p2p::start()", "[P2P] P2P subsystem started");
         Ok(())
     }
@@ -166,6 +178,9 @@ impl P2p {
         self.session_manual().stop().await;
         self.session_inbound().stop().await;
         self.session_outbound().stop().await;
+
+        // Stop greylist refinery process
+        self.greylist_refinery().stop().await;
     }
 
     /// Broadcasts a message concurrently across all active channels.
@@ -287,6 +302,11 @@ impl P2p {
     /// Get pointer to outbound session
     pub fn session_outbound(&self) -> OutboundSessionPtr {
         self.session_outbound.clone()
+    }
+
+    /// Get pointer to greylist refinery
+    pub fn greylist_refinery(&self) -> GreylistRefineryPtr {
+        self.greylist_refinery.clone()
     }
 
     /// Enable network debugging

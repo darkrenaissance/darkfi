@@ -70,8 +70,6 @@ pub struct OutboundSession {
     slots: Mutex<Vec<Arc<Slot>>>,
     /// Peer discovery task
     peer_discovery: Arc<PeerDiscovery>,
-    ///// Greylist refinery task
-    //greylist_refinery: Arc<GreylistRefinery>,
 }
 
 impl OutboundSession {
@@ -82,10 +80,8 @@ impl OutboundSession {
             channel_subscriber: Subscriber::new(),
             slots: Mutex::new(Vec::new()),
             peer_discovery: PeerDiscovery::new(),
-            //greylist_refinery: GreylistRefinery::new(),
         });
         self_.peer_discovery.session.init(self_.clone());
-        //self_.greylist_refinery.session.init(self_.clone());
         self_
     }
 
@@ -105,7 +101,6 @@ impl OutboundSession {
         }
 
         self.peer_discovery.clone().start().await;
-        //self.greylist_refinery.clone().start().await;
     }
 
     /// Stops the outbound session.
@@ -117,7 +112,6 @@ impl OutboundSession {
         }
 
         self.peer_discovery.clone().stop().await;
-        //self.greylist_refinery.clone().stop().await;
     }
 
     pub async fn slot_info(&self) -> Vec<u32> {

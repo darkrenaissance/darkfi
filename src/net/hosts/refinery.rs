@@ -22,34 +22,36 @@ use log::{debug, warn};
 use rand::Rng;
 use url::Url;
 
-use super::super::p2p::P2pPtr;
+use super::super::p2p::{P2p, P2pPtr};
 use crate::{
     net::{
         connector::Connector,
         protocol::ProtocolVersion,
         session::{Session, SessionWeakPtr},
     },
-    system::{sleep, StoppableTask, StoppableTaskPtr},
+    system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr},
     Error,
 };
+
+pub type GreylistRefineryPtr = Arc<GreylistRefinery>;
 
 //// Probe random peers on the greylist. If a peer is responsive, update the last_seen field and
 //// add it to the whitelist. If a node does not respond, remove it from the greylist.
 //// Called periodically.
 // NOTE: in monero this is called "greylist housekeeping" but that's a bit verbose.
-struct GreylistRefinery {
-    p2p: P2pPtr,
+pub struct GreylistRefinery {
+    /// Weak pointer to parent p2p object
+    pub(in crate::net) p2p: LazyWeak<P2p>,
     process: StoppableTaskPtr,
-    session: SessionWeakPtr,
 }
 
 impl GreylistRefinery {
-    fn new(p2p: P2pPtr, session: SessionWeakPtr) -> Arc<Self> {
-        Arc::new(Self { p2p, process: StoppableTask::new(), session })
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self { p2p: LazyWeak::new(), process: StoppableTask::new() })
     }
 
-    async fn start(self: Arc<Self>) {
-        let ex = self.p2p.executor();
+    pub async fn start(self: Arc<Self>) {
+        let ex = self.p2p().executor();
         self.process.clone().start(
             async move {
                 self.run().await;
@@ -62,7 +64,7 @@ impl GreylistRefinery {
         );
     }
 
-    async fn stop(self: Arc<Self>) {
+    pub async fn stop(self: Arc<Self>) {
         self.process.stop().await
     }
 
@@ -71,11 +73,12 @@ impl GreylistRefinery {
     async fn run(self: Arc<Self>) {
         debug!(target: "net::refinery::run()", "START");
         loop {
-            let hosts = self.p2p.hosts();
+            let hosts = self.p2p().hosts();
 
             if hosts.is_empty_greylist().await {
-                warn!(target: "net::refinery::run()", "Greylist is empty. Aborting");
-                break
+                warn!(target: "net::refinery::run()",
+                "Greylist is empty! Cannot start refinery process. Sleeping...");
+                sleep(5).await;
             } else {
                 debug!(target: "net::refinery::run()", "Starting refinery process");
                 // Randomly select an entry from the greylist.
@@ -84,7 +87,7 @@ impl GreylistRefinery {
                 let entry = &greylist[position];
                 let url = &entry.0;
 
-                if ping_node(url, self.p2p.clone(), self.session.clone()).await {
+                if ping_node(url, self.p2p().clone()).await {
                     let whitelist = hosts.whitelist.read().await;
                     // Remove oldest element if the whitelist reaches max size.
                     if whitelist.len() == 1000 {
@@ -119,16 +122,21 @@ impl GreylistRefinery {
 
             // TODO: create a custom net setting for this timer
             debug!(target: "net::greylist_refinery::run()", "Sleeping...");
-            sleep(self.p2p.settings().outbound_peer_discovery_attempt_time).await;
+            sleep(5).await;
         }
+    }
+
+    fn p2p(&self) -> P2pPtr {
+        self.p2p.upgrade()
     }
 }
 
 // Ping a node to check it's online.
 // TODO: make this an actual ping-pong method, rather than a version exchange.
-pub async fn ping_node(addr: &Url, p2p: P2pPtr, session: SessionWeakPtr) -> bool {
-    let connector = Connector::new(p2p.settings(), session.clone());
-    let outbound_session = p2p.session_outbound();
+pub async fn ping_node(addr: &Url, p2p: P2pPtr) -> bool {
+    let session_outbound = p2p.session_outbound();
+    let parent = Arc::downgrade(&session_outbound);
+    let connector = Connector::new(p2p.settings(), parent);
 
     debug!(target: "net::refinery::ping_node()", "Attempting to connect to {}", addr);
     match connector.connect(addr).await {
@@ -136,7 +144,7 @@ pub async fn ping_node(addr: &Url, p2p: P2pPtr, session: SessionWeakPtr) -> bool
             debug!(target: "net::refinery::ping_node()", "Connected successfully!");
             let proto_ver = ProtocolVersion::new(channel.clone(), p2p.settings()).await;
 
-            let handshake_task = outbound_session.perform_handshake_protocols(
+            let handshake_task = session_outbound.perform_handshake_protocols(
                 proto_ver,
                 channel.clone(),
                 p2p.executor(),

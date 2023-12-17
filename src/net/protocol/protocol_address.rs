@@ -49,10 +49,9 @@ pub struct ProtocolAddress {
     get_addrs_sub: MessageSubscription<GetAddrsMessage>,
     hosts: HostsPtr,
     settings: SettingsPtr,
+    jobsman: ProtocolJobsManagerPtr,
     // We require this to access ping_self() method.
     p2p: P2pPtr,
-    session: OutboundSessionPtr,
-    jobsman: ProtocolJobsManagerPtr,
 }
 
 const PROTO_NAME: &str = "ProtocolAddress";
@@ -64,7 +63,6 @@ impl ProtocolAddress {
     pub async fn init(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let settings = p2p.settings();
         let hosts = p2p.hosts();
-        let session = p2p.session_outbound();
 
         // Creates a subscription to address message
         let addrs_sub =
@@ -80,9 +78,8 @@ impl ProtocolAddress {
             get_addrs_sub,
             hosts,
             jobsman: ProtocolJobsManager::new(PROTO_NAME, channel),
-            session,
-            p2p,
             settings,
+            p2p,
         })
     }
 
@@ -197,9 +194,8 @@ impl ProtocolAddress {
         for addr in self.settings.external_addrs.clone() {
             debug!(target: "net::protocol_address::send_my_addrs()", "Attempting to ping self");
 
-            let parent = Arc::downgrade(&self.session);
             // See if we can do a version exchange with ourself.
-            if ping_node(&addr, self.p2p.clone(), parent).await {
+            if ping_node(&addr, self.p2p.clone()).await {
                 // We're online. Update last_seen and broadcast our address.
                 let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
                 addrs.push((addr, last_seen));
@@ -208,25 +204,12 @@ impl ProtocolAddress {
                 return Ok(())
             }
         }
-        //// See if we can do a version exchange with ourself.
         debug!(target: "net::protocol_address::send_my_addrs()", "Broadcasting address");
         let ext_addr_msg = AddrsMessage { addrs };
         self.channel.send(&ext_addr_msg).await?;
         debug!(target: "net::protocol_address::send_my_addrs()", "[END]");
 
         Ok(())
-        //debug!(target: "net::protocol_address", "Attempting to ping self");
-        //if self.session.ping_node(self.channel.address()).await {
-        //    // We're online. Broadcast our address.
-        //    let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-        //    let addrs = vec![(self.channel.address().clone(), last_seen)];
-        //    let addrs_msg = AddrsMessage { addrs };
-        //    self.channel.send(&addrs_msg).await?;
-        //} else {
-        //    debug!(target: "net::protocol_address", "Ping self failed");
-        //}
-
-        //Ok(())
     }
 }
 
@@ -242,6 +225,7 @@ impl ProtocolBase for ProtocolAddress {
         self.jobsman.clone().spawn(self.clone().send_my_addrs(), ex.clone()).await;
 
         self.jobsman.clone().spawn(self.clone().handle_receive_addrs(), ex.clone()).await;
+
         self.jobsman.spawn(self.clone().handle_receive_get_addrs(), ex).await;
 
         // Send get_address message.
