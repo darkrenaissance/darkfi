@@ -25,7 +25,7 @@ use smol::Executor;
 use super::{
     super::{
         channel::ChannelPtr,
-        hosts::HostsPtr,
+        hosts::store::HostsPtr,
         message::{AddrsMessage, GetAddrsMessage},
         message_subscriber::MessageSubscription,
         p2p::P2pPtr,
@@ -35,6 +35,7 @@ use super::{
     protocol_base::{ProtocolBase, ProtocolBasePtr},
 };
 use crate::Result;
+use crate::net::hosts::refinery::ping_node;
 
 /// Implements the seed protocol
 pub struct ProtocolSeed {
@@ -44,6 +45,7 @@ pub struct ProtocolSeed {
     addr_sub: MessageSubscription<AddrsMessage>,
     // We require this to access ping_self() method.
     session: OutboundSessionPtr,
+    p2p: P2pPtr,
 }
 
 const PROTO_NAME: &str = "ProtocolSeed";
@@ -59,7 +61,7 @@ impl ProtocolSeed {
         let addr_sub =
             channel.subscribe_msg::<AddrsMessage>().await.expect("Missing addr dispatcher!");
 
-        Arc::new(Self { channel, hosts, settings, addr_sub, session })
+        Arc::new(Self { channel, hosts, settings, addr_sub, session, p2p })
     }
 
     /// Sends own external addresses over a channel. Imports own external addresses
@@ -70,14 +72,14 @@ impl ProtocolSeed {
         // Do nothing if external addresses are not configured
         if self.settings.external_addrs.is_empty() {
             debug!(target: "net::protocol_seed::send_my_addrs()",
-            "Externaladdr not configured. Stopping");
+            "External address is not configured. Stopping");
             return Ok(())
         }
 
         // Do nothing if advertise is set to false
         if self.settings.advertise == false {
             debug!(target: "net::protocol_seed::send_my_addrs()",
-            "Advertise is false. Stopping");
+            "Advertise is set to false. Stopping");
             return Ok(())
         }
 
@@ -86,7 +88,9 @@ impl ProtocolSeed {
             debug!(target: "net::protocol_seed::send_my_addrs()", "Attempting to ping self");
 
             // See if we can do a version exchange with ourself.
-            if self.session.ping_node(&addr).await {
+            let parent = Arc::downgrade(&self.session);
+            // See if we can do a version exchange with ourself.
+            if ping_node(&addr, self.p2p.clone(), parent).await {
                 // We're online. Update last_seen and broadcast our address.
                 let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
                 addrs.push((addr, last_seen));

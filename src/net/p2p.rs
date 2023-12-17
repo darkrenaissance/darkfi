@@ -30,7 +30,7 @@ use url::Url;
 use super::{
     channel::ChannelPtr,
     dnet::DnetEvent,
-    hosts::{Hosts, HostsPtr},
+    hosts::store::{Hosts, HostsPtr},
     message::Message,
     protocol::{protocol_registry::ProtocolRegistry, register_default_protocols},
     session::{

@@ -72,8 +72,8 @@ pub struct OutboundSession {
     slots: Mutex<Vec<Arc<Slot>>>,
     /// Peer discovery task
     peer_discovery: Arc<PeerDiscovery>,
-    /// Greylist refinery task
-    greylist_refinery: Arc<GreylistRefinery>,
+    ///// Greylist refinery task
+    //greylist_refinery: Arc<GreylistRefinery>,
 }
 
 impl OutboundSession {
@@ -84,7 +84,7 @@ impl OutboundSession {
             channel_subscriber: Subscriber::new(),
             slots: Mutex::new(Vec::new()),
             peer_discovery: PeerDiscovery::new(),
-            greylist_refinery: GreylistRefinery::new(),
+            //greylist_refinery: GreylistRefinery::new(),
         });
         self_.peer_discovery.session.init(self_.clone());
         //self_.greylist_refinery.session.init(self_.clone());
@@ -119,7 +119,7 @@ impl OutboundSession {
         }
 
         self.peer_discovery.clone().stop().await;
-        self.greylist_refinery.clone().stop().await;
+        //self.greylist_refinery.clone().stop().await;
     }
 
     pub async fn slot_info(&self) -> Vec<u32> {
@@ -139,45 +139,6 @@ impl OutboundSession {
         let slots = &*self.slots.lock().await;
         for slot in slots {
             slot.notify();
-        }
-    }
-
-    // Ping a node to check it's online.
-    // TODO: make this an actual ping-pong method, rather than a version exchange.
-    pub async fn ping_node(&self, addr: &Url) -> bool {
-        let p2p = self.p2p();
-        let session = &self.p2p().session_outbound();
-        let parent = Arc::downgrade(session);
-        let connector = Connector::new(p2p.settings(), parent);
-
-        debug!(target: "net::outbound_session::ping_node()", "Attempting to connect to {}", addr);
-        match connector.connect(addr).await {
-            Ok((_url, channel)) => {
-                debug!(target: "net::outbound_session::ping_node()", "Connected successfully!");
-                let proto_ver = ProtocolVersion::new(channel.clone(), p2p.settings()).await;
-
-                let handshake_task =
-                    session.perform_handshake_protocols(proto_ver, channel.clone(), p2p.executor());
-
-                channel.clone().start(p2p.executor());
-
-                match handshake_task.await {
-                    Ok(()) => {
-                        debug!(target: "net::outbound_sesion::ping_node()", "Handshake success! Stopping channel.");
-                        channel.stop().await;
-                        true
-                    }
-                    Err(e) => {
-                        debug!(target: "net::outbound_session::ping_node()", "Handshake failure! {}", e);
-                        false
-                    }
-                }
-            }
-
-            Err(e) => {
-                debug!(target: "net::outbound_sesion::ping_node()", "Failed to connect to {}, ({})", addr, e);
-                false
-            }
         }
     }
 }
@@ -592,104 +553,6 @@ impl PeerDiscovery {
     fn session(&self) -> OutboundSessionPtr {
         self.session.upgrade()
     }
-    fn p2p(&self) -> P2pPtr {
-        self.session().p2p()
-    }
-}
-
-//// Probe random peers on the greylist. If a peer is responsive, update the last_seen field and
-//// add it to the whitelist. If a node does not respond, remove it from the greylist.
-//// Called periodically.
-// NOTE: in monero this is called "greylist housekeeping" but that's a bit verbose.
-struct GreylistRefinery {
-    process: StoppableTaskPtr,
-    session: LazyWeak<OutboundSession>,
-}
-
-impl GreylistRefinery {
-    fn new() -> Arc<Self> {
-        Arc::new(Self { process: StoppableTask::new(), session: LazyWeak::new() })
-    }
-
-    async fn start(self: Arc<Self>) {
-        let ex = self.p2p().executor();
-        self.process.clone().start(
-            async move {
-                self.run().await;
-                unreachable!();
-            },
-            // Ignore stop handler
-            |_| async {},
-            Error::NetworkServiceStopped,
-            ex,
-        );
-    }
-
-    async fn stop(self: Arc<Self>) {
-        self.process.stop().await
-    }
-
-    //// Randomly select a peer on the greylist and probe it.
-    //// TODO: This frequency of this call can be set in net::Settings.
-    async fn run(self: Arc<Self>) {
-        debug!(target: "net::greylist_refinery::run()", "START");
-        loop {
-            let p2p = self.p2p();
-            let hosts = p2p.hosts();
-            let session = self.session();
-            let greylist = hosts.greylist.read().await;
-
-            if !hosts.is_empty_greylist().await {
-                debug!(target: "net::greylist_refinery::run()", "Starting refinery process");
-                //// Randomly select an entry from the greylist.
-                let position = rand::thread_rng().gen_range(0..greylist.len());
-                let entry = &greylist[position];
-                let url = &entry.0;
-
-                //let parent = Arc::downgrade(&self.session());
-
-                let mut greylist = hosts.greylist.write().await;
-                let mut whitelist = hosts.whitelist.write().await;
-
-                if session.ping_node(url).await {
-                    // Peer is responsive. Update last_seen and add it to the whitelist.
-                    let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-                    // Remove oldest element if the whitelist reaches max size.
-                    if whitelist.len() == 1000 {
-                        // Last element in vector should have the oldest timestamp.
-                        // This should never crash as only returns None when whitelist len() == 0.
-                        let entry = whitelist.pop().unwrap();
-                        debug!(target: "net::greylist_refinery::run()", "Whitelist reached max size. Removed host {}", entry.0);
-                    }
-
-                    // Append to the whitelist.
-                    debug!(target: "net::greylist_refinery::run()", "Adding peer {} to whitelist", url);
-                    whitelist.push((url.clone(), last_seen));
-
-                    // Sort whitelist by last_seen.
-                    whitelist.sort_unstable_by_key(|entry| entry.1);
-
-                    debug!(target: "net::greylist_refinery::run()", "Sorted whitelist: {:?}", whitelist);
-
-                    // Remove whitelisted peer from the greylist.
-                    debug!(target: "net::greylist_refinery::run()", "Removing whitelisted peer {} from greylist", url);
-                    greylist.remove(position);
-                } else {
-                    greylist.remove(position);
-                    debug!(target: "net::hosts::refresh_greylist()", "Peer {} is not response. Removed from greylist", url);
-                }
-            }
-
-            // TODO: create a custom net setting for this timer
-            debug!(target: "net::greylist_refinery::run()", "Sleeping...");
-            sleep(p2p.settings().outbound_peer_discovery_attempt_time).await;
-        }
-    }
-
-    fn session(&self) -> OutboundSessionPtr {
-        self.session.upgrade()
-    }
-
     fn p2p(&self) -> P2pPtr {
         self.session().p2p()
     }

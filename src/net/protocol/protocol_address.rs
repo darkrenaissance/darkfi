@@ -19,13 +19,13 @@
 use std::{sync::Arc, time::UNIX_EPOCH};
 
 use async_trait::async_trait;
-use log::debug;
+use log::{debug, warn};
 use smol::Executor;
 
 use super::{
     super::{
         channel::ChannelPtr,
-        hosts::HostsPtr,
+        hosts::{refinery::ping_node, store::HostsPtr},
         message::{AddrsMessage, GetAddrsMessage},
         message_subscriber::MessageSubscription,
         p2p::P2pPtr,
@@ -50,6 +50,7 @@ pub struct ProtocolAddress {
     hosts: HostsPtr,
     settings: SettingsPtr,
     // We require this to access ping_self() method.
+    p2p: P2pPtr,
     session: OutboundSessionPtr,
     jobsman: ProtocolJobsManagerPtr,
 }
@@ -80,6 +81,7 @@ impl ProtocolAddress {
             hosts,
             jobsman: ProtocolJobsManager::new(PROTO_NAME, channel),
             session,
+            p2p,
             settings,
         })
     }
@@ -168,20 +170,20 @@ impl ProtocolAddress {
         let type_id = self.channel.session_type_id();
 
         if type_id != SESSION_OUTBOUND {
-            debug!(target: "net::protocol_address::send_my_addrs()",
+            warn!(target: "net::protocol_address::send_my_addrs()",
             "Not an outbound session. Stopping");
             return Ok(())
         }
 
         if self.settings.external_addrs.is_empty() {
-            debug!(target: "net::protocol_address::send_my_addrs()",
+            warn!(target: "net::protocol_address::send_my_addrs()",
             "External addr not configured. Stopping");
             return Ok(())
         }
 
         // Do nothing if advertise is set to false
         if self.settings.advertise == false {
-            debug!(target: "net::protocol_address::send_my_addrs()",
+            warn!(target: "net::protocol_address::send_my_addrs()",
             "Advertise is false. Stopping");
             return Ok(())
         }
@@ -193,15 +195,16 @@ impl ProtocolAddress {
 
         let mut addrs = vec![];
         for addr in self.settings.external_addrs.clone() {
-            debug!(target: "net::protocol_seed::send_my_addrs()", "Attempting to ping self");
+            debug!(target: "net::protocol_address::send_my_addrs()", "Attempting to ping self");
 
+            let parent = Arc::downgrade(&self.session);
             // See if we can do a version exchange with ourself.
-            if self.session.ping_node(&addr).await {
+            if ping_node(&addr, self.p2p.clone(), parent).await {
                 // We're online. Update last_seen and broadcast our address.
                 let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
                 addrs.push((addr, last_seen));
             } else {
-                debug!(target: "net::protocol_seed::send_my_addrs()", "Ping self failed");
+                debug!(target: "net::protocol_address::send_my_addrs()", "Ping self failed");
                 return Ok(())
             }
         }
