@@ -18,7 +18,10 @@
 
 use std::time::Instant;
 
-use darkfi::{tx::Transaction, Result};
+use darkfi::{
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    Result,
+};
 use darkfi_dao_contract::{
     client,
     model::{Dao, DaoMintParams},
@@ -50,9 +53,9 @@ impl TestHarness {
 
         let mut data = vec![DaoFunction::Mint as u8];
         params.encode(&mut data)?;
-        let calls = vec![ContractCall { contract_id: *DAO_CONTRACT_ID, data }];
-        let proofs = vec![proofs];
-        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
+        let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![]);
+        let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &[dao_kp.secret])?;
         tx.signatures = vec![sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());

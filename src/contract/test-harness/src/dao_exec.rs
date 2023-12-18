@@ -18,7 +18,10 @@
 
 use std::time::Instant;
 
-use darkfi::{tx::Transaction, Result};
+use darkfi::{
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    Result,
+};
 use darkfi_dao_contract::{
     client::DaoExecCall,
     model::{Dao, DaoBulla, DaoExecParams, DaoProposal},
@@ -161,11 +164,13 @@ impl TestHarness {
         exec_params.encode(&mut data)?;
         let exec_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
 
-        let mut tx = Transaction {
-            calls: vec![xfer_call, exec_call],
-            proofs: vec![xfer_secrets.proofs, exec_proofs],
-            signatures: vec![],
-        };
+        let mut tx_builder = TransactionBuilder::new(
+            ContractCallLeaf { call: exec_call, proofs: exec_proofs },
+            vec![],
+        );
+        tx_builder
+            .append(ContractCallLeaf { call: xfer_call, proofs: xfer_secrets.proofs }, vec![])?;
+        let mut tx = tx_builder.build()?;
         let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_secrets.signature_secrets)?;
         let exec_sigs = tx.create_sigs(&mut OsRng, &[exec_signature_secret])?;
         tx.signatures = vec![xfer_sigs, exec_sigs];
