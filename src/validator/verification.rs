@@ -21,6 +21,7 @@ use std::{collections::HashMap, io::Cursor};
 use darkfi_sdk::{
     blockchain::{block_version, expected_reward},
     crypto::{schnorr::SchnorrPublic, PublicKey, CONSENSUS_CONTRACT_ID, MONEY_CONTRACT_ID},
+    dark_tree::dark_leaf_vec_integrity_check,
     pasta::pallas,
 };
 use darkfi_serial::{Decodable, Encodable, WriteExt};
@@ -30,7 +31,7 @@ use crate::{
     blockchain::{BlockInfo, BlockchainOverlayPtr},
     error::TxVerifyFailed,
     runtime::vm_runtime::Runtime,
-    tx::Transaction,
+    tx::{Transaction, MAX_TX_CALLS, MIN_TX_CALLS},
     util::time::TimeKeeper,
     validator::{
         consensus::{Consensus, Fork, Proposal, TXS_CAP},
@@ -338,6 +339,9 @@ pub async fn verify_transaction(
 ) -> Result<()> {
     let tx_hash = tx.hash()?;
     debug!(target: "validator::verification::verify_transaction", "Validating transaction {}", tx_hash);
+
+    // Verify calls indexes integrity
+    dark_leaf_vec_integrity_check(&tx.calls, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS))?;
 
     // Table of public inputs used for ZK proof verification
     let mut zkp_table = vec![];
