@@ -31,7 +31,7 @@ use crate::{
 };
 
 // Number of nodes to spawn and number of peers each node connects to
-const N_NODES: usize = 1;
+const N_NODES: usize = 5;
 const N_CONNS: usize = 2;
 
 // TODO: test whitelist propagation between peers
@@ -42,10 +42,10 @@ const N_CONNS: usize = 2;
 fn p2p_test() {
     let mut cfg = simplelog::ConfigBuilder::new();
     //cfg.add_filter_ignore("sled".to_string());
-    cfg.add_filter_ignore("net::channel::subscribe_stop()".to_string());
+    //cfg.add_filter_ignore("net::channel::subscribe_stop()".to_string());
     //cfg.add_filter_ignore("net::hosts".to_string());
     //cfg.add_filter_ignore("net::session".to_string());
-    cfg.add_filter_ignore("net::message_subscriber".to_string());
+    //cfg.add_filter_ignore("net::message_subscriber".to_string());
     //cfg.add_filter_ignore("net::protocol_ping".to_string());
     //cfg.add_filter_ignore("net::protocol_version".to_string());
     //cfg.add_filter_ignore("net::protocol_jobs_manager".to_string());
@@ -90,23 +90,23 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
     let mut p2p_instances = vec![];
     //let mut rng = rand::thread_rng();
 
-    info!("Initializing seed network");
-    let settings = Settings {
-        localnet: true,
-        inbound_addrs: vec![seed_addr.clone()],
-        external_addrs: vec![seed_addr.clone()],
-        outbound_connections: 0,
-        outbound_connect_timeout: 2,
-        inbound_connections: usize::MAX,
-        peers: vec![],
-        allowed_transports: vec!["tcp".to_string()],
-        node_id: "seed".to_string(),
-        //advertise: true,
-        ..Default::default()
-    };
+    //info!("Initializing seed network");
+    //let settings = Settings {
+    //    localnet: true,
+    //    inbound_addrs: vec![seed_addr.clone()],
+    //    external_addrs: vec![seed_addr.clone()],
+    //    outbound_connections: 0,
+    //    outbound_connect_timeout: 2,
+    //    inbound_connections: usize::MAX,
+    //    peers: vec![],
+    //    allowed_transports: vec!["tcp".to_string()],
+    //    node_id: "seed".to_string(),
+    //    //advertise: true,
+    //    ..Default::default()
+    //};
 
-    let p2p = P2p::new(settings, ex.clone()).await;
-    p2p_instances.push(p2p);
+    //let p2p = P2p::new(settings, ex.clone()).await;
+    //p2p_instances.push(p2p);
 
     info!("Initializing outbound nodes");
     for i in 0..N_NODES {
@@ -143,20 +143,18 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
         p2p.clone().start().await.unwrap();
     }
 
-    info!("Waiting 30s until all peers connect");
-    sleep(30).await;
+    info!("Waiting 10s until all peers connect");
+    sleep(15).await;
 
     info!("Inspecting peerlists...");
     for p2p in p2p_instances.iter() {
         let hosts = p2p.hosts();
-        info!("START peerlist {}", p2p.settings().node_id);
         assert!(!hosts.is_empty_greylist().await);
         let greylist = hosts.greylist.read().await;
-        for (url, last_seen) in greylist.iter() {
-            info!("{}", url);
-            info!("{}", last_seen);
+        info!("Peer {}", p2p.settings().node_id);
+        for (i, (url, last_seen)) in greylist.iter().enumerate() {
+            info!("Greylist entry {}: {}, {}", i, url, last_seen);
         }
-        info!("END peerlist {}", p2p.settings().node_id);
     }
 
     // Stop the P2P network

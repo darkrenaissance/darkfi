@@ -128,6 +128,9 @@ impl ProtocolAddress {
             // TODO: Verify this limit. It should be the max number of all our allowed transports,
             //       plus their mixing.
             if get_addrs_msg.transports.len() > 20 {
+                warn!(target: "net::protocol_address::handle_receive_get_addrs()",
+                "Sending empty Addrs message");
+
                 // TODO: Should this error out, effectively ending the connection?
                 let addrs_msg = AddrsMessage { addrs: vec![] };
                 self.channel.send(&addrs_msg).await?;
@@ -135,6 +138,8 @@ impl ProtocolAddress {
             }
 
             // First we grab address with the requested transports
+            debug!(target: "net::protocol_address::handle_receive_get_addrs()",
+            "Fetching whitelist entries with schemes");
             let mut addrs = self
                 .hosts
                 .whitelist_fetch_n_random_with_schemes(&get_addrs_msg.transports, get_addrs_msg.max)
@@ -142,6 +147,8 @@ impl ProtocolAddress {
 
             // Then we grab addresses without the requested transports
             // to fill a 2 * max length vector.
+            debug!(target: "net::protocol_address::handle_receive_get_addrs()",
+            "Fetching whitelist entries without schemes");
             let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
             addrs.append(
                 &mut self
@@ -167,21 +174,18 @@ impl ProtocolAddress {
         let type_id = self.channel.session_type_id();
 
         if type_id != SESSION_OUTBOUND {
-            warn!(target: "net::protocol_address::send_my_addrs()",
-            "Not an outbound session. Stopping");
+            debug!(target: "net::protocol_address::send_my_addrs()", "Not an outbound session. Stopping");
             return Ok(())
         }
 
         if self.settings.external_addrs.is_empty() {
-            warn!(target: "net::protocol_address::send_my_addrs()",
-            "External addr not configured. Stopping");
+            debug!(target: "net::protocol_address::send_my_addrs()", "External addr not configured. Stopping");
             return Ok(())
         }
 
         // Do nothing if advertise is set to false
         if self.settings.advertise == false {
-            warn!(target: "net::protocol_address::send_my_addrs()",
-            "Advertise is false. Stopping");
+            debug!(target: "net::protocol_address::send_my_addrs()", "Advertise is false. Stopping");
             return Ok(())
         }
 

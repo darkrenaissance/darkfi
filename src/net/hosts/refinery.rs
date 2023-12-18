@@ -77,47 +77,29 @@ impl GreylistRefinery {
 
             if hosts.is_empty_greylist().await {
                 warn!(target: "net::refinery::run()",
-                "Greylist is empty! Cannot start refinery process. Sleeping...");
-                sleep(5).await;
+                "Greylist is empty! Cannot start refinery process");
             } else {
                 debug!(target: "net::refinery::run()", "Starting refinery process");
                 // Randomly select an entry from the greylist.
-                let greylist = hosts.greylist.read().await;
-                let position = rand::thread_rng().gen_range(0..greylist.len());
-                let entry = &greylist[position];
+                let (entry, position) = hosts.greylist_fetch_random().await;
                 let url = &entry.0;
 
                 if ping_node(url, self.p2p().clone()).await {
-                    let whitelist = hosts.whitelist.read().await;
-                    // Remove oldest element if the whitelist reaches max size.
-                    if whitelist.len() == 1000 {
-                        // Last element in vector should have the oldest timestamp.
-                        // This should never crash as only returns None when whitelist len() == 0.
-                        let mut whitelist = hosts.whitelist.write().await;
-                        let entry = whitelist.pop().unwrap();
-                        debug!(target: "net::refinery::run()", "Whitelist reached max size. Removed host {}", entry.0);
-                    }
-
                     // Peer is responsive. Update last_seen and add it to the whitelist.
                     let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
                     // Append to the whitelist.
-                    debug!(target: "net::refinery::run()", "Adding peer {} to whitelist", url);
-                    let mut whitelist = hosts.whitelist.write().await;
-                    whitelist.push((url.clone(), last_seen));
-
-                    // Sort whitelist by last_seen.
-                    whitelist.sort_unstable_by_key(|entry| entry.1);
+                    hosts.whitelist_store_or_update(url, last_seen).await.unwrap();
 
                     // Remove whitelisted peer from the greylist.
-                    debug!(target: "net::refinery::run()", "Removing whitelisted peer {} from greylist", url);
-                    let mut greylist = hosts.greylist.write().await;
-                    greylist.remove(position);
-                } else {
-                    let mut greylist = hosts.greylist.write().await;
-                    greylist.remove(position);
-                    debug!(target: "net::refinery::run()", "Peer {} is not response. Removed from greylist", url);
+                    hosts.greylist_remove(url, position).await;
                 }
+                // TODO: verify this behavior against monero impl.
+                //else {
+                //    let mut greylist = hosts.greylist.write().await;
+                //    greylist.remove(position);
+                //    debug!(target: "net::refinery::run()", "Peer {} is not response. Removed from greylist", url);
+                //}
             }
 
             // TODO: create a custom net setting for this timer

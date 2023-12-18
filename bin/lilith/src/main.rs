@@ -411,7 +411,9 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!(target: "lilith", "Caught termination signal, cleaning up and exiting...");
 
     // Save in-memory hosts to tsv file
-    save_hosts(&expand_path(&args.hosts_file)?, &lilith.networks).await;
+    //info!(target: "lilith", "Saving hosts...");
+    // TODO: FIXME: this is broken
+    //save_hosts(&expand_path(&args.hosts_file)?, &lilith.networks).await;
 
     info!(target: "lilith", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
