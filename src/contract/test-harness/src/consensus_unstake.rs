@@ -18,7 +18,10 @@
 
 use std::time::Instant;
 
-use darkfi::{tx::Transaction, Result};
+use darkfi::{
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    Result,
+};
 use darkfi_consensus_contract::{
     client::unstake_v1::ConsensusUnstakeCallBuilder, ConsensusFunction,
 };
@@ -99,9 +102,15 @@ impl TestHarness {
         money_unstake_params.encode(&mut data)?;
         let money_call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
 
-        let calls = vec![consensus_call, money_call];
-        let proofs = vec![consensus_unstake_proofs, money_unstake_proofs];
-        let mut unstake_tx = Transaction { calls, proofs, signatures: vec![] };
+        let mut unstake_tx_builder = TransactionBuilder::new(
+            ContractCallLeaf { call: money_call, proofs: money_unstake_proofs },
+            vec![],
+        );
+        unstake_tx_builder.append(
+            ContractCallLeaf { call: consensus_call, proofs: consensus_unstake_proofs },
+            vec![],
+        )?;
+        let mut unstake_tx = unstake_tx_builder.build()?;
         let consensus_sigs = unstake_tx.create_sigs(&mut OsRng, &[consensus_unstake_secret_key])?;
         let money_sigs = unstake_tx.create_sigs(&mut OsRng, &[consensus_unstake_secret_key])?;
         unstake_tx.signatures = vec![consensus_sigs, money_sigs];

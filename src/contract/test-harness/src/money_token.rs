@@ -18,7 +18,11 @@
 
 use std::time::Instant;
 
-use darkfi::{tx::Transaction, zk::halo2::Field, Result};
+use darkfi::{
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    zk::halo2::Field,
+    Result,
+};
 use darkfi_money_contract::{
     client::{token_freeze_v1::TokenFreezeCallBuilder, token_mint_v1::TokenMintCallBuilder},
     model::{MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1},
@@ -70,9 +74,10 @@ impl TestHarness {
 
         let mut data = vec![MoneyFunction::TokenMintV1 as u8];
         debris.params.encode(&mut data)?;
-        let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
-        let proofs = vec![debris.proofs];
-        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
+        let mut tx_builder =
+            TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![]);
+        let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &[mint_authority.secret])?;
         tx.signatures = vec![sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());
@@ -132,9 +137,10 @@ impl TestHarness {
 
         let mut data = vec![MoneyFunction::TokenFreezeV1 as u8];
         debris.params.encode(&mut data)?;
-        let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
-        let proofs = vec![debris.proofs];
-        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
+        let mut tx_builder =
+            TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![]);
+        let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &[mint_authority.secret])?;
         tx.signatures = vec![sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());

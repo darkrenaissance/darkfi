@@ -186,8 +186,6 @@ pub struct ContractCallLeaf {
     pub call: ContractCall,
     /// Attached ZK proofs
     pub proofs: Vec<Proof>,
-    /// Attached Schnorr signatures
-    pub signatures: Vec<Signature>,
 }
 
 /// Auxilliary structure to build a full [`Transaction`] using
@@ -208,7 +206,12 @@ impl TransactionBuilder {
     }
 
     /// Append a new call to the tree
-    pub fn append(&mut self, child: DarkTree<ContractCallLeaf>) -> DarkTreeResult<()> {
+    pub fn append(
+        &mut self,
+        data: ContractCallLeaf,
+        children: Vec<DarkTree<ContractCallLeaf>>,
+    ) -> DarkTreeResult<()> {
+        let child = DarkTree::new(data, children, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS));
         self.calls.append(child)
     }
 
@@ -224,7 +227,6 @@ impl TransactionBuilder {
         // Build the corresponding transaction
         let mut calls = Vec::with_capacity(leafs.len());
         let mut proofs = Vec::with_capacity(leafs.len());
-        let mut signatures = Vec::with_capacity(leafs.len());
         for leaf in leafs {
             let call = DarkLeaf {
                 data: leaf.data.call,
@@ -233,9 +235,8 @@ impl TransactionBuilder {
             };
             calls.push(call);
             proofs.push(leaf.data.proofs);
-            signatures.push(leaf.data.signatures);
         }
 
-        Ok(Transaction { calls, proofs, signatures })
+        Ok(Transaction { calls, proofs, signatures: vec![] })
     }
 }
