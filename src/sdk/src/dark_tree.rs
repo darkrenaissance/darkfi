@@ -545,15 +545,39 @@ pub fn dark_leaf_vec_integrity_check<T: Clone + Send + Sync>(
 
     // Check each leaf indexes
     for (index, leaf) in leafs.iter().enumerate() {
-        // Parent must have our index in their children
+        // Check parent index validity
         if let Some(parent_index) = leaf.parent_index {
+            // Parent index is not out of bounds
+            if parent_index > leafs.len() - 1 {
+                return Err(DarkTreeError::InvalidLeafParentIndex(index))
+            }
+
+            // Our index must be less than our parent index
+            if index >= parent_index {
+                return Err(DarkTreeError::InvalidLeafParentIndex(index))
+            }
+
+            // Parent must have our index in their children
             if !leafs[parent_index].children_indexes.contains(&index) {
                 return Err(DarkTreeError::InvalidLeafChildrenIndexes(parent_index))
             }
         }
 
-        // Children must have its parent set to us
+        // Check children indexes validity
+        let mut check_vec = Vec::with_capacity(leaf.children_indexes.len());
         for child_index in &leaf.children_indexes {
+            // Children vector must be sorted and don't contain duplicates
+            if let Some(last) = check_vec.last() {
+                if child_index <= last {
+                    return Err(DarkTreeError::InvalidLeafChildrenIndexes(index))
+                }
+            }
+
+            // Our index must be greater than our child index
+            if index <= *child_index {
+                return Err(DarkTreeError::InvalidLeafChildrenIndexes(index))
+            }
+
             // Children must have its parent set to us
             match leafs[*child_index].parent_index {
                 Some(parent_index) => {
@@ -563,6 +587,8 @@ pub fn dark_leaf_vec_integrity_check<T: Clone + Send + Sync>(
                 }
                 None => return Err(DarkTreeError::InvalidLeafParentIndex(*child_index)),
             }
+
+            check_vec.push(*child_index);
         }
     }
 
@@ -1224,6 +1250,42 @@ mod tests {
             DarkLeaf { data: 0, parent_index: Some(2), children_indexes: vec![] },
             DarkLeaf { data: 0, parent_index: Some(2), children_indexes: vec![] },
             DarkLeaf { data: 0, parent_index: None, children_indexes: vec![0, 2] },
+        ];
+
+        // Verify vector integrity will fail
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None).is_err());
+
+        // Generate a new [`DarkLeaf`] vector manually,
+        // corresponding to a [`DarkTree`] with out of bound parent index.
+        let vec = vec![DarkLeaf { data: 0, parent_index: Some(2), children_indexes: vec![] }];
+
+        // Verify vector integrity will fail
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None).is_err());
+
+        // Generate a new [`DarkLeaf`] vector manually,
+        // corresponding to a [`DarkTree`] with out of bound children indexes
+        let vec = vec![DarkLeaf { data: 0, parent_index: None, children_indexes: vec![1] }];
+
+        // Verify vector integrity will fail
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None).is_err());
+
+        // Generate a new [`DarkLeaf`] vector manually,
+        // corresponding to a [`DarkTree`] with duplicate children indexes
+        let vec = vec![
+            DarkLeaf { data: 0, parent_index: Some(2), children_indexes: vec![] },
+            DarkLeaf { data: 0, parent_index: Some(2), children_indexes: vec![] },
+            DarkLeaf { data: 0, parent_index: None, children_indexes: vec![1, 1, 2] },
+        ];
+
+        // Verify vector integrity will fail
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None).is_err());
+
+        // Generate a new [`DarkLeaf`] vector manually,
+        // corresponding to a [`DarkTree`] with children after parent
+        let vec = vec![
+            DarkLeaf { data: 0, parent_index: None, children_indexes: vec![1, 2] },
+            DarkLeaf { data: 0, parent_index: Some(0), children_indexes: vec![] },
+            DarkLeaf { data: 0, parent_index: Some(0), children_indexes: vec![] },
         ];
 
         // Verify vector integrity will fail
