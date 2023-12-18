@@ -257,8 +257,8 @@ impl EventGraph {
         }
 
         // We know the number of peers we've communicated with,
-        // so we will consider events we saw at more that 2/3 of
-        // of those peers.
+        // so we will consider events we saw at more than 2/3 of
+        // those peers.
         let consideration_threshold = communicated_peers * 2 / 3;
         let mut considered_tips = HashSet::new();
         for (tip, (_, amount)) in tips.iter() {
@@ -661,8 +661,7 @@ impl EventGraph {
         // Build the layers map
         let mut map: BTreeMap<u64, HashSet<blake3::Hash>> = BTreeMap::new();
         for tip in tips {
-            let bytes = self.dag.get(tip.as_bytes()).unwrap().unwrap();
-            let event: Event = deserialize_async(&bytes).await.unwrap();
+            let event = self.dag_get(&tip).await.unwrap().unwrap();
             if let Some(layer_tips) = map.get_mut(&event.layer) {
                 layer_tips.insert(tip);
             } else {
@@ -707,8 +706,7 @@ impl EventGraph {
 
         for tip in self.get_unreferenced_tips_sorted().await {
             if !visited.contains(&tip) && tip != NULL_ID {
-                let tip = self.dag.get(tip.as_bytes()).unwrap().unwrap();
-                let tip = deserialize_async(&tip).await.unwrap();
+                let tip = self.dag_get(&tip).await.unwrap().unwrap();
                 self.dfs_topological_sort(tip, &mut visited, &mut ordered_events).await;
             }
         }
@@ -730,8 +728,7 @@ impl EventGraph {
 
         for parent_id in event.parents.iter() {
             if !visited.contains(parent_id) && parent_id != &NULL_ID {
-                let p_event = self.dag.get(parent_id.as_bytes()).unwrap().unwrap();
-                let p_event = deserialize_async(&p_event).await.unwrap();
+                let p_event = self.dag_get(parent_id).await.unwrap().unwrap();
                 self.dfs_topological_sort(p_event, visited, ordered_events).await;
             }
         }
@@ -741,8 +738,7 @@ impl EventGraph {
         for (idx, existing_id) in ordered_events.iter().enumerate().rev() {
             assert!(existing_id != &NULL_ID);
             if self.share_same_parents(&event_id, existing_id).await {
-                let existing_event = self.dag.get(existing_id.as_bytes()).unwrap().unwrap();
-                let existing_event: Event = deserialize_async(&existing_event).await.unwrap();
+                let existing_event = self.dag_get(existing_id).await.unwrap().unwrap();
 
                 // Sort by timestamp
                 match event.timestamp.cmp(&existing_event.timestamp) {
@@ -765,14 +761,12 @@ impl EventGraph {
 
     /// Check if two events have the same parents
     async fn share_same_parents(&self, event_id1: &blake3::Hash, event_id2: &blake3::Hash) -> bool {
-        let event1 = self.dag.get(event_id1.as_bytes()).unwrap().unwrap();
-        let event1: Event = deserialize_async(&event1).await.unwrap();
+        let event1 = self.dag_get(event_id1).await.unwrap().unwrap();
         let mut parents1: Vec<_> =
             event1.parents.iter().map(|x| BigUint::from_bytes_be(x.as_bytes())).collect();
         parents1.sort_unstable();
 
-        let event2 = self.dag.get(event_id2.as_bytes()).unwrap().unwrap();
-        let event2: Event = deserialize_async(&event2).await.unwrap();
+        let event2 = self.dag_get(event_id2).await.unwrap().unwrap();
         let mut parents2: Vec<_> =
             event2.parents.iter().map(|x| BigUint::from_bytes_be(x.as_bytes())).collect();
         parents2.sort_unstable();
