@@ -22,17 +22,16 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 
-use halo2_proofs::circuit::Value;
 use log::debug;
 use rand::rngs::OsRng;
 
 use darkfi::{
-    zk::{Proof, ProvingKey, Witness, ZkCircuit},
+    zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
 
-use crate::model::{Dao, DaoBlindAggregateVote, DaoExecParams, DaoProposal, DaoProposalBulla};
+use crate::model::{Dao, DaoBlindAggregateVote, DaoExecParams, DaoProposal};
 
 pub struct DaoExecCall {
     pub proposal: DaoProposal,
@@ -116,6 +115,9 @@ impl DaoExecCall {
             Witness::Base(Value::known(proposal_dest_y)),
             Witness::Base(Value::known(proposal_amount)),
             Witness::Base(Value::known(self.proposal.token_id.inner())),
+            Witness::Base(Value::known(self.proposal.content_commit)),
+            Witness::Base(Value::known(self.proposal.auth_contract_id)),
+            Witness::Base(Value::known(self.proposal.auth_function_id)),
             Witness::Base(Value::known(self.proposal.blind)),
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),

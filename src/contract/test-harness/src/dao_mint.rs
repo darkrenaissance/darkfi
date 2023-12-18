@@ -20,7 +20,9 @@ use std::time::Instant;
 
 use darkfi::{tx::Transaction, Result};
 use darkfi_dao_contract::{
-    client, model::{Dao, DaoMintParams}, DaoFunction, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
+    client,
+    model::{Dao, DaoMintParams},
+    DaoFunction, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
 };
 use darkfi_sdk::{
     crypto::{Keypair, MerkleNode, DAO_CONTRACT_ID},

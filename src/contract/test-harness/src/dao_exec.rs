@@ -21,7 +21,7 @@ use std::time::Instant;
 use darkfi::{tx::Transaction, Result};
 use darkfi_dao_contract::{
     client::DaoExecCall,
-    model::{Dao, DaoProposal, DaoBulla, DaoExecParams},
+    model::{Dao, DaoBulla, DaoExecParams, DaoProposal},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
 use darkfi_money_contract::{

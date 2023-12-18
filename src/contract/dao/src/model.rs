@@ -52,7 +52,7 @@ impl Dao {
         let approval_ratio_quot = pallas::Base::from(self.approval_ratio_quot);
         let approval_ratio_base = pallas::Base::from(self.approval_ratio_base);
         let (pub_x, pub_y) = self.public_key.xy();
-        let bulla = poseidon_hash::<8>([
+        let bulla = poseidon_hash([
             proposer_limit,
             quorum,
             approval_ratio_quot,
@@ -116,22 +116,24 @@ impl TryInto<DaoBulla> for ShareAddress {
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoProposal {
+    // delet [
     pub dest: PublicKey,
     pub amount: u64,
     pub token_id: TokenId,
+    // ]
+    pub content_commit: pallas::Base,
+    pub auth_contract_id: pallas::Base,
+    pub auth_function_id: pallas::Base,
     pub dao_bulla: DaoBulla,
     pub blind: pallas::Base,
 }
 
 impl DaoProposal {
     pub fn to_bulla(&self) -> DaoProposalBulla {
-        let (dest_x, dest_y) = self.dest.xy();
-        let amount = pallas::Base::from(self.amount);
-        let bulla = poseidon_hash::<6>([
-            dest_x,
-            dest_y,
-            amount,
-            self.token_id.inner(),
+        let bulla = poseidon_hash([
+            self.content_commit,
+            self.auth_contract_id,
+            self.auth_function_id,
             self.dao_bulla.inner(),
             self.blind,
         ]);

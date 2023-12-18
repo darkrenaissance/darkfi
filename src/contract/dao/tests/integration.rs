@@ -24,7 +24,10 @@ use darkfi_dao_contract::{
 };
 use darkfi_money_contract::model::CoinParams;
 use darkfi_sdk::{
-    crypto::{pasta_prelude::Field, pedersen_commitment_u64, DAO_CONTRACT_ID, DARK_TOKEN_ID},
+    crypto::{
+        pasta_prelude::Field, pedersen_commitment_u64, poseidon_hash, DAO_CONTRACT_ID,
+        DARK_TOKEN_ID,
+    },
     pasta::pallas,
 };
 use log::info;
@@ -179,7 +182,7 @@ fn integration_test() -> Result<()> {
         info!("[Alice] Building DAO proposal tx");
 
         // These coins are passed around to all DAO members who verify its validity
-        // They check
+        // They also check hashing them equals the proposal_commit
         let coins = vec![CoinParams {
             public_key: th.holders.get(&Holder::Rachel).unwrap().keypair.public,
             value: PROPOSAL_AMOUNT,
@@ -188,9 +191,17 @@ fn integration_test() -> Result<()> {
             spend_hook: pallas::Base::ZERO,
             user_data: pallas::Base::ZERO,
         }];
+        // We can add whatever we want in here, even arbitrary text
+        // It's up to the auth module to decide what to do with it.
+        let content_commit = poseidon_hash([coins[0].to_coin().inner()]);
+        let auth_contract_id = pallas::Base::ZERO;
+        let auth_function_id = pallas::Base::ZERO;
 
         let (propose_tx, propose_params, propose_info) = th.dao_propose(
             &Holder::Alice,
+            content_commit,
+            auth_contract_id,
+            auth_function_id,
             &Holder::Rachel,
             PROPOSAL_AMOUNT,
             drk_token_id,
