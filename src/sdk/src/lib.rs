@@ -49,3 +49,6 @@ pub use tx::ContractCall;
 
 /// Utility functions
 pub mod util;
+
+/// DarkTree structures
+pub mod dark_tree;
