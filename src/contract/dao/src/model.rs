@@ -19,7 +19,10 @@
 use core::str::FromStr;
 
 use darkfi_sdk::{
-    crypto::{note::AeadEncryptedNote, pasta_prelude::*, MerkleNode, Nullifier, PublicKey, poseidon_hash, TokenId},
+    crypto::{
+        note::AeadEncryptedNote, pasta_prelude::*, poseidon_hash, MerkleNode, Nullifier, PublicKey,
+        TokenId,
+    },
     error::ContractError,
     pasta::pallas,
 };

@@ -18,11 +18,11 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
-use darkfi_money_contract::model::CoinParams;
 use darkfi_dao_contract::{
     client::DaoVoteNote,
     model::{Dao, DaoBlindAggregateVote},
 };
+use darkfi_money_contract::model::CoinParams;
 use darkfi_sdk::{
     crypto::{pasta_prelude::Field, pedersen_commitment_u64, DAO_CONTRACT_ID, DARK_TOKEN_ID},
     pasta::pallas,
@@ -179,17 +179,15 @@ fn integration_test() -> Result<()> {
         info!("[Alice] Building DAO proposal tx");
 
         // These coins are passed around to all DAO members who verify its validity
-        // They check 
-        let coins = vec![
-            CoinParams {
-                public_key: th.holders.get(&Holder::Rachel).unwrap().keypair.public,
-                value: PROPOSAL_AMOUNT,
-                token_id: drk_token_id,
-                serial: pallas::Base::random(&mut OsRng),
-                spend_hook: pallas::Base::ZERO,
-                user_data: pallas::Base::ZERO,
-            }
-        ];
+        // They check
+        let coins = vec![CoinParams {
+            public_key: th.holders.get(&Holder::Rachel).unwrap().keypair.public,
+            value: PROPOSAL_AMOUNT,
+            token_id: drk_token_id,
+            serial: pallas::Base::random(&mut OsRng),
+            spend_hook: pallas::Base::ZERO,
+            user_data: pallas::Base::ZERO,
+        }];
 
         let (propose_tx, propose_params, propose_info) = th.dao_propose(
             &Holder::Alice,

@@ -16,11 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_money_contract::model::CoinParams;
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, SecretKey},
     pasta::pallas,
 };
-use darkfi_money_contract::model::CoinParams;
 
 use halo2_proofs::circuit::Value;
 use log::debug;
@@ -32,7 +32,7 @@ use darkfi::{
     Result,
 };
 
-use crate::model::{Dao, DaoProposal, DaoBlindAggregateVote, DaoExecParams, DaoProposalBulla};
+use crate::model::{Dao, DaoBlindAggregateVote, DaoExecParams, DaoProposal, DaoProposalBulla};
 
 pub struct DaoExecCall {
     pub proposal: DaoProposal,
@@ -85,8 +85,9 @@ impl DaoExecCall {
             token_id: self.proposal.token_id,
             serial: self.user_serial,
             spend_hook: user_spend_hook,
-            user_data: user_data,
-        }.to_coin();
+            user_data,
+        }
+        .to_coin();
         debug!("created coin_0 {:?}", coin_0);
 
         let coin_1 = CoinParams {
@@ -96,7 +97,8 @@ impl DaoExecCall {
             serial: self.dao_serial,
             spend_hook: self.hook_dao_exec,
             user_data: dao_bulla.inner(),
-        }.to_coin();
+        }
+        .to_coin();
         debug!("created coin_1 {:?}", coin_1);
 
         let yes_vote_commit = pedersen_commitment_u64(self.yes_vote_value, self.yes_vote_blind);

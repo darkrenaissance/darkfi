@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_money_contract::model::CoinParams;
 use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
@@ -26,7 +27,6 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
-use darkfi_money_contract::model::CoinParams;
 use log::debug;
 use rand::rngs::OsRng;
 
@@ -118,7 +118,8 @@ impl DaoVoteCall {
                 serial: note.serial,
                 spend_hook: pallas::Base::ZERO,
                 user_data: pallas::Base::ZERO,
-            }.to_coin();
+            }
+            .to_coin();
 
             let merkle_root = {
                 let position: u64 = input.leaf_position.into();
