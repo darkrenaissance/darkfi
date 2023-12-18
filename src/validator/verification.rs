@@ -206,7 +206,7 @@ pub async fn verify_producer_transaction(
     debug!(target: "validator::verification::verify_producer_transaction", "Validating proposal transaction {}", tx_hash);
 
     // Producer transactions must contain a single, non-empty call
-    if tx.calls.len() != 1 || tx.calls[0].data.is_empty() {
+    if tx.calls.len() != 1 || tx.calls[0].data.data.is_empty() {
         return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
 
@@ -215,13 +215,13 @@ pub async fn verify_producer_transaction(
     match block_version {
         1 => {
             // Version 1 blocks must contain a Money::PoWReward(0x08) call
-            if call.contract_id != *MONEY_CONTRACT_ID || call.data[0] != 0x08 {
+            if call.data.contract_id != *MONEY_CONTRACT_ID || call.data.data[0] != 0x08 {
                 return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
             }
         }
         2 => {
             // Version 2 blocks must contain a Consensus::Proposal(0x02) call
-            if call.contract_id != *CONSENSUS_CONTRACT_ID || call.data[0] != 0x02 {
+            if call.data.contract_id != *CONSENSUS_CONTRACT_ID || call.data.data[0] != 0x02 {
                 return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
             }
         }
@@ -232,7 +232,7 @@ pub async fn verify_producer_transaction(
     let mut verifying_keys: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
 
     // Initialize the map
-    verifying_keys.insert(call.contract_id.to_bytes(), HashMap::new());
+    verifying_keys.insert(call.data.contract_id.to_bytes(), HashMap::new());
 
     // Table of public inputs used for ZK proof verification
     let mut zkp_table = vec![];
@@ -247,9 +247,10 @@ pub async fn verify_producer_transaction(
     tx.calls.encode(&mut payload)?; // Actual call data
 
     debug!(target: "validator::verification::verify_producer_transaction", "Instantiating WASM runtime");
-    let wasm = overlay.lock().unwrap().wasm_bincode.get(call.contract_id)?;
+    let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id)?;
 
-    let mut runtime = Runtime::new(&wasm, overlay.clone(), call.contract_id, time_keeper.clone())?;
+    let mut runtime =
+        Runtime::new(&wasm, overlay.clone(), call.data.contract_id, time_keeper.clone())?;
 
     debug!(target: "validator::verification::verify_producer_transaction", "Executing \"metadata\" call");
     let metadata = runtime.metadata(&payload)?;
@@ -274,11 +275,12 @@ pub async fn verify_producer_transaction(
     debug!(target: "validator::verification::verify_producer_transaction", "Performing VerifyingKey lookups from the sled db");
     for (zkas_ns, _) in &zkp_pub {
         // TODO: verify this is correct behavior
-        let inner_vk_map = verifying_keys.get_mut(&call.contract_id.to_bytes()).unwrap();
+        let inner_vk_map = verifying_keys.get_mut(&call.data.contract_id.to_bytes()).unwrap();
         if inner_vk_map.contains_key(zkas_ns.as_str()) {
             continue
         }
-        let (_, vk) = overlay.lock().unwrap().contracts.get_zkas(&call.contract_id, zkas_ns)?;
+        let (_, vk) =
+            overlay.lock().unwrap().contracts.get_zkas(&call.data.contract_id, zkas_ns)?;
         inner_vk_map.insert(zkas_ns.to_string(), vk);
     }
 
@@ -345,8 +347,8 @@ pub async fn verify_transaction(
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
         // Transaction must not contain a reward call, Money::PoWReward(0x08) or Consensus::Proposal(0x02)
-        if (call.contract_id == *MONEY_CONTRACT_ID && call.data[0] == 0x08) ||
-            (call.contract_id == *CONSENSUS_CONTRACT_ID && call.data[0] == 0x02)
+        if (call.data.contract_id == *MONEY_CONTRACT_ID && call.data.data[0] == 0x08) ||
+            (call.data.contract_id == *CONSENSUS_CONTRACT_ID && call.data.data[0] == 0x02)
         {
             error!(target: "validator::verification::verify_transaction", "Reward transaction detected");
             return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
@@ -360,10 +362,10 @@ pub async fn verify_transaction(
         tx.calls.encode(&mut payload)?; // Actual call data
 
         debug!(target: "validator::verification::verify_transaction", "Instantiating WASM runtime");
-        let wasm = overlay.lock().unwrap().wasm_bincode.get(call.contract_id)?;
+        let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id)?;
 
         let mut runtime =
-            Runtime::new(&wasm, overlay.clone(), call.contract_id, time_keeper.clone())?;
+            Runtime::new(&wasm, overlay.clone(), call.data.contract_id, time_keeper.clone())?;
 
         debug!(target: "validator::verification::verify_transaction", "Executing \"metadata\" call");
         let metadata = runtime.metadata(&payload)?;
@@ -380,7 +382,7 @@ pub async fn verify_transaction(
         // Here we'll look up verifying keys and insert them into the per-contract map.
         debug!(target: "validator::verification::verify_transaction", "Performing VerifyingKey lookups from the sled db");
         for (zkas_ns, _) in &zkp_pub {
-            let inner_vk_map = verifying_keys.get_mut(&call.contract_id.to_bytes()).unwrap();
+            let inner_vk_map = verifying_keys.get_mut(&call.data.contract_id.to_bytes()).unwrap();
 
             // TODO: This will be a problem in case of ::deploy, unless we force a different
             // namespace and disable updating existing circuit. Might be a smart idea to do
@@ -389,7 +391,8 @@ pub async fn verify_transaction(
                 continue
             }
 
-            let (_, vk) = overlay.lock().unwrap().contracts.get_zkas(&call.contract_id, zkas_ns)?;
+            let (_, vk) =
+                overlay.lock().unwrap().contracts.get_zkas(&call.data.contract_id, zkas_ns)?;
 
             inner_vk_map.insert(zkas_ns.to_string(), vk);
         }
@@ -461,7 +464,7 @@ pub async fn verify_transactions(
     // Initialize the map
     for tx in txs {
         for call in &tx.calls {
-            vks.insert(call.contract_id.to_bytes(), HashMap::new());
+            vks.insert(call.data.contract_id.to_bytes(), HashMap::new());
         }
     }
 

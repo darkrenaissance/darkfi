@@ -23,7 +23,7 @@ use darkfi_sdk::{
         schnorr::{SchnorrPublic, SchnorrSecret, Signature},
         PublicKey, SecretKey,
     },
-    dark_tree::{dark_leaf_vec_integrity_check, DarkTree},
+    dark_tree::{dark_leaf_vec_integrity_check, DarkLeaf, DarkTree},
     error::DarkTreeResult,
     pasta::pallas,
     tx::ContractCall,
@@ -51,11 +51,12 @@ macro_rules! zip {
 
 // ANCHOR: transaction
 /// A Transaction contains an arbitrary number of `ContractCall` objects,
-/// along with corresponding ZK proofs and Schnorr signatures.
+/// along with corresponding ZK proofs and Schnorr signatures. `DarkLeaf`
+/// is used to map relations between contract calls in the transaciton.
 #[derive(Debug, Clone, Default, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Transaction {
     /// Calls executed in this transaction
-    pub calls: Vec<ContractCall>,
+    pub calls: Vec<DarkLeaf<ContractCall>>,
     /// Attached ZK proofs
     pub proofs: Vec<Vec<Proof>>,
     /// Attached Schnorr signatures
@@ -77,8 +78,8 @@ impl Transaction {
         for (call, (proofs, pubvals)) in zip!(self.calls, self.proofs, zkp_table) {
             assert_eq!(proofs.len(), pubvals.len());
 
-            let Some(contract_map) = verifying_keys.get(&call.contract_id.to_bytes()) else {
-                error!("Verifying keys not found for contract {}", call.contract_id);
+            let Some(contract_map) = verifying_keys.get(&call.data.contract_id.to_bytes()) else {
+                error!("Verifying keys not found for contract {}", call.data.contract_id);
                 return Err(TxVerifyFailed::InvalidZkProof.into())
             };
 
@@ -90,15 +91,15 @@ impl Transaction {
                         error!(
                             target: "",
                             "Failed verifying {}::{} ZK proof: {:#?}",
-                            call.contract_id, zk_ns, e
+                            call.data.contract_id, zk_ns, e
                         );
                         return Err(TxVerifyFailed::InvalidZkProof.into())
                     }
-                    debug!("Successfully verified {}::{} ZK proof", call.contract_id, zk_ns);
+                    debug!("Successfully verified {}::{} ZK proof", call.data.contract_id, zk_ns);
                     continue
                 }
 
-                let e = format!("{}:{} circuit VK nonexistent", call.contract_id, zk_ns);
+                let e = format!("{}:{} circuit VK nonexistent", call.data.contract_id, zk_ns);
                 error!("{}", e);
                 return Err(TxVerifyFailed::InvalidZkProof.into())
             }
@@ -225,7 +226,12 @@ impl TransactionBuilder {
         let mut proofs = Vec::with_capacity(leafs.len());
         let mut signatures = Vec::with_capacity(leafs.len());
         for leaf in leafs {
-            calls.push(leaf.data.call);
+            let call = DarkLeaf {
+                data: leaf.data.call,
+                parent_index: leaf.parent_index,
+                children_indexes: leaf.children_indexes,
+            };
+            calls.push(call);
             proofs.push(leaf.data.proofs);
             signatures.push(leaf.data.signatures);
         }
