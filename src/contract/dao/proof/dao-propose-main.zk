@@ -64,10 +64,6 @@ circuit "DaoProposeMain" {
 	);
 	constrain_instance(proposal_bulla);
 
-	# Rangeproof check for proposal amount
-	zero = witness_base(0);
-	less_than_strict(zero, proposal_amount);
-
 	# This is the main check
 	# We check that dao_proposer_limit <= total_funds
 	one = witness_base(1);

@@ -20,8 +20,8 @@ use std::time::Instant;
 
 use darkfi::{tx::Transaction, Result};
 use darkfi_dao_contract::{
-    client::{DaoInfo, DaoProposalInfo, DaoProposeCall, DaoProposeStakeInput},
-    model::{DaoBulla, DaoProposeParams},
+    client::{DaoProposeCall, DaoProposeStakeInput},
+    model::{Dao, DaoProposal, DaoBulla, DaoProposeParams},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
 };
 use darkfi_money_contract::client::OwnCoin;
@@ -42,9 +42,9 @@ impl TestHarness {
         recipient: &Holder,
         amount: u64,
         tx_token_id: TokenId,
-        dao: &DaoInfo,
+        dao: &Dao,
         dao_bulla: &DaoBulla,
-    ) -> Result<(Transaction, DaoProposeParams, DaoProposalInfo)> {
+    ) -> Result<(Transaction, DaoProposeParams, DaoProposal)> {
         let wallet = self.holders.get(proposer).unwrap();
 
         let (dao_propose_burn_pk, dao_propose_burn_zkbin) =
@@ -74,10 +74,12 @@ impl TestHarness {
             signature_secret,
         };
 
-        let proposal = DaoProposalInfo {
+        let proposal = DaoProposal {
             dest: self.holders.get(recipient).unwrap().keypair.public,
             amount,
             token_id: tx_token_id,
+            // TODO: pass proposal in directly
+            dao_bulla: dao.to_bulla(),
             blind: pallas::Base::random(&mut OsRng),
         };
 

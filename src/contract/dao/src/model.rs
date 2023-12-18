@@ -19,7 +19,7 @@
 use core::str::FromStr;
 
 use darkfi_sdk::{
-    crypto::{note::AeadEncryptedNote, pasta_prelude::*, MerkleNode, Nullifier, PublicKey},
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, MerkleNode, Nullifier, PublicKey, poseidon_hash, TokenId},
     error::ContractError,
     pasta::pallas,
 };
@@ -29,6 +29,40 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 use darkfi_serial::async_trait;
 
 use darkfi_sdk::crypto::{ShareAddress, ShareAddressType};
+
+/// DAOs are represented on chain as a commitment to this object
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct Dao {
+    pub proposer_limit: u64,
+    pub quorum: u64,
+    pub approval_ratio_quot: u64,
+    pub approval_ratio_base: u64,
+    pub gov_token_id: TokenId,
+    pub public_key: PublicKey,
+    pub bulla_blind: pallas::Base,
+}
+
+impl Dao {
+    pub fn to_bulla(&self) -> DaoBulla {
+        let proposer_limit = pallas::Base::from(self.proposer_limit);
+        let quorum = pallas::Base::from(self.quorum);
+        let approval_ratio_quot = pallas::Base::from(self.approval_ratio_quot);
+        let approval_ratio_base = pallas::Base::from(self.approval_ratio_base);
+        let (pub_x, pub_y) = self.public_key.xy();
+        let bulla = poseidon_hash::<8>([
+            proposer_limit,
+            quorum,
+            approval_ratio_quot,
+            approval_ratio_base,
+            self.gov_token_id.inner(),
+            pub_x,
+            pub_y,
+            self.bulla_blind,
+        ]);
+        DaoBulla(bulla)
+    }
+}
+
 /// A `DaoBulla` represented in the state
 #[derive(Debug, Copy, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct DaoBulla(pallas::Base);
@@ -74,6 +108,31 @@ impl TryInto<DaoBulla> for ShareAddress {
         }
         let sk: Result<DaoBulla, ContractError> = DaoBulla::from_bytes(self.raw);
         Ok(sk.unwrap())
+    }
+}
+
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct DaoProposal {
+    pub dest: PublicKey,
+    pub amount: u64,
+    pub token_id: TokenId,
+    pub dao_bulla: DaoBulla,
+    pub blind: pallas::Base,
+}
+
+impl DaoProposal {
+    pub fn to_bulla(&self) -> DaoProposalBulla {
+        let (dest_x, dest_y) = self.dest.xy();
+        let amount = pallas::Base::from(self.amount);
+        let bulla = poseidon_hash::<6>([
+            dest_x,
+            dest_y,
+            amount,
+            self.token_id.inner(),
+            self.dao_bulla.inner(),
+            self.blind,
+        ]);
+        DaoProposalBulla(bulla)
     }
 }
 

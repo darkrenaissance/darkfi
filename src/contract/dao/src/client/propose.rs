@@ -21,11 +21,12 @@ use darkfi_sdk::{
     bridgetree::Hashable,
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::*, pedersen::pedersen_commitment_u64,
-        poseidon_hash, MerkleNode, PublicKey, SecretKey, TokenId,
+        poseidon_hash, MerkleNode, PublicKey, SecretKey,
     },
     pasta::pallas,
 };
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
+use darkfi_money_contract::model::CoinParams;
 use rand::rngs::OsRng;
 
 use darkfi::{
@@ -34,21 +35,11 @@ use darkfi::{
     Result,
 };
 
-use crate::model::{DaoProposalBulla, DaoProposeParams, DaoProposeParamsInput};
-
-use super::DaoInfo;
-
-#[derive(SerialEncodable, SerialDecodable, Clone)]
-pub struct DaoProposalInfo {
-    pub dest: PublicKey,
-    pub amount: u64,
-    pub token_id: TokenId,
-    pub blind: pallas::Base,
-}
+use crate::model::{Dao, DaoProposal, DaoProposeParams, DaoProposeParamsInput};
 
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct DaoProposeNote {
-    pub proposal: DaoProposalInfo,
+    pub proposal: DaoProposal,
 }
 
 pub struct DaoProposeStakeInput {
@@ -61,8 +52,8 @@ pub struct DaoProposeStakeInput {
 
 pub struct DaoProposeCall {
     pub inputs: Vec<DaoProposeStakeInput>,
-    pub proposal: DaoProposalInfo,
-    pub dao: DaoInfo,
+    pub proposal: DaoProposal,
+    pub dao: Dao,
     pub dao_leaf_position: bridgetree::Position,
     pub dao_merkle_path: Vec<MerkleNode>,
     pub dao_merkle_root: MerkleNode,
@@ -112,21 +103,20 @@ impl DaoProposeCall {
             ];
 
             let public_key = PublicKey::from_secret(input.secret);
-            let (pub_x, pub_y) = public_key.xy();
+            let coin = CoinParams {
+                public_key,
+                value: note.value,
+                token_id: note.token_id,
+                serial: note.serial,
+                spend_hook: pallas::Base::ZERO,
+                user_data: pallas::Base::ZERO,
+            }.to_coin();
 
-            let coin = poseidon_hash::<7>([
-                pub_x,
-                pub_y,
-                pallas::Base::from(note.value),
-                note.token_id.inner(),
-                note.serial,
-                pallas::Base::from(0),
-                pallas::Base::from(0),
-            ]);
+            // TODO: We need a generic ZkSet widget to avoid doing this all the time
 
             let merkle_root = {
                 let position: u64 = input.leaf_position.into();
-                let mut current = MerkleNode::from(coin);
+                let mut current = MerkleNode::from(coin.inner());
                 for (level, sibling) in input.merkle_path.iter().enumerate() {
                     let level = level as u8;
                     current = if position & (1 << level) == 0 {
@@ -179,30 +169,12 @@ impl DaoProposeCall {
         let dao_quorum = pallas::Base::from(self.dao.quorum);
         let dao_approval_ratio_quot = pallas::Base::from(self.dao.approval_ratio_quot);
         let dao_approval_ratio_base = pallas::Base::from(self.dao.approval_ratio_base);
-
         let (dao_pub_x, dao_pub_y) = self.dao.public_key.xy();
-
-        let dao_bulla = poseidon_hash::<8>([
-            dao_proposer_limit,
-            dao_quorum,
-            dao_approval_ratio_quot,
-            dao_approval_ratio_base,
-            self.dao.gov_token_id.inner(),
-            dao_pub_x,
-            dao_pub_y,
-            self.dao.bulla_blind,
-        ]);
 
         let dao_leaf_position: u64 = self.dao_leaf_position.into();
 
-        let proposal_bulla = DaoProposalBulla::from(poseidon_hash::<6>([
-            proposal_dest_x,
-            proposal_dest_y,
-            proposal_amount,
-            self.proposal.token_id.inner(),
-            dao_bulla,
-            self.proposal.blind,
-        ]));
+        assert_eq!(self.dao.to_bulla(), self.proposal.dao_bulla);
+        let proposal_bulla = self.proposal.to_bulla();
 
         let prover_witnesses = vec![
             // Proposers total number of gov tokens

@@ -26,6 +26,7 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
+use darkfi_money_contract::model::CoinParams;
 use log::debug;
 use rand::rngs::OsRng;
 
@@ -35,8 +36,7 @@ use darkfi::{
     Result,
 };
 
-use super::{DaoInfo, DaoProposalInfo};
-use crate::model::{DaoProposalBulla, DaoVoteParams, DaoVoteParamsInput};
+use crate::model::{Dao, DaoProposal, DaoProposalBulla, DaoVoteParams, DaoVoteParamsInput};
 
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct DaoVoteNote {
@@ -61,8 +61,8 @@ pub struct DaoVoteCall {
     pub vote_option: bool,
     pub yes_vote_blind: pallas::Scalar,
     pub vote_keypair: Keypair,
-    pub proposal: DaoProposalInfo,
-    pub dao: DaoInfo,
+    pub proposal: DaoProposal,
+    pub dao: Dao,
 }
 
 impl DaoVoteCall {
@@ -111,21 +111,18 @@ impl DaoVoteCall {
             ];
 
             let public_key = PublicKey::from_secret(input.secret);
-            let (pub_x, pub_y) = public_key.xy();
-
-            let coin = poseidon_hash::<7>([
-                pub_x,
-                pub_y,
-                pallas::Base::from(note.value),
-                note.token_id.inner(),
-                note.serial,
-                pallas::Base::from(0),
-                pallas::Base::from(0),
-            ]);
+            let coin = CoinParams {
+                public_key,
+                value: note.value,
+                token_id: note.token_id,
+                serial: note.serial,
+                spend_hook: pallas::Base::ZERO,
+                user_data: pallas::Base::ZERO,
+            }.to_coin();
 
             let merkle_root = {
                 let position: u64 = input.leaf_position.into();
-                let mut current = MerkleNode::from(coin);
+                let mut current = MerkleNode::from(coin.inner());
                 for (level, sibling) in input.merkle_path.iter().enumerate() {
                     let level = level as u8;
                     current = if position & (1 << level) == 0 {

@@ -20,8 +20,8 @@ use std::time::Instant;
 
 use darkfi::{tx::Transaction, Result};
 use darkfi_dao_contract::{
-    client::{DaoExecCall, DaoInfo, DaoProposalInfo},
-    model::{DaoBulla, DaoExecParams},
+    client::DaoExecCall,
+    model::{Dao, DaoProposal, DaoBulla, DaoExecParams},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
 use darkfi_money_contract::{
@@ -45,9 +45,9 @@ impl TestHarness {
     #[allow(clippy::too_many_arguments)]
     pub fn dao_exec(
         &mut self,
-        dao: &DaoInfo,
+        dao: &Dao,
         dao_bulla: &DaoBulla,
-        proposal: &DaoProposalInfo,
+        proposal: &DaoProposal,
         yes_vote_value: u64,
         all_vote_value: u64,
         yes_vote_blind: pallas::Scalar,

@@ -26,7 +26,7 @@ pub use mint::{make_mint_call, DaoInfo};
 /// * `DaoProposeCall` is what creates the call data used on chain.
 /// * `DaoProposeNote` is the secret shared info transmitted between DAO members.
 pub mod propose;
-pub use propose::{DaoProposalInfo, DaoProposeCall, DaoProposeNote, DaoProposeStakeInput};
+pub use propose::{DaoProposeCall, DaoProposeNote, DaoProposeStakeInput};
 
 /// Provides core structs for DAO::vote()
 ///

@@ -20,8 +20,8 @@ use std::time::Instant;
 
 use darkfi::{tx::Transaction, Result};
 use darkfi_dao_contract::{
-    client::{DaoInfo, DaoProposalInfo, DaoVoteCall, DaoVoteInput},
-    model::{DaoProposalBulla, DaoVoteParams},
+    client::{DaoVoteCall, DaoVoteInput},
+    model::{Dao, DaoProposal, DaoProposalBulla, DaoVoteParams},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 use darkfi_money_contract::client::OwnCoin;
@@ -41,8 +41,8 @@ impl TestHarness {
         voter: &Holder,
         dao_kp: &Keypair,
         vote_option: bool,
-        dao: &DaoInfo,
-        proposal: &DaoProposalInfo,
+        dao: &Dao,
+        proposal: &DaoProposal,
         proposal_bulla: &DaoProposalBulla,
     ) -> Result<(Transaction, DaoVoteParams)> {
         let wallet = self.holders.get(voter).unwrap();
