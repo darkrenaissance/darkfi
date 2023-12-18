@@ -109,8 +109,8 @@ pub(crate) fn money_transfer_process_instruction_v1(
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
-    let params: MoneyTransferParamsV1 = deserialize(&self_.data[1..])?;
+    let self_ = &calls[call_idx as usize];
+    let params: MoneyTransferParamsV1 = deserialize(&self_.data.data[1..])?;
 
     if params.clear_inputs.len() + params.inputs.len() < 1 {
         msg!("[TransferV1] Error: No inputs in the call");
@@ -188,14 +188,20 @@ pub(crate) fn money_transfer_process_instruction_v1(
 
         // If spend hook is set, check its correctness
         if input.spend_hook != pallas::Base::ZERO {
-            let next_call_idx = call_idx + 1;
-            if next_call_idx >= calls.len() as u32 {
-                msg!("[TransferV1] Error: next_call_idx out of bounds (input {})", i);
+            let parent_call_idx = self_.parent_index;
+            if parent_call_idx.is_none() {
+                msg!("[TransferV1] Error: parent_call_idx is missing");
+                return Err(MoneyError::CallIdxOutOfBounds.into())
+            }
+            let parent_call_idx = parent_call_idx.unwrap();
+
+            if parent_call_idx >= calls.len() {
+                msg!("[TransferV1] Error: parent_call_idx out of bounds (input {})", i);
                 return Err(MoneyError::CallIdxOutOfBounds.into())
             }
 
-            let next = &calls[next_call_idx as usize].data;
-            if next.contract_id.inner() != input.spend_hook {
+            let parent = &calls[parent_call_idx].data;
+            if parent.contract_id.inner() != input.spend_hook {
                 msg!("[TransferV1] Error: Invoked contract call does not match spend hook in input {}", i);
                 return Err(MoneyError::SpendHookMismatch.into())
             }

@@ -20,7 +20,7 @@ use darkfi_sdk::error::ContractError;
 
 #[derive(Debug, Clone, thiserror::Error)]
 // TODO: Make generic contract common errors like
-// NextCallFunctionMismatch
+// ParentCallFunctionMismatch
 pub enum MoneyError {
     #[error("Missing inputs in transfer call")]
     TransferMissingInputs,
@@ -85,32 +85,32 @@ pub enum MoneyError {
     #[error("Missing nullifier")]
     StakeMissingNullifier,
 
-    #[error("Next contract call is not consensus contract")]
-    StakeNextCallNotConsensusContract,
+    #[error("Parent contract call is not consensus contract")]
+    StakeParentCallNotConsensusContract,
 
-    #[error("Previous contract call is not money contract")]
-    StakePreviousCallNotMoneyContract,
+    #[error("Child contract call is not money contract")]
+    StakeChildCallNotMoneyContract,
 
     #[error("Spend hook is not consensus contract")]
     UnstakeSpendHookNotConsensusContract,
 
-    #[error("Next contract call is not money contract")]
-    UnstakeNextCallNotMoneyContract,
+    #[error("Parent contract call is not money contract")]
+    UnstakeParentCallNotMoneyContract,
 
-    #[error("Previous contract call is not consensus contract")]
-    UnstakePreviousCallNotConsensusContract,
+    #[error("Child contract call is not consensus contract")]
+    UnstakeChildCallNotConsensusContract,
 
-    #[error("Next call function mismatch")]
-    NextCallFunctionMismatch,
+    #[error("Parent call function mismatch")]
+    ParentCallFunctionMismatch,
 
-    #[error("Next call input mismatch")]
-    NextCallInputMismatch,
+    #[error("Parent call input mismatch")]
+    ParentCallInputMismatch,
 
-    #[error("Previous call function mismatch")]
-    PreviousCallFunctionMismatch,
+    #[error("Child call function mismatch")]
+    ChildCallFunctionMismatch,
 
-    #[error("Previous call input mismatch")]
-    PreviousCallInputMismatch,
+    #[error("Child call input mismatch")]
+    ChildCallInputMismatch,
 
     #[error("Call is not executed on genesis slot")]
     GenesisCallNonGenesisSlot,
@@ -155,15 +155,15 @@ impl From<MoneyError> for ContractError {
             MoneyError::StakeInputNonNativeToken => Self::Custom(19),
             MoneyError::StakeMissingSpendHook => Self::Custom(20),
             MoneyError::StakeMissingNullifier => Self::Custom(21),
-            MoneyError::StakeNextCallNotConsensusContract => Self::Custom(22),
-            MoneyError::StakePreviousCallNotMoneyContract => Self::Custom(23),
+            MoneyError::StakeParentCallNotConsensusContract => Self::Custom(22),
+            MoneyError::StakeChildCallNotMoneyContract => Self::Custom(23),
             MoneyError::UnstakeSpendHookNotConsensusContract => Self::Custom(24),
-            MoneyError::UnstakeNextCallNotMoneyContract => Self::Custom(25),
-            MoneyError::UnstakePreviousCallNotConsensusContract => Self::Custom(26),
-            MoneyError::NextCallFunctionMismatch => Self::Custom(27),
-            MoneyError::NextCallInputMismatch => Self::Custom(28),
-            MoneyError::PreviousCallFunctionMismatch => Self::Custom(29),
-            MoneyError::PreviousCallInputMismatch => Self::Custom(30),
+            MoneyError::UnstakeParentCallNotMoneyContract => Self::Custom(25),
+            MoneyError::UnstakeChildCallNotConsensusContract => Self::Custom(26),
+            MoneyError::ParentCallFunctionMismatch => Self::Custom(27),
+            MoneyError::ParentCallInputMismatch => Self::Custom(28),
+            MoneyError::ChildCallFunctionMismatch => Self::Custom(29),
+            MoneyError::ChildCallInputMismatch => Self::Custom(30),
             MoneyError::GenesisCallNonGenesisSlot => Self::Custom(31),
             MoneyError::MissingNullifier => Self::Custom(32),
             MoneyError::PoWRewardCallAfterCutoffSlot => Self::Custom(33),

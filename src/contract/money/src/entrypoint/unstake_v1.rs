@@ -79,8 +79,8 @@ pub(crate) fn money_unstake_process_instruction_v1(
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
-    let params: MoneyUnstakeParamsV1 = deserialize(&self_.data[1..])?;
+    let self_ = &calls[call_idx as usize];
+    let params: MoneyUnstakeParamsV1 = deserialize(&self_.data.data[1..])?;
     let input = &params.input;
     let output = &params.output;
 
@@ -96,31 +96,37 @@ pub(crate) fn money_unstake_process_instruction_v1(
     // Perform the actual state transition
     // ===================================
 
-    // Check previous call is consensus contract
+    // Check child call is consensus contract
     if call_idx == 0 {
-        msg!("[MoneyUnstakeV1] Error: previous_call_idx will be out of bounds");
+        msg!("[MoneyUnstakeV1] Error: child_call_idx will be out of bounds");
         return Err(MoneyError::CallIdxOutOfBounds.into())
     }
 
-    let previous_call_idx = call_idx - 1;
-    let previous = &calls[previous_call_idx as usize].data;
-    if previous.contract_id.inner() != CONSENSUS_CONTRACT_ID.inner() {
-        msg!("[MoneyUnstakeV1] Error: Previous contract call is not consensus contract");
-        return Err(MoneyError::UnstakePreviousCallNotConsensusContract.into())
+    let child_call_indexes = &self_.children_indexes;
+    if child_call_indexes.len() != 1 {
+        msg!("[MoneyUnstakeV1] Error: child_call_idx is missing");
+        return Err(MoneyError::UnstakeChildCallNotConsensusContract.into())
+    }
+    let child_call_idx = child_call_indexes[0];
+
+    let child = &calls[child_call_idx].data;
+    if child.contract_id.inner() != CONSENSUS_CONTRACT_ID.inner() {
+        msg!("[MoneyUnstakeV1] Error: Child contract call is not consensus contract");
+        return Err(MoneyError::UnstakeChildCallNotConsensusContract.into())
     }
 
-    // Verify previous call corresponds to Consensus::UnstakeV1 (0x04)
-    if previous.data[0] != 0x04 {
-        msg!("[MoneyUnstakeV1] Error: Previous call function mismatch");
-        return Err(MoneyError::PreviousCallFunctionMismatch.into())
+    // Verify child call corresponds to Consensus::UnstakeV1 (0x04)
+    if child.data[0] != 0x04 {
+        msg!("[MoneyUnstakeV1] Error: Child call function mismatch");
+        return Err(MoneyError::ChildCallFunctionMismatch.into())
     }
 
-    // Verify previous call input is the same as this calls StakeInput
-    let previous_params: ConsensusUnstakeParamsV1 = deserialize(&previous.data[1..])?;
-    let previous_input = &previous_params.input;
-    if previous_input != input {
-        msg!("[MoneyUnstakeV1] Error: Previous call input mismatch");
-        return Err(MoneyError::PreviousCallInputMismatch.into())
+    // Verify child call input is the same as this calls StakeInput
+    let child_params: ConsensusUnstakeParamsV1 = deserialize(&child.data[1..])?;
+    let child_input = &child_params.input;
+    if child_input != input {
+        msg!("[MoneyUnstakeV1] Error: Child call input mismatch");
+        return Err(MoneyError::ChildCallInputMismatch.into())
     }
 
     msg!("[MoneyUnstakeV1] Validating anonymous output");
