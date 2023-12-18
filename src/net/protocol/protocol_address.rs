@@ -29,7 +29,7 @@ use super::{
         message::{AddrsMessage, GetAddrsMessage},
         message_subscriber::MessageSubscription,
         p2p::P2pPtr,
-        session::{OutboundSessionPtr, SESSION_OUTBOUND},
+        session::SESSION_OUTBOUND,
         settings::SettingsPtr,
     },
     protocol_base::{ProtocolBase, ProtocolBasePtr},

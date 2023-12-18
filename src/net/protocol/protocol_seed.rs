@@ -29,7 +29,6 @@ use super::{
         message::{AddrsMessage, GetAddrsMessage},
         message_subscriber::MessageSubscription,
         p2p::P2pPtr,
-        session::OutboundSessionPtr,
         settings::SettingsPtr,
     },
     protocol_base::{ProtocolBase, ProtocolBasePtr},
@@ -53,7 +52,6 @@ impl ProtocolSeed {
     pub async fn init(channel: ChannelPtr, p2p: P2pPtr) -> ProtocolBasePtr {
         let hosts = p2p.hosts();
         let settings = p2p.settings();
-        let session = p2p.session_outbound();
 
         // Create a subscription to address message
         let addr_sub =

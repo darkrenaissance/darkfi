@@ -19,16 +19,11 @@
 use std::{sync::Arc, time::UNIX_EPOCH};
 
 use log::{debug, warn};
-use rand::Rng;
 use url::Url;
 
 use super::super::p2p::{P2p, P2pPtr};
 use crate::{
-    net::{
-        connector::Connector,
-        protocol::ProtocolVersion,
-        session::{Session, SessionWeakPtr},
-    },
+    net::{connector::Connector, protocol::ProtocolVersion, session::Session},
     system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr},
     Error,
 };
@@ -102,7 +97,7 @@ impl GreylistRefinery {
 
             // TODO: create a custom net setting for this timer
             debug!(target: "net::greylist_refinery::run()", "Sleeping...");
-            sleep(5).await;
+            sleep(10).await;
         }
     }
 

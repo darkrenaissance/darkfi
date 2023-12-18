@@ -18,7 +18,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 
-use log::{debug, trace, warn};
+use log::{debug, trace};
 use rand::{
     prelude::{IteratorRandom, SliceRandom},
     rngs::OsRng,
@@ -184,7 +184,7 @@ impl Hosts {
         debug!(target: "net::hosts::store::greylist_store_or_update()", "[START]");
 
         // We filter addresses before writing to the greylist.
-        // We don't need to do this for the whitelist because it reads from the greylist.
+        // We don't need to do this for the whitelist the whitelist is created from the greylist.
         let filtered_addrs = self.filter_addresses(addrs).await;
         let filtered_addrs_len = filtered_addrs.len();
         for (addr, last_seen) in filtered_addrs {
@@ -209,7 +209,7 @@ impl Hosts {
     pub async fn greylist_store(&self, addr: &Url, last_seen: u64) {
         debug!(target: "net::hosts::greylist_store()", "hosts::greylist_store() [START]");
 
-        let mut greylist = self.greylist.try_write().unwrap();
+        let mut greylist = self.greylist.write().await;
 
         // Remove oldest element if the greylist reaches max size.
         if greylist.len() == GREYLIST_MAX_LEN {
@@ -230,7 +230,7 @@ impl Hosts {
     pub async fn whitelist_store(&self, addr: &Url, last_seen: u64) {
         debug!(target: "net::hosts::whitelist_store()", "[START]");
 
-        let mut whitelist = self.whitelist.try_write().unwrap();
+        let mut whitelist = self.whitelist.write().await;
 
         // Remove oldest element if the whitelist reaches max size.
         if whitelist.len() == WHITELIST_MAX_LEN {
@@ -250,7 +250,7 @@ impl Hosts {
     pub async fn whitelist_update_last_seen(&self, addr: &Url, last_seen: u64, index: usize) {
         debug!(target: "net::hosts::store::whitelist_update_last_seen()", "[START]");
 
-        let mut whitelist = self.whitelist.try_write().unwrap();
+        let mut whitelist = self.whitelist.write().await;
 
         whitelist[index] = (addr.clone(), last_seen);
 
@@ -264,7 +264,7 @@ impl Hosts {
     pub async fn greylist_update_last_seen(&self, addr: &Url, last_seen: u64, index: usize) {
         debug!(target: "net::hosts::greylist_update_last_seen()", "[START]");
 
-        let mut greylist = self.greylist.try_write().unwrap();
+        let mut greylist = self.greylist.write().await;
 
         greylist[index] = (addr.clone(), last_seen);
 
@@ -278,7 +278,7 @@ impl Hosts {
         // First lookup the entry using its addr.
         let mut entry = vec![];
 
-        let whitelist = self.whitelist.try_read().unwrap();
+        let whitelist = self.whitelist.read().await;
         for (url, time) in whitelist.iter() {
             if url == addr {
                 entry.push((url.clone(), time.clone()));
@@ -289,7 +289,7 @@ impl Hosts {
         assert!(entry.len() == 1);
 
         // Remove this item from the whitelist.
-        let mut whitelist = self.whitelist.try_write().unwrap();
+        let mut whitelist = self.whitelist.write().await;
         // TODO: test!
         let index = whitelist.iter().position(|x| *x == entry[0]);
         // This should never fail since the entry exists.
@@ -303,7 +303,7 @@ impl Hosts {
 
     pub async fn greylist_remove(&self, addr: &Url, position: usize) {
         debug!(target: "net::refinery::run()", "Removing whitelisted peer {} from greylist", addr);
-        let mut greylist = self.greylist.try_write().unwrap();
+        let mut greylist = self.greylist.write().await;
 
         greylist.remove(position);
 
@@ -592,7 +592,7 @@ impl Hosts {
         limit: Option<usize>,
     ) -> Vec<(Url, u64)> {
         debug!(target: "store::whitelist_fetch_with_schemes", "[START]");
-        let whitelist = self.whitelist.try_read().unwrap();
+        let whitelist = self.whitelist.read().await;
 
         let mut limit = match limit {
             Some(l) => l.min(whitelist.len()),
@@ -618,7 +618,7 @@ impl Hosts {
         // If we didn't find any, pick some from the greylist
         if ret.is_empty() {
             debug!(target: "store::whitelist_fetch_with_schemes", "No matching schemes! We must look at greylist");
-            let greylist = self.greylist.try_read().unwrap();
+            let greylist = self.greylist.read().await;
             for (addr, last_seen) in greylist.iter() {
                 if schemes.contains(&addr.scheme().to_string()) {
                     ret.push((addr.clone(), *last_seen));

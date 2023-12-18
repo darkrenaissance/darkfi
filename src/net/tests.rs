@@ -21,12 +21,12 @@
 use std::sync::Arc;
 
 use log::info;
-use rand::{prelude::SliceRandom, Rng};
+use rand::Rng;
 use smol::{channel, future, Executor};
 use url::Url;
 
 use crate::{
-    net::{P2p, Settings, SESSION_ALL},
+    net::{P2p, Settings},
     system::sleep,
 };
 
@@ -88,37 +88,19 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
     let seed_addr = Url::parse(&format!("tcp://127.0.0.1:{}", 51505)).unwrap();
 
     let mut p2p_instances = vec![];
-    //let mut rng = rand::thread_rng();
-
-    //info!("Initializing seed network");
-    //let settings = Settings {
-    //    localnet: true,
-    //    inbound_addrs: vec![seed_addr.clone()],
-    //    external_addrs: vec![seed_addr.clone()],
-    //    outbound_connections: 0,
-    //    outbound_connect_timeout: 2,
-    //    inbound_connections: usize::MAX,
-    //    peers: vec![],
-    //    allowed_transports: vec!["tcp".to_string()],
-    //    node_id: "seed".to_string(),
-    //    //advertise: true,
-    //    ..Default::default()
-    //};
-
-    //let p2p = P2p::new(settings, ex.clone()).await;
-    //p2p_instances.push(p2p);
+    let mut rng = rand::thread_rng();
 
     info!("Initializing outbound nodes");
     for i in 0..N_NODES {
         // Everyone will connect to N_CONNS random peers.
         let mut peers = vec![];
-        //for _ in 0..N_CONNS {
-        //    let mut port = 13200 + i;
-        //    while port == 13200 + i {
-        //        port = 13200 + rng.gen_range(0..N_NODES);
-        //    }
-        //    peers.push(Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap());
-        //}
+        for _ in 0..N_CONNS {
+            let mut port = 13200 + i;
+            while port == 13200 + i {
+                port = 13200 + rng.gen_range(0..N_NODES);
+            }
+            peers.push(Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap());
+        }
         let settings = Settings {
             localnet: true,
             inbound_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", 13200 + i)).unwrap()],
@@ -143,17 +125,25 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
         p2p.clone().start().await.unwrap();
     }
 
-    info!("Waiting 10s until all peers connect");
-    sleep(15).await;
+    info!("Waiting until all peers connect");
+    sleep(30).await;
 
-    info!("Inspecting peerlists...");
+    info!("Inspecting hostlists...");
     for p2p in p2p_instances.iter() {
         let hosts = p2p.hosts();
         assert!(!hosts.is_empty_greylist().await);
+        //assert!(!hosts.is_empty_whitelist().await);
+
         let greylist = hosts.greylist.read().await;
-        info!("Peer {}", p2p.settings().node_id);
+        let whitelist = hosts.whitelist.read().await;
+
+        info!("Node {}", p2p.settings().node_id);
         for (i, (url, last_seen)) in greylist.iter().enumerate() {
             info!("Greylist entry {}: {}, {}", i, url, last_seen);
+        }
+
+        for (i, (url, last_seen)) in whitelist.iter().enumerate() {
+            info!("Whitelist entry {}: {}, {}", i, url, last_seen);
         }
     }
 
