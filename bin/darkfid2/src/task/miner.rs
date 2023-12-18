@@ -18,7 +18,7 @@
 
 use darkfi::{
     blockchain::BlockInfo,
-    tx::Transaction,
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     validator::{
         consensus::{Fork, Proposal},
         pow::PoWModule,
@@ -209,9 +209,10 @@ fn generate_pow_transaction(
     // Generate and sign the actual transaction
     let mut data = vec![MoneyFunction::PoWRewardV1 as u8];
     debris.params.encode(&mut data)?;
-    let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
-    let proofs = vec![debris.proofs];
-    let mut tx = Transaction { calls, proofs, signatures: vec![] };
+    let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
+    let mut tx_builder =
+        TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![]);
+    let mut tx = tx_builder.build()?;
     let sigs = tx.create_sigs(&mut OsRng, &[*secret])?;
     tx.signatures = vec![sigs];
 
