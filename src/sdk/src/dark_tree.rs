@@ -16,7 +16,17 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::VecDeque, iter::FusedIterator, mem};
+use std::{
+    clone::Clone,
+    collections::VecDeque,
+    iter::FusedIterator,
+    marker::{Send, Sync},
+    mem,
+};
+
+#[cfg(feature = "async")]
+use darkfi_serial::async_trait;
+use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 use crate::error::{DarkTreeError, DarkTreeResult};
 
@@ -26,21 +36,21 @@ use crate::error::{DarkTreeError, DarkTreeResult};
 /// These indexes are only here to enable referencing
 /// connected nodes, and are *not* used as pointers by the
 /// tree. Creator must ensure they are properly setup.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct DarkLeaf<T>
 where
-    T: Clone,
+    T: Clone + Send + Sync,
 {
     /// Data holded by this leaf
     pub data: T,
     /// Index showcasing this leaf's parent tree, when all
     /// leafs are in order. None indicates that this leaf
     /// has no parent.
-    parent_index: Option<usize>,
+    pub parent_index: Option<usize>,
     /// Vector of indexes showcasing this leaf's children
     /// positions, when all leafs are in order. If vector
     /// is empty, it indicates that this leaf has no children.
-    children_indexes: Vec<usize>,
+    pub children_indexes: Vec<usize>,
 }
 
 /// This struct represents a Leaf of a [`DarkTree`],
@@ -49,7 +59,7 @@ where
 #[derive(Clone, Debug, PartialEq)]
 pub struct DarkTreeLeaf<T>
 where
-    T: Clone,
+    T: Clone + Send + Sync,
 {
     /// Index showcasing this leaf's position, when all
     /// leafs are in order.
@@ -59,7 +69,7 @@ where
     info: DarkLeaf<T>,
 }
 
-impl<T: std::clone::Clone> DarkTreeLeaf<T> {
+impl<T: Clone + Send + Sync> DarkTreeLeaf<T> {
     /// Every [`DarkTreeLeaf`] is initiated using default indexes.
     fn new(data: T) -> DarkTreeLeaf<T> {
         Self { index: 0, info: DarkLeaf { data, parent_index: None, children_indexes: vec![] } }
@@ -89,7 +99,7 @@ impl<T: std::clone::Clone> DarkTreeLeaf<T> {
 /// to always execute .build() after finishing setting up the
 /// Tree, to properly index it and check its integrity.
 #[derive(Debug, PartialEq)]
-pub struct DarkTree<T: std::clone::Clone> {
+pub struct DarkTree<T: Clone + Send + Sync> {
     /// This tree's leaf information, along with its data
     leaf: DarkTreeLeaf<T>,
     /// Vector containing all tree's branches(children tree)
@@ -112,7 +122,7 @@ pub struct DarkTree<T: std::clone::Clone> {
     max_capacity: Option<usize>,
 }
 
-impl<T: std::clone::Clone> DarkTree<T> {
+impl<T: Clone + Send + Sync> DarkTree<T> {
     /// Initialize a [`DarkTree`], using provided data to
     /// generate its root.
     pub fn new(
@@ -303,18 +313,18 @@ impl<T: std::clone::Clone> DarkTree<T> {
 
 /// Immutable iterator of a [`DarkTree`], performing DFS post-order
 /// traversal on the Tree leafs.
-pub struct DarkTreeIter<'a, T: std::clone::Clone> {
+pub struct DarkTreeIter<'a, T: Clone + Send + Sync> {
     children: &'a [DarkTree<T>],
     parent: Option<Box<DarkTreeIter<'a, T>>>,
 }
 
-impl<T: std::clone::Clone> Default for DarkTreeIter<'_, T> {
+impl<T: Clone + Send + Sync> Default for DarkTreeIter<'_, T> {
     fn default() -> Self {
         DarkTreeIter { children: &[], parent: None }
     }
 }
 
-impl<'a, T: std::clone::Clone> Iterator for DarkTreeIter<'a, T> {
+impl<'a, T: Clone + Send + Sync> Iterator for DarkTreeIter<'a, T> {
     type Item = &'a DarkTreeLeaf<T>;
 
     /// Grab next item iterator visits and return
@@ -347,13 +357,13 @@ impl<'a, T: std::clone::Clone> Iterator for DarkTreeIter<'a, T> {
     }
 }
 
-impl<T: std::clone::Clone> FusedIterator for DarkTreeIter<'_, T> {}
+impl<T: Clone + Send + Sync> FusedIterator for DarkTreeIter<'_, T> {}
 
 /// Define fusion iteration behavior, allowing
 /// us to use the [`DarkTreeIter`] iterator in
 /// loops directly, without using .iter() method
 /// of [`DarkTree`].
-impl<'a, T: std::clone::Clone> IntoIterator for &'a DarkTree<T> {
+impl<'a, T: Clone + Send + Sync> IntoIterator for &'a DarkTree<T> {
     type Item = &'a DarkTreeLeaf<T>;
 
     type IntoIter = DarkTreeIter<'a, T>;
@@ -365,19 +375,19 @@ impl<'a, T: std::clone::Clone> IntoIterator for &'a DarkTree<T> {
 
 /// Mutable iterator of a [`DarkTree`], performing DFS post-order
 /// traversal on the Tree leafs.
-pub struct DarkTreeIterMut<'a, T: std::clone::Clone> {
+pub struct DarkTreeIterMut<'a, T: Clone + Send + Sync> {
     children: &'a mut [DarkTree<T>],
     parent: Option<Box<DarkTreeIterMut<'a, T>>>,
     parent_leaf: Option<&'a mut DarkTreeLeaf<T>>,
 }
 
-impl<T: std::clone::Clone> Default for DarkTreeIterMut<'_, T> {
+impl<T: Clone + Send + Sync> Default for DarkTreeIterMut<'_, T> {
     fn default() -> Self {
         DarkTreeIterMut { children: &mut [], parent: None, parent_leaf: None }
     }
 }
 
-impl<'a, T: std::clone::Clone> Iterator for DarkTreeIterMut<'a, T> {
+impl<'a, T: Clone + Send + Sync> Iterator for DarkTreeIterMut<'a, T> {
     type Item = &'a mut DarkTreeLeaf<T>;
 
     /// Grab next item iterator visits and return
@@ -416,7 +426,7 @@ impl<'a, T: std::clone::Clone> Iterator for DarkTreeIterMut<'a, T> {
 /// us to use the [`DarkTreeIterMut`] iterator
 /// in loops directly, without using .iter_mut()
 /// method of [`DarkTree`].
-impl<'a, T: std::clone::Clone> IntoIterator for &'a mut DarkTree<T> {
+impl<'a, T: Clone + Send + Sync> IntoIterator for &'a mut DarkTree<T> {
     type Item = &'a mut DarkTreeLeaf<T>;
 
     type IntoIter = DarkTreeIterMut<'a, T>;
@@ -429,18 +439,18 @@ impl<'a, T: std::clone::Clone> IntoIterator for &'a mut DarkTree<T> {
 /// Special iterator of a [`DarkTree`], performing DFS post-order
 /// traversal on the Tree leafs, consuming each leaf. Since this
 /// iterator consumes the tree, it becomes unusable after it's moved.
-pub struct DarkTreeIntoIter<T: std::clone::Clone> {
+pub struct DarkTreeIntoIter<T: Clone + Send + Sync> {
     children: VecDeque<DarkTree<T>>,
     parent: Option<Box<DarkTreeIntoIter<T>>>,
 }
 
-impl<T: std::clone::Clone> Default for DarkTreeIntoIter<T> {
+impl<T: Clone + Send + Sync> Default for DarkTreeIntoIter<T> {
     fn default() -> Self {
         DarkTreeIntoIter { children: Default::default(), parent: None }
     }
 }
 
-impl<T: std::clone::Clone> Iterator for DarkTreeIntoIter<T> {
+impl<T: Clone + Send + Sync> Iterator for DarkTreeIntoIter<T> {
     type Item = DarkTreeLeaf<T>;
 
     /// Move next item iterator visits from the tree
@@ -476,13 +486,13 @@ impl<T: std::clone::Clone> Iterator for DarkTreeIntoIter<T> {
     }
 }
 
-impl<T: std::clone::Clone> FusedIterator for DarkTreeIntoIter<T> {}
+impl<T: Clone + Send + Sync> FusedIterator for DarkTreeIntoIter<T> {}
 
 /// Define fusion iteration behavior, allowing
 /// us to use the [`DarkTreeIntoIter`] .into_iter()
 /// method, to consume the [`DarkTree`] and iterate
 /// over it.
-impl<T: std::clone::Clone> IntoIterator for DarkTree<T> {
+impl<T: Clone + Send + Sync> IntoIterator for DarkTree<T> {
     type Item = DarkTreeLeaf<T>;
 
     type IntoIter = DarkTreeIntoIter<T>;
@@ -497,7 +507,7 @@ impl<T: std::clone::Clone> IntoIterator for DarkTree<T> {
 
 /// Auxiliary function to verify provided [`DarkLeaf`] slice is
 /// properly bounded and its members indexes are valid.
-pub fn dark_leaf_vec_integrity_check<T: std::clone::Clone>(
+pub fn dark_leaf_vec_integrity_check<T: Clone + Send + Sync>(
     leafs: &[DarkLeaf<T>],
     min_capacity: Option<usize>,
     max_capacity: Option<usize>,
