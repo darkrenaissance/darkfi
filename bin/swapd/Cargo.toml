@@ -36,6 +36,7 @@ structopt-toml = "0.5.1"
 eyre = "0.6"
 ethers = { version = "2.0", features = ["ethers-solc", "ws"] }
 tokio = { version = "1.34", features = ["sync"] }
+tracing = "0.1"
 
 [dev-dependencies]
 swapd = { path = ".", features = ["test-utils"] }

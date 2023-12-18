@@ -7,6 +7,9 @@ use darkfi_serial::async_trait;
 use ethers::prelude::*;
 use eyre::{ensure, Result, WrapErr as _};
 
+use std::sync::Arc;
+use tracing::info;
+
 /// Implemented on top of the non-initiating chain
 ///
 /// Can probably become an extension trait of an RPC client eventually
@@ -16,13 +19,19 @@ pub(crate) trait OtherChainClient {
 
 pub(crate) struct EthInitiator<M: Middleware, C: OtherChainClient> {
     contract: SwapCreator<M>,
+    middleware: Arc<M>,
     other_chain_client: C,
     secret: [u8; 32],
 }
 
 impl<M: Middleware, C: OtherChainClient> EthInitiator<M, C> {
-    pub(crate) fn new(contract: SwapCreator<M>, other_chain_client: C, secret: [u8; 32]) -> Self {
-        Self { contract, other_chain_client, secret }
+    pub(crate) fn new(
+        contract: SwapCreator<M>,
+        middleware: Arc<M>,
+        other_chain_client: C,
+        secret: [u8; 32],
+    ) -> Self {
+        Self { contract, middleware, other_chain_client, secret }
     }
 }
 
@@ -64,7 +73,7 @@ impl<M: Middleware + 'static, C: OtherChainClient + Send + Sync> Initiator for E
         let receipt = tx
             .send()
             .await
-            .wrap_err("failed to submit transaction")?
+            .wrap_err("failed to submit `newSwap` transaction")?
             .await
             .wrap_err("failed to await pending transaction")?
             .ok_or_else(|| eyre::eyre!("no receipt?"))?;
@@ -110,7 +119,8 @@ impl<M: Middleware + 'static, C: OtherChainClient + Send + Sync> Initiator for E
                 return Err(eyre::eyre!("expected FixedBytes, got something else"));
             }
         };
-        let (timeout_1, timeout_2) = match (tokens.remove(3), tokens.remove(4)) {
+        let (timeout_1, timeout_2) = match (tokens.remove(2), tokens.remove(2)) {
+            // tokens index 3 and 4
             (ethers::abi::Token::Uint(timeout_1), ethers::abi::Token::Uint(timeout_2)) => {
                 (timeout_1, timeout_2)
             }
@@ -120,7 +130,7 @@ impl<M: Middleware + 'static, C: OtherChainClient + Send + Sync> Initiator for E
         };
 
         let contract_swap = Swap {
-            owner: Address::zero(), // TODO
+            owner: self.middleware.default_sender().expect("must have a default sender"),
             claim_commitment,
             refund_commitment,
             claimer,
@@ -131,20 +141,30 @@ impl<M: Middleware + 'static, C: OtherChainClient + Send + Sync> Initiator for E
             nonce,
         };
 
-        Ok(HandleCounterpartyKeysReceivedResult { contract_swap_id: swap_id, contract_swap })
+        info!(contract_swap_id = ?swap_id, "initiated swap on-chain");
+
+        Ok(HandleCounterpartyKeysReceivedResult {
+            contract_swap_id: swap_id,
+            contract_swap,
+            block_number: receipt
+                .block_number
+                .expect("block number must be set in receipt")
+                .as_u64(),
+        })
     }
 
     async fn handle_counterparty_funds_locked(
         &self,
         swap: super::swap_creator::Swap,
+        swap_id: [u8; 32],
     ) -> Result<()> {
         let tx = self.contract.set_ready(swap);
         let receipt = tx
             .send()
             .await
-            .wrap_err("failed to submit transaction")?
+            .wrap_err("failed to submit `setReady` transaction")?
             .await
-            .wrap_err("failed to await pending transaction")?
+            .wrap_err("failed to await pending `setReady` transaction")?
             .ok_or_else(|| eyre::eyre!("no receipt?"))?;
 
         ensure!(
@@ -153,6 +173,7 @@ impl<M: Middleware + 'static, C: OtherChainClient + Send + Sync> Initiator for E
             receipt
         );
 
+        info!(contract_swap_id = ?swap_id, "contract set to ready");
         Ok(())
     }
 

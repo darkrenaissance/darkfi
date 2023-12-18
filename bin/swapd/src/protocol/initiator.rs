@@ -1,8 +1,9 @@
 use crate::protocol::traits::{
     HandleCounterpartyKeysReceivedResult, InitiateSwapArgs, InitiationArgs, Initiator,
 };
-use eyre::{eyre, Result};
-use tokio::sync::mpsc::Receiver;
+use eyre::{eyre, Context, Result};
+use tokio::sync::{mpsc, watch};
+use tracing::{info, warn};
 
 #[derive(Debug)]
 pub(crate) enum Event {
@@ -22,32 +23,56 @@ enum State {
 }
 
 struct Swap {
+    // the initial parameters required for the swap
     args: InitiationArgs,
+
+    // the chain-specific event handler
+    // TODO: just make this a generic
     handler: Box<dyn Initiator + Send + Sync>,
-    event_rx: Receiver<Event>,
-    state: tokio::sync::watch::Sender<State>,
+
+    // the event receiver channel for the swap
+    // the [`Watcher`] sends events to this channel
+    event_rx: mpsc::Receiver<Event>,
+
+    // the current state of the swap
+    state: watch::Sender<State>,
+
+    // the info of the swap within the on-chain contract
+    contract_swap_info: watch::Sender<Option<HandleCounterpartyKeysReceivedResult>>,
 }
 
 impl Swap {
     fn new(
         args: InitiationArgs,
         handler: Box<dyn Initiator + Send + Sync>,
-        event_rx: Receiver<Event>,
-    ) -> (Self, tokio::sync::watch::Receiver<State>) {
+        event_rx: mpsc::Receiver<Event>,
+    ) -> (Self, watch::Receiver<State>, watch::Receiver<Option<HandleCounterpartyKeysReceivedResult>>)
+    {
         let state = tokio::sync::watch::channel(State::WaitingForCounterpartyKeys);
-        (Self { args, handler, event_rx, state: state.0 }, state.1)
+        let contract_swap_info = tokio::sync::watch::channel(None);
+        (
+            Self {
+                args,
+                handler,
+                event_rx,
+                state: state.0,
+                contract_swap_info: contract_swap_info.0,
+            },
+            state.1,
+            contract_swap_info.1,
+        )
     }
 
     async fn run(mut self) -> Result<()> {
-        let mut contract_swap_info: Option<HandleCounterpartyKeysReceivedResult> = None;
+        //let mut contract_swap_info: Option<HandleCounterpartyKeysReceivedResult> = None;
 
         loop {
             match self.event_rx.recv().await {
                 Some(Event::ReceivedCounterpartyKeys(args)) => {
-                    println!("received counterparty keys: {:?}", args);
+                    info!("received counterparty keys");
 
                     if !matches!(*self.state.borrow(), State::WaitingForCounterpartyKeys) {
-                        println!(
+                        warn!(
                             "unexpected event ReceivedCounterpartyKeys, state is {:?}",
                             *self.state.borrow()
                         );
@@ -57,24 +82,34 @@ impl Swap {
                         ));
                     }
 
-                    contract_swap_info =
-                        Some(self.handler.handle_counterparty_keys_received(args).await?);
-                    let _ = self.state.send(State::WaitingForCounterpartyFundsLocked);
-                    //.expect("state channel should not be dropped");
+                    let contract_swap_info = Some(
+                        self.handler
+                            .handle_counterparty_keys_received(args)
+                            .await
+                            .wrap_err("failed to handle receiving counterparty keys")?,
+                    );
+
+                    let _ = self.contract_swap_info.send(contract_swap_info.clone());
+                    self.state
+                        .send(State::WaitingForCounterpartyFundsLocked)
+                        .expect("state channel should not be dropped");
                 }
                 Some(Event::CounterpartyFundsLocked) => {
-                    println!("counterparty funds locked");
+                    info!("counterparty funds locked");
                     if !matches!(*self.state.borrow(), State::WaitingForCounterpartyFundsLocked) {
                         return Err(eyre!("unexpected event: {:?}", Event::CounterpartyFundsLocked));
                     }
 
+                    let contract_swap_info = self
+                        .contract_swap_info
+                        .borrow()
+                        .clone()
+                        .expect("contract swap info must be set");
+
                     self.handler
                         .handle_counterparty_funds_locked(
-                            contract_swap_info
-                                .as_ref()
-                                .expect("contract swap info must be set")
-                                .contract_swap
-                                .clone(),
+                            contract_swap_info.contract_swap,
+                            contract_swap_info.contract_swap_id,
                         )
                         .await?;
 
@@ -105,15 +140,13 @@ impl Swap {
                     // we're almost at timeout 1, and the counterparty hasn't locked,
                     // so we need to refund
                     if matches!(*self.state.borrow(), State::WaitingForCounterpartyFundsLocked) {
-                        self.handler
-                            .handle_should_refund(
-                                contract_swap_info
-                                    .as_ref()
-                                    .expect("contract swap info must be set")
-                                    .contract_swap
-                                    .clone(),
-                            )
-                            .await?;
+                        let contract_swap_info = self
+                            .contract_swap_info
+                            .borrow()
+                            .clone()
+                            .expect("contract swap info must be set");
+
+                        self.handler.handle_should_refund(contract_swap_info.contract_swap).await?;
 
                         self.state
                             .send(State::Completed)
@@ -125,28 +158,28 @@ impl Swap {
                         return Err(eyre!("unexpected event: {:?}", Event::PastTimeout2));
                     }
 
+                    let contract_swap_info = self
+                        .contract_swap_info
+                        .borrow()
+                        .clone()
+                        .expect("contract swap info must be set");
+
                     // we're past timeout 2, and the counterparty hasn't claimed,
                     // so we need to refund
                     self.handler
-                        .handle_should_refund(
-                            contract_swap_info
-                                .as_ref()
-                                .expect("contract swap info must be set")
-                                .contract_swap
-                                .clone(),
-                        )
+                        .handle_should_refund(contract_swap_info.contract_swap.clone())
                         .await?;
 
                     self.state.send(State::Completed).expect("state channel should not be dropped");
                 }
                 None => {
-                    println!("event channel closed, exiting");
+                    info!("event channel closed, exiting");
                     break;
                 }
             }
 
             if matches!(*self.state.borrow(), State::Completed) {
-                println!("swap completed, exiting");
+                info!("swap completed, exiting");
                 break;
             }
         }
@@ -165,14 +198,21 @@ mod test {
         initiator::OtherChainClient, swap_creator::SwapCreator, EthInitiator, Watcher,
     };
 
-    use ethers::prelude::{Address, SignerMiddleware, U256};
+    use ethers::{
+        core::k256::elliptic_curve::sec1::ToEncodedPoint,
+        prelude::{Address, SignerMiddleware, U256},
+    };
 
     use crate::protocol::traits::{CounterpartyKeys, InitiatorEventWatcher as _};
+    // use ethers::{
+    //     core::k256::elliptic_curve::{PublicKey, SecretKey},
+    //     prelude::rand,
+    // };
 
     struct MockOtherChainClient;
 
     impl OtherChainClient for MockOtherChainClient {
-        fn claim_funds(&self, our_secret: [u8; 32], counterparty_secret: [u8; 32]) -> Result<()> {
+        fn claim_funds(&self, _our_secret: [u8; 32], _counterparty_secret: [u8; 32]) -> Result<()> {
             Ok(())
         }
     }
@@ -181,26 +221,38 @@ mod test {
     async fn test_initiator_swap() {
         let (event_tx, event_rx) = tokio::sync::mpsc::channel(1);
 
-        let (contract_address, provider, wallet, _anvil) =
+        let (contract_address, provider, wallet, anvil) =
             crate::ethereum::test_utils::deploy_swap_creator().await;
         let signer = Arc::new(SignerMiddleware::new(provider, wallet));
         let contract = SwapCreator::new(contract_address, signer.clone());
 
         let other_chain_client = MockOtherChainClient;
         let secret = [0; 32]; // TODO generate an actual secp256k1 private key
-        let initiator = EthInitiator::new(contract.clone(), other_chain_client, secret);
+        let initiator =
+            EthInitiator::new(contract.clone(), signer.clone(), other_chain_client, secret);
+
+        // let counterparty_secret = SecretKey::<Secp256k1>::random(&mut rand::thread_rng());
+        // let counterparty_public_key = PublicKey::<Secp256k1>::from_secret_scalar(&counterparty_secret.to_nonzero_scalar());
+
+        // TODO: this is the same key as the initiator right now.
+        let counterparty_secret: [u8; 32] = anvil.keys()[0].to_bytes().try_into().unwrap();
+        let counterparty_public_key = anvil.keys()[0].public_key();
+        let pubkey_bytes: [u8; 64] =
+            counterparty_public_key.to_encoded_point(false).as_bytes()[1..].try_into().unwrap();
+        let claim_commitment = ethers::utils::keccak256(pubkey_bytes);
 
         let args = InitiationArgs {
-            claim_commitment: [0; 32],
+            claim_commitment,
             claimer: signer.address(),
             timeout_duration_1: U256::from(120),
             timeout_duration_2: U256::from(120),
-            asset: Address::zero(), // ETH
-            value: U256::zero(),
-            nonce: U256::zero(), // arbitrary
+            asset: Address::zero(),                      // ETH
+            value: 1_000_000_000_000_000_000u128.into(), // 1 ETH
+            nonce: U256::zero(),                         // arbitrary
         };
 
-        let (swap, mut state) = Swap::new(args.clone(), Box::new(initiator), event_rx);
+        let (swap, mut state, contract_swap_id) =
+            Swap::new(args.clone(), Box::new(initiator), event_rx);
         assert!(*state.borrow_and_update() == State::WaitingForCounterpartyKeys);
 
         let swap_task = tokio::spawn(async move { swap.run().await });
@@ -217,7 +269,7 @@ mod test {
             .expect("should send counterparty keys");
         state.changed().await.expect("state should change");
         assert!(*state.borrow() == State::WaitingForCounterpartyFundsLocked);
-        join_handle.await.expect("task should not fail").expect("task should succeed");
+        join_handle.abort();
 
         Watcher::run_counterparty_funds_locked_watcher(event_tx.clone())
             .await
@@ -225,10 +277,35 @@ mod test {
         state.changed().await.expect("state should change");
         assert!(*state.borrow() == State::WaitingForCounterpartyFundsClaimed);
 
-        // TODO need to watch for swap contract ID
-        Watcher::run_counterparty_funds_claimed_watcher(event_tx, contract, &[0; 32], 1)
-            .await
-            .expect("watcher should run");
+        let contract_swap = contract_swap_id.borrow().as_ref().unwrap().contract_swap.clone();
+
+        let contract_clone = contract.clone();
+        tokio::spawn(async move {
+            let tx = contract_clone.claim(contract_swap, counterparty_secret);
+
+            let receipt = tx
+                .send()
+                .await
+                .expect("failed to submit transaction")
+                .await
+                .expect("failed to await pending transaction")
+                .expect("no receipt found");
+
+            assert!(
+                receipt.status == Some(ethers::types::U64::from(1)),
+                "`claim` transaction failed: {:?}",
+                receipt
+            );
+        });
+
+        Watcher::run_counterparty_funds_claimed_watcher(
+            event_tx,
+            contract,
+            &contract_swap_id.borrow().as_ref().unwrap().contract_swap_id,
+            contract_swap_id.borrow().as_ref().unwrap().block_number,
+        )
+        .await
+        .expect("watcher should run");
         state.changed().await.expect("state should change");
         assert!(*state.borrow() == State::Completed);
 

@@ -37,10 +37,16 @@ pub(crate) struct CounterpartyKeys {
     pub(crate) secp256k1_public_key: [u8; 33],
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct HandleCounterpartyKeysReceivedResult {
+    // the ID of the swap within the on-chain contract
     pub(crate) contract_swap_id: [u8; 32],
+
+    // the details of the swap within the on-chain contract
     pub(crate) contract_swap: Swap,
+
+    // the block number at which the swap was initiated
+    pub(crate) block_number: u64,
 }
 
 /// the chain that initiates the swap; ie. the first-mover
@@ -58,7 +64,7 @@ pub(crate) trait Initiator {
     ) -> Result<HandleCounterpartyKeysReceivedResult>;
 
     // handles the counterparty locking funds
-    async fn handle_counterparty_funds_locked(&self, swap: Swap) -> Result<()>;
+    async fn handle_counterparty_funds_locked(&self, swap: Swap, swap_id: [u8; 32]) -> Result<()>;
 
     // handles the counterparty claiming funds
     async fn handle_counterparty_funds_claimed(&self, counterparty_secret: [u8; 32]) -> Result<()>;

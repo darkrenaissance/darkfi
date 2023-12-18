@@ -21,7 +21,6 @@ impl InitiatorEventWatcher for Watcher {
         counterparty_keys_rx: Receiver<CounterpartyKeys>,
         args: InitiationArgs,
     ) -> Result<()> {
-        println!("waiting for counterparty keys");
         let counterparty_keys = counterparty_keys_rx.await?;
 
         let refund_commitment = ethers::utils::keccak256(&counterparty_keys.secp256k1_public_key);
@@ -37,7 +36,6 @@ impl InitiatorEventWatcher for Watcher {
             nonce: args.nonce,
         };
 
-        println!("sending received counterparty keys event");
         event_tx.send(Event::ReceivedCounterpartyKeys(args)).await.unwrap();
         Ok(())
     }

@@ -7476,6 +7476,7 @@ dependencies = [
  "structopt-toml",
  "swapd",
  "tokio",
+ "tracing",
  "url",
 ]
 
