@@ -23,6 +23,8 @@ use darkfi_sdk::{
         schnorr::{SchnorrPublic, SchnorrSecret, Signature},
         PublicKey, SecretKey,
     },
+    dark_tree::{dark_leaf_vec_integrity_check, DarkTree},
+    error::DarkTreeResult,
     pasta::pallas,
     tx::ContractCall,
 };
@@ -168,3 +170,66 @@ use crate::net::Message;
 
 #[cfg(feature = "net")]
 crate::impl_p2p_message!(Transaction, "tx");
+
+/// Calls tree bounds definitions
+// TODO: increase min to 2 when fees are implement
+pub const MIN_TX_CALLS: usize = 1;
+// TODO: verify max value
+pub const MAX_TX_CALLS: usize = 20;
+
+/// Auxiliarry structure containing all the information
+/// required to execute a contract call.
+#[derive(Clone)]
+pub struct ContractCallLeaf {
+    /// Call executed
+    pub call: ContractCall,
+    /// Attached ZK proofs
+    pub proofs: Vec<Proof>,
+    /// Attached Schnorr signatures
+    pub signatures: Vec<Signature>,
+}
+
+/// Auxilliary structure to build a full [`Transaction`] using
+/// [`DarkTree`] to order everything.
+pub struct TransactionBuilder {
+    /// Contract calls tree
+    pub calls: DarkTree<ContractCallLeaf>,
+}
+
+// TODO: for now we build the tree manually, but we should
+//       add all the proper functions for easier building.
+impl TransactionBuilder {
+    /// Initialize the builder, using provided data to
+    /// generate its [`DarkTree`] root.
+    pub fn new(data: ContractCallLeaf, children: Vec<DarkTree<ContractCallLeaf>>) -> Self {
+        let calls = DarkTree::new(data, children, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS));
+        Self { calls }
+    }
+
+    /// Append a new call to the tree
+    pub fn append(&mut self, child: DarkTree<ContractCallLeaf>) -> DarkTreeResult<()> {
+        self.calls.append(child)
+    }
+
+    /// Builder builds the calls vector using the [`DarkTree`]
+    /// and generates the corresponding [`Transaction`].
+    pub fn build(&mut self) -> DarkTreeResult<Transaction> {
+        // Build the leafs vector
+        let leafs = self.calls.build_vec()?;
+
+        // Double check integrity
+        dark_leaf_vec_integrity_check(&leafs, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS))?;
+
+        // Build the corresponding transaction
+        let mut calls = Vec::with_capacity(leafs.len());
+        let mut proofs = Vec::with_capacity(leafs.len());
+        let mut signatures = Vec::with_capacity(leafs.len());
+        for leaf in leafs {
+            calls.push(leaf.data.call);
+            proofs.push(leaf.data.proofs);
+            signatures.push(leaf.data.signatures);
+        }
+
+        Ok(Transaction { calls, proofs, signatures })
+    }
+}

@@ -18,7 +18,7 @@
 
 use std::{collections::VecDeque, iter::FusedIterator, mem};
 
-use crate::error::{DarkTreeResult, DarkTreeError};
+use crate::error::{DarkTreeError, DarkTreeResult};
 
 /// This struct represents the information hold by a
 /// [`DarkTreeLeaf`], namely its data, along with positional
@@ -27,12 +27,12 @@ use crate::error::{DarkTreeResult, DarkTreeError};
 /// connected nodes, and are *not* used as pointers by the
 /// tree. Creator must ensure they are properly setup.
 #[derive(Clone, Debug, PartialEq)]
-struct DarkLeaf<T>
+pub struct DarkLeaf<T>
 where
     T: Clone,
 {
     /// Data holded by this leaf
-    data: T,
+    pub data: T,
     /// Index showcasing this leaf's parent tree, when all
     /// leafs are in order. None indicates that this leaf
     /// has no parent.
@@ -47,7 +47,7 @@ where
 /// holding this tree node data, along with its positional
 /// index, based on tree's traversal order.
 #[derive(Clone, Debug, PartialEq)]
-struct DarkTreeLeaf<T>
+pub struct DarkTreeLeaf<T>
 where
     T: Clone,
 {
@@ -89,7 +89,7 @@ impl<T: std::clone::Clone> DarkTreeLeaf<T> {
 /// to always execute .build() after finishing setting up the
 /// Tree, to properly index it and check its integrity.
 #[derive(Debug, PartialEq)]
-struct DarkTree<T: std::clone::Clone> {
+pub struct DarkTree<T: std::clone::Clone> {
     /// This tree's leaf information, along with its data
     leaf: DarkTreeLeaf<T>,
     /// Vector containing all tree's branches(children tree)
@@ -115,7 +115,7 @@ struct DarkTree<T: std::clone::Clone> {
 impl<T: std::clone::Clone> DarkTree<T> {
     /// Initialize a [`DarkTree`], using provided data to
     /// generate its root.
-    fn new(
+    pub fn new(
         data: T,
         children: Vec<DarkTree<T>>,
         min_capacity: Option<usize>,
@@ -140,7 +140,7 @@ impl<T: std::clone::Clone> DarkTree<T> {
     /// after we have appended all child nodes, so we
     /// don't have to call .index() and .integrity_check()
     /// manually.
-    fn build(&mut self) -> DarkTreeResult<()> {
+    pub fn build(&mut self) -> DarkTreeResult<()> {
         self.index();
         self.integrity_check()
     }
@@ -148,7 +148,7 @@ impl<T: std::clone::Clone> DarkTree<T> {
     /// Build the [`DarkTree`] using .build() and
     /// then produce a flattened vector containing
     /// all the leafs in DFS post-order traversal order.
-    fn build_vec(&mut self) -> DarkTreeResult<Vec<DarkLeaf<T>>> {
+    pub fn build_vec(&mut self) -> DarkTreeResult<Vec<DarkLeaf<T>>> {
         self.build()?;
         Ok(self.iter().cloned().map(|x| x.info).collect())
     }
@@ -182,7 +182,7 @@ impl<T: std::clone::Clone> DarkTree<T> {
     /// if max capacity has not been exceeded. This call
     /// doesn't update the indexes, so either .index()
     /// or .build() must be called after it.
-    fn append(&mut self, child: DarkTree<T>) -> DarkTreeResult<()> {
+    pub fn append(&mut self, child: DarkTree<T>) -> DarkTreeResult<()> {
         // Check current max capacity
         if let Some(max_capacity) = self.max_capacity {
             if self.len() + 1 > max_capacity {
@@ -303,7 +303,7 @@ impl<T: std::clone::Clone> DarkTree<T> {
 
 /// Immutable iterator of a [`DarkTree`], performing DFS post-order
 /// traversal on the Tree leafs.
-struct DarkTreeIter<'a, T: std::clone::Clone> {
+pub struct DarkTreeIter<'a, T: std::clone::Clone> {
     children: &'a [DarkTree<T>],
     parent: Option<Box<DarkTreeIter<'a, T>>>,
 }
@@ -365,7 +365,7 @@ impl<'a, T: std::clone::Clone> IntoIterator for &'a DarkTree<T> {
 
 /// Mutable iterator of a [`DarkTree`], performing DFS post-order
 /// traversal on the Tree leafs.
-struct DarkTreeIterMut<'a, T: std::clone::Clone> {
+pub struct DarkTreeIterMut<'a, T: std::clone::Clone> {
     children: &'a mut [DarkTree<T>],
     parent: Option<Box<DarkTreeIterMut<'a, T>>>,
     parent_leaf: Option<&'a mut DarkTreeLeaf<T>>,
@@ -429,7 +429,7 @@ impl<'a, T: std::clone::Clone> IntoIterator for &'a mut DarkTree<T> {
 /// Special iterator of a [`DarkTree`], performing DFS post-order
 /// traversal on the Tree leafs, consuming each leaf. Since this
 /// iterator consumes the tree, it becomes unusable after it's moved.
-struct DarkTreeIntoIter<T: std::clone::Clone> {
+pub struct DarkTreeIntoIter<T: std::clone::Clone> {
     children: VecDeque<DarkTree<T>>,
     parent: Option<Box<DarkTreeIntoIter<T>>>,
 }
@@ -497,7 +497,7 @@ impl<T: std::clone::Clone> IntoIterator for DarkTree<T> {
 
 /// Auxiliary function to verify provided [`DarkLeaf`] slice is
 /// properly bounded and its members indexes are valid.
-fn dark_leaf_vec_integrity_check<T: std::clone::Clone>(
+pub fn dark_leaf_vec_integrity_check<T: std::clone::Clone>(
     leafs: &[DarkLeaf<T>],
     min_capacity: Option<usize>,
     max_capacity: Option<usize>,
@@ -745,7 +745,11 @@ mod tests {
             DarkTree {
                 leaf: DarkTreeLeaf {
                     index: 22,
-                    info: DarkLeaf { data: 24, parent_index: None, children_indexes: vec![10, 14, 21] },
+                    info: DarkLeaf {
+                        data: 24,
+                        parent_index: None,
+                        children_indexes: vec![10, 14, 21]
+                    },
                 },
                 children: vec![
                     DarkTree {
