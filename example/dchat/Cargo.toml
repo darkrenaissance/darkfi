@@ -1,6 +1,6 @@
 [package]
 name = "dchat"
-version = "0.4.1"
+version = "0.4.2"
 homepage = "https://dark.fi"
 description = "Demo chat app used to document DarkFi networking code"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
@@ -10,22 +10,24 @@ edition = "2021"
 
 # ANCHOR: darkfi
 [dependencies]
-darkfi = {path = "../../", features = ["net", "rpc"]}
+darkfi = {path = "../../", features = ["net", "toml", "system", "async-daemonize", "rpc"]}
 darkfi-serial = {path = "../../src/serial"}
 # ANCHOR_END: darkfi
 
 # ANCHOR: dependencies
-async-std = "1.12.0"
 async-trait = "0.1.74"
-easy-parallel = "3.3.1"
-smol = "1.3.0"
-
 log = "0.4.20"
-simplelog = "0.12.1"
 url = "2.5.0"
 
-serde_json = "1.0.108"
+# Daemon
+easy-parallel = "3.3.1"
+signal-hook-async-std = "0.2.2"
+signal-hook = "0.3.17"
+simplelog = "0.12.1"
+smol = "1.3.0"
+
+# Arg parsing
 serde = {version = "1.0.193", features = ["derive"]}
-toml = "0.8.8"
-libsqlite3-sys = {version = "0.27.0", features = ["bundled-sqlcipher-vendored-openssl"]}
+structopt = "0.3.26"
+structopt-toml = "0.5.1"
 # ANCHOR_END: dependencies

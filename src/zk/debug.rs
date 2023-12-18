@@ -78,7 +78,7 @@ pub fn export_witness_json<P: AsRef<Path>>(
 pub fn zkas_type_checks(
     circuit: &ZkCircuit,
     binary: &zkas::ZkBinary,
-    instances: &Vec<pallas::Base>,
+    instances: &[pallas::Base],
 ) -> Result<()> {
     if circuit.witnesses.len() != binary.witnesses.len() {
         error!(

@@ -288,6 +288,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
                 }
             }
         }
+    } else {
+        *event_graph.synced.write().await = true;
     }
 
     // Signal handling for graceful termination.

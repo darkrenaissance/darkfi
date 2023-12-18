@@ -251,13 +251,29 @@ impl Timestamp {
     }
 
     /// Calculates elapsed time of a `Timestamp`.
+    /// TODO: Rework this function to return the result of checked_sub and make calling code
+    /// check whether it is Some/None
     pub fn elapsed(&self) -> u64 {
-        UNIX_EPOCH.elapsed().unwrap().as_secs() - self.0
+        let now = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        if let Some(elapsed) = now.checked_sub(self.0) {
+            elapsed
+        } else {
+            panic!(
+                "Cannot subtract Timestamp value {} from current time {}. (Integer underflow)",
+                self.0, now
+            );
+        }
     }
 
     /// Increment a 'Timestamp'.
+    /// TODO: Rework this function to return the result of checked_add and make calling code
+    /// check whether it is Some/None
     pub fn add(&mut self, inc: u64) {
-        self.0 += inc;
+        if let Some(sum) = self.0.checked_add(inc) {
+            self.0 = sum
+        } else {
+            panic!("Cannot add {} to Timestamp {}. (Integer overflow)", self.0, inc);
+        }
     }
 }
 
@@ -438,5 +454,22 @@ mod tests {
         let tk_unsafe =
             TimeKeeperSafe { timekeeper: TimeKeeper::new(Timestamp::current_time(), 0, 0, 0) };
         tk_unsafe.slot_epoch(0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_on_add_overflow() {
+        // Panic when the Timestamp func add() overflows u64.
+        let mut ts = Timestamp::current_time();
+        ts.add(u64::MAX);
+    }
+
+    #[test]
+    #[should_panic]
+    fn panic_on_elapsed_underflow() {
+        // Panic when the Timestamp function elapsed() underflows u64.
+        let mut ts = Timestamp::current_time();
+        ts.add(10_000);
+        ts.elapsed();
     }
 }

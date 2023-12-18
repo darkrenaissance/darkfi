@@ -49,12 +49,12 @@ members = [
     "src/contract/consensus",
     "src/contract/deployooor",
 
-    #"example/dchat",
+    "example/dchat",
 ]
 
 [dependencies]
 # Hard dependencies
-libc = "0.2.150"
+libc = "0.2.151"
 log = "0.4.20"
 thiserror = "1.0.50"
 
@@ -203,6 +203,7 @@ event-graph = [
     "num-bigint",
     "rand",
     "sled",
+    "sled-overlay",
     "smol",
     "tinyjson",
 

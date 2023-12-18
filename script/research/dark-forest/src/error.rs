@@ -31,6 +31,15 @@ pub enum DarkTreeError {
     #[error("Invalid DarkLeaf children index found for leaf: {0}")]
     InvalidLeafChildrenIndexes(usize),
 
-    #[error("DarkTree capacity have been exceeded")]
-    CapacityExceeded,
+    #[error("Invalid DarkTree min capacity found: {0} (Expected: >= 1)")]
+    InvalidMinCapacity(usize),
+
+    #[error("DarkTree min capacity has not been exceeded")]
+    MinCapacityNotExceeded,
+
+    #[error("Invalid DarkTree max capacity found: {0} (Expected: >= {1})")]
+    InvalidMaxCapacity(usize, usize),
+
+    #[error("DarkTree max capacity has been exceeded")]
+    MaxCapacityExceeded,
 }

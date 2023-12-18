@@ -5,9 +5,9 @@ set -e
 tmux new-session -s "genevd" -n "genevd" -d
 tmux send-keys "../../../genevd --localnet --config genevd_seed.toml --skip-dag-sync" Enter && sleep 1
 tmux split-window -h
-tmux send-keys "../../../genevd --localnet --config genevd_a.toml" Enter
+tmux send-keys "../../../genevd --localnet --config genevd_a.toml --skip-dag-sync" Enter && sleep 1
 tmux split-window -h
-tmux send-keys "../../../genevd --localnet --config genevd_b.toml" Enter
+tmux send-keys "../../../genevd --localnet --config genevd_b.toml --skip-dag-sync" Enter
 tmux select-pane -t 0
 tmux split-window -v
 tmux send-keys "../../../genevd --localnet --config genevd_c.toml" Enter

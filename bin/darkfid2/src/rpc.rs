@@ -35,6 +35,7 @@ use darkfi::{
 use crate::Darkfid;
 
 #[async_trait]
+#[rustfmt::skip]
 impl RequestHandler for Darkfid {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
         debug!(target: "darkfid::rpc", "--> {}", req.stringify().unwrap());
@@ -53,21 +54,12 @@ impl RequestHandler for Darkfid {
             // ==================
             "blockchain.get_slot" => return self.blockchain_get_slot(req.id, req.params).await,
             "blockchain.get_tx" => return self.blockchain_get_tx(req.id, req.params).await,
-            "blockchain.last_known_slot" => {
-                return self.blockchain_last_known_slot(req.id, req.params).await
-            }
-            "blockchain.lookup_zkas" => {
-                return self.blockchain_lookup_zkas(req.id, req.params).await
-            }
-            "blockchain.subscribe_blocks" => {
-                return self.blockchain_subscribe_blocks(req.id, req.params).await
-            }
-            "blockchain.subscribe_txs" => {
-                return self.blockchain_subscribe_txs(req.id, req.params).await
-            }
-            "blockchain.subscribe_proposals" => {
-                return self.blockchain_subscribe_proposals(req.id, req.params).await
-            }
+            "blockchain.last_known_slot" => return self.blockchain_last_known_slot(req.id, req.params).await,
+            "blockchain.lookup_zkas" => return self.blockchain_lookup_zkas(req.id, req.params).await,
+            "blockchain.subscribe_blocks" => return self.blockchain_subscribe_blocks(req.id, req.params).await,
+            "blockchain.subscribe_txs" =>  return self.blockchain_subscribe_txs(req.id, req.params).await,
+            "blockchain.subscribe_proposals" => return self.blockchain_subscribe_proposals(req.id, req.params).await,
+            "merge_mining_get_chain_id" => return self.merge_mining_get_chain_id(req.id, req.params).await,
 
             // ===================
             // Transaction methods

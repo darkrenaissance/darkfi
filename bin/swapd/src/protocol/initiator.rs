@@ -234,7 +234,7 @@ mod test {
     }
 
     #[tokio::test]
-    async fn test_initiator_swap() {
+    async fn test_initiator_swap_success() {
         let (event_tx, event_rx) = tokio::sync::mpsc::channel(1);
 
         let (contract_address, provider, wallet, anvil) =
@@ -243,9 +243,9 @@ mod test {
         let contract = SwapCreator::new(contract_address, signer.clone());
 
         let other_chain_client = MockOtherChainClient;
-        let secret = [0; 32]; // TODO generate an actual secp256k1 private key
+        let refund_secret = [0; 32]; // TODO generate an actual secp256k1 private key for refund testing
         let initiator =
-            EthInitiator::new(contract.clone(), signer.clone(), other_chain_client, secret);
+            EthInitiator::new(contract.clone(), signer.clone(), other_chain_client, refund_secret);
 
         // let counterparty_secret = SecretKey::<Secp256k1>::random(&mut rand::thread_rng());
         // let counterparty_public_key = PublicKey::<Secp256k1>::from_secret_scalar(&counterparty_secret.to_nonzero_scalar());

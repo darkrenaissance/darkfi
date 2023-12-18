@@ -32,7 +32,7 @@ $(PROOFS_BIN): $(ZKAS) $(PROOFS_SRC)
 	$(ZKAS) $(basename $@) -o $@
 
 $(BIN): $(PROOFS_BIN) $(SRC)
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --target=$(RUST_TARGET) --release --package $@
+	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --target=$(RUST_TARGET) --release --package $@ --bin $@
 	cp -f ../../target/$(RUST_TARGET)/release/$@ $@
 	cp -f ../../target/$(RUST_TARGET)/release/$@ ../../$@
 

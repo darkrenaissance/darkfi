@@ -142,6 +142,8 @@ async fn realmain(settings: Args, executor: Arc<smol::Executor<'static>>) -> Res
                 }
             }
         }
+    } else {
+        *event_graph.synced.write().await = true;
     }
 
     ////////////////////

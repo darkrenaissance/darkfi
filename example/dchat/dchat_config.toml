@@ -1,28 +1,12 @@
-# chat toml
+# dchat toml
 
 [net]
-## P2P accept addresses
-#inbound=["tls://127.0.0.1:11002"]
+## P2P accept addresses Required for inbound nodes.
+#inbound=["tcp://127.0.0.1:51554"]
 
-## Connection slots
-outbound_connections=5
+## P2P external addresses. Required for inbound nodes.
+#external_addr=["tcp://127.0.0.1:51554"]
 
-## P2P external addresses
-#external_addr=["tls://127.0.0.1:11002"]
-
-## Peers to connect to
-#peers=["tls://127.0.0.1:11003"]
-
-## Seed nodes to connect to 
-#seeds=["tls://irc0.dark.fi:11001", "tls://irc1.dark.fi:11001"]
+## Seed nodes to connect to. Required for inbound and outbound nodes.
 seeds=["tcp://127.0.0.1:55555"]
 
-## Only used for debugging. Compromises privacy when set.
-#node_id = "foo"
-
-## these are the default configuration for the p2p network
-#manual_attempt_limit=0
-#seed_query_timeout_seconds=8
-#connect_timeout_seconds=10
-#channel_handshake_seconds=4
-#channel_heartbeat_seconds=10
