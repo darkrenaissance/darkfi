@@ -180,18 +180,15 @@ impl Hosts {
         Ok(())
     }
 
-    //// Update the last_seen field for a Url on the whitelist.
-    //pub async fn whitelist_update(&self, addr: &Url, last_seen: u64) -> Result<()> {
-    //    let index = self.get_whitelist_index_at_addr(addr).await?;
-    //    self.whitelist_update_last_seen(addr, last_seen, index).await;
-    //    Ok(())
-    //}
-
     pub async fn greylist_store_or_update(&self, addrs: &[(Url, u64)]) -> Result<()> {
         debug!(target: "net::hosts::store::greylist_store_or_update()", "[START]");
 
-        for (addr, last_seen) in addrs {
-            if !self.greylist_contains(addr).await {
+        // We filter addresses before writing to the greylist.
+        // We don't need to do this for the whitelist because it reads from the greylist.
+        let filtered_addrs = self.filter_addresses(addrs).await;
+        let filtered_addrs_len = filtered_addrs.len();
+        for (addr, last_seen) in filtered_addrs {
+            if !self.greylist_contains(&addr).await {
                 debug!(target: "net::hosts::store::greylist_store_or_update()", "We do not have this entry in the greylist. Adding to store...");
 
                 self.greylist_store(&addr, last_seen.clone()).await;
@@ -199,10 +196,11 @@ impl Hosts {
                 debug!(target: "net::hosts::store::greylist_store_or_update()",
                 "We have this entry in the greylist. Updating last seen...");
 
-                let index = self.get_greylist_index_at_addr(addr).await?;
-                self.greylist_update_last_seen(addr, last_seen.clone(), index).await;
+                let index = self.get_greylist_index_at_addr(&addr).await?;
+                self.greylist_update_last_seen(&addr, last_seen.clone(), index).await;
             }
         }
+        self.store_subscriber.notify(filtered_addrs_len).await;
         Ok(())
     }
 
