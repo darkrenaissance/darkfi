@@ -19,7 +19,7 @@
 use std::collections::HashSet;
 
 use async_trait::async_trait;
-use log::{debug, error, info};
+use log::{debug, error};
 use smol::lock::{Mutex, MutexGuard};
 use tinyjson::JsonValue;
 
@@ -140,7 +140,7 @@ impl JsonRpcInterface {
                 }
             };
 
-            info!("Marking event {} as seen", event_id);
+            debug!("Marking event {} as seen", event_id);
             seen_events.push(genevent);
         }
 
