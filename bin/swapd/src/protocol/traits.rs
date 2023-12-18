@@ -3,7 +3,7 @@ use crate::{ethereum::swap_creator::SwapCreator, protocol::initiator::Event};
 use darkfi_serial::async_trait;
 use ethers::prelude::*;
 use eyre::Result;
-use tokio::sync::mpsc::Sender;
+use smol::channel::Sender;
 
 // Initial parameters required by the swap initiator.
 // TODO: make Address/U256 generic; these are ethers-specific right now
@@ -80,7 +80,7 @@ pub(crate) trait Initiator {
 pub(crate) trait InitiatorEventWatcher {
     async fn run_received_counterparty_keys_watcher(
         event_tx: Sender<Event>,
-        counterparty_keys_rx: tokio::sync::oneshot::Receiver<CounterpartyKeys>,
+        counterparty_keys_rx: async_oneshot::Receiver<CounterpartyKeys>,
     ) -> Result<()>;
 
     async fn run_counterparty_funds_locked_watcher(event_tx: Sender<Event>) -> Result<()>;

@@ -3,7 +3,7 @@ use crate::protocol::traits::{
     Initiator,
 };
 use eyre::{eyre, Context, Result};
-use tokio::sync::{mpsc, watch};
+use smol::channel;
 use tracing::{info, warn};
 
 #[derive(Debug)]
@@ -35,13 +35,15 @@ struct Swap {
 
     // the event receiver channel for the swap
     // the [`Watcher`] sends events to this channel
-    event_rx: mpsc::Receiver<Event>,
+    event_rx: channel::Receiver<Event>,
 
     // the current state of the swap
-    state: watch::Sender<State>,
+    state_tx: async_watch::Sender<State>,
+    state_rx: async_watch::Receiver<State>,
 
     // the info of the swap within the on-chain contract
-    contract_swap_info: watch::Sender<Option<HandleCounterpartyKeysReceivedResult>>,
+    contract_swap_info_tx: async_watch::Sender<Option<HandleCounterpartyKeysReceivedResult>>,
+    contract_swap_info_rx: async_watch::Receiver<Option<HandleCounterpartyKeysReceivedResult>>,
 }
 
 #[allow(dead_code)]
@@ -49,34 +51,39 @@ impl Swap {
     fn new(
         args: InitiationArgs,
         handler: Box<dyn Initiator + Send + Sync>,
-        event_rx: mpsc::Receiver<Event>,
-    ) -> (Self, watch::Receiver<State>, watch::Receiver<Option<HandleCounterpartyKeysReceivedResult>>)
-    {
-        let state = tokio::sync::watch::channel(State::WaitingForCounterpartyKeys);
-        let contract_swap_info = tokio::sync::watch::channel(None);
+        event_rx: channel::Receiver<Event>,
+    ) -> (
+        Self,
+        async_watch::Receiver<State>,
+        async_watch::Receiver<Option<HandleCounterpartyKeysReceivedResult>>,
+    ) {
+        let state = async_watch::channel(State::WaitingForCounterpartyKeys);
+        let contract_swap_info = async_watch::channel(None);
         (
             Self {
                 args,
                 handler,
                 event_rx,
-                state: state.0,
-                contract_swap_info: contract_swap_info.0,
+                state_tx: state.0,
+                state_rx: state.1.clone(),
+                contract_swap_info_tx: contract_swap_info.0,
+                contract_swap_info_rx: contract_swap_info.1.clone(),
             },
             state.1,
             contract_swap_info.1,
         )
     }
 
-    async fn run(mut self) -> Result<()> {
+    async fn run(self) -> Result<()> {
         loop {
             match self.event_rx.recv().await {
-                Some(Event::ReceivedCounterpartyKeys(counterparty_keys)) => {
+                Ok(Event::ReceivedCounterpartyKeys(counterparty_keys)) => {
                     info!("received counterparty keys");
 
-                    if !matches!(*self.state.borrow(), State::WaitingForCounterpartyKeys) {
+                    if !matches!(*self.state_rx.borrow(), State::WaitingForCounterpartyKeys) {
                         warn!(
                             "unexpected event ReceivedCounterpartyKeys, state is {:?}",
-                            *self.state.borrow()
+                            *self.state_rx.borrow()
                         );
                         return Err(eyre!(
                             "unexpected event: {:?}",
@@ -105,19 +112,20 @@ impl Swap {
                             .wrap_err("failed to handle receiving counterparty keys")?,
                     );
 
-                    let _ = self.contract_swap_info.send(contract_swap_info.clone());
-                    self.state
+                    let _ = self.contract_swap_info_tx.send(contract_swap_info.clone());
+                    self.state_tx
                         .send(State::WaitingForCounterpartyFundsLocked)
                         .expect("state channel should not be dropped");
                 }
-                Some(Event::CounterpartyFundsLocked) => {
+                Ok(Event::CounterpartyFundsLocked) => {
                     info!("counterparty funds locked");
-                    if !matches!(*self.state.borrow(), State::WaitingForCounterpartyFundsLocked) {
+                    if !matches!(*self.state_rx.borrow(), State::WaitingForCounterpartyFundsLocked)
+                    {
                         return Err(eyre!("unexpected event: {:?}", Event::CounterpartyFundsLocked));
                     }
 
                     let contract_swap_info = self
-                        .contract_swap_info
+                        .contract_swap_info_rx
                         .borrow()
                         .clone()
                         .expect("contract swap info must be set");
@@ -129,12 +137,13 @@ impl Swap {
                         )
                         .await?;
 
-                    self.state
+                    self.state_tx
                         .send(State::WaitingForCounterpartyFundsClaimed)
                         .expect("state channel should not be dropped");
                 }
-                Some(Event::CounterpartyFundsClaimed(counterparty_secret)) => {
-                    if !matches!(*self.state.borrow(), State::WaitingForCounterpartyFundsClaimed) {
+                Ok(Event::CounterpartyFundsClaimed(counterparty_secret)) => {
+                    if !matches!(*self.state_rx.borrow(), State::WaitingForCounterpartyFundsClaimed)
+                    {
                         return Err(eyre!(
                             "unexpected event: {:?}",
                             Event::CounterpartyFundsClaimed(counterparty_secret)
@@ -142,10 +151,12 @@ impl Swap {
                     }
 
                     self.handler.handle_counterparty_funds_claimed(counterparty_secret).await?;
-                    self.state.send(State::Completed).expect("state channel should not be dropped");
+                    self.state_tx
+                        .send(State::Completed)
+                        .expect("state channel should not be dropped");
                 }
-                Some(Event::AlmostTimeout1) => {
-                    match *self.state.borrow() {
+                Ok(Event::AlmostTimeout1) => {
+                    match *self.state_rx.borrow() {
                         State::WaitingForCounterpartyFundsLocked |
                         State::WaitingForCounterpartyFundsClaimed => {}
                         _ => {
@@ -155,27 +166,28 @@ impl Swap {
 
                     // we're almost at timeout 1, and the counterparty hasn't locked,
                     // so we need to refund
-                    if matches!(*self.state.borrow(), State::WaitingForCounterpartyFundsLocked) {
+                    if matches!(*self.state_rx.borrow(), State::WaitingForCounterpartyFundsLocked) {
                         let contract_swap_info = self
-                            .contract_swap_info
+                            .contract_swap_info_rx
                             .borrow()
                             .clone()
                             .expect("contract swap info must be set");
 
                         self.handler.handle_should_refund(contract_swap_info.contract_swap).await?;
 
-                        self.state
+                        self.state_tx
                             .send(State::Completed)
                             .expect("state channel should not be dropped");
                     }
                 }
-                Some(Event::PastTimeout2) => {
-                    if !matches!(*self.state.borrow(), State::WaitingForCounterpartyFundsClaimed) {
+                Ok(Event::PastTimeout2) => {
+                    if !matches!(*self.state_rx.borrow(), State::WaitingForCounterpartyFundsClaimed)
+                    {
                         return Err(eyre!("unexpected event: {:?}", Event::PastTimeout2));
                     }
 
                     let contract_swap_info = self
-                        .contract_swap_info
+                        .contract_swap_info_rx
                         .borrow()
                         .clone()
                         .expect("contract swap info must be set");
@@ -186,15 +198,17 @@ impl Swap {
                         .handle_should_refund(contract_swap_info.contract_swap.clone())
                         .await?;
 
-                    self.state.send(State::Completed).expect("state channel should not be dropped");
+                    self.state_tx
+                        .send(State::Completed)
+                        .expect("state channel should not be dropped");
                 }
-                None => {
+                Err(_) => {
                     info!("event channel closed, exiting");
                     break;
                 }
             }
 
-            if matches!(*self.state.borrow(), State::Completed) {
+            if matches!(*self.state_rx.borrow(), State::Completed) {
                 info!("swap completed, exiting");
                 break;
             }
@@ -233,9 +247,9 @@ mod test {
         }
     }
 
-    #[tokio::test]
+    #[async_std::test]
     async fn test_initiator_swap_success() {
-        let (event_tx, event_rx) = tokio::sync::mpsc::channel(1);
+        let (event_tx, event_rx) = channel::bounded(1);
 
         let (contract_address, provider, wallet, anvil) =
             crate::ethereum::test_utils::deploy_swap_creator().await;
@@ -269,12 +283,12 @@ mod test {
 
         let (swap, mut state, contract_swap_id) =
             Swap::new(args.clone(), Box::new(initiator), event_rx);
-        assert!(*state.borrow_and_update() == State::WaitingForCounterpartyKeys);
+        assert!(*state.borrow() == State::WaitingForCounterpartyKeys);
 
-        let swap_task = tokio::spawn(async move { swap.run().await });
+        let swap_task = smol::spawn(async move { swap.run().await });
 
-        let (counterparty_keys_tx, counterparty_keys_rx) = tokio::sync::oneshot::channel();
-        let join_handle = tokio::spawn(Watcher::run_received_counterparty_keys_watcher(
+        let (mut counterparty_keys_tx, counterparty_keys_rx) = async_oneshot::oneshot();
+        let join_handle = smol::spawn(Watcher::run_received_counterparty_keys_watcher(
             event_tx.clone(),
             counterparty_keys_rx,
         ));
@@ -284,7 +298,7 @@ mod test {
             .expect("should send counterparty keys");
         state.changed().await.expect("state should change");
         assert!(*state.borrow() == State::WaitingForCounterpartyFundsLocked);
-        join_handle.abort();
+        join_handle.cancel().await.unwrap().unwrap();
 
         Watcher::run_counterparty_funds_locked_watcher(event_tx.clone())
             .await
@@ -295,7 +309,7 @@ mod test {
         let contract_swap = contract_swap_id.borrow().as_ref().unwrap().contract_swap.clone();
 
         let contract_clone = contract.clone();
-        tokio::spawn(async move {
+        let claim_task = smol::spawn(async move {
             let tx = contract_clone.claim(contract_swap, counterparty_secret);
 
             let receipt = tx
@@ -324,6 +338,7 @@ mod test {
         state.changed().await.expect("state should change");
         assert!(*state.borrow() == State::Completed);
 
-        swap_task.await.expect("task should not fail").expect("swap should succeed");
+        swap_task.await.expect("swap task should not fail");
+        claim_task.await;
     }
 }

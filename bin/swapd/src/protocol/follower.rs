@@ -1,5 +1,5 @@
 use crate::protocol::traits::Follower;
-use tokio::sync::mpsc::Receiver;
+use smol::channel;
 
 #[allow(dead_code)]
 enum Event {
@@ -11,28 +11,28 @@ enum Event {
 #[allow(dead_code)]
 struct Swap {
     handler: Box<dyn Follower>,
-    event_rx: Receiver<Event>,
+    event_rx: channel::Receiver<Event>,
 }
 
 #[allow(dead_code)]
 impl Swap {
-    fn new(handler: Box<dyn Follower>, event_rx: Receiver<Event>) -> Self {
+    fn new(handler: Box<dyn Follower>, event_rx: channel::Receiver<Event>) -> Self {
         Self { handler, event_rx }
     }
 
     async fn run(&mut self) {
         loop {
             match self.event_rx.recv().await {
-                Some(Event::CounterpartyFundsLocked) => {
+                Ok(Event::CounterpartyFundsLocked) => {
                     self.handler.handle_counterparty_funds_locked();
                 }
-                Some(Event::ReadyToClaim) => {
+                Ok(Event::ReadyToClaim) => {
                     self.handler.handle_ready_to_claim();
                 }
-                Some(Event::CounterpartyFundsRefunded) => {
+                Ok(Event::CounterpartyFundsRefunded) => {
                     self.handler.handle_counterparty_funds_refunded();
                 }
-                None => {
+                Err(_) => {
                     break;
                 }
             }

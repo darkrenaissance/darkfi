@@ -383,6 +383,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-attributes"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a3203e79f4dd9bdda415ed03cf14dae5a2bf775c683a00f94e9cd1faf0f596e5"
+dependencies = [
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "async-channel"
 version = "1.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -468,6 +478,7 @@ dependencies = [
  "blocking",
  "futures-lite 2.1.0",
  "once_cell",
+ "tokio",
 ]
 
 [[package]]
@@ -555,6 +566,15 @@ dependencies = [
  "async-io 1.13.0",
  "blocking",
  "futures-lite 1.13.0",
+]
+
+[[package]]
+name = "async-oneshot"
+version = "0.5.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae47de2a02d543205f3f5457a90b6ecbc9494db70557bd29590ec8f1ddff5463"
+dependencies = [
+ "futures-micro",
 ]
 
 [[package]]
@@ -654,6 +674,7 @@ version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62565bb4402e926b29953c785397c6dc0391b7b446e45008b0049eb43cec6f5d"
 dependencies = [
+ "async-attributes",
  "async-channel 1.9.0",
  "async-global-executor",
  "async-io 1.13.0",
@@ -690,6 +711,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.41",
+]
+
+[[package]]
+name = "async-watch"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a078faf4e27c0c6cc0efb20e5da59dcccc04968ebf2801d8e0b2195124cdcdb2"
+dependencies = [
+ "event-listener 2.5.3",
 ]
 
 [[package]]
@@ -3671,6 +3701,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.41",
+]
+
+[[package]]
+name = "futures-micro"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b460264b3593d68b16a7bc35f7bc226ddfebdf9a1c8db1ed95d5cc6b7168c826"
+dependencies = [
+ "pin-project-lite 0.2.13",
 ]
 
 [[package]]
@@ -7479,6 +7518,9 @@ dependencies = [
 name = "swapd"
 version = "0.4.1"
 dependencies = [
+ "async-oneshot",
+ "async-std",
+ "async-watch",
  "darkfi",
  "darkfi-serial",
  "easy-parallel",
@@ -7494,7 +7536,6 @@ dependencies = [
  "structopt",
  "structopt-toml",
  "swapd",
- "tokio",
  "tracing",
  "url",
 ]
@@ -7824,19 +7865,7 @@ dependencies = [
  "num_cpus",
  "pin-project-lite 0.2.13",
  "socket2 0.5.5",
- "tokio-macros",
  "windows-sys 0.48.0",
-]
-
-[[package]]
-name = "tokio-macros"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b8a1e28f2deaa14e508979454cb3a223b10b938b45af148bc0986de36f1923b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.41",
 ]
 
 [[package]]
