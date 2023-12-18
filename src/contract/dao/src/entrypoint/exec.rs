@@ -101,17 +101,25 @@ pub(crate) fn dao_exec_process_instruction(
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
-    let params: DaoExecParams = deserialize(&self_.data[1..])?;
+    let self_ = &calls[call_idx as usize];
+    let params: DaoExecParams = deserialize(&self_.data.data[1..])?;
 
     // ==========================================
     // Enforce the transaction has correct format
     // ==========================================
-    if calls.len() != 2 ||
-        call_idx != 1 ||
-        calls[0].data.contract_id != *MONEY_CONTRACT_ID ||
-        calls[0].data.data[0] != MoneyFunction::TransferV1 as u8
-    {
+    if call_idx == 0 {
+        msg!("[Dao::Exec] Error: child_call_idx will be out of bounds");
+        return Err(DaoError::ExecCallInvalidFormat.into())
+    }
+
+    let child_call_indexes = &self_.children_indexes;
+    if child_call_indexes.len() != 1 {
+        msg!("[Dao::Exec] Error: child_call_idx is missing");
+        return Err(DaoError::ExecCallInvalidFormat.into())
+    }
+    let child_call_idx = child_call_indexes[0];
+    let child = &calls[child_call_idx].data;
+    if child.contract_id != *MONEY_CONTRACT_ID || child.data[0] != MoneyFunction::TransferV1 as u8 {
         msg!("[Dao::Exec] Error: Transaction has incorrect format");
         return Err(DaoError::ExecCallInvalidFormat.into())
     }
