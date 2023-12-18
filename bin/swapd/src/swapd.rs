@@ -7,6 +7,8 @@ use structopt::StructOpt;
 use structopt_toml::StructOptToml;
 use url::Url;
 
+use crate::protocol::initiator;
+
 #[derive(Clone, Debug, Deserialize, StructOpt, StructOptToml)]
 #[structopt()]
 pub struct SwapdArgs {
@@ -30,6 +32,7 @@ pub struct Swapd {
 impl Swapd {
     /// Instantiate `Swapd` state
     pub async fn new(_swapd_args: &SwapdArgs, sled_db: sled::Db) -> Result<Self> {
+        // let _initiator = initiator::Swap::new();
         Ok(Self { _sled_db: sled_db, rpc_connections: Mutex::new(HashSet::new()) })
     }
 }

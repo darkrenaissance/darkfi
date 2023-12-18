@@ -2,7 +2,7 @@
 // Implemention based on Vitalik's idea:
 // https://ethresear.ch/t/you-can-kinda-abuse-ecrecover-to-do-ecmul-in-secp256k1-today
 
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 contract Secp256k1 {
     // solhint-disable-next-line

@@ -9,7 +9,7 @@ use eyre::{ensure, Result, WrapErr as _};
 
 /// Implemented on top of the non-initiating chain
 ///
-/// Can probably become an extension trait eventually
+/// Can probably become an extension trait of an RPC client eventually
 pub(crate) trait OtherChainClient {
     fn claim_funds(&self, our_secret: [u8; 32], counterparty_secret: [u8; 32]) -> Result<()>;
 }
@@ -18,6 +18,12 @@ pub(crate) struct EthInitiator<M: Middleware, C: OtherChainClient> {
     contract: SwapCreator<M>,
     other_chain_client: C,
     secret: [u8; 32],
+}
+
+impl<M: Middleware, C: OtherChainClient> EthInitiator<M, C> {
+    pub(crate) fn new(contract: SwapCreator<M>, other_chain_client: C, secret: [u8; 32]) -> Self {
+        Self { contract, other_chain_client, secret }
+    }
 }
 
 #[async_trait]
