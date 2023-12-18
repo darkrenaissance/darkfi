@@ -19,6 +19,7 @@
 use darkfi_money_contract::{model::MoneyTransferParamsV1, MoneyFunction};
 use darkfi_sdk::{
     crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, PublicKey},
+    dark_tree::DarkLeaf,
     db::{db_del, db_get, db_lookup},
     error::{ContractError, ContractResult},
     msg,
@@ -37,15 +38,15 @@ use crate::{
 pub(crate) fn dao_exec_get_metadata(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     assert_eq!(call_idx, 1);
     assert_eq!(calls.len(), 2);
 
-    let money_call = &calls[0];
+    let money_call = &calls[0].data;
     let money_xfer_params: MoneyTransferParamsV1 = deserialize(&money_call.data[1..])?;
 
-    let dao_call = &calls[1];
+    let dao_call = &calls[1].data;
     let dao_exec_params: DaoExecParams = deserialize(&dao_call.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -98,9 +99,9 @@ pub(crate) fn dao_exec_get_metadata(
 pub(crate) fn dao_exec_process_instruction(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: DaoExecParams = deserialize(&self_.data[1..])?;
 
     // ==========================================
@@ -108,14 +109,14 @@ pub(crate) fn dao_exec_process_instruction(
     // ==========================================
     if calls.len() != 2 ||
         call_idx != 1 ||
-        calls[0].contract_id != *MONEY_CONTRACT_ID ||
-        calls[0].data[0] != MoneyFunction::TransferV1 as u8
+        calls[0].data.contract_id != *MONEY_CONTRACT_ID ||
+        calls[0].data.data[0] != MoneyFunction::TransferV1 as u8
     {
         msg!("[Dao::Exec] Error: Transaction has incorrect format");
         return Err(DaoError::ExecCallInvalidFormat.into())
     }
 
-    let mt_params: MoneyTransferParamsV1 = deserialize(&calls[0].data[1..])?;
+    let mt_params: MoneyTransferParamsV1 = deserialize(&calls[0].data.data[1..])?;
 
     // MoneyTransfer should all have the same user_data set.
     // We check this by ensuring that user_data_enc is also the same for all inputs.

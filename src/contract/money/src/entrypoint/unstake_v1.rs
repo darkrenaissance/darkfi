@@ -21,6 +21,7 @@ use darkfi_sdk::{
         pasta_prelude::*, poseidon_hash, ContractId, MerkleNode, PublicKey, CONSENSUS_CONTRACT_ID,
         DARK_TOKEN_ID,
     },
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     merkle_add, msg,
@@ -41,9 +42,9 @@ use crate::{
 pub(crate) fn money_unstake_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: MoneyUnstakeParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -76,9 +77,9 @@ pub(crate) fn money_unstake_get_metadata_v1(
 pub(crate) fn money_unstake_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: MoneyUnstakeParamsV1 = deserialize(&self_.data[1..])?;
     let input = &params.input;
     let output = &params.output;
@@ -102,7 +103,7 @@ pub(crate) fn money_unstake_process_instruction_v1(
     }
 
     let previous_call_idx = call_idx - 1;
-    let previous = &calls[previous_call_idx as usize];
+    let previous = &calls[previous_call_idx as usize].data;
     if previous.contract_id.inner() != CONSENSUS_CONTRACT_ID.inner() {
         msg!("[MoneyUnstakeV1] Error: Previous contract call is not consensus contract");
         return Err(MoneyError::UnstakePreviousCallNotConsensusContract.into())

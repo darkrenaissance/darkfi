@@ -18,6 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{pasta_prelude::Field, ContractId, MerkleNode, MerkleTree, PublicKey},
+    dark_tree::DarkLeaf,
     db::{db_init, db_lookup, db_set, zkas_db_set},
     error::{ContractError, ContractResult},
     msg,
@@ -185,13 +186,13 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
 /// for verifying signatures and zk proofs. The payload given here are all the
 /// contract calls in the transaction.
 fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let (call_idx, calls): (u32, Vec<ContractCall>) = deserialize(ix)?;
+    let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
     if call_idx >= calls.len() as u32 {
         msg!("Error: call_idx >= calls.len()");
         return Err(ContractError::Internal)
     }
 
-    match MoneyFunction::try_from(calls[call_idx as usize].data[0])? {
+    match MoneyFunction::try_from(calls[call_idx as usize].data.data[0])? {
         MoneyFunction::TransferV1 => {
             // We pass everything into the correct function, and it will return
             // the metadata for us, which we can then copy into the host with
@@ -242,13 +243,13 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
 /// if everything is successful. This step should happen **after** the host
 /// has successfully verified the metadata from `get_metadata()`.
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let (call_idx, calls): (u32, Vec<ContractCall>) = deserialize(ix)?;
+    let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
     if call_idx >= calls.len() as u32 {
         msg!("Error: call_idx >= calls.len()");
         return Err(ContractError::Internal)
     }
 
-    match MoneyFunction::try_from(calls[call_idx as usize].data[0])? {
+    match MoneyFunction::try_from(calls[call_idx as usize].data.data[0])? {
         MoneyFunction::TransferV1 => {
             // Again, we pass everything into the correct function.
             // If it executes successfully, we'll get a state update

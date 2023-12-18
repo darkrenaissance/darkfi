@@ -18,6 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{ContractId, MerkleNode, PublicKey},
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     merkle_add, msg,
@@ -38,9 +39,9 @@ use crate::{
 pub(crate) fn dao_mint_get_metadata(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: DaoMintParams = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -68,9 +69,9 @@ pub(crate) fn dao_mint_get_metadata(
 pub(crate) fn dao_mint_process_instruction(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: DaoMintParams = deserialize(&self_.data[1..])?;
 
     // Check the DAO bulla doesn't already exist

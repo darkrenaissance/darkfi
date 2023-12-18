@@ -21,6 +21,7 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, MerkleNode, PublicKey},
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_get, db_lookup, db_set},
     error::{ContractError, ContractResult},
     msg,
@@ -40,9 +41,9 @@ use crate::{
 pub(crate) fn dao_propose_get_metadata(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: DaoProposeParams = deserialize(&self_.data[1..])?;
 
     if params.inputs.is_empty() {
@@ -103,9 +104,9 @@ pub(crate) fn dao_propose_get_metadata(
 pub(crate) fn dao_propose_process_instruction(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: DaoProposeParams = deserialize(&self_.data[1..])?;
 
     // Check the Merkle roots for the input coins are valid

@@ -24,6 +24,7 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, ContractId, MONEY_CONTRACT_ID},
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     msg,
@@ -39,9 +40,9 @@ use crate::{error::ConsensusError, model::GRACE_PERIOD, ConsensusFunction};
 pub(crate) fn consensus_unstake_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: ConsensusUnstakeParamsV1 = deserialize(&self_.data[1..])?;
     let input = &params.input;
 
@@ -82,9 +83,9 @@ pub(crate) fn consensus_unstake_get_metadata_v1(
 pub(crate) fn consensus_unstake_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: ConsensusUnstakeParamsV1 = deserialize(&self_.data[1..])?;
     let input = &params.input;
 
@@ -104,7 +105,7 @@ pub(crate) fn consensus_unstake_process_instruction_v1(
         return Err(MoneyError::CallIdxOutOfBounds.into())
     }
 
-    let next = &calls[next_call_idx as usize];
+    let next = &calls[next_call_idx as usize].data;
     if next.contract_id.inner() != MONEY_CONTRACT_ID.inner() {
         msg!("[ConsensusUnstakeV1] Error: Next contract call is not money contract");
         return Err(MoneyError::UnstakeNextCallNotMoneyContract.into())

@@ -18,6 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{ContractId, PublicKey, TokenId},
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     msg,
@@ -36,9 +37,9 @@ use crate::{
 pub(crate) fn money_token_freeze_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: MoneyTokenFreezeParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -68,9 +69,9 @@ pub(crate) fn money_token_freeze_get_metadata_v1(
 pub(crate) fn money_token_freeze_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: MoneyTokenFreezeParamsV1 = deserialize(&self_.data[1..])?;
 
     // We just check if the mint was already frozen beforehand

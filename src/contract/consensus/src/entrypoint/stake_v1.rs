@@ -27,6 +27,7 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, ContractId, MerkleNode, PublicKey, MONEY_CONTRACT_ID},
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     merkle_add, msg,
@@ -42,9 +43,9 @@ use crate::ConsensusFunction;
 pub(crate) fn consensus_stake_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: ConsensusStakeParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -79,9 +80,9 @@ pub(crate) fn consensus_stake_get_metadata_v1(
 pub(crate) fn consensus_stake_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: ConsensusStakeParamsV1 = deserialize(&self_.data[1..])?;
 
     // Check previous call is money contract
@@ -93,7 +94,7 @@ pub(crate) fn consensus_stake_process_instruction_v1(
 
     // Verify previous call corresponds to Money::StakeV1
     let previous_call_idx = call_idx - 1;
-    let previous = &calls[previous_call_idx as usize];
+    let previous = &calls[previous_call_idx as usize].data;
     if previous.contract_id.inner() != MONEY_CONTRACT_ID.inner() {
         msg!("[ConsensusStakeV1] Error: Previous contract call is not money contract");
         return Err(MoneyError::StakePreviousCallNotMoneyContract.into())

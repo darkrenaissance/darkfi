@@ -19,6 +19,7 @@
 use darkfi_money_contract::MONEY_CONTRACT_NULLIFIERS_TREE;
 use darkfi_sdk::{
     crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, PublicKey},
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_get, db_lookup, db_set},
     error::{ContractError, ContractResult},
     msg,
@@ -38,9 +39,9 @@ use crate::{
 pub(crate) fn dao_vote_get_metadata(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: DaoVoteParams = deserialize(&self_.data[1..])?;
 
     if params.inputs.is_empty() {
@@ -110,9 +111,9 @@ pub(crate) fn dao_vote_get_metadata(
 pub(crate) fn dao_vote_process_instruction(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: DaoVoteParams = deserialize(&self_.data[1..])?;
 
     // Check proposal bulla exists

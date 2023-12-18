@@ -20,6 +20,7 @@ use std::io::Cursor;
 
 use darkfi_sdk::{
     crypto::{ContractId, MerkleTree},
+    dark_tree::DarkLeaf,
     db::{db_get, db_init, db_lookup, db_set, zkas_db_set},
     error::{ContractError, ContractResult},
     msg,
@@ -142,13 +143,13 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
 /// for verifying signatures and ZK proofs. The payload given here are all the
 /// contract calls in the transaction.
 fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let (call_idx, calls): (u32, Vec<ContractCall>) = deserialize(ix)?;
+    let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
     if call_idx >= calls.len() as u32 {
         msg!("[DAO:get_metadata()] Error: call_idx >= calls.len()");
         return Err(ContractError::Internal)
     }
 
-    match DaoFunction::try_from(calls[call_idx as usize].data[0])? {
+    match DaoFunction::try_from(calls[call_idx as usize].data.data[0])? {
         DaoFunction::Mint => {
             let metadata = dao_mint_get_metadata(cid, call_idx, calls)?;
             Ok(set_return_data(&metadata)?)
@@ -174,13 +175,13 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
 /// This function verifies a state transition and produces a state update
 /// if everything is successful.
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let (call_idx, calls): (u32, Vec<ContractCall>) = deserialize(ix)?;
+    let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
     if call_idx >= calls.len() as u32 {
         msg!("[DAO::process_instruction()] Error: call_idx >= calls.len()");
         return Err(ContractError::Internal)
     }
 
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let func = DaoFunction::try_from(self_.data[0])?;
 
     if calls.len() != 1 {

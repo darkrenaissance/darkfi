@@ -18,6 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, poseidon_hash, ContractId, CONSENSUS_CONTRACT_ID, DARK_TOKEN_ID},
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     msg,
@@ -37,9 +38,9 @@ use crate::{
 pub(crate) fn money_stake_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: MoneyStakeParamsV1 = deserialize(&self_.data[1..])?;
     let input = &params.input;
 
@@ -83,9 +84,9 @@ pub(crate) fn money_stake_get_metadata_v1(
 pub(crate) fn money_stake_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: MoneyStakeParamsV1 = deserialize(&self_.data[1..])?;
 
     // Access the necessary databases where there is information to
@@ -133,7 +134,7 @@ pub(crate) fn money_stake_process_instruction_v1(
     }
 
     // Verify next call corresponds to Consensus::StakeV1 (0x01)
-    let next = &calls[next_call_idx as usize];
+    let next = &calls[next_call_idx as usize].data;
     if next.contract_id.inner() != CONSENSUS_CONTRACT_ID.inner() {
         msg!("[MoneyStakeV1] Error: Next contract call is not consensus contract");
         return Err(MoneyError::StakeNextCallNotConsensusContract.into())
