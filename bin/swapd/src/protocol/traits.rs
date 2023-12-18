@@ -7,6 +7,7 @@ use tokio::sync::mpsc::Sender;
 
 // Initial parameters required by the swap initiator.
 // TODO: make Address/U256 generic; these are ethers-specific right now
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub(crate) struct InitiationArgs {
     pub(crate) claim_commitment: [u8; 32],
@@ -32,11 +33,13 @@ pub(crate) struct InitiateSwapArgs {
 }
 
 // TODO: make this generic for both chains
+#[allow(dead_code)]
 #[derive(Debug)]
 pub(crate) struct CounterpartyKeys {
     pub(crate) secp256k1_public_key: [u8; 33],
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub(crate) struct HandleCounterpartyKeysReceivedResult {
     // the ID of the swap within the on-chain contract
@@ -78,7 +81,6 @@ pub(crate) trait InitiatorEventWatcher {
     async fn run_received_counterparty_keys_watcher(
         event_tx: Sender<Event>,
         counterparty_keys_rx: tokio::sync::oneshot::Receiver<CounterpartyKeys>,
-        args: InitiationArgs,
     ) -> Result<()>;
 
     async fn run_counterparty_funds_locked_watcher(event_tx: Sender<Event>) -> Result<()>;

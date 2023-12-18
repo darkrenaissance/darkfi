@@ -1,5 +1,6 @@
 use crate::protocol::traits::{
-    HandleCounterpartyKeysReceivedResult, InitiateSwapArgs, InitiationArgs, Initiator,
+    CounterpartyKeys, HandleCounterpartyKeysReceivedResult, InitiateSwapArgs, InitiationArgs,
+    Initiator,
 };
 use eyre::{eyre, Context, Result};
 use tokio::sync::{mpsc, watch};
@@ -7,13 +8,14 @@ use tracing::{info, warn};
 
 #[derive(Debug)]
 pub(crate) enum Event {
-    ReceivedCounterpartyKeys(InitiateSwapArgs),
+    ReceivedCounterpartyKeys(CounterpartyKeys),
     CounterpartyFundsLocked,
     CounterpartyFundsClaimed([u8; 32]),
     AlmostTimeout1,
     PastTimeout2,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum State {
     WaitingForCounterpartyKeys,
@@ -22,6 +24,7 @@ enum State {
     Completed,
 }
 
+#[allow(dead_code)]
 struct Swap {
     // the initial parameters required for the swap
     args: InitiationArgs,
@@ -41,6 +44,7 @@ struct Swap {
     contract_swap_info: watch::Sender<Option<HandleCounterpartyKeysReceivedResult>>,
 }
 
+#[allow(dead_code)]
 impl Swap {
     fn new(
         args: InitiationArgs,
@@ -64,11 +68,9 @@ impl Swap {
     }
 
     async fn run(mut self) -> Result<()> {
-        //let mut contract_swap_info: Option<HandleCounterpartyKeysReceivedResult> = None;
-
         loop {
             match self.event_rx.recv().await {
-                Some(Event::ReceivedCounterpartyKeys(args)) => {
+                Some(Event::ReceivedCounterpartyKeys(counterparty_keys)) => {
                     info!("received counterparty keys");
 
                     if !matches!(*self.state.borrow(), State::WaitingForCounterpartyKeys) {
@@ -78,9 +80,23 @@ impl Swap {
                         );
                         return Err(eyre!(
                             "unexpected event: {:?}",
-                            Event::ReceivedCounterpartyKeys(args)
+                            Event::ReceivedCounterpartyKeys(counterparty_keys)
                         ));
                     }
+
+                    let refund_commitment =
+                        ethers::utils::keccak256(&counterparty_keys.secp256k1_public_key);
+
+                    let args = InitiateSwapArgs {
+                        claim_commitment: self.args.claim_commitment,
+                        refund_commitment,
+                        claimer: self.args.claimer,
+                        timeout_duration_1: self.args.timeout_duration_1,
+                        timeout_duration_2: self.args.timeout_duration_2,
+                        asset: self.args.asset,
+                        value: self.args.value,
+                        nonce: self.args.nonce,
+                    };
 
                     let contract_swap_info = Some(
                         self.handler
@@ -261,7 +277,6 @@ mod test {
         let join_handle = tokio::spawn(Watcher::run_received_counterparty_keys_watcher(
             event_tx.clone(),
             counterparty_keys_rx,
-            args,
         ));
 
         counterparty_keys_tx

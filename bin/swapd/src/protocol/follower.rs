@@ -1,17 +1,20 @@
 use crate::protocol::traits::Follower;
 use tokio::sync::mpsc::Receiver;
 
+#[allow(dead_code)]
 enum Event {
     CounterpartyFundsLocked,
     ReadyToClaim,
     CounterpartyFundsRefunded,
 }
 
+#[allow(dead_code)]
 struct Swap {
     handler: Box<dyn Follower>,
     event_rx: Receiver<Event>,
 }
 
+#[allow(dead_code)]
 impl Swap {
     fn new(handler: Box<dyn Follower>, event_rx: Receiver<Event>) -> Self {
         Self { handler, event_rx }

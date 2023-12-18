@@ -24,6 +24,7 @@ pub(crate) struct EthInitiator<M: Middleware, C: OtherChainClient> {
     secret: [u8; 32],
 }
 
+#[allow(dead_code)]
 impl<M: Middleware, C: OtherChainClient> EthInitiator<M, C> {
     pub(crate) fn new(
         contract: SwapCreator<M>,

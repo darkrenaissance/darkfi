@@ -4,7 +4,7 @@ use crate::{
     ethereum::swap_creator::SwapCreator,
     protocol::{
         initiator::Event,
-        traits::{CounterpartyKeys, InitiateSwapArgs, InitiationArgs, InitiatorEventWatcher},
+        traits::{CounterpartyKeys, InitiatorEventWatcher},
     },
 };
 use ethers::prelude::Middleware;
@@ -19,24 +19,9 @@ impl InitiatorEventWatcher for Watcher {
     async fn run_received_counterparty_keys_watcher(
         event_tx: Sender<Event>,
         counterparty_keys_rx: Receiver<CounterpartyKeys>,
-        args: InitiationArgs,
     ) -> Result<()> {
         let counterparty_keys = counterparty_keys_rx.await?;
-
-        let refund_commitment = ethers::utils::keccak256(&counterparty_keys.secp256k1_public_key);
-
-        let args = InitiateSwapArgs {
-            claim_commitment: args.claim_commitment,
-            refund_commitment,
-            claimer: args.claimer,
-            timeout_duration_1: args.timeout_duration_1,
-            timeout_duration_2: args.timeout_duration_2,
-            asset: args.asset,
-            value: args.value,
-            nonce: args.nonce,
-        };
-
-        event_tx.send(Event::ReceivedCounterpartyKeys(args)).await.unwrap();
+        event_tx.send(Event::ReceivedCounterpartyKeys(counterparty_keys)).await.unwrap();
         Ok(())
     }
 
