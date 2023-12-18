@@ -93,13 +93,11 @@ impl GreylistRefinery {
 
                     // Remove whitelisted peer from the greylist.
                     hosts.greylist_remove(url, position).await;
+                } else {
+                    let mut greylist = hosts.greylist.write().await;
+                    greylist.remove(position);
+                    debug!(target: "net::refinery::run()", "Peer {} is not response. Removed from greylist", url);
                 }
-                // TODO: verify this behavior against monero impl.
-                //else {
-                //    let mut greylist = hosts.greylist.write().await;
-                //    greylist.remove(position);
-                //    debug!(target: "net::refinery::run()", "Peer {} is not response. Removed from greylist", url);
-                //}
             }
 
             // TODO: create a custom net setting for this timer
