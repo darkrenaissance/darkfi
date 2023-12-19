@@ -2,25 +2,29 @@
 
 ## Common Structures
 
-### Event
-
-Representation of an event in the Event Graph.
-This is either sent when a new event is created, or in response to `EventReq`.
-
-| Description   | Data Type      	   | Comments           		    |
-|-------------- | -------------------- | ------------------------------ |
-| timestamp	  	| `u64`                | Timestamp of the event    	    |
-| content	  	| `Vec<u8>`            | Content of the event    	    |
-| parents	  	| `u64`                | Parent nodes in the event DAG  |
-
-Receiving an event with missing parents, the node will issue `EventReq`
-requesting the missing parent from a peer.
-
 ### Event ID
 
 Is [blake3::Hash](https://docs.rs/blake3/latest/blake3/struct.Hash.html) 
 of the event, we use those IDs to request and reply 
 events and tips (tips being childless events in the graph).
+
+### Event
+
+Representation of an event in the Event Graph.
+This is either sent when a new event is created, or in response to `EventReq`.
+
+| Description   | Data Type      	                | Comments           		     |
+|-------------- | --------------------------------- | ------------------------------ |
+| timestamp	  	| `u64`                             | Timestamp of the event    	 |
+| content	  	| `Vec<u8>`                         | Content of the event    	     |
+| parents	  	| `[blake3::Hash; N_EVENT_PARENTS]` | Parent nodes in the event DAG  |
+| layer	  	    | `u64`                             | DAG layer index of the event   |
+
+Events could have multiple parents, `N_EVENT_PARENTS` is the maximum 
+number of parents an event could have.
+
+Receiving an event with missing parents, the node will issue `EventReq`
+requesting the missing parent from a peer.
 
 
 ## P2P Messages
