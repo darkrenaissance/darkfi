@@ -5,7 +5,11 @@ import sys
 from lib.net import Channel
 
 async def create_channel(server_name, port):
-    reader, writer = await asyncio.open_connection(server_name, port)
+    try:
+        reader, writer = await asyncio.open_connection(server_name, port)
+    except ConnectionRefusedError:
+        print(f"Error: Connection Refused to '{server_name}:{port}', Either because the daemon is down, is currently syncing or wrong url.")
+        sys.exit(-1)
     channel = Channel(reader, writer)
     return channel
 
