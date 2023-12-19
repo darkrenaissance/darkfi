@@ -24,7 +24,7 @@ use darkfi_sdk::{
     dark_tree::dark_leaf_vec_integrity_check,
     pasta::pallas,
 };
-use darkfi_serial::{Decodable, Encodable, WriteExt};
+use darkfi_serial::{deserialize_async, Decodable, Encodable, WriteExt};
 use log::{debug, error, warn};
 
 use crate::{
@@ -336,6 +336,7 @@ pub async fn verify_transaction(
     time_keeper: &TimeKeeper,
     tx: &Transaction,
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
+    verify_fee: bool, // FIXME: Remove this bool
 ) -> Result<u64> {
     let tx_hash = tx.hash()?;
     debug!(target: "validator::verification::verify_transaction", "Validating transaction {}", tx_hash);
@@ -350,6 +351,25 @@ pub async fn verify_transaction(
     let mut zkp_table = vec![];
     // Table of public keys used for signature verification
     let mut sig_table = vec![];
+
+    // Verify that the first call is the transaction fee and that it has no parents or children.
+    if verify_fee {
+        if tx.calls[0].data.contract_id != *MONEY_CONTRACT_ID || tx.calls[0].data.data[0] != 0x00 {
+            error!(
+                target: "validator::verification::verify_transaction",
+                "[VALIDATOR] First tx call is not Money::Fee",
+            );
+            return Err(TxVerifyFailed::MissingFee.into())
+        }
+
+        if tx.calls[0].parent_index.is_some() || !tx.calls[0].children_indexes.is_empty() {
+            error!(
+                target: "validator::verification::verify_transaction",
+                "[VALIDATOR] Fee call invalid (has parent/children)",
+            );
+            return Err(TxVerifyFailed::InvalidFee.into())
+        }
+    }
 
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
@@ -447,6 +467,34 @@ pub async fn verify_transaction(
         return Err(TxVerifyFailed::InvalidZkProof.into())
     }
 
+    if verify_fee {
+        // TODO: This counts 1 gas as 1 token unit. Pricing should be better specified.
+        // TODO: Currently this doesn't account for signatures or ZK proofs
+        // TODO: Currently this doesn't account for WASM host functions
+
+        // Deserialize the first call to find the paid fee
+        let fee: u64 = match deserialize_async(&tx.calls[0].data.data[1..9]).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    target: "validator::verification::verify_transaction",
+                    "[VALIDATOR] Failed deserializing tx {} fee call: {}", tx_hash, e,
+                );
+                return Err(TxVerifyFailed::InvalidFee.into())
+            }
+        };
+
+        // Check that enough fee has been paid for the used gas in this transaction.
+        if gas_used > fee {
+            error!(
+                target: "validator::verification::verify_transaction",
+                "[VALIDATOR] tx {} has insufficient fee. Required: {}, Paid: {}",
+                tx_hash, gas_used, fee,
+            );
+            return Err(TxVerifyFailed::InsufficientFee.into())
+        }
+    }
+
     debug!(target: "validator::verification::verify_transaction", "ZK proof verification successful");
     debug!(target: "validator::verification::verify_transaction", "Transaction {} verified successfully", tx_hash);
 
@@ -484,7 +532,7 @@ pub async fn verify_transactions(
     // Iterate over transactions and attempt to verify them
     for tx in txs {
         overlay.lock().unwrap().checkpoint();
-        match verify_transaction(overlay, time_keeper, tx, &mut vks).await {
+        match verify_transaction(overlay, time_keeper, tx, &mut vks, verify_fees).await {
             Ok(gas) => _gas_used += gas,
             Err(e) => {
                 warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {}", e);
@@ -495,7 +543,7 @@ pub async fn verify_transactions(
         }
 
         if verify_fees {
-            // Enforce that enough fee is paid
+            // Enforce that enough fee is paid.
             todo!()
         }
     }

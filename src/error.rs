@@ -620,11 +620,17 @@ pub enum TxVerifyFailed {
     #[error("Missing contract calls in transaction")]
     MissingCalls,
 
+    #[error("Invalid ZK proof in transaction")]
+    InvalidZkProof,
+
     #[error("Missing Money::Fee call in transaction")]
     MissingFee,
 
-    #[error("Invalid ZK proof in transaction")]
-    InvalidZkProof,
+    #[error("Invalid Money::Fee call in transaction")]
+    InvalidFee,
+
+    #[error("Insufficient fee paid")]
+    InsufficientFee,
 
     #[error("Erroneous transactions found")]
     ErroneousTxs(Vec<crate::tx::Transaction>),
