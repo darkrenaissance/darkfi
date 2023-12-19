@@ -24,7 +24,7 @@ use darkfi_sdk::error::ContractError;
 /// Functions available in the contract
 #[repr(u8)]
 pub enum MoneyFunction {
-    //Fee = 0x00,
+    FeeV1 = 0x00,
     GenesisMintV1 = 0x01,
     TransferV1 = 0x02,
     OtcSwapV1 = 0x03,
@@ -40,7 +40,7 @@ impl TryFrom<u8> for MoneyFunction {
 
     fn try_from(b: u8) -> core::result::Result<Self, Self::Error> {
         match b {
-            //0x00 => Ok(Self::Fee),
+            0x00 => Ok(Self::FeeV1),
             0x01 => Ok(Self::GenesisMintV1),
             0x02 => Ok(Self::TransferV1),
             0x03 => Ok(Self::OtcSwapV1),
@@ -80,6 +80,7 @@ pub const MONEY_CONTRACT_DB_VERSION: &str = "db_version";
 pub const MONEY_CONTRACT_COIN_MERKLE_TREE: &str = "coin_tree";
 pub const MONEY_CONTRACT_LATEST_COIN_ROOT: &str = "last_root";
 pub const MONEY_CONTRACT_FAUCET_PUBKEYS: &str = "faucet_pubkeys";
+pub const MONEY_CONTRACT_TOTAL_FEES_PAID: &str = "total_fees_paid";
 
 /// zkas mint circuit namespace
 pub const MONEY_CONTRACT_ZKAS_MINT_NS_V1: &str = "Mint_V1";

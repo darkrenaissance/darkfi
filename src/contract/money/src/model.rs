@@ -164,6 +164,32 @@ pub struct ConsensusOutput {
     pub note: AeadEncryptedNote,
 }
 
+/// Parameters for `Money::Fee`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyFeeParamsV1 {
+    /// Anonymous inputs
+    pub inputs: Vec<Input>,
+    /// Anonymous outputs
+    pub outputs: Vec<Output>,
+    /// Transaction fee amount
+    pub fee: u64,
+    /// Fee value blind
+    pub fee_value_blind: pallas::Scalar,
+    /// Token ID blind
+    pub token_blind: pallas::Base,
+}
+
+/// State update for `Money::Fee`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyFeeUpdateV1 {
+    /// Revealed nullifiers
+    pub nullifiers: Vec<Nullifier>,
+    /// Minted coins
+    pub coins: Vec<Coin>,
+    /// Fee paid
+    pub fee: u64,
+}
+
 /// Parameters for `Money::Transfer` and `Money::OtcSwap`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyTransferParamsV1 {

@@ -129,6 +129,13 @@ pub enum MoneyError {
 
     #[error("Eta VRF proof couldn't be verified")]
     PoWRewardErroneousVrfProof,
+
+    #[error("No inputs in fee call")]
+    FeeMissingInputs,
+
+    // TODO: This should catch-all (TransferMerkle../SwapMerkle...)
+    #[error("Coin merkle root not found")]
+    CoinMerkleRootNotFound,
 }
 
 impl From<MoneyError> for ContractError {
@@ -170,6 +177,8 @@ impl From<MoneyError> for ContractError {
             MoneyError::PoWRewardMissingSlot => Self::Custom(34),
             MoneyError::PoWRewardExtendsUnknownFork => Self::Custom(35),
             MoneyError::PoWRewardErroneousVrfProof => Self::Custom(36),
+            MoneyError::FeeMissingInputs => Self::Custom(37),
+            MoneyError::CoinMerkleRootNotFound => Self::Custom(38),
         }
     }
 }

@@ -30,13 +30,20 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     model::{
-        MoneyGenesisMintUpdateV1, MoneyPoWRewardUpdateV1, MoneyStakeUpdateV1,
+        MoneyFeeUpdateV1, MoneyGenesisMintUpdateV1, MoneyPoWRewardUpdateV1, MoneyStakeUpdateV1,
         MoneyTokenFreezeUpdateV1, MoneyTokenMintUpdateV1, MoneyTransferUpdateV1,
         MoneyUnstakeUpdateV1,
     },
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION, MONEY_CONTRACT_FAUCET_PUBKEYS,
     MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_TOKEN_FREEZE_TREE,
+    MONEY_CONTRACT_TOTAL_FEES_PAID,
+};
+
+/// `Money::Fee` functions
+mod fee_v1;
+use fee_v1::{
+    money_fee_get_metadata_v1, money_fee_process_instruction_v1, money_fee_process_update_v1,
 };
 
 /// `Money::Transfer` functions
@@ -159,12 +166,14 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
             // it with a "fake" coin that can be used for dummy inputs.
             let mut coin_tree = MerkleTree::new(100);
             coin_tree.append(MerkleNode::from(pallas::Base::ZERO));
-
             let mut coin_tree_data = vec![];
             coin_tree_data.write_u32(0)?;
             coin_tree.encode(&mut coin_tree_data)?;
-
             db_set(info_db, &serialize(&MONEY_CONTRACT_COIN_MERKLE_TREE), &coin_tree_data)?;
+
+            // Initialize the paid fees accumulator
+            db_set(info_db, &serialize(&MONEY_CONTRACT_TOTAL_FEES_PAID), &serialize(&0_u64))?;
+
             info_db
         }
     };
@@ -193,6 +202,11 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
     }
 
     match MoneyFunction::try_from(calls[call_idx as usize].data.data[0])? {
+        MoneyFunction::FeeV1 => {
+            let metadata = money_fee_get_metadata_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&metadata)?)
+        }
+
         MoneyFunction::TransferV1 => {
             // We pass everything into the correct function, and it will return
             // the metadata for us, which we can then copy into the host with
@@ -250,6 +264,11 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
     }
 
     match MoneyFunction::try_from(calls[call_idx as usize].data.data[0])? {
+        MoneyFunction::FeeV1 => {
+            let metadata = money_fee_process_instruction_v1(cid, call_idx, calls)?;
+            Ok(set_return_data(&metadata)?)
+        }
+
         MoneyFunction::TransferV1 => {
             // Again, we pass everything into the correct function.
             // If it executes successfully, we'll get a state update
@@ -303,6 +322,11 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
 /// is the update data retrieved from `process_instruction()`.
 fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
     match MoneyFunction::try_from(update_data[0])? {
+        MoneyFunction::FeeV1 => {
+            let update: MoneyFeeUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(money_fee_process_update_v1(cid, update)?)
+        }
+
         MoneyFunction::TransferV1 => {
             let update: MoneyTransferUpdateV1 = deserialize(&update_data[1..])?;
             Ok(money_transfer_process_update_v1(cid, update)?)

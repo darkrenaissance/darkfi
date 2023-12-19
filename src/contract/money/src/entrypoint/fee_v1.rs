@@ -32,31 +32,26 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::MoneyError,
-    model::{MoneyTransferParamsV1, MoneyTransferUpdateV1},
+    model::{MoneyFeeParamsV1, MoneyFeeUpdateV1},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_FAUCET_PUBKEYS, MONEY_CONTRACT_INFO_TREE,
-    MONEY_CONTRACT_LATEST_COIN_ROOT, MONEY_CONTRACT_NULLIFIERS_TREE,
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
+    MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_TOTAL_FEES_PAID, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
+    MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 
-/// `get_metadata` function for `Money::TransferV1`
-pub(crate) fn money_transfer_get_metadata_v1(
+/// `get_metadata` function for `Money::FeeV1`
+pub(crate) fn money_fee_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize].data;
-    let params: MoneyTransferParamsV1 = deserialize(&self_.data[1..])?;
+    let params: MoneyFeeParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     // Public keys for the transaction signatures we have to verify
     let mut signature_pubkeys: Vec<PublicKey> = vec![];
-
-    // Take all the pubkeys from any clear inputs
-    for input in &params.clear_inputs {
-        signature_pubkeys.push(input.signature_public);
-    }
 
     // Grab the pedersen commitments and signature pubkeys from the
     // anonymous inputs
@@ -103,24 +98,28 @@ pub(crate) fn money_transfer_get_metadata_v1(
     Ok(metadata)
 }
 
-/// `process_instruction` function for `Money::TransferV1`
-pub(crate) fn money_transfer_process_instruction_v1(
+/// `process_instruction` function for `Money::FeeV1`
+pub(crate) fn money_fee_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: MoneyTransferParamsV1 = deserialize(&self_.data.data[1..])?;
+    let params: MoneyFeeParamsV1 = deserialize(&self_.data.data[1..])?;
 
-    if params.clear_inputs.len() + params.inputs.len() < 1 {
-        msg!("[TransferV1] Error: No inputs in the call");
-        return Err(MoneyError::TransferMissingInputs.into())
+    // We need at least one input, but we shouldn't require any outputs.
+    if params.inputs.is_empty() {
+        msg!("[FeeV1] Error: No inputs in the call");
+        return Err(MoneyError::FeeMissingInputs.into())
     }
 
-    if params.outputs.is_empty() {
-        msg!("[TransferV1] Error: No outputs in the call");
-        return Err(MoneyError::TransferMissingOutputs.into())
+    // Though, we should have some fee paid...
+    /* XXX:
+    if params.fee == 0 {
+        msg!("[FeeV1] Error: Paid fee is 0");
+        return Err(MoneyError::InsufficientFee.into())
     }
+    */
 
     // Access the necessary databases where there is information to
     // validate this state transition.
@@ -129,85 +128,53 @@ pub(crate) fn money_transfer_process_instruction_v1(
     let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
-    // Grab faucet pubkeys. They're allowed to create clear inputs.
-    // Currently we use them for airdrops in the testnet.
-    let Some(faucet_pubkeys) = db_get(info_db, &serialize(&MONEY_CONTRACT_FAUCET_PUBKEYS))? else {
-        msg!("[TransferV1] Error: Missing faucet pubkeys from info db");
-        return Err(MoneyError::TransferMissingFaucetKeys.into())
-    };
-    let faucet_pubkeys: Vec<PublicKey> = deserialize(&faucet_pubkeys)?;
-
-    // Accumulator for the value commitments. We add inputs to it, and subtract
-    // outputs from it. For the commitments to be valid, the accumulator must
-    // be in its initial state after performing the arithmetics.
+    // Accumulator for the value commitments. We add inputs to it, and
+    // subtract the outputs and the fee from it. For the commitments to
+    // be valid, the accumulatior must be in its initial state after
+    // performing the arithmetics.
     let mut valcom_total = pallas::Point::identity();
+
+    // Fees can only be paid using the native token, so we'll compare
+    // the token commitments with this one:
+    let native_token_commit = poseidon_hash([DARK_TOKEN_ID.inner(), params.token_blind]);
 
     // ===================================
     // Perform the actual state transition
     // ===================================
 
-    // For clear inputs, we only allow the whitelisted faucet(s) to create them.
-    // Additionally, only DARK_TOKEN_ID is able to be here. For any arbitrary
-    // tokens, there is another functionality in this contract called `Mint` which
-    // allows users to mint their own tokens.
-    msg!("[TransferV1] Iterating over clear inputs");
-    for (i, input) in params.clear_inputs.iter().enumerate() {
-        if input.token_id != *DARK_TOKEN_ID {
-            msg!("[TransferV1] Error: Clear input {} used non-native token", i);
-            return Err(MoneyError::TransferClearInputNonNativeToken.into())
-        }
-
-        if !faucet_pubkeys.contains(&input.signature_public) {
-            msg!("[TransferV1] Error: Clear input {} used unauthorised pubkey", i);
-            return Err(MoneyError::TransferClearInputUnauthorised.into())
-        }
-
-        // Add this input to the value commitment accumulator
-        valcom_total += pedersen_commitment_u64(input.value, input.value_blind);
-    }
-
-    // For anonymous inputs, we must also gather all the new nullifiers
-    // that are introduced.
+    // For anonymous inputs, we must gather all the new nullifiers that
+    // are introduced.
     let mut new_nullifiers = Vec::with_capacity(params.inputs.len());
-    msg!("[TransferV1] Iterating over anonymous inputs");
+    msg!("[FeeV1] Iterating over anonymous inputs");
     for (i, input) in params.inputs.iter().enumerate() {
+        // Verify that the token commitment matches
+        if input.token_commit != native_token_commit {
+            msg!("[FeeV1] Error: Token commitment is not native token (input {})", i);
+            return Err(MoneyError::TokenMismatch.into())
+        }
+
+        // The spend hook must be zero.
+        if input.spend_hook != pallas::Base::ZERO {
+            msg!("[FeeV1] Error: Input spend hook is nonzero (input {})", i);
+            return Err(MoneyError::SpendHookNonZero.into())
+        }
+
         // The Merkle root is used to know whether this is a coin that
         // existed in a previous state.
         if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
-            msg!("[TransferV1] Error: Merkle root not found in previous state (input {})", i);
-            return Err(MoneyError::TransferMerkleRootNotFound.into())
+            msg!("[FeeV1] Error: Merkle root not found in previous state (input {})", i);
+            return Err(MoneyError::CoinMerkleRootNotFound.into())
         }
 
         // The nullifiers should not already exist. It is the double-spend protection.
         if new_nullifiers.contains(&input.nullifier) ||
             db_contains_key(nullifiers_db, &serialize(&input.nullifier))?
         {
-            msg!("[TransferV1] Error: Duplicate nullifier found (input {})", i);
+            msg!("[FeeV1] Error: Duplicate nullifier found (input {})", i);
             return Err(MoneyError::DuplicateNullifier.into())
         }
 
-        // If spend hook is set, check its correctness
-        if input.spend_hook != pallas::Base::ZERO {
-            let parent_call_idx = self_.parent_index;
-            if parent_call_idx.is_none() {
-                msg!("[TransferV1] Error: parent_call_idx is missing");
-                return Err(MoneyError::CallIdxOutOfBounds.into())
-            }
-            let parent_call_idx = parent_call_idx.unwrap();
-
-            if parent_call_idx >= calls.len() {
-                msg!("[TransferV1] Error: parent_call_idx out of bounds (input {})", i);
-                return Err(MoneyError::CallIdxOutOfBounds.into())
-            }
-
-            let parent = &calls[parent_call_idx].data;
-            if parent.contract_id.inner() != input.spend_hook {
-                msg!("[TransferV1] Error: Invoked contract call does not match spend hook in input {}", i);
-                return Err(MoneyError::SpendHookMismatch.into())
-            }
-        }
-
-        // Append this new nullifier to seen nullifiers, and accumulate the value commitment
+        // Append this new nullifier to seen nullifiers, and accumulate the value commitment.
         new_nullifiers.push(input.nullifier);
         valcom_total += input.value_commit;
     }
@@ -216,9 +183,15 @@ pub(crate) fn money_transfer_process_instruction_v1(
     // and we also check that they haven't existed before.
     let mut new_coins = Vec::with_capacity(params.outputs.len());
     for (i, output) in params.outputs.iter().enumerate() {
+        // Verify that the token commitment matches
+        if output.token_commit != native_token_commit {
+            msg!("[FeeV1] Error: Token commitment is not native token (output {})", i);
+            return Err(MoneyError::TokenMismatch.into())
+        }
+
         if new_coins.contains(&output.coin) || db_contains_key(coins_db, &serialize(&output.coin))?
         {
-            msg!("[TransferV1] Error: Duplicate coin found in output {}", i);
+            msg!("[FeeV1] Error: Duplicate coin found (output {})", i);
             return Err(MoneyError::DuplicateCoin.into())
         }
 
@@ -227,44 +200,34 @@ pub(crate) fn money_transfer_process_instruction_v1(
         valcom_total -= output.value_commit;
     }
 
-    // If the accumulator is not back in its initial state, that means there
-    // is a value mismatch between inputs and outputs.
+    // Now subtract the fee from the accumulator
+    valcom_total -= pedersen_commitment_u64(params.fee, params.fee_value_blind);
+
+    // If the accumulator is not back in its initial; state, that means there
+    // is a value mismatch betweeen inputs and outputs.
     if valcom_total != pallas::Point::identity() {
-        msg!("[TransferV1] Error: Value commitments do not result in identity");
+        msg!("[FeeV1] Error: Value commitments do not result in identity");
         return Err(MoneyError::ValueMismatch.into())
     }
 
-    // We also need to verify that all token commitments are the same.
-    // In the basic transfer, we only allow the same token type to be
-    // transferred. For exchanging we use another functionality of this
-    // contract called `OtcSwap`.
-    let tokcom = params.outputs[0].token_commit;
-    let mut failed_tokcom = params.inputs.iter().any(|x| x.token_commit != tokcom);
-    failed_tokcom = failed_tokcom || params.outputs.iter().any(|x| x.token_commit != tokcom);
-    failed_tokcom = failed_tokcom ||
-        params
-            .clear_inputs
-            .iter()
-            .any(|x| poseidon_hash([x.token_id.inner(), x.token_blind]) != tokcom);
+    // Accumulate the paid fee
+    let mut paid_fee: u64 =
+        deserialize(&db_get(info_db, &serialize(&MONEY_CONTRACT_TOTAL_FEES_PAID))?.unwrap())?;
+    paid_fee += params.fee;
 
-    if failed_tokcom {
-        msg!("[TransferV1] Error: Token commitments do not match");
-        return Err(MoneyError::TokenMismatch.into())
-    }
-
-    // At this point the state transition has passed, so we create a state update
-    let update = MoneyTransferUpdateV1 { nullifiers: new_nullifiers, coins: new_coins };
+    // At this point the state transition has passed, so we create a state update.
+    let update = MoneyFeeUpdateV1 { nullifiers: new_nullifiers, coins: new_coins, fee: paid_fee };
     let mut update_data = vec![];
-    update_data.write_u8(MoneyFunction::TransferV1 as u8)?;
+    update_data.write_u8(MoneyFunction::FeeV1 as u8)?;
     update.encode(&mut update_data)?;
     // and return it
     Ok(update_data)
 }
 
-/// `process_update` function for `Money::TransferV1`
-pub(crate) fn money_transfer_process_update_v1(
+/// `process_update` function for `Money::FeeV1`
+pub(crate) fn money_fee_process_update_v1(
     cid: ContractId,
-    update: MoneyTransferUpdateV1,
+    update: MoneyFeeUpdateV1,
 ) -> ContractResult {
     // Grab all necessary db handles for where we want to write
     let info_db = db_lookup(cid, MONEY_CONTRACT_INFO_TREE)?;
@@ -272,17 +235,17 @@ pub(crate) fn money_transfer_process_update_v1(
     let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
-    msg!("[TransferV1] Adding new nullifiers to the set");
+    msg!("[FeeV1] Adding new nullifiers to the set");
     for nullifier in &update.nullifiers {
         db_set(nullifiers_db, &serialize(nullifier), &[])?;
     }
 
-    msg!("[TransferV1] Adding new coins to the set");
+    msg!("[FeeV1] Adding new coins to the set");
     for coin in &update.coins {
         db_set(coins_db, &serialize(coin), &[])?;
     }
 
-    msg!("[TransferV1] Adding new coins to the Merkle tree");
+    msg!("[FeeV1] Adding new coins to the Merkle tree");
     let coins: Vec<_> = update.coins.iter().map(|x| MerkleNode::from(x.inner())).collect();
     merkle_add(
         info_db,
@@ -291,6 +254,8 @@ pub(crate) fn money_transfer_process_update_v1(
         &serialize(&MONEY_CONTRACT_COIN_MERKLE_TREE),
         &coins,
     )?;
+
+    db_set(info_db, &serialize(&MONEY_CONTRACT_TOTAL_FEES_PAID), &serialize(&update.fee))?;
 
     Ok(())
 }
