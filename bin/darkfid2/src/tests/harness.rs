@@ -76,7 +76,7 @@ impl Harness {
         genesis_block.txs.push(genesis_stake_tx);
         genesis_block.txs.push(genesis_mint_tx);
         genesis_block.txs.push(producer_tx);
-        let genesis_txs_total = genesis_txs_total(&genesis_block.txs)?;
+        let genesis_txs_total = genesis_txs_total(&genesis_block.txs).await?;
         genesis_block.slots[0].total_tokens = genesis_txs_total;
 
         // Generate validators configuration

@@ -42,7 +42,7 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_sdk::crypto::PublicKey;
-use darkfi_serial::deserialize;
+use darkfi_serial::deserialize_async;
 
 #[cfg(test)]
 mod tests;
@@ -226,14 +226,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     // Parse the genesis block
     let bytes = bs58::decode(&genesis_block.trim()).into_vec()?;
-    let genesis_block: BlockInfo = deserialize(&bytes)?;
+    let genesis_block: BlockInfo = deserialize_async(&bytes).await?;
 
     // Initialize or open sled database
     let db_path = expand_path(&blockchain_config.database)?;
     let sled_db = sled::open(&db_path)?;
 
     // Initialize validator configuration
-    let genesis_txs_total = genesis_txs_total(&genesis_block.txs)?;
+    let genesis_txs_total = genesis_txs_total(&genesis_block.txs).await?;
     let time_keeper = TimeKeeper::new(
         genesis_block.header.timestamp,
         blockchain_config.epoch_length,

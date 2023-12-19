@@ -35,7 +35,7 @@ use darkfi::{
     validator::{consensus::Proposal, ValidatorPtr},
     Result,
 };
-use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{serialize_async, SerialDecodable, SerialEncodable};
 
 /// Auxiliary [`Proposal`] wrapper structure used for messaging.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -117,7 +117,8 @@ impl ProtocolProposal {
             match self.validator.consensus.append_proposal(&proposal_copy.0).await {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&proposal_copy, &exclude_list).await;
-                    let enc_prop = JsonValue::String(base64::encode(&serialize(&proposal_copy)));
+                    let enc_prop =
+                        JsonValue::String(base64::encode(&serialize_async(&proposal_copy).await));
                     self.subscriber.notify(vec![enc_prop].into()).await;
                 }
                 Err(e) => {

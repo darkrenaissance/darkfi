@@ -19,7 +19,7 @@
 use std::{collections::HashMap, str::FromStr};
 
 use darkfi_sdk::crypto::ContractId;
-use darkfi_serial::{deserialize, serialize};
+use darkfi_serial::{deserialize_async, serialize_async};
 use log::{debug, error};
 use tinyjson::JsonValue;
 
@@ -71,7 +71,7 @@ impl Darkfid {
             return server_error(RpcError::UnknownSlot, id, None)
         }
 
-        let block = base64::encode(&serialize(&blocks[0]));
+        let block = base64::encode(&serialize_async(&blocks[0]).await);
         JsonResponse::new(JsonValue::String(block), id).into()
     }
 
@@ -112,7 +112,7 @@ impl Darkfid {
         // and strict was used during .get()
         let tx = txs[0].as_ref().unwrap();
 
-        let tx_enc = base64::encode(&serialize(tx));
+        let tx_enc = base64::encode(&serialize_async(tx).await);
         JsonResponse::new(JsonValue::String(tx_enc), id).into()
     }
 
@@ -249,7 +249,7 @@ impl Darkfid {
                 return JsonError::new(InternalError, None, id).into()
             };
 
-            let Ok(zkas_ns) = deserialize(&zkas_ns) else {
+            let Ok(zkas_ns) = deserialize_async(&zkas_ns).await else {
                 return JsonError::new(InternalError, None, id).into()
             };
 
