@@ -360,7 +360,18 @@ pub async fn verify_transaction(
 
     if verify_fee {
         // Verify that the first call is the transaction fee and that it has no parents or children.
-        if tx.calls[0].data.contract_id != *MONEY_CONTRACT_ID || tx.calls[0].data.data[0] != 0x00 {
+        let Some(fee_call_parent_index) = tx.calls[0].parent_index else {
+            error!(
+                target: "validator::verification::verify_transaction",
+                "[VALIDATOR] Fee call does not have parent index",
+            );
+            return Err(TxVerifyFailed::InvalidFee.into())
+        };
+
+        if fee_call_parent_index != tx.calls.len() - 1 ||
+            tx.calls[0].data.contract_id != *MONEY_CONTRACT_ID ||
+            tx.calls[0].data.data[0] != 0x00
+        {
             error!(
                 target: "validator::verification::verify_transaction",
                 "[VALIDATOR] First tx call is not Money::Fee",
@@ -368,10 +379,10 @@ pub async fn verify_transaction(
             return Err(TxVerifyFailed::MissingFee.into())
         }
 
-        if tx.calls[0].parent_index.is_some() || !tx.calls[0].children_indexes.is_empty() {
+        if !tx.calls[0].children_indexes.is_empty() {
             error!(
                 target: "validator::verification::verify_transaction",
-                "[VALIDATOR] Fee call invalid (has parent/children)",
+                "[VALIDATOR] Fee call invalid (has children)",
             );
             return Err(TxVerifyFailed::InvalidFee.into())
         }
