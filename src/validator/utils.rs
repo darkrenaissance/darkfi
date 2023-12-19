@@ -177,7 +177,7 @@ pub fn median(mut v: Vec<u64>) -> u64 {
 /// Auxiliary function to calculate the total amount of minted tokens in provided
 /// genesis transactions set. This includes both staked and normal tokens.
 /// If a non-genesis transaction is found, execution fails.
-/// Set must also include the genesis transaction(empty) at last position.
+/// Set must also include the genesis transaction(empty) at first position.
 pub async fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
     let mut total = 0;
 
@@ -185,8 +185,12 @@ pub async fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
         return Ok(total)
     }
 
+    if txs[0] != Transaction::default() {
+        return Err(TxVerifyFailed::ErroneousTxs(vec![txs[0].clone()]).into())
+    }
+
     // Iterate transactions, exluding producer(last) one
-    for tx in &txs[..txs.len() - 1] {
+    for tx in &txs[1..] {
         // Transaction must contain a single Consensus::GenesisStake (0x00)
         // or Money::GenesisMint (0x01) call
         if tx.calls.len() != 1 {
@@ -213,11 +217,6 @@ pub async fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
         let value: u64 = AsyncDecodable::decode_async(&mut decoder).await?;
 
         total += value;
-    }
-
-    let tx = txs.last().unwrap();
-    if tx != &Transaction::default() {
-        return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
 
     Ok(total)

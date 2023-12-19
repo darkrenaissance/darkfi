@@ -97,14 +97,13 @@ pub async fn verify_genesis_block(
     overlay.lock().unwrap().slots.insert(&[genesis_slot.clone()])?;
 
     // Genesis transaction must be the Transaction::default() one(empty)
-    let tx = block.txs.last().unwrap();
-    if tx != &Transaction::default() {
+    if block.txs[0] != Transaction::default() {
         error!(target: "validator::verification::verify_genesis_block", "Genesis proposal transaction is not default one");
-        return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+        return Err(TxVerifyFailed::ErroneousTxs(vec![block.txs[0].clone()]).into())
     }
 
-    // Verify transactions, exluding producer(last) one
-    let txs = &block.txs[..block.txs.len() - 1];
+    // Verify transactions, exluding producer(first) one
+    let txs = &block.txs[1..];
     let erroneous_txs = verify_transactions(overlay, time_keeper, txs, false).await?;
     if !erroneous_txs.is_empty() {
         warn!(target: "validator::verification::verify_genesis_block", "Erroneous transactions found in set");
@@ -163,14 +162,14 @@ pub async fn verify_block(
     // Verify proposal transaction.
     // For PoS blocks(version 2) verify if not in PoS testing mode.
     if block.header.version != 2 || !pos_testing_mode {
-        let tx = block.txs.last().unwrap();
         let public_key =
-            verify_producer_transaction(overlay, time_keeper, tx, block.header.version).await?;
+            verify_producer_transaction(overlay, time_keeper, &block.txs[0], block.header.version)
+                .await?;
         verify_producer_signature(block, &public_key)?;
     }
 
-    // Verify transactions, exluding producer(last) one
-    let txs = &block.txs[..block.txs.len() - 1];
+    // Verify transactions, exluding producer(first) one
+    let txs = &block.txs[1..];
     let erroneous_txs = verify_transactions(overlay, time_keeper, txs, false).await?;
     if !erroneous_txs.is_empty() {
         warn!(target: "validator::verification::verify_block", "Erroneous transactions found in set");
