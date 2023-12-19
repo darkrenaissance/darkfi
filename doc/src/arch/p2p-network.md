@@ -131,6 +131,16 @@ routing tables is a kind of decentralized lilith which keeps track of all the sw
 
 Possibly a post-mainnet feature depending on the scale of architectural changes or new code required in the net submodule.
 
+## Scoring Subsystem
+
+Connections should maintain a scoring system. Protocols can increment the score.
+
+The score backs off exponentially. If the watermark is crossed then the
+connection is dropped.
+
+Since the reader in `messages.rs` preallocs buffers, there should be a hard
+limit here, and the raw reads also affects your score too.
+
 ## Proposed update
 
 ### Monero p2p recap
