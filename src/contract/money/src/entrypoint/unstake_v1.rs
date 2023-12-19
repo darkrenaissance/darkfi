@@ -190,8 +190,8 @@ pub(crate) fn money_unstake_process_update_v1(
     merkle_add(
         info_db,
         coin_roots_db,
-        &serialize(&MONEY_CONTRACT_LATEST_COIN_ROOT),
-        &serialize(&MONEY_CONTRACT_COIN_MERKLE_TREE),
+        MONEY_CONTRACT_LATEST_COIN_ROOT,
+        MONEY_CONTRACT_COIN_MERKLE_TREE,
         &coins,
     )?;
 

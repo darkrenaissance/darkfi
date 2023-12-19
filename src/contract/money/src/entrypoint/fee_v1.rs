@@ -212,7 +212,7 @@ pub(crate) fn money_fee_process_instruction_v1(
 
     // Accumulate the paid fee
     let mut paid_fee: u64 =
-        deserialize(&db_get(info_db, &serialize(&MONEY_CONTRACT_TOTAL_FEES_PAID))?.unwrap())?;
+        deserialize(&db_get(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID)?.unwrap())?;
     paid_fee += params.fee;
 
     // At this point the state transition has passed, so we create a state update.
@@ -250,12 +250,12 @@ pub(crate) fn money_fee_process_update_v1(
     merkle_add(
         info_db,
         coin_roots_db,
-        &serialize(&MONEY_CONTRACT_LATEST_COIN_ROOT),
-        &serialize(&MONEY_CONTRACT_COIN_MERKLE_TREE),
+        MONEY_CONTRACT_LATEST_COIN_ROOT,
+        MONEY_CONTRACT_COIN_MERKLE_TREE,
         &coins,
     )?;
 
-    db_set(info_db, &serialize(&MONEY_CONTRACT_TOTAL_FEES_PAID), &serialize(&update.fee))?;
+    db_set(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID, &serialize(&update.fee))?;
 
     Ok(())
 }

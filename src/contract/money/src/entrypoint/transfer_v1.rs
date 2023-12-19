@@ -129,9 +129,10 @@ pub(crate) fn money_transfer_process_instruction_v1(
     let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
+    // FIXME: Remove faucet references
     // Grab faucet pubkeys. They're allowed to create clear inputs.
     // Currently we use them for airdrops in the testnet.
-    let Some(faucet_pubkeys) = db_get(info_db, &serialize(&MONEY_CONTRACT_FAUCET_PUBKEYS))? else {
+    let Some(faucet_pubkeys) = db_get(info_db, MONEY_CONTRACT_FAUCET_PUBKEYS)? else {
         msg!("[TransferV1] Error: Missing faucet pubkeys from info db");
         return Err(MoneyError::TransferMissingFaucetKeys.into())
     };
@@ -287,8 +288,8 @@ pub(crate) fn money_transfer_process_update_v1(
     merkle_add(
         info_db,
         coin_roots_db,
-        &serialize(&MONEY_CONTRACT_LATEST_COIN_ROOT),
-        &serialize(&MONEY_CONTRACT_COIN_MERKLE_TREE),
+        MONEY_CONTRACT_LATEST_COIN_ROOT,
+        MONEY_CONTRACT_COIN_MERKLE_TREE,
         &coins,
     )?;
 

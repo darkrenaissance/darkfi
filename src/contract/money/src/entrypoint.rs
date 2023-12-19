@@ -169,24 +169,20 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
             let mut coin_tree_data = vec![];
             coin_tree_data.write_u32(0)?;
             coin_tree.encode(&mut coin_tree_data)?;
-            db_set(info_db, &serialize(&MONEY_CONTRACT_COIN_MERKLE_TREE), &coin_tree_data)?;
+            db_set(info_db, MONEY_CONTRACT_COIN_MERKLE_TREE, &coin_tree_data)?;
 
             // Initialize the paid fees accumulator
-            db_set(info_db, &serialize(&MONEY_CONTRACT_TOTAL_FEES_PAID), &serialize(&0_u64))?;
+            db_set(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID, &serialize(&0_u64))?;
 
             info_db
         }
     };
 
     // Whitelisted faucets
-    db_set(info_db, &serialize(&MONEY_CONTRACT_FAUCET_PUBKEYS), &serialize(&faucet_pubkeys))?;
+    db_set(info_db, MONEY_CONTRACT_FAUCET_PUBKEYS, &serialize(&faucet_pubkeys))?;
 
     // Update db version
-    db_set(
-        info_db,
-        &serialize(&MONEY_CONTRACT_DB_VERSION),
-        &serialize(&env!("CARGO_PKG_VERSION")),
-    )?;
+    db_set(info_db, MONEY_CONTRACT_DB_VERSION, &serialize(&env!("CARGO_PKG_VERSION")))?;
 
     Ok(())
 }

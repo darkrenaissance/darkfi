@@ -76,11 +76,11 @@ pub const MONEY_CONTRACT_NULLIFIERS_TREE: &str = "nullifiers";
 pub const MONEY_CONTRACT_TOKEN_FREEZE_TREE: &str = "token_freezes";
 
 // These are keys inside the info tree
-pub const MONEY_CONTRACT_DB_VERSION: &str = "db_version";
-pub const MONEY_CONTRACT_COIN_MERKLE_TREE: &str = "coin_tree";
-pub const MONEY_CONTRACT_LATEST_COIN_ROOT: &str = "last_root";
-pub const MONEY_CONTRACT_FAUCET_PUBKEYS: &str = "faucet_pubkeys";
-pub const MONEY_CONTRACT_TOTAL_FEES_PAID: &str = "total_fees_paid";
+pub const MONEY_CONTRACT_DB_VERSION: &[u8] = b"db_version";
+pub const MONEY_CONTRACT_COIN_MERKLE_TREE: &[u8] = b"coin_tree";
+pub const MONEY_CONTRACT_LATEST_COIN_ROOT: &[u8] = b"last_root";
+pub const MONEY_CONTRACT_FAUCET_PUBKEYS: &[u8] = b"faucet_pubkeys";
+pub const MONEY_CONTRACT_TOTAL_FEES_PAID: &[u8] = b"total_fees_paid";
 
 /// zkas mint circuit namespace
 pub const MONEY_CONTRACT_ZKAS_MINT_NS_V1: &str = "Mint_V1";
@@ -103,11 +103,12 @@ pub const CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE: &str = "consensus_staked_co
 pub const CONSENSUS_CONTRACT_UNSTAKED_COIN_ROOTS_TREE: &str = "consensus_unstaked_coin_roots";
 
 // These are keys inside the consensus info tree
-pub const CONSENSUS_CONTRACT_DB_VERSION: &str = "db_version";
-pub const CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE: &str = "consensus_staked_coin_tree";
-pub const CONSENSUS_CONTRACT_STAKED_COIN_LATEST_COIN_ROOT: &str = "consensus_staked_last_root";
-pub const CONSENSUS_CONTRACT_UNSTAKED_COIN_MERKLE_TREE: &str = "consensus_unstaked_coin_tree";
-pub const CONSENSUS_CONTRACT_UNSTAKED_COIN_LATEST_COIN_ROOT: &str = "consensus_unstaked_last_root";
+pub const CONSENSUS_CONTRACT_DB_VERSION: &[u8] = b"db_version";
+pub const CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE: &[u8] = b"consensus_staked_coin_tree";
+pub const CONSENSUS_CONTRACT_STAKED_COIN_LATEST_COIN_ROOT: &[u8] = b"consensus_staked_last_root";
+pub const CONSENSUS_CONTRACT_UNSTAKED_COIN_MERKLE_TREE: &[u8] = b"consensus_unstaked_coin_tree";
+pub const CONSENSUS_CONTRACT_UNSTAKED_COIN_LATEST_COIN_ROOT: &[u8] =
+    b"consensus_unstaked_last_root";
 
 /// zkas consensus mint circuit namespace
 pub const CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1: &str = "ConsensusMint_V1";
