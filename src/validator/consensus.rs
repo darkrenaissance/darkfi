@@ -526,7 +526,8 @@ impl Fork {
         let overlay = self.overlay.lock().unwrap().full_clone()?;
 
         // Verify transactions
-        let erroneous_txs = verify_transactions(&overlay, time_keeper, &unproposed_txs).await?;
+        let erroneous_txs =
+            verify_transactions(&overlay, time_keeper, &unproposed_txs, false).await?;
         if !erroneous_txs.is_empty() {
             unproposed_txs.retain(|x| !erroneous_txs.contains(x));
         }

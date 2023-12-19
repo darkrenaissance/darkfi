@@ -211,7 +211,7 @@ impl Validator {
             let overlay = fork.overlay.lock().unwrap().full_clone()?;
 
             // Verify transaction
-            let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec).await?;
+            let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec, false).await?;
             if !erroneous_txs.is_empty() {
                 continue
             }
@@ -223,7 +223,7 @@ impl Validator {
 
         // Verify transaction against canonical state
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
-        let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec).await?;
+        let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec, false).await?;
         if erroneous_txs.is_empty() {
             valid = true
         }
@@ -273,7 +273,8 @@ impl Validator {
                 let overlay = fork.overlay.lock().unwrap().full_clone()?;
 
                 // Verify transaction
-                let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec).await?;
+                let erroneous_txs =
+                    verify_transactions(&overlay, &time_keeper, &tx_vec, false).await?;
                 if erroneous_txs.is_empty() {
                     valid = true;
                     continue
@@ -285,7 +286,7 @@ impl Validator {
 
             // Verify transaction against canonical state
             let overlay = BlockchainOverlay::new(&self.blockchain)?;
-            let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec).await?;
+            let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec, false).await?;
             if erroneous_txs.is_empty() {
                 valid = true
             }
@@ -470,7 +471,7 @@ impl Validator {
         );
 
         // Verify all transactions and get erroneous ones
-        let erroneous_txs = verify_transactions(&overlay, &time_keeper, txs).await?;
+        let erroneous_txs = verify_transactions(&overlay, &time_keeper, txs, false).await?;
 
         let lock = overlay.lock().unwrap();
         let mut overlay = lock.overlay.lock().unwrap();

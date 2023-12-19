@@ -504,7 +504,7 @@ impl Runtime {
 
     /// Calculate the remaining gas using wasm's concept
     /// of metering points.
-    fn gas_used(&mut self) -> u64 {
+    pub fn gas_used(&mut self) -> u64 {
         let remaining_points = get_remaining_points(&mut self.store, &self.instance);
 
         match remaining_points {

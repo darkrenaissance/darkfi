@@ -104,7 +104,7 @@ pub async fn verify_genesis_block(
 
     // Verify transactions, exluding producer(last) one
     let txs = &block.txs[..block.txs.len() - 1];
-    let erroneous_txs = verify_transactions(overlay, time_keeper, txs).await?;
+    let erroneous_txs = verify_transactions(overlay, time_keeper, txs, false).await?;
     if !erroneous_txs.is_empty() {
         warn!(target: "validator::verification::verify_genesis_block", "Erroneous transactions found in set");
         overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
@@ -170,7 +170,7 @@ pub async fn verify_block(
 
     // Verify transactions, exluding producer(last) one
     let txs = &block.txs[..block.txs.len() - 1];
-    let erroneous_txs = verify_transactions(overlay, time_keeper, txs).await?;
+    let erroneous_txs = verify_transactions(overlay, time_keeper, txs, false).await?;
     if !erroneous_txs.is_empty() {
         warn!(target: "validator::verification::verify_block", "Erroneous transactions found in set");
         overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
@@ -336,9 +336,12 @@ pub async fn verify_transaction(
     time_keeper: &TimeKeeper,
     tx: &Transaction,
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
-) -> Result<()> {
+) -> Result<u64> {
     let tx_hash = tx.hash()?;
     debug!(target: "validator::verification::verify_transaction", "Validating transaction {}", tx_hash);
+
+    // Gas accumulator
+    let mut gas_used = 0;
 
     // Verify calls indexes integrity
     dark_leaf_vec_integrity_check(&tx.calls, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS))?;
@@ -416,6 +419,8 @@ pub async fn verify_transaction(
         debug!(target: "validator::verification::verify_transaction", "Successfully executed \"apply\" call");
 
         // At this point we're done with the call and move on to the next one.
+        // Accumulate the WASM gas used.
+        gas_used += runtime.gas_used();
     }
 
     // When we're done looping and executing over the tx's contract calls, we now
@@ -445,7 +450,7 @@ pub async fn verify_transaction(
     debug!(target: "validator::verification::verify_transaction", "ZK proof verification successful");
     debug!(target: "validator::verification::verify_transaction", "Transaction {} verified successfully", tx_hash);
 
-    Ok(())
+    Ok(gas_used)
 }
 
 /// Verify a set of [`Transaction`] in sequence and apply them if all are valid.
@@ -456,11 +461,15 @@ pub async fn verify_transactions(
     overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
     txs: &[Transaction],
+    verify_fees: bool, // FIXME: Remove this bool
 ) -> Result<Vec<Transaction>> {
     debug!(target: "validator::verification::verify_transactions", "Verifying {} transactions", txs.len());
 
     // Tracker for failed txs
     let mut erroneous_txs = vec![];
+
+    // Gas accumulator
+    let mut _gas_used = 0;
 
     // Map of ZK proof verifying keys for the current transaction batch
     let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
@@ -475,11 +484,19 @@ pub async fn verify_transactions(
     // Iterate over transactions and attempt to verify them
     for tx in txs {
         overlay.lock().unwrap().checkpoint();
-        if let Err(e) = verify_transaction(overlay, time_keeper, tx, &mut vks).await {
-            warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {}", e);
-            erroneous_txs.push(tx.clone());
-            // TODO: verify this works as expected
-            overlay.lock().unwrap().revert_to_checkpoint()?;
+        match verify_transaction(overlay, time_keeper, tx, &mut vks).await {
+            Ok(gas) => _gas_used += gas,
+            Err(e) => {
+                warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {}", e);
+                erroneous_txs.push(tx.clone());
+                // TODO: verify this works as expected
+                overlay.lock().unwrap().revert_to_checkpoint()?;
+            }
+        }
+
+        if verify_fees {
+            // Enforce that enough fee is paid
+            todo!()
         }
     }
 
