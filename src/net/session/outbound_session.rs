@@ -31,7 +31,7 @@ use std::{
         atomic::{AtomicU32, Ordering},
         Arc, Weak,
     },
-    time::{Duration, Instant, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 
 use async_trait::async_trait;
@@ -265,14 +265,6 @@ impl Slot {
                 "[P2P] Outbound slot #{} connected [{}]",
                 self.slot, addr_final
             );
-
-            // Update the last_seen field for this whitelisted peer.
-            // TODO: This peer should also be flagged as an "anchor" because we have been
-            // able to establish a connection to it to it.
-            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-
-            // TODO: FIXME: unwrap
-            hosts.whitelist_store_or_update(&addr_final, last_seen).await.unwrap();
 
             dnetev!(self, OutboundSlotConnected, {
                 slot: self.slot,
