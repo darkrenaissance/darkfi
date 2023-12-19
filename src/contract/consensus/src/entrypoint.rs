@@ -144,26 +144,14 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
             coin_tree_data.write_u32(0)?;
             coin_tree.encode(&mut coin_tree_data)?;
 
-            db_set(
-                info_db,
-                &serialize(&CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE),
-                &coin_tree_data,
-            )?;
-            db_set(
-                info_db,
-                &serialize(&CONSENSUS_CONTRACT_UNSTAKED_COIN_MERKLE_TREE),
-                &coin_tree_data,
-            )?;
+            db_set(info_db, CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE, &coin_tree_data)?;
+            db_set(info_db, CONSENSUS_CONTRACT_UNSTAKED_COIN_MERKLE_TREE, &coin_tree_data)?;
             info_db
         }
     };
 
     // Update db version
-    db_set(
-        info_db,
-        &serialize(&CONSENSUS_CONTRACT_DB_VERSION),
-        &serialize(&env!("CARGO_PKG_VERSION")),
-    )?;
+    db_set(info_db, CONSENSUS_CONTRACT_DB_VERSION, &serialize(&env!("CARGO_PKG_VERSION")))?;
 
     Ok(())
 }

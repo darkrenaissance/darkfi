@@ -184,8 +184,8 @@ pub(crate) fn consensus_unstake_request_process_update_v1(
     merkle_add(
         info_db,
         unstaked_coin_roots_db,
-        &serialize(&CONSENSUS_CONTRACT_UNSTAKED_COIN_LATEST_COIN_ROOT),
-        &serialize(&CONSENSUS_CONTRACT_UNSTAKED_COIN_MERKLE_TREE),
+        CONSENSUS_CONTRACT_UNSTAKED_COIN_LATEST_COIN_ROOT,
+        CONSENSUS_CONTRACT_UNSTAKED_COIN_MERKLE_TREE,
         &coins,
     )?;
 
