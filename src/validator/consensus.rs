@@ -99,7 +99,7 @@ impl Consensus {
 
         // If no forks exist, create a new one as a basis to extend
         if forks.is_empty() {
-            forks.push(Fork::new(&self.blockchain, self.module.read().await.clone())?);
+            forks.push(Fork::new(&self.blockchain, self.module.read().await.clone()).await?);
         }
 
         for fork in forks.iter_mut() {
@@ -122,7 +122,7 @@ impl Consensus {
 
         // If no forks exist, create a new one as a basis to extend
         if forks.is_empty() {
-            forks.push(Fork::new(&self.blockchain, self.module.read().await.clone())?);
+            forks.push(Fork::new(&self.blockchain, self.module.read().await.clone()).await?);
         }
 
         // Grab previous slot information
@@ -214,7 +214,7 @@ impl Consensus {
         let (mut fork, index) = verify_proposal(self, proposal).await?;
 
         // Append proposal to the fork
-        fork.append_proposal(proposal.hash, self.pos_testing_mode)?;
+        fork.append_proposal(proposal.hash, self.pos_testing_mode).await?;
 
         // Update fork slots based on proposal version
         match proposal.block.header.version {
@@ -275,7 +275,7 @@ impl Consensus {
             }
 
             // Generate a new fork extending canonical
-            let mut fork = Fork::new(&self.blockchain, self.module.read().await.clone())?;
+            let mut fork = Fork::new(&self.blockchain, self.module.read().await.clone()).await?;
             if proposal.block.header.height < POS_START {
                 fork.generate_pow_slot()?;
             } else {
@@ -296,7 +296,7 @@ impl Consensus {
         }
 
         // Rebuild fork
-        let mut fork = Fork::new(&self.blockchain, self.module.read().await.clone())?;
+        let mut fork = Fork::new(&self.blockchain, self.module.read().await.clone()).await?;
         fork.proposals = original_fork.proposals[..p_index + 1].to_vec();
 
         // Retrieve proposals blocks from original fork
@@ -443,7 +443,7 @@ pub struct Fork {
 }
 
 impl Fork {
-    pub fn new(blockchain: &Blockchain, module: PoWModule) -> Result<Self> {
+    pub async fn new(blockchain: &Blockchain, module: PoWModule) -> Result<Self> {
         let mempool =
             blockchain.get_pending_txs()?.iter().map(|tx| blake3::hash(&serialize(tx))).collect();
         let overlay = BlockchainOverlay::new(blockchain)?;
@@ -451,13 +451,13 @@ impl Fork {
     }
 
     /// Auxiliary function to append a proposal and recalculate current fork rank
-    pub fn append_proposal(
+    pub async fn append_proposal(
         &mut self,
         proposal: blake3::Hash,
         pos_testing_mode: bool,
     ) -> Result<()> {
         self.proposals.push(proposal);
-        self.rank = self.rank(pos_testing_mode)?;
+        self.rank = self.rank(pos_testing_mode).await?;
 
         Ok(())
     }
@@ -607,7 +607,7 @@ impl Fork {
     }
 
     /// Auxiliarry function to compute fork's rank, assuming all proposals are valid.
-    pub fn rank(&self, pos_testing_mode: bool) -> Result<u64> {
+    pub async fn rank(&self, pos_testing_mode: bool) -> Result<u64> {
         // If the fork is empty its rank is 0
         if self.proposals.is_empty() {
             return Ok(0)
@@ -629,7 +629,7 @@ impl Fork {
             } else {
                 proposal.clone()
             };
-            sum += block_rank(proposal, &previous_previous, pos_testing_mode)?;
+            sum += block_rank(proposal, &previous_previous, pos_testing_mode).await?;
         }
 
         // Use fork(proposals) length as a multiplier to compute the actual fork rank

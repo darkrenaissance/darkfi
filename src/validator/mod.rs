@@ -22,7 +22,7 @@ use darkfi_sdk::{
     blockchain::{expected_reward, Slot},
     crypto::PublicKey,
 };
-use darkfi_serial::serialize;
+use darkfi_serial::serialize_async;
 use log::{debug, error, info, warn};
 use num_bigint::BigUint;
 use smol::lock::RwLock;
@@ -143,7 +143,7 @@ impl Validator {
         let overlay = BlockchainOverlay::new(&blockchain)?;
 
         // Deploy native wasm contracts
-        deploy_native_contracts(&overlay, &config.time_keeper, &config.faucet_pubkeys)?;
+        deploy_native_contracts(&overlay, &config.time_keeper, &config.faucet_pubkeys).await?;
 
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
@@ -182,7 +182,7 @@ impl Validator {
     /// The node retrieves a transaction, validates its state transition,
     /// and appends it to the pending txs store.
     pub async fn append_tx(&self, tx: &Transaction) -> Result<()> {
-        let tx_hash = blake3::hash(&serialize(tx));
+        let tx_hash = blake3::hash(&serialize_async(tx).await);
 
         // Check if we have already seen this tx
         let tx_in_txstore = self.blockchain.transactions.contains(&tx_hash)?;
@@ -262,7 +262,7 @@ impl Validator {
 
         let mut removed_txs = vec![];
         for tx in pending_txs {
-            let tx_hash = &blake3::hash(&serialize(&tx));
+            let tx_hash = &blake3::hash(&serialize_async(&tx).await);
             let tx_vec = [tx.clone()];
             let mut valid = false;
 
@@ -584,7 +584,7 @@ impl Validator {
             PoWModule::new(blockchain.clone(), pow_threads, pow_target, pow_fixed_difficulty)?;
 
         // Deploy native wasm contracts
-        deploy_native_contracts(&overlay, &time_keeper, &faucet_pubkeys)?;
+        deploy_native_contracts(&overlay, &time_keeper, &faucet_pubkeys).await?;
 
         // Validate genesis block
         verify_genesis_block(&overlay, &time_keeper, previous, genesis_txs_total).await?;

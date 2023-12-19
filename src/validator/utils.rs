@@ -16,8 +16,6 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::Cursor;
-
 use darkfi_sdk::{
     crypto::{
         ecvrf::VrfProof, pasta_prelude::PrimeField, PublicKey, CONSENSUS_CONTRACT_ID,
@@ -25,8 +23,9 @@ use darkfi_sdk::{
     },
     pasta::{group::ff::FromUniformBytes, pallas},
 };
-use darkfi_serial::{serialize, Decodable};
+use darkfi_serial::{serialize_async, AsyncDecodable};
 use log::info;
+use smol::io::Cursor;
 
 use crate::{
     blockchain::{BlockInfo, BlockchainOverlayPtr},
@@ -48,7 +47,7 @@ use crate::{
 /// touch anything, or just potentially update the db schemas or whatever
 /// is necessary. This logic should be handled in the init function of
 /// the actual contract, so make sure the native contracts handle this well.
-pub fn deploy_native_contracts(
+pub async fn deploy_native_contracts(
     overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
     faucet_pubkeys: &Vec<PublicKey>,
@@ -57,7 +56,7 @@ pub fn deploy_native_contracts(
 
     // The faucet pubkeys are pubkeys which are allowed to create clear inputs
     // in the Money contract.
-    let money_contract_deploy_payload = serialize(faucet_pubkeys);
+    let money_contract_deploy_payload = serialize_async(faucet_pubkeys).await;
 
     // The DAO contract uses an empty payload to deploy itself.
     let dao_contract_deploy_payload = vec![];
@@ -105,7 +104,7 @@ pub fn deploy_native_contracts(
 /// Genesis block has rank 0.
 /// First 2 blocks rank is equal to their nonce, since their previous
 /// previous block producer doesn't exist or have a VRF.
-pub fn block_rank(
+pub async fn block_rank(
     block: &BlockInfo,
     previous_previous: &BlockInfo,
     pos_testing_mode: bool,
@@ -137,7 +136,7 @@ pub fn block_rank(
     };
     let mut decoder = Cursor::new(&data);
     decoder.set_position(position);
-    let vrf_proof: VrfProof = Decodable::decode(&mut decoder)?;
+    let vrf_proof: VrfProof = AsyncDecodable::decode_async(&mut decoder).await?;
 
     // Compute VRF u64
     let mut vrf = [0u8; 64];
@@ -179,7 +178,7 @@ pub fn median(mut v: Vec<u64>) -> u64 {
 /// genesis transactions set. This includes both staked and normal tokens.
 /// If a non-genesis transaction is found, execution fails.
 /// Set must also include the genesis transaction(empty) at last position.
-pub fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
+pub async fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
     let mut total = 0;
 
     if txs.is_empty() {
@@ -211,7 +210,7 @@ pub fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
         let position = 1;
         let mut decoder = Cursor::new(&data);
         decoder.set_position(position);
-        let value: u64 = Decodable::decode(&mut decoder)?;
+        let value: u64 = AsyncDecodable::decode_async(&mut decoder).await?;
 
         total += value;
     }

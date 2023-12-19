@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, io::Cursor};
+use std::collections::HashMap;
 
 use darkfi_sdk::{
     blockchain::{block_version, expected_reward},
@@ -24,8 +24,9 @@ use darkfi_sdk::{
     dark_tree::dark_leaf_vec_integrity_check,
     pasta::pallas,
 };
-use darkfi_serial::{deserialize_async, Decodable, Encodable, WriteExt};
+use darkfi_serial::{deserialize_async, AsyncDecodable, AsyncEncodable, AsyncWriteExt, WriteExt};
 use log::{debug, error, warn};
+use smol::io::Cursor;
 
 use crate::{
     blockchain::{BlockInfo, BlockchainOverlayPtr},
@@ -244,8 +245,8 @@ pub async fn verify_producer_transaction(
 
     // Write the actual payload data
     let mut payload = vec![];
-    payload.write_u32(0)?; // Call index
-    tx.calls.encode(&mut payload)?; // Actual call data
+    payload.write_u32_async(0).await?; // Call index
+    tx.calls.encode_async(&mut payload).await?; // Actual call data
 
     debug!(target: "validator::verification::verify_producer_transaction", "Instantiating WASM runtime");
     let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id)?;
@@ -260,8 +261,9 @@ pub async fn verify_producer_transaction(
     let mut decoder = Cursor::new(&metadata);
 
     // The tuple is (zkas_ns, public_inputs)
-    let zkp_pub: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
-    let sig_pub: Vec<PublicKey> = Decodable::decode(&mut decoder)?;
+    let zkp_pub: Vec<(String, Vec<pallas::Base>)> =
+        AsyncDecodable::decode_async(&mut decoder).await?;
+    let sig_pub: Vec<PublicKey> = AsyncDecodable::decode_async(&mut decoder).await?;
 
     // Check that only one ZK proof and signature public key exist
     if zkp_pub.len() != 1 || sig_pub.len() != 1 {
@@ -345,15 +347,19 @@ pub async fn verify_transaction(
     let mut gas_used = 0;
 
     // Verify calls indexes integrity
-    dark_leaf_vec_integrity_check(&tx.calls, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS))?;
+    if verify_fee {
+        dark_leaf_vec_integrity_check(&tx.calls, Some(MIN_TX_CALLS + 1), Some(MAX_TX_CALLS))?;
+    } else {
+        dark_leaf_vec_integrity_check(&tx.calls, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS))?;
+    }
 
     // Table of public inputs used for ZK proof verification
     let mut zkp_table = vec![];
     // Table of public keys used for signature verification
     let mut sig_table = vec![];
 
-    // Verify that the first call is the transaction fee and that it has no parents or children.
     if verify_fee {
+        // Verify that the first call is the transaction fee and that it has no parents or children.
         if tx.calls[0].data.contract_id != *MONEY_CONTRACT_ID || tx.calls[0].data.data[0] != 0x00 {
             error!(
                 target: "validator::verification::verify_transaction",
@@ -386,7 +392,7 @@ pub async fn verify_transaction(
         // Write the actual payload data
         let mut payload = vec![];
         payload.write_u32(idx as u32)?; // Call index
-        tx.calls.encode(&mut payload)?; // Actual call data
+        tx.calls.encode_async(&mut payload).await?; // Actual call data
 
         debug!(target: "validator::verification::verify_transaction", "Instantiating WASM runtime");
         let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id)?;
@@ -401,8 +407,9 @@ pub async fn verify_transaction(
         let mut decoder = Cursor::new(&metadata);
 
         // The tuple is (zkas_ns, public_inputs)
-        let zkp_pub: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
-        let sig_pub: Vec<PublicKey> = Decodable::decode(&mut decoder)?;
+        let zkp_pub: Vec<(String, Vec<pallas::Base>)> =
+            AsyncDecodable::decode_async(&mut decoder).await?;
+        let sig_pub: Vec<PublicKey> = AsyncDecodable::decode_async(&mut decoder).await?;
         // TODO: Make sure we've read all the bytes above.
         debug!(target: "validator::verification::verify_transaction", "Successfully executed \"metadata\" call");
 
