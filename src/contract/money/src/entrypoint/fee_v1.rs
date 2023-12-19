@@ -46,7 +46,9 @@ pub(crate) fn money_fee_get_metadata_v1(
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize].data;
-    let params: MoneyFeeParamsV1 = deserialize(&self_.data[1..])?;
+    // The first 8 bytes here is the u64 fee, so we get the params from that offset.
+    // (Plus 1, which is the function identifier byte)
+    let params: MoneyFeeParamsV1 = deserialize(&self_.data[9..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
@@ -105,7 +107,8 @@ pub(crate) fn money_fee_process_instruction_v1(
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: MoneyFeeParamsV1 = deserialize(&self_.data.data[1..])?;
+    let fee: u64 = deserialize(&self_.data.data[1..9])?;
+    let params: MoneyFeeParamsV1 = deserialize(&self_.data.data[9..])?;
 
     // We need at least one input, but we shouldn't require any outputs.
     if params.inputs.is_empty() {
@@ -115,7 +118,7 @@ pub(crate) fn money_fee_process_instruction_v1(
 
     // Though, we should have some fee paid...
     /* XXX:
-    if params.fee == 0 {
+    if fee == 0 {
         msg!("[FeeV1] Error: Paid fee is 0");
         return Err(MoneyError::InsufficientFee.into())
     }
@@ -201,7 +204,7 @@ pub(crate) fn money_fee_process_instruction_v1(
     }
 
     // Now subtract the fee from the accumulator
-    valcom_total -= pedersen_commitment_u64(params.fee, params.fee_value_blind);
+    valcom_total -= pedersen_commitment_u64(fee, params.fee_value_blind);
 
     // If the accumulator is not back in its initial; state, that means there
     // is a value mismatch betweeen inputs and outputs.
@@ -213,7 +216,7 @@ pub(crate) fn money_fee_process_instruction_v1(
     // Accumulate the paid fee
     let mut paid_fee: u64 =
         deserialize(&db_get(info_db, MONEY_CONTRACT_TOTAL_FEES_PAID)?.unwrap())?;
-    paid_fee += params.fee;
+    paid_fee += fee;
 
     // At this point the state transition has passed, so we create a state update.
     let update = MoneyFeeUpdateV1 { nullifiers: new_nullifiers, coins: new_coins, fee: paid_fee };

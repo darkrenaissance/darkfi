@@ -171,8 +171,6 @@ pub struct MoneyFeeParamsV1 {
     pub inputs: Vec<Input>,
     /// Anonymous outputs
     pub outputs: Vec<Output>,
-    /// Transaction fee amount
-    pub fee: u64,
     /// Fee value blind
     pub fee_value_blind: pallas::Scalar,
     /// Token ID blind
