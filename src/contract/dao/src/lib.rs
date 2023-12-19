@@ -66,9 +66,9 @@ pub const DAO_CONTRACT_DB_PROPOSAL_BULLAS: &str = "dao_proposals";
 pub const DAO_CONTRACT_DB_VOTE_NULLIFIERS: &str = "dao_vote_nullifiers";
 
 // These are keys inside the info tree
-pub const DAO_CONTRACT_KEY_DB_VERSION: &str = "db_version";
-pub const DAO_CONTRACT_KEY_DAO_MERKLE_TREE: &str = "dao_merkle_tree";
-pub const DAO_CONTRACT_KEY_LATEST_DAO_ROOT: &str = "dao_last_root";
+pub const DAO_CONTRACT_KEY_DB_VERSION: &[u8] = b"db_version";
+pub const DAO_CONTRACT_KEY_DAO_MERKLE_TREE: &[u8] = b"dao_merkle_tree";
+pub const DAO_CONTRACT_KEY_LATEST_DAO_ROOT: &[u8] = b"dao_last_root";
 
 /// zkas dao mint circuit namespace
 pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "DaoMint";

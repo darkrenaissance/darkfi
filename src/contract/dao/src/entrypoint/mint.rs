@@ -103,8 +103,8 @@ pub(crate) fn dao_mint_process_update(cid: ContractId, update: DaoMintUpdate) ->
     merkle_add(
         info_db,
         roots_db,
-        &serialize(&DAO_CONTRACT_KEY_LATEST_DAO_ROOT),
-        &serialize(&DAO_CONTRACT_KEY_DAO_MERKLE_TREE),
+        DAO_CONTRACT_KEY_LATEST_DAO_ROOT,
+        DAO_CONTRACT_KEY_DAO_MERKLE_TREE,
         &dao,
     )?;
 

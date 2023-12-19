@@ -83,7 +83,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     };
 
     // Set up the entries in the header table
-    match db_get(dao_info_db, &serialize(&DAO_CONTRACT_KEY_DAO_MERKLE_TREE))? {
+    match db_get(dao_info_db, DAO_CONTRACT_KEY_DAO_MERKLE_TREE)? {
         Some(bytes) => {
             // We found some bytes, try to deserialize into a tree.
             // For now, if this doesn't work, we bail.
@@ -99,7 +99,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
             tree_data.write_u32(0)?;
             tree.encode(&mut tree_data)?;
 
-            db_set(dao_info_db, &serialize(&DAO_CONTRACT_KEY_DAO_MERKLE_TREE), &tree_data)?;
+            db_set(dao_info_db, DAO_CONTRACT_KEY_DAO_MERKLE_TREE, &tree_data)?;
         }
     }
 
@@ -130,11 +130,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     };
 
     // Update db version
-    db_set(
-        dao_info_db,
-        &serialize(&DAO_CONTRACT_KEY_DB_VERSION),
-        &serialize(&env!("CARGO_PKG_VERSION")),
-    )?;
+    db_set(dao_info_db, DAO_CONTRACT_KEY_DB_VERSION, &serialize(&env!("CARGO_PKG_VERSION")))?;
 
     Ok(())
 }
