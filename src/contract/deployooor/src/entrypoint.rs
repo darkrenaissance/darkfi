@@ -68,11 +68,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     }
 
     // Update db version
-    db_set(
-        info_db,
-        &serialize(&DEPLOY_CONTRACT_DB_VERSION),
-        &serialize(&env!("CARGO_PKG_VERSION")),
-    )?;
+    db_set(info_db, DEPLOY_CONTRACT_DB_VERSION, &serialize(&env!("CARGO_PKG_VERSION")))?;
 
     Ok(())
 }
