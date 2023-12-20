@@ -236,8 +236,6 @@ pub struct DaoProposalMetadata {
     pub vote_aggregate: DaoBlindAggregateVote,
     /// Snapshotted Merkle root in the Money state
     pub snapshot_root: MerkleNode,
-    /// Proposal closed
-    pub ended: bool,
 }
 
 /// Parameters for `Dao::Vote`

@@ -58,8 +58,6 @@ circuit "DaoVoteMain" {
 		proposal_blind,
 	);
 	constrain_instance(proposal_bulla);
-	# TODO: We need to check the proposal isn't invalidated
-	# that is expired or already executed.
 
 	# Normally we call this yes vote
 	# Pedersen commitment for vote option

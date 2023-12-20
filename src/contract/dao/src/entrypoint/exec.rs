@@ -155,11 +155,6 @@ pub(crate) fn dao_exec_process_instruction(
     };
     let proposal: DaoProposalMetadata = deserialize(&data)?;
 
-    if proposal.ended {
-        msg!("[Dao::Exec] Error: Proposal {:?} ended", params.proposal);
-        return Err(DaoError::ProposalEnded.into())
-    }
-
     // 3. Check yes_vote commit and all_vote_commit are the same as in BlindAggregateVote
     if proposal.vote_aggregate.yes_vote_commit != params.blind_total_vote.yes_vote_commit ||
         proposal.vote_aggregate.all_vote_commit != params.blind_total_vote.all_vote_commit

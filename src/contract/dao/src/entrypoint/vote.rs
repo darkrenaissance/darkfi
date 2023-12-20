@@ -123,14 +123,9 @@ pub(crate) fn dao_vote_process_instruction(
         return Err(DaoError::ProposalNonexistent.into())
     };
 
-    // Get the current votes, and additionally confirm proposal hasn't ended
+    // Get the current votes
     // TODO: Proposals should have a set length of time
     let mut proposal_metadata: DaoProposalMetadata = deserialize(&data)?;
-
-    if proposal_metadata.ended {
-        msg!("[Dao::Vote] Error: Proposal ended: {:?}", params.proposal_bulla);
-        return Err(DaoError::ProposalEnded.into())
-    }
 
     // Check the Merkle root and nullifiers for the input coins are valid
     let money_nullifier_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIERS_TREE)?;

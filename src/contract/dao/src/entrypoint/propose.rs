@@ -161,7 +161,6 @@ pub(crate) fn dao_propose_process_update(
     let proposal_metadata = DaoProposalMetadata {
         vote_aggregate: DaoBlindAggregateVote::default(),
         snapshot_root: update.snapshot_root,
-        ended: false,
     };
 
     // Set the new proposal in the db
