@@ -18,7 +18,7 @@
 
 use std::{collections::HashSet, sync::Arc};
 
-use log::{debug, trace};
+use log::{debug, trace, warn};
 use rand::{
     prelude::{IteratorRandom, SliceRandom},
     rngs::OsRng,
@@ -162,20 +162,22 @@ impl Hosts {
     // Store the address in the whitelist if we don't have it.
     // Otherwise, update the last_seen field.
     // TODO: test the performance of this method. It might be costly.
-    pub async fn whitelist_store_or_update(&self, addr: &Url, last_seen: u64) -> Result<()> {
+    pub async fn whitelist_store_or_update(&self, addrs: &[(Url, u64)]) -> Result<()> {
         debug!(target: "net::hosts::whitelist_store_or_update()", "[START]");
 
-        if !self.whitelist_contains(addr).await {
-            debug!(target: "net::hosts::whitelist_store_or_update()",
+        for (addr, last_seen) in addrs {
+            if !self.whitelist_contains(addr).await {
+                debug!(target: "net::hosts::whitelist_store_or_update()",
         "We do not have this entry in the whitelist. Adding to store...");
 
-            self.whitelist_store(addr, last_seen).await;
-        } else {
-            debug!(target: "net::hosts::whitelist_store_or_update()",
+                self.whitelist_store(addr, last_seen).await;
+            } else {
+                debug!(target: "net::hosts::whitelist_store_or_update()",
         "We have this entry in the whitelist. Updating last seen...");
 
-            let index = self.get_whitelist_index_at_addr(addr).await?;
-            self.whitelist_update_last_seen(addr, last_seen, index).await;
+                let index = self.get_whitelist_index_at_addr(addr).await?;
+                self.whitelist_update_last_seen(addr, last_seen.clone(), index).await;
+            }
         }
         Ok(())
     }
@@ -378,6 +380,13 @@ impl Hosts {
                 // Our own external addresses should never enter the hosts set.
                 for ext in &self.settings.external_addrs {
                     if host_str == ext.host_str().unwrap() {
+                        continue 'addr_loop
+                    }
+                }
+            } else {
+                // On localnet, make sure ours ports don't enter the host set.
+                for ext in &self.settings.external_addrs {
+                    if addr_.port() == ext.port() {
                         continue 'addr_loop
                     }
                 }
