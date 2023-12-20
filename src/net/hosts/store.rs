@@ -746,7 +746,7 @@ mod tests {
 
             let hosts = Hosts::new(Arc::new(settings.clone()));
             for addr in settings.external_addrs {
-                hosts.greylist_store(&addr, last_seen).await;
+                hosts.greylist_store(addr, last_seen).await;
             }
 
             assert!(hosts.is_empty_greylist().await);
@@ -760,7 +760,7 @@ mod tests {
             ];
 
             for host in &local_hosts {
-                hosts.greylist_store(&host, last_seen).await;
+                hosts.greylist_store(host.clone(), last_seen).await;
             }
             assert!(hosts.is_empty_greylist().await);
 
@@ -771,7 +771,7 @@ mod tests {
             ];
 
             for host in &remote_hosts {
-                hosts.greylist_store(&host, last_seen).await;
+                hosts.greylist_store(host.clone(), last_seen).await;
             }
 
             assert!(hosts.greylist_contains(&remote_hosts[0]).await);
@@ -798,7 +798,7 @@ mod tests {
             let url = Url::parse("tcp://dark.renaissance:333").unwrap();
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
-            hosts.whitelist_store(&url, last_seen).await;
+            hosts.whitelist_store(url.clone(), last_seen).await;
 
             assert!(!hosts.is_empty_whitelist().await);
             assert!(hosts.whitelist_contains(&url).await);
