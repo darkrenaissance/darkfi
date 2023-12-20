@@ -20,8 +20,7 @@ use darkfi_sdk::{
     crypto::{pasta_prelude::Field, ContractId, MerkleNode, MerkleTree, PublicKey},
     dark_tree::DarkLeaf,
     db::{db_init, db_lookup, db_set, zkas_db_set},
-    error::{ContractError, ContractResult},
-    msg,
+    error::ContractResult,
     pasta::pallas,
     util::set_return_data,
     ContractCall,
@@ -192,61 +191,27 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
 /// contract calls in the transaction.
 fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
     let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
-    if call_idx >= calls.len() as u32 {
-        msg!("Error: call_idx >= calls.len()");
-        return Err(ContractError::Internal)
-    }
+    let self_ = &calls[call_idx as usize].data;
+    let func = MoneyFunction::try_from(self_.data[0])?;
 
-    match MoneyFunction::try_from(calls[call_idx as usize].data.data[0])? {
-        MoneyFunction::FeeV1 => {
-            let metadata = money_fee_get_metadata_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
-        }
-
+    let metadata = match func {
+        MoneyFunction::FeeV1 => money_fee_get_metadata_v1(cid, call_idx, calls)?,
         MoneyFunction::TransferV1 => {
             // We pass everything into the correct function, and it will return
             // the metadata for us, which we can then copy into the host with
             // the `set_return_data` function. On the host, this metadata will
             // be used to do external verification (zk proofs, and signatures).
-            let metadata = money_transfer_get_metadata_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
+            money_transfer_get_metadata_v1(cid, call_idx, calls)?
         }
-
-        MoneyFunction::OtcSwapV1 => {
-            let metadata = money_otcswap_get_metadata_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
-        }
-
-        MoneyFunction::GenesisMintV1 => {
-            let metadata = money_genesis_mint_get_metadata_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
-        }
-
-        MoneyFunction::TokenMintV1 => {
-            let metadata = money_token_mint_get_metadata_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
-        }
-
-        MoneyFunction::TokenFreezeV1 => {
-            let metadata = money_token_freeze_get_metadata_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
-        }
-
-        MoneyFunction::StakeV1 => {
-            let metadata = money_stake_get_metadata_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
-        }
-
-        MoneyFunction::UnstakeV1 => {
-            let metadata = money_unstake_get_metadata_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
-        }
-
-        MoneyFunction::PoWRewardV1 => {
-            let metadata = money_pow_reward_get_metadata_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
-        }
-    }
+        MoneyFunction::OtcSwapV1 => money_otcswap_get_metadata_v1(cid, call_idx, calls)?,
+        MoneyFunction::GenesisMintV1 => money_genesis_mint_get_metadata_v1(cid, call_idx, calls)?,
+        MoneyFunction::TokenMintV1 => money_token_mint_get_metadata_v1(cid, call_idx, calls)?,
+        MoneyFunction::TokenFreezeV1 => money_token_freeze_get_metadata_v1(cid, call_idx, calls)?,
+        MoneyFunction::StakeV1 => money_stake_get_metadata_v1(cid, call_idx, calls)?,
+        MoneyFunction::UnstakeV1 => money_unstake_get_metadata_v1(cid, call_idx, calls)?,
+        MoneyFunction::PoWRewardV1 => money_pow_reward_get_metadata_v1(cid, call_idx, calls)?,
+    };
+    Ok(set_return_data(&metadata)?)
 }
 
 /// This function verifies a state transition and produces a state update
@@ -254,62 +219,36 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
 /// has successfully verified the metadata from `get_metadata()`.
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
     let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
-    if call_idx >= calls.len() as u32 {
-        msg!("Error: call_idx >= calls.len()");
-        return Err(ContractError::Internal)
-    }
+    let self_ = &calls[call_idx as usize].data;
+    let func = MoneyFunction::try_from(self_.data[0])?;
 
-    match MoneyFunction::try_from(calls[call_idx as usize].data.data[0])? {
-        MoneyFunction::FeeV1 => {
-            let metadata = money_fee_process_instruction_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
-        }
-
+    let update_data = match func {
+        MoneyFunction::FeeV1 => money_fee_process_instruction_v1(cid, call_idx, calls)?,
         MoneyFunction::TransferV1 => {
             // Again, we pass everything into the correct function.
             // If it executes successfully, we'll get a state update
             // which we can copy into the host using `set_return_data`.
             // This update can then be written with `process_update()`
             // if everything is in order.
-            let update_data = money_transfer_process_instruction_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&update_data)?)
+            money_transfer_process_instruction_v1(cid, call_idx, calls)?
         }
-
-        MoneyFunction::OtcSwapV1 => {
-            let update_data = money_otcswap_process_instruction_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&update_data)?)
-        }
-
+        MoneyFunction::OtcSwapV1 => money_otcswap_process_instruction_v1(cid, call_idx, calls)?,
         MoneyFunction::GenesisMintV1 => {
-            let update_data = money_genesis_mint_process_instruction_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&update_data)?)
+            money_genesis_mint_process_instruction_v1(cid, call_idx, calls)?
         }
-
         MoneyFunction::TokenMintV1 => {
-            let update_data = money_token_mint_process_instruction_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&update_data)?)
+            money_token_mint_process_instruction_v1(cid, call_idx, calls)?
         }
-
         MoneyFunction::TokenFreezeV1 => {
-            let update_data = money_token_freeze_process_instruction_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&update_data)?)
+            money_token_freeze_process_instruction_v1(cid, call_idx, calls)?
         }
-
-        MoneyFunction::StakeV1 => {
-            let update_data = money_stake_process_instruction_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&update_data)?)
-        }
-
-        MoneyFunction::UnstakeV1 => {
-            let update_data = money_unstake_process_instruction_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&update_data)?)
-        }
-
+        MoneyFunction::StakeV1 => money_stake_process_instruction_v1(cid, call_idx, calls)?,
+        MoneyFunction::UnstakeV1 => money_unstake_process_instruction_v1(cid, call_idx, calls)?,
         MoneyFunction::PoWRewardV1 => {
-            let update_data = money_pow_reward_process_instruction_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&update_data)?)
+            money_pow_reward_process_instruction_v1(cid, call_idx, calls)?
         }
-    }
+    };
+    Ok(set_return_data(&update_data)?)
 }
 
 /// This function attempts to write a given state update provided the previous steps
