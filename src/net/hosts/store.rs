@@ -170,7 +170,7 @@ impl Hosts {
                 debug!(target: "net::hosts::whitelist_store_or_update()",
         "We do not have this entry in the whitelist. Adding to store...");
 
-                self.whitelist_store(addr, last_seen).await;
+                self.whitelist_store(addr.clone(), last_seen.clone()).await;
             } else {
                 debug!(target: "net::hosts::whitelist_store_or_update()",
         "We have this entry in the whitelist. Updating last seen...");
@@ -193,13 +193,13 @@ impl Hosts {
             if !self.greylist_contains(&addr).await {
                 debug!(target: "net::hosts::store::greylist_store_or_update()", "We do not have this entry in the greylist. Adding to store...");
 
-                self.greylist_store(&addr, last_seen.clone()).await;
+                self.greylist_store(addr.clone(), last_seen.clone()).await;
             } else {
                 debug!(target: "net::hosts::store::greylist_store_or_update()",
                 "We have this entry in the greylist. Updating last seen...");
 
                 let index = self.get_greylist_index_at_addr(&addr).await?;
-                self.greylist_update_last_seen(&addr, last_seen.clone(), index).await;
+                self.greylist_update_last_seen(&addr, last_seen, index).await;
             }
         }
         self.store_subscriber.notify(filtered_addrs_len).await;
@@ -207,8 +207,7 @@ impl Hosts {
     }
 
     // Append host to the greylist. Called on learning of a new peer.
-    // TODO: FIXME: address filtering
-    pub async fn greylist_store(&self, addr: &Url, last_seen: u64) {
+    pub async fn greylist_store(&self, addr: Url, last_seen: u64) {
         debug!(target: "net::hosts::greylist_store()", "hosts::greylist_store() [START]");
 
         let mut greylist = self.greylist.write().await;
@@ -219,7 +218,7 @@ impl Hosts {
             debug!(target: "net::hosts::greylist_store()", "Greylist reached max size. Removed {:?}", last_entry);
         } else {
             debug!(target: "net::hosts::greylist_store()", "Inserting {}", addr);
-            greylist.push((addr.clone(), last_seen.clone()));
+            greylist.push((addr, last_seen));
 
             // Sort the list by last_seen.
             greylist.sort_by_key(|entry| entry.1);
@@ -229,7 +228,7 @@ impl Hosts {
 
     // Append host to the whitelist. Called after a successful interaction with an online peer.
     // TODO: FIXME: address filtering
-    pub async fn whitelist_store(&self, addr: &Url, last_seen: u64) {
+    pub async fn whitelist_store(&self, addr: Url, last_seen: u64) {
         debug!(target: "net::hosts::whitelist_store()", "[START]");
 
         let mut whitelist = self.whitelist.write().await;
@@ -240,7 +239,7 @@ impl Hosts {
             debug!(target: "net::hosts::store::whitelist_store()", "Whitelist reached max size. Removed {:?}", last_entry);
         } else {
             debug!(target: "net::hosts::store::whitelist_store()", "Inserting {}. Last seen {:?}", addr, last_seen);
-            whitelist.push((addr.clone(), last_seen));
+            whitelist.push((addr, last_seen));
 
             // Sort the list by last_seen.
             whitelist.sort_by_key(|entry| entry.1);
@@ -300,7 +299,7 @@ impl Hosts {
         // Add it to the greylist.
         let addr = entry[0].0.clone();
         let last_seen = entry[0].1.clone();
-        self.greylist_store(&addr, last_seen).await;
+        self.greylist_store(addr, last_seen).await;
     }
 
     pub async fn greylist_remove(&self, addr: &Url, position: usize) {
