@@ -28,6 +28,7 @@ pub enum DaoFunction {
     Propose = 0x01,
     Vote = 0x02,
     Exec = 0x03,
+    AuthMoneyTransfer = 0x04,
 }
 
 impl TryFrom<u8> for DaoFunction {
@@ -39,6 +40,7 @@ impl TryFrom<u8> for DaoFunction {
             0x01 => Ok(DaoFunction::Propose),
             0x02 => Ok(DaoFunction::Vote),
             0x03 => Ok(DaoFunction::Exec),
+            0x04 => Ok(DaoFunction::AuthMoneyTransfer),
             _ => Err(ContractError::InvalidFunction),
         }
     }

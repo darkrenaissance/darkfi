@@ -8,12 +8,6 @@ constant "DaoExec" {
 
 witness "DaoExec" {
 	# Proposal parameters
-    # delet [
-	Base proposal_dest_x,
-	Base proposal_dest_y,
-	Base proposal_amount,
-	Base proposal_token_id,
-    # ]
     Base proposal_content_commit,
     Base proposal_auth_contract_id,
     Base proposal_auth_function_id,
@@ -34,20 +28,6 @@ witness "DaoExec" {
 	Base all_vote_value,
 	Scalar yes_vote_blind,
 	Scalar all_vote_blind,
-
-	# Outputs + Inputs
-	Base user_serial,
-	Base dao_serial,
-	Base input_value,
-	Scalar input_value_blind,
-
-	# Miscellaneous
-	Base dao_spend_hook,
-	Base user_spend_hook,
-	Base user_data,
-
-    # Check input user_data_enc encodes the same DAO bulla
-	Base input_user_data_blind,
 }
 
 circuit "DaoExec" {
@@ -74,30 +54,6 @@ circuit "DaoExec" {
 	);
 	constrain_instance(proposal_bulla);
 
-	coin_0 = poseidon_hash(
-		proposal_dest_x,
-		proposal_dest_y,
-		proposal_amount,
-		proposal_token_id,
-		user_serial,
-		user_spend_hook,
-		user_data,
-	);
-	constrain_instance(coin_0);
-
-	change = base_sub(input_value, proposal_amount);
-
-	coin_1 = poseidon_hash(
-		dao_public_x,
-		dao_public_y,
-		change,
-		proposal_token_id,
-		dao_serial,
-		dao_spend_hook,
-		dao_bulla,
-	);
-	constrain_instance(coin_1);
-
 	# Create Pedersen commitments for win_votes and total_votes, and
 	# constrain the commitments' coordinates.
 	yes_vote_value_c = ec_mul_short(yes_vote_value, VALUE_COMMIT_VALUE);
@@ -111,17 +67,6 @@ circuit "DaoExec" {
 	all_vote_commit = ec_add(all_vote_value_c, all_vote_blind_c);
 	constrain_instance(ec_get_x(all_vote_commit));
 	constrain_instance(ec_get_y(all_vote_commit));
-
-	# Create Pedersen commitment for input_value and make public
-	input_value_v = ec_mul_short(input_value, VALUE_COMMIT_VALUE);
-	input_value_r = ec_mul(input_value_blind, VALUE_COMMIT_RANDOM);
-	input_value_commit = ec_add(input_value_v, input_value_r);
-	constrain_instance(ec_get_x(input_value_commit));
-	constrain_instance(ec_get_y(input_value_commit));
-
-	constrain_instance(dao_spend_hook);
-	constrain_instance(user_spend_hook);
-	constrain_instance(user_data);
 
 	# Check that dao_quorum is less than or equal to all_vote_value
 	one = witness_base(1);
@@ -137,19 +82,6 @@ circuit "DaoExec" {
 	rhs = base_mul(yes_vote_value, dao_approval_ratio_base);
 	rhs_1 = base_add(rhs, one);
 	less_than_strict(lhs, rhs_1);
-
-	# Create coin 0
-	# Create coin 1
-	# Check values of coin 0 + coin 1 == input_value
-	# Check value of coin 0 == proposal_amount
-	# Check public key matches too
-	# Create the input value commit
-	# Create the value commits
-
-    # The coin we are spending should have the encrypted DAO bulla
-    # Make sure it is the same as the DAO we are operating on.
-	input_user_data_enc = poseidon_hash(dao_bulla, input_user_data_blind);
-	constrain_instance(input_user_data_enc);
 
 	# NOTE: There is a vulnerability here where someone can create the exec
 	# transaction with a bad note so it cannot be decrypted by the receiver

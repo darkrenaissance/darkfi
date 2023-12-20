@@ -28,8 +28,9 @@ use darkfi_dao_contract::{
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
 use darkfi_money_contract::{
-    client::transfer_v1 as xfer, model::MoneyTransferParamsV1, MoneyFunction,
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    client::transfer_v1 as xfer,
+    model::{CoinParams, MoneyTransferParamsV1},
+    MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
@@ -51,6 +52,7 @@ impl TestHarness {
         dao: &Dao,
         dao_bulla: &DaoBulla,
         proposal: &DaoProposal,
+        proposal_coins: &Vec<CoinParams>,
         yes_vote_value: u64,
         all_vote_value: u64,
         yes_vote_blind: pallas::Scalar,
@@ -72,13 +74,18 @@ impl TestHarness {
         // TODO: FIXME: This is not checked anywhere!
         let exec_signature_secret = SecretKey::random(&mut OsRng);
 
-        let coins = dao_wallet
+        assert!(proposal_coins.len() > 0);
+        let proposal_token_id = proposal_coins[0].token_id;
+        assert!(proposal_coins.iter().all(|c| c.token_id == proposal_token_id));
+        let proposal_amount = proposal_coins.iter().map(|c| c.value).sum();
+
+        let dao_coins = dao_wallet
             .unspent_money_coins
             .iter()
-            .filter(|x| x.note.token_id == proposal.token_id)
+            .filter(|x| x.note.token_id == proposal_token_id)
             .cloned()
             .collect();
-        let (spent_coins, change_value) = xfer::select_coins(coins, proposal.amount)?;
+        let (spent_coins, change_value) = xfer::select_coins(dao_coins, proposal_amount)?;
         let tree = dao_wallet.money_merkle_tree.clone();
 
         let mut inputs = vec![];
@@ -95,25 +102,28 @@ impl TestHarness {
             });
         }
 
+        let mut outputs = vec![];
+        for coin in proposal_coins {
+            outputs.push(xfer::TransferCallOutput {
+                value: proposal_amount,
+                token_id: proposal_token_id,
+                public_key: coin.public_key,
+                spend_hook: pallas::Base::ZERO,
+                user_data: pallas::Base::ZERO,
+            });
+        }
+        outputs.push(xfer::TransferCallOutput {
+            value: change_value,
+            token_id: proposal_token_id,
+            public_key: dao_wallet.keypair.public,
+            spend_hook: DAO_CONTRACT_ID.inner(),
+            user_data: dao_bulla.inner(),
+        });
+
         let xfer_builder = xfer::TransferCallBuilder {
             clear_inputs: vec![],
             inputs,
-            outputs: vec![
-                xfer::TransferCallOutput {
-                    value: proposal.amount,
-                    token_id: proposal.token_id,
-                    public_key: proposal.dest,
-                    spend_hook: pallas::Base::ZERO,
-                    user_data: pallas::Base::ZERO,
-                },
-                xfer::TransferCallOutput {
-                    value: change_value,
-                    token_id: proposal.token_id,
-                    public_key: dao_wallet.keypair.public,
-                    spend_hook: DAO_CONTRACT_ID.inner(),
-                    user_data: dao_bulla.inner(),
-                },
-            ],
+            outputs,
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
             burn_zkbin: burn_zkbin.clone(),

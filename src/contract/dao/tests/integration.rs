@@ -183,7 +183,7 @@ fn integration_test() -> Result<()> {
 
         // These coins are passed around to all DAO members who verify its validity
         // They also check hashing them equals the proposal_commit
-        let coins = vec![CoinParams {
+        let proposal_coins = vec![CoinParams {
             public_key: th.holders.get(&Holder::Rachel).unwrap().keypair.public,
             value: PROPOSAL_AMOUNT,
             token_id: drk_token_id,
@@ -193,7 +193,7 @@ fn integration_test() -> Result<()> {
         }];
         // We can add whatever we want in here, even arbitrary text
         // It's up to the auth module to decide what to do with it.
-        let content_commit = poseidon_hash([coins[0].to_coin().inner()]);
+        let content_commit = poseidon_hash([proposal_coins[0].to_coin().inner()]);
         let auth_contract_id = pallas::Base::ZERO;
         let auth_function_id = pallas::Base::ZERO;
 
@@ -324,6 +324,7 @@ fn integration_test() -> Result<()> {
             &dao,
             &dao_mint_params.dao_bulla,
             &propose_info,
+            &proposal_coins,
             total_yes_vote_value,
             total_all_vote_value,
             total_yes_vote_blind,

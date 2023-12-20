@@ -116,11 +116,6 @@ impl TryInto<DaoBulla> for ShareAddress {
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoProposal {
-    // delet [
-    pub dest: PublicKey,
-    pub amount: u64,
-    pub token_id: TokenId,
-    // ]
     pub content_commit: pallas::Base,
     pub auth_contract_id: pallas::Base,
     pub auth_function_id: pallas::Base,
@@ -319,3 +314,7 @@ pub struct DaoExecUpdate {
     /// The proposal bulla
     pub proposal: DaoProposalBulla,
 }
+
+/// Parameters for `Dao::AuthMoneyTransfer`
+#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
+pub struct DaoAuthMoneyTransferParams {}

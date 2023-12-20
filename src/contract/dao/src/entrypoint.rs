@@ -55,6 +55,9 @@ use vote::{dao_vote_get_metadata, dao_vote_process_instruction, dao_vote_process
 mod exec;
 use exec::{dao_exec_get_metadata, dao_exec_process_instruction, dao_exec_process_update};
 
+mod auth_xfer;
+use auth_xfer::{dao_authxfer_get_metadata, dao_authxfer_process_instruction};
+
 darkfi_sdk::define_contract!(
     init: init_contract,
     exec: process_instruction,
@@ -69,12 +72,13 @@ darkfi_sdk::define_contract!(
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // The zkas circuits can simply be embedded in the wasm and set up by
     // the initialization.
-    zkas_db_set(&include_bytes!("../proof/dao-exec.zk.bin")[..])?;
     zkas_db_set(&include_bytes!("../proof/dao-mint.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../proof/dao-vote-burn.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../proof/dao-vote-main.zk.bin")[..])?;
     zkas_db_set(&include_bytes!("../proof/dao-propose-burn.zk.bin")[..])?;
     zkas_db_set(&include_bytes!("../proof/dao-propose-main.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../proof/dao-vote-burn.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../proof/dao-vote-main.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../proof/dao-exec.zk.bin")[..])?;
+    //zkas_db_set(&include_bytes!("../proof/dao-auth-money-transfer.zk.bin")[..])?;
 
     // Set up db for general info
     let dao_info_db = match db_lookup(cid, DAO_CONTRACT_DB_INFO_TREE) {
@@ -140,91 +144,39 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
 /// contract calls in the transaction.
 fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
     let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
-    if call_idx >= calls.len() as u32 {
-        msg!("[DAO:get_metadata()] Error: call_idx >= calls.len()");
-        return Err(ContractError::Internal)
-    }
+    let self_ = &calls[call_idx as usize].data;
+    let func = DaoFunction::try_from(self_.data[0])?;
 
-    match DaoFunction::try_from(calls[call_idx as usize].data.data[0])? {
-        DaoFunction::Mint => {
-            let metadata = dao_mint_get_metadata(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
-        }
-
-        DaoFunction::Propose => {
-            let metadata = dao_propose_get_metadata(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
-        }
-
-        DaoFunction::Vote => {
-            let metadata = dao_vote_get_metadata(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
-        }
-
-        DaoFunction::Exec => {
-            let metadata = dao_exec_get_metadata(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
-        }
-    }
+    let metadata = match func {
+        DaoFunction::Mint => dao_mint_get_metadata(cid, call_idx, calls)?,
+        DaoFunction::Propose => dao_propose_get_metadata(cid, call_idx, calls)?,
+        DaoFunction::Vote => dao_vote_get_metadata(cid, call_idx, calls)?,
+        DaoFunction::Exec => dao_exec_get_metadata(cid, call_idx, calls)?,
+        DaoFunction::AuthMoneyTransfer => dao_authxfer_get_metadata(cid, call_idx, calls)?,
+    };
+    Ok(set_return_data(&metadata)?)
 }
 
 /// This function verifies a state transition and produces a state update
 /// if everything is successful.
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
     let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
-    if call_idx >= calls.len() as u32 {
-        msg!("[DAO::process_instruction()] Error: call_idx >= calls.len()");
-        return Err(ContractError::Internal)
-    }
-
     let self_ = &calls[call_idx as usize].data;
     let func = DaoFunction::try_from(self_.data[0])?;
 
-    if calls.len() != 1 {
-        // Enforce a strict structure for our tx
-        if calls.len() != 2 || call_idx != 1 {
-            msg!("[Dao] Error: No more than 2 calls allowed, and DAO call must be last");
-            return Err(DaoError::InvalidCalls.into())
-        }
-
-        // We can unpack user_data and check the function call is correct.
-        // But in this contract, only DAO::exec() can be invoked by other ones.
-        // So just check the function call is correct.
-
-        // NOTE: we may wish to improve this since it cripples user composability.
-
-        if func != DaoFunction::Exec {
-            msg!("[Dao] Error: Only DAO::exec() can be invoked");
-            return Err(DaoError::InvalidCalls.into())
-        }
-    }
-
-    match func {
-        DaoFunction::Mint => {
-            let update_data = dao_mint_process_instruction(cid, call_idx, calls)?;
-            Ok(set_return_data(&update_data)?)
-        }
-
-        DaoFunction::Propose => {
-            let update_data = dao_propose_process_instruction(cid, call_idx, calls)?;
-            Ok(set_return_data(&update_data)?)
-        }
-
-        DaoFunction::Vote => {
-            let update_data = dao_vote_process_instruction(cid, call_idx, calls)?;
-            Ok(set_return_data(&update_data)?)
-        }
-
-        DaoFunction::Exec => {
-            let update_data = dao_exec_process_instruction(cid, call_idx, calls)?;
-            Ok(set_return_data(&update_data)?)
-        }
-    }
+    let update_data = match func {
+        DaoFunction::Mint => dao_mint_process_instruction(cid, call_idx, calls)?,
+        DaoFunction::Propose => dao_propose_process_instruction(cid, call_idx, calls)?,
+        DaoFunction::Vote => dao_vote_process_instruction(cid, call_idx, calls)?,
+        DaoFunction::Exec => dao_exec_process_instruction(cid, call_idx, calls)?,
+        DaoFunction::AuthMoneyTransfer => dao_authxfer_process_instruction(cid, call_idx, calls)?,
+    };
+    Ok(set_return_data(&update_data)?)
 }
 
 /// This function attempts to write a given state update provided the previous
 /// steps of the contract call execution were successful. The payload given to
-/// the functioon is the update data retrieved from `process_instruction()`.
+/// the function is the update data retrieved from `process_instruction()`.
 fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
     match DaoFunction::try_from(update_data[0])? {
         DaoFunction::Mint => {
@@ -245,6 +197,11 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
         DaoFunction::Exec => {
             let update: DaoExecUpdate = deserialize(&update_data[1..])?;
             Ok(dao_exec_process_update(cid, update)?)
+        }
+
+        DaoFunction::AuthMoneyTransfer => {
+            // Does nothing, just verifies the other calls are correct
+            Ok(())
         }
     }
 }

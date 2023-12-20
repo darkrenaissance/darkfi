@@ -81,13 +81,9 @@ impl TestHarness {
         };
 
         let proposal = DaoProposal {
-            dest: self.holders.get(recipient).unwrap().keypair.public,
-            amount,
-            token_id: tx_token_id,
             content_commit,
             auth_contract_id,
             auth_function_id,
-            // TODO: pass proposal in directly
             dao_bulla: dao.to_bulla(),
             blind: pallas::Base::random(&mut OsRng),
         };

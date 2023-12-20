@@ -217,7 +217,6 @@ impl DaoVoteCall {
         let public_inputs = vec![
             token_commit,
             proposal_bulla.inner(),
-            // this should be a value commit??
             *yes_vote_commit_coords.x(),
             *yes_vote_commit_coords.y(),
             *all_vote_commit_coords.x(),
