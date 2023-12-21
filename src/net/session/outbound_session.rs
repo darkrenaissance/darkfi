@@ -319,10 +319,6 @@ impl Slot {
                     self.slot, addr, e
                 );
 
-                // At this point we failed to connect.
-                // Remove this item from the whitelist and add it to the greylist.
-                self.p2p().hosts().whitelist_downgrade(&addr).await;
-
                 // Remove connection from pending
                 self.p2p().remove_pending(&addr).await;
 
