@@ -144,6 +144,24 @@ pub trait Session: Sync {
         Ok(())
     }
 
+    async fn perform_local_handshake(
+        &self,
+        protocol_version: Arc<ProtocolVersion>,
+        channel: ChannelPtr,
+        executor: Arc<Executor<'_>>,
+    ) -> Result<()> {
+        // Perform handshake
+        protocol_version.run(executor.clone()).await?;
+
+        // Channel is now initialized
+
+        // Subscribe to stop, so we can remove from p2p
+        executor.spawn(remove_sub_on_stop(self.p2p(), channel)).detach();
+
+        // Channel is ready for use
+        Ok(())
+    }
+
     /// Returns a pointer to the p2p network interface
     fn p2p(&self) -> P2pPtr;
 
