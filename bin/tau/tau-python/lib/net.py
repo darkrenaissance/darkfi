@@ -1,14 +1,4 @@
-import json, os, sys
-from Crypto.Cipher import AES
-
-# import lib.config
-
-# should be 32 bytes hex
-# https://pycryptodome.readthedocs.io/en/latest/src/cipher/aes.html
-# KEY = bytes.fromhex(lib.config.get(
-#     "shared_secret",
-#     "87b9b70e722d20c046c8dba8d0add1f16307fec33debffec9d001fd20dbca3ee"
-# ))
+import json
 
 class Channel:
 
@@ -26,28 +16,6 @@ class Channel:
     async def receive(self):
         if (plaintext := await self.readline()) is None:
             return None
-        # if (ciphertext := await self.readline()) is None:
-        #     return None
-        # if (tag := await self.readline()) is None:
-        #     return None
-
-        # nonce = bytes.fromhex(nonce)
-        # ciphertext = bytes.fromhex(ciphertext)
-        # tag = bytes.fromhex(tag)
-
-        #print(f"{nonce.hex()}")
-        #print(f"{ciphertext.hex()}")
-        #print(f"{tag.hex()}")
-        #print()
-
-        # Decrypt
-        # cipher = AES.new(KEY, AES.MODE_EAX, nonce=nonce)
-        # plaintext = cipher.decrypt(ciphertext)
-        # try:
-        #     cipher.verify(tag)
-        # except ValueError:
-        #     print("error: key incorrect or message corrupted", file=sys.stderr)
-        #     return None
 
         message = plaintext
         response = json.loads(message)
@@ -57,24 +25,6 @@ class Channel:
         message = json.dumps(obj)
         data = message.encode()
 
-        # Encrypt
-        # cipher = AES.new(KEY, AES.MODE_EAX)
-        # nonce = cipher.nonce
-        # ciphertext, tag = cipher.encrypt_and_digest(data)
-
-        #print(f"{nonce.hex()}")
-        #print(f"{ciphertext.hex()}")
-        #print(f"{tag.hex()}")
-        #print()
-
-        # Encode as hex strings since the bytes might contain new lines
-        # nonce = nonce.hex().encode()
-        # ciphertext = ciphertext.hex().encode()
-        # tag = tag.hex().encode()
-
-        # self.writer.write(nonce + b"\n")
-        # self.writer.write(ciphertext + b"\n")
-        # self.writer.write(tag + b"\n")
         self.writer.write(data + b"\n")
         await self.writer.drain()
 
