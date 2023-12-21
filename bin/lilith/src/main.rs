@@ -169,43 +169,44 @@ impl RequestHandler for Lilith {
     }
 }
 
+// TODO: FIXME
 fn load_hosts(path: &Path, networks: &[&str]) -> HashMap<String, Vec<(Url, u64)>> {
     let mut saved_hosts = HashMap::new();
 
-    let contents = load_file(path);
-    if let Err(e) = contents {
-        warn!(target: "lilith", "Failed retrieving saved hosts: {}", e);
-        return saved_hosts
-    }
+    //let contents = load_file(path);
+    //if let Err(e) = contents {
+    //    warn!(target: "lilith", "Failed retrieving saved hosts: {}", e);
+    //    return saved_hosts
+    //}
 
-    for line in contents.unwrap().lines() {
-        let data: Vec<&str> = line.split('\t').collect();
-        debug!(target: "lilith", "::load_hosts()::data\"{:?}\"", data);
-        if networks.contains(&data[0]) {
-            let mut hosts = match saved_hosts.get(data[0]) {
-                Some(hosts) => hosts.clone(),
-                None => Vec::new(),
-            };
+    //for line in contents.unwrap().lines() {
+    //    let data: Vec<&str> = line.split('\t').collect();
+    //    debug!(target: "lilith", "::load_hosts()::data\"{:?}\"", data);
+    //    if networks.contains(&data[0]) {
+    //        let mut hosts = match saved_hosts.get(data[0]) {
+    //            Some(hosts) => hosts.clone(),
+    //            None => Vec::new(),
+    //        };
 
-            let url = match Url::parse(data[1]) {
-                Ok(u) => u,
-                Err(e) => {
-                    warn!(target: "lilith", "Skipping malformed url: {} ({})", data[1], e);
-                    continue
-                }
-            };
+    //        let url = match Url::parse(data[1]) {
+    //            Ok(u) => u,
+    //            Err(e) => {
+    //                warn!(target: "lilith", "Skipping malformed url: {} ({})", data[1], e);
+    //                continue
+    //            }
+    //        };
 
-            let last_seen = match data[2].parse::<u64>() {
-                Ok(u) => u,
-                Err(e) => {
-                    warn!(target: "lilith", "Skipping malformed timestamp: {} ({})", data[2], e);
-                    continue
-                }
-            };
-            hosts.push((url, last_seen));
-            saved_hosts.insert(data[0].to_string(), hosts);
-        }
-    }
+    //        let last_seen = match data[2].parse::<u64>() {
+    //            Ok(u) => u,
+    //            Err(e) => {
+    //                warn!(target: "lilith", "Skipping malformed timestamp: {} ({})", data[2], e);
+    //                continue
+    //            }
+    //        };
+    //        hosts.push((url, last_seen));
+    //        saved_hosts.insert(data[0].to_string(), hosts);
+    //    }
+    //}
 
     saved_hosts
 }
