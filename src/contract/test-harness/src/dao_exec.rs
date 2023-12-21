@@ -193,11 +193,14 @@ impl TestHarness {
             vec![],
         );
         tx_builder
+            .append(ContractCallLeaf { call: authxfer_call, proofs: authxfer_proofs }, vec![])?;
+        tx_builder
             .append(ContractCallLeaf { call: xfer_call, proofs: xfer_secrets.proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
+        let authxfer_sigs = vec![];
         let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_secrets.signature_secrets)?;
         let exec_sigs = tx.create_sigs(&mut OsRng, &[exec_signature_secret])?;
-        tx.signatures = vec![xfer_sigs, exec_sigs];
+        tx.signatures = vec![authxfer_sigs, xfer_sigs, exec_sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());
 
         // Calculate transaction sizes
