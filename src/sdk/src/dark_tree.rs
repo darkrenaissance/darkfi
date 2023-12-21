@@ -163,6 +163,41 @@ impl<T: Clone + Send + Sync> DarkTree<T> {
         Ok(self.iter().cloned().map(|x| x.info).collect())
     }
 
+    /// Build the [`DarkTree`] flattened vector using
+    /// .build_vec() and then move the root from last
+    /// position to first, updating all indexes
+    pub fn build_shifted_root_vec(&mut self) -> DarkTreeResult<Vec<DarkLeaf<T>>> {
+        let mut vec = self.build_vec()?;
+
+        // Keep initial root index
+        let root_index = vec.len() - 1;
+
+        // Grab root and update its children indexes
+        let mut root = vec.pop().unwrap();
+        for child in &mut root.children_indexes {
+            *child += 1;
+        }
+
+        // Update rest indexes by shifting 1 position
+        for leaf in &mut vec {
+            if let Some(parent) = &mut leaf.parent_index {
+                if *parent == root_index {
+                    *parent = 0;
+                } else {
+                    *parent += 1;
+                }
+            }
+            for child in &mut leaf.children_indexes {
+                *child += 1;
+            }
+        }
+
+        // Push root in the front of the vec
+        vec.insert(0, root);
+
+        Ok(vec)
+    }
+
     /// Return the count of all [`DarkTree`] leafs.
     fn len(&self) -> usize {
         self.iter().count()
@@ -511,6 +546,7 @@ pub fn dark_leaf_vec_integrity_check<T: Clone + Send + Sync>(
     leafs: &[DarkLeaf<T>],
     min_capacity: Option<usize>,
     max_capacity: Option<usize>,
+    shifted_root: bool,
 ) -> DarkTreeResult<()> {
     // Setup min capacity
     let min_capacity = if let Some(min_capacity) = min_capacity {
@@ -543,9 +579,17 @@ pub fn dark_leaf_vec_integrity_check<T: Clone + Send + Sync>(
         }
     }
 
-    // Check each leaf indexes exluding root(last)
+    // Grab correct range iterator to exclude root
+    let iterator = if shifted_root { leafs[1..].iter() } else { leafs[..leafs.len() - 1].iter() };
+
+    // Check each leaf indexes exluding root
     let mut checked_indexes = Vec::with_capacity(leafs.len());
-    for (index, leaf) in leafs[..leafs.len() - 1].iter().enumerate() {
+    for (mut index, leaf) in iterator.enumerate() {
+        // Shift index
+        if shifted_root {
+            index += 1;
+        }
+
         // Check parent index exists
         let Some(parent_index) = leaf.parent_index else {
             return Err(DarkTreeError::InvalidLeafParentIndex(index))
@@ -556,8 +600,9 @@ pub fn dark_leaf_vec_integrity_check<T: Clone + Send + Sync>(
             return Err(DarkTreeError::InvalidLeafParentIndex(index))
         }
 
-        // Our index must be less than our parent index
-        if index >= parent_index {
+        // Our index must be less than our parent index, excluding root
+        // when shifted
+        if (parent_index != 0 || !shifted_root) && index >= parent_index {
             return Err(DarkTreeError::InvalidLeafParentIndex(index))
         }
 
@@ -567,13 +612,14 @@ pub fn dark_leaf_vec_integrity_check<T: Clone + Send + Sync>(
         }
 
         // Check children indexes validity
-        check_children(leafs, &index, leaf, &checked_indexes)?;
+        check_children(leafs, &index, leaf, &checked_indexes, shifted_root)?;
 
         checked_indexes.push(index);
     }
 
     // It's safe to unwrap here since we enforced min capacity of 1
-    let root = leafs.last().unwrap();
+    let (root, root_index) =
+        if shifted_root { (&leafs[0], 0) } else { (leafs.last().unwrap(), leafs.len() - 1) };
 
     // Root must not contain a parent
     if root.parent_index.is_some() {
@@ -581,7 +627,7 @@ pub fn dark_leaf_vec_integrity_check<T: Clone + Send + Sync>(
     }
 
     // Check its children
-    check_children(leafs, &(leafs.len() - 1), root, &checked_indexes)
+    check_children(leafs, &root_index, root, &checked_indexes, shifted_root)
 }
 
 /// Check `DarkLeaf` children indexes validity
@@ -590,6 +636,7 @@ fn check_children<T: Clone + Send + Sync>(
     index: &usize,
     leaf: &DarkLeaf<T>,
     checked_indexes: &[usize],
+    shifted_root: bool,
 ) -> DarkTreeResult<()> {
     let mut children_vec = Vec::with_capacity(leaf.children_indexes.len());
     for child_index in &leaf.children_indexes {
@@ -605,8 +652,9 @@ fn check_children<T: Clone + Send + Sync>(
             return Err(DarkTreeError::InvalidLeafChildrenIndexes(*index))
         }
 
-        // Our index must be greater than our child index
-        if index <= child_index {
+        // Our index must be greater than our child index, excluding root
+        // when shifted
+        if (*index != 0 || !shifted_root) && index <= child_index {
             return Err(DarkTreeError::InvalidLeafChildrenIndexes(*index))
         }
 
@@ -1254,15 +1302,15 @@ mod tests {
         let vec = tree.build_vec()?;
 
         // Verify vector integrity
-        dark_leaf_vec_integrity_check(&vec, Some(23), Some(23))?;
+        dark_leaf_vec_integrity_check(&vec, Some(23), Some(23), false)?;
 
         // Verify vector integrity will fail using different bounds:
         // 1. Leafs less that min capacity
-        assert!(dark_leaf_vec_integrity_check(&vec, Some(24), None).is_err());
+        assert!(dark_leaf_vec_integrity_check(&vec, Some(24), None, false).is_err());
         // 2. Leafs more than max capacity
-        assert!(dark_leaf_vec_integrity_check(&vec, None, Some(22)).is_err());
+        assert!(dark_leaf_vec_integrity_check(&vec, None, Some(22), false).is_err());
         // 3. Max capacity less than min capacity
-        assert!(dark_leaf_vec_integrity_check(&vec, Some(23), Some(22)).is_err());
+        assert!(dark_leaf_vec_integrity_check(&vec, Some(23), Some(22), false).is_err());
 
         // Loop the vector to verify it follows expected
         // traversal order.
@@ -1284,21 +1332,21 @@ mod tests {
         ];
 
         // Verify vector integrity will fail
-        assert!(dark_leaf_vec_integrity_check(&vec, None, None).is_err());
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None, false).is_err());
 
         // Generate a new [`DarkLeaf`] vector manually,
         // corresponding to a [`DarkTree`] with out of bound parent index.
         let vec = vec![DarkLeaf { data: 0, parent_index: Some(2), children_indexes: vec![] }];
 
         // Verify vector integrity will fail
-        assert!(dark_leaf_vec_integrity_check(&vec, None, None).is_err());
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None, false).is_err());
 
         // Generate a new [`DarkLeaf`] vector manually,
         // corresponding to a [`DarkTree`] with out of bound children indexes
         let vec = vec![DarkLeaf { data: 0, parent_index: None, children_indexes: vec![1] }];
 
         // Verify vector integrity will fail
-        assert!(dark_leaf_vec_integrity_check(&vec, None, None).is_err());
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None, false).is_err());
 
         // Generate a new [`DarkLeaf`] vector manually,
         // corresponding to a [`DarkTree`] with duplicate children indexes
@@ -1309,7 +1357,7 @@ mod tests {
         ];
 
         // Verify vector integrity will fail
-        assert!(dark_leaf_vec_integrity_check(&vec, None, None).is_err());
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None, false).is_err());
 
         // Generate a new [`DarkLeaf`] vector manually,
         // corresponding to a [`DarkTree`] with children after parent
@@ -1320,7 +1368,7 @@ mod tests {
         ];
 
         // Verify vector integrity will fail
-        assert!(dark_leaf_vec_integrity_check(&vec, None, None).is_err());
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None, false).is_err());
 
         // Generate a new [`DarkLeaf`] vector manually,
         // corresponding to a [`DarkTree`] with nothing indexed
@@ -1331,7 +1379,102 @@ mod tests {
         ];
 
         // Verify vector integrity will fail
-        assert!(dark_leaf_vec_integrity_check(&vec, None, None).is_err());
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None, false).is_err());
+
+        // Thanks for reading
+        Ok(())
+    }
+
+    #[test]
+    fn test_darktree_shifted_root_flattened_vec() -> DarkTreeResult<()> {
+        let (mut tree, mut traversal_order) = generate_tree()?;
+
+        // Shift root in traversal order
+        let root = traversal_order.pop().unwrap();
+        traversal_order.insert(0, root);
+
+        // Build the flattened vector
+        let vec = tree.build_shifted_root_vec()?;
+
+        // Verify vector integrity
+        dark_leaf_vec_integrity_check(&vec, Some(23), Some(23), true)?;
+
+        // Verify vector integrity will fail using different bounds:
+        // 1. Leafs less that min capacity
+        assert!(dark_leaf_vec_integrity_check(&vec, Some(24), None, true).is_err());
+        // 2. Leafs more than max capacity
+        assert!(dark_leaf_vec_integrity_check(&vec, None, Some(22), true).is_err());
+        // 3. Max capacity less than min capacity
+        assert!(dark_leaf_vec_integrity_check(&vec, Some(23), Some(22), true).is_err());
+
+        // Loop the vector to verify it follows expected
+        // traversal order.
+        for (index, leaf) in vec.iter().enumerate() {
+            assert_eq!(leaf.data, traversal_order[index]);
+        }
+
+        // Verify the tree is still intact
+        let (new_tree, _) = generate_tree()?;
+        assert_eq!(tree, new_tree);
+
+        // Generate a new [`DarkLeaf`] vector manually,
+        // corresponding to a [`DarkTree`] with a 2 children,
+        // with erroneous indexes
+        let vec = vec![
+            DarkLeaf { data: 0, parent_index: None, children_indexes: vec![0, 2] },
+            DarkLeaf { data: 0, parent_index: Some(0), children_indexes: vec![] },
+            DarkLeaf { data: 0, parent_index: Some(0), children_indexes: vec![] },
+        ];
+
+        // Verify vector integrity will fail
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None, true).is_err());
+
+        // Generate a new [`DarkLeaf`] vector manually,
+        // corresponding to a [`DarkTree`] with out of bound parent index.
+        let vec = vec![DarkLeaf { data: 0, parent_index: Some(2), children_indexes: vec![] }];
+
+        // Verify vector integrity will fail
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None, true).is_err());
+
+        // Generate a new [`DarkLeaf`] vector manually,
+        // corresponding to a [`DarkTree`] with out of bound children indexes
+        let vec = vec![DarkLeaf { data: 0, parent_index: None, children_indexes: vec![1] }];
+
+        // Verify vector integrity will fail
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None, true).is_err());
+
+        // Generate a new [`DarkLeaf`] vector manually,
+        // corresponding to a [`DarkTree`] with duplicate children indexes
+        let vec = vec![
+            DarkLeaf { data: 0, parent_index: None, children_indexes: vec![1, 1, 2] },
+            DarkLeaf { data: 0, parent_index: Some(0), children_indexes: vec![] },
+            DarkLeaf { data: 0, parent_index: Some(0), children_indexes: vec![] },
+        ];
+
+        // Verify vector integrity will fail
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None, true).is_err());
+
+        // Generate a new [`DarkLeaf`] vector manually,
+        // corresponding to a [`DarkTree`] with children before parent
+        let vec = vec![
+            DarkLeaf { data: 0, parent_index: Some(2), children_indexes: vec![] },
+            DarkLeaf { data: 0, parent_index: Some(2), children_indexes: vec![] },
+            DarkLeaf { data: 0, parent_index: None, children_indexes: vec![0, 1] },
+        ];
+
+        // Verify vector integrity will fail
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None, true).is_err());
+
+        // Generate a new [`DarkLeaf`] vector manually,
+        // corresponding to a [`DarkTree`] with nothing indexed
+        let vec = vec![
+            DarkLeaf { data: 0, parent_index: None, children_indexes: vec![] },
+            DarkLeaf { data: 0, parent_index: None, children_indexes: vec![] },
+            DarkLeaf { data: 0, parent_index: None, children_indexes: vec![] },
+        ];
+
+        // Verify vector integrity will fail
+        assert!(dark_leaf_vec_integrity_check(&vec, None, None, true).is_err());
 
         // Thanks for reading
         Ok(())

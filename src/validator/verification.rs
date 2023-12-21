@@ -347,9 +347,9 @@ pub async fn verify_transaction(
 
     // Verify calls indexes integrity
     if verify_fee {
-        dark_leaf_vec_integrity_check(&tx.calls, Some(MIN_TX_CALLS + 1), Some(MAX_TX_CALLS))?;
+        dark_leaf_vec_integrity_check(&tx.calls, Some(MIN_TX_CALLS + 1), Some(MAX_TX_CALLS), true)?;
     } else {
-        dark_leaf_vec_integrity_check(&tx.calls, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS))?;
+        dark_leaf_vec_integrity_check(&tx.calls, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS), true)?;
     }
 
     // Table of public inputs used for ZK proof verification
