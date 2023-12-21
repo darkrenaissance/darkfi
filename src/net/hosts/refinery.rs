@@ -135,6 +135,7 @@ pub async fn ping_node(addr: &Url, p2p: P2pPtr) -> bool {
                 }
                 Err(e) => {
                     debug!(target: "net::refinery::ping_node()", "Handshake failure! {}", e);
+                    channel.stop().await;
                     false
                 }
             }
