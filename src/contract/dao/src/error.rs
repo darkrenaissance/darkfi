@@ -53,6 +53,9 @@ pub enum DaoError {
     #[error("Attempted double vote")]
     DoubleVote,
 
+    #[error("Child of exec call does not match proposal")]
+    ExecCallWrongChildCall,
+
     #[error("Exec call has invalid tx format")]
     ExecCallInvalidFormat,
 
@@ -80,10 +83,11 @@ impl From<DaoError> for ContractError {
             DaoError::ProposalEnded => Self::Custom(9),
             DaoError::CoinAlreadySpent => Self::Custom(10),
             DaoError::DoubleVote => Self::Custom(11),
-            DaoError::ExecCallInvalidFormat => Self::Custom(12),
-            DaoError::ExecCallOutputsLenNot2 => Self::Custom(13),
-            DaoError::ExecCallValueMismatch => Self::Custom(14),
-            DaoError::VoteCommitMismatch => Self::Custom(15),
+            DaoError::ExecCallWrongChildCall => Self::Custom(12),
+            DaoError::ExecCallInvalidFormat => Self::Custom(13),
+            DaoError::ExecCallOutputsLenNot2 => Self::Custom(14),
+            DaoError::ExecCallValueMismatch => Self::Custom(15),
+            DaoError::VoteCommitMismatch => Self::Custom(16),
         }
     }
 }

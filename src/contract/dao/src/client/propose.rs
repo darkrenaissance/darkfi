@@ -35,7 +35,7 @@ use darkfi::{
     Result,
 };
 
-use crate::model::{Dao, DaoProposal, DaoProposeParams, DaoProposeParamsInput};
+use crate::model::{Dao, DaoProposal, DaoProposeParams, DaoProposeParamsInput, VecAuthCallCommit};
 
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct DaoProposeNote {
@@ -178,9 +178,8 @@ impl DaoProposeCall {
             // Used for blinding exported gov token ID
             Witness::Base(Value::known(gov_token_blind)),
             // proposal params
-            Witness::Base(Value::known(self.proposal.content_commit)),
-            Witness::Base(Value::known(self.proposal.auth_contract_id)),
-            Witness::Base(Value::known(self.proposal.auth_function_id)),
+            Witness::Base(Value::known(self.proposal.auth_calls.commit())),
+            Witness::Base(Value::known(self.proposal.user_data)),
             Witness::Base(Value::known(self.proposal.blind)),
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),

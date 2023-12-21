@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::model::CoinParams;
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, SecretKey},
+    crypto::{pasta_prelude::*, pedersen_commitment_u64, SecretKey},
     pasta::pallas,
 };
 
@@ -31,7 +30,7 @@ use darkfi::{
     Result,
 };
 
-use crate::model::{Dao, DaoBlindAggregateVote, DaoExecParams, DaoProposal};
+use crate::model::{Dao, DaoBlindAggregateVote, DaoExecParams, DaoProposal, VecAuthCallCommit};
 
 pub struct DaoExecCall {
     pub proposal: DaoProposal,
@@ -75,11 +74,12 @@ impl DaoExecCall {
         let all_vote_commit = pedersen_commitment_u64(self.all_vote_value, self.all_vote_blind);
         let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
 
+        let proposal_auth_calls_commit = self.proposal.auth_calls.commit();
+
         let prover_witnesses = vec![
             // proposal params
-            Witness::Base(Value::known(self.proposal.content_commit)),
-            Witness::Base(Value::known(self.proposal.auth_contract_id)),
-            Witness::Base(Value::known(self.proposal.auth_function_id)),
+            Witness::Base(Value::known(proposal_auth_calls_commit)),
+            Witness::Base(Value::known(self.proposal.user_data)),
             Witness::Base(Value::known(self.proposal.blind)),
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),
@@ -100,6 +100,7 @@ impl DaoExecCall {
         debug!(target: "dao", "proposal_bulla: {:?}", proposal_bulla);
         let public_inputs = vec![
             proposal_bulla.inner(),
+            proposal_auth_calls_commit,
             *yes_vote_commit_coords.x(),
             *yes_vote_commit_coords.y(),
             *all_vote_commit_coords.x(),
@@ -114,6 +115,7 @@ impl DaoExecCall {
 
         let params = DaoExecParams {
             proposal: proposal_bulla,
+            proposal_auth_calls: self.proposal.auth_calls,
             blind_total_vote: DaoBlindAggregateVote { yes_vote_commit, all_vote_commit },
         };
 

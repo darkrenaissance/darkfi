@@ -30,7 +30,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::DaoError,
-    model::{DaoExecParams, DaoExecUpdate, DaoProposalMetadata},
+    model::{DaoExecParams, DaoExecUpdate, DaoProposalMetadata, VecAuthCallCommit},
     DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
 
@@ -72,6 +72,7 @@ pub(crate) fn dao_exec_get_metadata(
         DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string(),
         vec![
             dao_exec_params.proposal.inner(),
+            dao_exec_params.proposal_auth_calls.commit(),
             *yes_vote_coords.x(),
             *yes_vote_coords.y(),
             *all_vote_coords.x(),
@@ -95,6 +96,25 @@ pub(crate) fn dao_exec_process_instruction(
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
     let params: DaoExecParams = deserialize(&self_.data.data[1..])?;
+
+    // Check children of DAO exec match the specified calls
+    for auth_call in &params.proposal_auth_calls {
+        let child_idx = self_.children_indexes[auth_call.index];
+        let child = &calls[child_idx];
+        let call = &child.data;
+
+        let function_code = call.data[0] as u64;
+        // How can I do this?
+        //let auth_call_function_code: u64 = auth_call.function_id.into();
+
+        if call.contract_id.inner() != auth_call.contract_id {
+            // || function_code != auth_call_function_code {
+            msg!("[Dao::Exec] Error: wrong child call");
+            //return Err(DaoError::ExecCallWrongChildCall.into())
+        }
+    }
+
+    /*
 
     // ==========================================
     // Enforce the transaction has correct format
@@ -138,6 +158,8 @@ pub(crate) fn dao_exec_process_instruction(
         msg!("[Dao::Exec] Error: Money outputs != 2");
         return Err(DaoError::ExecCallOutputsLenNot2.into())
     }
+
+    */
 
     // 2. Get the ProposalVote from DAO state
     let proposal_db = db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;

@@ -15,9 +15,8 @@ witness "DaoProposeMain" {
 	Base gov_token_blind,
 
 	# Proposal parameters
-    Base proposal_content_commit,
-    Base proposal_auth_contract_id,
-    Base proposal_auth_function_id,
+    Base proposal_auth_calls_commit,
+    Base proposal_user_data,
 	Base proposal_blind,
 
 	# DAO params
@@ -54,9 +53,8 @@ circuit "DaoProposeMain" {
 	# Proves this DAO is valid
 
 	proposal_bulla = poseidon_hash(
-        proposal_content_commit,
-        proposal_auth_contract_id,
-        proposal_auth_function_id,
+        proposal_auth_calls_commit,
+        proposal_user_data,
 		dao_bulla,
 		proposal_blind,
 	);

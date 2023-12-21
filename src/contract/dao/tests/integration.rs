@@ -193,18 +193,12 @@ fn integration_test() -> Result<()> {
         }];
         // We can add whatever we want in here, even arbitrary text
         // It's up to the auth module to decide what to do with it.
-        let content_commit = poseidon_hash([proposal_coins[0].to_coin().inner()]);
-        let auth_contract_id = pallas::Base::ZERO;
-        let auth_function_id = pallas::Base::ZERO;
+        let user_data = pallas::Base::ZERO;
 
         let (propose_tx, propose_params, propose_info) = th.dao_propose(
             &Holder::Alice,
-            content_commit,
-            auth_contract_id,
-            auth_function_id,
-            &Holder::Rachel,
-            PROPOSAL_AMOUNT,
-            drk_token_id,
+            proposal_coins.clone(),
+            user_data,
             &dao,
             &dao_mint_params.dao_bulla,
         )?;

@@ -24,10 +24,10 @@ use darkfi::{
 };
 use darkfi_dao_contract::{
     client::{DaoProposeCall, DaoProposeStakeInput},
-    model::{Dao, DaoBulla, DaoProposal, DaoProposeParams},
+    model::{Dao, DaoAuthCall, DaoBulla, DaoProposal, DaoProposeParams},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
 };
-use darkfi_money_contract::client::OwnCoin;
+use darkfi_money_contract::{client::OwnCoin, model::CoinParams};
 use darkfi_sdk::{
     crypto::{pasta_prelude::Field, MerkleNode, SecretKey, TokenId, DAO_CONTRACT_ID},
     pasta::pallas,
@@ -42,12 +42,8 @@ impl TestHarness {
     pub fn dao_propose(
         &mut self,
         proposer: &Holder,
-        content_commit: pallas::Base,
-        auth_contract_id: pallas::Base,
-        auth_function_id: pallas::Base,
-        recipient: &Holder,
-        amount: u64,
-        tx_token_id: TokenId,
+        proposal_coins: Vec<CoinParams>,
+        user_data: pallas::Base,
         dao: &Dao,
         dao_bulla: &DaoBulla,
     ) -> Result<(Transaction, DaoProposeParams, DaoProposal)> {
@@ -80,10 +76,19 @@ impl TestHarness {
             signature_secret,
         };
 
+        let mut proposal_data = vec![];
+        proposal_coins.encode(&mut proposal_data).unwrap();
+
+        let auth_calls = vec![DaoAuthCall {
+            index: 0,
+            contract_id: DAO_CONTRACT_ID.inner(),
+            function_id: pallas::Base::from(DaoFunction::AuthMoneyTransfer as u64),
+            proposal_data,
+        }];
+
         let proposal = DaoProposal {
-            content_commit,
-            auth_contract_id,
-            auth_function_id,
+            auth_calls,
+            user_data,
             dao_bulla: dao.to_bulla(),
             blind: pallas::Base::random(&mut OsRng),
         };

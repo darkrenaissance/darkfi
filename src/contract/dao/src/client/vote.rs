@@ -36,7 +36,7 @@ use darkfi::{
     Result,
 };
 
-use crate::model::{Dao, DaoProposal, DaoVoteParams, DaoVoteParamsInput};
+use crate::model::{Dao, DaoProposal, DaoVoteParams, DaoVoteParamsInput, VecAuthCallCommit};
 
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct DaoVoteNote {
@@ -191,9 +191,8 @@ impl DaoVoteCall {
 
         let prover_witnesses = vec![
             // proposal params
-            Witness::Base(Value::known(self.proposal.content_commit)),
-            Witness::Base(Value::known(self.proposal.auth_contract_id)),
-            Witness::Base(Value::known(self.proposal.auth_function_id)),
+            Witness::Base(Value::known(self.proposal.auth_calls.commit())),
+            Witness::Base(Value::known(self.proposal.user_data)),
             Witness::Base(Value::known(self.proposal.blind)),
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),

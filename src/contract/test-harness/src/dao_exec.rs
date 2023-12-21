@@ -23,7 +23,7 @@ use darkfi::{
     Result,
 };
 use darkfi_dao_contract::{
-    client::DaoExecCall,
+    client::{DaoAuthMoneyTransferCall, DaoExecCall},
     model::{Dao, DaoBulla, DaoExecParams, DaoProposal},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
@@ -173,6 +173,20 @@ impl TestHarness {
         let mut data = vec![DaoFunction::Exec as u8];
         exec_params.encode(&mut data)?;
         let exec_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
+
+        // Auth module
+        let authxfer_builder = DaoAuthMoneyTransferCall {};
+        let (authxfer_params, authxfer_proofs) = authxfer_builder.make()?;
+        let mut data = vec![DaoFunction::AuthMoneyTransfer as u8];
+        authxfer_params.encode(&mut data)?;
+        let authxfer_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
+
+        // We need to construct this tree, where exec is the parent:
+        //
+        //   exec ->
+        //       authxfer
+        //       xfer
+        //
 
         let mut tx_builder = TransactionBuilder::new(
             ContractCallLeaf { call: exec_call, proofs: exec_proofs },

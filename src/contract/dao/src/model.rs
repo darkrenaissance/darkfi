@@ -17,6 +17,7 @@
  */
 
 use core::str::FromStr;
+use std::io::Read;
 
 use darkfi_sdk::{
     crypto::{
@@ -26,7 +27,7 @@ use darkfi_sdk::{
     error::ContractError,
     pasta::pallas,
 };
-use darkfi_serial::{SerialDecodable, SerialEncodable};
+use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 
 #[cfg(feature = "client")]
 use darkfi_serial::async_trait;
@@ -115,10 +116,33 @@ impl TryInto<DaoBulla> for ShareAddress {
 }
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct DaoAuthCall {
+    pub index: usize,
+    pub contract_id: pallas::Base,
+    pub function_id: pallas::Base,
+    pub proposal_data: Vec<u8>,
+}
+
+pub trait VecAuthCallCommit {
+    fn commit(&self) -> pallas::Base;
+}
+
+impl VecAuthCallCommit for Vec<DaoAuthCall> {
+    fn commit(&self) -> pallas::Base {
+        let mut hasher = blake3::Hasher::new();
+        self.encode(&mut hasher).unwrap();
+        let hash = hasher.finalize();
+        let bytes = hash.as_bytes();
+        let raw_base: [u64; 4] = Decodable::decode(&mut bytes.as_slice()).unwrap();
+        pallas::Base::from_raw(raw_base)
+    }
+}
+
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoProposal {
-    pub content_commit: pallas::Base,
-    pub auth_contract_id: pallas::Base,
-    pub auth_function_id: pallas::Base,
+    pub auth_calls: Vec<DaoAuthCall>,
+    /// Arbitrary data provided by the user. We don't use this.
+    pub user_data: pallas::Base,
     pub dao_bulla: DaoBulla,
     pub blind: pallas::Base,
 }
@@ -126,9 +150,8 @@ pub struct DaoProposal {
 impl DaoProposal {
     pub fn to_bulla(&self) -> DaoProposalBulla {
         let bulla = poseidon_hash([
-            self.content_commit,
-            self.auth_contract_id,
-            self.auth_function_id,
+            self.auth_calls.commit(),
+            self.user_data,
             self.dao_bulla.inner(),
             self.blind,
         ]);
@@ -174,7 +197,7 @@ darkfi_sdk::fp_to_bs58!(DaoProposalBulla);
 darkfi_sdk::ty_from_fp!(DaoProposalBulla);
 
 /// Parameters for `Dao::Mint`
-#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoMintParams {
     /// The DAO bulla
     pub dao_bulla: DaoBulla,
@@ -183,7 +206,7 @@ pub struct DaoMintParams {
 }
 
 /// State update for `Dao::Mint`
-#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoMintUpdate {
     /// Revealed DAO bulla
     pub dao_bulla: DaoBulla,
@@ -205,7 +228,7 @@ pub struct DaoProposeParams {
 }
 
 /// Input for a DAO proposal
-#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoProposeParamsInput {
     /// Value commitment for the input
     pub value_commit: pallas::Point,
@@ -216,7 +239,7 @@ pub struct DaoProposeParamsInput {
 }
 
 /// State update for `Dao::Propose`
-#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoProposeUpdate {
     /// Minted proposal bulla
     pub proposal_bulla: DaoProposalBulla,
@@ -225,7 +248,7 @@ pub struct DaoProposeUpdate {
 }
 
 /// Metadata for a DAO proposal on the blockchain
-#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoProposalMetadata {
     /// Vote aggregate
     pub vote_aggregate: DaoBlindAggregateVote,
@@ -249,7 +272,7 @@ pub struct DaoVoteParams {
 }
 
 /// Input for a DAO proposal vote
-#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoVoteParamsInput {
     /// Revealed nullifier
     pub nullifier: Nullifier,
@@ -274,7 +297,7 @@ pub struct DaoVoteUpdate {
 
 /// Represents a single or multiple blinded votes.
 /// These can be summed together.
-#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoBlindAggregateVote {
     /// Weighted vote commit
     pub yes_vote_commit: pallas::Point,
@@ -300,21 +323,22 @@ impl Default for DaoBlindAggregateVote {
 }
 
 /// Parameters for `Dao::Exec`
-#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoExecParams {
     /// The proposal bulla
     pub proposal: DaoProposalBulla,
+    pub proposal_auth_calls: Vec<DaoAuthCall>,
     /// Aggregated blinds for the vote commitments
     pub blind_total_vote: DaoBlindAggregateVote,
 }
 
 /// State update for `Dao::Exec`
-#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoExecUpdate {
     /// The proposal bulla
     pub proposal: DaoProposalBulla,
 }
 
 /// Parameters for `Dao::AuthMoneyTransfer`
-#[derive(Debug, Copy, Clone, SerialEncodable, SerialDecodable)]
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoAuthMoneyTransferParams {}

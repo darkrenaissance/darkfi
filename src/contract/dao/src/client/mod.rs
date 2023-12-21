@@ -40,6 +40,9 @@ pub use vote::{DaoVoteCall, DaoVoteInput, DaoVoteNote};
 pub mod exec;
 pub use exec::DaoExecCall;
 
+pub mod auth_xfer;
+pub use auth_xfer::DaoAuthMoneyTransferCall;
+
 // Wallet SQL table constant names. These have to represent the SQL schema.
 pub const DAO_DAOS_TABLE: &str = "dao_daos";
 pub const DAO_DAOS_COL_DAO_ID: &str = "dao_id";
