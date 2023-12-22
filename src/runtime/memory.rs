@@ -36,13 +36,12 @@ impl<'a> MemoryManipulation for MemoryView<'a> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
-    use wasmer::{WasmPtr, MemoryType, Memory, Store};
     use super::*;
-    use std::io::Cursor;
     use darkfi_serial::Decodable;
+    use std::io::Cursor;
+    use wasmer::{Memory, MemoryType, Store, WasmPtr};
 
     #[test]
     fn test_memoryview_writeslice() {
@@ -54,7 +53,7 @@ mod tests {
         assert!(res.is_ok());
         let ptr: WasmPtr<u8> = WasmPtr::new(0);
         let slice = ptr.slice(&view, value.len() as u32);
-        let mut buf: [u8; 3] = [0;3];
+        let mut buf: [u8; 3] = [0; 3];
         let _ = slice.expect("err").read_slice(&mut buf);
         assert_eq!(buf, value);
     }
@@ -69,13 +68,13 @@ mod tests {
         assert!(res.is_ok());
         let ptr: WasmPtr<u8> = WasmPtr::new(0);
         let slice = ptr.slice(&view, value.len() as u32)?;
-        let mut buf: [u8; 3] = [0;3];
+        let mut buf: [u8; 3] = [0; 3];
         let _ = slice.read_slice(&mut buf);
         let mut buf_reader = Cursor::new(buf);
         let ret: [u8; 3] = Decodable::decode(&mut buf_reader)?;
-        assert!(buf.len()==(slice.len() as usize));
+        assert!(buf.len() == (slice.len() as usize));
         assert_eq!(ret, value);
-        assert!(buf_reader.position()==slice.len());
+        assert!(buf_reader.position() == slice.len());
         Ok(())
     }
 }
