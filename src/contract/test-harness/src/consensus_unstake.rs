@@ -105,7 +105,7 @@ impl TestHarness {
         let mut unstake_tx_builder = TransactionBuilder::new(
             ContractCallLeaf { call: money_call, proofs: money_unstake_proofs },
             vec![],
-        );
+        )?;
         unstake_tx_builder.append(
             ContractCallLeaf { call: consensus_call, proofs: consensus_unstake_proofs },
             vec![],

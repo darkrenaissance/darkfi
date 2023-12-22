@@ -211,7 +211,7 @@ fn generate_pow_transaction(
     debris.params.encode(&mut data)?;
     let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
     let mut tx_builder =
-        TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![]);
+        TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
     let mut tx = tx_builder.build()?;
     let sigs = tx.create_sigs(&mut OsRng, &[*secret])?;
     tx.signatures = vec![sigs];

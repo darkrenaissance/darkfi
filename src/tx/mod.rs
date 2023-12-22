@@ -23,7 +23,7 @@ use darkfi_sdk::{
         schnorr::{SchnorrPublic, SchnorrSecret, Signature},
         PublicKey, SecretKey,
     },
-    dark_tree::{dark_leaf_vec_integrity_check, DarkLeaf, DarkTree},
+    dark_tree::{dark_forest_leaf_vec_integrity_check, DarkForest, DarkLeaf, DarkTree},
     error::DarkTreeResult,
     pasta::pallas,
     tx::ContractCall,
@@ -210,38 +210,43 @@ pub struct ContractCallLeaf {
 /// Auxilliary structure to build a full [`Transaction`] using
 /// [`DarkTree`] to order everything.
 pub struct TransactionBuilder {
-    /// Contract calls tree
-    pub calls: DarkTree<ContractCallLeaf>,
+    /// Contract calls trees forest
+    pub calls: DarkForest<ContractCallLeaf>,
 }
 
-// TODO: for now we build the tree manually, but we should
+// TODO: for now we build the trees manually, but we should
 //       add all the proper functions for easier building.
 impl TransactionBuilder {
     /// Initialize the builder, using provided data to
-    /// generate its [`DarkTree`] root.
-    pub fn new(data: ContractCallLeaf, children: Vec<DarkTree<ContractCallLeaf>>) -> Self {
-        let calls = DarkTree::new(data, children, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS));
-        Self { calls }
+    /// generate its initial [`DarkTree`] root.
+    pub fn new(
+        data: ContractCallLeaf,
+        children: Vec<DarkTree<ContractCallLeaf>>,
+    ) -> DarkTreeResult<Self> {
+        let calls = DarkForest::new(Some(MIN_TX_CALLS), Some(MAX_TX_CALLS));
+        let mut self_ = Self { calls };
+        self_.append(data, children)?;
+        Ok(self_)
     }
 
-    /// Append a new call to the tree
+    /// Append a new call tree to the forest
     pub fn append(
         &mut self,
         data: ContractCallLeaf,
         children: Vec<DarkTree<ContractCallLeaf>>,
     ) -> DarkTreeResult<()> {
-        let child = DarkTree::new(data, children, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS));
-        self.calls.append(child)
+        let tree = DarkTree::new(data, children, None, None);
+        self.calls.append(tree)
     }
 
-    /// Builder builds the calls vector using the [`DarkTree`]
+    /// Builder builds the calls vector using the [`DarkForest`]
     /// and generates the corresponding [`Transaction`].
     pub fn build(&mut self) -> DarkTreeResult<Transaction> {
         // Build the leafs vector
         let leafs = self.calls.build_vec()?;
 
         // Double check integrity
-        dark_leaf_vec_integrity_check(&leafs, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS), None)?;
+        dark_forest_leaf_vec_integrity_check(&leafs, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS))?;
 
         // Build the corresponding transaction
         let mut calls = Vec::with_capacity(leafs.len());

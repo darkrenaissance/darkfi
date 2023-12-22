@@ -90,7 +90,7 @@ impl TestHarness {
         let mut unstake_request_builder = TransactionBuilder::new(
             ContractCallLeaf { call, proofs: unstake_request_proofs },
             vec![],
-        );
+        )?;
         let mut unstake_request_tx = unstake_request_builder.build()?;
         let sigs =
             unstake_request_tx.create_sigs(&mut OsRng, &[unstake_request_signature_secret_key])?;

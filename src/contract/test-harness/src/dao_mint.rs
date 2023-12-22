@@ -54,7 +54,7 @@ impl TestHarness {
         let mut data = vec![DaoFunction::Mint as u8];
         params.encode(&mut data)?;
         let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
-        let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![]);
+        let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &[dao_kp.secret])?;
         tx.signatures = vec![sigs];

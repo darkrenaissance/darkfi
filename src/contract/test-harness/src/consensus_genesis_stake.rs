@@ -79,7 +79,7 @@ impl TestHarness {
         let mut genesis_stake_tx_builder = TransactionBuilder::new(
             ContractCallLeaf { call: contract_call, proofs: genesis_stake_proofs },
             vec![],
-        );
+        )?;
         let mut genesis_stake_tx = genesis_stake_tx_builder.build()?;
         let sigs = genesis_stake_tx.create_sigs(&mut OsRng, &[wallet.keypair.secret])?;
         genesis_stake_tx.signatures = vec![sigs];

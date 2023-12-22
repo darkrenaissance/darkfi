@@ -111,7 +111,7 @@ impl TestHarness {
         let mut stake_tx_builder = TransactionBuilder::new(
             ContractCallLeaf { call: consensus_call, proofs: consensus_stake_proofs },
             vec![],
-        );
+        )?;
         stake_tx_builder
             .append(ContractCallLeaf { call: money_call, proofs: money_stake_proofs }, vec![])?;
         let mut stake_tx = stake_tx_builder.build()?;

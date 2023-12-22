@@ -140,7 +140,7 @@ impl TestHarness {
         swap_full_params.encode(&mut data)?;
         let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
         let mut tx_builder =
-            TransactionBuilder::new(ContractCallLeaf { call, proofs: swap_full_proofs }, vec![]);
+            TransactionBuilder::new(ContractCallLeaf { call, proofs: swap_full_proofs }, vec![])?;
         let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &[debris1.signature_secret])?;
         tx.signatures = vec![sigs];

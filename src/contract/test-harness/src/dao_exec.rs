@@ -192,7 +192,7 @@ impl TestHarness {
         //let mut tx_builder = TransactionBuilder::new(
         //    ContractCallLeaf { call: exec_call, proofs: exec_proofs },
         //    vec![],
-        //);
+        //)?;
         //tx_builder
         //    .append(ContractCallLeaf { call: authxfer_call, proofs: authxfer_proofs }, vec![])?;
         //tx_builder

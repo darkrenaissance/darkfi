@@ -21,7 +21,7 @@ use std::collections::HashMap;
 use darkfi_sdk::{
     blockchain::{block_version, expected_reward},
     crypto::{schnorr::SchnorrPublic, PublicKey, CONSENSUS_CONTRACT_ID, MONEY_CONTRACT_ID},
-    dark_tree::dark_leaf_vec_integrity_check,
+    dark_tree::dark_forest_leaf_vec_integrity_check,
     pasta::pallas,
 };
 use darkfi_serial::{deserialize_async, AsyncDecodable, AsyncEncodable, AsyncWriteExt, WriteExt};
@@ -347,9 +347,13 @@ pub async fn verify_transaction(
 
     // Verify calls indexes integrity
     if verify_fee {
-        dark_leaf_vec_integrity_check(&tx.calls, Some(MIN_TX_CALLS + 1), Some(MAX_TX_CALLS), None)?;
+        dark_forest_leaf_vec_integrity_check(
+            &tx.calls,
+            Some(MIN_TX_CALLS + 1),
+            Some(MAX_TX_CALLS),
+        )?;
     } else {
-        dark_leaf_vec_integrity_check(&tx.calls, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS), None)?;
+        dark_forest_leaf_vec_integrity_check(&tx.calls, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS))?;
     }
 
     // Table of public inputs used for ZK proof verification
