@@ -466,11 +466,11 @@ pub enum Error {
     WasmerOomError(String),
 
     #[cfg(feature = "darkfi-sdk")]
-    #[error("Contract execution failed")]
+    #[error("Contract execution failed: {0}")]
     ContractError(darkfi_sdk::error::ContractError),
 
     #[cfg(feature = "darkfi-sdk")]
-    #[error("Invalid DarkTree")]
+    #[error("Invalid DarkTree: {0}")]
     DarkTreeError(darkfi_sdk::error::DarkTreeError),
 
     #[cfg(feature = "blockchain")]

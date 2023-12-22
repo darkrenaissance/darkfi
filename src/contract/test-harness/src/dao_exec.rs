@@ -37,6 +37,7 @@ use darkfi_sdk::{
         pasta_prelude::Field, pedersen_commitment_u64, MerkleNode, SecretKey, DAO_CONTRACT_ID,
         MONEY_CONTRACT_ID,
     },
+    dark_tree::DarkLeaf,
     pasta::pallas,
     ContractCall,
 };
@@ -188,20 +189,28 @@ impl TestHarness {
         //       xfer
         //
 
-        let mut tx_builder = TransactionBuilder::new(
-            ContractCallLeaf { call: exec_call, proofs: exec_proofs },
-            vec![],
-        );
-        tx_builder
-            .append(ContractCallLeaf { call: authxfer_call, proofs: authxfer_proofs }, vec![])?;
-        tx_builder
-            .append(ContractCallLeaf { call: xfer_call, proofs: xfer_secrets.proofs }, vec![])?;
-        let mut tx = tx_builder.build()?;
+        //let mut tx_builder = TransactionBuilder::new(
+        //    ContractCallLeaf { call: exec_call, proofs: exec_proofs },
+        //    vec![],
+        //);
+        //tx_builder
+        //    .append(ContractCallLeaf { call: authxfer_call, proofs: authxfer_proofs }, vec![])?;
+        //tx_builder
+        //let mut tx = tx_builder.build()?;
+
+        let mut tx = Transaction {
+            calls: vec![
+                DarkLeaf { data: authxfer_call, parent_index: Some(2), children_indexes: vec![] },
+                DarkLeaf { data: xfer_call, parent_index: Some(2), children_indexes: vec![] },
+                DarkLeaf { data: exec_call, parent_index: None, children_indexes: vec![0, 1] },
+            ],
+            proofs: vec![authxfer_proofs, xfer_secrets.proofs, exec_proofs],
+            signatures: vec![],
+        };
         let authxfer_sigs = vec![];
         let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_secrets.signature_secrets)?;
         let exec_sigs = tx.create_sigs(&mut OsRng, &[exec_signature_secret])?;
-        // FIXME: this is wrong! exec_sigs should be last... awaiting tree fix
-        tx.signatures = vec![exec_sigs, authxfer_sigs, xfer_sigs];
+        tx.signatures = vec![authxfer_sigs, xfer_sigs, exec_sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());
 
         // Calculate transaction sizes
