@@ -67,6 +67,12 @@ pub enum DaoError {
 
     #[error("Vote commitments mismatch")]
     VoteCommitMismatch,
+
+    #[error("Sibling contract ID is not money::transfer()")]
+    AuthXferSiblingWrongContractId,
+
+    #[error("Sibling function code is not money::transfer()")]
+    AuthXferSiblingWrongFunctionCode,
 }
 
 impl From<DaoError> for ContractError {
@@ -88,6 +94,8 @@ impl From<DaoError> for ContractError {
             DaoError::ExecCallOutputsLenNot2 => Self::Custom(14),
             DaoError::ExecCallValueMismatch => Self::Custom(15),
             DaoError::VoteCommitMismatch => Self::Custom(16),
+            DaoError::AuthXferSiblingWrongContractId => Self::Custom(17),
+            DaoError::AuthXferSiblingWrongFunctionCode => Self::Custom(18),
         }
     }
 }

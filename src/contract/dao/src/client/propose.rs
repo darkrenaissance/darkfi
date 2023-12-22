@@ -37,11 +37,6 @@ use darkfi::{
 
 use crate::model::{Dao, DaoProposal, DaoProposeParams, DaoProposeParamsInput, VecAuthCallCommit};
 
-#[derive(SerialEncodable, SerialDecodable)]
-pub struct DaoProposeNote {
-    pub proposal: DaoProposal,
-}
-
 pub struct DaoProposeStakeInput {
     pub secret: SecretKey,
     pub note: darkfi_money_contract::client::MoneyNote,
@@ -206,8 +201,8 @@ impl DaoProposeCall {
             .expect("DAO::propose() proving error!");
         proofs.push(main_proof);
 
-        let note = DaoProposeNote { proposal: self.proposal };
-        let enc_note = AeadEncryptedNote::encrypt(&note, &self.dao.public_key, &mut OsRng).unwrap();
+        let enc_note =
+            AeadEncryptedNote::encrypt(&self.proposal, &self.dao.public_key, &mut OsRng).unwrap();
         let params = DaoProposeParams {
             dao_merkle_root: self.dao_merkle_root,
             proposal_bulla,

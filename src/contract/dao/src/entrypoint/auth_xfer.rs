@@ -55,6 +55,18 @@ pub(crate) fn dao_authxfer_process_instruction(
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
+    let sibling_idx = call_idx + 1;
+    let xfer_call = &calls[sibling_idx as usize].data;
+
+    if xfer_call.contract_id != *MONEY_CONTRACT_ID {
+        return Err(DaoError::AuthXferSiblingWrongContractId.into())
+    }
+
+    let xfer_call_function_code = xfer_call.data[0];
+    if xfer_call_function_code != MoneyFunction::TransferV1 as u8 {
+        return Err(DaoError::AuthXferSiblingWrongFunctionCode.into())
+    }
+
     let mut update_data = vec![];
     update_data.write_u8(DaoFunction::AuthMoneyTransfer as u8)?;
     Ok(update_data)
