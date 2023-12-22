@@ -119,7 +119,7 @@ impl TryInto<DaoBulla> for ShareAddress {
 pub struct DaoAuthCall {
     pub index: usize,
     pub contract_id: pallas::Base,
-    pub function_id: pallas::Base,
+    pub function_code: u8,
     pub proposal_data: Vec<u8>,
 }
 

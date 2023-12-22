@@ -82,7 +82,7 @@ impl TestHarness {
         let auth_calls = vec![DaoAuthCall {
             index: 0,
             contract_id: DAO_CONTRACT_ID.inner(),
-            function_id: pallas::Base::from(DaoFunction::AuthMoneyTransfer as u64),
+            function_code: DaoFunction::AuthMoneyTransfer as u8,
             proposal_data,
         }];
 

@@ -93,56 +93,22 @@ pub(crate) fn dao_exec_process_instruction(
     let self_ = &calls[call_idx as usize];
     let params: DaoExecParams = deserialize(&self_.data.data[1..])?;
 
-    //for (i, call) in calls.iter().enumerate() {
-    //msg!("{}", i);
-    //msg!("parent: {:?}", call.parent_index);
-    //msg!("child: {:?}", call.children_indexes);
-    //msg!("--");
-    //}
-
     // Check children of DAO exec match the specified calls
-    /*
     for auth_call in &params.proposal_auth_calls {
         let child_idx = self_.children_indexes[auth_call.index];
         let child = &calls[child_idx];
         let call = &child.data;
 
-        let function_code = call.data[0] as u64;
-        // How can I do this?
-        //let auth_call_function_code: u64 = auth_call.function_id.into();
+        let contract_id = call.contract_id.inner();
+        let function_code = call.data[0];
 
-        if call.contract_id.inner() != auth_call.contract_id {
-            // || function_code != auth_call_function_code {
+        if contract_id != auth_call.contract_id || function_code != auth_call.function_code {
             msg!("[Dao::Exec] Error: wrong child call");
-            //return Err(DaoError::ExecCallWrongChildCall.into())
+            return Err(DaoError::ExecCallWrongChildCall.into())
         }
     }
-    */
 
     /*
-
-    // ==========================================
-    // Enforce the transaction has correct format
-    // ==========================================
-    if call_idx == 0 {
-        msg!("[Dao::Exec] Error: child_call_idx will be out of bounds");
-        return Err(DaoError::ExecCallInvalidFormat.into())
-    }
-
-    let child_call_indexes = &self_.children_indexes;
-    if child_call_indexes.len() != 1 {
-        msg!("[Dao::Exec] Error: child_call_idx is missing");
-        return Err(DaoError::ExecCallInvalidFormat.into())
-    }
-    let child_call_idx = child_call_indexes[0];
-    let child = &calls[child_call_idx].data;
-    if child.contract_id != *MONEY_CONTRACT_ID || child.data[0] != MoneyFunction::TransferV1 as u8 {
-        msg!("[Dao::Exec] Error: Transaction has incorrect format");
-        return Err(DaoError::ExecCallInvalidFormat.into())
-    }
-
-    let mt_params: MoneyTransferParamsV1 = deserialize(&calls[0].data.data[1..])?;
-
     // MoneyTransfer should all have the same user_data set.
     // We check this by ensuring that user_data_enc is also the same for all inputs.
     // This means using the same blinding factor for all input's user_data.
@@ -163,7 +129,6 @@ pub(crate) fn dao_exec_process_instruction(
         msg!("[Dao::Exec] Error: Money outputs != 2");
         return Err(DaoError::ExecCallOutputsLenNot2.into())
     }
-
     */
 
     // 2. Get the ProposalVote from DAO state
