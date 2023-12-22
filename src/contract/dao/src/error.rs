@@ -53,14 +53,14 @@ pub enum DaoError {
     #[error("Attempted double vote")]
     DoubleVote,
 
+    #[error("Exec calls len does not match auth spec")]
+    ExecCallWrongChildCallsLen,
+
     #[error("Child of exec call does not match proposal")]
     ExecCallWrongChildCall,
 
     #[error("Exec call has invalid tx format")]
     ExecCallInvalidFormat,
-
-    #[error("Exec call outputs.len() should be 2")]
-    ExecCallOutputsLenNot2,
 
     #[error("Exec call value commitment mismatch")]
     ExecCallValueMismatch,
@@ -73,6 +73,12 @@ pub enum DaoError {
 
     #[error("Sibling function code is not money::transfer()")]
     AuthXferSiblingWrongFunctionCode,
+
+    #[error("Inputs with non-matching encrypted input user data")]
+    AuthXferNonMatchingEncInputUserData,
+
+    #[error("Auth call not found in parent")]
+    AuthXferCallNotFoundInParent,
 }
 
 impl From<DaoError> for ContractError {
@@ -89,13 +95,15 @@ impl From<DaoError> for ContractError {
             DaoError::ProposalEnded => Self::Custom(9),
             DaoError::CoinAlreadySpent => Self::Custom(10),
             DaoError::DoubleVote => Self::Custom(11),
-            DaoError::ExecCallWrongChildCall => Self::Custom(12),
-            DaoError::ExecCallInvalidFormat => Self::Custom(13),
-            DaoError::ExecCallOutputsLenNot2 => Self::Custom(14),
+            DaoError::ExecCallWrongChildCallsLen => Self::Custom(12),
+            DaoError::ExecCallWrongChildCall => Self::Custom(13),
+            DaoError::ExecCallInvalidFormat => Self::Custom(14),
             DaoError::ExecCallValueMismatch => Self::Custom(15),
             DaoError::VoteCommitMismatch => Self::Custom(16),
             DaoError::AuthXferSiblingWrongContractId => Self::Custom(17),
             DaoError::AuthXferSiblingWrongFunctionCode => Self::Custom(18),
+            DaoError::AuthXferNonMatchingEncInputUserData => Self::Custom(19),
+            DaoError::AuthXferCallNotFoundInParent => Self::Custom(20),
         }
     }
 }

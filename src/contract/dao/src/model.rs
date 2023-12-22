@@ -117,10 +117,9 @@ impl TryInto<DaoBulla> for ShareAddress {
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoAuthCall {
-    pub index: usize,
     pub contract_id: pallas::Base,
     pub function_code: u8,
-    pub proposal_data: Vec<u8>,
+    pub auth_data: Vec<u8>,
 }
 
 pub trait VecAuthCallCommit {

@@ -27,9 +27,11 @@ use darkfi_dao_contract::{
     model::{Dao, DaoAuthCall, DaoBulla, DaoProposal, DaoProposeParams},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
 };
-use darkfi_money_contract::{client::OwnCoin, model::CoinParams};
+use darkfi_money_contract::{client::OwnCoin, model::CoinParams, MoneyFunction};
 use darkfi_sdk::{
-    crypto::{pasta_prelude::Field, MerkleNode, SecretKey, TokenId, DAO_CONTRACT_ID},
+    crypto::{
+        pasta_prelude::Field, MerkleNode, SecretKey, TokenId, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+    },
     pasta::pallas,
     ContractCall,
 };
@@ -79,12 +81,18 @@ impl TestHarness {
         let mut proposal_data = vec![];
         proposal_coins.encode(&mut proposal_data).unwrap();
 
-        let auth_calls = vec![DaoAuthCall {
-            index: 0,
-            contract_id: DAO_CONTRACT_ID.inner(),
-            function_code: DaoFunction::AuthMoneyTransfer as u8,
-            proposal_data,
-        }];
+        let auth_calls = vec![
+            DaoAuthCall {
+                contract_id: DAO_CONTRACT_ID.inner(),
+                function_code: DaoFunction::AuthMoneyTransfer as u8,
+                auth_data: proposal_data,
+            },
+            DaoAuthCall {
+                contract_id: MONEY_CONTRACT_ID.inner(),
+                function_code: MoneyFunction::TransferV1 as u8,
+                auth_data: vec![],
+            },
+        ];
 
         let proposal = DaoProposal {
             auth_calls,

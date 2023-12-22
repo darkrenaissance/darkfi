@@ -93,45 +93,39 @@ pub(crate) fn dao_exec_process_instruction(
     let self_ = &calls[call_idx as usize];
     let params: DaoExecParams = deserialize(&self_.data.data[1..])?;
 
+    ///////////////////////////////////////////////////
+    // 1. Verify the correct calling formats match the proposal
+    ///////////////////////////////////////////////////
+
     // Check children of DAO exec match the specified calls
-    for auth_call in &params.proposal_auth_calls {
-        let child_idx = self_.children_indexes[auth_call.index];
-        let child = &calls[child_idx];
-        let call = &child.data;
+    if params.proposal_auth_calls.len() != self_.children_indexes.len() {
+        return Err(DaoError::ExecCallWrongChildCallsLen.into())
+    }
+    for (auth_call, child_idx) in
+        params.proposal_auth_calls.iter().zip(self_.children_indexes.iter())
+    {
+        let child_call = &calls[*child_idx].data;
 
-        let contract_id = call.contract_id.inner();
-        let function_code = call.data[0];
+        // We are allowing 2nd tier child calls here since it
+        // should be allowed to make recursive calls.
+        // Auth modules should check the direct parent is DAO::exec().
+        // Doing anything else is potentially risky.
 
+        let contract_id = child_call.contract_id.inner();
+        let function_code = child_call.data[0];
+
+        // Check they match the auth call spec
         if contract_id != auth_call.contract_id || function_code != auth_call.function_code {
             msg!("[Dao::Exec] Error: wrong child call");
             return Err(DaoError::ExecCallWrongChildCall.into())
         }
     }
 
-    /*
-    // MoneyTransfer should all have the same user_data set.
-    // We check this by ensuring that user_data_enc is also the same for all inputs.
-    // This means using the same blinding factor for all input's user_data.
-    assert!(mt_params.inputs.len() > 0);
-    let user_data_enc = mt_params.inputs[0].user_data_enc;
-    for input in &mt_params.inputs[1..] {
-        if input.user_data_enc != user_data_enc {
-            msg!("[Dao::Exec] Error: Money inputs unmatched user_data_enc");
-            return Err(DaoError::ExecCallInvalidFormat.into())
-        }
-    }
+    ///////////////////////////////////////////////////
+    // 2. Verify the correct voting
+    ///////////////////////////////////////////////////
 
-    // ======
-    // Checks
-    // ======
-    // MoneyTransfer should have exactly 2 outputs
-    if mt_params.outputs.len() != 2 {
-        msg!("[Dao::Exec] Error: Money outputs != 2");
-        return Err(DaoError::ExecCallOutputsLenNot2.into())
-    }
-    */
-
-    // 2. Get the ProposalVote from DAO state
+    // Get the ProposalVote from DAO state
     let proposal_db = db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
     let Some(data) = db_get(proposal_db, &serialize(&params.proposal))? else {
         msg!("[Dao::Exec] Error: Proposal {:?} not found", params.proposal);
@@ -139,7 +133,7 @@ pub(crate) fn dao_exec_process_instruction(
     };
     let proposal: DaoProposalMetadata = deserialize(&data)?;
 
-    // 3. Check yes_vote commit and all_vote_commit are the same as in BlindAggregateVote
+    // Check yes_vote commit and all_vote_commit are the same as in BlindAggregateVote
     if proposal.vote_aggregate.yes_vote_commit != params.blind_total_vote.yes_vote_commit ||
         proposal.vote_aggregate.all_vote_commit != params.blind_total_vote.all_vote_commit
     {
@@ -156,10 +150,8 @@ pub(crate) fn dao_exec_process_instruction(
 
 /// `process_update` function for `Dao::Exec`
 pub(crate) fn dao_exec_process_update(cid: ContractId, update: DaoExecUpdate) -> ContractResult {
-    // Grab all db handles we want to work on
-    let proposal_vote_db = db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
-
     // Remove proposal from db
+    let proposal_vote_db = db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
     db_del(proposal_vote_db, &serialize(&update.proposal))?;
 
     Ok(())

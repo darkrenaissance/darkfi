@@ -29,8 +29,9 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
-    error::DaoError, model::DaoAuthMoneyTransferParams, DaoFunction,
-    DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
+    error::DaoError,
+    model::{DaoAuthCall, DaoAuthMoneyTransferParams, DaoExecParams},
+    DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
 
 /// `get_metdata` function for `Dao::Exec`
@@ -49,6 +50,21 @@ pub(crate) fn dao_authxfer_get_metadata(
     Ok(metadata)
 }
 
+fn find_auth_in_parent(
+    exec_callnode: &DarkLeaf<ContractCall>,
+    proposal_auth_calls: Vec<DaoAuthCall>,
+    self_call_idx: u32,
+) -> Option<DaoAuthCall> {
+    for (auth_call, child_idx) in
+        proposal_auth_calls.into_iter().zip(exec_callnode.children_indexes.iter())
+    {
+        if *child_idx == self_call_idx as usize {
+            return Some(auth_call);
+        }
+    }
+    return None;
+}
+
 /// `process_instruction` function for `Dao::Exec`
 pub(crate) fn dao_authxfer_process_instruction(
     cid: ContractId,
@@ -58,6 +74,10 @@ pub(crate) fn dao_authxfer_process_instruction(
     let sibling_idx = call_idx + 1;
     let xfer_call = &calls[sibling_idx as usize].data;
 
+    ///////////////////////////////////////////////////
+    // 1. Next call should be money transfer
+    ///////////////////////////////////////////////////
+
     if xfer_call.contract_id != *MONEY_CONTRACT_ID {
         return Err(DaoError::AuthXferSiblingWrongContractId.into())
     }
@@ -66,6 +86,55 @@ pub(crate) fn dao_authxfer_process_instruction(
     if xfer_call_function_code != MoneyFunction::TransferV1 as u8 {
         return Err(DaoError::AuthXferSiblingWrongFunctionCode.into())
     }
+
+    ///////////////////////////////////////////////////
+    // 2. money::transfer() inputs should all have the same user_data
+    ///////////////////////////////////////////////////
+
+    let xfer_params: MoneyTransferParamsV1 = deserialize(&xfer_call.data[1..])?;
+    assert!(xfer_params.inputs.len() > 0);
+    // We need the last output to be the change
+    assert!(xfer_params.outputs.len() > 1);
+
+    // MoneyTransfer should all have the same user_data set.
+    // We check this by ensuring that user_data_enc is also the same for all inputs.
+    // This means using the same blinding factor for all input's user_data.
+    let user_data_enc = xfer_params.inputs[0].user_data_enc;
+    for input in &xfer_params.inputs[1..] {
+        if input.user_data_enc != user_data_enc {
+            msg!("[Dao::Exec] Error: Money inputs unmatched user_data_enc");
+            return Err(DaoError::AuthXferNonMatchingEncInputUserData.into())
+        }
+    }
+
+    ///////////////////////////////////////////////////
+    // 3. Check the coins on transfer outputs match
+    ///////////////////////////////////////////////////
+
+    // Find this auth_call in the parent DAO::exec()
+    let parent_idx = calls[call_idx as usize].parent_index.unwrap();
+    let exec_callnode = &calls[parent_idx];
+    let exec_params: DaoExecParams = deserialize(&exec_callnode.data.data[1..])?;
+
+    let mut auth_call =
+        find_auth_in_parent(&exec_callnode, exec_params.proposal_auth_calls, call_idx);
+    if auth_call.is_none() {
+        return Err(DaoError::AuthXferCallNotFoundInParent.into())
+    }
+
+    // Read the proposal_data which should be Vec<CoinParams>
+    // Deserialize the proposal_data
+    // Check all the outputs except the last match
+
+    ///////////////////////////////////////////////////
+    // 4. Change belongs to the DAO
+    ///////////////////////////////////////////////////
+
+    // The last output is sent back to the DAO. This is verified inside ZK.
+    // Also the public_key should match.
+
+    // We do not need to check the amounts, since sum(input values) == sum(output values)
+    // otherwise the tx is invalid.
 
     let mut update_data = vec![];
     update_data.write_u8(DaoFunction::AuthMoneyTransfer as u8)?;
