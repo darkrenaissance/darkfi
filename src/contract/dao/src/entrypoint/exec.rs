@@ -40,24 +40,19 @@ pub(crate) fn dao_exec_get_metadata(
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    assert_eq!(call_idx, 1);
-    assert_eq!(calls.len(), 2);
-
-    let money_call = &calls[0].data;
-    let money_xfer_params: MoneyTransferParamsV1 = deserialize(&money_call.data[1..])?;
-
-    let dao_call = &calls[1].data;
-    let dao_exec_params: DaoExecParams = deserialize(&dao_call.data[1..])?;
+    let self_ = &calls[call_idx as usize];
+    let params: DaoExecParams = deserialize(&self_.data.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     // Public keys for the transaction signatures we have to verify
     let signature_pubkeys: Vec<PublicKey> = vec![];
 
-    let blind_vote = dao_exec_params.blind_total_vote;
+    let blind_vote = params.blind_total_vote;
     let yes_vote_coords = blind_vote.yes_vote_commit.to_affine().coordinates().unwrap();
     let all_vote_coords = blind_vote.all_vote_commit.to_affine().coordinates().unwrap();
 
+    /*
     let mut input_valcoms = pallas::Point::identity();
     for input in &money_xfer_params.inputs {
         input_valcoms += input.value_commit;
@@ -67,12 +62,13 @@ pub(crate) fn dao_exec_get_metadata(
     assert!(money_xfer_params.inputs.len() > 0);
     // This value should be the same for all inputs, as enforced in process_instruction() below.
     let input_user_data_enc = money_xfer_params.inputs[0].user_data_enc;
+    */
 
     zk_public_inputs.push((
         DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string(),
         vec![
-            dao_exec_params.proposal.inner(),
-            dao_exec_params.proposal_auth_calls.commit(),
+            params.proposal.inner(),
+            params.proposal_auth_calls.commit(),
             *yes_vote_coords.x(),
             *yes_vote_coords.y(),
             *all_vote_coords.x(),
@@ -97,7 +93,15 @@ pub(crate) fn dao_exec_process_instruction(
     let self_ = &calls[call_idx as usize];
     let params: DaoExecParams = deserialize(&self_.data.data[1..])?;
 
+    //for (i, call) in calls.iter().enumerate() {
+    //msg!("{}", i);
+    //msg!("parent: {:?}", call.parent_index);
+    //msg!("child: {:?}", call.children_indexes);
+    //msg!("--");
+    //}
+
     // Check children of DAO exec match the specified calls
+    /*
     for auth_call in &params.proposal_auth_calls {
         let child_idx = self_.children_indexes[auth_call.index];
         let child = &calls[child_idx];
@@ -113,6 +117,7 @@ pub(crate) fn dao_exec_process_instruction(
             //return Err(DaoError::ExecCallWrongChildCall.into())
         }
     }
+    */
 
     /*
 

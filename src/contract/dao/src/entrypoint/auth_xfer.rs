@@ -39,7 +39,14 @@ pub(crate) fn dao_authxfer_get_metadata(
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    Ok(vec![])
+    let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
+    let signature_pubkeys: Vec<PublicKey> = vec![];
+
+    let mut metadata = vec![];
+    zk_public_inputs.encode(&mut metadata)?;
+    signature_pubkeys.encode(&mut metadata)?;
+
+    Ok(metadata)
 }
 
 /// `process_instruction` function for `Dao::Exec`
@@ -48,5 +55,7 @@ pub(crate) fn dao_authxfer_process_instruction(
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    Ok(vec![])
+    let mut update_data = vec![];
+    update_data.write_u8(DaoFunction::AuthMoneyTransfer as u8)?;
+    Ok(update_data)
 }

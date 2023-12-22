@@ -200,7 +200,8 @@ impl TestHarness {
         let authxfer_sigs = vec![];
         let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_secrets.signature_secrets)?;
         let exec_sigs = tx.create_sigs(&mut OsRng, &[exec_signature_secret])?;
-        tx.signatures = vec![authxfer_sigs, xfer_sigs, exec_sigs];
+        // FIXME: this is wrong! exec_sigs should be last... awaiting tree fix
+        tx.signatures = vec![exec_sigs, authxfer_sigs, xfer_sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());
 
         // Calculate transaction sizes

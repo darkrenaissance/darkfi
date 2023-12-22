@@ -72,6 +72,7 @@ mod money_transfer;
 pub fn init_logger() {
     let mut cfg = simplelog::ConfigBuilder::new();
     cfg.add_filter_ignore("sled".to_string());
+    //cfg.set_target_level(simplelog::LevelFilter::Error);
 
     // We check this error so we can execute same file tests in parallel,
     // otherwise second one fails to init logger here.
