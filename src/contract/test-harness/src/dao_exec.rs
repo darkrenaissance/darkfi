@@ -25,7 +25,7 @@ use darkfi::{
 use darkfi_dao_contract::{
     client::{DaoAuthMoneyTransferCall, DaoExecCall},
     model::{Dao, DaoBulla, DaoExecParams, DaoProposal},
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
+    DaoFunction, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
 use darkfi_money_contract::{
     client::transfer_v1 as xfer,
@@ -67,6 +67,10 @@ impl TestHarness {
             self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
         let (dao_exec_pk, dao_exec_zkbin) =
             self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string()).unwrap();
+        let (dao_auth_xfer_pk, dao_auth_xfer_zkbin) = self
+            .proving_keys
+            .get(&DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS.to_string())
+            .unwrap();
 
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoExec).unwrap();
         let timer = Instant::now();
@@ -179,16 +183,18 @@ impl TestHarness {
         let exec_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
 
         // Auth module
-        let authxfer_builder = DaoAuthMoneyTransferCall {};
-        let (authxfer_params, authxfer_proofs) = authxfer_builder.make()?;
+        let auth_xfer_builder =
+            DaoAuthMoneyTransferCall { proposal: proposal.clone(), dao: dao.clone() };
+        let (auth_xfer_params, auth_xfer_proofs) =
+            auth_xfer_builder.make(dao_auth_xfer_zkbin, dao_auth_xfer_pk)?;
         let mut data = vec![DaoFunction::AuthMoneyTransfer as u8];
-        authxfer_params.encode(&mut data)?;
-        let authxfer_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
+        auth_xfer_params.encode(&mut data)?;
+        let auth_xfer_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
 
         // We need to construct this tree, where exec is the parent:
         //
         //   exec ->
-        //       authxfer
+        //       auth_xfer
         //       xfer
         //
 
@@ -197,23 +203,23 @@ impl TestHarness {
         //    vec![],
         //)?;
         //tx_builder
-        //    .append(ContractCallLeaf { call: authxfer_call, proofs: authxfer_proofs }, vec![])?;
+        //    .append(ContractCallLeaf { call: auth_xfer_call, proofs: auth_xfer_proofs }, vec![])?;
         //tx_builder
         //let mut tx = tx_builder.build()?;
 
         let mut tx = Transaction {
             calls: vec![
-                DarkLeaf { data: authxfer_call, parent_index: Some(2), children_indexes: vec![] },
+                DarkLeaf { data: auth_xfer_call, parent_index: Some(2), children_indexes: vec![] },
                 DarkLeaf { data: xfer_call, parent_index: Some(2), children_indexes: vec![] },
                 DarkLeaf { data: exec_call, parent_index: None, children_indexes: vec![0, 1] },
             ],
-            proofs: vec![authxfer_proofs, xfer_secrets.proofs, exec_proofs],
+            proofs: vec![auth_xfer_proofs, xfer_secrets.proofs, exec_proofs],
             signatures: vec![],
         };
-        let authxfer_sigs = vec![];
+        let auth_xfer_sigs = vec![];
         let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_secrets.signature_secrets)?;
         let exec_sigs = tx.create_sigs(&mut OsRng, &[exec_signature_secret])?;
-        tx.signatures = vec![authxfer_sigs, xfer_sigs, exec_sigs];
+        tx.signatures = vec![auth_xfer_sigs, xfer_sigs, exec_sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());
 
         // Calculate transaction sizes

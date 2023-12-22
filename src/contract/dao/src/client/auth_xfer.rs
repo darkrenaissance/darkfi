@@ -30,18 +30,55 @@ use darkfi::{
     Result,
 };
 
-use crate::model::{Dao, DaoAuthMoneyTransferParams, DaoBlindAggregateVote, DaoProposal};
+use crate::model::{
+    Dao, DaoAuthMoneyTransferParams, DaoBlindAggregateVote, DaoProposal, VecAuthCallCommit,
+};
 
-pub struct DaoAuthMoneyTransferCall {}
+pub struct DaoAuthMoneyTransferCall {
+    pub proposal: DaoProposal,
+    pub dao: Dao,
+}
 
 impl DaoAuthMoneyTransferCall {
     pub fn make(
         self,
-        //_auth_xfer_zkbin: &ZkBinary,
-        //_auth_xfer_pk: &ProvingKey,
+        auth_xfer_zkbin: &ZkBinary,
+        auth_xfer_pk: &ProvingKey,
     ) -> Result<(DaoAuthMoneyTransferParams, Vec<Proof>)> {
-        let proofs = vec![];
-        let params = DaoAuthMoneyTransferParams {};
+        let mut proofs = vec![];
+        let params = DaoAuthMoneyTransferParams { proposal_bulla: self.proposal.to_bulla() };
+
+        let dao_proposer_limit = pallas::Base::from(self.dao.proposer_limit);
+        let dao_quorum = pallas::Base::from(self.dao.quorum);
+        let dao_approval_ratio_quot = pallas::Base::from(self.dao.approval_ratio_quot);
+        let dao_approval_ratio_base = pallas::Base::from(self.dao.approval_ratio_base);
+
+        let (dao_pub_x, dao_pub_y) = self.dao.public_key.xy();
+
+        let prover_witnesses = vec![
+            // proposal params
+            Witness::Base(Value::known(self.proposal.auth_calls.commit())),
+            Witness::Base(Value::known(self.proposal.user_data)),
+            Witness::Base(Value::known(self.proposal.blind)),
+            // DAO params
+            Witness::Base(Value::known(dao_proposer_limit)),
+            Witness::Base(Value::known(dao_quorum)),
+            Witness::Base(Value::known(dao_approval_ratio_quot)),
+            Witness::Base(Value::known(dao_approval_ratio_base)),
+            Witness::Base(Value::known(self.dao.gov_token_id.inner())),
+            Witness::Base(Value::known(dao_pub_x)),
+            Witness::Base(Value::known(dao_pub_y)),
+            Witness::Base(Value::known(self.dao.bulla_blind)),
+        ];
+
+        let public_inputs = vec![params.proposal_bulla.inner()];
+        //export_witness_json("witness.json", &prover_witnesses, &public_inputs);
+
+        let circuit = ZkCircuit::new(prover_witnesses, auth_xfer_zkbin);
+        let proof = Proof::create(auth_xfer_pk, &[circuit], &public_inputs, &mut OsRng)
+            .expect("DAO::exec() proving error!)");
+        proofs.push(proof);
+
         Ok((params, proofs))
     }
 }

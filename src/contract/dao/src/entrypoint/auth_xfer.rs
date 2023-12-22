@@ -34,7 +34,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 use crate::{
     error::DaoError,
     model::{DaoAuthCall, DaoAuthMoneyTransferParams, DaoExecParams},
-    DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
+    DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS,
 };
 
 /// `get_metdata` function for `Dao::Exec`
@@ -43,8 +43,16 @@ pub(crate) fn dao_authxfer_get_metadata(
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
+    let self_ = &calls[call_idx as usize];
+    let params: DaoAuthMoneyTransferParams = deserialize(&self_.data.data[1..])?;
+
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     let signature_pubkeys: Vec<PublicKey> = vec![];
+
+    zk_public_inputs.push((
+        DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS.to_string(),
+        vec![params.proposal_bulla.inner()],
+    ));
 
     let mut metadata = vec![];
     zk_public_inputs.encode(&mut metadata)?;

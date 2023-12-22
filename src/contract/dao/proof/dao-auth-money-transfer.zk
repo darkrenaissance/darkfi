@@ -21,12 +21,6 @@ witness "DaoAuthMoneyTransfer" {
 	Base dao_public_x,
 	Base dao_public_y,
 	Base dao_bulla_blind,
-
-	# Votes
-	Base yes_vote_value,
-	Base all_vote_value,
-	Scalar yes_vote_blind,
-	Scalar all_vote_blind,
 }
 
 circuit "DaoAuthMoneyTransfer" {

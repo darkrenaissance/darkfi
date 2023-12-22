@@ -340,4 +340,7 @@ pub struct DaoExecUpdate {
 
 /// Parameters for `Dao::AuthMoneyTransfer`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct DaoAuthMoneyTransferParams {}
+pub struct DaoAuthMoneyTransferParams {
+    /// The proposal bulla
+    pub proposal_bulla: DaoProposalBulla,
+}

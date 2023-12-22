@@ -74,8 +74,6 @@ pub const DAO_CONTRACT_KEY_LATEST_DAO_ROOT: &[u8] = b"dao_last_root";
 
 /// zkas dao mint circuit namespace
 pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "DaoMint";
-/// zkas dao exec circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "DaoExec";
 /// zkas dao vote input circuit namespace
 pub const DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS: &str = "DaoVoteInput";
 /// zkas dao vote main circuit namespace
@@ -84,3 +82,7 @@ pub const DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS: &str = "DaoVoteMain";
 pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS: &str = "DaoProposeInput";
 /// zkas dao propose main circuit namespace
 pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "DaoProposeMain";
+/// zkas dao exec circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "DaoExec";
+/// zkas dao auth money_transfer circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "DaoAuthMoneyTransfer";

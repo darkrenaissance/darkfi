@@ -72,13 +72,13 @@ darkfi_sdk::define_contract!(
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // The zkas circuits can simply be embedded in the wasm and set up by
     // the initialization.
-    zkas_db_set(&include_bytes!("../proof/dao-mint.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../proof/dao-propose-burn.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../proof/dao-propose-main.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../proof/dao-vote-burn.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../proof/dao-vote-main.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../proof/dao-exec.zk.bin")[..])?;
-    //zkas_db_set(&include_bytes!("../proof/dao-auth-money-transfer.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/dao-mint.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/dao-propose-burn.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/dao-propose-main.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/dao-vote-burn.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/dao-vote-main.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/dao-exec.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/dao-auth-money-transfer.zk.bin")[..])?;
 
     // Set up db for general info
     let dao_info_db = match db_lookup(cid, DAO_CONTRACT_DB_INFO_TREE) {
