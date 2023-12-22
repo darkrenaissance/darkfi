@@ -219,10 +219,10 @@ impl TransactionBuilder {
     /// and generates the corresponding [`Transaction`].
     pub fn build(&mut self) -> DarkTreeResult<Transaction> {
         // Build the leafs vector
-        let leafs = self.calls.build_shifted_root_vec()?;
+        let leafs = self.calls.build_vec()?;
 
         // Double check integrity
-        dark_leaf_vec_integrity_check(&leafs, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS), true)?;
+        dark_leaf_vec_integrity_check(&leafs, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS))?;
 
         // Build the corresponding transaction
         let mut calls = Vec::with_capacity(leafs.len());
