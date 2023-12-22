@@ -241,7 +241,7 @@ impl TransactionBuilder {
         let leafs = self.calls.build_vec()?;
 
         // Double check integrity
-        dark_leaf_vec_integrity_check(&leafs, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS))?;
+        dark_leaf_vec_integrity_check(&leafs, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS), None)?;
 
         // Build the corresponding transaction
         let mut calls = Vec::with_capacity(leafs.len());
