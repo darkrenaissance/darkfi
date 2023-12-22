@@ -232,10 +232,16 @@ impl P2p {
     }
 
     /// Add a channel to the set of connected channels
-    pub(super) async fn store(&self, channel: ChannelPtr) {
-        // TODO: Check the code path for this, and potentially also insert the remote
-        // into the hosts list?
+    pub(super) async fn store(&self, channel: ChannelPtr, last_seen: u64) {
         self.channels.lock().await.insert(channel.address().clone(), channel.clone());
+
+        // TODO: check for duplicates.
+        // TODO: FIXME: unwrap
+        self.hosts()
+            .anchorlist_store_or_update(&[(channel.address().clone(), last_seen)])
+            .await
+            .unwrap();
+
         self.channel_subscriber.notify(Ok(channel)).await;
     }
 

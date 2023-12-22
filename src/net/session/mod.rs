@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::{Arc, Weak};
+use std::{
+    sync::{Arc, Weak},
+    time::UNIX_EPOCH,
+};
 
 use async_trait::async_trait;
 use log::debug;
@@ -132,10 +135,11 @@ pub trait Session: Sync {
         // Perform handshake
         protocol_version.run(executor.clone()).await?;
 
-        // Channel is now initialized
+        // Channel is now initialized. Timestamp this.
+        let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
         // Add channel to p2p
-        self.p2p().store(channel.clone()).await;
+        self.p2p().store(channel.clone(), last_seen).await;
 
         // Subscribe to stop, so we can remove from p2p
         executor.spawn(remove_sub_on_stop(self.p2p(), channel)).detach();
