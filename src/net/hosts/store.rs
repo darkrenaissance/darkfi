@@ -44,12 +44,28 @@ const WHITELIST_MAX_LEN: usize = 5000;
 const GREYLIST_MAX_LEN: usize = 2000;
 
 /// Manages a store of network addresses
+// TODO: 1. Hostlists will be stored on disk and loaded on start.
+//
+//       2. Potentially we should store the entire peer list as a single file,
+//       classified by grey/ white/ anchor (more in line with the monero impl).
+//
+//       3. Currently, we remove items from the greylist when they are promoted to whitelist.
+//       However, this is redundant: when we learn of the host from a seed node it will be re-added
+//       to the greylist again, resulting in duplicates across the grey and whitelist. The same 
+//       issue applies to the anchor list. Check how monero deals with this.
+//       
+//       4. Test the performance overhead of using vectors for white/grey/anchor lists. 
+//
+//       5. Check whether anchorlist has a max size in Monero.
 pub struct Hosts {
     // Intermediary node list that is periodically probed and updated to whitelist.
     pub greylist: RwLock<Vec<(Url, u64)>>,
 
     // Recently seen nodes.
     pub whitelist: RwLock<Vec<(Url, u64)>>,
+
+    // Nodes to which we have already been able to establish a connection.
+    pub anchorlist: RwLock<Vec<(Url, u64)>>,
 
     /// Peers we reject from connecting
     rejected: RwLock<HashSet<String>>,
@@ -67,6 +83,7 @@ impl Hosts {
         Arc::new(Self {
             whitelist: RwLock::new(Vec::new()),
             greylist: RwLock::new(Vec::new()),
+            anchorlist: RwLock::new(Vec::new()),
             rejected: RwLock::new(HashSet::new()),
             store_subscriber: Subscriber::new(),
             settings,
@@ -161,7 +178,6 @@ impl Hosts {
 
     // Store the address in the whitelist if we don't have it.
     // Otherwise, update the last_seen field.
-    // TODO: test the performance of this method. It might be costly.
     pub async fn whitelist_store_or_update(&self, addrs: &[(Url, u64)]) -> Result<()> {
         debug!(target: "net::hosts::whitelist_store_or_update()", "[START]");
 
@@ -186,7 +202,7 @@ impl Hosts {
         debug!(target: "net::hosts::store::greylist_store_or_update()", "[START]");
 
         // We filter addresses before writing to the greylist.
-        // We don't need to do this for the whitelist the whitelist is created from the greylist.
+        // We don't need to do this for the whitelist (whitelist is created from greylist)
         let filtered_addrs = self.filter_addresses(addrs).await;
         let filtered_addrs_len = filtered_addrs.len();
         for (addr, last_seen) in filtered_addrs {
@@ -203,6 +219,26 @@ impl Hosts {
             }
         }
         self.store_subscriber.notify(filtered_addrs_len).await;
+        Ok(())
+    }
+
+    pub async fn anchorlist_store_or_update(&self, addrs: &[(Url, u64)]) -> Result<()> {
+        debug!(target: "net::hosts::store::anchor_store_or_update()", "[START]");
+
+        for (addr, last_seen) in addrs {
+            if !self.anchorlist_contains(addr).await {
+                debug!(target: "net::hosts::whitelist_store_or_update()",
+        "We do not have this entry in the whitelist. Adding to store...");
+
+                self.anchorlist_store(addr.clone(), last_seen.clone()).await;
+            } else {
+                debug!(target: "net::hosts::whitelist_store_or_update()",
+        "We have this entry in the whitelist. Updating last seen...");
+
+                let index = self.get_anchorlist_index_at_addr(addr).await?;
+                self.anchorlist_update_last_seen(addr, last_seen.clone(), index).await;
+            }
+        }
         Ok(())
     }
 
@@ -227,7 +263,6 @@ impl Hosts {
     }
 
     // Append host to the whitelist. Called after a successful interaction with an online peer.
-    // TODO: FIXME: address filtering
     pub async fn whitelist_store(&self, addr: Url, last_seen: u64) {
         debug!(target: "net::hosts::whitelist_store()", "[START]");
 
@@ -245,6 +280,21 @@ impl Hosts {
             whitelist.sort_by_key(|entry| entry.1);
         }
         debug!(target: "net::hosts::store::whitelist_store()", "[END]");
+    }
+
+    // Append host to the anchorlist. Called after we have established a successful connection to a
+    // peer.
+    pub async fn anchorlist_store(&self, addr: Url, last_seen: u64) {
+        debug!(target: "net::hosts::anchorlist_store()", "[START]");
+
+        let mut anchorlist = self.anchorlist.write().await;
+
+        debug!(target: "net::hosts::anchorlist_store()", "Inserting {}", addr);
+        anchorlist.push((addr, last_seen));
+
+        // Sort the list by last_seen.
+        anchorlist.sort_by_key(|entry| entry.1);
+        debug!(target: "net::hosts::anchorlist_store()", "[END]");
     }
 
     // Update the last_seen field of a peer on the whitelist.
@@ -275,6 +325,20 @@ impl Hosts {
         debug!(target: "net::hosts::store::greylist_update_last_seen()", "[END]");
     }
 
+    // Update the last_seen field of a peer on the anchorlist.
+    pub async fn anchorlist_update_last_seen(&self, addr: &Url, last_seen: u64, index: usize) {
+        debug!(target: "net::hosts::store::anchorlist_update_last_seen()", "[START]");
+
+        let mut anchorlist = self.anchorlist.write().await;
+
+        anchorlist[index] = (addr.clone(), last_seen);
+
+        // Sort the list by last_seen.
+        anchorlist.sort_by_key(|entry| entry.1);
+
+        debug!(target: "net::hosts::store::anchorlist_update_last_seen()", "[END]");
+    }
+
     pub async fn whitelist_downgrade(&self, addr: &Url) {
         // First lookup the entry using its addr.
         let mut entry = vec![];
@@ -285,9 +349,6 @@ impl Hosts {
                 entry.push((url.clone(), time.clone()));
             }
         }
-
-        // TODO: This is for testing purposes.
-        assert!(entry.len() == 1);
 
         // Remove this item from the whitelist.
         let mut whitelist = self.whitelist.write().await;
@@ -493,6 +554,15 @@ impl Hosts {
         return false
     }
 
+    /// Check if host is in the anchorlist
+    pub async fn anchorlist_contains(&self, addr: &Url) -> bool {
+        let anchorlist = self.anchorlist.read().await;
+        if anchorlist.iter().any(|(u, _t)| u == addr) {
+            return true
+        }
+        return false
+    }
+
     /// Get the index for a given addr on the whitelist.
     pub async fn get_whitelist_index_at_addr(&self, addr: &Url) -> Result<usize> {
         let whitelist = self.whitelist.read().await;
@@ -514,6 +584,18 @@ impl Hosts {
         }
         return Err(Error::InvalidIndex)
     }
+
+    /// Get the index for a given addr on the anchorlist.
+    pub async fn get_anchorlist_index_at_addr(&self, addr: &Url) -> Result<usize> {
+        let anchorlist = self.anchorlist.read().await;
+        for (i, (url, _time)) in anchorlist.iter().enumerate() {
+            if url == addr {
+                return Ok(i)
+            }
+        }
+        return Err(Error::InvalidIndex)
+    }
+
     /// Return all known whitelisted hosts
     pub async fn whitelist_fetch_all(&self) -> Vec<(Url, u64)> {
         self.whitelist.read().await.iter().cloned().collect()
