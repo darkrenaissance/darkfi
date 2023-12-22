@@ -49,14 +49,9 @@ const GREYLIST_MAX_LEN: usize = 2000;
 //       2. Potentially we should store the entire peer list as a single file,
 //       classified by grey/ white/ anchor (more in line with the monero impl).
 //
-//       3. Currently, we remove items from the greylist when they are promoted to whitelist.
-//       However, this is redundant: when we learn of the host from a seed node it will be re-added
-//       to the greylist again, resulting in duplicates across the grey and whitelist. The same 
-//       issue applies to the anchor list. Check how monero deals with this.
-//       
-//       4. Test the performance overhead of using vectors for white/grey/anchor lists. 
+//       3. Test the performance overhead of using vectors for white/grey/anchor lists.
 //
-//       5. Check whether anchorlist has a max size in Monero.
+//       3. Check whether anchorlist has a max size in Monero.
 pub struct Hosts {
     // Intermediary node list that is periodically probed and updated to whitelist.
     pub greylist: RwLock<Vec<(Url, u64)>>,
@@ -176,6 +171,167 @@ impl Hosts {
         None
     }
 
+    pub async fn greylist_fetch_address_with_lock(
+        &self,
+        p2p: P2pPtr,
+        transports: &[String],
+    ) -> Option<(Url, u64)> {
+        // Collect hosts
+        let mut hosts = vec![];
+
+        // If transport mixing is enabled, then for example we're allowed to
+        // use tor:// to connect to tcp:// and tor+tls:// to connect to tcp+tls://.
+        // However, **do not** mix tor:// and tcp+tls://, nor tor+tls:// and tcp://.
+        let transport_mixing = self.settings.transport_mixing;
+        macro_rules! mix_transport {
+            ($a:expr, $b:expr) => {
+                if transports.contains(&$a.to_string()) && transport_mixing {
+                    let mut a_to_b =
+                        self.greylist_fetch_with_schemes(&[$b.to_string()], None).await;
+                    for (addr, last_seen) in a_to_b.iter_mut() {
+                        addr.set_scheme($a).unwrap();
+                        hosts.push((addr.clone(), last_seen.clone()));
+                    }
+                }
+            };
+        }
+        mix_transport!("tor", "tcp");
+        mix_transport!("tor+tls", "tcp+tls");
+        mix_transport!("nym", "tcp");
+        mix_transport!("nym+tls", "tcp+tls");
+
+        // And now the actual requested transports
+        for (addr, last_seen) in self.greylist_fetch_with_schemes(transports, None).await {
+            hosts.push((addr, last_seen));
+        }
+
+        // Randomize hosts list. Do not try to connect in a deterministic order.
+        // This is healthier for multiple slots to not compete for the same addrs.
+        hosts.shuffle(&mut OsRng);
+
+        // Try to find an unused host in the set.
+        for (host, last_seen) in hosts.iter() {
+            // Check if we already have this connection established
+            if p2p.exists(host).await {
+                trace!(
+                    target: "net::hosts::greylist_fetch_address_with_lock()",
+                    "Host '{}' exists so skipping",
+                    host
+                );
+                continue
+            }
+
+            // Check if we already have this configured as a manual peer
+            if self.settings.peers.contains(host) {
+                trace!(
+                    target: "net::hosts::greylist_fetch_address_with_lock()",
+                    "Host '{}' configured as manual peer so skipping",
+                    host
+                );
+                continue
+            }
+
+            // Obtain a lock on this address to prevent duplicate connection
+            if !p2p.add_pending(host).await {
+                trace!(
+                    target: "net::hosts::greylist_fetch_address_with_lock()",
+                    "Host '{}' pending so skipping",
+                    host
+                );
+                continue
+            }
+
+            trace!(
+                target: "net::hosts::greylist_fetch_address_with_lock()",
+                "Found valid host '{}",
+                host
+            );
+            return Some((host.clone(), last_seen.clone()))
+        }
+
+        None
+    }
+    pub async fn anchorlist_fetch_address_with_lock(
+        &self,
+        p2p: P2pPtr,
+        transports: &[String],
+    ) -> Option<(Url, u64)> {
+        // Collect hosts
+        let mut hosts = vec![];
+
+        // If transport mixing is enabled, then for example we're allowed to
+        // use tor:// to connect to tcp:// and tor+tls:// to connect to tcp+tls://.
+        // However, **do not** mix tor:// and tcp+tls://, nor tor+tls:// and tcp://.
+        let transport_mixing = self.settings.transport_mixing;
+        macro_rules! mix_transport {
+            ($a:expr, $b:expr) => {
+                if transports.contains(&$a.to_string()) && transport_mixing {
+                    let mut a_to_b =
+                        self.anchorlist_fetch_with_schemes(&[$b.to_string()], None).await;
+                    for (addr, last_seen) in a_to_b.iter_mut() {
+                        addr.set_scheme($a).unwrap();
+                        hosts.push((addr.clone(), last_seen.clone()));
+                    }
+                }
+            };
+        }
+        mix_transport!("tor", "tcp");
+        mix_transport!("tor+tls", "tcp+tls");
+        mix_transport!("nym", "tcp");
+        mix_transport!("nym+tls", "tcp+tls");
+
+        // And now the actual requested transports
+        for (addr, last_seen) in self.anchorlist_fetch_with_schemes(transports, None).await {
+            hosts.push((addr, last_seen));
+        }
+
+        // Randomize hosts list. Do not try to connect in a deterministic order.
+        // This is healthier for multiple slots to not compete for the same addrs.
+        hosts.shuffle(&mut OsRng);
+
+        // Try to find an unused host in the set.
+        for (host, last_seen) in hosts.iter() {
+            // Check if we already have this connection established
+            if p2p.exists(host).await {
+                trace!(
+                    target: "net::hosts::anchorlist_fetch_address_with_lock()",
+                    "Host '{}' exists so skipping",
+                    host
+                );
+                continue
+            }
+
+            // Check if we already have this configured as a manual peer
+            if self.settings.peers.contains(host) {
+                trace!(
+                    target: "net::hosts::anchorlist_fetch_address_with_lock()",
+                    "Host '{}' configured as manual peer so skipping",
+                    host
+                );
+                continue
+            }
+
+            // Obtain a lock on this address to prevent duplicate connection
+            if !p2p.add_pending(host).await {
+                trace!(
+                    target: "net::hosts::anchorlist_fetch_address_with_lock()",
+                    "Host '{}' pending so skipping",
+                    host
+                );
+                continue
+            }
+
+            trace!(
+                target: "net::hosts::anchorlist_fetch_address_with_lock()",
+                "Found valid host '{}",
+                host
+            );
+            return Some((host.clone(), last_seen.clone()))
+        }
+
+        None
+    }
+
     // Store the address in the whitelist if we don't have it.
     // Otherwise, update the last_seen field.
     pub async fn whitelist_store_or_update(&self, addrs: &[(Url, u64)]) -> Result<()> {
@@ -206,8 +362,8 @@ impl Hosts {
         let filtered_addrs = self.filter_addresses(addrs).await;
         let filtered_addrs_len = filtered_addrs.len();
         for (addr, last_seen) in filtered_addrs {
-            if !self.greylist_contains(&addr).await {
-                debug!(target: "net::hosts::store::greylist_store_or_update()", "We do not have this entry in the greylist. Adding to store...");
+            if !self.hostlist_contains(&addr).await {
+                debug!(target: "net::hosts::store::greylist_store_or_update()", "We do not have this entry in the hostlist. Adding to store...");
 
                 self.greylist_store(addr.clone(), last_seen.clone()).await;
             } else {
@@ -227,13 +383,13 @@ impl Hosts {
 
         for (addr, last_seen) in addrs {
             if !self.anchorlist_contains(addr).await {
-                debug!(target: "net::hosts::whitelist_store_or_update()",
+                debug!(target: "net::hosts::anchorlist_store_or_update()",
         "We do not have this entry in the whitelist. Adding to store...");
 
                 self.anchorlist_store(addr.clone(), last_seen.clone()).await;
             } else {
-                debug!(target: "net::hosts::whitelist_store_or_update()",
-        "We have this entry in the whitelist. Updating last seen...");
+                debug!(target: "net::hosts::anchorlist_store_or_update()",
+        "We have this entry in the anchorlist. Updating last seen...");
 
                 let index = self.get_anchorlist_index_at_addr(addr).await?;
                 self.anchorlist_update_last_seen(addr, last_seen.clone(), index).await;
@@ -339,29 +495,29 @@ impl Hosts {
         debug!(target: "net::hosts::store::anchorlist_update_last_seen()", "[END]");
     }
 
-    pub async fn whitelist_downgrade(&self, addr: &Url) {
-        // First lookup the entry using its addr.
-        let mut entry = vec![];
+    //pub async fn whitelist_downgrade(&self, addr: &Url) {
+    //    // First lookup the entry using its addr.
+    //    let mut entry = vec![];
 
-        let whitelist = self.whitelist.read().await;
-        for (url, time) in whitelist.iter() {
-            if url == addr {
-                entry.push((url.clone(), time.clone()));
-            }
-        }
+    //    let whitelist = self.whitelist.read().await;
+    //    for (url, time) in whitelist.iter() {
+    //        if url == addr {
+    //            entry.push((url.clone(), time.clone()));
+    //        }
+    //    }
 
-        // Remove this item from the whitelist.
-        let mut whitelist = self.whitelist.write().await;
-        // TODO: test!
-        let index = whitelist.iter().position(|x| *x == entry[0]);
-        // This should never fail since the entry exists.
-        whitelist.remove(index.unwrap());
+    //    // Remove this item from the whitelist.
+    //    let mut whitelist = self.whitelist.write().await;
+    //    // TODO: test!
+    //    let index = whitelist.iter().position(|x| *x == entry[0]);
+    //    // This should never fail since the entry exists.
+    //    whitelist.remove(index.unwrap());
 
-        // Add it to the greylist.
-        let addr = entry[0].0.clone();
-        let last_seen = entry[0].1.clone();
-        self.greylist_store(addr, last_seen).await;
-    }
+    //    // Add it to the greylist.
+    //    let addr = entry[0].0.clone();
+    //    let last_seen = entry[0].1.clone();
+    //    self.greylist_store(addr, last_seen).await;
+    //}
 
     pub async fn greylist_remove(&self, addr: &Url, position: usize) {
         debug!(target: "net::refinery::run()", "Removing whitelisted peer {} from greylist", addr);
@@ -536,6 +692,19 @@ impl Hosts {
         self.whitelist.read().await.is_empty()
     }
 
+    // Check whether this peer is in any of the hostlists.
+    async fn hostlist_contains(&self, addr: &Url) -> bool {
+        if self.greylist_contains(addr).await {
+            return true
+        } else if self.whitelist_contains(addr).await {
+            return true
+        } else if self.anchorlist_contains(addr).await {
+            return true
+        } else {
+            return false
+        }
+    }
+
     /// Check if host is in the greylist
     pub async fn greylist_contains(&self, addr: &Url) -> bool {
         let greylist = self.greylist.read().await;
@@ -602,7 +771,7 @@ impl Hosts {
     }
 
     /// Get up to n random peers from the whitelist.
-    pub async fn fetch_n_random(&self, n: u32) -> Vec<(Url, u64)> {
+    pub async fn whitelist_fetch_n_random(&self, n: u32) -> Vec<(Url, u64)> {
         let n = n as usize;
         if n == 0 {
             return vec![]
@@ -721,6 +890,104 @@ impl Hosts {
         }
 
         debug!(target: "store::whitelist_fetch_with_schemes", "END");
+
+        ret
+    }
+
+    async fn greylist_fetch_with_schemes(
+        &self,
+        schemes: &[String],
+        limit: Option<usize>,
+    ) -> Vec<(Url, u64)> {
+        debug!(target: "store::greylist_fetch_with_schemes", "[START]");
+        let greylist = self.greylist.read().await;
+
+        let mut limit = match limit {
+            Some(l) => l.min(greylist.len()),
+            None => greylist.len(),
+        };
+        let mut ret = vec![];
+
+        if limit == 0 {
+            return ret
+        }
+
+        for (addr, last_seen) in greylist.iter() {
+            if schemes.contains(&addr.scheme().to_string()) {
+                ret.push((addr.clone(), *last_seen));
+                limit -= 1;
+                if limit == 0 {
+                    debug!(target: "store::greylist_fetch_with_schemes", "Found matching scheme, returning");
+                    return ret
+                }
+            }
+        }
+
+        //// If we didn't find any, pick some from the greylist
+        //if ret.is_empty() {
+        //    debug!(target: "store::greylist_fetch_with_schemes", "No matching schemes! We must look at greylist");
+        //    let greylist = self.greylist.read().await;
+        //    for (addr, last_seen) in greylist.iter() {
+        //        if schemes.contains(&addr.scheme().to_string()) {
+        //            ret.push((addr.clone(), *last_seen));
+        //            limit -= 1;
+        //            if limit == 0 {
+        //                break
+        //            }
+        //        }
+        //    }
+        //}
+
+        debug!(target: "store::greylist_fetch_with_schemes", "END");
+
+        ret
+    }
+
+    async fn anchorlist_fetch_with_schemes(
+        &self,
+        schemes: &[String],
+        limit: Option<usize>,
+    ) -> Vec<(Url, u64)> {
+        debug!(target: "store::anchorlist_fetch_with_schemes", "[START]");
+        let anchorlist = self.anchorlist.read().await;
+
+        let mut limit = match limit {
+            Some(l) => l.min(anchorlist.len()),
+            None => anchorlist.len(),
+        };
+        let mut ret = vec![];
+
+        if limit == 0 {
+            return ret
+        }
+
+        for (addr, last_seen) in anchorlist.iter() {
+            if schemes.contains(&addr.scheme().to_string()) {
+                ret.push((addr.clone(), *last_seen));
+                limit -= 1;
+                if limit == 0 {
+                    debug!(target: "store::anchorlist_fetch_with_schemes", "Found matching scheme, returning");
+                    return ret
+                }
+            }
+        }
+
+        //// If we didn't find any, pick some from the greylist
+        //if ret.is_empty() {
+        //    debug!(target: "store::whitelist_fetch_with_schemes", "No matching schemes! We must look at greylist");
+        //    let greylist = self.greylist.read().await;
+        //    for (addr, last_seen) in greylist.iter() {
+        //        if schemes.contains(&addr.scheme().to_string()) {
+        //            ret.push((addr.clone(), *last_seen));
+        //            limit -= 1;
+        //            if limit == 0 {
+        //                break
+        //            }
+        //        }
+        //    }
+        //}
+
+        debug!(target: "store::anchorlist_fetch_with_schemes", "END");
 
         ret
     }
