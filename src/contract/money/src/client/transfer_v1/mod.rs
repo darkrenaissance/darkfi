@@ -123,18 +123,20 @@ pub fn make_transfer_call(
     debug!("Selected inputs");
 
     outputs.push(TransferCallOutput {
+        public_key: recipient,
         value,
         token_id,
-        public_key: recipient,
+        serial: pallas::Base::random(&mut OsRng),
         spend_hook: pallas::Base::ZERO,
         user_data: pallas::Base::ZERO,
     });
 
     if change_value > 0 {
         outputs.push(TransferCallOutput {
+            public_key: keypair.public,
             value: change_value,
             token_id,
-            public_key: keypair.public,
+            serial: pallas::Base::random(&mut OsRng),
             spend_hook: pallas::Base::ZERO,
             user_data: pallas::Base::ZERO,
         });

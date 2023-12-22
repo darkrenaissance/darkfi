@@ -27,7 +27,7 @@ use darkfi_dao_contract::{
     model::{Dao, DaoAuthCall, DaoBulla, DaoProposal, DaoProposeParams},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
 };
-use darkfi_money_contract::{client::OwnCoin, model::CoinParams, MoneyFunction};
+use darkfi_money_contract::{client::OwnCoin, model::CoinAttributes, MoneyFunction};
 use darkfi_sdk::{
     crypto::{
         pasta_prelude::Field, MerkleNode, SecretKey, TokenId, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
@@ -44,7 +44,7 @@ impl TestHarness {
     pub fn dao_propose(
         &mut self,
         proposer: &Holder,
-        proposal_coins: Vec<CoinParams>,
+        proposal_coinattrs: &Vec<CoinAttributes>,
         user_data: pallas::Base,
         dao: &Dao,
         dao_bulla: &DaoBulla,
@@ -78,6 +78,11 @@ impl TestHarness {
             signature_secret,
         };
 
+        // Convert coin_params to actual coins
+        let mut proposal_coins = vec![];
+        for coin_params in proposal_coinattrs {
+            proposal_coins.push(coin_params.to_coin());
+        }
         let mut proposal_data = vec![];
         proposal_coins.encode(&mut proposal_data).unwrap();
 

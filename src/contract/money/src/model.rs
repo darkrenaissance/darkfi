@@ -57,7 +57,7 @@ impl Coin {
 }
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct CoinParams {
+pub struct CoinAttributes {
     pub public_key: PublicKey,
     pub value: u64,
     pub token_id: TokenId,
@@ -66,7 +66,7 @@ pub struct CoinParams {
     pub user_data: pallas::Base,
 }
 
-impl CoinParams {
+impl CoinAttributes {
     pub fn to_coin(&self) -> Coin {
         let (pub_x, pub_y) = self.public_key.xy();
         let coin = poseidon_hash([

@@ -69,9 +69,10 @@ impl TestHarness {
             }],
             inputs: vec![],
             outputs: vec![xfer::TransferCallOutput {
+                public_key: recipient,
                 value,
                 token_id: *DARK_TOKEN_ID,
-                public_key: recipient,
+                serial: pallas::Base::random(&mut OsRng),
                 spend_hook: rcpt_spend_hook.unwrap_or(pallas::Base::ZERO),
                 user_data: rcpt_user_data.unwrap_or(pallas::Base::ZERO),
             }],

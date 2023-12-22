@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::model::CoinParams;
+use darkfi_money_contract::model::CoinAttributes;
 use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
@@ -109,7 +109,7 @@ impl DaoVoteCall {
             ];
 
             let public_key = PublicKey::from_secret(input.secret);
-            let coin = CoinParams {
+            let coin = CoinAttributes {
                 public_key,
                 value: note.value,
                 token_id: note.token_id,

@@ -22,7 +22,7 @@ use darkfi_dao_contract::{
     client::DaoVoteNote,
     model::{Dao, DaoBlindAggregateVote},
 };
-use darkfi_money_contract::model::CoinParams;
+use darkfi_money_contract::model::CoinAttributes;
 use darkfi_sdk::{
     crypto::{
         pasta_prelude::Field, pedersen_commitment_u64, poseidon_hash, DAO_CONTRACT_ID,
@@ -183,7 +183,7 @@ fn integration_test() -> Result<()> {
 
         // These coins are passed around to all DAO members who verify its validity
         // They also check hashing them equals the proposal_commit
-        let proposal_coins = vec![CoinParams {
+        let proposal_coinattrs = vec![CoinAttributes {
             public_key: th.holders.get(&Holder::Rachel).unwrap().keypair.public,
             value: PROPOSAL_AMOUNT,
             token_id: drk_token_id,
@@ -197,7 +197,7 @@ fn integration_test() -> Result<()> {
 
         let (propose_tx, propose_params, propose_info) = th.dao_propose(
             &Holder::Alice,
-            proposal_coins.clone(),
+            &proposal_coinattrs,
             user_data,
             &dao,
             &dao_mint_params.dao_bulla,
@@ -318,7 +318,7 @@ fn integration_test() -> Result<()> {
             &dao,
             &dao_mint_params.dao_bulla,
             &propose_info,
-            &proposal_coins,
+            &proposal_coinattrs,
             total_yes_vote_value,
             total_all_vote_value,
             total_yes_vote_blind,

@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::{model::MoneyTransferParamsV1, MoneyFunction};
+use darkfi_money_contract::{
+    model::{Coin, MoneyTransferParamsV1},
+    MoneyFunction,
+};
 use darkfi_sdk::{
     crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, PublicKey},
     dark_tree::DarkLeaf,
@@ -122,9 +125,19 @@ pub(crate) fn dao_authxfer_process_instruction(
         return Err(DaoError::AuthXferCallNotFoundInParent.into())
     }
 
-    // Read the proposal_data which should be Vec<CoinParams>
-    // Deserialize the proposal_data
+    // Read the proposal auth data which should be Vec<CoinAttributes>
+    let proposal_coins: Vec<Coin> = deserialize(&auth_call.unwrap().auth_data[..])?;
+
     // Check all the outputs except the last match
+    let send_outs = xfer_params.outputs.split_last().unwrap().1;
+    if send_outs.len() != proposal_coins.len() {
+        return Err(DaoError::AuthXferWrongNumberOutputs.into())
+    }
+    for (output, coin) in send_outs.iter().zip(proposal_coins.iter()) {
+        if output.coin != *coin {
+            return Err(DaoError::AuthXferWrongOutputCoin.into())
+        }
+    }
 
     ///////////////////////////////////////////////////
     // 4. Change belongs to the DAO

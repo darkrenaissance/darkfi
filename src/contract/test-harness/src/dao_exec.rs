@@ -29,7 +29,7 @@ use darkfi_dao_contract::{
 };
 use darkfi_money_contract::{
     client::transfer_v1 as xfer,
-    model::{CoinParams, MoneyTransferParamsV1},
+    model::{CoinAttributes, MoneyTransferParamsV1},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
@@ -53,7 +53,7 @@ impl TestHarness {
         dao: &Dao,
         dao_bulla: &DaoBulla,
         proposal: &DaoProposal,
-        proposal_coins: &Vec<CoinParams>,
+        proposal_coinattrs: &Vec<CoinAttributes>,
         yes_vote_value: u64,
         all_vote_value: u64,
         yes_vote_blind: pallas::Scalar,
@@ -75,10 +75,10 @@ impl TestHarness {
         // TODO: FIXME: This is not checked anywhere!
         let exec_signature_secret = SecretKey::random(&mut OsRng);
 
-        assert!(proposal_coins.len() > 0);
-        let proposal_token_id = proposal_coins[0].token_id;
-        assert!(proposal_coins.iter().all(|c| c.token_id == proposal_token_id));
-        let proposal_amount = proposal_coins.iter().map(|c| c.value).sum();
+        assert!(proposal_coinattrs.len() > 0);
+        let proposal_token_id = proposal_coinattrs[0].token_id;
+        assert!(proposal_coinattrs.iter().all(|c| c.token_id == proposal_token_id));
+        let proposal_amount = proposal_coinattrs.iter().map(|c| c.value).sum();
 
         let dao_coins = dao_wallet
             .unspent_money_coins
@@ -104,19 +104,22 @@ impl TestHarness {
         }
 
         let mut outputs = vec![];
-        for coin in proposal_coins {
+        for coin in proposal_coinattrs {
+            assert_eq!(proposal_token_id, coin.token_id);
             outputs.push(xfer::TransferCallOutput {
-                value: proposal_amount,
-                token_id: proposal_token_id,
                 public_key: coin.public_key,
-                spend_hook: pallas::Base::ZERO,
-                user_data: pallas::Base::ZERO,
+                value: coin.value,
+                token_id: proposal_token_id,
+                serial: coin.serial,
+                spend_hook: coin.spend_hook,
+                user_data: coin.user_data,
             });
         }
         outputs.push(xfer::TransferCallOutput {
+            public_key: dao_wallet.keypair.public,
             value: change_value,
             token_id: proposal_token_id,
-            public_key: dao_wallet.keypair.public,
+            serial: pallas::Base::random(&mut OsRng),
             spend_hook: DAO_CONTRACT_ID.inner(),
             user_data: dao_bulla.inner(),
         });

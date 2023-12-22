@@ -91,9 +91,10 @@ impl GenesisMintCallBuilder {
         };
 
         let output = TransferCallOutput {
+            public_key: self.keypair.public,
             value: self.amount,
             token_id,
-            public_key: self.keypair.public,
+            serial: pallas::Base::random(&mut OsRng),
             spend_hook: pallas::Base::ZERO,
             user_data: pallas::Base::ZERO,
         };
