@@ -53,7 +53,7 @@ macro_rules! zip {
 /// A Transaction contains an arbitrary number of `ContractCall` objects,
 /// along with corresponding ZK proofs and Schnorr signatures. `DarkLeaf`
 /// is used to map relations between contract calls in the transaciton.
-#[derive(Debug, Clone, Default, Eq, PartialEq, SerialEncodable, SerialDecodable)]
+#[derive(Clone, Default, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Transaction {
     /// Calls executed in this transaction
     pub calls: Vec<DarkLeaf<ContractCall>>,
@@ -163,6 +163,25 @@ impl Transaction {
         let mut hasher = blake3::Hasher::new();
         self.encode(&mut hasher)?;
         Ok(hasher.finalize())
+    }
+}
+
+// Avoid showing the proofs and sigs in the debug output since often they are very long.
+impl std::fmt::Debug for Transaction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Transaction {{\n")?;
+        for (i, call) in self.calls.iter().enumerate() {
+            write!(f, "  Call {} {{\n", i)?;
+            write!(f, "    contract_id: {:?}\n", call.data.contract_id.inner())?;
+            let calldata = &call.data.data;
+            if calldata.len() > 0 {
+                write!(f, "    function_code: {}\n", calldata[0])?;
+            }
+            write!(f, "    parent: {:?}\n", call.parent_index)?;
+            write!(f, "    children: {:?}\n", call.children_indexes)?;
+            write!(f, "  }},\n")?;
+        }
+        write!(f, "}}\n")
     }
 }
 
