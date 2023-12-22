@@ -115,7 +115,10 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
                 }
             };
 
-            // TODO: Ensure we've read the entire buffer above.
+            if buf_reader.position() != (len as u64) {
+                error!(target: "runtime::merkle", "Mismatch between given length, and cursor length");
+                return -2
+            }
 
             // Read the current tree
             let ret = match env
