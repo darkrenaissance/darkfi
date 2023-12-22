@@ -555,7 +555,7 @@ impl Runtime {
 
     /// Copy payload to the start of the memory
     fn copy_to_memory(&self, payload: &[u8]) -> Result<()> {
-        // TODO: Maybe should write to first zero memory and return the pointer/offset?
+        // Payload is copied to index 0.
         // Get the memory view
         let env = self.ctx.as_ref(&self.store);
         let memory_view = env.memory_view(&self.store);
