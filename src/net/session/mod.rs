@@ -99,6 +99,7 @@ pub trait Session: Sync {
 
         // Perform the handshake protocol
         let protocol_version = ProtocolVersion::new(channel.clone(), p2p.settings().clone()).await;
+        debug!(target: "net::session::register_channel()", "register_channel {}", channel.clone().address());
         let handshake_task =
             self.perform_handshake_protocols(protocol_version, channel.clone(), executor.clone());
 
@@ -135,11 +136,21 @@ pub trait Session: Sync {
         // Perform handshake
         protocol_version.run(executor.clone()).await?;
 
-        // Channel is now initialized. Timestamp this.
-        let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        if self.type_id() != SESSION_INBOUND {
+            // Channel is now initialized. Timestamp this.
+            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+
+            // TODO: FIXME: unwrap
+            self.p2p()
+                .hosts()
+                .anchorlist_store_or_update(&[(channel.address().clone(), last_seen)])
+                .await
+                .unwrap();
+        }
 
         // Add channel to p2p
-        self.p2p().store(channel.clone(), last_seen).await;
+        debug!(target: "net::session::register_channel()", "perform_handshake_protocol {}", channel.clone().address());
+        self.p2p().store(channel.clone()).await;
 
         // Subscribe to stop, so we can remove from p2p
         executor.spawn(remove_sub_on_stop(self.p2p(), channel)).detach();
