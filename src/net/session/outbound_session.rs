@@ -31,7 +31,7 @@ use std::{
         atomic::{AtomicU32, Ordering},
         Arc, Weak,
     },
-    time::{Duration, Instant},
+    time::{Duration, Instant, UNIX_EPOCH},
 };
 
 use async_trait::async_trait;
@@ -203,6 +203,7 @@ impl Slot {
     // Fetch address, try to connect to it, call setup_channel.
     async fn run(self: Arc<Self>) {
         let hosts = self.p2p().hosts();
+        // TODO: reimplement
         let slot_count = self.p2p().settings().outbound_connections;
         let white_count = slot_count * DEFAULT_WHITE_CONN_PERCENT / 100;
 
@@ -235,49 +236,102 @@ impl Slot {
                 continue
             }
 
-            // For the first 2 loops, connect to a host from the anchorlist.
-            if connect_count < DEFAULT_ANCHOR_CONN_COUNT {
-                if let Some(host) =
-                    hosts.anchorlist_fetch_address_with_lock(self.p2p(), transports).await
-                {
-                    // TODO: Error handling.
-                    self.connect_slot(&host.0, self.slot).await.unwrap();
-                } else {
-                    continue
-                }
-            }
+            
+            // Uo to DEFAULT_ANCHOR_CONN_COUNT connections:
+            //
+            //  Select from the anchorlist
+            //  If the anchorlist is empty, select from the whitelist
+            //  If the whitelist is empty, select from the greylist
+            //  If the greylist is empty, do peer discovery
+            //
+            // Up to DEFAULT_WHITE_CONN_PERCENT connections:
+            //
+            //  Select from the whitelist
+            //  If the whitelist is empty, select from the greylist
+            //  If the greylist is empty, do peer discovery
+            //
+            // All other connections:
+            //
+            //  Select from the greylist
+            //  If the greylist is empty, do peer discovery
 
-            //// For the next N loops, connect to a host from the whitelist.
-            if connect_count < white_count {
-                if let Some(host) =
-                    hosts.whitelist_fetch_address_with_lock(self.p2p(), transports).await
-                {
-                    // TODO: Error handling.
-                    self.connect_slot(&host.0, self.slot).await.unwrap();
-                } else {
-                    continue
+            if connect_count < DEFAULT_ANCHOR_CONN_COUNT {
+                // There's no hosts on the anchorlist, connect to addrs on the greylist.
+                if hosts.is_empty_anchorlist().await {
+                    match hosts.whitelist_fetch_address_with_lock(self.p2p(), transports).await {
+                        Some(white) => {
+                            // Connect to whitelist addr
+                            self.connect_slot(&white.0, self.slot).await.unwrap();
+                        }
+                        None => {
+                            // If we can't find a peer on the whitelist, chose from the greylist.
+                            match hosts
+                                .greylist_fetch_address_with_lock(self.p2p(), transports)
+                                .await
+                            {
+                                Some(grey) => {
+                                    // Connect to greylist addr
+                                    self.connect_slot(&grey.0, self.slot).await.unwrap();
+                                }
+                                None => {
+                                    // peer discovery
+                                }
+                            }
+                        }
+                    }
                 }
-            }
+                // Connect to an addr from the anchor list.
+                else {
+                    let anchor = hosts
+                        .anchorlist_fetch_address_with_lock(self.p2p(), transports)
+                        .await
+                        .unwrap();
+                    self.connect_slot(&anchor.0, self.slot).await.unwrap();
+                }
+
+                // If the filled slots are less than the default whitelist slots limit,
+                // search for connections from the whitelist.
+            } else if connect_count < white_count {
+                if hosts.is_empty_whitelist().await {
+                    // Take from the greylist if there's nothing on the whitelist.
+                    match hosts.greylist_fetch_address_with_lock(self.p2p(), transports).await {
+                        Some(grey) => self.connect_slot(&grey.0, self.slot).await.unwrap(),
+                        None => {
+                            // We haven't been able to connect to any known peers. Activate peer discovery.
+                            dnetev!(self, OutboundSlotSleeping, {
+                                slot: self.slot,
+                            });
+
+                            self.wakeup_self.reset();
+                            // Peer discovery
+                            self.session().wakeup_peer_discovery();
+                            // Wait to be woken up by peer discovery
+                            self.wakeup_self.wait().await;
+                            continue
+                        }
+                    }
+                }
 
             // For any remaining slots, connect to a host on the greylist.
-            if connect_count < slot_count {
-                if let Some(host) =
-                    hosts.greylist_fetch_address_with_lock(self.p2p(), transports).await
-                {
-                    // TODO: Error handling.
-                    self.connect_slot(&host.0, self.slot).await.unwrap();
-                } else {
-                    // We haven't been able to connect to any known peers. Activate peer discovery.
-                    dnetev!(self, OutboundSlotSleeping, {
-                        slot: self.slot,
-                    });
+            } else if connect_count < slot_count {
+                match hosts.greylist_fetch_address_with_lock(self.p2p(), transports).await {
+                    Some(grey) => {
+                        self.connect_slot(&grey.0, self.slot).await.unwrap();
+                    }
 
-                    self.wakeup_self.reset();
-                    // Peer discovery
-                    self.session().wakeup_peer_discovery();
-                    // Wait to be woken up by peer discovery
-                    self.wakeup_self.wait().await;
-                    continue
+                    None => {
+                        // We haven't been able to connect to any known peers. Activate peer discovery.
+                        dnetev!(self, OutboundSlotSleeping, {
+                            slot: self.slot,
+                        });
+
+                        self.wakeup_self.reset();
+                        // Peer discovery
+                        self.session().wakeup_peer_discovery();
+                        // Wait to be woken up by peer discovery
+                        self.wakeup_self.wait().await;
+                        continue
+                    }
                 }
             }
         }
@@ -498,7 +552,17 @@ impl Slot {
 
     async fn setup_channel(&self, addr: Url, channel: ChannelPtr) -> Result<()> {
         // Register the new channel
+        debug!(target: "net::outbound_session::setup_channel", "register_channel {}", channel.clone().address());
         self.session().register_channel(channel.clone(), self.p2p().executor()).await?;
+
+        // Channel is now initialized. Timestamp this.
+        let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+
+        // Save this connection on the anchorlist.
+        self.p2p()
+            .hosts()
+            .anchorlist_store_or_update(&[(channel.address().clone(), last_seen)])
+            .await?;
 
         // Channel is now connected but not yet setup
         // Remove pending lock since register_channel will add the channel to p2p
