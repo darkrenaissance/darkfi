@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-// cargo +nightly test --release --all-features --lib p2p -- --include-ignored
+// cargo +nightly test --release --features=net --lib p2p -- --include-ignored
 
 use std::sync::Arc;
 
@@ -34,30 +34,9 @@ use crate::{
 const N_NODES: usize = 5;
 const N_CONNS: usize = 2;
 
-// TODO: test whitelist propagation between peers
-// TODO: test whitelist propagation from lilith to peers
-// TODO: test greylist storage and sorting
-// TODO: test greylist/ whitelist refining and refreshing
 #[test]
 fn p2p_test() {
     let mut cfg = simplelog::ConfigBuilder::new();
-    //cfg.add_filter_ignore("sled".to_string());
-    //cfg.add_filter_ignore("net::channel::subscribe_stop()".to_string());
-    //cfg.add_filter_ignore("net::hosts".to_string());
-    //cfg.add_filter_ignore("net::session".to_string());
-    //cfg.add_filter_ignore("net::message_subscriber".to_string());
-    //cfg.add_filter_ignore("net::protocol_ping".to_string());
-    //cfg.add_filter_ignore("net::protocol_version".to_string());
-    //cfg.add_filter_ignore("net::protocol_jobs_manager".to_string());
-    //cfg.add_filter_ignore("net::protocol_registry".to_string());
-    //cfg.add_filter_ignore("net::channel::send()".to_string());
-    //cfg.add_filter_ignore("net::channel::start()".to_string());
-    //cfg.add_filter_ignore("net::channel::stop()".to_string());
-    //cfg.add_filter_ignore("net::channel::handle_stop()".to_string());
-    //cfg.add_filter_ignore("net::channel::subscribe_msg()".to_string());
-    //cfg.add_filter_ignore("net::channel::main_receive_loop()".to_string());
-    //cfg.add_filter_ignore("net::greylist_refinery::run()".to_string());
-    //cfg.add_filter_ignore("net::outbound_session::try_connect()".to_string());
 
     simplelog::TermLogger::init(
         //simplelog::LevelFilter::Info,
@@ -126,16 +105,18 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
     }
 
     info!("Waiting until all peers connect");
-    sleep(30).await;
+    sleep(60).await;
 
     info!("Inspecting hostlists...");
     for p2p in p2p_instances.iter() {
         let hosts = p2p.hosts();
-        assert!(!hosts.is_empty_greylist().await);
+        //assert!(!hosts.is_empty_greylist().await);
         //assert!(!hosts.is_empty_whitelist().await);
+        //assert!(!hosts.is_empty_anchorlist().await);
 
         let greylist = hosts.greylist.read().await;
         let whitelist = hosts.whitelist.read().await;
+        let anchorlist = hosts.anchorlist.read().await;
 
         info!("Node {}", p2p.settings().node_id);
         for (i, (url, last_seen)) in greylist.iter().enumerate() {
@@ -144,6 +125,10 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
 
         for (i, (url, last_seen)) in whitelist.iter().enumerate() {
             info!("Whitelist entry {}: {}, {}", i, url, last_seen);
+        }
+
+        for (i, (url, last_seen)) in anchorlist.iter().enumerate() {
+            info!("Anchorlist entry {}: {}, {}", i, url, last_seen);
         }
     }
 

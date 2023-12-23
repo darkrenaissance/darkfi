@@ -692,6 +692,24 @@ impl Hosts {
         self.whitelist.read().await.is_empty()
     }
 
+    /// Check if the anchorlist is empty.
+    pub async fn is_empty_anchorlist(&self) -> bool {
+        self.anchorlist.read().await.is_empty()
+    }
+
+    /// Check if the hostlist is empty.
+    pub async fn is_empty_hostlist(&self) -> bool {
+        if self.is_empty_greylist().await {
+            return true
+        } else if self.is_empty_whitelist().await {
+            return true
+        } else if self.is_empty_anchorlist().await {
+            return true
+        } else {
+            return false
+        }
+    }
+
     // Check whether this peer is in any of the hostlists.
     async fn hostlist_contains(&self, addr: &Url) -> bool {
         if self.greylist_contains(addr).await {
