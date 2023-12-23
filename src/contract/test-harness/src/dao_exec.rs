@@ -18,10 +18,7 @@
 
 use std::time::Instant;
 
-use darkfi::{
-    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
-    Result,
-};
+use darkfi::{tx::Transaction, Result};
 use darkfi_dao_contract::{
     client::{DaoAuthMoneyTransferCall, DaoExecCall},
     model::{Dao, DaoBulla, DaoExecParams, DaoProposal},
@@ -79,7 +76,7 @@ impl TestHarness {
         // TODO: FIXME: This is not checked anywhere!
         let exec_signature_secret = SecretKey::random(&mut OsRng);
 
-        assert!(proposal_coinattrs.len() > 0);
+        assert!(!proposal_coinattrs.is_empty());
         let proposal_token_id = proposal_coinattrs[0].token_id;
         assert!(proposal_coinattrs.iter().all(|c| c.token_id == proposal_token_id));
         let proposal_amount = proposal_coinattrs.iter().map(|c| c.value).sum();

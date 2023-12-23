@@ -169,19 +169,19 @@ impl Transaction {
 // Avoid showing the proofs and sigs in the debug output since often they are very long.
 impl std::fmt::Debug for Transaction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Transaction {{\n")?;
+        writeln!(f, "Transaction {{")?;
         for (i, call) in self.calls.iter().enumerate() {
-            write!(f, "  Call {} {{\n", i)?;
-            write!(f, "    contract_id: {:?}\n", call.data.contract_id.inner())?;
+            writeln!(f, "  Call {} {{", i)?;
+            writeln!(f, "    contract_id: {:?}", call.data.contract_id.inner())?;
             let calldata = &call.data.data;
-            if calldata.len() > 0 {
-                write!(f, "    function_code: {}\n", calldata[0])?;
+            if !calldata.is_empty() {
+                writeln!(f, "    function_code: {}", calldata[0])?;
             }
-            write!(f, "    parent: {:?}\n", call.parent_index)?;
-            write!(f, "    children: {:?}\n", call.children_indexes)?;
-            write!(f, "  }},\n")?;
+            writeln!(f, "    parent: {:?}", call.parent_index)?;
+            writeln!(f, "    children: {:?}", call.children_indexes)?;
+            writeln!(f, "  }},")?;
         }
-        write!(f, "}}\n")
+        writeln!(f, "}}")
     }
 }
 

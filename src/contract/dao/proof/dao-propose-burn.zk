@@ -2,61 +2,61 @@ k = 13;
 field = "pallas";
 
 constant "DaoProposeInput" {
-	EcFixedPointBase NULLIFIER_K,
-	EcFixedPoint VALUE_COMMIT_RANDOM,
-	EcFixedPointShort VALUE_COMMIT_VALUE,
+    EcFixedPointBase NULLIFIER_K,
+    EcFixedPoint VALUE_COMMIT_RANDOM,
+    EcFixedPointShort VALUE_COMMIT_VALUE,
 }
 
 witness "DaoProposeInput" {
-	Base secret,
-	Base serial,
-	Base spend_hook,
-	Base user_data,
-	Base value,
-	Base token,
-	Scalar value_blind,
-	Base token_blind,
-	Uint32 leaf_pos,
-	MerklePath path,
-	Base signature_secret,
+    Base secret,
+    Base serial,
+    Base spend_hook,
+    Base user_data,
+    Base value,
+    Base token,
+    Scalar value_blind,
+    Base token_blind,
+    Uint32 leaf_pos,
+    MerklePath path,
+    Base signature_secret,
 }
 
 circuit "DaoProposeInput" {
-	#nullifier = poseidon_hash(secret, serial);
-	#constrain_instance(nullifier);
+    #nullifier = poseidon_hash(secret, serial);
+    #constrain_instance(nullifier);
 
-	# Pedersen commitment for coin's value
-	vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
-	vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
-	value_commit = ec_add(vcv, vcr);
-	constrain_instance(ec_get_x(value_commit));
-	constrain_instance(ec_get_y(value_commit));
+    # Pedersen commitment for coin's value
+    vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
+    vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
+    value_commit = ec_add(vcv, vcr);
+    constrain_instance(ec_get_x(value_commit));
+    constrain_instance(ec_get_y(value_commit));
 
-	# Commitment for coin's token ID
-	token_commit = poseidon_hash(token, token_blind);
-	constrain_instance(token_commit);
+    # Commitment for coin's token ID
+    token_commit = poseidon_hash(token, token_blind);
+    constrain_instance(token_commit);
 
-	# Coin hash
-	pub = ec_mul_base(secret, NULLIFIER_K);
-	pub_x = ec_get_x(pub);
-	pub_y = ec_get_y(pub);
-	C = poseidon_hash(
-		pub_x,
-		pub_y,
-		value,
-		token,
-		serial,
-		spend_hook,
-		user_data,
-	);
+    # Coin hash
+    pub = ec_mul_base(secret, NULLIFIER_K);
+    pub_x = ec_get_x(pub);
+    pub_y = ec_get_y(pub);
+    C = poseidon_hash(
+        pub_x,
+        pub_y,
+        value,
+        token,
+        serial,
+        spend_hook,
+        user_data,
+    );
 
-	# Merkle root
-	root = merkle_root(leaf_pos, path, C);
-	constrain_instance(root);
+    # Merkle root
+    root = merkle_root(leaf_pos, path, C);
+    constrain_instance(root);
 
-	# Finally we derive a public key for the signature and constrain
-	# its coordinates:
-	signature_public = ec_mul_base(signature_secret, NULLIFIER_K);
-	constrain_instance(ec_get_x(signature_public));
-	constrain_instance(ec_get_y(signature_public));
+    # Finally we derive a public key for the signature and constrain
+    # its coordinates:
+    signature_public = ec_mul_base(signature_secret, NULLIFIER_K);
+    constrain_instance(ec_get_x(signature_public));
+    constrain_instance(ec_get_y(signature_public));
 }

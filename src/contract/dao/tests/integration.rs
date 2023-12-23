@@ -24,10 +24,7 @@ use darkfi_dao_contract::{
 };
 use darkfi_money_contract::model::CoinAttributes;
 use darkfi_sdk::{
-    crypto::{
-        pasta_prelude::Field, pedersen_commitment_u64, poseidon_hash, DAO_CONTRACT_ID,
-        DARK_TOKEN_ID,
-    },
+    crypto::{pasta_prelude::Field, pedersen_commitment_u64, DAO_CONTRACT_ID, DARK_TOKEN_ID},
     pasta::pallas,
 };
 use log::info;

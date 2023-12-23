@@ -21,25 +21,24 @@ use darkfi_money_contract::{
     MoneyFunction,
 };
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, ContractId, PublicKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
+    crypto::{ContractId, PublicKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
     dark_tree::DarkLeaf,
-    db::{db_del, db_get, db_lookup},
-    error::{ContractError, ContractResult},
+    error::ContractError,
     msg,
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
+use darkfi_serial::{deserialize, Encodable, WriteExt};
 
 use crate::{
     error::DaoError,
-    model::{DaoAuthCall, DaoAuthMoneyTransferParams, DaoExecParams, VecAuthCallCommit},
-    DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS,
+    model::{DaoAuthCall, DaoExecParams, VecAuthCallCommit},
+    DaoFunction, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS,
 };
 
 /// `get_metdata` function for `Dao::Exec`
 pub(crate) fn dao_authxfer_get_metadata(
-    cid: ContractId,
+    _cid: ContractId,
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
@@ -97,7 +96,7 @@ fn find_auth_in_parent(
 
 /// `process_instruction` function for `Dao::Exec`
 pub(crate) fn dao_authxfer_process_instruction(
-    cid: ContractId,
+    _cid: ContractId,
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
@@ -146,8 +145,7 @@ pub(crate) fn dao_authxfer_process_instruction(
     let exec_callnode = &calls[parent_idx];
     let exec_params: DaoExecParams = deserialize(&exec_callnode.data.data[1..])?;
 
-    let mut auth_call =
-        find_auth_in_parent(&exec_callnode, exec_params.proposal_auth_calls, call_idx);
+    let auth_call = find_auth_in_parent(&exec_callnode, exec_params.proposal_auth_calls, call_idx);
     if auth_call.is_none() {
         return Err(DaoError::AuthXferCallNotFoundInParent.into())
     }

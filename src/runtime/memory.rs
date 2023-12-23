@@ -48,7 +48,7 @@ mod tests {
         let mut store = Store::default();
         let m = Memory::new(&mut store, MemoryType::new(1, None, false)).unwrap();
         let value: [u8; 3] = [3, 0, 1];
-        let view = m.view(&mut store);
+        let view = m.view(&store);
         let res = view.write_slice(&value, 0);
         assert!(res.is_ok());
         let ptr: WasmPtr<u8> = WasmPtr::new(0);
@@ -63,7 +63,7 @@ mod tests {
         let mut store = Store::default();
         let m = Memory::new(&mut store, MemoryType::new(1, None, false)).unwrap();
         let value: [u8; 3] = [3, 0, 1];
-        let view = m.view(&mut store);
+        let view = m.view(&store);
         let res = view.write_slice(&value, 0);
         assert!(res.is_ok());
         let ptr: WasmPtr<u8> = WasmPtr::new(0);

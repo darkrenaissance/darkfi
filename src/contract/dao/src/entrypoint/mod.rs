@@ -22,15 +22,13 @@ use darkfi_sdk::{
     crypto::{ContractId, MerkleTree},
     dark_tree::DarkLeaf,
     db::{db_get, db_init, db_lookup, db_set, zkas_db_set},
-    error::{ContractError, ContractResult},
-    msg,
+    error::ContractResult,
     util::set_return_data,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Decodable, Encodable, WriteExt};
 
 use crate::{
-    error::DaoError,
     model::{DaoExecUpdate, DaoMintUpdate, DaoProposeUpdate, DaoVoteUpdate},
     DaoFunction, DAO_CONTRACT_DB_DAO_BULLAS, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS,
     DAO_CONTRACT_DB_INFO_TREE, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_DB_VOTE_NULLIFIERS,

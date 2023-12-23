@@ -18,13 +18,10 @@
 
 use darkfi_money_contract::model::CoinAttributes;
 use darkfi_sdk::{
-    crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, SecretKey, DAO_CONTRACT_ID,
-    },
+    crypto::{poseidon_hash, DAO_CONTRACT_ID},
     pasta::pallas,
 };
 
-use log::debug;
 use rand::rngs::OsRng;
 
 use darkfi::{
@@ -33,9 +30,7 @@ use darkfi::{
     Result,
 };
 
-use crate::model::{
-    Dao, DaoAuthMoneyTransferParams, DaoBlindAggregateVote, DaoProposal, VecAuthCallCommit,
-};
+use crate::model::{Dao, DaoAuthMoneyTransferParams, DaoProposal, VecAuthCallCommit};
 
 pub struct DaoAuthMoneyTransferCall {
     pub proposal: DaoProposal,

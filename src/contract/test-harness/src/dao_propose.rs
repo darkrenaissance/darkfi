@@ -29,9 +29,7 @@ use darkfi_dao_contract::{
 };
 use darkfi_money_contract::{client::OwnCoin, model::CoinAttributes, MoneyFunction};
 use darkfi_sdk::{
-    crypto::{
-        pasta_prelude::Field, MerkleNode, SecretKey, TokenId, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
-    },
+    crypto::{pasta_prelude::Field, MerkleNode, SecretKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
     pasta::pallas,
     ContractCall,
 };

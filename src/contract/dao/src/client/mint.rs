@@ -72,7 +72,7 @@ pub fn make_mint_call(
     let circuit = ZkCircuit::new(prover_witnesses, dao_mint_zkbin);
     let proof = Proof::create(dao_mint_pk, &[circuit], &public, &mut OsRng)?;
 
-    let dao_mint_params = DaoMintParams { dao_bulla: dao_bulla.into(), dao_pubkey: dao.public_key };
+    let dao_mint_params = DaoMintParams { dao_bulla, dao_pubkey: dao.public_key };
 
     Ok((dao_mint_params, vec![proof]))
 }

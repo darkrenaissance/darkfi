@@ -16,9 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::{model::MoneyTransferParamsV1, MoneyFunction};
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, PublicKey},
+    crypto::{pasta_prelude::*, ContractId, PublicKey},
     dark_tree::DarkLeaf,
     db::{db_del, db_get, db_lookup},
     error::{ContractError, ContractResult},
@@ -36,7 +35,7 @@ use crate::{
 
 /// `get_metdata` function for `Dao::Exec`
 pub(crate) fn dao_exec_get_metadata(
-    cid: ContractId,
+    _cid: ContractId,
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {

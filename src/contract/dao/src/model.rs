@@ -17,7 +17,6 @@
  */
 
 use core::str::FromStr;
-use std::io::Read;
 
 use darkfi_sdk::{
     crypto::{

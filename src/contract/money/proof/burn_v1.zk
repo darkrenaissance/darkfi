@@ -4,95 +4,95 @@ field = "pallas";
 
 # The constants we define for our circuit
 constant "Burn_V1" {
-	EcFixedPointShort VALUE_COMMIT_VALUE,
-	EcFixedPoint VALUE_COMMIT_RANDOM,
-	EcFixedPointBase NULLIFIER_K,
+    EcFixedPointShort VALUE_COMMIT_VALUE,
+    EcFixedPoint VALUE_COMMIT_RANDOM,
+    EcFixedPointBase NULLIFIER_K,
 }
 
 # The witness values we define for our circuit
 witness "Burn_V1" {
-	# The value of this coin
-	Base value,
-	# The token ID
-	Base token,
-	# Random blinding factor for value commitment
-	Scalar value_blind,
-	# Random blinding factor for the token ID
-	Base token_blind,
-	# Unique serial number corresponding to this coin
-	Base serial,
-	# Allows composing this ZK proof to invoke other contracts
-	Base spend_hook,
-	# Data passed from this coin to the invoked contract
-	Base user_data,
-	# Blinding factor for the encrypted user_data
-	Base user_data_blind,
-	# Secret key used to derive nullifier and coin's public key
-	Base secret,
-	# Leaf position of the coin in the Merkle tree of coins
-	Uint32 leaf_pos,
-	# Merkle path to the coin
-	MerklePath path,
-	# Secret key used to derive public key for the tx signature
-	Base signature_secret,
+    # The value of this coin
+    Base value,
+    # The token ID
+    Base token,
+    # Random blinding factor for value commitment
+    Scalar value_blind,
+    # Random blinding factor for the token ID
+    Base token_blind,
+    # Unique serial number corresponding to this coin
+    Base serial,
+    # Allows composing this ZK proof to invoke other contracts
+    Base spend_hook,
+    # Data passed from this coin to the invoked contract
+    Base user_data,
+    # Blinding factor for the encrypted user_data
+    Base user_data_blind,
+    # Secret key used to derive nullifier and coin's public key
+    Base secret,
+    # Leaf position of the coin in the Merkle tree of coins
+    Uint32 leaf_pos,
+    # Merkle path to the coin
+    MerklePath path,
+    # Secret key used to derive public key for the tx signature
+    Base signature_secret,
 }
 
 # The definition of our circuit
 circuit "Burn_V1" {
-	# Poseidon hash of the nullifier
-	nullifier = poseidon_hash(secret, serial);
-	constrain_instance(nullifier);
+    # Poseidon hash of the nullifier
+    nullifier = poseidon_hash(secret, serial);
+    constrain_instance(nullifier);
 
-	# Pedersen commitment for coin's value
-	vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
-	vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
-	value_commit = ec_add(vcv, vcr);
-	# Since value_commit is a curve point, we fetch its coordinates
-	# and constrain them:
-	constrain_instance(ec_get_x(value_commit));
-	constrain_instance(ec_get_y(value_commit));
+    # Pedersen commitment for coin's value
+    vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
+    vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
+    value_commit = ec_add(vcv, vcr);
+    # Since value_commit is a curve point, we fetch its coordinates
+    # and constrain them:
+    constrain_instance(ec_get_x(value_commit));
+    constrain_instance(ec_get_y(value_commit));
 
-	# Commitment for coin's token ID. We do a poseidon hash since it's
-	# cheaper than EC operations and doesn't need the homomorphic prop.
-	token_commit = poseidon_hash(token, token_blind);
-	constrain_instance(token_commit);
+    # Commitment for coin's token ID. We do a poseidon hash since it's
+    # cheaper than EC operations and doesn't need the homomorphic prop.
+    token_commit = poseidon_hash(token, token_blind);
+    constrain_instance(token_commit);
 
-	# Derive the public key used in the coin from its secret counterpart
-	pub = ec_mul_base(secret, NULLIFIER_K);
-	# Coin hash
-	C = poseidon_hash(
-		ec_get_x(pub),
-		ec_get_y(pub),
-		value,
-		token,
-		serial,
-		spend_hook,
-		user_data,
-	);
+    # Derive the public key used in the coin from its secret counterpart
+    pub = ec_mul_base(secret, NULLIFIER_K);
+    # Coin hash
+    C = poseidon_hash(
+        ec_get_x(pub),
+        ec_get_y(pub),
+        value,
+        token,
+        serial,
+        spend_hook,
+        user_data,
+    );
 
-	# With this, we can actually produce a fake coin of value 0
-	# above and use it as a dummy input. The inclusion merkle tree
-	# has a 0x00 leaf at position 0, so zero_cond will output value
-	# iff value is 0 - which is equivalent to 0x00 so that's the
-	# trick we use to make the inclusion proof.
-	coin_incl = zero_cond(value, C);
+    # With this, we can actually produce a fake coin of value 0
+    # above and use it as a dummy input. The inclusion merkle tree
+    # has a 0x00 leaf at position 0, so zero_cond will output value
+    # iff value is 0 - which is equivalent to 0x00 so that's the
+    # trick we use to make the inclusion proof.
+    coin_incl = zero_cond(value, C);
 
-	# Merkle root
-	root = merkle_root(leaf_pos, path, coin_incl);
-	constrain_instance(root);
+    # Merkle root
+    root = merkle_root(leaf_pos, path, coin_incl);
+    constrain_instance(root);
 
-	# Export user_data
-	user_data_enc = poseidon_hash(user_data, user_data_blind);
-	constrain_instance(user_data_enc);
+    # Export user_data
+    user_data_enc = poseidon_hash(user_data, user_data_blind);
+    constrain_instance(user_data_enc);
 
-	# Reveal spend_hook
-	constrain_instance(spend_hook);
+    # Reveal spend_hook
+    constrain_instance(spend_hook);
 
-	# Finally, we derive a public key for the signature and
-	# constrain its coordinates:
-	signature_public = ec_mul_base(signature_secret, NULLIFIER_K);
-	constrain_instance(ec_get_x(signature_public));
-	constrain_instance(ec_get_y(signature_public));
+    # Finally, we derive a public key for the signature and
+    # constrain its coordinates:
+    signature_public = ec_mul_base(signature_secret, NULLIFIER_K);
+    constrain_instance(ec_get_x(signature_public));
+    constrain_instance(ec_get_y(signature_public));
 
-	# At this point we've enforced all of our public inputs.
+    # At this point we've enforced all of our public inputs.
 }

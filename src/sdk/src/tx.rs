@@ -39,7 +39,7 @@ impl std::fmt::Debug for ContractCall {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "ContractCall(id={:?}", self.contract_id.inner())?;
         let calldata = &self.data;
-        if calldata.len() > 0 {
+        if !calldata.is_empty() {
             write!(f, ", function_code={}", calldata[0])?;
         }
         write!(f, ")")
