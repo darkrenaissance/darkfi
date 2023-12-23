@@ -77,7 +77,7 @@ circuit "ConsensusProposal_V1" {
     # Merkle inclusion proof
     root = merkle_root(leaf_pos, path, C);
     constrain_instance(root);
-    
+
     # Pedersen commitment for burned coin's value
     vcv = ec_mul_short(input_value, VALUE_COMMIT_VALUE);
     vcr = ec_mul(input_value_blind, VALUE_COMMIT_RANDOM);
@@ -112,7 +112,7 @@ circuit "ConsensusProposal_V1" {
     output_pub = ec_mul_base(output_secret_key, NULLIFIER_K);
     output_pub_x = ec_get_x(output_pub);
     output_pub_y = ec_get_y(output_pub);
-        
+
     # Poseidon hash of the new coin
     # In here we set the new epoch as ZERO, thus removing a
     # potentially existing timelock.

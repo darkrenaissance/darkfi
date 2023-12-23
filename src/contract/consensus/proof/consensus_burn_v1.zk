@@ -40,7 +40,7 @@ circuit "ConsensusBurn_V1" {
     constrain_instance(pub_x);
     constrain_instance(pub_y);
 
-    # Coin hash    
+    # Coin hash
     C = poseidon_hash(
         pub_x,
         pub_y,
@@ -52,7 +52,7 @@ circuit "ConsensusBurn_V1" {
     # Merkle root
     root = merkle_root(leaf_pos, path, C);
     constrain_instance(root);
-    
+
     # Pedersen commitment for coin's value
     vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
     vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
