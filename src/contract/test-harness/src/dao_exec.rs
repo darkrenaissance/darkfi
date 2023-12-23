@@ -53,7 +53,7 @@ impl TestHarness {
         dao: &Dao,
         dao_bulla: &DaoBulla,
         proposal: &DaoProposal,
-        proposal_coinattrs: &Vec<CoinAttributes>,
+        proposal_coinattrs: Vec<CoinAttributes>,
         yes_vote_value: u64,
         all_vote_value: u64,
         yes_vote_blind: pallas::Scalar,
@@ -108,25 +108,20 @@ impl TestHarness {
         }
 
         let mut outputs = vec![];
-        for coin in proposal_coinattrs {
-            assert_eq!(proposal_token_id, coin.token_id);
-            outputs.push(xfer::TransferCallOutput {
-                public_key: coin.public_key,
-                value: coin.value,
-                token_id: proposal_token_id,
-                serial: coin.serial,
-                spend_hook: coin.spend_hook,
-                user_data: coin.user_data,
-            });
+        for coin_attr in proposal_coinattrs {
+            assert_eq!(proposal_token_id, coin_attr.token_id);
+            outputs.push(coin_attr);
         }
-        outputs.push(xfer::TransferCallOutput {
+
+        let dao_coin_attrs = CoinAttributes {
             public_key: dao_wallet.keypair.public,
             value: change_value,
             token_id: proposal_token_id,
             serial: pallas::Base::random(&mut OsRng),
             spend_hook: DAO_CONTRACT_ID.inner(),
             user_data: dao_bulla.inner(),
-        });
+        };
+        outputs.push(dao_coin_attrs.clone());
 
         let xfer_builder = xfer::TransferCallBuilder {
             clear_inputs: vec![],
@@ -183,8 +178,12 @@ impl TestHarness {
         let exec_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
 
         // Auth module
-        let auth_xfer_builder =
-            DaoAuthMoneyTransferCall { proposal: proposal.clone(), dao: dao.clone() };
+        let auth_xfer_builder = DaoAuthMoneyTransferCall {
+            proposal: proposal.clone(),
+            dao: dao.clone(),
+            input_user_data_blind,
+            dao_coin_attrs,
+        };
         let (auth_xfer_params, auth_xfer_proofs) =
             auth_xfer_builder.make(dao_auth_xfer_zkbin, dao_auth_xfer_pk)?;
         let mut data = vec![DaoFunction::AuthMoneyTransfer as u8];

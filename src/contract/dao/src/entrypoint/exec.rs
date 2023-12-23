@@ -52,22 +52,10 @@ pub(crate) fn dao_exec_get_metadata(
     let yes_vote_coords = blind_vote.yes_vote_commit.to_affine().coordinates().unwrap();
     let all_vote_coords = blind_vote.all_vote_commit.to_affine().coordinates().unwrap();
 
-    /*
-    let mut input_valcoms = pallas::Point::identity();
-    for input in &money_xfer_params.inputs {
-        input_valcoms += input.value_commit;
-    }
-    let input_value_coords = input_valcoms.to_affine().coordinates().unwrap();
-
-    assert!(money_xfer_params.inputs.len() > 0);
-    // This value should be the same for all inputs, as enforced in process_instruction() below.
-    let input_user_data_enc = money_xfer_params.inputs[0].user_data_enc;
-    */
-
     zk_public_inputs.push((
         DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string(),
         vec![
-            params.proposal.inner(),
+            params.proposal_bulla.inner(),
             params.proposal_auth_calls.commit(),
             *yes_vote_coords.x(),
             *yes_vote_coords.y(),
@@ -127,8 +115,8 @@ pub(crate) fn dao_exec_process_instruction(
 
     // Get the ProposalVote from DAO state
     let proposal_db = db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
-    let Some(data) = db_get(proposal_db, &serialize(&params.proposal))? else {
-        msg!("[Dao::Exec] Error: Proposal {:?} not found", params.proposal);
+    let Some(data) = db_get(proposal_db, &serialize(&params.proposal_bulla))? else {
+        msg!("[Dao::Exec] Error: Proposal {:?} not found", params.proposal_bulla);
         return Err(DaoError::ProposalNonexistent.into())
     };
     let proposal: DaoProposalMetadata = deserialize(&data)?;
@@ -141,7 +129,7 @@ pub(crate) fn dao_exec_process_instruction(
     }
 
     // Create state update
-    let update = DaoExecUpdate { proposal: params.proposal };
+    let update = DaoExecUpdate { proposal_bulla: params.proposal_bulla };
     let mut update_data = vec![];
     update_data.write_u8(DaoFunction::Exec as u8)?;
     update.encode(&mut update_data)?;
@@ -152,7 +140,7 @@ pub(crate) fn dao_exec_process_instruction(
 pub(crate) fn dao_exec_process_update(cid: ContractId, update: DaoExecUpdate) -> ContractResult {
     // Remove proposal from db
     let proposal_vote_db = db_lookup(cid, DAO_CONTRACT_DB_PROPOSAL_BULLAS)?;
-    db_del(proposal_vote_db, &serialize(&update.proposal))?;
+    db_del(proposal_vote_db, &serialize(&update.proposal_bulla))?;
 
     Ok(())
 }

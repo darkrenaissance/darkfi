@@ -21,6 +21,17 @@ witness "DaoAuthMoneyTransfer" {
 	Base dao_public_x,
 	Base dao_public_y,
 	Base dao_bulla_blind,
+
+    # Dao input(s) user data blind
+    Base input_user_data_blind,
+
+	# Dao output coin attrs
+	Base dao_value,
+	Base dao_token,
+	Base dao_serial,
+
+    # Should be set to DAO_CONTRACT_ID
+    Base dao_contract_id,
 }
 
 circuit "DaoAuthMoneyTransfer" {
@@ -47,9 +58,28 @@ circuit "DaoAuthMoneyTransfer" {
 	constrain_instance(proposal_bulla);
 
     # Check inputs are spending from the correct DAO
+    input_user_data_enc = poseidon_hash(dao_bulla, input_user_data_blind);
+	constrain_instance(input_user_data_enc);
+
     # Change output should be sending back to the DAO
+	dao_change_coin = poseidon_hash(
+		dao_public_x,
+		dao_public_y,
+        # We don't need to check this value.
+        # money::transfer() checks that sum(input values) = sum(output values)
+        # which ensures it will be correct.
+		dao_value,
+        # Likewise the token_id must match the other output coins.
+		dao_token,
+		dao_serial,
+		dao_contract_id,
+		dao_bulla,
+	);
+	constrain_instance(dao_change_coin);
+	constrain_instance(dao_contract_id);
 
     # Reveal content commit. This should contain the set of coins.
     # We check these are set in the runtime.
+	constrain_instance(proposal_auth_calls_commit);
 }
 

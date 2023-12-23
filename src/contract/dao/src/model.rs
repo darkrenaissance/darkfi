@@ -325,7 +325,7 @@ impl Default for DaoBlindAggregateVote {
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoExecParams {
     /// The proposal bulla
-    pub proposal: DaoProposalBulla,
+    pub proposal_bulla: DaoProposalBulla,
     pub proposal_auth_calls: Vec<DaoAuthCall>,
     /// Aggregated blinds for the vote commitments
     pub blind_total_vote: DaoBlindAggregateVote,
@@ -335,12 +335,9 @@ pub struct DaoExecParams {
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoExecUpdate {
     /// The proposal bulla
-    pub proposal: DaoProposalBulla,
+    pub proposal_bulla: DaoProposalBulla,
 }
 
 /// Parameters for `Dao::AuthMoneyTransfer`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct DaoAuthMoneyTransferParams {
-    /// The proposal bulla
-    pub proposal_bulla: DaoProposalBulla,
-}
+pub struct DaoAuthMoneyTransferParams {}

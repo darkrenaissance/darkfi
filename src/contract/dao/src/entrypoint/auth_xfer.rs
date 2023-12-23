@@ -21,7 +21,7 @@ use darkfi_money_contract::{
     MoneyFunction,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, PublicKey},
+    crypto::{pasta_prelude::*, ContractId, PublicKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
     dark_tree::DarkLeaf,
     db::{db_del, db_get, db_lookup},
     error::{ContractError, ContractResult},
@@ -33,7 +33,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::DaoError,
-    model::{DaoAuthCall, DaoAuthMoneyTransferParams, DaoExecParams},
+    model::{DaoAuthCall, DaoAuthMoneyTransferParams, DaoExecParams, VecAuthCallCommit},
     DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS,
 };
 
@@ -43,15 +43,34 @@ pub(crate) fn dao_authxfer_get_metadata(
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
-    let params: DaoAuthMoneyTransferParams = deserialize(&self_.data.data[1..])?;
+    let sibling_idx = call_idx + 1;
+    let xfer_call = &calls[sibling_idx as usize].data;
+    let xfer_params: MoneyTransferParamsV1 = deserialize(&xfer_call.data[1..])?;
+
+    let parent_idx = calls[call_idx as usize].parent_index.unwrap();
+    let exec_callnode = &calls[parent_idx];
+    let exec_params: DaoExecParams = deserialize(&exec_callnode.data.data[1..])?;
+
+    assert!(xfer_params.inputs.len() > 0);
+    // This value should be the same for all inputs, as enforced in process_instruction() below.
+    let input_user_data_enc = xfer_params.inputs[0].user_data_enc;
+
+    assert!(xfer_params.outputs.len() > 0);
+    // Also check the coin in the change output
+    let last_coin = xfer_params.outputs.last().unwrap().coin;
 
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     let signature_pubkeys: Vec<PublicKey> = vec![];
 
     zk_public_inputs.push((
         DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS.to_string(),
-        vec![params.proposal_bulla.inner()],
+        vec![
+            exec_params.proposal_bulla.inner(),
+            input_user_data_enc,
+            last_coin.inner(),
+            DAO_CONTRACT_ID.inner(),
+            exec_params.proposal_auth_calls.commit(),
+        ],
     ));
 
     let mut metadata = vec![];
@@ -155,7 +174,7 @@ pub(crate) fn dao_authxfer_process_instruction(
     // Also the public_key should match.
 
     // We do not need to check the amounts, since sum(input values) == sum(output values)
-    // otherwise the tx is invalid.
+    // otherwise the money::transfer() call is invalid.
 
     let mut update_data = vec![];
     update_data.write_u8(DaoFunction::AuthMoneyTransfer as u8)?;

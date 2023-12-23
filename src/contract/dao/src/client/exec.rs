@@ -114,7 +114,7 @@ impl DaoExecCall {
         proofs.push(input_proof);
 
         let params = DaoExecParams {
-            proposal: proposal_bulla,
+            proposal_bulla,
             proposal_auth_calls: self.proposal.auth_calls,
             blind_total_vote: DaoBlindAggregateVote { yes_vote_commit, all_vote_commit },
         };

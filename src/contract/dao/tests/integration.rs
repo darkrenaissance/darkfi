@@ -318,7 +318,7 @@ fn integration_test() -> Result<()> {
             &dao,
             &dao_mint_params.dao_bulla,
             &propose_info,
-            &proposal_coinattrs,
+            proposal_coinattrs,
             total_yes_vote_value,
             total_all_vote_value,
             total_yes_vote_blind,
