@@ -98,10 +98,12 @@ pub const MONEY_ALIASES_TABLE: &str = "money_aliases";
 pub const MONEY_ALIASES_COL_ALIAS: &str = "alias";
 pub const MONEY_ALIASES_COL_TOKEN_ID: &str = "token_id";
 
-/// `MoneyNote` holds the inner attributes of a `Coin`.
+/// `MoneyNote` holds the inner attributes of a `Coin`
+/// It does not store the public key since it's encrypted for that key,
+/// and so is not needed to infer the coin attributes.
+/// All other coin attributes must be present.
 #[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct MoneyNote {
-    // TODO: replace these fields with CoinAttributes
     /// Serial number of the coin, used for the nullifier
     pub serial: pallas::Base,
     /// Value of the coin
@@ -113,7 +115,6 @@ pub struct MoneyNote {
     pub spend_hook: pallas::Base,
     /// User data used by protocol when spend hook is enabled
     pub user_data: pallas::Base,
-    // end todo
     /// Blinding factor for the value pedersen commitment
     pub value_blind: pallas::Scalar,
     /// Blinding factor for the token ID pedersen commitment
