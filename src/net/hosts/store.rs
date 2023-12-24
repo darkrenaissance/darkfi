@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use log::{debug, trace, warn};
 use rand::{
@@ -788,6 +791,20 @@ impl Hosts {
         self.whitelist.read().await.iter().cloned().collect()
     }
 
+    /// Return all known hosts
+    pub async fn hostlist_fetch_all(&self) -> HashMap<String, Vec<(Url, u64)>> {
+        let mut hostlist = HashMap::new();
+        hostlist.insert(
+            "anchorlist".to_string(),
+            self.anchorlist.read().await.iter().cloned().collect(),
+        );
+        hostlist
+            .insert("whitelist".to_string(), self.whitelist.read().await.iter().cloned().collect());
+        hostlist
+            .insert("greylist".to_string(), self.greylist.read().await.iter().cloned().collect());
+        hostlist
+    }
+
     /// Get up to n random peers from the whitelist.
     pub async fn whitelist_fetch_n_random(&self, n: u32) -> Vec<(Url, u64)> {
         let n = n as usize;
@@ -886,7 +903,8 @@ impl Hosts {
                 ret.push((addr.clone(), *last_seen));
                 limit -= 1;
                 if limit == 0 {
-                    debug!(target: "store::whitelist_fetch_with_schemes", "Found matching scheme, returning");
+                    debug!(target: "store::whitelist_fetch_with_schemes",
+                           "Found matching scheme, returning");
                     return ret
                 }
             }
@@ -894,7 +912,8 @@ impl Hosts {
 
         // If we didn't find any, pick some from the greylist
         if ret.is_empty() {
-            debug!(target: "store::whitelist_fetch_with_schemes", "No matching schemes! We must look at greylist");
+            warn!(target: "store::whitelist_fetch_with_schemes",
+                  "No matching schemes! Selecting a peer from the greylist.");
             let greylist = self.greylist.read().await;
             for (addr, last_seen) in greylist.iter() {
                 if schemes.contains(&addr.scheme().to_string()) {
@@ -941,21 +960,6 @@ impl Hosts {
             }
         }
 
-        //// If we didn't find any, pick some from the greylist
-        //if ret.is_empty() {
-        //    debug!(target: "store::greylist_fetch_with_schemes", "No matching schemes! We must look at greylist");
-        //    let greylist = self.greylist.read().await;
-        //    for (addr, last_seen) in greylist.iter() {
-        //        if schemes.contains(&addr.scheme().to_string()) {
-        //            ret.push((addr.clone(), *last_seen));
-        //            limit -= 1;
-        //            if limit == 0 {
-        //                break
-        //            }
-        //        }
-        //    }
-        //}
-
         debug!(target: "store::greylist_fetch_with_schemes", "END");
 
         ret
@@ -984,26 +988,28 @@ impl Hosts {
                 ret.push((addr.clone(), *last_seen));
                 limit -= 1;
                 if limit == 0 {
-                    debug!(target: "store::anchorlist_fetch_with_schemes", "Found matching scheme, returning");
+                    debug!(target: "store::anchorlist_fetch_with_schemes",
+                           "Found matching scheme, returning");
                     return ret
                 }
             }
         }
 
-        //// If we didn't find any, pick some from the greylist
-        //if ret.is_empty() {
-        //    debug!(target: "store::whitelist_fetch_with_schemes", "No matching schemes! We must look at greylist");
-        //    let greylist = self.greylist.read().await;
-        //    for (addr, last_seen) in greylist.iter() {
-        //        if schemes.contains(&addr.scheme().to_string()) {
-        //            ret.push((addr.clone(), *last_seen));
-        //            limit -= 1;
-        //            if limit == 0 {
-        //                break
-        //            }
-        //        }
-        //    }
-        //}
+        // If we didn't find any, pick some from the whitelist
+        if ret.is_empty() {
+            warn!(target: "store::whitelist_fetch_with_schemes",
+                  "No matching schemes! Selecting a peer from the whitelist.");
+            let whitelist = self.whitelist.read().await;
+            for (addr, last_seen) in whitelist.iter() {
+                if schemes.contains(&addr.scheme().to_string()) {
+                    ret.push((addr.clone(), *last_seen));
+                    limit -= 1;
+                    if limit == 0 {
+                        break
+                    }
+                }
+            }
+        }
 
         debug!(target: "store::anchorlist_fetch_with_schemes", "END");
 
@@ -1052,6 +1058,72 @@ impl Hosts {
         }
 
         ret
+    }
+
+    // TODO: FIXME
+    //fn load_hosts(&self, path: &Path, networks: &[&str]) -> HashMap<String, Vec<(Url, u64)>> {
+    //    let mut saved_hosts = HashMap::new();
+
+    //    //let contents = load_file(path);
+    //    //if let Err(e) = contents {
+    //    //    warn!(target: "lilith", "Failed retrieving saved hosts: {}", e);
+    //    //    return saved_hosts
+    //    //}
+
+    //    //for line in contents.unwrap().lines() {
+    //    //    let data: Vec<&str> = line.split('\t').collect();
+    //    //    debug!(target: "lilith", "::load_hosts()::data\"{:?}\"", data);
+    //    //    if networks.contains(&data[0]) {
+    //    //        let mut hosts = match saved_hosts.get(data[0]) {
+    //    //            Some(hosts) => hosts.clone(),
+    //    //            None => Vec::new(),
+    //    //        };
+
+    //    //        let url = match Url::parse(data[1]) {
+    //    //            Ok(u) => u,
+    //    //            Err(e) => {
+    //    //                warn!(target: "lilith", "Skipping malformed url: {} ({})", data[1], e);
+    //    //                continue
+    //    //            }
+    //    //        };
+
+    //    //        let last_seen = match data[2].parse::<u64>() {
+    //    //            Ok(u) => u,
+    //    //            Err(e) => {
+    //    //                warn!(target: "lilith", "Skipping malformed timestamp: {} ({})", data[2], e);
+    //    //                continue
+    //    //            }
+    //    //        };
+    //    //        hosts.push((url, last_seen));
+    //    //        saved_hosts.insert(data[0].to_string(), hosts);
+    //    //    }
+    //    //}
+
+    //    saved_hosts
+    //}
+
+    // Save the hostlist to a file.
+    pub async fn save_hosts(&self) {
+        let mut tsv = String::new();
+
+        for (name, list) in self.hostlist_fetch_all().await {
+            //debug!(target: "net::hosts::store", "Saving {}", name);
+            //for (url, last_seen) in list {
+            //    debug!(target: "net::hosts::store", "Contents: {} {}", url, last_seen);
+            //}
+            //tsv.push_str(&format!("{}\t{:?}\n", name, list));
+            for (url, last_seen) in list {
+                tsv.push_str(&format!("{}\t{}\t{}\n", name, url, last_seen));
+            }
+        }
+
+        debug!(target: "net::hosts::store", "SAVE HOSTS {}", tsv);
+        //if !tsv.eq("") {
+        //    info!(target: "lilith", "Saving current hosts of spawned networks to: {:?}", path);
+        //    if let Err(e) = save_file(path, &tsv) {
+        //        error!(target: "lilith", "Failed saving hosts: {}", e);
+        //    }
+        //}
     }
 }
 

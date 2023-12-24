@@ -236,7 +236,6 @@ impl Slot {
                 continue
             }
 
-            
             // Uo to DEFAULT_ANCHOR_CONN_COUNT connections:
             //
             //  Select from the anchorlist
@@ -256,67 +255,50 @@ impl Slot {
             //  If the greylist is empty, do peer discovery
 
             if connect_count < DEFAULT_ANCHOR_CONN_COUNT {
-                // There's no hosts on the anchorlist, connect to addrs on the greylist.
-                if hosts.is_empty_anchorlist().await {
-                    match hosts.whitelist_fetch_address_with_lock(self.p2p(), transports).await {
-                        Some(white) => {
-                            // Connect to whitelist addr
-                            self.connect_slot(&white.0, self.slot).await.unwrap();
-                        }
-                        None => {
-                            // If we can't find a peer on the whitelist, chose from the greylist.
-                            match hosts
-                                .greylist_fetch_address_with_lock(self.p2p(), transports)
-                                .await
-                            {
-                                Some(grey) => {
-                                    // Connect to greylist addr
-                                    self.connect_slot(&grey.0, self.slot).await.unwrap();
-                                }
-                                None => {
-                                    // peer discovery
-                                }
-                            }
-                        }
+                match hosts.anchorlist_fetch_address_with_lock(self.p2p(), transports).await {
+                    Some(host) => {
+                        // Connect to whitelist addr
+                        self.connect_slot(&host.0, self.slot).await.unwrap();
+                    }
+                    None => {
+                        // We haven't been able to connect to any known peers. Activate peer discovery.
+                        dnetev!(self, OutboundSlotSleeping, {
+                        slot: self.slot,
+                        });
+
+                        self.wakeup_self.reset();
+                        // Peer discovery
+                        self.session().wakeup_peer_discovery();
+                        // Wait to be woken up by peer discovery
+                        self.wakeup_self.wait().await;
                     }
                 }
-                // Connect to an addr from the anchor list.
-                else {
-                    let anchor = hosts
-                        .anchorlist_fetch_address_with_lock(self.p2p(), transports)
-                        .await
-                        .unwrap();
-                    self.connect_slot(&anchor.0, self.slot).await.unwrap();
-                }
+            }
 
-                // If the filled slots are less than the default whitelist slots limit,
-                // search for connections from the whitelist.
-            } else if connect_count < white_count {
-                if hosts.is_empty_whitelist().await {
-                    // Take from the greylist if there's nothing on the whitelist.
-                    match hosts.greylist_fetch_address_with_lock(self.p2p(), transports).await {
-                        Some(grey) => self.connect_slot(&grey.0, self.slot).await.unwrap(),
-                        None => {
-                            // We haven't been able to connect to any known peers. Activate peer discovery.
-                            dnetev!(self, OutboundSlotSleeping, {
-                                slot: self.slot,
-                            });
+            if connect_count < white_count {
+                // Take from the greylist if there's nothing on the whitelist.
+                match hosts.whitelist_fetch_address_with_lock(self.p2p(), transports).await {
+                    Some(host) => self.connect_slot(&host.0, self.slot).await.unwrap(),
+                    None => {
+                        // We haven't been able to connect to any known peers. Activate peer discovery.
+                        dnetev!(self, OutboundSlotSleeping, {
+                            slot: self.slot,
+                        });
 
-                            self.wakeup_self.reset();
-                            // Peer discovery
-                            self.session().wakeup_peer_discovery();
-                            // Wait to be woken up by peer discovery
-                            self.wakeup_self.wait().await;
-                            continue
-                        }
+                        self.wakeup_self.reset();
+                        // Peer discovery
+                        self.session().wakeup_peer_discovery();
+                        // Wait to be woken up by peer discovery
+                        self.wakeup_self.wait().await;
                     }
                 }
+            }
 
             // For any remaining slots, connect to a host on the greylist.
-            } else if connect_count < slot_count {
+            if connect_count < slot_count {
                 match hosts.greylist_fetch_address_with_lock(self.p2p(), transports).await {
-                    Some(grey) => {
-                        self.connect_slot(&grey.0, self.slot).await.unwrap();
+                    Some(host) => {
+                        self.connect_slot(&host.0, self.slot).await.unwrap();
                     }
 
                     None => {
@@ -330,7 +312,6 @@ impl Slot {
                         self.session().wakeup_peer_discovery();
                         // Wait to be woken up by peer discovery
                         self.wakeup_self.wait().await;
-                        continue
                     }
                 }
             }
