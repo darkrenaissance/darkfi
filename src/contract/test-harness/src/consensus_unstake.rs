@@ -32,6 +32,7 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{MerkleNode, SecretKey, CONSENSUS_CONTRACT_ID, MONEY_CONTRACT_ID},
+    dark_tree::DarkTree,
     ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
@@ -104,11 +105,12 @@ impl TestHarness {
 
         let mut unstake_tx_builder = TransactionBuilder::new(
             ContractCallLeaf { call: money_call, proofs: money_unstake_proofs },
-            vec![],
-        )?;
-        unstake_tx_builder.append(
-            ContractCallLeaf { call: consensus_call, proofs: consensus_unstake_proofs },
-            vec![],
+            vec![DarkTree::new(
+                ContractCallLeaf { call: consensus_call, proofs: consensus_unstake_proofs },
+                vec![],
+                None,
+                None,
+            )],
         )?;
         let mut unstake_tx = unstake_tx_builder.build()?;
         let consensus_sigs = unstake_tx.create_sigs(&mut OsRng, &[consensus_unstake_secret_key])?;
