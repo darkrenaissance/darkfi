@@ -18,10 +18,11 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    path::Path,
     sync::Arc,
 };
 
-use log::{debug, trace, warn};
+use log::{debug, error, info, trace, warn};
 use rand::{
     prelude::{IteratorRandom, SliceRandom},
     rngs::OsRng,
@@ -33,6 +34,11 @@ use url::Url;
 use super::super::{p2p::P2pPtr, settings::SettingsPtr};
 use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
+    util::{
+        file::{load_file, save_file},
+        path,
+        path::expand_path,
+    },
     Error, Result,
 };
 
@@ -1060,70 +1066,75 @@ impl Hosts {
         ret
     }
 
-    // TODO: FIXME
-    //fn load_hosts(&self, path: &Path, networks: &[&str]) -> HashMap<String, Vec<(Url, u64)>> {
-    //    let mut saved_hosts = HashMap::new();
+    pub async fn load_hosts(&self) -> Result<()> {
+        // TODO: FIXME: make this a net::Setting
+        let path = expand_path(&"~/.config/darkfi/hostlist.tsv")?;
 
-    //    //let contents = load_file(path);
-    //    //if let Err(e) = contents {
-    //    //    warn!(target: "lilith", "Failed retrieving saved hosts: {}", e);
-    //    //    return saved_hosts
-    //    //}
+        let contents = load_file(&path);
+        if let Err(e) = contents {
+            warn!(target: "net::hosts::store", "Failed retrieving saved hosts: {}", e);
+            return Ok(())
+        }
 
-    //    //for line in contents.unwrap().lines() {
-    //    //    let data: Vec<&str> = line.split('\t').collect();
-    //    //    debug!(target: "lilith", "::load_hosts()::data\"{:?}\"", data);
-    //    //    if networks.contains(&data[0]) {
-    //    //        let mut hosts = match saved_hosts.get(data[0]) {
-    //    //            Some(hosts) => hosts.clone(),
-    //    //            None => Vec::new(),
-    //    //        };
+        for line in contents.unwrap().lines() {
+            let data: Vec<&str> = line.split('\t').collect();
 
-    //    //        let url = match Url::parse(data[1]) {
-    //    //            Ok(u) => u,
-    //    //            Err(e) => {
-    //    //                warn!(target: "lilith", "Skipping malformed url: {} ({})", data[1], e);
-    //    //                continue
-    //    //            }
-    //    //        };
+            let url = match Url::parse(data[1]) {
+                Ok(u) => u,
+                Err(e) => {
+                    debug!(target: "net::hosts::store", "load_hosts(): Skipping malformed URL...");
+                    continue
+                }
+            };
 
-    //    //        let last_seen = match data[2].parse::<u64>() {
-    //    //            Ok(u) => u,
-    //    //            Err(e) => {
-    //    //                warn!(target: "lilith", "Skipping malformed timestamp: {} ({})", data[2], e);
-    //    //                continue
-    //    //            }
-    //    //        };
-    //    //        hosts.push((url, last_seen));
-    //    //        saved_hosts.insert(data[0].to_string(), hosts);
-    //    //    }
-    //    //}
+            let last_seen = match data[2].parse::<u64>() {
+                Ok(t) => t,
+                Err(e) => {
+                    debug!(target: "net::hosts::store", "load_hosts(): Skipping malformed last seen...");
+                    continue
+                }
+            };
 
-    //    saved_hosts
-    //}
+            match data[0] {
+                "greylist" => {
+                    self.greylist_store(url, last_seen).await;
+                }
+                "whitelist" => {
+                    self.whitelist_store(url, last_seen).await;
+                }
+                "anchorlist" => {
+                    self.anchorlist_store(url, last_seen).await;
+                }
+                _ => {
+                    debug!(target: "net::hosts::store", "load_hosts(): Malformed list name...");
+                }
+            }
+        }
+
+        Ok(())
+    }
 
     // Save the hostlist to a file.
-    pub async fn save_hosts(&self) {
+    pub async fn save_hosts(&self) -> Result<()> {
+        // TODO: FIXME: make this a net::Setting
+        let path = expand_path(&"~/.config/darkfi/hostlist.tsv")?;
+
         let mut tsv = String::new();
 
         for (name, list) in self.hostlist_fetch_all().await {
-            //debug!(target: "net::hosts::store", "Saving {}", name);
-            //for (url, last_seen) in list {
-            //    debug!(target: "net::hosts::store", "Contents: {} {}", url, last_seen);
-            //}
-            //tsv.push_str(&format!("{}\t{:?}\n", name, list));
             for (url, last_seen) in list {
                 tsv.push_str(&format!("{}\t{}\t{}\n", name, url, last_seen));
             }
         }
 
-        debug!(target: "net::hosts::store", "SAVE HOSTS {}", tsv);
-        //if !tsv.eq("") {
-        //    info!(target: "lilith", "Saving current hosts of spawned networks to: {:?}", path);
-        //    if let Err(e) = save_file(path, &tsv) {
-        //        error!(target: "lilith", "Failed saving hosts: {}", e);
-        //    }
-        //}
+        if !tsv.eq("") {
+            info!(target: "net::hosts::store", "Saving current hosts of spawned networks to: {:?}",
+                  path);
+            if let Err(e) = save_file(&path, &tsv) {
+                error!(target: "net::hosts::store", "Failed saving hosts: {}", e);
+            }
+        }
+        Ok(())
     }
 }
 

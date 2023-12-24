@@ -46,6 +46,9 @@ impl GreylistRefinery {
     }
 
     pub async fn start(self: Arc<Self>) {
+        // TODO: FIXME: unwrap
+        self.p2p().hosts().load_hosts().await.unwrap();
+
         let ex = self.p2p().executor();
         self.process.clone().start(
             async move {
@@ -60,6 +63,9 @@ impl GreylistRefinery {
     }
 
     pub async fn stop(self: Arc<Self>) {
+        debug!(target: "net::refinery::stop()", "Saving hostlist...");
+        // TODO: FIXME: unwrap
+        self.p2p().hosts().save_hosts().await.unwrap();
         self.process.stop().await
     }
 
