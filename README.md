@@ -21,7 +21,6 @@ the potential to birth new technological concepts centered around
 sovereignty. This can be a creative, regenerative space - the dawn of
 a Dark Renaissance.
 
-
 ## Connect to DarkFi IRC
 
 Follow the [installation instructions](https://darkrenaissance.github.io/darkfi/misc/ircd/ircd.html#installation)
