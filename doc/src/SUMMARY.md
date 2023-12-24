@@ -21,7 +21,8 @@
 # Developer Doc
 
 - [Development](dev/dev.md)
-  - [Contribute](dev/contribute.md)
+  - [Contribute](dev/contrib/contrib.md)
+    - [Using Tor](dev/contrib/tor.md)
   - [Learn](dev/learn.md)
   - [API Rustdoc](dev/rustdoc.md)
   - [Native Contracts](dev/native_contracts.md)
