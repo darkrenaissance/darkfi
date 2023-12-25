@@ -9,6 +9,8 @@ constant "DaoAuthMoneyTransfer" {
 witness "DaoAuthMoneyTransfer" {
     # Proposal parameters
     Base proposal_auth_calls_commit,
+    Base proposal_current_day,
+    Base proposal_duration_days,
     Base proposal_user_data,
     Base proposal_blind,
 
@@ -51,6 +53,8 @@ circuit "DaoAuthMoneyTransfer" {
     # proposal - so it is redundant to check DAO bulla exists here.
     proposal_bulla = poseidon_hash(
         proposal_auth_calls_commit,
+        proposal_current_day,
+        proposal_duration_days,
         proposal_user_data,
         dao_bulla,
         proposal_blind,

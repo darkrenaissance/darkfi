@@ -38,6 +38,8 @@ use rand::rngs::OsRng;
 
 use super::{Holder, TestHarness, TxAction};
 
+const SECS_IN_DAY: u64 = 24 * 60 * 60;
+
 impl TestHarness {
     pub fn dao_vote(
         &mut self,
@@ -78,6 +80,8 @@ impl TestHarness {
             signature_secret,
         };
 
+        let current_day =
+            wallet.validator.consensus.time_keeper.blockchain_timestamp() / SECS_IN_DAY;
         let call = DaoVoteCall {
             inputs: vec![input],
             vote_option,
@@ -85,6 +89,7 @@ impl TestHarness {
             vote_keypair: *dao_kp,
             proposal: proposal.clone(),
             dao: dao.clone(),
+            current_day,
         };
 
         let (params, proofs) = call.make(

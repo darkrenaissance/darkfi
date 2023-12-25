@@ -139,6 +139,8 @@ impl VecAuthCallCommit for Vec<DaoAuthCall> {
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoProposal {
     pub auth_calls: Vec<DaoAuthCall>,
+    pub creation_day: u64,
+    pub duration_days: u64,
     /// Arbitrary data provided by the user. We don't use this.
     pub user_data: pallas::Base,
     pub dao_bulla: DaoBulla,
@@ -149,6 +151,8 @@ impl DaoProposal {
     pub fn to_bulla(&self) -> DaoProposalBulla {
         let bulla = poseidon_hash([
             self.auth_calls.commit(),
+            pallas::Base::from(self.creation_day),
+            pallas::Base::from(self.duration_days),
             self.user_data,
             self.dao_bulla.inner(),
             self.blind,

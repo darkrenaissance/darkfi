@@ -173,6 +173,8 @@ impl DaoProposeCall {
             Witness::Base(Value::known(gov_token_blind)),
             // proposal params
             Witness::Base(Value::known(self.proposal.auth_calls.commit())),
+            Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_day))),
+            Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_days))),
             Witness::Base(Value::known(self.proposal.user_data)),
             Witness::Base(Value::known(self.proposal.blind)),
             // DAO params
@@ -191,6 +193,7 @@ impl DaoProposeCall {
             token_commit,
             self.dao_merkle_root.inner(),
             proposal_bulla.inner(),
+            pallas::Base::from(self.proposal.creation_day),
             *total_funds_coords.x(),
             *total_funds_coords.y(),
         ];

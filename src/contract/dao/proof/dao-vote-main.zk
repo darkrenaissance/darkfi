@@ -9,6 +9,8 @@ constant "DaoVoteMain" {
 witness "DaoVoteMain" {
     # Proposal parameters
     Base proposal_auth_calls_commit,
+    Base proposal_current_day,
+    Base proposal_duration_days,
     Base proposal_user_data,
     Base proposal_blind,
 
@@ -32,6 +34,9 @@ witness "DaoVoteMain" {
 
     # Check the inputs and this proof are for the same token
     Base gov_token_blind,
+
+    # Check whether the proposal has expired or not
+    Base current_day,
 }
 
 circuit "DaoVoteMain" {
@@ -51,6 +56,8 @@ circuit "DaoVoteMain" {
 
     proposal_bulla = poseidon_hash(
         proposal_auth_calls_commit,
+        proposal_current_day,
+        proposal_duration_days,
         proposal_user_data,
         dao_bulla,
         proposal_blind,
@@ -75,4 +82,9 @@ circuit "DaoVoteMain" {
 
     # Vote option should be 0 or 1
     bool_check(vote_option);
+
+    # Enforce that the proposal has not expired
+    end_time = base_add(proposal_current_day, proposal_duration_days);
+    less_than_strict(current_day, end_time);
+    constrain_instance(current_day);
 }

@@ -63,6 +63,7 @@ pub struct DaoVoteCall {
     pub vote_keypair: Keypair,
     pub proposal: DaoProposal,
     pub dao: Dao,
+    pub current_day: u64,
 }
 
 impl DaoVoteCall {
@@ -189,9 +190,12 @@ impl DaoVoteCall {
         let all_vote_commit = pedersen_commitment_u64(all_vote_value, all_vote_blind);
         let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
 
+        let current_day = pallas::Base::from(self.current_day);
         let prover_witnesses = vec![
             // proposal params
             Witness::Base(Value::known(self.proposal.auth_calls.commit())),
+            Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_day))),
+            Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_days))),
             Witness::Base(Value::known(self.proposal.user_data)),
             Witness::Base(Value::known(self.proposal.blind)),
             // DAO params
@@ -211,6 +215,8 @@ impl DaoVoteCall {
             Witness::Scalar(Value::known(all_vote_blind)),
             // gov token
             Witness::Base(Value::known(gov_token_blind)),
+            // time checks
+            Witness::Base(Value::known(current_day)),
         ];
 
         let public_inputs = vec![
@@ -220,6 +226,7 @@ impl DaoVoteCall {
             *yes_vote_commit_coords.y(),
             *all_vote_commit_coords.x(),
             *all_vote_commit_coords.y(),
+            current_day,
         ];
 
         let circuit = ZkCircuit::new(prover_witnesses, main_zkbin);

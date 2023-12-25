@@ -38,6 +38,8 @@ use rand::rngs::OsRng;
 
 use super::{Holder, TestHarness, TxAction};
 
+const SECS_IN_DAY: u64 = 24 * 60 * 60;
+
 impl TestHarness {
     pub fn dao_propose(
         &mut self,
@@ -97,8 +99,12 @@ impl TestHarness {
             },
         ];
 
+        let creation_day =
+            wallet.validator.consensus.time_keeper.blockchain_timestamp() / SECS_IN_DAY;
         let proposal = DaoProposal {
             auth_calls,
+            creation_day,
+            duration_days: 30,
             user_data,
             dao_bulla: dao.to_bulla(),
             blind: pallas::Base::random(&mut OsRng),
