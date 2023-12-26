@@ -3,8 +3,7 @@
 ... or how to setup Tor git access with darkfi repo.
 
 We assume you have tor installed locally and access to Tor browser.
-You can check your tor daemon is running by installing `python-pysocks`
-and then run this command:
+You can check your tor daemon is running by running this command:
 
 ```
 curl --socks5-hostname 127.0.0.1:9050 https://myip.wtf/text
