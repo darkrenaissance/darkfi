@@ -64,6 +64,11 @@ The last step is routine:
 
 ```
 git remote add codeberg git@codeberg-tor:darkrenaissance/darkfi.git
+# Optionally delete the github origin:
+git remote rm origin
 ```
 
-And then finally it should work.
+And then finally it should work. Make sure you use `git push -u codeb master`
+to update your main source to codeberg over Tor. You don't want to accidentally
+git push to github and dox yourself.
+
