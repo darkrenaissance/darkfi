@@ -33,7 +33,7 @@ use rand::rngs::OsRng;
 
 use super::proof::{create_transfer_burn_proof, create_transfer_mint_proof};
 use crate::{
-    client::{MoneyNote, OwnCoin},
+    client::{compute_remainder_blind, MoneyNote, OwnCoin},
     model::{ClearInput, CoinAttributes, Input, MoneyTransferParamsV1, Output},
 };
 
@@ -74,28 +74,6 @@ pub struct TransferCallInput {
 pub type TransferCallOutput = CoinAttributes;
 
 impl TransferCallBuilder {
-    fn compute_remainder_blind(
-        clear_inputs: &[ClearInput],
-        input_blinds: &[pallas::Scalar],
-        output_blinds: &[pallas::Scalar],
-    ) -> pallas::Scalar {
-        let mut total = pallas::Scalar::zero();
-
-        for input in clear_inputs {
-            total += input.value_blind;
-        }
-
-        for input_blind in input_blinds {
-            total += input_blind;
-        }
-
-        for output_blind in output_blinds {
-            total -= output_blind;
-        }
-
-        total
-    }
-
     pub fn build(self) -> Result<(MoneyTransferParamsV1, TransferCallSecrets)> {
         debug!("Building Money::TransferV1 contract call");
         assert!(self.clear_inputs.len() + self.inputs.len() > 0);
@@ -161,7 +139,7 @@ impl TransferCallBuilder {
 
         for (i, output) in self.outputs.iter().enumerate() {
             let value_blind = if i == self.outputs.len() - 1 {
-                Self::compute_remainder_blind(&params.clear_inputs, &input_blinds, &output_blinds)
+                compute_remainder_blind(&params.clear_inputs, &input_blinds, &output_blinds)
             } else {
                 pallas::Scalar::random(&mut OsRng)
             };

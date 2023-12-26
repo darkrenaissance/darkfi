@@ -35,6 +35,9 @@ use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
 use crate::model::Coin;
 
+/// `Money::FeeV1` API
+pub mod fee_v1;
+
 /// `Money::TransferV1` API
 pub mod transfer_v1;
 
@@ -195,4 +198,26 @@ impl From<ConsensusOwnCoin> for OwnCoin {
             leaf_position: consensus_own_coin.leaf_position,
         }
     }
+}
+
+pub fn compute_remainder_blind(
+    clear_inputs: &[crate::model::ClearInput],
+    input_blinds: &[pallas::Scalar],
+    output_blinds: &[pallas::Scalar],
+) -> pallas::Scalar {
+    let mut total = pallas::Scalar::zero();
+
+    for input in clear_inputs {
+        total += input.value_blind;
+    }
+
+    for input_blind in input_blinds {
+        total += input_blind;
+    }
+
+    for output_blind in output_blinds {
+        total -= output_blind;
+    }
+
+    total
 }
