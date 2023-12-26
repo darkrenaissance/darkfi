@@ -1,4 +1,4 @@
-/* This file is part of Darkfi (https://dark.fi)
+/* This file is part of DarkFi (https://dark.fi)
  *
  * Copyright (C) 2020-2023 Dyne.org foundation
  *
