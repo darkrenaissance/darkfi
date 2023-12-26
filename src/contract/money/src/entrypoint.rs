@@ -213,7 +213,8 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
         MoneyFunction::UnstakeV1 => money_unstake_get_metadata_v1(cid, call_idx, calls)?,
         MoneyFunction::PoWRewardV1 => money_pow_reward_get_metadata_v1(cid, call_idx, calls)?,
     };
-    Ok(set_return_data(&metadata)?)
+
+    set_return_data(&metadata)
 }
 
 /// This function verifies a state transition and produces a state update
@@ -250,7 +251,8 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
             money_pow_reward_process_instruction_v1(cid, call_idx, calls)?
         }
     };
-    Ok(set_return_data(&update_data)?)
+
+    set_return_data(&update_data)
 }
 
 /// This function attempts to write a given state update provided the previous steps
