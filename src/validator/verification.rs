@@ -524,13 +524,11 @@ pub async fn verify_transaction(
 
 /// Verify a set of [`Transaction`] in sequence and apply them if all are valid.
 /// In case any of the transactions fail, they will be returned to the caller.
-/// The function takes a boolean called `write` which tells it to actually write
-/// the state transitions to the database.
 pub async fn verify_transactions(
     overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
     txs: &[Transaction],
-    verify_fees: bool, // FIXME: Remove this bool
+    verify_fees: bool,
 ) -> Result<Vec<Transaction>> {
     debug!(target: "validator::verification::verify_transactions", "Verifying {} transactions", txs.len());
 
