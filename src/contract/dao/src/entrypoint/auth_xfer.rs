@@ -88,10 +88,10 @@ fn find_auth_in_parent(
         proposal_auth_calls.into_iter().zip(exec_callnode.children_indexes.iter())
     {
         if *child_idx == self_call_idx as usize {
-            return Some(auth_call);
+            return Some(auth_call)
         }
     }
-    return None;
+    return None
 }
 
 /// `process_instruction` function for `Dao::Exec`
