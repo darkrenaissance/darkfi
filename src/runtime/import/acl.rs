@@ -29,12 +29,3 @@ pub(super) fn acl_allow(env: &Env, sections: &[ContractSection]) -> Result<()> {
 
     Ok(())
 }
-
-/// Return an error if the current Env section is in the sections list.
-pub(super) fn acl_deny(env: &Env, sections: &[ContractSection]) -> Result<()> {
-    if sections.contains(&env.contract_section) {
-        return Err(Error::WasmFunctionAclDenied)
-    }
-
-    Ok(())
-}
