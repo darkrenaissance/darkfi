@@ -82,6 +82,8 @@ pub const MONEY_CONTRACT_LATEST_COIN_ROOT: &[u8] = b"last_root";
 pub const MONEY_CONTRACT_FAUCET_PUBKEYS: &[u8] = b"faucet_pubkeys";
 pub const MONEY_CONTRACT_TOTAL_FEES_PAID: &[u8] = b"total_fees_paid";
 
+/// zkas fee circuit namespace
+pub const MONEY_CONTRACT_ZKAS_FEE_NS_V1: &str = "Fee_V1";
 /// zkas mint circuit namespace
 pub const MONEY_CONTRACT_ZKAS_MINT_NS_V1: &str = "Mint_V1";
 /// zkas burn circuit namespace

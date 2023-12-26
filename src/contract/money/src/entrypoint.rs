@@ -120,12 +120,14 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
     // respective db functions. The special `zkas db` operations exist in
     // order to be able to verify the circuits being bundled and enforcing
     // a specific tree inside sled, and also creation of VerifyingKey.
+    let fee_v1_bincode = include_bytes!("../proof/fee_v1.zk.bin");
     let mint_v1_bincode = include_bytes!("../proof/mint_v1.zk.bin");
     let burn_v1_bincode = include_bytes!("../proof/burn_v1.zk.bin");
     let token_mint_v1_bincode = include_bytes!("../proof/token_mint_v1.zk.bin");
     let token_frz_v1_bincode = include_bytes!("../proof/token_freeze_v1.zk.bin");
 
     // For that, we use `zkas_db_set` and pass in the bincode.
+    zkas_db_set(&fee_v1_bincode[..])?;
     zkas_db_set(&mint_v1_bincode[..])?;
     zkas_db_set(&burn_v1_bincode[..])?;
     zkas_db_set(&token_mint_v1_bincode[..])?;

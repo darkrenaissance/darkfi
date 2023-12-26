@@ -167,10 +167,10 @@ pub struct ConsensusOutput {
 /// Parameters for `Money::Fee`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyFeeParamsV1 {
-    /// Anonymous inputs
-    pub inputs: Vec<Input>,
+    /// Anonymous input
+    pub input: Input,
     /// Anonymous outputs
-    pub outputs: Vec<Output>,
+    pub output: Output,
     /// Fee value blind
     pub fee_value_blind: pallas::Scalar,
     /// Token ID blind
@@ -180,10 +180,10 @@ pub struct MoneyFeeParamsV1 {
 /// State update for `Money::Fee`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyFeeUpdateV1 {
-    /// Revealed nullifiers
-    pub nullifiers: Vec<Nullifier>,
-    /// Minted coins
-    pub coins: Vec<Coin>,
+    /// Revealed nullifier
+    pub nullifier: Nullifier,
+    /// Minted coin
+    pub coin: Coin,
     /// Fee paid
     pub fee: u64,
 }
