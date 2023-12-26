@@ -4,8 +4,13 @@
 
 We assume you have tor installed locally and access to Tor browser.
 You can check your tor daemon is running by installing `python-pysocks`
-and then run this Python script:
+and then run this command:
 
+```
+curl --socks5-hostname 127.0.0.1:9050 https://myip.wtf/text
+```
+
+<!--
 ```py
 # install pysocks
 import socks
@@ -16,6 +21,7 @@ import requests
 response = requests.get("https://myip.wtf/text")
 print(response.content)
 ```
+-->
 
 ## Setting Up Codeberg
 
