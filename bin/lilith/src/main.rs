@@ -18,13 +18,12 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    path::Path,
     process::exit,
     sync::Arc,
 };
 
 use async_trait::async_trait;
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use semver::Version;
 use smol::{
     lock::{Mutex, MutexGuard},
@@ -46,8 +45,7 @@ use darkfi::{
     },
     system::{StoppableTask, StoppableTaskPtr},
     util::{
-        file::{load_file, save_file},
-        path::{expand_path, get_config_path},
+        path::{get_config_path},
     },
     Error, Result,
 };
@@ -169,66 +167,6 @@ impl RequestHandler for Lilith {
     }
 }
 
-// TODO: FIXME
-fn load_hosts(path: &Path, networks: &[&str]) -> HashMap<String, Vec<(Url, u64)>> {
-    let mut saved_hosts = HashMap::new();
-
-    //let contents = load_file(path);
-    //if let Err(e) = contents {
-    //    warn!(target: "lilith", "Failed retrieving saved hosts: {}", e);
-    //    return saved_hosts
-    //}
-
-    //for line in contents.unwrap().lines() {
-    //    let data: Vec<&str> = line.split('\t').collect();
-    //    debug!(target: "lilith", "::load_hosts()::data\"{:?}\"", data);
-    //    if networks.contains(&data[0]) {
-    //        let mut hosts = match saved_hosts.get(data[0]) {
-    //            Some(hosts) => hosts.clone(),
-    //            None => Vec::new(),
-    //        };
-
-    //        let url = match Url::parse(data[1]) {
-    //            Ok(u) => u,
-    //            Err(e) => {
-    //                warn!(target: "lilith", "Skipping malformed url: {} ({})", data[1], e);
-    //                continue
-    //            }
-    //        };
-
-    //        let last_seen = match data[2].parse::<u64>() {
-    //            Ok(u) => u,
-    //            Err(e) => {
-    //                warn!(target: "lilith", "Skipping malformed timestamp: {} ({})", data[2], e);
-    //                continue
-    //            }
-    //        };
-    //        hosts.push((url, last_seen));
-    //        saved_hosts.insert(data[0].to_string(), hosts);
-    //    }
-    //}
-
-    saved_hosts
-}
-
-async fn save_hosts(path: &Path, networks: &[Spawn]) {
-    let mut tsv = String::new();
-
-    for spawn in networks {
-        for (host, last_seen) in spawn.p2p.hosts().whitelist_fetch_all().await {
-            debug!(target: "lilith", "save_hosts {} {}", host, last_seen);
-            tsv.push_str(&format!("{}\t{}\t{}\n", spawn.name, host.as_str(), last_seen));
-        }
-    }
-
-    if !tsv.eq("") {
-        info!(target: "lilith", "Saving current hosts of spawned networks to: {:?}", path);
-        if let Err(e) = save_file(path, &tsv) {
-            error!(target: "lilith", "Failed saving hosts: {}", e);
-        }
-    }
-}
-
 /// Parse a TOML string for any configured network and return a map containing
 /// said configurations.
 fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
@@ -302,7 +240,6 @@ fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
 async fn spawn_net(
     name: String,
     info: &NetInfo,
-    saved_hosts: &Vec<(Url, u64)>,
     ex: Arc<Executor<'static>>,
 ) -> Result<Spawn> {
     let mut listen_urls = vec![];
@@ -336,10 +273,6 @@ async fn spawn_net(
     // Create P2P instance
     let p2p = P2p::new(settings, ex.clone()).await;
 
-    // Fill db with cached hosts
-    let hosts: Vec<(Url, u64)> = saved_hosts.iter().cloned().collect();
-    p2p.hosts().greylist_store_or_update(&hosts).await?;
-
     let addrs_str: Vec<&str> = listen_urls.iter().map(|x| x.as_str()).collect();
     info!(target: "lilith", "Starting seed network node for \"{}\" on {:?}", name, addrs_str);
     p2p.clone().start().await?;
@@ -360,10 +293,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         exit(1);
     }
 
-    // Retrieve any saved hosts for configured networks
-    let net_names: Vec<&str> = configured_nets.keys().map(|x| x.as_str()).collect();
-    let saved_hosts = load_hosts(&expand_path(&args.hosts_file)?, &net_names);
-
     // Spawn configured networks
     let mut networks = vec![];
     for (name, info) in &configured_nets {
@@ -374,7 +303,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         match spawn_net(
             name.to_string(),
             info,
-            saved_hosts.get(name).unwrap_or(&Vec::new()),
             ex.clone(),
         )
         .await
@@ -410,11 +338,6 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     let (signals_handler, signals_task) = SignalHandler::new(ex)?;
     signals_handler.wait_termination(signals_task).await?;
     info!(target: "lilith", "Caught termination signal, cleaning up and exiting...");
-
-    // Save in-memory hosts to tsv file
-    //info!(target: "lilith", "Saving hosts...");
-    // TODO: FIXME: this is broken
-    //save_hosts(&expand_path(&args.hosts_file)?, &lilith.networks).await;
 
     info!(target: "lilith", "Stopping JSON-RPC server...");
     rpc_task.stop().await;
