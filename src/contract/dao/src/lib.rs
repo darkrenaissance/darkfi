@@ -86,3 +86,12 @@ pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "DaoProposeMain";
 pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "DaoExec";
 /// zkas dao auth money_transfer circuit namespace
 pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "DaoAuthMoneyTransfer";
+
+const SLOT_TIME: u64 = 90;
+const SECS_IN_DAY: u64 = 24 * 60 * 60;
+
+/// Days since genesis block. Used for time limit on DAO proposals.
+pub fn slot_to_day(slot: u64) -> u64 {
+    let timestamp_secs = slot * SLOT_TIME;
+    timestamp_secs / SECS_IN_DAY
+}

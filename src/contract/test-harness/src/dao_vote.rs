@@ -25,7 +25,8 @@ use darkfi::{
 use darkfi_dao_contract::{
     client::{DaoVoteCall, DaoVoteInput},
     model::{Dao, DaoProposal, DaoProposalBulla, DaoVoteParams},
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
+    slot_to_day, DaoFunction, DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS,
+    DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
@@ -37,8 +38,6 @@ use darkfi_serial::{serialize, Encodable};
 use rand::rngs::OsRng;
 
 use super::{Holder, TestHarness, TxAction};
-
-const SECS_IN_DAY: u64 = 24 * 60 * 60;
 
 impl TestHarness {
     pub fn dao_vote(
@@ -80,8 +79,7 @@ impl TestHarness {
             signature_secret,
         };
 
-        let current_day =
-            wallet.validator.consensus.time_keeper.blockchain_timestamp() / SECS_IN_DAY;
+        let current_day = slot_to_day(wallet.validator.consensus.time_keeper.current_slot());
         let call = DaoVoteCall {
             inputs: vec![input],
             vote_option,

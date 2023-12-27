@@ -26,7 +26,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    util::get_blockchain_time,
+    util::get_current_slot,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -34,11 +34,9 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 use crate::{
     error::DaoError,
     model::{DaoBlindAggregateVote, DaoProposalMetadata, DaoProposeParams, DaoProposeUpdate},
-    DaoFunction, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS, DAO_CONTRACT_DB_PROPOSAL_BULLAS,
+    slot_to_day, DaoFunction, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS, DAO_CONTRACT_DB_PROPOSAL_BULLAS,
     DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
 };
-
-const SECS_IN_DAY: u64 = 24 * 60 * 60;
 
 /// `get_metdata` function for `Dao::Propose`
 pub(crate) fn dao_propose_get_metadata(
@@ -83,7 +81,7 @@ pub(crate) fn dao_propose_get_metadata(
         ));
     }
 
-    let current_day = get_blockchain_time() / SECS_IN_DAY;
+    let current_day = slot_to_day(get_current_slot());
 
     let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
     zk_public_inputs.push((

@@ -24,7 +24,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    util::get_blockchain_time,
+    util::get_current_slot,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -32,11 +32,9 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 use crate::{
     error::DaoError,
     model::{DaoProposalMetadata, DaoVoteParams, DaoVoteUpdate},
-    DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_DB_VOTE_NULLIFIERS,
+    slot_to_day, DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_DB_VOTE_NULLIFIERS,
     DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
-
-const SECS_IN_DAY: u64 = 24 * 60 * 60;
 
 /// `get_metdata` function for `Dao::Vote`
 pub(crate) fn dao_vote_get_metadata(
@@ -87,7 +85,7 @@ pub(crate) fn dao_vote_get_metadata(
         ));
     }
 
-    let current_day = get_blockchain_time() / SECS_IN_DAY;
+    let current_day = slot_to_day(get_current_slot());
 
     let yes_vote_commit_coords = params.yes_vote_commit.to_affine().coordinates().unwrap();
     let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();

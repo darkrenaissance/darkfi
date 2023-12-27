@@ -25,7 +25,8 @@ use darkfi::{
 use darkfi_dao_contract::{
     client::{DaoProposeCall, DaoProposeStakeInput},
     model::{Dao, DaoAuthCall, DaoBulla, DaoProposal, DaoProposeParams},
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
+    slot_to_day, DaoFunction, DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS,
+    DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
 };
 use darkfi_money_contract::{client::OwnCoin, model::CoinAttributes, MoneyFunction};
 use darkfi_sdk::{
@@ -37,8 +38,6 @@ use darkfi_serial::{serialize, Encodable};
 use rand::rngs::OsRng;
 
 use super::{Holder, TestHarness, TxAction};
-
-const SECS_IN_DAY: u64 = 24 * 60 * 60;
 
 impl TestHarness {
     pub fn dao_propose(
@@ -99,8 +98,7 @@ impl TestHarness {
             },
         ];
 
-        let creation_day =
-            wallet.validator.consensus.time_keeper.blockchain_timestamp() / SECS_IN_DAY;
+        let creation_day = slot_to_day(wallet.validator.consensus.time_keeper.current_slot());
         let proposal = DaoProposal {
             auth_calls,
             creation_day,
