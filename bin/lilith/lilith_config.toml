@@ -9,9 +9,6 @@
 # JSON-RPC listen URL
 #rpc_listen = "tcp://127.0.0.1:18927"
 
-# Hosts .tsv file to use
-#hosts_file="~/.config/darkfi/lilith_hosts.tsv"
-
 ## Per-network settings
 #[network."darkfid_sync_v4"]
 #accept_addrs = ["tcp+tls://0.0.0.0:33022"]
@@ -19,6 +16,8 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
+#hostlist ="~/.config/darkfi/darkfid_sync_hostlist.tsv"
+
 
 #[network."darkfid_consensus_v4"]
 #accept_addrs = ["tcp+tls://0.0.0.0:33023"]
@@ -26,6 +25,7 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
+#hostlist ="~/.config/darkfi/darkfid_consensus_hostlist.tsv"
 
 #[network."darkirc_v4"]
 #accept_addrs = ["tcp+tls://0.0.0.0:25551"]
@@ -33,6 +33,7 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
+#hostlist ="~/.config/darkfi/darkirc_hostlist.tsv"
 
 #[network."taud_v4"]
 #accept_addrs = ["tcp+tls://0.0.0.0:23331"]
@@ -40,3 +41,4 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
+#hostlist ="~/.config/darkfi/taud_hostlist.tsv"

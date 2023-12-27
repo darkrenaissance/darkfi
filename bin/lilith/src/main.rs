@@ -44,9 +44,7 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
     },
     system::{StoppableTask, StoppableTaskPtr},
-    util::{
-        path::{get_config_path},
-    },
+    util::path::get_config_path,
     Error, Result,
 };
 
@@ -64,10 +62,6 @@ struct Args {
     #[structopt(short, long)]
     /// Configuration file to use
     pub config: Option<String>,
-
-    #[structopt(long, default_value = "~/.config/darkfi/lilith_hosts.tsv")]
-    /// Hosts .tsv file to use
-    pub hosts_file: String,
 
     #[structopt(short, long)]
     /// Set log file to ouput into
@@ -124,6 +118,8 @@ struct NetInfo {
     pub version: Version,
     /// Enable localnet hosts
     pub localnet: bool,
+    /// Path to hostlist
+    pub hostlist: String,
 }
 
 /// Struct representing the daemon
@@ -182,6 +178,11 @@ fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
                     continue
                 }
 
+                if !table.contains_key("hostlist") {
+                    warn!(target: "lilith", "Hostlist path is mandatory, skipping network.");
+                    continue
+                }
+
                 let name = net.0.to_string();
                 let accept_addrs: Vec<Url> = table["accept_addrs"]
                     .as_array()
@@ -228,7 +229,9 @@ fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
                     semver::Version::parse(option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0"))?
                 };
 
-                let net_info = NetInfo { accept_addrs, seeds, peers, version, localnet };
+                let hostlist: String = table["hostlist"].as_str().unwrap().to_string();
+
+                let net_info = NetInfo { accept_addrs, seeds, peers, version, localnet, hostlist };
                 ret.insert(name, net_info);
             }
         }
@@ -237,11 +240,7 @@ fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
     Ok(ret)
 }
 
-async fn spawn_net(
-    name: String,
-    info: &NetInfo,
-    ex: Arc<Executor<'static>>,
-) -> Result<Spawn> {
+async fn spawn_net(name: String, info: &NetInfo, ex: Arc<Executor<'static>>) -> Result<Spawn> {
     let mut listen_urls = vec![];
 
     // Configure listen addrs for this network
@@ -259,6 +258,7 @@ async fn spawn_net(
         inbound_connections: 512,
         app_version: info.version.clone(),
         localnet: info.localnet,
+        hostlist: info.hostlist.clone(),
         allowed_transports: vec![
             "tcp".to_string(),
             "tcp+tls".to_string(),
@@ -300,13 +300,7 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         // e.g. p2p_v3, p2p_v4, etc. Therefore we can spawn multiple networks
         // and they would all be version-checked, so we avoid mismatches when
         // seeding peers.
-        match spawn_net(
-            name.to_string(),
-            info,
-            ex.clone(),
-        )
-        .await
-        {
+        match spawn_net(name.to_string(), info, ex.clone()).await {
             Ok(spawn) => networks.push(spawn),
             Err(e) => {
                 error!(target: "lilith", "Failed to start P2P network seed for \"{}\": {}", name, e);
