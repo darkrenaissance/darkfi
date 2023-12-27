@@ -18,7 +18,8 @@
 
 use std::{
     collections::{HashMap, HashSet},
-    path::Path,
+    fs,
+    fs::File,
     sync::Arc,
 };
 
@@ -36,7 +37,6 @@ use crate::{
     system::{Subscriber, SubscriberPtr, Subscription},
     util::{
         file::{load_file, save_file},
-        path,
         path::expand_path,
     },
     Error, Result,
@@ -1068,7 +1068,16 @@ impl Hosts {
 
     pub async fn load_hosts(&self) -> Result<()> {
         // TODO: FIXME: make this a net::Setting
-        let path = expand_path(&"~/.config/darkfi/hostlist.tsv")?;
+        //let path = expand_path(&"~/.config/darkfi/hostlist.tsv")?;
+        let path = expand_path(&self.settings.hostlist)?;
+
+        if !path.exists() {
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+
+            File::create(path.clone())?;
+        }
 
         let contents = load_file(&path);
         if let Err(e) = contents {
@@ -1082,7 +1091,7 @@ impl Hosts {
             let url = match Url::parse(data[1]) {
                 Ok(u) => u,
                 Err(e) => {
-                    debug!(target: "net::hosts::store", "load_hosts(): Skipping malformed URL...");
+                    debug!(target: "net::hosts::store", "load_hosts(): Skipping malformed URL {}", e);
                     continue
                 }
             };
@@ -1090,7 +1099,7 @@ impl Hosts {
             let last_seen = match data[2].parse::<u64>() {
                 Ok(t) => t,
                 Err(e) => {
-                    debug!(target: "net::hosts::store", "load_hosts(): Skipping malformed last seen...");
+                    debug!(target: "net::hosts::store", "load_hosts(): Skipping malformed last seen {}", e);
                     continue
                 }
             };
@@ -1116,8 +1125,7 @@ impl Hosts {
 
     // Save the hostlist to a file.
     pub async fn save_hosts(&self) -> Result<()> {
-        // TODO: FIXME: make this a net::Setting
-        let path = expand_path(&"~/.config/darkfi/hostlist.tsv")?;
+        let path = expand_path(&self.settings.hostlist)?;
 
         let mut tsv = String::new();
 
@@ -1128,7 +1136,7 @@ impl Hosts {
         }
 
         if !tsv.eq("") {
-            info!(target: "net::hosts::store", "Saving current hosts of spawned networks to: {:?}",
+            info!(target: "net::hosts::store", "Saving hosts to: {:?}",
                   path);
             if let Err(e) = save_file(&path, &tsv) {
                 error!(target: "net::hosts::store", "Failed saving hosts: {}", e);

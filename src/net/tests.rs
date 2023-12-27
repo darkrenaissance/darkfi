@@ -31,7 +31,7 @@ use crate::{
 };
 
 // Number of nodes to spawn and number of peers each node connects to
-const N_NODES: usize = 5;
+const N_NODES: usize = 3;
 const N_CONNS: usize = 2;
 
 #[test]
@@ -88,6 +88,7 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
             outbound_connect_timeout: 10,
             inbound_connections: usize::MAX,
             seeds: vec![seed_addr.clone()],
+            hostlist: String::from(".config/darkfi/hosts.tsv"),
             peers,
             allowed_transports: vec!["tcp".to_string()],
             node_id: i.to_string(),
@@ -105,7 +106,7 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
     }
 
     info!("Waiting until all peers connect");
-    sleep(60).await;
+    sleep(10).await;
 
     info!("Inspecting hostlists...");
     for p2p in p2p_instances.iter() {

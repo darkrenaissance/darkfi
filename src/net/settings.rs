@@ -70,12 +70,15 @@ pub struct Settings {
     pub outbound_peer_discovery_attempt_time: u64,
     /// Advertise our external address
     pub advertise: bool,
+    /// Hostlist storage path
+    pub hostlist: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         let version = option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0");
         let app_version = semver::Version::parse(version).unwrap();
+        let hostlist = String::from("~/.config/darkfi/hostlist.tsv");
 
         Self {
             node_id: String::new(),
@@ -97,6 +100,7 @@ impl Default for Settings {
             outbound_peer_discovery_cooloff_time: 30,
             outbound_peer_discovery_attempt_time: 5,
             advertise: true,
+            hostlist,
         }
     }
 }
@@ -190,6 +194,11 @@ pub struct SettingsOpt {
     #[serde(default)]
     #[structopt(long)]
     pub advertise: bool,
+
+    /// Hosts .tsv file to use
+    #[serde(default)]
+    #[structopt(long)]
+    pub hostlist: String,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -228,6 +237,7 @@ impl From<SettingsOpt> for Settings {
                 .outbound_peer_discovery_attempt_time
                 .unwrap_or(def.outbound_peer_discovery_attempt_time),
             advertise: opt.advertise,
+            hostlist: opt.hostlist,
         }
     }
 }
