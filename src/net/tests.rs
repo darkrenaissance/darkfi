@@ -88,7 +88,7 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
             outbound_connect_timeout: 10,
             inbound_connections: usize::MAX,
             seeds: vec![seed_addr.clone()],
-            hostlist: String::from(".config/darkfi/hosts.tsv"),
+            hostlist: String::from(format!(".config/darkfi/hosts{}.tsv", i)),
             peers,
             allowed_transports: vec!["tcp".to_string()],
             node_id: i.to_string(),
@@ -106,7 +106,7 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
     }
 
     info!("Waiting until all peers connect");
-    sleep(10).await;
+    sleep(60).await;
 
     info!("Inspecting hostlists...");
     for p2p in p2p_instances.iter() {

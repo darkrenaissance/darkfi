@@ -53,8 +53,7 @@ const WHITELIST_MAX_LEN: usize = 5000;
 const GREYLIST_MAX_LEN: usize = 2000;
 
 /// Manages a store of network addresses
-// TODO:
-//       * Test the performance overhead of using vectors for white/grey/anchor lists.
+// TODO: Test the performance overhead of using vectors for white/grey/anchor lists.
 //       * Check whether anchorlist has a max size in Monero.
 pub struct Hosts {
     // Intermediary node list that is periodically probed and updated to whitelist.
@@ -507,6 +506,16 @@ impl Hosts {
 
         // Sort the list by last_seen.
         greylist.sort_by_key(|entry| entry.1);
+    }
+
+    pub async fn anchorlist_remove(&self, addr: &Url, position: usize) {
+        debug!(target: "net::refinery::run()", "Removing disconnected peer {} from anchorlist", addr);
+        let mut anchorlist = self.anchorlist.write().await;
+
+        anchorlist.remove(position);
+
+        // Sort the list by last_seen.
+        anchorlist.sort_by_key(|entry| entry.1);
     }
 
     pub async fn subscribe_store(&self) -> Result<Subscription<usize>> {

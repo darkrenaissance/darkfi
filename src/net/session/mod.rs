@@ -22,7 +22,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use log::debug;
+use log::{debug, error};
 use smol::Executor;
 
 use super::{channel::ChannelPtr, p2p::P2pPtr, protocol::ProtocolVersion};
@@ -49,7 +49,7 @@ pub type SessionWeakPtr = Weak<dyn Session + Send + Sync + 'static>;
 
 /// Removes channel from the list of connected channels when a stop signal
 /// is received.
-pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
+pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: SessionBitFlag) {
     debug!(target: "net::session::remove_sub_on_stop()", "[START]");
     // Subscribe to stop events
     let stop_sub = channel.clone().subscribe_stop().await;
@@ -63,6 +63,16 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
         target: "net::session::remove_sub_on_stop()",
         "Received stop event. Removing channel {}", channel.address(),
     );
+
+    if type_id != SESSION_INBOUND {
+        match p2p.hosts().get_anchorlist_index_at_addr(channel.address()).await {
+            Ok(index) => p2p.hosts().anchorlist_remove(channel.address(), index).await,
+            Err(e) => {
+                error!(target: "net::session::remove_sub_on_stop()",
+                "Can't remove anchor connection {}", e)
+            }
+        }
+    }
 
     // Remove channel from p2p
     p2p.remove(channel).await;
@@ -151,25 +161,7 @@ pub trait Session: Sync {
         self.p2p().store(channel.clone()).await;
 
         // Subscribe to stop, so we can remove from p2p
-        executor.spawn(remove_sub_on_stop(self.p2p(), channel)).detach();
-
-        // Channel is ready for use
-        Ok(())
-    }
-
-    async fn perform_local_handshake(
-        &self,
-        protocol_version: Arc<ProtocolVersion>,
-        channel: ChannelPtr,
-        executor: Arc<Executor<'_>>,
-    ) -> Result<()> {
-        // Perform handshake
-        protocol_version.run(executor.clone()).await?;
-
-        // Channel is now initialized
-
-        // Subscribe to stop, so we can remove from p2p
-        executor.spawn(remove_sub_on_stop(self.p2p(), channel)).detach();
+        executor.spawn(remove_sub_on_stop(self.p2p(), channel, self.type_id())).detach();
 
         // Channel is ready for use
         Ok(())

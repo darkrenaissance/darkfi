@@ -132,7 +132,7 @@ pub async fn ping_node(addr: &Url, p2p: P2pPtr) -> bool {
             debug!(target: "net::refinery::ping_node()", "Connected successfully!");
             let proto_ver = ProtocolVersion::new(channel.clone(), p2p.settings()).await;
 
-            let handshake_task = session_outbound.perform_local_handshake(
+            let handshake_task = session_outbound.perform_handshake_protocols(
                 proto_ver,
                 channel.clone(),
                 p2p.executor(),
