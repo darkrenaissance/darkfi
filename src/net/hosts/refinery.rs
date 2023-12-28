@@ -45,9 +45,14 @@ impl GreylistRefinery {
     }
 
     pub async fn start(self: Arc<Self>) {
-        // TODO: FIXME: unwrap
-        self.p2p().hosts().load_hosts().await.unwrap();
-
+        match self.p2p().hosts().load_hosts().await {
+            Ok(()) => {
+                debug!(target: "net::refinery::start()", "Load hosts successful!");
+            }
+            Err(e) => {
+                warn!(target: "net::refinery::start()", "Error loading hosts {}", e);
+            }
+        }
         let ex = self.p2p().executor();
         self.process.clone().start(
             async move {
@@ -62,9 +67,14 @@ impl GreylistRefinery {
     }
 
     pub async fn stop(self: Arc<Self>) {
-        debug!(target: "net::refinery::stop()", "Saving hostlist...");
-        // TODO: FIXME: unwrap
-        self.p2p().hosts().save_hosts().await.unwrap();
+        match self.p2p().hosts().save_hosts().await {
+            Ok(()) => {
+                debug!(target: "net::refinery::stop()", "Save hosts successful!");
+            }
+            Err(e) => {
+                warn!(target: "net::refinery::stop()", "Error saving hosts {}", e);
+            }
+        }
         self.process.stop().await
     }
 

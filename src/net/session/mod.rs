@@ -140,12 +140,10 @@ pub trait Session: Sync {
             // Channel is now initialized. Timestamp this.
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
-            // TODO: FIXME: unwrap
             self.p2p()
                 .hosts()
                 .anchorlist_store_or_update(&[(channel.address().clone(), last_seen)])
-                .await
-                .unwrap();
+                .await?;
         }
 
         // Add channel to p2p

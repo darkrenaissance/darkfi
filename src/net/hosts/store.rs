@@ -499,30 +499,6 @@ impl Hosts {
         debug!(target: "net::hosts::store::anchorlist_update_last_seen()", "[END]");
     }
 
-    //pub async fn whitelist_downgrade(&self, addr: &Url) {
-    //    // First lookup the entry using its addr.
-    //    let mut entry = vec![];
-
-    //    let whitelist = self.whitelist.read().await;
-    //    for (url, time) in whitelist.iter() {
-    //        if url == addr {
-    //            entry.push((url.clone(), time.clone()));
-    //        }
-    //    }
-
-    //    // Remove this item from the whitelist.
-    //    let mut whitelist = self.whitelist.write().await;
-    //    // TODO: test!
-    //    let index = whitelist.iter().position(|x| *x == entry[0]);
-    //    // This should never fail since the entry exists.
-    //    whitelist.remove(index.unwrap());
-
-    //    // Add it to the greylist.
-    //    let addr = entry[0].0.clone();
-    //    let last_seen = entry[0].1.clone();
-    //    self.greylist_store(addr, last_seen).await;
-    //}
-
     pub async fn greylist_remove(&self, addr: &Url, position: usize) {
         debug!(target: "net::refinery::run()", "Removing whitelisted peer {} from greylist", addr);
         let mut greylist = self.greylist.write().await;
@@ -1062,8 +1038,6 @@ impl Hosts {
     }
 
     pub async fn load_hosts(&self) -> Result<()> {
-        // TODO: FIXME: make this a net::Setting
-        //let path = expand_path(&"~/.config/darkfi/hostlist.tsv")?;
         let path = expand_path(&self.settings.hostlist)?;
 
         if !path.exists() {
@@ -1137,6 +1111,7 @@ impl Hosts {
                 error!(target: "net::hosts::store", "Failed saving hosts: {}", e);
             }
         }
+
         Ok(())
     }
 }
