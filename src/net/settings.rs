@@ -72,6 +72,8 @@ pub struct Settings {
     pub advertise: bool,
     /// Hostlist storage path
     pub hostlist: String,
+    /// Pause interval within greylist refinery process
+    pub greylist_refinery_interval: u64,
 }
 
 impl Default for Settings {
@@ -101,6 +103,7 @@ impl Default for Settings {
             outbound_peer_discovery_attempt_time: 5,
             advertise: true,
             hostlist,
+            greylist_refinery_interval: 30,
         }
     }
 }
@@ -199,6 +202,10 @@ pub struct SettingsOpt {
     #[serde(default)]
     #[structopt(long)]
     pub hostlist: String,
+
+    /// Pause interval within greylist refinery process
+    #[structopt(skip)]
+    pub greylist_refinery_interval: Option<u64>,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -238,6 +245,9 @@ impl From<SettingsOpt> for Settings {
                 .unwrap_or(def.outbound_peer_discovery_attempt_time),
             advertise: opt.advertise,
             hostlist: opt.hostlist,
+            greylist_refinery_interval: opt
+                .greylist_refinery_interval
+                .unwrap_or(def.greylist_refinery_interval),
         }
     }
 }

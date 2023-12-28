@@ -33,7 +33,6 @@ pub type GreylistRefineryPtr = Arc<GreylistRefinery>;
 //// Probe random peers on the greylist. If a peer is responsive, update the last_seen field and
 //// add it to the whitelist. If a node does not respond, remove it from the greylist.
 //// Called periodically.
-// NOTE: in monero this is called "greylist housekeeping" but that's a bit verbose.
 pub struct GreylistRefinery {
     /// Weak pointer to parent p2p object
     pub(in crate::net) p2p: LazyWeak<P2p>,
@@ -69,8 +68,7 @@ impl GreylistRefinery {
         self.process.stop().await
     }
 
-    //// Randomly select a peer on the greylist and probe it.
-    //// TODO: This frequency of this call can be set in net::Settings.
+    // Randomly select a peer on the greylist and probe it.
     async fn run(self: Arc<Self>) {
         debug!(target: "net::refinery::run()", "START");
         loop {
@@ -101,9 +99,8 @@ impl GreylistRefinery {
                 }
             }
 
-            // TODO: create a custom net setting for this timer
             debug!(target: "net::greylist_refinery::run()", "Sleeping...");
-            sleep(10).await;
+            sleep(self.p2p().settings().greylist_refinery_interval).await;
         }
     }
 
