@@ -98,7 +98,7 @@ impl TestHarness {
             },
         ];
 
-        let creation_day = slot_to_day(wallet.validator.consensus.time_keeper.current_slot());
+        let creation_day = slot_to_day(wallet.validator.consensus.time_keeper.verifying_slot);
         let proposal = DaoProposal {
             auth_calls,
             creation_day,

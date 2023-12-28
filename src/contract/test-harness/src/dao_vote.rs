@@ -79,7 +79,7 @@ impl TestHarness {
             signature_secret,
         };
 
-        let current_day = slot_to_day(wallet.validator.consensus.time_keeper.current_slot());
+        let current_day = slot_to_day(wallet.validator.consensus.time_keeper.verifying_slot);
         let call = DaoVoteCall {
             inputs: vec![input],
             vote_option,

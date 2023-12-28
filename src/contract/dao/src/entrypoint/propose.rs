@@ -26,7 +26,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    util::get_current_slot,
+    util::get_verifying_slot,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -81,7 +81,7 @@ pub(crate) fn dao_propose_get_metadata(
         ));
     }
 
-    let current_day = slot_to_day(get_current_slot());
+    let current_day = slot_to_day(get_verifying_slot());
 
     let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
     zk_public_inputs.push((
