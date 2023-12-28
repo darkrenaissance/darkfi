@@ -54,7 +54,7 @@ const GREYLIST_MAX_LEN: usize = 2000;
 
 /// Manages a store of network addresses
 // TODO: Test the performance overhead of using vectors for white/grey/anchor lists.
-//       * Check whether anchorlist has a max size in Monero.
+// TODO: Check whether anchorlist has a max size in Monero.
 pub struct Hosts {
     // Intermediary node list that is periodically probed and updated to whitelist.
     pub greylist: RwLock<Vec<(Url, u64)>>,

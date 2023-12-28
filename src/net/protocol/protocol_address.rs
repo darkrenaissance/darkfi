@@ -37,12 +37,9 @@ use super::{
 };
 use crate::Result;
 
-/// Defines address and get-address messages
-// New protocol that sends and receives whitelist info instead of Vec<Url>.
-// AddrMessage is of the format Vec<(Url, u64)>. On receiving GetAddr, nodes send AddrMessage
-// with whitelisted nodes. On receiving an AddrMessage, nodes enter the info into their greylists.
-// The format of GetAddrMessage remains the same.
-// TODO: cleanup documentation
+/// Defines address and get-address messages.
+/// On receiving GetAddr, nodes send an AddrMessage containing whitelisted nodes.
+/// On receiving an AddrMessage, nodes enter the info into their greylists.
 pub struct ProtocolAddress {
     channel: ChannelPtr,
     addrs_sub: MessageSubscription<AddrsMessage>,
@@ -50,7 +47,6 @@ pub struct ProtocolAddress {
     hosts: HostsPtr,
     settings: SettingsPtr,
     jobsman: ProtocolJobsManagerPtr,
-    // We require this to access ping_self() method.
     p2p: P2pPtr,
 }
 
@@ -219,8 +215,10 @@ impl ProtocolAddress {
 
 #[async_trait]
 impl ProtocolBase for ProtocolAddress {
-    /// Starts the address protocol. Runs receive address and get address
-    /// protocols on the protocol task manager. Then sends get-address msg.
+    /// Starts the address protocol. If it's an outbound session, has an external address
+    /// is set to advertise, pings our external address and sends it if everything is fine.
+    /// Runs receive address and get address protocols on the protocol task manager.
+    /// Then sends get-address msg.
     async fn start(self: Arc<Self>, ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::protocol_address::start()", "START => address={}", self.channel.address());
 

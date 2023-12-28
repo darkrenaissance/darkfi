@@ -41,7 +41,6 @@ pub struct ProtocolSeed {
     hosts: HostsPtr,
     settings: SettingsPtr,
     addr_sub: MessageSubscription<AddrsMessage>,
-    // We require this to access ping_self() method.
     p2p: P2pPtr,
 }
 

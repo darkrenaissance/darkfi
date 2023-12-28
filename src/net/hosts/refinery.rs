@@ -120,7 +120,6 @@ impl GreylistRefinery {
 }
 
 // Ping a node to check it's online.
-// TODO: make this an actual ping-pong method, rather than a version exchange.
 pub async fn ping_node(addr: &Url, p2p: P2pPtr) -> bool {
     let session_outbound = p2p.session_outbound();
     let parent = Arc::downgrade(&session_outbound);
