@@ -110,12 +110,6 @@ pub(crate) fn money_fee_process_instruction_v1(
     let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
-    // Accumulator for the value commitments. We add inputs to it, and
-    // subtract the outputs and the fee from it. For the commitments to
-    // be valid, the accumulatior must be in its initial state after
-    // performing the arithmetics.
-    let mut valcom_total = pallas::Point::identity();
-
     // Fees can only be paid using the native token, so we'll compare
     // the token commitments with this one:
     let native_token_commit = poseidon_hash([DARK_TOKEN_ID.inner(), params.token_blind]);
@@ -125,6 +119,12 @@ pub(crate) fn money_fee_process_instruction_v1(
     // ===================================
     if params.input.token_commit != native_token_commit {
         msg!("[FeeV1] Error: Input token commitment is not the native token");
+        return Err(MoneyError::TokenMismatch.into())
+    }
+
+    // Verify that the token commitment matches
+    if params.output.token_commit != native_token_commit {
+        msg!("[FeeV1] Error: Output token commitment is not native token");
         return Err(MoneyError::TokenMismatch.into())
     }
 
@@ -147,21 +147,22 @@ pub(crate) fn money_fee_process_instruction_v1(
         return Err(MoneyError::DuplicateNullifier.into())
     }
 
-    // Append this new nullifier to seen nullifiers, and accumulate the value commitment.
-    valcom_total += params.input.value_commit;
-
-    // Verify that the token commitment matches
-    if params.output.token_commit != native_token_commit {
-        msg!("[FeeV1] Error: Output token commitment is not native token");
-        return Err(MoneyError::TokenMismatch.into())
-    }
-
+    // The new coin should not exist
     if db_contains_key(coins_db, &serialize(&params.output.coin))? {
         msg!("[FeeV1] Error: Duplicate coin found");
         return Err(MoneyError::DuplicateCoin.into())
     }
 
-    // Subtract the value commitment
+    // Accumulator for the value commitments. We add inputs to it, and
+    // subtract the outputs and the fee from it. For the commitments to
+    // be valid, the accumulatior must be in its initial state after
+    // performing the arithmetics.
+    let mut valcom_total = pallas::Point::identity();
+
+    // Accumulate the input value commitment.
+    valcom_total += params.input.value_commit;
+
+    // Subtract the output value commitment
     valcom_total -= params.output.value_commit;
 
     // Now subtract the fee from the accumulator
