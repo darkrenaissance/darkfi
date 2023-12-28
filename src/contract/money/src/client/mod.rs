@@ -118,10 +118,14 @@ pub struct MoneyNote {
     pub spend_hook: pallas::Base,
     /// User data used by protocol when spend hook is enabled
     pub user_data: pallas::Base,
+    // TODO: look into removing these fields. We potentially don't need them [
     /// Blinding factor for the value pedersen commitment
     pub value_blind: pallas::Scalar,
     /// Blinding factor for the token ID pedersen commitment
     pub token_blind: pallas::Base,
+    // ] ^ the receiver is not interested in the value commit / token commits.
+    // we just want to examine the coins in the outputs. The money::transfer() contract
+    // should ensure everything else is correct.
     /// Attached memo (arbitrary data)
     pub memo: Vec<u8>,
 }
