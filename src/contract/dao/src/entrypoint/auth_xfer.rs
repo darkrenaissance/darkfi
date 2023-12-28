@@ -32,8 +32,9 @@ use darkfi_serial::{deserialize, Encodable, WriteExt};
 
 use crate::{
     error::DaoError,
-    model::{DaoAuthCall, DaoExecParams, VecAuthCallCommit},
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS,
+    model::{DaoAuthCall, DaoAuthMoneyTransferParams, DaoExecParams, VecAuthCallCommit},
+    DaoFunction, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
+    DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS,
 };
 
 /// `get_metdata` function for `Dao::Exec`
@@ -42,6 +43,9 @@ pub(crate) fn dao_authxfer_get_metadata(
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
+    let self_ = &calls[call_idx as usize];
+    let self_params: DaoAuthMoneyTransferParams = deserialize(&self_.data.data[1..])?;
+
     let sibling_idx = call_idx + 1;
     let xfer_call = &calls[sibling_idx as usize].data;
     let xfer_params: MoneyTransferParamsV1 = deserialize(&xfer_call.data[1..])?;
@@ -51,15 +55,34 @@ pub(crate) fn dao_authxfer_get_metadata(
     let exec_params: DaoExecParams = deserialize(&exec_callnode.data.data[1..])?;
 
     assert!(xfer_params.inputs.len() > 0);
-    // This value should be the same for all inputs, as enforced in process_instruction() below.
-    let input_user_data_enc = xfer_params.inputs[0].user_data_enc;
-
     assert!(xfer_params.outputs.len() > 0);
-    // Also check the coin in the change output
-    let last_coin = xfer_params.outputs.last().unwrap().coin;
 
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     let signature_pubkeys: Vec<PublicKey> = vec![];
+
+    for (output, attrs) in xfer_params.outputs.iter().zip(self_params.enc_attrs.iter()) {
+        let coin = output.coin;
+        let (ephem_x, ephem_y) = attrs.ephem_pubkey.xy();
+        zk_public_inputs.push((
+            DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS.to_string(),
+            vec![
+                coin.inner(),
+                ephem_x,
+                ephem_y,
+                attrs.value,
+                attrs.token_id,
+                attrs.serial,
+                attrs.spend_hook,
+                attrs.user_data,
+            ],
+        ));
+    }
+
+    // This value should be the same for all inputs, as enforced in process_instruction() below.
+    let input_user_data_enc = xfer_params.inputs[0].user_data_enc;
+
+    // Also check the coin in the change output
+    let last_coin = xfer_params.outputs.last().unwrap().coin;
 
     zk_public_inputs.push((
         DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS.to_string(),

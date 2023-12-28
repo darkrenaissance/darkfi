@@ -341,6 +341,19 @@ pub struct DaoExecUpdate {
     pub proposal_bulla: DaoProposalBulla,
 }
 
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct DaoAuthCoinAttrs {
+    pub value: pallas::Base,
+    pub token_id: pallas::Base,
+    pub serial: pallas::Base,
+    pub spend_hook: pallas::Base,
+    pub user_data: pallas::Base,
+
+    pub ephem_pubkey: PublicKey,
+}
+
 /// Parameters for `Dao::AuthMoneyTransfer`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct DaoAuthMoneyTransferParams {}
+pub struct DaoAuthMoneyTransferParams {
+    pub enc_attrs: Vec<DaoAuthCoinAttrs>,
+}

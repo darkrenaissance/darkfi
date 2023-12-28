@@ -18,7 +18,7 @@
 
 use darkfi_money_contract::model::CoinAttributes;
 use darkfi_sdk::{
-    crypto::{poseidon_hash, DAO_CONTRACT_ID},
+    crypto::{pasta_prelude::*, poseidon_hash, util::mod_r_p, PublicKey, DAO_CONTRACT_ID},
     pasta::pallas,
 };
 
@@ -30,10 +30,13 @@ use darkfi::{
     Result,
 };
 
-use crate::model::{Dao, DaoAuthMoneyTransferParams, DaoProposal, VecAuthCallCommit};
+use crate::model::{
+    Dao, DaoAuthCoinAttrs, DaoAuthMoneyTransferParams, DaoProposal, VecAuthCallCommit,
+};
 
 pub struct DaoAuthMoneyTransferCall {
     pub proposal: DaoProposal,
+    pub proposal_coinattrs: Vec<CoinAttributes>,
     pub dao: Dao,
     pub input_user_data_blind: pallas::Base,
     pub dao_coin_attrs: CoinAttributes,
@@ -44,9 +47,82 @@ impl DaoAuthMoneyTransferCall {
         self,
         auth_xfer_zkbin: &ZkBinary,
         auth_xfer_pk: &ProvingKey,
+        auth_xfer_enc_coin_zkbin: &ZkBinary,
+        auth_xfer_enc_coin_pk: &ProvingKey,
     ) -> Result<(DaoAuthMoneyTransferParams, Vec<Proof>)> {
         let mut proofs = vec![];
-        let params = DaoAuthMoneyTransferParams {};
+
+        // Proof for each coin of verifiable encryption
+
+        let mut enc_attrs = vec![];
+        let mut proposal_coinattrs = self.proposal_coinattrs;
+        proposal_coinattrs.push(self.dao_coin_attrs.clone());
+        for coin_attrs in proposal_coinattrs {
+            let coin = coin_attrs.to_coin();
+
+            let ephem_secret = pallas::Base::random(&mut OsRng);
+            let ephem_pubkey = PublicKey::from_secret(ephem_secret.into());
+            let (ephem_x, ephem_y) = ephem_pubkey.xy();
+
+            let public_key = coin_attrs.public_key.inner();
+            let value_base = pallas::Base::from(coin_attrs.value);
+
+            let shared_point = public_key * mod_r_p(ephem_secret);
+            let shared_point_coords = shared_point.to_affine().coordinates().unwrap();
+            let (shared_point_x, shared_point_y) =
+                (*shared_point_coords.x(), *shared_point_coords.y());
+            let shared_secret = poseidon_hash([shared_point_x, shared_point_y]);
+            let enc_value = value_base + shared_secret;
+
+            let enc_token_id =
+                coin_attrs.token_id.inner() + poseidon_hash([shared_secret, pallas::Base::from(1)]);
+            let enc_serial =
+                coin_attrs.serial + poseidon_hash([shared_secret, pallas::Base::from(2)]);
+            let enc_spend_hook =
+                coin_attrs.spend_hook + poseidon_hash([shared_secret, pallas::Base::from(3)]);
+            let enc_user_data =
+                coin_attrs.user_data + poseidon_hash([shared_secret, pallas::Base::from(4)]);
+
+            let prover_witnesses = vec![
+                Witness::EcNiPoint(Value::known(public_key)),
+                Witness::Base(Value::known(value_base)),
+                Witness::Base(Value::known(coin_attrs.token_id.inner())),
+                Witness::Base(Value::known(coin_attrs.serial)),
+                Witness::Base(Value::known(coin_attrs.spend_hook)),
+                Witness::Base(Value::known(coin_attrs.user_data)),
+                Witness::Base(Value::known(ephem_secret)),
+            ];
+
+            let public_inputs = vec![
+                coin.inner(),
+                ephem_x,
+                ephem_y,
+                enc_value,
+                enc_token_id,
+                enc_serial,
+                enc_spend_hook,
+                enc_user_data,
+            ];
+
+            let circuit = ZkCircuit::new(prover_witnesses, auth_xfer_enc_coin_zkbin);
+            let proof =
+                Proof::create(auth_xfer_enc_coin_pk, &[circuit], &public_inputs, &mut OsRng)
+                    .expect("DAO::exec() proving error!)");
+            proofs.push(proof);
+
+            enc_attrs.push(DaoAuthCoinAttrs {
+                value: enc_value,
+                token_id: enc_token_id,
+                serial: enc_serial,
+                spend_hook: enc_spend_hook,
+                user_data: enc_user_data,
+                ephem_pubkey,
+            });
+        }
+
+        // Build the main proof
+
+        let params = DaoAuthMoneyTransferParams { enc_attrs };
 
         let dao_proposer_limit = pallas::Base::from(self.dao.proposer_limit);
         let dao_quorum = pallas::Base::from(self.dao.quorum);

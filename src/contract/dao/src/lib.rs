@@ -86,6 +86,9 @@ pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "DaoProposeMain";
 pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "DaoExec";
 /// zkas dao auth money_transfer circuit namespace
 pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "DaoAuthMoneyTransfer";
+/// zkas dao auth money_transfer encrypted coin circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str =
+    "DaoAuthMoneyTransferEncCoin";
 
 const SLOT_TIME: u64 = 90;
 const SECS_IN_DAY: u64 = 24 * 60 * 60;

@@ -22,7 +22,8 @@ use darkfi::{tx::Transaction, Result};
 use darkfi_dao_contract::{
     client::{DaoAuthMoneyTransferCall, DaoExecCall},
     model::{Dao, DaoBulla, DaoExecParams, DaoProposal},
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
+    DaoFunction, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
+    DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
 use darkfi_money_contract::{
     client::transfer_v1 as xfer,
@@ -68,6 +69,10 @@ impl TestHarness {
             .proving_keys
             .get(&DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS.to_string())
             .unwrap();
+        let (dao_auth_xfer_enc_coin_pk, dao_auth_xfer_enc_coin_zkbin) = self
+            .proving_keys
+            .get(&DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS.to_string())
+            .unwrap();
 
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoExec).unwrap();
         let timer = Instant::now();
@@ -105,7 +110,7 @@ impl TestHarness {
         }
 
         let mut outputs = vec![];
-        for coin_attr in proposal_coinattrs {
+        for coin_attr in proposal_coinattrs.clone() {
             assert_eq!(proposal_token_id, coin_attr.token_id);
             outputs.push(coin_attr);
         }
@@ -177,12 +182,17 @@ impl TestHarness {
         // Auth module
         let auth_xfer_builder = DaoAuthMoneyTransferCall {
             proposal: proposal.clone(),
+            proposal_coinattrs,
             dao: dao.clone(),
             input_user_data_blind,
             dao_coin_attrs,
         };
-        let (auth_xfer_params, auth_xfer_proofs) =
-            auth_xfer_builder.make(dao_auth_xfer_zkbin, dao_auth_xfer_pk)?;
+        let (auth_xfer_params, auth_xfer_proofs) = auth_xfer_builder.make(
+            dao_auth_xfer_zkbin,
+            dao_auth_xfer_pk,
+            dao_auth_xfer_enc_coin_zkbin,
+            dao_auth_xfer_enc_coin_pk,
+        )?;
         let mut data = vec![DaoFunction::AuthMoneyTransfer as u8];
         auth_xfer_params.encode(&mut data)?;
         let auth_xfer_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };

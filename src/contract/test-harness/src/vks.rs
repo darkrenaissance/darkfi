@@ -30,6 +30,7 @@ use darkfi::{
     Result,
 };
 use darkfi_dao_contract::{
+    DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
     DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
     DAO_CONTRACT_ZKAS_DAO_MINT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS,
     DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS,
@@ -49,8 +50,8 @@ use darkfi_serial::{deserialize, serialize};
 use log::debug;
 
 /// Update this if any circuits are changed
-const VKS_HASH: &str = "3571f82a2ff9f05dda4a280b6100aae77fc743f8dc2d6aa02c885ccc2a8f14c3";
-const PKS_HASH: &str = "f3399d23e4b917b2156e140227dac5ee5ba3977064ec2132954636441c4fbfb7";
+const VKS_HASH: &str = "8936e8806f8b05af04a5cbdd5dba446a7cb07ea46a9bcd0f2d7db6ff1c28da66";
+const PKS_HASH: &str = "4ca45a982ecc5e1689a95a6f2d341c61efd38a4b1ef6178eb6aecf9b8bf122a1";
 
 fn pks_path(typ: &str) -> Result<PathBuf> {
     let output = Command::new("git").arg("rev-parse").arg("--show-toplevel").output()?.stdout;
@@ -129,6 +130,7 @@ pub fn read_or_gen_vks_and_pks() -> Result<(Pks, Vks)> {
         &include_bytes!("../../dao/proof/dao-vote-main.zk.bin")[..],
         &include_bytes!("../../dao/proof/dao-exec.zk.bin")[..],
         &include_bytes!("../../dao/proof/dao-auth-money-transfer.zk.bin")[..],
+        &include_bytes!("../../dao/proof/dao-auth-money-transfer-enc-coin.zk.bin")[..],
         // Consensus
         &include_bytes!("../../consensus/proof/consensus_burn_v1.zk.bin")[..],
         &include_bytes!("../../consensus/proof/consensus_mint_v1.zk.bin")[..],
@@ -214,7 +216,8 @@ pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
             DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS |
             DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS |
             DAO_CONTRACT_ZKAS_DAO_EXEC_NS |
-            DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS => {
+            DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS |
+            DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS => {
                 let key = serialize(&namespace.as_str());
                 let value = serialize(&(bincode.clone(), vk.clone()));
                 dao_zkas_tree.insert(key, value)?;
