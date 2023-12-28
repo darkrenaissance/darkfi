@@ -57,11 +57,6 @@ use crate::{
     Error, Result,
 };
 
-// Default whitelist connections.
-// TODO: Add to net::Setting.
-const DEFAULT_WHITE_CONN_PERCENT: usize = 50;
-const DEFAULT_ANCHOR_CONN_COUNT: usize = 2;
-
 pub type OutboundSessionPtr = Arc<OutboundSession>;
 
 /// Defines outbound connections session.
@@ -190,22 +185,13 @@ impl Slot {
         self.process.stop().await
     }
 
-    // Following monero's hostlist connection algorithm, we first try to make connections to the
-    // addresses on our anchor list. We then find some whitelist connections according to the
-    // whitelist percent default. Finally, any remaining connections we make from the greylist.
-    //
-    // See:
-    // https://github.com/monero-project/monero/blob/ac02af92867590ca80b2779a7bbeafa99ff94dcb/src/p2p/net_node.inl#L1807
-    //
-    // TODO: read white/anchor/greylist from disk instead of getting from a seed node each time.
-    // TODO: clean up below code reuse and test! Currently untested.
-    //
-    // Fetch address, try to connect to it, call setup_channel.
+    // We first try to make connections to the addresses on our anchor list. We then find some
+    // whitelist connections according to the whitelist percent default. Finally, any remaining
+    // connections we make from the greylist.
     async fn run(self: Arc<Self>) {
         let hosts = self.p2p().hosts();
-        // TODO: reimplement
         let slot_count = self.p2p().settings().outbound_connections;
-        let white_count = slot_count * DEFAULT_WHITE_CONN_PERCENT / 100;
+        let white_count = slot_count * self.p2p().settings().white_connection_percent / 100;
 
         loop {
             // Activate the slot
@@ -236,14 +222,14 @@ impl Slot {
                 continue
             }
 
-            // Uo to DEFAULT_ANCHOR_CONN_COUNT connections:
+            // Uo to anchor_connection_count connections:
             //
             //  Select from the anchorlist
             //  If the anchorlist is empty, select from the whitelist
             //  If the whitelist is empty, select from the greylist
             //  If the greylist is empty, do peer discovery
             //
-            // Up to DEFAULT_WHITE_CONN_PERCENT connections:
+            // Up to white_connection_percent connections:
             //
             //  Select from the whitelist
             //  If the whitelist is empty, select from the greylist
@@ -254,7 +240,7 @@ impl Slot {
             //  Select from the greylist
             //  If the greylist is empty, do peer discovery
 
-            if connect_count < DEFAULT_ANCHOR_CONN_COUNT {
+            if connect_count < self.p2p().settings().anchor_connection_count {
                 match hosts.anchorlist_fetch_address_with_lock(self.p2p(), transports).await {
                     Some(host) => {
                         // Connect to whitelist addr
