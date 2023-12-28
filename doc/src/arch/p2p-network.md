@@ -207,8 +207,8 @@ addresses, append them to the whitelist. [STATUS: COMPLETE]
 
 * Create a new list in `hosts.rs` called `anchorlist`. `OutboundSession`
 first tries to connect to address in the `anchorlist` on `start()`. [STATUS:
-TODO]
+COMPLETE]
 
 * Call ping_node() on idle connections. If they do not respond, drop the
 associated connection and select a new peer from the whitelist. [STATUS:
-TODO]
+EVALUATE]
