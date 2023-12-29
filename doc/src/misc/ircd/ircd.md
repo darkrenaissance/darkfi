@@ -47,6 +47,13 @@ This is for Android 64 bit (which is most phones).
    the left to bring up the sidebar.
 7. Connect the RevolutionIRC frontend.
 
+## Logs
+
+The public channels have [logs available](https://agorism.dev/log/), and
+additionally there is a mirror on telegram @darkfi_darkirc channel.
+You can also message @darkirc_bot with "sub" to avoid doxxing your username.
+Use "unsub" to unsubscribe.
+
 ## Usage (DarkFi Network)
 
 Upon compiling `ircd` as described above, the preconfigured defaults
