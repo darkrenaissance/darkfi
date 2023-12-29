@@ -58,15 +58,8 @@ or need to be maintained:
   For example maintaining network resiliency. You can also look at apps like darkirc, and the event graph subsystem,
   and see how to make them more reliable. See also the task manager tau.
     * Implement resource manager. See its implementation in libp2p for inspiration.
-    * Improve hosts strategy using a white list, grey list and black list.
-      See [p2p Network: Common Mitigations](arch/p2p-network.md#common-mitigations) item called
-      *White, gray and black lists*.
 * Harder **crypto** tasks:
-    * DAO note verifiable encryption
-    * Generalize DAO proposals by committing to a set of coins rather than a single one.
-    * Add proposal_type field and proposal_data.
     * Money viewing keys
-    * Method to `export_public_inputs(calldata, "public.json")`
 * Eth-DarkFi bridge or atomic swaps. Atomic swaps is probably better since it's trustless and p2p.
 
 ## Mainnet tasks
@@ -88,8 +81,8 @@ _Tasks are in no particular order. Use common sense._
 9. Implement transaction fees logic
 10. Implement contracts deployment logic
 11. Revisit **all** the code inside `src/runtime/` and make sure it's safe
-12. Implement verifiable encryption for `DAO` payments
-13. `DAO` should be able to perform arbitrary contract calls, it should act as a voted multisig
+12. ~~Implement verifiable encryption for `DAO` payments~~
+13. ~~`DAO` should be able to perform arbitrary contract calls, it should act as a voted multisig~~
 14. Implement cross-chain atomic swaps (XMR, ETH, anything applicable)
 15. Rework the connection algo for p2p to use black list, grey and white list
   * https://eprint.iacr.org/2019/411.pdf (Section 2.2)
@@ -100,7 +93,7 @@ _Tasks are in no particular order. Use common sense._
     We can use this to model network behaviour.
 17. Implement address/secretkey differentiation
   * See [WIF](https://en.bitcoin.it/wiki/Wallet_import_format)
-18. Fix bugs and issues in the DAO implementation
+18. ~~Fix bugs and issues in the DAO implementation~~
 19. Perform thorough review of all contracts and their functionalities
 20. Randomize outputs in `Money::*`, and potentially elsewhere where applicable
   * This is so the change output isn't always in the same predictable place, and makes identifying
