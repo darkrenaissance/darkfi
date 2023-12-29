@@ -40,7 +40,10 @@ or need to be maintained:
 * **Documentation:** general documentation and code docs (cargo doc). This is a very 
   important work for example [overview](https://darkrenaissance.github.io/darkfi/arch/overview.html) 
   page is out of date.
-    * We need a tutorial on writing smart contracts.
+    * We need a tutorial on writing smart contracts. The tutorial could show
+      how to make an anon ZK credential for a service like a forum.
+    * Continuing on, it could show how to use the p2p network or event graph
+      to build an anonymous service like a forum.
 * **TODO** and **FIXME** are throughout the codebase. Find your favourite one and begin hacking.
     * DarkIRC encrypted DMs to nonexistant users should not be allowed.
     * Currently closing DarkIRC with ctrl-c stalls in `p2p.stop()`. This should be fixed.
