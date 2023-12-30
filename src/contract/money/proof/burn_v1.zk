@@ -39,8 +39,21 @@ witness "Burn_V1" {
 
 # The definition of our circuit
 circuit "Burn_V1" {
+    # Derive the public key used in the coin from its secret counterpart
+    pub = ec_mul_base(secret, NULLIFIER_K);
+    # Coin hash
+    coin = poseidon_hash(
+        ec_get_x(pub),
+        ec_get_y(pub),
+        value,
+        token,
+        serial,
+        spend_hook,
+        user_data,
+    );
+
     # Poseidon hash of the nullifier
-    nullifier = poseidon_hash(secret, serial);
+    nullifier = poseidon_hash(secret, coin);
     constrain_instance(nullifier);
 
     # Pedersen commitment for coin's value
@@ -57,25 +70,12 @@ circuit "Burn_V1" {
     token_commit = poseidon_hash(token, token_blind);
     constrain_instance(token_commit);
 
-    # Derive the public key used in the coin from its secret counterpart
-    pub = ec_mul_base(secret, NULLIFIER_K);
-    # Coin hash
-    C = poseidon_hash(
-        ec_get_x(pub),
-        ec_get_y(pub),
-        value,
-        token,
-        serial,
-        spend_hook,
-        user_data,
-    );
-
     # With this, we can actually produce a fake coin of value 0
     # above and use it as a dummy input. The inclusion merkle tree
     # has a 0x00 leaf at position 0, so zero_cond will output value
     # iff value is 0 - which is equivalent to 0x00 so that's the
     # trick we use to make the inclusion proof.
-    coin_incl = zero_cond(value, C);
+    coin_incl = zero_cond(value, coin);
 
     # Merkle root
     root = merkle_root(leaf_pos, path, coin_incl);

@@ -46,20 +46,6 @@ witness "Fee_V1" {
 }
 
 circuit "Fee_V1" {
-    nullifier = poseidon_hash(input_secret, input_serial);
-    constrain_instance(nullifier);
-
-    # Pedersen commitment for the input coin value
-    input_vcv = ec_mul_short(input_value, VALUE_COMMIT_VALUE);
-    input_vcr = ec_mul(input_value_blind, VALUE_COMMIT_RANDOM);
-    input_value_commit = ec_add(input_vcv, input_vcr);
-    constrain_instance(ec_get_x(input_value_commit));
-    constrain_instance(ec_get_y(input_value_commit));
-
-    # Commitment for the token ID
-    token_commit = poseidon_hash(token, token_blind);
-    constrain_instance(token_commit);
-
     # Derive the input coin
     pub = ec_mul_base(input_secret, NULLIFIER_K);
     pub_x = ec_get_x(pub);
@@ -73,6 +59,20 @@ circuit "Fee_V1" {
         input_spend_hook,
         input_user_data,
     );
+
+    nullifier = poseidon_hash(input_secret, input_coin);
+    constrain_instance(nullifier);
+
+    # Pedersen commitment for the input coin value
+    input_vcv = ec_mul_short(input_value, VALUE_COMMIT_VALUE);
+    input_vcr = ec_mul(input_value_blind, VALUE_COMMIT_RANDOM);
+    input_value_commit = ec_add(input_vcv, input_vcr);
+    constrain_instance(ec_get_x(input_value_commit));
+    constrain_instance(ec_get_y(input_value_commit));
+
+    # Commitment for the token ID
+    token_commit = poseidon_hash(token, token_blind);
+    constrain_instance(token_commit);
 
     # Merkle root
     root = merkle_root(input_leaf_pos, input_path, input_coin);

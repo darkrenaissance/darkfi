@@ -42,7 +42,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{compute_remainder_blind, Coin, MoneyNote, OwnCoin},
-    model::{CoinAttributes, Input, MoneyFeeParamsV1, Output},
+    model::{CoinAttributes, Input, MoneyFeeParamsV1, NullifierAttributes, Output},
 };
 
 /// Append a fee-paying call to the given `TransactionBuilder`.
@@ -264,7 +264,6 @@ fn create_fee_proof(
     token_blind: pallas::Base,
     signature_secret: SecretKey,
 ) -> Result<(Proof, FeeRevealed)> {
-    let nullifier = Nullifier::from(poseidon_hash([input.secret.inner(), input.note.serial]));
     let public_key = PublicKey::from_secret(input.secret);
     let signature_public = PublicKey::from_secret(signature_secret);
 
@@ -278,6 +277,9 @@ fn create_fee_proof(
         user_data: input.note.user_data,
     }
     .to_coin();
+
+    let nullifier =
+        NullifierAttributes { secret_key: input.secret, coin: input_coin.clone() }.to_nullifier();
 
     let merkle_root = {
         let position: u64 = input.leaf_position.into();

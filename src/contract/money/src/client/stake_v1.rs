@@ -37,7 +37,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{MoneyNote, OwnCoin},
-    model::{Input, MoneyStakeParamsV1},
+    model::{CoinAttributes, Input, MoneyStakeParamsV1, NullifierAttributes},
 };
 
 pub struct MoneyStakeCallDebris {
@@ -160,25 +160,25 @@ pub fn create_stake_burn_proof(
     user_data_blind: pallas::Base,
     signature_secret: SecretKey,
 ) -> Result<(Proof, MoneyStakeBurnRevealed)> {
-    let nullifier = Nullifier::from(poseidon_hash([input.secret.inner(), input.note.serial]));
     let public_key = PublicKey::from_secret(input.secret);
-    let (pub_x, pub_y) = public_key.xy();
-
     let signature_public = PublicKey::from_secret(signature_secret);
 
-    let coin = poseidon_hash([
-        pub_x,
-        pub_y,
-        pallas::Base::from(input.note.value),
-        input.note.token_id.inner(),
-        input.note.serial,
-        input.note.spend_hook,
-        input.note.user_data,
-    ]);
+    let coin = CoinAttributes {
+        public_key,
+        value: input.note.value,
+        token_id: input.note.token_id,
+        serial: input.note.serial,
+        spend_hook: input.note.spend_hook,
+        user_data: input.note.user_data,
+    }
+    .to_coin();
+
+    let nullifier =
+        NullifierAttributes { secret_key: input.secret, coin: coin.clone() }.to_nullifier();
 
     let merkle_root = {
         let position: u64 = input.leaf_position.into();
-        let mut current = MerkleNode::from(coin);
+        let mut current = MerkleNode::from(coin.inner());
         for (level, sibling) in input.merkle_path.iter().enumerate() {
             let level = level as u8;
             current = if position & (1 << level) == 0 {
