@@ -190,8 +190,8 @@ pub enum Error {
     #[error("P2P network stopped")]
     P2PNetworkStopped,
 
-    #[error("Invalid hostlist index")]
-    InvalidIndex,
+    #[error("No matching hostlist entry")]
+    HostDoesNotExist,
 
     // =============
     // Crypto errors

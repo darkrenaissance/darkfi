@@ -340,6 +340,7 @@ impl Hosts {
     pub async fn whitelist_store_or_update(&self, addrs: &[(Url, u64)]) -> Result<()> {
         debug!(target: "net::hosts::whitelist_store_or_update()", "[START]");
 
+        // No address filtering for whitelist (whitelist is created from greylist)
         for (addr, last_seen) in addrs {
             if !self.whitelist_contains(addr).await {
                 debug!(target: "net::hosts::whitelist_store_or_update()",
@@ -360,8 +361,7 @@ impl Hosts {
     pub async fn greylist_store_or_update(&self, addrs: &[(Url, u64)]) -> Result<()> {
         debug!(target: "net::hosts::store::greylist_store_or_update()", "[START]");
 
-        // We filter addresses before writing to the greylist.
-        // We don't need to do this for the whitelist (whitelist is created from greylist)
+        // Filter addresses before writing to the greylist.
         let filtered_addrs = self.filter_addresses(addrs).await;
         let filtered_addrs_len = filtered_addrs.len();
         for (addr, last_seen) in filtered_addrs {
@@ -384,6 +384,7 @@ impl Hosts {
     pub async fn anchorlist_store_or_update(&self, addrs: &[(Url, u64)]) -> Result<()> {
         debug!(target: "net::hosts::store::anchor_store_or_update()", "[START]");
 
+        // No address filtering for anchorlist (contains addresses we have already connected to)
         for (addr, last_seen) in addrs {
             if !self.anchorlist_contains(addr).await {
                 debug!(target: "net::hosts::anchorlist_store_or_update()",
@@ -747,7 +748,7 @@ impl Hosts {
                 return Ok(i)
             }
         }
-        return Err(Error::InvalidIndex)
+        return Err(Error::HostDoesNotExist)
     }
 
     /// Get the index for a given addr on the greylist.
@@ -758,7 +759,7 @@ impl Hosts {
                 return Ok(i)
             }
         }
-        return Err(Error::InvalidIndex)
+        return Err(Error::HostDoesNotExist)
     }
 
     /// Get the index for a given addr on the anchorlist.
@@ -769,7 +770,7 @@ impl Hosts {
                 return Ok(i)
             }
         }
-        return Err(Error::InvalidIndex)
+        return Err(Error::HostDoesNotExist)
     }
 
     /// Return all known whitelisted hosts
