@@ -19,7 +19,7 @@
 use darkfi_sdk::{
     crypto::{
         ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::PrimeField, poseidon_hash,
-        MerkleNode, Nullifier, PublicKey, TokenId,
+        MerkleNode, Nullifier, PublicKey, SecretKey, TokenId,
     },
     error::ContractError,
     pasta::pallas,
@@ -56,11 +56,17 @@ impl Coin {
     }
 }
 
+use core::str::FromStr;
+darkfi_sdk::fp_from_bs58!(Coin);
+darkfi_sdk::fp_to_bs58!(Coin);
+darkfi_sdk::ty_from_fp!(Coin);
+
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct CoinAttributes {
     pub public_key: PublicKey,
     pub value: u64,
     pub token_id: TokenId,
+    /// Simultaneously blinds the coin and ensures uniqueness
     pub serial: pallas::Base,
     pub spend_hook: pallas::Base,
     pub user_data: pallas::Base,
@@ -82,10 +88,21 @@ impl CoinAttributes {
     }
 }
 
-use core::str::FromStr;
-darkfi_sdk::fp_from_bs58!(Coin);
-darkfi_sdk::fp_to_bs58!(Coin);
-darkfi_sdk::ty_from_fp!(Coin);
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct NullifierAttributes {
+    /// Secret key for the public key in the coin.
+    /// We need some secret info to avoid revealing which coin this
+    /// nullifier is connected to. We use the secret key for that.
+    pub secret_key: SecretKey,
+    /// The corresponding coin being spent.
+    pub coin: Coin,
+}
+
+impl NullifierAttributes {
+    pub fn to_nullifier(&self) -> Nullifier {
+        Nullifier::from(poseidon_hash([self.secret_key.inner(), self.coin.inner()]))
+    }
+}
 
 /// A contract call's clear input
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
