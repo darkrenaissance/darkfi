@@ -411,15 +411,6 @@ impl Slot {
         debug!(target: "net::outbound_session::setup_channel", "register_channel {}", channel.clone().address());
         self.session().register_channel(channel.clone(), self.p2p().executor()).await?;
 
-        // Channel is now initialized. Timestamp this.
-        let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-
-        // Save this connection on the anchorlist.
-        self.p2p()
-            .hosts()
-            .anchorlist_store_or_update(&[(channel.address().clone(), last_seen)])
-            .await?;
-
         // Channel is now connected but not yet setup
         // Remove pending lock since register_channel will add the channel to p2p
         self.p2p().remove_pending(&addr).await;
