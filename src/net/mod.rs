@@ -16,6 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#[cfg(test)]
+mod tests;
+
 /// Defines how to decode generic messages as well as implementing the
 /// common network messages that are sent between nodes as described
 /// by the [`protocol`] submodule.
