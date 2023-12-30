@@ -689,11 +689,10 @@ impl Hosts {
 
     /// Check if the hostlist is empty.
     pub async fn is_empty_hostlist(&self) -> bool {
-        if self.is_empty_greylist().await {
-            return true
-        } else if self.is_empty_whitelist().await {
-            return true
-        } else if self.is_empty_anchorlist().await {
+        if self.is_empty_greylist().await &&
+            self.is_empty_whitelist().await &&
+            self.is_empty_anchorlist().await
+        {
             return true
         } else {
             return false
