@@ -2,7 +2,7 @@
 
 import re
 import irc
-from tweety.bot import Twitter
+from tweety import Twitter
 from urllib.parse import urlparse
 
 ## IRC Config
@@ -14,7 +14,7 @@ ircc = irc.IRC()
 ircc.connect(server, port, channels, botnick)
 
 while True:
-    text = ircc.get_response()
+    text = ircc.get_response().strip()
     if not len(text) > 0:
         continue
     print(text)
@@ -33,7 +33,7 @@ while True:
             print(f"tweet id: {tweetId}")
             if not (parsed_url.netloc.lower() in ['twitter.com','t.co', 'x.com'] and parsed_url.scheme == 'https'):
                 continue
-            app = Twitter()
+            app = Twitter("session")
             try:
                 tweet_text = app.tweet_detail(tweetId)
             except:
