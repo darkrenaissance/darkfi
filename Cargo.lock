@@ -2262,25 +2262,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e962a19be5cfc3f3bf6dd8f61eb50107f356ad6270fbb3ed41476571db78be5"
 
 [[package]]
-name = "dchat"
-version = "0.4.2"
-dependencies = [
- "async-trait",
- "darkfi",
- "darkfi-serial",
- "easy-parallel",
- "log",
- "serde",
- "signal-hook",
- "signal-hook-async-std",
- "simplelog",
- "smol",
- "structopt",
- "structopt-toml",
- "url",
-]
-
-[[package]]
 name = "dchatd"
 version = "0.4.2"
 dependencies = [
