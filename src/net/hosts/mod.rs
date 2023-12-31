@@ -17,7 +17,7 @@
  */
 
 /// Periodically probe entries in the greylist. Randomly selects a greylist entry and tries to
-/// establish a local connection to it using the method probe_node(), which creates a channel and 
+/// establish a local connection to it using the method probe_node(), which creates a channel and
 /// does a version exchange using perform_handshake_protocols().
 ///
 /// If successful, the entry is removed from the greylist and added to the whitelist with an
@@ -31,7 +31,7 @@ pub(super) mod refinery;
 /// The main interface for interacting with the hostlist, which is stored in three sections: white,
 /// grey and anchorlists. The whitelist contains hosts that have been seen recently, the anchorlist
 /// contains hosts that we have been able to establish a connection to, and the greylist is an
-/// intermediary host list of recently received hosts that is periodically refreshed using the 
+/// intermediary host list of recently received hosts that is periodically refreshed using the
 /// greylist refinery.
 ///
 /// Store contains various methods for reading from, quering and writing to the hostlists. It is
