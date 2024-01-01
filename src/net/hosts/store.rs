@@ -454,6 +454,7 @@ impl Hosts {
             let (index, entry) = self.get_anchorlist_entry_at_addr(addr).await?;
             self.anchorlist_remove(addr, index).await;
             self.greylist_store_or_update(&[entry]).await?;
+
             Ok(())
         } else if self.whitelist_contains(addr).await {
             debug!(target: "net::store::downgrade_host()", 
@@ -461,11 +462,14 @@ impl Hosts {
             let (index, entry) = self.get_whitelist_entry_at_addr(addr).await?;
             self.whitelist_remove(addr, index).await;
             self.greylist_store_or_update(&[entry]).await?;
+
             Ok(())
         } else {
             debug!(target: "net::store::downgrade_host()", 
                    "Greylist entry detected! Do nothing for now...");
-            // TODO
+            let index = self.get_greylist_index_at_addr(addr).await?;
+            self.greylist_remove(addr, index).await;
+
             Ok(())
         }
     }
