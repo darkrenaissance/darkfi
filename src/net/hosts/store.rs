@@ -55,6 +55,7 @@ const GREYLIST_MAX_LEN: usize = 2000;
 /// Manages a store of network addresses
 // TODO: Test the performance overhead of using vectors for white/grey/anchor lists.
 // TODO: Check whether anchorlist has a max size in Monero.
+// TODO: we can probably clean up a lot of the repetitive code in this module.
 pub struct Hosts {
     // Intermediary node list that is periodically probed and updated to whitelist.
     pub greylist: RwLock<Vec<(Url, u64)>>,
@@ -399,7 +400,7 @@ impl Hosts {
                 debug!(target: "net::hosts::anchorlist_store_or_update()",
         "We have this entry in the anchorlist. Updating last seen...");
 
-                let index = self.get_anchorlist_index_at_addr(addr).await?;
+                let (index, entry) = self.get_anchorlist_entry_at_addr(addr).await?;
                 self.anchorlist_update_last_seen(addr, last_seen.clone(), index).await;
             }
         }
@@ -444,6 +445,29 @@ impl Hosts {
             whitelist.sort_by_key(|entry| entry.1);
         }
         debug!(target: "net::hosts::store::whitelist_store()", "[END]");
+    }
+
+    pub async fn downgrade_host(&self, addr: &Url) -> Result<()> {
+        if self.anchorlist_contains(addr).await {
+            debug!(target: "net::store::downgrade_host()", 
+                   "Removing non responsive peer from anchorlist");
+            let (index, entry) = self.get_anchorlist_entry_at_addr(addr).await?;
+            self.anchorlist_remove(addr, index).await;
+            self.greylist_store_or_update(&[entry]).await?;
+            Ok(())
+        } else if self.whitelist_contains(addr).await {
+            debug!(target: "net::store::downgrade_host()", 
+                   "Removing non responsive peer from whitelist");
+            let (index, entry) = self.get_whitelist_entry_at_addr(addr).await?;
+            self.whitelist_remove(addr, index).await;
+            self.greylist_store_or_update(&[entry]).await?;
+            Ok(())
+        } else {
+            debug!(target: "net::store::downgrade_host()", 
+                   "Greylist entry detected! Do nothing for now...");
+            // TODO
+            Ok(())
+        }
     }
 
     // Append host to the anchorlist. Called after we have established a successful connection to a
@@ -521,6 +545,16 @@ impl Hosts {
 
         // Sort the list by last_seen.
         anchorlist.sort_by_key(|entry| entry.1);
+    }
+
+    pub async fn whitelist_remove(&self, addr: &Url, position: usize) {
+        debug!(target: "net::refinery::run()", "Removing disconnected peer {} from whitelist", addr);
+        let mut whitelist = self.whitelist.write().await;
+
+        whitelist.remove(position);
+
+        // Sort the list by last_seen.
+        whitelist.sort_by_key(|entry| entry.1);
     }
 
     pub async fn subscribe_store(&self) -> Result<Subscription<usize>> {
@@ -743,6 +777,17 @@ impl Hosts {
         return false
     }
 
+    /// Get the index for a given addr on the anchorlist.
+    pub async fn get_anchorlist_index_at_addr(&self, addr: &Url) -> Result<usize> {
+        let anchorlist = self.anchorlist.read().await;
+        for (i, (url, time)) in anchorlist.iter().enumerate() {
+            if url == addr {
+                return Ok(i)
+            }
+        }
+        return Err(Error::HostDoesNotExist)
+    }
+
     /// Get the index for a given addr on the whitelist.
     pub async fn get_whitelist_index_at_addr(&self, addr: &Url) -> Result<usize> {
         let whitelist = self.whitelist.read().await;
@@ -765,12 +810,22 @@ impl Hosts {
         return Err(Error::HostDoesNotExist)
     }
 
-    /// Get the index for a given addr on the anchorlist.
-    pub async fn get_anchorlist_index_at_addr(&self, addr: &Url) -> Result<usize> {
-        let anchorlist = self.anchorlist.read().await;
-        for (i, (url, _time)) in anchorlist.iter().enumerate() {
+    /// Get the index and entry for a given addr on the whitelist.
+    pub async fn get_whitelist_entry_at_addr(&self, addr: &Url) -> Result<(usize, (Url, u64))> {
+        let whitelist = self.whitelist.read().await;
+        for (i, (url, time)) in whitelist.iter().enumerate() {
             if url == addr {
-                return Ok(i)
+                return Ok((i, (url.clone(), time.clone())))
+            }
+        }
+        return Err(Error::HostDoesNotExist)
+    }
+    /// Get the index and entry for a given addr on the anchorlist.
+    pub async fn get_anchorlist_entry_at_addr(&self, addr: &Url) -> Result<(usize, (Url, u64))> {
+        let anchorlist = self.anchorlist.read().await;
+        for (i, (url, time)) in anchorlist.iter().enumerate() {
+            if url == addr {
+                return Ok((i, (url.clone(), time.clone())))
             }
         }
         return Err(Error::HostDoesNotExist)
@@ -878,9 +933,7 @@ impl Hosts {
         debug!(target: "store::whitelist_fetch_with_schemes", "[START]");
         let mut ret = vec![];
 
-        // Anchorlist is empty!
         if !self.is_empty_whitelist().await {
-            // Select from the whitelist providing it's not empty.
             let whitelist = self.whitelist.read().await;
 
             let mut limit = match limit {
@@ -894,10 +947,11 @@ impl Hosts {
                     limit -= 1;
                     if limit == 0 {
                         debug!(target: "store::whitelist_fetch_with_schemes",
-                           "Found matching scheme, returning");
+                           "Found matching white scheme, returning");
                         return ret
                     }
                 } else {
+                    // TODO: select from greylist?
                     debug!(target: "store::whitelist_fetch_with_schemes",
                           "No matching schemes");
                 }
@@ -919,7 +973,7 @@ impl Hosts {
                         limit -= 1;
                         if limit == 0 {
                             debug!(target: "store::whitelist_fetch_with_schemes",
-                           "Found matching scheme, returning");
+                           "Found matching greylist scheme, returning");
                             return ret
                         }
                     } else {
@@ -992,7 +1046,7 @@ impl Hosts {
                     limit -= 1;
                     if limit == 0 {
                         debug!(target: "store::anchorlist_fetch_with_schemes",
-                           "Found matching scheme, returning");
+                           "Found matching anchor scheme, returning {:?}", ret);
                         return ret
                     }
                 } else {
@@ -1021,7 +1075,7 @@ impl Hosts {
                         limit -= 1;
                         if limit == 0 {
                             debug!(target: "store::anchorlist_fetch_with_schemes",
-                           "Found matching scheme, returning");
+                           "Found matching white scheme, returning {:?}", ret);
                             return ret
                         }
                     } else {
@@ -1046,7 +1100,7 @@ impl Hosts {
                             limit -= 1;
                             if limit == 0 {
                                 debug!(target: "store::anchorlist_fetch_with_schemes",
-                           "Found matching scheme, returning");
+                           "Found matching grey scheme, returning {:?}", ret);
                                 return ret
                             }
                         } else {

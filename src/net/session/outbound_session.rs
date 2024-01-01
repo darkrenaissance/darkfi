@@ -201,6 +201,8 @@ impl Slot {
         //  If the whitelist is empty, select from the greylist
         //  If the greylist is empty, do peer discovery
         if connect_count < self.p2p().settings().anchor_connection_count {
+            debug!(target: "outbound_session::fetch_address()",
+            "First two connections- prefer anchor connections");
             return hosts.anchorlist_fetch_address_with_lock(self.p2p(), transports).await
         }
         // Up to white_connection_percent connections:
@@ -209,6 +211,8 @@ impl Slot {
         //  If the whitelist is empty, select from the greylist
         //  If the greylist is empty, do peer discovery
         if connect_count < white_count {
+            debug!(target: "outbound_session::fetch_address()",
+            "Next N connections- prefer white connections");
             return hosts.whitelist_fetch_address_with_lock(self.p2p(), transports).await
         }
         // All other connections:
@@ -216,6 +220,8 @@ impl Slot {
         //  Select from the greylist
         //  If the greylist is empty, do peer discovery
         if connect_count < slot_count {
+            debug!(target: "outbound_session::fetch_address()",
+            "All other connections- get grey connections");
             return hosts.greylist_fetch_address_with_lock(self.p2p(), transports).await
         } else {
             return None
@@ -368,6 +374,10 @@ impl Slot {
                     "[P2P] Unable to connect outbound slot #{} [{}]: {}",
                     self.slot, addr, e
                 );
+
+                // At this point we've failed to connect.
+                // If the host is in the anchorlist or whitelist, downgrade it to greylist.
+                self.p2p().hosts().downgrade_host(&addr).await?;
 
                 // Remove connection from pending
                 self.p2p().remove_pending(&addr).await;
