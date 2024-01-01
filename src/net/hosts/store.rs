@@ -98,6 +98,7 @@ impl Hosts {
         p2p: P2pPtr,
         transports: &[String],
     ) -> Option<(Url, u64)> {
+        debug!(target: "store", "whitelist_fetch_address_with_lock() [START]");
         // Collect hosts
         let mut hosts = vec![];
 
@@ -179,6 +180,7 @@ impl Hosts {
         p2p: P2pPtr,
         transports: &[String],
     ) -> Option<(Url, u64)> {
+        debug!(target: "store", "greylist_fetch_address_with_lock() [START]");
         // Collect hosts
         let mut hosts = vec![];
 
@@ -254,11 +256,13 @@ impl Hosts {
 
         None
     }
+
     pub async fn anchorlist_fetch_address_with_lock(
         &self,
         p2p: P2pPtr,
         transports: &[String],
     ) -> Option<(Url, u64)> {
+        debug!(target: "store", "anchorlist_fetch_address_with_lock() [START]");
         // Collect hosts
         let mut hosts = vec![];
 
@@ -872,41 +876,55 @@ impl Hosts {
         limit: Option<usize>,
     ) -> Vec<(Url, u64)> {
         debug!(target: "store::whitelist_fetch_with_schemes", "[START]");
-        let whitelist = self.whitelist.read().await;
-
-        let mut limit = match limit {
-            Some(l) => l.min(whitelist.len()),
-            None => whitelist.len(),
-        };
         let mut ret = vec![];
 
-        if limit == 0 {
-            return ret
-        }
+        // Anchorlist is empty!
+        if !self.is_empty_whitelist().await {
+            // Select from the whitelist providing it's not empty.
+            let whitelist = self.whitelist.read().await;
 
-        for (addr, last_seen) in whitelist.iter() {
-            if schemes.contains(&addr.scheme().to_string()) {
-                ret.push((addr.clone(), *last_seen));
-                limit -= 1;
-                if limit == 0 {
-                    debug!(target: "store::whitelist_fetch_with_schemes",
-                           "Found matching scheme, returning");
-                    return ret
-                }
-            }
-        }
+            let mut limit = match limit {
+                Some(l) => l.min(whitelist.len()),
+                None => whitelist.len(),
+            };
 
-        // If we didn't find any, pick some from the greylist
-        if ret.is_empty() {
-            warn!(target: "store::whitelist_fetch_with_schemes",
-                  "No matching schemes! Selecting a peer from the greylist.");
-            let greylist = self.greylist.read().await;
-            for (addr, last_seen) in greylist.iter() {
+            for (addr, last_seen) in whitelist.iter() {
                 if schemes.contains(&addr.scheme().to_string()) {
                     ret.push((addr.clone(), *last_seen));
                     limit -= 1;
                     if limit == 0 {
-                        break
+                        debug!(target: "store::whitelist_fetch_with_schemes",
+                           "Found matching scheme, returning");
+                        return ret
+                    }
+                } else {
+                    debug!(target: "store::whitelist_fetch_with_schemes",
+                          "No matching schemes");
+                }
+            }
+        } else {
+            // Whitelist is empty!
+            if !self.is_empty_greylist().await {
+                // Select from the anchorlist providing it's not empty.
+                let greylist = self.greylist.read().await;
+
+                let mut limit = match limit {
+                    Some(l) => l.min(greylist.len()),
+                    None => greylist.len(),
+                };
+
+                for (addr, last_seen) in greylist.iter() {
+                    if schemes.contains(&addr.scheme().to_string()) {
+                        ret.push((addr.clone(), *last_seen));
+                        limit -= 1;
+                        if limit == 0 {
+                            debug!(target: "store::whitelist_fetch_with_schemes",
+                           "Found matching scheme, returning");
+                            return ret
+                        }
+                    } else {
+                        debug!(target: "store::whitelist_fetch_with_schemes",
+                          "No matching schemes");
                     }
                 }
             }
@@ -957,41 +975,84 @@ impl Hosts {
         limit: Option<usize>,
     ) -> Vec<(Url, u64)> {
         debug!(target: "store::anchorlist_fetch_with_schemes", "[START]");
-        let anchorlist = self.anchorlist.read().await;
-
-        let mut limit = match limit {
-            Some(l) => l.min(anchorlist.len()),
-            None => anchorlist.len(),
-        };
         let mut ret = vec![];
 
-        if limit == 0 {
-            return ret
-        }
+        if !self.is_empty_anchorlist().await {
+            // Select from the anchorlist providing it's not empty.
+            let anchorlist = self.anchorlist.read().await;
 
-        for (addr, last_seen) in anchorlist.iter() {
-            if schemes.contains(&addr.scheme().to_string()) {
-                ret.push((addr.clone(), *last_seen));
-                limit -= 1;
-                if limit == 0 {
-                    debug!(target: "store::anchorlist_fetch_with_schemes",
-                           "Found matching scheme, returning");
-                    return ret
-                }
-            }
-        }
+            let mut limit = match limit {
+                Some(l) => l.min(anchorlist.len()),
+                None => anchorlist.len(),
+            };
 
-        // If we didn't find any, pick some from the whitelist
-        if ret.is_empty() {
-            warn!(target: "store::whitelist_fetch_with_schemes",
-                  "No matching schemes! Selecting a peer from the whitelist.");
-            let whitelist = self.whitelist.read().await;
-            for (addr, last_seen) in whitelist.iter() {
+            for (addr, last_seen) in anchorlist.iter() {
                 if schemes.contains(&addr.scheme().to_string()) {
                     ret.push((addr.clone(), *last_seen));
                     limit -= 1;
                     if limit == 0 {
-                        break
+                        debug!(target: "store::anchorlist_fetch_with_schemes",
+                           "Found matching scheme, returning");
+                        return ret
+                    }
+                } else {
+                    debug!(target: "store::anchorlist_fetch_with_schemes",
+                          "No matching schemes!!");
+                }
+            }
+        } else {
+            // Anchorlist is empty!
+            if !self.is_empty_whitelist().await {
+                // Select from the whitelist providing it's not empty.
+                let whitelist = self.whitelist.read().await;
+
+                let mut limit = match limit {
+                    Some(l) => l.min(whitelist.len()),
+                    None => whitelist.len(),
+                };
+
+                if limit == 0 {
+                    return ret
+                }
+
+                for (addr, last_seen) in whitelist.iter() {
+                    if schemes.contains(&addr.scheme().to_string()) {
+                        ret.push((addr.clone(), *last_seen));
+                        limit -= 1;
+                        if limit == 0 {
+                            debug!(target: "store::anchorlist_fetch_with_schemes",
+                           "Found matching scheme, returning");
+                            return ret
+                        }
+                    } else {
+                        debug!(target: "store::anchorlist_fetch_with_schemes",
+                          "No matching schemes!!");
+                    }
+                }
+            } else {
+                // Whitelist is empty!
+                if !self.is_empty_greylist().await {
+                    // Select from the anchorlist providing it's not empty.
+                    let greylist = self.greylist.read().await;
+
+                    let mut limit = match limit {
+                        Some(l) => l.min(greylist.len()),
+                        None => greylist.len(),
+                    };
+
+                    for (addr, last_seen) in greylist.iter() {
+                        if schemes.contains(&addr.scheme().to_string()) {
+                            ret.push((addr.clone(), *last_seen));
+                            limit -= 1;
+                            if limit == 0 {
+                                debug!(target: "store::anchorlist_fetch_with_schemes",
+                           "Found matching scheme, returning");
+                                return ret
+                            }
+                        } else {
+                            debug!(target: "store::anchorlist_fetch_with_schemes",
+                          "No matching schemes!!");
+                        }
                     }
                 }
             }

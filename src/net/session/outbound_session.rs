@@ -260,10 +260,10 @@ impl Slot {
             }
 
             let addr = if let Some(addr) = self.fetch_address(connect_count, transports).await {
+                debug!(target: "outbound_session::run()", "Fetched address: {:?}", addr);
                 addr
-            //let addr = if let Some(addr) = hosts.greylist_fetch_address_with_lock(self.p2p(), transports).await {
-            //    addr
             } else {
+                debug!(target: "outbound_session::run()", "No address found! Activating peer discovery...");
                 dnetev!(self, OutboundSlotSleeping, {
                     slot: self.slot,
                 });
