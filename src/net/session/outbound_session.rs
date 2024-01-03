@@ -210,7 +210,7 @@ impl Slot {
         //  Select from the whitelist
         //  If the whitelist is empty, select from the greylist
         //  If the greylist is empty, do peer discovery
-        if connect_count < white_count {
+        else if connect_count < white_count {
             debug!(target: "outbound_session::fetch_address()",
             "Next N connections- prefer white connections");
             return hosts.whitelist_fetch_address_with_lock(self.p2p(), transports).await
@@ -219,7 +219,7 @@ impl Slot {
         //
         //  Select from the greylist
         //  If the greylist is empty, do peer discovery
-        if connect_count < slot_count {
+        else if connect_count < slot_count {
             debug!(target: "outbound_session::fetch_address()",
             "All other connections- get grey connections");
             return hosts.greylist_fetch_address_with_lock(self.p2p(), transports).await
