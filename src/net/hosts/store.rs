@@ -1361,6 +1361,98 @@ mod tests {
     }
 
     #[test]
+    fn test_fetch_address() {
+        smol::block_on(async {
+            let connect_count = 8;
+            let n_anchor = 10;
+            let n_white = 10;
+            let n_grey = 10;
+
+            let mut anchor_urls = vec![];
+            let mut white_urls = vec![];
+            let mut grey_urls = vec![];
+            let mut fetched_urls = vec![];
+
+            let ex = Arc::new(Executor::new());
+
+            let settings = Settings {
+                outbound_connections: 8,
+                allowed_transports: vec!["tcp".to_string()],
+                ..Default::default()
+            };
+            let p2p = P2p::new(settings, ex.clone()).await;
+            let hosts = p2p.hosts();
+
+            for i in 0..n_anchor {
+                anchor_urls.push(Url::parse(&format!("tcp://anchorlist{}:123", i)).unwrap());
+            }
+            for i in 0..n_white {
+                white_urls.push(Url::parse(&format!("tcp://whitelist{}:123", i)).unwrap());
+            }
+            for i in 0..n_grey {
+                grey_urls.push(Url::parse(&format!("tcp://greylist{}:123", i)).unwrap());
+            }
+
+            // Build up a hostlist
+            for anchor in &anchor_urls {
+                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                hosts.anchorlist_store(anchor.clone(), last_seen).await;
+            }
+            for white in &white_urls {
+                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                hosts.whitelist_store(white.clone(), last_seen).await;
+            }
+            for grey in &grey_urls {
+                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                hosts.greylist_store(grey.clone(), last_seen).await;
+            }
+
+            assert!(!hosts.is_empty_anchorlist().await);
+            assert!(!hosts.is_empty_whitelist().await);
+            assert!(!hosts.is_empty_greylist().await);
+
+            let transports = &p2p.settings().allowed_transports;
+            let slot_count = p2p.settings().outbound_connections;
+            let white_count = slot_count * p2p.settings().white_connection_percent / 100;
+            let anchor_count = p2p.settings().anchor_connection_count;
+
+            for i in 0..connect_count {
+                if i < anchor_count {
+                    fetched_urls.push(
+                        hosts
+                            .anchorlist_fetch_address_with_lock(p2p.clone(), transports)
+                            .await
+                            .unwrap(),
+                    );
+                } else if i < white_count {
+                    fetched_urls.push(
+                        hosts
+                            .whitelist_fetch_address_with_lock(p2p.clone(), transports)
+                            .await
+                            .unwrap(),
+                    );
+                } else if i < slot_count {
+                    fetched_urls.push(
+                        hosts
+                            .greylist_fetch_address_with_lock(p2p.clone(), transports)
+                            .await
+                            .unwrap(),
+                    );
+                }
+            }
+
+            assert!(anchor_urls.iter().any(|u| u.clone() == fetched_urls[0].0));
+            assert!(anchor_urls.iter().any(|u| u.clone() == fetched_urls[1].0));
+            assert!(white_urls.iter().any(|u| u.clone() == fetched_urls[2].0));
+            assert!(white_urls.iter().any(|u| u.clone() == fetched_urls[3].0));
+            assert!(grey_urls.iter().any(|u| u.clone() == fetched_urls[4].0));
+            assert!(grey_urls.iter().any(|u| u.clone() == fetched_urls[5].0));
+            assert!(grey_urls.iter().any(|u| u.clone() == fetched_urls[6].0));
+            assert!(grey_urls.iter().any(|u| u.clone() == fetched_urls[7].0));
+        })
+    }
+
+    #[test]
     fn test_anchorlist_fetch() {
         smol::block_on(async {
             let n_anchor = 5;
