@@ -364,18 +364,18 @@ impl Hosts {
     }
 
     pub async fn greylist_store_or_update(&self, addrs: &[(Url, u64)]) -> Result<()> {
-        debug!(target: "net::hosts::store::greylist_store_or_update()", "[START]");
+        debug!(target: "store::greylist_store_or_update()", "[START]");
 
         // Filter addresses before writing to the greylist.
         let filtered_addrs = self.filter_addresses(addrs).await;
         let filtered_addrs_len = filtered_addrs.len();
         for (addr, last_seen) in filtered_addrs {
             if !self.hostlist_contains(&addr).await {
-                debug!(target: "net::hosts::store::greylist_store_or_update()", "We do not have this entry in the hostlist. Adding to store...");
+                debug!(target: "store::greylist_store_or_update()", "We do not have this entry in the hostlist. Adding to store...");
 
                 self.greylist_store(addr.clone(), last_seen.clone()).await;
             } else {
-                debug!(target: "net::hosts::store::greylist_store_or_update()",
+                debug!(target: "store::greylist_store_or_update()",
                 "We have this entry in the greylist. Updating last seen...");
 
                 let index = self.get_greylist_index_at_addr(&addr).await?;
@@ -387,7 +387,7 @@ impl Hosts {
     }
 
     pub async fn anchorlist_store_or_update(&self, addrs: &[(Url, u64)]) -> Result<()> {
-        debug!(target: "net::hosts::store::anchor_store_or_update()", "[START]");
+        debug!(target: "store::anchor_store_or_update()", "[START]");
 
         // No address filtering for anchorlist (contains addresses we have already connected to)
         for (addr, last_seen) in addrs {
@@ -436,15 +436,15 @@ impl Hosts {
         // Remove oldest element if the whitelist reaches max size.
         if whitelist.len() == WHITELIST_MAX_LEN {
             let last_entry = whitelist.pop().unwrap();
-            debug!(target: "net::hosts::store::whitelist_store()", "Whitelist reached max size. Removed {:?}", last_entry);
+            debug!(target: "store::whitelist_store()", "Whitelist reached max size. Removed {:?}", last_entry);
         } else {
-            debug!(target: "net::hosts::store::whitelist_store()", "Inserting {}. Last seen {:?}", addr, last_seen);
+            debug!(target: "store::whitelist_store()", "Inserting {}. Last seen {:?}", addr, last_seen);
             whitelist.push((addr, last_seen));
 
             // Sort the list by last_seen.
             whitelist.sort_by_key(|entry| entry.1);
         }
-        debug!(target: "net::hosts::store::whitelist_store()", "[END]");
+        debug!(target: "store::whitelist_store()", "[END]");
     }
 
     pub async fn downgrade_host(&self, addr: &Url) -> Result<()> {
@@ -491,7 +491,7 @@ impl Hosts {
 
     // Update the last_seen field of a peer on the whitelist.
     pub async fn whitelist_update_last_seen(&self, addr: &Url, last_seen: u64, index: usize) {
-        debug!(target: "net::hosts::store::whitelist_update_last_seen()", "[START]");
+        debug!(target: "store::whitelist_update_last_seen()", "[START]");
 
         let mut whitelist = self.whitelist.write().await;
 
@@ -500,7 +500,7 @@ impl Hosts {
         // Sort the list by last_seen.
         whitelist.sort_by_key(|entry| entry.1);
 
-        debug!(target: "net::hosts::store::whitelist_update_last_seen()", "[END]");
+        debug!(target: "store::whitelist_update_last_seen()", "[END]");
     }
 
     // Update the last_seen field of a peer on the greylist.
@@ -514,12 +514,12 @@ impl Hosts {
         // Sort the list by last_seen.
         greylist.sort_by_key(|entry| entry.1);
 
-        debug!(target: "net::hosts::store::greylist_update_last_seen()", "[END]");
+        debug!(target: "store::greylist_update_last_seen()", "[END]");
     }
 
     // Update the last_seen field of a peer on the anchorlist.
     pub async fn anchorlist_update_last_seen(&self, addr: &Url, last_seen: u64, index: usize) {
-        debug!(target: "net::hosts::store::anchorlist_update_last_seen()", "[START]");
+        debug!(target: "store::anchorlist_update_last_seen()", "[START]");
 
         let mut anchorlist = self.anchorlist.write().await;
 
@@ -528,7 +528,7 @@ impl Hosts {
         // Sort the list by last_seen.
         anchorlist.sort_by_key(|entry| entry.1);
 
-        debug!(target: "net::hosts::store::anchorlist_update_last_seen()", "[END]");
+        debug!(target: "store::anchorlist_update_last_seen()", "[END]");
     }
 
     pub async fn greylist_remove(&self, addr: &Url, position: usize) {
@@ -893,8 +893,6 @@ impl Hosts {
         }
 
         // Grab random ones
-        debug!(target: "store::whitelist_fetch_n_random_with_schemes",
-               "whitelist is not empty! sending whitelist contents");
         let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
         urls.iter().map(|&url| url.clone()).collect()
     }
@@ -920,9 +918,6 @@ impl Hosts {
         }
 
         // Grab random ones
-        debug!(target: "store::whitelist_fetch_n_random_excluding_schemes",
-               "whitelist is not empty! sending whitelist contents");
-
         let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
         urls.iter().map(|&url| url.clone()).collect()
     }
@@ -1178,7 +1173,7 @@ impl Hosts {
 
         let contents = load_file(&path);
         if let Err(e) = contents {
-            warn!(target: "net::hosts::store", "Failed retrieving saved hosts: {}", e);
+            warn!(target: "store", "Failed retrieving saved hosts: {}", e);
             return Ok(())
         }
 
@@ -1188,7 +1183,7 @@ impl Hosts {
             let url = match Url::parse(data[1]) {
                 Ok(u) => u,
                 Err(e) => {
-                    debug!(target: "net::hosts::store", "load_hosts(): Skipping malformed URL {}", e);
+                    debug!(target: "store", "load_hosts(): Skipping malformed URL {}", e);
                     continue
                 }
             };
@@ -1196,7 +1191,7 @@ impl Hosts {
             let last_seen = match data[2].parse::<u64>() {
                 Ok(t) => t,
                 Err(e) => {
-                    debug!(target: "net::hosts::store", "load_hosts(): Skipping malformed last seen {}", e);
+                    debug!(target: "store", "load_hosts(): Skipping malformed last seen {}", e);
                     continue
                 }
             };
@@ -1212,7 +1207,7 @@ impl Hosts {
                     self.anchorlist_store(url, last_seen).await;
                 }
                 _ => {
-                    debug!(target: "net::hosts::store", "load_hosts(): Malformed list name...");
+                    debug!(target: "store", "load_hosts(): Malformed list name...");
                 }
             }
         }
@@ -1233,10 +1228,10 @@ impl Hosts {
         }
 
         if !tsv.eq("") {
-            info!(target: "net::hosts::store", "Saving hosts to: {:?}",
+            info!(target: "store", "Saving hosts to: {:?}",
                   path);
             if let Err(e) = save_file(&path, &tsv) {
-                error!(target: "net::hosts::store", "Failed saving hosts: {}", e);
+                error!(target: "store", "Failed saving hosts: {}", e);
             }
         }
 
@@ -1246,8 +1241,12 @@ impl Hosts {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::super::settings::Settings, *};
-    use std::time::UNIX_EPOCH;
+    use super::{
+        super::super::{settings::Settings, P2p},
+        *,
+    };
+    use smol::Executor;
+    use std::{sync::Arc, time::UNIX_EPOCH};
 
     #[test]
     fn test_is_local_host() {
@@ -1358,6 +1357,141 @@ mod tests {
 
             assert!(!hosts.is_empty_whitelist().await);
             assert!(hosts.whitelist_contains(&url).await);
+        });
+    }
+
+    #[test]
+    fn test_anchorlist_fetch() {
+        smol::block_on(async {
+            let n_anchor = 5;
+            let n_white = 5;
+            let n_grey = 10;
+
+            let mut anchor_urls = vec![];
+            let mut white_urls = vec![];
+            let mut grey_urls = vec![];
+
+            let ex = Arc::new(Executor::new());
+            let ex_ = ex.clone();
+
+            let settings =
+                Settings { allowed_transports: vec!["tcp".to_string()], ..Default::default() };
+
+            let p2p = P2p::new(settings, ex.clone()).await;
+            let hosts = p2p.hosts();
+
+            // Retrieve outbound transports
+            let transports = &p2p.settings().allowed_transports;
+
+            // First test that if we have anchorlist connections in our host list,
+            // those will be selected first.
+            for i in 0..n_anchor {
+                anchor_urls.push(Url::parse(&format!("tcp://anchorlist{}:123", i)).unwrap());
+            }
+            for i in 0..n_white {
+                white_urls.push(Url::parse(&format!("tcp://whitelist{}:123", i)).unwrap());
+            }
+            for i in 0..n_grey {
+                grey_urls.push(Url::parse(&format!("tcp://greylist{}:123", i)).unwrap());
+            }
+
+            // Build up a hostlist
+            for anchor in &anchor_urls {
+                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                hosts.anchorlist_store(anchor.clone(), last_seen).await;
+            }
+            for white in &white_urls {
+                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                hosts.whitelist_store(white.clone(), last_seen).await;
+            }
+            for grey in &grey_urls {
+                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                hosts.greylist_store(grey.clone(), last_seen).await;
+            }
+
+            assert!(!hosts.is_empty_anchorlist().await);
+            assert!(!hosts.is_empty_whitelist().await);
+            assert!(!hosts.is_empty_greylist().await);
+
+            let host =
+                hosts.anchorlist_fetch_address_with_lock(p2p.clone(), &transports).await.unwrap();
+
+            assert!(anchor_urls.iter().any(|u| u.clone() == host.0));
+
+            // Now clear the hostlists and test that if we have no anchorlist connections in our host list,
+            // we will select from the whitelist.
+
+            let mut anchorlist = hosts.anchorlist.write().await;
+            anchorlist.clear();
+            drop(anchorlist);
+
+            let mut whitelist = hosts.whitelist.write().await;
+            whitelist.clear();
+            drop(whitelist);
+
+            let mut greylist = hosts.greylist.write().await;
+            greylist.clear();
+            drop(greylist);
+
+            assert!(hosts.is_empty_anchorlist().await);
+            assert!(hosts.is_empty_whitelist().await);
+            assert!(hosts.is_empty_greylist().await);
+
+            for i in 0..n_white {
+                white_urls.push(Url::parse(&format!("tcp://whitelist{}:123", i)).unwrap());
+            }
+            for i in 0..n_grey {
+                grey_urls.push(Url::parse(&format!("tcp://greylist{}:123", i)).unwrap());
+            }
+
+            for white in &white_urls {
+                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                hosts.whitelist_store(white.clone(), last_seen).await;
+            }
+            for grey in &grey_urls {
+                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                hosts.greylist_store(grey.clone(), last_seen).await;
+            }
+
+            assert!(hosts.is_empty_anchorlist().await);
+            assert!(!hosts.is_empty_whitelist().await);
+            assert!(!hosts.is_empty_greylist().await);
+
+            let host =
+                hosts.anchorlist_fetch_address_with_lock(p2p.clone(), &transports).await.unwrap();
+
+            assert!(white_urls.iter().any(|u| u.clone() == host.0));
+
+            // If we have no whitelist connections, select from the greylist.
+            let mut whitelist = hosts.whitelist.write().await;
+            whitelist.clear();
+            drop(whitelist);
+
+            let mut greylist = hosts.greylist.write().await;
+            greylist.clear();
+            drop(greylist);
+
+            assert!(hosts.is_empty_anchorlist().await);
+            assert!(hosts.is_empty_whitelist().await);
+            assert!(hosts.is_empty_greylist().await);
+
+            for i in 0..n_grey {
+                grey_urls.push(Url::parse(&format!("tcp://greylist{}:123", i)).unwrap());
+            }
+
+            for grey in &grey_urls {
+                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                hosts.greylist_store(grey.clone(), last_seen).await;
+            }
+
+            assert!(hosts.is_empty_anchorlist().await);
+            assert!(hosts.is_empty_whitelist().await);
+            assert!(!hosts.is_empty_greylist().await);
+
+            let host =
+                hosts.anchorlist_fetch_address_with_lock(p2p.clone(), &transports).await.unwrap();
+
+            assert!(grey_urls.iter().any(|u| u.clone() == host.0));
         });
     }
 }
