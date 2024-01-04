@@ -22,6 +22,8 @@ use serde_json::json;
 
 use super::Drk;
 
+pub const BALANCE_BASE10_DECIMALS: usize = 8;
+
 impl Drk {
     /// Initialize wallet with tables for drk
     pub async fn initialize_wallet(&self) -> Result<()> {

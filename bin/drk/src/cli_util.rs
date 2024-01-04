@@ -24,7 +24,7 @@ use darkfi::{
 use darkfi_sdk::crypto::TokenId;
 use rodio::{source::Source, Decoder, OutputStream};
 
-use super::Drk;
+use super::{wallet::BALANCE_BASE10_DECIMALS, Drk};
 
 pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
     let v: Vec<&str> = s.split(':').collect();
@@ -33,9 +33,8 @@ pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
         exit(1);
     }
 
-    // TODO: We shouldn't be hardcoding everything to 8 decimals.
-    let val0 = decode_base10(v[0], 8, true);
-    let val1 = decode_base10(v[1], 8, true);
+    let val0 = decode_base10(v[0], BALANCE_BASE10_DECIMALS, true);
+    let val1 = decode_base10(v[1], BALANCE_BASE10_DECIMALS, true);
 
     if val0.is_err() || val1.is_err() {
         eprintln!("Invalid value pair. Use a pair such as 13.37:11.0");

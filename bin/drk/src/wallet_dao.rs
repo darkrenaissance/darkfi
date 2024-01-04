@@ -54,7 +54,7 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, SerialDecodable, SerialEncodable};
 use serde_json::json;
 
-use super::Drk;
+use super::{wallet::BALANCE_BASE10_DECIMALS, Drk};
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 /// Parameters representing a DAO to be initialized
@@ -81,10 +81,10 @@ impl fmt::Display for DaoParams {
             "DAO Parameters",
             "==============",
             "Proposer limit",
-            encode_base10(self.proposer_limit, 8),
+            encode_base10(self.proposer_limit, BALANCE_BASE10_DECIMALS),
             self.proposer_limit,
             "Quorum",
-            encode_base10(self.quorum, 8),
+            encode_base10(self.quorum, BALANCE_BASE10_DECIMALS),
             self.quorum,
             "Approval ratio",
             self.approval_ratio_quot as f64 / self.approval_ratio_base as f64,
@@ -163,10 +163,10 @@ impl fmt::Display for Dao {
             "Bulla",
             self.bulla(),
             "Proposer limit",
-            encode_base10(self.proposer_limit, 8),
+            encode_base10(self.proposer_limit, BALANCE_BASE10_DECIMALS),
             self.proposer_limit,
             "Quorum",
-            encode_base10(self.quorum, 8),
+            encode_base10(self.quorum, BALANCE_BASE10_DECIMALS),
             self.quorum,
             "Approval ratio",
             self.approval_ratio_quot as f64 / self.approval_ratio_base as f64,
@@ -250,7 +250,7 @@ impl fmt::Display for DaoProposal {
             ),
             self.dao_bulla,
             self.recipient,
-            encode_base10(self.amount, 8),
+            encode_base10(self.amount, BALANCE_BASE10_DECIMALS),
             self.amount,
             self.token_id,
             self.bulla_blind,

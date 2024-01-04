@@ -41,7 +41,7 @@ use darkfi_sdk::{
 use darkfi_serial::Encodable;
 use rand::rngs::OsRng;
 
-use super::Drk;
+use super::{wallet::BALANCE_BASE10_DECIMALS, Drk};
 
 impl Drk {
     /// Create a payment transaction. Returns the transaction object on success.
@@ -81,8 +81,7 @@ impl Drk {
             return Err(anyhow!("Did not find any coins with token ID: {}", token_id))
         }
 
-        // FIXME: Do not hardcode 8 decimals
-        let amount = decode_base10(amount, 8, false)?;
+        let amount = decode_base10(amount, BALANCE_BASE10_DECIMALS, false)?;
         let mut balance = 0;
         for coin in owncoins.iter() {
             balance += coin.note.value;
@@ -92,7 +91,7 @@ impl Drk {
             return Err(anyhow!(
                 "Not enough balance for token ID: {}, found: {}",
                 token_id,
-                encode_base10(balance, 8)
+                encode_base10(balance, BALANCE_BASE10_DECIMALS)
             ))
         }
 

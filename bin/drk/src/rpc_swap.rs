@@ -40,7 +40,7 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, Encodable, SerialDecodable, SerialEncodable};
 use rand::rngs::OsRng;
 
-use super::Drk;
+use super::{wallet::BALANCE_BASE10_DECIMALS, Drk};
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 /// Half of the swap data, includes the coin that is supposed to be sent,
@@ -349,7 +349,7 @@ impl Drk {
                 "Output[{}] value: {} ({})",
                 output_idx,
                 note.value,
-                encode_base10(note.value, 8)
+                encode_base10(note.value, BALANCE_BASE10_DECIMALS)
             );
             eprintln!("Output[{}] token ID: {}", output_idx, note.token_id);
 

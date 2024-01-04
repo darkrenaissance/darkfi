@@ -73,6 +73,7 @@ use cli_util::{kaching, parse_token_pair, parse_value_pair};
 
 /// Wallet functionality related to drk operations
 mod wallet;
+use wallet::BALANCE_BASE10_DECIMALS;
 
 /// Wallet functionality related to DAO
 mod wallet_dao;
@@ -565,8 +566,7 @@ async fn main() -> Result<()> {
                         None => "-",
                     };
 
-                    // FIXME: Don't hardcode to 8 decimals
-                    table.add_row(row![token_id, aliases, encode_base10(*balance, 8)]);
+                    table.add_row(row![token_id, aliases, encode_base10(*balance, BALANCE_BASE10_DECIMALS)]);
                 }
 
                 if table.is_empty() {
@@ -694,7 +694,7 @@ async fn main() -> Result<()> {
                         coin.1,
                         coin.0.note.token_id,
                         aliases,
-                        format!("{} ({})", coin.0.note.value, encode_base10(coin.0.note.value, 8)),
+                        format!("{} ({})", coin.0.note.value, encode_base10(coin.0.note.value, BALANCE_BASE10_DECIMALS)),
                         spend_hook,
                         user_data
                     ]);
@@ -900,8 +900,8 @@ async fn main() -> Result<()> {
                 let _ = f64::from_str(&proposer_limit).with_context(|| "Invalid proposer limit")?;
                 let _ = f64::from_str(&quorum).with_context(|| "Invalid quorum")?;
 
-                let proposer_limit = decode_base10(&proposer_limit, 8, true)?;
-                let quorum = decode_base10(&quorum, 8, true)?;
+                let proposer_limit = decode_base10(&proposer_limit, BALANCE_BASE10_DECIMALS, true)?;
+                let quorum = decode_base10(&quorum, BALANCE_BASE10_DECIMALS, true)?;
 
                 if approval_ratio > 1.0 {
                     eprintln!("Error: Approval ratio cannot be >1.0");
@@ -994,8 +994,7 @@ async fn main() -> Result<()> {
                         None => "-",
                     };
 
-                    // FIXME: Don't hardcode to 8 decimals
-                    table.add_row(row![token_id, aliases, encode_base10(*balance, 8)]);
+                    table.add_row(row![token_id, aliases, encode_base10(*balance, BALANCE_BASE10_DECIMALS)]);
                 }
 
                 if table.is_empty() {
@@ -1018,7 +1017,7 @@ async fn main() -> Result<()> {
 
             DaoSubcmd::Propose { dao_alias, recipient, amount, token } => {
                 let _ = f64::from_str(&amount).with_context(|| "Invalid amount")?;
-                let amount = decode_base10(&amount, 8, true)?;
+                let amount = decode_base10(&amount, BALANCE_BASE10_DECIMALS, true)?;
                 let rcpt = PublicKey::from_str(&recipient).with_context(|| "Invalid recipient")?;
                 let drk = Drk::new(args.endpoint).await?;
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
@@ -1073,7 +1072,7 @@ async fn main() -> Result<()> {
                 let dao_id = drk.get_dao_id(&dao_alias).await?;
 
                 let _ = f64::from_str(&vote_weight).with_context(|| "Invalid vote weight")?;
-                let weight = decode_base10(&vote_weight, 8, true)?;
+                let weight = decode_base10(&vote_weight, BALANCE_BASE10_DECIMALS, true)?;
 
                 if vote > 1 {
                     eprintln!("Vote can be either 0 (NO) or 1 (YES)");

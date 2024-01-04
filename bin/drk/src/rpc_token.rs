@@ -35,7 +35,7 @@ use darkfi_sdk::{
 use darkfi_serial::Encodable;
 use rand::rngs::OsRng;
 
-use super::Drk;
+use super::{wallet::BALANCE_BASE10_DECIMALS, Drk};
 
 impl Drk {
     /// Create a token mint transaction. Returns the transaction object on success.
@@ -49,7 +49,7 @@ impl Drk {
         let spend_hook = pallas::Base::zero();
         let user_data = pallas::Base::zero();
 
-        let amount = decode_base10(amount, 8, false)?;
+        let amount = decode_base10(amount, BALANCE_BASE10_DECIMALS, false)?;
 
         let mut tokens = self.list_tokens().await?;
         tokens.retain(|x| x.0 == token_id);
