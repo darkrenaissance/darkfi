@@ -108,6 +108,10 @@
   - [vrf](spec/crypto/vrf.md)
   - [nullifier](spec/crypto/nullifier.md)
 
+# Specs
+
+- [Concepts](spec2/concepts.md)
+
 # P2P API Tutorial
 
 - [P2P API Tutorial](learn/dchat/dchat.md)

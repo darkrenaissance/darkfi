@@ -47,6 +47,7 @@ const MEMORY: &str = "memory";
 /// Gas limit for a contract
 const GAS_LIMIT: u64 = 400_000_000;
 
+// ANCHOR: contract-section
 #[derive(Clone, Copy, PartialEq)]
 pub enum ContractSection {
     /// Setup function of a contract
@@ -60,6 +61,7 @@ pub enum ContractSection {
     /// Placeholder state before any initialization
     Null,
 }
+// ANCHOR_END: contract-section
 
 impl ContractSection {
     pub const fn name(&self) -> &str {

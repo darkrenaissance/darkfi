@@ -446,7 +446,7 @@ pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
     DB_SUCCESS
 }
 
-/// Reads a key from the key-value store.
+/// Reads a value by key from the key-value store.
 /// Thie function can be called from the Deploy, Exec, or Metadata [`ContractSection`].
 /// On success, returns the length of the `objects` Vector in the environment.
 /// Otherwise, returns a negative error code.
