@@ -111,6 +111,10 @@
 # Specs
 
 - [Concepts](spec2/concepts.md)
+- [Cryptographic Schemes](spec2/crypto-schemes.md)
+- [Contracts]()
+  - [DAO](spec2/contracts/dao/dao.md)
+    - [DAO](spec2/contracts/dao/concepts.md)
 
 # P2P API Tutorial
 
