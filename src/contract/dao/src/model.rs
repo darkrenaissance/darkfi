@@ -33,6 +33,7 @@ use darkfi_serial::async_trait;
 
 use darkfi_sdk::crypto::{ShareAddress, ShareAddressType};
 
+// ANCHOR: dao
 /// DAOs are represented on chain as a commitment to this object
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Dao {
@@ -44,6 +45,7 @@ pub struct Dao {
     pub public_key: PublicKey,
     pub bulla_blind: pallas::Base,
 }
+// ANCHOR_END: dao
 
 impl Dao {
     pub fn to_bulla(&self) -> DaoBulla {
