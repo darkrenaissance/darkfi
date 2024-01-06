@@ -13,7 +13,10 @@ autojoin = ["#dev", "#test"]
 ## P2P net settings
 [net]
 ## Connection slots
-outbound_connections = 3
+outbound_connections = 8
+
+## Inbound connection slots
+inbound_connections = 8
 
 inbound = ["tcp://127.0.0.1:25552"]
 
@@ -35,8 +38,9 @@ localnet = true
 [channel."#test"]
 secret = "HoLfk8vXBvNsBZ73e2xRPBZ9vEbnF9FVi4fDdyU9AZLU"
 
-[secret_key."FCFYzvZ98gAncGNadFp35pTAJSuoJKZFddsi12PnREwp"]
+[crypto]
+#dm_chacha_public = "BmUo88RJ5TyR7gUWnr6Mk7tqZE5xPuCqJdJV8KWzsagh"
+dm_chacha_secret = "Bwdhe48rKsqFwGUquQSSGZZS5NQP1szrdJUhyDE77Br6"
 
 [contact."node2"]
-## contact public key
-public_key = "D6UzKA6qCG5Mep16i6pJYkUCQcnp46E1jPBsUhyJiXhb"
+dm_chacha_public = "ACaVU2uf4n2cheRHFP7RB9PASLweBJNdp5QJ4PGwVz67"
