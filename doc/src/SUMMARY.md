@@ -110,11 +110,13 @@
 
 # Specs
 
+- [Notation](spec2/notation.md)
 - [Concepts](spec2/concepts.md)
 - [Cryptographic Schemes](spec2/crypto-schemes.md)
 - [Contracts]()
   - [DAO](spec2/contracts/dao/dao.md)
-    - [DAO](spec2/contracts/dao/concepts.md)
+    - [Concepts](spec2/contracts/dao/concepts.md)
+    - [State](spec2/contracts/dao/state.md)
 
 # P2P API Tutorial
 
