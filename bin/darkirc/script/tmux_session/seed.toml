@@ -18,14 +18,17 @@ autojoin = ["#dev"]
 
 ## P2P net settings
 [net]
-## Connection slots
-# outbound_connections=8
+## Outbound connection slots
+outbound_connections = 8
+
+## Inbound connection slots
+inbound_connections = 8
 
 ## P2P accept addresses
 inbound = ["tcp://127.0.0.1:25551"]
 
 # Prefered transports for outbound connections
-outbound_transports = ["tcp"]
+allowed_transports = ["tcp"]
 
 localnet = true
 
