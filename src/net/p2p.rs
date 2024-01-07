@@ -148,11 +148,11 @@ impl P2p {
             return Err(err)
         }
 
-        // Start the outbound session
-        self.session_outbound().start().await;
-
         info!(target: "net::p2p::start()", "Starting greylist refinery process");
         self.greylist_refinery.clone().start().await;
+
+        // Start the outbound session
+        self.session_outbound().start().await;
 
         info!(target: "net::p2p::start()", "[P2P] P2P subsystem started");
         Ok(())

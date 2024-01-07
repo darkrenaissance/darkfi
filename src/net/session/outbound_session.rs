@@ -108,6 +108,8 @@ impl OutboundSession {
         let slots = &*self.slots.lock().await;
 
         for slot in slots {
+            debug!(target: "deadlock", "Killing channel {:?}, slot: {:?}, node: {:?}",
+                   slot.channel_id, slot.slot, self.p2p().settings().node_id);
             slot.clone().stop().await;
         }
 
@@ -187,11 +189,11 @@ impl Slot {
 
     async fn fetch_address(
         &self,
-        connect_count: usize,
+        slot_count: usize,
         transports: &[String],
     ) -> Option<(Url, u64)> {
         let hosts = self.p2p().hosts();
-        let slot_count = self.p2p().settings().outbound_connections;
+        //let slot_count = self.p2p().settings().outbound_connections;
         let white_count = slot_count * self.p2p().settings().white_connection_percent / 100;
 
         // Up to anchor_connection_count connections:
@@ -200,32 +202,43 @@ impl Slot {
         //  If the anchorlist is empty, select from the whitelist
         //  If the whitelist is empty, select from the greylist
         //  If the greylist is empty, do peer discovery
-        if connect_count < self.p2p().settings().anchor_connection_count {
-            debug!(target: "outbound_session::fetch_address()",
-            "First two connections- prefer anchor connections");
-            return hosts.anchorlist_fetch_address_with_lock(self.p2p(), transports).await
+
+        let addrs = {
+            if slot_count < self.p2p().settings().anchor_connection_count {
+                debug!(target: "outbound_session::fetch_address()",
+                "First two connections- prefer anchor connections");
+                hosts.anchorlist_fetch_address(self.p2p(), transports).await
+            }
+            // Up to white_connection_percent connections:
+            //
+            //  Select from the whitelist
+            //  If the whitelist is empty, select from the greylist
+            //  If the greylist is empty, do peer discovery
+            else if slot_count < white_count {
+                debug!(target: "outbound_session::fetch_address()",
+                "Next N connections- prefer white connections");
+                hosts.whitelist_fetch_address(self.p2p(), transports).await
+            }
+            // All other connections:
+            //
+            //  Select from the greylist
+            //  If the greylist is empty, do peer discovery
+            else {
+                debug!(target: "outbound_session::fetch_address()",
+                "All other connections- get grey connections");
+                hosts.greylist_fetch_address(self.p2p(), transports).await
+            } 
+        };
+
+        // Check whether:
+        // * we already have this connection established
+        // * we already have this configured as a manual peer
+        // * address is already pending a connection
+        if addrs.is_some() {
+            let addr = hosts.lock_check(self.p2p(), addrs.unwrap()).await;
+            return addr
         }
-        // Up to white_connection_percent connections:
-        //
-        //  Select from the whitelist
-        //  If the whitelist is empty, select from the greylist
-        //  If the greylist is empty, do peer discovery
-        else if connect_count < white_count {
-            debug!(target: "outbound_session::fetch_address()",
-            "Next N connections- prefer white connections");
-            return hosts.whitelist_fetch_address_with_lock(self.p2p(), transports).await
-        }
-        // All other connections:
-        //
-        //  Select from the greylist
-        //  If the greylist is empty, do peer discovery
-        else if connect_count < slot_count {
-            debug!(target: "outbound_session::fetch_address()",
-            "All other connections- get grey connections");
-            return hosts.greylist_fetch_address_with_lock(self.p2p(), transports).await
-        } else {
-            return None
-        }
+        None
     }
 
     // We first try to make connections to the addresses on our anchor list. We then find some
@@ -244,15 +257,23 @@ impl Slot {
                 self.slot,
             );
 
+            debug!(
+                target: "deadlock",
+                "Finding a host to connect to for outbound slot {}, node {}",
+                self.slot, self.p2p().settings().node_id,
+            );
             // Retrieve outbound transports
             let transports = &self.p2p().settings().allowed_transports;
-
-            // Get the active connection count.
-            let connect_count = self.get_active_connect_count().await;
 
             // Do peer discovery if we don't have a hostlist (first time connecting
             // to the network).
             if hosts.is_empty_hostlist().await {
+                debug!(
+                    target: "deadlock",
+                    "Empty hostlist: activating peer discovery on outbound slot {}, node {}",
+                    self.slot, self.p2p().settings().node_id,
+                );
+
                 dnetev!(self, OutboundSlotSleeping, {
                     slot: self.slot,
                 });
@@ -265,7 +286,7 @@ impl Slot {
                 continue
             }
 
-            let addr = if let Some(addr) = self.fetch_address(connect_count, transports).await {
+            let addr = if let Some(addr) = self.fetch_address(slot_count, transports).await {
                 debug!(target: "outbound_session::run()", "Fetched address: {:?}", addr);
                 addr
             } else {
@@ -274,6 +295,9 @@ impl Slot {
                     slot: self.slot,
                 });
 
+                debug!(target: "deadlock", "sleeping slot {}, node {}", self.slot, self.p2p().settings().node_id);
+
+                //sleep(5).await;
                 self.wakeup_self.reset();
                 // Peer discovery
                 self.session().wakeup_peer_discovery();
@@ -291,21 +315,31 @@ impl Slot {
                 slot, host,
             );
 
+            debug!(
+                target: "deadlock",
+                "connecting outbound slot {}, node {}",
+                slot, self.p2p().settings().node_id,
+            );
+
             dnetev!(self, OutboundSlotConnecting, {
                 slot: slot,
                 addr: host.clone(),
             });
 
-            info!("outbound_session::connect_slot(): try_connect");
             let (addr, channel) = match self.try_connect(host.clone()).await {
                 Ok(connect_info) => connect_info,
                 Err(err) => {
-                    error!(
-                        target: "net::outbound_session",
-                        "[P2P] Outbound slot #{} connection failed: {}",
-                        slot, err,
-                    );
+                    //debug!(
+                    //    target: "deadlock",
+                    //    "[P2P] Outbound slot #{} connection failed: {}, node {}",
+                    //    slot, err, self.p2p().settings().node_id
+                    //);
 
+                    debug!(
+                        target: "deadlock",
+                        "connection failed: slot {}, node {}",
+                        slot, self.p2p().settings().node_id
+                    );
                     dnetev!(self, OutboundSlotDisconnected, {
                         slot,
                         err: err.to_string()
@@ -320,6 +354,12 @@ impl Slot {
                 target: "net::outbound_session::try_connect()",
                 "[P2P] Outbound slot #{} connected [{}]",
                 slot, addr
+            );
+
+            debug!(
+                target: "deadlock",
+                "Created channel {} slot {}, node {}",
+                channel.info.id, slot, self.p2p().settings().node_id
             );
 
             dnetev!(self, OutboundSlotConnected, {
@@ -337,6 +377,11 @@ impl Slot {
                     slot, err
                 );
 
+                debug!(
+                    target: "deadlock",
+                    "disconnected slot {}, node {}",
+                    slot, self.p2p().settings().node_id,
+                );
                 dnetev!(self, OutboundSlotDisconnected, {
                     slot: self.slot,
                     err: err.to_string()
@@ -369,8 +414,8 @@ impl Slot {
             Ok((addr_final, channel)) => Ok((addr_final, channel)),
 
             Err(e) => {
-                error!(
-                    target: "net::outbound_session::try_connect()",
+                debug!(
+                    target: "deadlock",
                     "[P2P] Unable to connect outbound slot #{} [{}]: {}",
                     self.slot, addr, e
                 );
@@ -379,8 +424,10 @@ impl Slot {
                 // If the host is in the anchorlist or whitelist, downgrade it to greylist.
                 self.p2p().hosts().downgrade_host(&addr).await?;
 
+                debug!(target: "net::outbound_session::try_connect", "removing channel...");
                 // Remove connection from pending
                 self.p2p().remove_pending(&addr).await;
+                debug!(target: "net::outbound_session::try_connect", "channel removed!");
 
                 // Notify that channel processing failed
                 self.session().channel_subscriber.notify(Err(Error::ConnectFailed)).await;
@@ -397,22 +444,14 @@ impl Slot {
 
         // Channel is now connected but not yet setup
         // Remove pending lock since register_channel will add the channel to p2p
+        debug!(target: "net::outbound_session::setup_channel", "removing channel...");
         self.p2p().remove_pending(&addr).await;
+        debug!(target: "net::outbound_session::setup_channel", "channel removed!");
 
         // Notify that channel processing has been finished
         self.session().channel_subscriber.notify(Ok(channel)).await;
 
         Ok(())
-    }
-
-    async fn get_active_connect_count(&self) -> usize {
-        let mut connect_count = 0;
-        for channel in self.p2p().channels().await {
-            if channel.session_type_id() == SESSION_OUTBOUND {
-                connect_count += 1;
-            }
-        }
-        connect_count
     }
 
     fn notify(&self) {
@@ -469,10 +508,10 @@ impl PeerDiscovery {
     async fn run(self: Arc<Self>) {
         let mut current_attempt = 0;
         loop {
-            dnetev!(self, OutboundPeerDiscovery, {
-                attempt: current_attempt,
-                state: "wait",
-            });
+            //dnetev!(self, OutboundPeerDiscovery, {
+            //    attempt: current_attempt,
+            //    state: "wait",
+            //});
 
             // wait to be woken up by notify()
             let sleep_was_instant = self.wait().await;
