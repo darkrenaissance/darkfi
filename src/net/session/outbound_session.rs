@@ -108,12 +108,14 @@ impl OutboundSession {
         let slots = &*self.slots.lock().await;
 
         for slot in slots {
-            debug!(target: "deadlock", "Killing channel {:?}, slot: {:?}, node: {:?}",
+            debug!(target: "deadlock", "Killing channel {:?}, slot: {:?}, node {}",
                    slot.channel_id, slot.slot, self.p2p().settings().node_id);
             slot.clone().stop().await;
         }
 
+        debug!(target: "deadlock", "Killing peer discovery node {}", self.p2p().settings().node_id);
         self.peer_discovery.clone().stop().await;
+        debug!(target: "deadlock", "Killed all outbound processes node {}", self.p2p().settings().node_id);
     }
 
     pub async fn slot_info(&self) -> Vec<u32> {
@@ -187,14 +189,10 @@ impl Slot {
         self.process.stop().await
     }
 
-    async fn fetch_address(
-        &self,
-        slot_count: usize,
-        transports: &[String],
-    ) -> Option<(Url, u64)> {
+    async fn fetch_address(&self, slot_count: usize, transports: &[String]) -> Option<(Url, u64)> {
         let hosts = self.p2p().hosts();
-        //let slot_count = self.p2p().settings().outbound_connections;
-        let white_count = slot_count * self.p2p().settings().white_connection_percent / 100;
+        let connects = self.p2p().settings().outbound_connections;
+        let white_count = connects * self.p2p().settings().white_connection_percent / 100;
 
         // Up to anchor_connection_count connections:
         //
@@ -227,18 +225,15 @@ impl Slot {
                 debug!(target: "outbound_session::fetch_address()",
                 "All other connections- get grey connections");
                 hosts.greylist_fetch_address(self.p2p(), transports).await
-            } 
+            }
         };
 
         // Check whether:
         // * we already have this connection established
         // * we already have this configured as a manual peer
         // * address is already pending a connection
-        if addrs.is_some() {
-            let addr = hosts.lock_check(self.p2p(), addrs.unwrap()).await;
-            return addr
-        }
-        None
+        let addr = hosts.check_address_with_lock(self.p2p(), addrs).await;
+        return addr
     }
 
     // We first try to make connections to the addresses on our anchor list. We then find some
@@ -414,20 +409,30 @@ impl Slot {
             Ok((addr_final, channel)) => Ok((addr_final, channel)),
 
             Err(e) => {
+                //debug!(
+                //    target: "TODO",
+                //    "[P2P] Unable to connect outbound slot #{} [{}]: {}",
+                //    self.slot, addr, e
+                //);
+
                 debug!(
                     target: "deadlock",
-                    "[P2P] Unable to connect outbound slot #{} [{}]: {}",
-                    self.slot, addr, e
+                    "[P2P] Unable to connect outbound slot #{} [{}]: {} node {}",
+                    self.slot, addr, e, self.p2p().settings().node_id
                 );
 
                 // At this point we've failed to connect.
                 // If the host is in the anchorlist or whitelist, downgrade it to greylist.
                 self.p2p().hosts().downgrade_host(&addr).await?;
 
+                debug!(target: "deadlock", "removing channel... slot {} node {}",
+                       self.slot, self.p2p().settings().node_id);
                 debug!(target: "net::outbound_session::try_connect", "removing channel...");
                 // Remove connection from pending
                 self.p2p().remove_pending(&addr).await;
                 debug!(target: "net::outbound_session::try_connect", "channel removed!");
+                debug!(target: "deadlock", "channel removed! slot {} node {}",
+                       self.slot, self.p2p().settings().node_id);
 
                 // Notify that channel processing failed
                 self.session().channel_subscriber.notify(Err(Error::ConnectFailed)).await;
@@ -508,6 +513,8 @@ impl PeerDiscovery {
     async fn run(self: Arc<Self>) {
         let mut current_attempt = 0;
         loop {
+            debug!(target: "deadlock", "peer discovery START node {} current attempt {}", 
+                   self.p2p().settings().node_id, current_attempt);
             //dnetev!(self, OutboundPeerDiscovery, {
             //    attempt: current_attempt,
             //    state: "wait",

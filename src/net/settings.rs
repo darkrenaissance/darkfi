@@ -108,7 +108,7 @@ impl Default for Settings {
             advertise: true,
             hostlist,
             greylist_refinery_interval: 30,
-            white_connection_percent: 50,
+            white_connection_percent: 90,
             anchor_connection_count: 2,
         }
     }

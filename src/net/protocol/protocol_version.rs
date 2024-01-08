@@ -58,6 +58,7 @@ impl ProtocolVersion {
     /// info and wait for version ack. Wait for version info and send
     /// version ack.
     pub async fn run(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
+        //debug!(target: "deadlock", "protocol_version::START => address={}", self.channel.address());
         debug!(target: "net::protocol_version::run()", "START => address={}", self.channel.address());
         // Start timer
         // Send version, wait for verack
@@ -82,7 +83,8 @@ impl ProtocolVersion {
             return Err(Error::ChannelTimeout)
         }
 
-        debug!(target: "net::protocol_version::run()", "END => address={}", self.channel.address());
+        //debug!(target: "deadlock", "protocol_version::END => address={}", self.channel.address());
+        //debug!(target: "net::protocol_version::run()", "END => address={}", self.channel.address());
         Ok(())
     }
 

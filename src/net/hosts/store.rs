@@ -98,7 +98,7 @@ impl Hosts {
         &self,
         p2p: P2pPtr,
         transports: &[String],
-    ) -> Option<Vec<(Url, u64)>> {
+    ) -> Vec<(Url, u64)> {
         trace!(target: "store", "greylist_fetch_address() [START]");
         // Collect hosts
         let mut hosts = vec![];
@@ -133,48 +133,7 @@ impl Hosts {
         // This is healthier for multiple slots to not compete for the same addrs.
         hosts.shuffle(&mut OsRng);
 
-        Some(hosts)
-        //// Try to find an unused host in the set.
-        //for (host, last_seen) in hosts.iter() {
-        //    // Check if we already have this connection established
-        //    if p2p.exists(host).await {
-        //        debug!(
-        //            target: "store::greylist_fetch_address()",
-        //            "Host '{}' exists so skipping",
-        //            host
-        //        );
-        //        continue
-        //    }
-
-        //    // Check if we already have this configured as a manual peer
-        //    if self.settings.peers.contains(host) {
-        //        debug!(
-        //            target: "store::greylist_fetch_address()",
-        //            "Host '{}' configured as manual peer so skipping",
-        //            host
-        //        );
-        //        continue
-        //    }
-
-        //    // Obtain a lock on this address to prevent duplicate connection
-        //    if !p2p.add_pending(host).await {
-        //        debug!(
-        //            target: "store::greylist_fetch_address()",
-        //            "Host '{}' pending so skipping",
-        //            host
-        //        );
-        //        continue
-        //    }
-
-        //    debug!(
-        //        target: "store::greylist_fetch_address()",
-        //        "Found valid host '{}",
-        //        host
-        //    );
-        //    return Some((host.clone(), last_seen.clone()))
-        //}
-
-        //None
+        hosts
     }
 
     /// Loops through whitelist addresses to find an outbound address that we can
@@ -186,7 +145,7 @@ impl Hosts {
         &self,
         p2p: P2pPtr,
         transports: &[String],
-    ) -> Option<Vec<(Url, u64)>> {
+    ) -> Vec<(Url, u64)> {
         trace!(target: "store", "whitelist_fetch_address() [START]");
         // Collect hosts
         let mut hosts = vec![];
@@ -224,61 +183,7 @@ impl Hosts {
         // This is healthier for multiple slots to not compete for the same addrs.
         hosts.shuffle(&mut OsRng);
 
-        Some(hosts)
-        //// Try to find an unused host in the set.
-        //for (host, last_seen) in hosts.iter() {
-        //    debug!(target: "store::whitelist_fetch_address()",
-        //    "Starting checks");
-        //    // Check if we already have this connection established
-        //    if p2p.exists(host).await {
-        //        debug!(
-        //            target: "store::whitelist_fetch_address()",
-        //            "Host '{}' exists so skipping",
-        //            host
-        //        );
-        //        continue
-        //    }
-
-        //    debug!(target: "store::whitelist_fetch_address()",
-        //           "Connection is not already established");
-
-        //    // Check if we already have this configured as a manual peer
-        //    if self.settings.peers.contains(host) {
-        //        debug!(
-        //            target: "store::whitelist_fetch_address()",
-        //            "Host '{}' configured as manual peer so skipping",
-        //            host
-        //        );
-        //        continue
-        //    }
-
-        //    debug!(target: "store::whitelist_fetch_address()",
-        //           "Connection not configured as manual peer");
-
-        //    // Obtain a lock on this address to prevent duplicate connection
-        //    if !p2p.add_pending(host).await {
-        //        debug!(
-        //            target: "store::whitelist_fetch_address()",
-        //            "Host '{}' pending so skipping",
-        //            host
-        //        );
-        //        continue
-        //    }
-
-        //    debug!(target: "store::whitelist_fetch_address()",
-        //           "Connection not pending");
-
-        //    debug!(
-        //        target: "store::whitelist_fetch_address()",
-        //        "Found valid host '{}",
-        //        host
-        //    );
-        //    return Some((host.clone(), last_seen.clone()))
-        //}
-
-        //debug!(target: "store::whitelist_fetch_address()",
-        //"Exiting with NONE");
-        //None
+        hosts
     }
 
     /// Loops through anchorlist addresses to find an outbound address that we can
@@ -290,7 +195,7 @@ impl Hosts {
         &self,
         p2p: P2pPtr,
         transports: &[String],
-    ) -> Option<Vec<(Url, u64)>> {
+    ) -> Vec<(Url, u64)> {
         trace!(target: "store", "anchorlist_fetch_address() [START]");
         // Collect hosts
         let mut hosts = vec![];
@@ -328,64 +233,14 @@ impl Hosts {
         // This is healthier for multiple slots to not compete for the same addrs.
         hosts.shuffle(&mut OsRng);
 
-        Some(hosts)
-        //// Try to find an unused host in the set.
-        //for (host, last_seen) in hosts.iter() {
-        //    debug!(target: "store::anchorlist_fetch_address()",
-        //    "Starting checks");
-        //    // Check if we already have this connection established
-        //    if p2p.exists(host).await {
-        //        debug!(
-        //            target: "store::anchorlist_fetch_address()",
-        //            "Host '{}' exists so skipping",
-        //            host
-        //        );
-        //        continue
-        //    }
-
-        //    debug!(target: "store::anchorlist_fetch_address()",
-        //           "Connection is not already established");
-
-        //    // Check if we already have this configured as a manual peer
-        //    if self.settings.peers.contains(host) {
-        //        debug!(
-        //            target: "store::anchorlist_fetch_address()",
-        //            "Host '{}' configured as manual peer so skipping",
-        //            host
-        //        );
-        //        continue
-        //    }
-
-        //    debug!(target: "store::anchorlist_fetch_address()",
-        //           "Connection not configured as manual peer");
-
-        //    // Obtain a lock on this address to prevent duplicate connection
-        //    if !p2p.add_pending(host).await {
-        //        debug!(
-        //            target: "store::anchorlist_fetch_address()",
-        //            "Host '{}' pending so skipping",
-        //            host
-        //        );
-        //        continue
-        //    }
-
-        //    debug!(target: "store::anchorlist_fetch_address()",
-        //           "Connection not pending");
-
-        //    debug!(
-        //        target: "store::anchorlist_fetch_address()",
-        //        "Found valid host '{}",
-        //        host
-        //    );
-        //    return Some((host.clone(), last_seen.clone()))
-        //}
-
-        //debug!(target: "store::anchorlist_fetch_address()",
-        //"Exiting with NONE");
-        //None
+        hosts
     }
 
-    pub async fn lock_check(&self, p2p: P2pPtr, hosts: Vec<(Url, u64)>) -> Option<(Url, u64)> {
+    pub async fn check_address_with_lock(
+        &self,
+        p2p: P2pPtr,
+        hosts: Vec<(Url, u64)>,
+    ) -> Option<(Url, u64)> {
         // Try to find an unused host in the set.
         for (host, last_seen) in hosts {
             debug!(target: "store::anchorlist_fetch_address()",

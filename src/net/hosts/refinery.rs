@@ -69,48 +69,59 @@ impl GreylistRefinery {
     pub async fn stop(self: Arc<Self>) {
         match self.p2p().hosts().save_hosts().await {
             Ok(()) => {
+                debug!(target: "deadlock", "saved hosts node {}", self.p2p().settings().node_id);
                 debug!(target: "net::refinery::stop()", "Save hosts successful!");
             }
             Err(e) => {
+                debug!(target: "deadlock", "ERROR saving hosts node {}", self.p2p().settings().node_id);
                 warn!(target: "net::refinery::stop()", "Error saving hosts {}", e);
             }
         }
-        self.process.stop().await
+        debug!(target: "deadlock", "Stopping refinery process node {}", self.p2p().settings().node_id);
+        self.process.stop().await;
+        debug!(target: "deadlock", "Refinery process stopped node {}", self.p2p().settings().node_id);
     }
 
     // Randomly select a peer on the greylist and probe it.
     async fn run(self: Arc<Self>) {
-        debug!(target: "net::refinery::run()", "START");
+        //debug!(target: "net::refinery::run()", "START");
+        debug!(target: "deadlock", "refinery START node {}", self.p2p().settings().node_id);
         loop {
+            sleep(self.p2p().settings().greylist_refinery_interval).await;
+
             let hosts = self.p2p().hosts();
 
             if hosts.is_empty_greylist().await {
+                debug!(target: "deadlock", "Greylist is empty! Cannot start refinery node {}", self.p2p().settings().node_id);
                 warn!(target: "net::refinery::run()",
                 "Greylist is empty! Cannot start refinery process");
-            } else {
-                debug!(target: "net::refinery::run()", "Starting refinery process");
-                // Randomly select an entry from the greylist.
-                let (entry, position) = hosts.greylist_fetch_random().await;
-                let url = &entry.0;
 
-                if ping_node(url, self.p2p().clone()).await {
-                    // Peer is responsive. Update last_seen and add it to the whitelist.
-                    let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-
-                    // Append to the whitelist.
-                    hosts.whitelist_store_or_update(&[(url.clone(), last_seen)]).await.unwrap();
-
-                    // Remove whitelisted peer from the greylist.
-                    hosts.greylist_remove(url, position).await;
-                } else {
-                    let mut greylist = hosts.greylist.write().await;
-                    greylist.remove(position);
-                    debug!(target: "net::refinery::run()", "Peer {} is not response. Removed from greylist", url);
-                }
+                continue
             }
 
-            debug!(target: "net::greylist_refinery::run()", "Sleeping...");
-            sleep(self.p2p().settings().greylist_refinery_interval).await;
+            let (entry, position) = hosts.greylist_fetch_random().await;
+            let url = &entry.0;
+
+            if !ping_node(url, self.p2p().clone()).await {
+                let mut greylist = hosts.greylist.write().await;
+                greylist.remove(position);
+                //debug!(target: "net::refinery::run()", "Peer {} is not response. Removed from greylist", url);
+                debug!(target: "deadlock", "Peer {} is not response. Removed from greylist node {}", url, self.p2p().settings().node_id);
+
+                continue
+            }
+
+            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+
+            debug!(target: "deadlock", "whitelist store or update node {}", self.p2p().settings().node_id);
+            // Append to the whitelist.
+            hosts.whitelist_store_or_update(&[(url.clone(), last_seen)]).await.unwrap();
+
+            debug!(target: "deadlock", "greylist remove node {}", self.p2p().settings().node_id);
+            // Remove whitelisted peer from the greylist.
+            hosts.greylist_remove(url, position).await;
+
+            debug!(target: "deadlock", "refinery STOP node {}", self.p2p().settings().node_id);
         }
     }
 
@@ -121,6 +132,7 @@ impl GreylistRefinery {
 
 // Ping a node to check it's online.
 pub async fn ping_node(addr: &Url, p2p: P2pPtr) -> bool {
+    debug!(target: "deadlock", "ping node START node {}", p2p.settings().node_id);
     let session_outbound = p2p.session_outbound();
     let parent = Arc::downgrade(&session_outbound);
     let connector = Connector::new(p2p.settings(), parent);
@@ -142,11 +154,13 @@ pub async fn ping_node(addr: &Url, p2p: P2pPtr) -> bool {
             match handshake_task.await {
                 Ok(()) => {
                     debug!(target: "net::refinery::ping_node()", "Handshake success! Stopping channel.");
+                    debug!(target: "deadlock", "ping node STOP node {} -> true", p2p.settings().node_id);
                     channel.stop().await;
                     true
                 }
                 Err(e) => {
                     debug!(target: "net::refinery::ping_node()", "Handshake failure! {}", e);
+                    debug!(target: "deadlock", "ping node STOP node {} -> false", p2p.settings().node_id);
                     channel.stop().await;
                     false
                 }
@@ -155,6 +169,7 @@ pub async fn ping_node(addr: &Url, p2p: P2pPtr) -> bool {
 
         Err(e) => {
             debug!(target: "net::refinery::ping_node()", "Failed to connect to {}, ({})", addr, e);
+            debug!(target: "deadlock", "ping node STOP node {} -> false", p2p.settings().node_id);
             false
         }
     }
