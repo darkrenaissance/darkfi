@@ -11,10 +11,10 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 darkfi-sdk = { path = "../../sdk" }
 darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
-thiserror = "1.0.50"
+thiserror = "1.0.56"
 wasmparser = "0.118.1"
 
-async-trait = { version = "0.1.74", optional = true }
+async-trait = { version = "0.1.77", optional = true }
 
 # We need to disable random using "custom" which makes the crate a noop
 # so the wasm32-unknown-unknown target is enabled.

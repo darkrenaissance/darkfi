@@ -17,7 +17,7 @@ async = ["darkfi-serial/async"]
 
 [dependencies]
 # Error handling
-thiserror = "1.0.50"
+thiserror = "1.0.56"
 
 # Serialization
 darkfi-serial = {path = "../serial", features = ["crypto"]}

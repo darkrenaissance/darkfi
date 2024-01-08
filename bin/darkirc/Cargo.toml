@@ -21,15 +21,15 @@ path = "src/main.rs"
 darkfi = {path = "../../", features = ["async-daemonize", "event-graph", "net", "util", "system", "rpc", "zk"]}
 darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {path = "../../src/serial", features = ["async"]}
-libc = "0.2.151"
+libc = "0.2.152"
 
 # Event Graph DB
 sled = "0.34.7"
 
 # TLS
-async-rustls = "0.4.1"
-async-trait = "0.1.74"
-futures = "0.3.29"
+async-rustls = "0.4.2"
+async-trait = "0.1.77"
+futures = "0.3.30"
 rustls-pemfile = "2.0.0"
 
 # Crypto
@@ -53,6 +53,6 @@ simplelog = "0.12.1"
 smol = "1.3.0"
 
 # Argument parsing
-serde = {version = "1.0.193", features = ["derive"]}
+serde = {version = "1.0.195", features = ["derive"]}
 structopt = "0.3.26"
 structopt-toml = "0.5.1"
