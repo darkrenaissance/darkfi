@@ -11,7 +11,7 @@ edition = "2021"
 [dependencies]
 arg = {git = "https://github.com/parazyd/arg"}
 bs58 = "0.5.0"
-ctrlc = "3.4.1"
+ctrlc = "3.4.2"
 darkfi = {path = "../../", features = ["util"]}
 darkfi-sdk = {path = "../../src/sdk"}
 rand = "0.8.5"
