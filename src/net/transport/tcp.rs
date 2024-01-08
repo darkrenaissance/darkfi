@@ -18,8 +18,8 @@
 
 use std::{io, time::Duration};
 
-use async_rustls::{TlsAcceptor, TlsStream};
 use async_trait::async_trait;
+use futures_rustls::{TlsAcceptor, TlsStream};
 use log::debug;
 use smol::net::{SocketAddr, TcpListener as SmolTcpListener, TcpStream};
 use socket2::{Domain, Socket, TcpKeepalive, Type};
