@@ -46,7 +46,7 @@ fn main() {
     let timekeeper = TimeKeeper::new(Timestamp::current_time(), 10, 90, 0);
 
     let wasm_bytes =
-        include_bytes!("../../../target/wasm32-unknown-unknown/release/darkfi_dummy_contract.wasm");
+        include_bytes!("../target/wasm32-unknown-unknown/release/darkfi_dummy_contract.wasm");
 
     let contract_id = ContractId::from(pallas::Base::from(69));
 
@@ -54,5 +54,10 @@ fn main() {
     match runtime.deploy(&[]) {
         Ok(()) => {}
         Err(e) => println!("Error running deploy: {:#?}", e),
+    }
+
+    match runtime.exec(&[]) {
+        Ok(_) => {}
+        Err(e) => println!("Error running exec: {:#?}", e),
     }
 }

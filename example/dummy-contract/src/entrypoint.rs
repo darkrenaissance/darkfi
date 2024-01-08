@@ -16,7 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{crypto::ContractId, error::ContractResult};
+use darkfi_sdk::{
+    crypto::ContractId,
+    db::{db_init, db_lookup},
+    error::ContractResult,
+};
 
 darkfi_sdk::define_contract!(
     init: init_contract,
@@ -25,8 +29,12 @@ darkfi_sdk::define_contract!(
     metadata: get_metadata
 );
 
-fn init_contract(_cid: ContractId, _ix: &[u8]) -> ContractResult {
-    //panic!("ohai");
+fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
+    let db = match db_lookup(cid, "dummy_db") {
+        Ok(v) => v,
+        Err(_) => db_init(cid, "dummy_db")?,
+    };
+
     Ok(())
 }
 
@@ -34,7 +42,9 @@ fn get_metadata(_cid: ContractId, _ix: &[u8]) -> ContractResult {
     Ok(())
 }
 
-fn process_instruction(_cid: ContractId, _ix: &[u8]) -> ContractResult {
+fn process_instruction(cid: ContractId, _ix: &[u8]) -> ContractResult {
+    let db = db_lookup(cid, "dummy_db")?;
+
     Ok(())
 }
 
