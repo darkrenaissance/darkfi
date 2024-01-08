@@ -183,7 +183,7 @@ impl Acceptor {
                 // Handle ErrorKind::Other
                 Err(e) if e.kind() == ErrorKind::Other => {
                     if let Some(inner) = std::error::Error::source(&e) {
-                        if let Some(inner) = inner.downcast_ref::<async_rustls::rustls::Error>() {
+                        if let Some(inner) = inner.downcast_ref::<futures_rustls::rustls::Error>() {
                             error!(
                                 target: "net::acceptor::run_accept_loop()",
                                 "[P2P] rustls listener error: {:?}", inner,

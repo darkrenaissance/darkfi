@@ -576,7 +576,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ecfa55659849ace733f86ccd219da40abd8bc14124e40b312433e85a5a266e77"
 dependencies = [
  "futures-io",
- "rustls",
+ "rustls 0.21.10",
 ]
 
 [[package]]
@@ -1763,7 +1763,6 @@ version = "0.4.1"
 dependencies = [
  "arti-client",
  "async-recursion",
- "async-rustls",
  "async-trait",
  "blake3 1.5.0",
  "bs58",
@@ -1777,6 +1776,7 @@ dependencies = [
  "easy-parallel",
  "ed25519-compact",
  "futures",
+ "futures-rustls",
  "halo2_gadgets",
  "halo2_proofs",
  "lazy_static",
@@ -2033,7 +2033,6 @@ dependencies = [
 name = "darkirc"
 version = "0.4.2"
 dependencies = [
- "async-rustls",
  "async-trait",
  "blake3 1.5.0",
  "bs58",
@@ -2043,6 +2042,7 @@ dependencies = [
  "darkfi-serial",
  "easy-parallel",
  "futures",
+ "futures-rustls",
  "libc",
  "log",
  "rand 0.8.5",
@@ -3122,6 +3122,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.48",
+]
+
+[[package]]
+name = "futures-rustls"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3afda89bce8f65072d24f8b99a2127e229462d8008182ca93f1d5d2e5df8f22f"
+dependencies = [
+ "futures-io",
+ "rustls 0.22.2",
+ "rustls-pki-types",
 ]
 
 [[package]]
@@ -5378,8 +5389,22 @@ checksum = "f9d5a6813c0759e4609cd494e8e725babae6a2ca7b62a5536a13daaec6fcb7ba"
 dependencies = [
  "log",
  "ring 0.17.7",
- "rustls-webpki",
+ "rustls-webpki 0.101.7",
  "sct",
+]
+
+[[package]]
+name = "rustls"
+version = "0.22.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e87c9956bd9807afa1f77e0f7594af32566e830e088a5576d27c5b6f30f49d41"
+dependencies = [
+ "log",
+ "ring 0.17.7",
+ "rustls-pki-types",
+ "rustls-webpki 0.102.1",
+ "subtle",
+ "zeroize",
 ]
 
 [[package]]
@@ -5405,6 +5430,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b6275d1ee7a1cd780b64aca7726599a1dbc893b1e64144529e55c3c2f745765"
 dependencies = [
  "ring 0.17.7",
+ "untrusted 0.9.0",
+]
+
+[[package]]
+name = "rustls-webpki"
+version = "0.102.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ef4ca26037c909dedb327b48c3327d0ba91d3dd3c4e05dad328f210ffb68e95b"
+dependencies = [
+ "ring 0.17.7",
+ "rustls-pki-types",
  "untrusted 0.9.0",
 ]
 
@@ -7394,7 +7430,7 @@ dependencies = [
  "educe",
  "futures",
  "pin-project",
- "rustls",
+ "rustls 0.21.10",
  "thiserror",
  "x509-signature",
 ]
