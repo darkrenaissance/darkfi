@@ -63,6 +63,9 @@ pub mod validation;
 pub mod utils;
 use utils::deploy_native_contracts;
 
+/// Contract deployment utilities
+pub mod deploy;
+
 /// Base 10 big float implementation for high precision arithmetics
 pub mod float_10;
 
