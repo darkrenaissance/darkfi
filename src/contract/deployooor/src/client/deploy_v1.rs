@@ -21,11 +21,10 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_sdk::crypto::Keypair;
+use darkfi_sdk::{crypto::Keypair, deploy::DeployParamsV1};
 use log::{debug, info};
 
 use super::create_derive_contractid_proof;
-use crate::model::DeployParamsV1;
 
 pub struct DeployCallDebris {
     pub params: DeployParamsV1,

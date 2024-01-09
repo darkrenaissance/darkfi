@@ -19,6 +19,7 @@
 use darkfi_sdk::{
     crypto::{ContractId, PublicKey},
     db::{db_get, db_lookup, db_set},
+    deploy::DeployParamsV1,
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
@@ -31,9 +32,8 @@ use wasmparser::{
 };
 
 use crate::{
-    error::DeployError,
-    model::{DeployParamsV1, DeployUpdateV1},
-    DeployFunction, DEPLOY_CONTRACT_LOCK_TREE, DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1,
+    error::DeployError, model::DeployUpdateV1, DeployFunction, DEPLOY_CONTRACT_LOCK_TREE,
+    DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1,
 };
 
 /// `get_metadata` function for `Deploy::DeployV1`
