@@ -77,10 +77,6 @@ pub mod pasta_prelude {
     };
 }
 
-/// Sharing address encoded as wallet import format
-pub mod share_address;
-pub use share_address::{ShareAddress, ShareAddressType};
-
 #[macro_export]
 macro_rules! fp_from_bs58 {
     ($ty:ident) => {
