@@ -116,7 +116,7 @@
 - [Contracts]()
   - [DAO](spec2/contracts/dao/dao.md)
     - [Concepts](spec2/contracts/dao/concepts.md)
-    - [State](spec2/contracts/dao/state.md)
+    - [Model](spec2/contracts/dao/model.md)
 
 # P2P API Tutorial
 

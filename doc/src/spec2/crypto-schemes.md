@@ -56,3 +56,24 @@ Let $ℙᵥ$ be the group of points with $∞$ on $Eᵥ$.
 
 Arithmetic is mainly done in circuits with $𝔽ₚ$ and $Eₚ$.
 
+### Coordinate Extractor for Pallas
+
+Let $ℙₚ, ∞, 𝔽ₚ$ be defined as [above](#pallas-and-vesta).
+
+Define $\mathcal{X} : ℙₚ → 𝔽ₚ$ such that
+$$ \mathcal{X}(∞_{Eₚ}) = 0 $$
+$$ \mathcal{X}((x, y)) = x $$
+$$ \mathcal{Y}(∞_{Eₚ}) = 0 $$
+$$ \mathcal{Y}((x, y)) = y $$
+
+**Note:** There is no $P = (0, y) ∈ Eₚ$ so $\mathcal{X}(P) = 0 ⟹  P = ∞$.
+Likewise there is no $P = (x, 0) ∈ Eₚ$ so $\mathcal{Y}(P) = 0 ⟹  P = ∞$.
+
+### Encoding and Decoding for $𝔽ₚ$
+
+TODO: define $\t{Encode}_{𝔽ₚ} : 𝔽ₚ → 𝔹³²$.
+
+## BLAKE3 Hash Function
+
+BLAKE3 is defined by [CANW2021](https://raw.githubusercontent.com/BLAKE3-team/BLAKE3-specs/master/blake3.pdf).
+$$ \t{BLAKE3}: 𝔹^* → 𝔹³² $$
