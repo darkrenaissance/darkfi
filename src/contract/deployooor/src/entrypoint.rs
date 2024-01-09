@@ -52,7 +52,7 @@ darkfi_sdk::define_contract!(
 /// with initial data if necessary.
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // Set up the zkas circuit tree
-    let derive_cid_bincode = include_bytes!("../proof/derive_contract_id.zk");
+    let derive_cid_bincode = include_bytes!("../proof/derive_contract_id.zk.bin");
     zkas_db_set(&derive_cid_bincode[..])?;
 
     // Set up a database tree for arbitrary data

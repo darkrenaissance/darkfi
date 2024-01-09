@@ -40,8 +40,8 @@ use darkfi_sdk::{
     blockchain::{PidOutput, PreviousSlot, Slot},
     bridgetree,
     crypto::{
-        pasta_prelude::Field, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey,
-        SecretKey, TokenId,
+        pasta_prelude::Field, poseidon_hash, ContractId, Keypair, MerkleNode, MerkleTree,
+        Nullifier, PublicKey, SecretKey, TokenId,
     },
     pasta::pallas,
 };
@@ -58,6 +58,7 @@ mod consensus_proposal;
 mod consensus_stake;
 mod consensus_unstake;
 mod consensus_unstake_request;
+mod contract_deploy;
 mod dao_exec;
 mod dao_mint;
 mod dao_propose;
@@ -77,8 +78,8 @@ pub fn init_logger() {
     // We check this error so we can execute same file tests in parallel,
     // otherwise second one fails to init logger here.
     if simplelog::TermLogger::init(
-        simplelog::LevelFilter::Info,
-        //simplelog::LevelFilter::Debug,
+        //simplelog::LevelFilter::Info,
+        simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
@@ -125,6 +126,7 @@ pub enum TxAction {
 pub struct Wallet {
     pub keypair: Keypair,
     pub token_mint_authority: Keypair,
+    pub contract_deploy_authority: Keypair,
     pub validator: ValidatorPtr,
     pub money_merkle_tree: MerkleTree,
     pub consensus_staked_merkle_tree: MerkleTree,
@@ -182,10 +184,12 @@ impl Wallet {
         let spent_money_coins = vec![];
 
         let token_mint_authority = Keypair::random(&mut OsRng);
+        let contract_deploy_authority = Keypair::random(&mut OsRng);
 
         Ok(Self {
             keypair,
             token_mint_authority,
+            contract_deploy_authority,
             validator,
             money_merkle_tree,
             consensus_staked_merkle_tree,
@@ -492,6 +496,11 @@ impl TestHarness {
     pub fn token_id(&self, holder: &Holder) -> TokenId {
         let holder = self.holders.get(holder).unwrap();
         TokenId::derive_public(holder.token_mint_authority.public)
+    }
+
+    pub fn contract_id(&self, holder: &Holder) -> ContractId {
+        let holder = self.holders.get(holder).unwrap();
+        ContractId::derive_public(holder.contract_deploy_authority.public)
     }
 
     pub fn statistics(&self) {
