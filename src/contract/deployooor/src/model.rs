@@ -29,6 +29,8 @@ pub struct DeployParamsV1 {
     pub wasm_bincode: Vec<u8>,
     /// Public key used to sign the transaction and derive the `ContractId`
     pub public_key: PublicKey,
+    /// Serialized deployment payload instruction
+    pub ix: Vec<u8>,
 }
 
 /// State update for `Deploy::Deploy`

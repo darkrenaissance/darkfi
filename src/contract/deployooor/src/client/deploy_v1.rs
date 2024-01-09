@@ -38,6 +38,8 @@ pub struct DeployCallBuilder {
     pub deploy_keypair: Keypair,
     /// WASM bincode to deploy
     pub wasm_bincode: Vec<u8>,
+    /// Serialized deployment payload instruction
+    pub deploy_ix: Vec<u8>,
     /// `DeriveContractID` zkas circuit ZkBinary
     pub derivecid_zkbin: ZkBinary,
     /// Proving key for the `DeriveContractID` zk circuit
@@ -59,6 +61,7 @@ impl DeployCallBuilder {
         let params = DeployParamsV1 {
             wasm_bincode: self.wasm_bincode.clone(),
             public_key: self.deploy_keypair.public,
+            ix: self.deploy_ix.clone(),
         };
 
         let debris = DeployCallDebris { params, proofs: vec![proof] };
