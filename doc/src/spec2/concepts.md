@@ -55,3 +55,9 @@ cannot call `db_get()`, but may call `db_set()`.
 | `set_return_data` | Exec, Metadata                 | Used for returning data to the host |
 | `get_slot`        | Deploy, Exec, Metadata         | Get the current slot                |
 
+## Function IDs
+
+Let $𝔽ₚ$ be defined as in the section [Pallas and Vesta](crypto-schemes.md#pallas-and-vesta).
+
+Functions can be specified using a tuple $\t{FuncId} := (𝔽ₚ, 𝔹)$.
+

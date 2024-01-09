@@ -31,9 +31,9 @@ use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
 #[cfg(feature = "client")]
 use darkfi_serial::async_trait;
 
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 // ANCHOR: dao
 /// DAOs are represented on chain as a commitment to this object
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct Dao {
     pub proposer_limit: u64,
     pub quorum: u64,
@@ -104,11 +104,13 @@ darkfi_sdk::fp_to_bs58!(DaoBulla);
 darkfi_sdk::ty_from_fp!(DaoBulla);
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: dao-auth-call
 pub struct DaoAuthCall {
     pub contract_id: pallas::Base,
     pub function_code: u8,
     pub auth_data: Vec<u8>,
 }
+// ANCHOR_END: dao-auth-call
 
 pub trait VecAuthCallCommit {
     fn commit(&self) -> pallas::Base;
@@ -126,6 +128,7 @@ impl VecAuthCallCommit for Vec<DaoAuthCall> {
 }
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: dao-proposal
 pub struct DaoProposal {
     pub auth_calls: Vec<DaoAuthCall>,
     pub creation_day: u64,
@@ -135,6 +138,7 @@ pub struct DaoProposal {
     pub dao_bulla: DaoBulla,
     pub blind: pallas::Base,
 }
+// ANCHOR_END: dao-proposal
 
 impl DaoProposal {
     pub fn to_bulla(&self) -> DaoProposalBulla {
