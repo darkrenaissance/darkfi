@@ -32,7 +32,7 @@ setup_pacman() {
 }
 
 setup_xbps() {
-	xbps_deps="git make gcc pkg-config alsa-lib-devel openssl-devel sqlcipher-devel"
+	xbps_deps="git make gcc pkg-config alsa-lib-devel openssl-devel sqlcipher-devel wabt"
 	$1 -S $xbps_deps || return 1
 }
 
