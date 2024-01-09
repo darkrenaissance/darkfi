@@ -39,8 +39,9 @@ impl<'a> MemoryManipulation for MemoryView<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use darkfi_serial::Decodable;
     use std::io::Cursor;
+
+    use darkfi_serial::Decodable;
     use wasmer::{Memory, MemoryType, Store, WasmPtr};
 
     #[test]

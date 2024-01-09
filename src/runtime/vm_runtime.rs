@@ -305,21 +305,6 @@ impl Runtime {
         Ok(Self { instance, store, ctx })
     }
 
-    /// Perform a sanity check of the WASM bincode. In particular, ensure that it contains
-    /// all the necessary symbols for executing contracts, including sections for
-    /// Deploy, Exec, Update, and Metadata.
-    pub fn sanity_check(&self) -> Result<()> {
-        debug!(target: "runtime::vm_runtime", "Performing sanity check on wasm bincode");
-
-        // Check that we have all the necessary symbols;
-        let _ = self.instance.exports.get_function(ContractSection::Deploy.name())?;
-        let _ = self.instance.exports.get_function(ContractSection::Exec.name())?;
-        let _ = self.instance.exports.get_function(ContractSection::Update.name())?;
-        let _ = self.instance.exports.get_function(ContractSection::Metadata.name())?;
-
-        Ok(())
-    }
-
     /// Call a contract method defined by a [`ContractSection`] using a supplied
     /// payload. Returns a Vector of bytes corresponding to the result data of the call.
     /// For calls that do not return any data, an empty Vector is returned.
