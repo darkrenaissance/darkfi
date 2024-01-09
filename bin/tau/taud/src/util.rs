@@ -47,12 +47,7 @@ pub fn set_event(task_info: &mut TaskInfo, action: &str, author: &str, content: 
 }
 
 pub fn pipe_write<P: AsRef<Path>>(path: P) -> Result<File> {
-    OpenOptions::new()
-        .write(true)
-        .append(true)
-        .custom_flags(libc::O_NONBLOCK)
-        .open(path)
-        .map_err(Error::from)
+    OpenOptions::new().append(true).custom_flags(libc::O_NONBLOCK).open(path).map_err(Error::from)
 }
 
 pub fn gen_id(len: usize) -> String {
