@@ -55,13 +55,14 @@ The following dependencies are also required:
 | alsa-lib       | libasound2-dev   |
 | openssl        | libssl-dev       |
 | sqlcipher      | libsqlcipher-dev |
+| wabt           | wabt             |
 
 Users of Debian-based systems (e.g. Ubuntu) can simply run the
 following to install the required dependencies:
 
 ```shell
 # apt-get update
-# apt-get install -y git make gcc pkg-config libasound2-dev libssl-dev libsqlcipher-dev
+# apt-get install -y git make gcc pkg-config libasound2-dev libssl-dev libsqlcipher-dev wabt
 ```
 
 Alternatively, users can try using the automated script under `contrib`

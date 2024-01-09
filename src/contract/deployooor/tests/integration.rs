@@ -21,7 +21,6 @@ use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
 use log::info;
 
 #[test]
-#[ignore]
 fn deploy_integration() -> Result<()> {
     smol::block_on(async {
         init_logger();

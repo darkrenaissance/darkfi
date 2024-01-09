@@ -42,6 +42,7 @@ $(WASM_BIN): $(WASM_SRC) $(PROOFS_BIN)
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) build --target=$(WASM_TARGET) \
 	--release --package $(PKGNAME)
 	cp -f ../../../target/$(WASM_TARGET)/release/$@ $@
+	wasm-strip $@
 
 test-stake-unstake: all
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
