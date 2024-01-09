@@ -77,6 +77,9 @@ impl DaoVoteCall {
         debug!(target: "dao", "build()");
         let mut proofs = vec![];
 
+        assert_eq!(self.dao.to_bulla(), self.proposal.dao_bulla);
+        let proposal_bulla = self.proposal.to_bulla();
+
         let gov_token_blind = pallas::Base::random(&mut OsRng);
 
         let mut inputs = vec![];
@@ -107,6 +110,7 @@ impl DaoVoteCall {
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
                 Witness::Base(Value::known(input.signature_secret.inner())),
+                Witness::Base(Value::known(proposal_bulla.inner())),
             ];
 
             let public_key = PublicKey::from_secret(input.secret);
@@ -137,7 +141,8 @@ impl DaoVoteCall {
             let token_commit = poseidon_hash([note.token_id.inner(), gov_token_blind]);
             assert_eq!(self.dao.gov_token_id, note.token_id);
 
-            let nullifier = poseidon_hash([input.secret.inner(), note.serial]);
+            let nullifier =
+                poseidon_hash([input.secret.inner(), coin.inner(), proposal_bulla.inner()]);
 
             let vote_commit = pedersen_commitment_u64(note.value, all_vote_blind);
             let vote_commit_coords = vote_commit.to_affine().coordinates().unwrap();
@@ -145,6 +150,7 @@ impl DaoVoteCall {
             let (sig_x, sig_y) = signature_public.xy();
 
             let public_inputs = vec![
+                proposal_bulla.inner(),
                 nullifier,
                 *vote_commit_coords.x(),
                 *vote_commit_coords.y(),
@@ -176,9 +182,6 @@ impl DaoVoteCall {
         let dao_approval_ratio_quot = pallas::Base::from(self.dao.approval_ratio_quot);
         let dao_approval_ratio_base = pallas::Base::from(self.dao.approval_ratio_base);
         let (dao_pub_x, dao_pub_y) = self.dao.public_key.xy();
-
-        assert_eq!(self.dao.to_bulla(), self.proposal.dao_bulla);
-        let proposal_bulla = self.proposal.to_bulla();
 
         let vote_option = self.vote_option as u64;
         assert!(vote_option == 0 || vote_option == 1);
