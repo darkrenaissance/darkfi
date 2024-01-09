@@ -339,6 +339,9 @@ pub enum Error {
     #[error("Proposal task stopped")]
     ProposalTaskStopped,
 
+    #[error("Proposal already exists")]
+    ProposalAlreadyExists,
+
     #[error("Miner task stopped")]
     MinerTaskStopped,
 
