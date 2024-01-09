@@ -437,7 +437,7 @@ impl Runtime {
             db_handles.push(DbHandle::new(env_mut.contract_id, zkas_tree_handle));
         }
 
-        debug!(target: "runtime::vm_runtime", "[wasm-runtime] payload: {:?}", payload);
+        //debug!(target: "runtime::vm_runtime", "[wasm-runtime] payload: {:?}", payload);
         let _ = self.call(ContractSection::Deploy, payload)?;
 
         // Update the wasm bincode in the WasmStore
