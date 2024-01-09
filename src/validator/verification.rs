@@ -20,7 +20,10 @@ use std::collections::HashMap;
 
 use darkfi_sdk::{
     blockchain::{block_version, expected_reward},
-    crypto::{schnorr::SchnorrPublic, PublicKey, CONSENSUS_CONTRACT_ID, MONEY_CONTRACT_ID},
+    crypto::{
+        schnorr::SchnorrPublic, ContractId, PublicKey, CONSENSUS_CONTRACT_ID,
+        DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
+    },
     dark_tree::dark_forest_leaf_vec_integrity_check,
     pasta::pallas,
 };
@@ -36,6 +39,7 @@ use crate::{
     util::time::TimeKeeper,
     validator::{
         consensus::{Consensus, Fork, Proposal, TXS_CAP},
+        deploy::DeployParamsV1,
         pow::PoWModule,
         validation::validate_block,
     },
@@ -458,6 +462,30 @@ pub async fn verify_transaction(
         debug!(target: "validator::verification::verify_transaction", "Executing \"apply\" call");
         runtime.apply(&state_update)?;
         debug!(target: "validator::verification::verify_transaction", "Successfully executed \"apply\" call");
+
+        // If this call is supposed to deploy a new contract, we have to instantiate
+        // a new `Runtime` and run its deploy function.
+        if call.data.contract_id == *DEPLOYOOOR_CONTRACT_ID && call.data.data[0] == 0x00
+        /* DeployV1 */
+        {
+            debug!(target: "validator::verification::verify_transaction", "Deploying new contract");
+            // Deserialize the deployment parameters
+            let deploy_params: DeployParamsV1 = deserialize_async(&call.data.data[1..]).await?;
+            let deploy_cid = ContractId::derive_public(deploy_params.public_key);
+
+            // Instantiate the new deployment runtime
+            let mut deploy_runtime = Runtime::new(
+                &deploy_params.wasm_bincode,
+                overlay.clone(),
+                deploy_cid,
+                time_keeper.clone(),
+            )?;
+
+            deploy_runtime.deploy(&deploy_params.ix)?;
+
+            // Append the used gas
+            gas_used += deploy_runtime.gas_used();
+        }
 
         // At this point we're done with the call and move on to the next one.
         // Accumulate the WASM gas used.
