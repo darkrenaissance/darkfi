@@ -18,6 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{ContractId, PublicKey},
+    dark_tree::DarkLeaf,
     db::{db_get, db_lookup, db_set},
     deploy::DeployParamsV1,
     error::{ContractError, ContractResult},
@@ -40,10 +41,10 @@ use crate::{
 pub(crate) fn deploy_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: DeployParamsV1 = deserialize(&self_.data[1..])?;
+    let params: DeployParamsV1 = deserialize(&self_.data.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
@@ -72,10 +73,10 @@ pub(crate) fn deploy_get_metadata_v1(
 pub(crate) fn deploy_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: DeployParamsV1 = deserialize(&self_.data[1..])?;
+    let params: DeployParamsV1 = deserialize(&self_.data.data[1..])?;
 
     // In this function, we have to check that the contract isn't locked.
     let lock_db = db_lookup(cid, DEPLOY_CONTRACT_LOCK_TREE)?;
