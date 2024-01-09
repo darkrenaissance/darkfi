@@ -25,6 +25,7 @@ use darkfi_sdk::{
         DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     dark_tree::dark_forest_leaf_vec_integrity_check,
+    deploy::DeployParamsV1,
     pasta::pallas,
 };
 use darkfi_serial::{deserialize_async, AsyncDecodable, AsyncEncodable, AsyncWriteExt, WriteExt};
@@ -39,7 +40,6 @@ use crate::{
     util::time::TimeKeeper,
     validator::{
         consensus::{Consensus, Fork, Proposal, TXS_CAP},
-        deploy::DeployParamsV1,
         pow::PoWModule,
         validation::validate_block,
     },

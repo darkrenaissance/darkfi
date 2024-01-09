@@ -16,12 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::crypto::PublicKey;
-use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
+#[cfg(feature = "async")]
+use darkfi_serial::async_trait;
+use darkfi_serial::{SerialDecodable, SerialEncodable};
+
+use crate::crypto::PublicKey;
 
 /// Parameters for `Deploy::Deploy`
-///
-/// This is copied from `src/contract/deployooor.rs`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct DeployParamsV1 {
     /// Webassembly bincode of the smart contract
