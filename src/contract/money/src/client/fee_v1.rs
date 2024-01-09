@@ -279,7 +279,7 @@ fn create_fee_proof(
     .to_coin();
 
     let nullifier =
-        NullifierAttributes { secret_key: input.secret, coin: input_coin.clone() }.to_nullifier();
+        NullifierAttributes { secret_key: input.secret, coin: input_coin }.to_nullifier();
 
     let merkle_root = {
         let position: u64 = input.leaf_position.into();

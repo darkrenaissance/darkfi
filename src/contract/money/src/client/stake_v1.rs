@@ -173,8 +173,7 @@ pub fn create_stake_burn_proof(
     }
     .to_coin();
 
-    let nullifier =
-        NullifierAttributes { secret_key: input.secret, coin: coin.clone() }.to_nullifier();
+    let nullifier = NullifierAttributes { secret_key: input.secret, coin }.to_nullifier();
 
     let merkle_root = {
         let position: u64 = input.leaf_position.into();

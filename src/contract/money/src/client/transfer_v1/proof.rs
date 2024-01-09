@@ -17,7 +17,7 @@
  */
 
 use darkfi::{
-    zk::{export_witness_json, halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
+    zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
@@ -103,8 +103,7 @@ pub fn create_transfer_burn_proof(
     }
     .to_coin();
 
-    let nullifier =
-        NullifierAttributes { secret_key: input.secret, coin: coin.clone() }.to_nullifier();
+    let nullifier = NullifierAttributes { secret_key: input.secret, coin }.to_nullifier();
 
     let merkle_root = {
         let position: u64 = input.leaf_position.into();
