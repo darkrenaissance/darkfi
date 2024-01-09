@@ -254,15 +254,37 @@ pub fn previous_slot_info(
 }
 
 /// Given a proposal, find the index of the fork chain it extends, along with the specific
-/// extended proposal index.
+/// extended proposal index. Additionally, check that proposal doesn't already exists in any
+/// fork chain.
 pub fn find_extended_fork_index(forks: &[Fork], proposal: &Proposal) -> Result<(usize, usize)> {
+    // Grab provided proposal hash
+    let proposal_hash = proposal.block.hash()?;
+
+    // Keep track of fork and proposal indexes
+    let (mut fork_index, mut proposal_index) = (None, None);
+
+    // Loop through all the forks
     for (f_index, fork) in forks.iter().enumerate() {
         // Traverse fork proposals sequence in reverse
         for (p_index, p_hash) in fork.proposals.iter().enumerate().rev() {
+            // Check we haven't already seen that proposal
+            if &proposal_hash == p_hash {
+                return Err(Error::ProposalAlreadyExists)
+            }
+
+            // Check if proposal extends this fork
             if &proposal.block.header.previous == p_hash {
-                return Ok((f_index, p_index))
+                // Proposal must only extend a single fork
+                if fork_index.is_some() {
+                    return Err(Error::ProposalAlreadyExists)
+                }
+                (fork_index, proposal_index) = (Some(f_index), Some(p_index));
             }
         }
+    }
+
+    if let (Some(f_index), Some(p_index)) = (fork_index, proposal_index) {
+        return Ok((f_index, p_index))
     }
 
     Err(Error::ExtendedChainIndexNotFound)
