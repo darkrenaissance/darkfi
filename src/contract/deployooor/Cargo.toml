@@ -14,7 +14,11 @@ darkfi-serial = { path = "../../serial", features = ["derive", "crypto"] }
 thiserror = "1.0.56"
 wasmparser = "0.118.1"
 
-async-trait = { version = "0.1.77", optional = true }
+# The following dependencies are used for the client API and
+# probably shouldn't be in WASM
+darkfi = { path = "../../../", features = ["zk"], optional = true }
+log = { version = "0.4.20", optional = true }
+rand = { version = "0.8.5", optional = true }
 
 # We need to disable random using "custom" which makes the crate a noop
 # so the wasm32-unknown-unknown target is enabled.
@@ -25,6 +29,10 @@ getrandom = { version = "0.2.8", features = ["custom"] }
 default = []
 no-entrypoint = []
 client = [
+    "darkfi",
     "darkfi-sdk/async",
     "darkfi-serial/async",
+
+    "log",
+    "rand",
 ]

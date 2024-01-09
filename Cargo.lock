@@ -1971,10 +1971,12 @@ dependencies = [
 name = "darkfi_deployooor_contract"
 version = "0.4.1"
 dependencies = [
- "async-trait",
+ "darkfi",
  "darkfi-sdk",
  "darkfi-serial",
  "getrandom 0.2.11",
+ "log",
+ "rand 0.8.5",
  "thiserror",
  "wasmparser 0.118.1",
 ]
