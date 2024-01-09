@@ -19,7 +19,7 @@
 use darkfi_sdk::{
     crypto::{
         ecvrf::VrfProof, pasta_prelude::PrimeField, PublicKey, CONSENSUS_CONTRACT_ID,
-        DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+        DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     pasta::{group::ff::FromUniformBytes, pallas},
 };
@@ -64,6 +64,9 @@ pub async fn deploy_native_contracts(
     // The Consensus contract uses an empty payload to deploy itself.
     let consensus_contract_deploy_payload = vec![];
 
+    // The Deployooor contract uses an empty payload to deploy itself.
+    let deployooor_contract_deploy_payload = vec![];
+
     let native_contracts = vec![
         (
             "Money Contract",
@@ -82,6 +85,12 @@ pub async fn deploy_native_contracts(
             *CONSENSUS_CONTRACT_ID,
             include_bytes!("../contract/consensus/darkfi_consensus_contract.wasm").to_vec(),
             consensus_contract_deploy_payload,
+        ),
+        (
+            "Deployooor Contract",
+            *DEPLOYOOOR_CONTRACT_ID,
+            include_bytes!("../contract/deployooor/darkfi_deployooor_contract.wasm").to_vec(),
+            deployooor_contract_deploy_payload,
         ),
     ];
 
