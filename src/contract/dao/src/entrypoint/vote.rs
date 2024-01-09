@@ -74,6 +74,7 @@ pub(crate) fn dao_vote_get_metadata(
         zk_public_inputs.push((
             DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS.to_string(),
             vec![
+                params.proposal_bulla.inner(),
                 input.nullifier.inner(),
                 *value_coords.x(),
                 *value_coords.y(),
