@@ -22,7 +22,9 @@ use log::error;
 #[cfg(feature = "tinyjson")]
 use {
     std::{collections::HashMap, fs::File, io::Write, path::Path},
-    tinyjson::JsonValue::{Array as JsonArray, Object as JsonObj, String as JsonStr},
+    tinyjson::JsonValue::{
+        Array as JsonArray, Number as JsonNum, Object as JsonObj, String as JsonStr,
+    },
 };
 
 use super::{Witness, ZkCircuit};
@@ -50,6 +52,22 @@ pub fn export_witness_json<P: AsRef<Path>>(
                     value_json.insert("Scalar".to_string(), JsonStr(format!("{:?}", w1)));
                     w1
                 });
+            }
+            Witness::Uint32(value) => {
+                value.map(|w1| {
+                    value_json.insert("Uint32".to_string(), JsonNum(w1.into()));
+                    w1
+                });
+            }
+            Witness::MerklePath(value) => {
+                let mut path = Vec::new();
+                value.map(|w1| {
+                    for node in w1 {
+                        path.push(JsonStr(format!("{:?}", node.inner())));
+                    }
+                    w1
+                });
+                value_json.insert("MerklePath".to_string(), JsonArray(path));
             }
             _ => unimplemented!(),
         }
