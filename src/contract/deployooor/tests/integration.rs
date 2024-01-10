@@ -29,7 +29,8 @@ fn deploy_integration() -> Result<()> {
         let current_slot = 0;
 
         // Initialize harness
-        let mut th = TestHarness::new(&["money".to_string(), "deployooor".to_string()]).await?;
+        let mut th =
+            TestHarness::new(&["money".to_string(), "deployooor".to_string()], false).await?;
 
         // WASM bincode to deploy
         let wasm_bincode = include_bytes!("../../dao/darkfi_dao_contract.wasm");

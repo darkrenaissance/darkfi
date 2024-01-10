@@ -53,7 +53,7 @@ fn genesis_mint() -> Result<()> {
         let current_slot = 0;
 
         // Initialize harness
-        let mut th = TestHarness::new(&["money".to_string()]).await?;
+        let mut th = TestHarness::new(&["money".to_string()], false).await?;
 
         let mut alice_owncoins = vec![];
         let mut bob_owncoins = vec![];

@@ -45,7 +45,8 @@ fn consensus_contract_genesis_stake_unstake() -> Result<()> {
         let mut current_slot = 0;
 
         // Initialize harness
-        let mut th = TestHarness::new(&["money".to_string(), "consensus".to_string()]).await?;
+        let mut th =
+            TestHarness::new(&["money".to_string(), "consensus".to_string()], false).await?;
 
         // Now Alice can create a genesis stake transaction to mint
         // some staked coins

@@ -50,7 +50,7 @@ fn integration_test() -> Result<()> {
         ];
 
         // Initialize harness
-        let mut th = TestHarness::new(&["money".to_string(), "dao".to_string()]).await?;
+        let mut th = TestHarness::new(&["money".to_string(), "dao".to_string()], false).await?;
 
         // We'll use the ALICE token as the DAO governance token
         let gov_token_id = th.token_id(&Holder::Alice);

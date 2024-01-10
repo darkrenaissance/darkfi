@@ -148,6 +148,7 @@ impl Wallet {
         genesis_block: &BlockInfo,
         faucet_pubkeys: &[PublicKey],
         vks: &Vks,
+        verify_fees: bool,
     ) -> Result<Self> {
         let wallet = WalletDb::new(None, None)?;
         let sled_db = sled::Config::new().temporary(true).open()?;
@@ -169,6 +170,7 @@ impl Wallet {
             0,
             faucet_pubkeys.to_vec(),
             false,
+            verify_fees,
         );
         let validator = Validator::new(&sled_db, config).await?;
 
@@ -214,7 +216,7 @@ pub struct TestHarness {
 }
 
 impl TestHarness {
-    pub async fn new(_contracts: &[String]) -> Result<Self> {
+    pub async fn new(_contracts: &[String], verify_fees: bool) -> Result<Self> {
         let mut holders = HashMap::new();
         let mut genesis_block = BlockInfo::default();
         genesis_block.header.timestamp = Timestamp(1689772567);
@@ -236,27 +238,31 @@ impl TestHarness {
 
         let faucet_kp = Keypair::random(&mut rng);
         let faucet_pubkeys = vec![faucet_kp.public];
-        let faucet = Wallet::new(faucet_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
+        let faucet =
+            Wallet::new(faucet_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
         holders.insert(Holder::Faucet, faucet);
 
         let alice_kp = Keypair::random(&mut rng);
-        let alice = Wallet::new(alice_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
+        let alice =
+            Wallet::new(alice_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
         holders.insert(Holder::Alice, alice);
 
         let bob_kp = Keypair::random(&mut rng);
-        let bob = Wallet::new(bob_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
+        let bob = Wallet::new(bob_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
         holders.insert(Holder::Bob, bob);
 
         let charlie_kp = Keypair::random(&mut rng);
-        let charlie = Wallet::new(charlie_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
+        let charlie =
+            Wallet::new(charlie_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
         holders.insert(Holder::Charlie, charlie);
 
         let rachel_kp = Keypair::random(&mut rng);
-        let rachel = Wallet::new(rachel_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
+        let rachel =
+            Wallet::new(rachel_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
         holders.insert(Holder::Rachel, rachel);
 
         let dao_kp = Keypair::random(&mut rng);
-        let dao = Wallet::new(dao_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
+        let dao = Wallet::new(dao_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
         holders.insert(Holder::Dao, dao);
 
         // Build benchmarks map

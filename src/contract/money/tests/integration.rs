@@ -29,7 +29,7 @@ fn money_integration() -> Result<()> {
         const HOLDERS: [Holder; 2] = [Holder::Alice, Holder::Bob];
 
         // Initialize harness
-        let mut th = TestHarness::new(&["money".to_string()]).await?;
+        let mut th = TestHarness::new(&["money".to_string()], true).await?;
 
         // Current verification slot
         let mut verification_slot = 1;
