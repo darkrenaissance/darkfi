@@ -51,6 +51,8 @@ fn money_integration() -> Result<()> {
             .await?;
         }
 
+        let _ = th.gather_owncoin(&Holder::Alice, &alice_proposal_params.output, None)?;
+
         th.assert_trees(&HOLDERS);
         verification_slot += 1;
         th.generate_slot(verification_slot).await?;
@@ -70,6 +72,8 @@ fn money_integration() -> Result<()> {
             )
             .await?;
         }
+
+        let _ = th.gather_owncoin(&Holder::Bob, &bob_proposal_params.output, None)?;
 
         th.assert_trees(&HOLDERS);
         verification_slot += 1;
