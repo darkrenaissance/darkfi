@@ -36,7 +36,7 @@ circuit "DaoVoteInput" {
         spend_hook,
         user_data,
     );
-    nullifier = poseidon_hash(secret, coin, proposal_bulla);
+    nullifier = poseidon_hash(serial, coin, proposal_bulla);
     constrain_instance(proposal_bulla);
     constrain_instance(nullifier);
 

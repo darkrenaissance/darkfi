@@ -141,8 +141,7 @@ impl DaoVoteCall {
             let token_commit = poseidon_hash([note.token_id.inner(), gov_token_blind]);
             assert_eq!(self.dao.gov_token_id, note.token_id);
 
-            let nullifier =
-                poseidon_hash([input.secret.inner(), coin.inner(), proposal_bulla.inner()]);
+            let nullifier = poseidon_hash([note.serial, coin.inner(), proposal_bulla.inner()]);
 
             let vote_commit = pedersen_commitment_u64(note.value, all_vote_blind);
             let vote_commit_coords = vote_commit.to_affine().coordinates().unwrap();
