@@ -60,9 +60,14 @@ pub struct Harness {
 }
 
 impl Harness {
-    pub async fn new(config: HarnessConfig, ex: &Arc<smol::Executor<'static>>) -> Result<Self> {
+    pub async fn new(
+        config: HarnessConfig,
+        verify_fees: bool,
+        ex: &Arc<smol::Executor<'static>>,
+    ) -> Result<Self> {
         // Use test harness to generate genesis transactions
-        let mut th = TestHarness::new(&["money".to_string(), "consensus".to_string()]).await?;
+        let mut th =
+            TestHarness::new(&["money".to_string(), "consensus".to_string()], verify_fees).await?;
         let (genesis_stake_tx, _) = th.genesis_stake(&Holder::Alice, config.alice_initial)?;
         let (genesis_mint_tx, _) = th.genesis_mint(&Holder::Bob, config.bob_initial)?;
 
@@ -89,6 +94,7 @@ impl Harness {
             genesis_txs_total,
             vec![],
             config.pos_testing_mode,
+            verify_fees,
         );
 
         // Generate validators using pregenerated vks

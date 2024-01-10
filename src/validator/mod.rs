@@ -87,6 +87,8 @@ pub struct ValidatorConfig {
     pub faucet_pubkeys: Vec<PublicKey>,
     /// Flag to enable PoS testing mode
     pub pos_testing_mode: bool,
+    /// Flag to enable tx fee verification
+    pub verify_fees: bool,
 }
 
 impl ValidatorConfig {
@@ -101,6 +103,7 @@ impl ValidatorConfig {
         genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
         pos_testing_mode: bool,
+        verify_fees: bool,
     ) -> Self {
         Self {
             time_keeper,
@@ -112,6 +115,7 @@ impl ValidatorConfig {
             genesis_txs_total,
             faucet_pubkeys,
             pos_testing_mode,
+            verify_fees,
         }
     }
 }
@@ -129,6 +133,8 @@ pub struct Validator {
     pub synced: RwLock<bool>,
     /// Flag to enable PoS testing mode
     pub pos_testing_mode: bool,
+    /// Flag to enable tx fee verification
+    pub verify_fees: bool,
 }
 
 impl Validator {
@@ -172,10 +178,15 @@ impl Validator {
         )?;
 
         // Create the actual state
-        let state =
-            Arc::new(Self { blockchain, consensus, synced: RwLock::new(false), pos_testing_mode });
-        info!(target: "validator::new", "Finished initializing validator");
+        let state = Arc::new(Self {
+            blockchain,
+            consensus,
+            synced: RwLock::new(false),
+            pos_testing_mode,
+            verify_fees: config.verify_fees,
+        });
 
+        info!(target: "validator::new", "Finished initializing validator");
         Ok(state)
     }
 
@@ -471,7 +482,8 @@ impl Validator {
         );
 
         // Verify all transactions and get erroneous ones
-        let erroneous_txs = verify_transactions(&overlay, &time_keeper, txs, false).await?;
+        let erroneous_txs =
+            verify_transactions(&overlay, &time_keeper, txs, self.verify_fees).await?;
 
         let lock = overlay.lock().unwrap();
         let mut overlay = lock.overlay.lock().unwrap();

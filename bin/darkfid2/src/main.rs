@@ -234,18 +234,21 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     // Initialize validator configuration
     let genesis_txs_total = genesis_txs_total(&genesis_block.txs).await?;
+
     let time_keeper = TimeKeeper::new(
         genesis_block.header.timestamp,
         blockchain_config.epoch_length,
         blockchain_config.slot_time,
         0,
     );
+
     let pow_fixed_difficulty = if let Some(diff) = blockchain_config.pow_fixed_difficulty {
         info!(target: "darkfid", "Node is configured to run with fixed PoW difficulty: {}", diff);
         Some(diff.into())
     } else {
         None
     };
+
     let config = ValidatorConfig::new(
         time_keeper,
         blockchain_config.threshold,
@@ -256,6 +259,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         genesis_txs_total,
         vec![],
         blockchain_config.pos_testing_mode,
+        false, // TODO: Make configurable
     );
 
     // Initialize validator
