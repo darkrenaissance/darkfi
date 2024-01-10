@@ -1,1 +1,0 @@
-# verifiable delay function (VDF)
