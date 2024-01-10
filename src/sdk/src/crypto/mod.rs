@@ -73,7 +73,7 @@ pub mod pasta_prelude {
     pub use pasta_curves::{
         arithmetic::{CurveAffine, CurveExt},
         group::{
-            ff::{Field, PrimeField},
+            ff::{Field, FromUniformBytes, PrimeField},
             Curve, Group,
         },
     };

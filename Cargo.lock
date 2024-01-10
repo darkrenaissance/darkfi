@@ -1955,7 +1955,7 @@ dependencies = [
 name = "darkfi_dao_contract"
 version = "0.4.1"
 dependencies = [
- "blake3 1.5.0",
+ "blake2b_simd",
  "bs58",
  "chacha20poly1305",
  "darkfi",

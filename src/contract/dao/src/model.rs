@@ -118,12 +118,16 @@ pub trait VecAuthCallCommit {
 
 impl VecAuthCallCommit for Vec<DaoAuthCall> {
     fn commit(&self) -> pallas::Base {
-        let mut hasher = blake3::Hasher::new();
+        // Hash a bunch of data, then convert it so pallas::Base
+        // see https://docs.rs/ff/0.13.0/ff/trait.FromUniformBytes.html
+        // We essentially create a really large value and reduce it modulo the field
+        // to diminish the statistical significance of any overlap.
+        let mut hasher =
+            blake2b_simd::Params::new().hash_length(64).personal(b"justDAOthings").to_state();
         self.encode(&mut hasher).unwrap();
         let hash = hasher.finalize();
-        let bytes = hash.as_bytes();
-        let raw_base: [u64; 4] = Decodable::decode(&mut bytes.as_slice()).unwrap();
-        pallas::Base::from_raw(raw_base)
+        let bytes = hash.as_array();
+        pallas::Base::from_uniform_bytes(bytes)
     }
 }
 
