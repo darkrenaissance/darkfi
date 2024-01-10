@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use log::{debug, trace};
+use log::trace;
 use rand::{rngs::OsRng, Rng};
 use smol::{
     future::{self, Future},
@@ -115,11 +115,9 @@ impl StoppableTask {
     /// Can be called multiple times. After the first call, this does nothing.
     pub async fn stop(&self) {
         trace!(target: "system::StoppableTask", "Stopping task {}", self.task_id);
-        debug!(target: "deadlock", "system::StoppableTask Stopping task {}", self.task_id);
         self.signal.notify();
         self.barrier.wait().await;
         trace!(target: "system::StoppableTask", "Stopped task {}", self.task_id);
-        debug!(target: "deadlock", "system::StoppableTask Stopped task {}", self.task_id);
     }
 }
 

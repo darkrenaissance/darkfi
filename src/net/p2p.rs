@@ -180,7 +180,6 @@ impl P2p {
         self.session_outbound().stop().await;
 
         // Stop greylist refinery process
-        debug!(target: "deadlock", "Killing greylist refinery node: {}", self.settings().node_id);
         self.greylist_refinery().stop().await;
     }
 

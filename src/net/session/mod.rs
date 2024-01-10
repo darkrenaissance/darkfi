@@ -147,8 +147,6 @@ pub trait Session: Sync {
         protocol_version.run(executor.clone()).await?;
 
         if self.type_id() != SESSION_INBOUND {
-            //debug!(target: "deadlock", "perform_handshake_protocols adding to anchorlist channel {}, node {}",
-            //       channel.clone().address(), self.p2p().settings().node_id);
             // Channel is now initialized. Timestamp this.
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
@@ -159,29 +157,11 @@ pub trait Session: Sync {
         }
 
         // Add channel to p2p
-        //debug!(target: "deadlock", "Storing channel in p2p, channel {} node {}",
-        //channel.clone().address(), self.p2p().settings().node_id);
-
-        //debug!(target: "net::session::register_channel()", "perform_handshake_protocol {}", channel.clone().address());
         self.p2p().store(channel.clone()).await;
 
         // Subscribe to stop, so we can remove from p2p
-        //debug!(target: "deadlock", "Waiting for a stop signal channel {} node {}",
-        //channel.clone().address(), self.p2p().settings().node_id);
         executor.spawn(remove_sub_on_stop(self.p2p(), channel, self.type_id())).detach();
 
-        // Channel is ready for use
-        Ok(())
-    }
-
-    async fn perform_local_handshake(
-        &self,
-        protocol_version: Arc<ProtocolVersion>,
-        channel: ChannelPtr,
-        executor: Arc<Executor<'_>>,
-    ) -> Result<()> {
-        // Perform handshake
-        protocol_version.run(executor.clone()).await?;
         // Channel is ready for use
         Ok(())
     }

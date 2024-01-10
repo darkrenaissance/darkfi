@@ -32,7 +32,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use log::{debug, info, warn};
+use log::{info, warn};
 use smol::lock::Mutex;
 use url::Url;
 

@@ -94,11 +94,7 @@ impl Hosts {
     /// our own inbound address, then checks whether it is already connected
     /// (exists) or connecting (pending).
     /// Lastly adds matching address to the pending list.
-    pub async fn greylist_fetch_address(
-        &self,
-        p2p: P2pPtr,
-        transports: &[String],
-    ) -> Vec<(Url, u64)> {
+    pub async fn greylist_fetch_address(&self, transports: &[String]) -> Vec<(Url, u64)> {
         trace!(target: "store", "greylist_fetch_address() [START]");
         // Collect hosts
         let mut hosts = vec![];
@@ -141,11 +137,7 @@ impl Hosts {
     /// our own inbound address, then checks whether it is already connected
     /// (exists) or connecting (pending).
     /// Lastly adds matching address to the pending list.
-    pub async fn whitelist_fetch_address(
-        &self,
-        p2p: P2pPtr,
-        transports: &[String],
-    ) -> Vec<(Url, u64)> {
+    pub async fn whitelist_fetch_address(&self, transports: &[String]) -> Vec<(Url, u64)> {
         trace!(target: "store", "whitelist_fetch_address() [START]");
         // Collect hosts
         let mut hosts = vec![];
@@ -191,11 +183,7 @@ impl Hosts {
     /// our own inbound address, then checks whether it is already connected
     /// (exists) or connecting (pending).
     /// Lastly adds matching address to the pending list.
-    pub async fn anchorlist_fetch_address(
-        &self,
-        p2p: P2pPtr,
-        transports: &[String],
-    ) -> Vec<(Url, u64)> {
+    pub async fn anchorlist_fetch_address(&self, transports: &[String]) -> Vec<(Url, u64)> {
         trace!(target: "store", "anchorlist_fetch_address() [START]");
         // Collect hosts
         let mut hosts = vec![];
@@ -361,7 +349,7 @@ impl Hosts {
                 debug!(target: "store::anchorlist_store_or_update()",
         "We have this entry in the anchorlist. Updating last seen...");
 
-                let (index, entry) = self.get_anchorlist_entry_at_addr(addr).await?;
+                let index = self.get_anchorlist_index_at_addr(addr).await?;
                 self.anchorlist_update_last_seen(addr, last_seen.clone(), index).await;
             }
         }
@@ -774,7 +762,7 @@ impl Hosts {
     /// Get the index for a given addr on the anchorlist.
     pub async fn get_anchorlist_index_at_addr(&self, addr: &Url) -> Result<usize> {
         let anchorlist = self.anchorlist.read().await;
-        for (i, (url, time)) in anchorlist.iter().enumerate() {
+        for (i, (url, _time)) in anchorlist.iter().enumerate() {
             if url == addr {
                 return Ok(i)
             }
@@ -1153,11 +1141,7 @@ impl Hosts {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        super::super::{settings::Settings, P2p},
-        *,
-    };
-    use smol::Executor;
+    use super::{super::super::settings::Settings, *};
     use std::{sync::Arc, time::UNIX_EPOCH};
 
     #[test]
