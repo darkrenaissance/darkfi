@@ -75,48 +75,13 @@
 
 # Specs
 
-- [Payment](spec/payment/payment.md)
-  - [burn](spec/payment/burn.md)
-  - [mint](spec/payment/mint.md)
-  - [coin](spec/payment/coin.md)
-  - [token id](spec/payment/token_id.md)
-  - [freeze token](spec/payment/freeze_token.md)
-  - [token mint](spec/payment/token_mint.md)
-
-- [Dao](spec/dao/index.md)
-  - [bulla](spec/dao/bulla.md)
-  - [proposal](spec/dao/proposal.md)
-  - [dao proposal](spec/dao/dao_propose.md)
-  - [dao proposal burn](spec/dao/dao_propose_burn.md)
-  - [mint](spec/dao/mint.md)
-  - [vote](spec/dao/vote.md)
-  - [vote burn](spec/dao/vote_burn.md)
-  - [exec](spec/dao/dao_exec.md)
-
-- [Proof of Stake](spec/pos/index.md)
-  - [burn](spec/pos/burn.md)
-  - [mint](spec/pos/mint.md)
-  - [lottery](spec/pos/proposal.md)
-
-- [Crypto](spec/crypto/index.md)
-  - [commitment](spec/crypto/commitment.md)
-  - [keypair](spec/crypto/keypair.md)
-  - [Signature](spec/crypto/signature.md)
-  - [hash](spec/crypto/hash.md)
-  - [merkletree](spec/crypto/merkletree.md)
-  - [note](spec/crypto/note.md)
-  - [vrf](spec/crypto/vrf.md)
-  - [nullifier](spec/crypto/nullifier.md)
-
-# Specs
-
-- [Notation](spec2/notation.md)
-- [Concepts](spec2/concepts.md)
-- [Cryptographic Schemes](spec2/crypto-schemes.md)
+- [Notation](spec/notation.md)
+- [Concepts](spec/concepts.md)
+- [Cryptographic Schemes](spec/crypto-schemes.md)
 - [Contracts]()
-  - [DAO](spec2/contracts/dao/dao.md)
-    - [Concepts](spec2/contracts/dao/concepts.md)
-    - [Model](spec2/contracts/dao/model.md)
+  - [DAO](spec/contracts/dao/dao.md)
+    - [Concepts](spec/contracts/dao/concepts.md)
+    - [Model](spec/contracts/dao/model.md)
 
 # P2P API Tutorial
 
