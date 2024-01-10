@@ -71,7 +71,11 @@ Likewise there is no $P = (x, 0) ∈ Eₚ$ so $\mathcal{Y}(P) = 0 ⟹  P = ∞$.
 
 ### Encoding and Decoding for $𝔽ₚ$
 
-TODO: define $\t{Encode}_{𝔽ₚ} : 𝔽ₚ → 𝔹³²$.
+Define $𝔽ₚ2𝔹³² : 𝔽ₚ → 𝔹³²$ as encoding the canonical representation
+of $𝔽ₚ$ in little endian byte format.
+
+Define $𝔹³²2𝔽ₚ : 𝔹³² → 𝔽ₚ$ as the matching decoding of $𝔽ₚ$ modulo
+the canonical class in little endian byte format.
 
 ## BLAKE3 Hash Function
 
