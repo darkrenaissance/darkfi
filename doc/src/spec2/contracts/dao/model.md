@@ -1,6 +1,8 @@
 # Model
 
-Let $ℙₚ, 𝔽ₚ, \mathcal{X}, \mathcal{Y}$ be defined as in the section [Pallas and Vesta](../../crypto-schemes.md#pallas-and-vesta).
+Let $\t{Bulla}$ be defined as in the section [Bulla Commitments](../../crypto-schemes.md#bulla-commitments).
+
+Let $ℙₚ, 𝔽ₚ, \mathcal{X}, \mathcal{Y}, \t{𝔹³²2𝔽ₚ}$ be defined as in the section [Pallas and Vesta](../../crypto-schemes.md#pallas-and-vesta).
 
 ## DAO
 
@@ -33,10 +35,12 @@ class $[\frac{q}{d}]$ of fractions defined by $q₁d₂ = q₂d₁ ⟺  [\frac{q
 {{#include ../../../../../src/contract/dao/src/model.rs:dao}}
 ```
 
-$$ \t{DAO2𝔽ₚ} : \t{Params}_\t{DAO} → 𝔽ₚ⁷ $$
-$$ \t{DAO2𝔽ₚ}(p) = (\t{ℕ₆₄2𝔽ₚ}(p.L), \t{ℕ₆₄2𝔽ₚ}(p.Q), \t{ℕ₆₄2𝔽ₚ}(p.A^\%), p.T, \mathcal{X}(p.PK), \mathcal{Y}(p.PK)) $$
+$$ \t{Bulla}_\t{DAO} : \t{Params}_\t{DAO} → 𝔽ₚ $$
+$$ \t{Bulla}_\t{DAO}(p) = \t{Bulla}(ℕ₆₄2𝔽ₚ(p.L), ℕ₆₄2𝔽ₚ(p.Q), ℕ₆₄2𝔽ₚ(p.A^\%), p.T, \mathcal{X}(p.PK), \mathcal{Y}(p.PK)) $$
 
-## Proposal
+## Proposals
+
+### Auth Calls
 
 Let $\t{FuncId}$ be defined as in [Function IDs](../../concepts.md#function-ids).
 
@@ -49,8 +53,11 @@ contract to enforce additional invariants.
 {{#include ../../../../../src/contract/dao/src/model.rs:dao-auth-call}}
 ```
 
-Define $\t{Commit}_\t{Auth} : \t{AuthCall} → 𝔽ₚ$ by.
-$$ \t{Commit}_\t{Auth}(c) = 𝔹³²2𝔽ₚ(\t{BLAKE3}(\t{Encode}(c))) $$
+Define $\t{Commit}_\t{Auth} : \t{AuthCall}^* → 𝔽ₚ$ by
+$$ \t{Commit}_{\t{Auth}^*}(c) = 𝔹³²2𝔽ₚ(\t{BLAKE3}(\t{Encode}(c))) $$
+which commits to a `Vec<DaoAuthCall>`.
+
+### Proposal
 
 Define the proposal params
 $$ \begin{aligned}
@@ -65,5 +72,18 @@ $$ \begin{aligned}
 {{#include ../../../../../src/contract/dao/src/model.rs:dao-proposal}}
 ```
 
+$$ \t{Bulla}_\t{Proposal} : \t{Params}_\t{Proposal} → 𝔽ₚ⁵ $$
+$$ \t{Bulla}_\t{Proposal}(p) = (\t{Commit}_{\t{Auth}^*}(p.C), ℕ₆₄2𝔽ₚ(p.T₀), ℕ₆₄2𝔽ₚ(p.D), p.φ, p.\t{DAO}) $$
+
 ## Vote Nullifiers
 
+Additionally for proposals, we keep track of nullifiers for each token weighted
+vote for or against a proposal.
+
+Let $\mathcal{C}$ be the coin params, and $C$ be the coin commitment
+as defined in [Money Contract](TODO).
+
+Let $P$ be a proposal bulla as in the section [Proposal](#proposal).
+
+Define $\t{Nullifier}_\t{Vote} : 𝔽ₚ × 𝔽ₚ × 𝔽ₚ → 𝔽ₚ$ as follows:
+$$ \t{Nullifier}_\t{Vote}(\mathcal{C}.s, C, P) = \t{PoseidonHash}(\mathcal{C}.s, C, P) $$
