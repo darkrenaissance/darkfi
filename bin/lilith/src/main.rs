@@ -179,8 +179,8 @@ fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
                 }
 
                 if !table.contains_key("hostlist") {
-                    warn!(target: "lilith", "Hostlist path is mandatory, skipping network.");
-                    continue
+                    error!(target: "lilith", "Hostlist path is mandatory! Configure and try again.");
+                    exit(1)
                 }
 
                 let name = net.0.to_string();
