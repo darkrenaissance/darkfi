@@ -28,16 +28,17 @@ fn money_integration() -> Result<()> {
         // Holders this test will use
         const HOLDERS: [Holder; 2] = [Holder::Alice, Holder::Bob];
 
-        // Current verification slot
-        let mut verification_slot = 0;
-
         // Initialize harness
         let mut th = TestHarness::new(&["money".to_string()]).await?;
+
+        // Current verification slot
+        let mut verification_slot = 1;
+        th.generate_slot(verification_slot).await?;
 
         // Drop some money to Alice
         info!("[Alice] Building block proposal");
         let (alice_proposal_tx, alice_proposal_params) =
-            th.pow_reward(&Holder::Alice, None, verification_slot + 1, None)?;
+            th.pow_reward(&Holder::Alice, None, verification_slot, None)?;
 
         for holder in HOLDERS {
             info!("[{holder:?}] Executing Alice's block proposal");
@@ -57,7 +58,7 @@ fn money_integration() -> Result<()> {
         // And some to Bob
         info!("[Bob] Building block proposal");
         let (bob_proposal_tx, bob_proposal_params) =
-            th.pow_reward(&Holder::Bob, None, verification_slot + 1, None)?;
+            th.pow_reward(&Holder::Bob, None, verification_slot, None)?;
 
         for holder in HOLDERS {
             info!("[{holder:?}] Executing Alice's block proposal");
