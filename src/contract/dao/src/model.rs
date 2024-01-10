@@ -122,6 +122,12 @@ impl VecAuthCallCommit for Vec<DaoAuthCall> {
         // see https://docs.rs/ff/0.13.0/ff/trait.FromUniformBytes.html
         // We essentially create a really large value and reduce it modulo the field
         // to diminish the statistical significance of any overlap.
+        //
+        // The range of pallas::Base is [0, p-1] where p < u256 (=32 bytes).
+        // For those values produced by blake3 hash which are [p, u256::MAX],
+        // they get mapped to [0, u256::MAX - p].
+        // Those 32 bits of pallas::Base are hashed to more frequently.
+        // note: blake2 is more secure but slower than blake3
         let mut hasher =
             blake2b_simd::Params::new().hash_length(64).personal(b"justDAOthings").to_state();
         self.encode(&mut hasher).unwrap();
