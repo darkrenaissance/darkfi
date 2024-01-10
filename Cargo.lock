@@ -1833,6 +1833,7 @@ dependencies = [
  "darkfi_deployooor_contract",
  "darkfi_money_contract",
  "log",
+ "num-bigint",
  "rand 0.8.5",
  "simplelog",
  "sled",

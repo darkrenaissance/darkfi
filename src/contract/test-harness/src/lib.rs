@@ -46,6 +46,7 @@ use darkfi_sdk::{
     pasta::pallas,
 };
 use log::{info, warn};
+use num_bigint::BigUint;
 use rand::rngs::OsRng;
 
 mod benchmarks;
@@ -163,7 +164,7 @@ impl Wallet {
             3,
             1,
             90,
-            None,
+            Some(BigUint::from(1_u8)),
             genesis_block.clone(),
             0,
             faucet_pubkeys.to_vec(),
