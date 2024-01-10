@@ -72,7 +72,7 @@ impl ProtocolSeed {
         }
 
         // Do nothing if advertise is set to false
-        if self.settings.advertise == false {
+        if !self.settings.advertise {
             debug!(target: "net::protocol_seed::send_my_addrs()",
             "Advertise is set to false. Stopping");
             return Ok(())
