@@ -28,6 +28,7 @@ pub enum RpcError {
     // Miner errors
     MiningFailed = -32201,
     HashingFailed = -32202,
+    StopFailed = -32203,
 }
 
 fn to_tuple(e: RpcError) -> (i32, String) {
@@ -38,6 +39,7 @@ fn to_tuple(e: RpcError) -> (i32, String) {
         // Miner errors
         RpcError::MiningFailed => "Mining block failed",
         RpcError::HashingFailed => "Hashing block failed",
+        RpcError::StopFailed => "Failed to stop previous request",
     };
 
     (e as i32, msg.to_string())
