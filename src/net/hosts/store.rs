@@ -243,9 +243,6 @@ impl Hosts {
                 continue
             }
 
-            debug!(target: "store::anchorlist_fetch_address()",
-                   "Connection is not already established");
-
             // Check if we already have this configured as a manual peer
             if self.settings.peers.contains(&host) {
                 debug!(
@@ -255,9 +252,6 @@ impl Hosts {
                 );
                 continue
             }
-
-            debug!(target: "store::anchorlist_fetch_address()",
-                   "Connection not configured as manual peer");
 
             // Obtain a lock on this address to prevent duplicate connection
             if !p2p.add_pending(&host).await {
@@ -269,9 +263,6 @@ impl Hosts {
                 continue
             }
 
-            debug!(target: "store::anchorlist_fetch_address()",
-                   "Connection not pending");
-
             debug!(
                 target: "store::anchorlist_fetch_address()",
                 "Found valid host '{}",
@@ -280,8 +271,6 @@ impl Hosts {
             return Some((host.clone(), last_seen.clone()))
         }
 
-        debug!(target: "store::anchorlist_fetch_address()",
-        "Exiting with NONE");
         None
     }
 
@@ -1141,7 +1130,11 @@ impl Hosts {
 
 #[cfg(test)]
 mod tests {
-    use super::{super::super::settings::Settings, *};
+    use super::{
+        super::super::{settings::Settings, P2p},
+        *,
+    };
+    use smol::Executor;
     use std::{sync::Arc, time::UNIX_EPOCH};
 
     #[test]
@@ -1256,230 +1249,100 @@ mod tests {
         });
     }
 
-    //#[test]
-    //fn test_fetch_address() {
-    //    smol::block_on(async {
-    //        let connect_count = 8;
-    //        let n_anchor = 10;
-    //        let n_white = 10;
-    //        let n_grey = 10;
+    #[test]
+    fn test_fetch_address() {
+        smol::block_on(async {
+            let mut hostlist = vec![];
+            let mut grey_urls = vec![];
+            let mut white_urls = vec![];
+            let mut anchor_urls = vec![];
 
-    //        let mut anchor_urls = vec![];
-    //        let mut white_urls = vec![];
-    //        let mut grey_urls = vec![];
-    //        let mut fetched_urls = vec![];
+            let ex = Arc::new(Executor::new());
 
-    //        let ex = Arc::new(Executor::new());
+            let settings = Settings {
+                outbound_connections: 8,
+                allowed_transports: vec!["tcp".to_string()],
+                ..Default::default()
+            };
+            let p2p = P2p::new(settings, ex.clone()).await;
+            let hosts = p2p.hosts();
 
-    //        let settings = Settings {
-    //            outbound_connections: 8,
-    //            allowed_transports: vec!["tcp".to_string()],
-    //            ..Default::default()
-    //        };
-    //        let p2p = P2p::new(settings, ex.clone()).await;
-    //        let hosts = p2p.hosts();
+            // Build up a hostlist
+            for i in 0..5 {
+                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                hosts
+                    .anchorlist_store(
+                        Url::parse(&format!("tcp://anchorlist{}:123", i)).unwrap(),
+                        last_seen,
+                    )
+                    .await;
+                hosts
+                    .whitelist_store(
+                        Url::parse(&format!("tcp://whitelist{}:123", i)).unwrap(),
+                        last_seen,
+                    )
+                    .await;
+                hosts
+                    .greylist_store(
+                        Url::parse(&format!("tcp://greylist{}:123", i)).unwrap(),
+                        last_seen,
+                    )
+                    .await;
 
-    //        for i in 0..n_anchor {
-    //            anchor_urls.push(Url::parse(&format!("tcp://anchorlist{}:123", i)).unwrap());
-    //        }
-    //        for i in 0..n_white {
-    //            white_urls.push(Url::parse(&format!("tcp://whitelist{}:123", i)).unwrap());
-    //        }
-    //        for i in 0..n_grey {
-    //            grey_urls.push(Url::parse(&format!("tcp://greylist{}:123", i)).unwrap());
-    //        }
+                grey_urls
+                    .push((Url::parse(&format!("tcp://greylist{}:123", i)).unwrap(), last_seen));
+                white_urls
+                    .push((Url::parse(&format!("tcp://whitelist{}:123", i)).unwrap(), last_seen));
+                anchor_urls
+                    .push((Url::parse(&format!("tcp://anchorlist{}:123", i)).unwrap(), last_seen));
+            }
 
-    //        // Build up a hostlist
-    //        for anchor in &anchor_urls {
-    //            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-    //            hosts.anchorlist_store(anchor.clone(), last_seen).await;
-    //        }
-    //        for white in &white_urls {
-    //            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-    //            hosts.whitelist_store(white.clone(), last_seen).await;
-    //        }
-    //        for grey in &grey_urls {
-    //            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-    //            hosts.greylist_store(grey.clone(), last_seen).await;
-    //        }
+            assert!(!hosts.is_empty_anchorlist().await);
+            assert!(!hosts.is_empty_whitelist().await);
+            assert!(!hosts.is_empty_greylist().await);
 
-    //        assert!(!hosts.is_empty_anchorlist().await);
-    //        assert!(!hosts.is_empty_whitelist().await);
-    //        assert!(!hosts.is_empty_greylist().await);
+            let transports = &p2p.settings().allowed_transports;
+            let white_count =
+                p2p.settings().outbound_connections * p2p.settings().white_connection_percent / 100;
 
-    //        let transports = &p2p.settings().allowed_transports;
-    //        let slot_count = p2p.settings().outbound_connections;
-    //        let white_count = slot_count * p2p.settings().white_connection_percent / 100;
-    //        let anchor_count = p2p.settings().anchor_connection_count;
+            // Simulate the address selection logic found in outbound_session::fetch_address()
+            for i in 0..8 {
+                let addrs = {
+                    if i < p2p.settings().anchor_connection_count {
+                        hosts.anchorlist_fetch_address(transports).await
+                    } else if i < white_count {
+                        hosts.whitelist_fetch_address(transports).await
+                    } else {
+                        hosts.greylist_fetch_address(transports).await
+                    }
+                };
+                hostlist.push(addrs);
+            }
 
-    //        for i in 0..connect_count {
-    //            if i < anchor_count {
-    //                fetched_urls.push(
-    //                    hosts
-    //                        .anchorlist_fetch_address(p2p.clone(), transports)
-    //                        .await
-    //                        .unwrap(),
-    //                );
-    //            } else if i < white_count {
-    //                fetched_urls.push(
-    //                    hosts
-    //                        .whitelist_fetch_address(p2p.clone(), transports)
-    //                        .await
-    //                        .unwrap(),
-    //                );
-    //            } else if i < slot_count {
-    //                fetched_urls.push(
-    //                    hosts
-    //                        .greylist_fetch_address(p2p.clone(), transports)
-    //                        .await
-    //                        .unwrap(),
-    //                );
-    //            }
-    //        }
+            // Check we're returning the correct addresses.
+            assert!(anchor_urls.sort() == hostlist[0].sort());
+            assert!(white_urls.sort() == hostlist[4].sort());
+            assert!(grey_urls.sort() == hostlist[7].sort());
 
-    //        assert!(anchor_urls.iter().any(|u| u.clone() == fetched_urls[0].0));
-    //        assert!(anchor_urls.iter().any(|u| u.clone() == fetched_urls[1].0));
-    //        assert!(white_urls.iter().any(|u| u.clone() == fetched_urls[2].0));
-    //        assert!(white_urls.iter().any(|u| u.clone() == fetched_urls[3].0));
-    //        assert!(grey_urls.iter().any(|u| u.clone() == fetched_urls[4].0));
-    //        assert!(grey_urls.iter().any(|u| u.clone() == fetched_urls[5].0));
-    //        assert!(grey_urls.iter().any(|u| u.clone() == fetched_urls[6].0));
-    //        assert!(grey_urls.iter().any(|u| u.clone() == fetched_urls[7].0));
-    //    })
-    //}
+            // Now clear the anchorlist.
+            // anchorlist_fetch_address should return whitelist entries if
+            // the anchorlist is empty.
+            let mut anchorlist = hosts.anchorlist.write().await;
+            anchorlist.clear();
+            drop(anchorlist);
 
-    //#[test]
-    //fn test_anchorlist_fetch() {
-    //    smol::block_on(async {
-    //        let n_anchor = 5;
-    //        let n_white = 5;
-    //        let n_grey = 10;
+            let mut addrs = hosts.anchorlist_fetch_address(transports).await;
+            assert!(white_urls.sort() == addrs.sort());
 
-    //        let mut anchor_urls = vec![];
-    //        let mut white_urls = vec![];
-    //        let mut grey_urls = vec![];
+            // Now clear the whitelist.
+            // anchorlist_fetch_address should return greylist entries if
+            // both the anchorlist and the whitelist are empty.
+            let mut whitelist = hosts.whitelist.write().await;
+            whitelist.clear();
+            drop(whitelist);
 
-    //        let ex = Arc::new(Executor::new());
-    //        let ex_ = ex.clone();
-
-    //        let settings =
-    //            Settings { allowed_transports: vec!["tcp".to_string()], ..Default::default() };
-
-    //        let p2p = P2p::new(settings, ex.clone()).await;
-    //        let hosts = p2p.hosts();
-
-    //        // Retrieve outbound transports
-    //        let transports = &p2p.settings().allowed_transports;
-
-    //        // First test that if we have anchorlist connections in our host list,
-    //        // those will be selected first.
-    //        for i in 0..n_anchor {
-    //            anchor_urls.push(Url::parse(&format!("tcp://anchorlist{}:123", i)).unwrap());
-    //        }
-    //        for i in 0..n_white {
-    //            white_urls.push(Url::parse(&format!("tcp://whitelist{}:123", i)).unwrap());
-    //        }
-    //        for i in 0..n_grey {
-    //            grey_urls.push(Url::parse(&format!("tcp://greylist{}:123", i)).unwrap());
-    //        }
-
-    //        // Build up a hostlist
-    //        for anchor in &anchor_urls {
-    //            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-    //            hosts.anchorlist_store(anchor.clone(), last_seen).await;
-    //        }
-    //        for white in &white_urls {
-    //            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-    //            hosts.whitelist_store(white.clone(), last_seen).await;
-    //        }
-    //        for grey in &grey_urls {
-    //            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-    //            hosts.greylist_store(grey.clone(), last_seen).await;
-    //        }
-
-    //        assert!(!hosts.is_empty_anchorlist().await);
-    //        assert!(!hosts.is_empty_whitelist().await);
-    //        assert!(!hosts.is_empty_greylist().await);
-
-    //        let host =
-    //            hosts.anchorlist_fetch_address(p2p.clone(), &transports).await.unwrap();
-
-    //        assert!(anchor_urls.iter().any(|u| u.clone() == host.0));
-
-    //        // Now clear the hostlists and test that if we have no anchorlist connections in our host list,
-    //        // we will select from the whitelist.
-
-    //        let mut anchorlist = hosts.anchorlist.write().await;
-    //        anchorlist.clear();
-    //        drop(anchorlist);
-
-    //        let mut whitelist = hosts.whitelist.write().await;
-    //        whitelist.clear();
-    //        drop(whitelist);
-
-    //        let mut greylist = hosts.greylist.write().await;
-    //        greylist.clear();
-    //        drop(greylist);
-
-    //        assert!(hosts.is_empty_anchorlist().await);
-    //        assert!(hosts.is_empty_whitelist().await);
-    //        assert!(hosts.is_empty_greylist().await);
-
-    //        for i in 0..n_white {
-    //            white_urls.push(Url::parse(&format!("tcp://whitelist{}:123", i)).unwrap());
-    //        }
-    //        for i in 0..n_grey {
-    //            grey_urls.push(Url::parse(&format!("tcp://greylist{}:123", i)).unwrap());
-    //        }
-
-    //        for white in &white_urls {
-    //            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-    //            hosts.whitelist_store(white.clone(), last_seen).await;
-    //        }
-    //        for grey in &grey_urls {
-    //            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-    //            hosts.greylist_store(grey.clone(), last_seen).await;
-    //        }
-
-    //        assert!(hosts.is_empty_anchorlist().await);
-    //        assert!(!hosts.is_empty_whitelist().await);
-    //        assert!(!hosts.is_empty_greylist().await);
-
-    //        let host =
-    //            hosts.anchorlist_fetch_address(p2p.clone(), &transports).await.unwrap();
-
-    //        assert!(white_urls.iter().any(|u| u.clone() == host.0));
-
-    //        // If we have no whitelist connections, select from the greylist.
-    //        let mut whitelist = hosts.whitelist.write().await;
-    //        whitelist.clear();
-    //        drop(whitelist);
-
-    //        let mut greylist = hosts.greylist.write().await;
-    //        greylist.clear();
-    //        drop(greylist);
-
-    //        assert!(hosts.is_empty_anchorlist().await);
-    //        assert!(hosts.is_empty_whitelist().await);
-    //        assert!(hosts.is_empty_greylist().await);
-
-    //        for i in 0..n_grey {
-    //            grey_urls.push(Url::parse(&format!("tcp://greylist{}:123", i)).unwrap());
-    //        }
-
-    //        for grey in &grey_urls {
-    //            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-    //            hosts.greylist_store(grey.clone(), last_seen).await;
-    //        }
-
-    //        assert!(hosts.is_empty_anchorlist().await);
-    //        assert!(hosts.is_empty_whitelist().await);
-    //        assert!(!hosts.is_empty_greylist().await);
-
-    //        let host =
-    //            hosts.anchorlist_fetch_address(p2p.clone(), &transports).await.unwrap();
-
-    //        assert!(grey_urls.iter().any(|u| u.clone() == host.0));
-    //    });
-    //}
+            let mut addrs = hosts.anchorlist_fetch_address(transports).await;
+            assert!(grey_urls.sort() == addrs.sort());
+        })
+    }
 }
