@@ -286,91 +286,16 @@ impl PoWModule {
         overlay.lock().unwrap().difficulties.insert(&[difficulty])
     }
 
-    /// Mine provided block, based on provided PoW module next mine target and difficulty
+    /// Mine provided block, based on next mine target
     pub fn mine_block(
         &self,
         miner_block: &mut BlockInfo,
         stop_signal: &Receiver<()>,
     ) -> Result<()> {
-        let miner_setup = Instant::now();
-
         // Grab the next mine target
         let target = self.next_mine_target()?;
-        debug!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{:064x}", target);
 
-        // Get the PoW input. The key changes with every mined block.
-        let input = miner_block.header.previous;
-        debug!(target: "validator::pow::mine_block", "[MINER] PoW input: {}", input.to_hex());
-        let flags = RandomXFlags::default() | RandomXFlags::FULLMEM;
-        debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX dataset...");
-        let dataset = Arc::new(RandomXDataset::new(flags, input.as_bytes(), self.threads).unwrap());
-        debug!(target: "validator::pow::mine_block", "[MINER] Setup time: {:?}", miner_setup.elapsed());
-
-        // Multithreaded mining setup
-        let mining_time = Instant::now();
-        let mut handles = vec![];
-        let found_block = Arc::new(AtomicBool::new(false));
-        let found_nonce = Arc::new(AtomicU32::new(0));
-        let threads = self.threads as u32;
-        for t in 0..threads {
-            let target = target.clone();
-            let mut block = miner_block.clone();
-            let found_block = Arc::clone(&found_block);
-            let found_nonce = Arc::clone(&found_nonce);
-            let dataset = Arc::clone(&dataset);
-            let stop_signal = stop_signal.clone();
-
-            handles.push(thread::spawn(move || {
-                debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX VM #{}...", t);
-                let mut miner_nonce = t;
-                let vm = RandomXVM::new_fast(flags, &dataset).unwrap();
-                loop {
-                    // Check if stop signal was received
-                    if stop_signal.is_full() {
-                        debug!(target: "validator::pow::mine_block", "[MINER] Stop signal received, thread #{} exiting", t);
-                        break
-                    }
-
-                    block.header.nonce = pallas::Base::from(miner_nonce as u64);
-                    if found_block.load(Ordering::SeqCst) {
-                        debug!(target: "validator::pow::mine_block", "[MINER] Block found, thread #{} exiting", t);
-                        break
-                    }
-
-                    let out_hash = vm.hash(block.hash().unwrap().as_bytes());
-                    let out_hash = BigUint::from_bytes_be(&out_hash);
-                    if out_hash <= target {
-                        found_block.store(true, Ordering::SeqCst);
-                        found_nonce.store(miner_nonce, Ordering::SeqCst);
-                        debug!(target: "validator::pow::mine_block", "[MINER] Thread #{} found block using nonce {}",
-                            t, miner_nonce
-                        );
-                        debug!(target: "validator::pow::mine_block", "[MINER] Block hash {}", block.hash().unwrap().to_hex());
-                        debug!(target: "validator::pow::mine_block", "[MINER] RandomX output: 0x{:064x}", out_hash);
-                        break
-                    }
-
-                    // This means thread 0 will use nonces, 0, 4, 8, ...
-                    // and thread 1 will use nonces, 1, 5, 9, ...
-                    miner_nonce += threads;
-                }
-            }));
-        }
-
-        for handle in handles {
-            let _ = handle.join();
-        }
-        // Check if stop signal was received
-        if stop_signal.is_full() {
-            return Err(Error::MinerTaskStopped)
-        }
-
-        debug!(target: "validator::pow::mine_block", "[MINER] Mining time: {:?}", mining_time.elapsed());
-
-        // Set the valid mined nonce in the block
-        miner_block.header.nonce = pallas::Base::from(found_nonce.load(Ordering::SeqCst) as u64);
-
-        Ok(())
+        mine_block(&target, miner_block, self.threads, stop_signal)
     }
 }
 
@@ -383,6 +308,91 @@ impl std::fmt::Display for PoWModule {
         write!(f, "\tdifficulties: {:?}", self.difficulties)?;
         write!(f, "\tcummulative_difficulty: {}", self.cummulative_difficulty)
     }
+}
+
+/// Mine provided block, based on provided PoW module next mine target
+pub fn mine_block(
+    target: &BigUint,
+    miner_block: &mut BlockInfo,
+    threads: usize,
+    stop_signal: &Receiver<()>,
+) -> Result<()> {
+    let miner_setup = Instant::now();
+
+    debug!(target: "validator::pow::mine_block", "[MINER] Mine target: 0x{:064x}", target);
+    // Get the PoW input. The key changes with every mined block.
+    let input = miner_block.header.previous;
+    debug!(target: "validator::pow::mine_block", "[MINER] PoW input: {}", input.to_hex());
+    let flags = RandomXFlags::default() | RandomXFlags::FULLMEM;
+    debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX dataset...");
+    let dataset = Arc::new(RandomXDataset::new(flags, input.as_bytes(), threads).unwrap());
+    debug!(target: "validator::pow::mine_block", "[MINER] Setup time: {:?}", miner_setup.elapsed());
+
+    // Multithreaded mining setup
+    let mining_time = Instant::now();
+    let mut handles = vec![];
+    let found_block = Arc::new(AtomicBool::new(false));
+    let found_nonce = Arc::new(AtomicU32::new(0));
+    let threads = threads as u32;
+    for t in 0..threads {
+        let target = target.clone();
+        let mut block = miner_block.clone();
+        let found_block = Arc::clone(&found_block);
+        let found_nonce = Arc::clone(&found_nonce);
+        let dataset = Arc::clone(&dataset);
+        let stop_signal = stop_signal.clone();
+
+        handles.push(thread::spawn(move || {
+            debug!(target: "validator::pow::mine_block", "[MINER] Initializing RandomX VM #{}...", t);
+            let mut miner_nonce = t;
+            let vm = RandomXVM::new_fast(flags, &dataset).unwrap();
+            loop {
+                // Check if stop signal was received
+                if stop_signal.is_full() {
+                    debug!(target: "validator::pow::mine_block", "[MINER] Stop signal received, thread #{} exiting", t);
+                    break
+                }
+
+                block.header.nonce = pallas::Base::from(miner_nonce as u64);
+                if found_block.load(Ordering::SeqCst) {
+                    debug!(target: "validator::pow::mine_block", "[MINER] Block found, thread #{} exiting", t);
+                    break
+                }
+
+                let out_hash = vm.hash(block.hash().unwrap().as_bytes());
+                let out_hash = BigUint::from_bytes_be(&out_hash);
+                if out_hash <= target {
+                    found_block.store(true, Ordering::SeqCst);
+                    found_nonce.store(miner_nonce, Ordering::SeqCst);
+                    debug!(target: "validator::pow::mine_block", "[MINER] Thread #{} found block using nonce {}",
+                        t, miner_nonce
+                    );
+                    debug!(target: "validator::pow::mine_block", "[MINER] Block hash {}", block.hash().unwrap().to_hex());
+                    debug!(target: "validator::pow::mine_block", "[MINER] RandomX output: 0x{:064x}", out_hash);
+                    break
+                }
+
+                // This means thread 0 will use nonces, 0, 4, 8, ...
+                // and thread 1 will use nonces, 1, 5, 9, ...
+                miner_nonce += threads;
+            }
+        }));
+    }
+
+    for handle in handles {
+        let _ = handle.join();
+    }
+    // Check if stop signal was received
+    if stop_signal.is_full() {
+        return Err(Error::MinerTaskStopped)
+    }
+
+    debug!(target: "validator::pow::mine_block", "[MINER] Mining time: {:?}", mining_time.elapsed());
+
+    // Set the valid mined nonce in the block
+    miner_block.header.nonce = pallas::Base::from(found_nonce.load(Ordering::SeqCst) as u64);
+
+    Ok(())
 }
 
 #[cfg(test)]
