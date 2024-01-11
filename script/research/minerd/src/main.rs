@@ -19,7 +19,12 @@
 use std::{collections::HashSet, sync::Arc};
 
 use log::{error, info};
-use smol::{channel::Receiver, lock::Mutex, stream::StreamExt, Executor};
+use smol::{
+    channel::{Receiver, Sender},
+    lock::Mutex,
+    stream::StreamExt,
+    Executor,
+};
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
 
@@ -68,6 +73,8 @@ struct Args {
 pub struct Minerd {
     /// PoW miner number of threads to use
     threads: usize,
+    // Sender to stop miner threads
+    sender: Sender<()>,
     // Receiver to stop miner threads
     stop_signal: Receiver<()>,
     /// JSON-RPC connection tracker
@@ -75,8 +82,8 @@ pub struct Minerd {
 }
 
 impl Minerd {
-    pub fn new(threads: usize, stop_signal: Receiver<()>) -> Self {
-        Self { threads, stop_signal, rpc_connections: Mutex::new(HashSet::new()) }
+    pub fn new(threads: usize, sender: Sender<()>, stop_signal: Receiver<()>) -> Self {
+        Self { threads, sender, stop_signal, rpc_connections: Mutex::new(HashSet::new()) }
     }
 }
 
@@ -84,7 +91,7 @@ async_daemonize!(realmain);
 async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
     info!(target: "minerd", "Starting DarkFi Mining Daemon...");
     let (sender, recvr) = smol::channel::bounded(1);
-    let minerd = Arc::new(Minerd::new(args.threads, recvr));
+    let minerd = Arc::new(Minerd::new(args.threads, sender.clone(), recvr));
 
     info!(target: "minerd", "Starting JSON-RPC server on {}", args.rpc_listen);
     let minerd_ = Arc::clone(&minerd);

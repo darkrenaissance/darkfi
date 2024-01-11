@@ -29,7 +29,7 @@ use darkfi::{
         server::RequestHandler,
         util::JsonValue,
     },
-    system::StoppableTaskPtr,
+    system::{sleep, StoppableTaskPtr},
     util::encoding::base64,
     validator::pow::mine_block,
 };
@@ -88,13 +88,36 @@ impl Minerd {
             return server_error(RpcError::BlockParseError, id, None)
         };
 
+        // Check if another request is being processed
+        if self.stop_signal.receiver_count() > 1 {
+            info!(target: "minerd::rpc", "Another request is in progress, sending stop signal...");
+            // Send stop signal to other worker
+            if self.sender.send(()).await.is_err() {
+                error!(target: "minerd::rpc", "Failed to stop previous request");
+                return server_error(RpcError::StopFailed, id, None)
+            }
+
+            // Wait for other worker to terminate
+            info!(target: "minerd::rpc", "Waiting for request to terminate...");
+            while self.stop_signal.receiver_count() > 1 {
+                sleep(1).await;
+            }
+            info!(target: "minerd::rpc", "Previous request terminated!");
+
+            // Consume channel item so its empty again
+            if self.stop_signal.recv().await.is_err() {
+                error!(target: "minerd::rpc", "Failed to cleanup stop signal channel");
+                return server_error(RpcError::StopFailed, id, None)
+            }
+        }
+
         // Mine provided block
         let Ok(block_hash) = block.hash() else {
             error!(target: "minerd::rpc", "Failed to hash block");
             return server_error(RpcError::HashingFailed, id, None)
         };
         info!(target: "minerd::rpc", "Mining block {} for target: {}", block_hash, target);
-        if let Err(e) = mine_block(&target, &mut block, self.threads, &self.stop_signal) {
+        if let Err(e) = mine_block(&target, &mut block, self.threads, &self.stop_signal.clone()) {
             error!(target: "minerd::rpc", "Failed mining block {} with error: {}", block_hash, e);
             return server_error(RpcError::MiningFailed, id, None)
         }
