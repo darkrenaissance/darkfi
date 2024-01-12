@@ -18,10 +18,11 @@
 
 use darkfi::{
     blockchain::BlockInfo,
+    rpc::util::JsonValue,
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    util::encoding::base64,
     validator::{
         consensus::{Fork, Proposal},
-        pow::PoWModule,
         utils::best_forks_indexes,
     },
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
@@ -37,21 +38,17 @@ use darkfi_sdk::{
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::Encodable;
+use darkfi_serial::{deserialize, serialize, Encodable};
 use log::info;
+use num_bigint::BigUint;
 use rand::rngs::OsRng;
-use smol::channel::Receiver;
 
 use crate::{proto::BlockInfoMessage, Darkfid};
 
 // TODO: handle all ? so the task don't stop on errors
 
 /// async task used for participating in the PoW consensus protocol
-pub async fn miner_task(
-    node: &Darkfid,
-    recipient: &PublicKey,
-    stop_signal: &Receiver<()>,
-) -> Result<()> {
+pub async fn miner_task(node: &Darkfid, recipient: &PublicKey) -> Result<()> {
     // TODO: For now we asume we have a single miner that produces block,
     //       until the PoW consensus and proper validations have been added.
     //       The miner workflow would be:
@@ -72,17 +69,13 @@ pub async fn miner_task(
     info!(target: "darkfid::task::miner_task", "Starting miner task...");
 
     // Start miner loop
-    miner_loop(node, recipient, stop_signal).await?;
+    miner_loop(node, recipient).await?;
 
     Ok(())
 }
 
 /// Miner loop
-async fn miner_loop(
-    node: &Darkfid,
-    recipient: &PublicKey,
-    stop_signal: &Receiver<()>,
-) -> Result<()> {
+async fn miner_loop(node: &Darkfid, recipient: &PublicKey) -> Result<()> {
     // Grab zkas proving keys and bin for PoWReward transaction
     info!(target: "darkfid::task::miner_task", "Generating zkas bin and proving keys...");
     let blockchain = node.validator.blockchain.clone();
@@ -108,10 +101,17 @@ async fn miner_loop(
     info!(target: "darkfid::task::miner_task", "Miner loop starts!");
     // Miner loop
     loop {
-        // Grab next block
-        let (mut next_block, module) =
+        // Grab next target and block
+        let (next_target, mut next_block) =
             generate_next_block(node, &mut secret, recipient, &zkbin, &pk).await?;
-        module.mine_block(&mut next_block, stop_signal)?;
+
+        // Execute request to minerd and parse response
+        let target = JsonValue::String(next_target.to_string());
+        let block = JsonValue::String(base64::encode(&serialize(&next_block)));
+        let response =
+            node.miner_daemon_request("mine", JsonValue::Array(vec![target, block])).await?;
+        let nonce_bytes = base64::decode(response.get::<String>().unwrap()).unwrap();
+        next_block.header.nonce = deserialize::<pallas::Base>(&nonce_bytes)?;
 
         // Sign the mined block
         next_block.sign(&secret)?;
@@ -141,7 +141,7 @@ async fn generate_next_block(
     recipient: &PublicKey,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
-) -> Result<(BlockInfo, PoWModule)> {
+) -> Result<(BigUint, BlockInfo)> {
     // Grab a lock over nodes' current forks
     let forks = node.validator.consensus.forks.read().await;
 
@@ -161,13 +161,13 @@ async fn generate_next_block(
     let tx = generate_pow_transaction(fork, secret, recipient, zkbin, pk)?;
 
     // Generate next block proposal
+    let target = fork.module.next_mine_target()?;
     let next_block = node.validator.consensus.generate_unsigned_block(fork, tx).await?;
-    let module = fork.module.clone();
 
     // Drop forks lock
     drop(forks);
 
-    Ok((next_block, module))
+    Ok((target, next_block))
 }
 
 /// Auxiliary function to generate a Money::PoWReward transaction

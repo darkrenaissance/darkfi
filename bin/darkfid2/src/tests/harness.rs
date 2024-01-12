@@ -43,7 +43,6 @@ use crate::{
 };
 
 pub struct HarnessConfig {
-    pub pow_threads: usize,
     pub pow_target: usize,
     pub pow_fixed_difficulty: Option<BigUint>,
     pub pos_testing_mode: bool,
@@ -87,7 +86,6 @@ impl Harness {
         let validator_config = ValidatorConfig::new(
             time_keeper,
             3,
-            config.pow_threads,
             config.pow_target,
             config.pow_fixed_difficulty.clone(),
             genesis_block,
@@ -148,7 +146,6 @@ impl Harness {
             .validate_blockchain(
                 genesis_txs_total,
                 vec![],
-                self.config.pow_threads,
                 self.config.pow_target,
                 self.config.pow_fixed_difficulty.clone(),
             )
@@ -156,7 +153,6 @@ impl Harness {
         bob.validate_blockchain(
             genesis_txs_total,
             vec![],
-            self.config.pow_threads,
             self.config.pow_target,
             self.config.pow_fixed_difficulty.clone(),
         )
@@ -269,7 +265,8 @@ pub async fn generate_node(
     } else {
         None
     };
-    let node = Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator, subscribers).await;
+    let node =
+        Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator, subscribers, None).await;
 
     sync_p2p.clone().start().await?;
 

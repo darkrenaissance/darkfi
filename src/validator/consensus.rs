@@ -69,17 +69,12 @@ impl Consensus {
         blockchain: Blockchain,
         time_keeper: TimeKeeper,
         finalization_threshold: usize,
-        pow_threads: usize,
         pow_target: usize,
         pow_fixed_difficulty: Option<BigUint>,
         pos_testing_mode: bool,
     ) -> Result<Self> {
-        let module = RwLock::new(PoWModule::new(
-            blockchain.clone(),
-            pow_threads,
-            pow_target,
-            pow_fixed_difficulty,
-        )?);
+        let module =
+            RwLock::new(PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?);
         Ok(Self {
             blockchain,
             time_keeper,

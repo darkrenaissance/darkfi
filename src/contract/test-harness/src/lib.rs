@@ -163,7 +163,6 @@ impl Wallet {
         let config = ValidatorConfig::new(
             time_keeper,
             3,
-            1,
             90,
             Some(BigUint::from(1_u8)),
             genesis_block.clone(),
