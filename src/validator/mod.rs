@@ -73,8 +73,6 @@ pub struct ValidatorConfig {
     pub time_keeper: TimeKeeper,
     /// Currently configured finalization security threshold
     pub finalization_threshold: usize,
-    /// Currently configured PoW miner number of threads to use
-    pub pow_threads: usize,
     /// Currently configured PoW target
     pub pow_target: usize,
     /// Optional fixed difficulty, for testing purposes
@@ -96,7 +94,6 @@ impl ValidatorConfig {
     pub fn new(
         time_keeper: TimeKeeper,
         finalization_threshold: usize,
-        pow_threads: usize,
         pow_target: usize,
         pow_fixed_difficulty: Option<BigUint>,
         genesis_block: BlockInfo,
@@ -108,7 +105,6 @@ impl ValidatorConfig {
         Self {
             time_keeper,
             finalization_threshold,
-            pow_threads,
             pow_target,
             pow_fixed_difficulty,
             genesis_block,
@@ -171,7 +167,6 @@ impl Validator {
             blockchain.clone(),
             config.time_keeper,
             config.finalization_threshold,
-            config.pow_threads,
             config.pow_target,
             config.pow_fixed_difficulty,
             pos_testing_mode,
@@ -571,7 +566,6 @@ impl Validator {
         &self,
         genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
-        pow_threads: usize,
         pow_target: usize,
         pow_fixed_difficulty: Option<BigUint>,
     ) -> Result<()> {
@@ -592,8 +586,7 @@ impl Validator {
 
         // Create a time keeper and a PoW module to validate each block
         let mut time_keeper = self.consensus.time_keeper.clone();
-        let mut module =
-            PoWModule::new(blockchain.clone(), pow_threads, pow_target, pow_fixed_difficulty)?;
+        let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?;
 
         // Deploy native wasm contracts
         deploy_native_contracts(&overlay, &time_keeper, &faucet_pubkeys).await?;

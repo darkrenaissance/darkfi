@@ -20,8 +20,8 @@ database = "~/.local/darkfi/darkfid_blockchain_localnet"
 # Finalization threshold, denominated by number of blocks
 threshold = 3
 
-# PoW miner number of threads to use
-pow_threads = 4
+# minerd JSON-RPC endpoint
+minerd_endpoint = "tcp://127.0.0.1:28467"
 
 # PoW block production target, in seconds
 pow_target = 10
@@ -164,8 +164,8 @@ database = "~/.local/darkfi/darkfid_blockchain_testnet"
 # Finalization threshold, denominated by number of blocks
 threshold = 6
 
-# PoW miner number of threads to use
-pow_threads = 6
+# minerd JSON-RPC endpoint
+minerd_endpoint = "tcp://127.0.0.1:28467"
 
 # PoW block production target, in seconds
 pow_target = 90
@@ -323,8 +323,8 @@ database = "~/.local/darkfi/darkfid_blockchain_mainnet"
 # Finalization threshold, denominated by number of blocks
 threshold = 11
 
-# PoW miner number of threads to use
-pow_threads = 8
+# minerd JSON-RPC endpoint
+minerd_endpoint = "tcp://127.0.0.1:28467"
 
 # PoW block production target, in seconds
 pow_target = 90

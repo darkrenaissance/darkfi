@@ -77,8 +77,6 @@ const BLOCK_FUTURE_TIME_LIMIT: u64 = 60 * 60 * 2;
 /// This struct represents the information required by the PoW algorithm
 #[derive(Clone)]
 pub struct PoWModule {
-    /// Number of threads to use for hashing
-    pub threads: usize,
     /// Target block time, in seconds
     pub target: usize,
     /// Optional fixed difficulty
@@ -97,7 +95,6 @@ pub struct PoWModule {
 impl PoWModule {
     pub fn new(
         blockchain: Blockchain,
-        threads: usize,
         target: usize,
         fixed_difficulty: Option<BigUint>,
     ) -> Result<Self> {
@@ -117,14 +114,7 @@ impl PoWModule {
             assert!(diff > &BigUint::zero());
         }
 
-        Ok(Self {
-            threads,
-            target,
-            fixed_difficulty,
-            timestamps,
-            difficulties,
-            cummulative_difficulty,
-        })
+        Ok(Self { target, fixed_difficulty, timestamps, difficulties, cummulative_difficulty })
     }
 
     /// Compute the next mining difficulty, based on current ring buffers.
@@ -290,19 +280,19 @@ impl PoWModule {
     pub fn mine_block(
         &self,
         miner_block: &mut BlockInfo,
+        threads: usize,
         stop_signal: &Receiver<()>,
     ) -> Result<()> {
         // Grab the next mine target
         let target = self.next_mine_target()?;
 
-        mine_block(&target, miner_block, self.threads, stop_signal)
+        mine_block(&target, miner_block, threads, stop_signal)
     }
 }
 
 impl std::fmt::Display for PoWModule {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "PoWModule:")?;
-        write!(f, "\tthreads: {}", self.threads)?;
         write!(f, "\ttarget: {}", self.target)?;
         write!(f, "\ttimestamps: {:?}", self.timestamps)?;
         write!(f, "\tdifficulties: {:?}", self.difficulties)?;
@@ -419,8 +409,7 @@ mod tests {
     fn test_wide_difficulty() -> Result<()> {
         let sled_db = sled::Config::new().temporary(true).open()?;
         let blockchain = Blockchain::new(&sled_db)?;
-        let mut module =
-            PoWModule::new(blockchain, DEFAULT_TEST_THREADS, DEFAULT_TEST_DIFFICULTY_TARGET, None)?;
+        let mut module = PoWModule::new(blockchain, DEFAULT_TEST_DIFFICULTY_TARGET, None)?;
 
         let output = Command::new("./script/research/pow/gen_wide_data.py").output().unwrap();
         let reader = Cursor::new(output.stdout);
@@ -453,15 +442,14 @@ mod tests {
         // Default setup
         let sled_db = sled::Config::new().temporary(true).open()?;
         let blockchain = Blockchain::new(&sled_db)?;
-        let module =
-            PoWModule::new(blockchain, DEFAULT_TEST_THREADS, DEFAULT_TEST_DIFFICULTY_TARGET, None)?;
+        let module = PoWModule::new(blockchain, DEFAULT_TEST_DIFFICULTY_TARGET, None)?;
         let (_, recvr) = smol::channel::bounded(1);
         let genesis_block = BlockInfo::default();
 
         // Mine next block
         let mut next_block = BlockInfo::default();
         next_block.header.previous = genesis_block.hash()?;
-        module.mine_block(&mut next_block, &recvr)?;
+        module.mine_block(&mut next_block, DEFAULT_TEST_THREADS, &recvr)?;
 
         // Verify it
         module.verify_current_block(&next_block)?;

@@ -336,13 +336,11 @@ pub fn validate_pos_slot(
 /// Be careful as this will try to load everything in memory.
 pub fn validate_blockchain(
     blockchain: &Blockchain,
-    pow_threads: usize,
     pow_target: usize,
     pow_fixed_difficulty: Option<BigUint>,
 ) -> Result<()> {
     // Generate a PoW module
-    let mut module =
-        PoWModule::new(blockchain.clone(), pow_threads, pow_target, pow_fixed_difficulty)?;
+    let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?;
     // We use block order store here so we have all blocks in order
     let blocks = blockchain.order.get_all()?;
     for (index, block) in blocks[1..].iter().enumerate() {

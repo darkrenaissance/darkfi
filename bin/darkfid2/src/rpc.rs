@@ -16,10 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashSet;
+use std::{collections::HashSet, time::Instant};
 
 use async_trait::async_trait;
-use log::debug;
+use log::{debug, error};
 use smol::lock::MutexGuard;
 use tinyjson::JsonValue;
 
@@ -30,9 +30,13 @@ use darkfi::{
     },
     system::StoppableTaskPtr,
     util::time::Timestamp,
+    Error, Result,
 };
 
-use crate::Darkfid;
+use crate::{
+    error::{server_error, RpcError},
+    Darkfid,
+};
 
 #[async_trait]
 #[rustfmt::skip]
@@ -48,6 +52,7 @@ impl RequestHandler for Darkfid {
             "clock" => return self.clock(req.id, req.params).await,
             "sync_dnet_switch" => return self.sync_dnet_switch(req.id, req.params).await,
             "consensus_dnet_switch" => return self.consensus_dnet_switch(req.id, req.params).await,
+            "ping_miner" => return self.ping_miner(req.id, req.params).await,
 
             // ==================
             // Blockchain methods
@@ -138,5 +143,37 @@ impl Darkfid {
         }
 
         JsonResponse::new(JsonValue::Boolean(true), id).into()
+    }
+
+    // RPCAPI:
+    // Pings configured miner daemon for livenes.
+    // Returns `true` on success.
+    //
+    // --> {"jsonrpc": "2.0", "method": "ping_miner", "params": [], "id": 1}
+    // <-- {"jsonrpc": "2.0", "result": "true", "id": 1}
+    async fn ping_miner(&self, id: u16, _params: JsonValue) -> JsonResult {
+        if let Err(e) = self.ping_miner_daemon().await {
+            error!(target: "darkfid::rpc::ping_miner", "Failed to ping miner daemon: {}", e);
+            return server_error(RpcError::PingFailed, id, None)
+        }
+        JsonResponse::new(JsonValue::Boolean(true), id).into()
+    }
+
+    pub async fn ping_miner_daemon(&self) -> Result<()> {
+        debug!(target: "darkfid::ping_miner_daemon", "Pinging miner daemon...");
+        self.miner_daemon_request("ping", JsonValue::Array(vec![])).await?;
+        Ok(())
+    }
+
+    pub async fn miner_daemon_request(&self, method: &str, params: JsonValue) -> Result<JsonValue> {
+        let Some(ref rpc_client) = self.rpc_client else { return Err(Error::RpcClientStopped) };
+        debug!(target: "darkfid::rpc::miner_daemon_request", "Executing request {} with params: {:?}", method, params);
+        let latency = Instant::now();
+        let req = JsonRequest::new(method, params);
+        let rep = rpc_client.request(req).await?;
+        let latency = latency.elapsed();
+        debug!(target: "darkfid::rpc::miner_daemon_request", "Got reply: {:?}", rep);
+        debug!(target: "darkfid::rpc::miner_daemon_request", "Latency: {:?}", latency);
+        Ok(rep)
     }
 }
