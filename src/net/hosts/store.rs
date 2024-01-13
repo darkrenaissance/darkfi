@@ -39,7 +39,7 @@ use crate::{
         file::{load_file, save_file},
         path::expand_path,
     },
-    Error, Result,
+    Result,
 };
 
 /// Atomic pointer to hosts object
@@ -168,7 +168,7 @@ impl Hosts {
             hosts.push((addr, last_seen));
         }
 
-        debug!(target: "store::whitelist_fetch_address()",
+        trace!(target: "store::whitelist_fetch_address()",
         "Grabbed hosts, length: {}", hosts.len());
 
         // Randomize hosts list. Do not try to connect in a deterministic order.
@@ -214,7 +214,7 @@ impl Hosts {
             hosts.push((addr, last_seen));
         }
 
-        debug!(target: "store::anchorlist_fetch_address()",
+        trace!(target: "store::anchorlist_fetch_address()",
         "Grabbed hosts, length: {}", hosts.len());
 
         // Randomize hosts list. Do not try to connect in a deterministic order.
@@ -291,7 +291,7 @@ impl Hosts {
                 debug!(target: "store::greylist_store_or_update()",
                 "We have this entry in the greylist. Updating last seen...");
 
-                let index = self.get_greylist_index_at_addr(&addr).await?;
+                let index = self.get_greylist_index_at_addr(addr.clone()).await.unwrap();
                 self.greylist_update_last_seen(&addr, last_seen, index).await;
             }
         }
@@ -315,7 +315,7 @@ impl Hosts {
                 debug!(target: "store::whitelist_store_or_update()",
         "We have this entry in the whitelist. Updating last seen...");
 
-                let index = self.get_whitelist_index_at_addr(addr).await?;
+                let index = self.get_whitelist_index_at_addr(addr.clone()).await.unwrap();
                 self.whitelist_update_last_seen(addr, last_seen.clone(), index).await;
             }
         }
@@ -338,7 +338,7 @@ impl Hosts {
                 debug!(target: "store::anchorlist_store_or_update()",
         "We have this entry in the anchorlist. Updating last seen...");
 
-                let index = self.get_anchorlist_index_at_addr(addr).await?;
+                let index = self.get_anchorlist_index_at_addr(addr.clone()).await.unwrap();
                 self.anchorlist_update_last_seen(addr, last_seen.clone(), index).await;
             }
         }
@@ -376,7 +376,7 @@ impl Hosts {
             let last_entry = whitelist.pop().unwrap();
             debug!(target: "store::whitelist_store()", "Whitelist reached max size. Removed {:?}", last_entry);
         } else {
-            debug!(target: "store::whitelist_store()", "Inserting {}. Last seen {:?}", addr, last_seen);
+            trace!(target: "store::whitelist_store()", "Inserting {}. Last seen {:?}", addr, last_seen);
             whitelist.push((addr, last_seen));
 
             // Sort the list by last_seen.
@@ -392,7 +392,7 @@ impl Hosts {
 
         let mut anchorlist = self.anchorlist.write().await;
 
-        debug!(target: "store::anchorlist_store()", "Inserting {}", addr);
+        trace!(target: "store::anchorlist_store()", "Inserting {}", addr);
         anchorlist.push((addr, last_seen));
 
         // Sort the list by last_seen.
@@ -407,7 +407,16 @@ impl Hosts {
         if self.anchorlist_contains(addr).await {
             debug!(target: "net::store::downgrade_host()", 
                    "Removing non responsive peer from anchorlist");
-            let (index, entry) = self.get_anchorlist_entry_at_addr(addr).await?;
+
+            let index = self
+                .get_anchorlist_index_at_addr(addr.clone())
+                .await
+                .expect("Expected anchorlist index to exist");
+            let entry = self
+                .get_anchorlist_entry_at_addr(addr)
+                .await
+                .expect("Expected anchorlist entry to exist");
+
             self.anchorlist_remove(addr, index).await;
             self.greylist_store_or_update(&[entry]).await?;
 
@@ -415,7 +424,16 @@ impl Hosts {
         } else if self.whitelist_contains(addr).await {
             debug!(target: "net::store::downgrade_host()", 
                    "Removing non responsive peer from whitelist");
-            let (index, entry) = self.get_whitelist_entry_at_addr(addr).await?;
+
+            let index = self
+                .get_whitelist_index_at_addr(addr.clone())
+                .await
+                .expect("Expected whitelist index to exist");
+            let entry = self
+                .get_whitelist_entry_at_addr(addr)
+                .await
+                .expect("Expected whitelist entry to exist");
+
             self.whitelist_remove(addr, index).await;
             self.greylist_store_or_update(&[entry]).await?;
 
@@ -423,7 +441,12 @@ impl Hosts {
         } else {
             debug!(target: "net::store::downgrade_host()", 
                    "Removing non responsive peer from greylist");
-            let index = self.get_greylist_index_at_addr(addr).await?;
+
+            let index = self
+                .get_greylist_index_at_addr(addr.clone())
+                .await
+                .expect("Expected greylist index to exist");
+
             self.greylist_remove(addr, index).await;
 
             Ok(())
@@ -604,7 +627,7 @@ impl Hosts {
                     if tor_hscrypto::pk::HsId::from_str(host_str).is_err() {
                         continue
                     }
-                    debug!(target: "store::filter_addresses()", "[Tor] Valid: {}", host_str);
+                    trace!(target: "store::filter_addresses()", "[Tor] Valid: {}", host_str);
                 }
 
                 #[cfg(feature = "p2p-nym")]
@@ -612,7 +635,7 @@ impl Hosts {
 
                 #[cfg(feature = "p2p-tcp")]
                 "tcp" | "tcp+tls" => {
-                    debug!(target: "store::filter_addresses()", "[TCP] Valid: {}", host_str);
+                    trace!(target: "store::filter_addresses()", "[TCP] Valid: {}", host_str);
                 }
 
                 _ => continue,
@@ -686,98 +709,53 @@ impl Hosts {
         }
     }
 
-    // Check whether this peer is in any of the hostlists.
+    /// Check whether this peer is in any of the hostlists.
     async fn hostlist_contains(&self, addr: &Url) -> bool {
-        if self.greylist_contains(addr).await {
-            return true
-        } else if self.whitelist_contains(addr).await {
-            return true
-        } else if self.anchorlist_contains(addr).await {
-            return true
-        } else {
-            return false
-        }
+        self.greylist_contains(addr).await |
+            self.whitelist_contains(addr).await |
+            self.anchorlist_contains(addr).await
     }
 
     /// Check if host is in the greylist
     pub async fn greylist_contains(&self, addr: &Url) -> bool {
-        let greylist = self.greylist.read().await;
-        if greylist.iter().any(|(u, _t)| u == addr) {
-            return true
-        }
-        return false
+        self.greylist.read().await.iter().any(|(u, _t)| u == addr)
     }
 
     /// Check if host is in the whitelist
     pub async fn whitelist_contains(&self, addr: &Url) -> bool {
-        let whitelist = self.whitelist.read().await;
-        if whitelist.iter().any(|(u, _t)| u == addr) {
-            return true
-        }
-        return false
+        self.whitelist.read().await.iter().any(|(u, _t)| u == addr)
     }
 
     /// Check if host is in the anchorlist
     pub async fn anchorlist_contains(&self, addr: &Url) -> bool {
-        let anchorlist = self.anchorlist.read().await;
-        if anchorlist.iter().any(|(u, _t)| u == addr) {
-            return true
-        }
-        return false
+        self.anchorlist.read().await.iter().any(|(u, _t)| u == addr)
     }
 
     /// Get the index for a given addr on the greylist.
-    pub async fn get_greylist_index_at_addr(&self, addr: &Url) -> Result<usize> {
-        let greylist = self.greylist.read().await;
-        for (i, (url, _time)) in greylist.iter().enumerate() {
-            if url == addr {
-                return Ok(i)
-            }
-        }
-        return Err(Error::HostDoesNotExist)
+    pub async fn get_greylist_index_at_addr(&self, addr: Url) -> Option<usize> {
+        self.greylist.read().await.iter().position(|a| a.0 == addr)
     }
 
     /// Get the index for a given addr on the whitelist.
-    pub async fn get_whitelist_index_at_addr(&self, addr: &Url) -> Result<usize> {
-        let whitelist = self.whitelist.read().await;
-        for (i, (url, _time)) in whitelist.iter().enumerate() {
-            if url == addr {
-                return Ok(i)
-            }
-        }
-        return Err(Error::HostDoesNotExist)
+    pub async fn get_whitelist_index_at_addr(&self, addr: Url) -> Option<usize> {
+        self.whitelist.read().await.iter().position(|a| a.0 == addr)
     }
 
     /// Get the index for a given addr on the anchorlist.
-    pub async fn get_anchorlist_index_at_addr(&self, addr: &Url) -> Result<usize> {
-        let anchorlist = self.anchorlist.read().await;
-        for (i, (url, _time)) in anchorlist.iter().enumerate() {
-            if url == addr {
-                return Ok(i)
-            }
-        }
-        return Err(Error::HostDoesNotExist)
+    pub async fn get_anchorlist_index_at_addr(&self, addr: Url) -> Option<usize> {
+        self.whitelist.read().await.iter().position(|a| a.0 == addr)
     }
 
-    /// Get the index and entry for a given addr on the whitelist.
-    pub async fn get_whitelist_entry_at_addr(&self, addr: &Url) -> Result<(usize, (Url, u64))> {
+    /// Get the entry for a given addr on the whitelist.
+    pub async fn get_whitelist_entry_at_addr(&self, addr: &Url) -> Option<(Url, u64)> {
         let whitelist = self.whitelist.read().await;
-        for (i, (url, time)) in whitelist.iter().enumerate() {
-            if url == addr {
-                return Ok((i, (url.clone(), time.clone())))
-            }
-        }
-        return Err(Error::HostDoesNotExist)
+        whitelist.iter().find(|(url, _)| url == addr).map(|(url, time)| (url.clone(), *time))
     }
-    /// Get the index and entry for a given addr on the anchorlist.
-    pub async fn get_anchorlist_entry_at_addr(&self, addr: &Url) -> Result<(usize, (Url, u64))> {
+
+    /// Get the entry for a given addr on the anchorlist.
+    pub async fn get_anchorlist_entry_at_addr(&self, addr: &Url) -> Option<(Url, u64)> {
         let anchorlist = self.anchorlist.read().await;
-        for (i, (url, time)) in anchorlist.iter().enumerate() {
-            if url == addr {
-                return Ok((i, (url.clone(), time.clone())))
-            }
-        }
-        return Err(Error::HostDoesNotExist)
+        anchorlist.iter().find(|(url, _)| url == addr).map(|(url, time)| (url.clone(), *time))
     }
 
     /// Return all known whitelisted hosts
@@ -833,7 +811,7 @@ impl Hosts {
         // Retrieve all peers corresponding to that transport schemes
         let hosts = self.whitelist_fetch_with_schemes(schemes, None).await;
         if hosts.is_empty() {
-            debug!(target: "store::whitelist_fetch_n_random_with_schemes",
+            trace!(target: "store::whitelist_fetch_n_random_with_schemes",
                   "Whitelist is empty {:?}! Exiting...", hosts);
             return hosts
         }
@@ -957,7 +935,7 @@ impl Hosts {
         schemes: &[String],
         limit: Option<usize>,
     ) -> Vec<(Url, u64)> {
-        //debug!(target: "store::whitelist_fetch_with_schemes", "[START]");
+        debug!(target: "store::whitelist_fetch_with_schemes", "[START]");
         let mut ret = vec![];
 
         if !self.is_empty_whitelist().await {
@@ -973,7 +951,7 @@ impl Hosts {
                     ret.push((addr.clone(), *last_seen));
                     parsed_limit -= 1;
                     if parsed_limit == 0 {
-                        debug!(target: "store::whitelist_fetch_with_schemes",
+                        trace!(target: "store::whitelist_fetch_with_schemes",
                            "Found matching white scheme, returning {:?}", ret);
                         return ret
                     }
@@ -1020,7 +998,7 @@ impl Hosts {
                     ret.push((addr.clone(), *last_seen));
                     parsed_limit -= 1;
                     if parsed_limit == 0 {
-                        debug!(target: "store::anchorlist_fetch_with_schemes",
+                        trace!(target: "store::anchorlist_fetch_with_schemes",
                            "Found matching anchor scheme, returning {:?}", ret);
                         return ret
                     }

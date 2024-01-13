@@ -22,7 +22,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use log::{debug, error};
+use log::{debug};
 use smol::Executor;
 
 use super::{channel::ChannelPtr, p2p::P2pPtr, protocol::ProtocolVersion};
@@ -49,7 +49,7 @@ pub type SessionWeakPtr = Weak<dyn Session + Send + Sync + 'static>;
 
 /// Removes channel from the list of connected channels when a stop signal
 /// is received.
-pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: SessionBitFlag) {
+pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr) {
     debug!(target: "net::session::remove_sub_on_stop()", "[START]");
     // Subscribe to stop events
     let stop_sub = channel.clone().subscribe_stop().await;
@@ -64,14 +64,11 @@ pub async fn remove_sub_on_stop(p2p: P2pPtr, channel: ChannelPtr, type_id: Sessi
         "Received stop event. Removing channel {}", channel.address(),
     );
 
-    if type_id != SESSION_INBOUND {
-        match p2p.hosts().get_anchorlist_index_at_addr(channel.address()).await {
-            Ok(index) => p2p.hosts().anchorlist_remove(channel.address(), index).await,
-            Err(e) => {
-                error!(target: "net::session::remove_sub_on_stop()",
-                "Can't remove anchor connection {}", e)
-            }
-        }
+    // Remove channel from anchorlist
+    if p2p.hosts().anchorlist_contains(channel.address()).await {
+        let index =
+            p2p.hosts().get_anchorlist_index_at_addr(channel.address().clone()).await.unwrap();
+        p2p.hosts().anchorlist_remove(channel.address(), index).await;
     }
 
     // Remove channel from p2p
@@ -160,7 +157,7 @@ pub trait Session: Sync {
         self.p2p().store(channel.clone()).await;
 
         // Subscribe to stop, so we can remove from p2p
-        executor.spawn(remove_sub_on_stop(self.p2p(), channel, self.type_id())).detach();
+        executor.spawn(remove_sub_on_stop(self.p2p(), channel)).detach();
 
         // Channel is ready for use
         Ok(())
