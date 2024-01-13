@@ -8,5 +8,6 @@ make proposals which are then voted on. When proposals pass a specified
 threshold they are finalized, then the proposal can be executed.
 
 - [Concepts](concepts.md)
-- [State](state.md)
+- [Model](model.md)
+- [Contract](contract.md)
 
