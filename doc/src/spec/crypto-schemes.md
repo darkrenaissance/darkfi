@@ -86,6 +86,6 @@ For this reason we define the conversion from $𝔹⁶⁴$ for hash functions.
 ## BLAKE2b Hash Function
 
 BLAKE2 is defined by [ANWW2013](https://blake2.net/#sp).
-DarkFi uses the BLAKE2b variant.
+Define the BLAKE2b variant as
 $$ \t{BLAKE2b}: 𝔹^* → 𝔹⁶⁴ $$
 
