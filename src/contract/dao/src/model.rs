@@ -26,7 +26,7 @@ use darkfi_sdk::{
     error::ContractError,
     pasta::pallas,
 };
-use darkfi_serial::{Decodable, Encodable, SerialDecodable, SerialEncodable};
+use darkfi_serial::{Encodable, SerialDecodable, SerialEncodable};
 
 #[cfg(feature = "client")]
 use darkfi_serial::async_trait;
