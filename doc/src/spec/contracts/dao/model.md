@@ -2,7 +2,7 @@
 
 Let $\t{Bulla}$ be defined as in the section [Bulla Commitments](../../crypto-schemes.md#bulla-commitments).
 
-Let $ℙₚ, 𝔽ₚ, \mathcal{X}, \mathcal{Y}, \t{𝔹³²2𝔽ₚ}$ be defined as in the section [Pallas and Vesta](../../crypto-schemes.md#pallas-and-vesta).
+Let $ℙₚ, 𝔽ₚ, \mathcal{X}, \mathcal{Y}, \t{𝔹⁶⁴2𝔽ₚ}$ be defined as in the section [Pallas and Vesta](../../crypto-schemes.md#pallas-and-vesta).
 
 ## DAO
 
@@ -44,7 +44,7 @@ $$ \t{Bulla}_\t{DAO}(p) = \t{Bulla}(ℕ₆₄2𝔽ₚ(p.L), ℕ₆₄2𝔽ₚ(p.
 
 Let $\t{FuncId}$ be defined as in [Function IDs](../../concepts.md#function-ids).
 
-Let $\t{BLAKE3}$ be defined as in [BLAKE3 Hash Function](../../crypto-schemes.md#blake3-hash-function).
+Let $\t{BLAKE2b}$ be defined as in [BLAKE2b Hash Function](../../crypto-schemes.md#blake2b-hash-function).
 
 Define $\t{AuthCall} = (\t{FuncId}, 𝔹^*)$. Each *authorization call* represents
 a child call made by the DAO. The *auth data* field is used by the child invoked
@@ -54,7 +54,7 @@ contract to enforce additional invariants.
 ```
 
 Define $\t{Commit}_\t{Auth} : \t{AuthCall}^* → 𝔽ₚ$ by
-$$ \t{Commit}_{\t{Auth}^*}(c) = 𝔹³²2𝔽ₚ(\t{BLAKE3}(\t{Encode}(c))) $$
+$$ \t{Commit}_{\t{Auth}^*}(c) = 𝔹⁶⁴2𝔽ₚ(\t{BLAKE2b}(\t{Encode}(c))) $$
 which commits to a `Vec<DaoAuthCall>`.
 
 ### Proposal
