@@ -287,64 +287,67 @@ impl EventGraph {
         info!(target: "event_graph::dag_sync()", "[EVENTGRAPH] Fetching events");
         let mut received_events: BTreeMap<u64, Vec<Event>> = BTreeMap::new();
         let mut received_events_hashes = HashSet::new();
+
         while !missing_parents.is_empty() {
-            for parent_id in missing_parents.clone().iter() {
-                let mut found_event = false;
+            let mut found_event = false;
 
-                for channel in channels.iter() {
-                    let url = channel.address();
+            for channel in channels.iter() {
+                let url = channel.address();
 
-                    debug!(
-                        target: "event_graph::dag_sync()",
-                        "Requesting {} from {}...", parent_id, url,
-                    );
+                debug!(
+                    target: "event_graph::dag_sync()",
+                    "Requesting {:?} from {}...", missing_parents, url,
+                );
 
-                    let ev_rep_sub = match channel.subscribe_msg::<EventRep>().await {
-                        Ok(v) => v,
-                        Err(e) => {
-                            error!(
-                                target: "event_graph::dag_sync()",
-                                "[EVENTGRAPH] Sync: Couldn't subscribe EventRep for peer {}, skipping ({})",
-                                url, e,
-                            );
-                            continue
-                        }
-                    };
-
-                    if let Err(e) = channel.send(&EventReq(*parent_id)).await {
+                let multi_ev_rep_sub = match channel.subscribe_msg::<EventRep>().await {
+                    Ok(v) => v,
+                    Err(e) => {
                         error!(
                             target: "event_graph::dag_sync()",
-                            "[EVENTGRAPH] Sync: Failed communicating EventReq({}) to {}: {}",
-                            parent_id, url, e,
+                            "[EVENTGRAPH] Sync: Couldn't subscribe EventRep for peer {}, skipping ({})",
+                            url, e,
                         );
                         continue
                     }
+                };
 
-                    let parent = match timeout(REPLY_TIMEOUT, ev_rep_sub.receive()).await {
-                        Ok(parent) => parent,
-                        Err(_) => {
-                            error!(
-                                target: "event_graph::dag_sync()",
-                                "[EVENTGRAPH] Sync: Timeout waiting for parent {} from {}",
-                                parent_id, url,
-                            );
-                            continue
-                        }
-                    };
+                let request_missing_events = missing_parents.clone().into_iter().collect();
+                if let Err(e) = channel.send(&EventReq(request_missing_events)).await {
+                    error!(
+                        target: "event_graph::dag_sync()",
+                        "[EVENTGRAPH] Sync: Failed communicating MultiEventReq({:?}) to {}: {}",
+                        missing_parents, url, e,
+                    );
+                    continue
+                }
 
-                    let parent = match parent {
-                        Ok(v) => v.0.clone(),
-                        Err(e) => {
-                            error!(
-                                target: "event_graph::dag_sync()",
-                                "[EVENTGRAPH] Sync: Failed receiving parent {}: {}",
-                                parent_id, e,
-                            );
-                            continue
-                        }
-                    };
+                let parent = match timeout(REPLY_TIMEOUT, multi_ev_rep_sub.receive()).await {
+                    Ok(parent) => parent,
+                    Err(_) => {
+                        error!(
+                            target: "event_graph::dag_sync()",
+                            "[EVENTGRAPH] Sync: Timeout waiting for parents {:?} from {}",
+                            missing_parents, url,
+                        );
+                        continue
+                    }
+                };
 
-                    if &parent.id() != parent_id {
+                let parents = match parent {
+                    Ok(v) => v.0.clone(),
+                    Err(e) => {
+                        error!(
+                            target: "event_graph::dag_sync()",
+                            "[EVENTGRAPH] Sync: Failed receiving parents {:?}: {}",
+                            missing_parents, e,
+                        );
+                        continue
+                    }
+                };
+
+                for parent in parents {
+                    let parent_id = parent.id();
+                    if !missing_parents.contains(&parent_id) {
                         error!(
                             target: "event_graph::dag_sync()",
                             "[EVENTGRAPH] Sync: Peer {} replied with a wrong event: {}",
@@ -364,9 +367,9 @@ impl EventGraph {
                         let layer_events = vec![parent.clone()];
                         received_events.insert(parent.layer, layer_events);
                     }
-                    received_events_hashes.insert(*parent_id);
+                    received_events_hashes.insert(parent_id);
 
-                    missing_parents.remove(parent_id);
+                    missing_parents.remove(&parent_id);
                     found_event = true;
 
                     // See if we have the upper parents
@@ -386,18 +389,19 @@ impl EventGraph {
                             missing_parents.insert(*upper_parent);
                         }
                     }
-
-                    break
                 }
 
-                if !found_event {
-                    error!(
-                        target: "event_graph::dag_sync()",
-                        "[EVENTGRAPH] Sync: Failed to get all events",
-                    );
-                    return Err(Error::DagSyncFailed)
-                }
+                break
             }
+
+            if !found_event {
+                error!(
+                    target: "event_graph::dag_sync()",
+                    "[EVENTGRAPH] Sync: Failed to get all events",
+                );
+                return Err(Error::DagSyncFailed)
+            }
+            // }
         } // <-- while !missing_parents.is_empty
 
         // At this point we should've got all the events.
