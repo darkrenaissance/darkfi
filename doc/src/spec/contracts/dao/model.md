@@ -25,7 +25,7 @@ $$ \begin{aligned}
   \t{Params}_\t{DAO}.L &∈ ℕ₆₄ \\
   \t{Params}_\t{DAO}.Q &∈ ℕ₆₄ \\
   \t{Params}_\t{DAO}.A^\% &∈ ℕ₆₄ × ℕ₆₄ \\
-  \t{Params}_\t{DAO}.T &∈ 𝔽ₚ \\
+  \t{Params}_\t{DAO}.τ &∈ 𝔽ₚ \\
   \t{Params}_\t{DAO}.PK &∈ ℙₚ
 \end{aligned} $$
 where the approval ratio $\t{Approval}^\% = (q, d)$ defines the equivalence
@@ -35,8 +35,8 @@ class $[\frac{q}{d}]$ of fractions defined by $q₁d₂ = q₂d₁ ⟺  [\frac{q
 {{#include ../../../../../src/contract/dao/src/model.rs:dao}}
 ```
 
-$$ \t{Bulla}_\t{DAO} : \t{Params}_\t{DAO} → 𝔽ₚ $$
-$$ \t{Bulla}_\t{DAO}(p) = \t{Bulla}(ℕ₆₄2𝔽ₚ(p.L), ℕ₆₄2𝔽ₚ(p.Q), ℕ₆₄2𝔽ₚ(p.A^\%), p.T, \mathcal{X}(p.PK), \mathcal{Y}(p.PK)) $$
+$$ \t{Bulla}_\t{DAO} : \t{Params}_\t{DAO} × 𝔽ₚ → 𝔽ₚ $$
+$$ \t{Bulla}_\t{DAO}(p, b_\t{DAO}) = \t{Bulla}(ℕ₆₄2𝔽ₚ(p.L), ℕ₆₄2𝔽ₚ(p.Q), ℕ₆₄2𝔽ₚ(p.A^\%), p.τ, \mathcal{X}(p.PK), \mathcal{Y}(p.PK), b_\t{DAO}) $$
 
 ## Proposals
 
@@ -62,7 +62,7 @@ which commits to a `Vec<DaoAuthCall>`.
 Define the proposal params
 $$ \begin{aligned}
   \t{Params}_\t{Proposal}.C &∈ \t{AuthCall}^* \\
-  \t{Params}_\t{Proposal}.T₀ &∈ ℕ₆₄ \\
+  \t{Params}_\t{Proposal}.t₀ &∈ ℕ₆₄ \\
   \t{Params}_\t{Proposal}.D &∈ ℕ₆₄ \\
   \t{Params}_\t{Proposal}.φ &∈ 𝔽ₚ \\
   \t{Params}_\t{Proposal}.\t{DAO} &∈ \t{Bulla}(\t{DAO2𝔽ₚ}(\t{Params}_\t{DAO})) \\
@@ -73,12 +73,14 @@ $$ \begin{aligned}
 ```
 
 $$ \t{Bulla}_\t{Proposal} : \t{Params}_\t{Proposal} → 𝔽ₚ⁵ $$
-$$ \t{Bulla}_\t{Proposal}(p) = (\t{Commit}_{\t{Auth}^*}(p.C), ℕ₆₄2𝔽ₚ(p.T₀), ℕ₆₄2𝔽ₚ(p.D), p.φ, p.\t{DAO}) $$
+$$ \t{Bulla}_\t{Proposal}(p) = (\t{Commit}_{\t{Auth}^*}(p.C), ℕ₆₄2𝔽ₚ(p.t₀), ℕ₆₄2𝔽ₚ(p.D), p.φ, p.\t{DAO}) $$
 
 ## Vote Nullifiers
 
 Additionally for proposals, we keep track of nullifiers for each token weighted
 vote for or against a proposal.
+
+Let $\t{PoseidonHash}$ be defined as in the section [PoseidonHash Function](../../crypto-schemes.md#poseidonhash-function).
 
 Let $\mathcal{C}$ be the coin params, and $C$ be the coin commitment
 as defined in [Money Contract](TODO).

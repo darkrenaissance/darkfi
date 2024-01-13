@@ -24,8 +24,8 @@ representations which we call bullas.
 
 Let $\textrm{Params} ∈ 𝔽ₚⁿ$ represent object parameters, then we can define
 $$ \textrm{Bulla} : 𝔽ₚⁿ × 𝔽ₚ → 𝔽ₚ $$
-$$ \textrm{Bulla}(\textrm{Params}, r) = \textrm{PoseidonHash}(\textrm{Params}, r) $$
-where $r ∈ 𝔽ₚ$ is a random blinding factor.
+$$ \textrm{Bulla}(\textrm{Params}, b) = \textrm{PoseidonHash}(\textrm{Params}, b) $$
+where $b ∈ 𝔽ₚ$ is a random blinding factor.
 
 Then the bulla (on chain anonymized representation) can be used in contracts
 with ZK proofs to construct statements on $\textrm{Params}$.

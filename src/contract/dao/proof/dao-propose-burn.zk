@@ -40,7 +40,7 @@ circuit "DaoProposeInput" {
     pub = ec_mul_base(secret, NULLIFIER_K);
     pub_x = ec_get_x(pub);
     pub_y = ec_get_y(pub);
-    C = poseidon_hash(
+    coin = poseidon_hash(
         pub_x,
         pub_y,
         value,
@@ -50,8 +50,12 @@ circuit "DaoProposeInput" {
         user_data,
     );
 
+    # BUG: doesn't check if coin was spent.
+    # we need to fix this.
+    # ideas???
+
     # Merkle root
-    root = merkle_root(leaf_pos, path, C);
+    root = merkle_root(leaf_pos, path, coin);
     constrain_instance(root);
 
     # Finally we derive a public key for the signature and constrain

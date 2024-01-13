@@ -201,14 +201,16 @@ darkfi_sdk::fp_from_bs58!(DaoProposalBulla);
 darkfi_sdk::fp_to_bs58!(DaoProposalBulla);
 darkfi_sdk::ty_from_fp!(DaoProposalBulla);
 
-/// Parameters for `Dao::Mint`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: dao-mint-params
+/// Parameters for `Dao::Mint`
 pub struct DaoMintParams {
     /// The DAO bulla
     pub dao_bulla: DaoBulla,
     /// The DAO public key
     pub dao_pubkey: PublicKey,
 }
+// ANCHOR_END: dao-mint-params
 
 /// State update for `Dao::Mint`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -217,8 +219,9 @@ pub struct DaoMintUpdate {
     pub dao_bulla: DaoBulla,
 }
 
-/// Parameters for `Dao::Propose`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: dao-propose-params
+/// Parameters for `Dao::Propose`
 pub struct DaoProposeParams {
     /// Merkle root of the DAO in the DAO state
     pub dao_merkle_root: MerkleNode,
@@ -231,9 +234,11 @@ pub struct DaoProposeParams {
     /// Inputs for the proposal
     pub inputs: Vec<DaoProposeParamsInput>,
 }
+// ANCHOR_END: dao-propose-params
 
-/// Input for a DAO proposal
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: dao-propose-input-params
+/// Input for a DAO proposal
 pub struct DaoProposeParamsInput {
     /// Value commitment for the input
     pub value_commit: pallas::Point,
@@ -242,6 +247,7 @@ pub struct DaoProposeParamsInput {
     /// Public key used for signing
     pub signature_public: PublicKey,
 }
+// ANCHOR_END: dao-propose-input-params
 
 /// State update for `Dao::Propose`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
