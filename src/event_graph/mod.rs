@@ -401,7 +401,6 @@ impl EventGraph {
                 );
                 return Err(Error::DagSyncFailed)
             }
-            // }
         } // <-- while !missing_parents.is_empty
 
         // At this point we should've got all the events.

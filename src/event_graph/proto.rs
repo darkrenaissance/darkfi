@@ -416,8 +416,10 @@ impl ProtocolEventGraph {
             // Check if the incoming event is older than the genesis event. If so, something
             // has gone wrong. The event should have been pruned during the last
             // rotation.
-            for event in events.clone() {
-                let genesis_timestamp = self.event_graph.current_genesis.read().await.timestamp;
+            let genesis_timestamp = self.event_graph.current_genesis.read().await.timestamp;
+            let mut bcast_ids = self.event_graph.broadcasted_ids.write().await;
+
+            for event in events.iter() {
                 if event.timestamp < genesis_timestamp {
                     error!(
                         target: "event_graph::protocol::handle_event_req()",
@@ -429,17 +431,16 @@ impl ProtocolEventGraph {
 
                 // Now let's get the upper level of event IDs. When we reply, we could
                 // get requests for those IDs as well.
-                let mut bcast_ids = self.event_graph.broadcasted_ids.write().await;
                 for parent_id in event.parents.iter() {
                     if parent_id != &NULL_ID {
                         bcast_ids.insert(*parent_id);
                     }
                 }
-                // TODO: We should remove the reply from the bcast IDs for this specific channel.
-                //       We can't remove them for everyone.
-                //bcast_ids.remove(&event_id);
-                drop(bcast_ids);
             }
+            // TODO: We should remove the reply from the bcast IDs for this specific channel.
+            //       We can't remove them for everyone.
+            //bcast_ids.remove(&event_id);
+            drop(bcast_ids);
 
             // Reply with the event
             self.channel.send(&EventRep(events)).await?;
