@@ -69,15 +69,23 @@ $$ \mathcal{Y}((x, y)) = y $$
 **Note:** There is no $P = (0, y) ∈ Eₚ$ so $\mathcal{X}(P) = 0 ⟹  P = ∞$.
 Likewise there is no $P = (x, 0) ∈ Eₚ$ so $\mathcal{Y}(P) = 0 ⟹  P = ∞$.
 
-### Encoding and Decoding for $𝔽ₚ$
+### Hashing to $𝔽ₚ$
 
-Define $𝔽ₚ2𝔹³² : 𝔽ₚ → 𝔹³²$ as encoding the canonical representation
-of $𝔽ₚ$ in little endian byte format.
-
-Define $𝔹³²2𝔽ₚ : 𝔹³² → 𝔽ₚ$ as the matching decoding of $𝔽ₚ$ modulo
+Define $𝔹⁶⁴2𝔽ₚ : 𝔹⁶⁴ → 𝔽ₚ$ as the matching decoding of $𝔽ₚ$ modulo
 the canonical class in little endian byte format.
 
-## BLAKE3 Hash Function
+Let there by a uniform hash function $h : X → [0, r)$ with $r ≠ p$,
+and a map $σ : [0, r) → [0, p)$ converting to the canonical representation
+of the class in $ℤ/⟨p⟩$.
 
-BLAKE3 is defined by [CANW2021](https://raw.githubusercontent.com/BLAKE3-team/BLAKE3-specs/master/blake3.pdf).
-$$ \t{BLAKE3}: 𝔹^* → 𝔹³² $$
+Let $s = σ ∘ h$ be the composition of functions, then $s$ has a non-uniform
+range. However increasing the size of $r$ relative to $p$ diminises the
+statistical significance of any overlap.
+For this reason we define the conversion from $𝔹⁶⁴$ for hash functions.
+
+## BLAKE2b Hash Function
+
+BLAKE2 is defined by [ANWW2013](https://blake2.net/#sp).
+DarkFi uses the BLAKE2b variant.
+$$ \t{BLAKE2b}: 𝔹^* → 𝔹⁶⁴ $$
+
