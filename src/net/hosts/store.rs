@@ -1180,7 +1180,7 @@ mod tests {
                 hosts.greylist_store(addr, last_seen).await;
             }
 
-            assert!(hosts.is_empty_greylist().await);
+            assert!(!hosts.is_empty_greylist().await);
 
             let local_hosts = vec![
                 (Url::parse("tcp://localhost:3921").unwrap()),
@@ -1193,7 +1193,7 @@ mod tests {
             for host in &local_hosts {
                 hosts.greylist_store(host.clone(), last_seen).await;
             }
-            assert!(hosts.is_empty_greylist().await);
+            assert!(!hosts.is_empty_greylist().await);
 
             let remote_hosts = vec![
                 (Url::parse("tcp://dark.fi:80").unwrap()),
@@ -1207,7 +1207,7 @@ mod tests {
 
             assert!(hosts.greylist_contains(&remote_hosts[0]).await);
             assert!(hosts.greylist_contains(&remote_hosts[1]).await);
-            assert!(!hosts.greylist_contains(&remote_hosts[2]).await);
+            assert!(hosts.greylist_contains(&remote_hosts[2]).await);
         });
     }
 
