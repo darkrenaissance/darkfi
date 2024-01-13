@@ -22,7 +22,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use log::{debug};
+use log::debug;
 use smol::Executor;
 
 use super::{channel::ChannelPtr, p2p::P2pPtr, protocol::ProtocolVersion};

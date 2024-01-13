@@ -291,7 +291,10 @@ impl Hosts {
                 debug!(target: "store::greylist_store_or_update()",
                 "We have this entry in the greylist. Updating last seen...");
 
-                let index = self.get_greylist_index_at_addr(addr.clone()).await.unwrap();
+                let index = self
+                    .get_greylist_index_at_addr(addr.clone())
+                    .await
+                    .expect("Expected greylist entry to exist");
                 self.greylist_update_last_seen(&addr, last_seen, index).await;
             }
         }
@@ -315,7 +318,10 @@ impl Hosts {
                 debug!(target: "store::whitelist_store_or_update()",
         "We have this entry in the whitelist. Updating last seen...");
 
-                let index = self.get_whitelist_index_at_addr(addr.clone()).await.unwrap();
+                let index = self
+                    .get_whitelist_index_at_addr(addr.clone())
+                    .await
+                    .expect("Expected whitelist entry to exist");
                 self.whitelist_update_last_seen(addr, last_seen.clone(), index).await;
             }
         }
@@ -338,7 +344,10 @@ impl Hosts {
                 debug!(target: "store::anchorlist_store_or_update()",
         "We have this entry in the anchorlist. Updating last seen...");
 
-                let index = self.get_anchorlist_index_at_addr(addr.clone()).await.unwrap();
+                let index = self
+                    .get_anchorlist_index_at_addr(addr.clone())
+                    .await
+                    .expect("Expected anchorlist entry to exist");
                 self.anchorlist_update_last_seen(addr, last_seen.clone(), index).await;
             }
         }
