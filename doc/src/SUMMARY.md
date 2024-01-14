@@ -83,6 +83,7 @@
     - [Concepts](spec/contracts/dao/concepts.md)
     - [Model](spec/contracts/dao/model.md)
     - [Contract](spec/contracts/dao/contract.md)
+  - [Money](spec/contracts/money.md)
 
 # P2P API Tutorial
 
