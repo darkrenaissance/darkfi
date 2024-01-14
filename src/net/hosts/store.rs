@@ -342,7 +342,7 @@ impl Hosts {
                 self.anchorlist_store(addr.clone(), last_seen.clone()).await;
             }
             debug!(target: "store::anchorlist_store_or_update()",
-        "We have this entry in the anchorlist. Updating last seen...");
+            "We have this entry in the anchorlist. Updating last seen...");
 
             let index = self
                 .get_anchorlist_index_at_addr(addr.clone())
@@ -744,7 +744,7 @@ impl Hosts {
 
     /// Get the index for a given addr on the anchorlist.
     pub async fn get_anchorlist_index_at_addr(&self, addr: Url) -> Option<usize> {
-        self.whitelist.read().await.iter().position(|a| a.0 == addr)
+        self.anchorlist.read().await.iter().position(|a| a.0 == addr)
     }
 
     /// Get the entry for a given addr on the whitelist.
