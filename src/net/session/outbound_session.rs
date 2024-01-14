@@ -229,7 +229,6 @@ impl Slot {
         // * address is already pending a connection
         let addr = hosts.check_address_with_lock(self.p2p(), addrs).await;
         return addr
-        //return None
     }
 
     // We first try to make connections to the addresses on our anchor list. We then find some
@@ -238,6 +237,7 @@ impl Slot {
     async fn run(self: Arc<Self>) {
         let hosts = self.p2p().hosts();
         let slot_count = self.p2p().settings().outbound_connections;
+        let mut rejected = vec![];
 
         loop {
             // Activate the slot
@@ -262,6 +262,7 @@ impl Slot {
                 self.session().wakeup_peer_discovery();
                 // Wait to be woken up by peer discovery
                 self.wakeup_self.wait().await;
+
                 continue
             }
 
@@ -279,10 +280,9 @@ impl Slot {
                 self.session().wakeup_peer_discovery();
                 // Wait to be woken up by peer discovery
                 self.wakeup_self.wait().await;
+
                 continue
             };
-
-            debug!(target: "deadlock", "Got addrs: {}, slot {} node {}", addr.0, self.slot, self.p2p().settings().node_id);
 
             let host = addr.0;
             let slot = self.slot;
@@ -298,6 +298,10 @@ impl Slot {
                 addr: host.clone(),
             });
 
+            if rejected.contains(&host) {
+                continue
+            }
+
             let (addr, channel) = match self.try_connect(host.clone()).await {
                 Ok(connect_info) => connect_info,
                 Err(err) => {
@@ -307,20 +311,18 @@ impl Slot {
                         slot, err, self.p2p().settings().node_id
                     );
 
-                    debug!(
-                        target: "deadlock",
-                        "connection failed: {}, slot {} node {}, channel {}",
-                        err, slot, self.p2p().settings().node_id, host.clone()
-                    );
-
                     dnetev!(self, OutboundSlotDisconnected, {
                         slot,
                         err: err.to_string()
                     });
 
-                    self.channel_id.store(0, Ordering::Relaxed);
+                    // Add to the rejected list to avoid immediately reconnecting.
+                    // TODO: Once it's been added to this list it will never be connected to
+                    // in the lifespan of Outbound Session. Refactor this so that it gets put
+                    // in a temporary quarantine and is freed up to try again later.
+                    rejected.push(host.clone());
 
-                    sleep(1).await;
+                    self.channel_id.store(0, Ordering::Relaxed);
                     continue
                 }
             };
@@ -336,6 +338,8 @@ impl Slot {
                 addr: addr.clone(),
                 channel_id: channel.info.id
             });
+
+            // At this point we've managed to connect.
 
             let stop_sub = channel.subscribe_stop().await.expect("Channel should not be stopped");
             // Setup new channel
@@ -386,10 +390,6 @@ impl Slot {
                     "[P2P] Unable to connect outbound slot #{} [{}]: {}",
                     self.slot, addr, e
                 );
-
-                //// At this point we've failed to connect.
-                //// If the host is in the anchorlist or whitelist, downgrade it to greylist.
-                //self.p2p().hosts().downgrade_host(&addr).await?;
 
                 // Remove connection from pending
                 self.p2p().remove_pending(&addr).await;
