@@ -287,16 +287,16 @@ impl Hosts {
                 debug!(target: "store::greylist_store_or_update()", "We do not have this entry in the hostlist. Adding to store...");
 
                 self.greylist_store(addr.clone(), last_seen.clone()).await;
-            } else {
-                debug!(target: "store::greylist_store_or_update()",
+            }
+
+            debug!(target: "store::greylist_store_or_update()",
                 "We have this entry in the greylist. Updating last seen...");
 
-                let index = self
-                    .get_greylist_index_at_addr(addr.clone())
-                    .await
-                    .expect("Expected greylist entry to exist");
-                self.greylist_update_last_seen(&addr, last_seen, index).await;
-            }
+            let index = self
+                .get_greylist_index_at_addr(addr.clone())
+                .await
+                .expect("Expected greylist entry to exist");
+            self.greylist_update_last_seen(&addr, last_seen, index).await;
         }
         self.store_subscriber.notify(filtered_addrs_len).await;
         Ok(())
@@ -314,16 +314,16 @@ impl Hosts {
         "We do not have this entry in the whitelist. Adding to store...");
 
                 self.whitelist_store(addr.clone(), last_seen.clone()).await;
-            } else {
-                debug!(target: "store::whitelist_store_or_update()",
+            }
+
+            debug!(target: "store::whitelist_store_or_update()",
         "We have this entry in the whitelist. Updating last seen...");
 
-                let index = self
-                    .get_whitelist_index_at_addr(addr.clone())
-                    .await
-                    .expect("Expected whitelist entry to exist");
-                self.whitelist_update_last_seen(addr, last_seen.clone(), index).await;
-            }
+            let index = self
+                .get_whitelist_index_at_addr(addr.clone())
+                .await
+                .expect("Expected whitelist entry to exist");
+            self.whitelist_update_last_seen(addr, last_seen.clone(), index).await;
         }
         Ok(())
     }
@@ -340,16 +340,15 @@ impl Hosts {
         "We do not have this entry in the whitelist. Adding to store...");
 
                 self.anchorlist_store(addr.clone(), last_seen.clone()).await;
-            } else {
-                debug!(target: "store::anchorlist_store_or_update()",
+            }
+            debug!(target: "store::anchorlist_store_or_update()",
         "We have this entry in the anchorlist. Updating last seen...");
 
-                let index = self
-                    .get_anchorlist_index_at_addr(addr.clone())
-                    .await
-                    .expect("Expected anchorlist entry to exist");
-                self.anchorlist_update_last_seen(addr, last_seen.clone(), index).await;
-            }
+            let index = self
+                .get_anchorlist_index_at_addr(addr.clone())
+                .await
+                .expect("Expected anchorlist entry to exist");
+            self.anchorlist_update_last_seen(addr, last_seen.clone(), index).await;
         }
         Ok(())
     }
@@ -364,13 +363,13 @@ impl Hosts {
         if greylist.len() == GREYLIST_MAX_LEN {
             let last_entry = greylist.pop().unwrap();
             debug!(target: "store::greylist_store()", "Greylist reached max size. Removed {:?}", last_entry);
-        } else {
-            debug!(target: "store::greylist_store()", "Inserting {}", addr);
-            greylist.push((addr, last_seen));
-
-            // Sort the list by last_seen.
-            greylist.sort_by_key(|entry| entry.1);
         }
+
+        debug!(target: "store::greylist_store()", "Inserting {}", addr);
+        greylist.push((addr, last_seen));
+
+        // Sort the list by last_seen.
+        greylist.sort_by_key(|entry| entry.1);
         trace!(target: "store::greylist_store()", "[END]");
     }
 
@@ -384,13 +383,12 @@ impl Hosts {
         if whitelist.len() == WHITELIST_MAX_LEN {
             let last_entry = whitelist.pop().unwrap();
             debug!(target: "store::whitelist_store()", "Whitelist reached max size. Removed {:?}", last_entry);
-        } else {
-            trace!(target: "store::whitelist_store()", "Inserting {}. Last seen {:?}", addr, last_seen);
-            whitelist.push((addr, last_seen));
-
-            // Sort the list by last_seen.
-            whitelist.sort_by_key(|entry| entry.1);
         }
+        trace!(target: "store::whitelist_store()", "Inserting {}. Last seen {:?}", addr, last_seen);
+        whitelist.push((addr, last_seen));
+
+        // Sort the list by last_seen.
+        whitelist.sort_by_key(|entry| entry.1);
         trace!(target: "store::whitelist_store()", "[END]");
     }
 
@@ -608,12 +606,11 @@ impl Hosts {
                         continue 'addr_loop
                     }
                 }
-            } else {
-                // On localnet, make sure ours ports don't enter the host set.
-                for ext in &self.settings.external_addrs {
-                    if addr_.port() == ext.port() {
-                        continue 'addr_loop
-                    }
+            }
+            // On localnet, make sure ours ports don't enter the host set.
+            for ext in &self.settings.external_addrs {
+                if addr_.port() == ext.port() {
+                    continue 'addr_loop
                 }
             }
 
@@ -708,14 +705,9 @@ impl Hosts {
 
     /// Check if the hostlist is empty.
     pub async fn is_empty_hostlist(&self) -> bool {
-        if self.is_empty_greylist().await &&
+        self.is_empty_greylist().await &&
             self.is_empty_whitelist().await &&
             self.is_empty_anchorlist().await
-        {
-            return true
-        } else {
-            return false
-        }
     }
 
     /// Check whether this peer is in any of the hostlists.
@@ -964,18 +956,16 @@ impl Hosts {
                            "Found matching white scheme, returning {:?}", ret);
                         return ret
                     }
-                } else {
-                    debug!(target: "store::whitelist_fetch_with_schemes",
-                          "No matching schemes! Trying greylist...");
-                    return self.greylist_fetch_with_schemes(schemes, limit).await
                 }
-            }
-        } else {
-            // Whitelist is empty!
-            if !self.is_empty_greylist().await {
-                // Select from the greylist providing it's not empty.
+                debug!(target: "store::whitelist_fetch_with_schemes",
+                          "No matching schemes! Trying greylist...");
                 return self.greylist_fetch_with_schemes(schemes, limit).await
             }
+        }
+        // Whitelist is empty!
+        if !self.is_empty_greylist().await {
+            // Select from the greylist providing it's not empty.
+            return self.greylist_fetch_with_schemes(schemes, limit).await
         }
 
         trace!(target: "store::whitelist_fetch_with_schemes", "END");
@@ -1011,23 +1001,23 @@ impl Hosts {
                            "Found matching anchor scheme, returning {:?}", ret);
                         return ret
                     }
-                } else {
-                    debug!(target: "store::anchorlist_fetch_with_schemes",
+                }
+
+                debug!(target: "store::anchorlist_fetch_with_schemes",
                           "No matching schemes! Trying greylist...");
-                    return self.whitelist_fetch_with_schemes(schemes, limit).await
-                }
-            }
-        } else {
-            // Anchorlist is empty!
-            if !self.is_empty_whitelist().await {
                 return self.whitelist_fetch_with_schemes(schemes, limit).await
-            } else {
-                // Whitelist is empty!
-                if !self.is_empty_greylist().await {
-                    // Select from the greyist providing it's not empty.
-                    return self.greylist_fetch_with_schemes(schemes, limit).await
-                }
             }
+        }
+
+        // Anchorlist is empty!
+        if !self.is_empty_whitelist().await {
+            return self.whitelist_fetch_with_schemes(schemes, limit).await
+        }
+
+        // Whitelist is empty!
+        if !self.is_empty_greylist().await {
+            // Select from the greyist providing it's not empty.
+            return self.greylist_fetch_with_schemes(schemes, limit).await
         }
 
         trace!(target: "store::anchorlist_fetch_with_schemes", "END");
