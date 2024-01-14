@@ -66,15 +66,9 @@ pub(crate) fn dao_vote_get_metadata(
         let value_coords = input.vote_commit.to_affine().coordinates().unwrap();
         let (sig_x, sig_y) = input.signature_public.xy();
 
-        // TODO: Here we "trust" the input param's merkle root. Instead we compare
-        // that this root equals to the proposal's snapshotted root later in the
-        // `process_instruction`. Should we just enforce it here instead/aswell?
-        // The reason is because ZK proofs are verified afterwards, so by checking
-        // in wasm first, we can potentially bail out more quickly.
         zk_public_inputs.push((
             DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS.to_string(),
             vec![
-                params.proposal_bulla.inner(),
                 input.nullifier.inner(),
                 *value_coords.x(),
                 *value_coords.y(),
@@ -129,7 +123,6 @@ pub(crate) fn dao_vote_process_instruction(
     };
 
     // Get the current votes
-    // TODO: Proposals should have a set length of time
     let mut proposal_metadata: DaoProposalMetadata = deserialize(&data)?;
 
     // Check the Merkle root and nullifiers for the input coins are valid

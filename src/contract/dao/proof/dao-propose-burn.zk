@@ -22,20 +22,6 @@ witness "DaoProposeInput" {
 }
 
 circuit "DaoProposeInput" {
-    #nullifier = poseidon_hash(secret, serial);
-    #constrain_instance(nullifier);
-
-    # Pedersen commitment for coin's value
-    vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
-    vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
-    value_commit = ec_add(vcv, vcr);
-    constrain_instance(ec_get_x(value_commit));
-    constrain_instance(ec_get_y(value_commit));
-
-    # Commitment for coin's token ID
-    token_commit = poseidon_hash(token, token_blind);
-    constrain_instance(token_commit);
-
     # Coin hash
     pub = ec_mul_base(secret, NULLIFIER_K);
     pub_x = ec_get_x(pub);
@@ -50,9 +36,22 @@ circuit "DaoProposeInput" {
         user_data,
     );
 
-    # BUG: doesn't check if coin was spent.
-    # we need to fix this.
-    # ideas???
+    # We need this to detect whether the above coin was already spent.
+    # To avoid leaking timing & other info, we can just make a
+    # money::transfer() call within the same tx.
+    nullifier = poseidon_hash(secret, coin);
+    constrain_instance(nullifier);
+
+    # Pedersen commitment for coin's value
+    vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
+    vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
+    value_commit = ec_add(vcv, vcr);
+    constrain_instance(ec_get_x(value_commit));
+    constrain_instance(ec_get_y(value_commit));
+
+    # Commitment for coin's token ID
+    token_commit = poseidon_hash(token, token_blind);
+    constrain_instance(token_commit);
 
     # Merkle root
     root = merkle_root(leaf_pos, path, coin);

@@ -22,7 +22,7 @@ use darkfi_sdk::{
     bridgetree::Hashable,
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::*, pedersen::pedersen_commitment_u64,
-        poseidon_hash, MerkleNode, PublicKey, SecretKey,
+        poseidon_hash, MerkleNode, Nullifier, PublicKey, SecretKey,
     },
     pasta::pallas,
 };
@@ -83,8 +83,8 @@ impl DaoProposeCall {
             let prover_witnesses = vec![
                 Witness::Base(Value::known(input.secret.inner())),
                 Witness::Base(Value::known(note.serial)),
-                Witness::Base(Value::known(pallas::Base::from(0))),
-                Witness::Base(Value::known(pallas::Base::from(0))),
+                Witness::Base(Value::known(pallas::Base::ZERO)),
+                Witness::Base(Value::known(pallas::Base::ZERO)),
                 Witness::Base(Value::known(pallas::Base::from(note.value))),
                 Witness::Base(Value::known(note.token_id.inner())),
                 Witness::Scalar(Value::known(funds_blind)),
@@ -121,6 +121,8 @@ impl DaoProposeCall {
                 current
             };
 
+            let nullifier: Nullifier = poseidon_hash([input.secret.inner(), coin.inner()]).into();
+
             let token_commit = poseidon_hash([note.token_id.inner(), gov_token_blind]);
             assert_eq!(self.dao.gov_token_id, note.token_id);
 
@@ -130,6 +132,7 @@ impl DaoProposeCall {
             let (sig_x, sig_y) = signature_public.xy();
 
             let public_inputs = vec![
+                nullifier.inner(),
                 *value_coords.x(),
                 *value_coords.y(),
                 token_commit,
@@ -144,7 +147,8 @@ impl DaoProposeCall {
                 .expect("DAO::propose() proving error!");
             proofs.push(input_proof);
 
-            let input = DaoProposeParamsInput { value_commit, merkle_root, signature_public };
+            let input =
+                DaoProposeParamsInput { nullifier, value_commit, merkle_root, signature_public };
             inputs.push(input);
         }
 

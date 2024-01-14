@@ -77,9 +77,6 @@ impl DaoVoteCall {
         debug!(target: "dao", "build()");
         let mut proofs = vec![];
 
-        assert_eq!(self.dao.to_bulla(), self.proposal.dao_bulla);
-        let proposal_bulla = self.proposal.to_bulla();
-
         let gov_token_blind = pallas::Base::random(&mut OsRng);
 
         let mut inputs = vec![];
@@ -101,8 +98,8 @@ impl DaoVoteCall {
             let prover_witnesses = vec![
                 Witness::Base(Value::known(input.secret.inner())),
                 Witness::Base(Value::known(note.serial)),
-                Witness::Base(Value::known(pallas::Base::from(0))),
-                Witness::Base(Value::known(pallas::Base::from(0))),
+                Witness::Base(Value::known(pallas::Base::ZERO)),
+                Witness::Base(Value::known(pallas::Base::ZERO)),
                 Witness::Base(Value::known(pallas::Base::from(note.value))),
                 Witness::Base(Value::known(note.token_id.inner())),
                 Witness::Scalar(Value::known(all_vote_blind)),
@@ -110,7 +107,6 @@ impl DaoVoteCall {
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
                 Witness::Base(Value::known(input.signature_secret.inner())),
-                Witness::Base(Value::known(proposal_bulla.inner())),
             ];
 
             let public_key = PublicKey::from_secret(input.secret);
@@ -141,7 +137,7 @@ impl DaoVoteCall {
             let token_commit = poseidon_hash([note.token_id.inner(), gov_token_blind]);
             assert_eq!(self.dao.gov_token_id, note.token_id);
 
-            let nullifier = poseidon_hash([note.serial, coin.inner(), proposal_bulla.inner()]);
+            let nullifier = poseidon_hash([input.secret.inner(), coin.inner()]);
 
             let vote_commit = pedersen_commitment_u64(note.value, all_vote_blind);
             let vote_commit_coords = vote_commit.to_affine().coordinates().unwrap();
@@ -149,7 +145,6 @@ impl DaoVoteCall {
             let (sig_x, sig_y) = signature_public.xy();
 
             let public_inputs = vec![
-                proposal_bulla.inner(),
                 nullifier,
                 *vote_commit_coords.x(),
                 *vote_commit_coords.y(),
@@ -220,6 +215,9 @@ impl DaoVoteCall {
             // time checks
             Witness::Base(Value::known(current_day)),
         ];
+
+        assert_eq!(self.dao.to_bulla(), self.proposal.dao_bulla);
+        let proposal_bulla = self.proposal.to_bulla();
 
         let public_inputs = vec![
             token_commit,
