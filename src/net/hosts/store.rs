@@ -276,7 +276,7 @@ impl Hosts {
 
     /// Stores an address on the greylist or updates its last_seen field if we already
     /// have the address.
-    pub async fn greylist_store_or_update(&self, addrs: &[(Url, u64)]) -> Result<()> {
+    pub async fn greylist_store_or_update(&self, addrs: &[(Url, u64)]) {
         trace!(target: "store::greylist_store_or_update()", "[START]");
 
         // Filter addresses before writing to the greylist.
@@ -299,12 +299,11 @@ impl Hosts {
             self.greylist_update_last_seen(&addr, last_seen, index).await;
         }
         self.store_subscriber.notify(filtered_addrs_len).await;
-        Ok(())
     }
 
     /// Stores an address on the whitelist or updates its last_seen field if we already
     /// have the address.
-    pub async fn whitelist_store_or_update(&self, addrs: &[(Url, u64)]) -> Result<()> {
+    pub async fn whitelist_store_or_update(&self, addrs: &[(Url, u64)]) {
         trace!(target: "store::whitelist_store_or_update()", "[START]");
 
         // No address filtering for whitelist (whitelist is created from greylist)
@@ -325,12 +324,11 @@ impl Hosts {
                 .expect("Expected whitelist entry to exist");
             self.whitelist_update_last_seen(addr, last_seen.clone(), index).await;
         }
-        Ok(())
     }
 
     /// Stores an address on the anchorlist or updates its last_seen field if we already
     /// have the address.
-    pub async fn anchorlist_store_or_update(&self, addrs: &[(Url, u64)]) -> Result<()> {
+    pub async fn anchorlist_store_or_update(&self, addrs: &[(Url, u64)]) {
         trace!(target: "store::anchor_store_or_update()", "[START]");
 
         // No address filtering for anchorlist (contains addresses we have already connected to)
@@ -350,7 +348,6 @@ impl Hosts {
                 .expect("Expected anchorlist entry to exist");
             self.anchorlist_update_last_seen(addr, last_seen.clone(), index).await;
         }
-        Ok(())
     }
 
     /// Append host to the greylist. Called on learning of a new peer.
@@ -407,58 +404,58 @@ impl Hosts {
         trace!(target: "store::anchorlist_store()", "[END]");
     }
 
-    // Downgrade a non-responsive host.
-    // TODO: it is perhaps more efficient simply to select another connection and allow
-    // the greylist refinery process to filter address.
-    pub async fn downgrade_host(&self, addr: &Url) -> Result<()> {
-        if self.anchorlist_contains(addr).await {
-            debug!(target: "net::store::downgrade_host()", 
-                   "Removing non responsive peer from anchorlist");
+    //// Downgrade a non-responsive host.
+    //// TODO: it is perhaps more efficient simply to select another connection and allow
+    //// the greylist refinery process to filter address.
+    //pub async fn downgrade_host(&self, addr: &Url) -> Result<()> {
+    //    if self.anchorlist_contains(addr).await {
+    //        debug!(target: "net::store::downgrade_host()",
+    //               "Removing non responsive peer from anchorlist");
 
-            let index = self
-                .get_anchorlist_index_at_addr(addr.clone())
-                .await
-                .expect("Expected anchorlist index to exist");
-            let entry = self
-                .get_anchorlist_entry_at_addr(addr)
-                .await
-                .expect("Expected anchorlist entry to exist");
+    //        let index = self
+    //            .get_anchorlist_index_at_addr(addr.clone())
+    //            .await
+    //            .expect("Expected anchorlist index to exist");
+    //        let entry = self
+    //            .get_anchorlist_entry_at_addr(addr)
+    //            .await
+    //            .expect("Expected anchorlist entry to exist");
 
-            self.anchorlist_remove(addr, index).await;
-            self.greylist_store_or_update(&[entry]).await?;
+    //        self.anchorlist_remove(addr, index).await;
+    //        self.greylist_store_or_update(&[entry]).await?;
 
-            Ok(())
-        } else if self.whitelist_contains(addr).await {
-            debug!(target: "net::store::downgrade_host()", 
-                   "Removing non responsive peer from whitelist");
+    //        Ok(())
+    //    } else if self.whitelist_contains(addr).await {
+    //        debug!(target: "net::store::downgrade_host()",
+    //               "Removing non responsive peer from whitelist");
 
-            let index = self
-                .get_whitelist_index_at_addr(addr.clone())
-                .await
-                .expect("Expected whitelist index to exist");
-            let entry = self
-                .get_whitelist_entry_at_addr(addr)
-                .await
-                .expect("Expected whitelist entry to exist");
+    //        let index = self
+    //            .get_whitelist_index_at_addr(addr.clone())
+    //            .await
+    //            .expect("Expected whitelist index to exist");
+    //        let entry = self
+    //            .get_whitelist_entry_at_addr(addr)
+    //            .await
+    //            .expect("Expected whitelist entry to exist");
 
-            self.whitelist_remove(addr, index).await;
-            self.greylist_store_or_update(&[entry]).await?;
+    //        self.whitelist_remove(addr, index).await;
+    //        self.greylist_store_or_update(&[entry]).await?;
 
-            Ok(())
-        } else {
-            debug!(target: "net::store::downgrade_host()", 
-                   "Removing non responsive peer from greylist");
+    //        Ok(())
+    //    } else {
+    //        debug!(target: "net::store::downgrade_host()",
+    //               "Removing non responsive peer from greylist");
 
-            let index = self
-                .get_greylist_index_at_addr(addr.clone())
-                .await
-                .expect("Expected greylist index to exist");
+    //        let index = self
+    //            .get_greylist_index_at_addr(addr.clone())
+    //            .await
+    //            .expect("Expected greylist index to exist");
 
-            self.greylist_remove(addr, index).await;
+    //        self.greylist_remove(addr, index).await;
 
-            Ok(())
-        }
-    }
+    //        Ok(())
+    //    }
+    //}
 
     /// Update the last_seen field of a peer on the greylist.
     pub async fn greylist_update_last_seen(&self, addr: &Url, last_seen: u64, index: usize) {
@@ -918,7 +915,8 @@ impl Hosts {
                 ret.push((addr.clone(), *last_seen));
                 limit -= 1;
                 if limit == 0 {
-                    debug!(target: "store::greylist_fetch_with_schemes", "Found matching scheme, returning");
+                    debug!(target: "deadlock", "Found matching grey scheme, returning");
+                    debug!(target: "store::greylist_fetch_with_schemes", "Found matching greylist entry, returning");
                     return ret
                 }
             }
@@ -952,12 +950,16 @@ impl Hosts {
                     ret.push((addr.clone(), *last_seen));
                     parsed_limit -= 1;
                     if parsed_limit == 0 {
+                        debug!(target: "deadlock",
+                           "Found matching white scheme, returning {:?}", ret);
                         trace!(target: "store::whitelist_fetch_with_schemes",
                            "Found matching white scheme, returning {:?}", ret);
                         return ret
                     }
                 }
-                debug!(target: "store::whitelist_fetch_with_schemes",
+                debug!(target: "deadlock",
+                          "No matching schemes! Trying greylist...");
+                warn!(target: "store::whitelist_fetch_with_schemes",
                           "No matching schemes! Trying greylist...");
                 return self.greylist_fetch_with_schemes(schemes, limit).await
             }
@@ -997,14 +999,20 @@ impl Hosts {
                     ret.push((addr.clone(), *last_seen));
                     parsed_limit -= 1;
                     if parsed_limit == 0 {
+                        debug!(target: "deadlock",
+                           "Found matching anchor scheme, returning {:?}", ret);
+
                         trace!(target: "store::anchorlist_fetch_with_schemes",
                            "Found matching anchor scheme, returning {:?}", ret);
                         return ret
                     }
                 }
 
-                debug!(target: "store::anchorlist_fetch_with_schemes",
-                          "No matching schemes! Trying greylist...");
+                debug!(target: "deadlock",
+                          "No matching schemes! Trying whitelist...");
+
+                warn!(target: "store::anchorlist_fetch_with_schemes",
+                          "No matching schemes! Trying whitelist...");
                 return self.whitelist_fetch_with_schemes(schemes, limit).await
             }
         }

@@ -106,7 +106,7 @@ impl GreylistRefinery {
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
             // Append to the whitelist.
-            hosts.whitelist_store_or_update(&[(url.clone(), last_seen)]).await.unwrap();
+            hosts.whitelist_store_or_update(&[(url.clone(), last_seen)]).await;
 
             // Remove whitelisted peer from the greylist.
             hosts.greylist_remove(url, position).await;

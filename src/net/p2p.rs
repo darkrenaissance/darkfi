@@ -228,7 +228,9 @@ impl P2p {
 
     /// Check whether we're connected to a given address
     pub async fn exists(&self, addr: &Url) -> bool {
-        self.channels.lock().await.contains_key(addr)
+        //self.channels.lock().await.contains_key(addr)
+        //true
+        false
     }
 
     /// Add a channel to the set of connected channels

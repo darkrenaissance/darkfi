@@ -100,7 +100,7 @@ impl ProtocolAddress {
                 "Appending to greylist...",
             );
 
-            self.hosts.greylist_store_or_update(&addrs_msg.addrs).await?;
+            self.hosts.greylist_store_or_update(&addrs_msg.addrs).await;
         }
     }
 

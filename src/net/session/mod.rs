@@ -24,6 +24,7 @@ use std::{
 use async_trait::async_trait;
 use log::debug;
 use smol::Executor;
+use url::Url;
 
 use super::{channel::ChannelPtr, p2p::P2pPtr, protocol::ProtocolVersion};
 use crate::Result;
@@ -143,16 +144,6 @@ pub trait Session: Sync {
         // Perform handshake
         protocol_version.run(executor.clone()).await?;
 
-        if self.type_id() != SESSION_INBOUND {
-            // Channel is now initialized. Timestamp this.
-            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-
-            self.p2p()
-                .hosts()
-                .anchorlist_store_or_update(&[(channel.address().clone(), last_seen)])
-                .await?;
-        }
-
         // Add channel to p2p
         self.p2p().store(channel.clone()).await;
 
@@ -161,6 +152,26 @@ pub trait Session: Sync {
 
         // Channel is ready for use
         Ok(())
+    }
+
+    /// Upgrade a connection to the anchorlist and remove it from the white or greylist.
+    /// Called after a connection has been successfully established in Outbound and Manual
+    /// sessions.
+    async fn upgrade_connection(&self, addr: &Url) {
+        let hosts = self.p2p().hosts();
+
+        let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+        hosts.anchorlist_store_or_update(&[(addr.clone(), last_seen)]).await;
+
+        if hosts.whitelist_contains(&addr).await {
+            let index = hosts.get_whitelist_index_at_addr(addr.clone()).await.unwrap();
+            hosts.whitelist_remove(&addr, index).await;
+        }
+
+        if hosts.greylist_contains(&addr).await {
+            let index = hosts.get_greylist_index_at_addr(addr.clone()).await.unwrap();
+            hosts.greylist_remove(&addr, index).await;
+        }
     }
 
     /// Returns a pointer to the p2p network interface

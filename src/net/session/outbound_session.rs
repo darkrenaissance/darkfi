@@ -190,14 +190,13 @@ impl Slot {
         let connects = self.p2p().settings().outbound_connections;
         let white_count = connects * self.p2p().settings().white_connection_percent / 100;
 
-        // Up to anchor_connection_count connections:
-        //
-        //  Select from the anchorlist
-        //  If the anchorlist is empty, select from the whitelist
-        //  If the whitelist is empty, select from the greylist
-        //  If the greylist is empty, do peer discovery
-
         let addrs = {
+            // Up to anchor_connection_count connections:
+            //
+            //  Select from the anchorlist
+            //  If the anchorlist is empty, select from the whitelist
+            //  If the whitelist is empty, select from the greylist
+            //  If the greylist is empty, do peer discovery
             if slot_count < self.p2p().settings().anchor_connection_count {
                 debug!(target: "net::outbound_session::fetch_address()",
                 "First two connections- prefer anchor connections");
@@ -230,6 +229,7 @@ impl Slot {
         // * address is already pending a connection
         let addr = hosts.check_address_with_lock(self.p2p(), addrs).await;
         return addr
+        //return None
     }
 
     // We first try to make connections to the addresses on our anchor list. We then find some
@@ -282,6 +282,8 @@ impl Slot {
                 continue
             };
 
+            debug!(target: "deadlock", "Got addrs: {}, slot {} node {}", addr.0, self.slot, self.p2p().settings().node_id);
+
             let host = addr.0;
             let slot = self.slot;
 
@@ -305,12 +307,20 @@ impl Slot {
                         slot, err, self.p2p().settings().node_id
                     );
 
+                    debug!(
+                        target: "deadlock",
+                        "connection failed: {}, slot {} node {}, channel {}",
+                        err, slot, self.p2p().settings().node_id, host.clone()
+                    );
+
                     dnetev!(self, OutboundSlotDisconnected, {
                         slot,
                         err: err.to_string()
                     });
 
                     self.channel_id.store(0, Ordering::Relaxed);
+
+                    sleep(1).await;
                     continue
                 }
             };
@@ -347,6 +357,9 @@ impl Slot {
 
             self.channel_id.store(channel.info.id, Ordering::Relaxed);
 
+            // Add this connection to the anchorlist, remove it from the [otherlist]
+            self.session().upgrade_connection(&addr).await;
+
             // Wait for channel to close
             stop_sub.receive().await;
             self.channel_id.store(0, Ordering::Relaxed);
@@ -374,9 +387,9 @@ impl Slot {
                     self.slot, addr, e
                 );
 
-                // At this point we've failed to connect.
-                // If the host is in the anchorlist or whitelist, downgrade it to greylist.
-                self.p2p().hosts().downgrade_host(&addr).await?;
+                //// At this point we've failed to connect.
+                //// If the host is in the anchorlist or whitelist, downgrade it to greylist.
+                //self.p2p().hosts().downgrade_host(&addr).await?;
 
                 // Remove connection from pending
                 self.p2p().remove_pending(&addr).await;

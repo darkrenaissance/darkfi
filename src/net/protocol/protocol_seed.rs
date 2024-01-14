@@ -129,7 +129,7 @@ impl ProtocolBase for ProtocolSeed {
             target: "net::protocol_seed::start()",
             "Appending to greylist...",
         );
-        self.hosts.greylist_store_or_update(&addrs_msg.addrs).await?;
+        self.hosts.greylist_store_or_update(&addrs_msg.addrs).await;
 
         debug!(target: "net::protocol_seed::start()", "END => address={}", self.channel.address());
         Ok(())
