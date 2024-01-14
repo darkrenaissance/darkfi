@@ -126,10 +126,11 @@ impl ManualSession {
                     let stop_sub =
                         channel.subscribe_stop().await.expect("Channel should not be stopped");
 
+                    // Channel is now connected but not yet setup
+
                     // Register the new channel
                     self.register_channel(channel.clone(), ex.clone()).await?;
 
-                    // Channel is now connected but not yet setup
                     // Remove pending lock since register_channel will add the channel to p2p
                     self.p2p().remove_pending(&addr).await;
 
