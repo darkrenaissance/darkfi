@@ -21,6 +21,7 @@ use darkfi_sdk::{
         pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode,
         PublicKey, DARK_TOKEN_ID,
     },
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_get, db_lookup, db_set},
     error::{ContractError, ContractResult},
     merkle_add, msg,
@@ -42,9 +43,9 @@ use crate::{
 pub(crate) fn money_transfer_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: MoneyTransferParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -106,10 +107,10 @@ pub(crate) fn money_transfer_get_metadata_v1(
 pub(crate) fn money_transfer_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: MoneyTransferParamsV1 = deserialize(&self_.data[1..])?;
+    let params: MoneyTransferParamsV1 = deserialize(&self_.data.data[1..])?;
 
     if params.clear_inputs.len() + params.inputs.len() < 1 {
         msg!("[TransferV1] Error: No inputs in the call");
@@ -128,9 +129,10 @@ pub(crate) fn money_transfer_process_instruction_v1(
     let nullifiers_db = db_lookup(cid, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
+    // FIXME: Remove faucet references
     // Grab faucet pubkeys. They're allowed to create clear inputs.
     // Currently we use them for airdrops in the testnet.
-    let Some(faucet_pubkeys) = db_get(info_db, &serialize(&MONEY_CONTRACT_FAUCET_PUBKEYS))? else {
+    let Some(faucet_pubkeys) = db_get(info_db, MONEY_CONTRACT_FAUCET_PUBKEYS)? else {
         msg!("[TransferV1] Error: Missing faucet pubkeys from info db");
         return Err(MoneyError::TransferMissingFaucetKeys.into())
     };
@@ -187,14 +189,20 @@ pub(crate) fn money_transfer_process_instruction_v1(
 
         // If spend hook is set, check its correctness
         if input.spend_hook != pallas::Base::ZERO {
-            let next_call_idx = call_idx + 1;
-            if next_call_idx >= calls.len() as u32 {
-                msg!("[TransferV1] Error: next_call_idx out of bounds (input {})", i);
+            let parent_call_idx = self_.parent_index;
+            if parent_call_idx.is_none() {
+                msg!("[TransferV1] Error: parent_call_idx is missing");
+                return Err(MoneyError::CallIdxOutOfBounds.into())
+            }
+            let parent_call_idx = parent_call_idx.unwrap();
+
+            if parent_call_idx >= calls.len() {
+                msg!("[TransferV1] Error: parent_call_idx out of bounds (input {})", i);
                 return Err(MoneyError::CallIdxOutOfBounds.into())
             }
 
-            let next = &calls[next_call_idx as usize];
-            if next.contract_id.inner() != input.spend_hook {
+            let parent = &calls[parent_call_idx].data;
+            if parent.contract_id.inner() != input.spend_hook {
                 msg!("[TransferV1] Error: Invoked contract call does not match spend hook in input {}", i);
                 return Err(MoneyError::SpendHookMismatch.into())
             }
@@ -266,8 +274,8 @@ pub(crate) fn money_transfer_process_update_v1(
     let coin_roots_db = db_lookup(cid, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
 
     msg!("[TransferV1] Adding new nullifiers to the set");
-    for nullifier in update.nullifiers {
-        db_set(nullifiers_db, &serialize(&nullifier), &[])?;
+    for nullifier in &update.nullifiers {
+        db_set(nullifiers_db, &serialize(nullifier), &[])?;
     }
 
     msg!("[TransferV1] Adding new coins to the set");
@@ -280,8 +288,8 @@ pub(crate) fn money_transfer_process_update_v1(
     merkle_add(
         info_db,
         coin_roots_db,
-        &serialize(&MONEY_CONTRACT_LATEST_COIN_ROOT),
-        &serialize(&MONEY_CONTRACT_COIN_MERKLE_TREE),
+        MONEY_CONTRACT_LATEST_COIN_ROOT,
+        MONEY_CONTRACT_COIN_MERKLE_TREE,
         &coins,
     )?;
 

@@ -22,6 +22,7 @@ use darkfi_sdk::{
         pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode,
         DARK_TOKEN_ID,
     },
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     merkle_add, msg,
@@ -43,9 +44,9 @@ use crate::{
 pub(crate) fn money_pow_reward_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: MoneyPoWRewardParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -78,9 +79,9 @@ pub(crate) fn money_pow_reward_get_metadata_v1(
 pub(crate) fn money_pow_reward_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: MoneyPoWRewardParamsV1 = deserialize(&self_.data[1..])?;
 
     // Verify this contract call is verified against a slot(block height) before PoS transition,
@@ -199,8 +200,8 @@ pub(crate) fn money_pow_reward_process_update_v1(
     merkle_add(
         info_db,
         coin_roots_db,
-        &serialize(&MONEY_CONTRACT_LATEST_COIN_ROOT),
-        &serialize(&MONEY_CONTRACT_COIN_MERKLE_TREE),
+        MONEY_CONTRACT_LATEST_COIN_ROOT,
+        MONEY_CONTRACT_COIN_MERKLE_TREE,
         &coins,
     )?;
 

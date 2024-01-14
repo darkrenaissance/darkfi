@@ -40,12 +40,13 @@ use darkfi_sdk::{
     blockchain::{PidOutput, PreviousSlot, Slot},
     bridgetree,
     crypto::{
-        pasta_prelude::Field, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey,
-        SecretKey, TokenId,
+        pasta_prelude::Field, poseidon_hash, ContractId, Keypair, MerkleNode, MerkleTree,
+        Nullifier, PublicKey, SecretKey, TokenId,
     },
     pasta::pallas,
 };
 use log::{info, warn};
+use num_bigint::BigUint;
 use rand::rngs::OsRng;
 
 mod benchmarks;
@@ -58,6 +59,7 @@ mod consensus_proposal;
 mod consensus_stake;
 mod consensus_unstake;
 mod consensus_unstake_request;
+mod contract_deploy;
 mod dao_exec;
 mod dao_mint;
 mod dao_propose;
@@ -72,6 +74,7 @@ mod money_transfer;
 pub fn init_logger() {
     let mut cfg = simplelog::ConfigBuilder::new();
     cfg.add_filter_ignore("sled".to_string());
+    //cfg.set_target_level(simplelog::LevelFilter::Error);
 
     // We check this error so we can execute same file tests in parallel,
     // otherwise second one fails to init logger here.
@@ -124,6 +127,7 @@ pub enum TxAction {
 pub struct Wallet {
     pub keypair: Keypair,
     pub token_mint_authority: Keypair,
+    pub contract_deploy_authority: Keypair,
     pub validator: ValidatorPtr,
     pub money_merkle_tree: MerkleTree,
     pub consensus_staked_merkle_tree: MerkleTree,
@@ -144,6 +148,7 @@ impl Wallet {
         genesis_block: &BlockInfo,
         faucet_pubkeys: &[PublicKey],
         vks: &Vks,
+        verify_fees: bool,
     ) -> Result<Self> {
         let wallet = WalletDb::new(None, None)?;
         let sled_db = sled::Config::new().temporary(true).open()?;
@@ -158,13 +163,13 @@ impl Wallet {
         let config = ValidatorConfig::new(
             time_keeper,
             3,
-            1,
             90,
-            None,
+            Some(BigUint::from(1_u8)),
             genesis_block.clone(),
             0,
             faucet_pubkeys.to_vec(),
             false,
+            verify_fees,
         );
         let validator = Validator::new(&sled_db, config).await?;
 
@@ -181,10 +186,12 @@ impl Wallet {
         let spent_money_coins = vec![];
 
         let token_mint_authority = Keypair::random(&mut OsRng);
+        let contract_deploy_authority = Keypair::random(&mut OsRng);
 
         Ok(Self {
             keypair,
             token_mint_authority,
+            contract_deploy_authority,
             validator,
             money_merkle_tree,
             consensus_staked_merkle_tree,
@@ -208,7 +215,7 @@ pub struct TestHarness {
 }
 
 impl TestHarness {
-    pub async fn new(_contracts: &[String]) -> Result<Self> {
+    pub async fn new(_contracts: &[String], verify_fees: bool) -> Result<Self> {
         let mut holders = HashMap::new();
         let mut genesis_block = BlockInfo::default();
         genesis_block.header.timestamp = Timestamp(1689772567);
@@ -230,27 +237,31 @@ impl TestHarness {
 
         let faucet_kp = Keypair::random(&mut rng);
         let faucet_pubkeys = vec![faucet_kp.public];
-        let faucet = Wallet::new(faucet_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
+        let faucet =
+            Wallet::new(faucet_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
         holders.insert(Holder::Faucet, faucet);
 
         let alice_kp = Keypair::random(&mut rng);
-        let alice = Wallet::new(alice_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
+        let alice =
+            Wallet::new(alice_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
         holders.insert(Holder::Alice, alice);
 
         let bob_kp = Keypair::random(&mut rng);
-        let bob = Wallet::new(bob_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
+        let bob = Wallet::new(bob_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
         holders.insert(Holder::Bob, bob);
 
         let charlie_kp = Keypair::random(&mut rng);
-        let charlie = Wallet::new(charlie_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
+        let charlie =
+            Wallet::new(charlie_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
         holders.insert(Holder::Charlie, charlie);
 
         let rachel_kp = Keypair::random(&mut rng);
-        let rachel = Wallet::new(rachel_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
+        let rachel =
+            Wallet::new(rachel_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
         holders.insert(Holder::Rachel, rachel);
 
         let dao_kp = Keypair::random(&mut rng);
-        let dao = Wallet::new(dao_kp, &genesis_block, &faucet_pubkeys, &vks).await?;
+        let dao = Wallet::new(dao_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
         holders.insert(Holder::Dao, dao);
 
         // Build benchmarks map
@@ -491,6 +502,11 @@ impl TestHarness {
     pub fn token_id(&self, holder: &Holder) -> TokenId {
         let holder = self.holders.get(holder).unwrap();
         TokenId::derive_public(holder.token_mint_authority.public)
+    }
+
+    pub fn contract_id(&self, holder: &Holder) -> ContractId {
+        let holder = self.holders.get(holder).unwrap();
+        ContractId::derive_public(holder.contract_deploy_authority.public)
     }
 
     pub fn statistics(&self) {

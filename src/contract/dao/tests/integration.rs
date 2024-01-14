@@ -19,9 +19,10 @@
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
 use darkfi_dao_contract::{
-    client::{DaoInfo, DaoVoteNote},
-    model::DaoBlindAggregateVote,
+    client::DaoVoteNote,
+    model::{Dao, DaoBlindAggregateVote},
 };
+use darkfi_money_contract::model::CoinAttributes;
 use darkfi_sdk::{
     crypto::{pasta_prelude::Field, pedersen_commitment_u64, DAO_CONTRACT_ID, DARK_TOKEN_ID},
     pasta::pallas,
@@ -49,7 +50,7 @@ fn integration_test() -> Result<()> {
         ];
 
         // Initialize harness
-        let mut th = TestHarness::new(&["money".to_string(), "dao".to_string()]).await?;
+        let mut th = TestHarness::new(&["money".to_string(), "dao".to_string()], false).await?;
 
         // We'll use the ALICE token as the DAO governance token
         let gov_token_id = th.token_id(&Holder::Alice);
@@ -67,7 +68,7 @@ fn integration_test() -> Result<()> {
 
         // DAO parameters
         let dao_keypair = th.holders.get(&Holder::Dao).unwrap().keypair;
-        let dao = DaoInfo {
+        let dao = Dao {
             proposer_limit: 100_000_000,
             quorum: 199_999_999,
             approval_ratio_base: 2,
@@ -176,11 +177,25 @@ fn integration_test() -> Result<()> {
         // TODO: Is it possible for an invalid transfer() to be constructed on exec()?
         //       Need to look into this.
         info!("[Alice] Building DAO proposal tx");
+
+        // These coins are passed around to all DAO members who verify its validity
+        // They also check hashing them equals the proposal_commit
+        let proposal_coinattrs = vec![CoinAttributes {
+            public_key: th.holders.get(&Holder::Rachel).unwrap().keypair.public,
+            value: PROPOSAL_AMOUNT,
+            token_id: drk_token_id,
+            serial: pallas::Base::random(&mut OsRng),
+            spend_hook: pallas::Base::ZERO,
+            user_data: pallas::Base::ZERO,
+        }];
+        // We can add whatever we want in here, even arbitrary text
+        // It's up to the auth module to decide what to do with it.
+        let user_data = pallas::Base::ZERO;
+
         let (propose_tx, propose_params, propose_info) = th.dao_propose(
             &Holder::Alice,
-            &Holder::Rachel,
-            PROPOSAL_AMOUNT,
-            drk_token_id,
+            &proposal_coinattrs,
+            user_data,
             &dao,
             &dao_mint_params.dao_bulla,
         )?;
@@ -300,6 +315,7 @@ fn integration_test() -> Result<()> {
             &dao,
             &dao_mint_params.dao_bulla,
             &propose_info,
+            proposal_coinattrs,
             total_yes_vote_value,
             total_all_vote_value,
             total_yes_vote_blind,

@@ -18,7 +18,11 @@
 
 use std::time::Instant;
 
-use darkfi::{tx::Transaction, zk::halo2::Field, Result};
+use darkfi::{
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    zk::halo2::Field,
+    Result,
+};
 use darkfi_money_contract::{
     client::{swap_v1::SwapCallBuilder, OwnCoin},
     model::MoneyTransferParamsV1,
@@ -134,11 +138,10 @@ impl TestHarness {
         // And signs the transaction
         let mut data = vec![MoneyFunction::OtcSwapV1 as u8];
         swap_full_params.encode(&mut data)?;
-        let mut tx = Transaction {
-            calls: vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }],
-            proofs: vec![swap_full_proofs],
-            signatures: vec![],
-        };
+        let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
+        let mut tx_builder =
+            TransactionBuilder::new(ContractCallLeaf { call, proofs: swap_full_proofs }, vec![])?;
+        let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &[debris1.signature_secret])?;
         tx.signatures = vec![sigs];
 

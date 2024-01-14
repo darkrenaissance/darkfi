@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_serial::deserialize;
+use darkfi_serial::deserialize_async;
 use log::error;
 use tinyjson::JsonValue;
 
@@ -61,7 +61,7 @@ impl Darkfid {
             }
         };
 
-        let tx: Transaction = match deserialize(&tx_bytes) {
+        let tx: Transaction = match deserialize_async(&tx_bytes).await {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "darkfid::rpc::tx_simulate", "Failed deserializing bytes into Transaction: {}", e);
@@ -112,7 +112,7 @@ impl Darkfid {
             }
         };
 
-        let tx: Transaction = match deserialize(&tx_bytes) {
+        let tx: Transaction = match deserialize_async(&tx_bytes).await {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "darkfid::rpc::tx_broadcast", "Failed deserializing bytes into Transaction: {}", e);

@@ -20,19 +20,22 @@ use std::time::Instant;
 
 use darkfi::{tx::Transaction, Result};
 use darkfi_dao_contract::{
-    client::{DaoExecCall, DaoInfo, DaoProposalInfo},
-    model::{DaoBulla, DaoExecParams},
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
+    client::{DaoAuthMoneyTransferCall, DaoExecCall},
+    model::{Dao, DaoBulla, DaoExecParams, DaoProposal},
+    DaoFunction, DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
+    DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
 };
 use darkfi_money_contract::{
-    client::transfer_v1 as xfer, model::MoneyTransferParamsV1, MoneyFunction,
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    client::transfer_v1 as xfer,
+    model::{CoinAttributes, MoneyTransferParamsV1},
+    MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
         pasta_prelude::Field, pedersen_commitment_u64, MerkleNode, SecretKey, DAO_CONTRACT_ID,
         MONEY_CONTRACT_ID,
     },
+    dark_tree::DarkLeaf,
     pasta::pallas,
     ContractCall,
 };
@@ -45,9 +48,10 @@ impl TestHarness {
     #[allow(clippy::too_many_arguments)]
     pub fn dao_exec(
         &mut self,
-        dao: &DaoInfo,
+        dao: &Dao,
         dao_bulla: &DaoBulla,
-        proposal: &DaoProposalInfo,
+        proposal: &DaoProposal,
+        proposal_coinattrs: Vec<CoinAttributes>,
         yes_vote_value: u64,
         all_vote_value: u64,
         yes_vote_blind: pallas::Scalar,
@@ -61,6 +65,14 @@ impl TestHarness {
             self.proving_keys.get(&MONEY_CONTRACT_ZKAS_BURN_NS_V1.to_string()).unwrap();
         let (dao_exec_pk, dao_exec_zkbin) =
             self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_EXEC_NS.to_string()).unwrap();
+        let (dao_auth_xfer_pk, dao_auth_xfer_zkbin) = self
+            .proving_keys
+            .get(&DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS.to_string())
+            .unwrap();
+        let (dao_auth_xfer_enc_coin_pk, dao_auth_xfer_enc_coin_zkbin) = self
+            .proving_keys
+            .get(&DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS.to_string())
+            .unwrap();
 
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoExec).unwrap();
         let timer = Instant::now();
@@ -69,13 +81,18 @@ impl TestHarness {
         // TODO: FIXME: This is not checked anywhere!
         let exec_signature_secret = SecretKey::random(&mut OsRng);
 
-        let coins = dao_wallet
+        assert!(!proposal_coinattrs.is_empty());
+        let proposal_token_id = proposal_coinattrs[0].token_id;
+        assert!(proposal_coinattrs.iter().all(|c| c.token_id == proposal_token_id));
+        let proposal_amount = proposal_coinattrs.iter().map(|c| c.value).sum();
+
+        let dao_coins = dao_wallet
             .unspent_money_coins
             .iter()
-            .filter(|x| x.note.token_id == proposal.token_id)
+            .filter(|x| x.note.token_id == proposal_token_id)
             .cloned()
             .collect();
-        let (spent_coins, change_value) = xfer::select_coins(coins, proposal.amount)?;
+        let (spent_coins, change_value) = xfer::select_coins(dao_coins, proposal_amount)?;
         let tree = dao_wallet.money_merkle_tree.clone();
 
         let mut inputs = vec![];
@@ -92,25 +109,26 @@ impl TestHarness {
             });
         }
 
+        let mut outputs = vec![];
+        for coin_attr in proposal_coinattrs.clone() {
+            assert_eq!(proposal_token_id, coin_attr.token_id);
+            outputs.push(coin_attr);
+        }
+
+        let dao_coin_attrs = CoinAttributes {
+            public_key: dao_wallet.keypair.public,
+            value: change_value,
+            token_id: proposal_token_id,
+            serial: pallas::Base::random(&mut OsRng),
+            spend_hook: DAO_CONTRACT_ID.inner(),
+            user_data: dao_bulla.inner(),
+        };
+        outputs.push(dao_coin_attrs.clone());
+
         let xfer_builder = xfer::TransferCallBuilder {
             clear_inputs: vec![],
             inputs,
-            outputs: vec![
-                xfer::TransferCallOutput {
-                    value: proposal.amount,
-                    token_id: proposal.token_id,
-                    public_key: proposal.dest,
-                    spend_hook: pallas::Base::ZERO,
-                    user_data: pallas::Base::ZERO,
-                },
-                xfer::TransferCallOutput {
-                    value: change_value,
-                    token_id: proposal.token_id,
-                    public_key: dao_wallet.keypair.public,
-                    spend_hook: DAO_CONTRACT_ID.inner(),
-                    user_data: dao_bulla.inner(),
-                },
-            ],
+            outputs,
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
             burn_zkbin: burn_zkbin.clone(),
@@ -161,14 +179,53 @@ impl TestHarness {
         exec_params.encode(&mut data)?;
         let exec_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
 
+        // Auth module
+        let auth_xfer_builder = DaoAuthMoneyTransferCall {
+            proposal: proposal.clone(),
+            proposal_coinattrs,
+            dao: dao.clone(),
+            input_user_data_blind,
+            dao_coin_attrs,
+        };
+        let (auth_xfer_params, auth_xfer_proofs) = auth_xfer_builder.make(
+            dao_auth_xfer_zkbin,
+            dao_auth_xfer_pk,
+            dao_auth_xfer_enc_coin_zkbin,
+            dao_auth_xfer_enc_coin_pk,
+        )?;
+        let mut data = vec![DaoFunction::AuthMoneyTransfer as u8];
+        auth_xfer_params.encode(&mut data)?;
+        let auth_xfer_call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
+
+        // We need to construct this tree, where exec is the parent:
+        //
+        //   exec ->
+        //       auth_xfer
+        //       xfer
+        //
+
+        //let mut tx_builder = TransactionBuilder::new(
+        //    ContractCallLeaf { call: exec_call, proofs: exec_proofs },
+        //    vec![],
+        //)?;
+        //tx_builder
+        //    .append(ContractCallLeaf { call: auth_xfer_call, proofs: auth_xfer_proofs }, vec![])?;
+        //tx_builder
+        //let mut tx = tx_builder.build()?;
+
         let mut tx = Transaction {
-            calls: vec![xfer_call, exec_call],
-            proofs: vec![xfer_secrets.proofs, exec_proofs],
+            calls: vec![
+                DarkLeaf { data: auth_xfer_call, parent_index: Some(2), children_indexes: vec![] },
+                DarkLeaf { data: xfer_call, parent_index: Some(2), children_indexes: vec![] },
+                DarkLeaf { data: exec_call, parent_index: None, children_indexes: vec![0, 1] },
+            ],
+            proofs: vec![auth_xfer_proofs, xfer_secrets.proofs, exec_proofs],
             signatures: vec![],
         };
+        let auth_xfer_sigs = vec![];
         let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_secrets.signature_secrets)?;
         let exec_sigs = tx.create_sigs(&mut OsRng, &[exec_signature_secret])?;
-        tx.signatures = vec![xfer_sigs, exec_sigs];
+        tx.signatures = vec![auth_xfer_sigs, xfer_sigs, exec_sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());
 
         // Calculate transaction sizes

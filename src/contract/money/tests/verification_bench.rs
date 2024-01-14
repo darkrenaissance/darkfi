@@ -24,6 +24,7 @@ use log::info;
 use rand::{prelude::IteratorRandom, Rng};
 
 #[test]
+#[ignore]
 fn alice2alice_random_amounts() -> Result<()> {
     smol::block_on(async {
         init_logger();
@@ -49,7 +50,7 @@ fn alice2alice_random_amounts() -> Result<()> {
         }
 
         // Initialize harness
-        let mut th = TestHarness::new(&["money".to_string()]).await?;
+        let mut th = TestHarness::new(&["money".to_string()], false).await?;
 
         info!(target: "money", "[Faucet] ========================");
         info!(target: "money", "[Faucet] Building Alice's airdrop");
@@ -118,6 +119,7 @@ fn alice2alice_random_amounts() -> Result<()> {
 }
 
 #[test]
+#[ignore]
 fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
     smol::block_on(async {
         init_logger();
@@ -141,7 +143,7 @@ fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
         }
 
         // Initialize harness
-        let mut th = TestHarness::new(&["money".to_string()]).await?;
+        let mut th = TestHarness::new(&["money".to_string()], false).await?;
 
         // Mint 10 coins
         let mut token_ids = vec![];

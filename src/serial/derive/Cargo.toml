@@ -12,10 +12,10 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
-proc-macro-crate = "2.0.0"
-proc-macro2 = "1.0.70"
-quote = "1.0.33"
-syn = {version = "2.0.41", features = ["full", "fold"]}
+proc-macro-crate = "3.0.0"
+proc-macro2 = "1.0.76"
+quote = "1.0.35"
+syn = {version = "2.0.48", features = ["full", "fold"]}
 
 darkfi-derive-internal = {version = "0.4.1", path = "../derive-internal"}
 

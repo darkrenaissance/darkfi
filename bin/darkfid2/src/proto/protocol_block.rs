@@ -36,7 +36,7 @@ use darkfi::{
     validator::ValidatorPtr,
     Result,
 };
-use darkfi_serial::{serialize, SerialDecodable, SerialEncodable};
+use darkfi_serial::{serialize_async, SerialDecodable, SerialEncodable};
 
 /// Auxiliary [`BlockInfo`] wrapper structure used for messaging.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
@@ -127,7 +127,8 @@ impl ProtocolBlock {
             match self.validator.append_block(&block_copy.0).await {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&block_copy, &exclude_list).await;
-                    let encoded_block = JsonValue::String(base64::encode(&serialize(&block_copy)));
+                    let encoded_block =
+                        JsonValue::String(base64::encode(&serialize_async(&block_copy).await));
                     self.subscriber.notify(vec![encoded_block].into()).await;
                 }
                 Err(e) => {

@@ -28,6 +28,7 @@ pub enum DaoFunction {
     Propose = 0x01,
     Vote = 0x02,
     Exec = 0x03,
+    AuthMoneyTransfer = 0x04,
 }
 
 impl TryFrom<u8> for DaoFunction {
@@ -39,6 +40,7 @@ impl TryFrom<u8> for DaoFunction {
             0x01 => Ok(DaoFunction::Propose),
             0x02 => Ok(DaoFunction::Vote),
             0x03 => Ok(DaoFunction::Exec),
+            0x04 => Ok(DaoFunction::AuthMoneyTransfer),
             _ => Err(ContractError::InvalidFunction),
         }
     }
@@ -66,14 +68,12 @@ pub const DAO_CONTRACT_DB_PROPOSAL_BULLAS: &str = "dao_proposals";
 pub const DAO_CONTRACT_DB_VOTE_NULLIFIERS: &str = "dao_vote_nullifiers";
 
 // These are keys inside the info tree
-pub const DAO_CONTRACT_KEY_DB_VERSION: &str = "db_version";
-pub const DAO_CONTRACT_KEY_DAO_MERKLE_TREE: &str = "dao_merkle_tree";
-pub const DAO_CONTRACT_KEY_LATEST_DAO_ROOT: &str = "dao_last_root";
+pub const DAO_CONTRACT_KEY_DB_VERSION: &[u8] = b"db_version";
+pub const DAO_CONTRACT_KEY_DAO_MERKLE_TREE: &[u8] = b"dao_merkle_tree";
+pub const DAO_CONTRACT_KEY_LATEST_DAO_ROOT: &[u8] = b"dao_last_root";
 
 /// zkas dao mint circuit namespace
 pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "DaoMint";
-/// zkas dao exec circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "DaoExec";
 /// zkas dao vote input circuit namespace
 pub const DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS: &str = "DaoVoteInput";
 /// zkas dao vote main circuit namespace
@@ -82,3 +82,19 @@ pub const DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS: &str = "DaoVoteMain";
 pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS: &str = "DaoProposeInput";
 /// zkas dao propose main circuit namespace
 pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "DaoProposeMain";
+/// zkas dao exec circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "DaoExec";
+/// zkas dao auth money_transfer circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "DaoAuthMoneyTransfer";
+/// zkas dao auth money_transfer encrypted coin circuit namespace
+pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str =
+    "DaoAuthMoneyTransferEncCoin";
+
+const SLOT_TIME: u64 = 90;
+const SECS_IN_DAY: u64 = 24 * 60 * 60;
+
+/// Days since genesis block. Used for time limit on DAO proposals.
+pub fn slot_to_day(slot: u64) -> u64 {
+    let timestamp_secs = slot * SLOT_TIME;
+    timestamp_secs / SECS_IN_DAY
+}

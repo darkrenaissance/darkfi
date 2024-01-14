@@ -35,7 +35,7 @@ use darkfi::{
     validator::ValidatorPtr,
     Result,
 };
-use darkfi_serial::serialize;
+use darkfi_serial::serialize_async;
 
 pub struct ProtocolTx {
     tx_sub: MessageSubscription<Transaction>,
@@ -106,7 +106,8 @@ impl ProtocolTx {
             match self.validator.append_tx(&tx_copy).await {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&tx_copy, &exclude_list).await;
-                    let encoded_tx = JsonValue::String(base64::encode(&serialize(&tx_copy)));
+                    let encoded_tx =
+                        JsonValue::String(base64::encode(&serialize_async(&tx_copy).await));
                     self.subscriber.notify(vec![encoded_tx].into()).await;
                 }
                 Err(e) => {

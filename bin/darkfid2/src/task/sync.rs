@@ -17,7 +17,7 @@
  */
 
 use darkfi::{system::sleep, util::encoding::base64, Result};
-use darkfi_serial::serialize;
+use darkfi_serial::serialize_async;
 use log::{debug, info, warn};
 use tinyjson::JsonValue;
 
@@ -72,7 +72,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
 
         // Notify subscriber
         for block in &response.blocks {
-            let encoded_block = JsonValue::String(base64::encode(&serialize(block)));
+            let encoded_block = JsonValue::String(base64::encode(&serialize_async(block).await));
             notif_sub.notify(vec![encoded_block].into()).await;
         }
 

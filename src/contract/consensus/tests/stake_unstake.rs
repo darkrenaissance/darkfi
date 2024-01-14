@@ -53,7 +53,8 @@ fn consensus_contract_stake_unstake() -> Result<()> {
         let mut current_slot = 1;
 
         // Initialize harness
-        let mut th = TestHarness::new(&["money".to_string(), "consensus".to_string()]).await?;
+        let mut th =
+            TestHarness::new(&["money".to_string(), "consensus".to_string()], false).await?;
 
         // Now Alice can airdrop some native tokens to herself
         let alice_oc =

@@ -16,17 +16,16 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::io::Cursor;
-
 use darkfi_sdk::{
     crypto::{
         ecvrf::VrfProof, pasta_prelude::PrimeField, PublicKey, CONSENSUS_CONTRACT_ID,
-        DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+        DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     pasta::{group::ff::FromUniformBytes, pallas},
 };
-use darkfi_serial::{serialize, Decodable};
+use darkfi_serial::{serialize_async, AsyncDecodable};
 use log::info;
+use smol::io::Cursor;
 
 use crate::{
     blockchain::{BlockInfo, BlockchainOverlayPtr},
@@ -48,7 +47,7 @@ use crate::{
 /// touch anything, or just potentially update the db schemas or whatever
 /// is necessary. This logic should be handled in the init function of
 /// the actual contract, so make sure the native contracts handle this well.
-pub fn deploy_native_contracts(
+pub async fn deploy_native_contracts(
     overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
     faucet_pubkeys: &Vec<PublicKey>,
@@ -57,13 +56,16 @@ pub fn deploy_native_contracts(
 
     // The faucet pubkeys are pubkeys which are allowed to create clear inputs
     // in the Money contract.
-    let money_contract_deploy_payload = serialize(faucet_pubkeys);
+    let money_contract_deploy_payload = serialize_async(faucet_pubkeys).await;
 
     // The DAO contract uses an empty payload to deploy itself.
     let dao_contract_deploy_payload = vec![];
 
     // The Consensus contract uses an empty payload to deploy itself.
     let consensus_contract_deploy_payload = vec![];
+
+    // The Deployooor contract uses an empty payload to deploy itself.
+    let deployooor_contract_deploy_payload = vec![];
 
     let native_contracts = vec![
         (
@@ -83,6 +85,12 @@ pub fn deploy_native_contracts(
             *CONSENSUS_CONTRACT_ID,
             include_bytes!("../contract/consensus/darkfi_consensus_contract.wasm").to_vec(),
             consensus_contract_deploy_payload,
+        ),
+        (
+            "Deployooor Contract",
+            *DEPLOYOOOR_CONTRACT_ID,
+            include_bytes!("../contract/deployooor/darkfi_deployooor_contract.wasm").to_vec(),
+            deployooor_contract_deploy_payload,
         ),
     ];
 
@@ -105,7 +113,7 @@ pub fn deploy_native_contracts(
 /// Genesis block has rank 0.
 /// First 2 blocks rank is equal to their nonce, since their previous
 /// previous block producer doesn't exist or have a VRF.
-pub fn block_rank(
+pub async fn block_rank(
     block: &BlockInfo,
     previous_previous: &BlockInfo,
     pos_testing_mode: bool,
@@ -127,7 +135,7 @@ pub fn block_rank(
 
     // Extract VRF proof from the previous previous producer transaction
     let tx = previous_previous.txs.last().unwrap();
-    let data = &tx.calls[0].data;
+    let data = &tx.calls[0].data.data;
     let position = match previous_previous.header.version {
         // PoW uses MoneyPoWRewardParamsV1
         1 => 563,
@@ -137,7 +145,7 @@ pub fn block_rank(
     };
     let mut decoder = Cursor::new(&data);
     decoder.set_position(position);
-    let vrf_proof: VrfProof = Decodable::decode(&mut decoder)?;
+    let vrf_proof: VrfProof = AsyncDecodable::decode_async(&mut decoder).await?;
 
     // Compute VRF u64
     let mut vrf = [0u8; 64];
@@ -178,27 +186,32 @@ pub fn median(mut v: Vec<u64>) -> u64 {
 /// Auxiliary function to calculate the total amount of minted tokens in provided
 /// genesis transactions set. This includes both staked and normal tokens.
 /// If a non-genesis transaction is found, execution fails.
-/// Set must also include the genesis transaction(empty) at last position.
-pub fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
+/// Set must also include the genesis transaction(empty) at first position.
+pub async fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
     let mut total = 0;
 
     if txs.is_empty() {
         return Ok(total)
     }
 
+    if txs[0] != Transaction::default() {
+        return Err(TxVerifyFailed::ErroneousTxs(vec![txs[0].clone()]).into())
+    }
+
     // Iterate transactions, exluding producer(last) one
-    for tx in &txs[..txs.len() - 1] {
+    for tx in &txs[1..] {
         // Transaction must contain a single Consensus::GenesisStake (0x00)
         // or Money::GenesisMint (0x01) call
         if tx.calls.len() != 1 {
             return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
         }
         let call = &tx.calls[0];
-        let data = &call.data;
+        let data = &call.data.data;
         let function = data[0];
-        if !(call.contract_id == *CONSENSUS_CONTRACT_ID || call.contract_id == *MONEY_CONTRACT_ID) ||
-            (call.contract_id == *CONSENSUS_CONTRACT_ID && function != 0x00_u8) ||
-            (call.contract_id == *MONEY_CONTRACT_ID && function != 0x01_u8)
+        if !(call.data.contract_id == *CONSENSUS_CONTRACT_ID ||
+            call.data.contract_id == *MONEY_CONTRACT_ID) ||
+            (call.data.contract_id == *CONSENSUS_CONTRACT_ID && function != 0x00_u8) ||
+            (call.data.contract_id == *MONEY_CONTRACT_ID && function != 0x01_u8)
         {
             return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
         }
@@ -210,14 +223,9 @@ pub fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
         let position = 1;
         let mut decoder = Cursor::new(&data);
         decoder.set_position(position);
-        let value: u64 = Decodable::decode(&mut decoder)?;
+        let value: u64 = AsyncDecodable::decode_async(&mut decoder).await?;
 
         total += value;
-    }
-
-    let tx = txs.last().unwrap();
-    if tx != &Transaction::default() {
-        return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
 
     Ok(total)
@@ -246,15 +254,37 @@ pub fn previous_slot_info(
 }
 
 /// Given a proposal, find the index of the fork chain it extends, along with the specific
-/// extended proposal index.
+/// extended proposal index. Additionally, check that proposal doesn't already exists in any
+/// fork chain.
 pub fn find_extended_fork_index(forks: &[Fork], proposal: &Proposal) -> Result<(usize, usize)> {
+    // Grab provided proposal hash
+    let proposal_hash = proposal.block.hash()?;
+
+    // Keep track of fork and proposal indexes
+    let (mut fork_index, mut proposal_index) = (None, None);
+
+    // Loop through all the forks
     for (f_index, fork) in forks.iter().enumerate() {
         // Traverse fork proposals sequence in reverse
         for (p_index, p_hash) in fork.proposals.iter().enumerate().rev() {
+            // Check we haven't already seen that proposal
+            if &proposal_hash == p_hash {
+                return Err(Error::ProposalAlreadyExists)
+            }
+
+            // Check if proposal extends this fork
             if &proposal.block.header.previous == p_hash {
-                return Ok((f_index, p_index))
+                // Proposal must only extend a single fork
+                if fork_index.is_some() {
+                    return Err(Error::ProposalAlreadyExists)
+                }
+                (fork_index, proposal_index) = (Some(f_index), Some(p_index));
             }
         }
+    }
+
+    if let (Some(f_index), Some(p_index)) = (fork_index, proposal_index) {
+        return Ok((f_index, p_index))
     }
 
     Err(Error::ExtendedChainIndexNotFound)

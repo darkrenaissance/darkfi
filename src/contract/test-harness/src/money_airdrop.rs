@@ -18,7 +18,11 @@
 
 use std::time::Instant;
 
-use darkfi::{tx::Transaction, zk::halo2::Field, Result};
+use darkfi::{
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    zk::halo2::Field,
+    Result,
+};
 use darkfi_money_contract::{
     client::{transfer_v1 as xfer, OwnCoin},
     model::MoneyTransferParamsV1,
@@ -65,9 +69,10 @@ impl TestHarness {
             }],
             inputs: vec![],
             outputs: vec![xfer::TransferCallOutput {
+                public_key: recipient,
                 value,
                 token_id: *DARK_TOKEN_ID,
-                public_key: recipient,
+                serial: pallas::Base::random(&mut OsRng),
                 spend_hook: rcpt_spend_hook.unwrap_or(pallas::Base::ZERO),
                 user_data: rcpt_user_data.unwrap_or(pallas::Base::ZERO),
             }],
@@ -81,9 +86,10 @@ impl TestHarness {
 
         let mut data = vec![MoneyFunction::TransferV1 as u8];
         params.encode(&mut data)?;
-        let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
-        let proofs = vec![secrets.proofs];
-        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
+        let mut tx_builder =
+            TransactionBuilder::new(ContractCallLeaf { call, proofs: secrets.proofs }, vec![])?;
+        let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &secrets.signature_secrets)?;
         tx.signatures = vec![sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());

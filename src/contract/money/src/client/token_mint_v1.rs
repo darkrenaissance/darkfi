@@ -105,9 +105,10 @@ impl TokenMintCallBuilder {
         };
 
         let output = TransferCallOutput {
+            public_key: self.recipient,
             value: self.amount,
             token_id,
-            public_key: self.recipient,
+            serial: pallas::Base::random(&mut OsRng),
             spend_hook: pallas::Base::ZERO,
             user_data: pallas::Base::ZERO,
         };

@@ -49,12 +49,16 @@ pub mod model;
 /// Contract errors
 pub mod error;
 
+#[cfg(feature = "client")]
+/// Client API for interaction with this smart contract
+pub mod client;
+
 // These are the different sled trees that will be created
 pub const DEPLOY_CONTRACT_INFO_TREE: &str = "info";
 pub const DEPLOY_CONTRACT_LOCK_TREE: &str = "lock";
 
 // These are keys inside the info tree
-pub const DEPLOY_CONTRACT_DB_VERSION: &str = "db_version";
+pub const DEPLOY_CONTRACT_DB_VERSION: &[u8] = b"db_version";
 
 /// zkas derive circuit namespace
 pub const DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1: &str = "DeriveContractID";

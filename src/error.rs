@@ -336,6 +336,9 @@ pub enum Error {
     #[error("Proposal task stopped")]
     ProposalTaskStopped,
 
+    #[error("Proposal already exists")]
+    ProposalAlreadyExists,
+
     #[error("Miner task stopped")]
     MinerTaskStopped,
 
@@ -466,8 +469,12 @@ pub enum Error {
     WasmerOomError(String),
 
     #[cfg(feature = "darkfi-sdk")]
-    #[error("Contract execution failed")]
+    #[error("Contract execution failed: {0}")]
     ContractError(darkfi_sdk::error::ContractError),
+
+    #[cfg(feature = "darkfi-sdk")]
+    #[error("Invalid DarkTree: {0}")]
+    DarkTreeError(darkfi_sdk::error::DarkTreeError),
 
     #[cfg(feature = "blockchain")]
     #[error("contract wasm bincode not found")]
@@ -616,11 +623,17 @@ pub enum TxVerifyFailed {
     #[error("Missing contract calls in transaction")]
     MissingCalls,
 
+    #[error("Invalid ZK proof in transaction")]
+    InvalidZkProof,
+
     #[error("Missing Money::Fee call in transaction")]
     MissingFee,
 
-    #[error("Invalid ZK proof in transaction")]
-    InvalidZkProof,
+    #[error("Invalid Money::Fee call in transaction")]
+    InvalidFee,
+
+    #[error("Insufficient fee paid")]
+    InsufficientFee,
 
     #[error("Erroneous transactions found")]
     ErroneousTxs(Vec<crate::tx::Transaction>),
@@ -852,5 +865,12 @@ impl From<wasmer::MemoryError> for Error {
 impl From<darkfi_sdk::error::ContractError> for Error {
     fn from(err: darkfi_sdk::error::ContractError) -> Self {
         Self::ContractError(err)
+    }
+}
+
+#[cfg(feature = "darkfi-sdk")]
+impl From<darkfi_sdk::error::DarkTreeError> for Error {
+    fn from(err: darkfi_sdk::error::DarkTreeError) -> Self {
+        Self::DarkTreeError(err)
     }
 }

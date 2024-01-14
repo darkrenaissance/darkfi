@@ -18,6 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, ContractId},
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup},
     error::{ContractError, ContractResult},
     msg,
@@ -38,7 +39,7 @@ use crate::{
 pub(crate) fn money_otcswap_get_metadata_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     // In here we can use the same function as we use in `TransferV1`.
     money_transfer_get_metadata_v1(cid, call_idx, calls)
@@ -48,9 +49,9 @@ pub(crate) fn money_otcswap_get_metadata_v1(
 pub(crate) fn money_otcswap_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: MoneyTransferParamsV1 = deserialize(&self_.data[1..])?;
 
     // The atomic swap is able to use the same parameters as `TransferV1`.

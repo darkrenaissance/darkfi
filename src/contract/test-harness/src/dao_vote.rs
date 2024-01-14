@@ -18,11 +18,15 @@
 
 use std::time::Instant;
 
-use darkfi::{tx::Transaction, Result};
+use darkfi::{
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    Result,
+};
 use darkfi_dao_contract::{
-    client::{DaoInfo, DaoProposalInfo, DaoVoteCall, DaoVoteInput},
-    model::{DaoProposalBulla, DaoVoteParams},
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
+    client::{DaoVoteCall, DaoVoteInput},
+    model::{Dao, DaoProposal, DaoProposalBulla, DaoVoteParams},
+    slot_to_day, DaoFunction, DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS,
+    DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
@@ -41,8 +45,8 @@ impl TestHarness {
         voter: &Holder,
         dao_kp: &Keypair,
         vote_option: bool,
-        dao: &DaoInfo,
-        proposal: &DaoProposalInfo,
+        dao: &Dao,
+        proposal: &DaoProposal,
         proposal_bulla: &DaoProposalBulla,
     ) -> Result<(Transaction, DaoVoteParams)> {
         let wallet = self.holders.get(voter).unwrap();
@@ -75,6 +79,7 @@ impl TestHarness {
             signature_secret,
         };
 
+        let current_day = slot_to_day(wallet.validator.consensus.time_keeper.verifying_slot);
         let call = DaoVoteCall {
             inputs: vec![input],
             vote_option,
@@ -82,6 +87,7 @@ impl TestHarness {
             vote_keypair: *dao_kp,
             proposal: proposal.clone(),
             dao: dao.clone(),
+            current_day,
         };
 
         let (params, proofs) = call.make(
@@ -93,9 +99,9 @@ impl TestHarness {
 
         let mut data = vec![DaoFunction::Vote as u8];
         params.encode(&mut data)?;
-        let calls = vec![ContractCall { contract_id: *DAO_CONTRACT_ID, data }];
-        let proofs = vec![proofs];
-        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
+        let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
+        let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &[signature_secret])?;
         tx.signatures = vec![sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());

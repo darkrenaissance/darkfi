@@ -3,9 +3,9 @@
 set -e
 
 tmux new-session -s "darkirc" -n "darkirc" -d
-tmux send-keys "../../../../darkirc --config seed.toml" Enter && sleep 1
+tmux send-keys "../../../../darkirc --config seed.toml --skip-dag-sync" Enter && sleep 1
 tmux split-window -h
-tmux send-keys "../../../../darkirc --config darkirc_full_node1.toml" Enter && sleep 1
+tmux send-keys "../../../../darkirc --config darkirc_full_node1.toml --skip-dag-sync" Enter && sleep 1
 tmux split-window -h
 tmux send-keys "../../../../darkirc --config darkirc_full_node2.toml" Enter
 tmux select-pane -t 0

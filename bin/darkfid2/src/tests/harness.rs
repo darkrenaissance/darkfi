@@ -43,7 +43,6 @@ use crate::{
 };
 
 pub struct HarnessConfig {
-    pub pow_threads: usize,
     pub pow_target: usize,
     pub pow_fixed_difficulty: Option<BigUint>,
     pub pos_testing_mode: bool,
@@ -60,23 +59,24 @@ pub struct Harness {
 }
 
 impl Harness {
-    pub async fn new(config: HarnessConfig, ex: &Arc<smol::Executor<'static>>) -> Result<Self> {
+    pub async fn new(
+        config: HarnessConfig,
+        verify_fees: bool,
+        ex: &Arc<smol::Executor<'static>>,
+    ) -> Result<Self> {
         // Use test harness to generate genesis transactions
-        let mut th = TestHarness::new(&["money".to_string(), "consensus".to_string()]).await?;
+        let mut th =
+            TestHarness::new(&["money".to_string(), "consensus".to_string()], verify_fees).await?;
         let (genesis_stake_tx, _) = th.genesis_stake(&Holder::Alice, config.alice_initial)?;
         let (genesis_mint_tx, _) = th.genesis_mint(&Holder::Bob, config.bob_initial)?;
 
         // Generate default genesis block
         let mut genesis_block = BlockInfo::default();
 
-        // Retrieve genesis producer transaction
-        let producer_tx = genesis_block.txs.pop().unwrap();
-
         // Append genesis transactions and calculate their total
         genesis_block.txs.push(genesis_stake_tx);
         genesis_block.txs.push(genesis_mint_tx);
-        genesis_block.txs.push(producer_tx);
-        let genesis_txs_total = genesis_txs_total(&genesis_block.txs)?;
+        let genesis_txs_total = genesis_txs_total(&genesis_block.txs).await?;
         genesis_block.slots[0].total_tokens = genesis_txs_total;
 
         // Generate validators configuration
@@ -86,13 +86,13 @@ impl Harness {
         let validator_config = ValidatorConfig::new(
             time_keeper,
             3,
-            config.pow_threads,
             config.pow_target,
             config.pow_fixed_difficulty.clone(),
             genesis_block,
             genesis_txs_total,
             vec![],
             config.pos_testing_mode,
+            verify_fees,
         );
 
         // Generate validators using pregenerated vks
@@ -146,7 +146,6 @@ impl Harness {
             .validate_blockchain(
                 genesis_txs_total,
                 vec![],
-                self.config.pow_threads,
                 self.config.pow_target,
                 self.config.pow_fixed_difficulty.clone(),
             )
@@ -154,7 +153,6 @@ impl Harness {
         bob.validate_blockchain(
             genesis_txs_total,
             vec![],
-            self.config.pow_threads,
             self.config.pow_target,
             self.config.pow_fixed_difficulty.clone(),
         )
@@ -267,7 +265,8 @@ pub async fn generate_node(
     } else {
         None
     };
-    let node = Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator, subscribers).await;
+    let node =
+        Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator, subscribers, None).await;
 
     sync_p2p.clone().start().await?;
 

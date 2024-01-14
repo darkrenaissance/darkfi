@@ -35,6 +35,9 @@ use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
 use crate::model::Coin;
 
+/// `Money::FeeV1` API
+pub mod fee_v1;
+
 /// `Money::TransferV1` API
 pub mod transfer_v1;
 
@@ -98,7 +101,10 @@ pub const MONEY_ALIASES_TABLE: &str = "money_aliases";
 pub const MONEY_ALIASES_COL_ALIAS: &str = "alias";
 pub const MONEY_ALIASES_COL_TOKEN_ID: &str = "token_id";
 
-/// `MoneyNote` holds the inner attributes of a `Coin`.
+/// `MoneyNote` holds the inner attributes of a `Coin`
+/// It does not store the public key since it's encrypted for that key,
+/// and so is not needed to infer the coin attributes.
+/// All other coin attributes must be present.
 #[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct MoneyNote {
     /// Serial number of the coin, used for the nullifier
@@ -112,10 +118,14 @@ pub struct MoneyNote {
     pub spend_hook: pallas::Base,
     /// User data used by protocol when spend hook is enabled
     pub user_data: pallas::Base,
+    // TODO: look into removing these fields. We potentially don't need them [
     /// Blinding factor for the value pedersen commitment
     pub value_blind: pallas::Scalar,
     /// Blinding factor for the token ID pedersen commitment
     pub token_blind: pallas::Base,
+    // ] ^ the receiver is not interested in the value commit / token commits.
+    // we just want to examine the coins in the outputs. The money::transfer() contract
+    // should ensure everything else is correct.
     /// Attached memo (arbitrary data)
     pub memo: Vec<u8>,
 }
@@ -192,4 +202,26 @@ impl From<ConsensusOwnCoin> for OwnCoin {
             leaf_position: consensus_own_coin.leaf_position,
         }
     }
+}
+
+pub fn compute_remainder_blind(
+    clear_inputs: &[crate::model::ClearInput],
+    input_blinds: &[pallas::Scalar],
+    output_blinds: &[pallas::Scalar],
+) -> pallas::Scalar {
+    let mut total = pallas::Scalar::zero();
+
+    for input in clear_inputs {
+        total += input.value_blind;
+    }
+
+    for input_blind in input_blinds {
+        total += input_blind;
+    }
+
+    for output_blind in output_blinds {
+        total -= output_blind;
+    }
+
+    total
 }

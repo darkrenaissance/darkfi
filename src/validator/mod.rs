@@ -22,7 +22,7 @@ use darkfi_sdk::{
     blockchain::{expected_reward, Slot},
     crypto::PublicKey,
 };
-use darkfi_serial::serialize;
+use darkfi_serial::serialize_async;
 use log::{debug, error, info, warn};
 use num_bigint::BigUint;
 use smol::lock::RwLock;
@@ -73,8 +73,6 @@ pub struct ValidatorConfig {
     pub time_keeper: TimeKeeper,
     /// Currently configured finalization security threshold
     pub finalization_threshold: usize,
-    /// Currently configured PoW miner number of threads to use
-    pub pow_threads: usize,
     /// Currently configured PoW target
     pub pow_target: usize,
     /// Optional fixed difficulty, for testing purposes
@@ -87,6 +85,8 @@ pub struct ValidatorConfig {
     pub faucet_pubkeys: Vec<PublicKey>,
     /// Flag to enable PoS testing mode
     pub pos_testing_mode: bool,
+    /// Flag to enable tx fee verification
+    pub verify_fees: bool,
 }
 
 impl ValidatorConfig {
@@ -94,24 +94,24 @@ impl ValidatorConfig {
     pub fn new(
         time_keeper: TimeKeeper,
         finalization_threshold: usize,
-        pow_threads: usize,
         pow_target: usize,
         pow_fixed_difficulty: Option<BigUint>,
         genesis_block: BlockInfo,
         genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
         pos_testing_mode: bool,
+        verify_fees: bool,
     ) -> Self {
         Self {
             time_keeper,
             finalization_threshold,
-            pow_threads,
             pow_target,
             pow_fixed_difficulty,
             genesis_block,
             genesis_txs_total,
             faucet_pubkeys,
             pos_testing_mode,
+            verify_fees,
         }
     }
 }
@@ -129,6 +129,8 @@ pub struct Validator {
     pub synced: RwLock<bool>,
     /// Flag to enable PoS testing mode
     pub pos_testing_mode: bool,
+    /// Flag to enable tx fee verification
+    pub verify_fees: bool,
 }
 
 impl Validator {
@@ -143,7 +145,7 @@ impl Validator {
         let overlay = BlockchainOverlay::new(&blockchain)?;
 
         // Deploy native wasm contracts
-        deploy_native_contracts(&overlay, &config.time_keeper, &config.faucet_pubkeys)?;
+        deploy_native_contracts(&overlay, &config.time_keeper, &config.faucet_pubkeys).await?;
 
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
@@ -165,24 +167,28 @@ impl Validator {
             blockchain.clone(),
             config.time_keeper,
             config.finalization_threshold,
-            config.pow_threads,
             config.pow_target,
             config.pow_fixed_difficulty,
             pos_testing_mode,
         )?;
 
         // Create the actual state
-        let state =
-            Arc::new(Self { blockchain, consensus, synced: RwLock::new(false), pos_testing_mode });
-        info!(target: "validator::new", "Finished initializing validator");
+        let state = Arc::new(Self {
+            blockchain,
+            consensus,
+            synced: RwLock::new(false),
+            pos_testing_mode,
+            verify_fees: config.verify_fees,
+        });
 
+        info!(target: "validator::new", "Finished initializing validator");
         Ok(state)
     }
 
     /// The node retrieves a transaction, validates its state transition,
     /// and appends it to the pending txs store.
     pub async fn append_tx(&self, tx: &Transaction) -> Result<()> {
-        let tx_hash = blake3::hash(&serialize(tx));
+        let tx_hash = blake3::hash(&serialize_async(tx).await);
 
         // Check if we have already seen this tx
         let tx_in_txstore = self.blockchain.transactions.contains(&tx_hash)?;
@@ -211,7 +217,7 @@ impl Validator {
             let overlay = fork.overlay.lock().unwrap().full_clone()?;
 
             // Verify transaction
-            let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec).await?;
+            let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec, false).await?;
             if !erroneous_txs.is_empty() {
                 continue
             }
@@ -223,7 +229,7 @@ impl Validator {
 
         // Verify transaction against canonical state
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
-        let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec).await?;
+        let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec, false).await?;
         if erroneous_txs.is_empty() {
             valid = true
         }
@@ -262,7 +268,7 @@ impl Validator {
 
         let mut removed_txs = vec![];
         for tx in pending_txs {
-            let tx_hash = &blake3::hash(&serialize(&tx));
+            let tx_hash = &blake3::hash(&serialize_async(&tx).await);
             let tx_vec = [tx.clone()];
             let mut valid = false;
 
@@ -273,7 +279,8 @@ impl Validator {
                 let overlay = fork.overlay.lock().unwrap().full_clone()?;
 
                 // Verify transaction
-                let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec).await?;
+                let erroneous_txs =
+                    verify_transactions(&overlay, &time_keeper, &tx_vec, false).await?;
                 if erroneous_txs.is_empty() {
                     valid = true;
                     continue
@@ -285,7 +292,7 @@ impl Validator {
 
             // Verify transaction against canonical state
             let overlay = BlockchainOverlay::new(&self.blockchain)?;
-            let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec).await?;
+            let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec, false).await?;
             if erroneous_txs.is_empty() {
                 valid = true
             }
@@ -470,7 +477,8 @@ impl Validator {
         );
 
         // Verify all transactions and get erroneous ones
-        let erroneous_txs = verify_transactions(&overlay, &time_keeper, txs).await?;
+        let erroneous_txs =
+            verify_transactions(&overlay, &time_keeper, txs, self.verify_fees).await?;
 
         let lock = overlay.lock().unwrap();
         let mut overlay = lock.overlay.lock().unwrap();
@@ -558,7 +566,6 @@ impl Validator {
         &self,
         genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
-        pow_threads: usize,
         pow_target: usize,
         pow_fixed_difficulty: Option<BigUint>,
     ) -> Result<()> {
@@ -579,11 +586,10 @@ impl Validator {
 
         // Create a time keeper and a PoW module to validate each block
         let mut time_keeper = self.consensus.time_keeper.clone();
-        let mut module =
-            PoWModule::new(blockchain.clone(), pow_threads, pow_target, pow_fixed_difficulty)?;
+        let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?;
 
         // Deploy native wasm contracts
-        deploy_native_contracts(&overlay, &time_keeper, &faucet_pubkeys)?;
+        deploy_native_contracts(&overlay, &time_keeper, &faucet_pubkeys).await?;
 
         // Validate genesis block
         verify_genesis_block(&overlay, &time_keeper, previous, genesis_txs_total).await?;

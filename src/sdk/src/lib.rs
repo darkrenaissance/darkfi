@@ -27,6 +27,9 @@ pub mod blockchain;
 /// Database functions
 pub mod db;
 
+/// Contract deployment utilities
+pub mod deploy;
+
 /// Entrypoint used for the wasm binaries
 pub mod entrypoint;
 
@@ -49,3 +52,6 @@ pub use tx::ContractCall;
 
 /// Utility functions
 pub mod util;
+
+/// DarkTree structures
+pub mod dark_tree;

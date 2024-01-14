@@ -191,3 +191,31 @@ impl From<bs58::decode::Error> for ContractError {
         Self::IoError(format!("{}", err))
     }
 }
+
+/// Main result type used by DarkTree.
+pub type DarkTreeResult<T> = ResultGeneric<T, DarkTreeError>;
+
+/// General DarkTree related errors.
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum DarkTreeError {
+    #[error("Invalid DarkLeaf index found: {0} (Expected: {1}")]
+    InvalidLeafIndex(usize, usize),
+
+    #[error("Invalid DarkLeaf parent index found for leaf: {0}")]
+    InvalidLeafParentIndex(usize),
+
+    #[error("Invalid DarkLeaf children index found for leaf: {0}")]
+    InvalidLeafChildrenIndexes(usize),
+
+    #[error("Invalid DarkTree min capacity found: {0} (Expected: >= 1)")]
+    InvalidMinCapacity(usize),
+
+    #[error("DarkTree min capacity has not been exceeded")]
+    MinCapacityNotExceeded,
+
+    #[error("Invalid DarkTree max capacity found: {0} (Expected: >= {1})")]
+    InvalidMaxCapacity(usize, usize),
+
+    #[error("DarkTree max capacity has been exceeded")]
+    MaxCapacityExceeded,
+}

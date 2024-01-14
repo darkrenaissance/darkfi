@@ -32,7 +32,9 @@ pub use keypair::{Keypair, PublicKey, SecretKey};
 
 /// Contract ID definitions and methods
 pub mod contract_id;
-pub use contract_id::{ContractId, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
+pub use contract_id::{
+    ContractId, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
+};
 
 /// Token ID definitions and methods
 pub mod token_id;
@@ -71,15 +73,11 @@ pub mod pasta_prelude {
     pub use pasta_curves::{
         arithmetic::{CurveAffine, CurveExt},
         group::{
-            ff::{Field, PrimeField},
+            ff::{Field, FromUniformBytes, PrimeField},
             Curve, Group,
         },
     };
 }
-
-/// Sharing address encoded as wallet import format
-pub mod share_address;
-pub use share_address::{ShareAddress, ShareAddressType};
 
 #[macro_export]
 macro_rules! fp_from_bs58 {

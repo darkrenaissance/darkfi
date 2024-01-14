@@ -16,21 +16,27 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, io::Cursor};
+use std::collections::HashMap;
 
 use darkfi_sdk::{
     blockchain::{block_version, expected_reward},
-    crypto::{schnorr::SchnorrPublic, PublicKey, CONSENSUS_CONTRACT_ID, MONEY_CONTRACT_ID},
+    crypto::{
+        schnorr::SchnorrPublic, ContractId, PublicKey, CONSENSUS_CONTRACT_ID,
+        DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
+    },
+    dark_tree::dark_forest_leaf_vec_integrity_check,
+    deploy::DeployParamsV1,
     pasta::pallas,
 };
-use darkfi_serial::{Decodable, Encodable, WriteExt};
+use darkfi_serial::{deserialize_async, AsyncDecodable, AsyncEncodable, AsyncWriteExt, WriteExt};
 use log::{debug, error, warn};
+use smol::io::Cursor;
 
 use crate::{
     blockchain::{BlockInfo, BlockchainOverlayPtr},
     error::TxVerifyFailed,
     runtime::vm_runtime::Runtime,
-    tx::Transaction,
+    tx::{Transaction, MAX_TX_CALLS, MIN_TX_CALLS},
     util::time::TimeKeeper,
     validator::{
         consensus::{Consensus, Fork, Proposal, TXS_CAP},
@@ -95,15 +101,14 @@ pub async fn verify_genesis_block(
     overlay.lock().unwrap().slots.insert(&[genesis_slot.clone()])?;
 
     // Genesis transaction must be the Transaction::default() one(empty)
-    let tx = block.txs.last().unwrap();
-    if tx != &Transaction::default() {
+    if block.txs[0] != Transaction::default() {
         error!(target: "validator::verification::verify_genesis_block", "Genesis proposal transaction is not default one");
-        return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+        return Err(TxVerifyFailed::ErroneousTxs(vec![block.txs[0].clone()]).into())
     }
 
-    // Verify transactions, exluding producer(last) one
-    let txs = &block.txs[..block.txs.len() - 1];
-    let erroneous_txs = verify_transactions(overlay, time_keeper, txs).await?;
+    // Verify transactions, exluding producer(first) one
+    let txs = &block.txs[1..];
+    let erroneous_txs = verify_transactions(overlay, time_keeper, txs, false).await?;
     if !erroneous_txs.is_empty() {
         warn!(target: "validator::verification::verify_genesis_block", "Erroneous transactions found in set");
         overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
@@ -161,15 +166,15 @@ pub async fn verify_block(
     // Verify proposal transaction.
     // For PoS blocks(version 2) verify if not in PoS testing mode.
     if block.header.version != 2 || !pos_testing_mode {
-        let tx = block.txs.last().unwrap();
         let public_key =
-            verify_producer_transaction(overlay, time_keeper, tx, block.header.version).await?;
+            verify_producer_transaction(overlay, time_keeper, &block.txs[0], block.header.version)
+                .await?;
         verify_producer_signature(block, &public_key)?;
     }
 
-    // Verify transactions, exluding producer(last) one
-    let txs = &block.txs[..block.txs.len() - 1];
-    let erroneous_txs = verify_transactions(overlay, time_keeper, txs).await?;
+    // Verify transactions, exluding producer(first) one
+    let txs = &block.txs[1..];
+    let erroneous_txs = verify_transactions(overlay, time_keeper, txs, false).await?;
     if !erroneous_txs.is_empty() {
         warn!(target: "validator::verification::verify_block", "Erroneous transactions found in set");
         overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
@@ -206,7 +211,7 @@ pub async fn verify_producer_transaction(
     debug!(target: "validator::verification::verify_producer_transaction", "Validating proposal transaction {}", tx_hash);
 
     // Producer transactions must contain a single, non-empty call
-    if tx.calls.len() != 1 || tx.calls[0].data.is_empty() {
+    if tx.calls.len() != 1 || tx.calls[0].data.data.is_empty() {
         return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
 
@@ -215,13 +220,13 @@ pub async fn verify_producer_transaction(
     match block_version {
         1 => {
             // Version 1 blocks must contain a Money::PoWReward(0x08) call
-            if call.contract_id != *MONEY_CONTRACT_ID || call.data[0] != 0x08 {
+            if call.data.contract_id != *MONEY_CONTRACT_ID || call.data.data[0] != 0x08 {
                 return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
             }
         }
         2 => {
             // Version 2 blocks must contain a Consensus::Proposal(0x02) call
-            if call.contract_id != *CONSENSUS_CONTRACT_ID || call.data[0] != 0x02 {
+            if call.data.contract_id != *CONSENSUS_CONTRACT_ID || call.data.data[0] != 0x02 {
                 return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
             }
         }
@@ -232,7 +237,7 @@ pub async fn verify_producer_transaction(
     let mut verifying_keys: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
 
     // Initialize the map
-    verifying_keys.insert(call.contract_id.to_bytes(), HashMap::new());
+    verifying_keys.insert(call.data.contract_id.to_bytes(), HashMap::new());
 
     // Table of public inputs used for ZK proof verification
     let mut zkp_table = vec![];
@@ -243,13 +248,14 @@ pub async fn verify_producer_transaction(
 
     // Write the actual payload data
     let mut payload = vec![];
-    payload.write_u32(0)?; // Call index
-    tx.calls.encode(&mut payload)?; // Actual call data
+    payload.write_u32_async(0).await?; // Call index
+    tx.calls.encode_async(&mut payload).await?; // Actual call data
 
     debug!(target: "validator::verification::verify_producer_transaction", "Instantiating WASM runtime");
-    let wasm = overlay.lock().unwrap().wasm_bincode.get(call.contract_id)?;
+    let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id)?;
 
-    let mut runtime = Runtime::new(&wasm, overlay.clone(), call.contract_id, time_keeper.clone())?;
+    let mut runtime =
+        Runtime::new(&wasm, overlay.clone(), call.data.contract_id, time_keeper.clone())?;
 
     debug!(target: "validator::verification::verify_producer_transaction", "Executing \"metadata\" call");
     let metadata = runtime.metadata(&payload)?;
@@ -258,8 +264,9 @@ pub async fn verify_producer_transaction(
     let mut decoder = Cursor::new(&metadata);
 
     // The tuple is (zkas_ns, public_inputs)
-    let zkp_pub: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
-    let sig_pub: Vec<PublicKey> = Decodable::decode(&mut decoder)?;
+    let zkp_pub: Vec<(String, Vec<pallas::Base>)> =
+        AsyncDecodable::decode_async(&mut decoder).await?;
+    let sig_pub: Vec<PublicKey> = AsyncDecodable::decode_async(&mut decoder).await?;
 
     // Check that only one ZK proof and signature public key exist
     if zkp_pub.len() != 1 || sig_pub.len() != 1 {
@@ -274,11 +281,12 @@ pub async fn verify_producer_transaction(
     debug!(target: "validator::verification::verify_producer_transaction", "Performing VerifyingKey lookups from the sled db");
     for (zkas_ns, _) in &zkp_pub {
         // TODO: verify this is correct behavior
-        let inner_vk_map = verifying_keys.get_mut(&call.contract_id.to_bytes()).unwrap();
+        let inner_vk_map = verifying_keys.get_mut(&call.data.contract_id.to_bytes()).unwrap();
         if inner_vk_map.contains_key(zkas_ns.as_str()) {
             continue
         }
-        let (_, vk) = overlay.lock().unwrap().contracts.get_zkas(&call.contract_id, zkas_ns)?;
+        let (_, vk) =
+            overlay.lock().unwrap().contracts.get_zkas(&call.data.contract_id, zkas_ns)?;
         inner_vk_map.insert(zkas_ns.to_string(), vk);
     }
 
@@ -333,20 +341,65 @@ pub async fn verify_transaction(
     time_keeper: &TimeKeeper,
     tx: &Transaction,
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
-) -> Result<()> {
+    verify_fee: bool, // FIXME: Remove this bool
+) -> Result<u64> {
     let tx_hash = tx.hash()?;
     debug!(target: "validator::verification::verify_transaction", "Validating transaction {}", tx_hash);
+
+    // Gas accumulator
+    let mut gas_used = 0;
+
+    // Verify calls indexes integrity
+    if verify_fee {
+        dark_forest_leaf_vec_integrity_check(
+            &tx.calls,
+            Some(MIN_TX_CALLS + 1),
+            Some(MAX_TX_CALLS),
+        )?;
+    } else {
+        dark_forest_leaf_vec_integrity_check(&tx.calls, Some(MIN_TX_CALLS), Some(MAX_TX_CALLS))?;
+    }
 
     // Table of public inputs used for ZK proof verification
     let mut zkp_table = vec![];
     // Table of public keys used for signature verification
     let mut sig_table = vec![];
 
+    if verify_fee {
+        // Verify that the first call is the transaction fee and that it has no parents or children.
+        let Some(fee_call_parent_index) = tx.calls[0].parent_index else {
+            error!(
+                target: "validator::verification::verify_transaction",
+                "[VALIDATOR] Fee call does not have parent index",
+            );
+            return Err(TxVerifyFailed::InvalidFee.into())
+        };
+
+        if fee_call_parent_index != tx.calls.len() - 1 ||
+            tx.calls[0].data.contract_id != *MONEY_CONTRACT_ID ||
+            tx.calls[0].data.data[0] != 0x00
+        {
+            error!(
+                target: "validator::verification::verify_transaction",
+                "[VALIDATOR] First tx call is not Money::Fee",
+            );
+            return Err(TxVerifyFailed::MissingFee.into())
+        }
+
+        if !tx.calls[0].children_indexes.is_empty() {
+            error!(
+                target: "validator::verification::verify_transaction",
+                "[VALIDATOR] Fee call invalid (has children)",
+            );
+            return Err(TxVerifyFailed::InvalidFee.into())
+        }
+    }
+
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
         // Transaction must not contain a reward call, Money::PoWReward(0x08) or Consensus::Proposal(0x02)
-        if (call.contract_id == *MONEY_CONTRACT_ID && call.data[0] == 0x08) ||
-            (call.contract_id == *CONSENSUS_CONTRACT_ID && call.data[0] == 0x02)
+        if (call.data.contract_id == *MONEY_CONTRACT_ID && call.data.data[0] == 0x08) ||
+            (call.data.contract_id == *CONSENSUS_CONTRACT_ID && call.data.data[0] == 0x02)
         {
             error!(target: "validator::verification::verify_transaction", "Reward transaction detected");
             return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
@@ -357,13 +410,13 @@ pub async fn verify_transaction(
         // Write the actual payload data
         let mut payload = vec![];
         payload.write_u32(idx as u32)?; // Call index
-        tx.calls.encode(&mut payload)?; // Actual call data
+        tx.calls.encode_async(&mut payload).await?; // Actual call data
 
         debug!(target: "validator::verification::verify_transaction", "Instantiating WASM runtime");
-        let wasm = overlay.lock().unwrap().wasm_bincode.get(call.contract_id)?;
+        let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id)?;
 
         let mut runtime =
-            Runtime::new(&wasm, overlay.clone(), call.contract_id, time_keeper.clone())?;
+            Runtime::new(&wasm, overlay.clone(), call.data.contract_id, time_keeper.clone())?;
 
         debug!(target: "validator::verification::verify_transaction", "Executing \"metadata\" call");
         let metadata = runtime.metadata(&payload)?;
@@ -372,15 +425,16 @@ pub async fn verify_transaction(
         let mut decoder = Cursor::new(&metadata);
 
         // The tuple is (zkas_ns, public_inputs)
-        let zkp_pub: Vec<(String, Vec<pallas::Base>)> = Decodable::decode(&mut decoder)?;
-        let sig_pub: Vec<PublicKey> = Decodable::decode(&mut decoder)?;
+        let zkp_pub: Vec<(String, Vec<pallas::Base>)> =
+            AsyncDecodable::decode_async(&mut decoder).await?;
+        let sig_pub: Vec<PublicKey> = AsyncDecodable::decode_async(&mut decoder).await?;
         // TODO: Make sure we've read all the bytes above.
         debug!(target: "validator::verification::verify_transaction", "Successfully executed \"metadata\" call");
 
         // Here we'll look up verifying keys and insert them into the per-contract map.
         debug!(target: "validator::verification::verify_transaction", "Performing VerifyingKey lookups from the sled db");
         for (zkas_ns, _) in &zkp_pub {
-            let inner_vk_map = verifying_keys.get_mut(&call.contract_id.to_bytes()).unwrap();
+            let inner_vk_map = verifying_keys.get_mut(&call.data.contract_id.to_bytes()).unwrap();
 
             // TODO: This will be a problem in case of ::deploy, unless we force a different
             // namespace and disable updating existing circuit. Might be a smart idea to do
@@ -389,7 +443,8 @@ pub async fn verify_transaction(
                 continue
             }
 
-            let (_, vk) = overlay.lock().unwrap().contracts.get_zkas(&call.contract_id, zkas_ns)?;
+            let (_, vk) =
+                overlay.lock().unwrap().contracts.get_zkas(&call.data.contract_id, zkas_ns)?;
 
             inner_vk_map.insert(zkas_ns.to_string(), vk);
         }
@@ -408,7 +463,33 @@ pub async fn verify_transaction(
         runtime.apply(&state_update)?;
         debug!(target: "validator::verification::verify_transaction", "Successfully executed \"apply\" call");
 
+        // If this call is supposed to deploy a new contract, we have to instantiate
+        // a new `Runtime` and run its deploy function.
+        if call.data.contract_id == *DEPLOYOOOR_CONTRACT_ID && call.data.data[0] == 0x00
+        /* DeployV1 */
+        {
+            debug!(target: "validator::verification::verify_transaction", "Deploying new contract");
+            // Deserialize the deployment parameters
+            let deploy_params: DeployParamsV1 = deserialize_async(&call.data.data[1..]).await?;
+            let deploy_cid = ContractId::derive_public(deploy_params.public_key);
+
+            // Instantiate the new deployment runtime
+            let mut deploy_runtime = Runtime::new(
+                &deploy_params.wasm_bincode,
+                overlay.clone(),
+                deploy_cid,
+                time_keeper.clone(),
+            )?;
+
+            deploy_runtime.deploy(&deploy_params.ix)?;
+
+            // Append the used gas
+            gas_used += deploy_runtime.gas_used();
+        }
+
         // At this point we're done with the call and move on to the next one.
+        // Accumulate the WASM gas used.
+        gas_used += runtime.gas_used();
     }
 
     // When we're done looping and executing over the tx's contract calls, we now
@@ -435,25 +516,55 @@ pub async fn verify_transaction(
         return Err(TxVerifyFailed::InvalidZkProof.into())
     }
 
+    if verify_fee {
+        // TODO: This counts 1 gas as 1 token unit. Pricing should be better specified.
+        // TODO: Currently this doesn't account for signatures or ZK proofs
+        // TODO: Currently this doesn't account for WASM host functions
+
+        // Deserialize the first call to find the paid fee
+        let fee: u64 = match deserialize_async(&tx.calls[0].data.data[1..9]).await {
+            Ok(v) => v,
+            Err(e) => {
+                error!(
+                    target: "validator::verification::verify_transaction",
+                    "[VALIDATOR] Failed deserializing tx {} fee call: {}", tx_hash, e,
+                );
+                return Err(TxVerifyFailed::InvalidFee.into())
+            }
+        };
+
+        // Check that enough fee has been paid for the used gas in this transaction.
+        if gas_used > fee {
+            error!(
+                target: "validator::verification::verify_transaction",
+                "[VALIDATOR] tx {} has insufficient fee. Required: {}, Paid: {}",
+                tx_hash, gas_used, fee,
+            );
+            return Err(TxVerifyFailed::InsufficientFee.into())
+        }
+    }
+
     debug!(target: "validator::verification::verify_transaction", "ZK proof verification successful");
     debug!(target: "validator::verification::verify_transaction", "Transaction {} verified successfully", tx_hash);
 
-    Ok(())
+    Ok(gas_used)
 }
 
 /// Verify a set of [`Transaction`] in sequence and apply them if all are valid.
 /// In case any of the transactions fail, they will be returned to the caller.
-/// The function takes a boolean called `write` which tells it to actually write
-/// the state transitions to the database.
 pub async fn verify_transactions(
     overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
     txs: &[Transaction],
+    verify_fees: bool,
 ) -> Result<Vec<Transaction>> {
     debug!(target: "validator::verification::verify_transactions", "Verifying {} transactions", txs.len());
 
     // Tracker for failed txs
     let mut erroneous_txs = vec![];
+
+    // Gas accumulator
+    let mut _gas_used = 0;
 
     // Map of ZK proof verifying keys for the current transaction batch
     let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
@@ -461,18 +572,26 @@ pub async fn verify_transactions(
     // Initialize the map
     for tx in txs {
         for call in &tx.calls {
-            vks.insert(call.contract_id.to_bytes(), HashMap::new());
+            vks.insert(call.data.contract_id.to_bytes(), HashMap::new());
         }
     }
 
     // Iterate over transactions and attempt to verify them
     for tx in txs {
         overlay.lock().unwrap().checkpoint();
-        if let Err(e) = verify_transaction(overlay, time_keeper, tx, &mut vks).await {
-            warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {}", e);
-            erroneous_txs.push(tx.clone());
-            // TODO: verify this works as expected
-            overlay.lock().unwrap().revert_to_checkpoint()?;
+        match verify_transaction(overlay, time_keeper, tx, &mut vks, verify_fees).await {
+            Ok(gas) => _gas_used += gas,
+            Err(e) => {
+                warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {}", e);
+                erroneous_txs.push(tx.clone());
+                // TODO: verify this works as expected
+                overlay.lock().unwrap().revert_to_checkpoint()?;
+            }
+        }
+
+        if verify_fees {
+            // Enforce that enough fee is paid.
+            todo!()
         }
     }
 

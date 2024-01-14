@@ -35,3 +35,47 @@ impl<'a> MemoryManipulation for MemoryView<'a> {
         Ok(slice.write_slice(value_slice)?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    use darkfi_serial::Decodable;
+    use wasmer::{Memory, MemoryType, Store, WasmPtr};
+
+    #[test]
+    fn test_memoryview_writeslice() {
+        let mut store = Store::default();
+        let m = Memory::new(&mut store, MemoryType::new(1, None, false)).unwrap();
+        let value: [u8; 3] = [3, 0, 1];
+        let view = m.view(&store);
+        let res = view.write_slice(&value, 0);
+        assert!(res.is_ok());
+        let ptr: WasmPtr<u8> = WasmPtr::new(0);
+        let slice = ptr.slice(&view, value.len() as u32);
+        let mut buf: [u8; 3] = [0; 3];
+        let _ = slice.expect("err").read_slice(&mut buf);
+        assert_eq!(buf, value);
+    }
+
+    #[test]
+    fn test_memoryview_allread() -> Result<()> {
+        let mut store = Store::default();
+        let m = Memory::new(&mut store, MemoryType::new(1, None, false)).unwrap();
+        let value: [u8; 3] = [3, 0, 1];
+        let view = m.view(&store);
+        let res = view.write_slice(&value, 0);
+        assert!(res.is_ok());
+        let ptr: WasmPtr<u8> = WasmPtr::new(0);
+        let slice = ptr.slice(&view, value.len() as u32)?;
+        let mut buf: [u8; 3] = [0; 3];
+        let _ = slice.read_slice(&mut buf);
+        let mut buf_reader = Cursor::new(buf);
+        let ret: [u8; 3] = Decodable::decode(&mut buf_reader)?;
+        assert!(buf.len() == (slice.len() as usize));
+        assert_eq!(ret, value);
+        assert!(buf_reader.position() == slice.len());
+        Ok(())
+    }
+}

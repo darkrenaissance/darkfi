@@ -22,13 +22,13 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{poseidon_hash, PublicKey, SecretKey, TokenId},
+    crypto::{PublicKey, SecretKey, TokenId},
     pasta::pallas,
 };
 use log::debug;
 use rand::rngs::OsRng;
 
-use crate::model::DaoMintParams;
+use crate::model::{Dao, DaoMintParams};
 
 #[derive(Clone)]
 pub struct DaoInfo {
@@ -42,7 +42,7 @@ pub struct DaoInfo {
 }
 
 pub fn make_mint_call(
-    dao: &DaoInfo,
+    dao: &Dao,
     dao_secret_key: &SecretKey,
     dao_mint_zkbin: &ZkBinary,
     dao_mint_pk: &ProvingKey,
@@ -53,19 +53,6 @@ pub fn make_mint_call(
     let dao_quorum = pallas::Base::from(dao.quorum);
     let dao_approval_ratio_quot = pallas::Base::from(dao.approval_ratio_quot);
     let dao_approval_ratio_base = pallas::Base::from(dao.approval_ratio_base);
-
-    let (pub_x, pub_y) = dao.public_key.xy();
-
-    let dao_bulla = poseidon_hash([
-        dao_proposer_limit,
-        dao_quorum,
-        dao_approval_ratio_quot,
-        dao_approval_ratio_base,
-        dao.gov_token_id.inner(),
-        pub_x,
-        pub_y,
-        dao.bulla_blind,
-    ]);
 
     // NOTE: It's important to keep these in the same order as the zkas code.
     let prover_witnesses = vec![
@@ -78,12 +65,14 @@ pub fn make_mint_call(
         Witness::Base(halo2::Value::known(dao.bulla_blind)),
     ];
 
-    let public = vec![pub_x, pub_y, dao_bulla];
+    let (pub_x, pub_y) = dao.public_key.xy();
+    let dao_bulla = dao.to_bulla();
+    let public = vec![pub_x, pub_y, dao_bulla.inner()];
 
     let circuit = ZkCircuit::new(prover_witnesses, dao_mint_zkbin);
     let proof = Proof::create(dao_mint_pk, &[circuit], &public, &mut OsRng)?;
 
-    let dao_mint_params = DaoMintParams { dao_bulla: dao_bulla.into(), dao_pubkey: dao.public_key };
+    let dao_mint_params = DaoMintParams { dao_bulla, dao_pubkey: dao.public_key };
 
     Ok((dao_mint_params, vec![proof]))
 }

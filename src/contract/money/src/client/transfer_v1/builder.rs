@@ -33,8 +33,8 @@ use rand::rngs::OsRng;
 
 use super::proof::{create_transfer_burn_proof, create_transfer_mint_proof};
 use crate::{
-    client::{MoneyNote, OwnCoin},
-    model::{ClearInput, Input, MoneyTransferParamsV1, Output},
+    client::{compute_remainder_blind, MoneyNote, OwnCoin},
+    model::{ClearInput, CoinAttributes, Input, MoneyTransferParamsV1, Output},
 };
 
 /// Struct holding necessary information to build a `Money::TransferV1` contract call.
@@ -71,37 +71,9 @@ pub struct TransferCallInput {
     pub user_data_blind: pallas::Base,
 }
 
-pub struct TransferCallOutput {
-    pub value: u64,
-    pub token_id: TokenId,
-    pub public_key: PublicKey,
-    pub spend_hook: pallas::Base,
-    pub user_data: pallas::Base,
-}
+pub type TransferCallOutput = CoinAttributes;
 
 impl TransferCallBuilder {
-    fn compute_remainder_blind(
-        clear_inputs: &[ClearInput],
-        input_blinds: &[pallas::Scalar],
-        output_blinds: &[pallas::Scalar],
-    ) -> pallas::Scalar {
-        let mut total = pallas::Scalar::zero();
-
-        for input in clear_inputs {
-            total += input.value_blind;
-        }
-
-        for input_blind in input_blinds {
-            total += input_blind;
-        }
-
-        for output_blind in output_blinds {
-            total -= output_blind;
-        }
-
-        total
-    }
-
     pub fn build(self) -> Result<(MoneyTransferParamsV1, TransferCallSecrets)> {
         debug!("Building Money::TransferV1 contract call");
         assert!(self.clear_inputs.len() + self.inputs.len() > 0);
@@ -167,14 +139,12 @@ impl TransferCallBuilder {
 
         for (i, output) in self.outputs.iter().enumerate() {
             let value_blind = if i == self.outputs.len() - 1 {
-                Self::compute_remainder_blind(&params.clear_inputs, &input_blinds, &output_blinds)
+                compute_remainder_blind(&params.clear_inputs, &input_blinds, &output_blinds)
             } else {
                 pallas::Scalar::random(&mut OsRng)
             };
 
             output_blinds.push(value_blind);
-
-            let serial = pallas::Base::random(&mut OsRng);
 
             info!("Creating transfer mint proof for output {}", i);
             let (proof, public_inputs) = create_transfer_mint_proof(
@@ -183,7 +153,7 @@ impl TransferCallBuilder {
                 output,
                 value_blind,
                 token_blind,
-                serial,
+                output.serial,
                 output.spend_hook,
                 output.user_data,
             )?;
@@ -192,7 +162,7 @@ impl TransferCallBuilder {
 
             // Encrypted note
             let note = MoneyNote {
-                serial,
+                serial: output.serial,
                 value: output.value,
                 token_id: output.token_id,
                 spend_hook: output.spend_hook,

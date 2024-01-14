@@ -19,10 +19,12 @@
 use darkfi_money_contract::MONEY_CONTRACT_NULLIFIERS_TREE;
 use darkfi_sdk::{
     crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, PublicKey},
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_get, db_lookup, db_set},
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
+    util::get_verifying_slot,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -30,7 +32,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 use crate::{
     error::DaoError,
     model::{DaoProposalMetadata, DaoVoteParams, DaoVoteUpdate},
-    DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_DB_VOTE_NULLIFIERS,
+    slot_to_day, DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_DB_VOTE_NULLIFIERS,
     DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 
@@ -38,9 +40,9 @@ use crate::{
 pub(crate) fn dao_vote_get_metadata(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: DaoVoteParams = deserialize(&self_.data[1..])?;
 
     if params.inputs.is_empty() {
@@ -64,11 +66,6 @@ pub(crate) fn dao_vote_get_metadata(
         let value_coords = input.vote_commit.to_affine().coordinates().unwrap();
         let (sig_x, sig_y) = input.signature_public.xy();
 
-        // TODO: Here we "trust" the input param's merkle root. Instead we compare
-        // that this root equals to the proposal's snapshotted root later in the
-        // `process_instruction`. Should we just enforce it here instead/aswell?
-        // The reason is because ZK proofs are verified afterwards, so by checking
-        // in wasm first, we can potentially bail out more quickly.
         zk_public_inputs.push((
             DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS.to_string(),
             vec![
@@ -83,6 +80,8 @@ pub(crate) fn dao_vote_get_metadata(
         ));
     }
 
+    let current_day = slot_to_day(get_verifying_slot());
+
     let yes_vote_commit_coords = params.yes_vote_commit.to_affine().coordinates().unwrap();
     let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
 
@@ -95,6 +94,7 @@ pub(crate) fn dao_vote_get_metadata(
             *yes_vote_commit_coords.y(),
             *all_vote_commit_coords.x(),
             *all_vote_commit_coords.y(),
+            pallas::Base::from(current_day),
         ],
     ));
 
@@ -110,9 +110,9 @@ pub(crate) fn dao_vote_get_metadata(
 pub(crate) fn dao_vote_process_instruction(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: DaoVoteParams = deserialize(&self_.data[1..])?;
 
     // Check proposal bulla exists
@@ -122,14 +122,8 @@ pub(crate) fn dao_vote_process_instruction(
         return Err(DaoError::ProposalNonexistent.into())
     };
 
-    // Get the current votes, and additionally confirm proposal hasn't ended
-    // TODO: Proposals should have a set length of time
+    // Get the current votes
     let mut proposal_metadata: DaoProposalMetadata = deserialize(&data)?;
-
-    if proposal_metadata.ended {
-        msg!("[Dao::Vote] Error: Proposal ended: {:?}", params.proposal_bulla);
-        return Err(DaoError::ProposalEnded.into())
-    }
 
     // Check the Merkle root and nullifiers for the input coins are valid
     let money_nullifier_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIERS_TREE)?;

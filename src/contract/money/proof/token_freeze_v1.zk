@@ -2,26 +2,26 @@ k = 13;
 field = "pallas";
 
 constant "TokenFreeze_V1" {
-	EcFixedPointBase NULLIFIER_K,
+    EcFixedPointBase NULLIFIER_K,
 }
 
 witness "TokenFreeze_V1" {
-	# Token mint authority secret
-	Base mint_authority,
+    # Token mint authority secret
+    Base mint_authority,
 }
 
 circuit "TokenFreeze_V1" {
-	# TokenID derivation path (See darkfi_sdk::crypto::ContractId)
-	derivation_path = witness_base(69);
+    # TokenID derivation path (See darkfi_sdk::crypto::ContractId)
+    derivation_path = witness_base(69);
 
-	# Derive public key for the mint authority
-	mint_public = ec_mul_base(mint_authority, NULLIFIER_K);
-	mint_x = ec_get_x(mint_public);
-	mint_y = ec_get_y(mint_public);
-	constrain_instance(mint_x);
-	constrain_instance(mint_y);
+    # Derive public key for the mint authority
+    mint_public = ec_mul_base(mint_authority, NULLIFIER_K);
+    mint_x = ec_get_x(mint_public);
+    mint_y = ec_get_y(mint_public);
+    constrain_instance(mint_x);
+    constrain_instance(mint_y);
 
-	# Derive the token ID
-	token_id = poseidon_hash(derivation_path, mint_x, mint_y);
-	constrain_instance(token_id);
+    # Derive the token ID
+    token_id = poseidon_hash(derivation_path, mint_x, mint_y);
+    constrain_instance(token_id);
 }

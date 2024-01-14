@@ -33,7 +33,7 @@ use log::debug;
 use rand::rngs::OsRng;
 
 use super::{TransferCallInput, TransferCallOutput};
-use crate::model::{Coin, CoinParams};
+use crate::model::{Coin, CoinAttributes, NullifierAttributes};
 
 pub struct TransferMintRevealed {
     pub coin: Coin,
@@ -90,12 +90,10 @@ pub fn create_transfer_burn_proof(
     token_blind: pallas::Base,
     signature_secret: SecretKey,
 ) -> Result<(Proof, TransferBurnRevealed)> {
-    let nullifier = Nullifier::from(poseidon_hash([input.secret.inner(), input.note.serial]));
     let public_key = PublicKey::from_secret(input.secret);
-
     let signature_public = PublicKey::from_secret(signature_secret);
 
-    let coin = CoinParams {
+    let coin = CoinAttributes {
         public_key,
         value: input.note.value,
         token_id: input.note.token_id,
@@ -104,6 +102,8 @@ pub fn create_transfer_burn_proof(
         user_data: input.note.user_data,
     }
     .to_coin();
+
+    let nullifier = NullifierAttributes { secret_key: input.secret, coin }.to_nullifier();
 
     let merkle_root = {
         let position: u64 = input.leaf_position.into();
@@ -169,7 +169,7 @@ pub fn create_transfer_mint_proof(
     let token_commit = poseidon_hash([output.token_id.inner(), token_blind]);
     let (pub_x, pub_y) = output.public_key.xy();
 
-    let coin = CoinParams {
+    let coin = CoinAttributes {
         public_key: output.public_key,
         value: output.value,
         token_id: output.token_id,

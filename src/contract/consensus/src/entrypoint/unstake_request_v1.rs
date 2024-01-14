@@ -25,6 +25,7 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, ContractId, MerkleNode},
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     merkle_add, msg,
@@ -44,9 +45,9 @@ use crate::{
 pub(crate) fn consensus_unstake_request_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: ConsensusUnstakeReqParamsV1 = deserialize(&self_.data[1..])?;
     let input = &params.input;
     let output = &params.output;
@@ -100,9 +101,9 @@ pub(crate) fn consensus_unstake_request_get_metadata_v1(
 pub(crate) fn consensus_unstake_request_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: ConsensusUnstakeReqParamsV1 = deserialize(&self_.data[1..])?;
     let input = &params.input;
     let output = &params.output;
@@ -183,8 +184,8 @@ pub(crate) fn consensus_unstake_request_process_update_v1(
     merkle_add(
         info_db,
         unstaked_coin_roots_db,
-        &serialize(&CONSENSUS_CONTRACT_UNSTAKED_COIN_LATEST_COIN_ROOT),
-        &serialize(&CONSENSUS_CONTRACT_UNSTAKED_COIN_MERKLE_TREE),
+        CONSENSUS_CONTRACT_UNSTAKED_COIN_LATEST_COIN_ROOT,
+        CONSENSUS_CONTRACT_UNSTAKED_COIN_MERKLE_TREE,
         &coins,
     )?;
 

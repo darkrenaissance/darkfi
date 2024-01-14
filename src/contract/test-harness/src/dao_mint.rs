@@ -18,9 +18,14 @@
 
 use std::time::Instant;
 
-use darkfi::{tx::Transaction, Result};
+use darkfi::{
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    Result,
+};
 use darkfi_dao_contract::{
-    client, client::DaoInfo, model::DaoMintParams, DaoFunction, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
+    client,
+    model::{Dao, DaoMintParams},
+    DaoFunction, DAO_CONTRACT_ZKAS_DAO_MINT_NS,
 };
 use darkfi_sdk::{
     crypto::{Keypair, MerkleNode, DAO_CONTRACT_ID},
@@ -34,7 +39,7 @@ use super::{Holder, TestHarness, TxAction};
 impl TestHarness {
     pub fn dao_mint(
         &mut self,
-        dao_info: &DaoInfo,
+        dao_info: &Dao,
         dao_kp: &Keypair,
     ) -> Result<(Transaction, DaoMintParams)> {
         let (dao_mint_pk, dao_mint_zkbin) =
@@ -48,9 +53,9 @@ impl TestHarness {
 
         let mut data = vec![DaoFunction::Mint as u8];
         params.encode(&mut data)?;
-        let calls = vec![ContractCall { contract_id: *DAO_CONTRACT_ID, data }];
-        let proofs = vec![proofs];
-        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
+        let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
+        let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &[dao_kp.secret])?;
         tx.signatures = vec![sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());

@@ -9,7 +9,7 @@ license = "AGPL-3.0-only"
 edition = "2021"
 
 [dependencies]
-async-trait = "0.1.74"
+async-trait = "0.1.77"
 blake3 = "1.5.0"
 darkfi = {path = "../../../", features = ["dht"]}
 darkfi-serial = {path = "../../../src/serial", features = ["derive", "crypto"]}

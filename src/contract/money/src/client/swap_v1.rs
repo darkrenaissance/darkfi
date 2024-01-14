@@ -119,9 +119,10 @@ impl SwapCallBuilder {
         };
 
         let output = TransferCallOutput {
+            public_key: self.pubkey,
             value: self.value_recv,
             token_id: self.token_id_recv,
-            public_key: self.pubkey,
+            serial: pallas::Base::random(&mut OsRng),
             spend_hook: pallas::Base::ZERO,
             user_data: pallas::Base::ZERO,
         };

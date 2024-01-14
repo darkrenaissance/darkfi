@@ -18,7 +18,11 @@
 
 use std::time::Instant;
 
-use darkfi::{tx::Transaction, zk::halo2::Field, Result};
+use darkfi::{
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    zk::halo2::Field,
+    Result,
+};
 use darkfi_consensus_contract::{
     client::genesis_stake_v1::ConsensusGenesisStakeCallBuilder,
     model::ConsensusGenesisStakeParamsV1, ConsensusFunction,
@@ -72,9 +76,11 @@ impl TestHarness {
         let mut data = vec![ConsensusFunction::GenesisStakeV1 as u8];
         genesis_stake_params.encode(&mut data)?;
         let contract_call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
-        let calls = vec![contract_call];
-        let proofs = vec![genesis_stake_proofs];
-        let mut genesis_stake_tx = Transaction { calls, proofs, signatures: vec![] };
+        let mut genesis_stake_tx_builder = TransactionBuilder::new(
+            ContractCallLeaf { call: contract_call, proofs: genesis_stake_proofs },
+            vec![],
+        )?;
+        let mut genesis_stake_tx = genesis_stake_tx_builder.build()?;
         let sigs = genesis_stake_tx.create_sigs(&mut OsRng, &[wallet.keypair.secret])?;
         genesis_stake_tx.signatures = vec![sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());

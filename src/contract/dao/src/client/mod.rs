@@ -21,17 +21,14 @@ pub use mint::{make_mint_call, DaoInfo};
 
 /// Provides core structs for DAO::propose()
 ///
-/// * `DaoProposalInfo` is the main info about the proposal.
 /// * `DaoProposeStakeInput` are the staking inputs used to meet the `proposer_limit` threshold.
 /// * `DaoProposeCall` is what creates the call data used on chain.
-/// * `DaoProposeNote` is the secret shared info transmitted between DAO members.
 pub mod propose;
-pub use propose::{DaoProposalInfo, DaoProposeCall, DaoProposeNote, DaoProposeStakeInput};
+pub use propose::{DaoProposeCall, DaoProposeStakeInput};
 
 /// Provides core structs for DAO::vote()
 ///
-/// * `DaoVoteInfo` is the main info about the vote.
-/// * `DaoVoteStakeInput` are the staking inputs used in actual voting.
+/// * `DaoVoteInput` are the inputs used in actual voting.
 /// * `DaoVoteCall` is what creates the call data used on chain.
 /// * `DaoVoteNote` is the secret shared info transmitted between DAO members.
 pub mod vote;
@@ -39,6 +36,9 @@ pub use vote::{DaoVoteCall, DaoVoteInput, DaoVoteNote};
 
 pub mod exec;
 pub use exec::DaoExecCall;
+
+pub mod auth_xfer;
+pub use auth_xfer::DaoAuthMoneyTransferCall;
 
 // Wallet SQL table constant names. These have to represent the SQL schema.
 pub const DAO_DAOS_TABLE: &str = "dao_daos";

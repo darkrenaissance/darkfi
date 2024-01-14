@@ -13,7 +13,10 @@ autojoin = ["#dev", "#test"]
 ## P2P net settings
 [net]
 ## Connection slots
-outbound_connections = 3
+outbound_connections = 8
+
+## Inbound connection slots
+inbound_connections = 8
 
 inbound = ["tcp://127.0.0.1:25555"]
 
@@ -28,6 +31,8 @@ seeds = ["tcp://127.0.0.1:25551"]
 allowed_transports = ["tcp"]
 
 localnet = true
+
+channel_handshake_timeout = 25
 #
 # [channel."#dev"]
 # topic = "DarkFi Development HQ"

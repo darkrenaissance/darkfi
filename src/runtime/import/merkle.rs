@@ -115,7 +115,10 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
                 }
             };
 
-            // TODO: Ensure we've read the entire buffer above.
+            if buf_reader.position() != (len as u64) {
+                error!(target: "runtime::merkle", "Mismatch between given length, and cursor length");
+                return -2
+            }
 
             // Read the current tree
             let ret = match env
@@ -205,8 +208,10 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
                 //assert_eq!(root_index.len(), 4);
                 debug!(target: "runtime::merkle", "Appending Merkle root to db: {:?}", root);
                 let root_value: Vec<u8> = serialize(root);
-                // FIXME: This assert can be used to DoS nodes from contracts
-                assert_eq!(root_value.len(), 32);
+                if root_value.len() != 32 {
+                    error!(target: "runtime::merkle", "Couldn't serialize root value");
+                    return -2
+                }
                 if overlay.insert(&db_roots.tree, &root_value, &[]).is_err() {
                     error!(target: "runtime::merkle", "Couldn't insert to db_roots tree");
                     return -2

@@ -48,8 +48,8 @@ fi
 exit 0
 ```
 
-Place this script in `.git/hooks/pre-commit` and make sure it's
-executable by running `chmod +x .git/hooks/pre-commit`.
+Inside the darkfi project repo, place this script in `.git/hooks/pre-commit`
+and make sure it's executable by running `chmod +x .git/hooks/pre-commit`.
 
 
 ## Testing crate features

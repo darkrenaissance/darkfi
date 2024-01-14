@@ -18,9 +18,9 @@
 
 use darkfi_sdk::{
     crypto::ContractId,
+    dark_tree::DarkLeaf,
     db::{db_init, db_lookup, db_set, zkas_db_set},
-    error::{ContractError, ContractResult},
-    msg,
+    error::ContractResult,
     util::set_return_data,
     ContractCall,
 };
@@ -52,7 +52,7 @@ darkfi_sdk::define_contract!(
 /// with initial data if necessary.
 fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // Set up the zkas circuit tree
-    let derive_cid_bincode = include_bytes!("../proof/derive_contract_id.zk");
+    let derive_cid_bincode = include_bytes!("../proof/derive_contract_id.zk.bin");
     zkas_db_set(&derive_cid_bincode[..])?;
 
     // Set up a database tree for arbitrary data
@@ -68,11 +68,7 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     }
 
     // Update db version
-    db_set(
-        info_db,
-        &serialize(&DEPLOY_CONTRACT_DB_VERSION),
-        &serialize(&env!("CARGO_PKG_VERSION")),
-    )?;
+    db_set(info_db, DEPLOY_CONTRACT_DB_VERSION, &serialize(&env!("CARGO_PKG_VERSION")))?;
 
     Ok(())
 }
@@ -81,45 +77,31 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
 /// for verifying signatures and zk proofs. The payload given here are all the
 /// contract calls in the transaction.
 fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let (call_idx, calls): (u32, Vec<ContractCall>) = deserialize(ix)?;
-    if call_idx >= calls.len() as u32 {
-        msg!("Error: call_idx >= calls.len()");
-        return Err(ContractError::Internal)
-    }
+    let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
+    let self_ = &calls[call_idx as usize].data;
+    let func = DeployFunction::try_from(self_.data[0])?;
 
-    match DeployFunction::try_from(calls[call_idx as usize].data[0])? {
-        DeployFunction::DeployV1 => {
-            let metadata = deploy_get_metadata_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
-        }
+    let metadata = match func {
+        DeployFunction::DeployV1 => deploy_get_metadata_v1(cid, call_idx, calls)?,
+        DeployFunction::LockV1 => lock_get_metadata_v1(cid, call_idx, calls)?,
+    };
 
-        DeployFunction::LockV1 => {
-            let metadata = lock_get_metadata_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&metadata)?)
-        }
-    }
+    set_return_data(&metadata)
 }
 
 /// This function verifies a state transition and produces a state update
 /// if everything is successful.
 fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
-    let (call_idx, calls): (u32, Vec<ContractCall>) = deserialize(ix)?;
-    if call_idx >= calls.len() as u32 {
-        msg!("Error: call_idx >= calls.len()");
-        return Err(ContractError::Internal)
-    }
+    let (call_idx, calls): (u32, Vec<DarkLeaf<ContractCall>>) = deserialize(ix)?;
+    let self_ = &calls[call_idx as usize].data;
+    let func = DeployFunction::try_from(self_.data[0])?;
 
-    match DeployFunction::try_from(calls[call_idx as usize].data[0])? {
-        DeployFunction::DeployV1 => {
-            let update_data = deploy_process_instruction_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&update_data)?)
-        }
+    let update_data = match func {
+        DeployFunction::DeployV1 => deploy_process_instruction_v1(cid, call_idx, calls)?,
+        DeployFunction::LockV1 => lock_process_instruction_v1(cid, call_idx, calls)?,
+    };
 
-        DeployFunction::LockV1 => {
-            let update_data = lock_process_instruction_v1(cid, call_idx, calls)?;
-            Ok(set_return_data(&update_data)?)
-        }
-    }
+    set_return_data(&update_data)
 }
 
 /// This function attempts to write a given state update provided the previous

@@ -47,6 +47,7 @@ const MEMORY: &str = "memory";
 /// Gas limit for a contract
 const GAS_LIMIT: u64 = 400_000_000;
 
+// ANCHOR: contract-section
 #[derive(Clone, Copy, PartialEq)]
 pub enum ContractSection {
     /// Setup function of a contract
@@ -60,6 +61,7 @@ pub enum ContractSection {
     /// Placeholder state before any initialization
     Null,
 }
+// ANCHOR_END: contract-section
 
 impl ContractSection {
     pub const fn name(&self) -> &str {
@@ -303,21 +305,6 @@ impl Runtime {
         Ok(Self { instance, store, ctx })
     }
 
-    /// Perform a sanity check of the WASM bincode. In particular, ensure that it contains
-    /// all the necessary symbols for executing contracts, including sections for
-    /// Deploy, Exec, Update, and Metadata.
-    pub fn sanity_check(&self) -> Result<()> {
-        debug!(target: "runtime::vm_runtime", "Performing sanity check on wasm bincode");
-
-        // Check that we have all the necessary symbols;
-        let _ = self.instance.exports.get_function(ContractSection::Deploy.name())?;
-        let _ = self.instance.exports.get_function(ContractSection::Exec.name())?;
-        let _ = self.instance.exports.get_function(ContractSection::Update.name())?;
-        let _ = self.instance.exports.get_function(ContractSection::Metadata.name())?;
-
-        Ok(())
-    }
-
     /// Call a contract method defined by a [`ContractSection`] using a supplied
     /// payload. Returns a Vector of bytes corresponding to the result data of the call.
     /// For calls that do not return any data, an empty Vector is returned.
@@ -450,7 +437,7 @@ impl Runtime {
             db_handles.push(DbHandle::new(env_mut.contract_id, zkas_tree_handle));
         }
 
-        debug!(target: "runtime::vm_runtime", "[wasm-runtime] payload: {:?}", payload);
+        //debug!(target: "runtime::vm_runtime", "[wasm-runtime] payload: {:?}", payload);
         let _ = self.call(ContractSection::Deploy, payload)?;
 
         // Update the wasm bincode in the WasmStore
@@ -504,7 +491,7 @@ impl Runtime {
 
     /// Calculate the remaining gas using wasm's concept
     /// of metering points.
-    fn gas_used(&mut self) -> u64 {
+    pub fn gas_used(&mut self) -> u64 {
         let remaining_points = get_remaining_points(&mut self.store, &self.instance);
 
         match remaining_points {
@@ -555,7 +542,7 @@ impl Runtime {
 
     /// Copy payload to the start of the memory
     fn copy_to_memory(&self, payload: &[u8]) -> Result<()> {
-        // TODO: Maybe should write to first zero memory and return the pointer/offset?
+        // Payload is copied to index 0.
         // Get the memory view
         let env = self.ctx.as_ref(&self.store);
         let memory_view = env.memory_view(&self.store);

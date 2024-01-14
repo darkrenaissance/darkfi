@@ -18,7 +18,10 @@
 
 use std::time::Instant;
 
-use darkfi::{tx::Transaction, Result};
+use darkfi::{
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    Result,
+};
 use darkfi_money_contract::{
     client::genesis_mint_v1::GenesisMintCallBuilder, model::MoneyTokenMintParamsV1, MoneyFunction,
     MONEY_CONTRACT_ZKAS_MINT_NS_V1,
@@ -66,9 +69,10 @@ impl TestHarness {
 
         let mut data = vec![MoneyFunction::GenesisMintV1 as u8];
         debris.params.encode(&mut data)?;
-        let calls = vec![ContractCall { contract_id: *MONEY_CONTRACT_ID, data }];
-        let proofs = vec![debris.proofs];
-        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
+        let mut tx_builder =
+            TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
+        let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &[wallet.keypair.secret])?;
         tx.signatures = vec![sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());

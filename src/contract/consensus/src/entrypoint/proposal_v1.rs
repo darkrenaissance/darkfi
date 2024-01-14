@@ -25,6 +25,7 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     blockchain::Slot,
     crypto::{pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode},
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     merkle_add, msg,
@@ -47,9 +48,9 @@ use crate::{
 pub(crate) fn consensus_proposal_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: ConsensusProposalParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -150,9 +151,9 @@ pub(crate) fn consensus_proposal_get_metadata_v1(
 pub(crate) fn consensus_proposal_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: ConsensusProposalParamsV1 = deserialize(&self_.data[1..])?;
     let input = &params.input;
     let output = &params.output;
@@ -239,8 +240,8 @@ pub(crate) fn consensus_proposal_process_update_v1(
     merkle_add(
         info_db,
         staked_coin_roots_db,
-        &serialize(&CONSENSUS_CONTRACT_STAKED_COIN_LATEST_COIN_ROOT),
-        &serialize(&CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE),
+        CONSENSUS_CONTRACT_STAKED_COIN_LATEST_COIN_ROOT,
+        CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE,
         &coins,
     )?;
 

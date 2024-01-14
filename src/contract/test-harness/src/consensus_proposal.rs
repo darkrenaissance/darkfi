@@ -18,7 +18,10 @@
 
 use std::time::Instant;
 
-use darkfi::{tx::Transaction, Result};
+use darkfi::{
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    Result,
+};
 use darkfi_consensus_contract::{
     client::proposal_v1::ConsensusProposalCallBuilder,
     model::{ConsensusProposalParamsV1, REWARD},
@@ -78,10 +81,8 @@ impl TestHarness {
         let mut data = vec![ConsensusFunction::ProposalV1 as u8];
         params.encode(&mut data)?;
         let call = ContractCall { contract_id: *CONSENSUS_CONTRACT_ID, data };
-
-        let calls = vec![call];
-        let proofs = vec![proofs];
-        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
+        let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &[signature_secret_key])?;
         tx.signatures = vec![sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());

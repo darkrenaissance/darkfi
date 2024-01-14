@@ -22,15 +22,6 @@ use darkfi_serial::async_trait;
 use darkfi_sdk::crypto::{ContractId, PublicKey};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 
-/// Parameters for `Deploy::Deploy`
-#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-pub struct DeployParamsV1 {
-    /// Webassembly bincode of the smart contract
-    pub wasm_bincode: Vec<u8>,
-    /// Public key used to sign the transaction and derive the `ContractId`
-    pub public_key: PublicKey,
-}
-
 /// State update for `Deploy::Deploy`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct DeployUpdateV1 {

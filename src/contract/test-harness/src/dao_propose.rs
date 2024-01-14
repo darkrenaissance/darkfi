@@ -18,15 +18,19 @@
 
 use std::time::Instant;
 
-use darkfi::{tx::Transaction, Result};
-use darkfi_dao_contract::{
-    client::{DaoInfo, DaoProposalInfo, DaoProposeCall, DaoProposeStakeInput},
-    model::{DaoBulla, DaoProposeParams},
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
+use darkfi::{
+    tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    Result,
 };
-use darkfi_money_contract::client::OwnCoin;
+use darkfi_dao_contract::{
+    client::{DaoProposeCall, DaoProposeStakeInput},
+    model::{Dao, DaoAuthCall, DaoBulla, DaoProposal, DaoProposeParams},
+    slot_to_day, DaoFunction, DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS,
+    DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
+};
+use darkfi_money_contract::{client::OwnCoin, model::CoinAttributes, MoneyFunction};
 use darkfi_sdk::{
-    crypto::{pasta_prelude::Field, MerkleNode, SecretKey, TokenId, DAO_CONTRACT_ID},
+    crypto::{pasta_prelude::Field, MerkleNode, SecretKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
     pasta::pallas,
     ContractCall,
 };
@@ -39,12 +43,11 @@ impl TestHarness {
     pub fn dao_propose(
         &mut self,
         proposer: &Holder,
-        recipient: &Holder,
-        amount: u64,
-        tx_token_id: TokenId,
-        dao: &DaoInfo,
+        proposal_coinattrs: &Vec<CoinAttributes>,
+        user_data: pallas::Base,
+        dao: &Dao,
         dao_bulla: &DaoBulla,
-    ) -> Result<(Transaction, DaoProposeParams, DaoProposalInfo)> {
+    ) -> Result<(Transaction, DaoProposeParams, DaoProposal)> {
         let wallet = self.holders.get(proposer).unwrap();
 
         let (dao_propose_burn_pk, dao_propose_burn_zkbin) =
@@ -74,10 +77,34 @@ impl TestHarness {
             signature_secret,
         };
 
-        let proposal = DaoProposalInfo {
-            dest: self.holders.get(recipient).unwrap().keypair.public,
-            amount,
-            token_id: tx_token_id,
+        // Convert coin_params to actual coins
+        let mut proposal_coins = vec![];
+        for coin_params in proposal_coinattrs {
+            proposal_coins.push(coin_params.to_coin());
+        }
+        let mut proposal_data = vec![];
+        proposal_coins.encode(&mut proposal_data).unwrap();
+
+        let auth_calls = vec![
+            DaoAuthCall {
+                contract_id: DAO_CONTRACT_ID.inner(),
+                function_code: DaoFunction::AuthMoneyTransfer as u8,
+                auth_data: proposal_data,
+            },
+            DaoAuthCall {
+                contract_id: MONEY_CONTRACT_ID.inner(),
+                function_code: MoneyFunction::TransferV1 as u8,
+                auth_data: vec![],
+            },
+        ];
+
+        let creation_day = slot_to_day(wallet.validator.consensus.time_keeper.verifying_slot);
+        let proposal = DaoProposal {
+            auth_calls,
+            creation_day,
+            duration_days: 30,
+            user_data,
+            dao_bulla: dao.to_bulla(),
             blind: pallas::Base::random(&mut OsRng),
         };
 
@@ -102,9 +129,9 @@ impl TestHarness {
 
         let mut data = vec![DaoFunction::Propose as u8];
         params.encode(&mut data)?;
-        let calls = vec![ContractCall { contract_id: *DAO_CONTRACT_ID, data }];
-        let proofs = vec![proofs];
-        let mut tx = Transaction { calls, proofs, signatures: vec![] };
+        let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
+        let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
+        let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &[signature_secret])?;
         tx.signatures = vec![sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());

@@ -22,7 +22,7 @@ setup_mac() {
 }
 
 setup_apt() {
-	apt_deps="git cmake make gcc g++ pkg-config libasound2-dev libclang-dev libssl-dev libsqlcipher-dev libsqlite3-dev"
+	apt_deps="git cmake make gcc g++ pkg-config libasound2-dev libclang-dev libssl-dev libsqlcipher-dev libsqlite3-dev wabt"
 	$1 install $apt_deps || return 1
 }
 
@@ -32,7 +32,7 @@ setup_pacman() {
 }
 
 setup_xbps() {
-	xbps_deps="git make gcc pkg-config alsa-lib-devel openssl-devel sqlcipher-devel"
+	xbps_deps="git make gcc pkg-config alsa-lib-devel openssl-devel sqlcipher-devel wabt"
 	$1 -S $xbps_deps || return 1
 }
 

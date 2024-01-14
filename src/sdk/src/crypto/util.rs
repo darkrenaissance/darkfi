@@ -42,6 +42,11 @@ pub fn mod_r_p(x: pallas::Base) -> pallas::Scalar {
 
 /// Wrapper around poseidon in `halo2_gadgets`
 pub fn poseidon_hash<const N: usize>(messages: [pallas::Base; N]) -> pallas::Base {
+    // TODO: it's possible to make this function simply take a slice, by using the lower level
+    // sponge defined in halo2 lib. Simply look how the function hash() is defined.
+    // Why is this needed? Simply put we are often working with dynamic data such as Python
+    // or with other interpreted environments. We don't always know the length of input data
+    // at compile time.
     poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<N>, 3, 2>::init()
         .hash(messages)
 }

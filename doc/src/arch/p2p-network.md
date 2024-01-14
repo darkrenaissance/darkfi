@@ -131,12 +131,22 @@ routing tables is a kind of decentralized lilith which keeps track of all the sw
 
 Possibly a post-mainnet feature depending on the scale of architectural changes or new code required in the net submodule.
 
+## Scoring Subsystem
+
+Connections should maintain a scoring system. Protocols can increment the score.
+
+The score backs off exponentially. If the watermark is crossed then the
+connection is dropped.
+
+Since the reader in `messages.rs` preallocs buffers, there should be a hard
+limit here, and the raw reads also affects your score too.
+
 ## Proposed update
 
 ### Monero p2p recap
 
-In Monero, each node maintains a peer list consisting of two parts,
-a whitelist and a greylist. White/ greylists contain a `last_seen`
+In Monero, each node maintains a host list consisting of two parts,
+a whitelist and a greylist. Host lists contain a `last_seen`
 data field, a timestamp of the last time the peer was interacted with.
 
 The lists are ordered chronologically according to `last_seen`, with the
@@ -177,38 +187,28 @@ least two anchor nodes.
 
 * Refactor `src/hosts.rs` to store two `Vec<(Url, u64)>` instead of single
 `Hashset<Url>`, replacing the host list and its associated methods with
-a whitelist and a greylist. [STATUS: COMPLETE/ TESTING]
+a whitelist and a greylist. [STATUS: COMPLETE]
 
-* Create a `GreylistRefinery` protocol in `OutboundSession` (renamed from
-Monero's "greylist housekeeping" for succinctness) that periodically
-selects random peers from its greylist and pings them. If a peer is
-responsive, update the `last_seen` field and add it to the whitelist,
-otherwise remove it from the greylist. [STATUS: COMPLETE/ TESTING]
+* Create a `GreylistRefinery` protocol (renamed from Monero's "greylist
+housekeeping" for succinctness) that periodically selects random peers
+from its greylist and pings them. If a peer is responsive, update the
+`last_seen` field and add it to the whitelist, otherwise remove it from
+the greylist. [STATUS: COMPLETE]
 
-* `lilith` currently checks connections on the host list using a method
-called `periodic_purge` that gets hosts from the host list, copies them to
-a local ring buffer, and periodically handshakes the connections. If the
-handshake fails, `lilith` removes the host from the hostlist. This protocol
-has been replaced by a method called `whitelist_cleansing`. Like the
-prior method, `whitelist_cleansing` pulls connections from the whitelist,
-copies them to a ring buffer and handshakes them periodically. If they
-respond, the `last_seen` is updated, otherwise nothing happens. This is
-loosely based on Monero's `IDLE_HANDSHAKE` protocol. [STATUS: COMPLETE/
-REEVALUATE/ TESTING]
-
-* `ProtocolAddress`: On receiving an address, append it to the greylist. On
-receiving `get_addr`, fetch an address from the whitelist. [STATUS: COMPLETE/
-TESTING].
+* `ProtocolAddress`: On receiving an address, append it to the
+greylist. On receiving `get_addr`, fetch an address from the
+whitelist. [STATUS: COMPLETE].
 
 * `SeedSyncSession`: on receiving whitelisted peers, append them to
-greylist. [STATUS: INCOMPLETE/ FIXME]
+greylist. [STATUS: COMPLETE]
 
 * `ProtocolSeed`: Send our address to the seed node, and on receiving
-addresses, append them to the whitelist. [STATUS: INCOMPLETE/ FIXME]
+addresses, append them to the whitelist. [STATUS: COMPLETE]
 
 * Create a new list in `hosts.rs` called `anchorlist`. `OutboundSession`
 first tries to connect to address in the `anchorlist` on `start()`. [STATUS:
-TODO]
+COMPLETE]
 
-* Potentially create a new Protocol to send the top 250 nodes from the
-whitelist (Monero `SYN` exchange). [STATUS: TODO/ EVALUATE]
+* Call ping_node() on idle connections. If they do not respond, drop the
+associated connection and select a new peer from the whitelist. [STATUS:
+EVALUATE]

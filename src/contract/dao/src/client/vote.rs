@@ -16,6 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_money_contract::model::CoinAttributes;
 use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
@@ -30,13 +31,12 @@ use log::debug;
 use rand::rngs::OsRng;
 
 use darkfi::{
-    zk::{halo2, Proof, ProvingKey, Witness, ZkCircuit},
+    zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
 
-use super::{DaoInfo, DaoProposalInfo};
-use crate::model::{DaoProposalBulla, DaoVoteParams, DaoVoteParamsInput};
+use crate::model::{Dao, DaoProposal, DaoVoteParams, DaoVoteParamsInput, VecAuthCallCommit};
 
 #[derive(SerialEncodable, SerialDecodable)]
 pub struct DaoVoteNote {
@@ -61,8 +61,9 @@ pub struct DaoVoteCall {
     pub vote_option: bool,
     pub yes_vote_blind: pallas::Scalar,
     pub vote_keypair: Keypair,
-    pub proposal: DaoProposalInfo,
-    pub dao: DaoInfo,
+    pub proposal: DaoProposal,
+    pub dao: Dao,
+    pub current_day: u64,
 }
 
 impl DaoVoteCall {
@@ -95,37 +96,33 @@ impl DaoVoteCall {
             let leaf_pos: u64 = input.leaf_position.into();
 
             let prover_witnesses = vec![
-                Witness::Base(halo2::Value::known(input.secret.inner())),
-                Witness::Base(halo2::Value::known(note.serial)),
-                Witness::Base(halo2::Value::known(pallas::Base::from(0))),
-                Witness::Base(halo2::Value::known(pallas::Base::from(0))),
-                Witness::Base(halo2::Value::known(pallas::Base::from(note.value))),
-                Witness::Base(halo2::Value::known(note.token_id.inner())),
-                Witness::Scalar(halo2::Value::known(all_vote_blind)),
-                Witness::Base(halo2::Value::known(gov_token_blind)),
-                Witness::Uint32(halo2::Value::known(leaf_pos.try_into().unwrap())),
-                Witness::MerklePath(halo2::Value::known(
-                    input.merkle_path.clone().try_into().unwrap(),
-                )),
-                Witness::Base(halo2::Value::known(input.signature_secret.inner())),
+                Witness::Base(Value::known(input.secret.inner())),
+                Witness::Base(Value::known(note.serial)),
+                Witness::Base(Value::known(pallas::Base::ZERO)),
+                Witness::Base(Value::known(pallas::Base::ZERO)),
+                Witness::Base(Value::known(pallas::Base::from(note.value))),
+                Witness::Base(Value::known(note.token_id.inner())),
+                Witness::Scalar(Value::known(all_vote_blind)),
+                Witness::Base(Value::known(gov_token_blind)),
+                Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
+                Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
+                Witness::Base(Value::known(input.signature_secret.inner())),
             ];
 
             let public_key = PublicKey::from_secret(input.secret);
-            let (pub_x, pub_y) = public_key.xy();
-
-            let coin = poseidon_hash::<7>([
-                pub_x,
-                pub_y,
-                pallas::Base::from(note.value),
-                note.token_id.inner(),
-                note.serial,
-                pallas::Base::from(0),
-                pallas::Base::from(0),
-            ]);
+            let coin = CoinAttributes {
+                public_key,
+                value: note.value,
+                token_id: note.token_id,
+                serial: note.serial,
+                spend_hook: pallas::Base::ZERO,
+                user_data: pallas::Base::ZERO,
+            }
+            .to_coin();
 
             let merkle_root = {
                 let position: u64 = input.leaf_position.into();
-                let mut current = MerkleNode::from(coin);
+                let mut current = MerkleNode::from(coin.inner());
                 for (level, sibling) in input.merkle_path.iter().enumerate() {
                     let level = level as u8;
                     current = if position & (1 << level) == 0 {
@@ -137,10 +134,10 @@ impl DaoVoteCall {
                 current
             };
 
-            let token_commit = poseidon_hash::<2>([note.token_id.inner(), gov_token_blind]);
+            let token_commit = poseidon_hash([note.token_id.inner(), gov_token_blind]);
             assert_eq!(self.dao.gov_token_id, note.token_id);
 
-            let nullifier = poseidon_hash::<2>([input.secret.inner(), note.serial]);
+            let nullifier = poseidon_hash([input.secret.inner(), coin.inner()]);
 
             let vote_commit = pedersen_commitment_u64(note.value, all_vote_blind);
             let vote_commit_coords = vote_commit.to_affine().coordinates().unwrap();
@@ -172,38 +169,13 @@ impl DaoVoteCall {
             inputs.push(input);
         }
 
-        let token_commit = poseidon_hash::<2>([self.dao.gov_token_id.inner(), gov_token_blind]);
-
-        let (proposal_dest_x, proposal_dest_y) = self.proposal.dest.xy();
-
-        let proposal_amount = pallas::Base::from(self.proposal.amount);
+        let token_commit = poseidon_hash([self.dao.gov_token_id.inner(), gov_token_blind]);
 
         let dao_proposer_limit = pallas::Base::from(self.dao.proposer_limit);
         let dao_quorum = pallas::Base::from(self.dao.quorum);
         let dao_approval_ratio_quot = pallas::Base::from(self.dao.approval_ratio_quot);
         let dao_approval_ratio_base = pallas::Base::from(self.dao.approval_ratio_base);
-
         let (dao_pub_x, dao_pub_y) = self.dao.public_key.xy();
-
-        let dao_bulla = poseidon_hash::<8>([
-            dao_proposer_limit,
-            dao_quorum,
-            dao_approval_ratio_quot,
-            dao_approval_ratio_base,
-            self.dao.gov_token_id.inner(),
-            dao_pub_x,
-            dao_pub_y,
-            self.dao.bulla_blind,
-        ]);
-
-        let proposal_bulla = DaoProposalBulla::from(poseidon_hash::<6>([
-            proposal_dest_x,
-            proposal_dest_y,
-            proposal_amount,
-            self.proposal.token_id.inner(),
-            dao_bulla,
-            self.proposal.blind,
-        ]));
 
         let vote_option = self.vote_option as u64;
         assert!(vote_option == 0 || vote_option == 1);
@@ -215,40 +187,46 @@ impl DaoVoteCall {
         let all_vote_commit = pedersen_commitment_u64(all_vote_value, all_vote_blind);
         let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
 
+        let current_day = pallas::Base::from(self.current_day);
         let prover_witnesses = vec![
             // proposal params
-            Witness::Base(halo2::Value::known(proposal_dest_x)),
-            Witness::Base(halo2::Value::known(proposal_dest_y)),
-            Witness::Base(halo2::Value::known(proposal_amount)),
-            Witness::Base(halo2::Value::known(self.proposal.token_id.inner())),
-            Witness::Base(halo2::Value::known(self.proposal.blind)),
+            Witness::Base(Value::known(self.proposal.auth_calls.commit())),
+            Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_day))),
+            Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_days))),
+            Witness::Base(Value::known(self.proposal.user_data)),
+            Witness::Base(Value::known(self.proposal.blind)),
             // DAO params
-            Witness::Base(halo2::Value::known(dao_proposer_limit)),
-            Witness::Base(halo2::Value::known(dao_quorum)),
-            Witness::Base(halo2::Value::known(dao_approval_ratio_quot)),
-            Witness::Base(halo2::Value::known(dao_approval_ratio_base)),
-            Witness::Base(halo2::Value::known(self.dao.gov_token_id.inner())),
-            Witness::Base(halo2::Value::known(dao_pub_x)),
-            Witness::Base(halo2::Value::known(dao_pub_y)),
-            Witness::Base(halo2::Value::known(self.dao.bulla_blind)),
+            Witness::Base(Value::known(dao_proposer_limit)),
+            Witness::Base(Value::known(dao_quorum)),
+            Witness::Base(Value::known(dao_approval_ratio_quot)),
+            Witness::Base(Value::known(dao_approval_ratio_base)),
+            Witness::Base(Value::known(self.dao.gov_token_id.inner())),
+            Witness::Base(Value::known(dao_pub_x)),
+            Witness::Base(Value::known(dao_pub_y)),
+            Witness::Base(Value::known(self.dao.bulla_blind)),
             // Vote
-            Witness::Base(halo2::Value::known(pallas::Base::from(vote_option))),
-            Witness::Scalar(halo2::Value::known(self.yes_vote_blind)),
+            Witness::Base(Value::known(pallas::Base::from(vote_option))),
+            Witness::Scalar(Value::known(self.yes_vote_blind)),
             // Total number of gov tokens allocated
-            Witness::Base(halo2::Value::known(pallas::Base::from(all_vote_value))),
-            Witness::Scalar(halo2::Value::known(all_vote_blind)),
+            Witness::Base(Value::known(pallas::Base::from(all_vote_value))),
+            Witness::Scalar(Value::known(all_vote_blind)),
             // gov token
-            Witness::Base(halo2::Value::known(gov_token_blind)),
+            Witness::Base(Value::known(gov_token_blind)),
+            // time checks
+            Witness::Base(Value::known(current_day)),
         ];
+
+        assert_eq!(self.dao.to_bulla(), self.proposal.dao_bulla);
+        let proposal_bulla = self.proposal.to_bulla();
 
         let public_inputs = vec![
             token_commit,
             proposal_bulla.inner(),
-            // this should be a value commit??
             *yes_vote_commit_coords.x(),
             *yes_vote_commit_coords.y(),
             *all_vote_commit_coords.x(),
             *all_vote_commit_coords.y(),
+            current_day,
         ];
 
         let circuit = ZkCircuit::new(prover_witnesses, main_zkbin);

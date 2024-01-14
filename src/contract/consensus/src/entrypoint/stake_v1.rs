@@ -27,6 +27,7 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{pasta_prelude::*, ContractId, MerkleNode, PublicKey, MONEY_CONTRACT_ID},
+    dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
     merkle_add, msg,
@@ -42,9 +43,9 @@ use crate::ConsensusFunction;
 pub(crate) fn consensus_stake_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize];
+    let self_ = &calls[call_idx as usize].data;
     let params: ConsensusStakeParamsV1 = deserialize(&self_.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
@@ -79,37 +80,42 @@ pub(crate) fn consensus_stake_get_metadata_v1(
 pub(crate) fn consensus_stake_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
-    calls: Vec<ContractCall>,
+    calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize];
-    let params: ConsensusStakeParamsV1 = deserialize(&self_.data[1..])?;
+    let params: ConsensusStakeParamsV1 = deserialize(&self_.data.data[1..])?;
 
-    // Check previous call is money contract
-    // FIXME: This changes with Money::Fee
+    // Check child call is money contract
     if call_idx == 0 {
-        msg!("[ConsensusStakeV1] Error: previous_call_idx will be out of bounds");
+        msg!("[ConsensusStakeV1] Error: child_call_idx will be out of bounds");
         return Err(MoneyError::CallIdxOutOfBounds.into())
     }
 
-    // Verify previous call corresponds to Money::StakeV1
-    let previous_call_idx = call_idx - 1;
-    let previous = &calls[previous_call_idx as usize];
-    if previous.contract_id.inner() != MONEY_CONTRACT_ID.inner() {
-        msg!("[ConsensusStakeV1] Error: Previous contract call is not money contract");
-        return Err(MoneyError::StakePreviousCallNotMoneyContract.into())
+    let child_call_indexes = &self_.children_indexes;
+    if child_call_indexes.len() != 1 {
+        msg!("[ConsensusStakeV1] Error: child_call_idx is missing");
+        return Err(MoneyError::StakeChildCallNotMoneyContract.into())
+    }
+    let child_call_idx = child_call_indexes[0];
+
+    // Verify child call corresponds to Money::StakeV1
+    let child = &calls[child_call_idx].data;
+    if child.contract_id.inner() != MONEY_CONTRACT_ID.inner() {
+        msg!("[ConsensusStakeV1] Error: Child contract call is not money contract");
+        return Err(MoneyError::StakeChildCallNotMoneyContract.into())
     }
 
-    if previous.data[0] != MoneyFunction::StakeV1 as u8 {
-        msg!("[ConsensusStakeV1] Error: Previous call function mismatch");
-        return Err(MoneyError::PreviousCallFunctionMismatch.into())
+    if child.data[0] != MoneyFunction::StakeV1 as u8 {
+        msg!("[ConsensusStakeV1] Error: Child call function mismatch");
+        return Err(MoneyError::ChildCallFunctionMismatch.into())
     }
 
-    // Verify that the previous call's input is the same as this one's
-    let previous_params: MoneyStakeParamsV1 = deserialize(&previous.data[1..])?;
-    let previous_input = &previous_params.input;
-    if previous_input != &params.input {
-        msg!("[ConsensusStakeV1] Error: Previous call input mismatch");
-        return Err(MoneyError::PreviousCallInputMismatch.into())
+    // Verify that the child call's input is the same as this one's
+    let child_params: MoneyStakeParamsV1 = deserialize(&child.data[1..])?;
+    let child_input = &child_params.input;
+    if child_input != &params.input {
+        msg!("[ConsensusStakeV1] Error: Child call input mismatch");
+        return Err(MoneyError::ChildCallInputMismatch.into())
     }
 
     // Access the necessary databases where there is information to
@@ -187,8 +193,8 @@ pub(crate) fn consensus_stake_process_update_v1(
     merkle_add(
         info_db,
         staked_coin_roots_db,
-        &serialize(&CONSENSUS_CONTRACT_STAKED_COIN_LATEST_COIN_ROOT),
-        &serialize(&CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE),
+        CONSENSUS_CONTRACT_STAKED_COIN_LATEST_COIN_ROOT,
+        CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE,
         &coins,
     )?;
 
