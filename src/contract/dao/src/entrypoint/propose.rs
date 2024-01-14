@@ -18,6 +18,7 @@
 
 use darkfi_money_contract::{
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
+    MONEY_CONTRACT_NULLIFIERS_TREE,
 };
 use darkfi_sdk::{
     crypto::{contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, ContractId, MerkleNode, PublicKey},
@@ -71,6 +72,7 @@ pub(crate) fn dao_propose_get_metadata(
         zk_public_inputs.push((
             DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS.to_string(),
             vec![
+                input.nullifier.inner(),
                 *value_coords.x(),
                 *value_coords.y(),
                 params.token_commit,
@@ -113,12 +115,19 @@ pub(crate) fn dao_propose_process_instruction(
     let self_ = &calls[call_idx as usize].data;
     let params: DaoProposeParams = deserialize(&self_.data[1..])?;
 
-    // Check the Merkle roots for the input coins are valid
     let coin_roots_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
+    let money_nullifier_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIERS_TREE)?;
     for input in &params.inputs {
+        // Check the Merkle roots for the input coins are valid
         if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
             msg!("[Dao::Propose] Error: Invalid input Merkle root: {}", input.merkle_root);
             return Err(DaoError::InvalidInputMerkleRoot.into())
+        }
+
+        // Check the coins weren't already spent
+        if db_contains_key(money_nullifier_db, &serialize(&input.nullifier))? {
+            msg!("[Dao::Vote] Error: Coin is already spent");
+            return Err(DaoError::CoinAlreadySpent.into())
         }
     }
 

@@ -240,6 +240,7 @@ pub struct DaoProposeParams {
 // ANCHOR: dao-propose-input-params
 /// Input for a DAO proposal
 pub struct DaoProposeParamsInput {
+    pub nullifier: Nullifier,
     /// Value commitment for the input
     pub value_commit: pallas::Point,
     /// Merkle root for the input's inclusion proof
