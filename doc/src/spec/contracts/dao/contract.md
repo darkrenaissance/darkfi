@@ -74,6 +74,7 @@ $$ \begin{aligned}
 
 Define the DAO propose input function params
 $$ \begin{aligned}
+  \t{ProposeInput}.\cN &∈ 𝔽ₚ \\
   \t{ProposeInput}.V &∈ ℙₚ \\
   \t{ProposeInput}.R_\t{coin} &∈ 𝔽ₚ \\
   \t{ProposeInput}.\t{PK}_σ &∈ ℙₚ
@@ -129,11 +130,15 @@ claimed in the *proposer limit threshold met* check.
 
 For each input $i ∈ 𝐢$,
 
+&emsp; **Unused nullifier** &emsp; check that $\cN$ does not exist in the
+money contract nullifiers DB.
+
 &emsp; **Valid input coins merkle root** &emsp; check that $i.R_\t{coin}$ is a
 previously seen merkle root in the money contract merkle roots DB.
 
 &emsp; Let there be a prover auxiliary witness inputs:
 $$ \begin{aligned}
+  x_c &∈ 𝔽ₚ \\
   x_σ &∈ 𝔽ₚ \\
   c &∈ \t{Params}_\t{Coin} \\
   bᵥ &∈ 𝔽ᵥ \\
@@ -142,12 +147,13 @@ $$ \begin{aligned}
 \end{aligned} $$
 &emsp; Attach a proof $π_i$ such that the following relations hold:
 
+&emsp; **Nullifier integrity** &emsp; $\cN = \t{PoseidonHash}(x_c, C)$.
+
 &emsp; **Coin value commit** &emsp; $i.V = \t{PedersenCommit}(c.v, bᵥ)$.
 
 &emsp; **Token commit** &emsp; $T = \t{PoseidonHash}(c.τ, b_τ)$.
 
-&emsp; **Valid coin** &emsp; let $C = \t{Commit}(c)$. Check
-$i.R_\t{coin} = \t{MerkleRoot}(ψᵢ, Πᵢ, C)$.
+&emsp; **Valid coin** &emsp; Check $c.P = \t{DerivePubKey}(x_c)$. Let $C = \t{Commit}(c)$. Check $i.R_\t{coin} = \t{MerkleRoot}(ψᵢ, Πᵢ, C)$.
 
 &emsp; **Proof of signature public key ownership** &emsp; $i.\t{PK}_σ = \t{DerivePubKey}(x_σ)$.
 

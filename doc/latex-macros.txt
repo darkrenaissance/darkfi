@@ -2,4 +2,5 @@
 \hash:{\textrm{hash}}
 \t:{\textrm{#1}}
 \~:{\sim}
+\cN:{\mathcal{N}}
 

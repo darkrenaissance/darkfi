@@ -9,7 +9,7 @@ Let $ℙₚ, 𝔽ₚ, \mathcal{X}, \mathcal{Y}, \t{𝔹⁶⁴2𝔽ₚ}$ be defin
 The DAO contains the main parameters that define DAO operation:
 
 * The proposer limit $L$ is the minimum number of governance tokens of type
-  $T$ required to create a valid proposal on chain. Note this minimum can
+  $τ$ required to create a valid proposal on chain. Note this minimum can
   come from multiple token holders.
 * Quorum $Q$ specifies the absolute minimum number of tokens required for
   before a proposal can be accepted.
