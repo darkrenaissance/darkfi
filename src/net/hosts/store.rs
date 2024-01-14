@@ -404,59 +404,6 @@ impl Hosts {
         trace!(target: "store::anchorlist_store()", "[END]");
     }
 
-    //// Downgrade a non-responsive host.
-    //// TODO: it is perhaps more efficient simply to select another connection and allow
-    //// the greylist refinery process to filter address.
-    //pub async fn downgrade_host(&self, addr: &Url) -> Result<()> {
-    //    if self.anchorlist_contains(addr).await {
-    //        debug!(target: "net::store::downgrade_host()",
-    //               "Removing non responsive peer from anchorlist");
-
-    //        let index = self
-    //            .get_anchorlist_index_at_addr(addr.clone())
-    //            .await
-    //            .expect("Expected anchorlist index to exist");
-    //        let entry = self
-    //            .get_anchorlist_entry_at_addr(addr)
-    //            .await
-    //            .expect("Expected anchorlist entry to exist");
-
-    //        self.anchorlist_remove(addr, index).await;
-    //        self.greylist_store_or_update(&[entry]).await?;
-
-    //        Ok(())
-    //    } else if self.whitelist_contains(addr).await {
-    //        debug!(target: "net::store::downgrade_host()",
-    //               "Removing non responsive peer from whitelist");
-
-    //        let index = self
-    //            .get_whitelist_index_at_addr(addr.clone())
-    //            .await
-    //            .expect("Expected whitelist index to exist");
-    //        let entry = self
-    //            .get_whitelist_entry_at_addr(addr)
-    //            .await
-    //            .expect("Expected whitelist entry to exist");
-
-    //        self.whitelist_remove(addr, index).await;
-    //        self.greylist_store_or_update(&[entry]).await?;
-
-    //        Ok(())
-    //    } else {
-    //        debug!(target: "net::store::downgrade_host()",
-    //               "Removing non responsive peer from greylist");
-
-    //        let index = self
-    //            .get_greylist_index_at_addr(addr.clone())
-    //            .await
-    //            .expect("Expected greylist index to exist");
-
-    //        self.greylist_remove(addr, index).await;
-
-    //        Ok(())
-    //    }
-    //}
-
     /// Update the last_seen field of a peer on the greylist.
     pub async fn greylist_update_last_seen(&self, addr: &Url, last_seen: u64, index: usize) {
         trace!(target: "store::greylist_update_last_seen()", "[START]");
@@ -705,13 +652,6 @@ impl Hosts {
         self.is_empty_greylist().await &&
             self.is_empty_whitelist().await &&
             self.is_empty_anchorlist().await
-    }
-
-    /// Check whether this peer is in any of the hostlists.
-    async fn hostlist_contains(&self, addr: &Url) -> bool {
-        self.greylist_contains(addr).await |
-            self.whitelist_contains(addr).await |
-            self.anchorlist_contains(addr).await
     }
 
     /// Check if host is in the greylist
