@@ -205,8 +205,9 @@ pub struct MoneyFeeUpdateV1 {
     pub fee: u64,
 }
 
-/// Parameters for `Money::Transfer` and `Money::OtcSwap`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+// ANCHOR: money-params
+/// Parameters for `Money::Transfer` and `Money::OtcSwap`
 pub struct MoneyTransferParamsV1 {
     /// Clear inputs
     pub clear_inputs: Vec<ClearInput>,
@@ -215,6 +216,7 @@ pub struct MoneyTransferParamsV1 {
     /// Anonymous outputs
     pub outputs: Vec<Output>,
 }
+// ANCHOR_END: money-params
 
 /// State update for `Money::Transfer` and `Money::OtcSwap`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]

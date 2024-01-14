@@ -23,6 +23,7 @@ use darkfi_sdk::error::ContractError;
 
 /// Functions available in the contract
 #[repr(u8)]
+// ANCHOR: money-function
 pub enum MoneyFunction {
     FeeV1 = 0x00,
     GenesisMintV1 = 0x01,
@@ -34,6 +35,7 @@ pub enum MoneyFunction {
     UnstakeV1 = 0x07,
     PoWRewardV1 = 0x08,
 }
+// ANCHOR_END: money-function
 
 impl TryFrom<u8> for MoneyFunction {
     type Error = ContractError;
