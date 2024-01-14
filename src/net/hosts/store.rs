@@ -283,7 +283,7 @@ impl Hosts {
         let filtered_addrs = self.filter_addresses(addrs).await;
         let filtered_addrs_len = filtered_addrs.len();
         for (addr, last_seen) in filtered_addrs {
-            if !self.hostlist_contains(&addr).await {
+            if !self.greylist_contains(&addr).await {
                 debug!(target: "store::greylist_store_or_update()", "We do not have this entry in the hostlist. Adding to store...");
 
                 self.greylist_store(addr.clone(), last_seen.clone()).await;
@@ -915,7 +915,8 @@ impl Hosts {
                 ret.push((addr.clone(), *last_seen));
                 limit -= 1;
                 if limit == 0 {
-                    debug!(target: "deadlock", "Found matching grey scheme, returning");
+                    debug!(target: "deadlock", "Found matching grey scheme, returning len: {}", ret.len());
+
                     debug!(target: "store::greylist_fetch_with_schemes", "Found matching greylist entry, returning");
                     return ret
                 }
@@ -985,8 +986,8 @@ impl Hosts {
         trace!(target: "store::anchorlist_fetch_with_schemes", "[START]");
         let mut ret = vec![];
 
+        // Select from the anchorlist providing it's not empty.
         if !self.is_empty_anchorlist().await {
-            // Select from the anchorlist providing it's not empty.
             let anchorlist = self.anchorlist.read().await;
 
             let mut parsed_limit = match limit {
@@ -1017,14 +1018,13 @@ impl Hosts {
             }
         }
 
-        // Anchorlist is empty!
+        // Select from the whitelist providing it's not empty.
         if !self.is_empty_whitelist().await {
             return self.whitelist_fetch_with_schemes(schemes, limit).await
         }
 
-        // Whitelist is empty!
+        // Select from the greyist providing it's not empty.
         if !self.is_empty_greylist().await {
-            // Select from the greyist providing it's not empty.
             return self.greylist_fetch_with_schemes(schemes, limit).await
         }
 
