@@ -341,7 +341,7 @@ pub async fn verify_transaction(
     time_keeper: &TimeKeeper,
     tx: &Transaction,
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
-    verify_fee: bool, // FIXME: Remove this bool
+    verify_fee: bool,
 ) -> Result<u64> {
     let tx_hash = tx.hash()?;
     debug!(target: "validator::verification::verify_transaction", "Validating transaction {}", tx_hash);
@@ -366,30 +366,19 @@ pub async fn verify_transaction(
     let mut sig_table = vec![];
 
     if verify_fee {
-        // Verify that the first call is the transaction fee and that it has no parents or children.
-        let Some(fee_call_parent_index) = tx.calls[0].parent_index else {
-            error!(
-                target: "validator::verification::verify_transaction",
-                "[VALIDATOR] Fee call does not have parent index",
-            );
-            return Err(TxVerifyFailed::InvalidFee.into())
-        };
-
-        if fee_call_parent_index != tx.calls.len() - 1 ||
-            tx.calls[0].data.contract_id != *MONEY_CONTRACT_ID ||
-            tx.calls[0].data.data[0] != 0x00
-        {
-            error!(
-                target: "validator::verification::verify_transaction",
-                "[VALIDATOR] First tx call is not Money::Fee",
-            );
-            return Err(TxVerifyFailed::MissingFee.into())
+        let mut found_fee = false;
+        // Verify that there is a Money::FeeV1 (0x00) call in the transaction
+        for call in tx.calls.iter() {
+            if call.data.contract_id == *MONEY_CONTRACT_ID && call.data.data[0] == 0x00 {
+                found_fee = true;
+                break
+            }
         }
 
-        if !tx.calls[0].children_indexes.is_empty() {
+        if !found_fee {
             error!(
-                target: "validator::verification::verify_transaction",
-                "[VALIDATOR] Fee call invalid (has children)",
+                target: "validator::verification::verify_transcation",
+                "[VALIDATOR] Transaction {} does not contain fee payment call", tx_hash,
             );
             return Err(TxVerifyFailed::InvalidFee.into())
         }
@@ -428,7 +417,15 @@ pub async fn verify_transaction(
         let zkp_pub: Vec<(String, Vec<pallas::Base>)> =
             AsyncDecodable::decode_async(&mut decoder).await?;
         let sig_pub: Vec<PublicKey> = AsyncDecodable::decode_async(&mut decoder).await?;
-        // TODO: Make sure we've read all the bytes above.
+
+        if decoder.position() != metadata.len() as u64 {
+            error!(
+                target: "validator::verification::verify_transaction",
+                "[VALIDATOR] Failed decoding entire metadata buffer for {}:{}", tx_hash, idx,
+            );
+            return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
+        }
+
         debug!(target: "validator::verification::verify_transaction", "Successfully executed \"metadata\" call");
 
         // Here we'll look up verifying keys and insert them into the per-contract map.
@@ -537,7 +534,7 @@ pub async fn verify_transaction(
         if gas_used > fee {
             error!(
                 target: "validator::verification::verify_transaction",
-                "[VALIDATOR] tx {} has insufficient fee. Required: {}, Paid: {}",
+                "[VALIDATOR] Transaction {} has insufficient fee. Required: {}, Paid: {}",
                 tx_hash, gas_used, fee,
             );
             return Err(TxVerifyFailed::InsufficientFee.into())
