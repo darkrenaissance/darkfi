@@ -18,6 +18,7 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
+use darkfi_sdk::blockchain::expected_reward;
 use log::info;
 
 #[test]
@@ -51,7 +52,9 @@ fn money_integration() -> Result<()> {
             .await?;
         }
 
-        let _ = th.gather_owncoin(&Holder::Alice, &alice_proposal_params.output, None)?;
+        let alice_owncoin =
+            th.gather_owncoin(&Holder::Alice, &alice_proposal_params.output, None)?;
+        assert!(alice_owncoin.note.value == expected_reward(verification_slot));
 
         th.assert_trees(&HOLDERS);
         verification_slot += 1;
@@ -78,6 +81,8 @@ fn money_integration() -> Result<()> {
         th.assert_trees(&HOLDERS);
         verification_slot += 1;
         th.generate_slot(verification_slot).await?;
+
+        // Alice sends a payment of some DRK to Bob.
 
         // Statistics
         th.statistics();
