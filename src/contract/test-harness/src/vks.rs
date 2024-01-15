@@ -40,8 +40,8 @@ use darkfi_deployooor_contract::DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1;
 use darkfi_money_contract::{
     CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
     CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
-    MONEY_CONTRACT_ZKAS_MINT_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1,
-    MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
+    MONEY_CONTRACT_ZKAS_FEE_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::crypto::{
     contract_id::DEPLOYOOOR_CONTRACT_ID, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
@@ -50,8 +50,8 @@ use darkfi_serial::{deserialize, serialize};
 use log::debug;
 
 /// Update this if any circuits are changed
-const VKS_HASH: &str = "c863e90ea555cad8d1294ac95bd4600b86c16def186e6dc1b43de10cf0d6fd4b";
-const PKS_HASH: &str = "ea7017dd7eb2471604f04f8f1be78f0927ad1037009986d3b917680a61d323fc";
+const VKS_HASH: &str = "9d99da4cc2fa2882e5529bb6b24a965a815a2a22dc699d5e58ad17182e9f92a7";
+const PKS_HASH: &str = "83f2577d4036bd92c2502d11b7af5c37bbe350bc17f2a2cd96bd4b7e16e4cebf";
 
 fn pks_path(typ: &str) -> Result<PathBuf> {
     let output = Command::new("git").arg("rev-parse").arg("--show-toplevel").output()?.stdout;
@@ -118,6 +118,7 @@ pub fn read_or_gen_vks_and_pks() -> Result<(Pks, Vks)> {
 
     let bins = vec![
         // Money
+        &include_bytes!("../../money/proof/fee_v1.zk.bin")[..],
         &include_bytes!("../../money/proof/mint_v1.zk.bin")[..],
         &include_bytes!("../../money/proof/burn_v1.zk.bin")[..],
         &include_bytes!("../../money/proof/token_mint_v1.zk.bin")[..],
@@ -193,6 +194,7 @@ pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
     for (bincode, namespace, vk) in vks.iter() {
         match namespace.as_str() {
             // Money circuits
+            MONEY_CONTRACT_ZKAS_FEE_NS_V1 |
             MONEY_CONTRACT_ZKAS_MINT_NS_V1 |
             MONEY_CONTRACT_ZKAS_BURN_NS_V1 |
             MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1 |
