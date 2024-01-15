@@ -83,6 +83,20 @@ range. However increasing the size of $r$ relative to $p$ diminises the
 statistical significance of any overlap.
 For this reason we define the conversion from $𝔹⁶⁴$ for hash functions.
 
+### PubKey Derivation
+
+Let $G_N ∈ ℙₚ$ be the constant `NULLIFIER_K` defined in
+`src/sdk/src/crypto/constants/fixed_bases/nullifier_k.rs`.
+Since the scalar field of $ℙₚ$ is prime, all points in the group except
+the identity are generators.
+
+We declare the function $\t{Lift}ᵥ(x) : 𝔽ₚ → 𝔽ᵥ$. This map is injective since
+$\{0, p - 1 \} ⊂ \{0, q - 1\}$.
+
+Define the function
+$$ \t{DerivePubKey} : 𝔽ₚ → ℙₚ $$
+$$ \t{DerivePubKey}(x) = \t{Lift}ᵥ(x) G_N $$
+
 ## BLAKE2b Hash Function
 
 BLAKE2 is defined by [ANWW2013](https://blake2.net/#sp).
