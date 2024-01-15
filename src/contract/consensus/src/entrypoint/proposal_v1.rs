@@ -17,10 +17,10 @@
  */
 
 use darkfi_money_contract::{
-    error::MoneyError, model::POW_REWARD, CONSENSUS_CONTRACT_INFO_TREE,
-    CONSENSUS_CONTRACT_NULLIFIERS_TREE, CONSENSUS_CONTRACT_STAKED_COINS_TREE,
-    CONSENSUS_CONTRACT_STAKED_COIN_LATEST_COIN_ROOT, CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE,
-    CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1,
+    error::MoneyError, CONSENSUS_CONTRACT_INFO_TREE, CONSENSUS_CONTRACT_NULLIFIERS_TREE,
+    CONSENSUS_CONTRACT_STAKED_COINS_TREE, CONSENSUS_CONTRACT_STAKED_COIN_LATEST_COIN_ROOT,
+    CONSENSUS_CONTRACT_STAKED_COIN_MERKLE_TREE, CONSENSUS_CONTRACT_STAKED_COIN_ROOTS_TREE,
+    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1,
 };
 use darkfi_sdk::{
     blockchain::Slot,
@@ -39,7 +39,7 @@ use crate::{
     error::ConsensusError,
     model::{
         ConsensusProposalParamsV1, ConsensusProposalUpdateV1, GRACE_PERIOD, HEADSTART,
-        MU_RHO_PREFIX, MU_Y_PREFIX, REWARD_PALLAS,
+        MU_RHO_PREFIX, MU_Y_PREFIX, REWARD, REWARD_PALLAS,
     },
     ConsensusFunction,
 };
@@ -196,7 +196,7 @@ pub(crate) fn consensus_proposal_process_instruction_v1(
     // Here we check that input+reward == output
     let mut valcom_total = pallas::Point::identity();
     valcom_total += input.value_commit;
-    valcom_total += pedersen_commitment_u64(POW_REWARD, params.reward_blind);
+    valcom_total += pedersen_commitment_u64(REWARD, params.reward_blind);
     valcom_total -= output.value_commit;
     if valcom_total != pallas::Point::identity() {
         msg!("[ConsensusProposalV1] Error: Value commitments do not result in identity");

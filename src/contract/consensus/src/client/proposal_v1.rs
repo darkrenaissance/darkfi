@@ -26,7 +26,7 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{ConsensusNote, ConsensusOwnCoin},
-    model::{Coin, ConsensusInput, ConsensusOutput, POW_REWARD},
+    model::{Coin, ConsensusInput, ConsensusOutput},
 };
 use darkfi_sdk::{
     blockchain::Slot,
@@ -43,8 +43,8 @@ use rand::rngs::OsRng;
 use crate::{
     client::common::{ConsensusBurnInputInfo, ConsensusMintOutputInfo},
     model::{
-        ConsensusProposalParamsV1, HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX, SECRET_KEY_PREFIX,
-        SEED_PREFIX, SERIAL_PREFIX,
+        ConsensusProposalParamsV1, HEADSTART, MU_RHO_PREFIX, MU_Y_PREFIX, REWARD,
+        SECRET_KEY_PREFIX, SEED_PREFIX, SERIAL_PREFIX,
     },
 };
 
@@ -166,7 +166,7 @@ impl ConsensusProposalCallBuilder {
             poseidon_hash([SERIAL_PREFIX, self.owncoin.secret.inner(), self.owncoin.note.serial]);
 
         let output = ConsensusMintOutputInfo {
-            value: self.owncoin.note.value + POW_REWARD,
+            value: self.owncoin.note.value + REWARD,
             epoch: 0, // We set the epoch as 0 here to eliminate a potential timelock
             public_key: output_keypair.public,
             value_blind: output_value_blind,
@@ -204,7 +204,7 @@ impl ConsensusProposalCallBuilder {
             value: output.value,
             epoch: output.epoch,
             value_blind: output.value_blind,
-            reward: POW_REWARD,
+            reward: REWARD,
             reward_blind: output_reward_blind,
         };
 
@@ -220,7 +220,7 @@ impl ConsensusProposalCallBuilder {
         let params = ConsensusProposalParamsV1 {
             input: tx_input,
             output: tx_output,
-            reward: POW_REWARD,
+            reward: REWARD,
             reward_blind: output_reward_blind,
             fork_hash: self.fork_hash,
             fork_previous_hash: self.fork_previous_hash,
@@ -322,7 +322,7 @@ fn create_proposal_proof(
         public_key,
         merkle_root,
         input_value_commit,
-        reward: POW_REWARD,
+        reward: REWARD,
         output_value_commit: pedersen_commitment_u64(output.value, output.value_blind),
         output_coin,
         vrf_proof: *vrf_proof,
@@ -340,7 +340,7 @@ fn create_proposal_proof(
         Witness::Base(Value::known(input.note.serial)),
         Witness::Base(Value::known(pallas::Base::from(input.note.value))),
         Witness::Base(Value::known(pallas::Base::from(input.note.epoch))),
-        Witness::Base(Value::known(pallas::Base::from(POW_REWARD))),
+        Witness::Base(Value::known(pallas::Base::from(REWARD))),
         Witness::Scalar(Value::known(input.value_blind)),
         Witness::Uint32(Value::known(u64::from(input.leaf_position).try_into().unwrap())),
         Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),

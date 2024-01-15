@@ -29,9 +29,6 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 #[cfg(feature = "client")]
 use darkfi_serial::async_trait;
 
-/// Configured POW mining reward value (1 DRK == 1 * 10^8)
-pub const POW_REWARD: u64 = 100_000_000;
-
 /// A `Coin` represented in the Money state
 #[derive(Debug, Clone, Copy, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct Coin(pallas::Base);

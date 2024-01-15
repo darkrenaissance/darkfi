@@ -104,6 +104,8 @@ pub const EPOCH_LENGTH: u64 = 10;
 pub const SLOT_TIME: u64 = 90;
 // Stake/Unstake timelock length in epochs
 pub const GRACE_PERIOD: u64 = calculate_grace_period();
+/// Configured block reward (1 DRK == 1 * 10^8)
+pub const REWARD: u64 = 100_000_000;
 /// Reward `pallas::Base`, calculated by: pallas::Base::from(REWARD)
 pub const REWARD_PALLAS: pallas::Base = pallas::Base::from_raw([100000000, 0, 0, 0]);
 /// Serial prefix, calculated by: pallas::Base::from(2)
