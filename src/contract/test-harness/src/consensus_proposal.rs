@@ -23,12 +23,11 @@ use darkfi::{
     Result,
 };
 use darkfi_consensus_contract::{
-    client::proposal_v1::ConsensusProposalCallBuilder, model::ConsensusProposalParamsV1,
+    client::proposal_v1::ConsensusProposalCallBuilder,
+    model::{ConsensusProposalParamsV1, REWARD},
     ConsensusFunction,
 };
-use darkfi_money_contract::{
-    client::ConsensusOwnCoin, model::POW_REWARD, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1,
-};
+use darkfi_money_contract::{client::ConsensusOwnCoin, CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1};
 use darkfi_sdk::{
     blockchain::Slot,
     crypto::{MerkleNode, SecretKey, CONSENSUS_CONTRACT_ID},
@@ -156,7 +155,7 @@ impl TestHarness {
         )?;
 
         // Verify values match
-        assert!((staked_oc.note.value + POW_REWARD) == rewarded_staked_oc.note.value);
+        assert!((staked_oc.note.value + REWARD) == rewarded_staked_oc.note.value);
 
         Ok(rewarded_staked_oc)
     }
