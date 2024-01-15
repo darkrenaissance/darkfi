@@ -227,8 +227,7 @@ impl Slot {
         // * we already have this connection established
         // * we already have this configured as a manual peer
         // * address is already pending a connection
-        let addr = hosts.check_address_with_lock(self.p2p(), addrs).await;
-        return addr
+        hosts.check_address_with_lock(self.p2p(), addrs).await
     }
 
     // We first try to make connections to the addresses on our anchor list. We then find some
@@ -294,7 +293,7 @@ impl Slot {
             );
 
             dnetev!(self, OutboundSlotConnecting, {
-                slot: slot,
+                slot,
                 addr: host.clone(),
             });
 

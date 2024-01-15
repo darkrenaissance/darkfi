@@ -180,7 +180,7 @@ impl ProtocolAddress {
         }
 
         // Do nothing if advertise is set to false
-        if self.settings.advertise == false {
+        if !self.settings.advertise {
             debug!(target: "net::protocol_address::send_my_addrs()", "Advertise is false. Stopping");
             return Ok(())
         }

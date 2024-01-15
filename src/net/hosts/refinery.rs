@@ -30,9 +30,9 @@ use crate::{
 
 pub type GreylistRefineryPtr = Arc<GreylistRefinery>;
 
-//// Probe random peers on the greylist. If a peer is responsive, update the last_seen field and
-//// add it to the whitelist. If a node does not respond, remove it from the greylist.
-//// Called periodically.
+/// Probe random peers on the greylist. If a peer is responsive, update the last_seen field and
+/// add it to the whitelist. If a node does not respond, remove it from the greylist.
+/// Called periodically.
 pub struct GreylistRefinery {
     /// Weak pointer to parent p2p object
     pub(in crate::net) p2p: LazyWeak<P2p>,

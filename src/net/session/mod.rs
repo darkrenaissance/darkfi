@@ -163,14 +163,14 @@ pub trait Session: Sync {
         let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
         hosts.anchorlist_store_or_update(&[(addr.clone(), last_seen)]).await;
 
-        if hosts.whitelist_contains(&addr).await {
+        if hosts.whitelist_contains(addr).await {
             let index = hosts.get_whitelist_index_at_addr(addr.clone()).await.unwrap();
-            hosts.whitelist_remove(&addr, index).await;
+            hosts.whitelist_remove(addr, index).await;
         }
 
-        if hosts.greylist_contains(&addr).await {
+        if hosts.greylist_contains(addr).await {
             let index = hosts.get_greylist_index_at_addr(addr.clone()).await.unwrap();
-            hosts.greylist_remove(&addr, index).await;
+            hosts.greylist_remove(addr, index).await;
         }
     }
 

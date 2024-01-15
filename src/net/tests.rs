@@ -20,7 +20,7 @@
 
 use std::sync::Arc;
 
-use log::{debug, info};
+use log::{debug, info, warn};
 use rand::Rng;
 use smol::{channel, future, Executor};
 use url::Url;
@@ -63,7 +63,9 @@ fn p2p_test() {
     cfg.add_filter_ignore("net::channel::main_receive_loop()".to_string());
     cfg.add_filter_ignore("net::tcp".to_string());
 
-    simplelog::TermLogger::init(
+    // We check this error so we can execute same file tests in parallel,
+    // otherwise second one fails to init logger here.
+    if simplelog::TermLogger::init(
         simplelog::LevelFilter::Info,
         //simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
@@ -71,7 +73,10 @@ fn p2p_test() {
         simplelog::TerminalMode::Mixed,
         simplelog::ColorChoice::Auto,
     )
-    .unwrap();
+    .is_err()
+    {
+        warn!(target: "net::test", "Logger already initialized");
+    }
 
     let ex = Arc::new(Executor::new());
     let ex_ = ex.clone();
@@ -131,7 +136,7 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
             //outbound_connect_timeout: 10,
             inbound_connections: usize::MAX,
             seeds: vec![seed_addr.clone()],
-            hostlist: String::from(format!("~/.config/darkfi/hosts{}.tsv", i)),
+            hostlist: format!("~/.config/darkfi/hosts{}.tsv", i),
             peers,
             allowed_transports: vec!["tcp".to_string()],
             node_id: i.to_string(),
@@ -148,7 +153,7 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
     }
 
     info!("Waiting until all peers connect");
-    sleep(5).await;
+    sleep(10).await;
 
     info!("Inspecting hostlists...");
     for p2p in p2p_instances.iter() {

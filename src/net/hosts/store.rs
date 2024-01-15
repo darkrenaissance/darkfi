@@ -268,7 +268,7 @@ impl Hosts {
                 "Found valid host '{}",
                 host
             );
-            return Some((host.clone(), last_seen.clone()))
+            return Some((host.clone(), last_seen))
         }
 
         None
@@ -286,7 +286,7 @@ impl Hosts {
             if !self.greylist_contains(&addr).await {
                 debug!(target: "store::greylist_store_or_update()", "We do not have this entry in the hostlist. Adding to store...");
 
-                self.greylist_store(addr.clone(), last_seen.clone()).await;
+                self.greylist_store(addr.clone(), last_seen).await;
             }
 
             debug!(target: "store::greylist_store_or_update()",
@@ -312,7 +312,7 @@ impl Hosts {
                 debug!(target: "store::whitelist_store_or_update()",
         "We do not have this entry in the whitelist. Adding to store...");
 
-                self.whitelist_store(addr.clone(), last_seen.clone()).await;
+                self.whitelist_store(addr.clone(), *last_seen).await;
             }
 
             debug!(target: "store::whitelist_store_or_update()",
@@ -322,7 +322,7 @@ impl Hosts {
                 .get_whitelist_index_at_addr(addr.clone())
                 .await
                 .expect("Expected whitelist entry to exist");
-            self.whitelist_update_last_seen(addr, last_seen.clone(), index).await;
+            self.whitelist_update_last_seen(addr, *last_seen, index).await;
         }
     }
 
@@ -337,7 +337,7 @@ impl Hosts {
                 debug!(target: "store::anchorlist_store_or_update()",
         "We do not have this entry in the whitelist. Adding to store...");
 
-                self.anchorlist_store(addr.clone(), last_seen.clone()).await;
+                self.anchorlist_store(addr.clone(), *last_seen).await;
             }
             debug!(target: "store::anchorlist_store_or_update()",
             "We have this entry in the anchorlist. Updating last seen...");
@@ -346,7 +346,7 @@ impl Hosts {
                 .get_anchorlist_index_at_addr(addr.clone())
                 .await
                 .expect("Expected anchorlist entry to exist");
-            self.anchorlist_update_last_seen(addr, last_seen.clone(), index).await;
+            self.anchorlist_update_last_seen(addr, *last_seen, index).await;
         }
     }
 
@@ -591,7 +591,7 @@ impl Hosts {
                 _ => continue,
             }
 
-            ret.push((addr_.clone(), last_seen.clone()));
+            ret.push((addr_.clone(), *last_seen));
         }
 
         ret
@@ -731,7 +731,7 @@ impl Hosts {
         let greylist = self.greylist.read().await;
         let position = rand::thread_rng().gen_range(0..greylist.len());
         let entry = &greylist[position];
-        (entry.clone(), position.clone())
+        (entry.clone(), position)
     }
 
     /// Get up to n random whitelisted peers that match the given transport schemes from the hosts set.
@@ -855,8 +855,6 @@ impl Hosts {
                 ret.push((addr.clone(), *last_seen));
                 limit -= 1;
                 if limit == 0 {
-                    debug!(target: "deadlock", "Found matching grey scheme, returning len: {}", ret.len());
-
                     debug!(target: "store::greylist_fetch_with_schemes", "Found matching greylist entry, returning");
                     return ret
                 }
@@ -891,18 +889,15 @@ impl Hosts {
                     ret.push((addr.clone(), *last_seen));
                     parsed_limit -= 1;
                     if parsed_limit == 0 {
-                        debug!(target: "deadlock",
-                           "Found matching white scheme, returning {:?}", ret);
                         trace!(target: "store::whitelist_fetch_with_schemes",
                            "Found matching white scheme, returning {:?}", ret);
                         return ret
                     }
+                } else {
+                    warn!(target: "store::whitelist_fetch_with_schemes",
+                          "No matching schemes! Trying greylist...");
+                    return self.greylist_fetch_with_schemes(schemes, limit).await
                 }
-                debug!(target: "deadlock",
-                          "No matching schemes! Trying greylist...");
-                warn!(target: "store::whitelist_fetch_with_schemes",
-                          "No matching schemes! Trying greylist...");
-                return self.greylist_fetch_with_schemes(schemes, limit).await
             }
         }
         // Whitelist is empty!
@@ -940,21 +935,15 @@ impl Hosts {
                     ret.push((addr.clone(), *last_seen));
                     parsed_limit -= 1;
                     if parsed_limit == 0 {
-                        debug!(target: "deadlock",
-                           "Found matching anchor scheme, returning {:?}", ret);
-
                         trace!(target: "store::anchorlist_fetch_with_schemes",
                            "Found matching anchor scheme, returning {:?}", ret);
                         return ret
                     }
+                } else {
+                    warn!(target: "store::anchorlist_fetch_with_schemes",
+                          "No matching schemes! Trying whitelist...");
+                    return self.whitelist_fetch_with_schemes(schemes, limit).await
                 }
-
-                debug!(target: "deadlock",
-                          "No matching schemes! Trying whitelist...");
-
-                warn!(target: "store::anchorlist_fetch_with_schemes",
-                          "No matching schemes! Trying whitelist...");
-                return self.whitelist_fetch_with_schemes(schemes, limit).await
             }
         }
 
@@ -1244,10 +1233,17 @@ mod tests {
                 hostlist.push(addrs);
             }
 
-            // Check we're returning the correct addresses.
-            assert!(anchor_urls.sort() == hostlist[0].sort());
-            assert!(white_urls.sort() == hostlist[4].sort());
-            assert!(grey_urls.sort() == hostlist[7].sort());
+            //// Check we're returning the correct addresses.
+            anchor_urls.sort();
+            white_urls.sort();
+            grey_urls.sort();
+            hostlist[0].sort();
+            hostlist[4].sort();
+            hostlist[7].sort();
+
+            assert!(anchor_urls == hostlist[0]);
+            assert!(white_urls == hostlist[4]);
+            assert!(grey_urls == hostlist[7]);
 
             // Now clear the anchorlist.
             // anchorlist_fetch_address should return whitelist entries if
@@ -1257,7 +1253,8 @@ mod tests {
             drop(anchorlist);
 
             let mut addrs = hosts.anchorlist_fetch_address(transports).await;
-            assert!(white_urls.sort() == addrs.sort());
+            addrs.sort();
+            assert!(white_urls == addrs);
 
             // Now clear the whitelist.
             // anchorlist_fetch_address should return greylist entries if
@@ -1267,7 +1264,8 @@ mod tests {
             drop(whitelist);
 
             let mut addrs = hosts.anchorlist_fetch_address(transports).await;
-            assert!(grey_urls.sort() == addrs.sort());
+            addrs.sort();
+            assert!(grey_urls == addrs);
         })
     }
 }
