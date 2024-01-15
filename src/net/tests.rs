@@ -122,16 +122,16 @@ async fn hostlist_propagation(ex: Arc<Executor<'static>>) {
         // Everyone will connect to N_CONNS random peers.
         let mut peers = vec![];
         for _ in 0..N_CONNS {
-            let mut port = 13200 + i;
-            while port == 13200 + i {
-                port = 13200 + rng.gen_range(0..N_NODES);
+            let mut port = 53200 + i;
+            while port == 53200 + i {
+                port = 53200 + rng.gen_range(0..N_NODES);
             }
             peers.push(Url::parse(&format!("tcp://127.0.0.1:{}", port)).unwrap());
         }
         let settings = Settings {
             localnet: true,
-            inbound_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", 13200 + i)).unwrap()],
-            external_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", 13200 + i)).unwrap()],
+            inbound_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", 53200 + i)).unwrap()],
+            external_addrs: vec![Url::parse(&format!("tcp://127.0.0.1:{}", 53200 + i)).unwrap()],
             outbound_connections: 8,
             //outbound_connect_timeout: 10,
             inbound_connections: usize::MAX,
