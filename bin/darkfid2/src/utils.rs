@@ -18,16 +18,22 @@
 
 use std::{collections::HashMap, sync::Arc};
 
-use log::info;
-use smol::Executor;
+use log::{debug, error, info};
+use smol::{fs::read_to_string, Executor};
+use structopt_toml::StructOptToml;
 
 use darkfi::{
     net::{P2p, P2pPtr, Settings, SESSION_ALL},
     rpc::jsonrpc::JsonSubscriber,
+    util::path::get_config_path,
     validator::ValidatorPtr,
+    Error, Result,
 };
 
-use crate::proto::{ProtocolBlock, ProtocolProposal, ProtocolSync, ProtocolTx};
+use crate::{
+    proto::{ProtocolBlock, ProtocolProposal, ProtocolSync, ProtocolTx},
+    BlockchainNetwork, CONFIG_FILE,
+};
 
 /// Auxiliary function to generate the sync P2P network and register all its protocols.
 pub async fn spawn_sync_p2p(
@@ -93,4 +99,49 @@ pub async fn spawn_consensus_p2p(
         .await;
 
     p2p
+}
+
+/// Auxiliary function to parse darkfid configuration file and extract requested
+/// blockchain network config.
+pub async fn parse_blockchain_config(
+    config: Option<String>,
+    network: &str,
+) -> Result<BlockchainNetwork> {
+    // Grab config path
+    let config_path = get_config_path(config, CONFIG_FILE)?;
+    debug!(target: "darkfid", "Parsing configuration file: {:?}", config_path);
+
+    // Parse TOML file contents
+    let contents = read_to_string(&config_path).await?;
+    let contents: toml::Value = match toml::from_str(&contents) {
+        Ok(v) => v,
+        Err(e) => {
+            error!(target: "darkfid", "Failed parsing TOML config: {}", e);
+            return Err(Error::ParseFailed("Failed parsing TOML config"))
+        }
+    };
+
+    // Grab requested network config
+    let Some(table) = contents.as_table() else { return Err(Error::ParseFailed("TOML not a map")) };
+    let Some(network_configs) = table.get("network_config") else {
+        return Err(Error::ParseFailed("TOML does not contain network configurations"))
+    };
+    let Some(network_configs) = network_configs.as_table() else {
+        return Err(Error::ParseFailed("`network_config` not a map"))
+    };
+    let Some(network_config) = network_configs.get(network) else {
+        return Err(Error::ParseFailed("TOML does not contain requested network configuration"))
+    };
+    let network_config = toml::to_string(&network_config).unwrap();
+    let network_config =
+        match BlockchainNetwork::from_iter_with_toml::<Vec<String>>(&network_config, vec![]) {
+            Ok(v) => v,
+            Err(e) => {
+                error!(target: "darkfid", "Failed parsing requested network configuration: {}", e);
+                return Err(Error::ParseFailed("Failed parsing requested network configuration"))
+            }
+        };
+    debug!(target: "darkfid", "Parsed network configuration: {:?}", network_config);
+
+    Ok(network_config)
 }

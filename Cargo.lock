@@ -2036,6 +2036,7 @@ dependencies = [
  "structopt",
  "structopt-toml",
  "tinyjson",
+ "toml 0.8.8",
  "url",
 ]
 

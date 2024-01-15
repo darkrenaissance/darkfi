@@ -65,7 +65,7 @@ mod proto;
 
 /// Utility functions
 mod utils;
-use utils::{spawn_consensus_p2p, spawn_sync_p2p};
+use utils::{parse_blockchain_config, spawn_consensus_p2p, spawn_sync_p2p};
 
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
@@ -84,25 +84,13 @@ struct Args {
     /// Configuration file to use
     config: Option<String>,
 
-    #[structopt(long, default_value = "tcp://127.0.0.1:8340")]
+    #[structopt(short, long, default_value = "tcp://127.0.0.1:8340")]
     /// JSON-RPC listen URL
     rpc_listen: Url,
 
-    #[structopt(long, default_value = "testnet")]
+    #[structopt(short, long, default_value = "testnet")]
     /// Blockchain network to use
     network: String,
-
-    #[structopt(flatten)]
-    /// Localnet blockchain network configuration
-    localnet: BlockchainNetwork,
-
-    #[structopt(flatten)]
-    /// Testnet blockchain network configuration
-    testnet: BlockchainNetwork,
-
-    #[structopt(flatten)]
-    /// Mainnet blockchain network configuration
-    mainnet: BlockchainNetwork,
 
     #[structopt(short, long)]
     /// Set log file to ouput into
@@ -216,9 +204,15 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
     // Grab blockchain network configuration
     let (blockchain_config, genesis_block) = match args.network.as_str() {
-        "localnet" => (args.localnet, GENESIS_BLOCK_LOCALNET),
-        "testnet" => (args.testnet, GENESIS_BLOCK_TESTNET),
-        "mainnet" => (args.mainnet, GENESIS_BLOCK_MAINNET),
+        "localnet" => {
+            (parse_blockchain_config(args.config, "localnet").await?, GENESIS_BLOCK_LOCALNET)
+        }
+        "testnet" => {
+            (parse_blockchain_config(args.config, "testnet").await?, GENESIS_BLOCK_TESTNET)
+        }
+        "mainnet" => {
+            (parse_blockchain_config(args.config, "mainnet").await?, GENESIS_BLOCK_MAINNET)
+        }
         _ => {
             error!("Unsupported chain `{}`", args.network);
             return Err(Error::UnsupportedChain)
