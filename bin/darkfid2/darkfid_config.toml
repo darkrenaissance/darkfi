@@ -13,7 +13,7 @@ rpc_listen = "tcp://127.0.0.1:8340"
 network = "testnet"
 
 # Localnet blockchain network configuration
-[localnet]
+[network_config."localnet"]
 # Path to the blockchain database directory
 database = "~/.local/darkfi/darkfid_blockchain_localnet"
 
@@ -53,7 +53,7 @@ skip_sync = true
 pos_testing_mode = true
 
 ## Localnet sync P2P network settings
-[localnet.sync_net]
+[network_config."localnet".sync_net]
 # P2P accept addresses the instance listens on for inbound connections
 inbound = ["tcp+tls://0.0.0.0:8242"]
 
@@ -107,7 +107,7 @@ localnet = true
 #outbound_peer_discovery_attempt_time = 5
 
 ## Localnet consensus P2P network settings
-[localnet.consensus_net]
+[network_config."localnet".consensus_net]
 # P2P accept addresses the instance listens on for inbound connections
 #inbound = ["tcp+tls://0.0.0.0:8241"]
 
@@ -157,7 +157,7 @@ localnet = true
 #outbound_peer_discovery_attempt_time = 5
 
 # Testnet blockchain network configuration
-[testnet]
+[network_config."testnet"]
 # Path to the blockchain database directory
 database = "~/.local/darkfi/darkfid_blockchain_testnet"
 
@@ -192,7 +192,7 @@ skip_sync = false
 pos_testing_mode = false
 
 ## Testnet sync P2P network settings
-[testnet.sync_net]
+[network_config."testnet".sync_net]
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
 inbound = ["tcp+tls://0.0.0.0:8342"]
@@ -256,7 +256,7 @@ localnet = false
 #outbound_peer_discovery_attempt_time = 5
 
 ## Testnet consensus P2P network settings
-[testnet.consensus_net]
+[network_config."testnet".consensus_net]
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
 inbound = ["tcp+tls://0.0.0.0:8341"]
@@ -316,7 +316,7 @@ localnet = false
 #outbound_peer_discovery_attempt_time = 5
 
 # Mainnet blockchain network configuration
-[mainnet]
+[network_config."mainnet"]
 # Path to the blockchain database directory
 database = "~/.local/darkfi/darkfid_blockchain_mainnet"
 
@@ -351,7 +351,7 @@ skip_sync = false
 pos_testing_mode = false
 
 ## Mainnet sync P2P network settings
-[mainnet.sync_net]
+[network_config."mainnet".sync_net]
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
 inbound = ["tcp+tls://0.0.0.0:8442"]
@@ -415,7 +415,7 @@ localnet = false
 #outbound_peer_discovery_attempt_time = 5
 
 ## Mainnet consensus P2P network settings
-[mainnet.consensus_net]
+[network_config."mainnet".consensus_net]
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
 inbound = ["tcp+tls://0.0.0.0:8441"]

@@ -22,8 +22,9 @@ blake3 = "1.5.0"
 bs58 = "0.5.0"
 log = "0.4.20"
 num-bigint = "0.4.4"
-sled = "0.34.7"
 rand = "0.8.5"
+sled = "0.34.7"
+toml = "0.8.8"
 
 # JSON-RPC
 async-trait = "0.1.77"
