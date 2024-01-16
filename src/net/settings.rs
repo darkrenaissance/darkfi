@@ -107,7 +107,7 @@ impl Default for Settings {
             outbound_peer_discovery_attempt_time: 5,
             advertise: true,
             hostlist,
-            greylist_refinery_interval: 30,
+            greylist_refinery_interval: 5,
             white_connection_percent: 90,
             anchor_connection_count: 2,
         }
