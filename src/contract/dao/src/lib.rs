@@ -90,13 +90,13 @@ pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "DaoAuthMoneyTran
 pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str =
     "DaoAuthMoneyTransferEncCoin";
 
-// ANCHOR: dao-slot_to_day
-const SLOT_TIME: u64 = 90;
+// ANCHOR: dao-blockheight_to_day
+const BLOCK_TIME: u64 = 90;
 const SECS_IN_DAY: u64 = 24 * 60 * 60;
 
 /// Days since genesis block. Used for time limit on DAO proposals.
-pub fn slot_to_day(slot: u64) -> u64 {
-    let timestamp_secs = slot * SLOT_TIME;
+pub fn blockheight_to_day(height: u64) -> u64 {
+    let timestamp_secs = height * BLOCK_TIME;
     timestamp_secs / SECS_IN_DAY
 }
-// ANCHOR_END: dao-slot_to_day
+// ANCHOR_END: dao-blockheight_to_day
