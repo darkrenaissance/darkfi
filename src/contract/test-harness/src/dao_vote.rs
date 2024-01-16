@@ -23,10 +23,10 @@ use darkfi::{
     Result,
 };
 use darkfi_dao_contract::{
+    blockheight_to_day,
     client::{DaoVoteCall, DaoVoteInput},
     model::{Dao, DaoProposal, DaoProposalBulla, DaoVoteParams},
-    slot_to_day, DaoFunction, DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS,
-    DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
+    DaoFunction, DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
@@ -79,7 +79,7 @@ impl TestHarness {
             signature_secret,
         };
 
-        let current_day = slot_to_day(wallet.validator.consensus.time_keeper.verifying_slot);
+        let current_day = blockheight_to_day(wallet.validator.consensus.time_keeper.verifying_slot);
         let call = DaoVoteCall {
             inputs: vec![input],
             vote_option,
