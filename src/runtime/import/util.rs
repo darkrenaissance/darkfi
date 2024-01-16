@@ -79,7 +79,7 @@ pub(crate) fn put_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: 
     let memory_view = env.memory_view(&ctx);
 
     //debug!(target: "runtime::util", "diagnostic:");
-    //let pages = memory_view.size().0;
+    let pages = memory_view.size().0;
     //debug!(target: "runtime::util", "    pages: {}", pages);
 
     let Ok(slice) = ptr.slice(&memory_view, len) else {
@@ -95,7 +95,7 @@ pub(crate) fn put_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: 
 
     // There would be a serious problem if this is zero.
     // The number of pages is calculated as a quantity X + 1 where X >= 0
-    //assert!(pages > 0);
+    assert!(pages > 0);
 
     //debug!(target: "runtime::util", "    memory: {:02x?}", &buf[0..32]);
     //debug!(target: "runtime::util", "            {:x?}", &buf[32..64]);
