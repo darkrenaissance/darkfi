@@ -67,9 +67,6 @@ impl GreylistRefinery {
     }
 
     pub async fn stop(self: Arc<Self>) {
-        // First save whitelist entries on the greylist.
-        self.p2p().hosts().whitelist_downgrade().await;
-
         match self.p2p().hosts().save_hosts().await {
             Ok(()) => {
                 debug!(target: "net::refinery::stop()", "Save hosts successful!");
