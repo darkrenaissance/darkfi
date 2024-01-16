@@ -6,11 +6,12 @@ PoS consensus tokens.
 
 The functions/entrypoints provided by this smart contract are:
 ```rust
-{{#include ../../../../src/contract/money/src/lib.rs:money-function}}
+{{#include ../../../../../src/contract/money/src/lib.rs:money-function}}
 ```
 
 ## `MoneyFunction::TransferV1`
 
+Let $\t{PoseidonHash}$ be defined as in the section [PoseidonHash Function](../../crypto-schemes.md#poseidonhash-function).
 
 ### ZK proofs
 
@@ -40,10 +41,10 @@ on the network.
 
 **Circuit:**
 
-$$ C = \text{Poseidon}(P || v || t || s || h || u) $$
+$$ C = \text{PoseidonHash}(P, v, t, s, h, u) $$
 $$ \text{RangeCheck}(64, v) $$
 $$ V = vG + v_{\text{blind}}H $$
-$$ T = \text{Poseidon}(t || t_{\text{blind}}) $$
+$$ T = \text{PoseidonHash}(t, t_{\text{blind}}) $$
 
 $G$ and $H$ are constant well-known generators that are in the codebase
 as `VALUE_COMMIT_VALUE` and `VALUE_COMMIT_RANDOM`:
@@ -86,14 +87,14 @@ on the network.
 
 **Circuit:**
 
-$$ N = \text{Poseidon}(x || s) $$
+$$ N = \text{PoseidonHash}(x, s) $$
 $$ V = vG + v_{\text{blind}}H $$
-$$ T = \text{Poseidon}(t || t_{\text{blind}}) $$
+$$ T = \text{PoseidonHash}(t, t_{\text{blind}}) $$
 $$ P = xK $$
-$$ C = \text{Poseidon}(P || v || t || s || h || u) $$
+$$ C = \text{PoseidonHash}(P, v, t, s, h, u) $$
 $$ C' = \text{ZeroCond}(v, C) $$
 $$ R = \text{MerkleRoot}(l, p, C') $$
-$$ U = \text{Poseidon}(u, u_{\text{blind}}) $$
+$$ U = \text{PoseidonHash}(u, u_{\text{blind}}) $$
 $$ Z = zK $$
 
 $G$ and $H$ are the same generators used in `Mint_V1`, $K$ is the
@@ -143,7 +144,7 @@ number of inputs that were created with `Burn_V1` and a number of
 outputs created with `Mint_V1`.
 
 ```rust
-{{#include ../../../../src/contract/money/src/model.rs:money-params}}
+{{#include ../../../../../src/contract/money/src/model.rs:money-params}}
 ```
 
 This gets encoded into the `Transaction` format and the transaction is

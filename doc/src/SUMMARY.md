@@ -79,11 +79,13 @@
 - [Concepts](spec/concepts.md)
 - [Cryptographic Schemes](spec/crypto-schemes.md)
 - [Contracts]()
-  - [DAO](spec/contracts/dao/dao.md)
-    - [Concepts](spec/contracts/dao/concepts.md)
-    - [Model](spec/contracts/dao/model.md)
-    - [Contract](spec/contracts/dao/contract.md)
-  - [Money](spec/contracts/money.md)
+  - [DAO](spec/contract/dao/dao.md)
+    - [Concepts](spec/contract/dao/concepts.md)
+    - [Model](spec/contract/dao/model.md)
+    - [Scheme](spec/contract/dao/scheme.md)
+  - [Money]()
+    - [Model](spec/contract/money/model.md)
+    - [Scheme](spec/contract/money/scheme.md)
 
 # P2P API Tutorial
 

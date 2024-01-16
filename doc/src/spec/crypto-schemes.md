@@ -97,9 +97,33 @@ Define the function
 $$ \t{DerivePubKey} : 𝔽ₚ → ℙₚ $$
 $$ \t{DerivePubKey}(x) = \t{Lift}ᵥ(x) G_N $$
 
+## Group Hash
+
+Let $\t{GroupHash} : 𝔹^* × 𝔹^* → ℙₚ$ be the hash to curve function
+defined in [ZCash Protocol Spec, section 5.4.9.8](https://zips.z.cash/protocol/protocol.pdf#concretegrouphashpallasandvesta).
+The first input element acts as the domain separator to distinguish
+uses of the group hash for different purposes, while the second input is
+the actual message.
+
 ## BLAKE2b Hash Function
 
 BLAKE2 is defined by [ANWW2013](https://blake2.net/#sp).
 Define the BLAKE2b variant as
 $$ \t{BLAKE2b}: 𝔹^* → 𝔹⁶⁴ $$
+
+## Homomorphic Pedersen Commitments
+
+Let $\t{GroupHash}$ be defined as in [Group Hash](#group-hash).
+
+Let $\t{Lift}ᵥ$ be defined as in [Pubkey Derivation](#pubkey-derivation).
+
+When instantiating value commitments, we require the homomorphic property.
+
+Define:
+$$ G_V = \t{GroupHash}(\textbf{"z.cash:Orchard-cv"}, \textbf{"v"}) $$
+$$ G_B = \t{GroupHash}(\textbf{"z.cash:Orchard-cv"}, \textbf{"r"}) $$
+$$ \t{PedersenCommit} : 𝔽ₚ × 𝔽ᵥ → ℙₚ $$
+$$ \t{PedersenCommit}(v, b) = \t{Lift}ᵥ(v) G_V + b G_B $$
+
+This scheme is a computationally binding and perfectly hiding commitment scheme.
 
