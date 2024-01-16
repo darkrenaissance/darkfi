@@ -84,7 +84,9 @@ impl Default for Settings {
     fn default() -> Self {
         let version = option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0");
         let app_version = semver::Version::parse(version).unwrap();
-        let hostlist = String::from("~/.config/darkfi/hostlist.tsv");
+        // TODO: We don't have a cross-platform method for the app directory (.local/darkfi)
+        // in util/path.rs currently.
+        let hostlist = String::from(format!("~/.local/darkfi/{}/hostlist.tsv", env!("CARGO_PKG_NAME")));
 
         Self {
             node_id: String::new(),
