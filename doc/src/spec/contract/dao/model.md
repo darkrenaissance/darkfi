@@ -26,7 +26,7 @@ $$ \begin{aligned}
   \t{Params}_\t{DAO}.Q &∈ ℕ₆₄ \\
   \t{Params}_\t{DAO}.A^\% &∈ ℕ₆₄ × ℕ₆₄ \\
   \t{Params}_\t{DAO}.τ &∈ 𝔽ₚ \\
-  \t{Params}_\t{DAO}.PK &∈ ℙₚ
+  \t{Params}_\t{DAO}.\t{PK} &∈ ℙₚ
 \end{aligned} $$
 where the approval ratio $\t{Approval}^\% = (q, d)$ defines the equivalence
 class $[\frac{q}{d}]$ of fractions defined by $q₁d₂ = q₂d₁ ⟺  [\frac{q₁}{d₁}] \~ [\frac{q₂}{d₂}]$.
@@ -36,7 +36,7 @@ class $[\frac{q}{d}]$ of fractions defined by $q₁d₂ = q₂d₁ ⟺  [\frac{q
 ```
 
 $$ \t{Bulla}_\t{DAO} : \t{Params}_\t{DAO} × 𝔽ₚ → 𝔽ₚ $$
-$$ \t{Bulla}_\t{DAO}(p, b_\t{DAO}) = \t{Bulla}(ℕ₆₄2𝔽ₚ(p.L), ℕ₆₄2𝔽ₚ(p.Q), ℕ₆₄2𝔽ₚ(p.A^\%), p.τ, \mathcal{X}(p.PK), \mathcal{Y}(p.PK), b_\t{DAO}) $$
+$$ \t{Bulla}_\t{DAO}(p, b_\t{DAO}) = \t{Bulla}(ℕ₆₄2𝔽ₚ(p.L), ℕ₆₄2𝔽ₚ(p.Q), ℕ₆₄2𝔽ₚ(p.A^\%), p.τ, \mathcal{X}(p.\t{PK}), \mathcal{Y}(p.\t{PK}), b_\t{DAO}) $$
 
 ## Proposals
 
@@ -89,3 +89,19 @@ Let $P$ be a proposal bulla as in the section [Proposal](#proposal).
 
 Define $\t{Nullifier}_\t{Vote} : 𝔽ₚ × 𝔽ₚ × 𝔽ₚ → 𝔽ₚ$ as follows:
 $$ \t{Nullifier}_\t{Vote}(\mathcal{C}.s, C, P) = \t{PoseidonHash}(\mathcal{C}.s, C, P) $$
+
+## Current Day
+
+Time limits on proposals are expressed in terms of days. Since proofs cannot
+guarantee which block they get into, we therefore must modulo the block height
+a certain number which we use in the proofs.
+
+```rust
+{{#include ../../../../../src/contract/dao/src/lib.rs:dao-slot_to_day}}
+```
+
+which can be used like this
+```rust
+{{#include ../../../../../src/contract/dao/src/entrypoint/propose.rs:dao-slot_to_day-example-usage}}
+```
+

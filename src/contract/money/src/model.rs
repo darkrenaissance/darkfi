@@ -62,6 +62,7 @@ darkfi_sdk::fp_to_bs58!(Coin);
 darkfi_sdk::ty_from_fp!(Coin);
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: coin-attributes
 pub struct CoinAttributes {
     pub public_key: PublicKey,
     pub value: u64,
@@ -71,6 +72,7 @@ pub struct CoinAttributes {
     pub spend_hook: pallas::Base,
     pub user_data: pallas::Base,
 }
+// ANCHOR_END: coin-attributes
 
 impl CoinAttributes {
     pub fn to_coin(&self) -> Coin {

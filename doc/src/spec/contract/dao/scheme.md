@@ -6,16 +6,14 @@ Let $\t{PoseidonHash}$ be defined as in the section [PoseidonHash Function](../.
 
 Let $𝔽ₚ, ℙₚ, \t{DerivePubKey}$ be defined as in the section [Pallas and Vesta](../../crypto-schemes.md#pallas-and-vesta).
 
+Let $\t{PedersenCommit}$ be defined as in the section [Homomorphic Pedersen Commitments](../../crypto-schemes.md#homomorphic-pedersen-commitments).
+
 Let $\t{Params}_\t{DAO}, \t{Bulla}_\t{DAO}, \t{Params}_\t{Proposal}, \t{Bulla}_\t{Proposal}$ be defined as in [DAO Model](model.md).
 
 TODO: add merkle section to crypto-schemes with merklepos, merklepath,
 MerkleRoot
 
-TODO: add pedersencommit
-
-TODO: need params coin
-
-TODO: document current day = $𝔽ₚ$ CurrentDay
+TODO: rename slot to block_height
 
 ## Mint
 
@@ -88,7 +86,9 @@ $$ \begin{aligned}
 
 ### Contract Statement
 
-Let $t₀ = \t{CurrentDay} ∈ 𝔽ₚ$ be the current day.
+Let $t₀ = \t{CurrentDay} ∈ 𝔽ₚ$ be the current day as defined in [Current Day](model.md#current-day).
+
+Let $\t{Params}_\t{Coin}$ be defined as in [Coin](../money/model.md#coin).
 
 **Valid DAO bulla merkle root** &emsp; check that $R_\t{DAO}$ is a previously
 seen merkle root in the DAO contract merkle roots DB.

@@ -33,7 +33,7 @@ environment with limited access to the host.
 ## Contract Sections
 
 Contract operation is defined by *sections*. Each contract section is only
-allowed to call certain host functions.
+allowed to call certain [host functions](#host-functions).
 
 **Example:** `exec()` may call `db_get()` but not `db_set()`, while `update()`
 cannot call `db_get()`, but may call `db_set()`.
@@ -41,6 +41,21 @@ cannot call `db_get()`, but may call `db_set()`.
 ```rust
 {{#include ../../../src/runtime/vm_runtime.rs:contract-section}}
 ```
+
+For a list of permissions given to host functions, see the section [Host Functions](#host-functions).
+
+## Contract Function IDs
+
+Let $𝔽ₚ$ be defined as in the section [Pallas and Vesta](crypto-schemes.md#pallas-and-vesta).
+
+Functions can be specified using a tuple $\t{FuncId} := (𝔽ₚ, 𝔹)$.
+
+## Host Functions
+
+Host functions give access to the executing node context external to the local
+WASM scope.
+
+The current list of functions are:
 
 | Host function     | Permission                     | Description                         |
 |-------------------|--------------------------------|-------------------------------------|
@@ -54,10 +69,4 @@ cannot call `db_get()`, but may call `db_set()`.
 | `merkle_add`      | Update                         | Add a leaf to a merkle tree         |
 | `set_return_data` | Exec, Metadata                 | Used for returning data to the host |
 | `get_slot`        | Deploy, Exec, Metadata         | Get the current slot                |
-
-## Function IDs
-
-Let $𝔽ₚ$ be defined as in the section [Pallas and Vesta](crypto-schemes.md#pallas-and-vesta).
-
-Functions can be specified using a tuple $\t{FuncId} := (𝔽ₚ, 𝔹)$.
 

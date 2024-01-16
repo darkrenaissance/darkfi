@@ -90,6 +90,7 @@ pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "DaoAuthMoneyTran
 pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str =
     "DaoAuthMoneyTransferEncCoin";
 
+// ANCHOR: dao-slot_to_day
 const SLOT_TIME: u64 = 90;
 const SECS_IN_DAY: u64 = 24 * 60 * 60;
 
@@ -98,3 +99,4 @@ pub fn slot_to_day(slot: u64) -> u64 {
     let timestamp_secs = slot * SLOT_TIME;
     timestamp_secs / SECS_IN_DAY
 }
+// ANCHOR_END: dao-slot_to_day

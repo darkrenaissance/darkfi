@@ -83,7 +83,9 @@ pub(crate) fn dao_propose_get_metadata(
         ));
     }
 
+    // ANCHOR: dao-slot_to_day-example-usage
     let current_day = slot_to_day(get_verifying_slot());
+    // ANCHOR_END: dao-slot_to_day-example-usage
 
     let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
     zk_public_inputs.push((

@@ -9,5 +9,5 @@ threshold they are finalized, then the proposal can be executed.
 
 - [Concepts](concepts.md)
 - [Model](model.md)
-- [Contract](contract.md)
+- [Scheme](scheme.md)
 
