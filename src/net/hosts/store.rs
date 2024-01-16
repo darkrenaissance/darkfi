@@ -701,15 +701,15 @@ impl Hosts {
         self.whitelist.read().await.iter().cloned().collect()
     }
 
-    /// Return all known hosts
-    pub async fn hostlist_fetch_all(&self) -> HashMap<String, Vec<(Url, u64)>> {
+    /// Return all greylist and anchorlist hosts. Called on stop().
+    /// Note: we do not return whitelist entries here since whitelist entries must go via the
+    /// greylist refinery in the lifetime of the p2p network.
+    pub async fn hostlist_fetch_safe(&self) -> HashMap<String, Vec<(Url, u64)>> {
         let mut hostlist = HashMap::new();
         hostlist.insert(
             "anchorlist".to_string(),
             self.anchorlist.read().await.iter().cloned().collect(),
         );
-        hostlist
-            .insert("whitelist".to_string(), self.whitelist.read().await.iter().cloned().collect());
         hostlist
             .insert("greylist".to_string(), self.greylist.read().await.iter().cloned().collect());
         hostlist
@@ -1018,13 +1018,27 @@ impl Hosts {
         Ok(())
     }
 
-    /// Save the hostlist to a file.
+    /// Save the hostlist to a file. Whitelist gets written to the greylist to force
+    /// whitelist entries through the refinery on start.
     pub async fn save_hosts(&self) -> Result<()> {
         let path = expand_path(&self.settings.hostlist)?;
 
         let mut tsv = String::new();
+        let mut whitelist = vec![];
 
-        for (name, list) in self.hostlist_fetch_all().await {
+        // First gather all the whitelist entries we don't have in greylist.
+        for (url, last_seen) in self.whitelist_fetch_all().await {
+            if !self.greylist_contains(&url).await {
+                whitelist.push((url, last_seen))
+            }
+        }
+
+        // Collect the greylist and anchorlist entries, and append any whitelist entries to the
+        // greylist before saving.
+        for (name, mut list) in self.hostlist_fetch_safe().await {
+            if name == "greylist".to_string() {
+                list.append(&mut whitelist)
+            }
             for (url, last_seen) in list {
                 tsv.push_str(&format!("{}\t{}\t{}\n", name, url, last_seen));
             }
