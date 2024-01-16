@@ -27,7 +27,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     merkle_add, msg,
     pasta::pallas,
-    util::{get_slot, get_verifying_slot},
+    util::{get_slot, get_verifying_block_height},
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -84,21 +84,21 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
     let self_ = &calls[call_idx as usize].data;
     let params: MoneyPoWRewardParamsV1 = deserialize(&self_.data[1..])?;
 
-    // Verify this contract call is verified against a slot(block height) before PoS transition,
+    // Verify this contract call is verified against a block height(slot) before PoS transition,
     // excluding genesis.
-    let verifying_slot = get_verifying_slot();
-    if verifying_slot == 0 || verifying_slot > POW_CUTOFF {
+    let verifying_block_height = get_verifying_block_height();
+    if verifying_block_height == 0 || verifying_block_height > POW_CUTOFF {
         msg!(
-            "[PoWRewardV1] Error: Call is executed for slot {}(cutoff slot {})",
-            verifying_slot,
+            "[PoWRewardV1] Error: Call is executed for block height {}(cutoff block height {})",
+            verifying_block_height,
             POW_CUTOFF
         );
-        return Err(MoneyError::PoWRewardCallAfterCutoffSlot.into())
+        return Err(MoneyError::PoWRewardCallAfterCutoffBlockHeight.into())
     }
 
     // Grab the slot to validate consensus params against
-    let Some(slot) = get_slot(verifying_slot)? else {
-        msg!("[PoWRewardV1] Error: Missing slot {} from db", verifying_slot);
+    let Some(slot) = get_slot(verifying_block_height)? else {
+        msg!("[PoWRewardV1] Error: Missing slot {} from db", verifying_block_height);
         return Err(MoneyError::PoWRewardMissingSlot.into())
     };
     let slot: Slot = deserialize(&slot)?;
@@ -134,13 +134,13 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
         return Err(MoneyError::TransferClearInputNonNativeToken.into())
     }
 
-    // Verify reward value matches the expected one for this slot(block height)
-    let expected_reward = expected_reward(verifying_slot);
+    // Verify reward value matches the expected one for this block height(slot)
+    let expected_reward = expected_reward(verifying_block_height);
     if params.input.value != expected_reward {
         msg!(
             "[PoWRewardV1] Error: Reward value({}) is not the block height({}) expected one: {}",
             params.input.value,
-            verifying_slot,
+            verifying_block_height,
             expected_reward
         );
         return Err(MoneyError::ValueMismatch.into())

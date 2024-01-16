@@ -112,14 +112,14 @@ pub enum MoneyError {
     #[error("Child call input mismatch")]
     ChildCallInputMismatch,
 
-    #[error("Call is not executed on genesis slot")]
-    GenesisCallNonGenesisSlot,
+    #[error("Call is not executed on genesis block")]
+    GenesisCallNonGenesisBlock,
 
     #[error("Missing nullifier in set")]
     MissingNullifier,
 
-    #[error("Call is executed after cutoff slot")]
-    PoWRewardCallAfterCutoffSlot,
+    #[error("Call is executed after cutoff block height")]
+    PoWRewardCallAfterCutoffBlockHeight,
 
     #[error("Missing slot from db")]
     PoWRewardMissingSlot,
@@ -171,9 +171,9 @@ impl From<MoneyError> for ContractError {
             MoneyError::ParentCallInputMismatch => Self::Custom(28),
             MoneyError::ChildCallFunctionMismatch => Self::Custom(29),
             MoneyError::ChildCallInputMismatch => Self::Custom(30),
-            MoneyError::GenesisCallNonGenesisSlot => Self::Custom(31),
+            MoneyError::GenesisCallNonGenesisBlock => Self::Custom(31),
             MoneyError::MissingNullifier => Self::Custom(32),
-            MoneyError::PoWRewardCallAfterCutoffSlot => Self::Custom(33),
+            MoneyError::PoWRewardCallAfterCutoffBlockHeight => Self::Custom(33),
             MoneyError::PoWRewardMissingSlot => Self::Custom(34),
             MoneyError::PoWRewardExtendsUnknownFork => Self::Custom(35),
             MoneyError::PoWRewardErroneousVrfProof => Self::Custom(36),

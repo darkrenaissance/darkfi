@@ -26,7 +26,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     merkle_add, msg,
     pasta::pallas,
-    util::get_verifying_slot,
+    util::get_verifying_block_height,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -83,11 +83,14 @@ pub(crate) fn money_genesis_mint_process_instruction_v1(
     let self_ = &calls[call_idx as usize].data;
     let params: MoneyGenesisMintParamsV1 = deserialize(&self_.data[1..])?;
 
-    // Verify this contract call is verified against on genesis slot(0).
-    let verifying_slot = get_verifying_slot();
-    if verifying_slot != 0 {
-        msg!("[GenesisMintV1] Error: Call is executed for slot {}, not genesis", verifying_slot);
-        return Err(MoneyError::GenesisCallNonGenesisSlot.into())
+    // Verify this contract call is verified against genesis block(0).
+    let verifying_block_height = get_verifying_block_height();
+    if verifying_block_height != 0 {
+        msg!(
+            "[GenesisMintV1] Error: Call is executed for slot {}, not genesis",
+            verifying_block_height
+        );
+        return Err(MoneyError::GenesisCallNonGenesisBlock.into())
     }
 
     // Only DARK_TOKEN_ID can be minted on genesis slot.
