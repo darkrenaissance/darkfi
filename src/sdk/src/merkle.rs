@@ -54,5 +54,5 @@ pub fn merkle_add(
 }
 
 extern "C" {
-    fn merkle_add_(ptr: *const u8, len: u32) -> i32;
+    fn merkle_add_(ptr: *const u8, len: u32) -> i64;
 }
