@@ -33,7 +33,7 @@ use super::{
 #[allow(non_snake_case)]
 pub fn pedersen_commitment_base(value: pallas::Base, blind: pallas::Scalar) -> pallas::Point {
     let hasher = pallas::Point::hash_to_curve(VALUE_COMMITMENT_PERSONALIZATION);
-    let V = NullifierK.generator();
+    let V = hasher(&VALUE_COMMITMENT_V_BYTES);
     let R = hasher(&VALUE_COMMITMENT_R_BYTES);
 
     V * mod_r_p(value) + R * blind
