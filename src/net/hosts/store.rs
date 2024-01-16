@@ -696,20 +696,28 @@ impl Hosts {
         anchorlist.iter().find(|(url, _)| url == addr).map(|(url, time)| (url.clone(), *time))
     }
 
+    /// Return all known greylisted hosts
+    pub async fn greylist_fetch_all(&self) -> Vec<(Url, u64)> {
+        self.greylist.read().await.iter().cloned().collect()
+    }
+
     /// Return all known whitelisted hosts
     pub async fn whitelist_fetch_all(&self) -> Vec<(Url, u64)> {
         self.whitelist.read().await.iter().cloned().collect()
     }
 
-    /// Return all known hosts
-    pub async fn hostlist_fetch_all(&self) -> HashMap<String, Vec<(Url, u64)>> {
+    /// Return all known anchorlisted hosts
+    pub async fn anchorlist_fetch_all(&self) -> Vec<(Url, u64)> {
+        self.anchorlist.read().await.iter().cloned().collect()
+    }
+
+    /// Return anchorlist and greylist hosts. Called on stop().
+    pub async fn hostlist_fetch_safe(&self) -> HashMap<String, Vec<(Url, u64)>> {
         let mut hostlist = HashMap::new();
         hostlist.insert(
             "anchorlist".to_string(),
             self.anchorlist.read().await.iter().cloned().collect(),
         );
-        hostlist
-            .insert("whitelist".to_string(), self.whitelist.read().await.iter().cloned().collect());
         hostlist
             .insert("greylist".to_string(), self.greylist.read().await.iter().cloned().collect());
         hostlist
@@ -962,6 +970,18 @@ impl Hosts {
         ret
     }
 
+    /// Downgrade all whitelist entries to the greylist. Called on GreylistRefinery::stop().
+    pub async fn whitelist_downgrade(&self) {
+        let mut greylist = self.greylist.write().await;
+
+        for (url, last_seen) in self.whitelist.read().await.iter() {
+            if !self.greylist_contains(&url).await {
+                greylist.push((url.clone(), *last_seen));
+            }
+        }
+
+    }
+
     /// Load the hostlist from a file.
     pub async fn load_hosts(&self) -> Result<()> {
         let path = expand_path(&self.settings.hostlist)?;
@@ -1003,9 +1023,6 @@ impl Hosts {
                 "greylist" => {
                     self.greylist_store(url, last_seen).await;
                 }
-                "whitelist" => {
-                    self.whitelist_store(url, last_seen).await;
-                }
                 "anchorlist" => {
                     self.anchorlist_store(url, last_seen).await;
                 }
@@ -1018,13 +1035,16 @@ impl Hosts {
         Ok(())
     }
 
-    /// Save the hostlist to a file.
+    /// Save the greylist and anchorlist to a file.
+    /// Note: we do not save the whitelist here as doing so would make the whitelist
+    /// effectively static. Instead, we first downgrade whitelist entries as greylist before
+    /// storing them on disk. This forces all whitelist entries through the refinery.
     pub async fn save_hosts(&self) -> Result<()> {
         let path = expand_path(&self.settings.hostlist)?;
 
         let mut tsv = String::new();
 
-        for (name, list) in self.hostlist_fetch_all().await {
+        for (name, list) in self.hostlist_fetch_safe().await {
             for (url, last_seen) in list {
                 tsv.push_str(&format!("{}\t{}\t{}\n", name, url, last_seen));
             }
