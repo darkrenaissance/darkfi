@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use super::{
-    db::{CALLER_ACCESS_DENIED, DB_GET_FAILED},
-    error::{ContractError, GenericResult},
-};
+use super::error::{ContractError, GenericResult};
 
 /// Calls the `set_return_data` WASM function. Returns Ok(()) on success.
 /// Otherwise, convert the i64 error code into a [`ContractError`].
@@ -58,12 +55,12 @@ pub fn get_object_size(object_index: u32) -> i64 {
 pub(crate) fn parse_ret(ret: i64) -> GenericResult<Option<Vec<u8>>> {
     // Negative values represent an error code.
     if ret < 0 {
-        match ret {
-            CALLER_ACCESS_DENIED => return Err(ContractError::CallerAccessDenied),
-            DB_GET_FAILED => return Err(ContractError::DbGetFailed),
-            -127 => return Ok(None),
-            _ => unimplemented!(),
+        // However here on the special case, we'll return Ok(None)
+        if ret == crate::error::DB_GET_EMPTY {
+            return Ok(None)
         }
+
+        return Err(ContractError::from(ret))
     }
 
     // Ensure that the returned value fits into the u32 datatype.

@@ -654,13 +654,13 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
             }
         };
 
-    // Return error if the data is empty
+    // Return special error if the data is empty
     let Some(return_data) = ret else {
         debug!(
             target: "runtime::db::db_get",
             "[WASM] [{}] db_get(): Return data is empty", cid,
         );
-        return darkfi_sdk::error::INTERNAL_ERROR
+        return darkfi_sdk::error::DB_GET_EMPTY
     };
 
     if return_data.len() > u32::MAX as usize {
