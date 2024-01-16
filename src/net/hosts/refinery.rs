@@ -67,6 +67,8 @@ impl GreylistRefinery {
     }
 
     pub async fn stop(self: Arc<Self>) {
+        self.process.stop().await;
+
         match self.p2p().hosts().save_hosts().await {
             Ok(()) => {
                 debug!(target: "net::refinery::stop()", "Save hosts successful!");
@@ -75,7 +77,6 @@ impl GreylistRefinery {
                 warn!(target: "net::refinery::stop()", "Error saving hosts {}", e);
             }
         }
-        self.process.stop().await;
     }
 
     // Randomly select a peer on the greylist and probe it.
