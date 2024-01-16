@@ -97,11 +97,11 @@ guarantee which block they get into, we therefore must modulo the block height
 a certain number which we use in the proofs.
 
 ```rust
-{{#include ../../../../../src/contract/dao/src/lib.rs:dao-slot_to_day}}
+{{#include ../../../../../src/contract/dao/src/lib.rs:dao-blockheight_to_day}}
 ```
 
 which can be used like this
 ```rust
-{{#include ../../../../../src/contract/dao/src/entrypoint/propose.rs:dao-slot_to_day-example-usage}}
+{{#include ../../../../../src/contract/dao/src/entrypoint/propose.rs:dao-blockheight_to_day-example-usage}}
 ```
 
