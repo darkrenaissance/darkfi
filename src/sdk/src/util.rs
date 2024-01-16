@@ -86,6 +86,15 @@ pub fn get_current_epoch() -> u64 {
     unsafe { get_current_epoch_() }
 }
 
+/// Everyone can call this. Will return current block height.
+///
+/// ```
+/// block_height = get_current_block_height();
+/// ```
+pub fn get_current_block_height() -> u64 {
+    unsafe { get_current_block_height_() }
+}
+
 /// Everyone can call this. Will return current slot.
 ///
 /// ```
@@ -93,6 +102,16 @@ pub fn get_current_epoch() -> u64 {
 /// ```
 pub fn get_current_slot() -> u64 {
     unsafe { get_current_slot_() }
+}
+
+/// Everyone can call this. Will return runtime configured
+/// verifying block height.
+///
+/// ```
+/// block_height = get_verifying_block_height();
+/// ```
+pub fn get_verifying_block_height() -> u64 {
+    unsafe { get_verifying_block_height_() }
 }
 
 /// Everyone can call this. Will return runtime configured
@@ -106,10 +125,20 @@ pub fn get_verifying_slot() -> u64 {
 }
 
 /// Everyone can call this. Will return runtime configured
+/// verifying block height epoch.
+///
+/// ```
+/// epoch = get_verifying_block_height_epoch();
+/// ```
+pub fn get_verifying_block_height_epoch() -> u64 {
+    unsafe { get_verifying_block_height_epoch_() }
+}
+
+/// Everyone can call this. Will return runtime configured
 /// verifying slot epoch.
 ///
 /// ```
-/// slot = get_verifying_slot_epoch();
+/// epoch = get_verifying_slot_epoch();
 /// ```
 pub fn get_verifying_slot_epoch() -> u64 {
     unsafe { get_verifying_slot_epoch_() }
@@ -141,8 +170,11 @@ extern "C" {
     fn get_object_size_(len: u32) -> i64;
 
     fn get_current_epoch_() -> u64;
+    fn get_current_block_height_() -> u64;
     fn get_current_slot_() -> u64;
+    fn get_verifying_block_height_() -> u64;
     fn get_verifying_slot_() -> u64;
+    fn get_verifying_block_height_epoch_() -> u64;
     fn get_verifying_slot_epoch_() -> u64;
     fn get_slot_(slot: u64) -> i64;
     fn get_blockchain_time_() -> u64;

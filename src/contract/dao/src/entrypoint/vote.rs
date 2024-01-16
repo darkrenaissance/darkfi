@@ -24,7 +24,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    util::get_verifying_slot,
+    util::get_verifying_block_height,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -81,7 +81,7 @@ pub(crate) fn dao_vote_get_metadata(
         ));
     }
 
-    let current_day = blockheight_to_day(get_verifying_slot());
+    let current_day = blockheight_to_day(get_verifying_block_height());
 
     let yes_vote_commit_coords = params.yes_vote_commit.to_affine().coordinates().unwrap();
     let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();

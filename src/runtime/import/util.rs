@@ -199,14 +199,32 @@ pub(crate) fn get_current_epoch(ctx: FunctionEnvMut<Env>) -> u64 {
     ctx.data().time_keeper.current_epoch()
 }
 
+/// Will return current block height number, which is equivalent
+/// to current slot number.
+pub(crate) fn get_current_block_height(ctx: FunctionEnvMut<Env>) -> u64 {
+    ctx.data().time_keeper.current_slot()
+}
+
 /// Will return current slot number.
 pub(crate) fn get_current_slot(ctx: FunctionEnvMut<Env>) -> u64 {
     ctx.data().time_keeper.current_slot()
 }
 
+/// Will return current runtime configured verifying block height number,
+/// which is equivalent to verifying slot number.
+pub(crate) fn get_verifying_block_height(ctx: FunctionEnvMut<Env>) -> u64 {
+    ctx.data().time_keeper.verifying_slot
+}
+
 /// Will return current runtime configured verifying slot number.
 pub(crate) fn get_verifying_slot(ctx: FunctionEnvMut<Env>) -> u64 {
     ctx.data().time_keeper.verifying_slot
+}
+
+/// Will return current runtime configured verifying block height epoch number,
+/// which is equivalent to verifying slot epoch number.
+pub(crate) fn get_verifying_block_height_epoch(ctx: FunctionEnvMut<Env>) -> u64 {
+    ctx.data().time_keeper.verifying_slot_epoch()
 }
 
 /// Will return current runtime configured verifying slot epoch number.

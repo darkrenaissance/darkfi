@@ -27,7 +27,7 @@ use darkfi_sdk::{
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
-    util::get_verifying_slot,
+    util::get_verifying_block_height,
     ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
@@ -85,7 +85,7 @@ pub(crate) fn dao_propose_get_metadata(
     }
 
     // ANCHOR: dao-blockheight_to_day-example-usage
-    let current_day = blockheight_to_day(get_verifying_slot());
+    let current_day = blockheight_to_day(get_verifying_block_height());
     // ANCHOR_END: dao-blockheight_to_day-example-usage
 
     let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
