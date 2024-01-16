@@ -44,7 +44,7 @@ use crate::{
 /// Name of the wasm linear memory in our guest module
 const MEMORY: &str = "memory";
 
-/// Gas limit for a contract
+/// Gas limit for a single contract call (Single WASM instance)
 const GAS_LIMIT: u64 = 400_000_000;
 
 // ANCHOR: contract-section
@@ -75,7 +75,7 @@ impl ContractSection {
     }
 }
 
-/// The wasm vm runtime instantiated for every smart contract that runs.
+/// The WASM VM runtime environment instantiated for every smart contract that runs.
 pub struct Env {
     /// Blockchain overlay access
     pub blockchain: BlockchainOverlayPtr,
@@ -135,7 +135,7 @@ impl Runtime {
         contract_id: ContractId,
         time_keeper: TimeKeeper,
     ) -> Result<Self> {
-        info!(target: "runtime::vm_runtime", "Instantiating a new runtime");
+        info!(target: "runtime::vm_runtime", "[WASM] Instantiating a new runtime");
         // This function will be called for each `Operator` encountered during
         // the wasm module execution. It should return the cost of the operator
         // that it received as its first argument. For now, every wasm opcode
@@ -306,8 +306,8 @@ impl Runtime {
     }
 
     /// Call a contract method defined by a [`ContractSection`] using a supplied
-    /// payload. Returns a Vector of bytes corresponding to the result data of the call.
-    /// For calls that do not return any data, an empty Vector is returned.
+    /// payload. Returns a `Vec<u8>` corresponding to the result data of the call.
+    /// For calls that do not return any data, an empty `Vec<u8>` is returned.
     fn call(&mut self, section: ContractSection, payload: &[u8]) -> Result<Vec<u8>> {
         debug!(target: "runtime::vm_runtime", "Calling {} method", section.name());
 
@@ -316,10 +316,6 @@ impl Runtime {
         // Verify contract's return data is empty, or quit.
         assert!(env_mut.contract_return_data.take().is_none());
 
-        // This should already be clear, or the assert call above
-        // would prevent the code from reaching this point.
-        // Clear anyway, to be safe.
-        env_mut.contract_return_data.set(None);
         // Clear the logs
         let _ = env_mut.logs.take();
 
@@ -343,14 +339,14 @@ impl Runtime {
         let ret = match entrypoint.call(&mut self.store, &[Value::I32(0_i32)]) {
             Ok(retvals) => {
                 self.print_logs();
-                info!(target: "runtime::vm_runtime", "{}", self.gas_info());
+                info!(target: "runtime::vm_runtime", "[WASM] {}", self.gas_info());
                 retvals
             }
             Err(e) => {
                 self.print_logs();
-                info!(target: "runtime::vm_runtime", "{}", self.gas_info());
+                info!(target: "runtime::vm_runtime", "[WASM] {}", self.gas_info());
                 // WasmerRuntimeError panics are handled here. Return from run() immediately.
-                error!(target: "runtime::vm_runtime", "Wasmer Runtime Error: {:#?}", e);
+                error!(target: "runtime::vm_runtime", "[WASM] Wasmer Runtime Error: {:#?}", e);
                 return Err(e.into())
             }
         };
@@ -392,55 +388,50 @@ impl Runtime {
         // result data. Otherwise, map the integer return value to a [`ContractError`].
         match retval {
             entrypoint::SUCCESS => Ok(retdata),
-            // FIXME: we should be able to see the error returned from the contract
-            // We can put sdk::Error inside of this.
             _ => {
                 let err = darkfi_sdk::error::ContractError::from(retval);
+                error!(target: "runtime::vm_runtime", "[WASM] Contract returned: {:?}", err);
                 Err(Error::ContractError(err))
             }
         }
     }
 
     /// This function runs when a smart contract is initially deployed, or re-deployed.
-    /// The runtime will look for an `INITIALIZE` symbol in the wasm code, and execute
+    ///
+    /// The runtime will look for an `__initialize` symbol in the wasm code, and execute
     /// it if found. Optionally, it is possible to pass in a payload for any kind of special
     /// instructions the developer wants to manage in the initialize function.
+    ///
     /// This process is supposed to set up the overlay trees for storing the smart contract
     /// state, and it can create, delete, modify, read, and write to databases it's allowed to.
     /// The permissions for this are handled by the `ContractId` in the overlay db API so we
     /// assume that the contract is only able to do write operations on its own overlay trees.
-    /// TODO: This should also be in sled-overlay!
     pub fn deploy(&mut self, payload: &[u8]) -> Result<()> {
-        info!(target: "runtime::vm_runtime", "[wasm-runtime] Running deploy");
+        let cid = self.ctx.as_ref(&self.store).contract_id;
+        info!(target: "runtime::vm_runtime", "[WASM] Running deploy() for ContractID: {}", cid);
 
         // Scoped for borrows
         {
             let env_mut = self.ctx.as_mut(&mut self.store);
-
             // We always want to have the zkas db as index 0 in db handles and batches when
             // deploying.
             let contracts = &env_mut.blockchain.lock().unwrap().contracts;
 
+            // Open or create the zkas db tree for this contract
             let zkas_tree_handle =
                 match contracts.lookup(&env_mut.contract_id, SMART_CONTRACT_ZKAS_DB_NAME) {
                     Ok(v) => v,
-                    Err(_) => {
-                        // FIXME: All this is deploy code is "vulnerable" and able to init a
-                        // tree regardless of execution success. We can easily delete the db
-                        // if execution fails though, and we should charge gas for db_init.
-                        // and perhaps also for the zkas database in this specific case.
-                        contracts.init(&env_mut.contract_id, SMART_CONTRACT_ZKAS_DB_NAME)?
-                    }
+                    Err(_) => contracts.init(&env_mut.contract_id, SMART_CONTRACT_ZKAS_DB_NAME)?,
                 };
 
             let mut db_handles = env_mut.db_handles.borrow_mut();
             db_handles.push(DbHandle::new(env_mut.contract_id, zkas_tree_handle));
         }
 
-        //debug!(target: "runtime::vm_runtime", "[wasm-runtime] payload: {:?}", payload);
+        //debug!(target: "runtime::vm_runtime", "[WASM] payload: {:?}", payload);
         let _ = self.call(ContractSection::Deploy, payload)?;
 
-        // Update the wasm bincode in the WasmStore
+        // Update the wasm bincode in the WasmStore if the deploy exec passed successfully.
         let env_mut = self.ctx.as_mut(&mut self.store);
         env_mut
             .blockchain
@@ -449,36 +440,61 @@ impl Runtime {
             .wasm_bincode
             .insert(env_mut.contract_id, &env_mut.contract_bincode)?;
 
-        Ok(())
-    }
-
-    /// This function runs when someone wants to execute a smart contract.
-    /// The runtime will look for an `ENTRYPOINT` symbol in the wasm code, and
-    /// execute it if found. A payload is also passed as an instruction that can
-    /// be used inside the vm by the runtime.
-    pub fn exec(&mut self, payload: &[u8]) -> Result<Vec<u8>> {
-        debug!(target: "runtime::vm_runtime", "exec: {:?}", payload);
-        self.call(ContractSection::Exec, payload)
-    }
-
-    /// This function runs after successful execution of `exec` and tries to
-    /// apply the state change to the overlay databases.
-    /// The runtime will lok for an `UPDATE` symbol in the wasm code, and execute
-    /// it if found. The function does not take an arbitrary payload, but just takes
-    /// a state update from `env` and passes it into the wasm runtime.
-    pub fn apply(&mut self, update: &[u8]) -> Result<()> {
-        debug!(target: "runtime::vm_runtime", "apply: {:?}", update);
-        let _ = self.call(ContractSection::Update, update)?;
-
+        info!(target: "runtime::vm_runtime", "[WASM] Successfully deployed ContractID: {}", cid);
         Ok(())
     }
 
     /// This function runs first in the entire scheme of executing a smart contract.
+    ///
+    /// The runtime will look for a `__metadata` symbol in the wasm code and execute it.
     /// It is supposed to correctly extract public inputs for any ZK proofs included
     /// in the contract calls, and also extract the public keys used to verify the
     /// call/transaction signatures.
     pub fn metadata(&mut self, payload: &[u8]) -> Result<Vec<u8>> {
-        self.call(ContractSection::Metadata, payload)
+        let cid = self.ctx.as_ref(&self.store).contract_id;
+        info!(target: "runtime::vm_runtime", "[WASM] Running metadata() for ContractID: {}", cid);
+
+        debug!(target: "runtime::vm_runtime", "metadata payload: {:?}", payload);
+        let ret = self.call(ContractSection::Metadata, payload)?;
+        debug!(target: "runtime::vm_runtime", "metadata returned: {:?}", ret);
+
+        info!(target: "runtime::vm_runtime", "[WASM] Successfully got metadata ContractID: {}", cid);
+        Ok(ret)
+    }
+
+    /// This function runs when someone wants to execute a smart contract.
+    ///
+    /// The runtime will look for an `__entrypoint` symbol in the wasm code, and
+    /// execute it if found. A payload is also passed as an instruction that can
+    /// be used inside the vm by the runtime.
+    pub fn exec(&mut self, payload: &[u8]) -> Result<Vec<u8>> {
+        let cid = self.ctx.as_ref(&self.store).contract_id;
+        info!(target: "runtime::vm_runtime", "[WASM] Running exec() for ContractID: {}", cid);
+
+        debug!(target: "runtime::vm_runtime", "exec payload: {:?}", payload);
+        let ret = self.call(ContractSection::Exec, payload)?;
+        debug!(target: "runtime::vm_runtime", "exec returned: {:?}", ret);
+
+        info!(target: "runtime::vm_runtime", "[WASM] Successfully executed ContractID: {}", cid);
+        Ok(ret)
+    }
+
+    /// This function runs after successful execution of `exec` and tries to
+    /// apply the state change to the overlay databases.
+    ///
+    /// The runtime will lok for an `__update` symbol in the wasm code, and execute
+    /// it if found. The function does not take an arbitrary payload, but just takes
+    /// a state update from `env` and passes it into the wasm runtime.
+    pub fn apply(&mut self, update: &[u8]) -> Result<()> {
+        let cid = self.ctx.as_ref(&self.store).contract_id;
+        info!(target: "runtime::vm_runtime", "[WASM] Running apply() for ContractID: {}", cid);
+
+        debug!(target: "runtime::vm_runtime", "apply payload: {:?}", update);
+        let ret = self.call(ContractSection::Update, update)?;
+        debug!(target: "runtime::vm_runtime", "apply returned: {:?}", ret);
+
+        info!(target: "runtime::vm_runtime", "[WASM] Successfully applied ContractID: {}", cid);
+        Ok(())
     }
 
     /// Prints the wasm contract logs.
