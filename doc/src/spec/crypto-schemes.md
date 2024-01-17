@@ -127,3 +127,28 @@ $$ \t{PedersenCommit}(v, b) = \t{Lift}ᵥ(v) G_V + b G_B $$
 
 This scheme is a computationally binding and perfectly hiding commitment scheme.
 
+## Incremental Merkle Tree
+
+![incremental merkle tree](../assets/incremental-merkle-tree.svg)
+
+Let $ℓᴹ = 32$ be the merkle depth.
+
+The incremental merkle tree is fixed depth of $ℓᴹ$ used to store $𝔽ₚ$ items.
+It is an append-only set for which items can be proved to be inside within
+ZK. The root value is a commitment to the entire tree.
+
+Denote combining two nodes to produce a parent by the operator
+$⊕ : 𝔽ₚ × 𝔽ₚ → 𝔽ₚ$. Denote by $⊕_b$ where $b ∈ ℤ₂$, the function which
+swaps both arguments before calling $⊕$, that is
+$$ ⊕_b(X₁, X₂) = \begin{cases}
+⊕(X₁, X₂) & \text{if } b = 0 \\
+⊕(X₁, X₂) & \text{if } b = 1 \\
+\end{cases} $$
+
+We correspondingly define the types
+$$ \t{MerklePos} = ℤ₂^{ℓᴹ} $$
+$$ \t{MerklePath} = 𝔽ₚ^{ℓᴹ} $$
+and a function to calculate the root given a leaf, its position and the path,
+$$ \t{MerkleRoot} : \t{MerklePos} × \t{MerklePath} × 𝔽ₚ → 𝔽ₚ $$
+$$ \t{MerkleRoot}(𝐩, \mathbf{Π}, ℬ ) = ⊕_{p_{ℓᴹ}}(…, ⊕_{p₂}(π₂, ⊕_{p₁}(π₁, ℬ ))…) $$
+
