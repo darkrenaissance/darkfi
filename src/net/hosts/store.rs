@@ -1063,9 +1063,12 @@ impl Hosts {
 #[cfg(test)]
 mod tests {
     use super::{
-        super::super::{settings::Settings, P2p},
+        super::{
+            super::{settings::Settings, P2p},
+        },
         *,
     };
+    use crate::system::sleep;
     use smol::Executor;
     use std::{sync::Arc, time::UNIX_EPOCH};
 
@@ -1203,6 +1206,46 @@ mod tests {
 
             assert!(hosts.get_whitelist_entry_at_addr(&url).await.is_some());
             assert!(hosts.get_anchorlist_entry_at_addr(&url).await.is_some());
+        });
+    }
+
+    #[test]
+    fn test_remove() {
+        smol::block_on(async {
+            let settings = Settings {
+                outbound_connections: 8,
+                allowed_transports: vec!["tcp".to_string()],
+                ..Default::default()
+            };
+            let hosts = Hosts::new(Arc::new(settings.clone()));
+
+            let url = Url::parse("tcp://dark.renaissance:333").unwrap();
+            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+
+            hosts.whitelist_store(url.clone(), last_seen).await;
+
+            sleep(1).await;
+
+            let url = Url::parse("tcp://milady:333").unwrap();
+            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+
+            hosts.whitelist_store(url.clone(), last_seen).await;
+
+            sleep(1).await;
+
+            let url = Url::parse("tcp://king-ted:333").unwrap();
+            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+
+            hosts.whitelist_store(url.clone(), last_seen).await;
+            for (url, last_seen) in hosts.whitelist.read().await.iter() {
+                println!("{}, {}", url, last_seen);
+            }
+
+            let position = hosts.get_whitelist_index_at_addr(url.clone()).await.unwrap();
+            hosts.whitelist_remove(&url, position).await;
+            for (url, last_seen) in hosts.whitelist.read().await.iter() {
+                println!("{}, {}", url, last_seen);
+            }
         });
     }
 
