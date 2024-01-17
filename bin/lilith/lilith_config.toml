@@ -1,6 +1,6 @@
-## lilith configuration file
+## lilith.localuration file
 ##
-## Please make sure you go through all the settings so you can configure
+## Please make sure you go through all the settings so you can.localure
 ## your daemon properly.
 ##
 ## The default values are left commented. They can be overridden either by
@@ -16,7 +16,7 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
-#hostlist ="~/.config/darkfi/darkfid_sync_hostlist.tsv"
+#hostlist ="~/.local/darkfi/lilith/darkfid_sync_hostlist.tsv"
 
 
 #[network."darkfid_consensus_v4"]
@@ -25,7 +25,7 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
-#hostlist ="~/.config/darkfi/darkfid_consensus_hostlist.tsv"
+#hostlist ="~/.local/darkfi/lilith/darkfid_consensus_hostlist.tsv"
 
 #[network."darkirc_v4"]
 #accept_addrs = ["tcp+tls://0.0.0.0:25551"]
@@ -33,7 +33,7 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
-#hostlist ="~/.config/darkfi/darkirc_hostlist.tsv"
+#hostlist ="~/.local/darkfi/lilith/darkirc_hostlist.tsv"
 
 #[network."taud_v4"]
 #accept_addrs = ["tcp+tls://0.0.0.0:23331"]
@@ -41,4 +41,4 @@
 #peers = []
 #version = "0.4.1"
 #localnet = false
-#hostlist ="~/.config/darkfi/taud_hostlist.tsv"
+#hostlist ="~/.local/darkfi/lilith/taud_hostlist.tsv"
