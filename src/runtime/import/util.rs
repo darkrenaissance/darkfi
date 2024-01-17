@@ -265,8 +265,8 @@ pub(crate) fn get_verifying_slot_epoch(ctx: FunctionEnvMut<Env>) -> u64 {
 ///
 /// On success, returns the index of the new object in the object store.
 /// Otherwise, returns an error code.
-pub(crate) fn get_slot(ctx: FunctionEnvMut<Env>, slot: u64) -> i64 {
-    let env = ctx.data();
+pub(crate) fn get_slot(mut ctx: FunctionEnvMut<Env>, slot: u64) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
     let cid = &env.contract_id;
 
     // Enforce function ACL
@@ -291,6 +291,9 @@ pub(crate) fn get_slot(ctx: FunctionEnvMut<Env>, slot: u64) -> i64 {
             return darkfi_sdk::error::DB_GET_FAILED
         }
     };
+
+    // Subtract used gas. Here we count the size of the object.
+    env.subtract_gas(&mut store, ret.len() as u64);
 
     // Copy Vec<u8> to the VM
     let mut objects = env.objects.borrow_mut();
