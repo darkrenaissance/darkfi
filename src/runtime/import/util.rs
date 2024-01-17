@@ -23,11 +23,13 @@ use super::acl::acl_allow;
 use crate::runtime::vm_runtime::{ContractSection, Env};
 
 /// Host function for logging strings.
-pub(crate) fn drk_log(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) {
-    let env = ctx.data();
-    let cid = &env.contract_id;
-    let memory_view = env.memory_view(&ctx);
+pub(crate) fn drk_log(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) {
+    let (env, mut store) = ctx.data_and_store_mut();
 
+    // Subtract used gas. Here we count the length of the string.
+    env.subtract_gas(&mut store, len as u64);
+
+    let memory_view = env.memory_view(&store);
     match ptr.read_utf8_string(&memory_view, len) {
         Ok(msg) => {
             let mut logs = env.logs.borrow_mut();
@@ -37,7 +39,8 @@ pub(crate) fn drk_log(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) {
         Err(_) => {
             error!(
                 target: "runtime::util::drk_log",
-                "[WASM] [{}] drk_log(): Failed to read UTF-8 string from VM memory", cid,
+                "[WASM] [{}] drk_log(): Failed to read UTF-8 string from VM memory",
+                env.contract_id,
             );
         }
     }
@@ -48,8 +51,8 @@ pub(crate) fn drk_log(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) {
 ///
 /// Returns `SUCCESS` on success, otherwise returns an error code corresponding
 /// to a [`ContractError`].
-pub(crate) fn set_return_data(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
-    let env = ctx.data();
+pub(crate) fn set_return_data(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
     let cid = &env.contract_id;
 
     // Enforce function ACL
@@ -61,7 +64,10 @@ pub(crate) fn set_return_data(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    let memory_view = env.memory_view(&ctx);
+    // Subtract used gas. Here we count the length read from the memory slice.
+    env.subtract_gas(&mut store, len as u64);
+
+    let memory_view = env.memory_view(&store);
     let Ok(slice) = ptr.slice(&memory_view, len) else { return darkfi_sdk::error::INTERNAL_ERROR };
     let Ok(return_data) = slice.read_to_vec() else { return darkfi_sdk::error::INTERNAL_ERROR };
 
@@ -79,11 +85,14 @@ pub(crate) fn set_return_data(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u
 ///
 /// Returns an index corresponding to the new object's index in the objects
 /// store. (This index is equal to the last index in the store.)
-pub(crate) fn put_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
-    let env = ctx.data();
-    let cid = &env.contract_id;
-    let memory_view = env.memory_view(&ctx);
+pub(crate) fn put_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
 
+    // Subtract used gas. Here we count the length read from the memory slice.
+    env.subtract_gas(&mut store, len as u64);
+
+    let memory_view = env.memory_view(&store);
     //debug!(target: "runtime::util", "diagnostic:");
     let pages = memory_view.size().0;
     //debug!(target: "runtime::util", "    pages: {}", pages);
@@ -128,11 +137,10 @@ pub(crate) fn put_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: 
 /// The object's data is written to `ptr`.
 ///
 /// Returns `SUCCESS` on success and an error code otherwise.
-pub(crate) fn get_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, idx: u32) -> i64 {
+pub(crate) fn get_object_bytes(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, idx: u32) -> i64 {
     // Get the slice, where we will read the size of the buffer
-    let env = ctx.data();
-    let cid = &env.contract_id;
-    let memory_view = env.memory_view(&ctx);
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
 
     // Get the object from env
     let objects = env.objects.borrow();
@@ -143,12 +151,18 @@ pub(crate) fn get_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, idx: 
         );
         return darkfi_sdk::error::DATA_TOO_LARGE
     }
-    let obj = &objects[idx as usize];
+    let obj = objects[idx as usize].clone();
+    drop(objects);
+
     if obj.len() > u32::MAX as usize {
         return darkfi_sdk::error::DATA_TOO_LARGE
     }
 
+    // Subtract used gas. Here we count the bytes written to the memory slice
+    env.subtract_gas(&mut store, obj.len() as u64);
+
     // Read N bytes from the object and write onto the ptr.
+    let memory_view = env.memory_view(&store);
     let Ok(slice) = ptr.slice(&memory_view, obj.len() as u32) else {
         error!(
             target: "runtime::util::get_object_bytes",
@@ -158,7 +172,7 @@ pub(crate) fn get_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, idx: 
     };
 
     // Put the result in the VM
-    if let Err(e) = slice.write_slice(obj) {
+    if let Err(e) = slice.write_slice(&obj) {
         error!(
             target: "runtime::util::get_object_bytes",
             "[WASM] [{}] get_object_bytes(): Failed to write to memory slice: {}", cid, e,
@@ -171,10 +185,10 @@ pub(crate) fn get_object_bytes(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, idx: 
 
 /// Returns the size (number of bytes) of an object in the object store
 /// specified by index `idx`.
-pub(crate) fn get_object_size(ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
+pub(crate) fn get_object_size(mut ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
     // Get the slice, where we will read the size of the buffer
-    let env = ctx.data();
-    let cid = &env.contract_id;
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
 
     // Get the object from env
     let objects = env.objects.borrow();
@@ -187,48 +201,62 @@ pub(crate) fn get_object_size(ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
     }
 
     let obj = &objects[idx as usize];
-    if obj.len() > u32::MAX as usize {
+    let obj_len = obj.len();
+    drop(objects);
+
+    if obj_len > u32::MAX as usize {
         return darkfi_sdk::error::DATA_TOO_LARGE
     }
 
-    obj.len() as i64
+    // Subtract used gas. Here we count the size of the object.
+    // TODO: This could probably be fixed-cost
+    env.subtract_gas(&mut store, obj_len as u64);
+
+    obj_len as i64
 }
 
 /// Will return current epoch number.
 pub(crate) fn get_current_epoch(ctx: FunctionEnvMut<Env>) -> u64 {
+    // TODO: Gas cost
     ctx.data().time_keeper.current_epoch()
 }
 
 /// Will return current block height number, which is equivalent
 /// to current slot number.
 pub(crate) fn get_current_block_height(ctx: FunctionEnvMut<Env>) -> u64 {
+    // TODO: Gas cost
     ctx.data().time_keeper.current_slot()
 }
 
 /// Will return current slot number.
 pub(crate) fn get_current_slot(ctx: FunctionEnvMut<Env>) -> u64 {
+    // TODO: Gas cost
     ctx.data().time_keeper.current_slot()
 }
 
 /// Will return current runtime configured verifying block height number,
 /// which is equivalent to verifying slot number.
 pub(crate) fn get_verifying_block_height(ctx: FunctionEnvMut<Env>) -> u64 {
+    // TODO: Gas cost
     ctx.data().time_keeper.verifying_slot
 }
 
 /// Will return current runtime configured verifying slot number.
 pub(crate) fn get_verifying_slot(ctx: FunctionEnvMut<Env>) -> u64 {
+    // TODO: Gas cost
     ctx.data().time_keeper.verifying_slot
 }
 
 /// Will return current runtime configured verifying block height epoch number,
 /// which is equivalent to verifying slot epoch number.
 pub(crate) fn get_verifying_block_height_epoch(ctx: FunctionEnvMut<Env>) -> u64 {
+    // TODO: Gas cost
     ctx.data().time_keeper.verifying_slot_epoch()
 }
 
 /// Will return current runtime configured verifying slot epoch number.
 pub(crate) fn get_verifying_slot_epoch(ctx: FunctionEnvMut<Env>) -> u64 {
+    // TODO: Gas cost
     ctx.data().time_keeper.verifying_slot_epoch()
 }
 
@@ -252,6 +280,7 @@ pub(crate) fn get_slot(ctx: FunctionEnvMut<Env>, slot: u64) -> i64 {
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
+    // TODO: Gas cost
     let ret = match env.blockchain.lock().unwrap().slots.get_by_id(slot) {
         Ok(v) => v,
         Err(e) => {
@@ -275,5 +304,6 @@ pub(crate) fn get_slot(ctx: FunctionEnvMut<Env>, slot: u64) -> i64 {
 
 /// Will return current blockchain timestamp.
 pub(crate) fn get_blockchain_time(ctx: FunctionEnvMut<Env>) -> u64 {
+    // TODO: Gas cost
     ctx.data().time_keeper.blockchain_timestamp()
 }
