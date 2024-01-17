@@ -125,10 +125,6 @@ impl Hosts {
             hosts.push((addr, last_seen));
         }
 
-        // Randomize hosts list. Do not try to connect in a deterministic order.
-        // This is healthier for multiple slots to not compete for the same addrs.
-        hosts.shuffle(&mut OsRng);
-
         hosts
     }
 
@@ -171,10 +167,6 @@ impl Hosts {
         trace!(target: "store::whitelist_fetch_address()",
         "Grabbed hosts, length: {}", hosts.len());
 
-        // Randomize hosts list. Do not try to connect in a deterministic order.
-        // This is healthier for multiple slots to not compete for the same addrs.
-        hosts.shuffle(&mut OsRng);
-
         hosts
     }
 
@@ -216,10 +208,6 @@ impl Hosts {
 
         trace!(target: "store::anchorlist_fetch_address()",
         "Grabbed hosts, length: {}", hosts.len());
-
-        // Randomize hosts list. Do not try to connect in a deterministic order.
-        // This is healthier for multiple slots to not compete for the same addrs.
-        hosts.shuffle(&mut OsRng);
 
         hosts
     }
