@@ -25,12 +25,12 @@ use darkfi_sdk::{crypto::ContractId, entrypoint};
 use darkfi_serial::serialize;
 use log::{debug, error, info};
 use wasmer::{
-    imports, wasmparser::Operator, AsStoreRef, CompilerConfig, Function, FunctionEnv, Instance,
-    Memory, MemoryView, Module, Pages, Store, Value, WASM_PAGE_SIZE,
+    imports, wasmparser::Operator, AsStoreMut, AsStoreRef, CompilerConfig, Function, FunctionEnv,
+    Instance, Memory, MemoryView, Module, Pages, Store, Value, WASM_PAGE_SIZE,
 };
 use wasmer_compiler_singlepass::Singlepass;
 use wasmer_middlewares::{
-    metering::{get_remaining_points, MeteringPoints},
+    metering::{get_remaining_points, set_remaining_points, MeteringPoints},
     Metering,
 };
 
@@ -97,6 +97,8 @@ pub struct Env {
     pub objects: RefCell<Vec<Vec<u8>>>,
     /// Helper structure to calculate time related operations
     pub time_keeper: TimeKeeper,
+    /// Parent `Instance`
+    pub instance: Option<Arc<Instance>>,
 }
 
 impl Env {
@@ -115,12 +117,28 @@ impl Env {
     pub fn memory(&self) -> &Memory {
         self.memory.as_ref().unwrap()
     }
+
+    /// Subtract given gas cost from remaining gas in the current runtime
+    pub fn subtract_gas(&mut self, ctx: &mut impl AsStoreMut, gas: u64) {
+        match get_remaining_points(ctx, self.instance.as_ref().unwrap()) {
+            MeteringPoints::Remaining(rem) => {
+                if gas > rem {
+                    set_remaining_points(ctx, self.instance.as_ref().unwrap(), 0);
+                } else {
+                    set_remaining_points(ctx, self.instance.as_ref().unwrap(), rem - gas);
+                }
+            }
+            MeteringPoints::Exhausted => {
+                set_remaining_points(ctx, self.instance.as_ref().unwrap(), 0);
+            }
+        }
+    }
 }
 
 /// Define a wasm runtime.
 pub struct Runtime {
     /// A wasm instance
-    pub instance: Instance,
+    pub instance: Arc<Instance>,
     /// A wasm store (global state)
     pub store: Store,
     // Wrapper for [`Env`], defined above.
@@ -175,6 +193,7 @@ impl Runtime {
                 memory: None,
                 objects: RefCell::new(vec![]),
                 time_keeper,
+                instance: None,
             },
         );
 
@@ -315,10 +334,11 @@ impl Runtime {
         };
 
         debug!(target: "runtime::vm_runtime", "Instantiating module");
-        let instance = Instance::new(&mut store, &module, &imports)?;
+        let instance = Arc::new(Instance::new(&mut store, &module, &imports)?);
 
         let env_mut = ctx.as_mut(&mut store);
         env_mut.memory = Some(instance.exports.get_with_generics(MEMORY)?);
+        env_mut.instance = Some(Arc::clone(&instance));
 
         Ok(Self { instance, store, ctx })
     }
