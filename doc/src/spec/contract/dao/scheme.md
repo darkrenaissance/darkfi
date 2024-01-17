@@ -10,11 +10,6 @@ Let $\t{PedersenCommit}$ be defined as in the section [Homomorphic Pedersen Comm
 
 Let $\t{Params}_\t{DAO}, \t{Bulla}_\t{DAO}, \t{Params}_\t{Proposal}, \t{Bulla}_\t{Proposal}$ be defined as in [DAO Model](model.md).
 
-TODO: add merkle section to crypto-schemes with merklepos, merklepath,
-MerkleRoot
-
-TODO: rename slot to block_height
-
 ## Mint
 
 ### Function Params
