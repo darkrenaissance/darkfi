@@ -20,10 +20,11 @@ use std::{
     collections::{HashMap, HashSet},
     process::exit,
     sync::Arc,
+    time::UNIX_EPOCH,
 };
 
 use async_trait::async_trait;
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use semver::Version;
 use smol::{
     lock::{Mutex, MutexGuard},
@@ -38,18 +39,21 @@ use url::Url;
 
 use darkfi::{
     async_daemonize, cli_desc,
-    net::{self, P2p, P2pPtr},
+    net::{self, hosts::refinery::ping_node, P2p, P2pPtr},
     rpc::{
         jsonrpc::*,
         server::{listen_and_serve, RequestHandler},
     },
-    system::{StoppableTask, StoppableTaskPtr},
+    system::{sleep, StoppableTask, StoppableTaskPtr},
     util::path::get_config_path,
     Error, Result,
 };
 
 const CONFIG_FILE: &str = "lilith_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../lilith_config.toml");
+
+/// Interval after which the refinery happens (in seconds)
+const REFINERY_INTERVAL: u64 = 60;
 
 #[derive(Clone, Debug, serde::Deserialize, StructOpt, StructOptToml)]
 #[serde(default)]
@@ -131,6 +135,42 @@ struct Lilith {
 }
 
 impl Lilith {
+    /// Periodically ping nodes on the whitelist. If they are still reachable, update their last
+    /// seen field. Otherwise, downgrade them to the greylist (i.e. do not broadcast them to other
+    /// peers).
+    async fn whitelist_refinery(name: String, p2p: P2pPtr) -> Result<()> {
+        info!(target: "lilith", "Starting whitelist refinery for \"{}\"", name);
+
+        let hosts = p2p.hosts();
+
+        loop {
+            sleep(REFINERY_INTERVAL).await;
+
+            if hosts.is_empty_whitelist().await {
+                warn!(target: "lilith", "Whitelist is empty! Cannot start refinery process");
+
+                continue
+            }
+
+            let (entry, position) = hosts.whitelist_fetch_random().await;
+            let url = &entry.0;
+
+            if !ping_node(url, p2p.clone()).await {
+                let (_addr, last_seen) = hosts.get_whitelist_entry_at_addr(url).await.unwrap();
+                hosts.greylist_store_or_update(&[(url.clone(), last_seen)]).await;
+
+                hosts.whitelist_remove(url, position).await;
+                debug!(target: "lilith", "Host {} is not responsive. Downgraded from whitelist", url);
+
+                continue
+            }
+
+            // This node is active. Update the last seen field.
+            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+            hosts.whitelist_update_last_seen(url, last_seen, position).await;
+        }
+    }
+
     // RPCAPI:
     // Returns all spawned networks names with their node addresses.
     // --> {"jsonrpc": "2.0", "method": "spawns", "params": [], "id": 42}
@@ -309,8 +349,25 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
         }
     }
 
-    // Set up main daemon
+    // Set up main daemon and background refinery_tasks
     let lilith = Arc::new(Lilith { networks, rpc_connections: Mutex::new(HashSet::new()) });
+    let mut refinery_tasks = HashMap::new();
+    for network in &lilith.networks {
+        let name = network.name.clone();
+        let task = StoppableTask::new();
+        task.clone().start(
+            Lilith::whitelist_refinery(name.clone(), network.p2p.clone()),
+            |res| async move {
+                match res {
+                    Ok(()) | Err(Error::DetachedTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "lilith", "Failed starting refinery task for \"{}\": {}", name, e),
+                }
+            },
+            Error::DetachedTaskStopped,
+            ex.clone(),
+        );
+        refinery_tasks.insert(network.name.clone(), task);
+    }
 
     // JSON-RPC server
     info!(target: "lilith", "Starting JSON-RPC server on {}", args.rpc_listen);
@@ -338,6 +395,8 @@ async fn realmain(args: Args, ex: Arc<Executor<'static>>) -> Result<()> {
 
     // Cleanly stop p2p networks
     for spawn in &lilith.networks {
+        info!(target: "lilith", "Stopping \"{}\" task", spawn.name);
+        refinery_tasks.get(&spawn.name).unwrap().stop().await;
         info!(target: "lilith", "Stopping \"{}\" P2P", spawn.name);
         spawn.p2p.stop().await;
     }

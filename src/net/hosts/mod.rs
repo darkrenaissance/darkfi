@@ -26,7 +26,7 @@
 /// The method probe_node() is also used by ProtocolSeed and ProtocolAddress. We try to establish
 /// local connections to our own external addresses using probe_node() to ensure the address is valid
 /// before propagating in ProtocolSeed and ProtocolAddress.
-pub(super) mod refinery;
+pub mod refinery;
 
 /// The main interface for interacting with the hostlist, which is stored in three sections: white,
 /// grey and anchorlists. The whitelist contains hosts that have been seen recently, the anchorlist

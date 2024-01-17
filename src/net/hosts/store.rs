@@ -734,11 +734,19 @@ impl Hosts {
         urls.iter().map(|&url| url.clone()).collect()
     }
 
-    /// Get up to a random peer from the greylist.
+    /// Get a random peer from the greylist.
     pub async fn greylist_fetch_random(&self) -> ((Url, u64), usize) {
         let greylist = self.greylist.read().await;
         let position = rand::thread_rng().gen_range(0..greylist.len());
         let entry = &greylist[position];
+        (entry.clone(), position)
+    }
+
+    /// Get a random peer from the whitelist.
+    pub async fn whitelist_fetch_random(&self) -> ((Url, u64), usize) {
+        let whitelist = self.whitelist.read().await;
+        let position = rand::thread_rng().gen_range(0..whitelist.len());
+        let entry = &whitelist[position];
         (entry.clone(), position)
     }
 
