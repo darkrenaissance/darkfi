@@ -171,6 +171,9 @@ impl InboundSession {
 
         self.p2p().remove(channel.clone()).await;
 
+        // Downgrade this host to greylist if it's on the whitelist or anchorlist.
+        self.downgrade_host(&channel.info.addr).await;
+
         debug!(
             target: "net::inbound_session::setup_channel()",
             "Received stop_sub, channel removed from P2P",

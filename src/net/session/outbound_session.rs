@@ -236,7 +236,6 @@ impl Slot {
     async fn run(self: Arc<Self>) {
         let hosts = self.p2p().hosts();
         let slot_count = self.p2p().settings().outbound_connections;
-        let mut rejected = vec![];
 
         loop {
             // Activate the slot
@@ -297,10 +296,6 @@ impl Slot {
                 addr: host.clone(),
             });
 
-            if rejected.contains(&host) {
-                continue
-            }
-
             let (addr, channel) = match self.try_connect(host.clone()).await {
                 Ok(connect_info) => connect_info,
                 Err(err) => {
@@ -315,11 +310,8 @@ impl Slot {
                         err: err.to_string()
                     });
 
-                    // Add to the rejected list to avoid immediately reconnecting.
-                    // TODO: Once it's been added to this list it will never be connected to
-                    // in the lifespan of Outbound Session. Refactor this so that it gets put
-                    // in a temporary quarantine and is freed up to try again later.
-                    rejected.push(host.clone());
+                    // Downgrade this host to greylist if it's on the whitelist or anchorlist.
+                    self.session().downgrade_host(&host).await;
 
                     self.channel_id.store(0, Ordering::Relaxed);
                     continue
@@ -361,11 +353,14 @@ impl Slot {
             self.channel_id.store(channel.info.id, Ordering::Relaxed);
 
             // Add this connection to the anchorlist, remove it from the [otherlist]
-            self.session().upgrade_connection(&addr).await;
+            self.session().upgrade_host(&addr).await;
 
             // Wait for channel to close
             stop_sub.receive().await;
             self.channel_id.store(0, Ordering::Relaxed);
+
+            // Downgrade this host to greylist if it's on the whitelist or anchorlist.
+            self.session().downgrade_host(&addr).await;
         }
     }
 

@@ -686,14 +686,22 @@ impl Hosts {
 
     /// Get the entry for a given addr on the whitelist.
     pub async fn get_whitelist_entry_at_addr(&self, addr: &Url) -> Option<(Url, u64)> {
-        let whitelist = self.whitelist.read().await;
-        whitelist.iter().find(|(url, _)| url == addr).map(|(url, time)| (url.clone(), *time))
+        self.whitelist
+            .read()
+            .await
+            .iter()
+            .find(|(url, _)| url == addr)
+            .map(|(url, time)| (url.clone(), *time))
     }
 
     /// Get the entry for a given addr on the anchorlist.
     pub async fn get_anchorlist_entry_at_addr(&self, addr: &Url) -> Option<(Url, u64)> {
-        let anchorlist = self.anchorlist.read().await;
-        anchorlist.iter().find(|(url, _)| url == addr).map(|(url, time)| (url.clone(), *time))
+        self.anchorlist
+            .read()
+            .await
+            .iter()
+            .find(|(url, _)| url == addr)
+            .map(|(url, time)| (url.clone(), *time))
     }
 
     /// Return all known whitelisted hosts
@@ -1174,6 +1182,31 @@ mod tests {
 
             assert!(!hosts.is_empty_whitelist().await);
             assert!(hosts.whitelist_contains(&url).await);
+        });
+    }
+
+    #[test]
+    fn test_hostlist_get_entry() {
+        smol::block_on(async {
+            let settings = Settings {
+                localnet: false,
+                external_addrs: vec![
+                    Url::parse("tcp://foo.bar:123").unwrap(),
+                    Url::parse("tcp://lol.cat:321").unwrap(),
+                ],
+                ..Default::default()
+            };
+
+            let hosts = Hosts::new(Arc::new(settings.clone()));
+
+            let url = Url::parse("tcp://dark.renaissance:333").unwrap();
+            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+
+            hosts.whitelist_store(url.clone(), last_seen).await;
+            hosts.anchorlist_store(url.clone(), last_seen).await;
+
+            assert!(hosts.get_whitelist_entry_at_addr(&url).await.is_some());
+            assert!(hosts.get_anchorlist_entry_at_addr(&url).await.is_some());
         });
     }
 

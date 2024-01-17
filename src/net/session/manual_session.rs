@@ -135,7 +135,7 @@ impl ManualSession {
                     self.p2p().remove_pending(&addr).await;
 
                     // Add this connection to the anchorlist, remove it from the [otherlist]
-                    self.upgrade_connection(&addr).await;
+                    self.upgrade_host(&addr).await;
 
                     // Notify that channel processing has finished
                     self.channel_subscriber.notify(Ok(channel)).await;
@@ -146,6 +146,9 @@ impl ManualSession {
                         target: "net::manual_session",
                         "[P2P] Manual outbound disconnected [{}]", url,
                     );
+                    // Downgrade this host to greylist if it's on the whitelist or anchorlist.
+                    self.downgrade_host(&addr).await;
+
                     // DEV NOTE: Here we can choose to attempt reconnection again
                     return Ok(())
                 }
@@ -155,6 +158,9 @@ impl ManualSession {
                         "[P2P] Unable to connect to manual outbound [{}]: {}",
                         addr, e,
                     );
+
+                    // Downgrade this host to greylist if it's on the whitelist or anchorlist.
+                    self.downgrade_host(&addr).await;
                 }
             }
 
