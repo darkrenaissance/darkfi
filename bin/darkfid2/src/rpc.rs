@@ -146,7 +146,7 @@ impl Darkfid {
     }
 
     // RPCAPI:
-    // Pings configured miner daemon for livenes.
+    // Pings configured miner daemon for liveness.
     // Returns `true` on success.
     //
     // --> {"jsonrpc": "2.0", "method": "ping_miner", "params": [], "id": 1}
