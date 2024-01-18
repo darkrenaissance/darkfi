@@ -237,7 +237,7 @@ pub struct DaoProposeParams {
 // ANCHOR_END: dao-propose-params
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-// ANCHOR: dao-propose-input-params
+// ANCHOR: dao-propose-params-input
 /// Input for a DAO proposal
 pub struct DaoProposeParamsInput {
     pub nullifier: Nullifier,
@@ -248,7 +248,7 @@ pub struct DaoProposeParamsInput {
     /// Public key used for signing
     pub signature_public: PublicKey,
 }
-// ANCHOR_END: dao-propose-input-params
+// ANCHOR_END: dao-propose-params-input
 
 /// State update for `Dao::Propose`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -268,8 +268,9 @@ pub struct DaoProposalMetadata {
     pub snapshot_root: MerkleNode,
 }
 
-/// Parameters for `Dao::Vote`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: dao-vote-params
+/// Parameters for `Dao::Vote`
 pub struct DaoVoteParams {
     /// Token commitment for the vote inputs
     pub token_commit: pallas::Base,
@@ -282,9 +283,11 @@ pub struct DaoVoteParams {
     /// Inputs for the vote
     pub inputs: Vec<DaoVoteParamsInput>,
 }
+// ANCHOR_END: dao-vote-params
 
-/// Input for a DAO proposal vote
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: dao-vote-params-input
+/// Input for a DAO proposal vote
 pub struct DaoVoteParamsInput {
     /// Revealed nullifier
     pub nullifier: Nullifier,
@@ -295,6 +298,8 @@ pub struct DaoVoteParamsInput {
     /// Public key used for signing
     pub signature_public: PublicKey,
 }
+// ANCHOR_END: dao-vote-params-input
+/// Input for a DAO proposal vote
 
 /// State update for `Dao::Vote`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
