@@ -25,12 +25,8 @@ use std::{
 };
 
 use log::{debug, error, info, trace, warn};
-use rand::{
-    prelude::{IteratorRandom, SliceRandom},
-    rngs::OsRng,
-    Rng,
-};
-use smol::lock::{Mutex, RwLock};
+use rand::{prelude::IteratorRandom, rngs::OsRng, Rng};
+use smol::lock::RwLock;
 use url::Url;
 
 use super::super::{p2p::P2pPtr, settings::SettingsPtr};
@@ -1094,7 +1090,7 @@ impl Hosts {
         // Collect the greylist and anchorlist entries, and append any whitelist entries to the
         // greylist before saving.
         for (name, mut list) in self.hostlist_fetch_safe().await {
-            if name == "greylist".to_string() {
+            if name == *"greylist".to_string() {
                 list.append(&mut whitelist)
             }
             for (url, last_seen) in list {

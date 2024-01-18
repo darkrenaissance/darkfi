@@ -16,15 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{
-    sync::{Arc, Weak},
-    time::UNIX_EPOCH,
-};
+use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
-use log::{debug, warn};
+use log::debug;
 use smol::Executor;
-use url::Url;
 
 use super::{channel::ChannelPtr, p2p::P2pPtr, protocol::ProtocolVersion};
 use crate::Result;
