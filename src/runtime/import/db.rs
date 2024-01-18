@@ -786,9 +786,9 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
 /// Given a zkas circuit, create a VerifyingKey and insert them both into the db.
 /// This function can called only from the Deploy [`ContractSection`].
 /// Returns `0` on success, otherwise returns a (negative) error code.
-pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
-    let env = ctx.data();
-    let cid = &env.contract_id;
+pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
 
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy]) {
         error!(
@@ -798,8 +798,10 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    let memory_view = env.memory_view(&ctx);
-    let contract_id = &env.contract_id;
+    // Subtract used gas. Here we count the length read from the memory slice.
+    env.subtract_gas(&mut store, ptr_len as u64);
+
+    let memory_view = env.memory_view(&store);
 
     // Ensure that the memory is readable
     let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
@@ -843,11 +845,18 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
         }
     };
 
+    // Subtract used gas. We count 100 gas per opcode, witness, and literal.
+    // This is likely bad.
+    // TODO: This should be better-priced.
+    let gas_cost =
+        (zkbin.literals.len() + zkbin.witnesses.len() + zkbin.opcodes.len()) as u64 * 100;
+    env.subtract_gas(&mut store, gas_cost);
+
     // Because of `Runtime::Deploy`, we should be sure that the zkas db is index zero.
     let db_handles = env.db_handles.borrow();
     let db_handle = &db_handles[0];
     // Redundant check
-    if &db_handle.contract_id != contract_id {
+    if db_handle.contract_id != cid {
         error!(
             target: "runtime::db::zkas_db_set",
             "[WASM] [{}] zkas_db_set(): Internal error, zkas db at index 0 incorrect", cid,
@@ -898,6 +907,7 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
         "[WASM] [{}] zkas_db_set(): Creating VerifyingKey for {} zkas circuit",
         cid, zkbin.namespace,
     );
+
     let witnesses = match empty_witnesses(&zkbin) {
         Ok(w) => w,
         Err(e) => {
@@ -940,6 +950,10 @@ pub(crate) fn zkas_db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u
         );
         return darkfi_sdk::error::DB_SET_FAILED
     }
+    drop(db_handles);
+
+    // Subtract used gas. Here we count the bytes written into the db.
+    env.subtract_gas(&mut store, (key.len() + value.len()) as u64);
 
     darkfi_sdk::entrypoint::SUCCESS
 }
