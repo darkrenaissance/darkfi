@@ -280,7 +280,6 @@ pub(crate) fn get_slot(mut ctx: FunctionEnvMut<Env>, slot: u64) -> i64 {
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // TODO: Gas cost
     let ret = match env.blockchain.lock().unwrap().slots.get_by_id(slot) {
         Ok(v) => v,
         Err(e) => {
