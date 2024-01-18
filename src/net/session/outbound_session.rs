@@ -311,7 +311,7 @@ impl Slot {
                     });
 
                     // Downgrade this host to greylist if it's on the whitelist or anchorlist.
-                    self.session().downgrade_host(&host).await;
+                    //self.session().downgrade_host(&host).await;
 
                     self.channel_id.store(0, Ordering::Relaxed);
                     continue
@@ -353,14 +353,14 @@ impl Slot {
             self.channel_id.store(channel.info.id, Ordering::Relaxed);
 
             // Add this connection to the anchorlist, remove it from the [otherlist]
-            self.session().upgrade_host(&addr).await;
+            hosts.upgrade_host(&addr).await;
 
             // Wait for channel to close
             stop_sub.receive().await;
             self.channel_id.store(0, Ordering::Relaxed);
 
             // Downgrade this host to greylist if it's on the whitelist or anchorlist.
-            self.session().downgrade_host(&addr).await;
+            hosts.downgrade_host(&addr).await;
         }
     }
 

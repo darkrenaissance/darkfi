@@ -22,7 +22,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use log::debug;
+use log::{debug, warn};
 use smol::Executor;
 use url::Url;
 
@@ -145,51 +145,6 @@ pub trait Session: Sync {
 
         // Channel is ready for use
         Ok(())
-    }
-
-    /// Upgrade a connection to the anchorlist and remove it from the white or greylist.
-    /// Called after a connection has been successfully established in Outbound and Manual
-    /// sessions.
-    async fn upgrade_host(&self, addr: &Url) {
-        let hosts = self.p2p().hosts();
-
-        let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-        hosts.anchorlist_store_or_update(&[(addr.clone(), last_seen)]).await;
-
-        if hosts.whitelist_contains(addr).await {
-            let index = hosts.get_whitelist_index_at_addr(addr.clone()).await.unwrap();
-            hosts.whitelist_remove(addr, index).await;
-        }
-
-        if hosts.greylist_contains(addr).await {
-            let index = hosts.get_greylist_index_at_addr(addr.clone()).await.unwrap();
-            hosts.greylist_remove(addr, index).await;
-        }
-    }
-
-    /// Downgrade a connection. If it's on the anchorlist or the whitelist, remove it and add it
-    /// to the greylist. Called when we cannot establish a connection to a host or when a
-    /// pre-existing connection disconnects.
-    async fn downgrade_host(&self, addr: &Url) {
-        let hosts = self.p2p().hosts();
-
-        // Remove channel from anchorlist and add it to greylist
-        if hosts.anchorlist_contains(addr).await {
-            let (url, last_seen) = hosts.get_anchorlist_entry_at_addr(addr).await.unwrap();
-            hosts.greylist_store_or_update(&[(url, last_seen)]).await;
-
-            let index = hosts.get_anchorlist_index_at_addr(addr.clone()).await.unwrap();
-            hosts.anchorlist_remove(addr, index).await;
-        }
-
-        // Remove channel from whitelist and add to greylist
-        if hosts.whitelist_contains(addr).await {
-            let (url, last_seen) = hosts.get_whitelist_entry_at_addr(addr).await.unwrap();
-            hosts.greylist_store_or_update(&[(url, last_seen)]).await;
-
-            let index = hosts.get_whitelist_index_at_addr(addr.clone()).await.unwrap();
-            hosts.whitelist_remove(addr, index).await;
-        }
     }
 
     /// Returns a pointer to the p2p network interface
