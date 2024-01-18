@@ -259,30 +259,9 @@ impl Hosts {
         None
     }
 
-    /// Upgrade a connection to the anchorlist and remove it from the white or greylist.
-    /// Called after a connection has been successfully established in Outbound and Manual
-    /// sessions.
+    /// Upgrade a connection to the anchorlist. Called after a connection has been successfully
+    /// established in Outbound and Manual sessions.
     pub async fn upgrade_host(&self, addr: &Url) {
-        // Remove channel from whitelist
-        if self.whitelist_contains(addr).await {
-            let index = self
-                .get_whitelist_index_at_addr(addr.clone())
-                .await
-                .expect("Expected whitelist entry to exist");
-
-            self.whitelist_remove(addr, index).await;
-        }
-
-        // Remove channel from greylist
-        if self.greylist_contains(addr).await {
-            let index = self
-                .get_greylist_index_at_addr(addr.clone())
-                .await
-                .expect("Expected greylist entry to exist");
-            self.greylist_remove(addr, index).await;
-        }
-
-        // Add channel to anchorlist
         let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
         self.anchorlist_store_or_update(&[(addr.clone(), last_seen)]).await;
     }
