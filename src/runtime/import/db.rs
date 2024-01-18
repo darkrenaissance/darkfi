@@ -51,9 +51,9 @@ impl DbHandle {
 ///
 /// This function should **only** be allowed in `ContractSection::Deploy`, as that
 /// is called when a contract is being (re)deployed and databases have to be created.
-pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
-    let env = ctx.data();
-    let cid = &env.contract_id;
+pub(crate) fn db_init(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
 
     // Enforce function ACL
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy]) {
@@ -64,11 +64,15 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) 
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
+    // Subtract used gas. Here we count the length read from the memory slice.
+    // TODO: There should probably be an additional fee to open a new sled tree.
+    env.subtract_gas(&mut store, ptr_len as u64);
+
     // This takes lock of the blockchain overlay reference in the wasm env
     let contracts = &env.blockchain.lock().unwrap().contracts;
 
     // Create a mem slice of the wasm VM memory
-    let memory_view = env.memory_view(&ctx);
+    let memory_view = env.memory_view(&store);
     let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
         error!(
             target: "runtime::db::db_init",
@@ -131,7 +135,7 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) 
     }
 
     // Nor can we allow another contract to initialize a db for someone else:
-    if cid != &read_cid {
+    if cid != read_cid {
         error!(
             target: "runtime::db::db_init",
             "[WASM] [{}] db_init(): Unauthorized ContractId", cid,
@@ -194,9 +198,9 @@ pub(crate) fn db_init(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) 
 /// Otherwise, returns an error value.
 ///
 /// This function can be called from any [`ContractSection`].
-pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
-    let env = ctx.data();
-    let cid = &env.contract_id;
+pub(crate) fn db_lookup(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
 
     // Enforce function ACL
     if let Err(e) = acl_allow(
@@ -215,8 +219,11 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
+    // Subtract used gas. Here we count the length read from the memory slice.
+    env.subtract_gas(&mut store, ptr_len as u64);
+
     // Read memory location that contains the ContractId and DB name
-    let memory_view = env.memory_view(&ctx);
+    let memory_view = env.memory_view(&store);
     let contracts = &env.blockchain.lock().unwrap().contracts;
 
     let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
@@ -318,9 +325,9 @@ pub(crate) fn db_lookup(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32
 ///
 /// This function can be called only from the Deploy or Update [`ContractSection`].
 /// Returns `SUCCESS` on success, otherwise returns an error value.
-pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
-    let env = ctx.data();
-    let cid = &env.contract_id;
+pub(crate) fn db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
 
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy, ContractSection::Update]) {
         error!(
@@ -330,9 +337,11 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Ensure that it is possible to read from the memory that this function needs
-    let memory_view = env.memory_view(&ctx);
+    // Subtract used gas. Here we count the length hread from the memory slice.
+    env.subtract_gas(&mut store, ptr_len as u64);
 
+    // Ensure that it is possible to read from the memory that this function needs
+    let memory_view = env.memory_view(&store);
     let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
         error!(
             target: "runtime::db::db_set",
@@ -446,9 +455,9 @@ pub(crate) fn db_set(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
 ///
 /// This function can be called only from the Deploy or Update [`ContractSection`].
 /// Returns `SUCCESS` on success, otherwise returns an error value.
-pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
-    let env = ctx.data();
-    let cid = &env.contract_id;
+pub(crate) fn db_del(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
 
     if let Err(e) = acl_allow(env, &[ContractSection::Deploy, ContractSection::Update]) {
         error!(
@@ -458,8 +467,11 @@ pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
+    // Subtract used gas. Here we count the length of the looked-up key.
+    env.subtract_gas(&mut store, ptr_len as u64);
+
     // Ensure that it is possible to read from the memory that this function needs
-    let memory_view = env.memory_view(&ctx);
+    let memory_view = env.memory_view(&store);
 
     let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
         error!(
@@ -528,7 +540,7 @@ pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
     let db_handle = &db_handles[db_handle_index];
 
     // Validate that the DbHandle matches the contract ID
-    if db_handle.contract_id != env.contract_id {
+    if db_handle.contract_id != cid {
         error!(
             target: "runtime::db::db_del",
             "[WASM] [{}] db_del(): Unauthorized to write to DbHandle", cid,
@@ -555,9 +567,9 @@ pub(crate) fn db_del(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
 ///
 /// On success, returns the length of the `objects` Vector in the environment.
 /// Otherwise, returns an error code.
-pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
-    let env = ctx.data();
-    let cid = &env.contract_id;
+pub(crate) fn db_get(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
 
     if let Err(e) =
         acl_allow(env, &[ContractSection::Deploy, ContractSection::Exec, ContractSection::Metadata])
@@ -569,9 +581,11 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Ensure that it is possible to read memory
-    let memory_view = env.memory_view(&ctx);
+    // Subtract used gas. Here we count the length of the looked-up key.
+    env.subtract_gas(&mut store, ptr_len as u64);
 
+    // Ensure that it is possible to read memory
+    let memory_view = env.memory_view(&store);
     let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
         error!(
             target: "runtime::db::db_get",
@@ -653,6 +667,7 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
                 return darkfi_sdk::error::DB_GET_FAILED
             }
         };
+    drop(db_handles);
 
     // Return special error if the data is empty
     let Some(return_data) = ret else {
@@ -666,6 +681,9 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
     if return_data.len() > u32::MAX as usize {
         return darkfi_sdk::error::DATA_TOO_LARGE
     }
+
+    // Subtract used gas. Here we count the length of the data read from db.
+    env.subtract_gas(&mut store, return_data.len() as u64);
 
     // Copy the data (Vec<u8>) to the VM by pushing it to the objects Vector.
     let mut objects = env.objects.borrow_mut();
@@ -681,11 +699,12 @@ pub(crate) fn db_get(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -
 
 /// Check if a database contains a given key.
 ///
-/// Returns `1` if the key is found. Returns `0` if the key is not found and there are no errors.
+/// Returns `1` if the key is found.
+/// Returns `0` if the key is not found and there are no errors.
 /// Otherwise, returns an error code.
-pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
-    let env = ctx.data();
-    let cid = &env.contract_id;
+pub(crate) fn db_contains_key(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
 
     if let Err(e) =
         acl_allow(env, &[ContractSection::Deploy, ContractSection::Exec, ContractSection::Metadata])
@@ -697,9 +716,11 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    // Ensure memory is readable
-    let memory_view = env.memory_view(&ctx);
+    // Subtract used gas. Here we count the length of the looked-up key.
+    env.subtract_gas(&mut store, ptr_len as u64);
 
+    // Ensure memory is readable
+    let memory_view = env.memory_view(&store);
     let Ok(mem_slice) = ptr.slice(&memory_view, ptr_len) else {
         error!(
             target: "runtime::db::db_contains_key",
@@ -784,8 +805,9 @@ pub(crate) fn db_contains_key(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_le
 }
 
 /// Given a zkas circuit, create a VerifyingKey and insert them both into the db.
-/// This function can called only from the Deploy [`ContractSection`].
-/// Returns `0` on success, otherwise returns a (negative) error code.
+///
+/// This function can only be called from the Deploy [`ContractSection`].
+/// Returns `SUCCESS` on success, otherwise returns an error code.
 pub(crate) fn zkas_db_set(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, ptr_len: u32) -> i64 {
     let (env, mut store) = ctx.data_and_store_mut();
     let cid = env.contract_id;
