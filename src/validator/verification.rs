@@ -42,7 +42,7 @@ use crate::{
     util::time::TimeKeeper,
     validator::{
         consensus::{Consensus, Fork, Proposal, TXS_CAP},
-        fees::PALLAS_SCHNORR_SIGNATURE_FEE,
+        fees::{circuit_gas_use, PALLAS_SCHNORR_SIGNATURE_FEE},
         pow::PoWModule,
         validation::validate_block,
     },
@@ -288,8 +288,10 @@ pub async fn verify_producer_transaction(
         if inner_vk_map.contains_key(zkas_ns.as_str()) {
             continue
         }
-        let (_, vk) =
+
+        let (_zkbin, vk) =
             overlay.lock().unwrap().contracts.get_zkas(&call.data.contract_id, zkas_ns)?;
+
         inner_vk_map.insert(zkas_ns.to_string(), vk);
     }
 
@@ -391,6 +393,9 @@ pub async fn verify_transaction(
         }
     }
 
+    // We'll also take note of all the circuits in a Vec so we can calculate their verification cost.
+    let mut circuits_to_verify = vec![];
+
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
         // Transaction must not contain a reward call, Money::PoWReward(0x08) or Consensus::Proposal(0x02)
@@ -436,7 +441,7 @@ pub async fn verify_transaction(
         debug!(target: "validator::verification::verify_transaction", "Successfully executed \"metadata\" call");
 
         // Here we'll look up verifying keys and insert them into the per-contract map.
-        // TODO: This can potentially use a lot of RAM. Perhaps load keys on-demand at verification time?
+        // TODO: This vk map can potentially use a lot of RAM. Perhaps load keys on-demand at verification time?
         debug!(target: "validator::verification::verify_transaction", "Performing VerifyingKey lookups from the sled db");
         for (zkas_ns, _) in &zkp_pub {
             let inner_vk_map = verifying_keys.get_mut(&call.data.contract_id.to_bytes()).unwrap();
@@ -448,10 +453,11 @@ pub async fn verify_transaction(
                 continue
             }
 
-            let (_, vk) =
+            let (zkbin, vk) =
                 overlay.lock().unwrap().contracts.get_zkas(&call.data.contract_id, zkas_ns)?;
 
             inner_vk_map.insert(zkas_ns.to_string(), vk);
+            circuits_to_verify.push(zkbin);
         }
 
         zkp_table.push(zkp_pub);
@@ -502,8 +508,10 @@ pub async fn verify_transaction(
         gas_used += (PALLAS_SCHNORR_SIGNATURE_FEE * tx.signatures.len() as u64) +
             serialize_async(tx).await.len() as u64;
 
-        // TODO: This counts 1 gas as 1 token unit. Pricing should be better specified.
-        // TODO: Currently this doesn't account for ZK proofs
+        // The ZK circuit fee is calculated using a function in validator/fees.rs
+        for zkbin in circuits_to_verify.iter() {
+            gas_used += circuit_gas_use(zkbin);
+        }
 
         // Deserialize the fee call to find the paid fee
         let fee: u64 = match deserialize_async(&tx.calls[fee_call_idx].data.data[1..9]).await {
@@ -517,6 +525,7 @@ pub async fn verify_transaction(
             }
         };
 
+        // TODO: This counts 1 gas as 1 token unit. Pricing should be better specified.
         // Check that enough fee has been paid for the used gas in this transaction.
         if gas_used > fee {
             error!(
