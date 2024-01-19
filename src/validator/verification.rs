@@ -436,6 +436,7 @@ pub async fn verify_transaction(
         debug!(target: "validator::verification::verify_transaction", "Successfully executed \"metadata\" call");
 
         // Here we'll look up verifying keys and insert them into the per-contract map.
+        // TODO: This can potentially use a lot of RAM. Perhaps load keys on-demand at verification time?
         debug!(target: "validator::verification::verify_transaction", "Performing VerifyingKey lookups from the sled db");
         for (zkas_ns, _) in &zkp_pub {
             let inner_vk_map = verifying_keys.get_mut(&call.data.contract_id.to_bytes()).unwrap();
