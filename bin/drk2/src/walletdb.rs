@@ -18,7 +18,7 @@
 
 use std::{path::PathBuf, sync::Arc};
 
-use log::{debug, error, info};
+use log::{debug, error};
 use rusqlite::{
     types::{ToSql, Value},
     Connection,
@@ -56,8 +56,21 @@ impl WalletDb {
             return Err(WalletDbError::PragmaUpdateError);
         };
 
-        info!(target: "walletdb::new", "[WalletDb] Opened Sqlite connection at \"{path:?}\"");
+        debug!(target: "walletdb::new", "[WalletDb] Opened Sqlite connection at \"{path:?}\"");
         Ok(Arc::new(Self { conn: Mutex::new(conn) }))
+    }
+
+    /// This function executes a given SQL query that contains multiple SQL statements,
+    /// that don't contain any parameters.
+    pub async fn exec_batch_sql(&self, query: &str) -> WalletDbResult<()> {
+        debug!(target: "walletdb::exec_batch_sql", "[WalletDb] Executing batch SQL query:\n{query}");
+        // If no params are provided, execute directly
+        if let Err(e) = self.conn.lock().await.execute_batch(query) {
+            error!(target: "walletdb::exec_batch_sql", "[WalletDb] Query failed: {e}");
+            return Err(WalletDbError::QueryExecutionFailed)
+        };
+
+        Ok(())
     }
 
     /// This function executes a given SQL query, but isn't able to return anything.
@@ -76,6 +89,7 @@ impl WalletDb {
         // First we prepare the query
         let conn = self.conn.lock().await;
         let Ok(mut stmt) = conn.prepare(query) else {
+            eprintln!("Error: {:?}", conn.prepare(query));
             return Err(WalletDbError::QueryPreparationFailed)
         };
 
@@ -131,7 +145,7 @@ impl WalletDb {
         let Ok(next) = rows.next() else { return Err(WalletDbError::QueryExecutionFailed) };
         let row = match next {
             Some(row_result) => row_result,
-            None => return Ok(vec![]),
+            None => return Err(WalletDbError::RowNotFound),
         };
 
         // Grab returned values

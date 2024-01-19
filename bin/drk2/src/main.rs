@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{process::exit, sync::Arc, time::Instant};
+use std::{fs, process::exit, sync::Arc, time::Instant};
 
 use smol::stream::StreamExt;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
@@ -35,6 +35,12 @@ mod error;
 /// CLI utility functions
 mod cli_util;
 use cli_util::kaching;
+
+/// Wallet functionality related to Money
+mod money;
+
+/// Wallet functionality related to Dao
+mod dao;
 
 /// Wallet database operations handler
 mod walletdb;
@@ -136,15 +142,36 @@ impl Drk {
         endpoint: Url,
         ex: Arc<smol::Executor<'static>>,
     ) -> Result<Self> {
-        let wallet = match WalletDb::new(Some(expand_path(&wallet_path)?), Some(&wallet_pass)) {
+        // Initialize wallet
+        let wallet_path = expand_path(&wallet_path)?;
+        if !wallet_path.exists() {
+            if let Some(parent) = wallet_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+        }
+        let wallet = match WalletDb::new(Some(wallet_path), Some(&wallet_pass)) {
             Ok(w) => w,
             Err(e) => {
                 eprintln!("Error initializing wallet: {e:?}");
                 exit(2);
             }
         };
+
+        // Initialize rpc client
         let rpc_client = RpcClient::new(endpoint, ex).await?;
+
         Ok(Self { wallet, rpc_client })
+    }
+
+    /// Initialize wallet with tables for drk
+    async fn initialize_wallet(&self) -> Result<()> {
+        let wallet_schema = include_str!("../wallet.sql");
+        if let Err(e) = self.wallet.exec_batch_sql(wallet_schema).await {
+            eprintln!("Error initializing wallet: {e:?}");
+            exit(2);
+        }
+
+        Ok(())
     }
 
     /// Auxilliary function to ping configured darkfid daemon for liveness.
@@ -195,6 +222,15 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 eprintln!("Error: You must use at least one flag for this subcommand");
                 eprintln!("Run with \"wallet -h\" to see the subcommand usage.");
                 exit(2);
+            }
+
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+
+            if initialize {
+                drk.initialize_wallet().await?;
+                drk.initialize_money().await?;
+                drk.initialize_dao().await?;
+                return Ok(())
             }
 
             // TODO
