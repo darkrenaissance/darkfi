@@ -31,9 +31,9 @@ use crate::runtime::vm_runtime::{ContractSection, Env};
 /// Returns `0` on success; otherwise, returns an error-code corresponding to a
 /// [`ContractError`] (defined in the SDK).
 /// See also the method `merkle_add` in `sdk/src/merkle.rs`.
-pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
-    let env = ctx.data();
-    let cid = &env.contract_id;
+pub(crate) fn merkle_add(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = env.contract_id;
 
     // Enforce function ACL
     if let Err(e) = acl_allow(env, &[ContractSection::Update]) {
@@ -44,7 +44,10 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
         return darkfi_sdk::error::CALLER_ACCESS_DENIED
     }
 
-    let memory_view = env.memory_view(&ctx);
+    // Subtract used gas. Here we count the length read from the memory slice.
+    env.subtract_gas(&mut store, len as u64);
+
+    let memory_view = env.memory_view(&store);
     let Ok(mem_slice) = ptr.slice(&memory_view, len) else {
         error!(
             target: "runtime::merkle::merkle_add",
@@ -305,6 +308,17 @@ pub(crate) fn merkle_add(ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) -
             return darkfi_sdk::error::INTERNAL_ERROR
         }
     }
+
+    // Subtract used gas.
+    // Here we count:
+    // * The size of the Merkle tree we deserialized from the db.
+    // * The size of the Merkle tree we serialized into the db.
+    // * The size of the new Merkle roots we wrote into the db.
+    drop(overlay);
+    drop(lock);
+    drop(db_handles);
+    let spent_gas = return_data.len() + tree_data.len() + (new_roots.len() * 32);
+    env.subtract_gas(&mut store, spent_gas as u64);
 
     darkfi_sdk::entrypoint::SUCCESS
 }
