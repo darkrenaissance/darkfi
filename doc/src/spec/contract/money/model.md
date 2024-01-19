@@ -22,20 +22,20 @@ The coin contains the main parameters that define the `Money::transfer()` operat
   contract to store additional parameters in the coin. If the parameter length
   exceeds the size of $𝔽ₚ$ then a commit can be used here instead.
 
-Define the coin params
+Define the coin attributes
 $$ \begin{aligned}
-  \t{Params}_\t{Coin}.\t{PK} &∈ ℙₚ \\
-  \t{Params}_\t{Coin}.v &∈ ℕ₆₄ \\
-  \t{Params}_\t{Coin}.τ &∈ 𝔽ₚ \\
-  \t{Params}_\t{Coin}.ζ &∈ 𝔽ₚ \\
-  \t{Params}_\t{Coin}.\t{SH} &∈ 𝔽ₚ \\
-  \t{Params}_\t{Coin}.\t{UD} &∈ 𝔽ₚ \\
+  \t{Attrs}_\t{Coin}.\t{PK} &∈ ℙₚ \\
+  \t{Attrs}_\t{Coin}.v &∈ ℕ₆₄ \\
+  \t{Attrs}_\t{Coin}.τ &∈ 𝔽ₚ \\
+  \t{Attrs}_\t{Coin}.ζ &∈ 𝔽ₚ \\
+  \t{Attrs}_\t{Coin}.\t{SH} &∈ 𝔽ₚ \\
+  \t{Attrs}_\t{Coin}.\t{UD} &∈ 𝔽ₚ \\
 \end{aligned} $$
 
 ```rust
 {{#include ../../../../../src/contract/money/src/model.rs:coin-attributes}}
 ```
 
-$$ \t{Coin} : \t{Params}_\t{Coin} → 𝔽ₚ $$
+$$ \t{Coin} : \t{Attrs}_\t{Coin} → 𝔽ₚ $$
 $$ \t{Coin}(p) = \t{Bulla}(\mathcal{X}(p.\t{PK}), \mathcal{Y}(p.\t{PK}), ℕ₆₄2𝔽ₚ(p.v), p.τ, p.ζ, p.\t{SH}, p.\t{UD}) $$
 

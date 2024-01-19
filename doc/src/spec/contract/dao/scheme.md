@@ -85,7 +85,7 @@ $$ \begin{aligned}
 
 Let $t₀ = \t{CurrentDay} ∈ 𝔽ₚ$ be the current day as defined in [Current Day](model.md#current-day).
 
-Let $\t{Params}_\t{Coin}$ be defined as in [Coin](../money/model.md#coin).
+Let $\t{Attrs}_\t{Coin}$ be defined as in [Coin](../money/model.md#coin).
 
 **Valid DAO bulla merkle root** &emsp; check that $R_\t{DAO}$ is a previously
 seen merkle root in the DAO contract merkle roots DB.
@@ -134,7 +134,7 @@ previously seen merkle root in the money contract merkle roots DB.
 &emsp; Let there be a prover auxiliary witness inputs:
 $$ \begin{aligned}
   x_c &∈ 𝔽ₚ \\
-  c &∈ \t{Params}_\t{Coin} \\
+  c &∈ \t{Attrs}_\t{Coin} \\
   bᵥ &∈ 𝔽ᵥ \\
   b_τ &∈ 𝔽ₚ \\
   (ψᵢ, Πᵢ) &∈ \t{MerklePos} × \t{MerklePath} \\
@@ -232,7 +232,7 @@ DAO contract nullifiers DB for this specific proposal.
 Let there be prover auxiliary witness inputs:
 $$ \begin{aligned}
   x_c &∈ 𝔽ₚ \\
-  c &∈ \t{Params}_\t{Coin} \\
+  c &∈ \t{Attrs}_\t{Coin} \\
   bᵥ &∈ 𝔽ᵥ \\
   b_τ &∈ 𝔽ₚ \\
   (ψᵢ, Πᵢ) &∈ \t{MerklePos} × \t{MerklePath} \\
