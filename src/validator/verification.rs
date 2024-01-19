@@ -365,12 +365,16 @@ pub async fn verify_transaction(
     // Table of public keys used for signature verification
     let mut sig_table = vec![];
 
+    // Index of the Fee-paying call
+    let mut fee_call_idx = 0;
+
     if verify_fee {
         let mut found_fee = false;
         // Verify that there is a Money::FeeV1 (0x00) call in the transaction
-        for call in tx.calls.iter() {
+        for (call_idx, call) in tx.calls.iter().enumerate() {
             if call.data.contract_id == *MONEY_CONTRACT_ID && call.data.data[0] == 0x00 {
                 found_fee = true;
+                fee_call_idx = call_idx;
                 break
             }
         }
@@ -518,8 +522,8 @@ pub async fn verify_transaction(
         // TODO: Currently this doesn't account for signatures or ZK proofs
         // TODO: Currently this doesn't account for WASM host functions
 
-        // Deserialize the first call to find the paid fee
-        let fee: u64 = match deserialize_async(&tx.calls[0].data.data[1..9]).await {
+        // Deserialize the fee call to find the paid fee
+        let fee: u64 = match deserialize_async(&tx.calls[fee_call_idx].data.data[1..9]).await {
             Ok(v) => v,
             Err(e) => {
                 error!(
