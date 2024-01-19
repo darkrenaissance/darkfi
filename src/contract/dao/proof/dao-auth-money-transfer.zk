@@ -4,6 +4,7 @@ field = "pallas";
 constant "DaoAuthMoneyTransfer" {
     EcFixedPointShort VALUE_COMMIT_VALUE,
     EcFixedPoint VALUE_COMMIT_RANDOM,
+    EcFixedPointBase NULLIFIER_K,
 }
 
 witness "DaoAuthMoneyTransfer" {
@@ -20,8 +21,7 @@ witness "DaoAuthMoneyTransfer" {
     Base dao_approval_ratio_quot,
     Base dao_approval_ratio_base,
     Base gov_token_id,
-    Base dao_public_x,
-    Base dao_public_y,
+    EcNiPoint dao_public_key,
     Base dao_bulla_blind,
 
     # Dao input(s) user data blind
@@ -29,14 +29,24 @@ witness "DaoAuthMoneyTransfer" {
 
     # Dao output coin attrs
     Base dao_value,
-    Base dao_token,
+    Base dao_token_id,
     Base dao_serial,
 
     # Should be set to DAO_CONTRACT_ID
     Base dao_contract_id,
+
+    # Epehemeral secret used for diffie-hellman shared secret derivation
+    Base ephem_secret,
 }
 
 circuit "DaoAuthMoneyTransfer" {
+    # cast to EcPoint
+    # (otherwise zkas refuses to compile)
+    ONE = witness_base(1);
+    dao_pubkey = ec_mul_var_base(ONE, dao_public_key);
+    dao_public_x = ec_get_x(dao_pubkey);
+    dao_public_y = ec_get_y(dao_pubkey);
+
     dao_bulla = poseidon_hash(
         dao_proposer_limit,
         dao_quorum,
@@ -74,7 +84,7 @@ circuit "DaoAuthMoneyTransfer" {
         # which ensures it will be correct.
         dao_value,
         # Likewise the token_id must match the other output coins.
-        dao_token,
+        dao_token_id,
         dao_serial,
         dao_contract_id,
         dao_bulla,
@@ -85,5 +95,36 @@ circuit "DaoAuthMoneyTransfer" {
     # Reveal content commit. This should contain the set of coins.
     # We check these are set in the runtime.
     constrain_instance(proposal_auth_calls_commit);
+
+    # Now do verifiable encryption for DAO change output
+
+    # Ephemeral public key
+    ephem_public = ec_mul_base(ephem_secret, NULLIFIER_K);
+    constrain_instance(ec_get_x(ephem_public));
+    constrain_instance(ec_get_y(ephem_public));
+
+    # The shared_point C = eP = dE
+    shared_point = ec_mul_var_base(ephem_secret, dao_public_key);
+    shared_secret = poseidon_hash(
+        ec_get_x(shared_point),
+        ec_get_y(shared_point),
+    );
+
+    const_1 = witness_base(1);
+    const_2 = witness_base(2);
+
+    # Value
+    enc_value = base_add(dao_value, shared_secret);
+    constrain_instance(enc_value);
+
+    # Token ID
+    shared_secret_1 = poseidon_hash(shared_secret, const_1);
+    enc_token_id = base_add(dao_token_id, shared_secret_1);
+    constrain_instance(enc_token_id);
+
+    # Serial
+    shared_secret_2 = poseidon_hash(shared_secret, const_2);
+    enc_serial = base_add(dao_serial, shared_secret_2);
+    constrain_instance(enc_serial);
 }
 

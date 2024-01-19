@@ -21,11 +21,10 @@ witness "DaoAuthMoneyTransferEncCoin" {
 }
 
 circuit "DaoAuthMoneyTransferEncCoin" {
-    # UGLY HACK -----------------
+    # cast to EcPoint
     # (otherwise zkas refuses to compile)
     ONE = witness_base(1);
     pubkey = ec_mul_var_base(ONE, public_key);
-    # ---------------------------
 
     coin = poseidon_hash(
         ec_get_x(pubkey),

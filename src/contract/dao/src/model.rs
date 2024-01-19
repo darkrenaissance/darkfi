@@ -365,18 +365,23 @@ pub struct DaoExecUpdate {
 /// Parameters for `Dao::AuthMoneyTransfer`
 pub struct DaoAuthMoneyTransferParams {
     pub enc_attrs: Vec<DaoAuthCoinAttrs>,
+
+    pub change_ephem_pubkey: PublicKey,
+    pub change_enc_value: pallas::Base,
+    pub change_enc_token_id: pallas::Base,
+    pub change_enc_serial: pallas::Base,
 }
 // ANCHOR_END: dao-auth_xfer-params
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 // ANCHOR: dao-auth_coinattrs-params
 pub struct DaoAuthCoinAttrs {
+    pub ephem_pubkey: PublicKey,
+
     pub value: pallas::Base,
     pub token_id: pallas::Base,
     pub serial: pallas::Base,
     pub spend_hook: pallas::Base,
     pub user_data: pallas::Base,
-
-    pub ephem_pubkey: PublicKey,
 }
 // ANCHOR_END: dao-auth_coinattrs-params

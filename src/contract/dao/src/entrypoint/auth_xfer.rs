@@ -84,6 +84,7 @@ pub(crate) fn dao_authxfer_get_metadata(
     // Also check the coin in the change output
     let last_coin = xfer_params.outputs.last().unwrap().coin;
 
+    let (ephem_x, ephem_y) = self_params.change_ephem_pubkey.xy();
     zk_public_inputs.push((
         DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS.to_string(),
         vec![
@@ -92,6 +93,11 @@ pub(crate) fn dao_authxfer_get_metadata(
             last_coin.inner(),
             DAO_CONTRACT_ID.inner(),
             exec_params.proposal_auth_calls.commit(),
+            ephem_x,
+            ephem_y,
+            self_params.change_enc_value,
+            self_params.change_enc_token_id,
+            self_params.change_enc_serial,
         ],
     ));
 

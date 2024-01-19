@@ -122,14 +122,36 @@ impl DaoAuthMoneyTransferCall {
 
         // Build the main proof
 
-        let params = DaoAuthMoneyTransferParams { enc_attrs };
+        let ephem_secret = pallas::Base::random(&mut OsRng);
+        let change_ephem_pubkey = PublicKey::from_secret(ephem_secret.into());
+        let (ephem_x, ephem_y) = change_ephem_pubkey.xy();
+
+        let dao_public_key = self.dao.public_key.inner();
+        let dao_change_value = pallas::Base::from(self.dao_coin_attrs.value);
+
+        let shared_point = dao_public_key * mod_r_p(ephem_secret);
+        let shared_point_coords = shared_point.to_affine().coordinates().unwrap();
+        let (shared_point_x, shared_point_y) = (*shared_point_coords.x(), *shared_point_coords.y());
+        let shared_secret = poseidon_hash([shared_point_x, shared_point_y]);
+        let change_enc_value = dao_change_value + shared_secret;
+
+        let change_enc_token_id = self.dao_coin_attrs.token_id.inner() +
+            poseidon_hash([shared_secret, pallas::Base::from(1)]);
+        let change_enc_serial =
+            self.dao_coin_attrs.serial + poseidon_hash([shared_secret, pallas::Base::from(2)]);
+
+        let params = DaoAuthMoneyTransferParams {
+            enc_attrs,
+            change_enc_value,
+            change_enc_token_id,
+            change_enc_serial,
+            change_ephem_pubkey,
+        };
 
         let dao_proposer_limit = pallas::Base::from(self.dao.proposer_limit);
         let dao_quorum = pallas::Base::from(self.dao.quorum);
         let dao_approval_ratio_quot = pallas::Base::from(self.dao.approval_ratio_quot);
         let dao_approval_ratio_base = pallas::Base::from(self.dao.approval_ratio_base);
-
-        let (dao_pub_x, dao_pub_y) = self.dao.public_key.xy();
 
         let input_user_data_enc =
             poseidon_hash([self.dao.to_bulla().inner(), self.input_user_data_blind]);
@@ -147,17 +169,18 @@ impl DaoAuthMoneyTransferCall {
             Witness::Base(Value::known(dao_approval_ratio_quot)),
             Witness::Base(Value::known(dao_approval_ratio_base)),
             Witness::Base(Value::known(self.dao.gov_token_id.inner())),
-            Witness::Base(Value::known(dao_pub_x)),
-            Witness::Base(Value::known(dao_pub_y)),
+            Witness::EcNiPoint(Value::known(dao_public_key)),
             Witness::Base(Value::known(self.dao.bulla_blind)),
             // Dao input user data blind
             Witness::Base(Value::known(self.input_user_data_blind)),
             // Dao output coin attrs
-            Witness::Base(Value::known(pallas::Base::from(self.dao_coin_attrs.value))),
+            Witness::Base(Value::known(dao_change_value)),
             Witness::Base(Value::known(self.dao_coin_attrs.token_id.inner())),
             Witness::Base(Value::known(self.dao_coin_attrs.serial)),
             // DAO_CONTRACT_ID
             Witness::Base(Value::known(DAO_CONTRACT_ID.inner())),
+            // Encrypted change DAO output
+            Witness::Base(Value::known(ephem_secret)),
         ];
 
         let public_inputs = vec![
@@ -166,6 +189,11 @@ impl DaoAuthMoneyTransferCall {
             self.dao_coin_attrs.to_coin().inner(),
             DAO_CONTRACT_ID.inner(),
             self.proposal.auth_calls.commit(),
+            ephem_x,
+            ephem_y,
+            change_enc_value,
+            change_enc_token_id,
+            change_enc_serial,
         ];
 
         let circuit = ZkCircuit::new(prover_witnesses, auth_xfer_zkbin);
