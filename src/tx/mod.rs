@@ -79,28 +79,39 @@ impl Transaction {
             assert_eq!(proofs.len(), pubvals.len());
 
             let Some(contract_map) = verifying_keys.get(&call.data.contract_id.to_bytes()) else {
-                error!("Verifying keys not found for contract {}", call.data.contract_id);
+                error!(
+                    target: "tx::verify_zkps",
+                    "[TX] Verifying keys not found for contract {}",
+                    call.data.contract_id,
+                );
                 return Err(TxVerifyFailed::InvalidZkProof.into())
             };
 
             for (proof, (zk_ns, public_vals)) in proofs.iter().zip(pubvals.iter()) {
                 if let Some(vk) = contract_map.get(zk_ns) {
                     // We have a verifying key for this
-                    debug!("public inputs: {:#?}", public_vals);
+                    debug!(target: "tx::verify_zkps", "[TX] public inputs: {:#?}", public_vals);
                     if let Err(e) = proof.verify(vk, public_vals) {
                         error!(
-                            target: "",
-                            "Failed verifying {}::{} ZK proof: {:#?}",
+                            target: "tx::verify_zkps",
+                            "[TX] Failed verifying {}::{} ZK proof: {:#?}",
                             call.data.contract_id, zk_ns, e
                         );
                         return Err(TxVerifyFailed::InvalidZkProof.into())
                     }
-                    debug!("Successfully verified {}::{} ZK proof", call.data.contract_id, zk_ns);
+                    debug!(
+                        target: "tx::verify_zkps",
+                        "[TX] Successfully verified {}::{} ZK proof",
+                        call.data.contract_id, zk_ns,
+                    );
                     continue
                 }
 
-                let e = format!("{}:{} circuit VK nonexistent", call.data.contract_id, zk_ns);
-                error!("{}", e);
+                error!(
+                    target: "tx::verify_zkps",
+                    "[TX] {}::{} circuit VK nonexistent",
+                    call.data.contract_id, zk_ns,
+                );
                 return Err(TxVerifyFailed::InvalidZkProof.into())
             }
         }
@@ -116,19 +127,29 @@ impl Transaction {
         self.proofs.encode(&mut hasher)?;
         let data_hash = hasher.finalize();
 
-        debug!("tx.verify_sigs: data_hash: {:?}", data_hash.as_bytes());
+        debug!(
+            target: "tx::verify_sigs",
+            "tx.verify_sigs: data_hash: {:?}", data_hash.as_bytes(),
+        );
 
         assert!(pub_table.len() == self.signatures.len());
 
         for (i, (sigs, pubkeys)) in self.signatures.iter().zip(pub_table.iter()).enumerate() {
             for (pubkey, signature) in pubkeys.iter().zip(sigs) {
-                debug!("Verifying signature with public key: {}", pubkey);
+                debug!(
+                    target: "tx::verify_sigs",
+                    "[TX] Verifying signature with public key: {}", pubkey,
+                );
                 if !pubkey.verify(&data_hash.as_bytes()[..], signature) {
-                    error!("tx::verify_sigs[{}] failed to verify", i);
+                    error!(
+                        target: "tx::verify_sigs",
+                        "[TX] tx::verify_sigs[{}] failed to verify signature", i,
+                    );
                     return Err(Error::InvalidSignature)
                 }
             }
-            debug!("tx::verify_sigs[{}] passed", i);
+
+            debug!(target: "tx::verify_sigs", "[TX] tx::verify_sigs[{}] passed", i);
         }
 
         Ok(())
@@ -146,11 +167,17 @@ impl Transaction {
         self.proofs.encode(&mut hasher)?;
         let data_hash = hasher.finalize();
 
-        debug!("tx.create_sigs: data_hash: {:?}", data_hash.as_bytes());
+        debug!(
+            target: "tx::create_sigs",
+            "[TX] tx.create_sigs: data_hash: {:?}", data_hash.as_bytes(),
+        );
 
         let mut sigs = vec![];
         for secret in secret_keys {
-            debug!("Creating signature with public key: {}", PublicKey::from_secret(*secret));
+            debug!(
+                target: "tx::create_sigs",
+                "[TX] Creating signature with public key: {}", PublicKey::from_secret(*secret),
+            );
             let signature = secret.sign(rng, &data_hash.as_bytes()[..]);
             sigs.push(signature);
         }
