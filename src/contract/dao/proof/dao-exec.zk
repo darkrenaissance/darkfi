@@ -85,8 +85,5 @@ circuit "DaoExec" {
     rhs = base_mul(yes_vote_value, dao_approval_ratio_base);
     rhs_1 = base_add(rhs, one);
     less_than_strict(lhs, rhs_1);
-
-    # NOTE: There is a vulnerability here where someone can create the exec
-    # transaction with a bad note so it cannot be decrypted by the receiver
-    # TODO: Research verifiable encryption inside ZK
 }
+

@@ -312,15 +312,17 @@ pub struct DaoVoteUpdate {
     pub vote_nullifiers: Vec<Nullifier>,
 }
 
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: dao-blind-aggregate-vote
 /// Represents a single or multiple blinded votes.
 /// These can be summed together.
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 pub struct DaoBlindAggregateVote {
     /// Weighted vote commit
     pub yes_vote_commit: pallas::Point,
     /// All value staked in the vote
     pub all_vote_commit: pallas::Point,
 }
+// ANCHOR_END: dao-blind-aggregate-vote
 
 impl DaoBlindAggregateVote {
     /// Aggregate a vote with existing one
@@ -339,8 +341,9 @@ impl Default for DaoBlindAggregateVote {
     }
 }
 
-/// Parameters for `Dao::Exec`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: dao-exec-params
+/// Parameters for `Dao::Exec`
 pub struct DaoExecParams {
     /// The proposal bulla
     pub proposal_bulla: DaoProposalBulla,
@@ -348,6 +351,7 @@ pub struct DaoExecParams {
     /// Aggregated blinds for the vote commitments
     pub blind_total_vote: DaoBlindAggregateVote,
 }
+// ANCHOR_END: dao-exec-params
 
 /// State update for `Dao::Exec`
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
@@ -357,6 +361,15 @@ pub struct DaoExecUpdate {
 }
 
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: dao-auth_xfer-params
+/// Parameters for `Dao::AuthMoneyTransfer`
+pub struct DaoAuthMoneyTransferParams {
+    pub enc_attrs: Vec<DaoAuthCoinAttrs>,
+}
+// ANCHOR_END: dao-auth_xfer-params
+
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+// ANCHOR: dao-auth_coinattrs-params
 pub struct DaoAuthCoinAttrs {
     pub value: pallas::Base,
     pub token_id: pallas::Base,
@@ -366,9 +379,4 @@ pub struct DaoAuthCoinAttrs {
 
     pub ephem_pubkey: PublicKey,
 }
-
-/// Parameters for `Dao::AuthMoneyTransfer`
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-pub struct DaoAuthMoneyTransferParams {
-    pub enc_attrs: Vec<DaoAuthCoinAttrs>,
-}
+// ANCHOR_END: dao-auth_coinattrs-params
