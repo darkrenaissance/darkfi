@@ -56,6 +56,9 @@ use verification::{
     verify_transactions,
 };
 
+/// Fee calculation helpers
+pub mod fees;
+
 /// Validation functions
 pub mod validation;
 

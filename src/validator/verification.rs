@@ -28,7 +28,9 @@ use darkfi_sdk::{
     deploy::DeployParamsV1,
     pasta::pallas,
 };
-use darkfi_serial::{deserialize_async, AsyncDecodable, AsyncEncodable, AsyncWriteExt, WriteExt};
+use darkfi_serial::{
+    deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable, AsyncWriteExt, WriteExt,
+};
 use log::{debug, error, warn};
 use smol::io::Cursor;
 
@@ -40,6 +42,7 @@ use crate::{
     util::time::TimeKeeper,
     validator::{
         consensus::{Consensus, Fork, Proposal, TXS_CAP},
+        fees::PALLAS_SCHNORR_SIGNATURE_FEE,
         pow::PoWModule,
         validation::validate_block,
     },
@@ -493,34 +496,13 @@ pub async fn verify_transaction(
         gas_used += runtime.gas_used();
     }
 
-    // When we're done looping and executing over the tx's contract calls, we now
-    // move on with verification. First we verify the signatures as that's cheaper,
-    // and then finally we verify the ZK proofs.
-    debug!(target: "validator::verification::verify_transaction", "Verifying signatures for transaction {}", tx_hash);
-    if sig_table.len() != tx.signatures.len() {
-        error!(target: "validator::verification::verify_transaction", "Incorrect number of signatures in tx {}", tx_hash);
-        return Err(TxVerifyFailed::MissingSignatures.into())
-    }
-
-    // TODO: Go through the ZK circuits that have to be verified and account for the opcodes.
-
-    if let Err(e) = tx.verify_sigs(sig_table) {
-        error!(target: "validator::verification::verify_transaction", "Signature verification for tx {} failed: {}", tx_hash, e);
-        return Err(TxVerifyFailed::InvalidSignature.into())
-    }
-
-    debug!(target: "validator::verification::verify_transaction", "Signature verification successful");
-
-    debug!(target: "validator::verification::verify_transaction", "Verifying ZK proofs for transaction {}", tx_hash);
-    if let Err(e) = tx.verify_zkps(verifying_keys, zkp_table).await {
-        error!(target: "validator::verification::verify_transaction", "ZK proof verification for tx {} failed: {}", tx_hash, e);
-        return Err(TxVerifyFailed::InvalidZkProof.into())
-    }
-
     if verify_fee {
+        // The signature fee is tx_size + fixed_sig_fee * n_signatures
+        gas_used += (PALLAS_SCHNORR_SIGNATURE_FEE * tx.signatures.len() as u64) +
+            serialize_async(tx).await.len() as u64;
+
         // TODO: This counts 1 gas as 1 token unit. Pricing should be better specified.
-        // TODO: Currently this doesn't account for signatures or ZK proofs
-        // TODO: Currently this doesn't account for WASM host functions
+        // TODO: Currently this doesn't account for ZK proofs
 
         // Deserialize the fee call to find the paid fee
         let fee: u64 = match deserialize_async(&tx.calls[fee_call_idx].data.data[1..9]).await {
@@ -543,6 +525,29 @@ pub async fn verify_transaction(
             );
             return Err(TxVerifyFailed::InsufficientFee.into())
         }
+    }
+
+    // When we're done looping and executing over the tx's contract calls and
+    // (optionally) made sure that enough fee was paid, we now move on with
+    // verification. First we verify the transaction signatures and then we
+    // verify any accompanying ZK proofs.
+    debug!(target: "validator::verification::verify_transaction", "Verifying signatures for transaction {}", tx_hash);
+    if sig_table.len() != tx.signatures.len() {
+        error!(target: "validator::verification::verify_transaction", "Incorrect number of signatures in tx {}", tx_hash);
+        return Err(TxVerifyFailed::MissingSignatures.into())
+    }
+
+    if let Err(e) = tx.verify_sigs(sig_table) {
+        error!(target: "validator::verification::verify_transaction", "Signature verification for tx {} failed: {}", tx_hash, e);
+        return Err(TxVerifyFailed::InvalidSignature.into())
+    }
+
+    debug!(target: "validator::verification::verify_transaction", "Signature verification successful");
+
+    debug!(target: "validator::verification::verify_transaction", "Verifying ZK proofs for transaction {}", tx_hash);
+    if let Err(e) = tx.verify_zkps(verifying_keys, zkp_table).await {
+        error!(target: "validator::verification::verify_transaction", "ZK proof verification for tx {} failed: {}", tx_hash, e);
+        return Err(TxVerifyFailed::InvalidZkProof.into())
     }
 
     debug!(target: "validator::verification::verify_transaction", "ZK proof verification successful");
