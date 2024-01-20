@@ -91,9 +91,9 @@ _Tasks are in no particular order. Use common sense._
 12. ~~Implement verifiable encryption for `DAO` payments~~
 13. ~~`DAO` should be able to perform arbitrary contract calls, it should act as a voted multisig~~
 14. Implement cross-chain atomic swaps (XMR, ETH, anything applicable)
-15. Rework the connection algo for p2p to use black list, grey and white list
-  * https://eprint.iacr.org/2019/411.pdf (Section 2.2)
-  * See also [P2P Network: Common Mitigations](arch/p2p-network.md#common-mitigations)
+15. ~~Rework the connection algo for p2p to use black list, grey and white list~~
+  * ~~https://eprint.iacr.org/2019/411.pdf (Section 2.2)~~
+  * ~~See also [P2P Network: Common Mitigations](arch/p2p-network.md#common-mitigations)~~
 16. Create a P2P stack test harness in order to be able to easily simulate network
     behaviour
   * Possibly we can create a dummy p2p which can simulate network connections and routing traffic.
