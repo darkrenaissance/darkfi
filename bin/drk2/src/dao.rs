@@ -42,11 +42,7 @@ impl Drk {
         // a bit better and safer.
         // For now, on success, we don't care what's returned, but in the future
         // we should actually check it.
-        if self
-            .wallet
-            .query_single(DAO_TREES_TABLE, vec![DAO_TREES_COL_DAOS_TREE], &[])
-            .await
-            .is_err()
+        if self.wallet.query_single(DAO_TREES_TABLE, &[DAO_TREES_COL_DAOS_TREE], &[]).await.is_err()
         {
             eprintln!("Initializing DAO Merkle trees");
             let tree = MerkleTree::new(100);

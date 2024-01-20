@@ -18,6 +18,7 @@
 
 use std::{fs, process::exit, sync::Arc, time::Instant};
 
+use prettytable::{format, row, Table};
 use smol::stream::StreamExt;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
@@ -25,7 +26,7 @@ use url::Url;
 use darkfi::{
     async_daemonize, cli_desc,
     rpc::{client::RpcClient, jsonrpc::JsonRequest, util::JsonValue},
-    util::path::expand_path,
+    util::{parse::encode_base10, path::expand_path},
     Result,
 };
 
@@ -38,6 +39,7 @@ use cli_util::kaching;
 
 /// Wallet functionality related to Money
 mod money;
+use money::BALANCE_BASE10_DECIMALS;
 
 /// Wallet functionality related to Dao
 mod dao;
@@ -108,6 +110,14 @@ enum Subcmd {
         #[structopt(long)]
         /// Get the default address in the wallet
         address: bool,
+
+        #[structopt(long)]
+        /// Print all the addresses in the wallet
+        addresses: bool,
+
+        #[structopt(long)]
+        /// Set the default address in the wallet
+        default_address: Option<usize>,
 
         #[structopt(long)]
         /// Print all the secret keys from the wallet
@@ -205,6 +215,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             keygen,
             balance,
             address,
+            addresses,
+            default_address,
             secrets,
             import_secrets,
             tree,
@@ -214,6 +226,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 !keygen &&
                 !balance &&
                 !address &&
+                !addresses &&
+                default_address.is_none() &&
                 !secrets &&
                 !tree &&
                 !coins &&
@@ -230,6 +244,45 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 drk.initialize_wallet().await?;
                 drk.initialize_money().await?;
                 drk.initialize_dao().await?;
+                return Ok(())
+            }
+
+            if keygen {
+                if let Err(e) = drk.money_keygen().await {
+                    eprintln!("Failed to generate keypair: {e:?}");
+                    exit(2);
+                }
+                return Ok(())
+            }
+
+            if balance {
+                let balmap = drk.money_balance().await?;
+
+                let aliases_map = drk.get_aliases_mapped_by_token().await?;
+
+                // Create a prettytable with the new data:
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Token ID", "Aliases", "Balance"]);
+                for (token_id, balance) in balmap.iter() {
+                    let aliases = match aliases_map.get(token_id) {
+                        Some(a) => a,
+                        None => "-",
+                    };
+
+                    table.add_row(row![
+                        token_id,
+                        aliases,
+                        encode_base10(*balance, BALANCE_BASE10_DECIMALS)
+                    ]);
+                }
+
+                if table.is_empty() {
+                    println!("No unspent balances found");
+                } else {
+                    println!("{}", table);
+                }
+
                 return Ok(())
             }
 

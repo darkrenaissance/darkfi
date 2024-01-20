@@ -64,7 +64,6 @@ impl WalletDb {
     /// that don't contain any parameters.
     pub async fn exec_batch_sql(&self, query: &str) -> WalletDbResult<()> {
         debug!(target: "walletdb::exec_batch_sql", "[WalletDb] Executing batch SQL query:\n{query}");
-        // If no params are provided, execute directly
         if let Err(e) = self.conn.lock().await.execute_batch(query) {
             error!(target: "walletdb::exec_batch_sql", "[WalletDb] Query failed: {e}");
             return Err(WalletDbError::QueryExecutionFailed)
@@ -89,7 +88,6 @@ impl WalletDb {
         // First we prepare the query
         let conn = self.conn.lock().await;
         let Ok(mut stmt) = conn.prepare(query) else {
-            eprintln!("Error: {:?}", conn.prepare(query));
             return Err(WalletDbError::QueryPreparationFailed)
         };
 
@@ -109,25 +107,44 @@ impl WalletDb {
         Ok(())
     }
 
-    /// Query provided table from selected column names and provided `WHERE` clauses.
-    /// Named parameters are supported in the `WHERE` clauses, assuming they follow the
-    /// normal formatting ":{column_name}"
+    /// Generate a `SELECT` query for provided table from selected column names and
+    /// provided `WHERE` clauses. Named parameters are supported in the `WHERE` clauses,
+    /// assuming they follow the normal formatting ":{column_name}".
+    fn generate_select_query(
+        &self,
+        table: &str,
+        col_names: &[&str],
+        params: &[(&str, &dyn ToSql)],
+    ) -> String {
+        let mut query = if col_names.is_empty() {
+            format!("SELECT * FROM {}", table)
+        } else {
+            format!("SELECT {} FROM {}", col_names.join(", "), table)
+        };
+        if params.is_empty() {
+            return query
+        }
+
+        let mut where_str = Vec::with_capacity(params.len());
+        for (k, _) in params {
+            let col = &k[1..];
+            where_str.push(format!("{col} = {k}"));
+        }
+        query.push_str(&format!(" WHERE {}", where_str.join(" AND ")));
+
+        query
+    }
+
+    /// Query provided table from selected column names and provided `WHERE` clauses,
+    /// for a single row.
     pub async fn query_single(
         &self,
         table: &str,
-        col_names: Vec<&str>,
+        col_names: &[&str],
         params: &[(&str, &dyn ToSql)],
     ) -> WalletDbResult<Vec<Value>> {
         // Generate `SELECT` query
-        let mut query = format!("SELECT {} FROM {}", col_names.join(", "), table);
-        if !params.is_empty() {
-            let mut where_str = Vec::with_capacity(params.len());
-            for (k, _) in params {
-                let col = &k[1..];
-                where_str.push(format!("{col} = {k}"));
-            }
-            query.push_str(&format!(" WHERE {}", where_str.join(" AND ")));
-        };
+        let query = self.generate_select_query(table, col_names, params);
         debug!(target: "walletdb::query_single", "[WalletDb] Executing SQL query:\n{query}");
 
         // First we prepare the query
@@ -151,12 +168,88 @@ impl WalletDb {
         // Grab returned values
         let mut result = vec![];
         for col in col_names {
-            let Ok(value) = row.get(col) else { return Err(WalletDbError::ParseColumnValueError) };
+            let Ok(value) = row.get(*col) else { return Err(WalletDbError::ParseColumnValueError) };
             result.push(value);
         }
 
         Ok(result)
     }
+
+    /// Query provided table from selected column names and provided `WHERE` clauses,
+    /// for multiple rows.
+    pub async fn query_multiple(
+        &self,
+        table: &str,
+        col_names: &[&str],
+        params: &[(&str, &dyn ToSql)],
+    ) -> WalletDbResult<Vec<Vec<Value>>> {
+        // Generate `SELECT` query
+        let query = self.generate_select_query(table, col_names, params);
+        debug!(target: "walletdb::multiple", "[WalletDb] Executing SQL query:\n{query}");
+
+        // First we prepare the query
+        let conn = self.conn.lock().await;
+        let Ok(mut stmt) = conn.prepare(&query) else {
+            return Err(WalletDbError::QueryPreparationFailed)
+        };
+
+        // Execute the query using provided converted params
+        let Ok(mut rows) = stmt.query(params) else {
+            if let Err(e) = stmt.query(params) {
+                println!("eeer: {e:?}");
+            }
+            return Err(WalletDbError::QueryExecutionFailed)
+        };
+
+        // Loop over returned rows and parse them
+        let mut result = vec![];
+        loop {
+            // Check if an error occured
+            let row = match rows.next() {
+                Ok(r) => r,
+                Err(_) => return Err(WalletDbError::QueryExecutionFailed),
+            };
+
+            // Check if no row was returned
+            let row = match row {
+                Some(r) => r,
+                None => break,
+            };
+
+            // Grab row returned values
+            let mut row_values = vec![];
+            if col_names.is_empty() {
+                let mut idx = 0;
+                loop {
+                    let Ok(value) = row.get(idx) else { break };
+                    row_values.push(value);
+                    idx += 1;
+                }
+            } else {
+                for col in col_names {
+                    let Ok(value) = row.get(*col) else {
+                        return Err(WalletDbError::ParseColumnValueError)
+                    };
+                    row_values.push(value);
+                }
+            }
+            result.push(row_values);
+        }
+
+        Ok(result)
+    }
+}
+
+/// Custom implementation of rusqlite::named_params! to use `expr` instead of `literal` as `$param_name`,
+/// and append the ":" named parameters prefix.
+#[macro_export]
+macro_rules! convert_named_params {
+    () => {
+        &[] as &[(&str, &dyn rusqlite::types::ToSql)]
+    };
+    ($(($param_name:expr, $param_val:expr)),+ $(,)?) => {
+        &[$((format!(":{}", $param_name).as_str(), &$param_val as &dyn rusqlite::types::ToSql)),+] as &[(&str, &dyn rusqlite::types::ToSql)]
+    };
 }
 
 #[cfg(test)]
@@ -172,7 +265,7 @@ mod tests {
             wallet.exec_sql("CREATE TABLE mista ( numba INTEGER );", &[]).await.unwrap();
             wallet.exec_sql("INSERT INTO mista ( numba ) VALUES ( 42 );", &[]).await.unwrap();
 
-            let ret = wallet.query_single("mista", vec!["numba"], &[]).await.unwrap();
+            let ret = wallet.query_single("mista", &["numba"], &[]).await.unwrap();
             assert_eq!(ret.len(), 1);
             let numba: i64 = if let Value::Integer(numba) = ret[0] { numba } else { -1 };
             assert_eq!(numba, 42);
@@ -205,7 +298,7 @@ mod tests {
                 .unwrap();
 
             let ret =
-                wallet.query_single("mista", vec!["why", "are", "you", "gae"], &[]).await.unwrap();
+                wallet.query_single("mista", &["why", "are", "you", "gae"], &[]).await.unwrap();
             assert_eq!(ret.len(), 4);
             assert_eq!(ret[0], Value::Integer(why));
             assert_eq!(ret[1], Value::Text(are.clone()));
@@ -215,13 +308,71 @@ mod tests {
             let ret = wallet
                 .query_single(
                     "mista",
-                    vec!["gae"],
-                    rusqlite::named_params! {":why" : why, ":are" : are, ":you" : you},
+                    &["gae"],
+                    rusqlite::named_params! {":why": why, ":are": are, ":you": you},
                 )
                 .await
                 .unwrap();
             assert_eq!(ret.len(), 1);
             assert_eq!(ret[0], Value::Blob(gae));
+        });
+    }
+
+    #[test]
+    fn test_query_multi() {
+        smol::block_on(async {
+            let wallet = WalletDb::new(None, None).unwrap();
+            wallet
+                .exec_sql(
+                    "CREATE TABLE mista ( why INTEGER, are TEXT, you INTEGER, gae BLOB );",
+                    &[],
+                )
+                .await
+                .unwrap();
+
+            let why = 42;
+            let are = "are".to_string();
+            let you = 69;
+            let gae = vec![42u8; 32];
+
+            wallet
+                .exec_sql(
+                    "INSERT INTO mista ( why, are, you, gae ) VALUES (?1, ?2, ?3, ?4);",
+                    rusqlite::params![why, are, you, gae],
+                )
+                .await
+                .unwrap();
+            wallet
+                .exec_sql(
+                    "INSERT INTO mista ( why, are, you, gae ) VALUES (?1, ?2, ?3, ?4);",
+                    rusqlite::params![why, are, you, gae],
+                )
+                .await
+                .unwrap();
+
+            let ret = wallet.query_multiple("mista", &[], &[]).await.unwrap();
+            assert_eq!(ret.len(), 2);
+            for row in ret {
+                assert_eq!(row.len(), 4);
+                assert_eq!(row[0], Value::Integer(why));
+                assert_eq!(row[1], Value::Text(are.clone()));
+                assert_eq!(row[2], Value::Integer(you));
+                assert_eq!(row[3], Value::Blob(gae.clone()));
+            }
+
+            let ret = wallet
+                .query_multiple(
+                    "mista",
+                    &["gae"],
+                    convert_named_params! {("why", why), ("are", are), ("you", you)},
+                )
+                .await
+                .unwrap();
+            assert_eq!(ret.len(), 2);
+            for row in ret {
+                assert_eq!(row.len(), 1);
+                assert_eq!(row[0], Value::Blob(gae.clone()));
+            }
         });
     }
 }

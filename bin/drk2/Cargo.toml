@@ -18,6 +18,8 @@ darkfi-serial = {path = "../../src/serial"}
 
 # Misc
 log = "0.4.20"
+prettytable-rs = "0.10.0"
+rand = "0.8.5"
 rodio = {version = "0.17.3", default-features = false, features = ["minimp3"]}
 rusqlite = {version = "0.30.0", features = ["sqlcipher"]}
 url = "2.5.0"
