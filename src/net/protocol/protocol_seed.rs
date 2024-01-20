@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::sync::Arc;
+use std::{sync::Arc, time::UNIX_EPOCH};
 
 use async_trait::async_trait;
 use log::debug;
@@ -25,7 +25,7 @@ use smol::Executor;
 use super::{
     super::{
         channel::ChannelPtr,
-        hosts::HostsPtr,
+        hosts::store::HostsPtr,
         message::{AddrsMessage, GetAddrsMessage},
         message_subscriber::MessageSubscription,
         p2p::P2pPtr,
@@ -33,7 +33,7 @@ use super::{
     },
     protocol_base::{ProtocolBase, ProtocolBasePtr},
 };
-use crate::Result;
+use crate::{net::hosts::refinery::ping_node, Result};
 
 /// Implements the seed protocol
 pub struct ProtocolSeed {
@@ -41,6 +41,7 @@ pub struct ProtocolSeed {
     hosts: HostsPtr,
     settings: SettingsPtr,
     addr_sub: MessageSubscription<AddrsMessage>,
+    p2p: P2pPtr,
 }
 
 const PROTO_NAME: &str = "ProtocolSeed";
@@ -55,28 +56,47 @@ impl ProtocolSeed {
         let addr_sub =
             channel.subscribe_msg::<AddrsMessage>().await.expect("Missing addr dispatcher!");
 
-        Arc::new(Self { channel, hosts, settings, addr_sub })
+        Arc::new(Self { channel, hosts, settings, addr_sub, p2p })
     }
 
     /// Sends own external addresses over a channel. Imports own external addresses
     /// from settings, then adds those addresses to an addrs message and sends it
     /// out over the channel.
-    pub async fn send_self_address(&self) -> Result<()> {
-        debug!(target: "net::protocol_seed::send_self_address()", "[START]");
+    pub async fn send_my_addrs(&self) -> Result<()> {
+        debug!(target: "net::protocol_seed::send_my_addrs()", "[START]");
         // Do nothing if external addresses are not configured
         if self.settings.external_addrs.is_empty() {
+            debug!(target: "net::protocol_seed::send_my_addrs()",
+            "External address is not configured. Stopping");
             return Ok(())
         }
 
-        let addrs = self.settings.external_addrs.clone();
-        debug!(
-            target: "net::protocol_seed::send_self_address()",
-            "ext_addrs={:?}, dest={}", addrs, self.channel.address(),
-        );
+        // Do nothing if advertise is set to false
+        if !self.settings.advertise {
+            debug!(target: "net::protocol_seed::send_my_addrs()",
+            "Advertise is set to false. Stopping");
+            return Ok(())
+        }
 
+        let mut addrs = vec![];
+        for addr in self.settings.external_addrs.clone() {
+            debug!(target: "net::protocol_seed::send_my_addrs()", "Attempting to ping self");
+
+            // See if we can do a version exchange with ourself.
+            if ping_node(&addr, self.p2p.clone()).await {
+                // We're online. Update last_seen and broadcast our address.
+                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                addrs.push((addr, last_seen));
+            } else {
+                debug!(target: "net::protocol_seed::send_my_addrs()", "Ping self failed");
+                return Ok(())
+            }
+        }
+        debug!(target: "net::protocol_seed::send_my_addrs()", "Broadcasting address");
         let ext_addr_msg = AddrsMessage { addrs };
         self.channel.send(&ext_addr_msg).await?;
-        debug!(target: "net::protocol_seed::send_self_address()", "[END]");
+        debug!(target: "net::protocol_seed::send_my_addrs()", "[END]");
+
         Ok(())
     }
 }
@@ -90,7 +110,7 @@ impl ProtocolBase for ProtocolSeed {
         debug!(target: "net::protocol_seed::start()", "START => address={}", self.channel.address());
 
         // Send own address to the seed server
-        self.send_self_address().await?;
+        self.send_my_addrs().await?;
 
         // Send get address message
         let get_addr = GetAddrsMessage {
@@ -105,7 +125,11 @@ impl ProtocolBase for ProtocolSeed {
             target: "net::protocol_seed::start()",
             "Received {} addrs from {}", addrs_msg.addrs.len(), self.channel.address(),
         );
-        self.hosts.store(&addrs_msg.addrs).await;
+        debug!(
+            target: "net::protocol_seed::start()",
+            "Appending to greylist...",
+        );
+        self.hosts.greylist_store_or_update(&addrs_msg.addrs).await;
 
         debug!(target: "net::protocol_seed::start()", "END => address={}", self.channel.address());
         Ok(())

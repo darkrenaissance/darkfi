@@ -95,9 +95,8 @@ pub trait Session: Sync {
             p2p.protocol_registry().attach(self.type_id(), channel.clone(), p2p.clone()).await;
 
         // Perform the handshake protocol
-        let protocol_version =
-            ProtocolVersion::new(channel.clone(), p2p.settings().clone(), p2p.hosts().clone())
-                .await;
+        let protocol_version = ProtocolVersion::new(channel.clone(), p2p.settings().clone()).await;
+        debug!(target: "net::session::register_channel()", "register_channel {}", channel.clone().address());
         let handshake_task =
             self.perform_handshake_protocols(protocol_version, channel.clone(), executor.clone());
 
@@ -133,8 +132,6 @@ pub trait Session: Sync {
     ) -> Result<()> {
         // Perform handshake
         protocol_version.run(executor.clone()).await?;
-
-        // Channel is now initialized
 
         // Add channel to p2p
         self.p2p().store(channel.clone()).await;

@@ -35,8 +35,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use log::{debug, error, info, trace, warn};
-use rand::{prelude::SliceRandom, rngs::OsRng};
+use log::{debug, error, info, warn};
 use smol::lock::Mutex;
 use url::Url;
 
@@ -127,6 +126,7 @@ impl OutboundSession {
     fn wakeup_peer_discovery(&self) {
         self.peer_discovery.notify()
     }
+
     async fn wakeup_slots(&self) {
         let slots = &*self.slots.lock().await;
         for slot in slots {
@@ -185,18 +185,58 @@ impl Slot {
         self.process.stop().await
     }
 
+    async fn fetch_address(&self, slot_count: usize, transports: &[String]) -> Option<(Url, u64)> {
+        let hosts = self.p2p().hosts();
+        let connects = self.p2p().settings().outbound_connections;
+        let white_count = connects * self.p2p().settings().white_connection_percent / 100;
+
+        let addrs = {
+            // Up to anchor_connection_count connections:
+            //
+            //  Select from the anchorlist
+            //  If the anchorlist is empty, select from the whitelist
+            //  If the whitelist is empty, select from the greylist
+            //  If the greylist is empty, do peer discovery
+            if slot_count < self.p2p().settings().anchor_connection_count {
+                debug!(target: "net::outbound_session::fetch_address()",
+                "First two connections- prefer anchor connections");
+                hosts.anchorlist_fetch_address(transports).await
+            }
+            // Up to white_connection_percent connections:
+            //
+            //  Select from the whitelist
+            //  If the whitelist is empty, select from the greylist
+            //  If the greylist is empty, do peer discovery
+            else if slot_count < white_count {
+                debug!(target: "net::outbound_session::fetch_address()",
+                "Next N connections- prefer white connections");
+                hosts.whitelist_fetch_address(transports).await
+            }
+            // All other connections:
+            //
+            //  Select from the greylist
+            //  If the greylist is empty, do peer discovery
+            else {
+                debug!(target: "net::outbound_session::fetch_address()",
+                "All other connections- get grey connections");
+                hosts.greylist_fetch_address(transports).await
+            }
+        };
+
+        // Check whether:
+        // * we already have this connection established
+        // * we already have this configured as a manual peer
+        // * address is already pending a connection
+        hosts.check_address_with_lock(self.p2p(), addrs).await
+    }
+
+    // We first try to make connections to the addresses on our anchor list. We then find some
+    // whitelist connections according to the whitelist percent default. Finally, any remaining
+    // connections we make from the greylist.
     async fn run(self: Arc<Self>) {
-        // This is the main outbound connection loop where we try to establish
-        // a connection in the slot. The `try_connect` function will block in
-        // case the connection was sucessfully established. If it fails, then
-        // we will wait for a defined number of seconds and try to fill the
-        // slot again. This function should never exit during the lifetime of
-        // the P2P network, as it is supposed to represent an outbound slot we
-        // want to fill.
-        // The actual connection logic and peer selection is in `try_connect`.
-        // If the connection is successful, `try_connect` will wait for a stop
-        // signal and then exit. Once it exits, we'll run `try_connect` again
-        // and attempt to fill the slot with another peer.
+        let hosts = self.p2p().hosts();
+        let slot_count = self.p2p().settings().outbound_connections;
+
         loop {
             // Activate the slot
             debug!(
@@ -205,13 +245,12 @@ impl Slot {
                 self.slot,
             );
 
-            // Retrieve whitelisted outbound transports
+            // Retrieve outbound transports
             let transports = &self.p2p().settings().allowed_transports;
 
-            // Find an address to connect to. We also do peer discovery here if needed.
-            let addr = if let Some(addr) = self.fetch_address_with_lock(transports).await {
-                addr
-            } else {
+            // Do peer discovery if we don't have a hostlist (first time connecting
+            // to the network).
+            if hosts.is_empty_hostlist().await {
                 dnetev!(self, OutboundSlotSleeping, {
                     slot: self.slot,
                 });
@@ -221,33 +260,58 @@ impl Slot {
                 self.session().wakeup_peer_discovery();
                 // Wait to be woken up by peer discovery
                 self.wakeup_self.wait().await;
+
+                continue
+            }
+
+            let addr = if let Some(addr) = self.fetch_address(slot_count, transports).await {
+                debug!(target: "net::outbound_session::run()", "Fetched address: {:?}", addr);
+                addr
+            } else {
+                debug!(target: "net::outbound_session::run()", "No address found! Activating peer discovery...");
+                dnetev!(self, OutboundSlotSleeping, {
+                    slot: self.slot,
+                });
+
+                self.wakeup_self.reset();
+                // Peer discovery
+                self.session().wakeup_peer_discovery();
+                // Wait to be woken up by peer discovery
+                self.wakeup_self.wait().await;
+
                 continue
             };
+
+            let host = addr.0;
+            let slot = self.slot;
 
             info!(
                 target: "net::outbound_session::try_connect()",
                 "[P2P] Connecting outbound slot #{} [{}]",
-                self.slot, addr,
+                slot, host,
             );
 
             dnetev!(self, OutboundSlotConnecting, {
-                slot: self.slot,
-                addr: addr.clone(),
+                slot,
+                addr: host.clone(),
             });
 
-            let (addr_final, channel) = match self.try_connect(addr.clone()).await {
+            let (addr, channel) = match self.try_connect(host.clone()).await {
                 Ok(connect_info) => connect_info,
                 Err(err) => {
-                    error!(
-                        target: "net::outbound_session",
-                        "[P2P] Outbound slot #{} connection failed: {}",
-                        self.slot, err,
+                    debug!(
+                        target: "net::outbound_session::try_connect()",
+                        "[P2P] Outbound slot #{} connection failed: {}, node {}",
+                        slot, err, self.p2p().settings().node_id
                     );
 
                     dnetev!(self, OutboundSlotDisconnected, {
-                        slot: self.slot,
+                        slot,
                         err: err.to_string()
                     });
+
+                    // Downgrade this host to greylist if it's on the whitelist or anchorlist.
+                    //self.session().downgrade_host(&host).await;
 
                     self.channel_id.store(0, Ordering::Relaxed);
                     continue
@@ -257,22 +321,24 @@ impl Slot {
             info!(
                 target: "net::outbound_session::try_connect()",
                 "[P2P] Outbound slot #{} connected [{}]",
-                self.slot, addr_final
+                slot, addr
             );
 
             dnetev!(self, OutboundSlotConnected, {
                 slot: self.slot,
-                addr: addr_final.clone(),
+                addr: addr.clone(),
                 channel_id: channel.info.id
             });
 
+            // At this point we've managed to connect.
+
             let stop_sub = channel.subscribe_stop().await.expect("Channel should not be stopped");
             // Setup new channel
-            if let Err(err) = self.setup_channel(addr, channel.clone()).await {
+            if let Err(err) = self.setup_channel(host.clone(), channel.clone()).await {
                 info!(
                     target: "net::outbound_session",
                     "[P2P] Outbound slot #{} disconnected: {}",
-                    self.slot, err
+                    slot, err
                 );
 
                 dnetev!(self, OutboundSlotDisconnected, {
@@ -286,9 +352,15 @@ impl Slot {
 
             self.channel_id.store(channel.info.id, Ordering::Relaxed);
 
+            // Add this connection to the anchorlist, remove it from the [otherlist]
+            hosts.upgrade_host(&addr).await;
+
             // Wait for channel to close
             stop_sub.receive().await;
             self.channel_id.store(0, Ordering::Relaxed);
+
+            // Downgrade this host to greylist if it's on the whitelist or anchorlist.
+            hosts.downgrade_host(&addr).await;
         }
     }
 
@@ -307,14 +379,11 @@ impl Slot {
             Ok((addr_final, channel)) => Ok((addr_final, channel)),
 
             Err(e) => {
-                error!(
+                debug!(
                     target: "net::outbound_session::try_connect()",
                     "[P2P] Unable to connect outbound slot #{} [{}]: {}",
                     self.slot, addr, e
                 );
-
-                // At this point we failed to connect. We'll quarantine this peer now.
-                self.p2p().hosts().quarantine(&addr).await;
 
                 // Remove connection from pending
                 self.p2p().remove_pending(&addr).await;
@@ -329,100 +398,19 @@ impl Slot {
 
     async fn setup_channel(&self, addr: Url, channel: ChannelPtr) -> Result<()> {
         // Register the new channel
+        debug!(target: "net::outbound_session::setup_channel", "register_channel {}", channel.clone().address());
         self.session().register_channel(channel.clone(), self.p2p().executor()).await?;
 
         // Channel is now connected but not yet setup
         // Remove pending lock since register_channel will add the channel to p2p
+        debug!(target: "net::outbound_session::setup_channel", "removing channel...");
         self.p2p().remove_pending(&addr).await;
+        debug!(target: "net::outbound_session::setup_channel", "channel removed!");
 
         // Notify that channel processing has been finished
         self.session().channel_subscriber.notify(Ok(channel)).await;
 
         Ok(())
-    }
-
-    /// Loops through host addresses to find an outbound address that we can
-    /// connect to. Check whether the address is valid by making sure it isn't
-    /// our own inbound address, then checks whether it is already connected
-    /// (exists) or connecting (pending).
-    /// Lastly adds matching address to the pending list.
-    /// TODO: this method should go in hosts
-    async fn fetch_address_with_lock(&self, transports: &[String]) -> Option<Url> {
-        let p2p = self.p2p();
-
-        // Collect hosts
-        let mut hosts = vec![];
-
-        // If transport mixing is enabled, then for example we're allowed to
-        // use tor:// to connect to tcp:// and tor+tls:// to connect to tcp+tls://.
-        // However, **do not** mix tor:// and tcp+tls://, nor tor+tls:// and tcp://.
-        let transport_mixing = p2p.settings().transport_mixing;
-        macro_rules! mix_transport {
-            ($a:expr, $b:expr) => {
-                if transports.contains(&$a.to_string()) && transport_mixing {
-                    let mut a_to_b = p2p.hosts().fetch_with_schemes(&[$b.to_string()], None).await;
-                    for addr in a_to_b.iter_mut() {
-                        addr.set_scheme($a).unwrap();
-                        hosts.push(addr.clone());
-                    }
-                }
-            };
-        }
-        mix_transport!("tor", "tcp");
-        mix_transport!("tor+tls", "tcp+tls");
-        mix_transport!("nym", "tcp");
-        mix_transport!("nym+tls", "tcp+tls");
-
-        // And now the actual requested transports
-        for addr in p2p.hosts().fetch_with_schemes(transports, None).await {
-            hosts.push(addr);
-        }
-
-        // Randomize hosts list. Do not try to connect in a deterministic order.
-        // This is healthier for multiple slots to not compete for the same addrs.
-        hosts.shuffle(&mut OsRng);
-
-        // Try to find an unused host in the set.
-        for host in hosts.iter() {
-            // Check if we already have this connection established
-            if p2p.exists(host).await {
-                trace!(
-                    target: "net::outbound_session::fetch_address_with_lock()",
-                    "Host '{}' exists so skipping",
-                    host
-                );
-                continue
-            }
-
-            // Check if we already have this configured as a manual peer
-            if p2p.settings().peers.contains(host) {
-                trace!(
-                    target: "net::outbound_session::fetch_address_with_lock()",
-                    "Host '{}' configured as manual peer so skipping",
-                    host
-                );
-                continue
-            }
-
-            // Obtain a lock on this address to prevent duplicate connection
-            if !p2p.add_pending(host).await {
-                trace!(
-                    target: "net::outbound_session::fetch_address_with_lock()",
-                    "Host '{}' pending so skipping",
-                    host
-                );
-                continue
-            }
-
-            trace!(
-                target: "net::outbound_session::fetch_address_with_lock()",
-                "Found valid host '{}",
-                host
-            );
-            return Some(host.clone())
-        }
-
-        None
     }
 
     fn notify(&self) {
@@ -498,6 +486,7 @@ impl PeerDiscovery {
             }
 
             if current_attempt >= 4 {
+                debug!("current attempt: {}", current_attempt);
                 info!(
                     target: "net::outbound_session::peer_discovery()",
                     "[P2P] Sleeping and trying again..."

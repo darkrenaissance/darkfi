@@ -68,12 +68,25 @@ pub struct Settings {
     pub outbound_peer_discovery_cooloff_time: u64,
     /// Time between peer discovery attempts
     pub outbound_peer_discovery_attempt_time: u64,
+    /// Advertise our external address
+    pub advertise: bool,
+    /// Hostlist storage path
+    pub hostlist: String,
+    /// Pause interval within greylist refinery process
+    pub greylist_refinery_interval: u64,
+    /// Percent of connections to come from the whitelist
+    pub white_connection_percent: usize,
+    /// Number of anchorlist connections
+    pub anchor_connection_count: usize,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         let version = option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0");
         let app_version = semver::Version::parse(version).unwrap();
+        // TODO: We don't have a cross-platform method for the app directory (.local/darkfi)
+        // in util/path.rs currently.
+        let hostlist = format!("~/.local/darkfi/{}/hostlist.tsv", env!("CARGO_PKG_NAME"));
 
         Self {
             node_id: String::new(),
@@ -94,6 +107,11 @@ impl Default for Settings {
             hosts_quarantine_limit: 50,
             outbound_peer_discovery_cooloff_time: 30,
             outbound_peer_discovery_attempt_time: 5,
+            advertise: true,
+            hostlist,
+            greylist_refinery_interval: 5,
+            white_connection_percent: 90,
+            anchor_connection_count: 2,
         }
     }
 }
@@ -182,6 +200,28 @@ pub struct SettingsOpt {
     /// Time between peer discovery attempts
     #[structopt(skip)]
     pub outbound_peer_discovery_attempt_time: Option<u64>,
+
+    /// Advertise our external address
+    #[serde(default)]
+    #[structopt(long)]
+    pub advertise: bool,
+
+    /// Hosts .tsv file to use
+    #[serde(default)]
+    #[structopt(long)]
+    pub hostlist: String,
+
+    /// Pause interval within greylist refinery process
+    #[structopt(skip)]
+    pub greylist_refinery_interval: Option<u64>,
+
+    /// Percent of connections to come from the whitelist
+    #[structopt(skip)]
+    pub white_connection_percent: Option<usize>,
+
+    /// Number of anchorlist connections
+    #[structopt(skip)]
+    pub anchor_connection_count: Option<usize>,
 }
 
 impl From<SettingsOpt> for Settings {
@@ -219,6 +259,17 @@ impl From<SettingsOpt> for Settings {
             outbound_peer_discovery_attempt_time: opt
                 .outbound_peer_discovery_attempt_time
                 .unwrap_or(def.outbound_peer_discovery_attempt_time),
+            advertise: opt.advertise,
+            hostlist: opt.hostlist,
+            greylist_refinery_interval: opt
+                .greylist_refinery_interval
+                .unwrap_or(def.greylist_refinery_interval),
+            white_connection_percent: opt
+                .white_connection_percent
+                .unwrap_or(def.white_connection_percent),
+            anchor_connection_count: opt
+                .anchor_connection_count
+                .unwrap_or(def.anchor_connection_count),
         }
     }
 }

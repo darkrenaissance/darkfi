@@ -57,7 +57,7 @@ pub use protocol_ping::ProtocolPing;
 pub mod protocol_address;
 pub use protocol_address::ProtocolAddress;
 
-/// Seed servere protocol. Seed server is used when connecting to the network
+/// Seed server protocol. Seed server is used when connecting to the network
 /// for the first time. Returns a list of peers that nodes can connect to.
 ///
 /// To start the seed protocol, we create a subscription to the address

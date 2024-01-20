@@ -126,12 +126,16 @@ impl ManualSession {
                     let stop_sub =
                         channel.subscribe_stop().await.expect("Channel should not be stopped");
 
+                    // Channel is now connected but not yet setup
+
                     // Register the new channel
                     self.register_channel(channel.clone(), ex.clone()).await?;
 
-                    // Channel is now connected but not yet setup
                     // Remove pending lock since register_channel will add the channel to p2p
                     self.p2p().remove_pending(&addr).await;
+
+                    // Add this connection to the anchorlist, remove it from the [otherlist]
+                    self.p2p().hosts().upgrade_host(&addr).await;
 
                     // Notify that channel processing has finished
                     self.channel_subscriber.notify(Ok(channel)).await;
@@ -142,6 +146,9 @@ impl ManualSession {
                         target: "net::manual_session",
                         "[P2P] Manual outbound disconnected [{}]", url,
                     );
+                    // Downgrade this host to greylist if it's on the whitelist or anchorlist.
+                    self.p2p().hosts().downgrade_host(&addr).await;
+
                     // DEV NOTE: Here we can choose to attempt reconnection again
                     return Ok(())
                 }
@@ -151,6 +158,9 @@ impl ManualSession {
                         "[P2P] Unable to connect to manual outbound [{}]: {}",
                         addr, e,
                     );
+
+                    // Downgrade this host to greylist if it's on the whitelist or anchorlist.
+                    //self.downgrade_host(&addr).await;
                 }
             }
 
