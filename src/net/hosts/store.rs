@@ -767,6 +767,14 @@ impl Hosts {
         (entry.clone(), position)
     }
 
+    /// Get the oldest entry from the whitelist.
+    pub async fn whitelist_fetch_last(&self) -> ((Url, u64), usize) {
+        let whitelist = self.whitelist.read().await;
+        let position = whitelist.len() - 1;
+        let entry = &whitelist[position];
+        (entry.clone(), position)
+    }
+
     /// Get up to n random whitelisted peers that match the given transport schemes from the hosts set.
     pub async fn whitelist_fetch_n_random_with_schemes(
         &self,
@@ -1208,6 +1216,37 @@ mod tests {
 
             assert!(!hosts.is_empty_whitelist().await);
             assert!(hosts.whitelist_contains(&url).await);
+        });
+    }
+
+    #[test]
+    fn test_whitelist_get_last() {
+        smol::block_on(async {
+            let settings = Settings {
+                localnet: false,
+                external_addrs: vec![
+                    Url::parse("tcp://foo.bar:123").unwrap(),
+                    Url::parse("tcp://lol.cat:321").unwrap(),
+                ],
+                ..Default::default()
+            };
+
+            let hosts = Hosts::new(Arc::new(settings.clone()));
+
+            // Build up a hostlist
+            for i in 0..10 {
+                sleep(1).await;
+                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+                let url = Url::parse(&format!("tcp://whitelist{}:123", i)).unwrap();
+                hosts.whitelist_store(url.clone(), last_seen).await;
+            }
+
+            for (url, last_seen) in hosts.whitelist.read().await.iter() {
+                println!("{} {}", url, last_seen);
+            }
+
+            let (entry, _position) = hosts.whitelist_fetch_last().await;
+            println!("last entry: {} {}", entry.0, entry.1);
         });
     }
 

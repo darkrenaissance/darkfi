@@ -152,7 +152,7 @@ impl Lilith {
                 continue
             }
 
-            let (entry, position) = hosts.whitelist_fetch_random().await;
+            let (entry, position) = hosts.whitelist_fetch_last().await;
             let url = &entry.0;
 
             if !ping_node(url, p2p.clone()).await {
