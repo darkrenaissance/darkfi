@@ -14,11 +14,14 @@ Let $\t{Params}_\t{DAO}, \t{Bulla}_\t{DAO}, \t{Params}_\t{Proposal}, \t{Bulla}_\
 
 ## Mint
 
+This function creates a DAO bulla $𝒟 $. It's comparatively simple- we commit to
+the DAO params and then add the bulla to the set.
+
 ### Function Params
 
 Define the DAO mint function params
 $$ \begin{aligned}
-  ℬ  &∈ \t{im}(\t{Bulla}_\t{DAO}) \\
+  𝒟 &∈ \t{im}(\t{Bulla}_\t{DAO}) \\
   \t{PK} &∈ ℙₚ
 \end{aligned} $$
 
@@ -40,8 +43,7 @@ $$ \begin{aligned}
   b_\t{DAO} &∈ 𝔽ₚ
 \end{aligned} $$
 
-Attach a proof $π = \{ 𝐯, 𝐱 : R(𝐯, 𝐱) = 1 \}$ such that the
-following relations hold:
+Attach a proof $π$ such that the following relations hold:
 
 **Proof of public key ownership** &emsp; $\t{PK} = \t{DerivePubKey}(x)$.
 
@@ -53,6 +55,28 @@ There should be a single signature attached, which uses
 $\t{PK}$ as the signature public key.
 
 ## Propose
+
+This contract function creates a DAO proposal. It takes a merkle root
+$R_\t{DAO}$ which contains the DAO bulla created in the Mint phase.
+
+Several inputs are attached containing proof of ownership for the governance
+token. This is to satisfy the proposer limit value set in the DAO.
+We construct the nullifier $\cN$ which can leak anonymity when those same
+coins are spent. To workaround this, wallet implementers can attach an
+additional `Money::transfer()` call to the transaction.
+
+The nullifier $\cN$ proves the coin isn't already spent in the set determined
+by $R_\t{coin}$. Each value commit $V$ exported by the input is summed and
+used in the main proof to determine the total value attached in the inputs
+crosses the proposer limit threshold.
+
+This is merely a proof of ownership of holding a certain amount of value.
+Coins are not locked and continue to be spendable.
+
+Additionally the encrypted note $\t{EncNote}$ is used to send the proposal
+values to the DAO members using the public key set inside the DAO.
+
+A proposal contains a list of auth calls as specified in [Auth Calls](model.md#auth-calls). This specifies the contract call executed by the DAO on passing.
 
 ### Function Params
 
@@ -154,6 +178,26 @@ $$ \begin{aligned}
 
 ## Vote
 
+After `DAO::propose()` is called, DAO members can then call this contract
+function. Using a similar method as before, they attach inputs proving ownership
+of a certain value of governance tokens. This is how we achieve token weighted
+voting. The result of the vote is communicated to other DAO members through the
+encrypted note $\t{EncNote}$.
+
+Each nullifier $𝒩 $ is stored uniquely per proposal. Additionally as before,
+there is a leakage here connecting the coins when spent. However prodigious
+usage of `Money::transfer()` to wash the coins after calling `DAO::vote()`
+should mitigate against this attack. In the future this can be fixed using
+set nonmembership primitives.
+
+Another leakage is that the proposal bulla $𝒫 $ is public. To ensure every vote
+is discoverable by verifiers (who cannot decrypt values) and protect against
+'nothing up my sleeve', we link them all together. This is so the final tally
+used for executing proposals is accurate.
+
+The total sum of votes is represented by the commit $V_\t{all} = ∑_{i ∈ 𝐢} i.V$
+and the yes votes by $V_\t{yes}$.
+
 ### Function Params
 
 Define the DAO vote function params
@@ -252,6 +296,16 @@ Attach a proof $πᵢ$ such that the following relations hold:
 
 ## Exec
 
+Exec is the final stage after voting is [Accepted](concepts.md#proposal-states).
+
+It checks the correct voting conditions have been met in accordance with the DAO
+params such as quorum and approval ratio.
+
+It also checks that child calls have been attached in accordance with the auth
+calls set inside the proposal. One of these will usually be an auth module
+function. Currently the DAO provides a single preset for executing
+`Money::transfer()` calls so DAOs can manage anonymous treasuries.
+
 ### Function Params
 
 Let $\t{AuthCall}, \t{Commit}_{\t{Auth}^*}$ be defined as in the section [Auth Calls](model.md#auth-calls).
@@ -318,7 +372,7 @@ equivalent check that $v_a A^\%_q ≤ v_y A^\%_b$.
 This is a child call for Exec which can be used for DAO treasuries.
 It checks the next sibling call is `Money::transfer()` and accordingly
 verifies the first $n - 1$ output coins match the data set in this
-call's auth data.
+call's [auth data](model.md#auth-calls).
 
 Additionally we provide a note with the coin params that are verifiably
 encrypted to mitigate the attack where Exec is called, but the supplied
