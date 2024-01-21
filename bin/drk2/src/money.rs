@@ -21,19 +21,31 @@ use std::collections::HashMap;
 use rand::rngs::OsRng;
 use rusqlite::types::Value;
 
-use darkfi::{zk::halo2::Field, Error, Result};
+use darkfi::{tx::Transaction, zk::halo2::Field, Error, Result};
 use darkfi_money_contract::{
     client::{
-        MoneyNote, OwnCoin, MONEY_ALIASES_TABLE, MONEY_COINS_COL_IS_SPENT, MONEY_COINS_TABLE,
+        MoneyNote, OwnCoin, MONEY_ALIASES_COL_ALIAS, MONEY_ALIASES_COL_TOKEN_ID,
+        MONEY_ALIASES_TABLE, MONEY_COINS_COL_COIN, MONEY_COINS_COL_IS_SPENT,
+        MONEY_COINS_COL_LEAF_POSITION, MONEY_COINS_COL_MEMO, MONEY_COINS_COL_NULLIFIER,
+        MONEY_COINS_COL_SECRET, MONEY_COINS_COL_SERIAL, MONEY_COINS_COL_SPEND_HOOK,
+        MONEY_COINS_COL_TOKEN_BLIND, MONEY_COINS_COL_TOKEN_ID, MONEY_COINS_COL_USER_DATA,
+        MONEY_COINS_COL_VALUE, MONEY_COINS_COL_VALUE_BLIND, MONEY_COINS_TABLE,
         MONEY_INFO_COL_LAST_SCANNED_SLOT, MONEY_INFO_TABLE, MONEY_KEYS_COL_IS_DEFAULT,
         MONEY_KEYS_COL_KEY_ID, MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE,
+        MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_TOKEN_ID, MONEY_TOKENS_TABLE,
         MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
     },
-    model::Coin,
+    model::{
+        Coin, MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1, MoneyTransferParamsV1, Output,
+    },
+    MoneyFunction,
 };
 use darkfi_sdk::{
     bridgetree,
-    crypto::{Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey, TokenId},
+    crypto::{
+        poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey, TokenId,
+        MONEY_CONTRACT_ID,
+    },
     pasta::pallas,
 };
 use darkfi_serial::{deserialize, serialize};
@@ -41,13 +53,13 @@ use darkfi_serial::{deserialize, serialize};
 use crate::{
     convert_named_params,
     error::{WalletDbError, WalletDbResult},
-    Drk,
+    kaching, Drk,
 };
 
 pub const BALANCE_BASE10_DECIMALS: usize = 8;
 
 impl Drk {
-    /// Initialize wallet with tables for the Money contract
+    /// Initialize wallet with tables for the Money contract.
     pub async fn initialize_money(&self) -> WalletDbResult<()> {
         // Initialize Money wallet schema
         let wallet_schema = include_str!("../../../src/contract/money/wallet.sql");
@@ -198,7 +210,7 @@ impl Drk {
         Ok(vec)
     }
 
-    /// Fetch all secret keys from the wallet
+    /// Fetch all secret keys from the wallet.
     pub async fn get_money_secrets(&self) -> Result<Vec<SecretKey>> {
         let rows =
             match self.wallet.query_multiple(MONEY_KEYS_TABLE, &[MONEY_KEYS_COL_SECRET], &[]).await
@@ -400,6 +412,18 @@ impl Drk {
         Ok(owncoins)
     }
 
+    /// Create an alias record for provided Token ID.
+    pub async fn add_alias(&self, alias: String, token_id: TokenId) -> WalletDbResult<()> {
+        eprintln!("Generating alias {alias} for Token: {token_id}");
+        let query = format!(
+            "INSERT OR REPLACE INTO {} ({}, {}) VALUES (?1, ?2);",
+            MONEY_ALIASES_TABLE, MONEY_ALIASES_COL_ALIAS, MONEY_ALIASES_COL_TOKEN_ID,
+        );
+        self.wallet
+            .exec_sql(&query, rusqlite::params![serialize(&alias), serialize(&token_id)])
+            .await
+    }
+
     /// Fetch all aliases from the wallet.
     /// Optionally filter using alias name and/or token id.
     pub async fn get_aliases(
@@ -458,6 +482,24 @@ impl Drk {
         Ok(map)
     }
 
+    /// Remove provided alias record from the wallet database.
+    pub async fn remove_alias(&self, alias: String) -> WalletDbResult<()> {
+        eprintln!("Removing alias: {alias}");
+        let query =
+            format!("DELETE FROM {} WHERE {} = ?1;", MONEY_ALIASES_TABLE, MONEY_ALIASES_COL_ALIAS,);
+        self.wallet.exec_sql(&query, rusqlite::params![serialize(&alias)]).await
+    }
+
+    /// Mark a given coin in the wallet as unspent.
+    pub async fn unspend_coin(&self, coin: &Coin) -> WalletDbResult<()> {
+        let is_spend = 0;
+        let query = format!(
+            "UPDATE {} SET {} = ?1 WHERE {} = ?2",
+            MONEY_COINS_TABLE, MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_COIN,
+        );
+        self.wallet.exec_sql(&query, rusqlite::params![is_spend, serialize(&coin.inner())]).await
+    }
+
     /// Replace the Money Merkle tree in the wallet.
     pub async fn put_money_tree(&self, tree: &MerkleTree) -> WalletDbResult<()> {
         // First we remove old record
@@ -470,7 +512,7 @@ impl Drk {
         self.wallet.exec_sql(&query, rusqlite::params![serialize(tree)]).await
     }
 
-    /// Fetch the Money Merkle tree from the wallet
+    /// Fetch the Money Merkle tree from the wallet.
     pub async fn get_money_tree(&self) -> Result<MerkleTree> {
         let row =
             match self.wallet.query_single(MONEY_TREE_TABLE, &[MONEY_TREE_COL_TREE], &[]).await {
@@ -489,7 +531,7 @@ impl Drk {
         Ok(tree)
     }
 
-    /// Get the last scanned slot from the wallet
+    /// Get the last scanned slot from the wallet.
     pub async fn last_scanned_slot(&self) -> WalletDbResult<u64> {
         let ret = self
             .wallet
@@ -503,5 +545,223 @@ impl Drk {
         };
 
         Ok(slot)
+    }
+
+    /// Append data related to Money contract transactions into the wallet database.
+    pub async fn apply_tx_money_data(&self, tx: &Transaction, _confirm: bool) -> Result<()> {
+        let cid = *MONEY_CONTRACT_ID;
+
+        let mut nullifiers: Vec<Nullifier> = vec![];
+        let mut outputs: Vec<Output> = vec![];
+        let mut freezes: Vec<TokenId> = vec![];
+
+        for (i, call) in tx.calls.iter().enumerate() {
+            if call.data.contract_id == cid && call.data.data[0] == MoneyFunction::TransferV1 as u8
+            {
+                eprintln!("Found Money::TransferV1 in call {i}");
+                let params: MoneyTransferParamsV1 = deserialize(&call.data.data[1..])?;
+
+                for input in params.inputs {
+                    nullifiers.push(input.nullifier);
+                }
+
+                for output in params.outputs {
+                    outputs.push(output);
+                }
+
+                continue
+            }
+
+            if call.data.contract_id == cid && call.data.data[0] == MoneyFunction::OtcSwapV1 as u8 {
+                eprintln!("Found Money::OtcSwapV1 in call {i}");
+                let params: MoneyTransferParamsV1 = deserialize(&call.data.data[1..])?;
+
+                for input in params.inputs {
+                    nullifiers.push(input.nullifier);
+                }
+
+                for output in params.outputs {
+                    outputs.push(output);
+                }
+
+                continue
+            }
+
+            if call.data.contract_id == cid && call.data.data[0] == MoneyFunction::TokenMintV1 as u8
+            {
+                eprintln!("Found Money::MintV1 in call {i}");
+                let params: MoneyTokenMintParamsV1 = deserialize(&call.data.data[1..])?;
+                outputs.push(params.output);
+                continue
+            }
+
+            if call.data.contract_id == cid &&
+                call.data.data[0] == MoneyFunction::TokenFreezeV1 as u8
+            {
+                eprintln!("Found Money::FreezeV1 in call {i}");
+                let params: MoneyTokenFreezeParamsV1 = deserialize(&call.data.data[1..])?;
+                let token_id = TokenId::derive_public(params.signature_public);
+                freezes.push(token_id);
+            }
+        }
+
+        let secrets = self.get_money_secrets().await?;
+        let dao_secrets = self.get_dao_secrets().await?;
+        let mut tree = self.get_money_tree().await?;
+
+        let mut owncoins = vec![];
+
+        for output in outputs {
+            let coin = output.coin;
+
+            // Append the new coin to the Merkle tree. Every coin has to be added.
+            tree.append(MerkleNode::from(coin.inner()));
+
+            // Attempt to decrypt the note
+            for secret in secrets.iter().chain(dao_secrets.iter()) {
+                if let Ok(note) = output.note.decrypt::<MoneyNote>(secret) {
+                    eprintln!("Successfully decrypted a Money Note");
+                    eprintln!("Witnessing coin in Merkle tree");
+                    let leaf_position = tree.mark().unwrap();
+
+                    let owncoin = OwnCoin {
+                        coin,
+                        note: note.clone(),
+                        secret: *secret,
+                        nullifier: Nullifier::from(poseidon_hash([secret.inner(), note.serial])),
+                        leaf_position,
+                    };
+
+                    owncoins.push(owncoin);
+                }
+            }
+        }
+
+        if let Err(e) = self.put_money_tree(&tree).await {
+            return Err(Error::RusqliteError(format!(
+                "[apply_tx_money_data] Put Money tree failed: {e:?}"
+            )))
+        }
+        if !nullifiers.is_empty() {
+            self.mark_spent_coins(&nullifiers).await?;
+        }
+
+        // This is the SQL query we'll be executing to insert new coins
+        // into the wallet
+        let query = format!(
+            "INSERT INTO {} ({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13);",
+            MONEY_COINS_TABLE,
+            MONEY_COINS_COL_COIN,
+            MONEY_COINS_COL_IS_SPENT,
+            MONEY_COINS_COL_SERIAL,
+            MONEY_COINS_COL_VALUE,
+            MONEY_COINS_COL_TOKEN_ID,
+            MONEY_COINS_COL_SPEND_HOOK,
+            MONEY_COINS_COL_USER_DATA,
+            MONEY_COINS_COL_VALUE_BLIND,
+            MONEY_COINS_COL_TOKEN_BLIND,
+            MONEY_COINS_COL_SECRET,
+            MONEY_COINS_COL_NULLIFIER,
+            MONEY_COINS_COL_LEAF_POSITION,
+            MONEY_COINS_COL_MEMO,
+        );
+
+        eprintln!("Found {} OwnCoin(s) in transaction", owncoins.len());
+        for owncoin in &owncoins {
+            eprintln!("OwnCoin: {:?}", owncoin.coin);
+            let params = rusqlite::params![
+                serialize(&owncoin.coin),
+                0, // <-- is_spent
+                serialize(&owncoin.note.serial),
+                serialize(&owncoin.note.value),
+                serialize(&owncoin.note.token_id),
+                serialize(&owncoin.note.spend_hook),
+                serialize(&owncoin.note.user_data),
+                serialize(&owncoin.note.value_blind),
+                serialize(&owncoin.note.token_blind),
+                serialize(&owncoin.secret),
+                serialize(&owncoin.nullifier),
+                serialize(&owncoin.leaf_position),
+                serialize(&owncoin.note.memo),
+            ];
+
+            if let Err(e) = self.wallet.exec_sql(&query, params).await {
+                return Err(Error::RusqliteError(format!(
+                    "[apply_tx_money_data] Inserting Money coin failed: {e:?}"
+                )))
+            }
+        }
+
+        for token_id in freezes {
+            let query = format!(
+                "UPDATE {} SET {} = 1 WHERE {} = ?1;",
+                MONEY_TOKENS_TABLE, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_TOKEN_ID,
+            );
+
+            if let Err(e) =
+                self.wallet.exec_sql(&query, rusqlite::params![serialize(&token_id)]).await
+            {
+                return Err(Error::RusqliteError(format!(
+                    "[apply_tx_money_data] Inserting Money coin failed: {e:?}"
+                )))
+            }
+        }
+
+        if !owncoins.is_empty() {
+            kaching().await;
+        }
+
+        Ok(())
+    }
+
+    /// Mark a coin in the wallet as spent
+    pub async fn mark_spent_coin(&self, coin: &Coin) -> WalletDbResult<()> {
+        let query = format!(
+            "UPDATE {} SET {} = ?1 WHERE {} = ?2;",
+            MONEY_COINS_TABLE, MONEY_COINS_COL_IS_SPENT, MONEY_COINS_COL_COIN
+        );
+        let is_spent = 1;
+        self.wallet.exec_sql(&query, rusqlite::params![is_spent, serialize(&coin.inner())]).await
+    }
+
+    /// Marks all coins in the wallet as spent, if their nullifier is in the given set
+    pub async fn mark_spent_coins(&self, nullifiers: &[Nullifier]) -> Result<()> {
+        if nullifiers.is_empty() {
+            return Ok(())
+        }
+
+        for (coin, _) in self.get_coins(false).await? {
+            if nullifiers.contains(&coin.nullifier) {
+                if let Err(e) = self.mark_spent_coin(&coin.coin).await {
+                    return Err(Error::RusqliteError(format!(
+                        "[mark_spent_coins] Marking spent coin failed: {e:?}"
+                    )))
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Reset the Money Merkle tree in the wallet
+    pub async fn reset_money_tree(&self) -> WalletDbResult<()> {
+        eprintln!("Resetting Money Merkle tree");
+        let mut tree = MerkleTree::new(100);
+        tree.append(MerkleNode::from(pallas::Base::ZERO));
+        let _ = tree.mark().unwrap();
+        self.put_money_tree(&tree).await?;
+        eprintln!("Successfully reset Money Merkle tree");
+
+        Ok(())
+    }
+
+    /// Reset the Money coins in the wallet
+    pub async fn reset_money_coins(&self) -> WalletDbResult<()> {
+        eprintln!("Resetting coins");
+        let query = format!("DELETE FROM {};", MONEY_COINS_TABLE);
+        self.wallet.exec_sql(&query, &[]).await?;
+        eprintln!("Successfully reset coins");
+
+        Ok(())
     }
 }

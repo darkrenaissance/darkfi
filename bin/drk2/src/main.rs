@@ -16,7 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fs, io::stdin, process::exit, sync::Arc, time::Instant};
+use std::{
+    fs,
+    io::{stdin, Read},
+    process::exit,
+    str::FromStr,
+    sync::Arc,
+    time::Instant,
+};
 
 use prettytable::{format, row, Table};
 use smol::stream::StreamExt;
@@ -26,14 +33,22 @@ use url::Url;
 use darkfi::{
     async_daemonize, cli_desc,
     rpc::{client::RpcClient, jsonrpc::JsonRequest, util::JsonValue},
+    tx::Transaction,
     util::{parse::encode_base10, path::expand_path},
     Result,
 };
-use darkfi_sdk::pasta::pallas;
+use darkfi_money_contract::model::Coin;
+use darkfi_sdk::{
+    crypto::TokenId,
+    pasta::{group::ff::PrimeField, pallas},
+};
 use darkfi_serial::{deserialize, serialize};
 
 /// Error codes
 mod error;
+
+/// darkfid JSON-RPC related methods
+mod rpc;
 
 /// CLI utility functions
 mod cli_util;
@@ -45,6 +60,9 @@ use money::BALANCE_BASE10_DECIMALS;
 
 /// Wallet functionality related to Dao
 mod dao;
+
+/// Wallet functionality related to transactions history
+mod txs_history;
 
 /// Wallet database operations handler
 mod walletdb;
@@ -136,6 +154,82 @@ enum Subcmd {
         #[structopt(long)]
         /// Print all the coins in the wallet
         coins: bool,
+    },
+
+    /// Unspend a coin
+    Unspend {
+        /// base58-encoded coin to mark as unspent
+        coin: String,
+    },
+
+    // TODO: Transfer
+
+    // TODO: OTC
+    /// Inspect a transaction from stdin
+    Inspect,
+
+    /// Read a transaction from stdin and broadcast it
+    Broadcast,
+
+    /// This subscription will listen for incoming blocks from darkfid and look
+    /// through their transactions to see if there's any that interest us.
+    /// With `drk` we look at transactions calling the money contract so we can
+    /// find coins sent to us and fill our wallet with the necessary metadata.
+    Subscribe,
+
+    // TODO: DAO
+    /// Scan the blockchain and parse relevant transactions
+    Scan {
+        #[structopt(long)]
+        /// Reset Merkle tree and start scanning from first block
+        reset: bool,
+
+        #[structopt(long)]
+        /// List all available checkpoints
+        list: bool,
+
+        #[structopt(long)]
+        /// Reset Merkle tree to checkpoint index and start scanning
+        checkpoint: Option<u64>,
+    },
+
+    // TODO: Explorer
+    /// Manage Token aliases
+    Alias {
+        #[structopt(subcommand)]
+        /// Sub command to execute
+        command: AliasSubcmd,
+    },
+    // TODO: Token
+}
+
+#[derive(Clone, Debug, Deserialize, StructOpt)]
+enum AliasSubcmd {
+    /// Create a Token alias
+    Add {
+        /// Token alias
+        alias: String,
+
+        /// Token to create alias for
+        token: String,
+    },
+
+    /// Print alias info of optional arguments.
+    /// If no argument is provided, list all the aliases in the wallet.
+    Show {
+        /// Token alias to search for
+        #[structopt(short, long)]
+        alias: Option<String>,
+
+        /// Token to search alias for
+        #[structopt(short, long)]
+        token: Option<String>,
+    },
+
+    /// Remove a Token alias
+    Remove {
+        /// Token alias to remove
+        alias: String,
     },
 }
 
@@ -357,7 +451,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     if let Ok(line) = line {
                         let bytes = bs58::decode(&line.trim()).into_vec()?;
                         let Ok(secret) = deserialize(&bytes) else {
-                            eprintln!("Warning: Failed to deserialize secret on line {}", i);
+                            eprintln!("Warning: Failed to deserialize secret on line {i}");
                             continue
                         };
                         secrets.push(secret);
@@ -437,12 +531,189 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     ]);
                 }
 
-                println!("{table}");
+                eprintln!("{table}");
 
                 return Ok(())
             }
 
             unreachable!()
         }
+
+        Subcmd::Unspend { coin } => {
+            let bytes: [u8; 32] = match bs58::decode(&coin).into_vec()?.try_into() {
+                Ok(b) => b,
+                Err(e) => {
+                    eprintln!("Invalid coin: {e:?}");
+                    exit(2);
+                }
+            };
+
+            let elem: pallas::Base = match pallas::Base::from_repr(bytes).into() {
+                Some(v) => v,
+                None => {
+                    eprintln!("Invalid coin");
+                    exit(2);
+                }
+            };
+
+            let coin = Coin::from(elem);
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+            if let Err(e) = drk.unspend_coin(&coin).await {
+                eprintln!("Failed to mark coin as unspent: {e:?}");
+                exit(2);
+            }
+
+            Ok(())
+        }
+
+        Subcmd::Inspect => {
+            let mut buf = String::new();
+            stdin().read_to_string(&mut buf)?;
+            let bytes = bs58::decode(&buf.trim()).into_vec()?;
+            let tx: Transaction = deserialize(&bytes)?;
+            eprintln!("{tx:#?}");
+            Ok(())
+        }
+
+        Subcmd::Broadcast => {
+            eprintln!("Reading transaction from stdin...");
+            let mut buf = String::new();
+            stdin().read_to_string(&mut buf)?;
+            let bytes = bs58::decode(&buf.trim()).into_vec()?;
+            let tx = deserialize(&bytes)?;
+
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+
+            let txid = match drk.broadcast_tx(&tx).await {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("Failed to broadcast transaction: {e:?}");
+                    exit(2);
+                }
+            };
+
+            eprintln!("Transaction ID: {txid}");
+
+            Ok(())
+        }
+
+        Subcmd::Subscribe => {
+            let drk =
+                Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
+                    .await?;
+
+            if let Err(e) = drk.subscribe_blocks(args.endpoint, ex).await {
+                eprintln!("Block subscription failed: {e:?}");
+                exit(2);
+            }
+
+            Ok(())
+        }
+
+        Subcmd::Scan { reset, list, checkpoint } => {
+            let drk =
+                Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
+                    .await?;
+
+            if reset {
+                eprintln!("Reset requested.");
+                if let Err(e) = drk.scan_blocks(true).await {
+                    eprintln!("Failed during scanning: {e:?}");
+                    exit(2);
+                }
+                eprintln!("Finished scanning blockchain");
+
+                return Ok(())
+            }
+
+            if list {
+                eprintln!("List requested.");
+                // TODO: implement
+
+                return Ok(())
+            }
+
+            if let Some(c) = checkpoint {
+                eprintln!("Checkpoint requested: {c}");
+                // TODO: implement
+
+                return Ok(())
+            }
+
+            if let Err(e) = drk.scan_blocks(false).await {
+                eprintln!("Failed during scanning: {e:?}");
+                exit(2);
+            }
+            eprintln!("Finished scanning blockchain");
+
+            Ok(())
+        }
+
+        Subcmd::Alias { command } => match command {
+            AliasSubcmd::Add { alias, token } => {
+                if alias.chars().count() > 5 {
+                    eprintln!("Error: Alias exceeds 5 characters");
+                    exit(2);
+                }
+
+                let token_id = match TokenId::from_str(token.as_str()) {
+                    Ok(t) => t,
+                    Err(e) => {
+                        eprintln!("Invalid Token ID: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                if let Err(e) = drk.add_alias(alias, token_id).await {
+                    eprintln!("Failed to add alias: {e:?}");
+                    exit(2);
+                }
+
+                Ok(())
+            }
+
+            AliasSubcmd::Show { alias, token } => {
+                let token_id = match token {
+                    Some(t) => match TokenId::from_str(t.as_str()) {
+                        Ok(t) => Some(t),
+                        Err(e) => {
+                            eprintln!("Invalid Token ID: {e:?}");
+                            exit(2);
+                        }
+                    },
+                    None => None,
+                };
+
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let map = drk.get_aliases(alias, token_id).await?;
+
+                // Create a prettytable with the new data:
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Alias", "Token ID"]);
+                for (alias, token_id) in map.iter() {
+                    table.add_row(row![alias, token_id]);
+                }
+
+                if table.is_empty() {
+                    eprintln!("No aliases found");
+                } else {
+                    eprintln!("{table}");
+                }
+
+                Ok(())
+            }
+
+            AliasSubcmd::Remove { alias } => {
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                if let Err(e) = drk.remove_alias(alias).await {
+                    eprintln!("Failed to remove alias: {e:?}");
+                    exit(2);
+                }
+
+                Ok(())
+            }
+        },
     }
 }

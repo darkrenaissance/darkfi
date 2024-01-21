@@ -35,4 +35,7 @@ pub enum WalletDbError {
     QueryFinalizationFailed = -32122,
     ParseColumnValueError = -32123,
     RowNotFound = -32124,
+
+    // Generic error
+    GenericError = -32130,
 }
