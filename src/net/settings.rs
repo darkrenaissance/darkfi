@@ -209,7 +209,7 @@ pub struct SettingsOpt {
     /// Hosts .tsv file to use
     #[serde(default)]
     #[structopt(long)]
-    pub hostlist: String,
+    pub hostlist: Option<String>,
 
     /// Pause interval within greylist refinery process
     #[structopt(skip)]
@@ -260,7 +260,7 @@ impl From<SettingsOpt> for Settings {
                 .outbound_peer_discovery_attempt_time
                 .unwrap_or(def.outbound_peer_discovery_attempt_time),
             advertise: opt.advertise,
-            hostlist: opt.hostlist,
+            hostlist: opt.hostlist.unwrap_or(def.hostlist),
             greylist_refinery_interval: opt
                 .greylist_refinery_interval
                 .unwrap_or(def.greylist_refinery_interval),
