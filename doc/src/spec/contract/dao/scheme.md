@@ -186,6 +186,11 @@ $$ \begin{aligned}
 
 &emsp; **Proof of signature public key ownership** &emsp; $i.\t{PK}_σ = \t{DerivePubKey}(x_σ)$.
 
+### Signatures
+
+For each $i ∈ 𝐢$, attach a signature corresponding to the
+public key $i.\t{PK}_σ$.
+
 ## Vote
 
 After `DAO::propose()` is called, DAO members can then call this contract
@@ -310,6 +315,11 @@ Attach a proof $πᵢ$ such that the following relations hold:
 
 &emsp; **Proof of signature public key ownership** &emsp; $i.\t{PK}_σ = \t{DerivePubKey}(x_σ)$.
 
+### Signatures
+
+For each $i ∈ 𝐢$, attach a signature corresponding to the
+public key $i.\t{PK}_σ$.
+
 ## Exec
 
 Exec is the final stage after voting is [Accepted](concepts.md#proposal-states).
@@ -387,6 +397,10 @@ where $p.𝒜  = 𝒜 $.
 **Approval ratio satisfied** &emsp; we wish to check that
 $\frac{A^\%_q}{A^\%_b} ≤ \frac{v_y}{v_a}$. Instead we perform the
 equivalent check that $v_a A^\%_q ≤ v_y A^\%_b$.
+
+### Signatures
+
+No signatures are attached.
 
 ## AuthMoneyTransfer
 
@@ -526,4 +540,8 @@ then $a.τ^\t{enc} = c.τ + α₁$.
 
 &emsp; **Verifiable encryption for serial** &emsp; let $α₂ = \t{PoseidonHash}(α, 2_{𝔽ₚ})$
 then $a.ζ^\t{enc} = c.ζ + α₂$.
+
+### Signatures
+
+No signatures are attached.
 
