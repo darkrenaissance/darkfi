@@ -58,7 +58,7 @@ impl Drk {
         // new tree and push it into the table.
         // For now, on success, we don't care what's returned, but in the future
         // we should actually check it.
-        if self.wallet.query_single(MONEY_TREE_TABLE, &[MONEY_TREE_COL_TREE], &[]).await.is_err() {
+        if self.get_money_tree().await.is_err() {
             eprintln!("Initializing Money Merkle tree");
             let mut tree = MerkleTree::new(100);
             tree.append(MerkleNode::from(pallas::Base::ZERO));
@@ -107,7 +107,7 @@ impl Drk {
             .await?;
 
         eprintln!("New address:");
-        println!("{}", keypair.public);
+        eprintln!("{}", keypair.public);
 
         Ok(())
     }
@@ -196,6 +196,74 @@ impl Drk {
         }
 
         Ok(vec)
+    }
+
+    /// Fetch all secret keys from the wallet
+    pub async fn get_money_secrets(&self) -> Result<Vec<SecretKey>> {
+        let rows =
+            match self.wallet.query_multiple(MONEY_KEYS_TABLE, &[MONEY_KEYS_COL_SECRET], &[]).await
+            {
+                Ok(r) => r,
+                Err(e) => {
+                    return Err(Error::RusqliteError(format!(
+                        "[get_money_secrets] Secret keys retrieval failed: {e:?}"
+                    )))
+                }
+            };
+
+        let mut secrets = Vec::with_capacity(rows.len());
+
+        // Let's scan through the rows and see if we got anything.
+        for row in rows {
+            let Value::Blob(ref key_bytes) = row[0] else {
+                return Err(Error::ParseFailed(
+                    "[get_money_secrets] Secret key bytes parsing failed",
+                ))
+            };
+            let secret_key: SecretKey = deserialize(key_bytes)?;
+            secrets.push(secret_key);
+        }
+
+        Ok(secrets)
+    }
+
+    /// Import given secret keys into the wallet.
+    /// If the key already exists, it will be skipped.
+    /// Returns the respective PublicKey objects for the imported keys.
+    pub async fn import_money_secrets(&self, secrets: Vec<SecretKey>) -> Result<Vec<PublicKey>> {
+        let existing_secrets = self.get_money_secrets().await?;
+
+        let mut ret = Vec::with_capacity(secrets.len());
+
+        for secret in secrets {
+            // Check if secret already exists
+            if existing_secrets.contains(&secret) {
+                eprintln!("Existing key found: {secret}");
+                continue
+            }
+
+            ret.push(PublicKey::from_secret(secret));
+            let is_default = 0;
+            let public = serialize(&PublicKey::from_secret(secret));
+            let secret = serialize(&secret);
+
+            let query = format!(
+                "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
+                MONEY_KEYS_TABLE,
+                MONEY_KEYS_COL_IS_DEFAULT,
+                MONEY_KEYS_COL_PUBLIC,
+                MONEY_KEYS_COL_SECRET
+            );
+            if let Err(e) =
+                self.wallet.exec_sql(&query, rusqlite::params![is_default, public, secret]).await
+            {
+                return Err(Error::RusqliteError(format!(
+                    "[import_money_secrets] Inserting new address failed: {e:?}"
+                )))
+            }
+        }
+
+        Ok(ret)
     }
 
     /// Fetch known unspent balances from the wallet and return them as a hashmap.
@@ -400,6 +468,25 @@ impl Drk {
         let query =
             format!("INSERT INTO {} ({}) VALUES (?1);", MONEY_TREE_TABLE, MONEY_TREE_COL_TREE,);
         self.wallet.exec_sql(&query, rusqlite::params![serialize(tree)]).await
+    }
+
+    /// Fetch the Money Merkle tree from the wallet
+    pub async fn get_money_tree(&self) -> Result<MerkleTree> {
+        let row =
+            match self.wallet.query_single(MONEY_TREE_TABLE, &[MONEY_TREE_COL_TREE], &[]).await {
+                Ok(r) => r,
+                Err(e) => {
+                    return Err(Error::RusqliteError(format!(
+                        "[get_money_tree] Tree retrieval failed: {e:?}"
+                    )))
+                }
+            };
+
+        let Value::Blob(ref tree_bytes) = row[0] else {
+            return Err(Error::ParseFailed("[get_money_tree] Tree bytes parsing failed"))
+        };
+        let tree = deserialize(tree_bytes)?;
+        Ok(tree)
     }
 
     /// Get the last scanned slot from the wallet

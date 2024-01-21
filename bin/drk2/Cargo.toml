@@ -10,13 +10,14 @@ edition = "2021"
 
 [dependencies]
 # Darkfi
-darkfi = {path = "../../", features = ["async-daemonize", "rpc"]}
+darkfi = {path = "../../", features = ["async-daemonize", "bs58", "rpc"]}
 darkfi_money_contract = {path = "../../src/contract/money", features = ["no-entrypoint", "client"]}
 darkfi_dao_contract = {path = "../../src/contract/dao", features = ["no-entrypoint", "client"]}
 darkfi-sdk = {path = "../../src/sdk", features = ["async"]}
 darkfi-serial = {path = "../../src/serial"}
 
 # Misc
+bs58 = "0.5.0"
 log = "0.4.20"
 prettytable-rs = "0.10.0"
 rand = "0.8.5"

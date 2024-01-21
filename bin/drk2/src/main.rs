@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{fs, process::exit, sync::Arc, time::Instant};
+use std::{fs, io::stdin, process::exit, sync::Arc, time::Instant};
 
 use prettytable::{format, row, Table};
 use smol::stream::StreamExt;
@@ -29,6 +29,8 @@ use darkfi::{
     util::{parse::encode_base10, path::expand_path},
     Result,
 };
+use darkfi_sdk::pasta::pallas;
+use darkfi_serial::{deserialize, serialize};
 
 /// Error codes
 mod error;
@@ -191,8 +193,8 @@ impl Drk {
         let req = JsonRequest::new("ping", JsonValue::Array(vec![]));
         let rep = self.rpc_client.oneshot_request(req).await?;
         let latency = latency.elapsed();
-        eprintln!("Got reply: {:?}", rep);
-        eprintln!("Latency: {:?}", latency);
+        eprintln!("Got reply: {rep:?}");
+        eprintln!("Latency: {latency:?}");
         Ok(())
     }
 }
@@ -284,9 +286,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
 
                 if table.is_empty() {
-                    println!("No unspent balances found");
+                    eprintln!("No unspent balances found");
                 } else {
-                    println!("{table}");
+                    eprintln!("{table}");
                 }
 
                 return Ok(())
@@ -301,7 +303,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                println!("{address}");
+                eprintln!("{address}");
 
                 return Ok(())
             }
@@ -322,9 +324,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 }
 
                 if table.is_empty() {
-                    println!("No addresses found");
+                    eprintln!("No addresses found");
                 } else {
-                    println!("{table}");
+                    eprintln!("{table}");
                 }
 
                 return Ok(())
@@ -338,9 +340,109 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 return Ok(())
             }
 
-            // TODO
+            if secrets {
+                let v = drk.get_money_secrets().await?;
 
-            Ok(())
+                for i in v {
+                    eprintln!("{i}");
+                }
+
+                return Ok(())
+            }
+
+            if import_secrets {
+                let mut secrets = vec![];
+                let lines = stdin().lines();
+                for (i, line) in lines.enumerate() {
+                    if let Ok(line) = line {
+                        let bytes = bs58::decode(&line.trim()).into_vec()?;
+                        let Ok(secret) = deserialize(&bytes) else {
+                            eprintln!("Warning: Failed to deserialize secret on line {}", i);
+                            continue
+                        };
+                        secrets.push(secret);
+                    }
+                }
+
+                let pubkeys = match drk.import_money_secrets(secrets).await {
+                    Ok(p) => p,
+                    Err(e) => {
+                        eprintln!("Failed to import secret keys into wallet: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                for key in pubkeys {
+                    eprintln!("{key}");
+                }
+
+                return Ok(())
+            }
+
+            if tree {
+                let tree = drk.get_money_tree().await?;
+
+                eprintln!("{tree:#?}");
+
+                return Ok(())
+            }
+
+            if coins {
+                let coins = drk.get_coins(true).await?;
+
+                let aliases_map = drk.get_aliases_mapped_by_token().await?;
+
+                if coins.is_empty() {
+                    return Ok(())
+                }
+
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row![
+                    "Coin",
+                    "Spent",
+                    "Token ID",
+                    "Aliases",
+                    "Value",
+                    "Spend Hook",
+                    "User Data"
+                ]);
+                let zero = pallas::Base::zero();
+                for coin in coins {
+                    let aliases = match aliases_map.get(&coin.0.note.token_id.to_string()) {
+                        Some(a) => a,
+                        None => "-",
+                    };
+
+                    let spend_hook = if coin.0.note.spend_hook != zero {
+                        bs58::encode(&serialize(&coin.0.note.spend_hook)).into_string().to_string()
+                    } else {
+                        String::from("-")
+                    };
+
+                    let user_data = if coin.0.note.user_data != zero {
+                        bs58::encode(&serialize(&coin.0.note.user_data)).into_string().to_string()
+                    } else {
+                        String::from("-")
+                    };
+
+                    table.add_row(row![
+                        bs58::encode(&serialize(&coin.0.coin.inner())).into_string().to_string(),
+                        coin.1,
+                        coin.0.note.token_id,
+                        aliases,
+                        format!("{} ({})", coin.0.note.value, encode_base10(coin.0.note.value, 8)),
+                        spend_hook,
+                        user_data
+                    ]);
+                }
+
+                println!("{table}");
+
+                return Ok(())
+            }
+
+            unreachable!()
         }
     }
 }
