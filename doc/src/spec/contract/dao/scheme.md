@@ -270,8 +270,8 @@ commit $T = \t{PedersenCommit}(d.τ, b_τ)$ where $T = ∑_{i ∈ 𝐢} Tᵢ$.
 
 **Yes vote commit** &emsp; $V_\t{yes} = \t{PedersenCommit}(ov, b_y)$
 
-**Total vote value commit** &emsp; $V = \t{PedersenCommit}(v, bᵥ)$ where
-$V = ∑_{i ∈ 𝐢} i.V$ should also hold.
+**Total vote value commit** &emsp; $V_\t{all} = \t{PedersenCommit}(v, bᵥ)$ where
+$V_\t{all} = ∑_{i ∈ 𝐢} i.V$ should also hold.
 
 **Vote option boolean** &emsp; enforce $o ∈ \{ 0, 1 \}$.
 
@@ -314,8 +314,9 @@ Attach a proof $πᵢ$ such that the following relations hold:
 
 Exec is the final stage after voting is [Accepted](concepts.md#proposal-states).
 
-It checks the correct voting conditions have been met in accordance with the DAO
-params such as quorum and approval ratio.
+It checks the correct voting conditions have been met in accordance with the
+[DAO params](model.md#dao) such as quorum and approval ratio.
+$V_\t{yes}$ and $V_\t{all}$ are pedersen commits to $v_\t{yes}$ and $v_\t{all}$ respectively.
 
 It also checks that child calls have been attached in accordance with the auth
 calls set inside the proposal. One of these will usually be an auth module
@@ -357,7 +358,7 @@ If $\#C ≠ \#𝒜 $ then exit.
 Otherwise, for each $c ∈ C$ and $a ∈ 𝒜 $, check the function ID of $c$ is $a$.
 
 **Aggregate votes lookup** &emsp; using the proposal bulla, fetch the
-aggregated votes from the DB and verify $V_y$ and $V_a$ are set correctly.
+aggregated votes from the DB and verify $V_\t{yes}$ and $V_\t{all}$ are set correctly.
 
 Let there be prover auxiliary witness inputs:
 $$ \begin{aligned}
@@ -379,7 +380,7 @@ where $p.𝒜  = 𝒜 $.
 
 **Yes vote commit** &emsp; $V_\t{yes} = \t{PedersenCommit}(v_y, b_y)$
 
-**All vote commit** &emsp; $V_\t{yes} = \t{PedersenCommit}(v_a, b_a)$
+**All vote commit** &emsp; $V_\t{all} = \t{PedersenCommit}(v_a, b_a)$
 
 **All votes pass quorum** &emsp; $Q ≤ v_a$
 
@@ -426,8 +427,13 @@ $$ \begin{aligned}
   \t{AuthCoinAttrs}.\t{SH}^\t{enc} &∈ 𝔽ₚ \\
   \t{AuthCoinAttrs}.\t{UD}^\t{enc} &∈ 𝔽ₚ \\
 \end{aligned} $$
-which corresponds to encrypted coin attributes. This provides verifiable
-note encryption for all output coins in the sibling `Money::transfer()` call.
+which corresponds to encrypted coin attributes.
+In both cases $\t{EPK}$ refers to the ephemeral key used to construct a
+diffie-hellman shared secret. We then derive further blinding factors from this
+shared secret which we use to encrypt the [coin attributes](../money/model.md#coin)
+$v, τ, ζ, \t{SH}, \t{UD}$.
+
+This provides verifiable note encryption for all output coins in the sibling `Money::transfer()` call.
 
 ```rust
 {{#include ../../../../../src/contract/dao/src/model.rs:dao-auth_xfer-params}}
