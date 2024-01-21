@@ -39,10 +39,10 @@ $$ \begin{aligned}
 
 Let there be a prover auxiliary witness inputs:
 $$ \begin{aligned}
-  \t{Params}_\t{DAO}.L &∈ ℕ₆₄ \\
-  \t{Params}_\t{DAO}.Q &∈ ℕ₆₄ \\
-  \t{Params}_\t{DAO}.A^\% &∈ ℕ₆₄ × ℕ₆₄ \\
-  \t{Params}_\t{DAO}.T &∈ 𝔽ₚ \\
+  L &∈ ℕ₆₄ \\
+  Q &∈ ℕ₆₄ \\
+  A^\% &∈ ℕ₆₄ × ℕ₆₄ \\
+  τ &∈ 𝔽ₚ \\
   x &∈ 𝔽ₚ \\
   b_\t{DAO} &∈ 𝔽ₚ
 \end{aligned} $$
@@ -51,7 +51,7 @@ Attach a proof $π$ such that the following relations hold:
 
 **Proof of public key ownership** &emsp; $\t{PK} = \t{DerivePubKey}(x)$.
 
-**DAO bulla integrity** &emsp; $ℬ  = \t{Bulla}_\t{DAO}(\t{Params}_\t{DAO}, b_\t{DAO})$
+**DAO bulla integrity** &emsp; $ℬ  = \t{Bulla}_\t{DAO}((L, Q, A^\%, τ, \t{PK}), b_\t{DAO})$
 
 ### Signatures
 
