@@ -37,7 +37,7 @@ use crate::{
     error::DaoError,
     model::{DaoBlindAggregateVote, DaoProposalMetadata, DaoProposeParams, DaoProposeUpdate},
     DaoFunction, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS, DAO_CONTRACT_DB_PROPOSAL_BULLAS,
-    DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
+    DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
 };
 
 /// `get_metdata` function for `Dao::Propose`
@@ -71,7 +71,7 @@ pub(crate) fn dao_propose_get_metadata(
         let (sig_x, sig_y) = input.signature_public.xy();
 
         zk_public_inputs.push((
-            DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS.to_string(),
+            DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS.to_string(),
             vec![
                 input.nullifier.inner(),
                 *value_coords.x(),

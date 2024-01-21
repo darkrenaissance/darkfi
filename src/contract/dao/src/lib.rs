@@ -75,11 +75,11 @@ pub const DAO_CONTRACT_KEY_LATEST_DAO_ROOT: &[u8] = b"dao_last_root";
 /// zkas dao mint circuit namespace
 pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "DaoMint";
 /// zkas dao vote input circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS: &str = "DaoVoteInput";
+pub const DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS: &str = "DaoVoteInput";
 /// zkas dao vote main circuit namespace
 pub const DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS: &str = "DaoVoteMain";
 /// zkas dao propose input circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS: &str = "DaoProposeInput";
+pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS: &str = "DaoProposeInput";
 /// zkas dao propose main circuit namespace
 pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "DaoProposeMain";
 /// zkas dao exec circuit namespace

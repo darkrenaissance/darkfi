@@ -26,7 +26,7 @@ use darkfi_dao_contract::{
     blockheight_to_day,
     client::{DaoVoteCall, DaoVoteInput},
     model::{Dao, DaoProposal, DaoProposalBulla, DaoVoteParams},
-    DaoFunction, DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
+    DaoFunction, DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
@@ -52,7 +52,7 @@ impl TestHarness {
         let wallet = self.holders.get(voter).unwrap();
 
         let (dao_vote_burn_pk, dao_vote_burn_zkbin) =
-            self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS.to_string()).unwrap();
+            self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS.to_string()).unwrap();
 
         let (dao_vote_main_pk, dao_vote_main_zkbin) =
             self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS.to_string()).unwrap();

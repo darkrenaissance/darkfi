@@ -71,9 +71,9 @@ fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // The zkas circuits can simply be embedded in the wasm and set up by
     // the initialization.
     zkas_db_set(&include_bytes!("../../proof/dao-mint.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../../proof/dao-propose-burn.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/dao-propose-input.zk.bin")[..])?;
     zkas_db_set(&include_bytes!("../../proof/dao-propose-main.zk.bin")[..])?;
-    zkas_db_set(&include_bytes!("../../proof/dao-vote-burn.zk.bin")[..])?;
+    zkas_db_set(&include_bytes!("../../proof/dao-vote-input.zk.bin")[..])?;
     zkas_db_set(&include_bytes!("../../proof/dao-vote-main.zk.bin")[..])?;
     zkas_db_set(&include_bytes!("../../proof/dao-exec.zk.bin")[..])?;
     zkas_db_set(&include_bytes!("../../proof/dao-auth-money-transfer.zk.bin")[..])?;

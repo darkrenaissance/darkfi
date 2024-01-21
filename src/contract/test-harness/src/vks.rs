@@ -32,8 +32,8 @@ use darkfi::{
 use darkfi_dao_contract::{
     DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS,
     DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS, DAO_CONTRACT_ZKAS_DAO_EXEC_NS,
-    DAO_CONTRACT_ZKAS_DAO_MINT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS,
-    DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS,
+    DAO_CONTRACT_ZKAS_DAO_MINT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS,
+    DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS,
     DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
 use darkfi_deployooor_contract::DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1;
@@ -125,9 +125,9 @@ pub fn read_or_gen_vks_and_pks() -> Result<(Pks, Vks)> {
         &include_bytes!("../../money/proof/token_freeze_v1.zk.bin")[..],
         // DAO
         &include_bytes!("../../dao/proof/dao-mint.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-propose-burn.zk.bin")[..],
+        &include_bytes!("../../dao/proof/dao-propose-input.zk.bin")[..],
         &include_bytes!("../../dao/proof/dao-propose-main.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-vote-burn.zk.bin")[..],
+        &include_bytes!("../../dao/proof/dao-vote-input.zk.bin")[..],
         &include_bytes!("../../dao/proof/dao-vote-main.zk.bin")[..],
         &include_bytes!("../../dao/proof/dao-exec.zk.bin")[..],
         &include_bytes!("../../dao/proof/dao-auth-money-transfer.zk.bin")[..],
@@ -213,9 +213,9 @@ pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
 
             // DAO circuits
             DAO_CONTRACT_ZKAS_DAO_MINT_NS |
-            DAO_CONTRACT_ZKAS_DAO_VOTE_BURN_NS |
+            DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS |
             DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS |
-            DAO_CONTRACT_ZKAS_DAO_PROPOSE_BURN_NS |
+            DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS |
             DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS |
             DAO_CONTRACT_ZKAS_DAO_EXEC_NS |
             DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS |
