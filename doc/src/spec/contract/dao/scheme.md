@@ -17,6 +17,10 @@ Let $\t{Params}_\t{DAO}, \t{Bulla}_\t{DAO}, \t{Params}_\t{Proposal}, \t{Bulla}_\
 This function creates a DAO bulla $𝒟 $. It's comparatively simple- we commit to
 the DAO params and then add the bulla to the set.
 
+* Wallet builder: `src/contract/dao/src/client/mint.rs`
+* WASM VM code: `src/contract/dao/src/entrypoint/mint.rs`
+* ZK proof: `src/contract/dao/proof/dao-mint.zk`
+
 ### Function Params
 
 Define the DAO mint function params
@@ -77,6 +81,12 @@ Additionally the encrypted note $\t{EncNote}$ is used to send the proposal
 values to the DAO members using the public key set inside the DAO.
 
 A proposal contains a list of auth calls as specified in [Auth Calls](model.md#auth-calls). This specifies the contract call executed by the DAO on passing.
+
+* Wallet builder: `src/contract/dao/src/client/propose.rs`
+* WASM VM code: `src/contract/dao/src/entrypoint/propose.rs`
+* ZK proofs:
+  * `src/contract/dao/proof/dao-propose-main.zk`
+  * `src/contract/dao/proof/dao-propose-input.zk`
 
 ### Function Params
 
@@ -198,6 +208,12 @@ used for executing proposals is accurate.
 The total sum of votes is represented by the commit $V_\t{all} = ∑_{i ∈ 𝐢} i.V$
 and the yes votes by $V_\t{yes}$.
 
+* Wallet builder: `src/contract/dao/src/client/vote.rs`
+* WASM VM code: `src/contract/dao/src/entrypoint/vote.rs`
+* ZK proofs:
+  * `src/contract/dao/proof/dao-vote-main.zk`
+  * `src/contract/dao/proof/dao-vote-input.zk`
+
 ### Function Params
 
 Define the DAO vote function params
@@ -306,6 +322,10 @@ calls set inside the proposal. One of these will usually be an auth module
 function. Currently the DAO provides a single preset for executing
 `Money::transfer()` calls so DAOs can manage anonymous treasuries.
 
+* Wallet builder: `src/contract/dao/src/client/exec.rs`
+* WASM VM code: `src/contract/dao/src/entrypoint/exec.rs`
+* ZK proof: `src/contract/dao/proof/dao-exec.zk`
+
 ### Function Params
 
 Let $\t{AuthCall}, \t{Commit}_{\t{Auth}^*}$ be defined as in the section [Auth Calls](model.md#auth-calls).
@@ -379,6 +399,12 @@ encrypted to mitigate the attack where Exec is called, but the supplied
 `Money::transfer()` call contains an invalid note which cannot be
 decrypted by the receiver. In this case, the money would still leave the
 DAO treasury but be unspendable.
+
+* Wallet builder: `src/contract/dao/src/client/auth_xfer.rs`
+* WASM VM code: `src/contract/dao/src/entrypoint/auth_xfer.rs`
+* ZK proofs:
+  * `src/contract/dao/proof/dao-auth-money-transfer.zk`
+  * `src/contract/dao/proof/dao-auth-money-transfer-enc-coin.zk`
 
 ### Function Params
 
