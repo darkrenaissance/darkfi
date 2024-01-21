@@ -10,3 +10,5 @@ $ℤ₂$ refers to binary bits.
 
 $\t{im}(f)$ denotes the image of a function $f$.
 
+$[n]$ with $n ∈ ℕ$ denotes the sequences of $n$ values starting with 1.
+
