@@ -138,7 +138,7 @@ impl Darkfid {
             return JsonError::new(InternalError, None, id).into()
         };
 
-        JsonResponse::new(JsonValue::String(last_slot.0.to_string()), id).into()
+        JsonResponse::new(JsonValue::Number(last_slot.0 as f64), id).into()
     }
 
     // RPCAPI:

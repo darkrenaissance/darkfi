@@ -98,6 +98,9 @@ async fn miner_loop(node: &Darkfid, recipient: &PublicKey) -> Result<()> {
     info!(target: "darkfid::task::miner_task", "Generating new empty fork...");
     node.validator.consensus.generate_pow_slot().await?;
 
+    // Grab blocks subscriber
+    let block_sub = node.subscribers.get("blocks").unwrap();
+
     info!(target: "darkfid::task::miner_task", "Miner loop starts!");
     // Miner loop
     loop {
@@ -126,10 +129,14 @@ async fn miner_loop(node: &Darkfid, recipient: &PublicKey) -> Result<()> {
         // Check if we can finalize anything and broadcast them
         let finalized = node.validator.finalization().await?;
         if !finalized.is_empty() {
+            let mut notif_blocks = Vec::with_capacity(finalized.len());
             for block in finalized {
                 let message = BlockInfoMessage::from(&block);
                 node.sync_p2p.broadcast(&message).await;
+                notif_blocks
+                    .push(JsonValue::String(bs58::encode(&serialize(&block)).into_string()));
             }
+            block_sub.notify(JsonValue::Array(notif_blocks)).await;
         }
     }
 }
