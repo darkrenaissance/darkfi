@@ -4,7 +4,7 @@
 
 Let $\t{PoseidonHash}$ be defined as in the section [PoseidonHash Function](../../crypto-schemes.md#poseidonhash-function).
 
-Let $𝔽ₚ, ℙₚ, \t{DerivePubKey}$ be defined as in the section [Pallas and Vesta](../../crypto-schemes.md#pallas-and-vesta).
+Let $𝔽ₚ, ℙₚ, \t{DerivePubKey}, \t{Lift}ᵥ, G_N, \mathcal{X}, \mathcal{Y}$ be defined as in the section [Pallas and Vesta](../../crypto-schemes.md#pallas-and-vesta).
 
 Let $\t{PedersenCommit}$ be defined as in the section [Homomorphic Pedersen Commitments](../../crypto-schemes.md#homomorphic-pedersen-commitments).
 
@@ -329,16 +329,22 @@ DAO treasury but be unspendable.
 ### Function Params
 
 Define the DAO AuthMoneyTransfer function params
-$$ 𝒞_\t{enc} ∈ \t{AuthCoinAttrs}^* $$
+$$ \begin{aligned}
+  𝒞_\t{enc} &∈ \t{AuthCoinAttrs}^* \\
+  \t{EPK}_\t{DAO} &∈ ℙₚ \\
+  v_\t{DAO}^\t{enc} &∈ 𝔽ₚ \\
+  τ_\t{DAO}^\t{enc} &∈ 𝔽ₚ \\
+  ζ_\t{DAO}^\t{enc} &∈ 𝔽ₚ \\
+\end{aligned} $$
 
 Define the DAO $\t{AuthCoinAttrs}$ as
 $$ \begin{aligned}
-  \t{AuthCoinAttrs}.v &∈ 𝔽ₚ \\
-  \t{AuthCoinAttrs}.τ &∈ 𝔽ₚ \\
-  \t{AuthCoinAttrs}.ζ &∈ 𝔽ₚ \\
-  \t{AuthCoinAttrs}.\t{SH} &∈ 𝔽ₚ \\
-  \t{AuthCoinAttrs}.\t{UD} &∈ 𝔽ₚ \\
-  \t{AuthCoinAttrs}.\t{EPK} &∈ ℙₚ
+  \t{AuthCoinAttrs}.\t{EPK} &∈ ℙₚ \\
+  \t{AuthCoinAttrs}.v^\t{enc} &∈ 𝔽ₚ \\
+  \t{AuthCoinAttrs}.τ^\t{enc} &∈ 𝔽ₚ \\
+  \t{AuthCoinAttrs}.ζ^\t{enc} &∈ 𝔽ₚ \\
+  \t{AuthCoinAttrs}.\t{SH}^\t{enc} &∈ 𝔽ₚ \\
+  \t{AuthCoinAttrs}.\t{UD}^\t{enc} &∈ 𝔽ₚ \\
 \end{aligned} $$
 which corresponds to encrypted coin attributes. This provides verifiable
 note encryption for all output coins in the sibling `Money::transfer()` call.
@@ -350,4 +356,88 @@ note encryption for all output coins in the sibling `Money::transfer()` call.
 ```rust
 {{#include ../../../../../src/contract/dao/src/model.rs:dao-auth_coinattrs-params}}
 ```
+
+### Contract Statement
+
+Denote the DAO contract ID by $\t{CID}_\t{DAO} ∈ 𝔽ₚ$.
+
+**Sibling call is `Money::transfer()`** &emsp; load the sibling call and check
+the contract ID and function code match `Money::transfer()`.
+
+**Money originates from the same DAO** &emsp; check all the input's `user_data`
+for the sibling `Money::transfer()` encode the same DAO. We do this by using the
+same blind for all `user_data`. Denote this value by $\t{UD}_\t{enc}$.
+
+**Output coins match proposal** &emsp; check there are $n + 1$ output coins,
+with the first $n$ coins exactly matching those set in the auth data in
+the parent `DAO::exec()` call. Denote these proposal auth calls by $𝒜 $.
+
+Let there be a prover auxiliary witness inputs:
+$$ \begin{aligned}
+  p &∈ \t{Params}_\t{Proposal} \\
+  b_p &∈ 𝔽ₚ \\
+  d &∈ \t{Params}_\t{DAO} \\
+  b_d &∈ 𝔽ₚ \\
+  b_\t{UD} &∈ 𝔽ₚ \\
+  v_\t{DAO} &∈ 𝔽ₚ \\
+  τ_\t{DAO} &∈ 𝔽ₚ \\
+  ζ_\t{DAO} &∈ 𝔽ₚ \\
+  e &∈ 𝔽ₚ \\
+\end{aligned} $$
+
+Attach a proof $π_\t{auth}$ such that the
+following relations hold:
+
+**DAO bulla integrity** &emsp; $𝒟 = \t{Bulla}_\t{DAO}(d, b_d)$
+
+**Proposal bulla integrity** &emsp; $𝒫 = \t{Bulla}_\t{Proposal}(p, b_p)$
+where $𝒫 $ matches the value in `DAO::exec()`, and $p.𝒜  = 𝒜 $.
+
+**Input user data commits to DAO bulla** &emsp; $\t{UD}_\t{enc} =
+\t{PoseidonHash}(𝒟 , b_\t{UD})$
+
+**DAO change coin integrity** &emsp; denote the last coin in the
+`Money::transfer()` outputs by $C_\t{DAO}$. Then check
+$$ C_\t{DAO} = \t{Coin}(d.\t{PK}, v_\t{DAO}, τ_\t{DAO}, ζ_\t{DAO},
+                        \t{CID}_\t{DAO}, 𝒟 ) $$
+
+**Diffie-Hellman shared secret** &emsp; $\t{EPK}_\t{DAO} = \t{DerivePubKey}(e)$.
+Now we create the shared secret with the DAO pubkey.
+$$ P = \t{Lift}ᵥ(e) d.\t{PK} $$
+$$ α = \t{PoseidonHash}(\mathcal{X}(P), \mathcal{Y}(P)) $$
+This is then used in the following three checks.
+
+**Verifiable encryption for value** &emsp; $v_\t{DAO}^\t{enc} = v_\t{DAO} + α$
+
+**Verifiable encryption for token ID** &emsp; let $α₁ = \t{PoseidonHash}(α, 1_{𝔽ₚ})$
+then $τ_\t{DAO}^\t{enc} = τ_\t{DAO} + α₁$.
+
+**Verifiable encryption for serial** &emsp; let $α₂ = \t{PoseidonHash}(α, 2_{𝔽ₚ})$
+then $ζ_\t{DAO}^\t{enc} = ζ_\t{DAO} + α₂$.
+
+Then we do the same for each output coin of `Money::transfer()`.
+For $k ∈ [n]$, let $a = (𝒞_\t{enc})ₖ$ and $C$ be the $k$th output coin from
+`Money::transfer()`.
+Let there be prover auxiliary witness inputs:
+$$ \begin{aligned}
+  c &∈ \t{Attrs}_\t{Coin} \\
+  e &∈ 𝔽ₚ
+\end{aligned} $$
+Attach a proof $πₖ$ such that the following relations hold:
+
+&emsp; **Coin integrity** &emsp; $C = \t{Coin}(c)$
+
+&emsp; **Diffie-Hellman shared secret** &emsp; $a.\t{EPK} = \t{DerivePubKey}(e)$.
+Now we create the shared secret with the DAO pubkey.
+$$ P = \t{Lift}ᵥ(e) c.\t{PK} $$
+$$ α = \t{PoseidonHash}(\mathcal{X}(P), \mathcal{Y}(P)) $$
+This is then used in the following three checks.
+
+&emsp; **Verifiable encryption for value** &emsp; $a.v^\t{enc} = c.v + α$
+
+&emsp; **Verifiable encryption for token ID** &emsp; let $α₁ = \t{PoseidonHash}(α, 1_{𝔽ₚ})$
+then $a.τ^\t{enc} = c.τ + α₁$.
+
+&emsp; **Verifiable encryption for serial** &emsp; let $α₂ = \t{PoseidonHash}(α, 2_{𝔽ₚ})$
+then $a.ζ^\t{enc} = c.ζ + α₂$.
 
