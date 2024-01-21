@@ -183,11 +183,12 @@ pub(crate) fn dao_authxfer_process_instruction(
     let proposal_coins: Vec<Coin> = deserialize(&auth_call.unwrap().auth_data[..])?;
 
     // Check all the outputs except the last match
-    let send_outs = xfer_params.outputs.split_last().unwrap().1;
-    if send_outs.len() != proposal_coins.len() {
+    // There is the additional DAO change output which is always last.
+    let outs = xfer_params.outputs;
+    if outs.len() != proposal_coins.len() + 1 {
         return Err(DaoError::AuthXferWrongNumberOutputs.into())
     }
-    for (output, coin) in send_outs.iter().zip(proposal_coins.iter()) {
+    for (output, coin) in outs.iter().zip(proposal_coins.iter()) {
         if output.coin != *coin {
             return Err(DaoError::AuthXferWrongOutputCoin.into())
         }
