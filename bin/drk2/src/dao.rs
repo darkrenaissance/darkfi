@@ -16,26 +16,20 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::process::exit;
-
-use darkfi::Result;
 use darkfi_dao_contract::client::{
     DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE, DAO_TREES_TABLE,
 };
 use darkfi_sdk::crypto::MerkleTree;
 use darkfi_serial::serialize;
 
-use crate::Drk;
+use crate::{error::WalletDbResult, Drk};
 
 impl Drk {
     /// Initialize wallet with tables for the DAO contract
-    pub async fn initialize_dao(&self) -> Result<()> {
+    pub async fn initialize_dao(&self) -> WalletDbResult<()> {
         // Initialize DAO wallet schema
         let wallet_schema = include_str!("../../../src/contract/dao/wallet.sql");
-        if let Err(e) = self.wallet.exec_batch_sql(wallet_schema).await {
-            eprintln!("Error initializing DAO schema: {e:?}");
-            exit(2);
-        }
+        self.wallet.exec_batch_sql(wallet_schema).await?;
 
         // Check if we have to initialize the Merkle trees.
         // We check if one exists, but we actually create two. This should be written
@@ -58,28 +52,18 @@ impl Drk {
         &self,
         daos_tree: &MerkleTree,
         proposals_tree: &MerkleTree,
-    ) -> Result<()> {
+    ) -> WalletDbResult<()> {
         // First we remove old records
         let query = format!("DELETE FROM {};", DAO_TREES_TABLE);
-        if let Err(e) = self.wallet.exec_sql(&query, &[]).await {
-            eprintln!("Error removing DAO trees: {e:?}");
-            exit(2);
-        }
+        self.wallet.exec_sql(&query, &[]).await?;
 
         // then we insert the new one
         let query = format!(
             "INSERT INTO {} ({}, {}) VALUES (?1, ?2);",
             DAO_TREES_TABLE, DAO_TREES_COL_DAOS_TREE, DAO_TREES_COL_PROPOSALS_TREE,
         );
-        if let Err(e) = self
-            .wallet
+        self.wallet
             .exec_sql(&query, rusqlite::params![serialize(daos_tree), serialize(proposals_tree)])
             .await
-        {
-            eprintln!("Error replacing DAO trees: {e:?}");
-            exit(2);
-        }
-
-        Ok(())
     }
 }

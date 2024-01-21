@@ -242,8 +242,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             if initialize {
                 drk.initialize_wallet().await?;
-                drk.initialize_money().await?;
-                drk.initialize_dao().await?;
+                if let Err(e) = drk.initialize_money().await {
+                    eprintln!("Failed to initialize Money: {e:?}");
+                    exit(2);
+                }
+                if let Err(e) = drk.initialize_dao().await {
+                    eprintln!("Failed to initialize DAO: {e:?}");
+                    exit(2);
+                }
                 return Ok(())
             }
 
@@ -280,9 +286,55 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 if table.is_empty() {
                     println!("No unspent balances found");
                 } else {
-                    println!("{}", table);
+                    println!("{table}");
                 }
 
+                return Ok(())
+            }
+
+            if address {
+                let address = match drk.default_address().await {
+                    Ok(a) => a,
+                    Err(e) => {
+                        eprintln!("Failed to fetch default address: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                println!("{address}");
+
+                return Ok(())
+            }
+
+            if addresses {
+                let addresses = drk.addresses().await?;
+
+                // Create a prettytable with the new data:
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Key ID", "Public Key", "Secret Key", "Is Default"]);
+                for (key_id, public_key, secret_key, is_default) in addresses {
+                    let is_default = match is_default {
+                        1 => "*",
+                        _ => "",
+                    };
+                    table.add_row(row![key_id, public_key, secret_key, is_default]);
+                }
+
+                if table.is_empty() {
+                    println!("No addresses found");
+                } else {
+                    println!("{table}");
+                }
+
+                return Ok(())
+            }
+
+            if let Some(idx) = default_address {
+                if let Err(e) = drk.set_default_address(idx).await {
+                    eprintln!("Failed to set default address: {e:?}");
+                    exit(2);
+                }
                 return Ok(())
             }
 

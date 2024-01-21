@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, process::exit};
+use std::collections::HashMap;
 
 use rand::rngs::OsRng;
 use rusqlite::types::Value;
@@ -26,14 +26,14 @@ use darkfi_money_contract::{
     client::{
         MoneyNote, OwnCoin, MONEY_ALIASES_TABLE, MONEY_COINS_COL_IS_SPENT, MONEY_COINS_TABLE,
         MONEY_INFO_COL_LAST_SCANNED_SLOT, MONEY_INFO_TABLE, MONEY_KEYS_COL_IS_DEFAULT,
-        MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE, MONEY_TREE_COL_TREE,
-        MONEY_TREE_TABLE,
+        MONEY_KEYS_COL_KEY_ID, MONEY_KEYS_COL_PUBLIC, MONEY_KEYS_COL_SECRET, MONEY_KEYS_TABLE,
+        MONEY_TREE_COL_TREE, MONEY_TREE_TABLE,
     },
     model::Coin,
 };
 use darkfi_sdk::{
     bridgetree,
-    crypto::{Keypair, MerkleNode, MerkleTree, Nullifier, SecretKey, TokenId},
+    crypto::{Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey, TokenId},
     pasta::pallas,
 };
 use darkfi_serial::{deserialize, serialize};
@@ -48,13 +48,10 @@ pub const BALANCE_BASE10_DECIMALS: usize = 8;
 
 impl Drk {
     /// Initialize wallet with tables for the Money contract
-    pub async fn initialize_money(&self) -> Result<()> {
+    pub async fn initialize_money(&self) -> WalletDbResult<()> {
         // Initialize Money wallet schema
         let wallet_schema = include_str!("../../../src/contract/money/wallet.sql");
-        if let Err(e) = self.wallet.exec_batch_sql(wallet_schema).await {
-            eprintln!("Error initializing Money schema: {e:?}");
-            exit(2);
-        }
+        self.wallet.exec_batch_sql(wallet_schema).await?;
 
         // Check if we have to initialize the Merkle tree.
         // We check if we find a row in the tree table, and if not, we create a
@@ -77,17 +74,14 @@ impl Drk {
                 "INSERT INTO {} ({}) VALUES (?1);",
                 MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT
             );
-            if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![0]).await {
-                eprintln!("Error inserting last scanned slot: {e:?}");
-                exit(2);
-            }
+            self.wallet.exec_sql(&query, rusqlite::params![0]).await?;
         }
 
         Ok(())
     }
 
     /// Generate a new keypair and place it into the wallet.
-    pub async fn money_keygen(&self) -> Result<()> {
+    pub async fn money_keygen(&self) -> WalletDbResult<()> {
         eprintln!("Generating a new keypair");
 
         // TODO: We might want to have hierarchical deterministic key derivation.
@@ -101,8 +95,7 @@ impl Drk {
             MONEY_KEYS_COL_PUBLIC,
             MONEY_KEYS_COL_SECRET
         );
-        if let Err(e) = self
-            .wallet
+        self.wallet
             .exec_sql(
                 &query,
                 rusqlite::params![
@@ -111,16 +104,98 @@ impl Drk {
                     serialize(&keypair.secret)
                 ],
             )
-            .await
-        {
-            eprintln!("Error inserting new keypair: {e:?}");
-            exit(2);
-        }
+            .await?;
 
         eprintln!("New address:");
         println!("{}", keypair.public);
 
         Ok(())
+    }
+
+    /// Fetch default pubkey from the wallet.
+    pub async fn default_address(&self) -> Result<PublicKey> {
+        let row = match self
+            .wallet
+            .query_single(
+                MONEY_KEYS_TABLE,
+                &[MONEY_KEYS_COL_PUBLIC],
+                convert_named_params! {(MONEY_KEYS_COL_IS_DEFAULT, 1)},
+            )
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(Error::RusqliteError(format!(
+                    "[default_address] Default address retrieval failed: {e:?}"
+                )))
+            }
+        };
+
+        let Value::Blob(ref key_bytes) = row[0] else {
+            return Err(Error::ParseFailed("[default_address] Key bytes parsing failed"))
+        };
+        let public_key: PublicKey = deserialize(key_bytes)?;
+
+        Ok(public_key)
+    }
+
+    /// Set provided index address as default in the wallet.
+    pub async fn set_default_address(&self, idx: usize) -> WalletDbResult<()> {
+        // First we update previous default record
+        let is_default = 0;
+        let query = format!("UPDATE {} SET {} = ?1", MONEY_KEYS_TABLE, MONEY_KEYS_COL_IS_DEFAULT,);
+        self.wallet.exec_sql(&query, rusqlite::params![is_default]).await?;
+
+        // and then we set the new one
+        let is_default = 1;
+        let query = format!(
+            "UPDATE {} SET {} = ?1 WHERE {} = ?2",
+            MONEY_KEYS_TABLE, MONEY_KEYS_COL_IS_DEFAULT, MONEY_KEYS_COL_KEY_ID,
+        );
+        self.wallet.exec_sql(&query, rusqlite::params![is_default, idx]).await
+    }
+
+    /// Fetch all pukeys from the wallet.
+    pub async fn addresses(&self) -> Result<Vec<(u64, PublicKey, SecretKey, u64)>> {
+        let rows = match self.wallet.query_multiple(MONEY_KEYS_TABLE, &[], &[]).await {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(Error::RusqliteError(format!(
+                    "[addresses] Addresses retrieval failed: {e:?}"
+                )))
+            }
+        };
+
+        let mut vec = Vec::with_capacity(rows.len());
+        for row in rows {
+            let Value::Integer(key_id) = row[0] else {
+                return Err(Error::ParseFailed("[addresses] Key ID parsing failed"))
+            };
+            let Ok(key_id) = u64::try_from(key_id) else {
+                return Err(Error::ParseFailed("[addresses] Key ID parsing failed"))
+            };
+
+            let Value::Integer(is_default) = row[1] else {
+                return Err(Error::ParseFailed("[addresses] Is default parsing failed"))
+            };
+            let Ok(is_default) = u64::try_from(is_default) else {
+                return Err(Error::ParseFailed("[addresses] Is default parsing failed"))
+            };
+
+            let Value::Blob(ref key_bytes) = row[2] else {
+                return Err(Error::ParseFailed("[addresses] Public key bytes parsing failed"))
+            };
+            let public_key: PublicKey = deserialize(key_bytes)?;
+
+            let Value::Blob(ref key_bytes) = row[3] else {
+                return Err(Error::ParseFailed("[addresses] Secret key bytes parsing failed"))
+            };
+            let secret_key: SecretKey = deserialize(key_bytes)?;
+
+            vec.push((key_id, public_key, secret_key, is_default));
+        }
+
+        Ok(vec)
     }
 
     /// Fetch known unspent balances from the wallet and return them as a hashmap.
@@ -316,23 +391,15 @@ impl Drk {
     }
 
     /// Replace the Money Merkle tree in the wallet.
-    pub async fn put_money_tree(&self, tree: &MerkleTree) -> Result<()> {
+    pub async fn put_money_tree(&self, tree: &MerkleTree) -> WalletDbResult<()> {
         // First we remove old record
         let query = format!("DELETE FROM {};", MONEY_TREE_TABLE);
-        if let Err(e) = self.wallet.exec_sql(&query, &[]).await {
-            eprintln!("Error removing Money tree: {e:?}");
-            exit(2);
-        }
+        self.wallet.exec_sql(&query, &[]).await?;
 
         // then we insert the new one
         let query =
             format!("INSERT INTO {} ({}) VALUES (?1);", MONEY_TREE_TABLE, MONEY_TREE_COL_TREE,);
-        if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![serialize(tree)]).await {
-            eprintln!("Error replacing Money tree: {e:?}");
-            exit(2);
-        }
-
-        Ok(())
+        self.wallet.exec_sql(&query, rusqlite::params![serialize(tree)]).await
     }
 
     /// Get the last scanned slot from the wallet
