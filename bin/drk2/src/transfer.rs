@@ -16,6 +16,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use rand::rngs::OsRng;
+
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     util::parse::{decode_base10, encode_base10},
@@ -33,7 +35,6 @@ use darkfi_sdk::{
     tx::ContractCall,
 };
 use darkfi_serial::Encodable;
-use rand::rngs::OsRng;
 
 use crate::{money::BALANCE_BASE10_DECIMALS, Drk};
 

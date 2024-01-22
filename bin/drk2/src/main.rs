@@ -26,6 +26,7 @@ use std::{
 };
 
 use prettytable::{format, row, Table};
+use rand::rngs::OsRng;
 use smol::stream::StreamExt;
 use structopt_toml::{serde::Deserialize, structopt::StructOpt, StructOptToml};
 use url::Url;
@@ -39,7 +40,7 @@ use darkfi::{
 };
 use darkfi_money_contract::model::Coin;
 use darkfi_sdk::{
-    crypto::{PublicKey, TokenId},
+    crypto::{PublicKey, SecretKey, TokenId},
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{deserialize, serialize};
@@ -56,6 +57,9 @@ mod transfer;
 /// Swap methods
 mod swap;
 use swap::PartialSwapData;
+
+/// Token methods
+mod token;
 
 /// CLI utility functions
 mod cli_util;
@@ -229,7 +233,13 @@ enum Subcmd {
         /// Sub command to execute
         command: AliasSubcmd,
     },
-    // TODO: Token
+
+    /// Token functionalities
+    Token {
+        #[structopt(subcommand)]
+        /// Sub command to execute
+        command: TokenSubcmd,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt)]
@@ -313,6 +323,36 @@ enum AliasSubcmd {
     Remove {
         /// Token alias to remove
         alias: String,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, StructOpt)]
+enum TokenSubcmd {
+    /// Import a mint authority secret from stdin
+    Import,
+
+    /// Generate a new mint authority
+    GenerateMint,
+
+    /// List token IDs with available mint authorities
+    List,
+
+    /// Mint tokens
+    Mint {
+        /// Token ID to mint
+        token: String,
+
+        /// Amount to mint
+        amount: String,
+
+        /// Recipient of the minted tokens
+        recipient: String,
+    },
+
+    /// Freeze a token mint
+    Freeze {
+        /// Token ID mint to freeze
+        token: String,
     },
 }
 
@@ -1007,6 +1047,141 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     eprintln!("Failed to remove alias: {e:?}");
                     exit(2);
                 }
+
+                Ok(())
+            }
+        },
+
+        Subcmd::Token { command } => match command {
+            TokenSubcmd::Import => {
+                let mut buf = String::new();
+                stdin().read_to_string(&mut buf)?;
+                let mint_authority = match SecretKey::from_str(buf.trim()) {
+                    Ok(ma) => ma,
+                    Err(e) => {
+                        eprintln!("Invalid secret key: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                if let Err(e) = drk.import_mint_authority(mint_authority).await {
+                    eprintln!("Importing mint authority failed: {e:?}");
+                    exit(2);
+                };
+
+                let token_id = TokenId::derive(mint_authority);
+                eprintln!("Successfully imported mint authority for token ID: {token_id}");
+
+                Ok(())
+            }
+
+            TokenSubcmd::GenerateMint => {
+                let mint_authority = SecretKey::random(&mut OsRng);
+
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+
+                if let Err(e) = drk.import_mint_authority(mint_authority).await {
+                    eprintln!("Importing mint authority failed: {e:?}");
+                    exit(2);
+                };
+
+                let token_id = TokenId::derive(mint_authority);
+                eprintln!("Successfully imported mint authority for token ID: {token_id}");
+
+                Ok(())
+            }
+
+            TokenSubcmd::List => {
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let tokens = drk.list_tokens().await?;
+                let aliases_map = match drk.get_aliases_mapped_by_token().await {
+                    Ok(map) => map,
+                    Err(e) => {
+                        eprintln!("Failed to fetch wallet aliases: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Token ID", "Aliases", "Mint Authority", "Frozen"]);
+
+                for (token_id, authority, frozen) in tokens {
+                    let aliases = match aliases_map.get(&token_id.to_string()) {
+                        Some(a) => a,
+                        None => "-",
+                    };
+
+                    table.add_row(row![token_id, aliases, authority, frozen]);
+                }
+
+                if table.is_empty() {
+                    eprintln!("No tokens found");
+                } else {
+                    eprintln!("{table}");
+                }
+
+                Ok(())
+            }
+
+            // TODO: Mint directly into DAO treasury
+            TokenSubcmd::Mint { token, amount, recipient } => {
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+
+                if let Err(e) = f64::from_str(&amount) {
+                    eprintln!("Invalid amount: {e:?}");
+                    exit(2);
+                }
+
+                let rcpt = match PublicKey::from_str(&recipient) {
+                    Ok(r) => r,
+                    Err(e) => {
+                        eprintln!("Invalid recipient: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                let token_id = match drk.get_token(token).await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        eprintln!("Invalid Token ID: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                let tx = match drk.mint_token(&amount, rcpt, token_id).await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        eprintln!("Failed to create token mint transaction: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
+
+                Ok(())
+            }
+
+            TokenSubcmd::Freeze { token } => {
+                let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+                let token_id = match drk.get_token(token).await {
+                    Ok(t) => t,
+                    Err(e) => {
+                        eprintln!("Invalid Token ID: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                let tx = match drk.freeze_token(token_id).await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        eprintln!("Failed to create token freeze transaction: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
 
                 Ok(())
             }
