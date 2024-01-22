@@ -40,6 +40,8 @@ pub struct RpcClient {
     req_send: channel::Sender<(JsonRequest, bool)>,
     /// The channel used to read the JSON-RPC response object.
     rep_recv: channel::Receiver<JsonResult>,
+    /// The channel used to skip waiting for a JSON-RPC client request
+    req_skip_send: channel::Sender<()>,
     /// The stoppable task pointer, used on [`RpcClient::stop()`]
     task: StoppableTaskPtr,
 }
@@ -52,6 +54,7 @@ impl RpcClient {
         // Instantiate communication channels
         let (req_send, req_recv) = channel::unbounded();
         let (rep_send, rep_recv) = channel::unbounded();
+        let (req_skip_send, req_skip_recv) = channel::unbounded();
 
         // Instantiate Dialer and dial the server
         // TODO: Could add a timeout here
@@ -63,7 +66,7 @@ impl RpcClient {
         // using `RpcClient::stop()`.
         let task = StoppableTask::new();
         task.clone().start(
-            Self::reqrep_loop(stream, rep_send, req_recv),
+            Self::reqrep_loop(stream, rep_send, req_recv, req_skip_recv),
             |res| async move {
                 match res {
                     Ok(()) | Err(Error::RpcClientStopped) => {}
@@ -74,7 +77,7 @@ impl RpcClient {
             ex.clone(),
         );
 
-        Ok(Self { req_send, rep_recv, task })
+        Ok(Self { req_send, rep_recv, task, req_skip_send })
     }
 
     /// Stop the JSON-RPC client. This will trigger `stop()` on the inner
@@ -89,6 +92,7 @@ impl RpcClient {
         stream: Box<dyn PtStream>,
         rep_send: channel::Sender<JsonResult>,
         req_recv: channel::Receiver<(JsonRequest, bool)>,
+        req_skip_recv: channel::Receiver<()>,
     ) -> Result<()> {
         debug!(target: "rpc::client::reqrep_loop()", "Starting reqrep loop");
 
@@ -97,11 +101,25 @@ impl RpcClient {
 
         loop {
             let mut buf = Vec::with_capacity(INIT_BUF_SIZE);
+            let mut with_timeout = false;
 
-            let (request, with_timeout) = req_recv.recv().await?;
+            // Read an incoming client request, or skip it if triggered from
+            // a JSONRPC notification subscriber
+            smol::future::or(
+                async {
+                    let (request, timeout) = req_recv.recv().await?;
+                    with_timeout = timeout;
 
-            let request = JsonResult::Request(request);
-            write_to_stream(&mut writer, &request).await?;
+                    let request = JsonResult::Request(request);
+                    write_to_stream(&mut writer, &request).await?;
+                    Ok::<(), crate::Error>(())
+                },
+                async {
+                    req_skip_recv.recv().await?;
+                    Ok::<(), crate::Error>(())
+                },
+            )
+            .await?;
 
             if with_timeout {
                 let _ = io_timeout(READ_TIMEOUT, read_from_stream(&mut reader, &mut buf)).await?;
@@ -205,6 +223,7 @@ impl RpcClient {
             match notification {
                 JsonResult::Notification(ref n) => {
                     debug!(target: "rpc::client", "<-- {}", n.stringify()?);
+                    self.req_skip_send.send(()).await?;
                     sub.notify(notification.clone()).await;
                     continue
                 }
