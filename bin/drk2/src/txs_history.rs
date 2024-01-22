@@ -16,10 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::tx::Transaction;
-use darkfi_serial::serialize;
+use rusqlite::types::Value;
 
-use super::{
+use darkfi::{tx::Transaction, Error, Result};
+use darkfi_serial::{deserialize, serialize};
+
+use crate::{
+    convert_named_params,
     error::{WalletDbError, WalletDbResult},
     Drk,
 };
@@ -52,6 +55,80 @@ impl Drk {
                 ],
             )
             .await
+    }
+
+    /// Get a transaction history record.
+    pub async fn get_tx_history_record(
+        &self,
+        tx_hash: &str,
+    ) -> Result<(String, String, Transaction)> {
+        let row = match self
+            .wallet
+            .query_single(
+                WALLET_TXS_HISTORY_TABLE,
+                &[],
+                convert_named_params! {(WALLET_TXS_HISTORY_COL_TX_HASH, tx_hash)},
+            )
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(Error::RusqliteError(format!(
+                    "[get_tx_history_record] Transaction history record retrieval failed: {e:?}"
+                )))
+            }
+        };
+
+        let Value::Text(ref tx_hash) = row[0] else {
+            return Err(Error::ParseFailed(
+                "[get_tx_history_record] Transaction hash parsing failed",
+            ))
+        };
+        let tx_hash = tx_hash.clone();
+
+        let Value::Text(ref status) = row[1] else {
+            return Err(Error::ParseFailed("[get_tx_history_record] Status parsing failed"))
+        };
+        let status = status.clone();
+
+        let Value::Text(ref tx_encoded) = row[2] else {
+            return Err(Error::ParseFailed(
+                "[get_tx_history_record] Encoded transaction parsing failed",
+            ))
+        };
+        let tx_bytes: Vec<u8> = bs58::decode(tx_encoded).into_vec()?;
+        let tx: Transaction = deserialize(&tx_bytes)?;
+
+        Ok((tx_hash, status, tx))
+    }
+
+    /// Fetch all transactions history records, excluding bytes column.
+    pub async fn get_txs_history(&self) -> WalletDbResult<Vec<(String, String)>> {
+        let rows = self
+            .wallet
+            .query_multiple(
+                WALLET_TXS_HISTORY_TABLE,
+                &[WALLET_TXS_HISTORY_COL_TX_HASH, WALLET_TXS_HISTORY_COL_STATUS],
+                &[],
+            )
+            .await?;
+
+        let mut ret = Vec::with_capacity(rows.len());
+        for row in rows {
+            let Value::Text(ref tx_hash) = row[0] else {
+                return Err(WalletDbError::ParseColumnValueError)
+            };
+            let tx_hash = tx_hash.clone();
+
+            let Value::Text(ref status) = row[1] else {
+                return Err(WalletDbError::ParseColumnValueError)
+            };
+            let status = status.clone();
+
+            ret.push((tx_hash, status));
+        }
+
+        Ok(ret)
     }
 
     /// Update a transactions history record status to the given one.

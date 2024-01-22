@@ -193,7 +193,13 @@ enum Subcmd {
         checkpoint: Option<u64>,
     },
 
-    // TODO: Explorer
+    /// Explorer related subcommands
+    Explorer {
+        #[structopt(subcommand)]
+        /// Sub command to execute
+        command: ExplorerSubcmd,
+    },
+
     /// Manage Token aliases
     Alias {
         #[structopt(subcommand)]
@@ -201,6 +207,37 @@ enum Subcmd {
         command: AliasSubcmd,
     },
     // TODO: Token
+}
+
+#[derive(Clone, Debug, Deserialize, StructOpt)]
+enum ExplorerSubcmd {
+    /// Fetch a blockchain transaction by hash
+    FetchTx {
+        /// Transaction hash
+        tx_hash: String,
+
+        #[structopt(long)]
+        /// Print the full transaction information
+        full: bool,
+
+        #[structopt(long)]
+        /// Encode transaction to base58
+        encode: bool,
+    },
+
+    /// Read a transaction from stdin and simulate it
+    SimulateTx,
+
+    /// Fetch broadcasted transactions history
+    TxsHistory {
+        /// Fetch specific history record (optional)
+        tx_hash: Option<String>,
+
+        #[structopt(long)]
+        /// Encode specific history record transaction
+        /// to base58.
+        encode: bool,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt)]
@@ -648,6 +685,114 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
 
             Ok(())
         }
+
+        Subcmd::Explorer { command } => match command {
+            ExplorerSubcmd::FetchTx { tx_hash, full, encode } => {
+                let tx_hash = blake3::Hash::from_hex(&tx_hash)?;
+
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
+                        .await?;
+
+                let tx = match drk.get_tx(&tx_hash).await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        eprintln!("Failed to fetch transaction: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                let Some(tx) = tx else {
+                    eprintln!("Transaction was not found");
+                    exit(1);
+                };
+
+                // Make sure the tx is correct
+                assert_eq!(tx.hash()?, tx_hash);
+
+                if encode {
+                    eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
+                    exit(1)
+                }
+
+                eprintln!("Transaction ID: {tx_hash}");
+                if full {
+                    eprintln!("{tx:?}");
+                }
+
+                Ok(())
+            }
+
+            ExplorerSubcmd::SimulateTx => {
+                eprintln!("Reading transaction from stdin...");
+                let mut buf = String::new();
+                stdin().read_to_string(&mut buf)?;
+                let bytes = bs58::decode(&buf.trim()).into_vec()?;
+                let tx = deserialize(&bytes)?;
+
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
+                        .await?;
+
+                let is_valid = match drk.simulate_tx(&tx).await {
+                    Ok(b) => b,
+                    Err(e) => {
+                        eprintln!("Failed to simulate tx: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                eprintln!("Transaction ID: {}", tx.hash()?);
+                eprintln!("State: {}", if is_valid { "valid" } else { "invalid" });
+
+                Ok(())
+            }
+
+            ExplorerSubcmd::TxsHistory { tx_hash, encode } => {
+                let drk =
+                    Drk::new(args.wallet_path, args.wallet_pass, args.endpoint.clone(), ex.clone())
+                        .await?;
+
+                if let Some(c) = tx_hash {
+                    let (tx_hash, status, tx) = drk.get_tx_history_record(&c).await?;
+
+                    if encode {
+                        println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                        exit(1)
+                    }
+
+                    eprintln!("Transaction ID: {tx_hash}");
+                    eprintln!("Status: {status}");
+                    eprintln!("{tx:?}");
+
+                    return Ok(())
+                }
+
+                let map = match drk.get_txs_history().await {
+                    Ok(m) => m,
+                    Err(e) => {
+                        eprintln!("Failed to retrieve transactions history records: {e:?}");
+                        exit(2);
+                    }
+                };
+
+                // Create a prettytable with the new data:
+                let mut table = Table::new();
+                table.set_format(*format::consts::FORMAT_NO_BORDER_LINE_SEPARATOR);
+                table.set_titles(row!["Transaction Hash", "Status"]);
+                for (txs_hash, status) in map.iter() {
+                    table.add_row(row![txs_hash, status]);
+                }
+
+                if table.is_empty() {
+                    eprintln!("No transactions found");
+                } else {
+                    eprintln!("{table}");
+                }
+
+                Ok(())
+            }
+        },
 
         Subcmd::Alias { command } => match command {
             AliasSubcmd::Add { alias, token } => {

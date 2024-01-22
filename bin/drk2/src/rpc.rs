@@ -29,6 +29,7 @@ use darkfi::{
     },
     system::{StoppableTask, Subscriber},
     tx::Transaction,
+    util::encoding::base64,
     Error, Result,
 };
 use darkfi_money_contract::client::{MONEY_INFO_COL_LAST_SCANNED_SLOT, MONEY_INFO_TABLE};
@@ -313,5 +314,35 @@ impl Drk {
         }
 
         Ok(txid)
+    }
+
+    /// Queries darkfid for a tx with given hash
+    pub async fn get_tx(&self, tx_hash: &blake3::Hash) -> Result<Option<Transaction>> {
+        let tx_hash_str = tx_hash.to_hex().to_string();
+        let req = JsonRequest::new(
+            "blockchain.get_tx",
+            JsonValue::Array(vec![JsonValue::String(tx_hash_str)]),
+        );
+
+        match self.rpc_client.request(req).await {
+            Ok(param) => {
+                let tx_bytes = base64::decode(param.get::<String>().unwrap()).unwrap();
+                let tx = deserialize(&tx_bytes)?;
+                Ok(Some(tx))
+            }
+
+            Err(_) => Ok(None),
+        }
+    }
+
+    /// Simulate the transaction with the state machine
+    pub async fn simulate_tx(&self, tx: &Transaction) -> Result<bool> {
+        let tx_str = bs58::encode(&serialize(tx)).into_string();
+        let req =
+            JsonRequest::new("tx.simulate", JsonValue::Array(vec![JsonValue::String(tx_str)]));
+        let rep = self.rpc_client.request(req).await?;
+
+        let is_valid = *rep.get::<bool>().unwrap();
+        Ok(is_valid)
     }
 }
