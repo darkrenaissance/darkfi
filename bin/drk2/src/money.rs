@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use rand::rngs::OsRng;
 use rusqlite::types::Value;
@@ -122,6 +122,33 @@ impl Drk {
         eprintln!("{}", keypair.public);
 
         Ok(())
+    }
+
+    /// Fetch default secret key from the wallet.
+    pub async fn default_secret(&self) -> Result<SecretKey> {
+        let row = match self
+            .wallet
+            .query_single(
+                MONEY_KEYS_TABLE,
+                &[MONEY_KEYS_COL_SECRET],
+                convert_named_params! {(MONEY_KEYS_COL_IS_DEFAULT, 1)},
+            )
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                return Err(Error::RusqliteError(format!(
+                    "[default_secret] Default secret key retrieval failed: {e:?}"
+                )))
+            }
+        };
+
+        let Value::Blob(ref key_bytes) = row[0] else {
+            return Err(Error::ParseFailed("[default_secret] Key bytes parsing failed"))
+        };
+        let secret_key: SecretKey = deserialize(key_bytes)?;
+
+        Ok(secret_key)
     }
 
     /// Fetch default pubkey from the wallet.
@@ -763,5 +790,19 @@ impl Drk {
         eprintln!("Successfully reset coins");
 
         Ok(())
+    }
+
+    /// Retrieve token by provided string.
+    /// Input string represents either an alias or a token id.
+    pub async fn get_token(&self, input: String) -> Result<TokenId> {
+        // Check if input is an alias(max 5 characters)
+        if input.chars().count() <= 5 {
+            let aliases = self.get_aliases(Some(input.clone()), None).await?;
+            if let Some(token_id) = aliases.get(&input) {
+                return Ok(*token_id)
+            }
+        }
+        // Else parse input
+        Ok(TokenId::from_str(input.as_str())?)
     }
 }

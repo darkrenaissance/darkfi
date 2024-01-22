@@ -39,7 +39,7 @@ use darkfi::{
 };
 use darkfi_money_contract::model::Coin;
 use darkfi_sdk::{
-    crypto::TokenId,
+    crypto::{PublicKey, TokenId},
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{deserialize, serialize};
@@ -49,6 +49,9 @@ mod error;
 
 /// darkfid JSON-RPC related methods
 mod rpc;
+
+/// Payment methods
+mod transfer;
 
 /// CLI utility functions
 mod cli_util;
@@ -162,7 +165,17 @@ enum Subcmd {
         coin: String,
     },
 
-    // TODO: Transfer
+    /// Create a payment transaction
+    Transfer {
+        /// Amount to send
+        amount: String,
+
+        /// Token ID to send
+        token: String,
+
+        /// Recipient address
+        recipient: String,
+    },
 
     // TODO: OTC
     /// Inspect a transaction from stdin
@@ -599,6 +612,43 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                 eprintln!("Failed to mark coin as unspent: {e:?}");
                 exit(2);
             }
+
+            Ok(())
+        }
+
+        Subcmd::Transfer { amount, token, recipient } => {
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+
+            if let Err(e) = f64::from_str(&amount) {
+                eprintln!("Invalid amount: {e:?}");
+                exit(2);
+            }
+
+            let rcpt = match PublicKey::from_str(&recipient) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("Invalid recipient: {e:?}");
+                    exit(2);
+                }
+            };
+
+            let token_id = match drk.get_token(token).await {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("Invalid token alias: {e:?}");
+                    exit(2);
+                }
+            };
+
+            let tx = match drk.transfer(&amount, token_id, rcpt).await {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("Failed to create payment transaction: {e:?}");
+                    exit(2);
+                }
+            };
+
+            println!("{}", bs58::encode(&serialize(&tx)).into_string());
 
             Ok(())
         }
