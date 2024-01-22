@@ -15,11 +15,56 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-use std::io::Cursor;
+use std::{io::Cursor, process::exit};
 
 use rodio::{source::Source, Decoder, OutputStream};
 
-use darkfi::system::sleep;
+use darkfi::{system::sleep, util::parse::decode_base10, Result};
+use darkfi_sdk::crypto::TokenId;
+
+use crate::{money::BALANCE_BASE10_DECIMALS, Drk};
+
+pub fn parse_value_pair(s: &str) -> Result<(u64, u64)> {
+    let v: Vec<&str> = s.split(':').collect();
+    if v.len() != 2 {
+        eprintln!("Invalid value pair. Use a pair such as 13.37:11.0");
+        exit(1);
+    }
+
+    let val0 = decode_base10(v[0], BALANCE_BASE10_DECIMALS, true);
+    let val1 = decode_base10(v[1], BALANCE_BASE10_DECIMALS, true);
+
+    if val0.is_err() || val1.is_err() {
+        eprintln!("Invalid value pair. Use a pair such as 13.37:11.0");
+        exit(1);
+    }
+
+    Ok((val0.unwrap(), val1.unwrap()))
+}
+
+pub async fn parse_token_pair(drk: &Drk, s: &str) -> Result<(TokenId, TokenId)> {
+    let v: Vec<&str> = s.split(':').collect();
+    if v.len() != 2 {
+        eprintln!("Invalid token pair. Use a pair such as:");
+        eprintln!("WCKD:MLDY");
+        eprintln!("or");
+        eprintln!("A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd:FCuoMii64H5Ee4eVWBjP18WTFS8iLUJmGi16Qti1xFQ2");
+        exit(1);
+    }
+
+    let tok0 = drk.get_token(v[0].to_string()).await;
+    let tok1 = drk.get_token(v[1].to_string()).await;
+
+    if tok0.is_err() || tok1.is_err() {
+        eprintln!("Invalid token pair. Use a pair such as:");
+        eprintln!("WCKD:MLDY");
+        eprintln!("or");
+        eprintln!("A7f1RKsCUUHrSXA7a9ogmwg8p3bs6F47ggsW826HD4yd:FCuoMii64H5Ee4eVWBjP18WTFS8iLUJmGi16Qti1xFQ2");
+        exit(1);
+    }
+
+    Ok((tok0.unwrap(), tok1.unwrap()))
+}
 
 /// Fun police go away
 pub async fn kaching() {

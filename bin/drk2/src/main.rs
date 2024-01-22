@@ -53,9 +53,13 @@ mod rpc;
 /// Payment methods
 mod transfer;
 
+/// Swap methods
+mod swap;
+use swap::PartialSwapData;
+
 /// CLI utility functions
 mod cli_util;
-use cli_util::kaching;
+use cli_util::{kaching, parse_token_pair, parse_value_pair};
 
 /// Wallet functionality related to Money
 mod money;
@@ -177,7 +181,13 @@ enum Subcmd {
         recipient: String,
     },
 
-    // TODO: OTC
+    /// OTC atomic swap
+    Otc {
+        #[structopt(subcommand)]
+        /// Sub command to execute
+        command: OtcSubcmd,
+    },
+
     /// Inspect a transaction from stdin
     Inspect,
 
@@ -220,6 +230,29 @@ enum Subcmd {
         command: AliasSubcmd,
     },
     // TODO: Token
+}
+
+#[derive(Clone, Debug, Deserialize, StructOpt)]
+enum OtcSubcmd {
+    /// Initialize the first half of the atomic swap
+    Init {
+        /// Value pair to send:recv (11.55:99.42)
+        #[structopt(short, long)]
+        value_pair: String,
+
+        /// Token pair to send:recv (f00:b4r)
+        #[structopt(short, long)]
+        token_pair: String,
+    },
+
+    /// Build entire swap tx given the first half from stdin
+    Join,
+
+    /// Inspect a swap half or the full swap tx from stdin
+    Inspect,
+
+    /// Sign a transaction given from stdin as the first-half
+    Sign,
 }
 
 #[derive(Clone, Debug, Deserialize, StructOpt)]
@@ -651,6 +684,74 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             println!("{}", bs58::encode(&serialize(&tx)).into_string());
 
             Ok(())
+        }
+
+        Subcmd::Otc { command } => {
+            let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
+
+            match command {
+                OtcSubcmd::Init { value_pair, token_pair } => {
+                    let (vp_send, vp_recv) = parse_value_pair(&value_pair)?;
+                    let (tp_send, tp_recv) = parse_token_pair(&drk, &token_pair).await?;
+
+                    let half = match drk.init_swap(vp_send, tp_send, vp_recv, tp_recv).await {
+                        Ok(h) => h,
+                        Err(e) => {
+                            eprintln!("Failed to create swap transaction half: {e:?}");
+                            exit(2);
+                        }
+                    };
+
+                    println!("{}", bs58::encode(&serialize(&half)).into_string());
+                    Ok(())
+                }
+
+                OtcSubcmd::Join => {
+                    let mut buf = String::new();
+                    stdin().read_to_string(&mut buf)?;
+                    let bytes = bs58::decode(&buf.trim()).into_vec()?;
+                    let partial: PartialSwapData = deserialize(&bytes)?;
+
+                    let tx = match drk.join_swap(partial).await {
+                        Ok(tx) => tx,
+                        Err(e) => {
+                            eprintln!("Failed to create a join swap transaction: {e:?}");
+                            exit(2);
+                        }
+                    };
+
+                    println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                    Ok(())
+                }
+
+                OtcSubcmd::Inspect => {
+                    let mut buf = String::new();
+                    stdin().read_to_string(&mut buf)?;
+                    let bytes = bs58::decode(&buf.trim()).into_vec()?;
+
+                    if let Err(e) = drk.inspect_swap(bytes).await {
+                        eprintln!("Failed to inspect swap: {e:?}");
+                        exit(2);
+                    };
+
+                    Ok(())
+                }
+
+                OtcSubcmd::Sign => {
+                    let mut buf = String::new();
+                    stdin().read_to_string(&mut buf)?;
+                    let bytes = bs58::decode(&buf.trim()).into_vec()?;
+                    let mut tx: Transaction = deserialize(&bytes)?;
+
+                    if let Err(e) = drk.sign_swap(&mut tx).await {
+                        eprintln!("Failed to sign joined swap transaction: {e:?}");
+                        exit(2);
+                    };
+
+                    println!("{}", bs58::encode(&serialize(&tx)).into_string());
+                    Ok(())
+                }
+            }
         }
 
         Subcmd::Inspect => {
