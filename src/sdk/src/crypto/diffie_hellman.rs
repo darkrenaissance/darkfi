@@ -36,6 +36,9 @@ pub fn sapling_ka_agree(esk: &SecretKey, pk_d: &PublicKey) -> PublicKey {
 
 /// Sapling KDF for note encryption.
 pub fn kdf_sapling(dhsecret: &PublicKey, epk: &PublicKey) -> Blake2bHash {
+    // The P.to_bytes() for P ∈ ℙₚ function used on affine curves it not perfectly constant time,
+    // but it's close enough. The function returns 0 when P = ∞ is the identity which is the
+    // edge case but almost never occurs.
     Blake2bParams::new()
         .hash_length(32)
         .personal(KDF_SAPLING_PERSONALIZATION)
