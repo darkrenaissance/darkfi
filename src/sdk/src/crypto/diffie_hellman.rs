@@ -17,7 +17,7 @@
  */
 
 use blake2b_simd::{Hash as Blake2bHash, Params as Blake2bParams};
-use pasta_curves::group::{cofactor::CofactorGroup, GroupEncoding, Wnaf};
+use pasta_curves::group::{GroupEncoding, Wnaf};
 
 use super::{util::mod_r_p, PublicKey, SecretKey};
 
