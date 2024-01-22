@@ -19,6 +19,12 @@ RUN microdnf -y install gcc gcc-c++ kernel-headers cmake jq wget \
 # epel-release needs to be installed first
 RUN microdnf install -y sqlcipher-devel
 
+# not sure where to get the right one
+# RUN wget https://www.rpmfind.net/linux/epel/7/aarch64/Packages/w/wabt-1.0.11-1.el7.aarch64.rpm
+ENV WABT_RPM=wabt-1.0.24-1.el7.x86_64.rpm
+RUN wget https://dl.fedoraproject.org/pub/epel/7/x86_64/Packages/w/$WABT_RPM
+RUN rpm -Uvh ./$WABT_RPM
+
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain "${RUST_VER}"
 
 ENV PATH="/root/.cargo/bin:${PATH}"
