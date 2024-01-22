@@ -54,7 +54,7 @@ contract to enforce additional invariants.
 ```
 
 Define $\t{Commit}_\t{Auth} : \t{AuthCall}^* → 𝔽ₚ$ by
-$$ \t{Commit}_{\t{Auth}^*}(c) = 𝔹⁶⁴2𝔽ₚ(\t{BLAKE2b}(\t{Encode}(c))) $$
+$$ \t{Commit}_{\t{Auth}^*}(c) = 𝔹⁶⁴2𝔽ₚ(\t{BLAKE2b}₆₄(\t{Encode}(c))) $$
 which commits to a `Vec<DaoAuthCall>`.
 
 ### Proposal

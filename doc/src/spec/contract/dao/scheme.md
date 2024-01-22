@@ -12,6 +12,8 @@ Let $\t{MerklePos}, \t{MerklePath}, \t{MerkleRoot}$ be defined as in the section
 
 Let $\t{Params}_\t{DAO}, \t{Bulla}_\t{DAO}, \t{Params}_\t{Proposal}, \t{Bulla}_\t{Proposal}$ be defined as in [DAO Model](model.md).
 
+Let $\t{EncNote}$ be defined as in [In-band Secret Distribution](../../crypto-schemes.md#in-band-secret-distribution).
+
 ## Mint
 
 This function creates a DAO bulla $𝒟 $. It's comparatively simple- we commit to
@@ -77,7 +79,7 @@ crosses the proposer limit threshold.
 This is merely a proof of ownership of holding a certain amount of value.
 Coins are not locked and continue to be spendable.
 
-Additionally the encrypted note $\t{EncNote}$ is used to send the proposal
+Additionally the encrypted note $\t{note}$ is used to send the proposal
 values to the DAO members using the public key set inside the DAO.
 
 A proposal contains a list of auth calls as specified in [Auth Calls](model.md#auth-calls). This specifies the contract call executed by the DAO on passing.
@@ -95,7 +97,7 @@ $$ \begin{aligned}
   R_\t{DAO} &∈ 𝔽ₚ \\
   T &∈ 𝔽ₚ \\
   𝒫 &∈ \t{im}(\t{Bulla}_\t{Proposal}) \\
-  \t{EncNote} &∈ ⟂ \\
+  \t{note} &∈ \t{EncNote} \\
   𝐢 &∈ \t{ProposeInput}^*
 \end{aligned} $$
 
@@ -197,7 +199,7 @@ After `DAO::propose()` is called, DAO members can then call this contract
 function. Using a similar method as before, they attach inputs proving ownership
 of a certain value of governance tokens. This is how we achieve token weighted
 voting. The result of the vote is communicated to other DAO members through the
-encrypted note $\t{EncNote}$.
+encrypted note $\t{note}$.
 
 Each nullifier $𝒩 $ is stored uniquely per proposal. Additionally as before,
 there is a leakage here connecting the coins when spent. However prodigious
@@ -226,7 +228,7 @@ $$ \begin{aligned}
   τ &∈ 𝔽ₚ \\
   𝒫 &∈ \t{im}(\t{Bulla}_\t{Proposal}) \\
   V_\t{yes} &∈ ℙₚ \\
-  \t{EncNote} &∈ ⟂ \\
+  \t{note} &∈ \t{EncNote} \\
   𝐢 &∈ \t{VoteInput}^*
 \end{aligned} $$
 

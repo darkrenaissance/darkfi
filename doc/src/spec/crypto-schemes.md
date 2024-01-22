@@ -97,6 +97,26 @@ Define the function
 $$ \t{DerivePubKey} : 𝔽ₚ → ℙₚ $$
 $$ \t{DerivePubKey}(x) = \t{Lift}ᵥ(x) G_N $$
 
+### Point Serialization
+
+The maximum value of $𝔽ₚ$ fits within 255 bits, with the last bit
+of $𝔹³²$ being unused. We use this bit to store the sign of the $y$-coordinate.
+
+We compute the sign of $y = \mathcal{Y}(P)$ for $P ∈ ℙₚ$ by dividing
+$𝔽ₚ$ into even and odd sets. Let $\t{sgn}(y) = y \mod{2}$.
+
+We define $ℙₚ2𝔹³² : ℙₚ → 𝔹³²$ as follows. Let $P ∈ ℙₚ$, then
+
+$$ ℙₚ2𝔹³² = \begin{cases}
+ℕ2𝔹³²(0) & \text{if } P = ∞ \\
+ℕ2𝔹³²(\mathcal{X}(P) + 2²⁵⁵\t{sgn}(\mathcal{Y}(P)) & \text{otherwise}
+\end{cases} $$
+
+**Security note:** apart from the case when $P = ∞$, this function is mostly
+constant time. In cases such as key agreement, where constant time decryption
+is desirable and $P ≠ ∞$ is mostly guaranteed, this provides a strong
+approximation.
+
 ## Group Hash
 
 Let $\t{GroupHash} : 𝔹^* × 𝔹^* → ℙₚ$ be the hash to curve function
@@ -109,7 +129,7 @@ the actual message.
 
 BLAKE2 is defined by [ANWW2013](https://blake2.net/#sp).
 Define the BLAKE2b variant as
-$$ \t{BLAKE2b}: 𝔹^* → 𝔹⁶⁴ $$
+$$ \t{BLAKE2b}ₙ: 𝔹^* → 𝔹ⁿ $$
 
 ## Homomorphic Pedersen Commitments
 
@@ -151,4 +171,101 @@ $$ \t{MerklePath} = 𝔽ₚ^{ℓᴹ} $$
 and a function to calculate the root given a leaf, its position and the path,
 $$ \t{MerkleRoot} : \t{MerklePos} × \t{MerklePath} × 𝔽ₚ → 𝔽ₚ $$
 $$ \t{MerkleRoot}(𝐩, \mathbf{Π}, ℬ ) = ⊕_{p_{ℓᴹ}}(…, ⊕_{p₂}(π₂, ⊕_{p₁}(π₁, ℬ ))…) $$
+
+## Symmetric Encryption
+
+Let $\t{Sym}$ be an *authenticated one-time symmetric encryption scheme*
+instantiated as AEAD_CHACHA20_POLY1305 from [RFC 7539](https://www.rfc-editor.org/rfc/rfc7539).
+We use a nonce of $ℕ2𝔹¹²(0)$ with a 32-byte key.
+
+Let $K = 𝔹³²$ represent keys, $N = 𝔹^*$ for plaintext data and $C = 𝔹^*$ for ciphertexts.
+
+$\t{Sym}.\t{Encrypt} : K × N → C$ is the encryption algorithm.
+
+$\t{Sym}.\t{Decrypt} : K × C → N ∪ \{ ⟂ \}$ is the decryption algorithm,
+such that for any $k ∈ K$ and $p ∈ P$, we have
+$$ \t{Sym}.\t{Decrypt}(k, \t{Sym}.\t{Encrypt}(k, p)) = p $$
+we use $⟂$ to represent the decryption of an invalid ciphertext.
+
+**Security requirement:** $\t{Sym}$ must be *one-time* secure. One-time here
+means that an honest protocol participant will almost surely encrypt only
+one message with a given key; however, the adversary may make many adaptive
+chosen ciphertext queries for a given key.
+
+## Key Agreement
+
+Let $𝔽ₚ, ℙₚ, \t{Lift}ᵥ$ be defined as in the section [Pallas and Vesta](#pallas-and-vesta).
+
+A *key agreement scheme* is a cryptographic protocol in which two parties
+agree on a shared secret, each using their *private key* and the other
+party's *public key*.
+
+Let $\t{KeyAgree} : 𝔽ₚ × ℙₚ → ℙₚ$ be defined as $\t{KeyAgree}(x, P) = \t{Lift}ᵥ(x) P$.
+
+## Key Derivation
+
+Let $\t{BLAKE2b}ₙ$ be defined as in the section [BLAKE2b Hash Function](#blake2b-hash-function).
+
+Let $ℙₚ, ℙₚ2𝔹³²$ be defined as in the section [Pallas and Vesta](#pallas-and-vesta).
+
+A *Key Derivation Function* is defined for a particular *key agreement scheme*
+and *authenticated one-time symmetric encryption scheme*; it takes the
+shared secret produced by the key agreement and additional arguments, and
+derives a key suitable for the encryption scheme.
+
+$\t{KDF}$ takes as input the shared Diffie-Hellman secret $x$ and the
+*ephemeral public key* $\t{EPK}$. It derives keys for use with
+$\t{Sym}.\t{Encrypt}$.
+$$ \t{KDF}: ℙₚ × ℙₚ → 𝔹³² $$
+$$ \t{KDF}(P, \t{EPK}) = \t{BLAKE2b}₃₂(ℙₚ2𝔹³²(P) || ℙₚ2𝔹³²(\t{EPK})) $$
+
+## In-band Secret Distribution
+
+Let $\t{Sym}.\t{Encrypt}, \t{Sym}.\t{Decrypt}$ be defined as in the section [Symmetric Encryption](#symmetric-encryption).
+
+Let $\t{KeyAgree}$ be defined as in the section [Key Agreement](#key-agreement).
+
+Let $\t{KDF}$ be defined as in the section [Key Derivation](#key-derivation).
+
+Let $𝔽ₚ, ℙₚ, \t{DerivePubKey}$ be defined as in the section [Pallas and Vesta](#pallas-and-vesta).
+
+To transmit secrets securely to a recipient *without* requiring an out-of-band
+communication channel, we use the [key derivation function](#key-derivation)
+together with [symmetric encryption](#symmetric-encryption).
+
+Denote the ciphertext space $C = \t{im}(\t{Sym}.\t{Encrypt})$ by $\t{EncNote}$.
+
+### Encryption
+
+We let $P ∈ ℙₚ$ denote the recipient's public key with corresponding
+secret key $x ∈ 𝔽ₚ$. And let $\t{note} ∈ N = 𝔹^*$ denote the plaintext note to
+be encrypted.
+
+Let $\t{esk} ∈ 𝔽ₚ$ be the randomly generated *ephemeral secret key*.
+
+Let $\t{EPK} = \t{DerivePubKey}(\t{esk}) ∈ ℙₚ$
+
+Let $\t{shared\_secret} = \t{KeyAgree}(\t{esk}, P)$
+
+Let $k = \t{KDF}(\t{shared\_secret}, \t{EPK})$
+
+Let $c = \t{Sym}.\t{Encrypt}(k, \t{note})$
+
+Return $c$
+
+## Decryption
+
+We let $P ∈ ℙₚ$ denote the recipient's public key with corresponding
+secret key $x ∈ 𝔽ₚ$. And let $c ∈ C = 𝔹^*$ denote the ciphertext note to
+be decrypted.
+
+The recipient receives the *ephemeral public key* $\t{EPK} ∈ ℙₚ$ used to decrypt
+the ciphertext note $c$.
+
+Let $\t{shared\_secret} = \t{KeyAgree}(x, \t{EPK})$
+
+Let $k = \t{KDF}(\t{shared\_secret}, \t{EPK})$
+
+Let $\t{note} = \t{Sym}.\t{Decrypt}(k, c)$. If $\t{note} = ⟂$ then
+return $⟂$, otherwise return $\t{note}$.
 
