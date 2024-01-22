@@ -27,8 +27,11 @@ pub const KDF_SAPLING_PERSONALIZATION: &[u8; 16] = b"DarkFiSaplingKDF";
 /// Implements section 5.4.4.3 of the Zcash Protocol Specification
 pub fn sapling_ka_agree(esk: &SecretKey, pk_d: &PublicKey) -> PublicKey {
     let esk_s = mod_r_p(esk.inner());
+    // Windowed multiplication is constant time. Hence that is used here vs naive EC mult.
+    // Decrypting notes is a an amortized operation, so you want successful rare-case note
+    // decryptions to be indistinguishable from the usual case.
     let mut wnaf = Wnaf::new();
-    PublicKey::from(wnaf.scalar(&esk_s).base(pk_d.inner()).clear_cofactor())
+    PublicKey::from(wnaf.scalar(&esk_s).base(pk_d.inner()))
 }
 
 /// Sapling KDF for note encryption.
