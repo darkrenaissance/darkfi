@@ -270,13 +270,13 @@ impl Hosts {
         self.anchorlist_store_or_update(&[(addr.clone(), last_seen)]).await;
     }
 
-    /// Remove an entry from the hostlist. Called when we cannot establish a connection to a host or 
+    /// Remove an entry from the hostlist. Called when we cannot establish a connection to a host or
     /// when a pre-existing connection disconnects.
     pub async fn remove_host(&self, addr: &Url) {
         debug!(target: "store::downgrade_host", "Removing host {}", addr);
         self.mark_migrating(addr).await;
 
-        // Remove channel from anchorlist 
+        // Remove channel from anchorlist
         if self.anchorlist_contains(addr).await {
             debug!(target: "store::downgrade_host", "Removing from anchorlist {}", addr);
 
