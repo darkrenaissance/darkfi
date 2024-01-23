@@ -32,7 +32,7 @@ pub use propose::{DaoProposeCall, DaoProposeStakeInput};
 /// * `DaoVoteCall` is what creates the call data used on chain.
 /// * `DaoVoteNote` is the secret shared info transmitted between DAO members.
 pub mod vote;
-pub use vote::{DaoVoteCall, DaoVoteInput, DaoVoteNote};
+pub use vote::{DaoVoteCall, DaoVoteInput};
 
 pub mod exec;
 pub use exec::DaoExecCall;

@@ -21,14 +21,11 @@ use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
     crypto::{
-        note::{AeadEncryptedNote, ElGamalEncryptedNote},
-        pasta_prelude::*,
-        pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, Nullifier, PublicKey,
-        SecretKey,
+        note::ElGamalEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash,
+        util::mod_p_r_unsafe, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey,
     },
     pasta::pallas,
 };
-use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 use log::debug;
 use rand::rngs::OsRng;
 
@@ -40,15 +37,6 @@ use darkfi::{
 
 use crate::model::{Dao, DaoProposal, DaoVoteParams, DaoVoteParamsInput, VecAuthCallCommit};
 
-#[derive(SerialEncodable, SerialDecodable)]
-pub struct DaoVoteNote {
-    pub vote_option: bool,
-    pub yes_vote_blind: pallas::Scalar,
-    // yes_vote_value = vote_option * all_vote_value
-    pub all_vote_value: u64,
-    pub all_vote_blind: pallas::Scalar,
-}
-
 pub struct DaoVoteInput {
     pub secret: SecretKey,
     pub note: darkfi_money_contract::client::MoneyNote,
@@ -57,11 +45,10 @@ pub struct DaoVoteInput {
     pub signature_secret: SecretKey,
 }
 
-// Inside ZKproof, check proposal is correct.
+// Inside ZK proof, check proposal is correct.
 pub struct DaoVoteCall {
     pub inputs: Vec<DaoVoteInput>,
     pub vote_option: bool,
-    pub yes_vote_blind: pallas::Scalar,
     pub proposal: DaoProposal,
     pub dao: Dao,
     pub dao_keypair: Keypair,
@@ -85,8 +72,29 @@ impl DaoVoteCall {
         let mut all_vote_value = 0;
         let mut all_vote_blind = pallas::Scalar::from(0);
 
-        for input in self.inputs {
-            let value_blind = pallas::Scalar::random(&mut OsRng);
+        let last_input_idx = self.inputs.len() - 1;
+        for (i, input) in self.inputs.into_iter().enumerate() {
+            // Last input
+            // Choose a blinding factor that can be converted to pallas::Base exactly.
+            // We need this so we can verifiably encrypt the sum of input blinds
+            // in the next section.
+            // TODO: make a generalized widget for this, and also picking blinds in money::transfer()
+            let mut value_blind = pallas::Scalar::random(&mut OsRng);
+
+            if i == last_input_idx {
+                // It's near zero chance it ever loops at all.
+                // P(random 𝔽ᵥ ∉ 𝔽ₚ) = (q - p)/q = 2.99 × 10⁻⁵¹
+                loop {
+                    let av_blind = mod_p_r_unsafe(all_vote_blind + value_blind);
+
+                    if av_blind.is_none().into() {
+                        value_blind = pallas::Scalar::random(&mut OsRng);
+                        continue
+                    }
+
+                    break
+                }
+            }
 
             all_vote_value += input.note.value;
             all_vote_blind += value_blind;
@@ -104,7 +112,7 @@ impl DaoVoteCall {
                 Witness::Base(Value::known(pallas::Base::ZERO)),
                 Witness::Base(Value::known(pallas::Base::from(note.value))),
                 Witness::Base(Value::known(note.token_id.inner())),
-                Witness::Scalar(Value::known(all_vote_blind)),
+                Witness::Scalar(Value::known(value_blind)),
                 Witness::Base(Value::known(gov_token_blind)),
                 Witness::Uint32(Value::known(leaf_pos.try_into().unwrap())),
                 Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
@@ -141,7 +149,7 @@ impl DaoVoteCall {
 
             let nullifier = poseidon_hash([input.secret.inner(), coin.inner()]);
 
-            let vote_commit = pedersen_commitment_u64(note.value, all_vote_blind);
+            let vote_commit = pedersen_commitment_u64(note.value, value_blind);
             let vote_commit_coords = vote_commit.to_affine().coordinates().unwrap();
 
             let (sig_x, sig_y) = signature_public.xy();
@@ -182,12 +190,24 @@ impl DaoVoteCall {
         let vote_option = self.vote_option as u64;
         assert!(vote_option == 0 || vote_option == 1);
 
-        let yes_vote_commit =
-            pedersen_commitment_u64(vote_option * all_vote_value, self.yes_vote_blind);
+        // Create a random blind b ∈ 𝔽ᵥ, such that b ∈ 𝔽ₚ
+        let yes_vote_blind = loop {
+            let blind = pallas::Scalar::random(&mut OsRng);
+            if mod_p_r_unsafe(blind).is_some().into() {
+                break blind
+            }
+        };
+        let yes_vote_commit = pedersen_commitment_u64(vote_option * all_vote_value, yes_vote_blind);
         let yes_vote_commit_coords = yes_vote_commit.to_affine().coordinates().unwrap();
 
         let all_vote_commit = pedersen_commitment_u64(all_vote_value, all_vote_blind);
+        assert_eq!(all_vote_commit, inputs.iter().map(|i| i.vote_commit).sum());
         let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
+
+        // Convert blinds to 𝔽ₚ, which should work fine since we selected them
+        // to be convertable.
+        let yes_vote_blind = mod_p_r_unsafe(yes_vote_blind).unwrap();
+        let all_vote_blind = mod_p_r_unsafe(all_vote_blind).unwrap();
 
         let vote_option = pallas::Base::from(vote_option);
         let all_vote_value_fp = pallas::Base::from(all_vote_value);
@@ -213,10 +233,10 @@ impl DaoVoteCall {
             Witness::Base(Value::known(self.dao.bulla_blind)),
             // Vote
             Witness::Base(Value::known(vote_option)),
-            Witness::Scalar(Value::known(self.yes_vote_blind)),
+            Witness::Base(Value::known(yes_vote_blind)),
             // Total number of gov tokens allocated
             Witness::Base(Value::known(all_vote_value_fp)),
-            Witness::Scalar(Value::known(all_vote_blind)),
+            Witness::Base(Value::known(all_vote_blind)),
             // gov token
             Witness::Base(Value::known(gov_token_blind)),
             // time checks
@@ -228,12 +248,7 @@ impl DaoVoteCall {
         assert_eq!(self.dao.to_bulla(), self.proposal.dao_bulla);
         let proposal_bulla = self.proposal.to_bulla();
 
-        let note = [
-            vote_option,
-            //self.yes_vote_blind,
-            all_vote_value_fp,
-            //all_vote_blind,
-        ];
+        let note = [vote_option, yes_vote_blind, all_vote_value_fp, all_vote_blind];
         let enc_note = ElGamalEncryptedNote::encrypt(note, &ephem_secret, &self.dao_keypair.public);
 
         let public_inputs = vec![
@@ -248,6 +263,8 @@ impl DaoVoteCall {
             ephem_y,
             enc_note.encrypted_values[0],
             enc_note.encrypted_values[1],
+            enc_note.encrypted_values[2],
+            enc_note.encrypted_values[3],
         ];
 
         let circuit = ZkCircuit::new(prover_witnesses, main_zkbin);
@@ -257,23 +274,8 @@ impl DaoVoteCall {
             .expect("DAO::vote() proving error!");
         proofs.push(main_proof);
 
-        let note = DaoVoteNote {
-            vote_option: self.vote_option,
-            yes_vote_blind: self.yes_vote_blind,
-            all_vote_value,
-            all_vote_blind,
-        };
-        let enc_note_old =
-            AeadEncryptedNote::encrypt(&note, &self.dao_keypair.public, &mut OsRng).unwrap();
-
-        let params = DaoVoteParams {
-            token_commit,
-            proposal_bulla,
-            yes_vote_commit,
-            note: enc_note,
-            note_old: enc_note_old,
-            inputs,
-        };
+        let params =
+            DaoVoteParams { token_commit, proposal_bulla, yes_vote_commit, note: enc_note, inputs };
 
         Ok((params, proofs))
     }

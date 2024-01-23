@@ -280,8 +280,7 @@ pub struct DaoVoteParams {
     /// Commitment for yes votes
     pub yes_vote_commit: pallas::Point,
     /// Encrypted note
-    pub note: ElGamalEncryptedNote<2>,
-    pub note_old: AeadEncryptedNote,
+    pub note: ElGamalEncryptedNote<4>,
     /// Inputs for the vote
     pub inputs: Vec<DaoVoteParamsInput>,
 }

@@ -101,6 +101,8 @@ pub(crate) fn dao_vote_get_metadata(
             ephem_y,
             params.note.encrypted_values[0],
             params.note.encrypted_values[1],
+            params.note.encrypted_values[2],
+            params.note.encrypted_values[3],
         ],
     ));
 

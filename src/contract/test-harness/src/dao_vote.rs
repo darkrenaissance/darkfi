@@ -30,8 +30,7 @@ use darkfi_dao_contract::{
 };
 use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
-    crypto::{pasta_prelude::Field, Keypair, SecretKey, DAO_CONTRACT_ID},
-    pasta::pallas,
+    crypto::{Keypair, SecretKey, DAO_CONTRACT_ID},
     ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
@@ -83,7 +82,6 @@ impl TestHarness {
         let call = DaoVoteCall {
             inputs: vec![input],
             vote_option,
-            yes_vote_blind: pallas::Scalar::random(&mut OsRng),
             proposal: proposal.clone(),
             dao: dao.clone(),
             dao_keypair: dao_keypair.clone(),

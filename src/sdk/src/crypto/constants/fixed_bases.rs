@@ -111,8 +111,8 @@ pub struct ValueCommitV;
 
 /// ConstBaseFieldElement is used in scalar mul with a base field element.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(non_snake_case)] // Rust bug: see https://github.com/rust-lang/rust/issues/60681
 pub struct ConstBaseFieldElement {
-    #[allow(non_snake_case)]
     G: pallas::Affine,
     u: Vec<[[u8; 32]; H]>,
     z: Vec<u64>,

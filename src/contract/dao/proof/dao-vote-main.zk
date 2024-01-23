@@ -5,6 +5,7 @@ constant "DaoVoteMain" {
     EcFixedPoint VALUE_COMMIT_RANDOM,
     EcFixedPointShort VALUE_COMMIT_VALUE,
     EcFixedPointBase NULLIFIER_K,
+    EcFixedPointBase VALUE_COMMIT_RANDOM_BASE,
 }
 
 witness "DaoVoteMain" {
@@ -26,11 +27,11 @@ witness "DaoVoteMain" {
 
     # Is the vote yes or no
     Base vote_option,
-    Scalar yes_vote_blind,
+    Base yes_vote_blind,
 
     # Total amount of capital allocated to vote
     Base all_vote_value,
-    Scalar all_vote_blind,
+    Base all_vote_blind,
 
     # Check the inputs and this proof are for the same token
     Base gov_token_blind,
@@ -77,14 +78,14 @@ circuit "DaoVoteMain" {
     # Pedersen commitment for vote option
     yes_vote_value = base_mul(vote_option, all_vote_value);
     yes_vote_value_c = ec_mul_short(yes_vote_value, VALUE_COMMIT_VALUE);
-    yes_vote_blind_c = ec_mul(yes_vote_blind, VALUE_COMMIT_RANDOM);
+    yes_vote_blind_c = ec_mul_base(yes_vote_blind, VALUE_COMMIT_RANDOM_BASE);
     yes_vote_commit = ec_add(yes_vote_value_c, yes_vote_blind_c);
     constrain_instance(ec_get_x(yes_vote_commit));
     constrain_instance(ec_get_y(yes_vote_commit));
 
     # Pedersen commitment for vote value
     all_vote_c = ec_mul_short(all_vote_value, VALUE_COMMIT_VALUE);
-    all_vote_blind_c = ec_mul(all_vote_blind, VALUE_COMMIT_RANDOM);
+    all_vote_blind_c = ec_mul_base(all_vote_blind, VALUE_COMMIT_RANDOM_BASE);
     all_vote_commit = ec_add(all_vote_c, all_vote_blind_c);
     constrain_instance(ec_get_x(all_vote_commit));
     constrain_instance(ec_get_y(all_vote_commit));
@@ -108,12 +109,22 @@ circuit "DaoVoteMain" {
     );
     const_1 = witness_base(1);
     const_2 = witness_base(2);
-    # Token ID
+    const_3 = witness_base(3);
+    const_4 = witness_base(4);
+    # Vote option
     shared_secret_1 = poseidon_hash(shared_secret, const_1);
     enc_vote_option = base_add(vote_option, shared_secret_1);
     constrain_instance(enc_vote_option);
-    # Serial
+    # Yes vote blind
     shared_secret_2 = poseidon_hash(shared_secret, const_2);
-    enc_all_vote_value = base_add(all_vote_value, shared_secret_2);
+    enc_yes_vote_blind = base_add(yes_vote_blind, shared_secret_2);
+    constrain_instance(enc_yes_vote_blind);
+    # All vote value
+    shared_secret_3 = poseidon_hash(shared_secret, const_3);
+    enc_all_vote_value = base_add(all_vote_value, shared_secret_3);
     constrain_instance(enc_all_vote_value);
+    # All vote blind
+    shared_secret_4 = poseidon_hash(shared_secret, const_4);
+    enc_all_vote_blind = base_add(all_vote_blind, shared_secret_4);
+    constrain_instance(enc_all_vote_blind);
 }

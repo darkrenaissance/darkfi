@@ -16,11 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+use darkfi_serial::ReadExt;
 use halo2_gadgets::poseidon::primitives as poseidon;
 use pasta_curves::{
     group::ff::{FromUniformBytes, PrimeField},
     pallas,
 };
+use std::io::Cursor;
+use subtle::CtOption;
 
 /// Hash `a` and `b` together with a prefix `persona` and return a `pallas::Scalar`
 /// element from the digest.
@@ -40,6 +43,14 @@ pub fn mod_r_p(x: pallas::Base) -> pallas::Scalar {
     pallas::Scalar::from_repr(x.to_repr()).unwrap()
 }
 
+/// Converts from pallas::Scalar to pallas::Base (aka $x \pmod{r_\mathbb{P}}$).
+///
+/// This call is unsafe and liable to fail. Use with caution.
+/// The Pallas scalar field is bigger than the field we're converting to here.
+pub fn mod_p_r_unsafe(x: pallas::Scalar) -> CtOption<pallas::Base> {
+    pallas::Base::from_repr(x.to_repr())
+}
+
 /// Wrapper around poseidon in `halo2_gadgets`
 pub fn poseidon_hash<const N: usize>(messages: [pallas::Base; N]) -> pallas::Base {
     // TODO: it's possible to make this function simply take a slice, by using the lower level
@@ -49,4 +60,21 @@ pub fn poseidon_hash<const N: usize>(messages: [pallas::Base; N]) -> pallas::Bas
     // at compile time.
     poseidon::Hash::<_, poseidon::P128Pow5T3, poseidon::ConstantLength<N>, 3, 2>::init()
         .hash(messages)
+}
+
+pub fn fp_to_u64(v: pallas::Base) -> Option<u64> {
+    let repr = v.to_repr();
+    if !repr[8..].iter().all(|&b| b == 0u8) {
+        return None
+    }
+    let mut cur = Cursor::new(&repr[0..8]);
+    let val = ReadExt::read_u64(&mut cur).ok()?;
+    Some(val)
+}
+
+#[test]
+fn test_fp_to_u64() {
+    let fp = pallas::Base::from(u64::MAX);
+    assert_eq!(fp_to_u64(fp), Some(u64::MAX));
+    assert_eq!(fp_to_u64(fp + pallas::Base::ONE), None);
 }

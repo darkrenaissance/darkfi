@@ -18,13 +18,15 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
-use darkfi_dao_contract::{
-    client::DaoVoteNote,
-    model::{Dao, DaoBlindAggregateVote},
-};
+use darkfi_dao_contract::model::{Dao, DaoBlindAggregateVote};
 use darkfi_money_contract::model::CoinAttributes;
 use darkfi_sdk::{
-    crypto::{pasta_prelude::Field, pedersen_commitment_u64, DAO_CONTRACT_ID, DARK_TOKEN_ID},
+    crypto::{
+        pasta_prelude::*,
+        pedersen_commitment_u64,
+        util::{fp_to_u64, mod_r_p},
+        DAO_CONTRACT_ID, DARK_TOKEN_ID,
+    },
     pasta::pallas,
 };
 use log::info;
@@ -255,12 +257,9 @@ fn integration_test() -> Result<()> {
         }
 
         // Gather and decrypt all vote notes
-        let vote_note_1: DaoVoteNote =
-            alice_vote_params.note_old.decrypt(&dao_keypair.secret).unwrap();
-        let vote_note_2: DaoVoteNote =
-            bob_vote_params.note_old.decrypt(&dao_keypair.secret).unwrap();
-        let vote_note_3: DaoVoteNote =
-            charlie_vote_params.note_old.decrypt(&dao_keypair.secret).unwrap();
+        let vote_note_1 = alice_vote_params.note.decrypt(&dao_keypair.secret);
+        let vote_note_2 = bob_vote_params.note.decrypt(&dao_keypair.secret);
+        let vote_note_3 = charlie_vote_params.note.decrypt(&dao_keypair.secret);
 
         // Count the votes
         let mut total_yes_vote_value = 0;
@@ -269,29 +268,47 @@ fn integration_test() -> Result<()> {
         let mut total_yes_vote_blind = pallas::Scalar::ZERO;
         let mut total_all_vote_blind = pallas::Scalar::ZERO;
 
-        for (i, note) in [vote_note_1, vote_note_2, vote_note_3].iter().enumerate() {
-            total_yes_vote_blind += note.yes_vote_blind;
-            total_all_vote_blind += note.all_vote_blind;
+        for (i, (note, params)) in [
+            (vote_note_1, alice_vote_params),
+            (vote_note_2, bob_vote_params),
+            (vote_note_3, charlie_vote_params),
+        ]
+        .iter()
+        .enumerate()
+        {
+            // Note format: [
+            //   vote_option,
+            //   yes_vote_blind,
+            //   all_vote_value_fp,
+            //   all_vote_blind,
+            // ]
+            let vote_option = fp_to_u64(note[0]).unwrap();
+            let yes_vote_blind = mod_r_p(note[1]);
+            let all_vote_value = fp_to_u64(note[2]).unwrap();
+            let all_vote_blind = mod_r_p(note[3]);
+            assert!(vote_option == 0 || vote_option == 1);
+
+            total_yes_vote_blind += yes_vote_blind;
+            total_all_vote_blind += all_vote_blind;
 
             // Update private values
             // vote_option is either 0 or 1
-            let yes_vote_value = note.vote_option as u64 * note.all_vote_value;
+            let yes_vote_value = vote_option * all_vote_value;
             total_yes_vote_value += yes_vote_value;
-            total_all_vote_value += note.all_vote_value;
+            total_all_vote_value += all_vote_value;
 
             // Update public values
-            let yes_vote_commit = pedersen_commitment_u64(yes_vote_value, note.yes_vote_blind);
-            let all_vote_commit = pedersen_commitment_u64(note.all_vote_value, note.all_vote_blind);
+            let yes_vote_commit = params.yes_vote_commit;
+            let all_vote_commit = params.inputs.iter().map(|i| i.vote_commit).sum();
             let blind_vote = DaoBlindAggregateVote { yes_vote_commit, all_vote_commit };
             blind_total_vote.aggregate(blind_vote);
 
             // Just for the debug
-            let vote_result = match note.vote_option {
+            let vote_result = match vote_option != 0 {
                 true => "yes",
                 false => "no",
             };
-
-            info!("Voter {} voted {} with {} tokens", i, vote_result, note.all_vote_value);
+            info!("Voter {} voted {} with {} tokens", i, vote_result, all_vote_value);
         }
 
         info!("Outcome = {} / {}", total_yes_vote_value, total_all_vote_value);
