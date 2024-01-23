@@ -32,6 +32,9 @@ autojoin = [
 
 # P2P network settings
 [net]
+# Path to a configured hostlist for saving known peers
+hostlist = "~/.local/darkfi/darkirc/hostlist.tsv"
+
 ## P2P accept addresses
 #inbound = ["tcp+tls://0.0.0.0:26661", "tcp+tls://[::]:26661"]
 
