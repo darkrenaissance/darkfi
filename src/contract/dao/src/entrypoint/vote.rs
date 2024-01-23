@@ -86,6 +86,7 @@ pub(crate) fn dao_vote_get_metadata(
     let yes_vote_commit_coords = params.yes_vote_commit.to_affine().coordinates().unwrap();
     let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
 
+    let (ephem_x, ephem_y) = params.note.ephem_public.xy();
     zk_public_inputs.push((
         DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS.to_string(),
         vec![
@@ -96,6 +97,10 @@ pub(crate) fn dao_vote_get_metadata(
             *all_vote_commit_coords.x(),
             *all_vote_commit_coords.y(),
             pallas::Base::from(current_day),
+            ephem_x,
+            ephem_y,
+            params.note.encrypted_values[0],
+            params.note.encrypted_values[1],
         ],
     ));
 

@@ -43,9 +43,9 @@ impl TestHarness {
     pub fn dao_vote(
         &mut self,
         voter: &Holder,
-        dao_kp: &Keypair,
         vote_option: bool,
         dao: &Dao,
+        dao_keypair: &Keypair,
         proposal: &DaoProposal,
         proposal_bulla: &DaoProposalBulla,
     ) -> Result<(Transaction, DaoVoteParams)> {
@@ -84,9 +84,9 @@ impl TestHarness {
             inputs: vec![input],
             vote_option,
             yes_vote_blind: pallas::Scalar::random(&mut OsRng),
-            vote_keypair: *dao_kp,
             proposal: proposal.clone(),
             dao: dao.clone(),
+            dao_keypair: dao_keypair.clone(),
             current_day,
         };
 

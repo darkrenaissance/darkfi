@@ -21,8 +21,10 @@ use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, Keypair,
-        MerkleNode, Nullifier, PublicKey, SecretKey,
+        note::{AeadEncryptedNote, ElGamalEncryptedNote},
+        pasta_prelude::*,
+        pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, Nullifier, PublicKey,
+        SecretKey,
     },
     pasta::pallas,
 };
@@ -60,9 +62,9 @@ pub struct DaoVoteCall {
     pub inputs: Vec<DaoVoteInput>,
     pub vote_option: bool,
     pub yes_vote_blind: pallas::Scalar,
-    pub vote_keypair: Keypair,
     pub proposal: DaoProposal,
     pub dao: Dao,
+    pub dao_keypair: Keypair,
     pub current_day: u64,
 }
 
@@ -175,7 +177,7 @@ impl DaoVoteCall {
         let dao_quorum = pallas::Base::from(self.dao.quorum);
         let dao_approval_ratio_quot = pallas::Base::from(self.dao.approval_ratio_quot);
         let dao_approval_ratio_base = pallas::Base::from(self.dao.approval_ratio_base);
-        let (dao_pub_x, dao_pub_y) = self.dao.public_key.xy();
+        let dao_public_key = self.dao.public_key.inner();
 
         let vote_option = self.vote_option as u64;
         assert!(vote_option == 0 || vote_option == 1);
@@ -186,6 +188,12 @@ impl DaoVoteCall {
 
         let all_vote_commit = pedersen_commitment_u64(all_vote_value, all_vote_blind);
         let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
+
+        let vote_option = pallas::Base::from(vote_option);
+        let all_vote_value_fp = pallas::Base::from(all_vote_value);
+        let ephem_secret = SecretKey::random(&mut OsRng);
+        let ephem_pubkey = PublicKey::from_secret(ephem_secret.into());
+        let (ephem_x, ephem_y) = ephem_pubkey.xy();
 
         let current_day = pallas::Base::from(self.current_day);
         let prover_witnesses = vec![
@@ -201,23 +209,32 @@ impl DaoVoteCall {
             Witness::Base(Value::known(dao_approval_ratio_quot)),
             Witness::Base(Value::known(dao_approval_ratio_base)),
             Witness::Base(Value::known(self.dao.gov_token_id.inner())),
-            Witness::Base(Value::known(dao_pub_x)),
-            Witness::Base(Value::known(dao_pub_y)),
+            Witness::EcNiPoint(Value::known(dao_public_key)),
             Witness::Base(Value::known(self.dao.bulla_blind)),
             // Vote
-            Witness::Base(Value::known(pallas::Base::from(vote_option))),
+            Witness::Base(Value::known(vote_option)),
             Witness::Scalar(Value::known(self.yes_vote_blind)),
             // Total number of gov tokens allocated
-            Witness::Base(Value::known(pallas::Base::from(all_vote_value))),
+            Witness::Base(Value::known(all_vote_value_fp)),
             Witness::Scalar(Value::known(all_vote_blind)),
             // gov token
             Witness::Base(Value::known(gov_token_blind)),
             // time checks
             Witness::Base(Value::known(current_day)),
+            // verifiable encryption
+            Witness::Base(Value::known(ephem_secret.inner())),
         ];
 
         assert_eq!(self.dao.to_bulla(), self.proposal.dao_bulla);
         let proposal_bulla = self.proposal.to_bulla();
+
+        let note = [
+            vote_option,
+            //self.yes_vote_blind,
+            all_vote_value_fp,
+            //all_vote_blind,
+        ];
+        let enc_note = ElGamalEncryptedNote::encrypt(note, &ephem_secret, &self.dao_keypair.public);
 
         let public_inputs = vec![
             token_commit,
@@ -227,6 +244,10 @@ impl DaoVoteCall {
             *all_vote_commit_coords.x(),
             *all_vote_commit_coords.y(),
             current_day,
+            ephem_x,
+            ephem_y,
+            enc_note.encrypted_values[0],
+            enc_note.encrypted_values[1],
         ];
 
         let circuit = ZkCircuit::new(prover_witnesses, main_zkbin);
@@ -242,11 +263,17 @@ impl DaoVoteCall {
             all_vote_value,
             all_vote_blind,
         };
-        let enc_note =
-            AeadEncryptedNote::encrypt(&note, &self.vote_keypair.public, &mut OsRng).unwrap();
+        let enc_note_old =
+            AeadEncryptedNote::encrypt(&note, &self.dao_keypair.public, &mut OsRng).unwrap();
 
-        let params =
-            DaoVoteParams { token_commit, proposal_bulla, yes_vote_commit, note: enc_note, inputs };
+        let params = DaoVoteParams {
+            token_commit,
+            proposal_bulla,
+            yes_vote_commit,
+            note: enc_note,
+            note_old: enc_note_old,
+            inputs,
+        };
 
         Ok((params, proofs))
     }

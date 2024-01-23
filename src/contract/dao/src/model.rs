@@ -20,8 +20,9 @@ use core::str::FromStr;
 
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, poseidon_hash, MerkleNode, Nullifier, PublicKey,
-        TokenId,
+        note::{AeadEncryptedNote, ElGamalEncryptedNote},
+        pasta_prelude::*,
+        poseidon_hash, MerkleNode, Nullifier, PublicKey, TokenId,
     },
     error::ContractError,
     pasta::pallas,
@@ -279,7 +280,8 @@ pub struct DaoVoteParams {
     /// Commitment for yes votes
     pub yes_vote_commit: pallas::Point,
     /// Encrypted note
-    pub note: AeadEncryptedNote,
+    pub note: ElGamalEncryptedNote<2>,
+    pub note_old: AeadEncryptedNote,
     /// Inputs for the vote
     pub inputs: Vec<DaoVoteParamsInput>,
 }

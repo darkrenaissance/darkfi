@@ -4,6 +4,7 @@ field = "pallas";
 constant "DaoVoteMain" {
     EcFixedPoint VALUE_COMMIT_RANDOM,
     EcFixedPointShort VALUE_COMMIT_VALUE,
+    EcFixedPointBase NULLIFIER_K,
 }
 
 witness "DaoVoteMain" {
@@ -20,8 +21,7 @@ witness "DaoVoteMain" {
     Base dao_approval_ratio_quot,
     Base dao_approval_ratio_base,
     Base gov_token_id,
-    Base dao_public_x,
-    Base dao_public_y,
+    EcNiPoint dao_public_key,
     Base dao_bulla_blind,
 
     # Is the vote yes or no
@@ -37,11 +37,20 @@ witness "DaoVoteMain" {
 
     # Check whether the proposal has expired or not
     Base current_day,
+
+    Base ephem_secret,
 }
 
 circuit "DaoVoteMain" {
     token_commit = poseidon_hash(gov_token_id, gov_token_blind);
     constrain_instance(token_commit);
+
+    # cast to EcPoint
+    # (otherwise zkas refuses to compile)
+    ONE = witness_base(1);
+    dao_pubkey = ec_mul_var_base(ONE, dao_public_key);
+    dao_public_x = ec_get_x(dao_pubkey);
+    dao_public_y = ec_get_y(dao_pubkey);
 
     dao_bulla = poseidon_hash(
         dao_proposer_limit,
@@ -87,4 +96,24 @@ circuit "DaoVoteMain" {
     end_time = base_add(proposal_current_day, proposal_duration_days);
     less_than_strict(current_day, end_time);
     constrain_instance(current_day);
+
+    # Verifiable encryption
+    ephem_public = ec_mul_base(ephem_secret, NULLIFIER_K);
+    constrain_instance(ec_get_x(ephem_public));
+    constrain_instance(ec_get_y(ephem_public));
+    shared_point = ec_mul_var_base(ephem_secret, dao_public_key);
+    shared_secret = poseidon_hash(
+        ec_get_x(shared_point),
+        ec_get_y(shared_point),
+    );
+    const_1 = witness_base(1);
+    const_2 = witness_base(2);
+    # Token ID
+    shared_secret_1 = poseidon_hash(shared_secret, const_1);
+    enc_vote_option = base_add(vote_option, shared_secret_1);
+    constrain_instance(enc_vote_option);
+    # Serial
+    shared_secret_2 = poseidon_hash(shared_secret, const_2);
+    enc_all_vote_value = base_add(all_vote_value, shared_secret_2);
+    constrain_instance(enc_all_vote_value);
 }

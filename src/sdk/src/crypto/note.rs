@@ -93,7 +93,7 @@ impl<const N: usize> ElGamalEncryptedNote<N> {
         values: [pallas::Base; N],
         ephem_secret: &SecretKey,
         public: &PublicKey,
-    ) -> Result<Self, ContractError> {
+    ) -> Self {
         // Derive shared secret using DH
         let ephem_public = PublicKey::from_secret(*ephem_secret);
         let (ss_x, ss_y) = PublicKey::from(public.inner() * mod_r_p(ephem_secret.inner())).xy();
@@ -109,10 +109,10 @@ impl<const N: usize> ElGamalEncryptedNote<N> {
             encrypted_values[i] = values[i] + blinds[i];
         }
 
-        Ok(Self { encrypted_values, ephem_public })
+        Self { encrypted_values, ephem_public }
     }
 
-    pub fn decrypt(&self, secret: &SecretKey) -> Result<[pallas::Base; N], ContractError> {
+    pub fn decrypt(&self, secret: &SecretKey) -> [pallas::Base; N] {
         // Derive shared secret using DH
         let (ss_x, ss_y) =
             PublicKey::from(self.ephem_public.inner() * mod_r_p(secret.inner())).xy();
@@ -128,7 +128,7 @@ impl<const N: usize> ElGamalEncryptedNote<N> {
             decrypted_values[i] = self.encrypted_values[i] - blinds[i];
         }
 
-        Ok(decrypted_values)
+        decrypted_values
     }
 }
 
@@ -162,9 +162,9 @@ mod tests {
         let ephem_secret = SecretKey::random(&mut OsRng);
 
         let encrypted_note =
-            ElGamalEncryptedNote::encrypt(plain_values, &ephem_secret, &keypair.public).unwrap();
+            ElGamalEncryptedNote::encrypt(plain_values, &ephem_secret, &keypair.public);
 
-        let decrypted_values = encrypted_note.decrypt(&keypair.secret).unwrap();
+        let decrypted_values = encrypted_note.decrypt(&keypair.secret);
 
         assert_eq!(plain_values, decrypted_values);
     }

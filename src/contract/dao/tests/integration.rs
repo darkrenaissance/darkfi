@@ -216,9 +216,9 @@ fn integration_test() -> Result<()> {
         info!("[Alice] Building vote tx (yes)");
         let (alice_vote_tx, alice_vote_params) = th.dao_vote(
             &Holder::Alice,
-            &dao_keypair,
             true,
             &dao,
+            &dao_keypair,
             &propose_info,
             &propose_params.proposal_bulla,
         )?;
@@ -226,9 +226,9 @@ fn integration_test() -> Result<()> {
         info!("[Bob] Building vote tx (no)");
         let (bob_vote_tx, bob_vote_params) = th.dao_vote(
             &Holder::Bob,
-            &dao_keypair,
             false,
             &dao,
+            &dao_keypair,
             &propose_info,
             &propose_params.proposal_bulla,
         )?;
@@ -236,9 +236,9 @@ fn integration_test() -> Result<()> {
         info!("[Charlie] Building vote tx (yes)");
         let (charlie_vote_tx, charlie_vote_params) = th.dao_vote(
             &Holder::Charlie,
-            &dao_keypair,
             true,
             &dao,
+            &dao_keypair,
             &propose_info,
             &propose_params.proposal_bulla,
         )?;
@@ -255,10 +255,12 @@ fn integration_test() -> Result<()> {
         }
 
         // Gather and decrypt all vote notes
-        let vote_note_1: DaoVoteNote = alice_vote_params.note.decrypt(&dao_keypair.secret).unwrap();
-        let vote_note_2: DaoVoteNote = bob_vote_params.note.decrypt(&dao_keypair.secret).unwrap();
+        let vote_note_1: DaoVoteNote =
+            alice_vote_params.note_old.decrypt(&dao_keypair.secret).unwrap();
+        let vote_note_2: DaoVoteNote =
+            bob_vote_params.note_old.decrypt(&dao_keypair.secret).unwrap();
         let vote_note_3: DaoVoteNote =
-            charlie_vote_params.note.decrypt(&dao_keypair.secret).unwrap();
+            charlie_vote_params.note_old.decrypt(&dao_keypair.secret).unwrap();
 
         // Count the votes
         let mut total_yes_vote_value = 0;
