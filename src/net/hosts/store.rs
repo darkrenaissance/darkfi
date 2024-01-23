@@ -216,12 +216,12 @@ impl Hosts {
     ) -> Option<(Url, u64)> {
         // Try to find an unused host in the set.
         for (host, last_seen) in hosts {
-            debug!(target: "store::anchorlist_fetch_address()",
+            debug!(target: "store::check_address_with_lock()",
             "Starting checks");
             // Check if we already have this connection established
             if p2p.exists(&host).await {
                 debug!(
-                    target: "store::anchorlist_fetch_address()",
+                    target: "store::check_address_with_lock()",
                     "Host '{}' exists so skipping",
                     host
                 );
@@ -231,7 +231,7 @@ impl Hosts {
             // Check if we already have this configured as a manual peer
             if self.settings.peers.contains(&host) {
                 debug!(
-                    target: "store::anchorlist_fetch_address()",
+                    target: "store::check_address_with_lock()",
                     "Host '{}' configured as manual peer so skipping",
                     host
                 );
@@ -241,7 +241,7 @@ impl Hosts {
             // Obtain a lock on this address to prevent duplicate connection
             if !p2p.add_pending(&host).await {
                 debug!(
-                    target: "store::anchorlist_fetch_address()",
+                    target: "store::check_address_with_lock()",
                     "Host '{}' pending so skipping",
                     host
                 );
@@ -249,8 +249,8 @@ impl Hosts {
             }
 
             debug!(
-                target: "store::anchorlist_fetch_address()",
-                "Found valid host '{}",
+                target: "store::check_address_with_lock()",
+                "Found valid host {}",
                 host
             );
             return Some((host.clone(), last_seen))
