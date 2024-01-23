@@ -220,10 +220,12 @@ impl Validator {
             let overlay = fork.overlay.lock().unwrap().full_clone()?;
 
             // Verify transaction
-            let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec, false).await?;
-            if !erroneous_txs.is_empty() {
-                continue
+            match verify_transactions(&overlay, &time_keeper, &tx_vec, false).await {
+                Ok(_) => {}
+                Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => continue,
+                Err(e) => return Err(e),
             }
+
             valid = true;
 
             // Store transaction hash in forks' mempool
@@ -232,9 +234,13 @@ impl Validator {
 
         // Verify transaction against canonical state
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
-        let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec, false).await?;
-        if erroneous_txs.is_empty() {
-            valid = true
+        let mut erroneous_txs = vec![];
+        match verify_transactions(&overlay, &time_keeper, &tx_vec, false).await {
+            Ok(_) => valid = true,
+            Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(etx))) => {
+                erroneous_txs = etx
+            }
+            Err(e) => return Err(e),
         }
 
         // Drop forks lock
@@ -282,11 +288,13 @@ impl Validator {
                 let overlay = fork.overlay.lock().unwrap().full_clone()?;
 
                 // Verify transaction
-                let erroneous_txs =
-                    verify_transactions(&overlay, &time_keeper, &tx_vec, false).await?;
-                if erroneous_txs.is_empty() {
-                    valid = true;
-                    continue
+                match verify_transactions(&overlay, &time_keeper, &tx_vec, false).await {
+                    Ok(_) => {
+                        valid = true;
+                        continue
+                    }
+                    Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
+                    Err(e) => return Err(e),
                 }
 
                 // Remove erroneous transaction from forks' mempool
@@ -295,9 +303,11 @@ impl Validator {
 
             // Verify transaction against canonical state
             let overlay = BlockchainOverlay::new(&self.blockchain)?;
-            let erroneous_txs = verify_transactions(&overlay, &time_keeper, &tx_vec, false).await?;
-            if erroneous_txs.is_empty() {
-                valid = true
+
+            match verify_transactions(&overlay, &time_keeper, &tx_vec, false).await {
+                Ok(_) => valid = true,
+                Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
+                Err(e) => return Err(e),
             }
 
             // Remove pending transaction if it's not valid for canonical or any fork
@@ -480,15 +490,13 @@ impl Validator {
         );
 
         // Verify all transactions and get erroneous ones
-        let erroneous_txs =
-            verify_transactions(&overlay, &time_keeper, txs, self.verify_fees).await?;
-
+        let e = verify_transactions(&overlay, &time_keeper, txs, self.verify_fees).await;
         let lock = overlay.lock().unwrap();
         let mut overlay = lock.overlay.lock().unwrap();
-        if !erroneous_txs.is_empty() {
-            warn!(target: "validator::add_transactions", "Erroneous transactions found in set");
+
+        if let Err(e) = e {
             overlay.purge_new_trees()?;
-            return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
+            return Err(e)
         }
 
         if !write {

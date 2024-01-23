@@ -111,11 +111,13 @@ pub async fn verify_genesis_block(
 
     // Verify transactions, exluding producer(first) one
     let txs = &block.txs[1..];
-    let erroneous_txs = verify_transactions(overlay, time_keeper, txs, false).await?;
-    if !erroneous_txs.is_empty() {
-        warn!(target: "validator::verification::verify_genesis_block", "Erroneous transactions found in set");
+    if let Err(e) = verify_transactions(overlay, time_keeper, txs, false).await {
+        warn!(
+            target: "validator::verification::verify_genesis_block",
+            "[VALIDATOR] Erroneous transactions found in set",
+        );
         overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-        return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
+        return Err(e)
     }
 
     // Insert block
@@ -177,11 +179,14 @@ pub async fn verify_block(
 
     // Verify transactions, exluding producer(first) one
     let txs = &block.txs[1..];
-    let erroneous_txs = verify_transactions(overlay, time_keeper, txs, false).await?;
-    if !erroneous_txs.is_empty() {
-        warn!(target: "validator::verification::verify_block", "Erroneous transactions found in set");
+    let e = verify_transactions(overlay, time_keeper, txs, false).await;
+    if let Err(e) = e {
+        warn!(
+            target: "validator::verification::verify_block",
+            "[VALIDATOR] Erroneous transactions found in set",
+        );
         overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-        return Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
+        return Err(e)
     }
 
     // Insert block
@@ -503,16 +508,16 @@ pub async fn verify_transaction(
         gas_used += runtime.gas_used();
     }
 
+    // The signature fee is tx_size + fixed_sig_fee * n_signatures
+    gas_used += (PALLAS_SCHNORR_SIGNATURE_FEE * tx.signatures.len() as u64) +
+        serialize_async(tx).await.len() as u64;
+
+    // The ZK circuit fee is calculated using a function in validator/fees.rs
+    for zkbin in circuits_to_verify.iter() {
+        gas_used += circuit_gas_use(zkbin);
+    }
+
     if verify_fee {
-        // The signature fee is tx_size + fixed_sig_fee * n_signatures
-        gas_used += (PALLAS_SCHNORR_SIGNATURE_FEE * tx.signatures.len() as u64) +
-            serialize_async(tx).await.len() as u64;
-
-        // The ZK circuit fee is calculated using a function in validator/fees.rs
-        for zkbin in circuits_to_verify.iter() {
-            gas_used += circuit_gas_use(zkbin);
-        }
-
         // Deserialize the fee call to find the paid fee
         let fee: u64 = match deserialize_async(&tx.calls[fee_call_idx].data.data[1..9]).await {
             Ok(v) => v,
@@ -543,44 +548,53 @@ pub async fn verify_transaction(
     // verify any accompanying ZK proofs.
     debug!(target: "validator::verification::verify_transaction", "Verifying signatures for transaction {}", tx_hash);
     if sig_table.len() != tx.signatures.len() {
-        error!(target: "validator::verification::verify_transaction", "Incorrect number of signatures in tx {}", tx_hash);
+        error!(
+            target: "validator::verification::verify_transaction",
+            "[VALIDATOR] Incorrect number of signatures in tx {}", tx_hash,
+        );
         return Err(TxVerifyFailed::MissingSignatures.into())
     }
 
     if let Err(e) = tx.verify_sigs(sig_table) {
-        error!(target: "validator::verification::verify_transaction", "Signature verification for tx {} failed: {}", tx_hash, e);
+        error!(
+            target: "validator::verification::verify_transaction",
+            "[VALIDATOR] Signature verification for tx {} failed: {}", tx_hash, e,
+        );
         return Err(TxVerifyFailed::InvalidSignature.into())
     }
-
     debug!(target: "validator::verification::verify_transaction", "Signature verification successful");
 
     debug!(target: "validator::verification::verify_transaction", "Verifying ZK proofs for transaction {}", tx_hash);
     if let Err(e) = tx.verify_zkps(verifying_keys, zkp_table).await {
-        error!(target: "validator::verification::verify_transaction", "ZK proof verification for tx {} failed: {}", tx_hash, e);
+        error!(
+            target: "validator::verification::verify_transaction",
+            "[VALIDATOR] ZK proof verification for tx {} failed: {}", tx_hash, e,
+        );
         return Err(TxVerifyFailed::InvalidZkProof.into())
     }
-
     debug!(target: "validator::verification::verify_transaction", "ZK proof verification successful");
-    debug!(target: "validator::verification::verify_transaction", "Transaction {} verified successfully", tx_hash);
 
+    debug!(target: "validator::verification::verify_transaction", "Transaction {} verified successfully", tx_hash);
     Ok(gas_used)
 }
 
 /// Verify a set of [`Transaction`] in sequence and apply them if all are valid.
-/// In case any of the transactions fail, they will be returned to the caller.
+/// In case any of the transactions fail, they will be returned to the caller as an error.
+/// If all transactions are valid, the function will return the accumulated gas used from
+/// all the transactions.
 pub async fn verify_transactions(
     overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
     txs: &[Transaction],
     verify_fees: bool,
-) -> Result<Vec<Transaction>> {
+) -> Result<u64> {
     debug!(target: "validator::verification::verify_transactions", "Verifying {} transactions", txs.len());
 
     // Tracker for failed txs
     let mut erroneous_txs = vec![];
 
     // Gas accumulator
-    let mut _gas_used = 0;
+    let mut gas_used = 0;
 
     // Map of ZK proof verifying keys for the current transaction batch
     let mut vks: HashMap<[u8; 32], HashMap<String, VerifyingKey>> = HashMap::new();
@@ -596,7 +610,7 @@ pub async fn verify_transactions(
     for tx in txs {
         overlay.lock().unwrap().checkpoint();
         match verify_transaction(overlay, time_keeper, tx, &mut vks, verify_fees).await {
-            Ok(gas) => _gas_used += gas,
+            Ok(gas) => gas_used += gas,
             Err(e) => {
                 warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {}", e);
                 erroneous_txs.push(tx.clone());
@@ -611,7 +625,11 @@ pub async fn verify_transactions(
         }
     }
 
-    Ok(erroneous_txs)
+    if erroneous_txs.is_empty() {
+        Ok(gas_used)
+    } else {
+        Err(TxVerifyFailed::ErroneousTxs(erroneous_txs).into())
+    }
 }
 
 /// Verify given [`Proposal`] against provided consensus state

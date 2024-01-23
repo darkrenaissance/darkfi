@@ -34,7 +34,7 @@ use crate::{
         pid::slot_pid_output,
         pow::PoWModule,
         utils::{best_forks_indexes, block_rank, find_extended_fork_index, previous_slot_info},
-        verify_block, verify_proposal, verify_transactions,
+        verify_block, verify_proposal, verify_transactions, TxVerifyFailed,
     },
     Error, Result,
 };
@@ -527,10 +527,13 @@ impl Fork {
         let overlay = self.overlay.lock().unwrap().full_clone()?;
 
         // Verify transactions
-        let erroneous_txs =
-            verify_transactions(&overlay, time_keeper, &unproposed_txs, false).await?;
-        if !erroneous_txs.is_empty() {
-            unproposed_txs.retain(|x| !erroneous_txs.contains(x));
+        if let Err(e) = verify_transactions(&overlay, time_keeper, &unproposed_txs, false).await {
+            match e {
+                crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(erroneous_txs)) => {
+                    unproposed_txs.retain(|x| !erroneous_txs.contains(x))
+                }
+                _ => return Err(e),
+            }
         }
 
         Ok(unproposed_txs)
