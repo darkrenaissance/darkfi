@@ -63,7 +63,7 @@ mod token;
 
 /// CLI utility functions
 mod cli_util;
-use cli_util::{kaching, parse_token_pair, parse_value_pair};
+use cli_util::{generate_completions, kaching, parse_token_pair, parse_value_pair};
 
 /// Wallet functionality related to Money
 mod money;
@@ -123,7 +123,12 @@ enum Subcmd {
     /// Send a ping request to the darkfid RPC endpoint
     Ping,
 
-    // TODO: shell completions
+    /// Generate a SHELL completion script and print to stdout
+    Completions {
+        /// The Shell you want to generate script for
+        shell: String,
+    },
+
     /// Wallet operations
     Wallet {
         #[structopt(long)]
@@ -290,8 +295,7 @@ enum ExplorerSubcmd {
         tx_hash: Option<String>,
 
         #[structopt(long)]
-        /// Encode specific history record transaction
-        /// to base58.
+        /// Encode specific history record transaction to base58
         encode: bool,
     },
 }
@@ -351,7 +355,7 @@ enum TokenSubcmd {
 
     /// Freeze a token mint
     Freeze {
-        /// Token ID mint to freeze
+        /// Token ID to freeze
         token: String,
     },
 }
@@ -428,6 +432,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
             drk.ping().await
         }
+
+        Subcmd::Completions { shell } => generate_completions(&shell),
 
         Subcmd::Wallet {
             initialize,
