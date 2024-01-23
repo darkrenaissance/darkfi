@@ -311,7 +311,7 @@ impl Slot {
                     });
 
                     // Downgrade this host to greylist if it's on the whitelist or anchorlist.
-                    //self.session().downgrade_host(&host).await;
+                    hosts.downgrade_host(&host).await;
 
                     self.channel_id.store(0, Ordering::Relaxed);
                     continue
