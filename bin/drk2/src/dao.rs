@@ -687,7 +687,8 @@ impl Drk {
 
             for vote in new_dao_votes {
                 for dao in &daos {
-                    if let Ok(note) = vote.0.note.decrypt::<DaoVoteNote>(&dao.secret_key) {
+                    // TODO: we are using note_old here
+                    if let Ok(note) = vote.0.note_old.decrypt::<DaoVoteNote>(&dao.secret_key) {
                         eprintln!("Managed to decrypt DAO proposal vote note");
                         let daos_proposals = self.get_dao_proposals(dao.id).await?;
                         let mut proposal_id = None;
