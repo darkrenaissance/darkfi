@@ -101,14 +101,17 @@ impl GreylistRefinery {
                 continue
             }
 
+            let mut greylist = hosts.greylist.write().await;
             if !ping_node(url, self.p2p().clone()).await {
-                let mut greylist = hosts.greylist.write().await;
                 greylist.remove(position);
-                debug!(target: "net::refinery",
-                       "Peer {} is non-responsive. Removed from greylist", url);
+                debug!(
+                    target: "net::refinery",
+                    "Peer {} is non-responsive. Removed from greylist", url,
+                );
 
                 continue
             }
+            drop(greylist);
 
             let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
 
