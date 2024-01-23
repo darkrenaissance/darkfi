@@ -84,9 +84,6 @@ impl Default for Settings {
     fn default() -> Self {
         let version = option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0");
         let app_version = semver::Version::parse(version).unwrap();
-        // TODO: We don't have a cross-platform method for the app directory (.local/darkfi)
-        // in util/path.rs currently.
-        let hostlist = format!("~/.local/darkfi/{}/hostlist.tsv", env!("CARGO_PKG_NAME"));
 
         Self {
             node_id: String::new(),
@@ -108,7 +105,7 @@ impl Default for Settings {
             outbound_peer_discovery_cooloff_time: 30,
             outbound_peer_discovery_attempt_time: 5,
             advertise: true,
-            hostlist,
+            hostlist: "/dev/null".to_string(),
             greylist_refinery_interval: 5,
             white_connection_percent: 90,
             anchor_connection_count: 2,
