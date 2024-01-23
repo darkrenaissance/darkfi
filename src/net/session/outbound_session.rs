@@ -310,8 +310,8 @@ impl Slot {
                         err: err.to_string()
                     });
 
-                    // Downgrade this host to greylist if it's on the whitelist or anchorlist.
-                    hosts.downgrade_host(&host).await;
+                    // Remove this host from the hostlist.
+                    hosts.remove_host(&host).await;
 
                     self.channel_id.store(0, Ordering::Relaxed);
                     continue
@@ -359,8 +359,8 @@ impl Slot {
             stop_sub.receive().await;
             self.channel_id.store(0, Ordering::Relaxed);
 
-            // Downgrade this host to greylist if it's on the whitelist or anchorlist.
-            hosts.downgrade_host(&addr).await;
+            // Remove this host from the hostlist.
+            hosts.remove_host(&addr).await;
         }
     }
 

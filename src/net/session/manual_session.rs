@@ -146,8 +146,9 @@ impl ManualSession {
                         target: "net::manual_session",
                         "[P2P] Manual outbound disconnected [{}]", url,
                     );
-                    // Downgrade this host to greylist if it's on the whitelist or anchorlist.
-                    self.p2p().hosts().downgrade_host(&addr).await;
+
+                    // Remove this host from the hostlist.
+                    self.p2p().hosts().remove_host(&addr).await;
 
                     // DEV NOTE: Here we can choose to attempt reconnection again
                     return Ok(())

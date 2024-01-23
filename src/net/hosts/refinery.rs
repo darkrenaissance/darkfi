@@ -87,7 +87,7 @@ impl GreylistRefinery {
             let hosts = self.p2p().hosts();
 
             if hosts.is_empty_greylist().await {
-                warn!(target: "net::refinery::run()",
+                warn!(target: "net::refinery",
                 "Greylist is empty! Cannot start refinery process");
 
                 continue
@@ -96,10 +96,16 @@ impl GreylistRefinery {
             let (entry, position) = hosts.greylist_fetch_random().await;
             let url = &entry.0;
 
+            // Skip this node if it's being migrated currently.
+            if hosts.is_migrating(url).await {
+                continue
+            }
+
             if !ping_node(url, self.p2p().clone()).await {
                 let mut greylist = hosts.greylist.write().await;
                 greylist.remove(position);
-                debug!(target: "net::refinery::run()", "Peer {} is non-responsive. Removed from greylist", url);
+                debug!(target: "net::refinery",
+                       "Peer {} is non-responsive. Removed from greylist", url);
 
                 continue
             }

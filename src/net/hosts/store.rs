@@ -66,6 +66,9 @@ pub struct Hosts {
     /// Peers we reject from connecting to
     rejected: RwLock<HashSet<String>>,
 
+    /// Peers that are currently being removed from the hostlist
+    migrating: RwLock<HashSet<Url>>,
+
     /// Subscriber listening for store updates
     store_subscriber: SubscriberPtr<usize>,
 
@@ -81,6 +84,7 @@ impl Hosts {
             whitelist: RwLock::new(Vec::new()),
             anchorlist: RwLock::new(Vec::new()),
             rejected: RwLock::new(HashSet::new()),
+            migrating: RwLock::new(HashSet::new()),
             store_subscriber: Subscriber::new(),
             settings,
         })
@@ -266,18 +270,15 @@ impl Hosts {
         self.anchorlist_store_or_update(&[(addr.clone(), last_seen)]).await;
     }
 
-    /// Downgrade a connection. If it's on the anchorlist or the whitelist, remove it and add it
-    /// to the greylist. Called when we cannot establish a connection to a host or when a
-    /// pre-existing connection disconnects.
-    pub async fn downgrade_host(&self, addr: &Url) {
-        // Remove channel from anchorlist and add it to greylist
-        if self.anchorlist_contains(addr).await {
-            let (url, last_seen) = self
-                .get_anchorlist_entry_at_addr(addr)
-                .await
-                .expect("Expected anchorlist entry to exist");
+    /// Remove an entry from the hostlist. Called when we cannot establish a connection to a host or 
+    /// when a pre-existing connection disconnects.
+    pub async fn remove_host(&self, addr: &Url) {
+        debug!(target: "store::downgrade_host", "Removing host {}", addr);
+        self.mark_migrating(addr).await;
 
-            self.greylist_store_or_update(&[(url, last_seen)]).await;
+        // Remove channel from anchorlist 
+        if self.anchorlist_contains(addr).await {
+            debug!(target: "store::downgrade_host", "Removing from anchorlist {}", addr);
 
             let index = self
                 .get_anchorlist_index_at_addr(addr.clone())
@@ -287,14 +288,9 @@ impl Hosts {
             self.anchorlist_remove(addr, index).await;
         }
 
-        // Remove channel from whitelist and add to greylist
+        // Remove channel from whitelist
         if self.whitelist_contains(addr).await {
-            let (url, last_seen) = self
-                .get_whitelist_entry_at_addr(addr)
-                .await
-                .expect("Expected whitelist entry to exist");
-
-            self.greylist_store_or_update(&[(url, last_seen)]).await;
+            debug!(target: "store::downgrade_host", "Removing from whitelist {}", addr);
 
             let index = self
                 .get_whitelist_index_at_addr(addr.clone())
@@ -303,6 +299,20 @@ impl Hosts {
 
             self.whitelist_remove(addr, index).await;
         }
+
+        // Remove channel the greylist
+        if self.greylist_contains(addr).await {
+            debug!(target: "store::downgrade_host", "Removing from greylist {}", addr);
+
+            let index = self
+                .get_greylist_index_at_addr(addr.clone())
+                .await
+                .expect("Expected greylist index to exist");
+
+            self.greylist_remove(addr, index).await;
+        }
+
+        self.unmark_migrating(addr).await;
     }
 
     /// Stores an address on the greylist or updates its last_seen field if we already
@@ -480,19 +490,19 @@ impl Hosts {
 
     /// Remove an entry from the greylist.
     pub async fn greylist_remove(&self, addr: &Url, index: usize) {
-        debug!(target: "net::refinery::run()", "Removing peer {} from greylist", addr);
+        debug!(target: "store::greylist_remove", "Removing peer {} from greylist", addr);
         self.greylist.write().await.remove(index);
     }
 
     /// Remove an entry from the whitelist.
     pub async fn whitelist_remove(&self, addr: &Url, index: usize) {
-        debug!(target: "net::refinery::run()", "Removing peer {} from whitelist", addr);
+        debug!(target: "store::whitelist_remove", "Removing peer {} from whitelist", addr);
         self.whitelist.write().await.remove(index);
     }
 
     /// Remove an entry from the anchorlist.
     pub async fn anchorlist_remove(&self, addr: &Url, index: usize) {
-        debug!(target: "net::refinery::run()", "Removing peer {} from anchorlist", addr);
+        debug!(target: "store::anchorlist_remove", "Removing peer {} from anchorlist", addr);
         self.anchorlist.write().await.remove(index);
     }
 
@@ -647,6 +657,21 @@ impl Hosts {
         if let Some(hostname) = peer.host_str() {
             self.rejected.write().await.remove(hostname);
         }
+    }
+
+    /// Peer that is currently being removed from hostlists.
+    pub async fn is_migrating(&self, peer: &Url) -> bool {
+        self.migrating.read().await.contains(peer)
+    }
+
+    /// Mark a peer as currently migrating.
+    pub async fn mark_migrating(&self, peer: &Url) {
+        self.migrating.write().await.insert(peer.clone());
+    }
+
+    /// Unmark a migrating peer.
+    pub async fn unmark_migrating(&self, peer: &Url) {
+        self.migrating.write().await.remove(peer);
     }
 
     /// Check if the greylist is empty.
