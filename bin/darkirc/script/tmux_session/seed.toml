@@ -19,7 +19,7 @@ autojoin = ["#dev"]
 ## P2P net settings
 [net]
 ## Outbound connection slots
-outbound_connections = 8
+# outbound_connections = 8
 
 ## Inbound connection slots
 inbound_connections = 8
@@ -31,6 +31,7 @@ inbound = ["tcp://127.0.0.1:25551"]
 allowed_transports = ["tcp"]
 
 localnet = true
+hostlist = "/tmp/darkirc_test/darkirc-seed-host.tsv"
 
 ## Seed nodes to connect to 
 # seeds = ["tcp://127.0.0.1:25551", "tls://lilith1.dark.fi:25551"]

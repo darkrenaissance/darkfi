@@ -31,6 +31,8 @@ seeds = ["tcp://127.0.0.1:25551"]
 allowed_transports = ["tcp"]
 
 localnet = true
+hostlist = "/tmp/darkirc_test/darkirc1-host.tsv"
+advertise = true
 #
 # [channel."#dev"]
 # topic = "DarkFi Development HQ"
