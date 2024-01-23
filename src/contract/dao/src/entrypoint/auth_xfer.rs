@@ -60,20 +60,20 @@ pub(crate) fn dao_authxfer_get_metadata(
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     let signature_pubkeys: Vec<PublicKey> = vec![];
 
-    for (output, attrs) in xfer_params.outputs.iter().zip(self_params.enc_attrs.iter()) {
+    for (output, enc_attrs) in xfer_params.outputs.iter().zip(self_params.enc_attrs.iter()) {
         let coin = output.coin;
-        let (ephem_x, ephem_y) = attrs.ephem_pubkey.xy();
+        let (ephem_x, ephem_y) = enc_attrs.ephem_public.xy();
         zk_public_inputs.push((
             DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS.to_string(),
             vec![
                 coin.inner(),
                 ephem_x,
                 ephem_y,
-                attrs.value,
-                attrs.token_id,
-                attrs.serial,
-                attrs.spend_hook,
-                attrs.user_data,
+                enc_attrs.encrypted_values[0],
+                enc_attrs.encrypted_values[1],
+                enc_attrs.encrypted_values[2],
+                enc_attrs.encrypted_values[3],
+                enc_attrs.encrypted_values[4],
             ],
         ));
     }
@@ -84,7 +84,7 @@ pub(crate) fn dao_authxfer_get_metadata(
     // Also check the coin in the change output
     let last_coin = xfer_params.outputs.last().unwrap().coin;
 
-    let (ephem_x, ephem_y) = self_params.change_ephem_pubkey.xy();
+    let (ephem_x, ephem_y) = self_params.dao_change_attrs.ephem_public.xy();
     zk_public_inputs.push((
         DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS.to_string(),
         vec![
@@ -95,9 +95,9 @@ pub(crate) fn dao_authxfer_get_metadata(
             exec_params.proposal_auth_calls.commit(),
             ephem_x,
             ephem_y,
-            self_params.change_enc_value,
-            self_params.change_enc_token_id,
-            self_params.change_enc_serial,
+            self_params.dao_change_attrs.encrypted_values[0],
+            self_params.dao_change_attrs.encrypted_values[1],
+            self_params.dao_change_attrs.encrypted_values[2],
         ],
     ));
 

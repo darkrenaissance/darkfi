@@ -455,10 +455,6 @@ This provides verifiable note encryption for all output coins in the sibling `Mo
 {{#include ../../../../../src/contract/dao/src/model.rs:dao-auth_xfer-params}}
 ```
 
-```rust
-{{#include ../../../../../src/contract/dao/src/model.rs:dao-auth_coinattrs-params}}
-```
-
 ### Contract Statement
 
 Denote the DAO contract ID by $\t{CID}_\t{DAO} ∈ 𝔽ₚ$.

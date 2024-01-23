@@ -364,24 +364,7 @@ pub struct DaoExecUpdate {
 // ANCHOR: dao-auth_xfer-params
 /// Parameters for `Dao::AuthMoneyTransfer`
 pub struct DaoAuthMoneyTransferParams {
-    pub enc_attrs: Vec<DaoAuthCoinAttrs>,
-
-    pub change_ephem_pubkey: PublicKey,
-    pub change_enc_value: pallas::Base,
-    pub change_enc_token_id: pallas::Base,
-    pub change_enc_serial: pallas::Base,
+    pub enc_attrs: Vec<ElGamalEncryptedNote<5>>,
+    pub dao_change_attrs: ElGamalEncryptedNote<3>,
 }
 // ANCHOR_END: dao-auth_xfer-params
-
-#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
-// ANCHOR: dao-auth_coinattrs-params
-pub struct DaoAuthCoinAttrs {
-    pub ephem_pubkey: PublicKey,
-
-    pub value: pallas::Base,
-    pub token_id: pallas::Base,
-    pub serial: pallas::Base,
-    pub spend_hook: pallas::Base,
-    pub user_data: pallas::Base,
-}
-// ANCHOR_END: dao-auth_coinattrs-params

@@ -18,7 +18,7 @@
 
 use darkfi_money_contract::model::CoinAttributes;
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, poseidon_hash, util::mod_r_p, PublicKey, DAO_CONTRACT_ID},
+    crypto::{note::ElGamalEncryptedNote, poseidon_hash, PublicKey, SecretKey, DAO_CONTRACT_ID},
     pasta::pallas,
 };
 
@@ -30,9 +30,7 @@ use darkfi::{
     Result,
 };
 
-use crate::model::{
-    Dao, DaoAuthCoinAttrs, DaoAuthMoneyTransferParams, DaoProposal, VecAuthCallCommit,
-};
+use crate::model::{Dao, DaoAuthMoneyTransferParams, DaoProposal, VecAuthCallCommit};
 
 pub struct DaoAuthMoneyTransferCall {
     pub proposal: DaoProposal,
@@ -60,48 +58,41 @@ impl DaoAuthMoneyTransferCall {
         for coin_attrs in proposal_coinattrs {
             let coin = coin_attrs.to_coin();
 
-            let ephem_secret = pallas::Base::random(&mut OsRng);
-            let ephem_pubkey = PublicKey::from_secret(ephem_secret.into());
+            let ephem_secret = SecretKey::random(&mut OsRng);
+            let ephem_pubkey = PublicKey::from_secret(ephem_secret);
             let (ephem_x, ephem_y) = ephem_pubkey.xy();
 
-            let public_key = coin_attrs.public_key.inner();
             let value_base = pallas::Base::from(coin_attrs.value);
 
-            let shared_point = public_key * mod_r_p(ephem_secret);
-            let shared_point_coords = shared_point.to_affine().coordinates().unwrap();
-            let (shared_point_x, shared_point_y) =
-                (*shared_point_coords.x(), *shared_point_coords.y());
-            let shared_secret = poseidon_hash([shared_point_x, shared_point_y]);
-            let enc_value = value_base + shared_secret;
-
-            let enc_token_id =
-                coin_attrs.token_id.inner() + poseidon_hash([shared_secret, pallas::Base::from(1)]);
-            let enc_serial =
-                coin_attrs.serial + poseidon_hash([shared_secret, pallas::Base::from(2)]);
-            let enc_spend_hook =
-                coin_attrs.spend_hook + poseidon_hash([shared_secret, pallas::Base::from(3)]);
-            let enc_user_data =
-                coin_attrs.user_data + poseidon_hash([shared_secret, pallas::Base::from(4)]);
+            let note = [
+                value_base,
+                coin_attrs.token_id.inner(),
+                coin_attrs.serial,
+                coin_attrs.spend_hook,
+                coin_attrs.user_data,
+            ];
+            let enc_note =
+                ElGamalEncryptedNote::encrypt(note, &ephem_secret, &coin_attrs.public_key);
 
             let prover_witnesses = vec![
-                Witness::EcNiPoint(Value::known(public_key)),
+                Witness::EcNiPoint(Value::known(coin_attrs.public_key.inner())),
                 Witness::Base(Value::known(value_base)),
                 Witness::Base(Value::known(coin_attrs.token_id.inner())),
                 Witness::Base(Value::known(coin_attrs.serial)),
                 Witness::Base(Value::known(coin_attrs.spend_hook)),
                 Witness::Base(Value::known(coin_attrs.user_data)),
-                Witness::Base(Value::known(ephem_secret)),
+                Witness::Base(Value::known(ephem_secret.inner())),
             ];
 
             let public_inputs = vec![
                 coin.inner(),
                 ephem_x,
                 ephem_y,
-                enc_value,
-                enc_token_id,
-                enc_serial,
-                enc_spend_hook,
-                enc_user_data,
+                enc_note.encrypted_values[0],
+                enc_note.encrypted_values[1],
+                enc_note.encrypted_values[2],
+                enc_note.encrypted_values[3],
+                enc_note.encrypted_values[4],
             ];
 
             let circuit = ZkCircuit::new(prover_witnesses, auth_xfer_enc_coin_zkbin);
@@ -110,43 +101,24 @@ impl DaoAuthMoneyTransferCall {
                     .expect("DAO::exec() proving error!)");
             proofs.push(proof);
 
-            enc_attrs.push(DaoAuthCoinAttrs {
-                value: enc_value,
-                token_id: enc_token_id,
-                serial: enc_serial,
-                spend_hook: enc_spend_hook,
-                user_data: enc_user_data,
-                ephem_pubkey,
-            });
+            enc_attrs.push(enc_note);
         }
 
         // Build the main proof
 
-        let ephem_secret = pallas::Base::random(&mut OsRng);
-        let change_ephem_pubkey = PublicKey::from_secret(ephem_secret.into());
+        let ephem_secret = SecretKey::random(&mut OsRng);
+        let change_ephem_pubkey = PublicKey::from_secret(ephem_secret);
         let (ephem_x, ephem_y) = change_ephem_pubkey.xy();
 
         let dao_public_key = self.dao.public_key.inner();
         let dao_change_value = pallas::Base::from(self.dao_coin_attrs.value);
 
-        let shared_point = dao_public_key * mod_r_p(ephem_secret);
-        let shared_point_coords = shared_point.to_affine().coordinates().unwrap();
-        let (shared_point_x, shared_point_y) = (*shared_point_coords.x(), *shared_point_coords.y());
-        let shared_secret = poseidon_hash([shared_point_x, shared_point_y]);
-        let change_enc_value = dao_change_value + shared_secret;
+        let note =
+            [dao_change_value, self.dao_coin_attrs.token_id.inner(), self.dao_coin_attrs.serial];
+        let dao_change_attrs =
+            ElGamalEncryptedNote::encrypt(note, &ephem_secret, &self.dao.public_key);
 
-        let change_enc_token_id = self.dao_coin_attrs.token_id.inner() +
-            poseidon_hash([shared_secret, pallas::Base::from(1)]);
-        let change_enc_serial =
-            self.dao_coin_attrs.serial + poseidon_hash([shared_secret, pallas::Base::from(2)]);
-
-        let params = DaoAuthMoneyTransferParams {
-            enc_attrs,
-            change_enc_value,
-            change_enc_token_id,
-            change_enc_serial,
-            change_ephem_pubkey,
-        };
+        let params = DaoAuthMoneyTransferParams { enc_attrs, dao_change_attrs };
 
         let dao_proposer_limit = pallas::Base::from(self.dao.proposer_limit);
         let dao_quorum = pallas::Base::from(self.dao.quorum);
@@ -180,7 +152,7 @@ impl DaoAuthMoneyTransferCall {
             // DAO_CONTRACT_ID
             Witness::Base(Value::known(DAO_CONTRACT_ID.inner())),
             // Encrypted change DAO output
-            Witness::Base(Value::known(ephem_secret)),
+            Witness::Base(Value::known(ephem_secret.inner())),
         ];
 
         let public_inputs = vec![
@@ -191,9 +163,9 @@ impl DaoAuthMoneyTransferCall {
             self.proposal.auth_calls.commit(),
             ephem_x,
             ephem_y,
-            change_enc_value,
-            change_enc_token_id,
-            change_enc_serial,
+            dao_change_attrs.encrypted_values[0],
+            dao_change_attrs.encrypted_values[1],
+            dao_change_attrs.encrypted_values[2],
         ];
 
         let circuit = ZkCircuit::new(prover_witnesses, auth_xfer_zkbin);
