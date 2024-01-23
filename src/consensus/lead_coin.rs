@@ -20,7 +20,7 @@ use darkfi_sdk::{
     crypto::{
         pedersen::{pedersen_commitment_base, pedersen_commitment_u64},
         poseidon_hash,
-        util::mod_r_p,
+        util::fp_mod_fv,
         MerkleNode, MerkleTree, SecretKey,
     },
     pasta::{arithmetic::CurveAffine, group::Curve, pallas},
@@ -484,7 +484,7 @@ impl LeadCoinSecrets {
             let secret = if i == 0 {
                 pedersen_commitment_u64(1, pallas::Scalar::random(&mut OsRng))
             } else {
-                pedersen_commitment_u64(1, mod_r_p(prev_sk.inner()))
+                pedersen_commitment_u64(1, fp_mod_fv(prev_sk.inner()))
             };
 
             let secret_coords = secret.to_affine().coordinates().unwrap();

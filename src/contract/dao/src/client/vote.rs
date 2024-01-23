@@ -22,7 +22,7 @@ use darkfi_sdk::{
     bridgetree::Hashable,
     crypto::{
         note::ElGamalEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash,
-        util::mod_p_r_unsafe, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey,
+        util::fv_mod_fp_unsafe, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey,
     },
     pasta::pallas,
 };
@@ -85,7 +85,7 @@ impl DaoVoteCall {
                 // It's near zero chance it ever loops at all.
                 // P(random 𝔽ᵥ ∉ 𝔽ₚ) = (q - p)/q = 2.99 × 10⁻⁵¹
                 loop {
-                    let av_blind = mod_p_r_unsafe(all_vote_blind + value_blind);
+                    let av_blind = fv_mod_fp_unsafe(all_vote_blind + value_blind);
 
                     if av_blind.is_none().into() {
                         value_blind = pallas::Scalar::random(&mut OsRng);
@@ -193,7 +193,7 @@ impl DaoVoteCall {
         // Create a random blind b ∈ 𝔽ᵥ, such that b ∈ 𝔽ₚ
         let yes_vote_blind = loop {
             let blind = pallas::Scalar::random(&mut OsRng);
-            if mod_p_r_unsafe(blind).is_some().into() {
+            if fv_mod_fp_unsafe(blind).is_some().into() {
                 break blind
             }
         };
@@ -206,8 +206,8 @@ impl DaoVoteCall {
 
         // Convert blinds to 𝔽ₚ, which should work fine since we selected them
         // to be convertable.
-        let yes_vote_blind = mod_p_r_unsafe(yes_vote_blind).unwrap();
-        let all_vote_blind = mod_p_r_unsafe(all_vote_blind).unwrap();
+        let yes_vote_blind = fv_mod_fp_unsafe(yes_vote_blind).unwrap();
+        let all_vote_blind = fv_mod_fp_unsafe(all_vote_blind).unwrap();
 
         let vote_option = pallas::Base::from(vote_option);
         let all_vote_value_fp = pallas::Base::from(all_vote_value);

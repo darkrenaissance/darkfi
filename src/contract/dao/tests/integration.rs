@@ -24,7 +24,7 @@ use darkfi_sdk::{
     crypto::{
         pasta_prelude::*,
         pedersen_commitment_u64,
-        util::{fp_to_u64, mod_r_p},
+        util::{fp_mod_fv, fp_to_u64},
         DAO_CONTRACT_ID, DARK_TOKEN_ID,
     },
     pasta::pallas,
@@ -283,9 +283,9 @@ fn integration_test() -> Result<()> {
             //   all_vote_blind,
             // ]
             let vote_option = fp_to_u64(note[0]).unwrap();
-            let yes_vote_blind = mod_r_p(note[1]);
+            let yes_vote_blind = fp_mod_fv(note[1]);
             let all_vote_value = fp_to_u64(note[2]).unwrap();
-            let all_vote_blind = mod_r_p(note[3]);
+            let all_vote_blind = fp_mod_fv(note[3]);
             assert!(vote_option == 0 || vote_option == 1);
 
             total_yes_vote_blind += yes_vote_blind;

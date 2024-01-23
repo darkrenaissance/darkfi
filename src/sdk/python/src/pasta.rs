@@ -291,8 +291,8 @@ pub fn nullifier_k() -> EpAffine {
 
 #[pyfunction]
 /// Convert Fp to Fq safely.
-pub fn mod_r_p(x: &PyCell<Fp>) -> PyResult<Fq> {
-    Ok(Fq(util::mod_r_p(x.borrow().deref().0)))
+pub fn fp_mod_fv(x: &PyCell<Fp>) -> PyResult<Fq> {
+    Ok(Fq(util::fp_mod_fv(x.borrow().deref().0)))
 }
 
 pub fn create_module(py: pyo3::Python<'_>) -> PyResult<&PyModule> {
@@ -306,7 +306,7 @@ pub fn create_module(py: pyo3::Python<'_>) -> PyResult<&PyModule> {
     submod.add_class::<EqAffine>()?;
 
     submod.add_function(wrap_pyfunction!(nullifier_k, submod)?)?;
-    submod.add_function(wrap_pyfunction!(mod_r_p, submod)?)?;
+    submod.add_function(wrap_pyfunction!(fp_mod_fv, submod)?)?;
 
     Ok(submod)
 }

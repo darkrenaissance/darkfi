@@ -151,7 +151,7 @@ impl Circuit<pallas::Base> for EcipCircuit {
             assign_free_advice(layouter.namespace(|| "Witness s1"), config.advices[0], self.s1)?;
 
         let s1 =
-            ScalarVar::from_base(config.ecc_chip(), layouter.namespace(|| "mod_r_p(s1)"), &s1)?;
+            ScalarVar::from_base(config.ecc_chip(), layouter.namespace(|| "fp_mod_fv(s1)"), &s1)?;
 
         let (r, _) = g1.mul(layouter.namespace(|| "g1 * s1"), s1)?;
 
@@ -168,7 +168,7 @@ impl Circuit<pallas::Base> for EcipCircuit {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use darkfi_sdk::crypto::{pasta_prelude::Group, util::mod_r_p};
+    use darkfi_sdk::crypto::{pasta_prelude::Group, util::fp_mod_fv};
     use halo2_proofs::{
         arithmetic::{CurveAffine, Field},
         dev::MockProver,
@@ -184,7 +184,7 @@ mod tests {
 
         let circuit = EcipCircuit { g1: Value::known(g1), s1: Value::known(s1) };
 
-        let g1s1 = g1 * mod_r_p(s1);
+        let g1s1 = g1 * fp_mod_fv(s1);
         let g1s1_coords = g1s1.to_affine().coordinates().unwrap();
 
         let public_inputs = vec![*g1s1_coords.x(), *g1s1_coords.y()];

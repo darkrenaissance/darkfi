@@ -24,7 +24,7 @@ use rand_core::{CryptoRng, RngCore};
 #[cfg(feature = "async")]
 use darkfi_serial::async_trait;
 
-use super::{diffie_hellman, poseidon_hash, util::mod_r_p, PublicKey, SecretKey};
+use super::{diffie_hellman, poseidon_hash, util::fp_mod_fv, PublicKey, SecretKey};
 use crate::error::ContractError;
 
 /// AEAD tag length in bytes
@@ -96,7 +96,7 @@ impl<const N: usize> ElGamalEncryptedNote<N> {
     ) -> Self {
         // Derive shared secret using DH
         let ephem_public = PublicKey::from_secret(*ephem_secret);
-        let (ss_x, ss_y) = PublicKey::from(public.inner() * mod_r_p(ephem_secret.inner())).xy();
+        let (ss_x, ss_y) = PublicKey::from(public.inner() * fp_mod_fv(ephem_secret.inner())).xy();
         let shared_secret = poseidon_hash([ss_x, ss_y]);
 
         let mut blinds = [pallas::Base::ZERO; N];
@@ -115,7 +115,7 @@ impl<const N: usize> ElGamalEncryptedNote<N> {
     pub fn decrypt(&self, secret: &SecretKey) -> [pallas::Base; N] {
         // Derive shared secret using DH
         let (ss_x, ss_y) =
-            PublicKey::from(self.ephem_public.inner() * mod_r_p(secret.inner())).xy();
+            PublicKey::from(self.ephem_public.inner() * fp_mod_fv(secret.inner())).xy();
         let shared_secret = poseidon_hash([ss_x, ss_y]);
 
         let mut blinds = [pallas::Base::ZERO; N];

@@ -39,16 +39,16 @@ pub fn hash_to_scalar(persona: &[u8], a: &[u8], b: &[u8]) -> pallas::Scalar {
 ///
 /// This requires no modular reduction because Pallas' base field is smaller than its
 /// scalar field.
-pub fn mod_r_p(x: pallas::Base) -> pallas::Scalar {
-    pallas::Scalar::from_repr(x.to_repr()).unwrap()
+pub fn fp_mod_fv(val: pallas::Base) -> pallas::Scalar {
+    pallas::Scalar::from_repr(val.to_repr()).unwrap()
 }
 
 /// Converts from pallas::Scalar to pallas::Base (aka $x \pmod{r_\mathbb{P}}$).
 ///
 /// This call is unsafe and liable to fail. Use with caution.
 /// The Pallas scalar field is bigger than the field we're converting to here.
-pub fn mod_p_r_unsafe(x: pallas::Scalar) -> CtOption<pallas::Base> {
-    pallas::Base::from_repr(x.to_repr())
+pub fn fv_mod_fp_unsafe(val: pallas::Scalar) -> CtOption<pallas::Base> {
+    pallas::Base::from_repr(val.to_repr())
 }
 
 /// Wrapper around poseidon in `halo2_gadgets`
@@ -62,18 +62,20 @@ pub fn poseidon_hash<const N: usize>(messages: [pallas::Base; N]) -> pallas::Bas
         .hash(messages)
 }
 
-pub fn fp_to_u64(v: pallas::Base) -> Option<u64> {
-    let repr = v.to_repr();
+pub fn fp_to_u64(value: pallas::Base) -> Option<u64> {
+    let repr = value.to_repr();
     if !repr[8..].iter().all(|&b| b == 0u8) {
         return None
     }
     let mut cur = Cursor::new(&repr[0..8]);
-    let val = ReadExt::read_u64(&mut cur).ok()?;
-    Some(val)
+    let uint = ReadExt::read_u64(&mut cur).ok()?;
+    Some(uint)
 }
 
 #[test]
 fn test_fp_to_u64() {
+    use super::pasta_prelude::Field;
+
     let fp = pallas::Base::from(u64::MAX);
     assert_eq!(fp_to_u64(fp), Some(u64::MAX));
     assert_eq!(fp_to_u64(fp + pallas::Base::ONE), None);

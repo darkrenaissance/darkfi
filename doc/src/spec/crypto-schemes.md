@@ -36,7 +36,7 @@ DarkFi uses the elliptic curves Pallas and Vesta that form a 2-cycle.
 We denote Pallas by $ₚ$ and Vesta by $ᵥ$. Set the following values:
 
 $$ p = 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001 $$
-$$ q = 0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001 $$
+$$ v = 0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001 $$
 
 We now construct the base field for each curve $Kₚ$ and $Kᵥ$ as
 $Kₚ = 𝔽ₚ$ and $Kᵥ = 𝔽_q$.

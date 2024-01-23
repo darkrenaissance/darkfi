@@ -28,7 +28,7 @@ use rand_core::{CryptoRng, RngCore};
 
 use super::{
     constants::{NullifierK, DRK_SCHNORR_DOMAIN},
-    util::{hash_to_scalar, mod_r_p},
+    util::{fp_mod_fv, hash_to_scalar},
     PublicKey, SecretKey,
 };
 
@@ -65,7 +65,7 @@ impl SchnorrSecret for SecretKey {
         let commit = NullifierK.generator() * mask;
 
         let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &commit.to_bytes(), message);
-        let response = mask + challenge * mod_r_p(self.inner());
+        let response = mask + challenge * fp_mod_fv(self.inner());
 
         Signature { commit, response }
     }

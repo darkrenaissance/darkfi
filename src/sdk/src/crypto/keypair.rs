@@ -32,7 +32,7 @@ use pasta_curves::{
 };
 use rand_core::{CryptoRng, RngCore};
 
-use super::{constants::NullifierK, util::mod_r_p};
+use super::{constants::NullifierK, util::fp_mod_fv};
 use crate::error::ContractError;
 
 /// Keypair structure holding a `SecretKey` and its respective `PublicKey`
@@ -129,7 +129,7 @@ impl PublicKey {
 
     /// Derive a new `PublicKey` object given a `SecretKey`
     pub fn from_secret(s: SecretKey) -> Self {
-        let p = NullifierK.generator() * mod_r_p(s.inner());
+        let p = NullifierK.generator() * fp_mod_fv(s.inner());
         Self(p)
     }
 
