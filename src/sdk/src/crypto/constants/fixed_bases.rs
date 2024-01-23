@@ -109,9 +109,31 @@ pub struct NullifierK;
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct ValueCommitV;
 
+/// ConstBaseFieldElement is used in scalar mul with a base field element.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConstBaseFieldElement {
+    #[allow(non_snake_case)]
+    G: pallas::Affine,
+    u: Vec<[[u8; 32]; H]>,
+    z: Vec<u64>,
+}
+
+impl ConstBaseFieldElement {
+    pub fn value_commit_r() -> Self {
+        Self {
+            G: value_commit_r::generator(),
+            u: value_commit_r::U.to_vec(),
+            z: value_commit_r::Z.to_vec(),
+        }
+    }
+    pub fn nullifier_k() -> Self {
+        Self { G: nullifier_k::generator(), u: nullifier_k::U.to_vec(), z: nullifier_k::Z.to_vec() }
+    }
+}
+
 impl FixedPoints<pallas::Affine> for OrchardFixedBases {
     type FullScalar = OrchardFixedBasesFull;
-    type Base = NullifierK;
+    type Base = ConstBaseFieldElement;
     type ShortScalar = ValueCommitV;
 }
 
@@ -143,6 +165,22 @@ impl FixedPoint<pallas::Affine> for OrchardFixedBasesFull {
             Self::ValueCommitR => value_commit_r::Z.to_vec(),
             Self::SpendAuthG => spend_auth_g::Z.to_vec(),
         }
+    }
+}
+
+impl FixedPoint<pallas::Affine> for ConstBaseFieldElement {
+    type FixedScalarKind = BaseFieldElem;
+
+    fn generator(&self) -> pallas::Affine {
+        self.G
+    }
+
+    fn u(&self) -> Vec<[[u8; 32]; H]> {
+        self.u.clone()
+    }
+
+    fn z(&self) -> Vec<u64> {
+        self.z.clone()
     }
 }
 

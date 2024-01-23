@@ -42,7 +42,7 @@ const VALID_ECFIXEDPOINT: [&str; 1] = ["VALUE_COMMIT_RANDOM"];
 const VALID_ECFIXEDPOINTSHORT: [&str; 1] = ["VALUE_COMMIT_VALUE"];
 
 /// Valid EcFixedPointBase constant names supported by the VM.
-const VALID_ECFIXEDPOINTBASE: [&str; 1] = ["NULLIFIER_K"];
+const VALID_ECFIXEDPOINTBASE: [&str; 2] = ["VALUE_COMMIT_RANDOM_BASE", "NULLIFIER_K"];
 
 #[derive(Clone)]
 struct IndexMap<K, V> {

@@ -20,7 +20,9 @@ pub mod fixed_bases;
 pub mod sinsemilla;
 pub mod util;
 
-pub use fixed_bases::{NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV, H};
+pub use fixed_bases::{
+    ConstBaseFieldElement, NullifierK, OrchardFixedBases, OrchardFixedBasesFull, ValueCommitV, H,
+};
 
 /// Domain prefix used for Schnorr signatures, with `hash_to_scalar`.
 pub const DRK_SCHNORR_DOMAIN: &[u8] = b"DarkFi:Schnorr";
