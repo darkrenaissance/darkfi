@@ -88,8 +88,9 @@ impl ProtocolSeed {
                 let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
                 addrs.push((addr, last_seen));
             } else {
-                debug!(target: "net::protocol_seed::send_my_addrs()", "Ping self failed");
-                return Ok(())
+                // Our external addr is invalid. If every external addr in the list is invalid
+                // we will just broadcast an empty AddrsMessage.
+                debug!(target: "net::protocol_seed::send_my_addrs()", "Ping self failed!");
             }
         }
         debug!(target: "net::protocol_seed::send_my_addrs()", "Broadcasting address");
