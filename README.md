@@ -42,7 +42,7 @@ To install wasm32 target, execute:
 % rustup target add wasm32-unknown-unknown
 % rustup target add wasm32-unknown-unknown --toolchain nightly
 ```
-Minimum Rust version supported is **1.67.0 (stable)**.
+Minimum Rust version supported is **1.77.0 (nightly)**.
 
 The following dependencies are also required:
 
