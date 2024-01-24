@@ -409,6 +409,8 @@ impl Hosts {
 
         // Sort the list by last_seen.
         greylist.sort_by_key(|entry| entry.1);
+        greylist.reverse();
+
         trace!(target: "store::greylist_store()", "[END]");
     }
 
@@ -428,6 +430,8 @@ impl Hosts {
 
         // Sort the list by last_seen.
         whitelist.sort_by_key(|entry| entry.1);
+        whitelist.reverse();
+
         trace!(target: "store::whitelist_store()", "[END]");
     }
 
@@ -443,6 +447,8 @@ impl Hosts {
 
         // Sort the list by last_seen.
         anchorlist.sort_by_key(|entry| entry.1);
+        anchorlist.reverse();
+
         trace!(target: "store::anchorlist_store()", "[END]");
     }
 
@@ -456,6 +462,7 @@ impl Hosts {
 
         // Sort the list by last_seen.
         greylist.sort_by_key(|entry| entry.1);
+        greylist.reverse();
 
         trace!(target: "store::greylist_update_last_seen()", "[END]");
     }
@@ -470,6 +477,7 @@ impl Hosts {
 
         // Sort the list by last_seen.
         whitelist.sort_by_key(|entry| entry.1);
+        whitelist.reverse();
 
         trace!(target: "store::whitelist_update_last_seen()", "[END]");
     }
@@ -484,6 +492,7 @@ impl Hosts {
 
         // Sort the list by last_seen.
         anchorlist.sort_by_key(|entry| entry.1);
+        anchorlist.reverse();
 
         trace!(target: "store::anchorlist_update_last_seen()", "[END]");
     }
