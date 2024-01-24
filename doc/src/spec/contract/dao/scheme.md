@@ -12,7 +12,9 @@ Let $\t{MerklePos}, \t{MerklePath}, \t{MerkleRoot}$ be defined as in the section
 
 Let $\t{Params}_\t{DAO}, \t{Bulla}_\t{DAO}, \t{Params}_\t{Proposal}, \t{Bulla}_\t{Proposal}$ be defined as in [DAO Model](model.md).
 
-Let $\t{EncNote}$ be defined as in [In-band Secret Distribution](../../crypto-schemes.md#in-band-secret-distribution).
+Let $\t{AeadEncNote}$ be defined as in [In-band Secret Distribution](../../crypto-schemes.md#in-band-secret-distribution).
+
+Let $\t{ElGamal.Encryptₙ}, \t{ElGamalEncNote}ₙ$ be defined as in the section [Verifiable In-Band Secret Distribution](../../crypto-schemes.md#verifiable-in-band-secret-distribution).
 
 ## Mint
 
@@ -97,7 +99,7 @@ $$ \begin{aligned}
   R_\t{DAO} &∈ 𝔽ₚ \\
   T &∈ 𝔽ₚ \\
   𝒫 &∈ \t{im}(\t{Bulla}_\t{Proposal}) \\
-  \t{note} &∈ \t{EncNote} \\
+  \t{note} &∈ \t{AeadEncNote} \\
   𝐢 &∈ \t{ProposeInput}^*
 \end{aligned} $$
 
@@ -228,7 +230,7 @@ $$ \begin{aligned}
   τ &∈ 𝔽ₚ \\
   𝒫 &∈ \t{im}(\t{Bulla}_\t{Proposal}) \\
   V_\t{yes} &∈ ℙₚ \\
-  \t{note} &∈ \t{EncNote} \\
+  \t{enc\_vote} &∈ \t{ElGamalEncNote}₄ \\
   𝐢 &∈ \t{VoteInput}^*
 \end{aligned} $$
 
@@ -239,6 +241,14 @@ $$ \begin{aligned}
   \t{VoteInput}.R_\t{coin} &∈ 𝔽ₚ \\
   \t{VoteInput}.\t{PK}_σ &∈ ℙₚ
 \end{aligned} $$
+
+**Note**: $\t{VoteInput}.V$ is a pedersen commitment, where the blinds are
+selected such that their sum is a valid field element in $𝔽ₚ$ so the blind
+for $∑ V$ can be verifiably encrypted. Likewise we do the same for the blind
+used to calculate $V_\t{yes}$.
+
+This allows DAO members to securely receive all secrets for votes on a proposal.
+This is then used in the Exec phase when we work on the sum of DAO votes.
 
 ```rust
 {{#include ../../../../../src/contract/dao/src/model.rs:dao-vote-params}}
@@ -260,11 +270,12 @@ $$ \begin{aligned}
   d &∈ \t{Params}_\t{DAO} \\
   b_d &∈ 𝔽ₚ \\
   o &∈ 𝔽ₚ \\
-  b_y &∈ 𝔽ᵥ \\
+  b_y &∈ 𝔽ₚ \\
   v &∈ 𝔽ₚ \\
-  bᵥ &∈ 𝔽ᵥ \\
+  bᵥ &∈ 𝔽ₚ \\
   b_τ &∈ 𝔽ₚ \\
-  t_\t{now} &∈ 𝔽ₚ
+  t_\t{now} &∈ 𝔽ₚ \\
+  \t{esk} &∈ 𝔽ₚ \\
 \end{aligned} $$
 Attach a proof $π_\mathcal{V}$ such that the following relations hold:
 
@@ -275,15 +286,19 @@ commit $T = \t{PedersenCommit}(d.τ, b_τ)$ where $T = ∑_{i ∈ 𝐢} Tᵢ$.
 
 **Proposal bulla integrity** &emsp; $𝒫 = \t{Bulla}_\t{Proposal}(p, b_p)$
 
-**Yes vote commit** &emsp; $V_\t{yes} = \t{PedersenCommit}(ov, b_y)$
+**Yes vote commit** &emsp; $V_\t{yes} = \t{PedersenCommit}(ov, \t{Lift}ᵥ(b_y))$
 
-**Total vote value commit** &emsp; $V_\t{all} = \t{PedersenCommit}(v, bᵥ)$ where
+**Total vote value commit** &emsp; $V_\t{all} = \t{PedersenCommit}(v, \t{Lift}ᵥ(bᵥ))$ where
 $V_\t{all} = ∑_{i ∈ 𝐢} i.V$ should also hold.
 
 **Vote option boolean** &emsp; enforce $o ∈ \{ 0, 1 \}$.
 
 **Proposal not expired** &emsp; let $t_\t{end} = ℕ₆₄2𝔽ₚ(p.t₀) + ℕ₆₄2𝔽ₚ(p.D)$,
 and then check $t_\t{now} < t_\t{end}$.
+
+**Verifiable encryption of vote commit secrets** &emsp;
+let $𝐧 = (o, b_y, v, bᵥ)$, and verify
+$\t{enc\_vote} = \t{ElGamal}.\t{Encrypt}(𝐧, \t{esk}, d.\t{PK})$.
 
 For each input $i ∈ 𝐢$, perform the following checks:
 
@@ -427,29 +442,11 @@ DAO treasury but be unspendable.
 
 Define the DAO AuthMoneyTransfer function params
 $$ \begin{aligned}
-  𝒞_\t{enc} &∈ \t{AuthCoinAttrs}^* \\
-  \t{EPK}_\t{DAO} &∈ ℙₚ \\
-  v_\t{DAO}^\t{enc} &∈ 𝔽ₚ \\
-  τ_\t{DAO}^\t{enc} &∈ 𝔽ₚ \\
-  ζ_\t{DAO}^\t{enc} &∈ 𝔽ₚ \\
+  𝒞_\t{enc} &∈ \t{ElGamalEncNote}₅^* \\
+  𝒟_\t{enc} &∈ \t{ElGamalEncNote}₃
 \end{aligned} $$
 
-Define the DAO $\t{AuthCoinAttrs}$ as
-$$ \begin{aligned}
-  \t{AuthCoinAttrs}.\t{EPK} &∈ ℙₚ \\
-  \t{AuthCoinAttrs}.v^\t{enc} &∈ 𝔽ₚ \\
-  \t{AuthCoinAttrs}.τ^\t{enc} &∈ 𝔽ₚ \\
-  \t{AuthCoinAttrs}.ζ^\t{enc} &∈ 𝔽ₚ \\
-  \t{AuthCoinAttrs}.\t{SH}^\t{enc} &∈ 𝔽ₚ \\
-  \t{AuthCoinAttrs}.\t{UD}^\t{enc} &∈ 𝔽ₚ \\
-\end{aligned} $$
-which corresponds to encrypted coin attributes.
-In both cases $\t{EPK}$ refers to the ephemeral key used to construct a
-diffie-hellman shared secret. We then derive further blinding factors from this
-shared secret which we use to encrypt the [coin attributes](../money/model.md#coin)
-$v, τ, ζ, \t{SH}, \t{UD}$.
-
-This provides verifiable note encryption for all output coins in the sibling `Money::transfer()` call.
+This provides verifiable note encryption for all output coins in the sibling `Money::transfer()` call as well as the DAO change coin.
 
 ```rust
 {{#include ../../../../../src/contract/dao/src/model.rs:dao-auth_xfer-params}}
@@ -480,7 +477,7 @@ $$ \begin{aligned}
   v_\t{DAO} &∈ 𝔽ₚ \\
   τ_\t{DAO} &∈ 𝔽ₚ \\
   ζ_\t{DAO} &∈ 𝔽ₚ \\
-  e &∈ 𝔽ₚ \\
+  \t{esk} &∈ 𝔽ₚ \\
 \end{aligned} $$
 
 Attach a proof $π_\t{auth}$ such that the
@@ -499,19 +496,9 @@ where $𝒫 $ matches the value in `DAO::exec()`, and $p.𝒜  = 𝒜 $.
 $$ C_\t{DAO} = \t{Coin}(d.\t{PK}, v_\t{DAO}, τ_\t{DAO}, ζ_\t{DAO},
                         \t{CID}_\t{DAO}, 𝒟 ) $$
 
-**Diffie-Hellman shared secret** &emsp; $\t{EPK}_\t{DAO} = \t{DerivePubKey}(e)$.
-Now we create the shared secret with the DAO pubkey.
-$$ P = \t{Lift}ᵥ(e) d.\t{PK} $$
-$$ α = \t{PoseidonHash}(\mathcal{X}(P), \mathcal{Y}(P)) $$
-This is then used in the following three checks.
-
-**Verifiable encryption for value** &emsp; $v_\t{DAO}^\t{enc} = v_\t{DAO} + α$
-
-**Verifiable encryption for token ID** &emsp; let $α₁ = \t{PoseidonHash}(α, 1_{𝔽ₚ})$
-then $τ_\t{DAO}^\t{enc} = τ_\t{DAO} + α₁$.
-
-**Verifiable encryption for serial** &emsp; let $α₂ = \t{PoseidonHash}(α, 2_{𝔽ₚ})$
-then $ζ_\t{DAO}^\t{enc} = ζ_\t{DAO} + α₂$.
+**Verifiable DAO change coin note encryption** &emsp;
+let $𝐧 = (v_\t{DAO}, τ_\t{DAO}, ζ_\t{DAO})$, and verify
+$𝒟_\t{enc} = \t{ElGamal}.\t{Encrypt}(𝐧, \t{esk}, d.\t{PK})$.
 
 Then we do the same for each output coin of `Money::transfer()`.
 For $k ∈ [n]$, let $a = (𝒞_\t{enc})ₖ$ and $C$ be the $k$th output coin from
@@ -525,19 +512,9 @@ Attach a proof $πₖ$ such that the following relations hold:
 
 &emsp; **Coin integrity** &emsp; $C = \t{Coin}(c)$
 
-&emsp; **Diffie-Hellman shared secret** &emsp; $a.\t{EPK} = \t{DerivePubKey}(e)$.
-Now we create the shared secret with the DAO pubkey.
-$$ P = \t{Lift}ᵥ(e) c.\t{PK} $$
-$$ α = \t{PoseidonHash}(\mathcal{X}(P), \mathcal{Y}(P)) $$
-This is then used in the following three checks.
-
-&emsp; **Verifiable encryption for value** &emsp; $a.v^\t{enc} = c.v + α$
-
-&emsp; **Verifiable encryption for token ID** &emsp; let $α₁ = \t{PoseidonHash}(α, 1_{𝔽ₚ})$
-then $a.τ^\t{enc} = c.τ + α₁$.
-
-&emsp; **Verifiable encryption for serial** &emsp; let $α₂ = \t{PoseidonHash}(α, 2_{𝔽ₚ})$
-then $a.ζ^\t{enc} = c.ζ + α₂$.
+&emsp; **Verifiable output coin note encryption** &emsp;
+let $𝐧 = (c.v, c.τ, c.ζ, c.\t{SH}, c.\t{UD})$, and verify
+$a = \t{ElGamal}.\t{Encrypt}(𝐧, \t{esk}, d.\t{PK})$.
 
 ### Signatures
 

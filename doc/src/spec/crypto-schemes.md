@@ -233,7 +233,8 @@ To transmit secrets securely to a recipient *without* requiring an out-of-band
 communication channel, we use the [key derivation function](#key-derivation)
 together with [symmetric encryption](#symmetric-encryption).
 
-Denote the ciphertext space $C = \t{im}(\t{Sym}.\t{Encrypt})$ by $\t{EncNote}$.
+Denote $\t{AeadEncNote}ₙ = (E, C)$ where $E$ is the space of *ephemeral
+public keys* and $C$ is the ciphertext space.
 
 ### Encryption
 
@@ -255,9 +256,8 @@ Return $c$
 
 ## Decryption
 
-We let $P ∈ ℙₚ$ denote the recipient's public key with corresponding
-secret key $x ∈ 𝔽ₚ$. And let $c ∈ C = 𝔹^*$ denote the ciphertext note to
-be decrypted.
+We denote the recipient's secret key with $x ∈ 𝔽ₚ$.
+Let $c ∈ C = 𝔹^*$ denote the ciphertext note to be decrypted.
 
 The recipient receives the *ephemeral public key* $\t{EPK} ∈ ℙₚ$ used to decrypt
 the ciphertext note $c$.
@@ -268,4 +268,61 @@ Let $k = \t{KDF}(\t{shared\_secret}, \t{EPK})$
 
 Let $\t{note} = \t{Sym}.\t{Decrypt}(k, c)$. If $\t{note} = ⟂$ then
 return $⟂$, otherwise return $\t{note}$.
+
+## Verifiable In-Band Secret Distribution
+
+Let $\t{PoseidonHash}$ be defined as in the section [PoseidonHash Function](#poseidonhash-function).
+
+This scheme is verifiable inside ZK using the [Pallas and Vesta](#pallas-and-vesta) curves.
+
+Let $n ∈ ℕ$.
+Denote the plaintext space $N$ and ciphertext $C$ with $N = C = 𝔽ₚⁿ$.
+$$ \t{ElGamal}.\t{Encrypt}ₙ : N × 𝔽ₚ × ℙₚ → C × ℙₚ $$
+$$ \t{ElGamal}.\t{Decrypt}ₙ : C × 𝔽ₚ × ℙₚ → N $$
+
+Denote $\t{ElGamalEncNote}ₙ = (E, C)$ where $E$ is the space of *ephemeral
+public keys* and $C$ is the ciphertext space.
+
+See `ElGamalEncryptedNote` in `src/sdk/src/crypto/note.rs`.
+
+### Encryption
+
+We let $P ∈ ℙₚ$ denote the recipient's public key.
+Let $\t{note} ∈ N = 𝔽ₚⁿ$ with $n ∈ ℕ$ denote the plaintext note to be encrypted.
+
+Let $\t{esk} ∈ 𝔽ₚ$ be the randomly generated *ephemeral secret key*.
+
+Let $\t{EPK} = \t{DerivePubKey}(\t{esk}) ∈ ℙₚ$
+
+Let $\t{shared\_secret} = \t{KeyAgree}(\t{esk}, P)$
+
+Let $k = \t{PoseidonHash}(\cX(\t{shared\_secret}), \cY(\t{shared\_secret}))$
+
+For $i ∈ [n]$ then compute:
+
+&emsp; Let $bᵢ = \t{PoseidonHash}(k, i)$
+
+&emsp; Let $cᵢ = \t{note}ᵢ + bᵢ$
+
+Return $𝐜 = (cᵢ) ∈ C$ and $\t{EPK}$
+
+### Decryption
+
+We denote the recipient's secret key with $x ∈ 𝔽ₚ$.
+Let $\t{note} ∈ N = 𝔽ₚ^n$ with $n ∈ ℕ$ denote the plaintext note to be encrypted.
+
+The recipient receives the *ephemeral public key* $\t{EPK} ∈ ℙₚ$ used to decrypt
+the ciphertext note $𝐜 ∈ C = 𝔽ₚⁿ$.
+
+Let $\t{shared\_secret} = \t{KeyAgree}(x, \t{EPK})$
+
+Let $k = \t{PoseidonHash}(\cX(\t{shared\_secret}), \cY(\t{shared\_secret}))$
+
+For $i ∈ [n]$ then compute:
+
+&emsp; Let $bᵢ = \t{PoseidonHash}(k, i)$
+
+&emsp; Let $\t{note}ᵢ = cᵢ - bᵢ$
+
+Return $\t{note} = (\t{note}ᵢ)$
 
