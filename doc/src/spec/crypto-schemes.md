@@ -277,11 +277,9 @@ Let $\t{PoseidonHash}$ be defined as in the section [PoseidonHash Function](#pos
 This scheme is verifiable inside ZK using the [Pallas and Vesta](#pallas-and-vesta) curves.
 
 Let $n ∈ ℕ$.
-Denote the plaintext space $N$ and ciphertext $C$ with $N = C = 𝔽ₚⁿ$.
-$$ \t{ElGamal}.\t{Encrypt}ₙ : N × 𝔽ₚ × ℙₚ → C × ℙₚ $$
-$$ \t{ElGamal}.\t{Decrypt}ₙ : C × 𝔽ₚ × ℙₚ → N $$
+Denote the plaintext space $Nₖ$ and ciphertext $Cₖ$ with $Nₖ = Cₖ = 𝔽ₚᵏ$ where $k ∈ ℕ$.
 
-Denote $\t{ElGamalEncNote}ₙ = (E, C)$ where $E$ is the space of *ephemeral
+Denote $\t{ElGamalEncNote}ₖ = (E, Cₖ)$ where $E$ is the space of *ephemeral
 public keys* and $C$ is the ciphertext space.
 
 See `ElGamalEncryptedNote` in `src/sdk/src/crypto/note.rs`.
@@ -289,7 +287,10 @@ See `ElGamalEncryptedNote` in `src/sdk/src/crypto/note.rs`.
 ### Encryption
 
 We let $P ∈ ℙₚ$ denote the recipient's public key.
-Let $\t{note} ∈ N = 𝔽ₚⁿ$ with $n ∈ ℕ$ denote the plaintext note to be encrypted.
+Let $𝐧 ∈ N$ denote the plaintext note to be encrypted.
+
+Define $\t{ElGamal}.\t{Encrypt} : Nₖ × 𝔽ₚ × ℙₚ → Cₖ × ℙₚ$
+by $\t{ElGamal}.\t{Encrypt}(𝐧, P)$ as follows:
 
 Let $\t{esk} ∈ 𝔽ₚ$ be the randomly generated *ephemeral secret key*.
 
@@ -299,31 +300,32 @@ Let $\t{shared\_secret} = \t{KeyAgree}(\t{esk}, P)$
 
 Let $k = \t{PoseidonHash}(\cX(\t{shared\_secret}), \cY(\t{shared\_secret}))$
 
-For $i ∈ [n]$ then compute:
+For $i ∈ [k]$ then compute:
 
 &emsp; Let $bᵢ = \t{PoseidonHash}(k, i)$
 
 &emsp; Let $cᵢ = \t{note}ᵢ + bᵢ$
 
-Return $𝐜 = (cᵢ) ∈ C$ and $\t{EPK}$
+Return $(𝐜, \t{EPK})$ where $𝐜 = (cᵢ)$
 
 ### Decryption
 
 We denote the recipient's secret key with $x ∈ 𝔽ₚ$.
-Let $\t{note} ∈ N = 𝔽ₚ^n$ with $n ∈ ℕ$ denote the plaintext note to be encrypted.
-
 The recipient receives the *ephemeral public key* $\t{EPK} ∈ ℙₚ$ used to decrypt
-the ciphertext note $𝐜 ∈ C = 𝔽ₚⁿ$.
+the ciphertext note $𝐜 ∈ Cₖ$.
+
+Define $\t{ElGamal}.\t{Decrypt} : Cₖ × 𝔽ₚ × ℙₚ → Nₖ$
+by $\t{ElGamal}.\t{Decrypt}(𝐜, x, \t{EPK})$ as follows:
 
 Let $\t{shared\_secret} = \t{KeyAgree}(x, \t{EPK})$
 
 Let $k = \t{PoseidonHash}(\cX(\t{shared\_secret}), \cY(\t{shared\_secret}))$
 
-For $i ∈ [n]$ then compute:
+For $i ∈ [k]$ then compute:
 
 &emsp; Let $bᵢ = \t{PoseidonHash}(k, i)$
 
-&emsp; Let $\t{note}ᵢ = cᵢ - bᵢ$
+&emsp; Let $nᵢ = cᵢ - bᵢ$
 
-Return $\t{note} = (\t{note}ᵢ)$
+Return $𝐧 = (nᵢ)$
 

@@ -14,7 +14,7 @@ Let $\t{Params}_\t{DAO}, \t{Bulla}_\t{DAO}, \t{Params}_\t{Proposal}, \t{Bulla}_\
 
 Let $\t{AeadEncNote}$ be defined as in [In-band Secret Distribution](../../crypto-schemes.md#in-band-secret-distribution).
 
-Let $\t{ElGamal.Encryptₙ}, \t{ElGamalEncNote}ₙ$ be defined as in the section [Verifiable In-Band Secret Distribution](../../crypto-schemes.md#verifiable-in-band-secret-distribution).
+Let $\t{ElGamal.Encrypt}, \t{ElGamalEncNote}ₖ$ be defined as in the section [Verifiable In-Band Secret Distribution](../../crypto-schemes.md#verifiable-in-band-secret-distribution).
 
 ## Mint
 
