@@ -36,7 +36,7 @@ DarkFi uses the elliptic curves Pallas and Vesta that form a 2-cycle.
 We denote Pallas by $ₚ$ and Vesta by $ᵥ$. Set the following values:
 
 $$ p = 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001 $$
-$$ v = 0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001 $$
+$$ q = 0x40000000000000000000000000000000224698fc0994a8dd8c46eb2100000001 $$
 
 We now construct the base field for each curve $Kₚ$ and $Kᵥ$ as
 $Kₚ = 𝔽ₚ$ and $Kᵥ = 𝔽_q$.
@@ -90,12 +90,12 @@ Let $G_N ∈ ℙₚ$ be the constant `NULLIFIER_K` defined in
 Since the scalar field of $ℙₚ$ is prime, all points in the group except
 the identity are generators.
 
-We declare the function $\t{Lift}ᵥ(x) : 𝔽ₚ → 𝔽ᵥ$. This map is injective since
+We declare the function $\t{Lift}_q(x) : 𝔽ₚ → 𝔽ᵥ$. This map is injective since
 $\{0, p - 1 \} ⊂ \{0, q - 1\}$.
 
 Define the function
 $$ \t{DerivePubKey} : 𝔽ₚ → ℙₚ $$
-$$ \t{DerivePubKey}(x) = \t{Lift}ᵥ(x) G_N $$
+$$ \t{DerivePubKey}(x) = \t{Lift}_q(x) G_N $$
 
 ### Point Serialization
 
@@ -135,7 +135,7 @@ $$ \t{BLAKE2b}ₙ: 𝔹^* → 𝔹ⁿ $$
 
 Let $\t{GroupHash}$ be defined as in [Group Hash](#group-hash).
 
-Let $\t{Lift}ᵥ$ be defined as in [Pubkey Derivation](#pubkey-derivation).
+Let $\t{Lift}_q$ be defined as in [Pubkey Derivation](#pubkey-derivation).
 
 When instantiating value commitments, we require the homomorphic property.
 
@@ -143,7 +143,7 @@ Define:
 $$ G_V = \t{GroupHash}(\textbf{"z.cash:Orchard-cv"}, \textbf{"v"}) $$
 $$ G_B = \t{GroupHash}(\textbf{"z.cash:Orchard-cv"}, \textbf{"r"}) $$
 $$ \t{PedersenCommit} : 𝔽ₚ × 𝔽ᵥ → ℙₚ $$
-$$ \t{PedersenCommit}(v, b) = \t{Lift}ᵥ(v) G_V + b G_B $$
+$$ \t{PedersenCommit}(v, b) = \t{Lift}_q(v) G_V + b G_B $$
 
 This scheme is a computationally binding and perfectly hiding commitment scheme.
 
@@ -194,13 +194,13 @@ chosen ciphertext queries for a given key.
 
 ## Key Agreement
 
-Let $𝔽ₚ, ℙₚ, \t{Lift}ᵥ$ be defined as in the section [Pallas and Vesta](#pallas-and-vesta).
+Let $𝔽ₚ, ℙₚ, \t{Lift}_q$ be defined as in the section [Pallas and Vesta](#pallas-and-vesta).
 
 A *key agreement scheme* is a cryptographic protocol in which two parties
 agree on a shared secret, each using their *private key* and the other
 party's *public key*.
 
-Let $\t{KeyAgree} : 𝔽ₚ × ℙₚ → ℙₚ$ be defined as $\t{KeyAgree}(x, P) = \t{Lift}ᵥ(x) P$.
+Let $\t{KeyAgree} : 𝔽ₚ × ℙₚ → ℙₚ$ be defined as $\t{KeyAgree}(x, P) = \t{Lift}_q(x) P$.
 
 ## Key Derivation
 

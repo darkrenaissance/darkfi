@@ -4,7 +4,7 @@
 
 Let $\t{PoseidonHash}$ be defined as in the section [PoseidonHash Function](../../crypto-schemes.md#poseidonhash-function).
 
-Let $𝔽ₚ, ℙₚ, \t{DerivePubKey}, \t{Lift}ᵥ, G_N, \mathcal{X}, \mathcal{Y}$ be defined as in the section [Pallas and Vesta](../../crypto-schemes.md#pallas-and-vesta).
+Let $𝔽ₚ, ℙₚ, \t{DerivePubKey}, \t{Lift}_q, G_N, \mathcal{X}, \mathcal{Y}$ be defined as in the section [Pallas and Vesta](../../crypto-schemes.md#pallas-and-vesta).
 
 Let $\t{PedersenCommit}$ be defined as in the section [Homomorphic Pedersen Commitments](../../crypto-schemes.md#homomorphic-pedersen-commitments).
 
@@ -286,9 +286,9 @@ commit $T = \t{PedersenCommit}(d.τ, b_τ)$ where $T = ∑_{i ∈ 𝐢} Tᵢ$.
 
 **Proposal bulla integrity** &emsp; $𝒫 = \t{Bulla}_\t{Proposal}(p, b_p)$
 
-**Yes vote commit** &emsp; $V_\t{yes} = \t{PedersenCommit}(ov, \t{Lift}ᵥ(b_y))$
+**Yes vote commit** &emsp; $V_\t{yes} = \t{PedersenCommit}(ov, \t{Lift}_q(b_y))$
 
-**Total vote value commit** &emsp; $V_\t{all} = \t{PedersenCommit}(v, \t{Lift}ᵥ(bᵥ))$ where
+**Total vote value commit** &emsp; $V_\t{all} = \t{PedersenCommit}(v, \t{Lift}_q(bᵥ))$ where
 $V_\t{all} = ∑_{i ∈ 𝐢} i.V$ should also hold.
 
 **Vote option boolean** &emsp; enforce $o ∈ \{ 0, 1 \}$.
