@@ -93,7 +93,7 @@ impl ProtocolSeed {
                 debug!(target: "net::protocol_seed::send_my_addrs()", "Ping self failed!");
             }
         }
-        debug!(target: "net::protocol_seed::send_my_addrs()", "Broadcasting address");
+        debug!(target: "net::protocol_seed::send_my_addrs()", "Broadcasting {} addresses", addrs.len());
         let ext_addr_msg = AddrsMessage { addrs };
         self.channel.send(&ext_addr_msg).await?;
         debug!(target: "net::protocol_seed::send_my_addrs()", "[END]");

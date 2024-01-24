@@ -205,7 +205,7 @@ impl ProtocolAddress {
                 debug!(target: "net::protocol_address::send_my_addrs()", "Ping self failed!");
             }
         }
-        debug!(target: "net::protocol_address::send_my_addrs()", "Broadcasting address");
+        debug!(target: "net::protocol_address::send_my_addrs()", "Broadcasting {} addresses", addrs.len());
         let ext_addr_msg = AddrsMessage { addrs };
         self.channel.send(&ext_addr_msg).await?;
         debug!(target: "net::protocol_address::send_my_addrs()", "[END]");
