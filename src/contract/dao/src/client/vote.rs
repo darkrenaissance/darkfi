@@ -212,7 +212,7 @@ impl DaoVoteCall {
         let vote_option = pallas::Base::from(vote_option);
         let all_vote_value_fp = pallas::Base::from(all_vote_value);
         let ephem_secret = SecretKey::random(&mut OsRng);
-        let ephem_pubkey = PublicKey::from_secret(ephem_secret.into());
+        let ephem_pubkey = PublicKey::from_secret(ephem_secret);
         let (ephem_x, ephem_y) = ephem_pubkey.xy();
 
         let current_day = pallas::Base::from(self.current_day);

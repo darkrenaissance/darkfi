@@ -815,7 +815,7 @@ impl Hosts {
 
         // Retrieve all peers corresponding to that transport schemes
         let schemes = &self.settings.allowed_transports;
-        let greylist = self.greylist_fetch_with_schemes(&schemes, None).await;
+        let greylist = self.greylist_fetch_with_schemes(schemes, None).await;
 
         let position = rand::thread_rng().gen_range(0..greylist.len());
         let entry = &greylist[position];

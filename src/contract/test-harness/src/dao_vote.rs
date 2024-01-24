@@ -84,7 +84,7 @@ impl TestHarness {
             vote_option,
             proposal: proposal.clone(),
             dao: dao.clone(),
-            dao_keypair: dao_keypair.clone(),
+            dao_keypair: *dao_keypair,
             current_day,
         };
 
