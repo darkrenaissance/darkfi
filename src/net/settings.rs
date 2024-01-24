@@ -68,8 +68,6 @@ pub struct Settings {
     pub outbound_peer_discovery_cooloff_time: u64,
     /// Time between peer discovery attempts
     pub outbound_peer_discovery_attempt_time: u64,
-    /// Advertise our external address
-    pub advertise: bool,
     /// Hostlist storage path
     pub hostlist: String,
     /// Pause interval within greylist refinery process
@@ -104,7 +102,6 @@ impl Default for Settings {
             hosts_quarantine_limit: 50,
             outbound_peer_discovery_cooloff_time: 30,
             outbound_peer_discovery_attempt_time: 5,
-            advertise: true,
             hostlist: "/dev/null".to_string(),
             greylist_refinery_interval: 5,
             white_connection_percent: 90,
@@ -198,11 +195,6 @@ pub struct SettingsOpt {
     #[structopt(skip)]
     pub outbound_peer_discovery_attempt_time: Option<u64>,
 
-    /// Advertise our external address
-    #[serde(default)]
-    #[structopt(long)]
-    pub advertise: bool,
-
     /// Hosts .tsv file to use
     #[serde(default)]
     #[structopt(long)]
@@ -256,7 +248,6 @@ impl From<SettingsOpt> for Settings {
             outbound_peer_discovery_attempt_time: opt
                 .outbound_peer_discovery_attempt_time
                 .unwrap_or(def.outbound_peer_discovery_attempt_time),
-            advertise: opt.advertise,
             hostlist: opt.hostlist.unwrap_or(def.hostlist),
             greylist_refinery_interval: opt
                 .greylist_refinery_interval

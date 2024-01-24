@@ -71,13 +71,6 @@ impl ProtocolSeed {
             return Ok(())
         }
 
-        // Do nothing if advertise is set to false
-        if !self.settings.advertise {
-            debug!(target: "net::protocol_seed::send_my_addrs()",
-            "Advertise is set to false. Stopping");
-            return Ok(())
-        }
-
         let mut addrs = vec![];
         for addr in self.settings.external_addrs.clone() {
             debug!(target: "net::protocol_seed::send_my_addrs()", "Attempting to ping self");
