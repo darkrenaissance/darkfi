@@ -301,8 +301,8 @@ impl Slot {
                 Err(err) => {
                     debug!(
                         target: "net::outbound_session::try_connect()",
-                        "[P2P] Outbound slot #{} connection failed: {}, node {}",
-                        slot, err, self.p2p().settings().node_id
+                        "[P2P] Outbound slot #{} connection failed: {}",
+                        slot, err
                     );
 
                     dnetev!(self, OutboundSlotDisconnected, {
