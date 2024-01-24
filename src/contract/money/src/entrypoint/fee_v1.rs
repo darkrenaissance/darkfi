@@ -95,13 +95,11 @@ pub(crate) fn money_fee_process_instruction_v1(
     let fee: u64 = deserialize(&self_.data.data[1..9])?;
     let params: MoneyFeeParamsV1 = deserialize(&self_.data.data[9..])?;
 
-    // We should have some fee paid...
-    /* XXX:
+    // We should have _some_ fee paid...
     if fee == 0 {
         msg!("[FeeV1] Error: Paid fee is 0");
         return Err(MoneyError::InsufficientFee.into())
     }
-    */
 
     // Access the necessary databases where there is information to
     // validate this state transition.
