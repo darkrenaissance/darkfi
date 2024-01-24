@@ -136,6 +136,9 @@ pub enum MoneyError {
     #[error("No inputs in fee call")]
     FeeMissingInputs,
 
+    #[error("Insufficient fee paid")]
+    InsufficientFee,
+
     // TODO: This should catch-all (TransferMerkle../SwapMerkle...)
     #[error("Coin merkle root not found")]
     CoinMerkleRootNotFound,
@@ -182,7 +185,8 @@ impl From<MoneyError> for ContractError {
             MoneyError::PoWRewardExtendsUnknownFork => Self::Custom(36),
             MoneyError::PoWRewardErroneousVrfProof => Self::Custom(37),
             MoneyError::FeeMissingInputs => Self::Custom(38),
-            MoneyError::CoinMerkleRootNotFound => Self::Custom(39),
+            MoneyError::InsufficientFee => Self::Custom(39),
+            MoneyError::CoinMerkleRootNotFound => Self::Custom(40),
         }
     }
 }
