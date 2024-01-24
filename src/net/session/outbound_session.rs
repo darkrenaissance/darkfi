@@ -352,7 +352,7 @@ impl Slot {
 
             self.channel_id.store(channel.info.id, Ordering::Relaxed);
 
-            // Add this connection to the anchorlist, remove it from the [otherlist]
+            // Add this connection to the anchorlist
             hosts.upgrade_host(&addr).await;
 
             // Wait for channel to close

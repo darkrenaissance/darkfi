@@ -273,12 +273,12 @@ impl Hosts {
     /// Remove an entry from the hostlist. Called when we cannot establish a connection to a host or
     /// when a pre-existing connection disconnects.
     pub async fn remove_host(&self, addr: &Url) {
-        debug!(target: "store::downgrade_host", "Removing host {}", addr);
+        debug!(target: "store::remove_host", "Removing host {}", addr);
         self.mark_migrating(addr).await;
 
         // Remove channel from anchorlist
         if self.anchorlist_contains(addr).await {
-            debug!(target: "store::downgrade_host", "Removing from anchorlist {}", addr);
+            debug!(target: "store::remove_host", "Removing from anchorlist {}", addr);
 
             let index = self
                 .get_anchorlist_index_at_addr(addr.clone())
@@ -290,7 +290,7 @@ impl Hosts {
 
         // Remove channel from whitelist
         if self.whitelist_contains(addr).await {
-            debug!(target: "store::downgrade_host", "Removing from whitelist {}", addr);
+            debug!(target: "store::remove_host", "Removing from whitelist {}", addr);
 
             let index = self
                 .get_whitelist_index_at_addr(addr.clone())
@@ -302,7 +302,7 @@ impl Hosts {
 
         // Remove channel the greylist
         if self.greylist_contains(addr).await {
-            debug!(target: "store::downgrade_host", "Removing from greylist {}", addr);
+            debug!(target: "store::remove_host", "Removing from greylist {}", addr);
 
             let index = self
                 .get_greylist_index_at_addr(addr.clone())

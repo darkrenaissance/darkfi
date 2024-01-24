@@ -134,7 +134,7 @@ impl ManualSession {
                     // Remove pending lock since register_channel will add the channel to p2p
                     self.p2p().remove_pending(&addr).await;
 
-                    // Add this connection to the anchorlist, remove it from the [otherlist]
+                    // Add this connection to the anchorlist
                     self.p2p().hosts().upgrade_host(&addr).await;
 
                     // Notify that channel processing has finished
