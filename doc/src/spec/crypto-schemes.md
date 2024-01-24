@@ -236,11 +236,12 @@ together with [symmetric encryption](#symmetric-encryption).
 Denote $\t{AeadEncNote}ₙ = (E, C)$ where $E$ is the space of *ephemeral
 public keys* and $C$ is the ciphertext space.
 
+See `AeadEncryptedNote` in `src/sdk/src/crypto/note.rs`.
+
 ### Encryption
 
-We let $P ∈ ℙₚ$ denote the recipient's public key with corresponding
-secret key $x ∈ 𝔽ₚ$. And let $\t{note} ∈ N = 𝔹^*$ denote the plaintext note to
-be encrypted.
+We let $P ∈ ℙₚ$ denote the recipient's public key.
+Let $\t{note} ∈ N = 𝔹^*$ denote the plaintext note to be encrypted.
 
 Let $\t{esk} ∈ 𝔽ₚ$ be the randomly generated *ephemeral secret key*.
 
@@ -254,7 +255,7 @@ Let $c = \t{Sym}.\t{Encrypt}(k, \t{note})$
 
 Return $c$
 
-## Decryption
+### Decryption
 
 We denote the recipient's secret key with $x ∈ 𝔽ₚ$.
 Let $c ∈ C = 𝔹^*$ denote the ciphertext note to be decrypted.
