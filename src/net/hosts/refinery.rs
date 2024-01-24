@@ -87,13 +87,14 @@ impl GreylistRefinery {
             let hosts = self.p2p().hosts();
 
             if hosts.is_empty_greylist().await {
-                warn!(target: "net::refinery",
+                debug!(target: "net::refinery",
                 "Greylist is empty! Cannot start refinery process");
 
                 continue
             }
 
-            let (entry, position) = hosts.greylist_fetch_random().await;
+            // Only attempt to refine peers that match our transports.
+            let (entry, position) = hosts.greylist_fetch_random_with_schemes().await;
             let url = &entry.0;
 
             // Skip this node if it's being migrated currently.

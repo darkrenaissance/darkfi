@@ -800,7 +800,20 @@ impl Hosts {
         (entry.clone(), position)
     }
 
-    /// Get up to n random whitelisted peers that match the given transport schemes from the hosts set.
+    /// Get a random greylist peer that matches the given transport schemes.
+    pub async fn greylist_fetch_random_with_schemes(&self) -> ((Url, u64), usize) {
+        trace!(target: "store::greylist_fetch_random_with_schemes", "[START]");
+
+        // Retrieve all peers corresponding to that transport schemes
+        let schemes = &self.settings.allowed_transports;
+        let greylist = self.greylist_fetch_with_schemes(&schemes, None).await;
+
+        let position = rand::thread_rng().gen_range(0..greylist.len());
+        let entry = &greylist[position];
+        (entry.clone(), position)
+    }
+
+    /// Get up to n random whitelist peers that match the given transport schemes.
     pub async fn whitelist_fetch_n_random_with_schemes(
         &self,
         schemes: &[String],
