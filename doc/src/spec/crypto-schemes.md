@@ -125,6 +125,31 @@ The first input element acts as the domain separator to distinguish
 uses of the group hash for different purposes, while the second input is
 the actual message.
 
+The main components are:
+
+* An isogeny map $\t{iso\_map}^𝔾 : \t{iso-}𝔾 → 𝔾$ which is a group homomorphism
+  from $ℙₚ$ to a curve $\t{iso-}ℙₚ$ with $a_{\t{iso-}ℙₚ}, b_{\t{iso-}ℙₚ} ≠ 0$
+  which is required by the group hash.
+  See [IETF: Simplified SWU for AB == 0](https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-10.html#name-simplified-swu-for-ab-0-2).
+* [`hash_to_field` implementation](https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-10.html#name-hash_to_field-implementation)
+  which maps a byte array to the scalar field $𝔽_q$.
+* [`map_to_curve_simple_swu(u)`](https://www.ietf.org/archive/id/draft-irtf-cfrg-hash-to-curve-10.html#simple-swu)
+  which maps $u ∈ 𝔽_q$ to a curve point $\t{iso-}ℙₚ$.
+
+Then $\t{GroupHash}(D, M)$ is calculated as follows:
+
+Let $\t{DST} = D || \textbf{"-pallas\_XMD:BLAKE2b\_SSWU\_RO\_"}$
+
+Assert $\t{len}(DST) ≤ 255$
+
+Let $(u₁, u₂) = \t{hash\_to\_field}(M, \t{DST})$
+
+For $i ∈ [2]$
+
+&emsp; Let $Qᵢ = \t{map\_to\_curve\_simple\_swu}(uᵢ)$
+
+Return $\t{iso\_map}^{ℙₚ}(Q₁ + Q₂)$
+
 ## BLAKE2b Hash Function
 
 BLAKE2 is defined by [ANWW2013](https://blake2.net/#sp).
