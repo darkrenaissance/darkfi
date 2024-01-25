@@ -60,6 +60,13 @@ darkfi-mmproxy:
 		RUST_TARGET="$(RUST_TARGET)" \
 		RUSTFLAGS="$(RUSTFLAGS)"
 
+drk: contracts
+	$(MAKE) -C bin/$@ \
+		PREFIX="$(PREFIX)" \
+		CARGO="$(CARGO)" \
+		RUST_TARGET="$(RUST_TARGET)" \
+		RUSTFLAGS="$(RUSTFLAGS)"
+
 darkirc: zkas
 	$(MAKE) -C bin/$@ \
 		PREFIX="$(PREFIX)" \
