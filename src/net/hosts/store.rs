@@ -1530,11 +1530,9 @@ mod tests {
                         let addrs = hosts.greylist_fetch_address(transports).await;
                         hostlist.push(addrs);
                     }
-                } else {
-                    if !hosts.greylist_fetch_address(transports).await.is_empty() {
-                        let addrs = hosts.greylist_fetch_address(transports).await;
-                        hostlist.push(addrs);
-                    }
+                } else if !hosts.greylist_fetch_address(transports).await.is_empty() {
+                    let addrs = hosts.greylist_fetch_address(transports).await;
+                    hostlist.push(addrs);
                 }
             }
 
