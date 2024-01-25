@@ -26,7 +26,6 @@ use darkfi::{
         time::{TimeKeeper, Timestamp},
     },
     validator::{Validator, ValidatorConfig, ValidatorPtr},
-    wallet::{WalletDb, WalletPtr},
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Result,
@@ -134,7 +133,6 @@ pub struct Wallet {
     pub consensus_unstaked_merkle_tree: MerkleTree,
     pub dao_merkle_tree: MerkleTree,
     pub dao_proposals_tree: MerkleTree,
-    pub wallet: WalletPtr,
     pub unspent_money_coins: Vec<OwnCoin>,
     pub spent_money_coins: Vec<OwnCoin>,
     pub dao_leafs: HashMap<DaoBulla, bridgetree::Position>,
@@ -150,7 +148,6 @@ impl Wallet {
         vks: &Vks,
         verify_fees: bool,
     ) -> Result<Self> {
-        let wallet = WalletDb::new(None, None)?;
         let sled_db = sled::Config::new().temporary(true).open()?;
 
         // Use pregenerated vks and get pregenerated pks
@@ -198,7 +195,6 @@ impl Wallet {
             consensus_unstaked_merkle_tree,
             dao_merkle_tree,
             dao_proposals_tree,
-            wallet,
             unspent_money_coins,
             spent_money_coins,
             dao_leafs: HashMap::new(),

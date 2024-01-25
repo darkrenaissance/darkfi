@@ -432,18 +432,6 @@ pub enum Error {
     #[error("zkas bincode not found in sled database")]
     ZkasBincodeNotFound,
 
-    // =============
-    // Wallet errors
-    // =============
-    #[error("Wallet password is empty")]
-    WalletEmptyPassword,
-
-    #[error("Merkle tree already exists in wallet")]
-    WalletTreeExists,
-
-    #[error("Wallet insufficient balance")]
-    WalletInsufficientBalance,
-
     // ===================
     // wasm runtime errors
     // ===================

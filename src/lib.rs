@@ -53,9 +53,6 @@ pub mod tx;
 #[cfg(feature = "util")]
 pub mod util;
 
-#[cfg(feature = "wallet")]
-pub mod wallet;
-
 #[cfg(feature = "wasm-runtime")]
 pub mod runtime;
 
