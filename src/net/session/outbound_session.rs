@@ -213,8 +213,6 @@ impl Slot {
 
                 return hosts.check_address_with_lock(self.p2p(), addrs).await
             }
-
-            return None
         } else if slot_count < white_count {
             // Up to white_connection_percent connections:
             //  Select from the whitelist
@@ -231,8 +229,6 @@ impl Slot {
 
                 return hosts.check_address_with_lock(self.p2p(), addrs).await
             }
-
-            return None
         } else {
             // All other connections:
             //  Select from the greylist
@@ -242,9 +238,9 @@ impl Slot {
 
                 return hosts.check_address_with_lock(self.p2p(), addrs).await
             }
-
-            return None
         }
+
+        None
     }
 
     // We first try to make connections to the addresses on our anchor list. We then find some
