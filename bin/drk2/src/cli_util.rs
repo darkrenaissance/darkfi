@@ -120,16 +120,16 @@ pub fn generate_completions(shell: &str) -> Result<()> {
     let addresses =
         Arg::with_name("addresses").long("addresses").help("Print all the addresses in the wallet");
 
-    let default_address = Arg::with_name("default_address")
-        .long("default_address")
+    let default_address = Arg::with_name("default-address")
+        .long("default-address")
         .takes_value(true)
         .help("Set the default address in the wallet");
 
     let secrets =
         Arg::with_name("secrets").long("secrets").help("Print all the secret keys from the wallet");
 
-    let import_secrets = Arg::with_name("import_secrets")
-        .long("import_secrets")
+    let import_secrets = Arg::with_name("import-secrets")
+        .long("import-secrets")
         .help("Import secret keys from stdin into the wallet, separated by newlines");
 
     let tree = Arg::with_name("tree").long("tree").help("Print the Merkle tree in the wallet");
@@ -166,15 +166,15 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         .args(&vec![amount, token, recipient]);
 
     // Otc
-    let value_pair = Arg::with_name("value_pair")
+    let value_pair = Arg::with_name("value-pair")
         .short("v")
-        .long("value_pair")
+        .long("value-pair")
         .takes_value(true)
         .help("Value pair to send:recv (11.55:99.42)");
 
-    let token_pair = Arg::with_name("token_pair")
+    let token_pair = Arg::with_name("token-pair")
         .short("t")
-        .long("token_pair")
+        .long("token-pair")
         .takes_value(true)
         .help("Token pair to send:recv (f00:b4r)");
 
@@ -210,7 +210,88 @@ pub fn generate_completions(shell: &str) -> Result<()> {
                     find coins sent to us and fill our wallet with the necessary metadata.",
     );
 
-    // TODO: DAO
+    // DAO
+    let proposer_limit = Arg::with_name("proposer-limit")
+        .help("The minimum amount of governance tokens needed to open a proposal for this DAO");
+
+    let quorum = Arg::with_name("quorum")
+        .help("Minimal threshold of participating total tokens needed for a proposal to pass");
+
+    let approval_ratio = Arg::with_name("approval-ratio")
+        .help("The ratio of winning votes/total votes needed for a proposal to pass (2 decimals)");
+
+    let gov_token_id = Arg::with_name("gov-token-id").help("DAO's governance token ID");
+
+    let create = SubCommand::with_name("create").about("Create DAO parameters").args(&vec![
+        proposer_limit,
+        quorum,
+        approval_ratio,
+        gov_token_id,
+    ]);
+
+    let view = SubCommand::with_name("view").about("View DAO data from stdin");
+
+    let dao_name = Arg::with_name("dao-name").help("Named identifier for the DAO");
+
+    let import =
+        SubCommand::with_name("import").about("Import DAO data from stdin").args(&vec![dao_name]);
+
+    let dao_alias = Arg::with_name("dao-alias").help("Numeric identifier for the DAO (optional)");
+
+    let list = SubCommand::with_name("list")
+        .about("List imported DAOs (or info about a specific one)")
+        .args(&vec![dao_alias]);
+
+    let dao_alias = Arg::with_name("dao-alias").help("Name or numeric identifier for the DAO");
+
+    let balance = SubCommand::with_name("balance")
+        .about("Show the balance of a DAO")
+        .args(&vec![dao_alias.clone()]);
+
+    let mint = SubCommand::with_name("mint")
+        .about("Mint an imported DAO on-chain")
+        .args(&vec![dao_alias.clone()]);
+
+    let recipient =
+        Arg::with_name("recipient").help("Pubkey to send tokens to with proposal success");
+
+    let amount = Arg::with_name("amount").help("Amount to send from DAO with proposal success");
+
+    let token = Arg::with_name("token").help("Token ID to send from DAO with proposal success");
+
+    let propose = SubCommand::with_name("propose")
+        .about("Create a proposal for a DAO")
+        .args(&vec![dao_alias.clone(), recipient, amount, token]);
+
+    let proposals = SubCommand::with_name("proposals")
+        .about("List DAO proposals")
+        .args(&vec![dao_alias.clone()]);
+
+    let proposal_id = Arg::with_name("proposal-id").help("Numeric identifier for the proposal");
+
+    let proposal = SubCommand::with_name("proposal")
+        .about("View a DAO proposal data")
+        .args(&vec![dao_alias.clone(), proposal_id.clone()]);
+
+    let vote = Arg::with_name("vote").help("Vote (0 for NO, 1 for YES)");
+
+    let vote_weight =
+        Arg::with_name("vote-weight").help("Vote weight (amount of governance tokens)");
+
+    let vote = SubCommand::with_name("vote").about("Vote on a given proposal").args(&vec![
+        dao_alias.clone(),
+        proposal_id.clone(),
+        vote,
+        vote_weight,
+    ]);
+
+    let exec = SubCommand::with_name("exec")
+        .about("Execute a DAO proposal")
+        .args(&vec![dao_alias, proposal_id]);
+
+    let dao = SubCommand::with_name("dao").about("DAO functionalities").subcommands(vec![
+        create, view, import, list, balance, mint, propose, proposals, proposal, vote, exec,
+    ]);
 
     // Scan
     let reset = Arg::with_name("reset")
@@ -354,6 +435,7 @@ pub fn generate_completions(shell: &str) -> Result<()> {
         inspect,
         broadcast,
         subscribe,
+        dao,
         scan,
         explorer,
         alias,
