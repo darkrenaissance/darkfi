@@ -1,5 +1,8 @@
 .POSIX:
 
+# Compile target for docs
+RUST_TARGET = $(shell rustc -Vv | grep '^host: ' | cut -d' ' -f2)
+
 DARKFID_JSONRPC = src/clients/darkfid_jsonrpc.md
 FAUCETD_JSONRPC = src/clients/faucetd_jsonrpc.md
 
@@ -13,7 +16,7 @@ all: $(JSONRPC)
 	cp -f theme/logo* book/
 	./generate_seminar_ics.py --ics
 	$(MAKE) -C ../ rustdoc
-	cp -r ../target/doc/* book/dev/
+	cp -r ../target/$(RUST_TARGET)/doc/* book/dev/
 	./remove_chapter_nav_js.py
 
 $(DARKFID_JSONRPC):
