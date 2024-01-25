@@ -486,6 +486,12 @@ impl Drk {
         endpoint: Url,
         ex: Arc<smol::Executor<'static>>,
     ) -> Result<Self> {
+        // Script kiddies protection
+        if wallet_pass == "changeme" {
+            eprintln!("Please don't use default wallet password...");
+            exit(2);
+        }
+
         // Initialize wallet
         let wallet_path = expand_path(&wallet_path)?;
         if !wallet_path.exists() {
