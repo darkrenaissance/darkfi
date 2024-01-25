@@ -94,33 +94,41 @@ impl GreylistRefinery {
             }
 
             // Only attempt to refine peers that match our transports.
-            let (entry, position) = hosts.greylist_fetch_random_with_schemes().await;
-            let url = &entry.0;
+            match hosts.greylist_fetch_random_with_schemes().await {
+                Some((entry, position)) => {
+                    let url = &entry.0;
 
-            // Skip this node if it's being migrated currently.
-            if hosts.is_migrating(url).await {
-                continue
+                    // Skip this node if it's being migrated currently.
+                    if hosts.is_migrating(url).await {
+                        continue
+                    }
+
+                    let mut greylist = hosts.greylist.write().await;
+                    if !ping_node(url, self.p2p().clone()).await {
+                        greylist.remove(position);
+                        debug!(
+                            target: "net::refinery",
+                            "Peer {} is non-responsive. Removed from greylist", url,
+                        );
+
+                        continue
+                    }
+                    drop(greylist);
+
+                    let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
+
+                    // Append to the whitelist.
+                    hosts.whitelist_store_or_update(&[(url.clone(), last_seen)]).await;
+
+                    // Remove whitelisted peer from the greylist.
+                    hosts.greylist_remove(url, position).await;
+                }
+                None => {
+                    debug!(target: "net::refinery", "No matching greylist entries found. Cannot proceed with refinery");
+
+                    continue
+                }
             }
-
-            let mut greylist = hosts.greylist.write().await;
-            if !ping_node(url, self.p2p().clone()).await {
-                greylist.remove(position);
-                debug!(
-                    target: "net::refinery",
-                    "Peer {} is non-responsive. Removed from greylist", url,
-                );
-
-                continue
-            }
-            drop(greylist);
-
-            let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-
-            // Append to the whitelist.
-            hosts.whitelist_store_or_update(&[(url.clone(), last_seen)]).await;
-
-            // Remove whitelisted peer from the greylist.
-            hosts.greylist_remove(url, position).await;
         }
     }
 

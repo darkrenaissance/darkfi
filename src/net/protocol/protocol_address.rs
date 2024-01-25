@@ -153,6 +153,13 @@ impl ProtocolAddress {
                     .await,
             );
 
+            // If there's still space available, take from the greylist.
+            // Schemes are not taken into account.
+            debug!(target: "net::protocol_address::handle_receive_get_addrs()",
+            "Fetching greylist entries");
+            let remain = 2 * get_addrs_msg.max - addrs.len() as u32;
+            addrs.append(&mut self.hosts.greylist_fetch_n_random(remain).await);
+
             debug!(
                 target: "net::protocol_address::handle_receive_get_addrs()",
                 "Sending {} addresses to {}", addrs.len(), self.channel.address(),
@@ -186,6 +193,7 @@ impl ProtocolAddress {
 
         let mut addrs = vec![];
         for addr in self.settings.external_addrs.clone() {
+            //addrs.push((addr, 0));
             debug!(target: "net::protocol_address::send_my_addrs()", "Attempting to ping self");
 
             // See if we can do a version exchange with ourself.

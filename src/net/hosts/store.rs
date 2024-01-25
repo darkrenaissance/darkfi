@@ -213,6 +213,10 @@ impl Hosts {
         hosts
     }
 
+    /// Check whether:
+    /// *   We already have this connection established
+    /// *   We already have this configured as a manual peer
+    /// *   This address is already pending a connection
     pub async fn check_address_with_lock(
         &self,
         p2p: P2pPtr,
@@ -322,6 +326,11 @@ impl Hosts {
         // Filter addresses before writing to the greylist.
         let filtered_addrs = self.filter_addresses(addrs).await;
         let filtered_addrs_len = filtered_addrs.len();
+
+        if filtered_addrs.is_empty() {
+            debug!(target: "store::greylist_store_or_update()", "Filtered out all received addresses");
+        }
+
         for (addr, last_seen) in filtered_addrs {
             if !self.greylist_contains(&addr).await {
                 debug!(target: "store::greylist_store_or_update()",
@@ -810,16 +819,70 @@ impl Hosts {
     }
 
     /// Get a random greylist peer that matches the given transport schemes.
-    pub async fn greylist_fetch_random_with_schemes(&self) -> ((Url, u64), usize) {
+    pub async fn greylist_fetch_random_with_schemes(&self) -> Option<((Url, u64), usize)> {
         trace!(target: "store::greylist_fetch_random_with_schemes", "[START]");
 
         // Retrieve all peers corresponding to that transport schemes
         let schemes = &self.settings.allowed_transports;
         let greylist = self.greylist_fetch_with_schemes(schemes, None).await;
 
+        if greylist.is_empty() {
+            return None
+        }
+
         let position = rand::thread_rng().gen_range(0..greylist.len());
         let entry = &greylist[position];
-        (entry.clone(), position)
+        Some((entry.clone(), position))
+    }
+
+    /// Get up to n random greylist peers. Schemes are not taken into account.
+    pub async fn greylist_fetch_n_random(&self, n: u32) -> Vec<(Url, u64)> {
+        trace!(target: "store::greylist_fetch_n_random", "[START]");
+        let n = n as usize;
+        if n == 0 {
+            return vec![]
+        }
+        let mut hosts = vec![];
+
+        let greylist = self.greylist.read().await;
+
+        for (addr, last_seen) in greylist.iter() {
+            hosts.push((addr.clone(), *last_seen));
+        }
+
+        if hosts.is_empty() {
+            debug!(target: "store::greylist_fetch_n_random", "No greylist entries found!");
+            return hosts
+        }
+
+        // Grab random ones
+        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
+        urls.iter().map(|&url| url.clone()).collect()
+    }
+
+    /// Get up to n random greylist peers that match the given transport schemes.
+    pub async fn greylist_fetch_n_random_with_schemes(
+        &self,
+        schemes: &[String],
+        n: u32,
+    ) -> Vec<(Url, u64)> {
+        let n = n as usize;
+        if n == 0 {
+            return vec![]
+        }
+        trace!(target: "store::greylist_fetch_n_random_with_schemes", "[START]");
+
+        // Retrieve all peers corresponding to that transport schemes
+        let hosts = self.greylist_fetch_with_schemes(schemes, None).await;
+        if hosts.is_empty() {
+            debug!(target: "store::greylist_fetch_n_random_with_schemes",
+                  "No such schemes found on greylist!");
+            return hosts
+        }
+
+        // Grab random ones
+        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
+        urls.iter().map(|&url| url.clone()).collect()
     }
 
     /// Get up to n random whitelist peers that match the given transport schemes.
@@ -837,14 +900,50 @@ impl Hosts {
         // Retrieve all peers corresponding to that transport schemes
         let hosts = self.whitelist_fetch_with_schemes(schemes, None).await;
         if hosts.is_empty() {
-            trace!(target: "store::whitelist_fetch_n_random_with_schemes",
-                  "Whitelist is empty {:?}! Exiting...", hosts);
+            debug!(target: "store::whitelist_fetch_n_random_with_schemes",
+                  "No such schemes found on whitelist!");
             return hosts
         }
 
         // Grab random ones
         let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
         urls.iter().map(|&url| url.clone()).collect()
+    }
+
+    /// Get up to limit peers that don't match the given transport schemes from the greylist.
+    /// If limit was not provided, return all matching peers.
+    pub async fn greylist_fetch_excluding_schemes(
+        &self,
+        schemes: &[String],
+        limit: Option<usize>,
+    ) -> Vec<(Url, u64)> {
+        let greylist = self.greylist.read().await;
+        let mut limit = match limit {
+            Some(l) => l.min(greylist.len()),
+            None => greylist.len(),
+        };
+        let mut ret = vec![];
+
+        if limit == 0 {
+            return ret
+        }
+
+        for (addr, last_seen) in greylist.iter() {
+            if !schemes.contains(&addr.scheme().to_string()) {
+                ret.push((addr.clone(), *last_seen));
+                limit -= 1;
+                if limit == 0 {
+                    return ret
+                }
+            }
+        }
+
+        if ret.is_empty() {
+            debug!(target: "store::greylist_fetch_excluding_schemes",
+                  "No such schemes found on greylist!")
+        }
+
+        ret
     }
 
     /// Get up to limit peers that don't match the given transport schemes from the whitelist.
@@ -875,17 +974,9 @@ impl Hosts {
             }
         }
 
-        // If we didn't find any, pick some from the greylist
         if ret.is_empty() {
-            for (addr, last_seen) in self.greylist.read().await.iter() {
-                if !schemes.contains(&addr.scheme().to_string()) {
-                    ret.push((addr.clone(), *last_seen));
-                    limit -= 1;
-                    if limit == 0 {
-                        break
-                    }
-                }
-            }
+            debug!(target: "store::whiteist_fetch_excluding_schemes",
+                  "No such schemes found on whitelist!")
         }
 
         ret
@@ -909,7 +1000,7 @@ impl Hosts {
 
         if hosts.is_empty() {
             debug!(target: "store::whitelist_fetch_n_random_excluding_schemes",
-                  "No address without schemes found! Exiting...");
+                  "No such schemes found on whitelist!");
             return hosts
         }
 
@@ -925,7 +1016,7 @@ impl Hosts {
         schemes: &[String],
         limit: Option<usize>,
     ) -> Vec<(Url, u64)> {
-        debug!(target: "store::greylist_fetch_with_schemes", "[START]");
+        trace!(target: "store::greylist_fetch_with_schemes", "[START]");
         let greylist = self.greylist.read().await;
 
         let mut limit = match limit {
@@ -943,14 +1034,20 @@ impl Hosts {
                 ret.push((addr.clone(), *last_seen));
                 limit -= 1;
                 if limit == 0 {
-                    debug!(target: "store::greylist_fetch_with_schemes", "Found matching greylist entry, returning");
+                    debug!(target: "store::greylist_fetch_with_schemes",
+                        "Found matching scheme, returning {} grey addresses",
+                        ret.len());
                     return ret
                 }
             }
         }
 
-        trace!(target: "store::greylist_fetch_with_schemes", "END");
+        if ret.is_empty() {
+            debug!(target: "store::greylist_fetch_with_schemes",
+                  "No such schemes found on greylist!")
+        }
 
+        trace!(target: "store::greylist_fetch_with_schemes", "END");
         ret
     }
 
@@ -961,41 +1058,38 @@ impl Hosts {
         schemes: &[String],
         limit: Option<usize>,
     ) -> Vec<(Url, u64)> {
-        debug!(target: "store::whitelist_fetch_with_schemes", "[START]");
+        trace!(target: "store::whitelist_fetch_with_schemes", "[START]");
+        let whitelist = self.whitelist.read().await;
+
+        let mut limit = match limit {
+            Some(l) => l.min(whitelist.len()),
+            None => whitelist.len(),
+        };
         let mut ret = vec![];
 
-        if !self.is_empty_whitelist().await {
-            let whitelist = self.whitelist.read().await;
+        if limit == 0 {
+            return ret
+        }
 
-            let mut parsed_limit = match limit {
-                Some(l) => l.min(whitelist.len()),
-                None => whitelist.len(),
-            };
-
-            for (addr, last_seen) in whitelist.iter() {
-                if schemes.contains(&addr.scheme().to_string()) {
-                    ret.push((addr.clone(), *last_seen));
-                    parsed_limit -= 1;
-                    if parsed_limit == 0 {
-                        trace!(target: "store::whitelist_fetch_with_schemes",
-                           "Found matching white scheme, returning {:?}", ret);
-                        return ret
-                    }
-                } else {
-                    warn!(target: "store::whitelist_fetch_with_schemes",
-                          "No matching schemes! Trying greylist...");
-                    return self.greylist_fetch_with_schemes(schemes, limit).await
+        for (addr, last_seen) in whitelist.iter() {
+            if schemes.contains(&addr.scheme().to_string()) {
+                ret.push((addr.clone(), *last_seen));
+                limit -= 1;
+                if limit == 0 {
+                    debug!(target: "store::whitelist_fetch_with_schemes",
+                           "Found matching scheme, returning {} white addresses",
+                           ret.len());
+                    return ret
                 }
             }
         }
-        // Whitelist is empty!
-        if !self.is_empty_greylist().await {
-            // Select from the greylist providing it's not empty.
-            return self.greylist_fetch_with_schemes(schemes, limit).await
+
+        if ret.is_empty() {
+            debug!(target: "store::whitelist_fetch_with_schemes",
+                  "No such schemes found on whitelist!")
         }
 
         trace!(target: "store::whitelist_fetch_with_schemes", "END");
-
         ret
     }
 
@@ -1006,47 +1100,38 @@ impl Hosts {
         schemes: &[String],
         limit: Option<usize>,
     ) -> Vec<(Url, u64)> {
-        trace!(target: "store::anchorlist_fetch_with_schemes", "[START]");
+        //trace!(target: "store::anchorlist_fetch_with_schemes", "[START]");
+        let anchorlist = self.anchorlist.read().await;
+
+        let mut limit = match limit {
+            Some(l) => l.min(anchorlist.len()),
+            None => anchorlist.len(),
+        };
         let mut ret = vec![];
 
-        // Select from the anchorlist providing it's not empty.
-        if !self.is_empty_anchorlist().await {
-            let anchorlist = self.anchorlist.read().await;
+        if limit == 0 {
+            return ret
+        }
 
-            let mut parsed_limit = match limit {
-                Some(l) => l.min(anchorlist.len()),
-                None => anchorlist.len(),
-            };
-
-            for (addr, last_seen) in anchorlist.iter() {
-                if schemes.contains(&addr.scheme().to_string()) {
-                    ret.push((addr.clone(), *last_seen));
-                    parsed_limit -= 1;
-                    if parsed_limit == 0 {
-                        trace!(target: "store::anchorlist_fetch_with_schemes",
-                           "Found matching anchor scheme, returning {:?}", ret);
-                        return ret
-                    }
-                } else {
-                    warn!(target: "store::anchorlist_fetch_with_schemes",
-                          "No matching schemes! Trying whitelist...");
-                    return self.whitelist_fetch_with_schemes(schemes, limit).await
+        for (addr, last_seen) in anchorlist.iter() {
+            if schemes.contains(&addr.scheme().to_string()) {
+                ret.push((addr.clone(), *last_seen));
+                limit -= 1;
+                if limit == 0 {
+                    debug!(target: "store::anchorlist_fetch_with_schemes",
+                           "Found matching scheme, returning {} anchor addresses",
+                           ret.len());
+                    return ret
                 }
             }
         }
 
-        // Select from the whitelist providing it's not empty.
-        if !self.is_empty_whitelist().await {
-            return self.whitelist_fetch_with_schemes(schemes, limit).await
-        }
-
-        // Select from the greyist providing it's not empty.
-        if !self.is_empty_greylist().await {
-            return self.greylist_fetch_with_schemes(schemes, limit).await
+        if ret.is_empty() {
+            warn!(target: "store::anchorlist_fetch_with_schemes",
+                  "No matching schemes found on anchorlist")
         }
 
         trace!(target: "store::anchorlist_fetch_with_schemes", "END");
-
         ret
     }
 

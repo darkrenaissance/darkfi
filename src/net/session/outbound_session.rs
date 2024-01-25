@@ -190,44 +190,61 @@ impl Slot {
         let connects = self.p2p().settings().outbound_connections;
         let white_count = connects * self.p2p().settings().white_connection_percent / 100;
 
-        let addrs = {
-            // Up to anchor_connection_count connections:
-            //
+        if slot_count < self.p2p().settings().anchor_connection_count {
+            //  Up to anchor_connection_count connections:
             //  Select from the anchorlist
             //  If the anchorlist is empty, select from the whitelist
             //  If the whitelist is empty, select from the greylist
-            //  If the greylist is empty, do peer discovery
-            if slot_count < self.p2p().settings().anchor_connection_count {
-                debug!(target: "net::outbound_session::fetch_address()",
-                "First two connections- prefer anchor connections");
-                hosts.anchorlist_fetch_address(transports).await
+            //  If the greylist is empty, return None and do peer discovery
+            if !hosts.anchorlist_fetch_address(transports).await.is_empty() {
+                let addrs = hosts.anchorlist_fetch_address(transports).await;
+
+                return hosts.check_address_with_lock(self.p2p(), addrs).await
             }
+
+            if !hosts.whitelist_fetch_address(transports).await.is_empty() {
+                let addrs = hosts.whitelist_fetch_address(transports).await;
+
+                return hosts.check_address_with_lock(self.p2p(), addrs).await
+            }
+
+            if !hosts.greylist_fetch_address(transports).await.is_empty() {
+                let addrs = hosts.greylist_fetch_address(transports).await;
+
+                return hosts.check_address_with_lock(self.p2p(), addrs).await
+            }
+
+            return None
+        } else if slot_count < white_count {
             // Up to white_connection_percent connections:
-            //
             //  Select from the whitelist
             //  If the whitelist is empty, select from the greylist
-            //  If the greylist is empty, do peer discovery
-            else if slot_count < white_count {
-                debug!(target: "net::outbound_session::fetch_address()",
-                "Next N connections- prefer white connections");
-                hosts.whitelist_fetch_address(transports).await
+            //  If the greylist is empty, return None and do peer discovery
+            if !hosts.whitelist_fetch_address(transports).await.is_empty() {
+                let addrs = hosts.whitelist_fetch_address(transports).await;
+
+                return hosts.check_address_with_lock(self.p2p(), addrs).await
             }
+
+            if !hosts.greylist_fetch_address(transports).await.is_empty() {
+                let addrs = hosts.greylist_fetch_address(transports).await;
+
+                return hosts.check_address_with_lock(self.p2p(), addrs).await
+            }
+
+            return None
+        } else {
             // All other connections:
-            //
             //  Select from the greylist
             //  If the greylist is empty, do peer discovery
-            else {
-                debug!(target: "net::outbound_session::fetch_address()",
-                "All other connections- get grey connections");
-                hosts.greylist_fetch_address(transports).await
-            }
-        };
+            if !hosts.greylist_fetch_address(transports).await.is_empty() {
+                let addrs = hosts.greylist_fetch_address(transports).await;
 
-        // Check whether:
-        // * we already have this connection established
-        // * we already have this configured as a manual peer
-        // * address is already pending a connection
-        hosts.check_address_with_lock(self.p2p(), addrs).await
+                return hosts.check_address_with_lock(self.p2p(), addrs).await
+            }
+
+            return None
+        }
     }
 
     // We first try to make connections to the addresses on our anchor list. We then find some

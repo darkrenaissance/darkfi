@@ -73,6 +73,7 @@ impl ProtocolSeed {
 
         let mut addrs = vec![];
         for addr in self.settings.external_addrs.clone() {
+            //addrs.push((addr, 0));
             debug!(target: "net::protocol_seed::send_my_addrs()", "Attempting to ping self");
 
             // See if we can do a version exchange with ourself.
