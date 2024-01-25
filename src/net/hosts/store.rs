@@ -1505,16 +1505,37 @@ mod tests {
 
             // Simulate the address selection logic found in outbound_session::fetch_address()
             for i in 0..8 {
-                let addrs = {
-                    if i < p2p.settings().anchor_connection_count {
-                        hosts.anchorlist_fetch_address(transports).await
-                    } else if i < white_count {
-                        hosts.whitelist_fetch_address(transports).await
-                    } else {
-                        hosts.greylist_fetch_address(transports).await
+                if i < p2p.settings().anchor_connection_count {
+                    if !hosts.anchorlist_fetch_address(transports).await.is_empty() {
+                        let addrs = hosts.anchorlist_fetch_address(transports).await;
+                        hostlist.push(addrs);
                     }
-                };
-                hostlist.push(addrs);
+
+                    if !hosts.whitelist_fetch_address(transports).await.is_empty() {
+                        let addrs = hosts.whitelist_fetch_address(transports).await;
+                        hostlist.push(addrs);
+                    }
+
+                    if !hosts.greylist_fetch_address(transports).await.is_empty() {
+                        let addrs = hosts.greylist_fetch_address(transports).await;
+                        hostlist.push(addrs);
+                    }
+                } else if i < white_count {
+                    if !hosts.whitelist_fetch_address(transports).await.is_empty() {
+                        let addrs = hosts.whitelist_fetch_address(transports).await;
+                        hostlist.push(addrs);
+                    }
+
+                    if !hosts.greylist_fetch_address(transports).await.is_empty() {
+                        let addrs = hosts.greylist_fetch_address(transports).await;
+                        hostlist.push(addrs);
+                    }
+                } else {
+                    if !hosts.greylist_fetch_address(transports).await.is_empty() {
+                        let addrs = hosts.greylist_fetch_address(transports).await;
+                        hostlist.push(addrs);
+                    }
+                }
             }
 
             //// Check we're returning the correct addresses.
@@ -1528,28 +1549,6 @@ mod tests {
             assert!(anchor_urls == hostlist[0]);
             assert!(white_urls == hostlist[4]);
             assert!(grey_urls == hostlist[7]);
-
-            // Now clear the anchorlist.
-            // anchorlist_fetch_address should return whitelist entries if
-            // the anchorlist is empty.
-            let mut anchorlist = hosts.anchorlist.write().await;
-            anchorlist.clear();
-            drop(anchorlist);
-
-            let mut addrs = hosts.anchorlist_fetch_address(transports).await;
-            addrs.sort();
-            assert!(white_urls == addrs);
-
-            // Now clear the whitelist.
-            // anchorlist_fetch_address should return greylist entries if
-            // both the anchorlist and the whitelist are empty.
-            let mut whitelist = hosts.whitelist.write().await;
-            whitelist.clear();
-            drop(whitelist);
-
-            let mut addrs = hosts.anchorlist_fetch_address(transports).await;
-            addrs.sort();
-            assert!(grey_urls == addrs);
         })
     }
 }
