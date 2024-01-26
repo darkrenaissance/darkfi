@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{sync::Arc, time::UNIX_EPOCH};
+use std::{
+    sync::Arc,
+    time::{Duration, UNIX_EPOCH},
+};
 
 use log::{debug, warn};
 use url::Url;
@@ -24,7 +27,9 @@ use url::Url;
 use super::super::p2p::{P2p, P2pPtr};
 use crate::{
     net::{connector::Connector, protocol::ProtocolVersion, session::Session},
-    system::{sleep, LazyWeak, StoppableTask, StoppableTaskPtr},
+    system::{
+        run_until_completion, sleep, timeout::timeout, LazyWeak, StoppableTask, StoppableTaskPtr,
+    },
     Error,
 };
 
@@ -104,7 +109,7 @@ impl GreylistRefinery {
                     }
 
                     let mut greylist = hosts.greylist.write().await;
-                    if !ping_node(url, self.p2p().clone()).await {
+                    if !ping_node(url.clone(), self.p2p().clone()).await {
                         greylist.remove(position);
                         debug!(
                             target: "net::refinery",
@@ -137,14 +142,28 @@ impl GreylistRefinery {
     }
 }
 
-// Ping a node to check it's online.
-pub async fn ping_node(addr: &Url, p2p: P2pPtr) -> bool {
+/// Check a node is online by establishing a channel with it and conducting a handshake with a
+/// version exchange.
+///
+/// We must use run_until_completion() to ensure this code will complete even if the parent task
+/// has been destroyed. Otherwise ping_node() will become a zombie process if the rest of the p2p
+/// network has been shutdown but the handshake it still ongoing.
+///
+/// Other parts of the p2p stack have safe shutdown methods built into them due to the ownership
+/// structure. Here we are creating a outbound session that is not owned by anything and is not
+/// so is not safely cancelled on shutdown.
+pub async fn ping_node(addr: Url, p2p: P2pPtr) -> bool {
+    let ex = p2p.executor();
+    run_until_completion(ping_node_impl(addr.clone(), p2p), ex).await
+}
+
+async fn ping_node_impl(addr: Url, p2p: P2pPtr) -> bool {
     let session_outbound = p2p.session_outbound();
     let parent = Arc::downgrade(&session_outbound);
     let connector = Connector::new(p2p.settings(), parent);
 
     debug!(target: "net::refinery::ping_node()", "Attempting to connect to {}", addr);
-    match connector.connect(addr).await {
+    match connector.connect(&addr).await {
         Ok((_url, channel)) => {
             debug!(target: "net::refinery::ping_node()", "Connected successfully!");
             let proto_ver = ProtocolVersion::new(channel.clone(), p2p.settings()).await;
@@ -155,16 +174,21 @@ pub async fn ping_node(addr: &Url, p2p: P2pPtr) -> bool {
                 p2p.executor(),
             );
 
+            // Ensure the channel gets stopped by adding a timeout to the handshake. Otherwise if
+            // the handshake does not finish channel.stop() will never get called, resulting in
+            // zombie processes.
+            let result = timeout(Duration::from_secs(5), handshake_task).await;
+
             channel.clone().start(p2p.executor());
 
-            match handshake_task.await {
-                Ok(()) => {
+            match result {
+                Ok(_) => {
                     debug!(target: "net::refinery::ping_node()", "Handshake success! Stopping channel.");
                     channel.stop().await;
                     true
                 }
                 Err(e) => {
-                    debug!(target: "net::refinery::ping_node()", "Handshake failure! {}", e);
+                    debug!(target: "net::refinery::ping_node()", "Handshake timed out! {}", e);
                     channel.stop().await;
                     false
                 }

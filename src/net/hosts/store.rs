@@ -1235,9 +1235,32 @@ mod tests {
         super::super::{settings::Settings, P2p},
         *,
     };
-    use crate::system::sleep;
+    use crate::{net::hosts::refinery::ping_node, system::sleep};
     use smol::Executor;
     use std::{sync::Arc, time::UNIX_EPOCH};
+
+    #[test]
+    fn test_ping_node() {
+        smol::block_on(async {
+            let settings = Settings {
+                localnet: false,
+                external_addrs: vec![
+                    Url::parse("tcp://foo.bar:123").unwrap(),
+                    Url::parse("tcp://lol.cat:321").unwrap(),
+                ],
+                ..Default::default()
+            };
+
+            let ex = Arc::new(Executor::new());
+            let p2p = P2p::new(settings, ex.clone()).await;
+
+            let url = Url::parse("tcp://xeno.systems.wtf").unwrap();
+            println!("Pinging node...");
+            let task = ex.spawn(ping_node(url.clone(), p2p));
+            ex.run(task).await;
+            println!("Ping node complete!");
+        });
+    }
 
     #[test]
     fn test_is_local_host() {

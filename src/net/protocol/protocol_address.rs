@@ -197,7 +197,7 @@ impl ProtocolAddress {
             debug!(target: "net::protocol_address::send_my_addrs()", "Attempting to ping self");
 
             // See if we can do a version exchange with ourself.
-            if ping_node(&addr, self.p2p.clone()).await {
+            if ping_node(addr.clone(), self.p2p.clone()).await {
                 // We're online. Update last_seen and broadcast our address.
                 let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
                 addrs.push((addr, last_seen));

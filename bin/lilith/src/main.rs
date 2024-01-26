@@ -155,7 +155,7 @@ impl Lilith {
             let (entry, position) = hosts.whitelist_fetch_last().await;
             let url = &entry.0;
 
-            if !ping_node(url, p2p.clone()).await {
+            if !ping_node(url.clone(), p2p.clone()).await {
                 let (_addr, last_seen) = hosts.get_whitelist_entry_at_addr(url).await.unwrap();
                 hosts.greylist_store_or_update(&[(url.clone(), last_seen)]).await;
 
