@@ -18,7 +18,6 @@
 #localnet = false
 #hostlist ="~/.local/darkfi/lilith/darkfid_sync_hostlist.tsv"
 
-
 #[network."darkfid_consensus_v4"]
 #accept_addrs = ["tcp+tls://0.0.0.0:33023"]
 #seeds = []
