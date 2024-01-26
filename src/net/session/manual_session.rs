@@ -82,16 +82,15 @@ impl ManualSession {
     pub async fn connect(self: Arc<Self>, addr: Url) {
         let ex = self.p2p().executor();
         let task = StoppableTask::new();
+        self.connect_slots.lock().await.push(task.clone());
 
-        task.clone().start(
+        task.start(
             self.clone().channel_connect_loop(addr),
             // Ignore stop handler
             |_| async {},
             Error::NetworkServiceStopped,
             ex,
         );
-
-        self.connect_slots.lock().await.push(task);
     }
 
     /// Creates a connector object and tries to connect using it
