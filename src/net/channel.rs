@@ -174,7 +174,7 @@ impl Channel {
              M::NAME, self,
         );
 
-        if self.stopped.load(SeqCst) {
+        if self.is_stopped() {
             return Err(Error::ChannelStopped)
         }
 
@@ -299,13 +299,7 @@ impl Channel {
                     debug!(target: "net::channel::main_receive_loop()", "Stopping channel {:?}", self);
 
                     // We will reject further connections from this peer
-                    self.session
-                        .upgrade()
-                        .unwrap()
-                        .p2p()
-                        .hosts()
-                        .mark_rejected(self.address())
-                        .await;
+                    self.p2p().hosts().mark_rejected(self.address()).await;
 
                     return Err(Error::ChannelStopped)
                 }
