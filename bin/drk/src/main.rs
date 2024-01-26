@@ -771,7 +771,11 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                         coin.1,
                         coin.0.note.token_id,
                         aliases,
-                        format!("{} ({})", coin.0.note.value, encode_base10(coin.0.note.value, 8)),
+                        format!(
+                            "{} ({})",
+                            coin.0.note.value,
+                            encode_base10(coin.0.note.value, BALANCE_BASE10_DECIMALS)
+                        ),
                         spend_hook,
                         user_data
                     ]);
