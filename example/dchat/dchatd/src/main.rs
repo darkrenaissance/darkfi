@@ -169,12 +169,14 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     signals_handler.wait_termination(signals_task).await?;
     info!("Caught termination signal, cleaning up and exiting...");
 
-    info!("Stopping P2P network");
-    p2p.stop().await;
-
     info!("Stopping JSON-RPC server");
     rpc_task.stop().await;
+
+    info!("Stopping dnet tasks");
     dnet_task.stop().await;
+
+    info!("Stopping P2P network");
+    p2p.stop().await;
 
     info!("Shut down successfully");
     // ANCHOR_END: shutdown
