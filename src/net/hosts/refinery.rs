@@ -174,12 +174,12 @@ async fn ping_node_impl(addr: Url, p2p: P2pPtr) -> bool {
                 p2p.executor(),
             );
 
+            channel.clone().start(p2p.executor());
+
             // Ensure the channel gets stopped by adding a timeout to the handshake. Otherwise if
             // the handshake does not finish channel.stop() will never get called, resulting in
             // zombie processes.
             let result = timeout(Duration::from_secs(5), handshake_task).await;
-
-            channel.clone().start(p2p.executor());
 
             match result {
                 Ok(_) => {
