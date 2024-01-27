@@ -76,8 +76,6 @@ impl ProtocolVersion {
                 self.channel.address(), e,
             );
 
-            // Remove from hosts
-            //self.hosts.remove(self.channel.address()).await;
             self.channel.stop().await;
             return Err(Error::ChannelTimeout)
         }
@@ -151,7 +149,6 @@ impl ProtocolVersion {
                 self.channel.address(),
             );
 
-            //self.hosts.remove(self.channel.address()).await;
             self.channel.stop().await;
             return Err(Error::ChannelStopped)
         }
