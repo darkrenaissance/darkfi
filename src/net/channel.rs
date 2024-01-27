@@ -150,7 +150,7 @@ impl Channel {
     pub async fn subscribe_stop(&self) -> Result<Subscription<Error>> {
         debug!(target: "net::channel::subscribe_stop()", "START {:?}", self);
 
-        if self.stopped.load(SeqCst) {
+        if self.is_stopped() {
             return Err(Error::ChannelStopped)
         }
 
