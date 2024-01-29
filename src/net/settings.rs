@@ -93,7 +93,7 @@ impl Default for Settings {
             allowed_transports: vec![],
             transport_mixing: true,
             outbound_connections: 0,
-            inbound_connections: 0,
+            inbound_connections: 10,
             manual_attempt_limit: 0,
             outbound_connect_timeout: 15,
             channel_handshake_timeout: 10,
