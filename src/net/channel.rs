@@ -87,8 +87,8 @@ pub struct Channel {
 
 impl Channel {
     /// Sets up a new channel. Creates a reader and writer [`PtStream`] and
-    /// summons the message subscriber subsystem. Performs a network handshake
-    /// on the subsystem dispatchers.
+    /// the message subscriber subsystem. Performs a network handshake on the
+    /// subsystem dispatchers.
     pub async fn new(stream: Box<dyn PtStream>, addr: Url, session: SessionWeakPtr) -> Arc<Self> {
         let (reader, writer) = io::split(stream);
         let reader = Mutex::new(reader);
