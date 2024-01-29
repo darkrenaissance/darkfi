@@ -3,10 +3,9 @@
 ## Abstract
 
 The _Money_ contract implements network fees, token transfers,
-atomic swaps, token minting and freezing, and staking/unstaking of
-PoS consensus tokens.
+atomic swaps, and token minting.
 
-The functions/entrypoints provided by this smart contract are:
+The functions provided by this smart contract are:
 ```rust
 {{#include ../../../../../src/contract/money/src/lib.rs:money-function}}
 ```
