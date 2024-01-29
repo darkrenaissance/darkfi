@@ -1,14 +1,5 @@
 # Consensus
 
-To understand how the consensus smart contract works and how anonymous
-staking and unstaking is achieved, read the following chapters:
-
-* [Genesis stake](consensus/genesis_stake.md)
-* [Stake](consensus/stake.md)
-* [Proposal](consensus/proposal.md)
-* [Unstake request](consensus/unstake_request.md)
-* [Unstake](consensus/unstake.md)
-
 This section of the book describes how nodes participating in the DarkFi
 blockchain achieve consensus.
 
