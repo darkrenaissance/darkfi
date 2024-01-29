@@ -106,8 +106,9 @@ impl NullifierAttributes {
     }
 }
 
-/// A contract call's clear input
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+// ANCHOR: money-clear-input
+/// A contract call's clear input
 pub struct ClearInput {
     /// Input's value (amount)
     pub value: u64,
@@ -120,9 +121,11 @@ pub struct ClearInput {
     /// Public key for the signature
     pub signature_public: PublicKey,
 }
+// ANCHOR_END: money-clear-input
 
-/// A contract call's anonymous input
 #[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
+// ANCHOR: money-input
+/// A contract call's anonymous input
 pub struct Input {
     /// Pedersen commitment for the input's value
     pub value_commit: pallas::Point,
@@ -143,6 +146,22 @@ pub struct Input {
     /// Public key for the signature
     pub signature_public: PublicKey,
 }
+// ANCHOR_END: money-input
+
+#[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
+// ANCHOR: money-output
+/// A contract call's anonymous output
+pub struct Output {
+    /// Pedersen commitment for the output's value
+    pub value_commit: pallas::Point,
+    /// Commitment for the output's token ID
+    pub token_commit: pallas::Base,
+    /// Minted coin
+    pub coin: Coin,
+    /// AEAD encrypted note
+    pub note: AeadEncryptedNote,
+}
+// ANCHOR_END: money-output
 
 /// Anonymous input for consensus contract calls
 #[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
@@ -157,19 +176,6 @@ pub struct ConsensusInput {
     pub merkle_root: MerkleNode,
     /// Public key for the signature
     pub signature_public: PublicKey,
-}
-
-/// A contract call's anonymous output
-#[derive(Clone, Debug, PartialEq, SerialEncodable, SerialDecodable)]
-pub struct Output {
-    /// Pedersen commitment for the output's value
-    pub value_commit: pallas::Point,
-    /// Commitment for the output's token ID
-    pub token_commit: pallas::Base,
-    /// Minted coin
-    pub coin: Coin,
-    /// AEAD encrypted note
-    pub note: AeadEncryptedNote,
 }
 
 /// A consensus contract call's anonymous output

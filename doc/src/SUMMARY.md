@@ -83,7 +83,7 @@
     - [Concepts](spec/contract/dao/concepts.md)
     - [Model](spec/contract/dao/model.md)
     - [Scheme](spec/contract/dao/scheme.md)
-  - [Money]()
+  - [Money](spec/contract/money/money.md)
     - [Model](spec/contract/money/model.md)
     - [Scheme](spec/contract/money/scheme.md)
 

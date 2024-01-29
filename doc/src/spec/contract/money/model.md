@@ -39,3 +39,53 @@ $$ \begin{aligned}
 $$ \t{Coin} : \t{Attrs}_\t{Coin} → 𝔽ₚ $$
 $$ \t{Coin}(p) = \t{Bulla}(\mathcal{X}(p.\t{PK}), \mathcal{Y}(p.\t{PK}), ℕ₆₄2𝔽ₚ(p.v), p.τ, p.ζ, p.\t{SH}, p.\t{UD}) $$
 
+## Inputs and Outputs
+
+### Clear Input
+
+Define the clear input attributes
+$$ \begin{aligned}
+  \t{MoneyClearInput}.v &∈ ℕ₆₄ \\
+  \t{MoneyClearInput}.T &∈ ℙₚ \\
+  \t{MoneyClearInput}.v_\t{blind} &∈ 𝔽_q \\
+  \t{MoneyClearInput}.t_\t{blind} &∈ 𝔽ₚ \\
+  \t{MoneyClearInput}.Z &∈ ℙₚ \\
+\end{aligned} $$
+
+```rust
+{{#include ../../../../../src/contract/money/src/model.rs:money-clear-input}}
+```
+
+### Input
+
+Define the input attributes
+$$ \begin{aligned}
+  \t{MoneyInput}.V &∈ ℙₚ \\
+  \t{MoneyInput}.T &∈ 𝔽ₚ \\
+  \t{MoneyInput}.N &∈ 𝔽ₚ \\
+  \t{MoneyInput}.R &∈ 𝔽ₚ \\
+  \t{MoneyInput}.h &∈ 𝔽ₚ \\
+  \t{MoneyInput}.U &∈ 𝔽ₚ \\
+  \t{MoneyInput}.Z &∈ ℙₚ \\
+\end{aligned} $$
+
+```rust
+{{#include ../../../../../src/contract/money/src/model.rs:money-input}}
+```
+
+### Output
+
+Let $\t{AeadEncNote}$ be defined as in [In-band Secret Distribution](../../crypto-schemes.md#in-band-secret-distribution).
+
+Define the output attributes
+$$ \begin{aligned}
+  \t{MoneyOutput}.V &∈ ℙₚ \\
+  \t{MoneyOutput}.T &∈ 𝔽ₚ \\
+  \t{MoneyOutput}.C &∈ 𝔽ₚ \\
+  \t{MoneyOutput}.\t{note} &∈ \t{AeadEncNote} \\
+\end{aligned} $$
+
+```rust
+{{#include ../../../../../src/contract/money/src/model.rs:money-output}}
+```
+
