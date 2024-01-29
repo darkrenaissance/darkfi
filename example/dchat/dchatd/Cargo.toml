@@ -1,6 +1,6 @@
 [package]
 name = "dchatd"
-version = "0.4.2"
+version = "0.4.1"
 homepage = "https://dark.fi"
 description = "Simple chat app p2p daemon used to document DarkFi networking code"
 authors = ["Dyne.org foundation <foundation@dyne.org>"]
