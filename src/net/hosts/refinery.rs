@@ -181,15 +181,15 @@ async fn ping_node_impl(addr: Url, p2p: P2pPtr) -> bool {
             // zombie processes.
             let result = timeout(Duration::from_secs(5), handshake_task).await;
 
+            channel.stop().await;
+            
             match result {
                 Ok(_) => {
-                    debug!(target: "net::refinery::ping_node()", "Handshake success! Stopping channel.");
-                    channel.stop().await;
+                    debug!(target: "net::refinery::ping_node()", "Handshake success!");
                     true
                 }
                 Err(e) => {
-                    debug!(target: "net::refinery::ping_node()", "Handshake timed out! {}", e);
-                    channel.stop().await;
+                    debug!(target: "net::refinery::ping_node()", "Handshake err: {}", e);
                     false
                 }
             }
