@@ -281,8 +281,6 @@ impl Channel {
                         target: "net::channel::main_receive_loop()",
                         "Stopping channel {:?}", self
                     );
-                    self.stop().await;
-
                     return Err(Error::ChannelStopped)
                 }
             };
@@ -302,8 +300,6 @@ impl Channel {
 
                     // We will reject further connections from this peer
                     self.p2p().hosts().mark_rejected(self.address()).await;
-
-                    self.stop().await;
 
                     return Err(Error::ChannelStopped)
                 }
