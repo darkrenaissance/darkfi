@@ -18,8 +18,8 @@
 
 use darkfi_sdk::{
     crypto::{
-        ecvrf::VrfProof, pasta_prelude::PrimeField, PublicKey, CONSENSUS_CONTRACT_ID,
-        DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
+        ecvrf::VrfProof, pasta_prelude::PrimeField, PublicKey, DAO_CONTRACT_ID,
+        DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     pasta::{group::ff::FromUniformBytes, pallas},
 };
@@ -61,9 +61,6 @@ pub async fn deploy_native_contracts(
     // The DAO contract uses an empty payload to deploy itself.
     let dao_contract_deploy_payload = vec![];
 
-    // The Consensus contract uses an empty payload to deploy itself.
-    let consensus_contract_deploy_payload = vec![];
-
     // The Deployooor contract uses an empty payload to deploy itself.
     let deployooor_contract_deploy_payload = vec![];
 
@@ -79,12 +76,6 @@ pub async fn deploy_native_contracts(
             *DAO_CONTRACT_ID,
             include_bytes!("../contract/dao/darkfi_dao_contract.wasm").to_vec(),
             dao_contract_deploy_payload,
-        ),
-        (
-            "Consensus Contract",
-            *CONSENSUS_CONTRACT_ID,
-            include_bytes!("../contract/consensus/darkfi_consensus_contract.wasm").to_vec(),
-            consensus_contract_deploy_payload,
         ),
         (
             "Deployooor Contract",
@@ -198,7 +189,7 @@ pub async fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
         return Err(TxVerifyFailed::ErroneousTxs(vec![txs[0].clone()]).into())
     }
 
-    // Iterate transactions, exluding producer(last) one
+    // Iterate transactions, exluding producer(first) one
     for tx in &txs[1..] {
         // Transaction must contain a single Consensus::GenesisStake (0x00)
         // or Money::GenesisMint (0x01) call
@@ -208,11 +199,7 @@ pub async fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
         let call = &tx.calls[0];
         let data = &call.data.data;
         let function = data[0];
-        if !(call.data.contract_id == *CONSENSUS_CONTRACT_ID ||
-            call.data.contract_id == *MONEY_CONTRACT_ID) ||
-            (call.data.contract_id == *CONSENSUS_CONTRACT_ID && function != 0x00_u8) ||
-            (call.data.contract_id == *MONEY_CONTRACT_ID && function != 0x01_u8)
-        {
+        if call.data.contract_id != *MONEY_CONTRACT_ID || function != 0x01_u8 {
             return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
         }
 

@@ -1931,7 +1931,6 @@ dependencies = [
  "darkfi",
  "darkfi-sdk",
  "darkfi-serial",
- "darkfi_consensus_contract",
  "darkfi_dao_contract",
  "darkfi_deployooor_contract",
  "darkfi_money_contract",
@@ -2033,28 +2032,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "darkfi_consensus_contract"
-version = "0.4.1"
-dependencies = [
- "blake3 1.5.0",
- "bs58",
- "chacha20poly1305",
- "darkfi",
- "darkfi-contract-test-harness",
- "darkfi-sdk",
- "darkfi-serial",
- "darkfi_money_contract",
- "getrandom 0.2.12",
- "halo2_proofs",
- "log",
- "rand 0.8.5",
- "simplelog",
- "sled",
- "smol",
- "thiserror",
-]
-
-[[package]]
 name = "darkfi_dao_contract"
 version = "0.4.1"
 dependencies = [
@@ -2114,7 +2091,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "darkfid2"
+name = "darkfid"
 version = "0.4.1"
 dependencies = [
  "async-trait",
@@ -2124,7 +2101,6 @@ dependencies = [
  "darkfi-contract-test-harness",
  "darkfi-sdk",
  "darkfi-serial",
- "darkfi_consensus_contract",
  "darkfi_money_contract",
  "easy-parallel",
  "log",

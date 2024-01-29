@@ -38,20 +38,16 @@ use darkfi_dao_contract::{
 };
 use darkfi_deployooor_contract::DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1;
 use darkfi_money_contract::{
-    CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1, CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1,
-    CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
-    MONEY_CONTRACT_ZKAS_FEE_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_FEE_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
     MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
-use darkfi_sdk::crypto::{
-    contract_id::DEPLOYOOOR_CONTRACT_ID, CONSENSUS_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
-};
+use darkfi_sdk::crypto::{contract_id::DEPLOYOOOR_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
 use darkfi_serial::{deserialize, serialize};
 use log::debug;
 
 /// Update this if any circuits are changed
-const VKS_HASH: &str = "15c86acb8a96c21d9233e432975c1579c5b3b39c0b7568c4f3ae167783eeb548";
-const PKS_HASH: &str = "3bb43dbb2a5fbb54d406e637681c70bc748f158f4d725e71c1db38e85106966e";
+const VKS_HASH: &str = "d02c1709830fb6f2fb5672b2dc9052e8b85c9e1179c4b0fbbeea2ae50ae3b5b3";
+const PKS_HASH: &str = "98e95fce2f80b9d2a8adffa258e37316354fa3f236d2f25d3fd5d9fc04a089f9";
 
 fn pks_path(typ: &str) -> Result<PathBuf> {
     let output = Command::new("git").arg("rev-parse").arg("--show-toplevel").output()?.stdout;
@@ -132,10 +128,6 @@ pub fn read_or_gen_vks_and_pks() -> Result<(Pks, Vks)> {
         &include_bytes!("../../dao/proof/dao-exec.zk.bin")[..],
         &include_bytes!("../../dao/proof/dao-auth-money-transfer.zk.bin")[..],
         &include_bytes!("../../dao/proof/dao-auth-money-transfer-enc-coin.zk.bin")[..],
-        // Consensus
-        &include_bytes!("../../consensus/proof/consensus_burn_v1.zk.bin")[..],
-        &include_bytes!("../../consensus/proof/consensus_mint_v1.zk.bin")[..],
-        &include_bytes!("../../consensus/proof/consensus_proposal_v1.zk.bin")[..],
         // Deployooor
         &include_bytes!("../../deployooor/proof/derive_contract_id.zk.bin")[..],
     ];
@@ -184,9 +176,6 @@ pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
     let dao_zkas_tree_ptr = DAO_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
     let dao_zkas_tree = sled_db.open_tree(dao_zkas_tree_ptr)?;
 
-    let consensus_zkas_tree_ptr = CONSENSUS_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
-    let consensus_zkas_tree = sled_db.open_tree(consensus_zkas_tree_ptr)?;
-
     let deployooor_zkas_tree_ptr =
         DEPLOYOOOR_CONTRACT_ID.hash_state_id(SMART_CONTRACT_ZKAS_DB_NAME);
     let deployooor_zkas_tree = sled_db.open_tree(deployooor_zkas_tree_ptr)?;
@@ -223,15 +212,6 @@ pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
                 let key = serialize(&namespace.as_str());
                 let value = serialize(&(bincode.clone(), vk.clone()));
                 dao_zkas_tree.insert(key, value)?;
-            }
-
-            // Consensus circuits
-            CONSENSUS_CONTRACT_ZKAS_MINT_NS_V1 |
-            CONSENSUS_CONTRACT_ZKAS_BURN_NS_V1 |
-            CONSENSUS_CONTRACT_ZKAS_PROPOSAL_NS_V1 => {
-                let key = serialize(&namespace.as_str());
-                let value = serialize(&(bincode.clone(), vk.clone()));
-                consensus_zkas_tree.insert(key, value)?;
             }
 
             x => panic!("Found unhandled zkas namespace {}", x),

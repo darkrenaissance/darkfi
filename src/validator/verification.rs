@@ -21,8 +21,7 @@ use std::collections::HashMap;
 use darkfi_sdk::{
     blockchain::{block_version, expected_reward},
     crypto::{
-        schnorr::SchnorrPublic, ContractId, PublicKey, CONSENSUS_CONTRACT_ID,
-        DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
+        schnorr::SchnorrPublic, ContractId, PublicKey, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     dark_tree::dark_forest_leaf_vec_integrity_check,
     deploy::DeployParamsV1,
@@ -171,9 +170,7 @@ pub async fn verify_block(
     // Verify proposal transaction.
     // For PoS blocks(version 2) verify if not in PoS testing mode.
     if block.header.version != 2 || !pos_testing_mode {
-        let public_key =
-            verify_producer_transaction(overlay, time_keeper, &block.txs[0], block.header.version)
-                .await?;
+        let public_key = verify_producer_transaction(overlay, time_keeper, &block.txs[0]).await?;
         verify_producer_signature(block, &public_key)?;
     }
 
@@ -213,7 +210,6 @@ pub async fn verify_producer_transaction(
     overlay: &BlockchainOverlayPtr,
     time_keeper: &TimeKeeper,
     tx: &Transaction,
-    block_version: u8,
 ) -> Result<PublicKey> {
     let tx_hash = tx.hash()?;
     debug!(target: "validator::verification::verify_producer_transaction", "Validating proposal transaction {}", tx_hash);
@@ -225,20 +221,9 @@ pub async fn verify_producer_transaction(
 
     // Verify call based on version
     let call = &tx.calls[0];
-    match block_version {
-        1 => {
-            // Version 1 blocks must contain a Money::PoWReward(0x08) call
-            if call.data.contract_id != *MONEY_CONTRACT_ID || call.data.data[0] != 0x08 {
-                return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
-            }
-        }
-        2 => {
-            // Version 2 blocks must contain a Consensus::Proposal(0x02) call
-            if call.data.contract_id != *CONSENSUS_CONTRACT_ID || call.data.data[0] != 0x02 {
-                return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
-            }
-        }
-        _ => return Err(Error::BlockVersionIsInvalid(block_version)),
+    // Block must contain a Money::PoWReward(0x06) call
+    if call.data.contract_id != *MONEY_CONTRACT_ID || call.data.data[0] != 0x06 {
+        return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
     }
 
     // Map of ZK proof verifying keys for the current transaction
@@ -403,10 +388,8 @@ pub async fn verify_transaction(
 
     // Iterate over all calls to get the metadata
     for (idx, call) in tx.calls.iter().enumerate() {
-        // Transaction must not contain a reward call, Money::PoWReward(0x08) or Consensus::Proposal(0x02)
-        if (call.data.contract_id == *MONEY_CONTRACT_ID && call.data.data[0] == 0x08) ||
-            (call.data.contract_id == *CONSENSUS_CONTRACT_ID && call.data.data[0] == 0x02)
-        {
+        // Transaction must not contain a Money::PoWReward(0x06) call
+        if call.data.contract_id == *MONEY_CONTRACT_ID && call.data.data[0] == 0x06 {
             error!(target: "validator::verification::verify_transaction", "Reward transaction detected");
             return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
         }

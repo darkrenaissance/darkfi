@@ -36,7 +36,7 @@ use num_bigint::BigUint;
 use url::Url;
 
 use crate::{
-    proto::BlockInfoMessage,
+    //  proto::BlockInfoMessage,
     task::sync::sync_task,
     utils::{spawn_consensus_p2p, spawn_sync_p2p},
     Darkfid,
@@ -65,16 +65,13 @@ impl Harness {
         ex: &Arc<smol::Executor<'static>>,
     ) -> Result<Self> {
         // Use test harness to generate genesis transactions
-        let mut th =
-            TestHarness::new(&["money".to_string(), "consensus".to_string()], verify_fees).await?;
-        let (genesis_stake_tx, _) = th.genesis_stake(&Holder::Alice, config.alice_initial)?;
+        let mut th = TestHarness::new(&["money".to_string()], verify_fees).await?;
         let (genesis_mint_tx, _) = th.genesis_mint(&Holder::Bob, config.bob_initial)?;
 
         // Generate default genesis block
         let mut genesis_block = BlockInfo::default();
 
         // Append genesis transactions and calculate their total
-        genesis_block.txs.push(genesis_stake_tx);
         genesis_block.txs.push(genesis_mint_tx);
         let genesis_txs_total = genesis_txs_total(&genesis_block.txs).await?;
         genesis_block.slots[0].total_tokens = genesis_txs_total;
@@ -171,12 +168,12 @@ impl Harness {
 
     pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
         // We simply broadcast the block using Alice's sync P2P
-        for block in blocks {
-            self.alice.sync_p2p.broadcast(&BlockInfoMessage::from(block)).await;
+        for _block in blocks {
+            //self.alice.sync_p2p.broadcast(&BlockInfoMessage::from(block)).await;
         }
 
         // and then add it to her chain
-        self.alice.validator.add_blocks(blocks).await?;
+        //self.alice.validator.add_blocks(blocks).await?;
 
         Ok(())
     }

@@ -32,8 +32,8 @@ use darkfi::{
 };
 use darkfi_dao_contract::model::{DaoBulla, DaoProposalBulla};
 use darkfi_money_contract::{
-    client::{ConsensusNote, ConsensusOwnCoin, MoneyNote, OwnCoin},
-    model::{ConsensusOutput, Output},
+    client::{MoneyNote, OwnCoin},
+    model::Output,
 };
 use darkfi_sdk::{
     blockchain::{PidOutput, PreviousSlot, Slot},
@@ -53,11 +53,6 @@ use benchmarks::TxActionBenchmarks;
 pub mod vks;
 use vks::{read_or_gen_vks_and_pks, Vks};
 
-mod consensus_genesis_stake;
-mod consensus_proposal;
-mod consensus_stake;
-mod consensus_unstake;
-mod consensus_unstake_request;
 mod contract_deploy;
 mod dao_exec;
 mod dao_mint;
@@ -112,11 +107,6 @@ pub enum TxAction {
     MoneyTransfer,
     MoneyOtcSwap,
     MoneyPoWReward,
-    ConsensusGenesisStake,
-    ConsensusStake,
-    ConsensusProposal,
-    ConsensusUnstakeRequest,
-    ConsensusUnstake,
     DaoMint,
     DaoPropose,
     DaoVote,
@@ -129,8 +119,6 @@ pub struct Wallet {
     pub contract_deploy_authority: Keypair,
     pub validator: ValidatorPtr,
     pub money_merkle_tree: MerkleTree,
-    pub consensus_staked_merkle_tree: MerkleTree,
-    pub consensus_unstaked_merkle_tree: MerkleTree,
     pub dao_merkle_tree: MerkleTree,
     pub dao_proposals_tree: MerkleTree,
     pub unspent_money_coins: Vec<OwnCoin>,
@@ -173,8 +161,6 @@ impl Wallet {
         // Create necessary Merkle trees for tracking
         let mut money_merkle_tree = MerkleTree::new(100);
         money_merkle_tree.append(MerkleNode::from(pallas::Base::ZERO));
-        let consensus_staked_merkle_tree = MerkleTree::new(100);
-        let consensus_unstaked_merkle_tree = MerkleTree::new(100);
 
         let dao_merkle_tree = MerkleTree::new(100);
         let dao_proposals_tree = MerkleTree::new(100);
@@ -191,8 +177,6 @@ impl Wallet {
             contract_deploy_authority,
             validator,
             money_merkle_tree,
-            consensus_staked_merkle_tree,
-            consensus_unstaked_merkle_tree,
             dao_merkle_tree,
             dao_proposals_tree,
             unspent_money_coins,
@@ -269,12 +253,6 @@ impl TestHarness {
         tx_action_benchmarks.insert(TxAction::MoneyOtcSwap, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::MoneyTransfer, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::MoneyPoWReward, TxActionBenchmarks::default());
-        tx_action_benchmarks.insert(TxAction::ConsensusGenesisStake, TxActionBenchmarks::default());
-        tx_action_benchmarks.insert(TxAction::ConsensusStake, TxActionBenchmarks::default());
-        tx_action_benchmarks.insert(TxAction::ConsensusProposal, TxActionBenchmarks::default());
-        tx_action_benchmarks
-            .insert(TxAction::ConsensusUnstakeRequest, TxActionBenchmarks::default());
-        tx_action_benchmarks.insert(TxAction::ConsensusUnstake, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::DaoMint, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::DaoPropose, TxActionBenchmarks::default());
         tx_action_benchmarks.insert(TxAction::DaoVote, TxActionBenchmarks::default());
@@ -402,54 +380,6 @@ impl TestHarness {
         Ok(owncoin.unwrap())
     }
 
-    pub fn gather_consensus_staked_owncoin(
-        &mut self,
-        holder: &Holder,
-        output: &ConsensusOutput,
-        secret_key: Option<SecretKey>,
-    ) -> Result<ConsensusOwnCoin> {
-        let wallet = self.holders.get_mut(holder).unwrap();
-        let leaf_position = wallet.consensus_staked_merkle_tree.mark().unwrap();
-        let secret_key = match secret_key {
-            Some(key) => key,
-            None => wallet.keypair.secret,
-        };
-        let note: ConsensusNote = output.note.decrypt(&secret_key)?;
-        let oc = ConsensusOwnCoin {
-            coin: output.coin,
-            note: note.clone(),
-            secret: secret_key,
-            nullifier: Nullifier::from(poseidon_hash([wallet.keypair.secret.inner(), note.serial])),
-            leaf_position,
-        };
-
-        Ok(oc)
-    }
-
-    pub fn gather_consensus_unstaked_owncoin(
-        &mut self,
-        holder: &Holder,
-        output: &ConsensusOutput,
-        secret_key: Option<SecretKey>,
-    ) -> Result<ConsensusOwnCoin> {
-        let wallet = self.holders.get_mut(holder).unwrap();
-        let leaf_position = wallet.consensus_unstaked_merkle_tree.mark().unwrap();
-        let secret_key = match secret_key {
-            Some(key) => key,
-            None => wallet.keypair.secret,
-        };
-        let note: ConsensusNote = output.note.decrypt(&secret_key)?;
-        let oc = ConsensusOwnCoin {
-            coin: output.coin,
-            note: note.clone(),
-            secret: secret_key,
-            nullifier: Nullifier::from(poseidon_hash([wallet.keypair.secret.inner(), note.serial])),
-            leaf_position,
-        };
-
-        Ok(oc)
-    }
-
     pub async fn get_slot_by_slot(&self, slot: u64) -> Result<Slot> {
         let faucet = self.holders.get(&Holder::Faucet).unwrap();
         let slot = faucet.validator.blockchain.get_slots_by_id(&[slot])?[0].clone().unwrap();
@@ -484,14 +414,8 @@ impl TestHarness {
         // Compare trees
         let wallet = wallets[0];
         let money_root = wallet.money_merkle_tree.root(0).unwrap();
-        let consensus_stake_root = wallet.consensus_staked_merkle_tree.root(0).unwrap();
-        let consensus_unstake_root = wallet.consensus_unstaked_merkle_tree.root(0).unwrap();
         for wallet in &wallets[1..] {
             assert!(money_root == wallet.money_merkle_tree.root(0).unwrap());
-            assert!(consensus_stake_root == wallet.consensus_staked_merkle_tree.root(0).unwrap());
-            assert!(
-                consensus_unstake_root == wallet.consensus_unstaked_merkle_tree.root(0).unwrap()
-            );
         }
     }
 

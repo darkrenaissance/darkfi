@@ -29,7 +29,6 @@ use darkfi::{
     zkas::ZkBinary,
     Result,
 };
-use darkfi_consensus_contract::model::SECRET_KEY_PREFIX;
 use darkfi_money_contract::{
     client::pow_reward_v1::PoWRewardCallBuilder, MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
@@ -161,7 +160,8 @@ async fn generate_next_block(
     // We are deriving the next secret key for optimization.
     // Next secret is the poseidon hash of:
     //  [prefix, current(previous) secret, signing(block) height].
-    let next_secret = poseidon_hash([SECRET_KEY_PREFIX, secret.inner(), height.into()]);
+    let prefix = pallas::Base::from_raw([4, 0, 0, 0]);
+    let next_secret = poseidon_hash([prefix, secret.inner(), height.into()]);
     *secret = SecretKey::from(next_secret);
 
     // Generate reward transaction

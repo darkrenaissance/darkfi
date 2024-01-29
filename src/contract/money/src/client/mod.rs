@@ -28,7 +28,7 @@
 
 use darkfi_sdk::{
     bridgetree,
-    crypto::{pasta_prelude::*, Nullifier, SecretKey, TokenId, DARK_TOKEN_ID},
+    crypto::{Nullifier, SecretKey, TokenId},
     pasta::pallas,
 };
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
@@ -52,12 +52,6 @@ pub mod token_mint_v1;
 
 /// `Money::TokenFreezeV1` API
 pub mod token_freeze_v1;
-
-/// `Money::StakeV1` API
-pub mod stake_v1;
-
-/// `Money::UnstakeV1` API
-pub mod unstake_v1;
 
 /// `Money::PoWRewardV1` API
 pub mod pow_reward_v1;
@@ -143,65 +137,6 @@ pub struct OwnCoin {
     pub nullifier: Nullifier,
     /// Coin's leaf position in the Merkle tree of coins
     pub leaf_position: bridgetree::Position,
-}
-
-/// `ConsensusNote` holds the inner attributes of a `Coin`.
-#[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
-pub struct ConsensusNote {
-    /// Serial number of the coin, used for the nullifier
-    pub serial: pallas::Base,
-    /// Value of the coin
-    pub value: u64,
-    /// Epoch the coin was minted
-    pub epoch: u64,
-    /// Blinding factor for the value pedersen commitment
-    pub value_blind: pallas::Scalar,
-    /// Value of the reward
-    pub reward: u64,
-    /// Blinding factor for the reward value pedersen commitment
-    pub reward_blind: pallas::Scalar,
-}
-
-impl From<ConsensusNote> for MoneyNote {
-    fn from(consensus_note: ConsensusNote) -> Self {
-        MoneyNote {
-            serial: consensus_note.serial,
-            value: consensus_note.value,
-            token_id: *DARK_TOKEN_ID,
-            spend_hook: pallas::Base::ZERO,
-            user_data: pallas::Base::ZERO,
-            value_blind: consensus_note.value_blind,
-            token_blind: pallas::Base::ZERO,
-            memo: vec![],
-        }
-    }
-}
-
-/// `ConsensusOwnCoin` is a representation of `Coin` with its respective metadata.
-#[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
-pub struct ConsensusOwnCoin {
-    /// The coin hash
-    pub coin: Coin,
-    /// The attached `ConsensusNote`
-    pub note: ConsensusNote,
-    /// Coin's secret key
-    pub secret: SecretKey,
-    /// Coin's nullifier
-    pub nullifier: Nullifier,
-    /// Coin's leaf position in the Merkle tree of coins
-    pub leaf_position: bridgetree::Position,
-}
-
-impl From<ConsensusOwnCoin> for OwnCoin {
-    fn from(consensus_own_coin: ConsensusOwnCoin) -> Self {
-        OwnCoin {
-            coin: consensus_own_coin.coin,
-            note: consensus_own_coin.note.into(),
-            secret: consensus_own_coin.secret,
-            nullifier: consensus_own_coin.nullifier,
-            leaf_position: consensus_own_coin.leaf_position,
-        }
-    }
 }
 
 pub fn compute_remainder_blind(

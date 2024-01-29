@@ -48,7 +48,6 @@ RUN sed -e 's,^#RUSTFLAGS ,RUSTFLAGS ,' -i Makefile
 RUN make clean && make ${BINS} &&  mkdir compiled-bins && \
     (if [ -e zkas ]; then cp -a zkas compiled-bins/; fi;) && \
     (if [ -e darkfid ]; then cp -a darkfid compiled-bins/; fi;) && \
-    (if [ -e darkfid2 ]; then cp -a darkfid2 compiled-bins/; fi;) && \
     (if [ -e faucetd ]; then cp -a faucetd compiled-bins/; fi;) && \
     (if [ -e darkirc ]; then cp -a darkirc compiled-bins/; fi;) && \
     (if [ -e "genev-cli" ]; then cp -a genev-cli compiled-bins/; fi;) && \

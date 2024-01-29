@@ -528,7 +528,6 @@ impl Validator {
         &self,
         tx: &Transaction,
         verifying_slot: u64,
-        block_version: u8,
         write: bool,
     ) -> Result<()> {
         debug!(target: "validator::add_test_producer_transaction", "Instantiating BlockchainOverlay");
@@ -545,8 +544,7 @@ impl Validator {
 
         // Verify transaction
         let mut erroneous_txs = vec![];
-        if let Err(e) = verify_producer_transaction(&overlay, &time_keeper, tx, block_version).await
-        {
+        if let Err(e) = verify_producer_transaction(&overlay, &time_keeper, tx).await {
             warn!(target: "validator::add_test_producer_transaction", "Transaction verification failed: {}", e);
             erroneous_txs.push(tx.clone());
         }

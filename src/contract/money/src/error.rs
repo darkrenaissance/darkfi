@@ -76,30 +76,6 @@ pub enum MoneyError {
     #[error("Token mint is frozen")]
     TokenMintFrozen,
 
-    #[error("Input used non-native token")]
-    StakeInputNonNativeToken,
-
-    #[error("Missing spend hook")]
-    StakeMissingSpendHook,
-
-    #[error("Missing nullifier")]
-    StakeMissingNullifier,
-
-    #[error("Parent contract call is not consensus contract")]
-    StakeParentCallNotConsensusContract,
-
-    #[error("Child contract call is not money contract")]
-    StakeChildCallNotMoneyContract,
-
-    #[error("Spend hook is not consensus contract")]
-    UnstakeSpendHookNotConsensusContract,
-
-    #[error("Parent contract call is not money contract")]
-    UnstakeParentCallNotMoneyContract,
-
-    #[error("Child contract call is not consensus contract")]
-    UnstakeChildCallNotConsensusContract,
-
     #[error("Parent call function mismatch")]
     ParentCallFunctionMismatch,
 
@@ -165,28 +141,20 @@ impl From<MoneyError> for ContractError {
             MoneyError::SwapMerkleRootNotFound => Self::Custom(16),
             MoneyError::TokenIdDoesNotDeriveFromMint => Self::Custom(17),
             MoneyError::TokenMintFrozen => Self::Custom(18),
-            MoneyError::StakeInputNonNativeToken => Self::Custom(19),
-            MoneyError::StakeMissingSpendHook => Self::Custom(20),
-            MoneyError::StakeMissingNullifier => Self::Custom(21),
-            MoneyError::StakeParentCallNotConsensusContract => Self::Custom(22),
-            MoneyError::StakeChildCallNotMoneyContract => Self::Custom(23),
-            MoneyError::UnstakeSpendHookNotConsensusContract => Self::Custom(24),
-            MoneyError::UnstakeParentCallNotMoneyContract => Self::Custom(25),
-            MoneyError::UnstakeChildCallNotConsensusContract => Self::Custom(26),
-            MoneyError::ParentCallFunctionMismatch => Self::Custom(27),
-            MoneyError::ParentCallInputMismatch => Self::Custom(28),
-            MoneyError::ChildCallFunctionMismatch => Self::Custom(29),
-            MoneyError::ChildCallInputMismatch => Self::Custom(30),
-            MoneyError::GenesisCallNonGenesisBlock => Self::Custom(31),
-            MoneyError::GenesisCallNonGenesisSlot => Self::Custom(32),
-            MoneyError::MissingNullifier => Self::Custom(33),
-            MoneyError::PoWRewardCallAfterCutoffBlockHeight => Self::Custom(34),
-            MoneyError::PoWRewardMissingSlot => Self::Custom(35),
-            MoneyError::PoWRewardExtendsUnknownFork => Self::Custom(36),
-            MoneyError::PoWRewardErroneousVrfProof => Self::Custom(37),
-            MoneyError::FeeMissingInputs => Self::Custom(38),
-            MoneyError::InsufficientFee => Self::Custom(39),
-            MoneyError::CoinMerkleRootNotFound => Self::Custom(40),
+            MoneyError::ParentCallFunctionMismatch => Self::Custom(19),
+            MoneyError::ParentCallInputMismatch => Self::Custom(20),
+            MoneyError::ChildCallFunctionMismatch => Self::Custom(21),
+            MoneyError::ChildCallInputMismatch => Self::Custom(22),
+            MoneyError::GenesisCallNonGenesisBlock => Self::Custom(23),
+            MoneyError::GenesisCallNonGenesisSlot => Self::Custom(24),
+            MoneyError::MissingNullifier => Self::Custom(25),
+            MoneyError::PoWRewardCallAfterCutoffBlockHeight => Self::Custom(26),
+            MoneyError::PoWRewardMissingSlot => Self::Custom(27),
+            MoneyError::PoWRewardExtendsUnknownFork => Self::Custom(28),
+            MoneyError::PoWRewardErroneousVrfProof => Self::Custom(29),
+            MoneyError::FeeMissingInputs => Self::Custom(30),
+            MoneyError::InsufficientFee => Self::Custom(31),
+            MoneyError::CoinMerkleRootNotFound => Self::Custom(32),
         }
     }
 }
