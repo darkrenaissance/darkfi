@@ -86,10 +86,9 @@ impl InboundSession {
             // prepared by the Acceptor.
             let channel_sub = acceptor.clone().subscribe().await;
 
-            let task = StoppableTask::new();
-
             // Then start listening for a Channel returned by the Subscriber. Call setup_channel()
             // to register the Channel when it has been received.
+            let task = StoppableTask::new();
             task.clone().start(
                 self.clone().channel_sub_loop(channel_sub, index, ex.clone()),
                 // Ignore stop handler
@@ -100,8 +99,8 @@ impl InboundSession {
 
             accept_tasks.push(task);
 
-            // Finally, run the Acceptor to start accepting inbound connections. Only when Subscribers
-            // have been set up can we safely do this.
+            // Finally, run the Acceptor to start accepting inbound connections. Only when
+            // the Subscriber has been set up can we safely do this.
             self.clone()
                 .start_accept_session(index, accept_addr.clone(), acceptor, ex.clone())
                 .await?;

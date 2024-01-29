@@ -158,9 +158,6 @@ impl ManualSession {
                         "[P2P] Unable to connect to manual outbound [{}]: {}",
                         addr, e,
                     );
-
-                    // Downgrade this host to greylist if it's on the whitelist or anchorlist.
-                    //self.downgrade_host(&addr).await;
                 }
             }
 

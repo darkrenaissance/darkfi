@@ -166,8 +166,10 @@ async fn ping_node_impl(addr: Url, p2p: P2pPtr) -> bool {
     match connector.connect(&addr).await {
         Ok((_url, channel)) => {
             debug!(target: "net::refinery::ping_node()", "Connected successfully!");
+            // First initialize the version protocol and its Version, Verack subscribers.  
             let proto_ver = ProtocolVersion::new(channel.clone(), p2p.settings()).await;
 
+            // Then run the version exchange, store the channel and subscribe to a stop signal.
             let handshake_task = session_outbound.perform_handshake_protocols(
                 proto_ver,
                 channel.clone(),
