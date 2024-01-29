@@ -21,7 +21,8 @@ all: $(JSONRPC)
 
 $(DARKFID_JSONRPC):
 	@echo "# darkfid JSON-RPC API" > $@
-	for i in blockchain tx wallet misc; do \
+	./build_jsonrpc.py ../bin/darkfid/src/rpc.rs >> $@
+	for i in blockchain tx; do \
 		echo "## $$i methods" >> $@ ;\
 		./build_jsonrpc.py ../bin/darkfid/src/rpc_$$i.rs >> $@ ;\
 	done
