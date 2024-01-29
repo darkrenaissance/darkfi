@@ -36,7 +36,7 @@ use num_bigint::BigUint;
 use url::Url;
 
 use crate::{
-    //  proto::BlockInfoMessage,
+    proto::BlockInfoMessage,
     task::sync::sync_task,
     utils::{spawn_consensus_p2p, spawn_sync_p2p},
     Darkfid,
@@ -168,12 +168,12 @@ impl Harness {
 
     pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
         // We simply broadcast the block using Alice's sync P2P
-        for _block in blocks {
-            //self.alice.sync_p2p.broadcast(&BlockInfoMessage::from(block)).await;
+        for block in blocks {
+            self.alice.sync_p2p.broadcast(&BlockInfoMessage::from(block)).await;
         }
 
         // and then add it to her chain
-        //self.alice.validator.add_blocks(blocks).await?;
+        self.alice.validator.add_blocks(blocks).await?;
 
         Ok(())
     }

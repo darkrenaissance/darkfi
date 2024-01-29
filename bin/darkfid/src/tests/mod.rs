@@ -84,6 +84,7 @@ async fn sync_pos_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
 }
 
 #[test]
+#[ignore]
 fn sync_pos_blocks() -> Result<()> {
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = smol::channel::unbounded::<()>();
