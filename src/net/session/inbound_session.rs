@@ -40,7 +40,7 @@ use super::{
     Session, SessionBitFlag, SESSION_INBOUND,
 };
 use crate::{
-    system::{LazyWeak, StoppableTask, StoppableTaskPtr},
+    system::{LazyWeak, StoppableTask, StoppableTaskPtr, Subscription},
     Error, Result,
 };
 
@@ -78,12 +78,20 @@ impl InboundSession {
         let mut accept_tasks = self.accept_tasks.lock().await;
 
         for (index, accept_addr) in self.p2p().settings().inbound_addrs.iter().enumerate() {
-            self.clone().start_accept_session(index, accept_addr.clone(), ex.clone()).await?;
+            // First initialize an Acceptor and its Subscriber.
+            let parent = Arc::downgrade(&self);
+            let acceptor = Acceptor::new(parent);
+
+            // Now start the Subscriber. The Subscriber will return a Channel once it has been
+            // prepared by the Acceptor.
+            let channel_sub = acceptor.clone().subscribe().await;
 
             let task = StoppableTask::new();
 
+            // Then start listening for a Channel returned by the Subscriber. Call setup_channel()
+            // to register the Channel when it has been received.
             task.clone().start(
-                self.clone().channel_sub_loop(index, ex.clone()),
+                self.clone().channel_sub_loop(channel_sub, index, ex.clone()),
                 // Ignore stop handler
                 |_| async {},
                 Error::NetworkServiceStopped,
@@ -91,6 +99,12 @@ impl InboundSession {
             );
 
             accept_tasks.push(task);
+
+            // Finally, run the Acceptor to start accepting inbound connections. Only when Subscribers
+            // have been set up can we safely do this.
+            self.clone()
+                .start_accept_session(index, accept_addr.clone(), acceptor, ex.clone())
+                .await?;
         }
 
         Ok(())
@@ -114,13 +128,10 @@ impl InboundSession {
         self: Arc<Self>,
         index: usize,
         accept_addr: Url,
+        acceptor: AcceptorPtr,
         ex: Arc<Executor<'_>>,
     ) -> Result<()> {
         info!(target: "net::inbound_session", "[P2P] Starting Inbound session #{} on {}", index, accept_addr);
-        // Generate a new acceptor for this inbound session
-        let parent = Arc::downgrade(&self);
-        let acceptor = Acceptor::new(parent);
-
         // Start listener
         let result = acceptor.clone().start(accept_addr, ex).await;
         if let Err(e) = &result {
@@ -134,9 +145,12 @@ impl InboundSession {
     }
 
     /// Wait for all new channels created by the acceptor and call setup_channel() on them.
-    async fn channel_sub_loop(self: Arc<Self>, index: usize, ex: Arc<Executor<'_>>) -> Result<()> {
-        let channel_sub = self.acceptors.lock().await[index].clone().subscribe().await;
-
+    async fn channel_sub_loop(
+        self: Arc<Self>,
+        channel_sub: Subscription<Result<ChannelPtr>>,
+        index: usize,
+        ex: Arc<Executor<'_>>,
+    ) -> Result<()> {
         loop {
             let channel = channel_sub.receive().await?;
             // Spawn a detached task to process the channel.
