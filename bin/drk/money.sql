@@ -3,17 +3,17 @@
 -- TODO: The tables should be prefixed with ContractId to prevent collision
 
 -- Arbitrary info that is potentially useful
-CREATE TABLE IF NOT EXISTS money_info (
+CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_info (
 	last_scanned_slot INTEGER NOT NULL
 );
 
 -- The Merkle tree containing coins
-CREATE TABLE IF NOT EXISTS money_tree (
+CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_tree (
 	tree BLOB NOT NULL
 );
 
 -- The keypairs in our wallet
-CREATE TABLE IF NOT EXISTS money_keys (
+CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_keys (
 	key_id INTEGER PRIMARY KEY NOT NULL,
 	is_default INTEGER NOT NULL,
 	public BLOB NOT NULL,
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS money_keys (
 );
 
 -- The coins we have the information to and can spend
-CREATE TABLE IF NOT EXISTS money_coins (
+CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_coins (
 	coin BLOB PRIMARY KEY NOT NULL,
 	is_spent INTEGER NOT NULL,
 	value BLOB NOT NULL,
@@ -38,19 +38,19 @@ CREATE TABLE IF NOT EXISTS money_coins (
 );
 
 -- Arbitrary tokens
-CREATE TABLE IF NOT EXISTS money_tokens (
+CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_tokens (
 	mint_authority BLOB PRIMARY KEY NOT NULL,
 	token_id BLOB NOT NULL,
 	is_frozen INTEGER NOT NULL
 );
 
 -- The token aliases in our wallet
-CREATE TABLE IF NOT EXISTS money_aliases (
+CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_aliases (
 	alias BLOB PRIMARY KEY NOT NULL,
 	token_id BLOB NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS transactions_history (
+CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_transactions_history (
 	id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
 	transaction_hash TEXT UNIQUE NOT NULL,
 	status TEXT NOT NULL,

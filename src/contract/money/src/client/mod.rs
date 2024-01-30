@@ -56,45 +56,6 @@ pub mod token_freeze_v1;
 /// `Money::PoWRewardV1` API
 pub mod pow_reward_v1;
 
-// Wallet SQL table constant names. These have to represent the `wallet.sql`
-// SQL schema.
-// TODO: They should also be prefixed with the contract ID to avoid collisions.
-pub const MONEY_INFO_TABLE: &str = "money_info";
-pub const MONEY_INFO_COL_LAST_SCANNED_SLOT: &str = "last_scanned_slot";
-
-pub const MONEY_TREE_TABLE: &str = "money_tree";
-pub const MONEY_TREE_COL_TREE: &str = "tree";
-
-pub const MONEY_KEYS_TABLE: &str = "money_keys";
-pub const MONEY_KEYS_COL_KEY_ID: &str = "key_id";
-pub const MONEY_KEYS_COL_IS_DEFAULT: &str = "is_default";
-pub const MONEY_KEYS_COL_PUBLIC: &str = "public";
-pub const MONEY_KEYS_COL_SECRET: &str = "secret";
-
-pub const MONEY_COINS_TABLE: &str = "money_coins";
-pub const MONEY_COINS_COL_COIN: &str = "coin";
-pub const MONEY_COINS_COL_IS_SPENT: &str = "is_spent";
-pub const MONEY_COINS_COL_SERIAL: &str = "serial";
-pub const MONEY_COINS_COL_VALUE: &str = "value";
-pub const MONEY_COINS_COL_TOKEN_ID: &str = "token_id";
-pub const MONEY_COINS_COL_SPEND_HOOK: &str = "spend_hook";
-pub const MONEY_COINS_COL_USER_DATA: &str = "user_data";
-pub const MONEY_COINS_COL_VALUE_BLIND: &str = "value_blind";
-pub const MONEY_COINS_COL_TOKEN_BLIND: &str = "token_blind";
-pub const MONEY_COINS_COL_SECRET: &str = "secret";
-pub const MONEY_COINS_COL_NULLIFIER: &str = "nullifier";
-pub const MONEY_COINS_COL_LEAF_POSITION: &str = "leaf_position";
-pub const MONEY_COINS_COL_MEMO: &str = "memo";
-
-pub const MONEY_TOKENS_TABLE: &str = "money_tokens";
-pub const MONEY_TOKENS_COL_MINT_AUTHORITY: &str = "mint_authority";
-pub const MONEY_TOKENS_COL_TOKEN_ID: &str = "token_id";
-pub const MONEY_TOKENS_COL_IS_FROZEN: &str = "is_frozen";
-
-pub const MONEY_ALIASES_TABLE: &str = "money_aliases";
-pub const MONEY_ALIASES_COL_ALIAS: &str = "alias";
-pub const MONEY_ALIASES_COL_TOKEN_ID: &str = "token_id";
-
 /// `MoneyNote` holds the inner attributes of a `Coin`
 /// It does not store the public key since it's encrypted for that key,
 /// and so is not needed to infer the coin attributes.

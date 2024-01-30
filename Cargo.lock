@@ -2655,6 +2655,7 @@ dependencies = [
  "darkfi_dao_contract",
  "darkfi_money_contract",
  "easy-parallel",
+ "lazy_static",
  "log",
  "prettytable-rs",
  "rand 0.8.5",

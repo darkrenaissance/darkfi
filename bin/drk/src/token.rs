@@ -27,11 +27,7 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_money_contract::{
-    client::{
-        token_freeze_v1::TokenFreezeCallBuilder, token_mint_v1::TokenMintCallBuilder,
-        MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_MINT_AUTHORITY, MONEY_TOKENS_COL_TOKEN_ID,
-        MONEY_TOKENS_TABLE,
-    },
+    client::{token_freeze_v1::TokenFreezeCallBuilder, token_mint_v1::TokenMintCallBuilder},
     MoneyFunction, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::{
@@ -41,7 +37,14 @@ use darkfi_sdk::{
 };
 use darkfi_serial::{deserialize, serialize, Encodable};
 
-use crate::{error::WalletDbResult, money::BALANCE_BASE10_DECIMALS, Drk};
+use crate::{
+    error::WalletDbResult,
+    money::{
+        BALANCE_BASE10_DECIMALS, MONEY_TOKENS_COL_IS_FROZEN, MONEY_TOKENS_COL_MINT_AUTHORITY,
+        MONEY_TOKENS_COL_TOKEN_ID, MONEY_TOKENS_TABLE,
+    },
+    Drk,
+};
 
 impl Drk {
     /// Import a token mint authority into the wallet
@@ -51,7 +54,7 @@ impl Drk {
 
         let query = format!(
             "INSERT INTO {} ({}, {}, {}) VALUES (?1, ?2, ?3);",
-            MONEY_TOKENS_TABLE,
+            *MONEY_TOKENS_TABLE,
             MONEY_TOKENS_COL_MINT_AUTHORITY,
             MONEY_TOKENS_COL_TOKEN_ID,
             MONEY_TOKENS_COL_IS_FROZEN,
@@ -66,7 +69,7 @@ impl Drk {
     }
 
     pub async fn list_tokens(&self) -> Result<Vec<(TokenId, SecretKey, bool)>> {
-        let rows = match self.wallet.query_multiple(MONEY_TOKENS_TABLE, &[], &[]).await {
+        let rows = match self.wallet.query_multiple(&MONEY_TOKENS_TABLE, &[], &[]).await {
             Ok(r) => r,
             Err(e) => {
                 return Err(Error::RusqliteError(format!(

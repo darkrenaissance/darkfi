@@ -103,7 +103,7 @@
 
 PRAGMA foreign_keys = ON;
 
-CREATE TABLE IF NOT EXISTS dao_daos (
+CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_daos (
 	dao_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     name BLOB UNIQUE NOT NULL,
     proposer_limit BLOB NOT NULL,
@@ -124,12 +124,12 @@ CREATE TABLE IF NOT EXISTS dao_daos (
 );
 
 -- The merkle tree containing DAO bullas
-CREATE TABLE IF NOT EXISTS dao_trees (
+CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_trees (
 	daos_tree BLOB NOT NULL,
 	proposals_tree BLOB NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS dao_proposals (
+CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_proposals (
     proposal_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     dao_id INTEGER NOT NULL,
     -- Public key of person that would receive the funds
@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS dao_proposals (
     FOREIGN KEY(dao_id) REFERENCES dao_daos(dao_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS dao_votes (
+CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_votes (
     vote_id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     proposal_id INTEGER NOT NULL,
     vote_option INTEGER NOT NULL,

@@ -32,12 +32,12 @@ use darkfi::{
     util::encoding::base64,
     Error, Result,
 };
-use darkfi_money_contract::client::{MONEY_INFO_COL_LAST_SCANNED_SLOT, MONEY_INFO_TABLE};
 use darkfi_sdk::crypto::ContractId;
 use darkfi_serial::{deserialize, serialize};
 
-use super::{
+use crate::{
     error::{WalletDbError, WalletDbResult},
+    money::{MONEY_INFO_COL_LAST_SCANNED_SLOT, MONEY_INFO_TABLE},
     Drk,
 };
 
@@ -179,7 +179,7 @@ impl Drk {
 
         // Write this slot into `last_scanned_slot`
         let query =
-            format!("UPDATE {} SET {} = ?1;", MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT);
+            format!("UPDATE {} SET {} = ?1;", *MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT);
         if let Err(e) = self.wallet.exec_sql(&query, rusqlite::params![block.header.height]).await {
             return Err(Error::RusqliteError(format!(
                 "[scan_block_money] Update last scanned slot failed: {e:?}"
@@ -264,7 +264,7 @@ impl Drk {
                 // This might be a bit intense, but we accept it for now.
                 let query = format!(
                     "UPDATE {} SET {} = ?1;",
-                    MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT
+                    *MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT
                 );
                 self.wallet.exec_sql(&query, rusqlite::params![sl]).await?;
             }
