@@ -367,31 +367,30 @@ impl Drk {
             };
             let is_spent = is_spent > 0;
 
-            // TODO: this is in the wrong position. It should be moved after user_data.
-            let Value::Blob(ref coin_blind_bytes) = row[2] else {
-                return Err(Error::ParseFailed("[get_coins] Coin blind bytes parsing failed"))
-            };
-            let coin_blind: pallas::Base = deserialize(coin_blind_bytes)?;
-
-            let Value::Blob(ref value_bytes) = row[3] else {
+            let Value::Blob(ref value_bytes) = row[2] else {
                 return Err(Error::ParseFailed("[get_coins] Value bytes parsing failed"))
             };
             let value: u64 = deserialize(value_bytes)?;
 
-            let Value::Blob(ref token_id_bytes) = row[4] else {
+            let Value::Blob(ref token_id_bytes) = row[3] else {
                 return Err(Error::ParseFailed("[get_coins] Token ID bytes parsing failed"))
             };
             let token_id: TokenId = deserialize(token_id_bytes)?;
 
-            let Value::Blob(ref spend_hook_bytes) = row[5] else {
+            let Value::Blob(ref spend_hook_bytes) = row[4] else {
                 return Err(Error::ParseFailed("[get_coins] Spend hook bytes parsing failed"))
             };
             let spend_hook: pallas::Base = deserialize(spend_hook_bytes)?;
 
-            let Value::Blob(ref user_data_bytes) = row[6] else {
+            let Value::Blob(ref user_data_bytes) = row[5] else {
                 return Err(Error::ParseFailed("[get_coins] User data bytes parsing failed"))
             };
             let user_data: pallas::Base = deserialize(user_data_bytes)?;
+
+            let Value::Blob(ref coin_blind_bytes) = row[6] else {
+                return Err(Error::ParseFailed("[get_coins] Coin blind bytes parsing failed"))
+            };
+            let coin_blind: pallas::Base = deserialize(coin_blind_bytes)?;
 
             let Value::Blob(ref value_blind_bytes) = row[7] else {
                 return Err(Error::ParseFailed("[get_coins] Value blind bytes parsing failed"))
