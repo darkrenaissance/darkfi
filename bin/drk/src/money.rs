@@ -367,10 +367,11 @@ impl Drk {
             };
             let is_spent = is_spent > 0;
 
-            let Value::Blob(ref serial_bytes) = row[2] else {
-                return Err(Error::ParseFailed("[get_coins] Serial bytes parsing failed"))
+            // TODO: this is in the wrong position. It should be moved after user_data.
+            let Value::Blob(ref coin_blind_bytes) = row[2] else {
+                return Err(Error::ParseFailed("[get_coins] Coin blind bytes parsing failed"))
             };
-            let serial: pallas::Base = deserialize(serial_bytes)?;
+            let coin_blind: pallas::Base = deserialize(coin_blind_bytes)?;
 
             let Value::Blob(ref value_bytes) = row[3] else {
                 return Err(Error::ParseFailed("[get_coins] Value bytes parsing failed"))
@@ -422,11 +423,11 @@ impl Drk {
             };
 
             let note = MoneyNote {
-                serial,
                 value,
                 token_id,
                 spend_hook,
                 user_data,
+                coin_blind,
                 value_blind,
                 token_blind,
                 memo: memo.clone(),
@@ -655,7 +656,7 @@ impl Drk {
                         coin,
                         note: note.clone(),
                         secret: *secret,
-                        nullifier: Nullifier::from(poseidon_hash([secret.inner(), note.serial])),
+                        nullifier: Nullifier::from(poseidon_hash([secret.inner(), coin.inner()])),
                         leaf_position,
                     };
 
@@ -699,7 +700,7 @@ impl Drk {
             let params = rusqlite::params![
                 serialize(&owncoin.coin),
                 0, // <-- is_spent
-                serialize(&owncoin.note.serial),
+                serialize(&owncoin.note.coin_blind),
                 serialize(&owncoin.note.value),
                 serialize(&owncoin.note.token_id),
                 serialize(&owncoin.note.spend_hook),
