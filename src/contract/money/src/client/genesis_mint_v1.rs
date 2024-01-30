@@ -81,7 +81,7 @@ impl GenesisMintCallBuilder {
         assert!(self.amount != 0);
 
         // In this call, we will build one clear input and one anonymous output.
-        // Only DARK_TOKEN_ID can be minted on genesis slot.
+        // Only DARK_TOKEN_ID can be minted on genesis block.
         let token_id = *DARK_TOKEN_ID;
 
         let input = TransferCallClearInput {

@@ -93,14 +93,14 @@ impl TestHarness {
         holder: &Holder,
         tx: &Transaction,
         params: &MoneyTokenMintParamsV1,
-        slot: u64,
+        block_height: u64,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyGenesisMint).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.add_transactions(&[tx.clone()], slot, true).await?;
+        wallet.validator.add_transactions(&[tx.clone()], block_height, true).await?;
         wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 

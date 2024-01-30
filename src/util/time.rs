@@ -44,8 +44,8 @@ pub struct TimeKeeper {
     pub epoch_length: u64,
     /// Currently configured slot duration
     pub slot_time: u64,
-    /// Slot number runtime can access to verify against
-    pub verifying_slot: u64,
+    /// Block height(slot) number runtime can access to verify against
+    pub verifying_block_height: u64,
 }
 
 impl TimeKeeper {
@@ -53,9 +53,9 @@ impl TimeKeeper {
         genesis_ts: Timestamp,
         epoch_length: u64,
         slot_time: u64,
-        verifying_slot: u64,
+        verifying_block_height: u64,
     ) -> Self {
-        Self { genesis_ts, epoch_length, slot_time, verifying_slot }
+        Self { genesis_ts, epoch_length, slot_time, verifying_block_height }
     }
 
     /// Generate a TimeKeeper for current slot
@@ -64,7 +64,7 @@ impl TimeKeeper {
             genesis_ts: self.genesis_ts,
             epoch_length: self.epoch_length,
             slot_time: self.slot_time,
-            verifying_slot: self.current_slot(),
+            verifying_block_height: self.current_slot(),
         }
     }
 
@@ -99,8 +99,8 @@ impl TimeKeeper {
     }
 
     /// Calculates the epoch of the verifying slot.
-    pub fn verifying_slot_epoch(&self) -> u64 {
-        self.slot_epoch(self.verifying_slot)
+    pub fn verifying_block_height_epoch(&self) -> u64 {
+        self.slot_epoch(self.verifying_block_height)
     }
 
     /// Calculates seconds until next Nth slot starting time.
@@ -148,7 +148,7 @@ impl TimeKeeperSafe {
         genesis_ts: Timestamp,
         epoch_length: u64,
         slot_time: u64,
-        verifying_slot: u64,
+        verifying_block_height: u64,
     ) -> Self {
         // TimeKeeper uses epoch_length and slot_time as divisors so they should
         // never be zero in this struct.
@@ -158,7 +158,9 @@ impl TimeKeeperSafe {
         if slot_time == 0 {
             panic!("Slot time cannot be zero");
         }
-        Self { timekeeper: TimeKeeper { genesis_ts, epoch_length, slot_time, verifying_slot } }
+        Self {
+            timekeeper: TimeKeeper { genesis_ts, epoch_length, slot_time, verifying_block_height },
+        }
     }
     /// Generate a TimeKeeperSafe for current slot
     pub fn current(&self) -> TimeKeeperSafe {
@@ -166,7 +168,7 @@ impl TimeKeeperSafe {
             self.timekeeper.genesis_ts,
             self.timekeeper.epoch_length,
             self.timekeeper.slot_time,
-            self.timekeeper.verifying_slot,
+            self.timekeeper.verifying_block_height,
         )
     }
 
@@ -205,8 +207,8 @@ impl TimeKeeperSafe {
     }
 
     /// Calculates the epoch of the verifying slot.
-    pub fn verifying_slot_epoch(&self) -> u64 {
-        self.timekeeper.verifying_slot_epoch()
+    pub fn verifying_block_height_epoch(&self) -> u64 {
+        self.timekeeper.verifying_block_height_epoch()
     }
 
     /// Calculates seconds until next Nth slot starting time.

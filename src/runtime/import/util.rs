@@ -240,26 +240,14 @@ pub(crate) fn get_current_slot(ctx: FunctionEnvMut<Env>) -> u64 {
 /// which is equivalent to verifying slot number.
 pub(crate) fn get_verifying_block_height(ctx: FunctionEnvMut<Env>) -> u64 {
     // TODO: Gas cost
-    ctx.data().time_keeper.verifying_slot
-}
-
-/// Will return current runtime configured verifying slot number.
-pub(crate) fn get_verifying_slot(ctx: FunctionEnvMut<Env>) -> u64 {
-    // TODO: Gas cost
-    ctx.data().time_keeper.verifying_slot
+    ctx.data().time_keeper.verifying_block_height
 }
 
 /// Will return current runtime configured verifying block height epoch number,
 /// which is equivalent to verifying slot epoch number.
 pub(crate) fn get_verifying_block_height_epoch(ctx: FunctionEnvMut<Env>) -> u64 {
     // TODO: Gas cost
-    ctx.data().time_keeper.verifying_slot_epoch()
-}
-
-/// Will return current runtime configured verifying slot epoch number.
-pub(crate) fn get_verifying_slot_epoch(ctx: FunctionEnvMut<Env>) -> u64 {
-    // TODO: Gas cost
-    ctx.data().time_keeper.verifying_slot_epoch()
+    ctx.data().time_keeper.verifying_block_height_epoch()
 }
 
 /// Grabs last block from the `Blockchain` overlay and then copies its

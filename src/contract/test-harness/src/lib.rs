@@ -36,7 +36,6 @@ use darkfi_money_contract::{
     model::Output,
 };
 use darkfi_sdk::{
-    blockchain::{PidOutput, PreviousSlot, Slot},
     bridgetree,
     crypto::{
         pasta_prelude::Field, poseidon_hash, ContractId, Keypair, MerkleNode, MerkleTree,
@@ -266,7 +265,7 @@ impl TestHarness {
         action: TxAction,
         holder: &Holder,
         txs: &[Transaction],
-        slot: u64,
+        block_height: u64,
         erroneous: usize,
     ) -> Result<()> {
         let wallet = self.holders.get(holder).unwrap();
@@ -275,7 +274,7 @@ impl TestHarness {
 
         let erroneous_txs = wallet
             .validator
-            .add_transactions(txs, slot, false)
+            .add_transactions(txs, block_height, false)
             .await
             .err()
             .unwrap()
@@ -381,30 +380,6 @@ impl TestHarness {
         }
 
         Ok(owncoin.unwrap())
-    }
-
-    pub async fn get_slot_by_slot(&self, slot: u64) -> Result<Slot> {
-        let faucet = self.holders.get(&Holder::Faucet).unwrap();
-        let slot = faucet.validator.blockchain.get_slots_by_id(&[slot])?[0].clone().unwrap();
-
-        Ok(slot)
-    }
-
-    pub async fn generate_slot(&self, id: u64) -> Result<Slot> {
-        // We grab the genesis slot to generate slot
-        // using same consensus parameters
-        let genesis_block = self.genesis_block.hash()?;
-        let genesis_slot = self.get_slot_by_slot(0).await?;
-        let previous = PreviousSlot::new(0, vec![genesis_block], vec![genesis_block], 0.0);
-        let pid = PidOutput::new(0.0, 0.0, genesis_slot.pid.sigma1, genesis_slot.pid.sigma2);
-        let slot = Slot::new(id, previous, pid, genesis_slot.last_nonce, 0, 0);
-
-        // Store generated slot
-        for wallet in self.holders.values() {
-            wallet.validator.receive_test_slot(&slot).await?;
-        }
-
-        Ok(slot)
     }
 
     pub fn assert_trees(&self, holders: &[Holder]) {

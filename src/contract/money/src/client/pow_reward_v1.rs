@@ -69,7 +69,7 @@ pub struct PoWRewardCallBuilder {
     pub secret: SecretKey,
     /// Reward recipient's public key
     pub recipient: PublicKey,
-    /// Rewarded block height(slot)
+    /// Rewarded block height
     pub block_height: u64,
     /// Extending fork last proposal/block nonce
     pub last_nonce: pallas::Base,

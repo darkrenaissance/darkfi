@@ -99,7 +99,7 @@ impl TestHarness {
         ];
 
         let creation_day =
-            blockheight_to_day(wallet.validator.consensus.time_keeper.verifying_slot);
+            blockheight_to_day(wallet.validator.consensus.time_keeper.verifying_block_height);
         let proposal = DaoProposal {
             auth_calls,
             creation_day,
@@ -153,13 +153,13 @@ impl TestHarness {
         holder: &Holder,
         tx: &Transaction,
         params: &DaoProposeParams,
-        slot: u64,
+        block_height: u64,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoPropose).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.add_transactions(&[tx.clone()], slot, true).await?;
+        wallet.validator.add_transactions(&[tx.clone()], block_height, true).await?;
         wallet.dao_proposals_tree.append(MerkleNode::from(params.proposal_bulla.inner()));
 
         let prop_leaf_pos = wallet.dao_proposals_tree.mark().unwrap();

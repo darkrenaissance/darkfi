@@ -115,16 +115,6 @@ pub fn get_verifying_block_height() -> u64 {
 }
 
 /// Everyone can call this. Will return runtime configured
-/// verifying slot.
-///
-/// ```
-/// slot = get_verifying_slot();
-/// ```
-pub fn get_verifying_slot() -> u64 {
-    unsafe { get_verifying_slot_() }
-}
-
-/// Everyone can call this. Will return runtime configured
 /// verifying block height epoch.
 ///
 /// ```
@@ -132,16 +122,6 @@ pub fn get_verifying_slot() -> u64 {
 /// ```
 pub fn get_verifying_block_height_epoch() -> u64 {
     unsafe { get_verifying_block_height_epoch_() }
-}
-
-/// Everyone can call this. Will return runtime configured
-/// verifying slot epoch.
-///
-/// ```
-/// epoch = get_verifying_slot_epoch();
-/// ```
-pub fn get_verifying_slot_epoch() -> u64 {
-    unsafe { get_verifying_slot_epoch_() }
 }
 
 /// Everyone can call this. Will return requested slot from `SlotStore`.
@@ -183,9 +163,7 @@ extern "C" {
     fn get_current_block_height_() -> u64;
     fn get_current_slot_() -> u64;
     fn get_verifying_block_height_() -> u64;
-    fn get_verifying_slot_() -> u64;
     fn get_verifying_block_height_epoch_() -> u64;
-    fn get_verifying_slot_epoch_() -> u64;
     fn get_slot_(slot: u64) -> i64;
     fn get_blockchain_time_() -> u64;
     fn get_last_block_info_() -> i64;

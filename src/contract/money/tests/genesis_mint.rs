@@ -18,7 +18,7 @@
 
 //! Test for genesis transaction verification correctness between Alice and Bob.
 //!
-//! We first mint Alice some native tokens on genesis slot, and then she send
+//! We first mint Alice some native tokens on genesis block, and then she send
 //! some of them to Bob.
 //!
 //! With this test, we want to confirm the genesis transactions execution works
@@ -49,8 +49,8 @@ fn genesis_mint() -> Result<()> {
         // Bob = 50
         const BOB_SEND: u64 = BOB_INITIAL - 20;
 
-        // Slot to verify against
-        let current_slot = 0;
+        // Block height to verify against
+        let current_block_height = 0;
 
         // Initialize harness
         let mut th = TestHarness::new(&["money".to_string()], false).await?;
@@ -73,19 +73,19 @@ fn genesis_mint() -> Result<()> {
             TxAction::MoneyGenesisMint,
             &Holder::Alice,
             &[genesis_mint_tx.clone(), genesis_mint_tx.clone()],
-            current_slot,
+            current_block_height,
             1,
         )
         .await?;
 
-        info!(target: "money", "[Malicious] ============================================");
-        info!(target: "money", "[Malicious] Checking genesis mint tx not on genesis slot");
-        info!(target: "money", "[Malicious] ============================================");
+        info!(target: "money", "[Malicious] =============================================");
+        info!(target: "money", "[Malicious] Checking genesis mint tx not on genesis block");
+        info!(target: "money", "[Malicious] =============================================");
         th.execute_erroneous_txs(
             TxAction::MoneyGenesisMint,
             &Holder::Alice,
             &[genesis_mint_tx.clone()],
-            current_slot + 1,
+            current_block_height + 1,
             1,
         )
         .await?;
@@ -98,7 +98,7 @@ fn genesis_mint() -> Result<()> {
                 holder,
                 &genesis_mint_tx,
                 &genesis_mint_params,
-                current_slot,
+                current_block_height,
             )
             .await?;
         }
@@ -122,7 +122,7 @@ fn genesis_mint() -> Result<()> {
                 holder,
                 &genesis_mint_tx,
                 &genesis_mint_params,
-                current_slot,
+                current_block_height,
             )
             .await?;
         }
@@ -151,8 +151,14 @@ fn genesis_mint() -> Result<()> {
             info!(target: "money", "[{holder:?}] ==============================");
             info!(target: "money", "[{holder:?}] Executing Alice2Bob payment tx");
             info!(target: "money", "[{holder:?}] ==============================");
-            th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_slot, true)
-                .await?;
+            th.execute_transfer_tx(
+                holder,
+                &transfer_tx,
+                &transfer_params,
+                current_block_height,
+                true,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);
@@ -186,8 +192,14 @@ fn genesis_mint() -> Result<()> {
             info!(target: "money", "[{holder:?}] ==============================");
             info!(target: "money", "[{holder:?}] Executing Bob2Alice payment tx");
             info!(target: "money", "[{holder:?}] ==============================");
-            th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_slot, true)
-                .await?;
+            th.execute_transfer_tx(
+                holder,
+                &transfer_tx,
+                &transfer_params,
+                current_block_height,
+                true,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);

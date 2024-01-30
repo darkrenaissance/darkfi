@@ -147,7 +147,7 @@ impl Consensus {
         // Generate a time keeper for next/current slot
         let time_keeper = if slot.id < POS_START {
             let mut t = self.time_keeper.current();
-            t.verifying_slot = slot.id;
+            t.verifying_block_height = slot.id;
             t
         } else {
             self.time_keeper.current()
@@ -312,10 +312,10 @@ impl Consensus {
         // Validate and insert each block
         for block in blocks {
             // Use block slot in time keeper
-            time_keeper.verifying_slot = block.header.height;
+            time_keeper.verifying_block_height = block.header.height;
 
             // Retrieve expected reward
-            let expected_reward = expected_reward(time_keeper.verifying_slot);
+            let expected_reward = expected_reward(time_keeper.verifying_block_height);
 
             // Verify block
             if verify_block(
@@ -348,7 +348,7 @@ impl Consensus {
         if proposal.block.header.height < POS_START {
             fork.generate_pow_slot()?;
         } else {
-            let id = time_keeper.verifying_slot;
+            let id = time_keeper.verifying_block_height;
             let (producers, last_hashes, second_to_last_hashes) =
                 previous_slot_info(&forks, id - 1)?;
             fork.generate_pos_slot(id, producers, &last_hashes, &second_to_last_hashes)?;

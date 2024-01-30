@@ -34,8 +34,8 @@ fn alice2alice_random_amounts() -> Result<()> {
 
         const ALICE_AIRDROP: u64 = 1000;
 
-        // Slot to verify against
-        let current_slot = 0;
+        // Block height to verify against
+        let current_block_height = 0;
 
         // n transactions to loop
         let mut n = 3;
@@ -62,8 +62,13 @@ fn alice2alice_random_amounts() -> Result<()> {
             info!(target: "money", "[{holder:?}] ==========================");
             info!(target: "money", "[{holder:?}] Executing Alice airdrop tx");
             info!(target: "money", "[{holder:?}] ==========================");
-            th.execute_airdrop_native_tx(holder, &airdrop_tx, &airdrop_params, current_slot)
-                .await?;
+            th.execute_airdrop_native_tx(
+                holder,
+                &airdrop_tx,
+                &airdrop_params,
+                current_block_height,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);
@@ -97,12 +102,14 @@ fn alice2alice_random_amounts() -> Result<()> {
             info!(target: "money", "[Faucet] ================================");
             info!(target: "money", "[Faucet] Executing Alice2Alice payment tx");
             info!(target: "money", "[Faucet] ================================");
-            th.execute_transfer_tx(&Holder::Faucet, &tx, &params, current_slot, true).await?;
+            th.execute_transfer_tx(&Holder::Faucet, &tx, &params, current_block_height, true)
+                .await?;
 
             info!(target: "money", "[Alice] ================================");
             info!(target: "money", "[Alice] Executing Alice2Alice payment tx");
             info!(target: "money", "[Alice] ================================");
-            th.execute_transfer_tx(&Holder::Alice, &tx, &params, current_slot, false).await?;
+            th.execute_transfer_tx(&Holder::Alice, &tx, &params, current_block_height, false)
+                .await?;
 
             // Gather new owncoins
             owncoins.append(&mut th.gather_multiple_owncoins(&Holder::Alice, &params.outputs)?);
@@ -127,8 +134,8 @@ fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
         // Holders this test will use
         const HOLDERS: [Holder; 2] = [Holder::Faucet, Holder::Alice];
 
-        // Slot to verify against
-        let current_slot = 0;
+        // Block height to verify against
+        let current_block_height = 0;
 
         // N blocks to simulate
         let mut n = 3;
@@ -161,7 +168,8 @@ fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
                 info!(target: "money", "[{holder:?}] =======================");
                 info!(target: "money", "[{holder:?}] Executing Alice mint tx");
                 info!(target: "money", "[{holder:?}] =======================");
-                th.execute_token_mint_tx(holder, &mint_tx, &mint_params, current_slot).await?;
+                th.execute_token_mint_tx(holder, &mint_tx, &mint_params, current_block_height)
+                    .await?;
             }
 
             th.assert_trees(&HOLDERS);
@@ -226,7 +234,7 @@ fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
                 &Holder::Faucet,
                 &txs,
                 &txs_params,
-                current_slot,
+                current_block_height,
                 true,
             )
             .await?;
@@ -238,7 +246,7 @@ fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
                 &Holder::Alice,
                 &txs,
                 &txs_params,
-                current_slot,
+                current_block_height,
                 false,
             )
             .await?;

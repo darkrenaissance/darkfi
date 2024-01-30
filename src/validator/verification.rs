@@ -70,7 +70,7 @@ pub async fn verify_genesis_block(
     }
 
     // Block height must be the same as the time keeper verifying slot
-    if block.header.height != time_keeper.verifying_slot {
+    if block.header.height != time_keeper.verifying_block_height {
         return Err(Error::VerifyingSlotMissmatch())
     }
 
@@ -145,7 +145,7 @@ pub async fn verify_block(
     }
 
     // Block height must be the same as the time keeper verifying slot
-    if block.header.height != time_keeper.verifying_slot {
+    if block.header.height != time_keeper.verifying_block_height {
         return Err(Error::VerifyingSlotMissmatch())
     }
 
@@ -680,7 +680,7 @@ pub async fn verify_pow_proposal(
 
     // Generate a time keeper for proposal block leight
     let mut time_keeper = consensus.time_keeper.current();
-    time_keeper.verifying_slot = proposal.block.header.height;
+    time_keeper.verifying_block_height = proposal.block.header.height;
 
     // Verify proposal block (4)
     if verify_block(
@@ -721,7 +721,7 @@ pub async fn verify_pos_proposal(
     let time_keeper = consensus.time_keeper.current();
 
     // Node have already checked for finalization in this slot (1)
-    if time_keeper.verifying_slot <= *consensus.checked_finalization.read().await {
+    if time_keeper.verifying_block_height <= *consensus.checked_finalization.read().await {
         warn!(target: "validator::verification::verify_pos_proposal", "Proposal received after finalization sync period.");
         return Err(Error::ProposalAfterFinalizationError)
     }
@@ -730,7 +730,7 @@ pub async fn verify_pos_proposal(
     let hdr = &proposal.block.header;
 
     // Ignore proposal if not for current slot (2)
-    if hdr.height != time_keeper.verifying_slot {
+    if hdr.height != time_keeper.verifying_block_height {
         return Err(Error::ProposalNotForCurrentSlotError)
     }
 
@@ -771,7 +771,7 @@ pub async fn verify_pos_proposal(
     let previous = fork.overlay.lock().unwrap().last_block()?;
 
     // Retrieve expected reward
-    let expected_reward = expected_reward(time_keeper.verifying_slot);
+    let expected_reward = expected_reward(time_keeper.verifying_block_height);
 
     // Verify proposal block (6)
     if verify_block(

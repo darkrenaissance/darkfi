@@ -126,7 +126,7 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
         return Err(MoneyError::TransferClearInputNonNativeToken.into())
     }
 
-    // Verify reward value matches the expected one for this block height(slot)
+    // Verify reward value matches the expected one for this block height
     let expected_reward = expected_reward(verifying_block_height);
     if params.input.value != expected_reward {
         msg!(

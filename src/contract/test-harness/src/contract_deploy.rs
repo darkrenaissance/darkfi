@@ -68,11 +68,11 @@ impl TestHarness {
         holder: &Holder,
         tx: &Transaction,
         _params: &DeployParamsV1,
-        slot: u64,
+        block_height: u64,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(holder).unwrap();
 
-        wallet.validator.add_transactions(&[tx.clone()], slot, true).await?;
+        wallet.validator.add_transactions(&[tx.clone()], block_height, true).await?;
 
         Ok(())
     }

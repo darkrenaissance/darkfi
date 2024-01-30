@@ -301,22 +301,10 @@ impl Runtime {
                     import::util::get_verifying_block_height,
                 ),
 
-                "get_verifying_slot_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::util::get_verifying_slot,
-                ),
-
                 "get_verifying_block_height_epoch_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
                     import::util::get_verifying_block_height_epoch,
-                ),
-
-                "get_verifying_slot_epoch_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::util::get_verifying_slot_epoch,
                 ),
 
                 "get_slot_" => Function::new_typed_with_env(

@@ -65,8 +65,8 @@ fn integration_test() -> Result<()> {
         // The tokens we want to send via the proposal
         const PROPOSAL_AMOUNT: u64 = 250_000_000;
 
-        // Slot to verify against
-        let current_slot = 0;
+        // Block height to verify against
+        let current_block_height = 0;
 
         // DAO parameters
         let dao_keypair = th.holders.get(&Holder::Dao).unwrap().keypair;
@@ -91,7 +91,8 @@ fn integration_test() -> Result<()> {
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing DAO Mint tx");
-            th.execute_dao_mint_tx(holder, &dao_mint_tx, &dao_mint_params, current_slot).await?;
+            th.execute_dao_mint_tx(holder, &dao_mint_tx, &dao_mint_params, current_block_height)
+                .await?;
         }
 
         th.assert_trees(&HOLDERS);
@@ -111,8 +112,13 @@ fn integration_test() -> Result<()> {
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing DAO airdrop tx");
-            th.execute_airdrop_native_tx(holder, &airdrop_tx, &airdrop_params, current_slot)
-                .await?;
+            th.execute_airdrop_native_tx(
+                holder,
+                &airdrop_tx,
+                &airdrop_params,
+                current_block_height,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);
@@ -131,8 +137,13 @@ fn integration_test() -> Result<()> {
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing governance token mint tx for Alice");
-            th.execute_token_mint_tx(holder, &a_token_mint_tx, &a_token_mint_params, current_slot)
-                .await?;
+            th.execute_token_mint_tx(
+                holder,
+                &a_token_mint_tx,
+                &a_token_mint_params,
+                current_block_height,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);
@@ -146,8 +157,13 @@ fn integration_test() -> Result<()> {
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing governance token mint tx for Bob");
-            th.execute_token_mint_tx(holder, &b_token_mint_tx, &b_token_mint_params, current_slot)
-                .await?;
+            th.execute_token_mint_tx(
+                holder,
+                &b_token_mint_tx,
+                &b_token_mint_params,
+                current_block_height,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);
@@ -161,8 +177,13 @@ fn integration_test() -> Result<()> {
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing governance token mint tx for Charlie");
-            th.execute_token_mint_tx(holder, &c_token_mint_tx, &c_token_mint_params, current_slot)
-                .await?;
+            th.execute_token_mint_tx(
+                holder,
+                &c_token_mint_tx,
+                &c_token_mint_params,
+                current_block_height,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);
@@ -204,7 +225,8 @@ fn integration_test() -> Result<()> {
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing DAO proposal tx");
-            th.execute_dao_propose_tx(holder, &propose_tx, &propose_params, current_slot).await?;
+            th.execute_dao_propose_tx(holder, &propose_tx, &propose_params, current_block_height)
+                .await?;
         }
 
         th.assert_trees(&HOLDERS);
@@ -247,13 +269,24 @@ fn integration_test() -> Result<()> {
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing Alice vote tx");
-            th.execute_dao_vote_tx(holder, &alice_vote_tx, &alice_vote_params, current_slot)
-                .await?;
+            th.execute_dao_vote_tx(
+                holder,
+                &alice_vote_tx,
+                &alice_vote_params,
+                current_block_height,
+            )
+            .await?;
             info!("[{holder:?}] Executing Bob vote tx");
-            th.execute_dao_vote_tx(holder, &bob_vote_tx, &bob_vote_params, current_slot).await?;
-            info!("[{holder:?}] Executing Charlie vote tx");
-            th.execute_dao_vote_tx(holder, &charlie_vote_tx, &charlie_vote_params, current_slot)
+            th.execute_dao_vote_tx(holder, &bob_vote_tx, &bob_vote_params, current_block_height)
                 .await?;
+            info!("[{holder:?}] Executing Charlie vote tx");
+            th.execute_dao_vote_tx(
+                holder,
+                &charlie_vote_tx,
+                &charlie_vote_params,
+                current_block_height,
+            )
+            .await?;
         }
 
         // Gather and decrypt all vote notes
@@ -343,8 +376,14 @@ fn integration_test() -> Result<()> {
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing Dao::Exec tx");
-            th.execute_dao_exec_tx(holder, &exec_tx, &xfer_params, &exec_params, current_slot)
-                .await?;
+            th.execute_dao_exec_tx(
+                holder,
+                &exec_tx,
+                &xfer_params,
+                &exec_params,
+                current_block_height,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);

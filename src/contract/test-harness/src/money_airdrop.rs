@@ -110,14 +110,14 @@ impl TestHarness {
         holder: &Holder,
         tx: &Transaction,
         params: &MoneyTransferParamsV1,
-        slot: u64,
+        block_height: u64,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyAirdrop).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.add_transactions(&[tx.clone()], slot, true).await?;
+        wallet.validator.add_transactions(&[tx.clone()], block_height, true).await?;
         wallet.money_merkle_tree.append(MerkleNode::from(params.outputs[0].coin.inner()));
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
@@ -130,7 +130,7 @@ impl TestHarness {
         holders: &[Holder],
         holder: &Holder,
         value: u64,
-        current_slot: u64,
+        block_height: u64,
     ) -> Result<OwnCoin> {
         info!(target: "consensus", "[Faucet] ==============================");
         info!(target: "consensus", "[Faucet] Building {holder:?} airdrop tx");
@@ -141,7 +141,7 @@ impl TestHarness {
             info!(target: "consensus", "[{h:?}] ===============================");
             info!(target: "consensus", "[{h:?}] Executing {holder:?} airdrop tx");
             info!(target: "consensus", "[{h:?}] ===============================");
-            self.execute_airdrop_native_tx(h, &airdrop_tx, &airdrop_params, current_slot).await?;
+            self.execute_airdrop_native_tx(h, &airdrop_tx, &airdrop_params, block_height).await?;
         }
 
         self.assert_trees(holders);

@@ -87,13 +87,13 @@ pub(crate) fn money_genesis_mint_process_instruction_v1(
     let verifying_block_height = get_verifying_block_height();
     if verifying_block_height != 0 {
         msg!(
-            "[GenesisMintV1] Error: Call is executed for slot {}, not genesis",
+            "[GenesisMintV1] Error: Call is executed for block {}, not genesis",
             verifying_block_height
         );
         return Err(MoneyError::GenesisCallNonGenesisBlock.into())
     }
 
-    // Only DARK_TOKEN_ID can be minted on genesis slot.
+    // Only DARK_TOKEN_ID can be minted on genesis block
     if params.input.token_id != *DARK_TOKEN_ID {
         msg!("[GenesisMintV1] Error: Clear input used non-native token");
         return Err(MoneyError::TransferClearInputNonNativeToken.into())

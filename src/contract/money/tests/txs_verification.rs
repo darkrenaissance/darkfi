@@ -43,8 +43,8 @@ fn txs_verification() -> Result<()> {
         // Bob = 50 ALICE
         const ALICE_SEND: u64 = ALICE_INITIAL - 50;
 
-        // Slot to verify against
-        let current_slot = 0;
+        // Block height to verify against
+        let current_block_height = 0;
 
         // Initialize harness
         let mut th = TestHarness::new(&["money".to_string()], false).await?;
@@ -62,8 +62,13 @@ fn txs_verification() -> Result<()> {
             info!(target: "money", "[{holder:?}] =============================");
             info!(target: "money", "[{holder:?}] Executing Alice token mint tx");
             info!(target: "money", "[{holder:?}] =============================");
-            th.execute_token_mint_tx(holder, &token_mint_tx, &token_mint_params, current_slot)
-                .await?;
+            th.execute_token_mint_tx(
+                holder,
+                &token_mint_tx,
+                &token_mint_params,
+                current_block_height,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);
@@ -101,7 +106,7 @@ fn txs_verification() -> Result<()> {
                 info!(target: "money", "[{holder:?}] ==================================");
                 info!(target: "money", "[{holder:?}] Verifying Alice2Bob payment tx {i}");
                 info!(target: "money", "[{holder:?}] ==================================");
-                th.verify_transfer_tx(holder, &transfer_tx, current_slot).await?;
+                th.verify_transfer_tx(holder, &transfer_tx, current_block_height).await?;
             }
 
             transactions.push(transfer_tx);
@@ -122,12 +127,18 @@ fn txs_verification() -> Result<()> {
                 TxAction::MoneyTransfer,
                 holder,
                 &transactions,
-                current_slot,
+                current_block_height,
                 duplicates - 1,
             )
             .await?;
-            th.execute_transfer_tx(holder, &transactions[0], &txs_params[0], current_slot, true)
-                .await?;
+            th.execute_transfer_tx(
+                holder,
+                &transactions[0],
+                &txs_params[0],
+                current_block_height,
+                true,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);

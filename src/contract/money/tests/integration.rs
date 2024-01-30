@@ -32,14 +32,13 @@ fn money_integration() -> Result<()> {
         // Initialize harness
         let mut th = TestHarness::new(&["money".to_string()], true).await?;
 
-        // Current verification slot
-        let mut verification_slot = 1;
-        th.generate_slot(verification_slot).await?;
+        // Block height to verify against
+        let mut current_block_height = 1;
 
         // Drop some money to Alice
         info!("[Alice] Building block proposal");
         let (alice_proposal_tx, alice_proposal_params) =
-            th.pow_reward(&Holder::Alice, None, verification_slot, None)?;
+            th.pow_reward(&Holder::Alice, None, current_block_height, None)?;
 
         for holder in HOLDERS {
             info!("[{holder:?}] Executing Alice's block proposal");
@@ -47,23 +46,22 @@ fn money_integration() -> Result<()> {
                 &holder,
                 &alice_proposal_tx,
                 &alice_proposal_params,
-                verification_slot,
+                current_block_height,
             )
             .await?;
         }
 
         let alice_owncoin =
             th.gather_owncoin(&Holder::Alice, &alice_proposal_params.output, None)?;
-        assert!(alice_owncoin.note.value == expected_reward(verification_slot));
+        assert!(alice_owncoin.note.value == expected_reward(current_block_height));
 
         th.assert_trees(&HOLDERS);
-        verification_slot += 1;
-        th.generate_slot(verification_slot).await?;
+        current_block_height += 1;
 
         // And some to Bob
         info!("[Bob] Building block proposal");
         let (bob_proposal_tx, bob_proposal_params) =
-            th.pow_reward(&Holder::Bob, None, verification_slot, None)?;
+            th.pow_reward(&Holder::Bob, None, current_block_height, None)?;
 
         for holder in HOLDERS {
             info!("[{holder:?}] Executing Alice's block proposal");
@@ -71,7 +69,7 @@ fn money_integration() -> Result<()> {
                 &holder,
                 &bob_proposal_tx,
                 &bob_proposal_params,
-                verification_slot,
+                current_block_height,
             )
             .await?;
         }
@@ -79,8 +77,6 @@ fn money_integration() -> Result<()> {
         let _ = th.gather_owncoin(&Holder::Bob, &bob_proposal_params.output, None)?;
 
         th.assert_trees(&HOLDERS);
-        verification_slot += 1;
-        th.generate_slot(verification_slot).await?;
 
         // Alice sends a payment of some DRK to Bob.
 

@@ -78,7 +78,8 @@ impl TestHarness {
             signature_secret,
         };
 
-        let current_day = blockheight_to_day(wallet.validator.consensus.time_keeper.verifying_slot);
+        let current_day =
+            blockheight_to_day(wallet.validator.consensus.time_keeper.verifying_block_height);
         let call = DaoVoteCall {
             inputs: vec![input],
             vote_option,
@@ -120,13 +121,13 @@ impl TestHarness {
         holder: &Holder,
         tx: &Transaction,
         _params: &DaoVoteParams,
-        slot: u64,
+        block_height: u64,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoVote).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.add_transactions(&[tx.clone()], slot, true).await?;
+        wallet.validator.add_transactions(&[tx.clone()], block_height, true).await?;
 
         tx_action_benchmark.verify_times.push(timer.elapsed());
 

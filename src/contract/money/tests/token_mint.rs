@@ -31,8 +31,8 @@ fn token_mint() -> Result<()> {
         // Some numbers we want to assert
         const BOB_SUPPLY: u64 = 2000000000; // 10 BOB
 
-        // Slot to verify against
-        let current_slot = 0;
+        // Block height to verify against
+        let current_block_height = 0;
 
         // Initialize harness
         let mut th = TestHarness::new(&["money".to_string()], false).await?;
@@ -43,8 +43,13 @@ fn token_mint() -> Result<()> {
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing BOB token mint tx");
-            th.execute_token_mint_tx(holder, &token_mint_tx, &token_mint_params, current_slot)
-                .await?;
+            th.execute_token_mint_tx(
+                holder,
+                &token_mint_tx,
+                &token_mint_params,
+                current_block_height,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);
@@ -57,8 +62,13 @@ fn token_mint() -> Result<()> {
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing BOB token freeze tx");
-            th.execute_token_freeze_tx(holder, &token_frz_tx, &token_frz_params, current_slot)
-                .await?;
+            th.execute_token_freeze_tx(
+                holder,
+                &token_frz_tx,
+                &token_frz_params,
+                current_block_height,
+            )
+            .await?;
         }
 
         th.assert_trees(&HOLDERS);

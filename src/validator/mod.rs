@@ -407,10 +407,10 @@ impl Validator {
         // Validate and insert each block
         for block in blocks {
             // Use block height in time keeper
-            time_keeper.verifying_slot = block.header.height;
+            time_keeper.verifying_block_height = block.header.height;
 
             // Retrieve expected reward
-            let expected_reward = expected_reward(time_keeper.verifying_slot);
+            let expected_reward = expected_reward(time_keeper.verifying_block_height);
 
             // Verify block
             if verify_block(
@@ -474,7 +474,7 @@ impl Validator {
     pub async fn add_transactions(
         &self,
         txs: &[Transaction],
-        verifying_slot: u64,
+        verifying_block_height: u64,
         write: bool,
     ) -> Result<()> {
         debug!(target: "validator::add_transactions", "Instantiating BlockchainOverlay");
@@ -486,7 +486,7 @@ impl Validator {
             current_time_keeper.genesis_ts,
             current_time_keeper.epoch_length,
             current_time_keeper.slot_time,
-            verifying_slot,
+            verifying_block_height,
         );
 
         // Verify all transactions and get erroneous ones
@@ -527,7 +527,7 @@ impl Validator {
     pub async fn add_test_producer_transaction(
         &self,
         tx: &Transaction,
-        verifying_slot: u64,
+        verifying_block_height: u64,
         write: bool,
     ) -> Result<()> {
         debug!(target: "validator::add_test_producer_transaction", "Instantiating BlockchainOverlay");
@@ -539,7 +539,7 @@ impl Validator {
             current_time_keeper.genesis_ts,
             current_time_keeper.epoch_length,
             current_time_keeper.slot_time,
-            verifying_slot,
+            verifying_block_height,
         );
 
         // Verify transaction
@@ -606,10 +606,10 @@ impl Validator {
         // Validate and insert each block
         for block in &blocks[1..] {
             // Use block height in time keeper
-            time_keeper.verifying_slot = block.header.height;
+            time_keeper.verifying_block_height = block.header.height;
 
             // Retrieve expected reward
-            let expected_reward = expected_reward(time_keeper.verifying_slot);
+            let expected_reward = expected_reward(time_keeper.verifying_block_height);
 
             // Verify block
             if verify_block(

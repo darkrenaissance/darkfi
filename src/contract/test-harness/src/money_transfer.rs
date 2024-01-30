@@ -98,7 +98,7 @@ impl TestHarness {
         holder: &Holder,
         tx: &Transaction,
         params: &MoneyTransferParamsV1,
-        slot: u64,
+        block_height: u64,
         append: bool,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(holder).unwrap();
@@ -106,7 +106,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.add_transactions(&[tx.clone()], slot, true).await?;
+        wallet.validator.add_transactions(&[tx.clone()], block_height, true).await?;
         if append {
             for output in &params.outputs {
                 wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
@@ -122,7 +122,7 @@ impl TestHarness {
         holder: &Holder,
         txs: &[Transaction],
         txs_params: &Vec<MoneyTransferParamsV1>,
-        slot: u64,
+        block_height: u64,
         append: bool,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(holder).unwrap();
@@ -130,7 +130,7 @@ impl TestHarness {
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.add_transactions(txs, slot, true).await?;
+        wallet.validator.add_transactions(txs, block_height, true).await?;
         if append {
             for params in txs_params {
                 for output in &params.outputs {
@@ -147,14 +147,14 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
         tx: &Transaction,
-        slot: u64,
+        block_height: u64,
     ) -> Result<()> {
         let wallet = self.holders.get(holder).unwrap();
         let tx_action_benchmark =
             self.tx_action_benchmarks.get_mut(&TxAction::MoneyTransfer).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.add_transactions(&[tx.clone()], slot, false).await?;
+        wallet.validator.add_transactions(&[tx.clone()], block_height, false).await?;
         tx_action_benchmark.verify_times.push(timer.elapsed());
 
         Ok(())

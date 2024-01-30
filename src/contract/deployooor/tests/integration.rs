@@ -25,8 +25,8 @@ fn deploy_integration() -> Result<()> {
     smol::block_on(async {
         init_logger();
 
-        // Slot to verify against
-        let current_slot = 0;
+        // Block height to verify against
+        let current_block_height = 0;
 
         // Initialize harness
         let mut th =
@@ -40,7 +40,8 @@ fn deploy_integration() -> Result<()> {
             th.deploy_contract(&Holder::Alice, wasm_bincode.to_vec())?;
 
         info!("[Alice] Executing deploy tx");
-        th.execute_deploy_tx(&Holder::Alice, &deploy_tx, &deploy_params, current_slot).await?;
+        th.execute_deploy_tx(&Holder::Alice, &deploy_tx, &deploy_params, current_block_height)
+            .await?;
 
         // Thanks for reading
         Ok(())

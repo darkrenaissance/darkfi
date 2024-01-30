@@ -91,9 +91,6 @@ pub enum MoneyError {
     #[error("Call is not executed on genesis block")]
     GenesisCallNonGenesisBlock,
 
-    #[error("Call is not executed on genesis slot")]
-    GenesisCallNonGenesisSlot,
-
     #[error("Missing nullifier in set")]
     MissingNullifier,
 
@@ -146,15 +143,14 @@ impl From<MoneyError> for ContractError {
             MoneyError::ChildCallFunctionMismatch => Self::Custom(21),
             MoneyError::ChildCallInputMismatch => Self::Custom(22),
             MoneyError::GenesisCallNonGenesisBlock => Self::Custom(23),
-            MoneyError::GenesisCallNonGenesisSlot => Self::Custom(24),
-            MoneyError::MissingNullifier => Self::Custom(25),
-            MoneyError::PoWRewardCallOnGenesisBlock => Self::Custom(26),
-            MoneyError::PoWRewardRetrieveLastBlockError => Self::Custom(27),
-            MoneyError::PoWRewardCallNotOnNextBlockHeight => Self::Custom(28),
-            MoneyError::PoWRewardErroneousVrfProof => Self::Custom(29),
-            MoneyError::FeeMissingInputs => Self::Custom(30),
-            MoneyError::InsufficientFee => Self::Custom(31),
-            MoneyError::CoinMerkleRootNotFound => Self::Custom(32),
+            MoneyError::MissingNullifier => Self::Custom(24),
+            MoneyError::PoWRewardCallOnGenesisBlock => Self::Custom(25),
+            MoneyError::PoWRewardRetrieveLastBlockError => Self::Custom(26),
+            MoneyError::PoWRewardCallNotOnNextBlockHeight => Self::Custom(27),
+            MoneyError::PoWRewardErroneousVrfProof => Self::Custom(28),
+            MoneyError::FeeMissingInputs => Self::Custom(29),
+            MoneyError::InsufficientFee => Self::Custom(30),
+            MoneyError::CoinMerkleRootNotFound => Self::Custom(31),
         }
     }
 }

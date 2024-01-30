@@ -50,8 +50,8 @@ fn mint_pay_swap() -> Result<()> {
         // Bob = 20 BOB + 50 ALICE
         const BOB_FIRST_SEND: u64 = BOB_INITIAL - 20;
 
-        // Slot to verify against
-        let current_slot = 0;
+        // Block height to verify against
+        let current_block_height = 0;
 
         // Initialize harness
         let mut th = TestHarness::new(&["money".to_string()], false).await?;
@@ -69,7 +69,7 @@ fn mint_pay_swap() -> Result<()> {
             info!(target: "money", "[{holder:?}] ==============================");
             info!(target: "money", "[{holder:?}] Executing Alice token mint tx");
             info!(target: "money", "[{holder:?}] ==============================");
-            th.execute_token_mint_tx(holder, &mint_tx, &params, current_slot).await?;
+            th.execute_token_mint_tx(holder, &mint_tx, &params, current_block_height).await?;
         }
 
         th.assert_trees(&HOLDERS);
@@ -89,7 +89,7 @@ fn mint_pay_swap() -> Result<()> {
             info!(target: "money", "[{holder:?}] ===========================");
             info!(target: "money", "[{holder:?}] Executing Bob token mint tx");
             info!(target: "money", "[{holder:?}] ===========================");
-            th.execute_token_mint_tx(holder, &mint_tx, &params, current_slot).await?;
+            th.execute_token_mint_tx(holder, &mint_tx, &params, current_block_height).await?;
         }
 
         th.assert_trees(&HOLDERS);
@@ -123,8 +123,14 @@ fn mint_pay_swap() -> Result<()> {
             info!(target: "money", "[{holder:?}] Executing Alice2Bob payment tx");
             info!(target: "money", "[{holder:?}] ==============================");
             let write = holder == &Holder::Faucet;
-            th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_slot, write)
-                .await?;
+            th.execute_transfer_tx(
+                holder,
+                &transfer_tx,
+                &transfer_params,
+                current_block_height,
+                write,
+            )
+            .await?;
         }
 
         // Bob should now have a new OwnCoin.
@@ -166,8 +172,14 @@ fn mint_pay_swap() -> Result<()> {
             info!(target: "money", "[{holder:?}] Executing Bob2Alice payment tx");
             info!(target: "money", "[{holder:?}] ==============================");
             let write = holder == &Holder::Faucet;
-            th.execute_transfer_tx(holder, &transfer_tx, &transfer_params, current_slot, write)
-                .await?;
+            th.execute_transfer_tx(
+                holder,
+                &transfer_tx,
+                &transfer_params,
+                current_block_height,
+                write,
+            )
+            .await?;
         }
 
         // Alice should now have two OwnCoins
@@ -213,8 +225,14 @@ fn mint_pay_swap() -> Result<()> {
             info!(target: "money", "[{holder:?}] Executing AliceBob swap tx");
             info!(target: "money", "[{holder:?}] ==========================");
             let write = holder == &Holder::Faucet;
-            th.execute_otc_swap_tx(holder, &otc_swap_tx, &otc_swap_params, current_slot, write)
-                .await?;
+            th.execute_otc_swap_tx(
+                holder,
+                &otc_swap_tx,
+                &otc_swap_params,
+                current_block_height,
+                write,
+            )
+            .await?;
         }
 
         // Alice should now have two OwnCoins with the same token ID (ALICE)
@@ -258,7 +276,7 @@ fn mint_pay_swap() -> Result<()> {
             info!(target: "money", "[{holder:?}] ================================");
             info!(target: "money", "[{holder:?}] Executing Alice2Alice payment tx");
             info!(target: "money", "[{holder:?}] ================================");
-            th.execute_transfer_tx(holder, &tx, &params, current_slot, true).await?;
+            th.execute_transfer_tx(holder, &tx, &params, current_block_height, true).await?;
         }
 
         th.assert_trees(&HOLDERS);
@@ -289,7 +307,7 @@ fn mint_pay_swap() -> Result<()> {
             info!(target: "money", "[{holder:?}] ============================");
             info!(target: "money", "[{holder:?}] Executing Bob2Bob payment tx");
             info!(target: "money", "[{holder:?}] ============================");
-            th.execute_transfer_tx(holder, &tx, &params, current_slot, true).await?;
+            th.execute_transfer_tx(holder, &tx, &params, current_block_height, true).await?;
         }
 
         th.assert_trees(&HOLDERS);
@@ -321,8 +339,14 @@ fn mint_pay_swap() -> Result<()> {
             info!(target: "money", "[{holder:?}] Executing AliceBob swap tx");
             info!(target: "money", "[{holder:?}] ==========================");
             let write = holder == &Holder::Faucet;
-            th.execute_otc_swap_tx(holder, &otc_swap_tx, &otc_swap_params, current_slot, write)
-                .await?;
+            th.execute_otc_swap_tx(
+                holder,
+                &otc_swap_tx,
+                &otc_swap_params,
+                current_block_height,
+                write,
+            )
+            .await?;
         }
 
         assert_eq!(otc_swap_params.outputs.len(), 2);

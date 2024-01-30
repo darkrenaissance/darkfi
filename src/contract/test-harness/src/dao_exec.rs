@@ -238,13 +238,13 @@ impl TestHarness {
         tx: &Transaction,
         xfer_params: &MoneyTransferParamsV1,
         _exec_params: &DaoExecParams,
-        slot: u64,
+        block_height: u64,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(holder).unwrap();
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoExec).unwrap();
         let timer = Instant::now();
 
-        wallet.validator.add_transactions(&[tx.clone()], slot, true).await?;
+        wallet.validator.add_transactions(&[tx.clone()], block_height, true).await?;
 
         for output in &xfer_params.outputs {
             wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
