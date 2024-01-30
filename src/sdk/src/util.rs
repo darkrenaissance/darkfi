@@ -163,6 +163,16 @@ pub fn get_blockchain_time() -> u64 {
     unsafe { get_blockchain_time_() }
 }
 
+/// Only exec() can call this. Will return last block information.
+///
+/// ```
+/// last_block_info = get_last_block_info();
+/// ```
+pub fn get_last_block_info() -> GenericResult<Option<Vec<u8>>> {
+    let ret = unsafe { get_last_block_info_() };
+    parse_ret(ret)
+}
+
 extern "C" {
     fn set_return_data_(ptr: *const u8, len: u32) -> i64;
     fn put_object_bytes_(ptr: *const u8, len: u32) -> i64;
@@ -178,4 +188,5 @@ extern "C" {
     fn get_verifying_slot_epoch_() -> u64;
     fn get_slot_(slot: u64) -> i64;
     fn get_blockchain_time_() -> u64;
+    fn get_last_block_info_() -> i64;
 }

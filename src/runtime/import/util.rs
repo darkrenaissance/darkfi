@@ -19,6 +19,8 @@
 use log::error;
 use wasmer::{FunctionEnvMut, WasmPtr};
 
+use darkfi_sdk::crypto::pasta_prelude::PrimeField;
+
 use super::acl::acl_allow;
 use crate::runtime::vm_runtime::{ContractSection, Env};
 
@@ -258,6 +260,56 @@ pub(crate) fn get_verifying_block_height_epoch(ctx: FunctionEnvMut<Env>) -> u64 
 pub(crate) fn get_verifying_slot_epoch(ctx: FunctionEnvMut<Env>) -> u64 {
     // TODO: Gas cost
     ctx.data().time_keeper.verifying_slot_epoch()
+}
+
+/// Grabs last block from the `Blockchain` overlay and then copies its
+/// height, nonce and previous block hash into the VM, by appending the data
+/// to the VM's object store.
+///
+/// On success, returns the index of the new object in the object store.
+/// Otherwise, returns an error code.
+pub(crate) fn get_last_block_info(mut ctx: FunctionEnvMut<Env>) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = &env.contract_id;
+
+    // Enforce function ACL
+    if let Err(e) = acl_allow(env, &[ContractSection::Exec]) {
+        error!(
+            target: "runtime::db::get_last_block_info",
+            "[WASM] [{}] get_last_block_info(): Called in unauthorized section: {}", cid, e,
+        );
+        return darkfi_sdk::error::CALLER_ACCESS_DENIED
+    }
+
+    // Grab current last block
+    let block = match env.blockchain.lock().unwrap().last_block() {
+        Ok(b) => b,
+        Err(e) => {
+            error!(
+                target: "runtime::db::get_last_block_info",
+                "[WASM] [{}] get_last_block_info(): Internal error getting from blocks tree: {}", cid, e,
+            );
+            return darkfi_sdk::error::DB_GET_FAILED
+        }
+    };
+
+    // Create the return object
+    let mut ret = Vec::with_capacity(8 + 32 + blake3::OUT_LEN);
+    ret.extend_from_slice(&block.header.height.to_be_bytes());
+    ret.extend_from_slice(&block.header.nonce.to_repr());
+    ret.extend_from_slice(block.header.previous.as_bytes());
+
+    // Subtract used gas. Here we count the size of the object.
+    env.subtract_gas(&mut store, ret.len() as u64);
+
+    // Copy Vec<u8> to the VM
+    let mut objects = env.objects.borrow_mut();
+    objects.push(ret.to_vec());
+    if objects.len() > u32::MAX as usize {
+        return darkfi_sdk::error::DATA_TOO_LARGE
+    }
+
+    (objects.len() - 1) as i64
 }
 
 /// Copies the data of requested slot from `SlotStore` into the VM by appending

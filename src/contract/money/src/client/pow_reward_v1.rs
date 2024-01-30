@@ -73,8 +73,6 @@ pub struct PoWRewardCallBuilder {
     pub block_height: u64,
     /// Extending fork last proposal/block nonce
     pub last_nonce: pallas::Base,
-    /// Extending fork last proposal/block hash
-    pub fork_hash: blake3::Hash,
     /// Extending fork second to last proposal/block hash
     pub fork_previous_hash: blake3::Hash,
     /// Merkle tree of coins used to create inclusion proofs
@@ -162,13 +160,7 @@ impl PoWRewardCallBuilder {
         vrf_input.extend_from_slice(&pallas::Base::from(self.block_height).to_repr());
         let vrf_proof = VrfProof::prove(self.secret, &vrf_input, &mut OsRng);
 
-        let params = MoneyPoWRewardParamsV1 {
-            input: c_input,
-            output: c_output,
-            fork_hash: self.fork_hash,
-            fork_previous_hash: self.fork_previous_hash,
-            vrf_proof,
-        };
+        let params = MoneyPoWRewardParamsV1 { input: c_input, output: c_output, vrf_proof };
         let debris = PoWRewardCallDebris { params, proofs: vec![proof] };
         Ok(debris)
     }

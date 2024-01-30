@@ -56,7 +56,7 @@ impl TestHarness {
 
         // Proposals always extend genesis block
         let last_nonce = self.genesis_block.header.nonce;
-        let fork_hash = self.genesis_block.hash()?;
+        let fork_previous_hash = self.genesis_block.header.previous;
 
         // We're just going to be using a zero spend-hook and user-data
         let spend_hook = pallas::Base::zero();
@@ -74,8 +74,7 @@ impl TestHarness {
             recipient,
             block_height,
             last_nonce,
-            fork_hash,
-            fork_previous_hash: fork_hash,
+            fork_previous_hash,
             spend_hook,
             user_data,
             mint_zkbin: mint_zkbin.clone(),

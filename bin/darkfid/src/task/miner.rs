@@ -191,7 +191,6 @@ fn generate_pow_transaction(
     // Grab extended proposal info
     let last_proposal = fork.last_proposal()?;
     let last_nonce = last_proposal.block.header.nonce;
-    let fork_hash = last_proposal.hash;
     let fork_previous_hash = last_proposal.block.header.previous;
 
     // We're just going to be using a zero spend-hook and user-data
@@ -204,7 +203,6 @@ fn generate_pow_transaction(
         recipient: *recipient,
         block_height,
         last_nonce,
-        fork_hash,
         fork_previous_hash,
         spend_hook,
         user_data,

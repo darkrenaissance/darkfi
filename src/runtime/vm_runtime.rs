@@ -330,6 +330,12 @@ impl Runtime {
                     &ctx,
                     import::util::get_blockchain_time,
                 ),
+
+                "get_last_block_info_" => Function::new_typed_with_env(
+                    &mut store,
+                    &ctx,
+                    import::util::get_last_block_info,
+                ),
             }
         };
 

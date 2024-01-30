@@ -60,7 +60,6 @@ fn pow_reward() -> Result<()> {
             .await?;
 
         current_height += 1;
-        th.generate_slot(current_height).await?;
 
         let alice_reward = expected_reward(current_height);
         info!(target: "money", "[Malicious] ================================");
@@ -129,9 +128,6 @@ fn pow_reward() -> Result<()> {
         alice_owncoins.push(alice_oc);
 
         // Alice can also send her PoW reward directly to bob
-        current_height += 1;
-        th.generate_slot(current_height).await?;
-
         info!(target: "money", "[Alice] ==============================");
         info!(target: "money", "[Alice] Building PoW reward tx for Bob");
         info!(target: "money", "[Alice] ==============================");

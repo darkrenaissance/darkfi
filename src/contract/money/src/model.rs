@@ -264,10 +264,6 @@ pub struct MoneyPoWRewardParamsV1 {
     pub input: ClearInput,
     /// Anonymous output
     pub output: Output,
-    /// Extending fork last proposal/block hash
-    pub fork_hash: blake3::Hash,
-    /// Extending fork second to last proposal/block hash
-    pub fork_previous_hash: blake3::Hash,
     /// VRF proof for block rank calculation
     pub vrf_proof: VrfProof,
 }
