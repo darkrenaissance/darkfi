@@ -476,7 +476,7 @@ $$ \begin{aligned}
   b_\t{UD} &∈ 𝔽ₚ \\
   v_\t{DAO} &∈ 𝔽ₚ \\
   τ_\t{DAO} &∈ 𝔽ₚ \\
-  ζ_\t{DAO} &∈ 𝔽ₚ \\
+  b_\t{DAO} &∈ 𝔽ₚ \\
   \t{esk} &∈ 𝔽ₚ \\
 \end{aligned} $$
 
@@ -493,11 +493,11 @@ where $𝒫 $ matches the value in `DAO::exec()`, and $p.𝒜  = 𝒜 $.
 
 **DAO change coin integrity** &emsp; denote the last coin in the
 `Money::transfer()` outputs by $C_\t{DAO}$. Then check
-$$ C_\t{DAO} = \t{Coin}(d.\t{PK}, v_\t{DAO}, τ_\t{DAO}, ζ_\t{DAO},
-                        \t{CID}_\t{DAO}, 𝒟 ) $$
+$$ C_\t{DAO} = \t{Coin}(d.\t{PK}, v_\t{DAO}, τ_\t{DAO},
+                        \t{CID}_\t{DAO}, 𝒟 , b_\t{DAO}) $$
 
 **Verifiable DAO change coin note encryption** &emsp;
-let $𝐧 = (v_\t{DAO}, τ_\t{DAO}, ζ_\t{DAO})$, and verify
+let $𝐧 = (v_\t{DAO}, τ_\t{DAO}, b_\t{DAO})$, and verify
 $𝒟_\t{enc} = \t{ElGamal}.\t{Encrypt}(𝐧, \t{esk}, d.\t{PK})$.
 
 Then we do the same for each output coin of `Money::transfer()`.
@@ -513,7 +513,7 @@ Attach a proof $πₖ$ such that the following relations hold:
 &emsp; **Coin integrity** &emsp; $C = \t{Coin}(c)$
 
 &emsp; **Verifiable output coin note encryption** &emsp;
-let $𝐧 = (c.v, c.τ, c.ζ, c.\t{SH}, c.\t{UD})$, and verify
+let $𝐧 = (c.v, c.τ, c.\t{SH}, c.\t{UD}, c.n)$, and verify
 $a = \t{ElGamal}.\t{Encrypt}(𝐧, \t{esk}, d.\t{PK})$.
 
 ### Signatures

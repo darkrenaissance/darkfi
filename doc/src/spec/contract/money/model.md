@@ -13,9 +13,8 @@ The coin contains the main parameters that define the `Money::transfer()` operat
      key is used in the nullifier.
   2. Authorizes the creation of the nullifier by the receiver.
 * The core parameters are the value $v$ and the token ID $τ$.
-* The serial $ζ$ is randomly selected, and guarantees uniqueness of the coin
-  which is used in the nullifier. This simultaneously acts as the coin's random
-  blinding factor.
+* The blinding factor $b$ is randomly selected, and guarantees uniqueness of the coin
+  which is used in the nullifier.
 * To enable protocol owned liquidity, we define the spend hook $\t{SH}$
   which adds a constraint that when the coin is spent, it must be called by
   the contract specified. The user data $\t{UD}$ can then be used by the parent
@@ -27,9 +26,9 @@ $$ \begin{aligned}
   \t{Attrs}_\t{Coin}.\t{PK} &∈ ℙₚ \\
   \t{Attrs}_\t{Coin}.v &∈ ℕ₆₄ \\
   \t{Attrs}_\t{Coin}.τ &∈ 𝔽ₚ \\
-  \t{Attrs}_\t{Coin}.ζ &∈ 𝔽ₚ \\
   \t{Attrs}_\t{Coin}.\t{SH} &∈ 𝔽ₚ \\
   \t{Attrs}_\t{Coin}.\t{UD} &∈ 𝔽ₚ \\
+  \t{Attrs}_\t{Coin}.b &∈ 𝔽ₚ \\
 \end{aligned} $$
 
 ```rust
@@ -37,7 +36,7 @@ $$ \begin{aligned}
 ```
 
 $$ \t{Coin} : \t{Attrs}_\t{Coin} → 𝔽ₚ $$
-$$ \t{Coin}(p) = \t{Bulla}(\mathcal{X}(p.\t{PK}), \mathcal{Y}(p.\t{PK}), ℕ₆₄2𝔽ₚ(p.v), p.τ, p.ζ, p.\t{SH}, p.\t{UD}) $$
+$$ \t{Coin}(p) = \t{Bulla}(\mathcal{X}(p.\t{PK}), \mathcal{Y}(p.\t{PK}), ℕ₆₄2𝔽ₚ(p.v), p.τ, p.\t{SH}, p.\t{UD}, p.b) $$
 
 ## Inputs and Outputs
 
