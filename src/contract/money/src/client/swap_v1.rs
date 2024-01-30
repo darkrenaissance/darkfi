@@ -122,9 +122,9 @@ impl SwapCallBuilder {
             public_key: self.pubkey,
             value: self.value_recv,
             token_id: self.token_id_recv,
-            serial: pallas::Base::random(&mut OsRng),
             spend_hook: pallas::Base::ZERO,
             user_data: pallas::Base::ZERO,
+            blind: pallas::Base::random(&mut OsRng),
         };
 
         // Now we fill this with necessary stuff
@@ -157,8 +157,8 @@ impl SwapCallBuilder {
 
         proofs.push(proof);
 
-        // For the output, we create a new serial
-        let serial = pallas::Base::random(&mut OsRng);
+        // For the output, we create a new coin blind
+        let coin_blind = pallas::Base::random(&mut OsRng);
 
         info!("Creating mint proof for output");
         let (proof, public_inputs) = create_transfer_mint_proof(
@@ -167,20 +167,20 @@ impl SwapCallBuilder {
             &output,
             self.value_blinds[1],
             self.token_blinds[1],
-            serial,
             self.spend_hook_recv,
             self.user_data_recv,
+            coin_blind,
         )?;
 
         proofs.push(proof);
 
         // Encrypted note
         let note = MoneyNote {
-            serial,
             value: output.value,
             token_id: output.token_id,
             spend_hook: self.spend_hook_recv,
             user_data: self.user_data_recv,
+            coin_blind,
             value_blind: self.value_blinds[1],
             token_blind: self.token_blinds[1],
             // Here we store our secret key we use for signing

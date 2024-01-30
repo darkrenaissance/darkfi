@@ -67,10 +67,10 @@ pub struct CoinAttributes {
     pub public_key: PublicKey,
     pub value: u64,
     pub token_id: TokenId,
-    /// Simultaneously blinds the coin and ensures uniqueness
-    pub serial: pallas::Base,
     pub spend_hook: pallas::Base,
     pub user_data: pallas::Base,
+    /// Simultaneously blinds the coin and ensures uniqueness
+    pub blind: pallas::Base,
 }
 // ANCHOR_END: coin-attributes
 
@@ -82,9 +82,9 @@ impl CoinAttributes {
             pub_y,
             pallas::Base::from(self.value),
             self.token_id.inner(),
-            self.serial,
             self.spend_hook,
             self.user_data,
+            self.blind,
         ]);
         Coin(coin)
     }

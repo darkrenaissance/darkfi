@@ -106,9 +106,9 @@ pub async fn append_fee_call(
         public_key: keypair.public,
         value: change_value,
         token_id: coin.note.token_id,
-        serial: pallas::Base::random(&mut OsRng),
         spend_hook: pallas::Base::ZERO,
         user_data: pallas::Base::ZERO,
+        blind: pallas::Base::random(&mut OsRng),
     };
 
     let token_blind = pallas::Base::random(&mut OsRng);
@@ -127,20 +127,20 @@ pub async fn append_fee_call(
         input_value_blind,
         &output,
         output_value_blind,
-        output.serial,
         output.spend_hook,
         output.user_data,
+        output.blind,
         token_blind,
         signature_secret,
     )?;
 
     // Encrypted note for the output
     let note = MoneyNote {
-        serial: output.serial,
         value: output.value,
         token_id: output.token_id,
         spend_hook: output.spend_hook,
         user_data: output.user_data,
+        coin_blind: output.blind,
         value_blind: output_value_blind,
         token_blind,
         memo: vec![],
@@ -258,9 +258,9 @@ fn create_fee_proof(
     input_value_blind: pallas::Scalar,
     output: &FeeCallOutput,
     output_value_blind: pallas::Scalar,
-    output_serial: pallas::Base,
     output_spend_hook: pallas::Base,
     output_user_data: pallas::Base,
+    output_coin_blind: pallas::Base,
     token_blind: pallas::Base,
     signature_secret: SecretKey,
 ) -> Result<(Proof, FeeRevealed)> {
@@ -272,9 +272,9 @@ fn create_fee_proof(
         public_key,
         value: input.note.value,
         token_id: input.note.token_id,
-        serial: input.note.serial,
         spend_hook: input.note.spend_hook,
         user_data: input.note.user_data,
+        blind: input.note.coin_blind,
     }
     .to_coin();
 
@@ -305,9 +305,9 @@ fn create_fee_proof(
         public_key: output.public_key,
         value: output.value,
         token_id: output.token_id,
-        serial: output_serial,
         spend_hook: output_spend_hook,
         user_data: output_user_data,
+        blind: output_coin_blind,
     }
     .to_coin();
 
@@ -330,15 +330,15 @@ fn create_fee_proof(
         Witness::Base(Value::known(signature_secret.inner())),
         Witness::Base(Value::known(pallas::Base::from(input.note.value))),
         Witness::Scalar(Value::known(input_value_blind)),
-        Witness::Base(Value::known(input.note.serial)),
         Witness::Base(Value::known(input.note.spend_hook)),
         Witness::Base(Value::known(input.note.user_data)),
+        Witness::Base(Value::known(input.note.coin_blind)),
         Witness::Base(Value::known(input.user_data_blind)),
         Witness::Base(Value::known(pallas::Base::from(output.value))),
         Witness::Base(Value::known(output_spend_hook)),
         Witness::Base(Value::known(output_user_data)),
         Witness::Scalar(Value::known(output_value_blind)),
-        Witness::Base(Value::known(output_serial)),
+        Witness::Base(Value::known(output_coin_blind)),
         Witness::Base(Value::known(input.note.token_id.inner())),
         Witness::Base(Value::known(token_blind)),
     ];

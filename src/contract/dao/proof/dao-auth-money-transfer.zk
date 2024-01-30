@@ -30,7 +30,7 @@ witness "DaoAuthMoneyTransfer" {
     # Dao output coin attrs
     Base dao_value,
     Base dao_token_id,
-    Base dao_serial,
+    Base dao_coin_blind,
 
     # Should be set to DAO_CONTRACT_ID
     Base dao_contract_id,
@@ -85,9 +85,9 @@ circuit "DaoAuthMoneyTransfer" {
         dao_value,
         # Likewise the token_id must match the other output coins.
         dao_token_id,
-        dao_serial,
         dao_contract_id,
         dao_bulla,
+        dao_coin_blind,
     );
     constrain_instance(dao_change_coin);
     constrain_instance(dao_contract_id);
@@ -126,7 +126,7 @@ circuit "DaoAuthMoneyTransfer" {
 
     # Serial
     shared_secret_3 = poseidon_hash(shared_secret, const_3);
-    enc_serial = base_add(dao_serial, shared_secret_3);
-    constrain_instance(enc_serial);
+    enc_coin_blind = base_add(dao_coin_blind, shared_secret_3);
+    constrain_instance(enc_coin_blind);
 }
 

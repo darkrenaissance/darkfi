@@ -97,9 +97,9 @@ pub fn create_transfer_burn_proof(
         public_key,
         value: input.note.value,
         token_id: input.note.token_id,
-        serial: input.note.serial,
         spend_hook: input.note.spend_hook,
         user_data: input.note.user_data,
+        blind: input.note.coin_blind,
     }
     .to_coin();
 
@@ -138,9 +138,9 @@ pub fn create_transfer_burn_proof(
         Witness::Base(Value::known(input.note.token_id.inner())),
         Witness::Scalar(Value::known(value_blind)),
         Witness::Base(Value::known(token_blind)),
-        Witness::Base(Value::known(input.note.serial)),
         Witness::Base(Value::known(input.note.spend_hook)),
         Witness::Base(Value::known(input.note.user_data)),
+        Witness::Base(Value::known(input.note.coin_blind)),
         Witness::Base(Value::known(input.user_data_blind)),
         Witness::Base(Value::known(input.secret.inner())),
         Witness::Uint32(Value::known(u64::from(input.leaf_position).try_into().unwrap())),
@@ -161,9 +161,9 @@ pub fn create_transfer_mint_proof(
     output: &TransferCallOutput,
     value_blind: pallas::Scalar,
     token_blind: pallas::Base,
-    serial: pallas::Base,
     spend_hook: pallas::Base,
     user_data: pallas::Base,
+    coin_blind: pallas::Base,
 ) -> Result<(Proof, TransferMintRevealed)> {
     let value_commit = pedersen_commitment_u64(output.value, value_blind);
     let token_commit = poseidon_hash([output.token_id.inner(), token_blind]);
@@ -173,9 +173,9 @@ pub fn create_transfer_mint_proof(
         public_key: output.public_key,
         value: output.value,
         token_id: output.token_id,
-        serial,
         spend_hook,
         user_data,
+        blind: coin_blind,
     };
     debug!("Created coin: {:?}", coin);
     let coin = coin.to_coin();
@@ -187,9 +187,9 @@ pub fn create_transfer_mint_proof(
         Witness::Base(Value::known(pub_y)),
         Witness::Base(Value::known(pallas::Base::from(output.value))),
         Witness::Base(Value::known(output.token_id.inner())),
-        Witness::Base(Value::known(serial)),
         Witness::Base(Value::known(spend_hook)),
         Witness::Base(Value::known(user_data)),
+        Witness::Base(Value::known(coin_blind)),
         Witness::Scalar(Value::known(value_blind)),
         Witness::Base(Value::known(token_blind)),
     ];

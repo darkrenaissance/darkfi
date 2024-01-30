@@ -9,9 +9,9 @@ constant "DaoVoteInput" {
 
 witness "DaoVoteInput" {
     Base secret,
-    Base serial,
     Base spend_hook,
     Base user_data,
+    Base coin_blind,
     Base value,
     Base gov_token_id,
     Scalar value_blind,
@@ -30,9 +30,9 @@ circuit "DaoVoteInput" {
         pub_y,
         value,
         gov_token_id,
-        serial,
         spend_hook,
         user_data,
+        coin_blind,
     );
 
     # This is the same as for money::transfer() calls. We could use

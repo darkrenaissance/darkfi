@@ -126,9 +126,9 @@ pub fn make_transfer_call(
         public_key: recipient,
         value,
         token_id,
-        serial: pallas::Base::random(&mut OsRng),
         spend_hook: pallas::Base::ZERO,
         user_data: pallas::Base::ZERO,
+        blind: pallas::Base::random(&mut OsRng),
     });
 
     if change_value > 0 {
@@ -136,9 +136,9 @@ pub fn make_transfer_call(
             public_key: keypair.public,
             value: change_value,
             token_id,
-            serial: pallas::Base::random(&mut OsRng),
             spend_hook: pallas::Base::ZERO,
             user_data: pallas::Base::ZERO,
+            blind: pallas::Base::random(&mut OsRng),
         });
     }
 

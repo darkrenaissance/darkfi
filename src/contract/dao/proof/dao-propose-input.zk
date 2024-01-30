@@ -9,9 +9,9 @@ constant "DaoProposeInput" {
 
 witness "DaoProposeInput" {
     Base secret,
-    Base serial,
     Base spend_hook,
     Base user_data,
+    Base coin_blind,
     Base value,
     Base token,
     Scalar value_blind,
@@ -31,9 +31,9 @@ circuit "DaoProposeInput" {
         pub_y,
         value,
         token,
-        serial,
         spend_hook,
         user_data,
+        coin_blind,
     );
 
     # We need this to detect whether the above coin was already spent.

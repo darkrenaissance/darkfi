@@ -304,7 +304,10 @@ impl TestHarness {
             coin: output.coin,
             note: note.clone(),
             secret: secret_key,
-            nullifier: Nullifier::from(poseidon_hash([wallet.keypair.secret.inner(), note.serial])),
+            nullifier: Nullifier::from(poseidon_hash([
+                wallet.keypair.secret.inner(),
+                output.coin.inner(),
+            ])),
             leaf_position,
         };
 
@@ -334,7 +337,7 @@ impl TestHarness {
                 secret: secret_key,
                 nullifier: Nullifier::from(poseidon_hash([
                     wallet.keypair.secret.inner(),
-                    note.serial,
+                    output.coin.inner(),
                 ])),
                 leaf_position,
             };
@@ -367,7 +370,7 @@ impl TestHarness {
                     secret: secret_key,
                     nullifier: Nullifier::from(poseidon_hash([
                         wallet.keypair.secret.inner(),
-                        note.serial,
+                        output.coin.inner(),
                     ])),
                     leaf_position,
                 };

@@ -67,9 +67,9 @@ impl DaoAuthMoneyTransferCall {
             let note = [
                 value_base,
                 coin_attrs.token_id.inner(),
-                coin_attrs.serial,
                 coin_attrs.spend_hook,
                 coin_attrs.user_data,
+                coin_attrs.blind,
             ];
             let enc_note =
                 ElGamalEncryptedNote::encrypt(note, &ephem_secret, &coin_attrs.public_key);
@@ -78,9 +78,9 @@ impl DaoAuthMoneyTransferCall {
                 Witness::EcNiPoint(Value::known(coin_attrs.public_key.inner())),
                 Witness::Base(Value::known(value_base)),
                 Witness::Base(Value::known(coin_attrs.token_id.inner())),
-                Witness::Base(Value::known(coin_attrs.serial)),
                 Witness::Base(Value::known(coin_attrs.spend_hook)),
                 Witness::Base(Value::known(coin_attrs.user_data)),
+                Witness::Base(Value::known(coin_attrs.blind)),
                 Witness::Base(Value::known(ephem_secret.inner())),
             ];
 
@@ -114,7 +114,7 @@ impl DaoAuthMoneyTransferCall {
         let dao_change_value = pallas::Base::from(self.dao_coin_attrs.value);
 
         let note =
-            [dao_change_value, self.dao_coin_attrs.token_id.inner(), self.dao_coin_attrs.serial];
+            [dao_change_value, self.dao_coin_attrs.token_id.inner(), self.dao_coin_attrs.blind];
         let dao_change_attrs =
             ElGamalEncryptedNote::encrypt(note, &ephem_secret, &self.dao.public_key);
 
@@ -148,7 +148,7 @@ impl DaoAuthMoneyTransferCall {
             // Dao output coin attrs
             Witness::Base(Value::known(dao_change_value)),
             Witness::Base(Value::known(self.dao_coin_attrs.token_id.inner())),
-            Witness::Base(Value::known(self.dao_coin_attrs.serial)),
+            Witness::Base(Value::known(self.dao_coin_attrs.blind)),
             // DAO_CONTRACT_ID
             Witness::Base(Value::known(DAO_CONTRACT_ID.inner())),
             // Encrypted change DAO output

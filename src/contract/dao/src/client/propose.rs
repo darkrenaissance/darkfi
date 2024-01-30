@@ -82,9 +82,9 @@ impl DaoProposeCall {
 
             let prover_witnesses = vec![
                 Witness::Base(Value::known(input.secret.inner())),
-                Witness::Base(Value::known(note.serial)),
                 Witness::Base(Value::known(pallas::Base::ZERO)),
                 Witness::Base(Value::known(pallas::Base::ZERO)),
+                Witness::Base(Value::known(note.coin_blind)),
                 Witness::Base(Value::known(pallas::Base::from(note.value))),
                 Witness::Base(Value::known(note.token_id.inner())),
                 Witness::Scalar(Value::known(funds_blind)),
@@ -99,9 +99,9 @@ impl DaoProposeCall {
                 public_key,
                 value: note.value,
                 token_id: note.token_id,
-                serial: note.serial,
                 spend_hook: pallas::Base::ZERO,
                 user_data: pallas::Base::ZERO,
+                blind: note.coin_blind,
             }
             .to_coin();
 

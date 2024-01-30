@@ -119,9 +119,9 @@ impl TestHarness {
             public_key: dao_wallet.keypair.public,
             value: change_value,
             token_id: proposal_token_id,
-            serial: pallas::Base::random(&mut OsRng),
             spend_hook: DAO_CONTRACT_ID.inner(),
             user_data: dao_bulla.inner(),
+            blind: pallas::Base::random(&mut OsRng),
         };
         outputs.push(dao_coin_attrs.clone());
 
@@ -153,11 +153,6 @@ impl TestHarness {
             xfer_params.inputs.iter().map(|input| input.value_commit).sum()
         );
 
-        // First output is change, second output is recipient.
-        let minted_coins = xfer_secrets.minted_coins(&xfer_params);
-        let user_serial = minted_coins[0].note.serial;
-        let dao_serial = minted_coins[1].note.serial;
-
         let exec_builder = DaoExecCall {
             proposal: proposal.clone(),
             dao: dao.clone(),
@@ -165,8 +160,6 @@ impl TestHarness {
             all_vote_value,
             yes_vote_blind,
             all_vote_blind,
-            user_serial,
-            dao_serial,
             input_value,
             input_value_blind,
             input_user_data_blind,

@@ -186,9 +186,9 @@ fn integration_test() -> Result<()> {
             public_key: th.holders.get(&Holder::Rachel).unwrap().keypair.public,
             value: PROPOSAL_AMOUNT,
             token_id: drk_token_id,
-            serial: pallas::Base::random(&mut OsRng),
             spend_hook: pallas::Base::ZERO,
             user_data: pallas::Base::ZERO,
+            blind: pallas::Base::random(&mut OsRng),
         }];
         // We can add whatever we want in here, even arbitrary text
         // It's up to the auth module to decide what to do with it.

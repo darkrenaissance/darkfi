@@ -19,12 +19,12 @@ witness "Mint_V1" {
     Base value,
     # The token ID
     Base token,
-    # Unique serial number corresponding to this coin
-    Base serial,
     # Allows composing this ZK proof to invoke other contracts
     Base spend_hook,
     # Data passed from this coin to the invoked contract
     Base user_data,
+    # Unique serial number corresponding to this coin
+    Base coin_blind,
     # Random blinding factor for the value commitment
     Scalar value_blind,
     # Random blinding factor for the token ID
@@ -39,9 +39,9 @@ circuit "Mint_V1" {
         pub_y,
         value,
         token,
-        serial,
         spend_hook,
         user_data,
+        coin_blind,
     );
     constrain_instance(C);
 

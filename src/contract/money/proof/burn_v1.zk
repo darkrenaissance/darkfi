@@ -19,12 +19,12 @@ witness "Burn_V1" {
     Scalar value_blind,
     # Random blinding factor for the token ID
     Base token_blind,
-    # Unique serial number corresponding to this coin
-    Base serial,
     # Allows composing this ZK proof to invoke other contracts
     Base spend_hook,
     # Data passed from this coin to the invoked contract
     Base user_data,
+    # Unique serial number corresponding to this coin
+    Base coin_blind,
     # Blinding factor for the encrypted user_data
     Base user_data_blind,
     # Secret key used to derive nullifier and coin's public key
@@ -47,9 +47,9 @@ circuit "Burn_V1" {
         ec_get_y(pub),
         value,
         token,
-        serial,
         spend_hook,
         user_data,
+        coin_blind,
     );
 
     # Poseidon hash of the nullifier

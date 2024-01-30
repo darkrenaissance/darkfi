@@ -101,8 +101,6 @@ pub const MONEY_ALIASES_COL_TOKEN_ID: &str = "token_id";
 /// All other coin attributes must be present.
 #[derive(Debug, Clone, Eq, PartialEq, SerialEncodable, SerialDecodable)]
 pub struct MoneyNote {
-    /// Serial number of the coin, used for the nullifier
-    pub serial: pallas::Base,
     /// Value of the coin
     pub value: u64,
     /// Token ID of the coin
@@ -112,6 +110,8 @@ pub struct MoneyNote {
     pub spend_hook: pallas::Base,
     /// User data used by protocol when spend hook is enabled
     pub user_data: pallas::Base,
+    /// Blinding factor for the coin
+    pub coin_blind: pallas::Base,
     // TODO: look into removing these fields. We potentially don't need them [
     /// Blinding factor for the value pedersen commitment
     pub value_blind: pallas::Scalar,

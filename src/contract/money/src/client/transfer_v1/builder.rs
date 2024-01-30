@@ -153,20 +153,20 @@ impl TransferCallBuilder {
                 output,
                 value_blind,
                 token_blind,
-                output.serial,
                 output.spend_hook,
                 output.user_data,
+                output.blind,
             )?;
 
             proofs.push(proof);
 
             // Encrypted note
             let note = MoneyNote {
-                serial: output.serial,
                 value: output.value,
                 token_id: output.token_id,
                 spend_hook: output.spend_hook,
                 user_data: output.user_data,
+                coin_blind: output.blind,
                 value_blind,
                 token_blind,
                 memo: vec![],

@@ -39,8 +39,6 @@ pub struct DaoExecCall {
     pub all_vote_value: u64,
     pub yes_vote_blind: pallas::Scalar,
     pub all_vote_blind: pallas::Scalar,
-    pub user_serial: pallas::Base,
-    pub dao_serial: pallas::Base,
     pub input_value: u64,
     pub input_value_blind: pallas::Scalar,
     pub input_user_data_blind: pallas::Base,

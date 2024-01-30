@@ -108,9 +108,9 @@ impl TokenMintCallBuilder {
             public_key: self.recipient,
             value: self.amount,
             token_id,
-            serial: pallas::Base::random(&mut OsRng),
             spend_hook: pallas::Base::ZERO,
             user_data: pallas::Base::ZERO,
+            blind: pallas::Base::random(&mut OsRng),
         };
 
         // We just create the pedersen commitment blinds here. We simply
@@ -128,7 +128,7 @@ impl TokenMintCallBuilder {
             signature_public: PublicKey::from_secret(input.signature_secret),
         };
 
-        let serial = pallas::Base::random(&mut OsRng);
+        let coin_blind = pallas::Base::random(&mut OsRng);
 
         info!("Creating token mint proof for output");
         let (proof, public_inputs) = create_token_mint_proof(
@@ -138,17 +138,17 @@ impl TokenMintCallBuilder {
             &self.mint_authority,
             value_blind,
             token_blind,
-            serial,
             self.spend_hook,
             self.user_data,
+            coin_blind,
         )?;
 
         let note = MoneyNote {
-            serial,
             value: output.value,
             token_id: output.token_id,
             spend_hook: self.spend_hook,
             user_data: self.user_data,
+            coin_blind,
             value_blind,
             token_blind,
             memo: vec![],
@@ -177,9 +177,9 @@ pub fn create_token_mint_proof(
     mint_authority: &Keypair,
     value_blind: pallas::Scalar,
     token_blind: pallas::Base,
-    serial: pallas::Base,
     spend_hook: pallas::Base,
     user_data: pallas::Base,
+    coin_blind: pallas::Base,
 ) -> Result<(Proof, TokenMintRevealed)> {
     let token_id = TokenId::derive(mint_authority.secret);
 
@@ -193,9 +193,9 @@ pub fn create_token_mint_proof(
         rcpt_y,
         pallas::Base::from(output.value),
         token_id.inner(),
-        serial,
         spend_hook,
         user_data,
+        coin_blind,
     ]));
 
     let public_inputs = TokenMintRevealed {
@@ -211,9 +211,9 @@ pub fn create_token_mint_proof(
         Witness::Base(Value::known(pallas::Base::from(output.value))),
         Witness::Base(Value::known(rcpt_x)),
         Witness::Base(Value::known(rcpt_y)),
-        Witness::Base(Value::known(serial)),
         Witness::Base(Value::known(spend_hook)),
         Witness::Base(Value::known(user_data)),
+        Witness::Base(Value::known(coin_blind)),
         Witness::Scalar(Value::known(value_blind)),
         Witness::Base(Value::known(token_blind)),
     ];
