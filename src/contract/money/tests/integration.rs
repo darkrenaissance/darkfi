@@ -33,7 +33,7 @@ fn money_integration() -> Result<()> {
         let mut th = TestHarness::new(&["money".to_string()], true).await?;
 
         // Block height to verify against
-        let mut current_block_height = 1;
+        let current_block_height = 1;
 
         // Drop some money to Alice
         info!("[Alice] Building block proposal");
@@ -56,7 +56,6 @@ fn money_integration() -> Result<()> {
         assert!(alice_owncoin.note.value == expected_reward(current_block_height));
 
         th.assert_trees(&HOLDERS);
-        current_block_height += 1;
 
         // And some to Bob
         info!("[Bob] Building block proposal");
