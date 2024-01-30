@@ -65,8 +65,9 @@
 
 # DEP
 
-- [DEP 0001: Version Message Info](dep/0001.md)
-- [DEP 0002: Smart Contract Composability](dep/0002.md)
+- [DEP 0001: Version Message Info (accepted)](dep/0001.md)
+- [DEP 0002: Smart Contract Composability (deprecated)](dep/0002.md)
+- [DEP 0003: Token Mint Authorization (draft)](dep/0003.md)
 
 # Specs
 
