@@ -225,7 +225,7 @@ pub(crate) fn get_verifying_block_height(mut ctx: FunctionEnvMut<Env>) -> u64 {
     // u64 is 8 bytes.
     env.subtract_gas(&mut store, 8);
 
-    env.time_keeper.verifying_block_height
+    env.verifying_block_height
 }
 
 /// Will return current runtime configured verifying block height epoch number
@@ -236,7 +236,7 @@ pub(crate) fn get_verifying_block_height_epoch(mut ctx: FunctionEnvMut<Env>) -> 
     // u64 is 8 bytes.
     env.subtract_gas(&mut store, 8);
 
-    darkfi_sdk::blockchain::block_epoch(env.time_keeper.verifying_block_height)
+    darkfi_sdk::blockchain::block_epoch(env.verifying_block_height)
 }
 
 /// Will return current blockchain timestamp,

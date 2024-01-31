@@ -148,7 +148,12 @@ impl Validator {
         let overlay = BlockchainOverlay::new(&blockchain)?;
 
         // Deploy native wasm contracts
-        deploy_native_contracts(&overlay, &config.time_keeper, &config.faucet_pubkeys).await?;
+        deploy_native_contracts(
+            &overlay,
+            config.time_keeper.verifying_block_height,
+            &config.faucet_pubkeys,
+        )
+        .await?;
 
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
@@ -598,7 +603,8 @@ impl Validator {
         let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?;
 
         // Deploy native wasm contracts
-        deploy_native_contracts(&overlay, &time_keeper, &faucet_pubkeys).await?;
+        deploy_native_contracts(&overlay, time_keeper.verifying_block_height, &faucet_pubkeys)
+            .await?;
 
         // Validate genesis block
         verify_genesis_block(&overlay, &time_keeper, previous, genesis_txs_total).await?;

@@ -32,7 +32,6 @@ use crate::{
     error::TxVerifyFailed,
     runtime::vm_runtime::Runtime,
     tx::Transaction,
-    util::time::TimeKeeper,
     validator::consensus::{Fork, Proposal},
     Error, Result,
 };
@@ -49,7 +48,7 @@ use crate::{
 /// the actual contract, so make sure the native contracts handle this well.
 pub async fn deploy_native_contracts(
     overlay: &BlockchainOverlayPtr,
-    time_keeper: &TimeKeeper,
+    verifying_block_height: u64,
     faucet_pubkeys: &Vec<PublicKey>,
 ) -> Result<()> {
     info!(target: "validator::utils::deploy_native_contracts", "Deploying native WASM contracts");
@@ -88,7 +87,7 @@ pub async fn deploy_native_contracts(
     for nc in native_contracts {
         info!(target: "validator::utils::deploy_native_contracts", "Deploying {} with ContractID {}", nc.0, nc.1);
 
-        let mut runtime = Runtime::new(&nc.2[..], overlay.clone(), nc.1, time_keeper.clone())?;
+        let mut runtime = Runtime::new(&nc.2[..], overlay.clone(), nc.1, verifying_block_height)?;
 
         runtime.deploy(&nc.3)?;
 

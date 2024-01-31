@@ -247,8 +247,12 @@ pub async fn verify_producer_transaction(
     debug!(target: "validator::verification::verify_producer_transaction", "Instantiating WASM runtime");
     let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id)?;
 
-    let mut runtime =
-        Runtime::new(&wasm, overlay.clone(), call.data.contract_id, time_keeper.clone())?;
+    let mut runtime = Runtime::new(
+        &wasm,
+        overlay.clone(),
+        call.data.contract_id,
+        time_keeper.verifying_block_height,
+    )?;
 
     debug!(target: "validator::verification::verify_producer_transaction", "Executing \"metadata\" call");
     let metadata = runtime.metadata(&payload)?;
@@ -404,8 +408,12 @@ pub async fn verify_transaction(
         debug!(target: "validator::verification::verify_transaction", "Instantiating WASM runtime");
         let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id)?;
 
-        let mut runtime =
-            Runtime::new(&wasm, overlay.clone(), call.data.contract_id, time_keeper.clone())?;
+        let mut runtime = Runtime::new(
+            &wasm,
+            overlay.clone(),
+            call.data.contract_id,
+            time_keeper.verifying_block_height,
+        )?;
 
         debug!(target: "validator::verification::verify_transaction", "Executing \"metadata\" call");
         let metadata = runtime.metadata(&payload)?;
@@ -477,7 +485,7 @@ pub async fn verify_transaction(
                 &deploy_params.wasm_bincode,
                 overlay.clone(),
                 deploy_cid,
-                time_keeper.clone(),
+                time_keeper.verifying_block_height,
             )?;
 
             deploy_runtime.deploy(&deploy_params.ix)?;
