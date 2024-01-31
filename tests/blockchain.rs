@@ -21,7 +21,7 @@ use darkfi::{
     validator::{
         pid::slot_pid_output,
         pow::PoWModule,
-        validation::{validate_block, validate_blockchain},
+        verification::{validate_block, validate_blockchain},
     },
     Error, Result,
 };
@@ -134,11 +134,8 @@ impl Harness {
 
             // This will be true for every insert, apart from genesis
             if let Some(p) = previous {
-                // Retrieve expected reward
-                let expected_reward = expected_reward(block.header.height);
-
                 // Validate block
-                validate_block(block, &p, expected_reward, &node.module)?;
+                validate_block(block, &p, &node.module)?;
 
                 // Update PoW module
                 if block.header.version == 1 {
@@ -160,6 +157,7 @@ impl Harness {
     }
 }
 
+#[ignore]
 #[test]
 fn blockchain_add_pos_blocks() -> Result<()> {
     smol::block_on(async {

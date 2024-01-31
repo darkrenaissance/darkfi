@@ -70,12 +70,9 @@ async fn sync_pos_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let charlie =
         generate_node(&th.vks, &th.validator_config, &sync_settings, None, &ex, false).await?;
     // Verify node synced
-    let genesis_txs_total = th.config.alice_initial + th.config.bob_initial;
     let alice = &th.alice.validator;
     let charlie = &charlie.validator;
-    charlie
-        .validate_blockchain(genesis_txs_total, vec![], pow_target, pow_fixed_difficulty)
-        .await?;
+    charlie.validate_blockchain(vec![], pow_target, pow_fixed_difficulty).await?;
     assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
     assert_eq!(alice.blockchain.slots.len(), charlie.blockchain.slots.len());
 

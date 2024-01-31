@@ -135,20 +135,17 @@ impl Harness {
     }
 
     pub async fn validate_chains(&self, total_blocks: usize, total_slots: usize) -> Result<()> {
-        let genesis_txs_total = self.config.alice_initial + self.config.bob_initial;
         let alice = &self.alice.validator;
         let bob = &self.bob.validator;
 
         alice
             .validate_blockchain(
-                genesis_txs_total,
                 vec![],
                 self.config.pow_target,
                 self.config.pow_fixed_difficulty.clone(),
             )
             .await?;
         bob.validate_blockchain(
-            genesis_txs_total,
             vec![],
             self.config.pow_target,
             self.config.pow_fixed_difficulty.clone(),

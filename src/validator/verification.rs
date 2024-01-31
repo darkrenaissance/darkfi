@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 
 use darkfi_sdk::{
-    blockchain::{block_version, expected_reward},
+    blockchain::{block_epoch, block_version},
     crypto::{
         schnorr::SchnorrPublic, ContractId, PublicKey, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
@@ -31,31 +31,25 @@ use darkfi_serial::{
     deserialize_async, serialize_async, AsyncDecodable, AsyncEncodable, AsyncWriteExt, WriteExt,
 };
 use log::{debug, error, warn};
+use num_bigint::BigUint;
 use smol::io::Cursor;
 
 use crate::{
-    blockchain::{BlockInfo, BlockchainOverlayPtr},
+    blockchain::{BlockInfo, Blockchain, BlockchainOverlayPtr},
     error::TxVerifyFailed,
     runtime::vm_runtime::Runtime,
     tx::{Transaction, MAX_TX_CALLS, MIN_TX_CALLS},
-    util::time::TimeKeeper,
     validator::{
         consensus::{Consensus, Fork, Proposal, TXS_CAP},
         fees::{circuit_gas_use, PALLAS_SCHNORR_SIGNATURE_FEE},
         pow::PoWModule,
-        validation::validate_block,
     },
     zk::VerifyingKey,
     Error, Result,
 };
 
 /// Verify given genesis [`BlockInfo`], and apply it to the provided overlay
-pub async fn verify_genesis_block(
-    overlay: &BlockchainOverlayPtr,
-    time_keeper: &TimeKeeper,
-    block: &BlockInfo,
-    genesis_txs_total: u64,
-) -> Result<()> {
+pub async fn verify_genesis_block(overlay: &BlockchainOverlayPtr, block: &BlockInfo) -> Result<()> {
     let block_hash = block.hash()?.to_string();
     debug!(target: "validator::verification::verify_genesis_block", "Validating genesis block {}", block_hash);
 
@@ -69,38 +63,20 @@ pub async fn verify_genesis_block(
         return Err(Error::BlockIsInvalid(block_hash))
     }
 
-    // Block height must be the same as the time keeper verifying slot
-    if block.header.height != time_keeper.verifying_block_height {
-        return Err(Error::VerifyingSlotMissmatch())
-    }
-
-    // Check genesis slot exist
-    if block.slots.len() != 1 {
+    // Block epoch must be correct
+    if block.header.epoch != block_epoch(block.header.height) {
         return Err(Error::BlockIsInvalid(block_hash))
     }
 
-    // Retrieve genesis slot
-    let genesis_slot = block.slots.last().unwrap();
-
-    // Genesis block slot total token must correspond to the total
-    // of all genesis transactions public inputs (genesis distribution).
-    if genesis_slot.total_tokens != genesis_txs_total {
-        return Err(Error::SlotIsInvalid(genesis_slot.id))
-    }
-
-    // Verify there is no reward
-    if genesis_slot.reward != 0 {
-        return Err(Error::SlotIsInvalid(genesis_slot.id))
+    // Block version must be correct
+    if block.header.version != block_version(block.header.height) {
+        return Err(Error::BlockIsInvalid(block_hash))
     }
 
     // Verify transactions vector contains at least one(producers) transaction
     if block.txs.is_empty() {
         return Err(Error::BlockContainsNoTransactions(block_hash))
     }
-
-    // Insert genesis slot so transactions can be validated against.
-    // Since an overlay is used, original database is not affected.
-    overlay.lock().unwrap().slots.insert(&[genesis_slot.clone()])?;
 
     // Genesis transaction must be the Transaction::default() one(empty)
     if block.txs[0] != Transaction::default() {
@@ -110,7 +86,7 @@ pub async fn verify_genesis_block(
 
     // Verify transactions, exluding producer(first) one
     let txs = &block.txs[1..];
-    if let Err(e) = verify_transactions(overlay, time_keeper, txs, false).await {
+    if let Err(e) = verify_transactions(overlay, block.header.height, txs, false).await {
         warn!(
             target: "validator::verification::verify_genesis_block",
             "[VALIDATOR] Erroneous transactions found in set",
@@ -126,15 +102,76 @@ pub async fn verify_genesis_block(
     Ok(())
 }
 
+/// A block is considered valid when the following rules apply:
+///     1. Block version is correct for its height
+///     2. Block epoch corresponds to the one for its height
+///     3. Parent hash is equal to the hash of the previous block
+///     4. Block height increments previous block height by 1
+///     5. Timestamp is valid based on PoWModule validation
+///     6. Block hash is valid based on PoWModule validation
+/// Additional validity rules can be applied.
+pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, module: &PoWModule) -> Result<()> {
+    // Check block version (1)
+    if block.header.version != block_version(block.header.height) {
+        return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+    }
+
+    // Check block epoch (2)
+    if block.header.epoch != block_epoch(block.header.height) {
+        return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+    }
+
+    // Check previous hash (3)
+    let previous_hash = previous.hash()?;
+    if block.header.previous != previous_hash {
+        return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+    }
+
+    // Check heights are incremental (4)
+    if block.header.height != previous.header.height + 1 {
+        return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+    }
+
+    // Check timestamp validity (5)
+    if !module.verify_timestamp_by_median(block.header.timestamp.0) {
+        return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
+    }
+
+    // Check block hash corresponds to next one (6)
+    module.verify_block_hash(block)?;
+
+    Ok(())
+}
+
+/// A blockchain is considered valid, when every block is valid,
+/// based on validate_block checks.
+/// Be careful as this will try to load everything in memory.
+pub fn validate_blockchain(
+    blockchain: &Blockchain,
+    pow_target: usize,
+    pow_fixed_difficulty: Option<BigUint>,
+) -> Result<()> {
+    // Generate a PoW module
+    let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?;
+    // We use block order store here so we have all blocks in order
+    let blocks = blockchain.order.get_all()?;
+    for (index, block) in blocks[1..].iter().enumerate() {
+        let full_blocks = blockchain.get_blocks_by_hash(&[blocks[index].1, block.1])?;
+        let full_block = &full_blocks[1];
+        validate_block(full_block, &full_blocks[0], &module)?;
+        // Update PoW module
+        module.append(full_block.header.timestamp.0, &module.next_difficulty()?);
+    }
+
+    Ok(())
+}
+
 /// Verify given [`BlockInfo`], and apply it to the provided overlay
 pub async fn verify_block(
     overlay: &BlockchainOverlayPtr,
-    time_keeper: &TimeKeeper,
     module: &PoWModule,
     block: &BlockInfo,
     previous: &BlockInfo,
-    expected_reward: u64,
-    pos_testing_mode: bool,
 ) -> Result<()> {
     let block_hash = block.hash()?.to_string();
     debug!(target: "validator::verification::verify_block", "Validating block {}", block_hash);
@@ -144,39 +181,22 @@ pub async fn verify_block(
         return Err(Error::BlockAlreadyExists(block_hash))
     }
 
-    // Block height must be the same as the time keeper verifying slot
-    if block.header.height != time_keeper.verifying_block_height {
-        return Err(Error::VerifyingSlotMissmatch())
-    }
-
-    // Block epoch must be the correct one, calculated by the time keeper configuration
-    if block.header.epoch != time_keeper.slot_epoch(block.header.height) {
-        return Err(Error::VerifyingSlotMissmatch())
-    }
-
     // Validate block, using its previous
-    validate_block(block, previous, expected_reward, module)?;
+    validate_block(block, previous, module)?;
 
     // Verify transactions vector contains at least one(producers) transaction
     if block.txs.is_empty() {
         return Err(Error::BlockContainsNoTransactions(block_hash))
     }
 
-    // Insert last block slot so transactions can be validated against.
-    // Rest (empty) slots will be inserted along with the block.
-    // Since an overlay is used, original database is not affected.
-    overlay.lock().unwrap().slots.insert(&[block.slots.last().unwrap().clone()])?;
-
     // Verify proposal transaction.
-    // For PoS blocks(version 2) verify if not in PoS testing mode.
-    if block.header.version != 2 || !pos_testing_mode {
-        let public_key = verify_producer_transaction(overlay, time_keeper, &block.txs[0]).await?;
-        verify_producer_signature(block, &public_key)?;
-    }
+    let public_key =
+        verify_producer_transaction(overlay, block.header.height, &block.txs[0]).await?;
+    verify_producer_signature(block, &public_key)?;
 
     // Verify transactions, exluding producer(first) one
     let txs = &block.txs[1..];
-    let e = verify_transactions(overlay, time_keeper, txs, false).await;
+    let e = verify_transactions(overlay, block.header.height, txs, false).await;
     if let Err(e) = e {
         warn!(
             target: "validator::verification::verify_block",
@@ -208,7 +228,7 @@ pub fn verify_producer_signature(block: &BlockInfo, public_key: &PublicKey) -> R
 /// and apply it to the provided overlay. Returns transaction signature public key.
 pub async fn verify_producer_transaction(
     overlay: &BlockchainOverlayPtr,
-    time_keeper: &TimeKeeper,
+    verifying_block_height: u64,
     tx: &Transaction,
 ) -> Result<PublicKey> {
     let tx_hash = tx.hash()?;
@@ -247,12 +267,8 @@ pub async fn verify_producer_transaction(
     debug!(target: "validator::verification::verify_producer_transaction", "Instantiating WASM runtime");
     let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id)?;
 
-    let mut runtime = Runtime::new(
-        &wasm,
-        overlay.clone(),
-        call.data.contract_id,
-        time_keeper.verifying_block_height,
-    )?;
+    let mut runtime =
+        Runtime::new(&wasm, overlay.clone(), call.data.contract_id, verifying_block_height)?;
 
     debug!(target: "validator::verification::verify_producer_transaction", "Executing \"metadata\" call");
     let metadata = runtime.metadata(&payload)?;
@@ -337,7 +353,7 @@ pub async fn verify_producer_transaction(
 /// and apply it to the provided overlay.
 pub async fn verify_transaction(
     overlay: &BlockchainOverlayPtr,
-    time_keeper: &TimeKeeper,
+    verifying_block_height: u64,
     tx: &Transaction,
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
     verify_fee: bool,
@@ -408,12 +424,8 @@ pub async fn verify_transaction(
         debug!(target: "validator::verification::verify_transaction", "Instantiating WASM runtime");
         let wasm = overlay.lock().unwrap().wasm_bincode.get(call.data.contract_id)?;
 
-        let mut runtime = Runtime::new(
-            &wasm,
-            overlay.clone(),
-            call.data.contract_id,
-            time_keeper.verifying_block_height,
-        )?;
+        let mut runtime =
+            Runtime::new(&wasm, overlay.clone(), call.data.contract_id, verifying_block_height)?;
 
         debug!(target: "validator::verification::verify_transaction", "Executing \"metadata\" call");
         let metadata = runtime.metadata(&payload)?;
@@ -485,7 +497,7 @@ pub async fn verify_transaction(
                 &deploy_params.wasm_bincode,
                 overlay.clone(),
                 deploy_cid,
-                time_keeper.verifying_block_height,
+                verifying_block_height,
             )?;
 
             deploy_runtime.deploy(&deploy_params.ix)?;
@@ -575,7 +587,7 @@ pub async fn verify_transaction(
 /// all the transactions.
 pub async fn verify_transactions(
     overlay: &BlockchainOverlayPtr,
-    time_keeper: &TimeKeeper,
+    verifying_block_height: u64,
     txs: &[Transaction],
     verify_fees: bool,
 ) -> Result<u64> {
@@ -600,7 +612,7 @@ pub async fn verify_transactions(
     // Iterate over transactions and attempt to verify them
     for tx in txs {
         overlay.lock().unwrap().checkpoint();
-        match verify_transaction(overlay, time_keeper, tx, &mut vks, verify_fees).await {
+        match verify_transaction(overlay, verifying_block_height, tx, &mut vks, verify_fees).await {
             Ok(gas) => gas_used += gas,
             Err(e) => {
                 warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {}", e);
@@ -623,28 +635,13 @@ pub async fn verify_transactions(
     }
 }
 
-/// Verify given [`Proposal`] against provided consensus state
-pub async fn verify_proposal(
-    consensus: &Consensus,
-    proposal: &Proposal,
-) -> Result<(Fork, Option<usize>)> {
-    // TODO: verify proposal validations work as expected on versions change(cutoff)
-    match block_version(proposal.block.header.height) {
-        1 => verify_pow_proposal(consensus, proposal).await,
-        2 => verify_pos_proposal(consensus, proposal).await,
-        _ => Err(Error::BlockVersionIsInvalid(proposal.block.header.version)),
-    }
-}
-
-/// Verify given PoW [`Proposal`] against provided consensus state,
+/// Verify given [`Proposal`] against provided consensus state,
 /// A proposal is considered valid when the following rules apply:
 ///     1. Proposal hash matches the actual block one
 ///     2. Block transactions don't exceed set limit
-///     3. If proposal extends a known fork, verify block's slot
-///        correspond to the fork hot/live/next one
-///     4. Block is valid
+///     3. Block is valid
 /// Additional validity rules can be applied.
-pub async fn verify_pow_proposal(
+pub async fn verify_proposal(
     consensus: &Consensus,
     proposal: &Proposal,
 ) -> Result<(Fork, Option<usize>)> {
@@ -671,130 +668,12 @@ pub async fn verify_pow_proposal(
     // Check if proposal extends any existing forks
     let (fork, index) = consensus.find_extended_fork(proposal).await?;
 
-    // Verify block's slot correspond to the forks' hot/live/next one (3)
-    if fork.slots.len() != 1 || fork.slots != proposal.block.slots {
-        return Err(Error::ProposalContainsUnknownSlots)
-    }
-
-    // Insert block slot so transactions can be validated against.
-    // Since this fork uses an overlay clone, original overlay is not affected.
-    fork.overlay.lock().unwrap().slots.insert(&[proposal.block.slots.last().unwrap().clone()])?;
-
     // Grab overlay last block
     let previous = fork.overlay.lock().unwrap().last_block()?;
 
-    // Retrieve expected reward
-    let expected_reward = expected_reward(proposal.block.header.height);
-
-    // Generate a time keeper for proposal block leight
-    let mut time_keeper = consensus.time_keeper.current();
-    time_keeper.verifying_block_height = proposal.block.header.height;
-
-    // Verify proposal block (4)
-    if verify_block(
-        &fork.overlay,
-        &time_keeper,
-        &fork.module,
-        &proposal.block,
-        &previous,
-        expected_reward,
-        consensus.pos_testing_mode,
-    )
-    .await
-    .is_err()
-    {
+    // Verify proposal block (3)
+    if verify_block(&fork.overlay, &fork.module, &proposal.block, &previous).await.is_err() {
         error!(target: "validator::verification::verify_pow_proposal", "Erroneous proposal block found");
-        fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
-        return Err(Error::BlockIsInvalid(proposal.hash.to_string()))
-    };
-
-    Ok((fork, index))
-}
-
-/// Verify given PoS [`Proposal`] against provided consensus state,
-/// A proposal is considered valid when the following rules apply:
-///     1. Consensus(node) has not started current slot finalization
-///     2. Proposal refers to current slot
-///     3. Proposal hash matches the actual block one
-///     4. Block transactions don't exceed set limit
-///     5. If proposal extends a known fork, verify block slots
-///        correspond to the fork hot/live ones
-///     6. Block is valid
-/// Additional validity rules can be applied.
-pub async fn verify_pos_proposal(
-    consensus: &Consensus,
-    proposal: &Proposal,
-) -> Result<(Fork, Option<usize>)> {
-    // Generate a time keeper for current slot
-    let time_keeper = consensus.time_keeper.current();
-
-    // Node have already checked for finalization in this slot (1)
-    if time_keeper.verifying_block_height <= *consensus.checked_finalization.read().await {
-        warn!(target: "validator::verification::verify_pos_proposal", "Proposal received after finalization sync period.");
-        return Err(Error::ProposalAfterFinalizationError)
-    }
-
-    // Proposal validations
-    let hdr = &proposal.block.header;
-
-    // Ignore proposal if not for current slot (2)
-    if hdr.height != time_keeper.verifying_block_height {
-        return Err(Error::ProposalNotForCurrentSlotError)
-    }
-
-    // Check if proposal hash matches actual one (3)
-    let proposal_hash = proposal.block.hash()?;
-    if proposal.hash != proposal_hash {
-        warn!(
-            target: "validator::verification::verify_pos_proposal", "Received proposal contains mismatched hashes: {} - {}",
-            proposal.hash, proposal_hash
-        );
-        return Err(Error::ProposalHashesMissmatchError)
-    }
-
-    // Check that proposal transactions don't exceed limit (4)
-    if proposal.block.txs.len() > TXS_CAP {
-        warn!(
-            target: "validator::verification::verify_pos_proposal", "Received proposal transactions exceed configured cap: {} - {}",
-            proposal.block.txs.len(),
-            TXS_CAP
-        );
-        return Err(Error::ProposalTxsExceedCapError)
-    }
-
-    // Check if proposal extends any existing forks
-    let (fork, index) = consensus.find_extended_fork(proposal).await?;
-
-    // Verify block slots correspond to the forks' hot/live ones (5)
-    if !fork.slots.is_empty() && fork.slots != proposal.block.slots {
-        return Err(Error::ProposalContainsUnknownSlots)
-    }
-
-    // Insert last block slot so transactions can be validated against.
-    // Rest (empty) slots will be inserted along with the block.
-    // Since this fork uses an overlay clone, original overlay is not affected.
-    fork.overlay.lock().unwrap().slots.insert(&[proposal.block.slots.last().unwrap().clone()])?;
-
-    // Grab overlay last block
-    let previous = fork.overlay.lock().unwrap().last_block()?;
-
-    // Retrieve expected reward
-    let expected_reward = expected_reward(time_keeper.verifying_block_height);
-
-    // Verify proposal block (6)
-    if verify_block(
-        &fork.overlay,
-        &time_keeper,
-        &fork.module,
-        &proposal.block,
-        &previous,
-        expected_reward,
-        consensus.pos_testing_mode,
-    )
-    .await
-    .is_err()
-    {
-        error!(target: "validator::verification::verify_pos_proposal", "Erroneous proposal block found");
         fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
         return Err(Error::BlockIsInvalid(proposal.hash.to_string()))
     };

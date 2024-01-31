@@ -18,10 +18,7 @@
 
 use std::sync::Arc;
 
-use darkfi_sdk::{
-    blockchain::{expected_reward, Slot},
-    crypto::PublicKey,
-};
+use darkfi_sdk::{blockchain::Slot, crypto::PublicKey};
 use darkfi_serial::serialize_async;
 use log::{debug, error, info, warn};
 use num_bigint::BigUint;
@@ -58,9 +55,6 @@ use verification::{
 
 /// Fee calculation helpers
 pub mod fees;
-
-/// Validation functions
-pub mod validation;
 
 /// Helper utilities
 pub mod utils;
@@ -158,13 +152,7 @@ impl Validator {
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
             info!(target: "validator::new", "Appending genesis block");
-            verify_genesis_block(
-                &overlay,
-                &config.time_keeper,
-                &config.genesis_block,
-                config.genesis_txs_total,
-            )
-            .await?;
+            verify_genesis_block(&overlay, &config.genesis_block).await?;
         };
 
         // Write the changes to the actual chain db
@@ -225,7 +213,9 @@ impl Validator {
             let overlay = fork.overlay.lock().unwrap().full_clone()?;
 
             // Verify transaction
-            match verify_transactions(&overlay, &time_keeper, &tx_vec, false).await {
+            match verify_transactions(&overlay, time_keeper.verifying_block_height, &tx_vec, false)
+                .await
+            {
                 Ok(_) => {}
                 Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => continue,
                 Err(e) => return Err(e),
@@ -240,7 +230,9 @@ impl Validator {
         // Verify transaction against canonical state
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
         let mut erroneous_txs = vec![];
-        match verify_transactions(&overlay, &time_keeper, &tx_vec, false).await {
+        match verify_transactions(&overlay, time_keeper.verifying_block_height, &tx_vec, false)
+            .await
+        {
             Ok(_) => valid = true,
             Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(etx))) => {
                 erroneous_txs = etx
@@ -293,7 +285,14 @@ impl Validator {
                 let overlay = fork.overlay.lock().unwrap().full_clone()?;
 
                 // Verify transaction
-                match verify_transactions(&overlay, &time_keeper, &tx_vec, false).await {
+                match verify_transactions(
+                    &overlay,
+                    time_keeper.verifying_block_height,
+                    &tx_vec,
+                    false,
+                )
+                .await
+                {
                     Ok(_) => {
                         valid = true;
                         continue
@@ -309,7 +308,9 @@ impl Validator {
             // Verify transaction against canonical state
             let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
-            match verify_transactions(&overlay, &time_keeper, &tx_vec, false).await {
+            match verify_transactions(&overlay, time_keeper.verifying_block_height, &tx_vec, false)
+                .await
+            {
                 Ok(_) => valid = true,
                 Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
                 Err(e) => return Err(e),
@@ -402,8 +403,7 @@ impl Validator {
         // Retrieve last block
         let mut previous = &overlay.lock().unwrap().last_block()?;
 
-        // Create a time keeper and a PoW module to validate each block
-        let mut time_keeper = self.consensus.time_keeper.clone();
+        // Grab current PoW module to validate each block
         let mut module = self.consensus.module.read().await.clone();
 
         // Keep track of all blocks transactions to remove them from pending txs store
@@ -411,44 +411,23 @@ impl Validator {
 
         // Validate and insert each block
         for block in blocks {
-            // Use block height in time keeper
-            time_keeper.verifying_block_height = block.header.height;
-
-            // Retrieve expected reward
-            let expected_reward = expected_reward(time_keeper.verifying_block_height);
-
             // Verify block
-            if verify_block(
-                &overlay,
-                &time_keeper,
-                &module,
-                block,
-                previous,
-                expected_reward,
-                self.pos_testing_mode,
-            )
-            .await
-            .is_err()
-            {
+            if verify_block(&overlay, &module, block, previous).await.is_err() {
                 error!(target: "validator::add_blocks", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
             };
 
-            // Update PoW module
-            if block.header.version == 1 {
-                // Generate block difficulty
-                let difficulty = module.next_difficulty()?;
-                let cummulative_difficulty =
-                    module.cummulative_difficulty.clone() + difficulty.clone();
-                let block_difficulty = BlockDifficulty::new(
-                    block.header.height,
-                    block.header.timestamp.0,
-                    difficulty,
-                    cummulative_difficulty,
-                );
-                module.append_difficulty(&overlay, block_difficulty)?;
-            }
+            // Generate block difficulty
+            let difficulty = module.next_difficulty()?;
+            let cummulative_difficulty = module.cummulative_difficulty.clone() + difficulty.clone();
+            let block_difficulty = BlockDifficulty::new(
+                block.header.height,
+                block.header.timestamp.0,
+                difficulty,
+                cummulative_difficulty,
+            );
+            module.append_difficulty(&overlay, block_difficulty)?;
 
             // Store block transactions
             for tx in &block.txs {
@@ -485,17 +464,8 @@ impl Validator {
         debug!(target: "validator::add_transactions", "Instantiating BlockchainOverlay");
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
-        // Generate a time keeper using transaction verifying slot
-        let current_time_keeper = &self.consensus.time_keeper;
-        let time_keeper = TimeKeeper::new(
-            current_time_keeper.genesis_ts,
-            current_time_keeper.epoch_length,
-            current_time_keeper.slot_time,
-            verifying_block_height,
-        );
-
         // Verify all transactions and get erroneous ones
-        let e = verify_transactions(&overlay, &time_keeper, txs, self.verify_fees).await;
+        let e = verify_transactions(&overlay, verifying_block_height, txs, self.verify_fees).await;
         let lock = overlay.lock().unwrap();
         let mut overlay = lock.overlay.lock().unwrap();
 
@@ -538,18 +508,9 @@ impl Validator {
         debug!(target: "validator::add_test_producer_transaction", "Instantiating BlockchainOverlay");
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
-        // Generate a time keeper using transaction verifying slot
-        let current_time_keeper = &self.consensus.time_keeper;
-        let time_keeper = TimeKeeper::new(
-            current_time_keeper.genesis_ts,
-            current_time_keeper.epoch_length,
-            current_time_keeper.slot_time,
-            verifying_block_height,
-        );
-
         // Verify transaction
         let mut erroneous_txs = vec![];
-        if let Err(e) = verify_producer_transaction(&overlay, &time_keeper, tx).await {
+        if let Err(e) = verify_producer_transaction(&overlay, verifying_block_height, tx).await {
             warn!(target: "validator::add_test_producer_transaction", "Transaction verification failed: {}", e);
             erroneous_txs.push(tx.clone());
         }
@@ -578,7 +539,6 @@ impl Validator {
     /// Be careful as this will try to load everything in memory.
     pub async fn validate_blockchain(
         &self,
-        genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
         pow_target: usize,
         pow_fixed_difficulty: Option<BigUint>,
@@ -599,7 +559,7 @@ impl Validator {
         let mut previous = &blocks[0];
 
         // Create a time keeper and a PoW module to validate each block
-        let mut time_keeper = self.consensus.time_keeper.clone();
+        let time_keeper = self.consensus.time_keeper.clone();
         let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?;
 
         // Deploy native wasm contracts
@@ -607,29 +567,12 @@ impl Validator {
             .await?;
 
         // Validate genesis block
-        verify_genesis_block(&overlay, &time_keeper, previous, genesis_txs_total).await?;
+        verify_genesis_block(&overlay, previous).await?;
 
         // Validate and insert each block
         for block in &blocks[1..] {
-            // Use block height in time keeper
-            time_keeper.verifying_block_height = block.header.height;
-
-            // Retrieve expected reward
-            let expected_reward = expected_reward(time_keeper.verifying_block_height);
-
             // Verify block
-            if verify_block(
-                &overlay,
-                &time_keeper,
-                &module,
-                block,
-                previous,
-                expected_reward,
-                self.pos_testing_mode,
-            )
-            .await
-            .is_err()
-            {
+            if verify_block(&overlay, &module, block, previous).await.is_err() {
                 error!(target: "validator::validate_blockchain", "Erroneous block found in set");
                 overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 return Err(Error::BlockIsInvalid(block.hash()?.to_string()))

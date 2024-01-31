@@ -21,7 +21,6 @@ use std::collections::HashMap;
 use darkfi::{
     blockchain::BlockchainOverlayPtr,
     tx::TransactionBuilder,
-    util::time::TimeKeeper,
     validator::verification::verify_transaction,
     zk::{halo2::Value, Proof, ProvingKey, VerifyingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
@@ -65,7 +64,7 @@ pub async fn append_fee_call(
     fee_pk: &ProvingKey,
     tx_builder: &mut TransactionBuilder,
     overlay: &BlockchainOverlayPtr,
-    time_keeper: &TimeKeeper,
+    verifying_block_height: u64,
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
 ) -> Result<(MoneyFeeParamsV1, FeeCallSecrets)> {
     assert!(coin.note.value > 0);
@@ -76,7 +75,8 @@ pub async fn append_fee_call(
     // First we will verify the fee-less transaction to see how much gas
     // it uses for execution and verification.
     let tx = tx_builder.build()?;
-    let gas_used = verify_transaction(overlay, time_keeper, &tx, verifying_keys, false).await?;
+    let gas_used =
+        verify_transaction(overlay, verifying_block_height, &tx, verifying_keys, false).await?;
 
     // TODO: We could actually take a set of coins and then find one with
     //       enough value, instead of expecting one. It depends, the API

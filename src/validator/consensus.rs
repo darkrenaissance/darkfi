@@ -154,7 +154,8 @@ impl Consensus {
         };
 
         // Grab forks' unproposed transactions
-        let mut unproposed_txs = fork.unproposed_txs(&self.blockchain, &time_keeper).await?;
+        let mut unproposed_txs =
+            fork.unproposed_txs(&self.blockchain, time_keeper.verifying_block_height).await?;
         unproposed_txs.push(producer_tx);
 
         // Grab forks' last block proposal(previous)
@@ -305,30 +306,10 @@ impl Consensus {
         // Retrieve last block
         let mut previous = &fork.overlay.lock().unwrap().last_block()?;
 
-        // Create a time keeper to validate each proposal block
-        let mut time_keeper = self.time_keeper.clone();
-
         // Validate and insert each block
         for block in blocks {
-            // Use block slot in time keeper
-            time_keeper.verifying_block_height = block.header.height;
-
-            // Retrieve expected reward
-            let expected_reward = expected_reward(time_keeper.verifying_block_height);
-
             // Verify block
-            if verify_block(
-                &fork.overlay,
-                &time_keeper,
-                &fork.module,
-                block,
-                previous,
-                expected_reward,
-                self.pos_testing_mode,
-            )
-            .await
-            .is_err()
-            {
+            if verify_block(&fork.overlay, &fork.module, block, previous).await.is_err() {
                 error!(target: "validator::consensus::find_extended_fork_overlay", "Erroneous block found in set");
                 fork.overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
                 return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
@@ -344,14 +325,7 @@ impl Consensus {
         }
 
         // Rebuilt fork hot/live slots
-        if proposal.block.header.height < POS_START {
-            fork.generate_pow_slot()?;
-        } else {
-            let id = time_keeper.verifying_block_height;
-            let (producers, last_hashes, second_to_last_hashes) =
-                previous_slot_info(&forks, id - 1)?;
-            fork.generate_pos_slot(id, producers, &last_hashes, &second_to_last_hashes)?;
-        }
+        fork.generate_pow_slot()?;
 
         // Drop forks lock
         drop(forks);
@@ -498,7 +472,7 @@ impl Fork {
     pub async fn unproposed_txs(
         &self,
         blockchain: &Blockchain,
-        time_keeper: &TimeKeeper,
+        verifying_block_height: u64,
     ) -> Result<Vec<Transaction>> {
         // Retrieve all mempool transactions
         let mut unproposed_txs: Vec<Transaction> = blockchain
@@ -526,7 +500,9 @@ impl Fork {
         let overlay = self.overlay.lock().unwrap().full_clone()?;
 
         // Verify transactions
-        if let Err(e) = verify_transactions(&overlay, time_keeper, &unproposed_txs, false).await {
+        if let Err(e) =
+            verify_transactions(&overlay, verifying_block_height, &unproposed_txs, false).await
+        {
             match e {
                 crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(erroneous_txs)) => {
                     unproposed_txs.retain(|x| !erroneous_txs.contains(x))
