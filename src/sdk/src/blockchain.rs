@@ -122,13 +122,10 @@ impl Default for Slot {
 pub const POW_CUTOFF: u64 = 1000000;
 pub const POS_START: u64 = 1000001;
 
-/// Auxiliary function to calculate provided block height(slot) block version.
-/// PoW blocks use version 1, while PoS ones use version 2.
-pub fn block_version(height: u64) -> u8 {
-    match height {
-        0..=POW_CUTOFF => 1,
-        POS_START.. => 2,
-    }
+/// Auxiliary function to calculate provided block height block version.
+/// Currently, a single version(1) exists.
+pub fn block_version(_height: u64) -> u8 {
+    1
 }
 
 /// Auxiliary function to calculate provided block height epoch.

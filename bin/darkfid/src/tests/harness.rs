@@ -214,13 +214,7 @@ impl Harness {
 
         // Generate header
         let height = slots.last().unwrap().id;
-        let header = Header::new(
-            previous_hash,
-            self.alice.validator.consensus.time_keeper.slot_epoch(height),
-            height,
-            timestamp,
-            previous.header.nonce,
-        );
+        let header = Header::new(previous_hash, height, timestamp, previous.header.nonce);
 
         // Generate the block
         let mut block = BlockInfo::new_empty(header, slots);

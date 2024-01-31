@@ -95,8 +95,7 @@ impl Harness {
         timestamp.add(1);
 
         // Generate header
-        let header =
-            Header::new(previous_hash, previous.header.epoch, id, timestamp, previous.header.nonce);
+        let header = Header::new(previous_hash, id, timestamp, previous.header.nonce);
 
         // Generate the block
         let mut block = BlockInfo::new_empty(header, vec![slot]);

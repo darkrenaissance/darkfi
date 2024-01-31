@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    blockchain::block_version,
+    blockchain::{block_epoch, block_version},
     crypto::MerkleTree,
     pasta::{group::ff::Field, pallas},
 };
@@ -54,12 +54,12 @@ pub struct Header {
 impl Header {
     pub fn new(
         previous: blake3::Hash,
-        epoch: u64,
         height: u64,
         timestamp: Timestamp,
         nonce: pallas::Base,
     ) -> Self {
         let version = block_version(height);
+        let epoch = block_epoch(height);
         let tree = MerkleTree::new(1);
         Self { version, previous, epoch, height, timestamp, nonce, tree }
     }
@@ -85,7 +85,6 @@ impl Default for Header {
     fn default() -> Self {
         Header::new(
             blake3::hash(b"Let there be dark!"),
-            0,
             0,
             Timestamp::current_time(),
             pallas::Base::ZERO,

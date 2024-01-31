@@ -164,7 +164,6 @@ impl Consensus {
         // TODO: verify if header timestamp should be blockchain or system timestamp
         let header = Header::new(
             previous.block.hash()?,
-            time_keeper.slot_epoch(slot.id),
             slot.id,
             Timestamp::current_time(),
             slot.last_nonce,

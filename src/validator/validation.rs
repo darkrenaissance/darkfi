@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    blockchain::{block_version, expected_reward, Slot},
+    blockchain::{block_epoch, block_version, expected_reward, Slot},
     pasta::{group::ff::Field, pallas},
 };
 use num_bigint::BigUint;
@@ -47,12 +47,13 @@ pub fn validate_block(
 
 /// A PoW block is considered valid when the following rules apply:
 ///     1. Block version is equal to 1
-///     2. Parent hash is equal to the hash of the previous block
-///     3. Block height increments previous block height by 1
-///     4. Timestamp is valid based on PoWModule validation
-///     5. Block hash is valid based on PoWModule validation
-///     6. Slots vector contains a single valid slot
-///     7. Block height is the same as the slots vector last slot id
+///     2. Block epoch corresponds to the one for its height
+///     3. Parent hash is equal to the hash of the previous block
+///     4. Block height increments previous block height by 1
+///     5. Timestamp is valid based on PoWModule validation
+///     6. Block hash is valid based on PoWModule validation
+///     7. Slots vector contains a single valid slot
+///     8. Block height is the same as the slots vector last slot id
 /// Additional validity rules can be applied.
 pub fn validate_pow_block(
     block: &BlockInfo,
@@ -67,26 +68,31 @@ pub fn validate_pow_block(
         return error
     }
 
-    // Check previous hash (2)
+    // Check block epoch (2)
+    if block.header.epoch != block_epoch(block.header.height) {
+        return error
+    }
+
+    // Check previous hash (3)
     let previous_hash = previous.hash()?;
     if block.header.previous != previous_hash {
         return error
     }
 
-    // Check heights are incremental (3)
+    // Check heights are incremental (4)
     if block.header.height != previous.header.height + 1 {
         return error
     }
 
-    // Check timestamp validity (4)
+    // Check timestamp validity (5)
     if !module.verify_timestamp_by_median(block.header.timestamp.0) {
         return error
     }
 
-    // Check block hash corresponds to next one (5)
+    // Check block hash corresponds to next one (6)
     module.verify_block_hash(block)?;
 
-    // Verify slots vector contains single slot (6)
+    // Verify slots vector contains single slot (7)
     if block.slots.len() != 1 {
         return error
     }
@@ -105,7 +111,7 @@ pub fn validate_pow_block(
         expected_reward,
     )?;
 
-    // Check block height is the last slot id (7)
+    // Check block height is the last slot id (8)
     if last_slot.id != block.header.height {
         return error
     }
@@ -187,11 +193,12 @@ pub fn validate_pow_slot(
 
 /// A PoS block is considered valid when the following rules apply:
 ///     1. Block version is equal to 2
-///     2. Parent hash is equal to the hash of the previous block
-///     3. Timestamp increments previous block timestamp
-///     4. Slot increments previous block slot
-///     5. Slots vector is not empty and all its slots are valid
-///     6. Slot is the same as the slots vector last slot id
+///     2. Block epoch corresponds to the one for its height
+///     3. Parent hash is equal to the hash of the previous block
+///     4. Timestamp increments previous block timestamp
+///     5. Slot increments previous block slot
+///     6. Slots vector is not empty and all its slots are valid
+///     7. Slot is the same as the slots vector last slot id
 /// Additional validity rules can be applied.
 pub fn validate_pos_block(
     block: &BlockInfo,
@@ -205,23 +212,28 @@ pub fn validate_pos_block(
         return error
     }
 
-    // Check previous hash (2)
+    // Check block epoch (2)
+    if block.header.epoch != block_epoch(block.header.height) {
+        return error
+    }
+
+    // Check previous hash (3)
     let previous_hash = previous.hash()?;
     if block.header.previous != previous_hash {
         return error
     }
 
-    // Check timestamps are incremental (3)
+    // Check timestamps are incremental (4)
     if block.header.timestamp <= previous.header.timestamp {
         return error
     }
 
-    // Check heights are incremental (4)
+    // Check heights are incremental (5)
     if block.header.height <= previous.header.height {
         return error
     }
 
-    // Verify slots (5)
+    // Verify slots (6)
     if block.slots.is_empty() {
         return error
     }
@@ -257,7 +269,7 @@ pub fn validate_pos_block(
         expected_reward,
     )?;
 
-    // Check block height is the last slot id (6)
+    // Check block height is the last slot id (7)
     if last_slot.id != block.header.height {
         return error
     }
