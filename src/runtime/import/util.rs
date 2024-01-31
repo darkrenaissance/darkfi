@@ -217,37 +217,62 @@ pub(crate) fn get_object_size(mut ctx: FunctionEnvMut<Env>, idx: u32) -> i64 {
     obj_len as i64
 }
 
-/// Will return current epoch number.
-pub(crate) fn get_current_epoch(ctx: FunctionEnvMut<Env>) -> u64 {
-    // TODO: Gas cost
-    ctx.data().time_keeper.current_epoch()
+/// Will return current runtime configured verifying block height number
+pub(crate) fn get_verifying_block_height(mut ctx: FunctionEnvMut<Env>) -> u64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+
+    // Subtract used gas. Here we count the size of the object.
+    // u64 is 8 bytes.
+    env.subtract_gas(&mut store, 8);
+
+    env.time_keeper.verifying_block_height
 }
 
-/// Will return current block height number, which is equivalent
-/// to current slot number.
-pub(crate) fn get_current_block_height(ctx: FunctionEnvMut<Env>) -> u64 {
-    // TODO: Gas cost
-    ctx.data().time_keeper.current_slot()
+/// Will return current runtime configured verifying block height epoch number
+pub(crate) fn get_verifying_block_height_epoch(mut ctx: FunctionEnvMut<Env>) -> u64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+
+    // Subtract used gas. Here we count the size of the object.
+    // u64 is 8 bytes.
+    env.subtract_gas(&mut store, 8);
+
+    darkfi_sdk::blockchain::block_epoch(env.time_keeper.verifying_block_height)
 }
 
-/// Will return current slot number.
-pub(crate) fn get_current_slot(ctx: FunctionEnvMut<Env>) -> u64 {
-    // TODO: Gas cost
-    ctx.data().time_keeper.current_slot()
-}
+/// Will return current blockchain timestamp,
+/// defined as the last block's timestamp.
+pub(crate) fn get_blockchain_time(mut ctx: FunctionEnvMut<Env>) -> i64 {
+    let (env, mut store) = ctx.data_and_store_mut();
+    let cid = &env.contract_id;
 
-/// Will return current runtime configured verifying block height number,
-/// which is equivalent to verifying slot number.
-pub(crate) fn get_verifying_block_height(ctx: FunctionEnvMut<Env>) -> u64 {
-    // TODO: Gas cost
-    ctx.data().time_keeper.verifying_block_height
-}
+    // Grab current last block
+    let block = match env.blockchain.lock().unwrap().last_block() {
+        Ok(b) => b,
+        Err(e) => {
+            error!(
+                target: "runtime::db::get_blockchain_time",
+                "[WASM] [{}] get_blockchain_time(): Internal error getting from blocks tree: {}", cid, e,
+            );
+            return darkfi_sdk::error::DB_GET_FAILED
+        }
+    };
 
-/// Will return current runtime configured verifying block height epoch number,
-/// which is equivalent to verifying slot epoch number.
-pub(crate) fn get_verifying_block_height_epoch(ctx: FunctionEnvMut<Env>) -> u64 {
-    // TODO: Gas cost
-    ctx.data().time_keeper.verifying_block_height_epoch()
+    // Subtract used gas. Here we count the size of the object.
+    // u64 is 8 bytes.
+    env.subtract_gas(&mut store, 8);
+
+    // Create the return object
+    let mut ret = Vec::with_capacity(8);
+    ret.extend_from_slice(&block.header.timestamp.0.to_be_bytes());
+
+    // Copy Vec<u8> to the VM
+    let mut objects = env.objects.borrow_mut();
+    objects.push(ret.to_vec());
+    if objects.len() > u32::MAX as usize {
+        return darkfi_sdk::error::DATA_TOO_LARGE
+    }
+
+    (objects.len() - 1) as i64
 }
 
 /// Grabs last block from the `Blockchain` overlay and then copies its
@@ -281,15 +306,15 @@ pub(crate) fn get_last_block_info(mut ctx: FunctionEnvMut<Env>) -> i64 {
         }
     };
 
+    // Subtract used gas. Here we count the size of the object.
+    env.subtract_gas(&mut store, (8 + 32 + blake3::OUT_LEN) as u64);
+
     // Create the return object
     let mut ret = Vec::with_capacity(8 + 32 + blake3::OUT_LEN);
     ret.extend_from_slice(&block.header.height.to_be_bytes());
     ret.extend_from_slice(&block.header.nonce.to_repr());
     ret.extend_from_slice(block.header.previous.as_bytes());
 
-    // Subtract used gas. Here we count the size of the object.
-    env.subtract_gas(&mut store, ret.len() as u64);
-
     // Copy Vec<u8> to the VM
     let mut objects = env.objects.borrow_mut();
     objects.push(ret.to_vec());
@@ -298,54 +323,4 @@ pub(crate) fn get_last_block_info(mut ctx: FunctionEnvMut<Env>) -> i64 {
     }
 
     (objects.len() - 1) as i64
-}
-
-/// Copies the data of requested slot from `SlotStore` into the VM by appending
-/// the data to the VM's object store.
-///
-/// On success, returns the index of the new object in the object store.
-/// Otherwise, returns an error code.
-pub(crate) fn get_slot(mut ctx: FunctionEnvMut<Env>, slot: u64) -> i64 {
-    let (env, mut store) = ctx.data_and_store_mut();
-    let cid = &env.contract_id;
-
-    // Enforce function ACL
-    if let Err(e) =
-        acl_allow(env, &[ContractSection::Deploy, ContractSection::Metadata, ContractSection::Exec])
-    {
-        error!(
-            target: "runtime::db::db_get_slot",
-            "[WASM] [{}] get_slot({}): Called in unauthorized section: {}", cid, slot, e,
-        );
-        return darkfi_sdk::error::CALLER_ACCESS_DENIED
-    }
-
-    let ret = match env.blockchain.lock().unwrap().slots.get_by_id(slot) {
-        Ok(v) => v,
-        Err(e) => {
-            error!(
-                target: "runtime::db::db_get_slot",
-                "[WASM] [{}] db_get_slot(): Internal error getting from slots tree: {}", cid, e,
-            );
-            return darkfi_sdk::error::DB_GET_FAILED
-        }
-    };
-
-    // Subtract used gas. Here we count the size of the object.
-    env.subtract_gas(&mut store, ret.len() as u64);
-
-    // Copy Vec<u8> to the VM
-    let mut objects = env.objects.borrow_mut();
-    objects.push(ret.to_vec());
-    if objects.len() > u32::MAX as usize {
-        return darkfi_sdk::error::DATA_TOO_LARGE
-    }
-
-    (objects.len() - 1) as i64
-}
-
-/// Will return current blockchain timestamp.
-pub(crate) fn get_blockchain_time(ctx: FunctionEnvMut<Env>) -> u64 {
-    // TODO: Gas cost
-    ctx.data().time_keeper.blockchain_timestamp()
 }

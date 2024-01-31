@@ -131,26 +131,47 @@ pub fn block_version(height: u64) -> u8 {
     }
 }
 
-/// Auxiliary function to calculate provided block height(slot) expected reward value.
-/// Genesis slot(0) always returns reward value 0.
-/// We use PoW bootstrap, configured to reduce rewards at fixed height numbers, until a cutoff.
-/// Once cut-off is reached, signalling PoS start, reward value is based on DARK token-economics.
-pub fn expected_reward(height: u64) -> u64 {
-    // Configured block rewards (1 DRK == 1 * 10^8)
+/// Auxiliary function to calculate provided block height epoch.
+/// Each epoch is defined by the fixed intervals rewards change.
+/// Genesis block is on epoch 0.
+pub fn block_epoch(height: u64) -> u64 {
     match height {
         0 => 0,
-        1..=1000 => 2_000_000_000,         // 20 DRK
-        1001..=2000 => 1_800_000_000,      // 18 DRK
-        2001..=3000 => 1_600_000_000,      // 16 DRK
-        3001..=4000 => 1_400_000_000,      // 14 DRK
-        4001..=5000 => 1_200_000_000,      // 12 DRK
-        5001..=6000 => 1_000_000_000,      // 10 DRK
-        6001..=7000 => 800_000_000,        // 8 DRK
-        7001..=8000 => 600_000_000,        // 6 DRK
-        8001..=9000 => 400_000_000,        // 4 DRK
-        9001..=10000 => 200_000_000,       // 2 DRK
-        10001..=POW_CUTOFF => 100_000_000, // 1 DRK
-        // TODO (res) implement reward mechanism with accord to DRK, DARK token-economics.
-        POS_START.. => 100_000_000, // 1 DRK
+        1..=1000 => 1,
+        1001..=2000 => 2,
+        2001..=3000 => 3,
+        3001..=4000 => 4,
+        4001..=5000 => 5,
+        5001..=6000 => 6,
+        6001..=7000 => 7,
+        7001..=8000 => 8,
+        8001..=9000 => 9,
+        9001..=10000 => 10,
+        10001.. => 11,
+    }
+}
+
+/// Auxiliary function to calculate provided block height expected reward value.
+/// Genesis block always returns reward value 0. Rewards are halfed at fixed intervals,
+/// called epochs. After last epoch has started, reward value is based on DARK token-economics.
+pub fn expected_reward(height: u64) -> u64 {
+    // Grab block height epoch
+    let epoch = block_epoch(height);
+
+    // TODO (res) implement reward mechanism with accord to DRK, DARK token-economics.
+    // Configured block rewards (1 DRK == 1 * 10^8)
+    match epoch {
+        0 => 0,
+        1 => 2_000_000_000, // 20 DRK
+        2 => 1_800_000_000, // 18 DRK
+        3 => 1_600_000_000, // 16 DRK
+        4 => 1_400_000_000, // 14 DRK
+        5 => 1_200_000_000, // 12 DRK
+        6 => 1_000_000_000, // 10 DRK
+        7 => 800_000_000,   // 8 DRK
+        8 => 600_000_000,   // 6 DRK
+        9 => 400_000_000,   // 4 DRK
+        10 => 200_000_000,  // 2 DRK
+        _ => 100_000_000,   // 1 DRK
     }
 }

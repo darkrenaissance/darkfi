@@ -277,24 +277,6 @@ impl Runtime {
                     import::merkle::merkle_add,
                 ),
 
-                "get_current_epoch_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::util::get_current_epoch,
-                ),
-
-                "get_current_block_height_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::util::get_current_block_height,
-                ),
-
-                "get_current_slot_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::util::get_current_slot,
-                ),
-
                 "get_verifying_block_height_" => Function::new_typed_with_env(
                     &mut store,
                     &ctx,
@@ -305,12 +287,6 @@ impl Runtime {
                     &mut store,
                     &ctx,
                     import::util::get_verifying_block_height_epoch,
-                ),
-
-                "get_slot_" => Function::new_typed_with_env(
-                    &mut store,
-                    &ctx,
-                    import::util::get_slot,
                 ),
 
                 "get_blockchain_time_" => Function::new_typed_with_env(
