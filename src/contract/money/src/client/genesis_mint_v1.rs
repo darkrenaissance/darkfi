@@ -35,11 +35,11 @@ use crate::{
         },
         MoneyNote,
     },
-    model::{ClearInput, Coin, MoneyTokenMintParamsV1, Output},
+    model::{ClearInput, Coin, MoneyGenesisMintParamsV1, Output},
 };
 
 pub struct GenesisMintCallDebris {
-    pub params: MoneyTokenMintParamsV1,
+    pub params: MoneyGenesisMintParamsV1,
     pub proofs: Vec<Proof>,
 }
 
@@ -147,7 +147,7 @@ impl GenesisMintCallBuilder {
             note: encrypted_note,
         };
 
-        let params = MoneyTokenMintParamsV1 { input: c_input, output: c_output };
+        let params = MoneyGenesisMintParamsV1 { input: c_input, output: c_output };
         let debris = GenesisMintCallDebris { params, proofs: vec![proof] };
         Ok(debris)
     }

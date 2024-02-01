@@ -34,6 +34,10 @@ pub use keypair::{Keypair, PublicKey, SecretKey};
 pub mod contract_id;
 pub use contract_id::{ContractId, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID};
 
+/// Function ID definitions and methods
+pub mod func_ref;
+pub use func_ref::{FuncId, FuncRef};
+
 /// Token ID definitions and methods
 pub mod token_id;
 pub use token_id::{TokenId, DARK_TOKEN_ID};

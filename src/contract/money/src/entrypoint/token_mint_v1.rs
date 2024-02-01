@@ -17,9 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode, TokenId,
-    },
+    crypto::{ContractId, FuncRef, MerkleNode, PublicKey},
     dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup, db_set},
     error::{ContractError, ContractResult},
@@ -34,7 +32,7 @@ use crate::{
     model::{MoneyTokenMintParamsV1, MoneyTokenMintUpdateV1},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
-    MONEY_CONTRACT_TOKEN_FREEZE_TREE, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
+    MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 
 /// `get_metadata` function for `Money::TokenMintV1`
@@ -46,31 +44,22 @@ pub(crate) fn money_token_mint_get_metadata_v1(
     let self_ = &calls[call_idx as usize].data;
     let params: MoneyTokenMintParamsV1 = deserialize(&self_.data[1..])?;
 
+    let parent_idx = calls[call_idx as usize].parent_index.unwrap();
+    let parent_call = &calls[parent_idx].data;
+    let parent_contract_id = parent_call.contract_id;
+    let parent_func_code = parent_call.data[0];
+
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     // Public keys for the transaction signatures we have to verify.
-    // The minting transaction creates 1 clear input and 1 anonymous output.
-    // We check the signature from the clear input, which is supposed to be
-    // signed by the mint authority.
-    let signature_pubkeys = vec![params.input.signature_public];
+    let signature_pubkeys: Vec<PublicKey> = vec![];
 
-    // Derive the TokenId from the public key
-    let (sig_x, sig_y) = params.input.signature_public.xy();
-    let token_id = TokenId::derive_public(params.input.signature_public);
-
-    let value_coords = params.output.value_commit.to_affine().coordinates().unwrap();
+    let parent_func_id =
+        FuncRef { contract_id: parent_contract_id, func_code: parent_func_code }.to_func_id();
 
     zk_public_inputs.push((
         MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1.to_string(),
-        vec![
-            sig_x,
-            sig_y,
-            token_id.inner(),
-            params.output.coin.inner(),
-            *value_coords.x(),
-            *value_coords.y(),
-            params.output.token_commit,
-        ],
+        vec![parent_func_id.inner(), params.coin.inner()],
     ));
 
     // Serialize everything gathered and return it
@@ -93,46 +82,15 @@ pub(crate) fn money_token_mint_process_instruction_v1(
     // We have to check if the token mint is frozen, and if by some chance
     // the minted coin has existed already.
     let coins_db = db_lookup(cid, MONEY_CONTRACT_COINS_TREE)?;
-    let token_freeze_db = db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
-
-    // Check that the signature public key is actually the token ID
-    let token_id = TokenId::derive_public(params.input.signature_public);
-    if token_id != params.input.token_id {
-        msg!("[MintV1] Error: Token ID does not derive from mint authority");
-        return Err(MoneyError::TokenIdDoesNotDeriveFromMint.into())
-    }
-
-    // Check that the mint is not frozen
-    if db_contains_key(token_freeze_db, &serialize(&token_id))? {
-        msg!("[MintV1] Error: Token mint for {} is frozen", token_id);
-        return Err(MoneyError::TokenMintFrozen.into())
-    }
 
     // Check that the coin from the output hasn't existed before
-    if db_contains_key(coins_db, &serialize(&params.output.coin))? {
+    if db_contains_key(coins_db, &serialize(&params.coin))? {
         msg!("[MintV1] Error: Duplicate coin in output");
         return Err(MoneyError::DuplicateCoin.into())
     }
 
-    // Verify that the value and token commitments match. In here we just
-    // confirm that the clear input and the anon output have the same
-    // commitments.
-    if pedersen_commitment_u64(params.input.value, params.input.value_blind) !=
-        params.output.value_commit
-    {
-        msg!("[MintV1] Error: Value commitment mismatch");
-        return Err(MoneyError::ValueMismatch.into())
-    }
-
-    if poseidon_hash([params.input.token_id.inner(), params.input.token_blind]) !=
-        params.output.token_commit
-    {
-        msg!("[MintV1] Error: Token commitment mismatch");
-        return Err(MoneyError::TokenMismatch.into())
-    }
-
     // Create a state update. We only need the new coin.
-    let update = MoneyTokenMintUpdateV1 { coin: params.output.coin };
+    let update = MoneyTokenMintUpdateV1 { coin: params.coin };
     let mut update_data = vec![];
     update_data.write_u8(MoneyFunction::TokenMintV1 as u8)?;
     update.encode(&mut update_data)?;

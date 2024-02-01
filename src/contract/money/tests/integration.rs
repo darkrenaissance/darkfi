@@ -52,7 +52,7 @@ fn money_integration() -> Result<()> {
         }
 
         let alice_owncoin =
-            th.gather_owncoin(&Holder::Alice, &alice_proposal_params.output, None)?;
+            th.gather_owncoin_from_output(&Holder::Alice, &alice_proposal_params.output, None)?;
         assert!(alice_owncoin.note.value == expected_reward(current_block_height));
 
         th.assert_trees(&HOLDERS);
@@ -73,7 +73,7 @@ fn money_integration() -> Result<()> {
             .await?;
         }
 
-        let _ = th.gather_owncoin(&Holder::Bob, &bob_proposal_params.output, None)?;
+        let _ = th.gather_owncoin_from_output(&Holder::Bob, &bob_proposal_params.output, None)?;
 
         th.assert_trees(&HOLDERS);
 

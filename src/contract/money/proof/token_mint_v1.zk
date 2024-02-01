@@ -9,61 +9,36 @@ constant "TokenMint_V1" {
 }
 
 witness "TokenMint_V1" {
-    # Token mint authority secret
-    Base mint_authority,
-    # Token supply
-    Base supply,
-    # Recipient's public key x coordinate
-    Base rcpt_x,
-    # Recipient's public key y coordinate
-    Base rcpt_y,
-    # Unique serial number for the minted coin
-    Base serial,
-    # Allows composing this ZK proof to invoke other contracts
+    # CoinAttributes {
+    Base public_x,
+    Base public_y,
+    Base value,
     Base spend_hook,
-    # Data passed from this coin to the invoked contract
-    Base user_data,
-    # Random blinding factor for the value commitment
-    Scalar value_blind,
-    # Random blinding factor for the token ID
+    Base coin_user_data,
+    Base coin_blind,
+    # }
+
+    # TokenAttributes {
+    Base auth_parent,
+    Base token_user_data,
     Base token_blind,
+    # }
 }
 
 circuit "TokenMint_V1" {
-    # TokenID derivation path (See darkfi_sdk::crypto::TokenId)
-    derivation_path = witness_base(69);
-
-    # Derive public key for the mint authority
-    mint_public = ec_mul_base(mint_authority, NULLIFIER_K);
-    mint_x = ec_get_x(mint_public);
-    mint_y = ec_get_y(mint_public);
-    constrain_instance(mint_x);
-    constrain_instance(mint_y);
-
     # Derive the token ID
-    token_id = poseidon_hash(derivation_path, mint_x, mint_y);
-    constrain_instance(token_id);
+    token_id = poseidon_hash(auth_parent, token_user_data, token_blind);
+    constrain_instance(auth_parent);
 
-    # Poseidon hash of the minted coin
-    C = poseidon_hash(
-        rcpt_x,
-        rcpt_y,
-        supply,
+    # Then show the coin contains the token ID
+    coin = poseidon_hash(
+        public_x,
+        public_y,
+        value,
         token_id,
-        serial,
         spend_hook,
-        user_data,
+        coin_user_data,
+        coin_blind,
     );
-    constrain_instance(C);
-
-    # Pedersen commitment for the coin's value
-    vcv = ec_mul_short(supply, VALUE_COMMIT_VALUE);
-    vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
-    value_commit = ec_add(vcv, vcr);
-    constrain_instance(ec_get_x(value_commit));
-    constrain_instance(ec_get_y(value_commit));
-
-    # Commitment for the coin's token ID
-    token_commit = poseidon_hash(token_id, token_blind);
-    constrain_instance(token_commit);
+    constrain_instance(coin);
 }

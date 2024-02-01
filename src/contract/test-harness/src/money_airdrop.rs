@@ -147,7 +147,7 @@ impl TestHarness {
         self.assert_trees(holders);
 
         // Gather new owncoin
-        let oc = self.gather_owncoin(holder, &airdrop_params.outputs[0], None)?;
+        let oc = self.gather_owncoin_from_output(holder, &airdrop_params.outputs[0], None)?;
 
         Ok(oc)
     }

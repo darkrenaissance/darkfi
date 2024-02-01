@@ -17,9 +17,9 @@
  */
 
 use darkfi_sdk::{
-    crypto::{ContractId, PublicKey},
+    crypto::{pasta_prelude::*, ContractId, PublicKey},
     dark_tree::DarkLeaf,
-    db::{db_contains_key, db_lookup, db_set},
+    db::{db_contains_key, db_lookup},
     error::{ContractError, ContractResult},
     msg,
     pasta::pallas,
@@ -29,31 +29,42 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::MoneyError,
-    model::{MoneyTokenFreezeParamsV1, MoneyTokenFreezeUpdateV1},
-    MoneyFunction, MONEY_CONTRACT_TOKEN_FREEZE_TREE, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1,
+    model::{MoneyAuthTokenMintParamsV1, MoneyAuthTokenMintUpdateV1, MoneyTokenMintParamsV1},
+    MoneyFunction, MONEY_CONTRACT_TOKEN_FREEZE_TREE, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1,
 };
 
-/// `get_metadata` function for `Money::TokenFreezeV1`
-pub(crate) fn money_token_freeze_get_metadata_v1(
+/// `get_metadata` function for `Money::AuthTokenMintV1`
+pub(crate) fn money_auth_token_mint_get_metadata_v1(
     _cid: ContractId,
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
-    let self_ = &calls[call_idx as usize].data;
-    let params: MoneyTokenFreezeParamsV1 = deserialize(&self_.data[1..])?;
+    let self_node = &calls[call_idx as usize];
+    let self_data = &self_node.data;
+    let self_params: MoneyAuthTokenMintParamsV1 = deserialize(&self_data.data[1..])?;
+
+    assert_eq!(self_node.children_indexes.len(), 1);
+    let child_idx = self_node.children_indexes[0];
+    let child_node = &calls[child_idx];
+    let child_data = &child_node.data;
+    let child_params: MoneyTokenMintParamsV1 = deserialize(&child_data.data[1..])?;
 
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
-    // Public keys for the transaction signatures we have to verify
-    let signature_pubkeys: Vec<PublicKey> = vec![params.mint_public];
+    // Public keys for the transaction signatures we have to verify.
+    let signature_pubkeys: Vec<PublicKey> = vec![self_params.mint_pubkey];
 
-    // Derive the TokenId from the public key
-    let (mint_x, mint_y) = params.mint_public.xy();
-
-    // In ZK we just verify that the token ID is properly derived from the authority.
+    let value_commit = self_params.value_commit.to_affine().coordinates().unwrap();
     zk_public_inputs.push((
-        MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1.to_string(),
-        vec![mint_x, mint_y, params.token_id.inner()],
+        MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1.to_string(),
+        vec![
+            self_params.mint_pubkey.x(),
+            self_params.mint_pubkey.y(),
+            self_params.token_id.inner(),
+            child_params.coin.inner(),
+            *value_commit.x(),
+            *value_commit.y(),
+        ],
     ));
 
     // Serialize everything gathered and return it
@@ -64,16 +75,16 @@ pub(crate) fn money_token_freeze_get_metadata_v1(
     Ok(metadata)
 }
 
-/// `process_instruction` function for `Money::TokenFreezeV1`
-pub(crate) fn money_token_freeze_process_instruction_v1(
+/// `process_instruction` function for `Money::AuthTokenMintV1`
+pub(crate) fn money_auth_token_mint_process_instruction_v1(
     cid: ContractId,
     call_idx: u32,
     calls: Vec<DarkLeaf<ContractCall>>,
 ) -> Result<Vec<u8>, ContractError> {
     let self_ = &calls[call_idx as usize].data;
-    let params: MoneyTokenFreezeParamsV1 = deserialize(&self_.data[1..])?;
+    let params: MoneyAuthTokenMintParamsV1 = deserialize(&self_.data[1..])?;
 
-    // We just check if the mint was already frozen beforehand
+    // We have to check if the token mint is frozen.
     let token_freeze_db = db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
 
     // Check that the mint is not frozen
@@ -82,23 +93,20 @@ pub(crate) fn money_token_freeze_process_instruction_v1(
         return Err(MoneyError::TokenMintFrozen.into())
     }
 
-    // Create a state update. We only need the new coin.
-    let update = MoneyTokenFreezeUpdateV1 { token_id: params.token_id };
+    // Create a state update.
+    let update = MoneyAuthTokenMintUpdateV1 {};
     let mut update_data = vec![];
-    update_data.write_u8(MoneyFunction::TokenFreezeV1 as u8)?;
+    update_data.write_u8(MoneyFunction::AuthTokenMintV1 as u8)?;
     update.encode(&mut update_data)?;
 
     Ok(update_data)
 }
 
-/// `process_update` function for `Money::TokenFreezeV1`
-pub(crate) fn money_token_freeze_process_update_v1(
-    cid: ContractId,
-    update: MoneyTokenFreezeUpdateV1,
+/// `process_update` function for `Money::AuthTokenMintV1`
+pub(crate) fn money_auth_token_mint_process_update_v1(
+    _cid: ContractId,
+    _update: MoneyAuthTokenMintUpdateV1,
 ) -> ContractResult {
-    let token_freeze_db = db_lookup(cid, MONEY_CONTRACT_TOKEN_FREEZE_TREE)?;
-    msg!("[MintV1] Freezing mint for token {}", update.token_id);
-    db_set(token_freeze_db, &serialize(&update.token_id), &[])?;
-
+    // Do nothing... Coin is added with token_mint() call instead.
     Ok(())
 }

@@ -62,40 +62,42 @@ fn mint_pay_swap() -> Result<()> {
         info!(target: "money", "[Alice] ================================");
         info!(target: "money", "[Alice] Building token mint tx for Alice");
         info!(target: "money", "[Alice] ================================");
-        let (mint_tx, params) =
+        let (mint_tx, mint_params, mint_auth_params) =
             th.token_mint(ALICE_INITIAL, &Holder::Alice, &Holder::Alice, None, None)?;
 
         for holder in &HOLDERS {
             info!(target: "money", "[{holder:?}] ==============================");
             info!(target: "money", "[{holder:?}] Executing Alice token mint tx");
             info!(target: "money", "[{holder:?}] ==============================");
-            th.execute_token_mint_tx(holder, &mint_tx, &params, current_block_height).await?;
+            th.execute_token_mint_tx(holder, &mint_tx, &mint_params, current_block_height).await?;
         }
 
         th.assert_trees(&HOLDERS);
 
         // Alice gathers her new owncoin
-        let alice_oc = th.gather_owncoin(&Holder::Alice, &params.output, None)?;
+        let alice_oc =
+            th.gather_owncoin(&Holder::Alice, &mint_params.coin, &mint_auth_params.enc_note, None)?;
         let alice_token_id = alice_oc.note.token_id;
         alice_owncoins.push(alice_oc);
 
         info!(target: "money", "[Bob] ==============================");
         info!(target: "money", "[Bob] Building token mint tx for Bob");
         info!(target: "money", "[Bob] ==============================");
-        let (mint_tx, params) =
+        let (mint_tx, mint_params, mint_auth_params) =
             th.token_mint(BOB_INITIAL, &Holder::Bob, &Holder::Bob, None, None)?;
 
         for holder in &HOLDERS {
             info!(target: "money", "[{holder:?}] ===========================");
             info!(target: "money", "[{holder:?}] Executing Bob token mint tx");
             info!(target: "money", "[{holder:?}] ===========================");
-            th.execute_token_mint_tx(holder, &mint_tx, &params, current_block_height).await?;
+            th.execute_token_mint_tx(holder, &mint_tx, &mint_params, current_block_height).await?;
         }
 
         th.assert_trees(&HOLDERS);
 
         // Bob  gathers hist new owncoin
-        let bob_oc = th.gather_owncoin(&Holder::Bob, &params.output, None)?;
+        let bob_oc =
+            th.gather_owncoin(&Holder::Bob, &mint_params.coin, &mint_auth_params.enc_note, None)?;
         let bob_token_id = bob_oc.note.token_id;
         bob_owncoins.push(bob_oc);
 
@@ -282,7 +284,7 @@ fn mint_pay_swap() -> Result<()> {
         th.assert_trees(&HOLDERS);
 
         // Alice should now have a single OwnCoin with her initial airdrop
-        let alice_oc = th.gather_owncoin(&Holder::Alice, &params.outputs[0], None)?;
+        let alice_oc = th.gather_owncoin_from_output(&Holder::Alice, &params.outputs[0], None)?;
         alice_owncoins.push(alice_oc);
 
         assert!(alice_owncoins.len() == 1);
@@ -313,7 +315,7 @@ fn mint_pay_swap() -> Result<()> {
         th.assert_trees(&HOLDERS);
 
         // Bob should now have a single OwnCoin with his initial airdrop
-        let bob_oc = th.gather_owncoin(&Holder::Bob, &params.outputs[0], None)?;
+        let bob_oc = th.gather_owncoin_from_output(&Holder::Bob, &params.outputs[0], None)?;
         bob_owncoins.push(bob_oc);
 
         assert!(bob_owncoins.len() == 1);

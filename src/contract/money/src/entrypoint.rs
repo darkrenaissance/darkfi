@@ -29,8 +29,9 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     model::{
-        MoneyFeeUpdateV1, MoneyGenesisMintUpdateV1, MoneyPoWRewardUpdateV1,
-        MoneyTokenFreezeUpdateV1, MoneyTokenMintUpdateV1, MoneyTransferUpdateV1,
+        MoneyAuthTokenMintUpdateV1, MoneyFeeUpdateV1, MoneyGenesisMintUpdateV1,
+        MoneyPoWRewardUpdateV1, MoneyTokenFreezeUpdateV1, MoneyTokenMintUpdateV1,
+        MoneyTransferUpdateV1,
     },
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION, MONEY_CONTRACT_FAUCET_PUBKEYS,
@@ -84,6 +85,13 @@ mod pow_reward_v1;
 use pow_reward_v1::{
     money_pow_reward_get_metadata_v1, money_pow_reward_process_instruction_v1,
     money_pow_reward_process_update_v1,
+};
+
+/// `Money::AuthTokenMint` functions
+mod auth_token_mint_v1;
+use auth_token_mint_v1::{
+    money_auth_token_mint_get_metadata_v1, money_auth_token_mint_process_instruction_v1,
+    money_auth_token_mint_process_update_v1,
 };
 
 darkfi_sdk::define_contract!(
@@ -196,6 +204,9 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
         MoneyFunction::TokenMintV1 => money_token_mint_get_metadata_v1(cid, call_idx, calls)?,
         MoneyFunction::TokenFreezeV1 => money_token_freeze_get_metadata_v1(cid, call_idx, calls)?,
         MoneyFunction::PoWRewardV1 => money_pow_reward_get_metadata_v1(cid, call_idx, calls)?,
+        MoneyFunction::AuthTokenMintV1 => {
+            money_auth_token_mint_get_metadata_v1(cid, call_idx, calls)?
+        }
     };
 
     set_return_data(&metadata)
@@ -231,6 +242,9 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         }
         MoneyFunction::PoWRewardV1 => {
             money_pow_reward_process_instruction_v1(cid, call_idx, calls)?
+        }
+        MoneyFunction::AuthTokenMintV1 => {
+            money_auth_token_mint_process_instruction_v1(cid, call_idx, calls)?
         }
     };
 
@@ -278,6 +292,11 @@ fn process_update(cid: ContractId, update_data: &[u8]) -> ContractResult {
         MoneyFunction::PoWRewardV1 => {
             let update: MoneyPoWRewardUpdateV1 = deserialize(&update_data[1..])?;
             Ok(money_pow_reward_process_update_v1(cid, update)?)
+        }
+
+        MoneyFunction::AuthTokenMintV1 => {
+            let update: MoneyAuthTokenMintUpdateV1 = deserialize(&update_data[1..])?;
+            Ok(money_auth_token_mint_process_update_v1(cid, update)?)
         }
     }
 }

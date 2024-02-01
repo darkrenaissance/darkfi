@@ -109,8 +109,7 @@ impl DaoExecCall {
         //export_witness_json("witness.json", &prover_witnesses, &public_inputs);
 
         let circuit = ZkCircuit::new(prover_witnesses, exec_zkbin);
-        let input_proof = Proof::create(exec_pk, &[circuit], &public_inputs, &mut OsRng)
-            .expect("DAO::exec() proving error!)");
+        let input_proof = Proof::create(exec_pk, &[circuit], &public_inputs, &mut OsRng)?;
         proofs.push(input_proof);
 
         let params = DaoExecParams {

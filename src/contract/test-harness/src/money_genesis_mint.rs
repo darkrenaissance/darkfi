@@ -23,8 +23,8 @@ use darkfi::{
     Result,
 };
 use darkfi_money_contract::{
-    client::genesis_mint_v1::GenesisMintCallBuilder, model::MoneyTokenMintParamsV1, MoneyFunction,
-    MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    client::genesis_mint_v1::GenesisMintCallBuilder, model::MoneyGenesisMintParamsV1,
+    MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{MerkleNode, MONEY_CONTRACT_ID},
@@ -41,7 +41,7 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
         amount: u64,
-    ) -> Result<(Transaction, MoneyTokenMintParamsV1)> {
+    ) -> Result<(Transaction, MoneyGenesisMintParamsV1)> {
         let wallet = self.holders.get(holder).unwrap();
 
         let (mint_pk, mint_zkbin) =
@@ -92,7 +92,7 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
         tx: &Transaction,
-        params: &MoneyTokenMintParamsV1,
+        params: &MoneyGenesisMintParamsV1,
         block_height: u64,
     ) -> Result<()> {
         let wallet = self.holders.get_mut(holder).unwrap();

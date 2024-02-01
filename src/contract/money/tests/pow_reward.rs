@@ -105,7 +105,8 @@ fn pow_reward() -> Result<()> {
         th.assert_trees(&HOLDERS);
 
         // Alice gathers her new owncoin
-        let alice_oc = th.gather_owncoin(&Holder::Alice, &pow_reward_params.output, None)?;
+        let alice_oc =
+            th.gather_owncoin_from_output(&Holder::Alice, &pow_reward_params.output, None)?;
         alice_owncoins.push(alice_oc);
 
         // Now Alice can send a little bit of funds to Bob
@@ -140,11 +141,13 @@ fn pow_reward() -> Result<()> {
         th.assert_trees(&HOLDERS);
 
         // Bob should have this new OwnCoin.
-        let bob_oc = th.gather_owncoin(&Holder::Bob, &transfer_params.outputs[0], None)?;
+        let bob_oc =
+            th.gather_owncoin_from_output(&Holder::Bob, &transfer_params.outputs[0], None)?;
         bob_owncoins.push(bob_oc);
 
         // Alice should now have one OwnCoin with the change from the above transaction.
-        let alice_oc = th.gather_owncoin(&Holder::Alice, &transfer_params.outputs[1], None)?;
+        let alice_oc =
+            th.gather_owncoin_from_output(&Holder::Alice, &transfer_params.outputs[1], None)?;
         alice_owncoins.push(alice_oc);
 
         // Alice can also send her PoW reward directly to bob
@@ -170,7 +173,8 @@ fn pow_reward() -> Result<()> {
         th.assert_trees(&HOLDERS);
 
         // Bob gathers his new owncoin
-        let bob_oc = th.gather_owncoin(&Holder::Bob, &pow_reward_params.output, None)?;
+        let bob_oc =
+            th.gather_owncoin_from_output(&Holder::Bob, &pow_reward_params.output, None)?;
         bob_owncoins.push(bob_oc);
 
         // Validating transaction outcomes

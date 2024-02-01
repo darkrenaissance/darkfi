@@ -97,8 +97,7 @@ impl DaoAuthMoneyTransferCall {
 
             let circuit = ZkCircuit::new(prover_witnesses, auth_xfer_enc_coin_zkbin);
             let proof =
-                Proof::create(auth_xfer_enc_coin_pk, &[circuit], &public_inputs, &mut OsRng)
-                    .expect("DAO::exec() proving error!)");
+                Proof::create(auth_xfer_enc_coin_pk, &[circuit], &public_inputs, &mut OsRng)?;
             proofs.push(proof);
 
             enc_attrs.push(enc_note);
@@ -169,8 +168,7 @@ impl DaoAuthMoneyTransferCall {
         ];
 
         let circuit = ZkCircuit::new(prover_witnesses, auth_xfer_zkbin);
-        let proof = Proof::create(auth_xfer_pk, &[circuit], &public_inputs, &mut OsRng)
-            .expect("DAO::exec() proving error!)");
+        let proof = Proof::create(auth_xfer_pk, &[circuit], &public_inputs, &mut OsRng)?;
         proofs.push(proof);
 
         Ok((params, proofs))

@@ -33,13 +33,13 @@ use darkfi::{
 use darkfi_dao_contract::model::{DaoBulla, DaoProposalBulla};
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
-    model::Output,
+    model::{Coin, Output},
 };
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        pasta_prelude::Field, poseidon_hash, ContractId, Keypair, MerkleNode, MerkleTree,
-        Nullifier, PublicKey, SecretKey, TokenId,
+        note::AeadEncryptedNote, pasta_prelude::Field, poseidon_hash, ContractId, Keypair,
+        MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey,
     },
     pasta::pallas,
 };
@@ -115,6 +115,7 @@ pub enum TxAction {
 pub struct Wallet {
     pub keypair: Keypair,
     pub token_mint_authority: Keypair,
+    pub token_blind: pallas::Base,
     pub contract_deploy_authority: Keypair,
     pub validator: ValidatorPtr,
     pub money_merkle_tree: MerkleTree,
@@ -168,11 +169,13 @@ impl Wallet {
         let spent_money_coins = vec![];
 
         let token_mint_authority = Keypair::random(&mut OsRng);
+        let token_blind = pallas::Base::random(&mut OsRng);
         let contract_deploy_authority = Keypair::random(&mut OsRng);
 
         Ok(Self {
             keypair,
             token_mint_authority,
+            token_blind,
             contract_deploy_authority,
             validator,
             money_merkle_tree,
@@ -288,7 +291,8 @@ impl TestHarness {
     pub fn gather_owncoin(
         &mut self,
         holder: &Holder,
-        output: &Output,
+        coin: &Coin,
+        note: &AeadEncryptedNote,
         secret_key: Option<SecretKey>,
     ) -> Result<OwnCoin> {
         let wallet = self.holders.get_mut(holder).unwrap();
@@ -298,14 +302,14 @@ impl TestHarness {
             None => wallet.keypair.secret,
         };
 
-        let note: MoneyNote = output.note.decrypt(&secret_key)?;
+        let note: MoneyNote = note.decrypt(&secret_key)?;
         let oc = OwnCoin {
-            coin: output.coin,
+            coin: coin.clone(),
             note: note.clone(),
             secret: secret_key,
             nullifier: Nullifier::from(poseidon_hash([
                 wallet.keypair.secret.inner(),
-                output.coin.inner(),
+                coin.inner(),
             ])),
             leaf_position,
         };
@@ -313,6 +317,15 @@ impl TestHarness {
         wallet.unspent_money_coins.push(oc.clone());
 
         Ok(oc)
+    }
+
+    pub fn gather_owncoin_from_output(
+        &mut self,
+        holder: &Holder,
+        output: &Output,
+        secret_key: Option<SecretKey>,
+    ) -> Result<OwnCoin> {
+        self.gather_owncoin(holder, &output.coin, &output.note, secret_key)
     }
 
     /// This should be used after transfer call, so we can mark the merkle tree
@@ -395,11 +408,6 @@ impl TestHarness {
         for wallet in &wallets[1..] {
             assert!(money_root == wallet.money_merkle_tree.root(0).unwrap());
         }
-    }
-
-    pub fn token_id(&self, holder: &Holder) -> TokenId {
-        let holder = self.holders.get(holder).unwrap();
-        TokenId::derive_public(holder.token_mint_authority.public)
     }
 
     pub fn contract_id(&self, holder: &Holder) -> ContractId {

@@ -55,7 +55,7 @@ fn txs_verification() -> Result<()> {
         info!(target: "money", "[Alice] ================================");
         info!(target: "money", "[Alice] Building token mint tx for Alice");
         info!(target: "money", "[Alice] ================================");
-        let (token_mint_tx, token_mint_params) =
+        let (token_mint_tx, token_mint_params, token_auth_mint_params) =
             th.token_mint(ALICE_INITIAL, &Holder::Alice, &Holder::Alice, None, None)?;
 
         for holder in &HOLDERS {
@@ -74,7 +74,12 @@ fn txs_verification() -> Result<()> {
         th.assert_trees(&HOLDERS);
 
         // Alice gathers her new owncoin
-        let alice_oc = th.gather_owncoin(&Holder::Alice, &token_mint_params.output, None)?;
+        let alice_oc = th.gather_owncoin(
+            &Holder::Alice,
+            &token_mint_params.coin,
+            &token_auth_mint_params.enc_note,
+            None,
+        )?;
         let alice_token_id = alice_oc.note.token_id;
         alice_owncoins.push(alice_oc);
 
@@ -144,11 +149,13 @@ fn txs_verification() -> Result<()> {
         th.assert_trees(&HOLDERS);
 
         // Bob should now have the new OwnCoin.
-        let bob_oc = th.gather_owncoin(&Holder::Bob, &txs_params[0].outputs[0], None)?;
+        let bob_oc =
+            th.gather_owncoin_from_output(&Holder::Bob, &txs_params[0].outputs[0], None)?;
         bob_owncoins.push(bob_oc);
 
         // Alice should now have one OwnCoin with the change from the above transaction.
-        let alice_oc = th.gather_owncoin(&Holder::Alice, &txs_params[0].outputs[1], None)?;
+        let alice_oc =
+            th.gather_owncoin_from_output(&Holder::Alice, &txs_params[0].outputs[1], None)?;
         alice_owncoins.push(alice_oc);
 
         assert!(alice_owncoins.len() == 1);

@@ -18,7 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{
-        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::PrimeField, poseidon_hash,
+        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::PrimeField, poseidon_hash, FuncId,
         MerkleNode, Nullifier, PublicKey, SecretKey, TokenId,
     },
     error::ContractError,
@@ -87,6 +87,20 @@ impl CoinAttributes {
             self.blind,
         ]);
         Coin(coin)
+    }
+}
+
+#[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
+pub struct TokenAttributes {
+    pub auth_parent: FuncId,
+    pub user_data: pallas::Base,
+    pub blind: pallas::Base,
+}
+
+impl TokenAttributes {
+    pub fn to_token_id(&self) -> TokenId {
+        let token_id = poseidon_hash([self.auth_parent.inner(), self.user_data, self.blind]);
+        TokenId::from(token_id)
     }
 }
 
@@ -228,10 +242,8 @@ pub struct MoneyGenesisMintUpdateV1 {
 /// Parameters for `Money::TokenMint`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyTokenMintParamsV1 {
-    /// Clear input
-    pub input: ClearInput,
-    /// Anonymous output
-    pub output: Output,
+    /// The newly minted coin
+    pub coin: Coin,
 }
 
 /// State update for `Money::TokenMint`
@@ -241,20 +253,33 @@ pub struct MoneyTokenMintUpdateV1 {
     pub coin: Coin,
 }
 
+/// Parameters for `Money::auth_token_mint()`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyAuthTokenMintParamsV1 {
+    pub token_id: TokenId,
+    pub value_commit: pallas::Point,
+    pub enc_note: AeadEncryptedNote,
+    pub mint_pubkey: PublicKey,
+}
+
+/// State update for `Money::auth_token_mint()`
+#[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
+pub struct MoneyAuthTokenMintUpdateV1 {}
+
 /// Parameters for `Money::TokenFreeze`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyTokenFreezeParamsV1 {
     /// Mint authority public key
     ///
     /// We use this to derive the token ID and verify the signature.
-    pub signature_public: PublicKey,
+    pub mint_public: PublicKey,
+    pub token_id: TokenId,
 }
 
 /// State update for `Money::TokenFreeze`
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
 pub struct MoneyTokenFreezeUpdateV1 {
-    /// Mint authority public key
-    pub signature_public: PublicKey,
+    pub token_id: TokenId,
 }
 
 /// Parameters for `Money::PoWReward`

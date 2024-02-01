@@ -45,6 +45,7 @@ pub struct TokenId(pallas::Base);
 
 impl TokenId {
     /// Derives a `TokenId` from a `SecretKey` (mint authority)
+    #[deprecated]
     pub fn derive(mint_authority: SecretKey) -> Self {
         let public_key = PublicKey::from_secret(mint_authority);
         let (x, y) = public_key.xy();
@@ -53,10 +54,20 @@ impl TokenId {
     }
 
     /// Derives a `TokenId` from a `PublicKey`
+    #[deprecated]
     pub fn derive_public(public_key: PublicKey) -> Self {
         let (x, y) = public_key.xy();
         let hash = poseidon_hash([*TOKEN_ID_PREFIX, x, y]);
         Self(hash)
+    }
+
+    pub fn derive_from(
+        func_id: pallas::Base,
+        user_data: pallas::Base,
+        blind: pallas::Base,
+    ) -> Self {
+        let token_id = poseidon_hash([func_id, user_data, blind]);
+        Self(token_id)
     }
 
     /// Get the inner `pallas::Base` element.

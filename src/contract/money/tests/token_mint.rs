@@ -38,7 +38,7 @@ fn token_mint() -> Result<()> {
         let mut th = TestHarness::new(&["money".to_string()], false).await?;
 
         info!("[Bob] Building BOB token mint tx");
-        let (token_mint_tx, token_mint_params) =
+        let (token_mint_tx, token_mint_params, token_auth_mint_params) =
             th.token_mint(BOB_SUPPLY, &Holder::Bob, &Holder::Bob, None, None)?;
 
         for holder in &HOLDERS {
@@ -55,7 +55,12 @@ fn token_mint() -> Result<()> {
         th.assert_trees(&HOLDERS);
 
         // Bob gathers his new coin
-        th.gather_owncoin(&Holder::Bob, &token_mint_params.output, None)?;
+        th.gather_owncoin(
+            &Holder::Bob,
+            &token_mint_params.coin,
+            &token_auth_mint_params.enc_note,
+            None,
+        )?;
 
         info!("[Bob] Building BOB token freeze tx");
         let (token_frz_tx, token_frz_params) = th.token_freeze(&Holder::Bob)?;
