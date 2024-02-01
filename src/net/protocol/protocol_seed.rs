@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{sync::Arc, time::UNIX_EPOCH};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use log::debug;
@@ -33,7 +33,7 @@ use super::{
     },
     protocol_base::{ProtocolBase, ProtocolBasePtr},
 };
-use crate::{net::hosts::refinery::ping_node, Result};
+use crate::Result;
 
 /// Implements the seed protocol
 pub struct ProtocolSeed {
@@ -59,12 +59,18 @@ impl ProtocolSeed {
         Arc::new(Self { channel, hosts, settings, addr_sub, p2p })
     }
 
-    /// Sends own external addresses over a channel. Imports own external addresses
-    /// from settings, then adds those addresses to an addrs message and sends it
-    /// out over the channel.
+    /// Send our own external addresses over a channel. Get the latest
+    /// last_seen field from InboundSession, and send it along with our
+    /// external address.
+    ///
+    /// If our external address is misconfigured, send an empty vector.
+    /// If we have reached our inbound connection limit, send our external
+    /// address with a `last_seen` field that corresponds to the last time
+    /// we could receive inbound connections.
     pub async fn send_my_addrs(&self) -> Result<()> {
-        debug!(target: "net::protocol_seed::send_my_addrs()", "[START]");
-        // Do nothing if external addresses are not configured
+        debug!(target: "net::protocol_seed::send_my_addrs()",
+        "[START] channel address={}", self.channel.address());
+
         if self.settings.external_addrs.is_empty() {
             debug!(target: "net::protocol_seed::send_my_addrs()",
             "External address is not configured. Stopping");
@@ -72,25 +78,17 @@ impl ProtocolSeed {
         }
 
         let mut addrs = vec![];
-        for addr in self.settings.external_addrs.clone() {
-            //addrs.push((addr, 0));
-            debug!(target: "net::protocol_seed::send_my_addrs()", "Attempting to ping self");
-
-            // See if we can do a version exchange with ourself.
-            if ping_node(addr.clone(), self.p2p.clone()).await {
-                // We're online. Update last_seen and broadcast our address.
-                let last_seen = UNIX_EPOCH.elapsed().unwrap().as_secs();
-                addrs.push((addr, last_seen));
-            } else {
-                // Our external addr is invalid. If every external addr in the list is invalid
-                // we will just broadcast an empty AddrsMessage.
-                debug!(target: "net::protocol_seed::send_my_addrs()", "Ping self failed!");
-            }
+        let inbound = self.p2p.session_inbound();
+        for (addr, last_seen) in inbound.ping_self.addrs.lock().await.iter() {
+            addrs.push((addr.clone(), last_seen.clone()));
         }
-        debug!(target: "net::protocol_seed::send_my_addrs()", "Broadcasting {} addresses", addrs.len());
+
+        debug!(target: "net::protocol_seed::send_my_addrs()",
+        "Broadcasting {} addresses", addrs.len());
         let ext_addr_msg = AddrsMessage { addrs };
         self.channel.send(&ext_addr_msg).await?;
-        debug!(target: "net::protocol_seed::send_my_addrs()", "[END]");
+        debug!(target: "net::protocol_seed::send_my_addrs()",
+        "[END] channel address={}", self.channel.address());
 
         Ok(())
     }
@@ -98,9 +96,10 @@ impl ProtocolSeed {
 
 #[async_trait]
 impl ProtocolBase for ProtocolSeed {
-    /// Starts the seed protocol. Creates a subscription to the address message,
-    /// then sends our address to the seed server. Sends a get-address message
-    /// and receives an address messsage.
+    /// Starts the seed protocol. Creates a subscription to the address
+    /// message.  If our external address is enabled, then send our address
+    /// to the seed server.  Sends a get-address message and receives an
+    /// address messsage.
     async fn start(self: Arc<Self>, _ex: Arc<Executor<'_>>) -> Result<()> {
         debug!(target: "net::protocol_seed::start()", "START => address={}", self.channel.address());
 
