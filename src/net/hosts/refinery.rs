@@ -164,11 +164,12 @@ async fn ping_node_impl(addr: Url, p2p: P2pPtr) -> bool {
 
     debug!(target: "net::refinery::ping_node()", "Attempting to connect to {}", addr);
     match connector.connect(&addr).await {
-        Ok((_url, channel)) => {
-            debug!(target: "net::refinery::ping_node()", "Connected successfully!");
+        Ok((url, channel)) => {
+            debug!(target: "net::refinery::ping_node()", "Successfully created a channel with {}", url);
             // First initialize the version protocol and its Version, Verack subscribers.
             let proto_ver = ProtocolVersion::new(channel.clone(), p2p.settings()).await;
 
+            debug!(target: "net::refinery::ping_node()", "Performing handshake protocols with {}", url);
             // Then run the version exchange, store the channel and subscribe to a stop signal.
             let handshake_task = session_outbound.perform_handshake_protocols(
                 proto_ver,
@@ -176,6 +177,7 @@ async fn ping_node_impl(addr: Url, p2p: P2pPtr) -> bool {
                 p2p.executor(),
             );
 
+            debug!(target: "net::refinery::ping_node()", "Starting channel {}", url);
             channel.clone().start(p2p.executor());
 
             // Ensure the channel gets stopped by adding a timeout to the handshake. Otherwise if
@@ -183,6 +185,7 @@ async fn ping_node_impl(addr: Url, p2p: P2pPtr) -> bool {
             // zombie processes.
             let result = timeout(Duration::from_secs(5), handshake_task).await;
 
+            debug!(target: "net::refinery::ping_node()", "Stopping channel {}", url);
             channel.stop().await;
 
             match result {
