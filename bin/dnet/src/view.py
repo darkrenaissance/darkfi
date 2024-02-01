@@ -160,7 +160,6 @@ class View():
         node.set_txt(False)
         self.listw.append(node)
         for (i, key) in enumerate(info['spawns'].keys()):
-            logging.debug(f'creating spawn slot {key}')
             slot = Slot(node_name, "spawn-slot")
             slot.set_txt(i, key)
             self.listw.append(slot)
@@ -243,16 +242,13 @@ class View():
     # Render subscribe_events() (right menu)
     #-----------------------------------------------------------------
     def fill_right_box(self):
-        logging.debug('fill_right_box() [START]')
         self.pile.contents.clear()
         focus_w = self.list.get_focus()
-        logging.debug(f'focus_w: {focus_w}')
         if focus_w[0] is None:
             return
         session = focus_w[0].session
 
         if session == "outbound":
-            logging.debug('outbound slot selected')
             key = (focus_w[0].node_name, "outbound")
             info = self.model.nodes.get(focus_w[0].node_name)
             if key in info['event']:
@@ -263,7 +259,6 @@ class View():
 
         if (session == "outbound-slot" or session == "inbound-slot"
                 or session == "manual-slot" or session == "seed-slot"):
-            logging.debug('other slot selected')
             addr = focus_w[0].addr
             node_name = focus_w[0].node_name
             info = self.model.nodes.get(node_name)
@@ -278,33 +273,52 @@ class View():
                             f"{time}: {event}: {msg}"),
                             self.pile.options()))
 
-        #if session == "spawn-slot":
-        #    logging.debug('spawn slot selected')
-        #    node_name = focus_w[0].node_name
-        #    spawn_name = focus_w[0].id
-        #    lilith = self.model.liliths.get(node_name)
-        #    spawns = lilith.get('spawns')
-        #    info = spawns.get(spawn_name)
+        if session == "spawn-slot":
+            node_name = focus_w[0].node_name
+            spawn_name = focus_w[0].id
+            lilith = self.model.liliths.get(node_name)
+            spawns = lilith.get('spawns')
+            info = spawns.get(spawn_name)
 
-        #    if info['urls']:
-        #        urls = info['urls']
-        #        self.pile.contents.append((urwid.Text(
-        #            f"Accept addrs:"),
-        #            self.pile.options()))
-        #        for url in urls:
-        #            self.pile.contents.append((urwid.Text(
-        #                f"  {url}"),
-        #                self.pile.options()))
+            if info['urls']:
+                urls = info['urls']
+                self.pile.contents.append((urwid.Text(
+                    f"Accept addrs:"),
+                    self.pile.options()))
+                for url in urls:
+                    self.pile.contents.append((urwid.Text(
+                        f"  {url}"),
+                        self.pile.options()))
 
-        #    if info['hosts']:
-        #        hosts = info['hosts']
-        #        self.pile.contents.append((urwid.Text(
-        #            f"Hosts:"),
-        #            self.pile.options()))
-        #        for host in hosts:
-        #            self.pile.contents.append((urwid.Text(
-        #                f"  {host}"),
-        #                self.pile.options()))
+            if info['whitelist']:
+                whitelist = info['whitelist']
+                self.pile.contents.append((urwid.Text(
+                    f"Whitelist:"),
+                    self.pile.options()))
+                for host in whitelist:
+                    self.pile.contents.append((urwid.Text(
+                        f"  {host}"),
+                        self.pile.options()))
+
+            if info['greylist']:
+                greylist = info['greylist']
+                self.pile.contents.append((urwid.Text(
+                    f"Greylist:"),
+                    self.pile.options()))
+                for host in greylist:
+                    self.pile.contents.append((urwid.Text(
+                        f"  {host}"),
+                        self.pile.options()))
+
+            if info['anchorlist']:
+                anchorlist = info['anchorlist']
+                self.pile.contents.append((urwid.Text(
+                    f"Anchorlist:"),
+                    self.pile.options()))
+                for host in anchorlist:
+                    self.pile.contents.append((urwid.Text(
+                        f"  {host}"),
+                        self.pile.options()))
 
     # Sort nodes into lists.
     def sort(self, nodes):
@@ -343,9 +357,7 @@ class View():
     def draw_events(self, nodes):
         for name, info in nodes:
             if bool(info) and name in self.known_nodes:
-                logging.debug('fill left box')
                 self.fill_left_box()
-                logging.debug('fill right box')
                 self.fill_right_box()
 
                 if 'inbound' in info:
