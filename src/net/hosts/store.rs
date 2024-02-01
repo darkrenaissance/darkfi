@@ -769,6 +769,16 @@ impl Hosts {
         self.whitelist.read().await.iter().cloned().collect()
     }
 
+    /// Return all known greylisted hosts
+    pub async fn greylist_fetch_all(&self) -> Vec<(Url, u64)> {
+        self.greylist.read().await.iter().cloned().collect()
+    }
+
+    /// Return all known anchorlisted hosts
+    pub async fn anchorlist_fetch_all(&self) -> Vec<(Url, u64)> {
+        self.anchorlist.read().await.iter().cloned().collect()
+    }
+
     /// Return all greylist and anchorlist hosts. Called on stop().
     /// Note: we do not return whitelist entries here since whitelist entries must go via the
     /// greylist refinery in the lifetime of the p2p network.

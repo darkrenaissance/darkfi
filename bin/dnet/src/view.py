@@ -209,12 +209,32 @@ class View():
                         f"  {url}"),
                         self.pile.options()))
 
-            if info['hosts']:
-                hosts = info['hosts']
+            if info['whitelist']:
+                whitelist = info['whitelist']
                 self.pile.contents.append((urwid.Text(
-                    f"Hosts:"),
+                    f"Whitelist:"),
                     self.pile.options()))
-                for host in hosts:
+                for host in whitelist:
+                    self.pile.contents.append((urwid.Text(
+                        f"  {host}"),
+                        self.pile.options()))
+
+            if info['greylist']:
+                greylist = info['greylist']
+                self.pile.contents.append((urwid.Text(
+                    f"Greylist:"),
+                    self.pile.options()))
+                for host in greylist:
+                    self.pile.contents.append((urwid.Text(
+                        f"  {host}"),
+                        self.pile.options()))
+
+            if info['anchorlist']:
+                anchorlist = info['anchorlist']
+                self.pile.contents.append((urwid.Text(
+                    f"Anchorlist:"),
+                    self.pile.options()))
+                for host in anchorlist:
                     self.pile.contents.append((urwid.Text(
                         f"  {host}"),
                         self.pile.options()))
