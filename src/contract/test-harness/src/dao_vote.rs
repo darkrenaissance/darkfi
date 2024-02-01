@@ -39,6 +39,7 @@ use rand::rngs::OsRng;
 use super::{Holder, TestHarness, TxAction};
 
 impl TestHarness {
+    #[allow(clippy::too_many_arguments)]
     pub fn dao_vote(
         &mut self,
         voter: &Holder,
@@ -47,6 +48,7 @@ impl TestHarness {
         dao_keypair: &Keypair,
         proposal: &DaoProposal,
         proposal_bulla: &DaoProposalBulla,
+        block_height: u64,
     ) -> Result<(Transaction, DaoVoteParams)> {
         let wallet = self.holders.get(voter).unwrap();
 
@@ -78,8 +80,7 @@ impl TestHarness {
             signature_secret,
         };
 
-        let current_day =
-            blockheight_to_day(wallet.validator.consensus.time_keeper.verifying_block_height);
+        let current_day = blockheight_to_day(block_height);
         let call = DaoVoteCall {
             inputs: vec![input],
             vote_option,

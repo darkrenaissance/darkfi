@@ -221,6 +221,7 @@ fn integration_test() -> Result<()> {
             user_data,
             &dao,
             &dao_mint_params.dao_bulla,
+            current_block_height,
         )?;
 
         for holder in &HOLDERS {
@@ -245,6 +246,7 @@ fn integration_test() -> Result<()> {
             &dao_keypair,
             &propose_info,
             &propose_params.proposal_bulla,
+            current_block_height,
         )?;
 
         info!("[Bob] Building vote tx (no)");
@@ -255,6 +257,7 @@ fn integration_test() -> Result<()> {
             &dao_keypair,
             &propose_info,
             &propose_params.proposal_bulla,
+            current_block_height,
         )?;
 
         info!("[Charlie] Building vote tx (yes)");
@@ -265,6 +268,7 @@ fn integration_test() -> Result<()> {
             &dao_keypair,
             &propose_info,
             &propose_params.proposal_bulla,
+            current_block_height,
         )?;
 
         for holder in &HOLDERS {

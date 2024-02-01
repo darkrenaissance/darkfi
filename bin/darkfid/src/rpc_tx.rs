@@ -70,8 +70,7 @@ impl Darkfid {
         };
 
         // Simulate state transition
-        let current_slot = self.validator.consensus.time_keeper.current_slot();
-        let result = self.validator.add_transactions(&[tx], current_slot, false).await;
+        let result = self.validator.append_tx(&tx, false).await;
         if result.is_err() {
             error!(
                 target: "darkfid::rpc::tx_simulate", "Failed to validate state transition: {}",
@@ -124,14 +123,13 @@ impl Darkfid {
             // Consensus participants can directly perform
             // the state transition check and append to their
             // pending transactions store.
-            if self.validator.append_tx(&tx).await.is_err() {
+            if self.validator.append_tx(&tx, true).await.is_err() {
                 error!(target: "darkfid::rpc::tx_broadcast", "Failed to append transaction to mempool");
                 return server_error(RpcError::TxSimulationFail, id, None)
             }
         } else {
             // We'll perform the state transition check here.
-            let current_slot = self.validator.consensus.time_keeper.current_slot();
-            let result = self.validator.add_transactions(&[tx.clone()], current_slot, false).await;
+            let result = self.validator.append_tx(&tx, false).await;
             if result.is_err() {
                 error!(
                     target: "darkfid::rpc::tx_broadcast", "Failed to validate state transition: {}",

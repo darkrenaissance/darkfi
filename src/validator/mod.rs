@@ -43,9 +43,6 @@ use consensus::{Consensus, Proposal};
 pub mod pow;
 use pow::PoWModule;
 
-/// DarkFi consensus PID controller
-pub mod pid;
-
 /// Verification functions
 pub mod verification;
 use verification::{
@@ -59,9 +56,6 @@ pub mod fees;
 /// Helper utilities
 pub mod utils;
 use utils::deploy_native_contracts;
-
-/// Base 10 big float implementation for high precision arithmetics
-pub mod float_10;
 
 /// Configuration for initializing [`Validator`]
 #[derive(Clone)]
@@ -161,11 +155,9 @@ impl Validator {
         info!(target: "validator::new", "Initializing Consensus");
         let consensus = Consensus::new(
             blockchain.clone(),
-            config.time_keeper,
             config.finalization_threshold,
             config.pow_target,
             config.pow_fixed_difficulty,
-            pos_testing_mode,
         )?;
 
         // Create the actual state
@@ -183,7 +175,7 @@ impl Validator {
 
     /// The node retrieves a transaction, validates its state transition,
     /// and appends it to the pending txs store.
-    pub async fn append_tx(&self, tx: &Transaction) -> Result<()> {
+    pub async fn append_tx(&self, tx: &Transaction, write: bool) -> Result<()> {
         let tx_hash = blake3::hash(&serialize_async(tx).await);
 
         // Check if we have already seen this tx
@@ -203,19 +195,17 @@ impl Validator {
         // Grab a lock over current consensus forks state
         let mut forks = self.consensus.forks.write().await;
 
-        // Generate a time keeper for current slot
-        let time_keeper = self.consensus.time_keeper.current();
-
         // If node participates in consensus and holds any forks, iterate over them
         // to verify transaction validity in their overlays
         for fork in forks.iter_mut() {
             // Clone forks' overlay
             let overlay = fork.overlay.lock().unwrap().full_clone()?;
 
+            // Grab forks' next block height
+            let next_block_height = fork.get_next_block_height()?;
+
             // Verify transaction
-            match verify_transactions(&overlay, time_keeper.verifying_block_height, &tx_vec, false)
-                .await
-            {
+            match verify_transactions(&overlay, next_block_height, &tx_vec, false).await {
                 Ok(_) => {}
                 Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => continue,
                 Err(e) => return Err(e),
@@ -224,15 +214,16 @@ impl Validator {
             valid = true;
 
             // Store transaction hash in forks' mempool
-            fork.mempool.push(tx_hash);
+            if write {
+                fork.mempool.push(tx_hash);
+            }
         }
 
         // Verify transaction against canonical state
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
+        let next_block_height = self.blockchain.last_block()?.header.height + 1;
         let mut erroneous_txs = vec![];
-        match verify_transactions(&overlay, time_keeper.verifying_block_height, &tx_vec, false)
-            .await
-        {
+        match verify_transactions(&overlay, next_block_height, &tx_vec, false).await {
             Ok(_) => valid = true,
             Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(etx))) => {
                 erroneous_txs = etx
@@ -249,8 +240,10 @@ impl Validator {
         }
 
         // Add transaction to pending txs store
-        self.blockchain.add_pending_txs(&tx_vec)?;
-        info!(target: "validator::append_tx", "Appended tx to pending txs store");
+        if write {
+            self.blockchain.add_pending_txs(&tx_vec)?;
+            info!(target: "validator::append_tx", "Appended tx to pending txs store");
+        }
 
         Ok(())
     }
@@ -269,9 +262,6 @@ impl Validator {
         // Grab a lock over current consensus forks state
         let mut forks = self.consensus.forks.write().await;
 
-        // Generate a time keeper for current slot
-        let time_keeper = self.consensus.time_keeper.current();
-
         let mut removed_txs = vec![];
         for tx in pending_txs {
             let tx_hash = &blake3::hash(&serialize_async(&tx).await);
@@ -284,15 +274,11 @@ impl Validator {
                 // Clone forks' overlay
                 let overlay = fork.overlay.lock().unwrap().full_clone()?;
 
+                // Grab forks' next block height
+                let next_block_height = fork.get_next_block_height()?;
+
                 // Verify transaction
-                match verify_transactions(
-                    &overlay,
-                    time_keeper.verifying_block_height,
-                    &tx_vec,
-                    false,
-                )
-                .await
-                {
+                match verify_transactions(&overlay, next_block_height, &tx_vec, false).await {
                     Ok(_) => {
                         valid = true;
                         continue
@@ -307,10 +293,8 @@ impl Validator {
 
             // Verify transaction against canonical state
             let overlay = BlockchainOverlay::new(&self.blockchain)?;
-
-            match verify_transactions(&overlay, time_keeper.verifying_block_height, &tx_vec, false)
-                .await
-            {
+            let next_block_height = self.blockchain.last_block()?.header.height + 1;
+            match verify_transactions(&overlay, next_block_height, &tx_vec, false).await {
                 Ok(_) => valid = true,
                 Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
                 Err(e) => return Err(e),
@@ -376,7 +360,6 @@ impl Validator {
 
         // Rebuild best fork using last proposal
         *self.consensus.forks.write().await = vec![];
-        self.consensus.generate_pow_slot().await?;
         self.consensus.append_proposal(&Proposal::new(last)?).await?;
         info!(target: "validator::finalization", "Finalization completed!");
 
@@ -559,12 +542,10 @@ impl Validator {
         let mut previous = &blocks[0];
 
         // Create a time keeper and a PoW module to validate each block
-        let time_keeper = self.consensus.time_keeper.clone();
         let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?;
 
         // Deploy native wasm contracts
-        deploy_native_contracts(&overlay, time_keeper.verifying_block_height, &faucet_pubkeys)
-            .await?;
+        deploy_native_contracts(&overlay, 0, &faucet_pubkeys).await?;
 
         // Validate genesis block
         verify_genesis_block(&overlay, previous).await?;

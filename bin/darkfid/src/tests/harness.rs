@@ -19,19 +19,14 @@
 use std::{collections::HashMap, sync::Arc};
 
 use darkfi::{
-    blockchain::{BlockInfo, Header},
+    blockchain::BlockInfo,
     net::Settings,
     rpc::jsonrpc::JsonSubscriber,
-    tx::Transaction,
     util::time::TimeKeeper,
-    validator::{pid::slot_pid_output, utils::genesis_txs_total, Validator, ValidatorConfig},
+    validator::{utils::genesis_txs_total, Validator, ValidatorConfig},
     Result,
 };
 use darkfi_contract_test_harness::{vks, Holder, TestHarness};
-use darkfi_sdk::{
-    blockchain::{expected_reward, PidOutput, PreviousSlot, Slot, POS_START},
-    pasta::{group::ff::Field, pallas},
-};
 use num_bigint::BigUint;
 use url::Url;
 
@@ -163,7 +158,7 @@ impl Harness {
         Ok(())
     }
 
-    pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
+    pub async fn _add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
         // We simply broadcast the block using Alice's sync P2P
         for block in blocks {
             self.alice.sync_p2p.broadcast(&BlockInfoMessage::from(block)).await;
@@ -173,56 +168,6 @@ impl Harness {
         self.alice.validator.add_blocks(blocks).await?;
 
         Ok(())
-    }
-
-    pub async fn generate_next_pos_block(
-        &self,
-        previous: &BlockInfo,
-        slots_count: usize,
-    ) -> Result<BlockInfo> {
-        let previous_hash = previous.hash()?;
-
-        // Generate empty slots
-        let mut slots = Vec::with_capacity(slots_count);
-        let mut previous_slot = previous.slots.last().unwrap().clone();
-        for i in 0..slots_count {
-            let id = if previous_slot.id < POS_START { POS_START } else { previous_slot.id + 1 };
-            // First slot in the sequence has (at least) 1 previous slot producer
-            let producers = if i == 0 { 1 } else { 0 };
-            let previous = PreviousSlot::new(
-                producers,
-                vec![previous_hash],
-                vec![previous.header.previous],
-                previous_slot.pid.error,
-            );
-            let (f, error, sigma1, sigma2) = slot_pid_output(&previous_slot, producers);
-            let pid = PidOutput::new(f, error, sigma1, sigma2);
-            let total_tokens = previous_slot.total_tokens + previous_slot.reward;
-            // Only last slot in the sequence has a reward
-            let reward = if i == slots_count - 1 { expected_reward(id) } else { 0 };
-            let slot = Slot::new(id, previous, pid, pallas::Base::ZERO, total_tokens, reward);
-            slots.push(slot.clone());
-            previous_slot = slot;
-        }
-
-        // We increment timestamp so we don't have to use sleep
-        let mut timestamp = previous.header.timestamp;
-        timestamp.add(1);
-
-        // Generate header
-        let height = slots.last().unwrap().id;
-        let header = Header::new(previous_hash, height, timestamp, previous.header.nonce);
-
-        // Generate the block
-        let mut block = BlockInfo::new_empty(header, slots);
-
-        // Add transactions to the block
-        block.append_txs(vec![Transaction::default()])?;
-
-        // Attach signature
-        block.signature = previous.signature;
-
-        Ok(block)
     }
 }
 

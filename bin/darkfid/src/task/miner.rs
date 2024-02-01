@@ -95,7 +95,7 @@ async fn miner_loop(node: &Darkfid, recipient: &PublicKey) -> Result<()> {
 
     // Generate a new fork to be able to extend
     info!(target: "darkfid::task::miner_task", "Generating new empty fork...");
-    node.validator.consensus.generate_pow_slot().await?;
+    node.validator.consensus.generate_empty_fork().await?;
 
     // Grab blocks subscriber
     let block_sub = node.subscribers.get("blocks").unwrap();
@@ -156,16 +156,16 @@ async fn generate_next_block(
     let fork = &forks[fork_index];
 
     // Generate new signing key for next block
-    let height = fork.slots.last().unwrap().id;
+    let next_block_height = fork.get_next_block_height()?;
     // We are deriving the next secret key for optimization.
     // Next secret is the poseidon hash of:
     //  [prefix, current(previous) secret, signing(block) height].
     let prefix = pallas::Base::from_raw([4, 0, 0, 0]);
-    let next_secret = poseidon_hash([prefix, secret.inner(), height.into()]);
+    let next_secret = poseidon_hash([prefix, secret.inner(), next_block_height.into()]);
     *secret = SecretKey::from(next_secret);
 
     // Generate reward transaction
-    let tx = generate_pow_transaction(fork, secret, recipient, zkbin, pk)?;
+    let tx = generate_transaction(fork, secret, recipient, zkbin, pk, next_block_height)?;
 
     // Generate next block proposal
     let target = fork.module.next_mine_target()?;
@@ -178,16 +178,14 @@ async fn generate_next_block(
 }
 
 /// Auxiliary function to generate a Money::PoWReward transaction
-fn generate_pow_transaction(
+fn generate_transaction(
     fork: &Fork,
     secret: &SecretKey,
     recipient: &PublicKey,
     zkbin: &ZkBinary,
     pk: &ProvingKey,
+    block_height: u64,
 ) -> Result<Transaction> {
-    // Grab next block height
-    let block_height = fork.slots.last().unwrap().id;
-
     // Grab extended proposal info
     let last_proposal = fork.last_proposal()?;
     let last_nonce = last_proposal.block.header.nonce;

@@ -47,6 +47,7 @@ impl TestHarness {
         user_data: pallas::Base,
         dao: &Dao,
         dao_bulla: &DaoBulla,
+        block_height: u64,
     ) -> Result<(Transaction, DaoProposeParams, DaoProposal)> {
         let wallet = self.holders.get(proposer).unwrap();
 
@@ -98,8 +99,7 @@ impl TestHarness {
             },
         ];
 
-        let creation_day =
-            blockheight_to_day(wallet.validator.consensus.time_keeper.verifying_block_height);
+        let creation_day = blockheight_to_day(block_height);
         let proposal = DaoProposal {
             auth_calls,
             creation_day,

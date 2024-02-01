@@ -103,7 +103,7 @@ impl ProtocolTx {
             let tx_copy = (*tx).clone();
 
             // Nodes use unconfirmed_txs vector as seen_txs pool.
-            match self.validator.append_tx(&tx_copy).await {
+            match self.validator.append_tx(&tx_copy, true).await {
                 Ok(()) => {
                     self.p2p.broadcast_with_exclude(&tx_copy, &exclude_list).await;
                     let encoded_tx =

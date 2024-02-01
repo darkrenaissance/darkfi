@@ -103,11 +103,7 @@ pub async fn deploy_native_contracts(
 /// Genesis block has rank 0.
 /// First 2 blocks rank is equal to their nonce, since their previous
 /// previous block producer doesn't exist or have a VRF.
-pub async fn block_rank(
-    block: &BlockInfo,
-    previous_previous: &BlockInfo,
-    pos_testing_mode: bool,
-) -> Result<u64> {
+pub async fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Result<u64> {
     // Genesis block has rank 0
     if block.header.height == 0 {
         return Ok(0)
@@ -118,23 +114,17 @@ pub async fn block_rank(
     nonce.copy_from_slice(&block.header.nonce.to_repr()[..8]);
     let nonce = u64::from_be_bytes(nonce);
 
-    // First 2 blocks or testing ones have rank equal to their nonce
-    if block.header.height < 3 || pos_testing_mode {
+    // First 2 blocks have rank equal to their nonce
+    if block.header.height < 3 {
         return Ok(nonce)
     }
 
     // Extract VRF proof from the previous previous producer transaction
     let tx = previous_previous.txs.last().unwrap();
     let data = &tx.calls[0].data.data;
-    let position = match previous_previous.header.version {
-        // PoW uses MoneyPoWRewardParamsV1
-        1 => 563,
-        // PoS uses ConsensusProposalParamsV1
-        2 => 490,
-        _ => return Err(Error::BlockVersionIsInvalid(previous_previous.header.version)),
-    };
     let mut decoder = Cursor::new(&data);
-    decoder.set_position(position);
+    // PoW uses MoneyPoWRewardParamsV1
+    decoder.set_position(563);
     let vrf_proof: VrfProof = AsyncDecodable::decode_async(&mut decoder).await?;
 
     // Compute VRF u64
@@ -215,28 +205,6 @@ pub async fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
     }
 
     Ok(total)
-}
-
-/// Retrieve previous slot producers, last proposal hashes,
-/// and their second to last hashes, from all provided forks.
-pub fn previous_slot_info(
-    forks: &Vec<Fork>,
-    slot: u64,
-) -> Result<(u64, Vec<blake3::Hash>, Vec<blake3::Hash>)> {
-    let mut producers = 0;
-    let mut last_hashes = vec![];
-    let mut second_to_last_hashes = vec![];
-
-    for fork in forks {
-        let last_proposal = fork.last_proposal()?;
-        if last_proposal.block.header.height == slot {
-            producers += 1;
-        }
-        last_hashes.push(last_proposal.hash);
-        second_to_last_hashes.push(last_proposal.block.header.previous);
-    }
-
-    Ok((producers, last_hashes, second_to_last_hashes))
 }
 
 /// Given a proposal, find the index of the fork chain it extends, along with the specific

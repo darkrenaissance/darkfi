@@ -87,9 +87,6 @@ semver = {version = "1.0.21", optional = true}
 structopt = {version= "0.3.26", optional = true}
 structopt-toml = {version= "0.5.1", optional = true}
 toml = {version = "0.8.8", optional = true}
-# Big float high precision arithmetics
-dashu = {version = "0.4.0", optional = true}
-num-bigint = {version = "0.4.4", optional = true}
 
 # Utilities
 # TODO: check chrono usage and impl our own
@@ -97,6 +94,7 @@ chrono = {version = "0.4.31", optional = true}
 darkfi-serial = {path = "src/serial", optional = true}
 darkfi-derive = {path = "src/serial/derive", optional = true}
 lazy_static = {version = "1.4.0", optional = true}
+num-bigint = {version = "0.4.4", optional = true}
 url = {version = "2.5.0", features = ["serde"], optional = true}
 
 # Misc
@@ -164,7 +162,6 @@ validator = [
     "async-trait",
     "blake3",
     "crypto_api_chachapoly",
-    "dashu",
     "halo2_proofs",
     "lazy_static",
     "num-bigint",
