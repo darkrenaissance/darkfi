@@ -28,7 +28,7 @@ use harness::{generate_node, Harness, HarnessConfig};
 
 mod forks;
 
-async fn sync_pos_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
+async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     init_logger();
 
     // Initialize harness in testing mode
@@ -49,14 +49,14 @@ async fn sync_pos_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     // Generate next block
     //let block1 = th.generate_next_block(&previous).await?;
 
-    // Generate next block, with 4 empty slots inbetween
+    // Generate next block
     //let block2 = th.generate_next_block(&block1).await?;
 
     // Add it to nodes
     //th.add_blocks(&vec![block1, block2]).await?;
 
     // Validate chains
-    th.validate_chains(1, 1).await?;
+    th.validate_chains(1).await?;
 
     // We are going to create a third node and try to sync from the previous two
     let mut sync_settings =
@@ -74,22 +74,20 @@ async fn sync_pos_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let charlie = &charlie.validator;
     charlie.validate_blockchain(vec![], pow_target, pow_fixed_difficulty).await?;
     assert_eq!(alice.blockchain.len(), charlie.blockchain.len());
-    assert_eq!(alice.blockchain.slots.len(), charlie.blockchain.slots.len());
 
     // Thanks for reading
     Ok(())
 }
 
 #[test]
-#[ignore]
-fn sync_pos_blocks() -> Result<()> {
+fn sync_blocks() -> Result<()> {
     let ex = Arc::new(Executor::new());
     let (signal, shutdown) = smol::channel::unbounded::<()>();
 
     easy_parallel::Parallel::new().each(0..4, |_| smol::block_on(ex.run(shutdown.recv()))).finish(
         || {
             smol::block_on(async {
-                sync_pos_blocks_real(ex.clone()).await.unwrap();
+                sync_blocks_real(ex.clone()).await.unwrap();
                 drop(signal);
             })
         },

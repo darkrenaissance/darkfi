@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use darkfi_sdk::{blockchain::Slot, crypto::PublicKey};
+use darkfi_sdk::crypto::PublicKey;
 use darkfi_serial::serialize_async;
 use log::{debug, error, info, warn};
 use num_bigint::BigUint;
@@ -465,15 +465,6 @@ impl Validator {
 
         debug!(target: "validator::add_transactions", "Applying overlay changes");
         overlay.apply()?;
-        Ok(())
-    }
-
-    /// Append to canonical state received slot.
-    /// This should be only used for test purposes.
-    pub async fn receive_test_slot(&self, slot: &Slot) -> Result<()> {
-        debug!(target: "validator::receive_test_slot", "Appending slot to ledger");
-        self.blockchain.slots.insert(&[slot.clone()])?;
-
         Ok(())
     }
 

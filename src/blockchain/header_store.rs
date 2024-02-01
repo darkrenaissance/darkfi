@@ -39,7 +39,7 @@ pub struct Header {
     pub previous: blake3::Hash,
     /// Epoch number
     pub epoch: u64,
-    /// Block/Slot height
+    /// Block height
     pub height: u64,
     /// Block creation timestamp
     pub timestamp: Timestamp,

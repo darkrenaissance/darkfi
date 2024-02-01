@@ -97,7 +97,7 @@ impl Consensus {
         );
 
         // Generate the block
-        let mut block = BlockInfo::new_empty(header, vec![]);
+        let mut block = BlockInfo::new_empty(header);
 
         // Add transactions to the block
         block.append_txs(unproposed_txs)?;

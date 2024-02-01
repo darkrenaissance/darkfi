@@ -69,7 +69,6 @@ impl Harness {
         // Append genesis transactions and calculate their total
         genesis_block.txs.push(genesis_mint_tx);
         let genesis_txs_total = genesis_txs_total(&genesis_block.txs).await?;
-        genesis_block.slots[0].total_tokens = genesis_txs_total;
 
         // Generate validators configuration
         // NOTE: we are not using consensus constants here so we
@@ -129,7 +128,7 @@ impl Harness {
         Ok(Self { config, vks, validator_config, alice, bob })
     }
 
-    pub async fn validate_chains(&self, total_blocks: usize, total_slots: usize) -> Result<()> {
+    pub async fn validate_chains(&self, total_blocks: usize) -> Result<()> {
         let alice = &self.alice.validator;
         let bob = &self.bob.validator;
 
@@ -150,10 +149,6 @@ impl Harness {
         let alice_blockchain_len = alice.blockchain.len();
         assert_eq!(alice_blockchain_len, bob.blockchain.len());
         assert_eq!(alice_blockchain_len, total_blocks);
-
-        let alice_slots_len = alice.blockchain.slots.len();
-        assert_eq!(alice_slots_len, bob.blockchain.slots.len());
-        assert_eq!(alice_slots_len, total_slots);
 
         Ok(())
     }

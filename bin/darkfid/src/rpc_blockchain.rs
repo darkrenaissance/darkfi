@@ -59,7 +59,7 @@ impl Darkfid {
             Err(_) => return JsonError::new(ParseError, None, id).into(),
         };
 
-        let blocks = match self.validator.blockchain.get_blocks_by_slot(&[slot]) {
+        let blocks = match self.validator.blockchain.get_blocks_by_heights(&[slot]) {
             Ok(v) => v,
             Err(e) => {
                 error!(target: "darkfid::rpc::blockchain_get_slot", "Failed fetching block by slot: {}", e);

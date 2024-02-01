@@ -17,7 +17,6 @@
  */
 
 use darkfi_sdk::{
-    blockchain::Slot,
     crypto::{
         schnorr::{SchnorrSecret, Signature},
         SecretKey,
@@ -80,8 +79,6 @@ pub struct BlockInfo {
     pub txs: Vec<Transaction>,
     /// Block producer signature
     pub signature: Signature,
-    /// Slots payload
-    pub slots: Vec<Slot>,
 }
 
 impl Default for BlockInfo {
@@ -91,28 +88,21 @@ impl Default for BlockInfo {
             header: Header::default(),
             txs: vec![Transaction::default()],
             signature: Signature::dummy(),
-            slots: vec![Slot::default()],
         }
     }
 }
 
 impl BlockInfo {
-    pub fn new(
-        header: Header,
-        txs: Vec<Transaction>,
-        signature: Signature,
-        slots: Vec<Slot>,
-    ) -> Self {
-        Self { header, txs, signature, slots }
+    pub fn new(header: Header, txs: Vec<Transaction>, signature: Signature) -> Self {
+        Self { header, txs, signature }
     }
 
-    /// Generate an empty block for provided Header
-    /// and slots vector. Transactions and the producer
-    /// signature must be added after.
-    pub fn new_empty(header: Header, slots: Vec<Slot>) -> Self {
+    /// Generate an empty block for provided Header.
+    /// Transactions and the producer signature must be added after.
+    pub fn new_empty(header: Header) -> Self {
         let txs = vec![];
         let signature = Signature::dummy();
-        Self { header, txs, signature, slots }
+        Self { header, txs, signature }
     }
 
     /// A block's hash is the same as the hash of its header
