@@ -311,7 +311,7 @@ pub(crate) fn get_last_block_info(mut ctx: FunctionEnvMut<Env>) -> i64 {
 
     // Create the return object
     let mut ret = Vec::with_capacity(8 + 32 + blake3::OUT_LEN);
-    ret.extend_from_slice(&block.header.height.to_be_bytes());
+    ret.extend_from_slice(&darkfi_serial::serialize(&block.header.height));
     ret.extend_from_slice(&block.header.nonce.to_repr());
     ret.extend_from_slice(block.header.previous.as_bytes());
 

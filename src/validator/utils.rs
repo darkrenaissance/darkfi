@@ -124,7 +124,7 @@ pub async fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Res
     let data = &tx.calls[0].data.data;
     let mut decoder = Cursor::new(&data);
     // PoW uses MoneyPoWRewardParamsV1
-    decoder.set_position(563);
+    decoder.set_position(499);
     let vrf_proof: VrfProof = AsyncDecodable::decode_async(&mut decoder).await?;
 
     // Compute VRF u64
