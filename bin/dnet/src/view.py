@@ -107,7 +107,9 @@ class View():
     # Render get_info()
     #-----------------------------------------------------------------
     def draw_info(self, node_name, info):
+        logging.debug('draw_info() [START]')
         if 'spawns' in info and info['spawns']:
+            logging.debug(f'drawing lilith {info}')
             self.draw_lilith(node_name, info)
             return
 
@@ -158,6 +160,7 @@ class View():
         node.set_txt(False)
         self.listw.append(node)
         for (i, key) in enumerate(info['spawns'].keys()):
+            logging.debug(f'creating spawn slot {key}')
             slot = Slot(node_name, "spawn-slot")
             slot.set_txt(i, key)
             self.listw.append(slot)
@@ -183,41 +186,12 @@ class View():
                     slot.set_txt(item.i, info)
                     self.listw[index] = slot
 
-    #-----------------------------------------------------------------
-    # Render subscribe_events() (right menu)
-    #-----------------------------------------------------------------
-    def fill_right_box(self):
+    def fill_lilith_right_box(self):
         self.pile.contents.clear()
         focus_w = self.list.get_focus()
         if focus_w[0] is None:
             return
         session = focus_w[0].session
-
-        if session == "outbound":
-            key = (focus_w[0].node_name, "outbound")
-            info = self.model.nodes.get(focus_w[0].node_name)
-            if key in info['event']:
-                ev = info['event'].get(key)
-                self.pile.contents.append((
-                    urwid.Text(f" {ev}"),
-                    self.pile.options()))
-
-        if (session == "outbound-slot" or session == "inbound-slot"
-                or session == "manual-slot" or session == "seed-slot"):
-            addr = focus_w[0].addr
-            node_name = focus_w[0].node_name
-            info = self.model.nodes.get(node_name)
-
-            if addr in info['msgs']:
-                msg = info['msgs'].get(addr)
-                for m in msg:
-                    time = m[0]
-                    event = m[1]
-                    msg = m[2]
-                    self.pile.contents.append((urwid.Text(
-                            f"{time}: {event}: {msg}"),
-                            self.pile.options()))
-
         if session == "spawn-slot":
             node_name = focus_w[0].node_name
             spawn_name = focus_w[0].id
@@ -245,6 +219,73 @@ class View():
                         f"  {host}"),
                         self.pile.options()))
 
+    #-----------------------------------------------------------------
+    # Render subscribe_events() (right menu)
+    #-----------------------------------------------------------------
+    def fill_right_box(self):
+        logging.debug('fill_right_box() [START]')
+        self.pile.contents.clear()
+        focus_w = self.list.get_focus()
+        logging.debug(f'focus_w: {focus_w}')
+        if focus_w[0] is None:
+            return
+        session = focus_w[0].session
+
+        if session == "outbound":
+            logging.debug('outbound slot selected')
+            key = (focus_w[0].node_name, "outbound")
+            info = self.model.nodes.get(focus_w[0].node_name)
+            if key in info['event']:
+                ev = info['event'].get(key)
+                self.pile.contents.append((
+                    urwid.Text(f" {ev}"),
+                    self.pile.options()))
+
+        if (session == "outbound-slot" or session == "inbound-slot"
+                or session == "manual-slot" or session == "seed-slot"):
+            logging.debug('other slot selected')
+            addr = focus_w[0].addr
+            node_name = focus_w[0].node_name
+            info = self.model.nodes.get(node_name)
+
+            if addr in info['msgs']:
+                msg = info['msgs'].get(addr)
+                for m in msg:
+                    time = m[0]
+                    event = m[1]
+                    msg = m[2]
+                    self.pile.contents.append((urwid.Text(
+                            f"{time}: {event}: {msg}"),
+                            self.pile.options()))
+
+        #if session == "spawn-slot":
+        #    logging.debug('spawn slot selected')
+        #    node_name = focus_w[0].node_name
+        #    spawn_name = focus_w[0].id
+        #    lilith = self.model.liliths.get(node_name)
+        #    spawns = lilith.get('spawns')
+        #    info = spawns.get(spawn_name)
+
+        #    if info['urls']:
+        #        urls = info['urls']
+        #        self.pile.contents.append((urwid.Text(
+        #            f"Accept addrs:"),
+        #            self.pile.options()))
+        #        for url in urls:
+        #            self.pile.contents.append((urwid.Text(
+        #                f"  {url}"),
+        #                self.pile.options()))
+
+        #    if info['hosts']:
+        #        hosts = info['hosts']
+        #        self.pile.contents.append((urwid.Text(
+        #            f"Hosts:"),
+        #            self.pile.options()))
+        #        for host in hosts:
+        #            self.pile.contents.append((urwid.Text(
+        #                f"  {host}"),
+        #                self.pile.options()))
+
     # Sort nodes into lists.
     def sort(self, nodes):
         for name, info in nodes:
@@ -260,7 +301,7 @@ class View():
                 self.refresh = True
 
     # Display nodes according to list.
-    async def draw(self, nodes):
+    async def display(self, nodes):
         for name, info in nodes:
             if name in self.live_nodes and name not in self.known_nodes:
                 self.draw_info(name, info)
@@ -279,10 +320,12 @@ class View():
                 logging.debug("Refresh complete.")
 
     # Handle events.
-    def events(self, nodes):
+    def draw_events(self, nodes):
         for name, info in nodes:
             if bool(info) and name in self.known_nodes:
+                logging.debug('fill left box')
                 self.fill_left_box()
+                logging.debug('fill right box')
                 self.fill_right_box()
 
                 if 'inbound' in info:
@@ -341,7 +384,8 @@ class View():
             self.sort(nodes)
             self.sort(liliths)
             
-            await self.draw(nodes)
-            await self.draw(liliths)
+            await self.display(nodes)
+            await self.display(liliths)
 
-            self.events(nodes)
+            self.fill_lilith_right_box()
+            self.draw_events(nodes)
