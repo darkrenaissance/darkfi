@@ -90,7 +90,7 @@ impl Default for Settings {
             peers: vec![],
             seeds: vec![],
             app_version,
-            allowed_transports: vec![],
+            allowed_transports: vec!["tcp+tls".to_string()],
             transport_mixing: true,
             outbound_connections: 0,
             inbound_connections: 10,
@@ -172,7 +172,7 @@ pub struct SettingsOpt {
     /// Preferred transports for outbound connections
     #[serde(default)]
     #[structopt(long = "transports")]
-    pub allowed_transports: Vec<String>,
+    pub allowed_transports: Option<Vec<String>>,
 
     /// Allow transport mixing (e.g. Tor would be allowed to connect to `tcp://`)
     #[structopt(long)]
@@ -224,7 +224,7 @@ impl From<SettingsOpt> for Settings {
             peers: opt.peers,
             seeds: opt.seeds,
             app_version: def.app_version,
-            allowed_transports: opt.allowed_transports,
+            allowed_transports: opt.allowed_transports.unwrap_or(def.allowed_transports),
             transport_mixing: opt.transport_mixing.unwrap_or(def.transport_mixing),
             outbound_connections: opt.outbound_connections.unwrap_or(def.outbound_connections),
             inbound_connections: opt.inbound_connections.unwrap_or(def.inbound_connections),
