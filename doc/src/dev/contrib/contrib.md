@@ -48,6 +48,7 @@ or need to be maintained:
     * DarkIRC encrypted DMs to nonexistant users should not be allowed.
     * Currently closing DarkIRC with ctrl-c stalls in `p2p.stop()`. This should be fixed.
     * Add `log = path` and `log_level = debug` config setting to DarkIRC
+    * StoppableTask should panic when we call stop() on a task that has not been started.
 * **Tooling:** Creating new tools or improving existing ones.
     * Improve the ZK tooling. For example tools to work with txs, smart contracts and ZK proofs.
     * Also document zkrunner and other tools.
