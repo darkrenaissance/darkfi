@@ -112,6 +112,7 @@ impl InboundSession {
                 .await?;
         }
 
+        debug!(target: "net::inbound_session", "Starting ping_self process");
         self.ping_self.clone().start().await;
 
         Ok(())
@@ -119,6 +120,11 @@ impl InboundSession {
 
     /// Stops the inbound session.
     pub async fn stop(&self) {
+        if self.p2p().settings().inbound_addrs.is_empty() {
+            info!(target: "net::inbound_session", "[P2P] Not configured for inbound connections.");
+            return
+        }
+
         let acceptors = &*self.acceptors.lock().await;
         for acceptor in acceptors {
             acceptor.stop().await;
@@ -129,6 +135,7 @@ impl InboundSession {
             accept_task.stop().await;
         }
 
+        debug!(target: "net::inbound_session", "Stopping ping_self process");
         self.ping_self.clone().stop().await;
     }
 
