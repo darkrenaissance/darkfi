@@ -53,7 +53,7 @@ impl TokenMintCallBuilder {
             Witness::Base(Value::known(public_x)),
             Witness::Base(Value::known(public_y)),
             Witness::Base(Value::known(pallas::Base::from(self.coin_attrs.value))),
-            Witness::Base(Value::known(self.coin_attrs.spend_hook)),
+            Witness::Base(Value::known(self.coin_attrs.spend_hook.inner())),
             Witness::Base(Value::known(self.coin_attrs.user_data)),
             Witness::Base(Value::known(self.coin_attrs.blind)),
             // Token attributes

@@ -27,7 +27,7 @@ use darkfi_money_contract::{
     MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{MerkleNode, MONEY_CONTRACT_ID},
+    crypto::{FuncId, MerkleNode, MONEY_CONTRACT_ID},
     pasta::pallas,
     ContractCall,
 };
@@ -59,7 +59,7 @@ impl TestHarness {
         let fork_previous_hash = self.genesis_block.header.previous;
 
         // We're just going to be using a zero spend-hook and user-data
-        let spend_hook = pallas::Base::zero();
+        let spend_hook = FuncId::none();
         let user_data = pallas::Base::zero();
 
         let recipient = if let Some(holder) = recipient {

@@ -83,7 +83,8 @@ circuit "Fee_V1" {
     constrain_instance(user_data_enc);
 
     # Reveal spend_hook
-    constrain_instance(input_spend_hook);
+    ZERO = witness_base(0);
+    constrain_equal_base(input_spend_hook, ZERO);
 
     # Derive a public key for the signature and
     # constrain its coordinates

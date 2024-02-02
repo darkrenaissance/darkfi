@@ -18,7 +18,10 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
-use darkfi_dao_contract::model::{Dao, DaoBlindAggregateVote};
+use darkfi_dao_contract::{
+    model::{Dao, DaoBlindAggregateVote},
+    DaoFunction,
+};
 use darkfi_money_contract::{
     model::{CoinAttributes, TokenAttributes},
     MoneyFunction,
@@ -28,7 +31,7 @@ use darkfi_sdk::{
         pasta_prelude::*,
         pedersen_commitment_u64, poseidon_hash,
         util::{fp_mod_fv, fp_to_u64},
-        FuncRef, DAO_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
+        FuncId, FuncRef, DAO_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
 };
@@ -121,10 +124,14 @@ fn integration_test() -> Result<()> {
         info!("Stage 2. Send Treasury token");
 
         info!("[Faucet] Building DAO airdrop tx");
+        let spend_hook =
+            FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }
+                .to_func_id();
+
         let (airdrop_tx, airdrop_params) = th.airdrop_native(
             DRK_TOKEN_SUPPLY,
             &Holder::Dao,
-            Some(DAO_CONTRACT_ID.inner()),           // spend_hook
+            Some(spend_hook),                        // spend_hook
             Some(dao_mint_params.dao_bulla.inner()), // user_data
         )?;
 
@@ -240,7 +247,7 @@ fn integration_test() -> Result<()> {
             public_key: th.holders.get(&Holder::Rachel).unwrap().keypair.public,
             value: PROPOSAL_AMOUNT,
             token_id: drk_token_id,
-            spend_hook: pallas::Base::ZERO,
+            spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
             blind: pallas::Base::random(&mut OsRng),
         }];

@@ -25,7 +25,8 @@ use darkfi::{
 };
 use darkfi_sdk::{
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, MerkleTree, PublicKey, SecretKey, TokenId,
+        note::AeadEncryptedNote, pasta_prelude::*, FuncId, MerkleTree, PublicKey, SecretKey,
+        TokenId,
     },
     pasta::pallas,
 };
@@ -67,7 +68,7 @@ pub struct SwapCallBuilder {
     /// User data blind for the party's input
     pub user_data_blind_send: pallas::Base,
     /// Spend hook for the party's output
-    pub spend_hook_recv: pallas::Base,
+    pub spend_hook_recv: FuncId,
     /// User data for the party's output
     pub user_data_recv: pallas::Base,
     /// The blinds to be used for value pedersen commitments
@@ -122,7 +123,7 @@ impl SwapCallBuilder {
             public_key: self.pubkey,
             value: self.value_recv,
             token_id: self.token_id_recv,
-            spend_hook: pallas::Base::ZERO,
+            spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
             blind: pallas::Base::random(&mut OsRng),
         };
@@ -150,7 +151,6 @@ impl SwapCallBuilder {
             token_commit: public_inputs.token_commit,
             nullifier: public_inputs.nullifier,
             merkle_root: public_inputs.merkle_root,
-            spend_hook: public_inputs.spend_hook,
             user_data_enc: public_inputs.user_data_enc,
             signature_public: public_inputs.signature_public,
         });

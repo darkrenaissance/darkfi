@@ -20,7 +20,7 @@ use darkfi_serial::async_trait;
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use pasta_curves::pallas;
 
-use super::{poseidon_hash, ContractId};
+use super::{pasta_prelude::*, poseidon_hash, ContractId};
 
 pub type FunctionCode = u8;
 
@@ -42,6 +42,10 @@ impl FuncRef {
 pub struct FuncId(pallas::Base);
 
 impl FuncId {
+    pub fn none() -> Self {
+        Self(pallas::Base::ZERO)
+    }
+
     pub fn inner(&self) -> pallas::Base {
         self.0
     }

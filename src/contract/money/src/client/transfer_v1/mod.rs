@@ -17,7 +17,7 @@
  */
 use darkfi::{zk::ProvingKey, zkas::ZkBinary, ClientFailed, Result};
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, Keypair, MerkleTree, PublicKey, TokenId},
+    crypto::{pasta_prelude::*, FuncId, Keypair, MerkleTree, PublicKey, TokenId},
     pasta::pallas,
 };
 use log::{debug, error};
@@ -126,7 +126,7 @@ pub fn make_transfer_call(
         public_key: recipient,
         value,
         token_id,
-        spend_hook: pallas::Base::ZERO,
+        spend_hook: FuncId::none(),
         user_data: pallas::Base::ZERO,
         blind: pallas::Base::random(&mut OsRng),
     });
@@ -136,7 +136,7 @@ pub fn make_transfer_call(
             public_key: keypair.public,
             value: change_value,
             token_id,
-            spend_hook: pallas::Base::ZERO,
+            spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
             blind: pallas::Base::random(&mut OsRng),
         });

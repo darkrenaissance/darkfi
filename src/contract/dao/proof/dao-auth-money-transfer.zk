@@ -33,7 +33,7 @@ witness "DaoAuthMoneyTransfer" {
     Base dao_coin_blind,
 
     # Should be set to DAO_CONTRACT_ID
-    Base dao_contract_id,
+    Base dao_exec_func_id,
 
     # Epehemeral secret used for diffie-hellman shared secret derivation
     Base ephem_secret,
@@ -85,12 +85,12 @@ circuit "DaoAuthMoneyTransfer" {
         dao_value,
         # Likewise the token_id must match the other output coins.
         dao_token_id,
-        dao_contract_id,
+        dao_exec_func_id,
         dao_bulla,
         dao_coin_blind,
     );
     constrain_instance(dao_change_coin);
-    constrain_instance(dao_contract_id);
+    constrain_instance(dao_exec_func_id);
 
     # Reveal content commit. This should contain the set of coins.
     # We check these are set in the runtime.

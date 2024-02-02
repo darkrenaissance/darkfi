@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::pasta::pallas;
+use darkfi_sdk::{crypto::pasta_prelude::*, pasta::pallas};
 use log::error;
 
 #[cfg(feature = "tinyjson")]
@@ -42,32 +42,42 @@ pub fn export_witness_json<P: AsRef<Path>>(
         let mut value_json = HashMap::new();
         match witness {
             Witness::Base(value) => {
-                value.map(|w1| {
-                    value_json.insert("Base".to_string(), JsonStr(format!("{:?}", w1)));
-                    w1
+                value.map(|w| {
+                    value_json.insert("Base".to_string(), JsonStr(format!("{:?}", w)));
+                    w
                 });
             }
             Witness::Scalar(value) => {
-                value.map(|w1| {
-                    value_json.insert("Scalar".to_string(), JsonStr(format!("{:?}", w1)));
-                    w1
+                value.map(|w| {
+                    value_json.insert("Scalar".to_string(), JsonStr(format!("{:?}", w)));
+                    w
                 });
             }
             Witness::Uint32(value) => {
-                value.map(|w1| {
-                    value_json.insert("Uint32".to_string(), JsonNum(w1.into()));
-                    w1
+                value.map(|w| {
+                    value_json.insert("Uint32".to_string(), JsonNum(w.into()));
+                    w
                 });
             }
             Witness::MerklePath(value) => {
                 let mut path = Vec::new();
-                value.map(|w1| {
-                    for node in w1 {
+                value.map(|w| {
+                    for node in w {
                         path.push(JsonStr(format!("{:?}", node.inner())));
                     }
-                    w1
+                    w
                 });
                 value_json.insert("MerklePath".to_string(), JsonArray(path));
+            }
+            Witness::EcNiPoint(value) => {
+                let (mut x, mut y) = (pallas::Base::ZERO, pallas::Base::ZERO);
+                value.map(|w| {
+                    let coords = w.to_affine().coordinates().unwrap();
+                    (x, y) = (*coords.x(), *coords.y());
+                    w
+                });
+                let coords = vec![JsonStr(format!("{:?}", x)), JsonStr(format!("{:?}", y))];
+                value_json.insert("EcNiPoint".to_string(), JsonArray(coords));
             }
             _ => unimplemented!(),
         }

@@ -17,13 +17,11 @@
  */
 
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, ContractId},
+    crypto::{ContractId, FuncId},
     dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup},
     error::{ContractError, ContractResult},
-    msg,
-    pasta::pallas,
-    ContractCall,
+    msg, ContractCall,
 };
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
@@ -113,7 +111,7 @@ pub(crate) fn money_otcswap_process_instruction_v1(
         // For now, make sure that the inputs' spend hooks are zero.
         // This should however be allowed to some extent, e.g. if we
         // want a DAO to be able to do an atomic swap.
-        if input.spend_hook != pallas::Base::ZERO {
+        if calls[call_idx as usize].parent_index.is_some() {
             msg!("[OtcSwapV1] Error: Unable to swap coins with spend_hook != 0 (input {})", i);
             return Err(MoneyError::SpendHookNonZero.into())
         }

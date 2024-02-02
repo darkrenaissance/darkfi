@@ -21,7 +21,7 @@ use darkfi_money_contract::{
     MoneyFunction,
 };
 use darkfi_sdk::{
-    crypto::{ContractId, PublicKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
+    crypto::{ContractId, FuncRef, PublicKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
     dark_tree::DarkLeaf,
     error::ContractError,
     msg,
@@ -84,6 +84,9 @@ pub(crate) fn dao_authxfer_get_metadata(
     // Also check the coin in the change output
     let last_coin = xfer_params.outputs.last().unwrap().coin;
 
+    let spend_hook =
+        FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }.to_func_id();
+
     let (ephem_x, ephem_y) = self_params.dao_change_attrs.ephem_public.xy();
     zk_public_inputs.push((
         DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS.to_string(),
@@ -91,7 +94,7 @@ pub(crate) fn dao_authxfer_get_metadata(
             exec_params.proposal_bulla.inner(),
             input_user_data_enc,
             last_coin.inner(),
-            DAO_CONTRACT_ID.inner(),
+            spend_hook.inner(),
             exec_params.proposal_auth_calls.commit(),
             ephem_x,
             ephem_y,

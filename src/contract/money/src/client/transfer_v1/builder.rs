@@ -125,7 +125,6 @@ impl TransferCallBuilder {
                 token_commit: public_inputs.token_commit,
                 nullifier: public_inputs.nullifier,
                 merkle_root: public_inputs.merkle_root,
-                spend_hook: public_inputs.spend_hook,
                 user_data_enc: public_inputs.user_data_enc,
                 signature_public: public_inputs.signature_public,
             });

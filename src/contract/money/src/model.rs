@@ -67,7 +67,7 @@ pub struct CoinAttributes {
     pub public_key: PublicKey,
     pub value: u64,
     pub token_id: TokenId,
-    pub spend_hook: pallas::Base,
+    pub spend_hook: FuncId,
     pub user_data: pallas::Base,
     /// Simultaneously blinds the coin and ensures uniqueness
     pub blind: pallas::Base,
@@ -82,7 +82,7 @@ impl CoinAttributes {
             pub_y,
             pallas::Base::from(self.value),
             self.token_id.inner(),
-            self.spend_hook,
+            self.spend_hook.inner(),
             self.user_data,
             self.blind,
         ]);
@@ -149,13 +149,9 @@ pub struct Input {
     pub nullifier: Nullifier,
     /// Revealed Merkle root
     pub merkle_root: MerkleNode,
-    /// Spend hook used to invoke other contracts.
-    /// If this value is nonzero then the subsequent contract call in the tx
-    /// must have this value as its ID.
-    pub spend_hook: pallas::Base,
     /// Encrypted user data field. An encrypted commitment to arbitrary data.
-    /// When spend hook is set (it is nonzero), then this field may be used
-    /// to pass data to the invoked contract.
+    /// When spend hook is nonzero, then this field may be used to pass data
+    /// to the invoked contract.
     pub user_data_enc: pallas::Base,
     /// Public key for the signature
     pub signature_public: PublicKey,

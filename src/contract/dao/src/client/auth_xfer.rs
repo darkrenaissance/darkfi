@@ -18,7 +18,7 @@
 
 use darkfi_money_contract::model::CoinAttributes;
 use darkfi_sdk::{
-    crypto::{note::ElGamalEncryptedNote, poseidon_hash, PublicKey, SecretKey, DAO_CONTRACT_ID},
+    crypto::{note::ElGamalEncryptedNote, poseidon_hash, PublicKey, SecretKey},
     pasta::pallas,
 };
 
@@ -67,7 +67,7 @@ impl DaoAuthMoneyTransferCall {
             let note = [
                 value_base,
                 coin_attrs.token_id.inner(),
-                coin_attrs.spend_hook,
+                coin_attrs.spend_hook.inner(),
                 coin_attrs.user_data,
                 coin_attrs.blind,
             ];
@@ -78,7 +78,7 @@ impl DaoAuthMoneyTransferCall {
                 Witness::EcNiPoint(Value::known(coin_attrs.public_key.inner())),
                 Witness::Base(Value::known(value_base)),
                 Witness::Base(Value::known(coin_attrs.token_id.inner())),
-                Witness::Base(Value::known(coin_attrs.spend_hook)),
+                Witness::Base(Value::known(coin_attrs.spend_hook.inner())),
                 Witness::Base(Value::known(coin_attrs.user_data)),
                 Witness::Base(Value::known(coin_attrs.blind)),
                 Witness::Base(Value::known(ephem_secret.inner())),
@@ -148,8 +148,8 @@ impl DaoAuthMoneyTransferCall {
             Witness::Base(Value::known(dao_change_value)),
             Witness::Base(Value::known(self.dao_coin_attrs.token_id.inner())),
             Witness::Base(Value::known(self.dao_coin_attrs.blind)),
-            // DAO_CONTRACT_ID
-            Witness::Base(Value::known(DAO_CONTRACT_ID.inner())),
+            // DAO::exec() func ID
+            Witness::Base(Value::known(self.dao_coin_attrs.spend_hook.inner())),
             // Encrypted change DAO output
             Witness::Base(Value::known(ephem_secret.inner())),
         ];
@@ -158,7 +158,7 @@ impl DaoAuthMoneyTransferCall {
             self.proposal.to_bulla().inner(),
             input_user_data_enc,
             self.dao_coin_attrs.to_coin().inner(),
-            DAO_CONTRACT_ID.inner(),
+            self.dao_coin_attrs.spend_hook.inner(),
             self.proposal.auth_calls.commit(),
             ephem_x,
             ephem_y,

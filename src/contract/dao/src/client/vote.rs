@@ -22,7 +22,7 @@ use darkfi_sdk::{
     bridgetree::Hashable,
     crypto::{
         note::ElGamalEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash,
-        util::fv_mod_fp_unsafe, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey,
+        util::fv_mod_fp_unsafe, FuncId, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey,
     },
     pasta::pallas,
 };
@@ -124,7 +124,7 @@ impl DaoVoteCall {
                 public_key,
                 value: note.value,
                 token_id: note.token_id,
-                spend_hook: pallas::Base::ZERO,
+                spend_hook: FuncId::none(),
                 user_data: pallas::Base::ZERO,
                 blind: note.coin_blind,
             }

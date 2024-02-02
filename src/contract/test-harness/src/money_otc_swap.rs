@@ -29,7 +29,7 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{MerkleNode, MONEY_CONTRACT_ID},
+    crypto::{FuncId, MerkleNode, MONEY_CONTRACT_ID},
     pasta::pallas,
     ContractCall,
 };
@@ -61,7 +61,7 @@ impl TestHarness {
         let timer = Instant::now();
 
         // We're just going to be using a zero spend-hook and user-data
-        let rcpt_spend_hook = pallas::Base::zero();
+        let rcpt_spend_hook = FuncId::none();
         let rcpt_user_data = pallas::Base::zero();
         let rcpt_user_data_blind = pallas::Base::random(&mut OsRng);
 

@@ -18,7 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode,
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, FuncId, MerkleNode,
         PublicKey, DARK_TOKEN_ID,
     },
     dark_tree::DarkLeaf,
@@ -68,7 +68,6 @@ pub(crate) fn money_fee_get_metadata_v1(
             params.input.token_commit,
             params.input.merkle_root.inner(),
             params.input.user_data_enc,
-            params.input.spend_hook,
             sig_x,
             sig_y,
             params.output.coin.inner(),
@@ -124,12 +123,6 @@ pub(crate) fn money_fee_process_instruction_v1(
     if params.output.token_commit != native_token_commit {
         msg!("[FeeV1] Error: Output token commitment is not native token");
         return Err(MoneyError::TokenMismatch.into())
-    }
-
-    // The spend hook must be zero.
-    if params.input.spend_hook != pallas::Base::ZERO {
-        msg!("[FeeV1] Error: Input spend hook is nonzero");
-        return Err(MoneyError::SpendHookNonZero.into())
     }
 
     // The Merkle root is used to know whether this is a coin that

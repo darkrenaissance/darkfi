@@ -24,7 +24,7 @@ use darkfi::{
 use darkfi_sdk::{
     blockchain::expected_reward,
     crypto::{
-        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, PublicKey, SecretKey,
+        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, FuncId, PublicKey, SecretKey,
         DARK_TOKEN_ID,
     },
     pasta::pallas,
@@ -77,7 +77,7 @@ pub struct PoWRewardCallBuilder {
     pub fork_previous_hash: blake3::Hash,
     /// Merkle tree of coins used to create inclusion proofs
     /// Spend hook for the output
-    pub spend_hook: pallas::Base,
+    pub spend_hook: FuncId,
     /// User data for the output
     pub user_data: pallas::Base,
     /// `Mint_V1` zkas circuit ZkBinary
@@ -100,7 +100,7 @@ impl PoWRewardCallBuilder {
             public_key: self.recipient,
             value,
             token_id,
-            spend_hook: pallas::Base::ZERO,
+            spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
             blind: pallas::Base::random(&mut OsRng),
         };

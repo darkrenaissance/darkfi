@@ -32,8 +32,8 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::Field, pedersen_commitment_u64, MerkleNode, SecretKey, DAO_CONTRACT_ID,
-        MONEY_CONTRACT_ID,
+        pasta_prelude::Field, pedersen_commitment_u64, FuncRef, MerkleNode, SecretKey,
+        DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     dark_tree::DarkLeaf,
     pasta::pallas,
@@ -115,11 +115,15 @@ impl TestHarness {
             outputs.push(coin_attr);
         }
 
+        let spend_hook =
+            FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }
+                .to_func_id();
+
         let dao_coin_attrs = CoinAttributes {
             public_key: dao_wallet.keypair.public,
             value: change_value,
             token_id: proposal_token_id,
-            spend_hook: DAO_CONTRACT_ID.inner(),
+            spend_hook,
             user_data: dao_bulla.inner(),
             blind: pallas::Base::random(&mut OsRng),
         };

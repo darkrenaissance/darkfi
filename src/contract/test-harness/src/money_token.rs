@@ -36,7 +36,7 @@ use darkfi_money_contract::{
     MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{poseidon_hash, FuncRef, MerkleNode, MONEY_CONTRACT_ID},
+    crypto::{poseidon_hash, FuncId, FuncRef, MerkleNode, MONEY_CONTRACT_ID},
     dark_tree::DarkLeaf,
     pasta::pallas,
     ContractCall,
@@ -52,7 +52,7 @@ impl TestHarness {
         amount: u64,
         holder: &Holder,
         recipient: &Holder,
-        spend_hook: Option<pallas::Base>,
+        spend_hook: Option<FuncId>,
         user_data: Option<pallas::Base>,
     ) -> Result<(Transaction, MoneyTokenMintParamsV1, MoneyAuthTokenMintParamsV1)> {
         let wallet = self.holders.get(holder).unwrap();
@@ -94,7 +94,7 @@ impl TestHarness {
             public_key: rcpt,
             value: amount,
             token_id,
-            spend_hook: spend_hook.unwrap_or(pallas::Base::ZERO),
+            spend_hook: spend_hook.unwrap_or(FuncId::none()),
             user_data: user_data.unwrap_or(pallas::Base::ZERO),
             blind: pallas::Base::random(&mut OsRng),
         };

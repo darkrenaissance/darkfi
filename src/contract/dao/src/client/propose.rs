@@ -22,7 +22,7 @@ use darkfi_sdk::{
     bridgetree::Hashable,
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::*, pedersen::pedersen_commitment_u64,
-        poseidon_hash, MerkleNode, Nullifier, PublicKey, SecretKey,
+        poseidon_hash, FuncId, MerkleNode, Nullifier, PublicKey, SecretKey,
     },
     pasta::pallas,
 };
@@ -99,7 +99,7 @@ impl DaoProposeCall {
                 public_key,
                 value: note.value,
                 token_id: note.token_id,
-                spend_hook: pallas::Base::ZERO,
+                spend_hook: FuncId::none(),
                 user_data: pallas::Base::ZERO,
                 blind: note.coin_blind,
             }

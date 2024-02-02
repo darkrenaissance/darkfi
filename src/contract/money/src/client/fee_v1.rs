@@ -31,7 +31,7 @@ use darkfi_sdk::{
     crypto::{
         note::AeadEncryptedNote,
         pasta_prelude::{Curve, CurveAffine, Field},
-        pedersen_commitment_u64, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier,
+        pedersen_commitment_u64, poseidon_hash, FuncId, Keypair, MerkleNode, MerkleTree, Nullifier,
         PublicKey, SecretKey, DARK_TOKEN_ID,
     },
     pasta::pallas,
@@ -68,9 +68,9 @@ pub async fn append_fee_call(
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
 ) -> Result<(MoneyFeeParamsV1, FeeCallSecrets)> {
     assert!(coin.note.value > 0);
-    assert!(coin.note.token_id == *DARK_TOKEN_ID);
-    assert!(coin.note.user_data == pallas::Base::ZERO);
-    assert!(coin.note.spend_hook == pallas::Base::ZERO);
+    assert_eq!(coin.note.token_id, *DARK_TOKEN_ID);
+    assert_eq!(coin.note.user_data, pallas::Base::ZERO);
+    assert_eq!(coin.note.spend_hook, FuncId::none());
 
     // First we will verify the fee-less transaction to see how much gas
     // it uses for execution and verification.
@@ -106,7 +106,7 @@ pub async fn append_fee_call(
         public_key: keypair.public,
         value: change_value,
         token_id: coin.note.token_id,
-        spend_hook: pallas::Base::ZERO,
+        spend_hook: FuncId::none(),
         user_data: pallas::Base::ZERO,
         blind: pallas::Base::random(&mut OsRng),
     };
@@ -154,7 +154,6 @@ pub async fn append_fee_call(
             token_commit: public_inputs.token_commit,
             nullifier: public_inputs.nullifier,
             merkle_root: public_inputs.merkle_root,
-            spend_hook: public_inputs.input_spend_hook,
             user_data_enc: public_inputs.input_user_data_enc,
             signature_public: public_inputs.signature_public,
         },
@@ -200,10 +199,10 @@ pub struct FeeRevealed {
     pub token_commit: pallas::Base,
     /// Merkle root for input coin
     pub merkle_root: MerkleNode,
+    /// Input's spend hook
+    pub input_spend_hook: FuncId,
     /// Encrypted user data for input coin
     pub input_user_data_enc: pallas::Base,
-    /// Input's spend hook
-    pub input_spend_hook: pallas::Base,
     /// Public key used to sign transaction
     pub signature_public: PublicKey,
     /// Output coin commitment
@@ -229,7 +228,7 @@ impl FeeRevealed {
             self.token_commit,
             self.merkle_root.inner(),
             self.input_user_data_enc,
-            self.input_spend_hook,
+            self.input_spend_hook.inner(),
             *sigpub_coords.x(),
             *sigpub_coords.y(),
             self.output_coin.inner(),
@@ -258,7 +257,7 @@ fn create_fee_proof(
     input_value_blind: pallas::Scalar,
     output: &FeeCallOutput,
     output_value_blind: pallas::Scalar,
-    output_spend_hook: pallas::Base,
+    output_spend_hook: FuncId,
     output_user_data: pallas::Base,
     output_coin_blind: pallas::Base,
     token_blind: pallas::Base,
@@ -316,8 +315,8 @@ fn create_fee_proof(
         input_value_commit,
         token_commit,
         merkle_root,
-        input_user_data_enc,
         input_spend_hook: input.note.spend_hook,
+        input_user_data_enc,
         signature_public,
         output_coin,
         output_value_commit,
@@ -330,12 +329,12 @@ fn create_fee_proof(
         Witness::Base(Value::known(signature_secret.inner())),
         Witness::Base(Value::known(pallas::Base::from(input.note.value))),
         Witness::Scalar(Value::known(input_value_blind)),
-        Witness::Base(Value::known(input.note.spend_hook)),
+        Witness::Base(Value::known(input.note.spend_hook.inner())),
         Witness::Base(Value::known(input.note.user_data)),
         Witness::Base(Value::known(input.note.coin_blind)),
         Witness::Base(Value::known(input.user_data_blind)),
         Witness::Base(Value::known(pallas::Base::from(output.value))),
-        Witness::Base(Value::known(output_spend_hook)),
+        Witness::Base(Value::known(output_spend_hook.inner())),
         Witness::Base(Value::known(output_user_data)),
         Witness::Scalar(Value::known(output_value_blind)),
         Witness::Base(Value::known(output_coin_blind)),

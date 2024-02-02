@@ -28,7 +28,7 @@
 
 use darkfi_sdk::{
     bridgetree,
-    crypto::{Nullifier, SecretKey, TokenId},
+    crypto::{FuncId, Nullifier, SecretKey, TokenId},
     pasta::pallas,
 };
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
@@ -110,7 +110,7 @@ pub struct MoneyNote {
     pub token_id: TokenId,
     /// Spend hook used for protocol-owned liquidity.
     /// Specifies which contract owns this coin.
-    pub spend_hook: pallas::Base,
+    pub spend_hook: FuncId,
     /// User data used by protocol when spend hook is enabled
     pub user_data: pallas::Base,
     /// Blinding factor for the coin

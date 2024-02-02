@@ -18,8 +18,8 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode,
-        PublicKey, DARK_TOKEN_ID,
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, FuncId, FuncRef,
+        MerkleNode, PublicKey, DARK_TOKEN_ID,
     },
     dark_tree::DarkLeaf,
     db::{db_contains_key, db_get, db_lookup, db_set},
@@ -58,6 +58,18 @@ pub(crate) fn money_transfer_get_metadata_v1(
         signature_pubkeys.push(input.signature_public);
     }
 
+    // Calculate the spend hook
+    let spend_hook = match calls[call_idx as usize].parent_index {
+        Some(parent_idx) => {
+            let parent_call = &calls[parent_idx].data;
+            let contract_id = parent_call.contract_id;
+            let func_code = parent_call.data[0];
+
+            FuncRef { contract_id, func_code }.to_func_id()
+        }
+        None => FuncId::none(),
+    };
+
     // Grab the pedersen commitments and signature pubkeys from the
     // anonymous inputs
     for input in &params.inputs {
@@ -76,7 +88,7 @@ pub(crate) fn money_transfer_get_metadata_v1(
                 input.token_commit,
                 input.merkle_root.inner(),
                 input.user_data_enc,
-                input.spend_hook,
+                spend_hook.inner(),
                 sig_x,
                 sig_y,
             ],
@@ -185,27 +197,6 @@ pub(crate) fn money_transfer_process_instruction_v1(
         {
             msg!("[TransferV1] Error: Duplicate nullifier found (input {})", i);
             return Err(MoneyError::DuplicateNullifier.into())
-        }
-
-        // If spend hook is set, check its correctness
-        if input.spend_hook != pallas::Base::ZERO {
-            let parent_call_idx = self_.parent_index;
-            if parent_call_idx.is_none() {
-                msg!("[TransferV1] Error: parent_call_idx is missing");
-                return Err(MoneyError::CallIdxOutOfBounds.into())
-            }
-            let parent_call_idx = parent_call_idx.unwrap();
-
-            if parent_call_idx >= calls.len() {
-                msg!("[TransferV1] Error: parent_call_idx out of bounds (input {})", i);
-                return Err(MoneyError::CallIdxOutOfBounds.into())
-            }
-
-            let parent = &calls[parent_call_idx].data;
-            if parent.contract_id.inner() != input.spend_hook {
-                msg!("[TransferV1] Error: Invoked contract call does not match spend hook in input {}", i);
-                return Err(MoneyError::SpendHookMismatch.into())
-            }
         }
 
         // Append this new nullifier to seen nullifiers, and accumulate the value commitment

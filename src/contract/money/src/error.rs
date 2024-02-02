@@ -43,12 +43,6 @@ pub enum MoneyError {
     #[error("Duplicate nullifier found")]
     DuplicateNullifier,
 
-    #[error("Call index out of bounds")]
-    CallIdxOutOfBounds,
-
-    #[error("Spend hook mismatch")]
-    SpendHookMismatch,
-
     #[error("Duplicate coin found")]
     DuplicateCoin,
 
@@ -127,8 +121,8 @@ impl From<MoneyError> for ContractError {
             MoneyError::TransferClearInputUnauthorised => Self::Custom(5),
             MoneyError::TransferMerkleRootNotFound => Self::Custom(6),
             MoneyError::DuplicateNullifier => Self::Custom(7),
-            MoneyError::CallIdxOutOfBounds => Self::Custom(8),
-            MoneyError::SpendHookMismatch => Self::Custom(9),
+            // 8 was removed
+            // 9 was removed
             MoneyError::DuplicateCoin => Self::Custom(10),
             MoneyError::ValueMismatch => Self::Custom(11),
             MoneyError::TokenMismatch => Self::Custom(12),

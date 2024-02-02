@@ -24,8 +24,8 @@ use darkfi::{
 use darkfi_sdk::{
     bridgetree::Hashable,
     crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, MerkleNode, Nullifier, PublicKey,
-        SecretKey,
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, FuncId, MerkleNode, Nullifier,
+        PublicKey, SecretKey,
     },
     pasta::pallas,
 };
@@ -56,7 +56,7 @@ pub struct TransferBurnRevealed {
     pub token_commit: pallas::Base,
     pub nullifier: Nullifier,
     pub merkle_root: MerkleNode,
-    pub spend_hook: pallas::Base,
+    pub spend_hook: FuncId,
     pub user_data_enc: pallas::Base,
     pub signature_public: PublicKey,
 }
@@ -75,7 +75,7 @@ impl TransferBurnRevealed {
             self.token_commit,
             self.merkle_root.inner(),
             self.user_data_enc,
-            self.spend_hook,
+            self.spend_hook.inner(),
             *sigpub_coords.x(),
             *sigpub_coords.y(),
         ]
@@ -138,7 +138,7 @@ pub fn create_transfer_burn_proof(
         Witness::Base(Value::known(input.note.token_id.inner())),
         Witness::Scalar(Value::known(value_blind)),
         Witness::Base(Value::known(token_blind)),
-        Witness::Base(Value::known(input.note.spend_hook)),
+        Witness::Base(Value::known(input.note.spend_hook.inner())),
         Witness::Base(Value::known(input.note.user_data)),
         Witness::Base(Value::known(input.note.coin_blind)),
         Witness::Base(Value::known(input.user_data_blind)),
@@ -161,7 +161,7 @@ pub fn create_transfer_mint_proof(
     output: &TransferCallOutput,
     value_blind: pallas::Scalar,
     token_blind: pallas::Base,
-    spend_hook: pallas::Base,
+    spend_hook: FuncId,
     user_data: pallas::Base,
     coin_blind: pallas::Base,
 ) -> Result<(Proof, TransferMintRevealed)> {
@@ -187,7 +187,7 @@ pub fn create_transfer_mint_proof(
         Witness::Base(Value::known(pub_y)),
         Witness::Base(Value::known(pallas::Base::from(output.value))),
         Witness::Base(Value::known(output.token_id.inner())),
-        Witness::Base(Value::known(spend_hook)),
+        Witness::Base(Value::known(spend_hook.inner())),
         Witness::Base(Value::known(user_data)),
         Witness::Base(Value::known(coin_blind)),
         Witness::Scalar(Value::known(value_blind)),

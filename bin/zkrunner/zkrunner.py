@@ -138,7 +138,7 @@ def main(witness_file, source_file, mock=False, trace=False):
             show_trace(zkbin.opcodes(), circuit.opvalues())
 
         print("Verifying ZK proof...")
-        proof.verify(verifying_key, instances)
+        verify_status = proof.verify(verifying_key, instances)
 
     # Otherwise, we'll simply run the MockProver:
     else:
@@ -146,7 +146,11 @@ def main(witness_file, source_file, mock=False, trace=False):
         proof = MockProver.run(zkbin.k(), circuit, instances)
 
         print("Verifying MockProver...")
-        proof.verify()
+        verify_status = proof.verify()
+
+    if not verify_status:
+        eprint("Proof failed to verify")
+        return -3
 
     print("Proof verified successfully!")
     return 0

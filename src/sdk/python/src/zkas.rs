@@ -280,10 +280,10 @@ impl Proof {
         Self(proof)
     }
 
-    fn verify(&self, vk: &PyCell<VerifyingKey>, instances: Vec<&PyCell<Fp>>) {
+    fn verify(&self, vk: &PyCell<VerifyingKey>, instances: Vec<&PyCell<Fp>>) -> bool {
         let vk = vk.borrow().deref().0.clone();
         let instances: Vec<pallas::Base> = instances.iter().map(|i| i.borrow().deref().0).collect();
-        self.0.verify(&vk, instances.as_slice()).unwrap();
+        self.0.verify(&vk, instances.as_slice()).is_ok()
     }
 }
 
