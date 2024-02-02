@@ -44,7 +44,7 @@ use darkfi::{
 };
 use darkfi_money_contract::model::Coin;
 use darkfi_sdk::{
-    crypto::{PublicKey, SecretKey, TokenId},
+    crypto::{FuncId, PublicKey, SecretKey, TokenId},
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{deserialize, serialize};
@@ -747,20 +747,21 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     "Spend Hook",
                     "User Data"
                 ]);
-                let zero = pallas::Base::zero();
                 for coin in coins {
                     let aliases = match aliases_map.get(&coin.0.note.token_id.to_string()) {
                         Some(a) => a,
                         None => "-",
                     };
 
-                    let spend_hook = if coin.0.note.spend_hook != zero {
-                        bs58::encode(&serialize(&coin.0.note.spend_hook)).into_string().to_string()
+                    let spend_hook = if coin.0.note.spend_hook != FuncId::none() {
+                        bs58::encode(&serialize(&coin.0.note.spend_hook.inner()))
+                            .into_string()
+                            .to_string()
                     } else {
                         String::from("-")
                     };
 
-                    let user_data = if coin.0.note.user_data != zero {
+                    let user_data = if coin.0.note.user_data != pallas::Base::ZERO {
                         bs58::encode(&serialize(&coin.0.note.user_data)).into_string().to_string()
                     } else {
                         String::from("-")

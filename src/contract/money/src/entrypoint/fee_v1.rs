@@ -18,7 +18,7 @@
 
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, FuncId, MerkleNode,
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, ContractId, MerkleNode,
         PublicKey, DARK_TOKEN_ID,
     },
     dark_tree::DarkLeaf,

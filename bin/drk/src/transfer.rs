@@ -30,8 +30,7 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, Keypair, PublicKey, TokenId},
-    pasta::pallas,
+    crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, Keypair, PublicKey, TokenId},
     tx::ContractCall,
 };
 use darkfi_serial::Encodable;
@@ -53,7 +52,7 @@ impl Drk {
         // We're only interested in the ones for the token_id we're sending
         // And the ones not owned by some protocol (meaning spend-hook should be 0)
         owncoins.retain(|x| x.note.token_id == token_id);
-        owncoins.retain(|x| x.note.spend_hook == pallas::Base::zero());
+        owncoins.retain(|x| x.note.spend_hook == FuncId::none());
         if owncoins.is_empty() {
             return Err(Error::Custom(format!("Did not find any coins with token ID: {token_id}")))
         }

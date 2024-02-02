@@ -50,3 +50,9 @@ impl FuncId {
         self.0
     }
 }
+
+impl From<pallas::Base> for FuncId {
+    fn from(func_id: pallas::Base) -> Self {
+        Self(func_id)
+    }
+}

@@ -37,8 +37,8 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, FuncRef, Keypair, PublicKey, SecretKey,
-        TokenId,
+        contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, FuncId, FuncRef, Keypair, PublicKey,
+        SecretKey, TokenId,
     },
     dark_tree::DarkLeaf,
     pasta::pallas,
@@ -120,7 +120,7 @@ impl Drk {
         token_attrs: TokenAttributes,
     ) -> Result<Transaction> {
         // TODO: Mint directly into DAO treasury
-        let spend_hook = pallas::Base::zero();
+        let spend_hook = FuncId::none();
         let user_data = pallas::Base::zero();
 
         let amount = decode_base10(amount, BALANCE_BASE10_DECIMALS, false)?;

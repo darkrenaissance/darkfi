@@ -31,7 +31,7 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        note::AeadEncryptedNote, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier,
+        note::AeadEncryptedNote, poseidon_hash, FuncId, Keypair, MerkleNode, MerkleTree, Nullifier,
         PublicKey, SecretKey, TokenId, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
@@ -351,7 +351,7 @@ impl Drk {
     /// Fetch known unspent balances from the wallet and return them as a hashmap.
     pub async fn money_balance(&self) -> Result<HashMap<String, u64>> {
         let mut coins = self.get_coins(false).await?;
-        coins.retain(|x| x.0.note.spend_hook == pallas::Base::zero());
+        coins.retain(|x| x.0.note.spend_hook == FuncId::none());
 
         // Fill this map with balances
         let mut balmap: HashMap<String, u64> = HashMap::new();
@@ -467,7 +467,7 @@ impl Drk {
             let note = MoneyNote {
                 value,
                 token_id,
-                spend_hook,
+                spend_hook: spend_hook.into(),
                 user_data,
                 coin_blind,
                 value_blind,

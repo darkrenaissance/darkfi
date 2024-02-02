@@ -42,8 +42,8 @@ use darkfi_sdk::{
     crypto::{
         poseidon_hash,
         util::{fp_mod_fv, fp_to_u64},
-        Keypair, MerkleNode, MerkleTree, PublicKey, SecretKey, TokenId, DAO_CONTRACT_ID,
-        MONEY_CONTRACT_ID,
+        FuncId, FuncRef, Keypair, MerkleNode, MerkleTree, PublicKey, SecretKey, TokenId,
+        DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
     ContractCall,
@@ -1175,8 +1175,12 @@ impl Drk {
             return Err(Error::RusqliteError(format!("DAO with ID {dao_id} not found in wallet")))
         };
 
+        let dao_spend_hook =
+            FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }
+                .to_func_id();
+
         let mut coins = self.get_coins(false).await?;
-        coins.retain(|x| x.0.note.spend_hook == DAO_CONTRACT_ID.inner());
+        coins.retain(|x| x.0.note.spend_hook == dao_spend_hook);
         coins.retain(|x| x.0.note.user_data == dao.bulla().inner());
 
         // Fill this map with balances
@@ -1401,10 +1405,14 @@ impl Drk {
         let bulla = dao.bulla();
         let owncoins = self.get_coins(false).await?;
 
+        let dao_spend_hook =
+            FuncRef { contract_id: *DAO_CONTRACT_ID, func_code: DaoFunction::Exec as u8 }
+                .to_func_id();
+
         let mut dao_owncoins: Vec<OwnCoin> = owncoins.iter().map(|x| x.0.clone()).collect();
         dao_owncoins.retain(|x| {
             x.note.token_id == token_id &&
-                x.note.spend_hook == DAO_CONTRACT_ID.inner() &&
+                x.note.spend_hook == dao_spend_hook &&
                 x.note.user_data == bulla.inner()
         });
 
@@ -1600,7 +1608,7 @@ impl Drk {
             self.get_coins(false).await?.iter().map(|x| x.0.clone()).collect();
 
         coins.retain(|x| x.note.token_id == dao.gov_token_id);
-        coins.retain(|x| x.note.spend_hook == pallas::Base::zero());
+        coins.retain(|x| x.note.spend_hook == FuncId::none());
 
         if coins.iter().map(|x| x.note.value).sum::<u64>() < weight {
             return Err(Error::Custom("[dao_vote] Not enough balance for vote weight".to_string()))

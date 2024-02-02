@@ -21,7 +21,6 @@ use darkfi_sdk::{
     dark_tree::DarkLeaf,
     db::{db_init, db_lookup, db_set, zkas_db_set},
     error::ContractResult,
-    msg,
     pasta::pallas,
     util::set_return_data,
     ContractCall,

@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{ContractId, FuncId},
+    crypto::ContractId,
     dark_tree::DarkLeaf,
     db::{db_contains_key, db_lookup},
     error::{ContractError, ContractResult},

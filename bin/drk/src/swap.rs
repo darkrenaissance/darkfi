@@ -33,7 +33,7 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        contract_id::MONEY_CONTRACT_ID, pedersen::pedersen_commitment_u64, poseidon_hash,
+        contract_id::MONEY_CONTRACT_ID, pedersen::pedersen_commitment_u64, poseidon_hash, FuncId,
         PublicKey, SecretKey, TokenId,
     },
     pasta::pallas,
@@ -83,7 +83,7 @@ impl Drk {
         owncoins.retain(|x| {
             x.0.note.value == value_send &&
                 x.0.note.token_id == token_send &&
-                x.0.note.spend_hook == pallas::Base::zero()
+                x.0.note.spend_hook == FuncId::none()
         });
 
         if owncoins.is_empty() {
@@ -139,8 +139,8 @@ impl Drk {
             value_recv,
             token_id_recv: token_recv,
             user_data_blind_send: pallas::Base::random(&mut OsRng), // <-- FIXME: Perhaps should be passed in
-            spend_hook_recv: pallas::Base::zero(), // <-- FIXME: Should be passed in
-            user_data_recv: pallas::Base::zero(),  // <-- FIXME: Should be passed in
+            spend_hook_recv: FuncId::none(), // <-- FIXME: Should be passed in
+            user_data_recv: pallas::Base::zero(), // <-- FIXME: Should be passed in
             value_blinds,
             token_blinds,
             coin: burn_coin,
@@ -229,8 +229,8 @@ impl Drk {
             value_recv: partial.value_pair.0,
             token_id_recv: partial.token_pair.0,
             user_data_blind_send: pallas::Base::random(&mut OsRng), // <-- FIXME: Perhaps should be passed in
-            spend_hook_recv: pallas::Base::zero(), // <-- FIXME: Should be passed in
-            user_data_recv: pallas::Base::zero(),  // <-- FIXME: Should be passed in
+            spend_hook_recv: FuncId::none(), // <-- FIXME: Should be passed in
+            user_data_recv: pallas::Base::ZERO, // <-- FIXME: Should be passed in
             value_blinds: [partial.value_blinds[1], partial.value_blinds[0]],
             token_blinds: [partial.token_blinds[1], partial.token_blinds[0]],
             coin: burn_coin,
