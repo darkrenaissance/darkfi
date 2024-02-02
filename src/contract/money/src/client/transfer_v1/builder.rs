@@ -86,6 +86,7 @@ impl TransferCallBuilder {
         let token_blind = pallas::Base::random(&mut OsRng);
         debug!("Building clear inputs");
         for input in self.clear_inputs {
+            signature_secrets.push(input.signature_secret);
             let signature_public = PublicKey::from_secret(input.signature_secret);
             let value_blind = pallas::Scalar::random(&mut OsRng);
 

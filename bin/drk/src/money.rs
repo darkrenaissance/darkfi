@@ -25,17 +25,14 @@ use rusqlite::types::Value;
 use darkfi::{tx::Transaction, zk::halo2::Field, Error, Result};
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
-    model::{
-        Coin, MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1, MoneyTransferParamsV1,
-    },
+    model::{Coin, MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1, MoneyTransferParamsV1},
     MoneyFunction,
 };
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey, TokenId,
-        MONEY_CONTRACT_ID,
-        note::AeadEncryptedNote,
+        note::AeadEncryptedNote, poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier,
+        PublicKey, SecretKey, TokenId, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
 };

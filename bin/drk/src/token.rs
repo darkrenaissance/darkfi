@@ -27,14 +27,19 @@ use darkfi::{
     Error, Result,
 };
 use darkfi_money_contract::{
-    client::{token_freeze_v1::TokenFreezeCallBuilder, token_mint_v1::TokenMintCallBuilder, auth_token_mint_v1::AuthTokenMintCallBuilder},
-    MoneyFunction, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1,
+    client::{
+        auth_token_mint_v1::AuthTokenMintCallBuilder, token_freeze_v1::TokenFreezeCallBuilder,
+        token_mint_v1::TokenMintCallBuilder,
+    },
+    model::{CoinAttributes, TokenAttributes},
+    MoneyFunction, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1,
     MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
-    MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1,
-    model::{CoinAttributes, TokenAttributes}
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, Keypair, PublicKey, SecretKey, TokenId, FuncRef, pasta_prelude::*},
+    crypto::{
+        contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, FuncRef, Keypair, PublicKey, SecretKey,
+        TokenId,
+    },
     dark_tree::DarkLeaf,
     pasta::pallas,
     tx::ContractCall,
@@ -151,8 +156,7 @@ impl Drk {
             };
 
             let mint_zkbin = ZkBinary::decode(&token_mint_zkbin.1)?;
-            let token_mint_circuit =
-                ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
+            let token_mint_circuit = ZkCircuit::new(empty_witnesses(&mint_zkbin)?, &mint_zkbin);
 
             eprintln!("Creating token mint circuit proving keys");
             let mint_pk = ProvingKey::build(mint_zkbin.k, &token_mint_circuit);
@@ -290,13 +294,16 @@ impl Drk {
         };
 
         let freeze_zkbin = ZkBinary::decode(&token_freeze_zkbin.1)?;
-        let token_freeze_circuit =
-            ZkCircuit::new(empty_witnesses(&freeze_zkbin)?, &freeze_zkbin);
+        let token_freeze_circuit = ZkCircuit::new(empty_witnesses(&freeze_zkbin)?, &freeze_zkbin);
 
         eprintln!("Creating token freeze circuit proving keys");
         let freeze_pk = ProvingKey::build(freeze_zkbin.k, &token_freeze_circuit);
-        let freeze_builder =
-            TokenFreezeCallBuilder { mint_keypair: mint_authority, token_attrs, freeze_zkbin, freeze_pk };
+        let freeze_builder = TokenFreezeCallBuilder {
+            mint_keypair: mint_authority,
+            token_attrs,
+            freeze_zkbin,
+            freeze_pk,
+        };
 
         eprintln!("Building transaction parameters");
         let debris = freeze_builder.build()?;

@@ -217,7 +217,7 @@ impl TestHarness {
         };
         let auth_xfer_sigs = vec![];
         let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_secrets.signature_secrets)?;
-        let exec_sigs = tx.create_sigs(&mut OsRng, &[exec_signature_secret])?;
+        let exec_sigs = tx.create_sigs(&mut OsRng, &[])?;
         tx.signatures = vec![auth_xfer_sigs, xfer_sigs, exec_sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());
 

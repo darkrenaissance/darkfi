@@ -19,13 +19,16 @@
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
 use darkfi_dao_contract::model::{Dao, DaoBlindAggregateVote};
-use darkfi_money_contract::model::CoinAttributes;
+use darkfi_money_contract::{
+    model::{CoinAttributes, TokenAttributes},
+    MoneyFunction,
+};
 use darkfi_sdk::{
     crypto::{
         pasta_prelude::*,
-        pedersen_commitment_u64,
+        pedersen_commitment_u64, poseidon_hash,
         util::{fp_mod_fv, fp_to_u64},
-        DAO_CONTRACT_ID, DARK_TOKEN_ID,
+        FuncRef, DAO_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
 };
@@ -55,7 +58,22 @@ fn integration_test() -> Result<()> {
         let mut th = TestHarness::new(&["money".to_string(), "dao".to_string()], false).await?;
 
         // We'll use the ALICE token as the DAO governance token
-        let gov_token_id = th.token_id(&Holder::Alice);
+        let wallet = th.holders.get(&Holder::Alice).unwrap();
+        let mint_authority = wallet.token_mint_authority;
+        let token_blind = wallet.token_blind;
+
+        let auth_func_id = FuncRef {
+            contract_id: *MONEY_CONTRACT_ID,
+            func_code: MoneyFunction::AuthTokenMintV1 as u8,
+        }
+        .to_func_id();
+        let token_attrs = TokenAttributes {
+            auth_parent: auth_func_id,
+            user_data: poseidon_hash([mint_authority.public.x(), mint_authority.public.y()]),
+            blind: token_blind,
+        };
+        let gov_token_id = token_attrs.to_token_id();
+
         const ALICE_GOV_SUPPLY: u64 = 100_000_000;
         const BOB_GOV_SUPPLY: u64 = 100_000_000;
         const CHARLIE_GOV_SUPPLY: u64 = 100_000_000;
@@ -124,7 +142,7 @@ fn integration_test() -> Result<()> {
         th.assert_trees(&HOLDERS);
 
         // Gather the DAO owncoin
-        th.gather_owncoin(&Holder::Dao, &airdrop_params.outputs[0], None)?;
+        th.gather_owncoin_from_output(&Holder::Dao, &airdrop_params.outputs[0], None)?;
 
         // ======================================
         // Mint the governance token to 3 holders
@@ -132,7 +150,7 @@ fn integration_test() -> Result<()> {
         info!("Stage 3. Minting governance token");
 
         info!("[Alice] Building governance token mint tx for Alice");
-        let (a_token_mint_tx, a_token_mint_params) =
+        let (a_token_mint_tx, a_token_mint_params, a_auth_token_mint_params) =
             th.token_mint(ALICE_GOV_SUPPLY, &Holder::Alice, &Holder::Alice, None, None)?;
 
         for holder in &HOLDERS {
@@ -149,10 +167,15 @@ fn integration_test() -> Result<()> {
         th.assert_trees(&HOLDERS);
 
         // Gather owncoin
-        th.gather_owncoin(&Holder::Alice, &a_token_mint_params.output, None)?;
+        th.gather_owncoin(
+            &Holder::Alice,
+            &a_token_mint_params.coin,
+            &a_auth_token_mint_params.enc_note,
+            None,
+        )?;
 
         info!("[Alice] Building governance token mint tx for Bob");
-        let (b_token_mint_tx, b_token_mint_params) =
+        let (b_token_mint_tx, b_token_mint_params, b_auth_token_mint_params) =
             th.token_mint(BOB_GOV_SUPPLY, &Holder::Alice, &Holder::Bob, None, None)?;
 
         for holder in &HOLDERS {
@@ -169,10 +192,15 @@ fn integration_test() -> Result<()> {
         th.assert_trees(&HOLDERS);
 
         // Gather owncoin
-        th.gather_owncoin(&Holder::Bob, &b_token_mint_params.output, None)?;
+        th.gather_owncoin(
+            &Holder::Bob,
+            &b_token_mint_params.coin,
+            &b_auth_token_mint_params.enc_note,
+            None,
+        )?;
 
         info!("[Alice] Building governance token mint tx for Charlie");
-        let (c_token_mint_tx, c_token_mint_params) =
+        let (c_token_mint_tx, c_token_mint_params, c_auth_token_mint_params) =
             th.token_mint(CHARLIE_GOV_SUPPLY, &Holder::Alice, &Holder::Charlie, None, None)?;
 
         for holder in &HOLDERS {
@@ -189,7 +217,12 @@ fn integration_test() -> Result<()> {
         th.assert_trees(&HOLDERS);
 
         // Gather owncoin
-        th.gather_owncoin(&Holder::Charlie, &c_token_mint_params.output, None)?;
+        th.gather_owncoin(
+            &Holder::Charlie,
+            &c_token_mint_params.coin,
+            &c_auth_token_mint_params.enc_note,
+            None,
+        )?;
 
         // ================
         // Dao::Propose
@@ -393,8 +426,8 @@ fn integration_test() -> Result<()> {
         th.assert_trees(&HOLDERS);
 
         // Gather the coins
-        th.gather_owncoin(&Holder::Rachel, &xfer_params.outputs[0], None)?;
-        th.gather_owncoin(&Holder::Dao, &xfer_params.outputs[1], None)?;
+        th.gather_owncoin_from_output(&Holder::Rachel, &xfer_params.outputs[0], None)?;
+        th.gather_owncoin_from_output(&Holder::Dao, &xfer_params.outputs[1], None)?;
 
         let rachel_wallet = th.holders.get(&Holder::Rachel).unwrap();
         assert!(rachel_wallet.unspent_money_coins[0].note.value == PROPOSAL_AMOUNT);
