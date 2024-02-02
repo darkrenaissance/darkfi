@@ -26,7 +26,7 @@ use darkfi::{tx::Transaction, zk::halo2::Field, Error, Result};
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
     model::{
-        Coin, MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1, MoneyTransferParamsV1, Output,
+        Coin, MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1, MoneyTransferParamsV1,
     },
     MoneyFunction,
 };
@@ -35,6 +35,7 @@ use darkfi_sdk::{
     crypto::{
         poseidon_hash, Keypair, MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey, TokenId,
         MONEY_CONTRACT_ID,
+        note::AeadEncryptedNote,
     },
     pasta::pallas,
 };
@@ -626,7 +627,8 @@ impl Drk {
         let cid = *MONEY_CONTRACT_ID;
 
         let mut nullifiers: Vec<Nullifier> = vec![];
-        let mut outputs: Vec<Output> = vec![];
+        let mut coins: Vec<Coin> = vec![];
+        let mut notes: Vec<AeadEncryptedNote> = vec![];
         let mut freezes: Vec<TokenId> = vec![];
 
         for (i, call) in tx.calls.iter().enumerate() {
@@ -640,7 +642,8 @@ impl Drk {
                 }
 
                 for output in params.outputs {
-                    outputs.push(output);
+                    coins.push(output.coin);
+                    notes.push(output.note);
                 }
 
                 continue
@@ -655,7 +658,8 @@ impl Drk {
                 }
 
                 for output in params.outputs {
-                    outputs.push(output);
+                    coins.push(output.coin);
+                    notes.push(output.note);
                 }
 
                 continue
@@ -665,7 +669,8 @@ impl Drk {
             {
                 eprintln!("Found Money::MintV1 in call {i}");
                 let params: MoneyTokenMintParamsV1 = deserialize(&call.data.data[1..])?;
-                outputs.push(params.output);
+                coins.push(params.coin);
+                //notes.push(output.note);
                 continue
             }
 
@@ -674,7 +679,7 @@ impl Drk {
             {
                 eprintln!("Found Money::FreezeV1 in call {i}");
                 let params: MoneyTokenFreezeParamsV1 = deserialize(&call.data.data[1..])?;
-                let token_id = TokenId::derive_public(params.signature_public);
+                let token_id = TokenId::derive_public(params.mint_public);
                 freezes.push(token_id);
             }
         }
@@ -685,21 +690,19 @@ impl Drk {
 
         let mut owncoins = vec![];
 
-        for output in outputs {
-            let coin = output.coin;
-
+        for (coin, note) in coins.iter().zip(notes.iter()) {
             // Append the new coin to the Merkle tree. Every coin has to be added.
             tree.append(MerkleNode::from(coin.inner()));
 
             // Attempt to decrypt the note
             for secret in secrets.iter().chain(dao_secrets.iter()) {
-                if let Ok(note) = output.note.decrypt::<MoneyNote>(secret) {
+                if let Ok(note) = note.decrypt::<MoneyNote>(secret) {
                     eprintln!("Successfully decrypted a Money Note");
                     eprintln!("Witnessing coin in Merkle tree");
                     let leaf_position = tree.mark().unwrap();
 
                     let owncoin = OwnCoin {
-                        coin,
+                        coin: coin.clone(),
                         note: note.clone(),
                         secret: *secret,
                         nullifier: Nullifier::from(poseidon_hash([secret.inner(), coin.inner()])),

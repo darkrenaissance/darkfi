@@ -1485,6 +1485,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     exit(2);
                 };
 
+                // TODO: see TokenAttributes struct. I'm not sure how to restructure this rn.
                 let token_id = TokenId::derive(mint_authority);
                 eprintln!("Successfully imported mint authority for token ID: {token_id}");
 
@@ -1533,7 +1534,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     exit(2);
                 }
 
-                let rcpt = match PublicKey::from_str(&recipient) {
+                let _rcpt = match PublicKey::from_str(&recipient) {
                     Ok(r) => r,
                     Err(e) => {
                         eprintln!("Invalid recipient: {e:?}");
@@ -1541,7 +1542,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                let token_id = match drk.get_token(token).await {
+                let _token_id = match drk.get_token(token).await {
                     Ok(t) => t,
                     Err(e) => {
                         eprintln!("Invalid Token ID: {e:?}");
@@ -1549,22 +1550,23 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                let tx = match drk.mint_token(&amount, rcpt, token_id).await {
-                    Ok(tx) => tx,
-                    Err(e) => {
-                        eprintln!("Failed to create token mint transaction: {e:?}");
-                        exit(2);
-                    }
-                };
+                panic!("temporarily disabled due to change of API for drk.mint_token() fn");
+                //let tx = match drk.mint_token(&amount, rcpt, token_id).await {
+                //    Ok(tx) => tx,
+                //    Err(e) => {
+                //        eprintln!("Failed to create token mint transaction: {e:?}");
+                //        exit(2);
+                //    }
+                //};
 
-                eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
+                //eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
 
-                Ok(())
+                //Ok(())
             }
 
             TokenSubcmd::Freeze { token } => {
                 let drk = Drk::new(args.wallet_path, args.wallet_pass, args.endpoint, ex).await?;
-                let token_id = match drk.get_token(token).await {
+                let _token_id = match drk.get_token(token).await {
                     Ok(t) => t,
                     Err(e) => {
                         eprintln!("Invalid Token ID: {e:?}");
@@ -1572,17 +1574,18 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
                     }
                 };
 
-                let tx = match drk.freeze_token(token_id).await {
-                    Ok(tx) => tx,
-                    Err(e) => {
-                        eprintln!("Failed to create token freeze transaction: {e:?}");
-                        exit(2);
-                    }
-                };
+                panic!("temporarily disabled due to change of API for drk.mint_token() fn");
+                //let tx = match drk.freeze_token(token_id).await {
+                //    Ok(tx) => tx,
+                //    Err(e) => {
+                //        eprintln!("Failed to create token freeze transaction: {e:?}");
+                //        exit(2);
+                //    }
+                //};
 
-                eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
+                //eprintln!("{}", bs58::encode(&serialize(&tx)).into_string());
 
-                Ok(())
+                //Ok(())
             }
         },
     }
