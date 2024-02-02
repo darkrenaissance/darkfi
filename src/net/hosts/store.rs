@@ -63,6 +63,13 @@ pub struct Hosts {
     /// Nodes to which we have already been able to establish a connection.
     pub anchorlist: RwLock<Vec<(Url, u64)>>,
 
+    /// Set of stored addresses that are quarantined.
+    /// We quarantine peers we've been unable to connect to, but we keep them
+    /// around so we can potentially try them again, up to n tries. This should
+    /// be helpful in order to self-heal the p2p connections in case we have an
+    /// Internet interrupt (goblins unplugging cables)
+    quarantine: RwLock<HashMap<Url, usize>>,
+
     /// Peers we reject from connecting to
     rejected: RwLock<HashSet<String>>,
 
@@ -83,6 +90,7 @@ impl Hosts {
             greylist: RwLock::new(Vec::new()),
             whitelist: RwLock::new(Vec::new()),
             anchorlist: RwLock::new(Vec::new()),
+            quarantine: RwLock::new(HashMap::new()),
             rejected: RwLock::new(HashSet::new()),
             migrating: RwLock::new(HashSet::new()),
             store_subscriber: Subscriber::new(),
@@ -640,6 +648,28 @@ impl Hosts {
         }
 
         ret
+    }
+
+    /// Quarantine a peer.
+    /// If they've been quarantined for more than a configured limit, forget them.
+    pub async fn quarantine(&self, url: &Url) {
+        debug!(target: "store::remove()", "Quarantining peer {}", url);
+        // Remove from the entire hosts set
+        self.remove_host(url).await;
+
+        let mut q = self.quarantine.write().await;
+        if let Some(retries) = q.get_mut(url) {
+            *retries += 1;
+            debug!(target: "net::hosts::quarantine()", "Peer {} quarantined {} times", url, retries);
+            if *retries == self.settings.hosts_quarantine_limit {
+                debug!(target: "net::hosts::quarantine()", "Banning peer {}", url);
+                q.remove(url);
+                self.mark_rejected(url).await;
+            }
+        } else {
+            debug!(target: "net::hosts::remove()", "Added peer {} to quarantine", url);
+            q.insert(url.clone(), 0);
+        }
     }
 
     /// Check if a given peer (URL) is in the set of rejected hosts

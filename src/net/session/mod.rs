@@ -102,10 +102,21 @@ pub trait Session: Sync {
             self.perform_handshake_protocols(protocol_version, channel.clone(), executor.clone());
 
         // Switch on the channel
-        channel.start(executor.clone());
+        channel.clone().start(executor.clone());
 
         // Wait for handshake to finish.
-        handshake_task.await?;
+        // If the handshake returns an error, remove this host from all hostlists.
+        match handshake_task.await {
+            Ok(()) => {
+                debug!(target: "net::session::register_channel()",
+                "Handshake successful {}", channel.clone().address());
+            }
+            Err(e) => {
+                debug!(target: "net::session::register_channel()",
+                "Handshake error {}. Removing {} from hostlists", e, channel.clone().address());
+                p2p.hosts().remove_host(channel.address()).await;
+            }
+        }
 
         // Now the channel is ready
         debug!(target: "net::session::register_channel()", "Session handshake complete");

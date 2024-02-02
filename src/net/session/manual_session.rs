@@ -146,9 +146,6 @@ impl ManualSession {
                         "[P2P] Manual outbound disconnected [{}]", url,
                     );
 
-                    // Remove this host from the hostlist.
-                    self.p2p().hosts().remove_host(&addr).await;
-
                     // DEV NOTE: Here we can choose to attempt reconnection again
                     return Ok(())
                 }

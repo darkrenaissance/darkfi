@@ -323,9 +323,6 @@ impl Slot {
                         err: err.to_string()
                     });
 
-                    // Remove this host from the hostlist.
-                    hosts.remove_host(&host).await;
-
                     self.channel_id.store(0, Ordering::Relaxed);
                     continue
                 }
@@ -371,9 +368,6 @@ impl Slot {
             // Wait for channel to close
             stop_sub.receive().await;
             self.channel_id.store(0, Ordering::Relaxed);
-
-            // Remove this host from the hostlist.
-            hosts.remove_host(&addr).await;
         }
     }
 
@@ -397,6 +391,9 @@ impl Slot {
                     "[P2P] Unable to connect outbound slot #{} [{}]: {}",
                     self.slot, addr, e
                 );
+
+                // At this point we failed to connect. We'll quarantine this peer now.
+                self.p2p().hosts().quarantine(&addr).await;
 
                 // Remove connection from pending
                 self.p2p().remove_pending(&addr).await;
