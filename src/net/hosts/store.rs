@@ -950,6 +950,31 @@ impl Hosts {
         urls.iter().map(|&url| url.clone()).collect()
     }
 
+    /// Get up to n random anchorlist peers that match the given transport schemes.
+    pub async fn anchorlist_fetch_n_random_with_schemes(
+        &self,
+        schemes: &[String],
+        n: u32,
+    ) -> Vec<(Url, u64)> {
+        let n = n as usize;
+        if n == 0 {
+            return vec![]
+        }
+        trace!(target: "store::anchorlist_fetch_n_random_with_schemes", "[START]");
+
+        // Retrieve all peers corresponding to that transport schemes
+        let hosts = self.anchorlist_fetch_with_schemes(schemes, None).await;
+        if hosts.is_empty() {
+            debug!(target: "store::anchorlist_fetch_n_random_with_schemes",
+                  "No such schemes found on anchorlist!");
+            return hosts
+        }
+
+        // Grab random ones
+        let urls = hosts.iter().choose_multiple(&mut OsRng, n.min(hosts.len()));
+        urls.iter().map(|&url| url.clone()).collect()
+    }
+
     /// Get up to limit peers that don't match the given transport schemes from the greylist.
     /// If limit was not provided, return all matching peers.
     pub async fn greylist_fetch_excluding_schemes(

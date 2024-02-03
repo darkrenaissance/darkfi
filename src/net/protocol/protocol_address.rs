@@ -44,14 +44,17 @@ use crate::Result;
 /// The node selection logic for creating an AddrMessage is as follows:
 ///
 /// 1. First select nodes matching the requested transports from the
-/// whitelist. These nodes have a high guarantee of being reachable, so we
+/// anchorlist. These nodes have the highest guarantee of being reachable, so we
 /// prioritize them first.
 ///
-/// 2. Then select whitelist nodes that don't match our transports. We do
+/// 2. Then select nodes matching the requested transports from the
+/// whitelist. 
+///
+/// 3. Next select whitelist nodes that don't match our transports. We do
 /// this so that nodes share and propagate nodes of different transports,
 /// even if they can't connect to them themselves.
 ///
-/// 3. Finally, if there's still space available, fill the remaining vector
+/// 4. Finally, if there's still space available, fill the remaining vector
 /// space with greylist entries. This is necessary in case this node does
 /// not support the transports of the requesting node (non-supported
 /// transports are stored on the greylist).
@@ -149,15 +152,30 @@ impl ProtocolAddress {
                 continue
             }
 
-            // First we grab address with the requested transports
+            // First we grab address with the requested transports from the anchorlist
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
-            "Fetching whitelist entries with schemes");
+            "Fetching anchorlist entries with schemes");
             let mut addrs = self
                 .hosts
-                .whitelist_fetch_n_random_with_schemes(&get_addrs_msg.transports, get_addrs_msg.max)
+                .anchorlist_fetch_n_random_with_schemes(
+                    &get_addrs_msg.transports,
+                    get_addrs_msg.max,
+                )
                 .await;
 
-            // Then we grab addresses without the requested transports
+            // Then we grab address with the requested transports from the whitelist
+            debug!(target: "net::protocol_address::handle_receive_get_addrs()",
+            "Fetching whitelist entries with schemes");
+            addrs.append(
+                &mut self.hosts
+                    .whitelist_fetch_n_random_with_schemes(
+                        &get_addrs_msg.transports,
+                        get_addrs_msg.max,
+                    )
+                    .await,
+            );
+
+            // Next we grab addresses without the requested transports
             // to fill a 2 * max length vector.
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
             "Fetching whitelist entries without schemes");
