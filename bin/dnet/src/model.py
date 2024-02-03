@@ -153,7 +153,7 @@ class Model:
 
 
     def add_lilith(self, lilith):
-        logging.debug(f'adding lilith {lilith}')
+        #logging.debug(f'adding lilith {lilith}')
         key = list(lilith.keys())[0]
         values = list(lilith.values())[0]
         info = values['result']
@@ -174,6 +174,8 @@ class Model:
             spawn['whitelist'] = whitelist
             spawn['greylist'] = greylist
             spawn['anchorlist'] = anchorlist
+
+        #logging.debug(f'added lilith {self.liliths}')
 
     def __repr__(self):
         return f'{self.nodes}'
