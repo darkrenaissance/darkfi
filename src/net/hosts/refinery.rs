@@ -108,9 +108,22 @@ impl GreylistRefinery {
                         continue
                     }
 
+                    // Don't refine nodes that we are already connected to.
+                    if self.p2p().exists(&url).await {
+                        continue
+                    }
+
+                    // Don't refine nodes that we are trying to connect to.
+                    if !self.p2p().add_pending(&url).await {
+                        continue
+                    }
+
                     let mut greylist = hosts.greylist.write().await;
                     if !ping_node(url.clone(), self.p2p().clone()).await {
                         greylist.remove(position);
+
+                        // Remove connection from pending
+                        self.p2p().remove_pending(&url).await;
                         debug!(
                             target: "net::refinery",
                             "Peer {} is non-responsive. Removed from greylist", url,
@@ -127,6 +140,9 @@ impl GreylistRefinery {
 
                     // Remove whitelisted peer from the greylist.
                     hosts.greylist_remove(url, position).await;
+
+                    // Remove connection from pending
+                    self.p2p().remove_pending(&url).await;
                 }
                 None => {
                     debug!(target: "net::refinery", "No matching greylist entries found. Cannot proceed with refinery");
