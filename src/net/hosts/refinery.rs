@@ -109,12 +109,12 @@ impl GreylistRefinery {
                     }
 
                     // Don't refine nodes that we are already connected to.
-                    if self.p2p().exists(&url).await {
+                    if self.p2p().exists(url).await {
                         continue
                     }
 
                     // Don't refine nodes that we are trying to connect to.
-                    if !self.p2p().add_pending(&url).await {
+                    if !self.p2p().add_pending(url).await {
                         continue
                     }
 
@@ -123,7 +123,7 @@ impl GreylistRefinery {
                         greylist.remove(position);
 
                         // Remove connection from pending
-                        self.p2p().remove_pending(&url).await;
+                        self.p2p().remove_pending(url).await;
                         debug!(
                             target: "net::refinery",
                             "Peer {} is non-responsive. Removed from greylist", url,
@@ -142,7 +142,7 @@ impl GreylistRefinery {
                     hosts.greylist_remove(url, position).await;
 
                     // Remove connection from pending
-                    self.p2p().remove_pending(&url).await;
+                    self.p2p().remove_pending(url).await;
                 }
                 None => {
                     debug!(target: "net::refinery", "No matching greylist entries found. Cannot proceed with refinery");

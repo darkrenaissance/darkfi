@@ -48,7 +48,7 @@ use crate::Result;
 /// prioritize them first.
 ///
 /// 2. Then select nodes matching the requested transports from the
-/// whitelist. 
+/// whitelist.
 ///
 /// 3. Next select whitelist nodes that don't match our transports. We do
 /// this so that nodes share and propagate nodes of different transports,
@@ -167,7 +167,8 @@ impl ProtocolAddress {
             debug!(target: "net::protocol_address::handle_receive_get_addrs()",
             "Fetching whitelist entries with schemes");
             addrs.append(
-                &mut self.hosts
+                &mut self
+                    .hosts
                     .whitelist_fetch_n_random_with_schemes(
                         &get_addrs_msg.transports,
                         get_addrs_msg.max,
@@ -234,7 +235,7 @@ impl ProtocolAddress {
         let mut addrs = vec![];
         let inbound = self.p2p.session_inbound();
         for (addr, last_seen) in inbound.ping_self.addrs.lock().await.iter() {
-            addrs.push((addr.clone(), last_seen.clone()));
+            addrs.push((addr.clone(), *last_seen));
         }
 
         debug!(target: "net::protocol_address::send_my_addrs()",

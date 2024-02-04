@@ -308,7 +308,7 @@ impl PingSelfProcess {
                     let mut addrs = self.addrs.lock().await;
 
                     if addrs.contains_key(addr) {
-                        let val = addrs.get_mut(&addr).unwrap();
+                        let val = addrs.get_mut(addr).unwrap();
                         *val = last_seen;
                     }
                     addrs.insert(addr.clone(), last_seen);
