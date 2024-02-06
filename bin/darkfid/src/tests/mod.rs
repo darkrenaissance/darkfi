@@ -37,7 +37,6 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let config = HarnessConfig {
         pow_target,
         pow_fixed_difficulty: pow_fixed_difficulty.clone(),
-        pos_testing_mode: true,
         alice_initial: 1000,
         bob_initial: 500,
     };

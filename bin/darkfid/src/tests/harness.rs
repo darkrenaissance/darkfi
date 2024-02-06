@@ -22,7 +22,6 @@ use darkfi::{
     blockchain::BlockInfo,
     net::Settings,
     rpc::jsonrpc::JsonSubscriber,
-    util::time::TimeKeeper,
     validator::{utils::genesis_txs_total, Validator, ValidatorConfig},
     Result,
 };
@@ -40,7 +39,6 @@ use crate::{
 pub struct HarnessConfig {
     pub pow_target: usize,
     pub pow_fixed_difficulty: Option<BigUint>,
-    pub pos_testing_mode: bool,
     pub alice_initial: u64,
     pub bob_initial: u64,
 }
@@ -73,16 +71,13 @@ impl Harness {
         // Generate validators configuration
         // NOTE: we are not using consensus constants here so we
         // don't get circular dependencies.
-        let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
         let validator_config = ValidatorConfig::new(
-            time_keeper,
             3,
             config.pow_target,
             config.pow_fixed_difficulty.clone(),
             genesis_block,
             genesis_txs_total,
             vec![],
-            config.pos_testing_mode,
             verify_fees,
         );
 

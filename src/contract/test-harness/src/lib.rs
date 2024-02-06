@@ -21,10 +21,7 @@ use std::{collections::HashMap, io::Cursor, time::Instant};
 use darkfi::{
     blockchain::BlockInfo,
     tx::Transaction,
-    util::{
-        pcg::Pcg32,
-        time::{TimeKeeper, Timestamp},
-    },
+    util::{pcg::Pcg32, time::Timestamp},
     validator::{Validator, ValidatorConfig, ValidatorPtr},
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
@@ -144,16 +141,13 @@ impl Wallet {
         // Generate validator
         // NOTE: we are not using consensus constants here so we
         // don't get circular dependencies.
-        let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
         let config = ValidatorConfig::new(
-            time_keeper,
             3,
             90,
             Some(BigUint::from(1_u8)),
             genesis_block.clone(),
             0,
             faucet_pubkeys.to_vec(),
-            false,
             verify_fees,
         );
         let validator = Validator::new(&sled_db, config).await?;

@@ -31,7 +31,6 @@ use crate::{
     },
     error::TxVerifyFailed,
     tx::Transaction,
-    util::time::TimeKeeper,
     Error, Result,
 };
 
@@ -60,8 +59,6 @@ use utils::deploy_native_contracts;
 /// Configuration for initializing [`Validator`]
 #[derive(Clone)]
 pub struct ValidatorConfig {
-    /// Helper structure to calculate time related operations
-    pub time_keeper: TimeKeeper,
     /// Currently configured finalization security threshold
     pub finalization_threshold: usize,
     /// Currently configured PoW target
@@ -74,34 +71,27 @@ pub struct ValidatorConfig {
     pub genesis_txs_total: u64,
     /// Whitelisted faucet pubkeys (testnet stuff)
     pub faucet_pubkeys: Vec<PublicKey>,
-    /// Flag to enable PoS testing mode
-    pub pos_testing_mode: bool,
     /// Flag to enable tx fee verification
     pub verify_fees: bool,
 }
 
 impl ValidatorConfig {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
-        time_keeper: TimeKeeper,
         finalization_threshold: usize,
         pow_target: usize,
         pow_fixed_difficulty: Option<BigUint>,
         genesis_block: BlockInfo,
         genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
-        pos_testing_mode: bool,
         verify_fees: bool,
     ) -> Self {
         Self {
-            time_keeper,
             finalization_threshold,
             pow_target,
             pow_fixed_difficulty,
             genesis_block,
             genesis_txs_total,
             faucet_pubkeys,
-            pos_testing_mode,
             verify_fees,
         }
     }
@@ -118,8 +108,6 @@ pub struct Validator {
     pub consensus: Consensus,
     /// Flag signalling node has finished initial sync
     pub synced: RwLock<bool>,
-    /// Flag to enable PoS testing mode
-    pub pos_testing_mode: bool,
     /// Flag to enable tx fee verification
     pub verify_fees: bool,
 }
@@ -127,7 +115,6 @@ pub struct Validator {
 impl Validator {
     pub async fn new(db: &sled::Db, config: ValidatorConfig) -> Result<ValidatorPtr> {
         info!(target: "validator::new", "Initializing Validator");
-        let pos_testing_mode = config.pos_testing_mode;
 
         info!(target: "validator::new", "Initializing Blockchain");
         let blockchain = Blockchain::new(db)?;
@@ -136,12 +123,7 @@ impl Validator {
         let overlay = BlockchainOverlay::new(&blockchain)?;
 
         // Deploy native wasm contracts
-        deploy_native_contracts(
-            &overlay,
-            config.time_keeper.verifying_block_height,
-            &config.faucet_pubkeys,
-        )
-        .await?;
+        deploy_native_contracts(&overlay, &config.faucet_pubkeys).await?;
 
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
@@ -165,7 +147,6 @@ impl Validator {
             blockchain,
             consensus,
             synced: RwLock::new(false),
-            pos_testing_mode,
             verify_fees: config.verify_fees,
         });
 
@@ -536,7 +517,7 @@ impl Validator {
         let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?;
 
         // Deploy native wasm contracts
-        deploy_native_contracts(&overlay, 0, &faucet_pubkeys).await?;
+        deploy_native_contracts(&overlay, &faucet_pubkeys).await?;
 
         // Validate genesis block
         verify_genesis_block(&overlay, previous).await?;
