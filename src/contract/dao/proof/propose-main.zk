@@ -1,12 +1,12 @@
 k = 13;
 field = "pallas";
 
-constant "DaoProposeMain" {
+constant "ProposeMain" {
     EcFixedPointShort VALUE_COMMIT_VALUE,
     EcFixedPoint VALUE_COMMIT_RANDOM,
 }
 
-witness "DaoProposeMain" {
+witness "ProposeMain" {
     # Proposers total number of governance tokens
     Base total_funds,
     Scalar total_funds_blind,
@@ -35,7 +35,7 @@ witness "DaoProposeMain" {
     MerklePath dao_path,
 }
 
-circuit "DaoProposeMain" {
+circuit "ProposeMain" {
     token_commit = poseidon_hash(dao_gov_token_id, gov_token_blind);
     constrain_instance(token_commit);
 

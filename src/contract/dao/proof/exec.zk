@@ -1,13 +1,13 @@
 k = 13;
 field = "pallas";
 
-constant "DaoExec" {
+constant "Exec" {
     EcFixedPointShort VALUE_COMMIT_VALUE,
     EcFixedPoint VALUE_COMMIT_RANDOM,
     EcFixedPointBase NULLIFIER_K,
 }
 
-witness "DaoExec" {
+witness "Exec" {
     # Proposal parameters
     Base proposal_auth_calls_commit,
     Base proposal_current_day,
@@ -35,7 +35,7 @@ witness "DaoExec" {
     Base signature_secret,
 }
 
-circuit "DaoExec" {
+circuit "Exec" {
     dao_bulla = poseidon_hash(
         dao_proposer_limit,
         dao_quorum,

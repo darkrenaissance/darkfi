@@ -1,13 +1,13 @@
 k = 13;
 field = "pallas";
 
-constant "DaoVoteInput" {
+constant "VoteInput" {
     EcFixedPointBase NULLIFIER_K,
     EcFixedPoint VALUE_COMMIT_RANDOM,
     EcFixedPointShort VALUE_COMMIT_VALUE,
 }
 
-witness "DaoVoteInput" {
+witness "VoteInput" {
     Base coin_secret,
     Base coin_value,
     Base coin_gov_token_id,
@@ -24,7 +24,7 @@ witness "DaoVoteInput" {
     Base signature_secret,
 }
 
-circuit "DaoVoteInput" {
+circuit "VoteInput" {
     pub = ec_mul_base(coin_secret, NULLIFIER_K);
     pub_x = ec_get_x(pub);
     pub_y = ec_get_y(pub);

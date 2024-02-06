@@ -1,13 +1,13 @@
 k = 13;
 field = "pallas";
 
-constant "DaoAuthMoneyTransferEncCoin" {
+constant "AuthMoneyTransferEncCoin" {
     EcFixedPointShort VALUE_COMMIT_VALUE,
     EcFixedPoint VALUE_COMMIT_RANDOM,
     EcFixedPointBase NULLIFIER_K,
 }
 
-witness "DaoAuthMoneyTransferEncCoin" {
+witness "AuthMoneyTransferEncCoin" {
     # Coin attributes
     EcNiPoint coin_public_key,
     Base coin_value,
@@ -20,7 +20,7 @@ witness "DaoAuthMoneyTransferEncCoin" {
     Base ephem_secret,
 }
 
-circuit "DaoAuthMoneyTransferEncCoin" {
+circuit "AuthMoneyTransferEncCoin" {
     # cast to EcPoint
     # (otherwise zkas refuses to compile)
     ONE = witness_base(1);

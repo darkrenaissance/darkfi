@@ -73,22 +73,21 @@ pub const DAO_CONTRACT_KEY_DAO_MERKLE_TREE: &[u8] = b"dao_merkle_tree";
 pub const DAO_CONTRACT_KEY_LATEST_DAO_ROOT: &[u8] = b"dao_last_root";
 
 /// zkas dao mint circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "DaoMint";
+pub const DAO_CONTRACT_ZKAS_DAO_MINT_NS: &str = "Mint";
 /// zkas dao vote input circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS: &str = "DaoVoteInput";
+pub const DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS: &str = "VoteInput";
 /// zkas dao vote main circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS: &str = "DaoVoteMain";
+pub const DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS: &str = "VoteMain";
 /// zkas dao propose input circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS: &str = "DaoProposeInput";
+pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS: &str = "ProposeInput";
 /// zkas dao propose main circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "DaoProposeMain";
+pub const DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS: &str = "ProposeMain";
 /// zkas dao exec circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "DaoExec";
+pub const DAO_CONTRACT_ZKAS_DAO_EXEC_NS: &str = "Exec";
 /// zkas dao auth money_transfer circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "DaoAuthMoneyTransfer";
+pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "AuthMoneyTransfer";
 /// zkas dao auth money_transfer encrypted coin circuit namespace
-pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str =
-    "DaoAuthMoneyTransferEncCoin";
+pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str = "AuthMoneyTransferEncCoin";
 
 // ANCHOR: dao-blockwindow
 const BLOCK_TIME: u64 = 90;

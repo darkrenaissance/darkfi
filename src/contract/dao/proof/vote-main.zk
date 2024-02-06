@@ -1,14 +1,14 @@
 k = 13;
 field = "pallas";
 
-constant "DaoVoteMain" {
+constant "VoteMain" {
     EcFixedPoint VALUE_COMMIT_RANDOM,
     EcFixedPointShort VALUE_COMMIT_VALUE,
     EcFixedPointBase NULLIFIER_K,
     EcFixedPointBase VALUE_COMMIT_RANDOM_BASE,
 }
 
-witness "DaoVoteMain" {
+witness "VoteMain" {
     # Proposal parameters
     Base proposal_auth_calls_commit,
     Base proposal_current_day,
@@ -42,7 +42,7 @@ witness "DaoVoteMain" {
     Base ephem_secret,
 }
 
-circuit "DaoVoteMain" {
+circuit "VoteMain" {
     token_commit = poseidon_hash(dao_gov_token_id, gov_token_blind);
     constrain_instance(token_commit);
 

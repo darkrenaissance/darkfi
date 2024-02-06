@@ -1,13 +1,13 @@
 k = 13;
 field = "pallas";
 
-constant "DaoProposeInput" {
+constant "ProposeInput" {
     EcFixedPointBase NULLIFIER_K,
     EcFixedPoint VALUE_COMMIT_RANDOM,
     EcFixedPointShort VALUE_COMMIT_VALUE,
 }
 
-witness "DaoProposeInput" {
+witness "ProposeInput" {
     Base coin_secret,
     Base coin_value,
     Base coin_token,
@@ -24,7 +24,7 @@ witness "DaoProposeInput" {
     Base signature_secret,
 }
 
-circuit "DaoProposeInput" {
+circuit "ProposeInput" {
     # Coin hash
     pub = ec_mul_base(coin_secret, NULLIFIER_K);
     pub_x = ec_get_x(pub);

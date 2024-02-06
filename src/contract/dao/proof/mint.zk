@@ -1,12 +1,12 @@
 k = 13;
 field = "pallas";
 
-constant "DaoMint" {
+constant "Mint" {
     EcFixedPoint VALUE_COMMIT_RANDOM,
     EcFixedPointBase NULLIFIER_K,
 }
 
-witness "DaoMint" {
+witness "Mint" {
     Base dao_proposer_limit,
     Base dao_quorum,
     Base dao_approval_ratio_quot,
@@ -16,7 +16,7 @@ witness "DaoMint" {
     Base dao_bulla_blind,
 }
 
-circuit "DaoMint" {
+circuit "Mint" {
     # This circuit states that the bulla is a hash of 8 values
 
     dao_public = ec_mul_base(dao_secret, NULLIFIER_K);
