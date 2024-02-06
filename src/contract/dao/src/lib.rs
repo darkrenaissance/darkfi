@@ -90,13 +90,14 @@ pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_NS: &str = "DaoAuthMoneyTran
 pub const DAO_CONTRACT_ZKAS_DAO_AUTH_MONEY_TRANSFER_ENC_COIN_NS: &str =
     "DaoAuthMoneyTransferEncCoin";
 
-// ANCHOR: dao-blockheight_to_day
+// ANCHOR: dao-blockwindow
 const BLOCK_TIME: u64 = 90;
-const SECS_IN_DAY: u64 = 24 * 60 * 60;
+const SECS_IN_HOUR: u64 = 60 * 60;
+const WINDOW_TIME_HR: u64 = 4;
 
-/// Days since genesis block. Used for time limit on DAO proposals.
-pub fn blockheight_to_day(height: u64) -> u64 {
+/// Blockwindow from blockheight. Used for time limit on DAO proposals.
+pub fn blockwindow(height: u64) -> u64 {
     let timestamp_secs = height * BLOCK_TIME;
-    timestamp_secs / SECS_IN_DAY
+    timestamp_secs / (WINDOW_TIME_HR * SECS_IN_HOUR)
 }
-// ANCHOR_END: dao-blockheight_to_day
+// ANCHOR_END: dao-blockwindow

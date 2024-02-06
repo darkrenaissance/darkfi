@@ -121,7 +121,7 @@ $$ \begin{aligned}
 
 ### Contract Statement
 
-Let $t₀ = \t{CurrentDay} ∈ 𝔽ₚ$ be the current day as defined in [Current Day](model.md#current-day).
+Let $t₀ = \t{BlockWindow} ∈ 𝔽ₚ$ be the current blockwindow as defined in [Blockwindow](model.md#blockwindow).
 
 Let $\t{Attrs}_\t{Coin}$ be defined as in [Coin](../money/model.md#coin).
 
@@ -259,6 +259,8 @@ This is then used in the Exec phase when we work on the sum of DAO votes.
 ```
 
 ### Contract Statement
+
+Let $t₀ = \t{BlockWindow} ∈ 𝔽ₚ$ be the current blockwindow as defined in [Blockwindow](model.md#blockwindow).
 
 **Proposal bulla exists** &emsp; check $𝒫 $ exists in the DAO contract proposal
 bullas DB.

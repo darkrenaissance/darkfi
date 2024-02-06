@@ -33,7 +33,7 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
-    blockheight_to_day,
+    blockwindow,
     error::DaoError,
     model::{DaoBlindAggregateVote, DaoProposalMetadata, DaoProposeParams, DaoProposeUpdate},
     DaoFunction, DAO_CONTRACT_DB_DAO_MERKLE_ROOTS, DAO_CONTRACT_DB_PROPOSAL_BULLAS,
@@ -84,9 +84,9 @@ pub(crate) fn dao_propose_get_metadata(
         ));
     }
 
-    // ANCHOR: dao-blockheight_to_day-example-usage
-    let current_day = blockheight_to_day(get_verifying_block_height());
-    // ANCHOR_END: dao-blockheight_to_day-example-usage
+    // ANCHOR: dao-blockwindow-example-usage
+    let current_day = blockwindow(get_verifying_block_height());
+    // ANCHOR_END: dao-blockwindow-example-usage
 
     let total_funds_coords = total_funds_commit.to_affine().coordinates().unwrap();
     zk_public_inputs.push((

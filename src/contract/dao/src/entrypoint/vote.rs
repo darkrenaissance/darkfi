@@ -30,7 +30,7 @@ use darkfi_sdk::{
 use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
-    blockheight_to_day,
+    blockwindow,
     error::DaoError,
     model::{DaoProposalMetadata, DaoVoteParams, DaoVoteUpdate},
     DaoFunction, DAO_CONTRACT_DB_PROPOSAL_BULLAS, DAO_CONTRACT_DB_VOTE_NULLIFIERS,
@@ -81,7 +81,7 @@ pub(crate) fn dao_vote_get_metadata(
         ));
     }
 
-    let current_day = blockheight_to_day(get_verifying_block_height());
+    let current_day = blockwindow(get_verifying_block_height());
 
     let yes_vote_commit_coords = params.yes_vote_commit.to_affine().coordinates().unwrap();
     let all_vote_commit_coords = all_vote_commit.to_affine().coordinates().unwrap();
