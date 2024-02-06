@@ -64,7 +64,6 @@ pub struct TransferBurnRevealed {
 impl TransferBurnRevealed {
     pub fn to_vec(&self) -> Vec<pallas::Base> {
         let valcom_coords = self.value_commit.to_affine().coordinates().unwrap();
-        let sigpub_coords = self.signature_public.inner().to_affine().coordinates().unwrap();
 
         // NOTE: It's important to keep these in the same order
         // as the `constrain_instance` calls in the zkas code.
@@ -76,8 +75,8 @@ impl TransferBurnRevealed {
             self.merkle_root.inner(),
             self.user_data_enc,
             self.spend_hook.inner(),
-            *sigpub_coords.x(),
-            *sigpub_coords.y(),
+            self.signature_public.x(),
+            self.signature_public.y(),
         ]
     }
 }
