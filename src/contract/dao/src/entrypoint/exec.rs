@@ -45,7 +45,7 @@ pub(crate) fn dao_exec_get_metadata(
     // Public inputs for the ZK proofs we have to verify
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     // Public keys for the transaction signatures we have to verify
-    let signature_pubkeys: Vec<PublicKey> = vec![];
+    let signature_pubkeys: Vec<PublicKey> = vec![params.signature_public];
 
     let blind_vote = params.blind_total_vote;
     let yes_vote_coords = blind_vote.yes_vote_commit.to_affine().coordinates().unwrap();
@@ -60,6 +60,8 @@ pub(crate) fn dao_exec_get_metadata(
             *yes_vote_coords.y(),
             *all_vote_coords.x(),
             *all_vote_coords.y(),
+            params.signature_public.x(),
+            params.signature_public.y(),
         ],
     ));
 

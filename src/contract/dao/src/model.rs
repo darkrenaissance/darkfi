@@ -351,6 +351,9 @@ pub struct DaoExecParams {
     pub proposal_auth_calls: Vec<DaoAuthCall>,
     /// Aggregated blinds for the vote commitments
     pub blind_total_vote: DaoBlindAggregateVote,
+    /// Public key for the signature.
+    /// The signature ensures this DAO::exec call cannot be modified with other calls.
+    pub signature_public: PublicKey,
 }
 // ANCHOR_END: dao-exec-params
 

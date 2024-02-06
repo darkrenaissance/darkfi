@@ -78,7 +78,6 @@ impl TestHarness {
         let timer = Instant::now();
 
         let input_user_data_blind = pallas::Base::random(&mut OsRng);
-        // TODO: FIXME: This is not checked anywhere!
         let exec_signature_secret = SecretKey::random(&mut OsRng);
 
         assert!(!proposal_coinattrs.is_empty());
@@ -221,7 +220,7 @@ impl TestHarness {
         };
         let auth_xfer_sigs = vec![];
         let xfer_sigs = tx.create_sigs(&mut OsRng, &xfer_secrets.signature_secrets)?;
-        let exec_sigs = tx.create_sigs(&mut OsRng, &[])?;
+        let exec_sigs = tx.create_sigs(&mut OsRng, &[exec_signature_secret])?;
         tx.signatures = vec![auth_xfer_sigs, xfer_sigs, exec_sigs];
         tx_action_benchmark.creation_times.push(timer.elapsed());
 

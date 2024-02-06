@@ -4,6 +4,7 @@ field = "pallas";
 constant "DaoExec" {
     EcFixedPointShort VALUE_COMMIT_VALUE,
     EcFixedPoint VALUE_COMMIT_RANDOM,
+    EcFixedPointBase NULLIFIER_K,
 }
 
 witness "DaoExec" {
@@ -29,6 +30,9 @@ witness "DaoExec" {
     Base all_vote_value,
     Scalar yes_vote_blind,
     Scalar all_vote_blind,
+
+    # Signature secret
+    Base signature_secret,
 }
 
 circuit "DaoExec" {
@@ -85,5 +89,10 @@ circuit "DaoExec" {
     rhs = base_mul(yes_vote_value, dao_approval_ratio_base);
     rhs_1 = base_add(rhs, one);
     less_than_strict(lhs, rhs_1);
+
+    # Derive a public key for the signature and constrain its coordinates
+    signature_public = ec_mul_base(signature_secret, NULLIFIER_K);
+    constrain_instance(ec_get_x(signature_public));
+    constrain_instance(ec_get_y(signature_public));
 }
 

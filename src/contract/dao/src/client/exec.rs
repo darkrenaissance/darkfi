@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, pedersen_commitment_u64, SecretKey},
+    crypto::{pasta_prelude::*, pedersen_commitment_u64, PublicKey, SecretKey},
     pasta::pallas,
 };
 
@@ -74,6 +74,8 @@ impl DaoExecCall {
 
         let proposal_auth_calls_commit = self.proposal.auth_calls.commit();
 
+        let signature_public = PublicKey::from_secret(self.signature_secret);
+
         let prover_witnesses = vec![
             // proposal params
             Witness::Base(Value::known(proposal_auth_calls_commit)),
@@ -95,6 +97,8 @@ impl DaoExecCall {
             Witness::Base(Value::known(pallas::Base::from(self.all_vote_value))),
             Witness::Scalar(Value::known(self.yes_vote_blind)),
             Witness::Scalar(Value::known(self.all_vote_blind)),
+            // signature secret
+            Witness::Base(Value::known(self.signature_secret.inner())),
         ];
 
         debug!(target: "dao", "proposal_bulla: {:?}", proposal_bulla);
@@ -105,6 +109,8 @@ impl DaoExecCall {
             *yes_vote_commit_coords.y(),
             *all_vote_commit_coords.x(),
             *all_vote_commit_coords.y(),
+            signature_public.x(),
+            signature_public.y(),
         ];
         //export_witness_json("witness.json", &prover_witnesses, &public_inputs);
 
@@ -116,6 +122,7 @@ impl DaoExecCall {
             proposal_bulla,
             proposal_auth_calls: self.proposal.auth_calls,
             blind_total_vote: DaoBlindAggregateVote { yes_vote_commit, all_vote_commit },
+            signature_public,
         };
 
         Ok((params, proofs))
