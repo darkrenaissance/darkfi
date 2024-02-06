@@ -176,8 +176,12 @@ fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
             th.assert_trees(&HOLDERS);
 
             // Gather new owncoins
-            let owncoin =
-                th.gather_owncoin(&Holder::Alice, &mint_params.coin, &mint_auth_params.enc_note, None)?;
+            let owncoin = th.gather_owncoin(
+                &Holder::Alice,
+                &mint_params.coin,
+                &mint_auth_params.enc_note,
+                None,
+            )?;
             let token_id = owncoin.note.token_id;
             owncoins.push(vec![owncoin]);
             minted_amounts.push(amount);
