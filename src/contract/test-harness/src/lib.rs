@@ -304,7 +304,7 @@ impl TestHarness {
 
         let note: MoneyNote = note.decrypt(&secret_key)?;
         let oc = OwnCoin {
-            coin: coin.clone(),
+            coin: *coin,
             note: note.clone(),
             secret: secret_key,
             nullifier: Nullifier::from(poseidon_hash([

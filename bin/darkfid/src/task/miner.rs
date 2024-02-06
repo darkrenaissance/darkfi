@@ -192,7 +192,7 @@ fn generate_transaction(
     let fork_previous_hash = last_proposal.block.header.previous;
 
     // We're just going to be using a zero spend-hook and user-data
-    let spend_hook = pallas::Base::zero();
+    let spend_hook = pallas::Base::zero().into();
     let user_data = pallas::Base::zero();
 
     // Build the transaction debris

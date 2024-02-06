@@ -162,7 +162,7 @@ fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
             info!(target: "money", "[Faucet] ===================================================");
             info!(target: "money", "[Faucet] Building Money::Mint params for Alice's mint for token {} and amount {}", i, amount);
             info!(target: "money", "[Faucet] ===================================================");
-            let (mint_tx, mint_params) =
+            let (mint_tx, mint_params, mint_auth_params) =
                 th.token_mint(amount, &Holder::Alice, &Holder::Alice, None, None)?;
 
             for holder in &HOLDERS {
@@ -177,7 +177,7 @@ fn alice2alice_multiplecoins_random_amounts() -> Result<()> {
 
             // Gather new owncoins
             let owncoin =
-                th.gather_owncoin_from_output(&Holder::Alice, &mint_params.output, None)?;
+                th.gather_owncoin(&Holder::Alice, &mint_params.coin, &mint_auth_params.enc_note, None)?;
             let token_id = owncoin.note.token_id;
             owncoins.push(vec![owncoin]);
             minted_amounts.push(amount);

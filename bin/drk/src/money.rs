@@ -699,7 +699,7 @@ impl Drk {
                     let leaf_position = tree.mark().unwrap();
 
                     let owncoin = OwnCoin {
-                        coin: coin.clone(),
+                        coin: *coin,
                         note: note.clone(),
                         secret: *secret,
                         nullifier: Nullifier::from(poseidon_hash([secret.inner(), coin.inner()])),
