@@ -47,8 +47,8 @@ use darkfi_serial::{deserialize, serialize};
 use log::debug;
 
 /// Update this if any circuits are changed
-const VKS_HASH: &str = "e775e5a40a07a5048819bf137040c644a881624f3cf0785487f7a2253400d105";
-const PKS_HASH: &str = "a3307265fb6fbf8620080634a6ae10d82ceaf0394faeaad2a4bdf00c92bb8ade";
+const VKS_HASH: &str = "2f0fbe2efd2b513bd22bfbfde4ad3db0c5730706092aa3cd5d63cefee62a31a6";
+const PKS_HASH: &str = "cb81c8c7da7000bab623ab1d9fe548aba9e335199016c60339df198358f556d5";
 
 fn pks_path(typ: &str) -> Result<PathBuf> {
     let output = Command::new("git").arg("rev-parse").arg("--show-toplevel").output()?.stdout;
