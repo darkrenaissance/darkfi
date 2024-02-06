@@ -133,15 +133,15 @@ pub fn create_transfer_burn_proof(
     };
 
     let prover_witnesses = vec![
+        Witness::Base(Value::known(input.secret.inner())),
         Witness::Base(Value::known(pallas::Base::from(input.note.value))),
         Witness::Base(Value::known(input.note.token_id.inner())),
-        Witness::Scalar(Value::known(value_blind)),
-        Witness::Base(Value::known(token_blind)),
         Witness::Base(Value::known(input.note.spend_hook.inner())),
         Witness::Base(Value::known(input.note.user_data)),
         Witness::Base(Value::known(input.note.coin_blind)),
+        Witness::Scalar(Value::known(value_blind)),
+        Witness::Base(Value::known(token_blind)),
         Witness::Base(Value::known(input.user_data_blind)),
-        Witness::Base(Value::known(input.secret.inner())),
         Witness::Uint32(Value::known(u64::from(input.leaf_position).try_into().unwrap())),
         Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
         Witness::Base(Value::known(signature_secret.inner())),

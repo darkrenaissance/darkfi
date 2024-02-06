@@ -10,16 +10,16 @@ constant "TokenMint_V1" {
 
 witness "TokenMint_V1" {
     # CoinAttributes {
-    Base public_x,
-    Base public_y,
-    Base value,
-    Base spend_hook,
+    Base coin_public_x,
+    Base coin_public_y,
+    Base coin_value,
+    Base coin_spend_hook,
     Base coin_user_data,
     Base coin_blind,
     # }
 
     # TokenAttributes {
-    Base auth_parent,
+    Base token_auth_parent,
     Base token_user_data,
     Base token_blind,
     # }
@@ -27,16 +27,16 @@ witness "TokenMint_V1" {
 
 circuit "TokenMint_V1" {
     # Derive the token ID
-    token_id = poseidon_hash(auth_parent, token_user_data, token_blind);
-    constrain_instance(auth_parent);
+    token_id = poseidon_hash(token_auth_parent, token_user_data, token_blind);
+    constrain_instance(token_auth_parent);
 
     # Then show the coin contains the token ID
     coin = poseidon_hash(
-        public_x,
-        public_y,
-        value,
+        coin_public_x,
+        coin_public_y,
+        coin_value,
         token_id,
-        spend_hook,
+        coin_spend_hook,
         coin_user_data,
         coin_blind,
     );

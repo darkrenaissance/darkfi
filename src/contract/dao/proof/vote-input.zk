@@ -8,30 +8,33 @@ constant "DaoVoteInput" {
 }
 
 witness "DaoVoteInput" {
-    Base secret,
-    Base spend_hook,
-    Base user_data,
+    Base coin_secret,
+    Base coin_value,
+    Base coin_gov_token_id,
+    Base coin_spend_hook,
+    Base coin_user_data,
     Base coin_blind,
-    Base value,
-    Base gov_token_id,
+
     Scalar value_blind,
     Base gov_token_blind,
+
     Uint32 leaf_pos,
     MerklePath path,
+
     Base signature_secret,
 }
 
 circuit "DaoVoteInput" {
-    pub = ec_mul_base(secret, NULLIFIER_K);
+    pub = ec_mul_base(coin_secret, NULLIFIER_K);
     pub_x = ec_get_x(pub);
     pub_y = ec_get_y(pub);
     coin = poseidon_hash(
         pub_x,
         pub_y,
-        value,
-        gov_token_id,
-        spend_hook,
-        user_data,
+        coin_value,
+        coin_gov_token_id,
+        coin_spend_hook,
+        coin_user_data,
         coin_blind,
     );
 
@@ -41,16 +44,16 @@ circuit "DaoVoteInput" {
     # limitation where votes across proposals are linked where this
     # coin is active. The best fix would be the set non-membership,
     # but that possibly has scaling issues.
-    nullifier = poseidon_hash(secret, coin);
+    nullifier = poseidon_hash(coin_secret, coin);
     constrain_instance(nullifier);
 
-    vcv = ec_mul_short(value, VALUE_COMMIT_VALUE);
+    vcv = ec_mul_short(coin_value, VALUE_COMMIT_VALUE);
     vcr = ec_mul(value_blind, VALUE_COMMIT_RANDOM);
-    value_commit = ec_add(vcv, vcr);
-    constrain_instance(ec_get_x(value_commit));
-    constrain_instance(ec_get_y(value_commit));
+    coin_value_commit = ec_add(vcv, vcr);
+    constrain_instance(ec_get_x(coin_value_commit));
+    constrain_instance(ec_get_y(coin_value_commit));
 
-    token_commit = poseidon_hash(gov_token_id, gov_token_blind);
+    token_commit = poseidon_hash(coin_gov_token_id, gov_token_blind);
     constrain_instance(token_commit);
 
     # Merkle root

@@ -21,7 +21,7 @@ witness "DaoVoteMain" {
     Base dao_quorum,
     Base dao_approval_ratio_quot,
     Base dao_approval_ratio_base,
-    Base gov_token_id,
+    Base dao_gov_token_id,
     EcNiPoint dao_public_key,
     Base dao_bulla_blind,
 
@@ -43,7 +43,7 @@ witness "DaoVoteMain" {
 }
 
 circuit "DaoVoteMain" {
-    token_commit = poseidon_hash(gov_token_id, gov_token_blind);
+    token_commit = poseidon_hash(dao_gov_token_id, gov_token_blind);
     constrain_instance(token_commit);
 
     # cast to EcPoint
@@ -58,7 +58,7 @@ circuit "DaoVoteMain" {
         dao_quorum,
         dao_approval_ratio_quot,
         dao_approval_ratio_base,
-        gov_token_id,
+        dao_gov_token_id,
         dao_public_x,
         dao_public_y,
         dao_bulla_blind,
