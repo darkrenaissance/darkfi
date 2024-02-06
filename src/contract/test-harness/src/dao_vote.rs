@@ -23,7 +23,7 @@ use darkfi::{
     Result,
 };
 use darkfi_dao_contract::{
-    blockheight_to_day,
+    blockwindow,
     client::{DaoVoteCall, DaoVoteInput},
     model::{Dao, DaoProposal, DaoProposalBulla, DaoVoteParams},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
@@ -80,7 +80,7 @@ impl TestHarness {
             signature_secret,
         };
 
-        let current_day = blockheight_to_day(block_height);
+        let current_day = blockwindow(block_height);
         let call = DaoVoteCall {
             inputs: vec![input],
             vote_option,

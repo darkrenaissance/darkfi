@@ -122,14 +122,14 @@ pub fn read_or_gen_vks_and_pks() -> Result<(Pks, Vks)> {
         &include_bytes!("../../money/proof/token_freeze_v1.zk.bin")[..],
         &include_bytes!("../../money/proof/auth_token_mint_v1.zk.bin")[..],
         // DAO
-        &include_bytes!("../../dao/proof/dao-mint.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-propose-input.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-propose-main.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-vote-input.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-vote-main.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-exec.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-auth-money-transfer.zk.bin")[..],
-        &include_bytes!("../../dao/proof/dao-auth-money-transfer-enc-coin.zk.bin")[..],
+        &include_bytes!("../../dao/proof/mint.zk.bin")[..],
+        &include_bytes!("../../dao/proof/propose-input.zk.bin")[..],
+        &include_bytes!("../../dao/proof/propose-main.zk.bin")[..],
+        &include_bytes!("../../dao/proof/vote-input.zk.bin")[..],
+        &include_bytes!("../../dao/proof/vote-main.zk.bin")[..],
+        &include_bytes!("../../dao/proof/exec.zk.bin")[..],
+        &include_bytes!("../../dao/proof/auth-money-transfer.zk.bin")[..],
+        &include_bytes!("../../dao/proof/auth-money-transfer-enc-coin.zk.bin")[..],
         // Deployooor
         &include_bytes!("../../deployooor/proof/derive_contract_id.zk.bin")[..],
     ];

@@ -23,7 +23,7 @@ use darkfi::{
     Result,
 };
 use darkfi_dao_contract::{
-    blockheight_to_day,
+    blockwindow,
     client::{DaoProposeCall, DaoProposeStakeInput},
     model::{Dao, DaoAuthCall, DaoBulla, DaoProposal, DaoProposeParams},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
@@ -99,7 +99,7 @@ impl TestHarness {
             },
         ];
 
-        let creation_day = blockheight_to_day(block_height);
+        let creation_day = blockwindow(block_height);
         let proposal = DaoProposal {
             auth_calls,
             creation_day,
