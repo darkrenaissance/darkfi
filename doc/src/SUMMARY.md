@@ -3,6 +3,7 @@
 # About
 
 - [DarkFi](README.md)
+- [Start Here](start-here.md)
 - [Philosophy](philosophy/philosophy.md)
   - [Ideology](philosophy/ideology.md)
   - [Books](philosophy/books.md)
