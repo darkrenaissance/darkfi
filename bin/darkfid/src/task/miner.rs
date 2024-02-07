@@ -77,9 +77,8 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey) -> Result<()> {
 async fn miner_loop(node: &Darkfid, recipient: &PublicKey) -> Result<()> {
     // Grab zkas proving keys and bin for PoWReward transaction
     info!(target: "darkfid::task::miner_task", "Generating zkas bin and proving keys...");
-    let blockchain = node.validator.blockchain.clone();
-    let (zkbin, _) = blockchain.contracts.get_zkas(
-        &blockchain.sled_db,
+    let (zkbin, _) = node.validator.blockchain.contracts.get_zkas(
+        &node.validator.blockchain.sled_db,
         &MONEY_CONTRACT_ID,
         MONEY_CONTRACT_ZKAS_MINT_NS_V1,
     )?;

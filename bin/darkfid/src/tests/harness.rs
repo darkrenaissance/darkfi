@@ -19,14 +19,26 @@
 use std::{collections::HashMap, sync::Arc};
 
 use darkfi::{
-    blockchain::BlockInfo,
+    blockchain::{BlockInfo, Header},
     net::Settings,
     rpc::jsonrpc::JsonSubscriber,
+    tx::{ContractCallLeaf, TransactionBuilder},
     validator::{Validator, ValidatorConfig},
+    zk::{empty_witnesses, ProvingKey, ZkCircuit},
     Result,
 };
 use darkfi_contract_test_harness::{vks, Holder, TestHarness};
+use darkfi_money_contract::{
+    client::pow_reward_v1::PoWRewardCallBuilder, MoneyFunction, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+};
+use darkfi_sdk::{
+    crypto::{Keypair, MONEY_CONTRACT_ID},
+    pasta::pallas,
+    ContractCall,
+};
+use darkfi_serial::Encodable;
 use num_bigint::BigUint;
+use rand::rngs::OsRng;
 use url::Url;
 
 use crate::{
@@ -146,7 +158,7 @@ impl Harness {
         Ok(())
     }
 
-    pub async fn _add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
+    pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
         // We simply broadcast the block using Alice's sync P2P
         for block in blocks {
             self.alice.sync_p2p.broadcast(&BlockInfoMessage::from(block)).await;
@@ -156,6 +168,69 @@ impl Harness {
         self.alice.validator.add_blocks(blocks).await?;
 
         Ok(())
+    }
+
+    pub async fn generate_next_block(&self, previous: &BlockInfo) -> Result<BlockInfo> {
+        // Next block info
+        let block_height = previous.header.height + 1;
+        let last_nonce = previous.header.nonce;
+        let fork_previous_hash = previous.header.previous;
+
+        // Generate a producer transaction
+        let keypair = Keypair::default();
+        let (zkbin, _) = self.alice.validator.blockchain.contracts.get_zkas(
+            &self.alice.validator.blockchain.sled_db,
+            &MONEY_CONTRACT_ID,
+            MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+        )?;
+        let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
+        let pk = ProvingKey::build(zkbin.k, &circuit);
+
+        // We're just going to be using a zero spend-hook and user-data
+        let spend_hook = pallas::Base::zero().into();
+        let user_data = pallas::Base::zero();
+
+        // Build the transaction debris
+        let debris = PoWRewardCallBuilder {
+            secret: keypair.secret,
+            recipient: keypair.public,
+            block_height,
+            last_nonce,
+            fork_previous_hash,
+            spend_hook,
+            user_data,
+            mint_zkbin: zkbin.clone(),
+            mint_pk: pk.clone(),
+        }
+        .build()?;
+
+        // Generate and sign the actual transaction
+        let mut data = vec![MoneyFunction::PoWRewardV1 as u8];
+        debris.params.encode(&mut data)?;
+        let call = ContractCall { contract_id: *MONEY_CONTRACT_ID, data };
+        let mut tx_builder =
+            TransactionBuilder::new(ContractCallLeaf { call, proofs: debris.proofs }, vec![])?;
+        let mut tx = tx_builder.build()?;
+        let sigs = tx.create_sigs(&mut OsRng, &[keypair.secret])?;
+        tx.signatures = vec![sigs];
+
+        // We increment timestamp so we don't have to use sleep
+        let mut timestamp = previous.header.timestamp;
+        timestamp.add(1);
+
+        // Generate header
+        let header = Header::new(previous.hash()?, block_height, timestamp, last_nonce);
+
+        // Generate the block
+        let mut block = BlockInfo::new_empty(header);
+
+        // Add producer transaction to the block
+        block.append_txs(vec![tx])?;
+
+        // Attach signature
+        block.sign(&keypair.secret)?;
+
+        Ok(block)
     }
 }
 

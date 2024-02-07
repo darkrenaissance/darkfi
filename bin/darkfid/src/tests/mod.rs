@@ -20,6 +20,8 @@ use std::sync::Arc;
 
 use darkfi::{net::Settings, Result};
 use darkfi_contract_test_harness::init_logger;
+use darkfi_sdk::num_traits::One;
+use num_bigint::BigUint;
 use smol::Executor;
 use url::Url;
 
@@ -33,7 +35,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
 
     // Initialize harness in testing mode
     let pow_target = 90;
-    let pow_fixed_difficulty = None;
+    let pow_fixed_difficulty = Some(BigUint::one());
     let config = HarnessConfig {
         pow_target,
         pow_fixed_difficulty: pow_fixed_difficulty.clone(),
@@ -43,19 +45,19 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
     let th = Harness::new(config, false, &ex).await?;
 
     // Retrieve genesis block
-    let _previous = th.alice.validator.blockchain.last_block()?;
+    let previous = th.alice.validator.blockchain.last_block()?;
 
-    // Generate next block
-    //let block1 = th.generate_next_block(&previous).await?;
+    // Generate next blocks
+    let block1 = th.generate_next_block(&previous).await?;
+    let block2 = th.generate_next_block(&block1).await?;
+    let block3 = th.generate_next_block(&block2).await?;
+    let block4 = th.generate_next_block(&block3).await?;
 
-    // Generate next block
-    //let block2 = th.generate_next_block(&block1).await?;
-
-    // Add it to nodes
-    //th.add_blocks(&vec![block1, block2]).await?;
+    // Add them to nodes
+    th.add_blocks(&vec![block1, block2, block3, block4]).await?;
 
     // Validate chains
-    th.validate_chains(1).await?;
+    th.validate_chains(5).await?;
 
     // We are going to create a third node and try to sync from the previous two
     let mut sync_settings =
