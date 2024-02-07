@@ -480,7 +480,10 @@ impl BlockOrderStoreOverlay {
     /// Fetch the last block hash in the overlay, based on the `Ord`
     /// implementation for `Vec<u8>`.
     pub fn get_last(&self) -> Result<(u64, blake3::Hash)> {
-        let found = self.0.lock().unwrap().last(SLED_BLOCK_ORDER_TREE)?.unwrap();
+        let found = match self.0.lock().unwrap().last(SLED_BLOCK_ORDER_TREE)? {
+            Some(b) => b,
+            None => return Err(Error::BlockNumberNotFound(0)),
+        };
         let (number, hash) = parse_u64_key_record(found)?;
 
         Ok((number, hash))

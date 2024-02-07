@@ -39,7 +39,7 @@ use darkfi::{
     },
     system::{StoppableTask, StoppableTaskPtr},
     util::path::expand_path,
-    validator::{utils::genesis_txs_total, Validator, ValidatorConfig, ValidatorPtr},
+    validator::{Validator, ValidatorConfig, ValidatorPtr},
     Error, Result,
 };
 use darkfi_sdk::crypto::PublicKey;
@@ -216,8 +216,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     let sled_db = sled::open(&db_path)?;
 
     // Initialize validator configuration
-    let genesis_txs_total = genesis_txs_total(&genesis_block.txs).await?;
-
     let pow_fixed_difficulty = if let Some(diff) = blockchain_config.pow_fixed_difficulty {
         info!(target: "darkfid", "Node is configured to run with fixed PoW difficulty: {}", diff);
         Some(diff.into())
@@ -230,7 +228,6 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         blockchain_config.pow_target,
         pow_fixed_difficulty,
         genesis_block,
-        genesis_txs_total,
         vec![],
         false, // TODO: Make configurable
     );

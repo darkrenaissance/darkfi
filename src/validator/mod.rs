@@ -67,8 +67,6 @@ pub struct ValidatorConfig {
     pub pow_fixed_difficulty: Option<BigUint>,
     /// Genesis block
     pub genesis_block: BlockInfo,
-    /// Total amount of minted tokens in genesis block
-    pub genesis_txs_total: u64,
     /// Whitelisted faucet pubkeys (testnet stuff)
     pub faucet_pubkeys: Vec<PublicKey>,
     /// Flag to enable tx fee verification
@@ -81,7 +79,6 @@ impl ValidatorConfig {
         pow_target: usize,
         pow_fixed_difficulty: Option<BigUint>,
         genesis_block: BlockInfo,
-        genesis_txs_total: u64,
         faucet_pubkeys: Vec<PublicKey>,
         verify_fees: bool,
     ) -> Self {
@@ -90,7 +87,6 @@ impl ValidatorConfig {
             pow_target,
             pow_fixed_difficulty,
             genesis_block,
-            genesis_txs_total,
             faucet_pubkeys,
             verify_fees,
         }

@@ -27,11 +27,8 @@ use darkfi::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay},
     cli_desc,
     tx::Transaction,
-    util::{
-        path::expand_path,
-        time::{TimeKeeper, Timestamp},
-    },
-    validator::{utils::genesis_txs_total, verification::verify_genesis_block},
+    util::{path::expand_path, time::Timestamp},
+    validator::verification::verify_genesis_block,
 };
 use darkfi_contract_test_harness::vks;
 use darkfi_serial::{deserialize, serialize};
@@ -106,19 +103,12 @@ async fn main() -> Result<()> {
 
             // Append genesis transactions
             if !genesis_txs.is_empty() {
-                // Retrieve genesis producer transaction
-                let producer_tx = genesis_block.txs.pop().unwrap();
-
-                // Append genesis transactions and calculate their total
                 genesis_block.txs.append(&mut genesis_txs);
-                genesis_block.txs.push(producer_tx);
-                let genesis_txs_total = genesis_txs_total(&genesis_block.txs)?;
-                genesis_block.slots[0].total_tokens = genesis_txs_total;
             }
 
             // Write generated genesis block to stdin
             let encoded = bs58::encode(&serialize(&genesis_block)).into_string();
-            println!("{}", encoded);
+            println!("{encoded}");
 
             Ok(())
         }
@@ -138,13 +128,7 @@ async fn main() -> Result<()> {
             let blockchain = Blockchain::new(&sled_db)?;
             let overlay = BlockchainOverlay::new(&blockchain)?;
 
-            // Generate a dummy time keeper
-            let time_keeper = TimeKeeper::new(genesis_block.header.timestamp, 10, 90, 0);
-
-            // Grab block txs total
-            let genesis_txs_total = genesis_txs_total(&genesis_block.txs)?;
-
-            verify_genesis_block(&overlay, &time_keeper, &genesis_block, genesis_txs_total).await?;
+            verify_genesis_block(&overlay, &genesis_block).await?;
 
             println!("Genesis block {hash} verified successfully!");
 

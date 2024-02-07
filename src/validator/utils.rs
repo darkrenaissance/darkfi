@@ -29,9 +29,7 @@ use smol::io::Cursor;
 
 use crate::{
     blockchain::{BlockInfo, BlockchainOverlayPtr},
-    error::TxVerifyFailed,
     runtime::vm_runtime::Runtime,
-    tx::Transaction,
     validator::consensus::{Fork, Proposal},
     Error, Result,
 };
@@ -83,11 +81,17 @@ pub async fn deploy_native_contracts(
         ),
     ];
 
+    // Grab last known block height to verify against next one.
+    // If no blocks exist, we verify against genesis block height (0).
+    let verifying_block_height = match overlay.lock().unwrap().last() {
+        Ok((last_block_height, _)) => last_block_height + 1,
+        Err(_) => 0,
+    };
+
     for nc in native_contracts {
         info!(target: "validator::utils::deploy_native_contracts", "Deploying {} with ContractID {}", nc.0, nc.1);
 
-        // Note: Native contracts are always verifying against genesis block height(0)
-        let mut runtime = Runtime::new(&nc.2[..], overlay.clone(), nc.1, 0)?;
+        let mut runtime = Runtime::new(&nc.2[..], overlay.clone(), nc.1, verifying_block_height)?;
 
         runtime.deploy(&nc.3)?;
 
@@ -161,50 +165,6 @@ pub fn median(mut v: Vec<u64>) -> u64 {
     } else {
         get_mid(v[n - 1], v[n])
     }
-}
-
-/// Auxiliary function to calculate the total amount of minted tokens in provided
-/// genesis transactions set. This includes both staked and normal tokens.
-/// If a non-genesis transaction is found, execution fails.
-/// Set must also include the genesis transaction(empty) at first position.
-pub async fn genesis_txs_total(txs: &[Transaction]) -> Result<u64> {
-    let mut total = 0;
-
-    if txs.is_empty() {
-        return Ok(total)
-    }
-
-    if txs[0] != Transaction::default() {
-        return Err(TxVerifyFailed::ErroneousTxs(vec![txs[0].clone()]).into())
-    }
-
-    // Iterate transactions, exluding producer(first) one
-    for tx in &txs[1..] {
-        // Transaction must contain a single Consensus::GenesisStake (0x00)
-        // or Money::GenesisMint (0x01) call
-        if tx.calls.len() != 1 {
-            return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
-        }
-        let call = &tx.calls[0];
-        let data = &call.data.data;
-        let function = data[0];
-        if call.data.contract_id != *MONEY_CONTRACT_ID || function != 0x01_u8 {
-            return Err(TxVerifyFailed::ErroneousTxs(vec![tx.clone()]).into())
-        }
-
-        // Extract transaction input value.
-        // Consensus::GenesisStake uses ConsensusGenesisStakeParamsV1, while
-        // Money::GenesisMint uses MoneyGenesisMintParamsV1. Both params structs
-        // have the value at same position (1).
-        let position = 1;
-        let mut decoder = Cursor::new(&data);
-        decoder.set_position(position);
-        let value: u64 = AsyncDecodable::decode_async(&mut decoder).await?;
-
-        total += value;
-    }
-
-    Ok(total)
 }
 
 /// Given a proposal, find the index of the fork chain it extends, along with the specific

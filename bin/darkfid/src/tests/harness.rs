@@ -22,7 +22,7 @@ use darkfi::{
     blockchain::BlockInfo,
     net::Settings,
     rpc::jsonrpc::JsonSubscriber,
-    validator::{utils::genesis_txs_total, Validator, ValidatorConfig},
+    validator::{Validator, ValidatorConfig},
     Result,
 };
 use darkfi_contract_test_harness::{vks, Holder, TestHarness};
@@ -64,9 +64,8 @@ impl Harness {
         // Generate default genesis block
         let mut genesis_block = BlockInfo::default();
 
-        // Append genesis transactions and calculate their total
+        // Append genesis transactions
         genesis_block.txs.push(genesis_mint_tx);
-        let genesis_txs_total = genesis_txs_total(&genesis_block.txs).await?;
 
         // Generate validators configuration
         // NOTE: we are not using consensus constants here so we
@@ -76,7 +75,6 @@ impl Harness {
             config.pow_target,
             config.pow_fixed_difficulty.clone(),
             genesis_block,
-            genesis_txs_total,
             vec![],
             verify_fees,
         );

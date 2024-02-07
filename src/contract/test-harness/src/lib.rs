@@ -146,7 +146,6 @@ impl Wallet {
             90,
             Some(BigUint::from(1_u8)),
             genesis_block.clone(),
-            0,
             faucet_pubkeys.to_vec(),
             verify_fees,
         );
