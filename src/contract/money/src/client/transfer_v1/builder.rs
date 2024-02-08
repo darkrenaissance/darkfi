@@ -23,8 +23,7 @@ use darkfi::{
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, BaseBlind, Blind, MerkleNode, PublicKey,
-        ScalarBlind, SecretKey,
+        note::AeadEncryptedNote, pasta_prelude::*, MerkleNode, Nullifier, SecretKey, TokenId,
     },
     pasta::pallas,
 };
@@ -34,7 +33,7 @@ use rand::rngs::OsRng;
 use super::proof::{create_transfer_burn_proof, create_transfer_mint_proof};
 use crate::{
     client::{compute_remainder_blind, MoneyNote, OwnCoin},
-    model::{ClearInput, CoinAttributes, Input, MoneyTransferParamsV1, Nullifier, Output, TokenId},
+    model::{CoinAttributes, Input, MoneyTransferParamsV1, Output},
 };
 
 /// Struct holding necessary information to build a `Money::TransferV1` contract call.
@@ -78,27 +77,11 @@ impl TransferCallBuilder {
         debug!("Building Money::TransferV1 contract call");
         assert!(self.clear_inputs.len() + self.inputs.len() > 0);
 
-        let mut params =
-            MoneyTransferParamsV1 { clear_inputs: vec![], inputs: vec![], outputs: vec![] };
+        let mut params = MoneyTransferParamsV1 { inputs: vec![], outputs: vec![] };
         let mut signature_secrets = vec![];
         let mut proofs = vec![];
 
-        let token_blind = Blind::random(&mut OsRng);
-        debug!("Building clear inputs");
-        for input in self.clear_inputs {
-            signature_secrets.push(input.signature_secret);
-            let signature_public = PublicKey::from_secret(input.signature_secret);
-            let value_blind = Blind::random(&mut OsRng);
-
-            params.clear_inputs.push(ClearInput {
-                value: input.value,
-                token_id: input.token_id,
-                value_blind,
-                token_blind,
-                signature_public,
-            });
-        }
-
+        let token_blind = pallas::Base::random(&mut OsRng);
         let mut input_blinds = vec![];
         let mut output_blinds = vec![];
 
@@ -139,7 +122,7 @@ impl TransferCallBuilder {
 
         for (i, output) in self.outputs.iter().enumerate() {
             let value_blind = if i == self.outputs.len() - 1 {
-                compute_remainder_blind(&params.clear_inputs, &input_blinds, &output_blinds)
+                compute_remainder_blind(&[], &input_blinds, &output_blinds)
             } else {
                 Blind::random(&mut OsRng)
             };

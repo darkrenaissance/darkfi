@@ -17,7 +17,7 @@
  */
 
 use darkfi_sdk::{
-    crypto::{pasta_prelude::Field, ContractId, MerkleNode, MerkleTree, PublicKey},
+    crypto::{pasta_prelude::Field, ContractId, MerkleNode, MerkleTree},
     dark_tree::DarkLeaf,
     db::{db_init, db_lookup, db_set, zkas_db_set},
     error::ContractResult,
@@ -34,8 +34,8 @@ use crate::{
         MoneyTransferUpdateV1,
     },
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
-    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION, MONEY_CONTRACT_FAUCET_PUBKEYS,
-    MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_TOKEN_FREEZE_TREE,
+    MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_DB_VERSION, MONEY_CONTRACT_INFO_TREE,
+    MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_TOKEN_FREEZE_TREE,
     MONEY_CONTRACT_TOTAL_FEES_PAID,
 };
 
@@ -105,11 +105,7 @@ darkfi_sdk::define_contract!(
 /// We use this function to initialize all the necessary databases and prepare them
 /// with initial data if necessary. This is also the place where we bundle the zkas
 /// circuits that are to be used with functions provided by the contract.
-fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
-    // The payload for now contains a vector of `PublicKey` used to
-    // whitelist faucets that can create clear inputs.
-    let faucet_pubkeys: Vec<PublicKey> = deserialize(ix)?;
-
+fn init_contract(cid: ContractId, _ix: &[u8]) -> ContractResult {
     // zkas circuits can simply be embedded in the wasm and set up by using
     // respective db functions. The special `zkas db` operations exist in
     // order to be able to verify the circuits being bundled and enforcing
@@ -172,9 +168,6 @@ fn init_contract(cid: ContractId, ix: &[u8]) -> ContractResult {
             info_db
         }
     };
-
-    // Whitelisted faucets
-    db_set(info_db, MONEY_CONTRACT_FAUCET_PUBKEYS, &serialize(&faucet_pubkeys))?;
 
     // Update db version
     db_set(info_db, MONEY_CONTRACT_DB_VERSION, &serialize(&env!("CARGO_PKG_VERSION")))?;

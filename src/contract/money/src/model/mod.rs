@@ -210,8 +210,6 @@ pub struct MoneyFeeUpdateV1 {
 // ANCHOR: money-params
 /// Parameters for `Money::Transfer` and `Money::OtcSwap`
 pub struct MoneyTransferParamsV1 {
-    /// Clear inputs
-    pub clear_inputs: Vec<ClearInput>,
     /// Anonymous inputs
     pub inputs: Vec<Input>,
     /// Anonymous outputs

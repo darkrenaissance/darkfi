@@ -85,14 +85,13 @@ impl Harness {
         // Generate validators configuration
         // NOTE: we are not using consensus constants here so we
         // don't get circular dependencies.
-        let validator_config = ValidatorConfig::new(
-            3,
-            config.pow_target,
-            config.pow_fixed_difficulty.clone(),
+        let validator_config = ValidatorConfig {
+            finalization_threshold: 3,
+            pow_target: config.pow_target,
+            pow_fixed_difficulty: config.pow_fixed_difficulty.clone(),
             genesis_block,
-            vec![],
             verify_fees,
-        );
+        };
 
         // Generate validators using pregenerated vks
         let (_, vks) = vks::read_or_gen_vks_and_pks()?;
@@ -141,18 +140,11 @@ impl Harness {
         let bob = &self.bob.validator;
 
         alice
-            .validate_blockchain(
-                vec![],
-                self.config.pow_target,
-                self.config.pow_fixed_difficulty.clone(),
-            )
+            .validate_blockchain(self.config.pow_target, self.config.pow_fixed_difficulty.clone())
             .await?;
-        bob.validate_blockchain(
-            vec![],
-            self.config.pow_target,
-            self.config.pow_fixed_difficulty.clone(),
-        )
-        .await?;
+
+        bob.validate_blockchain(self.config.pow_target, self.config.pow_fixed_difficulty.clone())
+            .await?;
 
         let alice_blockchain_len = alice.blockchain.len();
         assert_eq!(alice_blockchain_len, bob.blockchain.len());

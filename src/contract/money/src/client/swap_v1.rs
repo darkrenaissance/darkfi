@@ -129,8 +129,7 @@ impl SwapCallBuilder {
         };
 
         // Now we fill this with necessary stuff
-        let mut params =
-            MoneyTransferParamsV1 { clear_inputs: vec![], inputs: vec![], outputs: vec![] };
+        let mut params = MoneyTransferParamsV1 { inputs: vec![], outputs: vec![] };
 
         // Create a new ephemeral secret key
         let signature_secret = SecretKey::random(&mut OsRng);

@@ -28,9 +28,6 @@ pub enum MoneyError {
     #[error("Missing outputs in transfer call")]
     TransferMissingOutputs,
 
-    #[error("Missing faucet pubkeys from info db")]
-    TransferMissingFaucetKeys,
-
     #[error("Clear input used non-native token")]
     TransferClearInputNonNativeToken,
 
@@ -116,7 +113,7 @@ impl From<MoneyError> for ContractError {
         match e {
             MoneyError::TransferMissingInputs => Self::Custom(1),
             MoneyError::TransferMissingOutputs => Self::Custom(2),
-            MoneyError::TransferMissingFaucetKeys => Self::Custom(3),
+            // 3 was removed
             MoneyError::TransferClearInputNonNativeToken => Self::Custom(4),
             MoneyError::TransferClearInputUnauthorised => Self::Custom(5),
             MoneyError::TransferMerkleRootNotFound => Self::Custom(6),

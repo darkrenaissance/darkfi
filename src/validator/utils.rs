@@ -18,12 +18,12 @@
 
 use darkfi_sdk::{
     crypto::{
-        ecvrf::VrfProof, pasta_prelude::PrimeField, PublicKey, DAO_CONTRACT_ID,
-        DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
+        ecvrf::VrfProof, pasta_prelude::PrimeField, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID,
+        MONEY_CONTRACT_ID,
     },
     pasta::{group::ff::FromUniformBytes, pallas},
 };
-use darkfi_serial::{serialize_async, AsyncDecodable};
+use darkfi_serial::AsyncDecodable;
 use log::info;
 use smol::io::Cursor;
 
@@ -44,15 +44,11 @@ use crate::{
 /// touch anything, or just potentially update the db schemas or whatever
 /// is necessary. This logic should be handled in the init function of
 /// the actual contract, so make sure the native contracts handle this well.
-pub async fn deploy_native_contracts(
-    overlay: &BlockchainOverlayPtr,
-    faucet_pubkeys: &Vec<PublicKey>,
-) -> Result<()> {
+pub async fn deploy_native_contracts(overlay: &BlockchainOverlayPtr) -> Result<()> {
     info!(target: "validator::utils::deploy_native_contracts", "Deploying native WASM contracts");
 
-    // The faucet pubkeys are pubkeys which are allowed to create clear inputs
-    // in the Money contract.
-    let money_contract_deploy_payload = serialize_async(faucet_pubkeys).await;
+    // The Money contract uses an empty payload to deploy itself.
+    let money_contract_deploy_payload = vec![];
 
     // The DAO contract uses an empty payload to deploy itself.
     let dao_contract_deploy_payload = vec![];

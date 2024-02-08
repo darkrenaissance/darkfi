@@ -123,7 +123,6 @@ impl TestHarness {
 
         // Then second holder combines the halves
         let swap_full_params = MoneyTransferParamsV1 {
-            clear_inputs: vec![],
             inputs: vec![debris0.params.inputs[0].clone(), debris1.params.inputs[0].clone()],
             outputs: vec![debris0.params.outputs[0].clone(), debris1.params.outputs[0].clone()],
         };

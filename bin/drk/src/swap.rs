@@ -245,7 +245,6 @@ impl Drk {
         let debris = builder.build()?;
 
         let full_params = MoneyTransferParamsV1 {
-            clear_inputs: vec![],
             inputs: vec![partial.params.inputs[0].clone(), debris.params.inputs[0].clone()],
             outputs: vec![partial.params.outputs[0].clone(), debris.params.outputs[0].clone()],
         };

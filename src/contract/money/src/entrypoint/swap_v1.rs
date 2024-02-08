@@ -58,12 +58,6 @@ pub(crate) fn money_otcswap_process_instruction_v1(
     // every atomic swap looks the same on the network, therefore there is
     // no special anonymity leak for different swaps that are being done,
     // at least in the scope of this contract call.
-
-    if !params.clear_inputs.is_empty() {
-        msg!("[OtcSwapV1] Error: Clear inputs are not empty");
-        return Err(MoneyError::InvalidNumberOfInputs.into())
-    }
-
     if params.inputs.len() != 2 {
         msg!("[OtcSwapV1] Error: Expected 2 inputs");
         return Err(MoneyError::InvalidNumberOfInputs.into())

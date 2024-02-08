@@ -35,8 +35,8 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::Field, poseidon_hash, BaseBlind, Blind, ContractId,
-        Keypair, MerkleNode, MerkleTree, PublicKey, SecretKey,
+        note::AeadEncryptedNote, pasta_prelude::Field, poseidon_hash, ContractId, Keypair,
+        MerkleNode, MerkleTree, Nullifier, SecretKey,
     },
     pasta::pallas,
 };
@@ -129,7 +129,6 @@ impl Wallet {
     pub async fn new(
         keypair: Keypair,
         genesis_block: &BlockInfo,
-        faucet_pubkeys: &[PublicKey],
         vks: &Vks,
         verify_fees: bool,
     ) -> Result<Self> {
@@ -141,14 +140,13 @@ impl Wallet {
         // Generate validator
         // NOTE: we are not using consensus constants here so we
         // don't get circular dependencies.
-        let config = ValidatorConfig::new(
-            3,
-            90,
-            Some(BigUint::from(1_u8)),
-            genesis_block.clone(),
-            faucet_pubkeys.to_vec(),
+        let config = ValidatorConfig {
+            finalization_threshold: 3,
+            pow_target: 90,
+            pow_fixed_difficulty: Some(BigUint::from(1_u8)),
+            genesis_block: genesis_block.clone(),
             verify_fees,
-        );
+        };
         let validator = Validator::new(&sled_db, config).await?;
 
         // Create necessary Merkle trees for tracking
@@ -213,32 +211,27 @@ impl TestHarness {
         }
 
         let faucet_kp = Keypair::random(&mut rng);
-        let faucet_pubkeys = vec![faucet_kp.public];
-        let faucet =
-            Wallet::new(faucet_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
+        let faucet = Wallet::new(faucet_kp, &genesis_block, &vks, verify_fees).await?;
         holders.insert(Holder::Faucet, faucet);
 
         let alice_kp = Keypair::random(&mut rng);
-        let alice =
-            Wallet::new(alice_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
+        let alice = Wallet::new(alice_kp, &genesis_block, &vks, verify_fees).await?;
         holders.insert(Holder::Alice, alice);
 
         let bob_kp = Keypair::random(&mut rng);
-        let bob = Wallet::new(bob_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
+        let bob = Wallet::new(bob_kp, &genesis_block, &vks, verify_fees).await?;
         holders.insert(Holder::Bob, bob);
 
         let charlie_kp = Keypair::random(&mut rng);
-        let charlie =
-            Wallet::new(charlie_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
+        let charlie = Wallet::new(charlie_kp, &genesis_block, &vks, verify_fees).await?;
         holders.insert(Holder::Charlie, charlie);
 
         let rachel_kp = Keypair::random(&mut rng);
-        let rachel =
-            Wallet::new(rachel_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
+        let rachel = Wallet::new(rachel_kp, &genesis_block, &vks, verify_fees).await?;
         holders.insert(Holder::Rachel, rachel);
 
         let dao_kp = Keypair::random(&mut rng);
-        let dao = Wallet::new(dao_kp, &genesis_block, &faucet_pubkeys, &vks, verify_fees).await?;
+        let dao = Wallet::new(dao_kp, &genesis_block, &vks, verify_fees).await?;
         holders.insert(Holder::Dao, dao);
 
         // Build benchmarks map

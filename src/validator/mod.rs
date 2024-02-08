@@ -18,7 +18,6 @@
 
 use std::sync::Arc;
 
-use darkfi_sdk::crypto::{MerkleTree, PublicKey};
 use darkfi_serial::serialize_async;
 use log::{debug, error, info, warn};
 use num_bigint::BigUint;
@@ -67,30 +66,8 @@ pub struct ValidatorConfig {
     pub pow_fixed_difficulty: Option<BigUint>,
     /// Genesis block
     pub genesis_block: BlockInfo,
-    /// Whitelisted faucet pubkeys (testnet stuff)
-    pub faucet_pubkeys: Vec<PublicKey>,
     /// Flag to enable tx fee verification
     pub verify_fees: bool,
-}
-
-impl ValidatorConfig {
-    pub fn new(
-        finalization_threshold: usize,
-        pow_target: usize,
-        pow_fixed_difficulty: Option<BigUint>,
-        genesis_block: BlockInfo,
-        faucet_pubkeys: Vec<PublicKey>,
-        verify_fees: bool,
-    ) -> Self {
-        Self {
-            finalization_threshold,
-            pow_target,
-            pow_fixed_difficulty,
-            genesis_block,
-            faucet_pubkeys,
-            verify_fees,
-        }
-    }
 }
 
 /// Atomic pointer to validator.
@@ -119,7 +96,7 @@ impl Validator {
         let overlay = BlockchainOverlay::new(&blockchain)?;
 
         // Deploy native wasm contracts
-        deploy_native_contracts(&overlay, &config.faucet_pubkeys).await?;
+        deploy_native_contracts(&overlay).await?;
 
         // Add genesis block if blockchain is empty
         if blockchain.genesis().is_err() {
@@ -536,7 +513,6 @@ impl Validator {
     /// Be careful as this will try to load everything in memory.
     pub async fn validate_blockchain(
         &self,
-        faucet_pubkeys: Vec<PublicKey>,
         pow_target: usize,
         pow_fixed_difficulty: Option<BigUint>,
     ) -> Result<()> {
@@ -559,7 +535,7 @@ impl Validator {
         let mut module = PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?;
 
         // Deploy native wasm contracts
-        deploy_native_contracts(&overlay, &faucet_pubkeys).await?;
+        deploy_native_contracts(&overlay).await?;
 
         // Validate genesis block
         verify_genesis_block(&overlay, previous).await?;

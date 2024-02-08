@@ -223,14 +223,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         None
     };
 
-    let config = ValidatorConfig::new(
-        blockchain_config.threshold,
-        blockchain_config.pow_target,
+    let config = ValidatorConfig {
+        finalization_threshold: blockchain_config.threshold,
+        pow_target: blockchain_config.pow_target,
         pow_fixed_difficulty,
         genesis_block,
-        vec![],
-        false, // TODO: Make configurable
-    );
+        verify_fees: false, // TODO: Make configurable
+    };
 
     // Initialize validator
     let validator = Validator::new(&sled_db, config).await?;
