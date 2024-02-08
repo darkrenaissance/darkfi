@@ -23,7 +23,7 @@ use darkfi_dao_contract::{
     DaoFunction,
 };
 use darkfi_money_contract::{
-    model::{CoinAttributes, TokenAttributes},
+    model::{CoinAttributes, TokenAttributes, DARK_TOKEN_ID},
     MoneyFunction,
 };
 use darkfi_sdk::{
@@ -31,7 +31,7 @@ use darkfi_sdk::{
         pasta_prelude::*,
         pedersen_commitment_u64, poseidon_hash,
         util::{fp_mod_fv, fp_to_u64},
-        FuncId, FuncRef, DAO_CONTRACT_ID, DARK_TOKEN_ID, MONEY_CONTRACT_ID,
+        FuncId, FuncRef, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
 };

@@ -21,7 +21,7 @@ use rodio::{source::Source, Decoder, OutputStream};
 use structopt_toml::clap::{App, Arg, Shell, SubCommand};
 
 use darkfi::{cli_desc, system::sleep, util::parse::decode_base10, Error, Result};
-use darkfi_sdk::crypto::TokenId;
+use darkfi_money_contract::model::TokenId;
 
 use crate::{money::BALANCE_BASE10_DECIMALS, Drk};
 

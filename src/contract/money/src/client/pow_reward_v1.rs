@@ -25,7 +25,6 @@ use darkfi_sdk::{
     blockchain::expected_reward,
     crypto::{
         ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::*, FuncId, PublicKey, SecretKey,
-        DARK_TOKEN_ID,
     },
     pasta::pallas,
 };
@@ -39,7 +38,7 @@ use crate::{
         },
         MoneyNote,
     },
-    model::{ClearInput, Coin, MoneyPoWRewardParamsV1, Output},
+    model::{ClearInput, Coin, MoneyPoWRewardParamsV1, Output, DARK_TOKEN_ID},
 };
 
 pub struct PoWRewardCallDebris {

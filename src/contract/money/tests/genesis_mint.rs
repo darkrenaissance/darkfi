@@ -27,7 +27,7 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness, TxAction};
-use darkfi_sdk::crypto::DARK_TOKEN_ID;
+use darkfi_money_contract::model::DARK_TOKEN_ID;
 use log::info;
 
 #[test]

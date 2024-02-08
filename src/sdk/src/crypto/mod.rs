@@ -38,10 +38,6 @@ pub use contract_id::{ContractId, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY
 pub mod func_ref;
 pub use func_ref::{FuncId, FuncRef};
 
-/// Token ID definitions and methods
-pub mod token_id;
-pub use token_id::{TokenId, DARK_TOKEN_ID};
-
 /// Merkle node definitions
 pub mod merkle_node;
 pub use merkle_node::{MerkleNode, MerkleTree};

@@ -24,10 +24,7 @@ use darkfi::{
     ClientFailed, Result,
 };
 use darkfi_sdk::{
-    crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, FuncId, MerkleTree, PublicKey, SecretKey,
-        TokenId,
-    },
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, FuncId, MerkleTree, PublicKey, SecretKey},
     pasta::pallas,
 };
 use darkfi_serial::serialize;
@@ -42,7 +39,7 @@ use crate::{
         },
         MoneyNote, OwnCoin,
     },
-    model::{Input, MoneyTransferParamsV1, Output},
+    model::{Input, MoneyTransferParamsV1, Output, TokenId},
 };
 
 pub struct SwapCallDebris {

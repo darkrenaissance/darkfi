@@ -36,14 +36,14 @@ use darkfi_dao_contract::{
     DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS, DAO_CONTRACT_ZKAS_DAO_VOTE_INPUT_NS,
     DAO_CONTRACT_ZKAS_DAO_VOTE_MAIN_NS,
 };
-use darkfi_money_contract::{client::OwnCoin, MoneyFunction};
+use darkfi_money_contract::{client::OwnCoin, model::TokenId, MoneyFunction};
 use darkfi_sdk::{
     bridgetree,
     crypto::{
         poseidon_hash,
         util::{fp_mod_fv, fp_to_u64},
-        FuncId, FuncRef, Keypair, MerkleNode, MerkleTree, PublicKey, SecretKey, TokenId,
-        DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+        FuncId, FuncRef, Keypair, MerkleNode, MerkleTree, PublicKey, SecretKey, DAO_CONTRACT_ID,
+        MONEY_CONTRACT_ID,
     },
     pasta::pallas,
     ContractCall,

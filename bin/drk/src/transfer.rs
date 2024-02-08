@@ -27,10 +27,11 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{transfer_v1::make_transfer_call, OwnCoin},
+    model::TokenId,
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, Keypair, PublicKey, TokenId},
+    crypto::{contract_id::MONEY_CONTRACT_ID, FuncId, Keypair, PublicKey},
     tx::ContractCall,
 };
 use darkfi_serial::Encodable;

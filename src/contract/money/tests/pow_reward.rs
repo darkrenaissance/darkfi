@@ -26,7 +26,8 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
-use darkfi_sdk::{blockchain::expected_reward, crypto::DARK_TOKEN_ID};
+use darkfi_money_contract::model::DARK_TOKEN_ID;
+use darkfi_sdk::blockchain::expected_reward;
 use log::info;
 
 #[test]

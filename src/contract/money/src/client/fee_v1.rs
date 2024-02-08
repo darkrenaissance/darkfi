@@ -32,7 +32,7 @@ use darkfi_sdk::{
         note::AeadEncryptedNote,
         pasta_prelude::{Curve, CurveAffine, Field},
         pedersen_commitment_u64, poseidon_hash, FuncId, Keypair, MerkleNode, MerkleTree, Nullifier,
-        PublicKey, SecretKey, DARK_TOKEN_ID,
+        PublicKey, SecretKey,
     },
     pasta::pallas,
 };
@@ -41,7 +41,7 @@ use rand::rngs::OsRng;
 
 use crate::{
     client::{compute_remainder_blind, Coin, MoneyNote, OwnCoin},
-    model::{CoinAttributes, Input, MoneyFeeParamsV1, NullifierAttributes, Output},
+    model::{CoinAttributes, Input, MoneyFeeParamsV1, NullifierAttributes, Output, DARK_TOKEN_ID},
 };
 
 /// Append a fee-paying call to the given `TransactionBuilder`.

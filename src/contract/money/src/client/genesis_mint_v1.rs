@@ -22,9 +22,7 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, FuncId, Keypair, PublicKey, DARK_TOKEN_ID,
-    },
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, FuncId, Keypair, PublicKey},
     pasta::pallas,
 };
 use log::{debug, info};
@@ -37,7 +35,7 @@ use crate::{
         },
         MoneyNote,
     },
-    model::{ClearInput, Coin, MoneyGenesisMintParamsV1, Output},
+    model::{ClearInput, Coin, MoneyGenesisMintParamsV1, Output, DARK_TOKEN_ID},
 };
 
 pub struct GenesisMintCallDebris {

@@ -16,14 +16,14 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#[cfg(feature = "async")]
-use darkfi_serial::async_trait;
+use darkfi_sdk::{crypto::pasta_prelude::PrimeField, error::ContractError, pasta::pallas};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
 use lazy_static::lazy_static;
-use pasta_curves::{group::ff::PrimeField, pallas};
+
+#[cfg(feature = "client")]
+use darkfi_serial::async_trait;
 
 use super::{poseidon_hash, PublicKey, SecretKey};
-use crate::error::ContractError;
 
 lazy_static! {
     // The idea here is that 0 is not a valid x coordinate for any pallas point,
@@ -93,6 +93,6 @@ impl TokenId {
 }
 
 use core::str::FromStr;
-crate::fp_from_bs58!(TokenId);
-crate::fp_to_bs58!(TokenId);
-crate::ty_from_fp!(TokenId);
+darkfi_sdk::fp_from_bs58!(TokenId);
+darkfi_sdk::fp_to_bs58!(TokenId);
+darkfi_sdk::ty_from_fp!(TokenId);

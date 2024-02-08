@@ -17,13 +17,16 @@
  */
 use darkfi::{zk::ProvingKey, zkas::ZkBinary, ClientFailed, Result};
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, FuncId, Keypair, MerkleTree, PublicKey, TokenId},
+    crypto::{pasta_prelude::*, FuncId, Keypair, MerkleTree, PublicKey},
     pasta::pallas,
 };
 use log::{debug, error};
 use rand::rngs::OsRng;
 
-use crate::{client::OwnCoin, model::MoneyTransferParamsV1};
+use crate::{
+    client::OwnCoin,
+    model::{MoneyTransferParamsV1, TokenId},
+};
 
 mod builder;
 pub use builder::{

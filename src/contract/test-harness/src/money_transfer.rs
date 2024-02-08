@@ -24,11 +24,11 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{transfer_v1::make_transfer_call, OwnCoin},
-    model::MoneyTransferParamsV1,
+    model::{MoneyTransferParamsV1, TokenId},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{MerkleNode, TokenId, MONEY_CONTRACT_ID},
+    crypto::{MerkleNode, MONEY_CONTRACT_ID},
     ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};

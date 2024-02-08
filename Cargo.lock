@@ -2081,6 +2081,7 @@ dependencies = [
  "darkfi-serial",
  "getrandom 0.2.12",
  "halo2_proofs",
+ "lazy_static",
  "log",
  "rand 0.8.5",
  "simplelog",
@@ -8184,6 +8185,7 @@ dependencies = [
  "ctrlc",
  "darkfi",
  "darkfi-sdk",
+ "darkfi_money_contract",
  "rand 0.8.5",
  "rayon",
 ]

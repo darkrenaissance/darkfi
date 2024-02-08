@@ -22,11 +22,13 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{PublicKey, SecretKey, TokenId},
+    crypto::{PublicKey, SecretKey},
     pasta::pallas,
 };
 use log::debug;
 use rand::rngs::OsRng;
+
+use darkfi_money_contract::model::TokenId;
 
 use crate::model::{Dao, DaoMintParams};
 

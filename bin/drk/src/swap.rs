@@ -28,13 +28,13 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{swap_v1::SwapCallBuilder, MoneyNote},
-    model::{Coin, MoneyTransferParamsV1},
+    model::{Coin, MoneyTransferParamsV1, TokenId},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
         contract_id::MONEY_CONTRACT_ID, pedersen::pedersen_commitment_u64, poseidon_hash, FuncId,
-        PublicKey, SecretKey, TokenId,
+        PublicKey, SecretKey,
     },
     pasta::pallas,
     tx::ContractCall,

@@ -31,14 +31,14 @@ use darkfi_money_contract::{
         auth_token_mint_v1::AuthTokenMintCallBuilder, token_freeze_v1::TokenFreezeCallBuilder,
         token_mint_v1::TokenMintCallBuilder,
     },
-    model::{CoinAttributes, TokenAttributes},
+    model::{CoinAttributes, TokenAttributes, TokenId},
     MoneyFunction, MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1,
     MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
         contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, FuncId, FuncRef, Keypair, PublicKey,
-        SecretKey, TokenId,
+        SecretKey,
     },
     dark_tree::DarkLeaf,
     pasta::pallas,

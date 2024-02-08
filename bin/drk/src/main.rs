@@ -42,9 +42,9 @@ use darkfi::{
     zk::halo2::Field,
     Result,
 };
-use darkfi_money_contract::model::Coin;
+use darkfi_money_contract::model::{Coin, TokenId};
 use darkfi_sdk::{
-    crypto::{FuncId, PublicKey, SecretKey, TokenId},
+    crypto::{FuncId, PublicKey, SecretKey},
     pasta::{group::ff::PrimeField, pallas},
 };
 use darkfi_serial::{deserialize, serialize};

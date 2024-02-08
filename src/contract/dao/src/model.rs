@@ -18,11 +18,12 @@
 
 use core::str::FromStr;
 
+use darkfi_money_contract::model::TokenId;
 use darkfi_sdk::{
     crypto::{
         note::{AeadEncryptedNote, ElGamalEncryptedNote},
         pasta_prelude::*,
-        poseidon_hash, MerkleNode, Nullifier, PublicKey, TokenId,
+        poseidon_hash, MerkleNode, Nullifier, PublicKey,
     },
     error::ContractError,
     pasta::pallas,

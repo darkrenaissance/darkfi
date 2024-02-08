@@ -24,7 +24,8 @@ use std::{
 
 use arg::Args;
 use darkfi::{util::cli::ProgressInc, ANSI_LOGO};
-use darkfi_sdk::crypto::{ContractId, PublicKey, SecretKey, TokenId};
+use darkfi_money_contract::model::TokenId;
+use darkfi_sdk::crypto::{ContractId, PublicKey, SecretKey};
 use rand::rngs::OsRng;
 use rayon::iter::ParallelIterator;
 

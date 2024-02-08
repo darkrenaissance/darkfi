@@ -25,11 +25,11 @@ use darkfi::{
 };
 use darkfi_money_contract::{
     client::{transfer_v1 as xfer, OwnCoin},
-    model::MoneyTransferParamsV1,
+    model::{MoneyTransferParamsV1, DARK_TOKEN_ID},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{FuncId, MerkleNode, DARK_TOKEN_ID, MONEY_CONTRACT_ID},
+    crypto::{FuncId, MerkleNode, MONEY_CONTRACT_ID},
     pasta::pallas,
     ContractCall,
 };
