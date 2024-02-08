@@ -38,7 +38,7 @@ use crate::{
 };
 
 // Consensus configuration
-/// Block/proposal maximum transactions
+/// Block/proposal maximum transactions, exluding producer transaction
 pub const TXS_CAP: usize = 50;
 
 /// This struct represents the information required by the consensus algorithm
@@ -364,27 +364,43 @@ impl Fork {
         blockchain: &Blockchain,
         verifying_block_height: u64,
     ) -> Result<Vec<Transaction>> {
-        // Retrieve all mempool transactions
-        let mut unproposed_txs: Vec<Transaction> = blockchain
-            .pending_txs
-            .get(&self.mempool, true)?
-            .iter()
-            .map(|x| x.clone().unwrap())
-            .collect();
+        // Check if our mempool is not empty
+        if self.mempool.is_empty() {
+            return Ok(vec![])
+        }
 
-        // Iterate over fork proposals to find already proposed transactions
-        // and remove them from the unproposed_txs vector.
-        let proposals = self.overlay.lock().unwrap().get_blocks_by_hash(&self.proposals)?;
-        for proposal in proposals {
-            for tx in &proposal.txs {
-                unproposed_txs.retain(|x| x != tx);
+        // Grab all current proposals transactions hashes
+        let proposals_txs = self.overlay.lock().unwrap().get_blocks_txs_hashes(&self.proposals)?;
+
+        // Iterate through all pending transactions in the forks' mempool
+        let mut unproposed_txs = vec![];
+        for tx in &self.mempool {
+            // If the hash is contained in the proposals transactions vec, skip it
+            if proposals_txs.contains(tx) {
+                continue
+            }
+
+            // Push the tx hash into the unproposed transactions vector
+            unproposed_txs.push(*tx);
+
+            // Check limit
+            if unproposed_txs.len() == TXS_CAP {
+                break
             }
         }
 
-        // Check if transactions exceed configured cap
-        if unproposed_txs.len() > TXS_CAP {
-            unproposed_txs = unproposed_txs[0..TXS_CAP].to_vec()
+        // Check if we have any unproposed transactions
+        if unproposed_txs.is_empty() {
+            return Ok(vec![])
         }
+
+        // Retrieve the actual unproposed transactions
+        let mut unproposed_txs: Vec<Transaction> = blockchain
+            .pending_txs
+            .get(&unproposed_txs, true)?
+            .iter()
+            .map(|x| x.clone().unwrap())
+            .collect();
 
         // Clone forks' overlay
         let overlay = self.overlay.lock().unwrap().full_clone()?;

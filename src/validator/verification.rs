@@ -695,7 +695,7 @@ pub async fn verify_proposal(
     }
 
     // Check that proposal transactions don't exceed limit (2)
-    if proposal.block.txs.len() > TXS_CAP {
+    if proposal.block.txs.len() > TXS_CAP + 1 {
         warn!(
             target: "validator::verification::verify_pow_proposal", "Received proposal transactions exceed configured cap: {} - {}",
             proposal.block.txs.len(),

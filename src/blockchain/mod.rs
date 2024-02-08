@@ -465,6 +465,17 @@ impl BlockchainOverlay {
         Ok(ret)
     }
 
+    /// Retrieve [`Block`]s by given hashes and return their transactions hashes.
+    pub fn get_blocks_txs_hashes(&self, hashes: &[blake3::Hash]) -> Result<Vec<blake3::Hash>> {
+        let blocks = self.blocks.get(hashes, true)?;
+        let mut ret = vec![];
+        for block in blocks {
+            ret.extend_from_slice(&block.unwrap().txs);
+        }
+
+        Ok(ret)
+    }
+
     /// Checkpoint overlay so we can revert to it, if needed.
     pub fn checkpoint(&self) {
         self.overlay.lock().unwrap().checkpoint();
