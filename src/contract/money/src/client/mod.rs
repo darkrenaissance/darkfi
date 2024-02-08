@@ -26,6 +26,8 @@
 //! the necessary objects provided by the caller. This is intentional, so we
 //! are able to abstract away any wallet interfaces to client implementations.
 
+use std::hash::{Hash, Hasher};
+
 use darkfi_sdk::{
     bridgetree,
     crypto::{BaseBlind, Blind, FuncId, ScalarBlind, SecretKey},
@@ -101,6 +103,12 @@ pub struct OwnCoin {
     pub nullifier: Nullifier,
     /// Coin's leaf position in the Merkle tree of coins
     pub leaf_position: bridgetree::Position,
+}
+
+impl Hash for OwnCoin {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.coin.inner().to_repr().hash(state);
+    }
 }
 
 pub fn compute_remainder_blind(
