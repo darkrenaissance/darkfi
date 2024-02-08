@@ -64,7 +64,7 @@ pub fn make_mint_call(
         Witness::Base(halo2::Value::known(dao_approval_ratio_base)),
         Witness::Base(halo2::Value::known(dao.gov_token_id.inner())),
         Witness::Base(halo2::Value::known(dao_secret_key.inner())),
-        Witness::Base(halo2::Value::known(dao.bulla_blind)),
+        Witness::Base(halo2::Value::known(dao.bulla_blind.inner())),
     ];
 
     let (pub_x, pub_y) = dao.public_key.xy();

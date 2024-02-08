@@ -237,7 +237,7 @@ pub(crate) fn money_transfer_process_instruction_v1(
         params
             .clear_inputs
             .iter()
-            .any(|x| poseidon_hash([x.token_id.inner(), x.token_blind]) != tokcom);
+            .any(|x| poseidon_hash([x.token_id.inner(), x.token_blind.inner()]) != tokcom);
 
     if failed_tokcom {
         msg!("[TransferV1] Error: Token commitments do not match");

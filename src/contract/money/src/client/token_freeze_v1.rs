@@ -52,7 +52,7 @@ impl TokenFreezeCallBuilder {
         let prover_witnesses = vec![
             // Token attributes
             Witness::Base(Value::known(self.token_attrs.auth_parent.inner())),
-            Witness::Base(Value::known(self.token_attrs.blind)),
+            Witness::Base(Value::known(self.token_attrs.blind.inner())),
             // Secret key used by mint
             Witness::Base(Value::known(self.mint_keypair.secret.inner())),
         ];

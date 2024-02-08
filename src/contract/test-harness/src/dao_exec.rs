@@ -32,11 +32,10 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        pasta_prelude::Field, pedersen_commitment_u64, FuncRef, MerkleNode, SecretKey,
+        pedersen_commitment_u64, Blind, FuncRef, MerkleNode, ScalarBlind, SecretKey,
         DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     dark_tree::DarkLeaf,
-    pasta::pallas,
     ContractCall,
 };
 use darkfi_serial::{serialize, Encodable};
@@ -54,8 +53,8 @@ impl TestHarness {
         proposal_coinattrs: Vec<CoinAttributes>,
         yes_vote_value: u64,
         all_vote_value: u64,
-        yes_vote_blind: pallas::Scalar,
-        all_vote_blind: pallas::Scalar,
+        yes_vote_blind: ScalarBlind,
+        all_vote_blind: ScalarBlind,
     ) -> Result<(Transaction, MoneyTransferParamsV1, DaoExecParams)> {
         let dao_wallet = self.holders.get(&Holder::Dao).unwrap();
 
@@ -77,7 +76,7 @@ impl TestHarness {
         let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoExec).unwrap();
         let timer = Instant::now();
 
-        let input_user_data_blind = pallas::Base::random(&mut OsRng);
+        let input_user_data_blind = Blind::random(&mut OsRng);
         let exec_signature_secret = SecretKey::random(&mut OsRng);
 
         assert!(!proposal_coinattrs.is_empty());
@@ -124,7 +123,7 @@ impl TestHarness {
             token_id: proposal_token_id,
             spend_hook,
             user_data: dao_bulla.inner(),
-            blind: pallas::Base::random(&mut OsRng),
+            blind: Blind::random(&mut OsRng),
         };
         outputs.push(dao_coin_attrs.clone());
 
@@ -146,10 +145,10 @@ impl TestHarness {
         // We need to extract stuff from the inputs and outputs that we'll also
         // use in the DAO::Exec call. This DAO API needs to be better.
         let mut input_value = 0;
-        let mut input_value_blind = pallas::Scalar::ZERO;
+        let mut input_value_blind = Blind::ZERO;
         for (input, blind) in spent_coins.iter().zip(xfer_secrets.input_value_blinds.iter()) {
             input_value += input.note.value;
-            input_value_blind += blind;
+            input_value_blind += *blind;
         }
         assert_eq!(
             pedersen_commitment_u64(input_value, input_value_blind),

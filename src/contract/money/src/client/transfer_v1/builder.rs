@@ -22,7 +22,10 @@ use darkfi::{
 };
 use darkfi_sdk::{
     bridgetree,
-    crypto::{note::AeadEncryptedNote, pasta_prelude::*, MerkleNode, PublicKey, SecretKey},
+    crypto::{
+        note::AeadEncryptedNote, pasta_prelude::*, BaseBlind, Blind, MerkleNode, PublicKey,
+        ScalarBlind, SecretKey,
+    },
     pasta::pallas,
 };
 use log::{debug, info};
@@ -65,7 +68,7 @@ pub struct TransferCallInput {
     pub note: MoneyNote,
     // In the DAO all inputs must have the same user_data_enc and use the same blind
     // So support allowing the user to set their own blind.
-    pub user_data_blind: pallas::Base,
+    pub user_data_blind: BaseBlind,
 }
 
 pub type TransferCallOutput = CoinAttributes;
@@ -80,12 +83,12 @@ impl TransferCallBuilder {
         let mut signature_secrets = vec![];
         let mut proofs = vec![];
 
-        let token_blind = pallas::Base::random(&mut OsRng);
+        let token_blind = Blind::random(&mut OsRng);
         debug!("Building clear inputs");
         for input in self.clear_inputs {
             signature_secrets.push(input.signature_secret);
             let signature_public = PublicKey::from_secret(input.signature_secret);
-            let value_blind = pallas::Scalar::random(&mut OsRng);
+            let value_blind = Blind::random(&mut OsRng);
 
             params.clear_inputs.push(ClearInput {
                 value: input.value,
@@ -101,7 +104,7 @@ impl TransferCallBuilder {
 
         debug!("Building anonymous inputs");
         for (i, input) in self.inputs.iter().enumerate() {
-            let value_blind = pallas::Scalar::random(&mut OsRng);
+            let value_blind = Blind::random(&mut OsRng);
             input_blinds.push(value_blind);
 
             let signature_secret = SecretKey::random(&mut OsRng);
@@ -138,7 +141,7 @@ impl TransferCallBuilder {
             let value_blind = if i == self.outputs.len() - 1 {
                 compute_remainder_blind(&params.clear_inputs, &input_blinds, &output_blinds)
             } else {
-                pallas::Scalar::random(&mut OsRng)
+                Blind::random(&mut OsRng)
             };
 
             output_blinds.push(value_blind);
@@ -203,9 +206,9 @@ pub struct TransferCallSecrets {
     pub output_notes: Vec<MoneyNote>,
 
     /// The value blinds created for the inputs
-    pub input_value_blinds: Vec<pallas::Scalar>,
+    pub input_value_blinds: Vec<ScalarBlind>,
     /// The value blinds created for the outputs
-    pub output_value_blinds: Vec<pallas::Scalar>,
+    pub output_value_blinds: Vec<ScalarBlind>,
 }
 
 impl TransferCallSecrets {

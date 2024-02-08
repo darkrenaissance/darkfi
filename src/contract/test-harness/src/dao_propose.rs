@@ -30,7 +30,7 @@ use darkfi_dao_contract::{
 };
 use darkfi_money_contract::{client::OwnCoin, model::CoinAttributes, MoneyFunction};
 use darkfi_sdk::{
-    crypto::{pasta_prelude::Field, MerkleNode, SecretKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
+    crypto::{Blind, MerkleNode, SecretKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
     pasta::pallas,
     ContractCall,
 };
@@ -106,7 +106,7 @@ impl TestHarness {
             duration_days: 30,
             user_data,
             dao_bulla: dao.to_bulla(),
-            blind: pallas::Base::random(&mut OsRng),
+            blind: Blind::random(&mut OsRng),
         };
 
         let call = DaoProposeCall {

@@ -108,7 +108,7 @@ pub(crate) fn money_fee_process_instruction_v1(
 
     // Fees can only be paid using the native token, so we'll compare
     // the token commitments with this one:
-    let native_token_commit = poseidon_hash([DARK_TOKEN_ID.inner(), params.token_blind]);
+    let native_token_commit = poseidon_hash([DARK_TOKEN_ID.inner(), params.token_blind.inner()]);
 
     // ===================================
     // Perform the actual state transition

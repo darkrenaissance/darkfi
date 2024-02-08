@@ -16,6 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+/// Blinding factors
+pub mod blind;
+pub use blind::{BaseBlind, Blind, ScalarBlind};
+
 /// Cryptographic constants
 pub mod constants;
 

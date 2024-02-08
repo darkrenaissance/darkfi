@@ -55,11 +55,11 @@ impl TokenMintCallBuilder {
             Witness::Base(Value::known(pallas::Base::from(self.coin_attrs.value))),
             Witness::Base(Value::known(self.coin_attrs.spend_hook.inner())),
             Witness::Base(Value::known(self.coin_attrs.user_data)),
-            Witness::Base(Value::known(self.coin_attrs.blind)),
+            Witness::Base(Value::known(self.coin_attrs.blind.inner())),
             // Token attributes
             Witness::Base(Value::known(self.token_attrs.auth_parent.inner())),
             Witness::Base(Value::known(self.token_attrs.user_data)),
-            Witness::Base(Value::known(self.token_attrs.blind)),
+            Witness::Base(Value::known(self.token_attrs.blind.inner())),
         ];
 
         let coin = self.coin_attrs.to_coin();

@@ -37,8 +37,7 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        contract_id::MONEY_CONTRACT_ID, pasta_prelude::*, FuncId, FuncRef, Keypair, PublicKey,
-        SecretKey,
+        contract_id::MONEY_CONTRACT_ID, Blind, FuncId, FuncRef, Keypair, PublicKey, SecretKey,
     },
     dark_tree::DarkLeaf,
     pasta::pallas,
@@ -225,7 +224,7 @@ impl Drk {
             token_id,
             spend_hook,
             user_data,
-            blind: pallas::Base::random(&mut OsRng),
+            blind: Blind::random(&mut OsRng),
         };
 
         let builder = TokenMintCallBuilder {

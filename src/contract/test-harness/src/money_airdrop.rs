@@ -29,7 +29,7 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{FuncId, MerkleNode, MONEY_CONTRACT_ID},
+    crypto::{Blind, FuncId, MerkleNode, MONEY_CONTRACT_ID},
     pasta::pallas,
     ContractCall,
 };
@@ -74,7 +74,7 @@ impl TestHarness {
                 token_id: *DARK_TOKEN_ID,
                 spend_hook: rcpt_spend_hook.unwrap_or(FuncId::none()),
                 user_data: rcpt_user_data.unwrap_or(pallas::Base::ZERO),
-                blind: pallas::Base::random(&mut OsRng),
+                blind: Blind::random(&mut OsRng),
             }],
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),

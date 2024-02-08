@@ -22,7 +22,7 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{note::AeadEncryptedNote, pasta_prelude::*, FuncId, Keypair, PublicKey},
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, Blind, FuncId, Keypair, PublicKey},
     pasta::pallas,
 };
 use log::{debug, info};
@@ -96,14 +96,14 @@ impl GenesisMintCallBuilder {
             token_id,
             spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
-            blind: pallas::Base::random(&mut OsRng),
+            blind: Blind::random(&mut OsRng),
         };
 
         // We just create the commitment blinds here. We simply encofce
         // that the clear input and the anon output have the same commitments.
         // Not sure if this can be avoided, but also is it really necessary to avoid?
-        let value_blind = pallas::Scalar::random(&mut OsRng);
-        let token_blind = pallas::Base::random(&mut OsRng);
+        let value_blind = Blind::random(&mut OsRng);
+        let token_blind = Blind::random(&mut OsRng);
 
         let c_input = ClearInput {
             value: input.value,
@@ -113,7 +113,7 @@ impl GenesisMintCallBuilder {
             signature_public: PublicKey::from_secret(input.signature_secret),
         };
 
-        let coin_blind = pallas::Base::random(&mut OsRng);
+        let coin_blind = Blind::random(&mut OsRng);
 
         info!("Creating token mint proof for output");
         let (proof, public_inputs) = create_transfer_mint_proof(

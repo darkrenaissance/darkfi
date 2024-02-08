@@ -18,8 +18,8 @@
 
 use darkfi_sdk::{
     crypto::{
-        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::PrimeField, poseidon_hash, FuncId,
-        MerkleNode, PublicKey, SecretKey,
+        ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::PrimeField, poseidon_hash,
+        BaseBlind, FuncId, MerkleNode, PublicKey, ScalarBlind, SecretKey,
     },
     error::ContractError,
     pasta::pallas,
@@ -78,7 +78,7 @@ pub struct CoinAttributes {
     pub spend_hook: FuncId,
     pub user_data: pallas::Base,
     /// Simultaneously blinds the coin and ensures uniqueness
-    pub blind: pallas::Base,
+    pub blind: BaseBlind,
 }
 // ANCHOR_END: coin-attributes
 
@@ -92,7 +92,7 @@ impl CoinAttributes {
             self.token_id.inner(),
             self.spend_hook.inner(),
             self.user_data,
-            self.blind,
+            self.blind.inner(),
         ]);
         Coin(coin)
     }
@@ -102,12 +102,13 @@ impl CoinAttributes {
 pub struct TokenAttributes {
     pub auth_parent: FuncId,
     pub user_data: pallas::Base,
-    pub blind: pallas::Base,
+    pub blind: BaseBlind,
 }
 
 impl TokenAttributes {
     pub fn to_token_id(&self) -> TokenId {
-        let token_id = poseidon_hash([self.auth_parent.inner(), self.user_data, self.blind]);
+        let token_id =
+            poseidon_hash([self.auth_parent.inner(), self.user_data, self.blind.inner()]);
         TokenId::from(token_id)
     }
 }
@@ -137,9 +138,9 @@ pub struct ClearInput {
     /// Input's token ID
     pub token_id: TokenId,
     /// Blinding factor for `value`
-    pub value_blind: pallas::Scalar,
+    pub value_blind: ScalarBlind,
     /// Blinding factor for `token_id`
-    pub token_blind: pallas::Base,
+    pub token_blind: BaseBlind,
     /// Public key for the signature
     pub signature_public: PublicKey,
 }
@@ -189,9 +190,9 @@ pub struct MoneyFeeParamsV1 {
     /// Anonymous outputs
     pub output: Output,
     /// Fee value blind
-    pub fee_value_blind: pallas::Scalar,
+    pub fee_value_blind: ScalarBlind,
     /// Token ID blind
-    pub token_blind: pallas::Base,
+    pub token_blind: BaseBlind,
 }
 
 /// State update for `Money::Fee`

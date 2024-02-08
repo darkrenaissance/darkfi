@@ -28,7 +28,7 @@
 
 use darkfi_sdk::{
     bridgetree,
-    crypto::{FuncId, SecretKey},
+    crypto::{BaseBlind, Blind, FuncId, ScalarBlind, SecretKey},
     pasta::pallas,
 };
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
@@ -75,12 +75,12 @@ pub struct MoneyNote {
     /// User data used by protocol when spend hook is enabled
     pub user_data: pallas::Base,
     /// Blinding factor for the coin
-    pub coin_blind: pallas::Base,
+    pub coin_blind: BaseBlind,
     // TODO: look into removing these fields. We potentially don't need them [
     /// Blinding factor for the value pedersen commitment
-    pub value_blind: pallas::Scalar,
+    pub value_blind: ScalarBlind,
     /// Blinding factor for the token ID pedersen commitment
-    pub token_blind: pallas::Base,
+    pub token_blind: BaseBlind,
     // ] ^ the receiver is not interested in the value commit / token commits.
     // we just want to examine the coins in the outputs. The money::transfer() contract
     // should ensure everything else is correct.
@@ -105,22 +105,22 @@ pub struct OwnCoin {
 
 pub fn compute_remainder_blind(
     clear_inputs: &[crate::model::ClearInput],
-    input_blinds: &[pallas::Scalar],
-    output_blinds: &[pallas::Scalar],
-) -> pallas::Scalar {
+    input_blinds: &[ScalarBlind],
+    output_blinds: &[ScalarBlind],
+) -> ScalarBlind {
     let mut total = pallas::Scalar::zero();
 
     for input in clear_inputs {
-        total += input.value_blind;
+        total += input.value_blind.inner();
     }
 
     for input_blind in input_blinds {
-        total += input_blind;
+        total += input_blind.inner();
     }
 
     for output_blind in output_blinds {
-        total -= output_blind;
+        total -= output_blind.inner();
     }
 
-    total
+    Blind(total)
 }

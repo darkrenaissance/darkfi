@@ -24,7 +24,10 @@ use darkfi::{
     ClientFailed, Result,
 };
 use darkfi_sdk::{
-    crypto::{note::AeadEncryptedNote, pasta_prelude::*, FuncId, MerkleTree, PublicKey, SecretKey},
+    crypto::{
+        note::AeadEncryptedNote, pasta_prelude::*, BaseBlind, Blind, FuncId, MerkleTree, PublicKey,
+        ScalarBlind, SecretKey,
+    },
     pasta::pallas,
 };
 use darkfi_serial::serialize;
@@ -63,7 +66,7 @@ pub struct SwapCallBuilder {
     /// The token ID of the party's output to receive
     pub token_id_recv: TokenId,
     /// User data blind for the party's input
-    pub user_data_blind_send: pallas::Base,
+    pub user_data_blind_send: BaseBlind,
     /// Spend hook for the party's output
     pub spend_hook_recv: FuncId,
     /// User data for the party's output
@@ -72,9 +75,9 @@ pub struct SwapCallBuilder {
     /// `[0]` is used for input 0 and output 1, and `[1]` is
     /// used for input 1 and output 0. The same applies to
     /// `token_blinds`.
-    pub value_blinds: [pallas::Scalar; 2],
+    pub value_blinds: [ScalarBlind; 2],
     /// The blinds to be used for token ID pedersen commitments
-    pub token_blinds: [pallas::Base; 2],
+    pub token_blinds: [BaseBlind; 2],
     /// The coin to be used as the input to the swap
     pub coin: OwnCoin,
     /// Merkle tree of coins used to create inclusion proofs
@@ -122,7 +125,7 @@ impl SwapCallBuilder {
             token_id: self.token_id_recv,
             spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
-            blind: pallas::Base::random(&mut OsRng),
+            blind: Blind::random(&mut OsRng),
         };
 
         // Now we fill this with necessary stuff
@@ -155,7 +158,7 @@ impl SwapCallBuilder {
         proofs.push(proof);
 
         // For the output, we create a new coin blind
-        let coin_blind = pallas::Base::random(&mut OsRng);
+        let coin_blind = Blind::random(&mut OsRng);
 
         info!("Creating mint proof for output");
         let (proof, public_inputs) = create_transfer_mint_proof(

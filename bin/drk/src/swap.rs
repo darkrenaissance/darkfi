@@ -33,8 +33,8 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     crypto::{
-        contract_id::MONEY_CONTRACT_ID, pedersen::pedersen_commitment_u64, poseidon_hash, FuncId,
-        PublicKey, SecretKey,
+        contract_id::MONEY_CONTRACT_ID, pedersen::pedersen_commitment_u64, poseidon_hash,
+        BaseBlind, Blind, FuncId, PublicKey, ScalarBlind, SecretKey,
     },
     pasta::pallas,
     tx::ContractCall,
@@ -51,8 +51,8 @@ pub struct PartialSwapData {
     proofs: Vec<Proof>,
     value_pair: (u64, u64),
     token_pair: (TokenId, TokenId),
-    value_blinds: Vec<pallas::Scalar>,
-    token_blinds: Vec<pallas::Base>,
+    value_blinds: Vec<ScalarBlind>,
+    token_blinds: Vec<BaseBlind>,
 }
 
 impl fmt::Display for PartialSwapData {
@@ -125,8 +125,8 @@ impl Drk {
         let burn_circuit = ZkCircuit::new(empty_witnesses(&burn_zkbin)?, &burn_zkbin);
 
         // Since we're creating the first half, we generate the blinds.
-        let value_blinds = [pallas::Scalar::random(&mut OsRng), pallas::Scalar::random(&mut OsRng)];
-        let token_blinds = [pallas::Base::random(&mut OsRng), pallas::Base::random(&mut OsRng)];
+        let value_blinds = [Blind::random(&mut OsRng), Blind::random(&mut OsRng)];
+        let token_blinds = [Blind::random(&mut OsRng), Blind::random(&mut OsRng)];
 
         // Now we should have everything we need to build the swap half
         eprintln!("Creating Mint and Burn circuit proving keys");
@@ -138,9 +138,9 @@ impl Drk {
             token_id_send: token_send,
             value_recv,
             token_id_recv: token_recv,
-            user_data_blind_send: pallas::Base::random(&mut OsRng), // <-- FIXME: Perhaps should be passed in
-            spend_hook_recv: FuncId::none(), // <-- FIXME: Should be passed in
-            user_data_recv: pallas::Base::zero(), // <-- FIXME: Should be passed in
+            user_data_blind_send: Blind::random(&mut OsRng), // <-- FIXME: Perhaps should be passed in
+            spend_hook_recv: FuncId::none(),                 // <-- FIXME: Should be passed in
+            user_data_recv: pallas::Base::ZERO,              // <-- FIXME: Should be passed in
             value_blinds,
             token_blinds,
             coin: burn_coin,
@@ -228,9 +228,9 @@ impl Drk {
             token_id_send: partial.token_pair.1,
             value_recv: partial.value_pair.0,
             token_id_recv: partial.token_pair.0,
-            user_data_blind_send: pallas::Base::random(&mut OsRng), // <-- FIXME: Perhaps should be passed in
-            spend_hook_recv: FuncId::none(), // <-- FIXME: Should be passed in
-            user_data_recv: pallas::Base::ZERO, // <-- FIXME: Should be passed in
+            user_data_blind_send: Blind::random(&mut OsRng), // <-- FIXME: Perhaps should be passed in
+            spend_hook_recv: FuncId::none(),                 // <-- FIXME: Should be passed in
+            user_data_recv: pallas::Base::ZERO,              // <-- FIXME: Should be passed in
             value_blinds: [partial.value_blinds[1], partial.value_blinds[0]],
             token_blinds: [partial.token_blinds[1], partial.token_blinds[0]],
             coin: burn_coin,
@@ -361,7 +361,7 @@ impl Drk {
                 pub_y,
                 pallas::Base::from(note.value),
                 note.token_id.inner(),
-                note.coin_blind,
+                note.coin_blind.inner(),
             ]));
 
             if coin == params.outputs[output_idx].coin {
@@ -372,7 +372,7 @@ impl Drk {
             }
 
             let valcom = pedersen_commitment_u64(note.value, note.value_blind);
-            let tokcom = poseidon_hash([note.token_id.inner(), note.token_blind]);
+            let tokcom = poseidon_hash([note.token_id.inner(), note.token_blind.inner()]);
 
             if valcom != params.outputs[output_idx].value_commit {
                 eprintln!(

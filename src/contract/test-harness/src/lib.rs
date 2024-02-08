@@ -35,8 +35,8 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        note::AeadEncryptedNote, pasta_prelude::Field, poseidon_hash, ContractId, Keypair,
-        MerkleNode, MerkleTree, PublicKey, SecretKey,
+        note::AeadEncryptedNote, pasta_prelude::Field, poseidon_hash, BaseBlind, Blind, ContractId,
+        Keypair, MerkleNode, MerkleTree, PublicKey, SecretKey,
     },
     pasta::pallas,
 };
@@ -64,13 +64,13 @@ mod money_transfer;
 pub fn init_logger() {
     let mut cfg = simplelog::ConfigBuilder::new();
     cfg.add_filter_ignore("sled".to_string());
-    cfg.set_target_level(simplelog::LevelFilter::Error);
+    //cfg.set_target_level(simplelog::LevelFilter::Error);
 
     // We check this error so we can execute same file tests in parallel,
     // otherwise second one fails to init logger here.
     if simplelog::TermLogger::init(
-        //simplelog::LevelFilter::Info,
-        simplelog::LevelFilter::Debug,
+        simplelog::LevelFilter::Info,
+        //simplelog::LevelFilter::Debug,
         //simplelog::LevelFilter::Trace,
         cfg.build(),
         simplelog::TerminalMode::Mixed,
@@ -112,7 +112,7 @@ pub enum TxAction {
 pub struct Wallet {
     pub keypair: Keypair,
     pub token_mint_authority: Keypair,
-    pub token_blind: pallas::Base,
+    pub token_blind: BaseBlind,
     pub contract_deploy_authority: Keypair,
     pub validator: ValidatorPtr,
     pub money_merkle_tree: MerkleTree,
@@ -162,7 +162,7 @@ impl Wallet {
         let spent_money_coins = vec![];
 
         let token_mint_authority = Keypair::random(&mut OsRng);
-        let token_blind = pallas::Base::random(&mut OsRng);
+        let token_blind = Blind::random(&mut OsRng);
         let contract_deploy_authority = Keypair::random(&mut OsRng);
 
         Ok(Self {

@@ -29,7 +29,7 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{FuncId, MerkleNode, MONEY_CONTRACT_ID},
+    crypto::{Blind, FuncId, MerkleNode, MONEY_CONTRACT_ID},
     pasta::pallas,
     ContractCall,
 };
@@ -62,14 +62,14 @@ impl TestHarness {
 
         // We're just going to be using a zero spend-hook and user-data
         let rcpt_spend_hook = FuncId::none();
-        let rcpt_user_data = pallas::Base::zero();
-        let rcpt_user_data_blind = pallas::Base::random(&mut OsRng);
+        let rcpt_user_data = pallas::Base::ZERO;
+        let rcpt_user_data_blind = Blind::random(&mut OsRng);
 
         // Generating  swap blinds
-        let value_send_blind = pallas::Scalar::random(&mut OsRng);
-        let value_recv_blind = pallas::Scalar::random(&mut OsRng);
-        let token_send_blind = pallas::Base::random(&mut OsRng);
-        let token_recv_blind = pallas::Base::random(&mut OsRng);
+        let value_send_blind = Blind::random(&mut OsRng);
+        let value_recv_blind = Blind::random(&mut OsRng);
+        let token_send_blind = Blind::random(&mut OsRng);
+        let token_recv_blind = Blind::random(&mut OsRng);
 
         // Builder first holder part
         let builder = SwapCallBuilder {

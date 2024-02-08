@@ -17,7 +17,7 @@
  */
 use darkfi::{zk::ProvingKey, zkas::ZkBinary, ClientFailed, Result};
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, FuncId, Keypair, MerkleTree, PublicKey},
+    crypto::{pasta_prelude::*, Blind, FuncId, Keypair, MerkleTree, PublicKey},
     pasta::pallas,
 };
 use log::{debug, error};
@@ -118,7 +118,7 @@ pub fn make_transfer_call(
             merkle_path,
             secret: coin.secret,
             note: coin.note.clone(),
-            user_data_blind: pallas::Base::random(&mut OsRng),
+            user_data_blind: Blind::random(&mut OsRng),
         };
 
         inputs.push(input);
@@ -131,7 +131,7 @@ pub fn make_transfer_call(
         token_id,
         spend_hook: FuncId::none(),
         user_data: pallas::Base::ZERO,
-        blind: pallas::Base::random(&mut OsRng),
+        blind: Blind::random(&mut OsRng),
     });
 
     if change_value > 0 {
@@ -141,7 +141,7 @@ pub fn make_transfer_call(
             token_id,
             spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
-            blind: pallas::Base::random(&mut OsRng),
+            blind: Blind::random(&mut OsRng),
         });
     }
 

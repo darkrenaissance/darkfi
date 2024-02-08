@@ -34,8 +34,8 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        note::AeadEncryptedNote, poseidon_hash, FuncId, Keypair, MerkleNode, MerkleTree, PublicKey,
-        SecretKey, MONEY_CONTRACT_ID,
+        note::AeadEncryptedNote, poseidon_hash, BaseBlind, FuncId, Keypair, MerkleNode, MerkleTree,
+        PublicKey, ScalarBlind, SecretKey, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
 };
@@ -436,17 +436,17 @@ impl Drk {
             let Value::Blob(ref coin_blind_bytes) = row[6] else {
                 return Err(Error::ParseFailed("[get_coins] Coin blind bytes parsing failed"))
             };
-            let coin_blind: pallas::Base = deserialize(coin_blind_bytes)?;
+            let coin_blind: BaseBlind = deserialize(coin_blind_bytes)?;
 
             let Value::Blob(ref value_blind_bytes) = row[7] else {
                 return Err(Error::ParseFailed("[get_coins] Value blind bytes parsing failed"))
             };
-            let value_blind: pallas::Scalar = deserialize(value_blind_bytes)?;
+            let value_blind: ScalarBlind = deserialize(value_blind_bytes)?;
 
             let Value::Blob(ref token_blind_bytes) = row[8] else {
                 return Err(Error::ParseFailed("[get_coins] Token blind bytes parsing failed"))
             };
-            let token_blind: pallas::Base = deserialize(token_blind_bytes)?;
+            let token_blind: BaseBlind = deserialize(token_blind_bytes)?;
 
             let Value::Blob(ref secret_bytes) = row[9] else {
                 return Err(Error::ParseFailed("[get_coins] Secret bytes parsing failed"))

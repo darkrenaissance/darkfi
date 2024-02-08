@@ -23,7 +23,7 @@ use darkfi_sdk::{
     crypto::{
         note::{AeadEncryptedNote, ElGamalEncryptedNote},
         pasta_prelude::*,
-        poseidon_hash, MerkleNode, PublicKey,
+        poseidon_hash, BaseBlind, MerkleNode, PublicKey,
     },
     error::ContractError,
     pasta::pallas,
@@ -43,7 +43,7 @@ pub struct Dao {
     pub approval_ratio_base: u64,
     pub gov_token_id: TokenId,
     pub public_key: PublicKey,
-    pub bulla_blind: pallas::Base,
+    pub bulla_blind: BaseBlind,
 }
 // ANCHOR_END: dao
 
@@ -62,7 +62,7 @@ impl Dao {
             self.gov_token_id.inner(),
             pub_x,
             pub_y,
-            self.bulla_blind,
+            self.bulla_blind.inner(),
         ]);
         DaoBulla(bulla)
     }
@@ -148,7 +148,7 @@ pub struct DaoProposal {
     /// Arbitrary data provided by the user. We don't use this.
     pub user_data: pallas::Base,
     pub dao_bulla: DaoBulla,
-    pub blind: pallas::Base,
+    pub blind: BaseBlind,
 }
 // ANCHOR_END: dao-proposal
 
@@ -160,7 +160,7 @@ impl DaoProposal {
             pallas::Base::from(self.duration_days),
             self.user_data,
             self.dao_bulla.inner(),
-            self.blind,
+            self.blind.inner(),
         ]);
         DaoProposalBulla(bulla)
     }

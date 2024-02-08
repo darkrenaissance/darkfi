@@ -31,7 +31,7 @@ use darkfi_sdk::{
         pasta_prelude::*,
         pedersen_commitment_u64, poseidon_hash,
         util::{fp_mod_fv, fp_to_u64},
-        FuncId, FuncRef, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+        Blind, FuncId, FuncRef, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
 };
@@ -98,7 +98,7 @@ fn integration_test() -> Result<()> {
             approval_ratio_quot: 1,
             gov_token_id,
             public_key: dao_keypair.public,
-            bulla_blind: pallas::Base::random(&mut OsRng),
+            bulla_blind: Blind::random(&mut OsRng),
         };
 
         // ====================
@@ -249,7 +249,7 @@ fn integration_test() -> Result<()> {
             token_id: drk_token_id,
             spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
-            blind: pallas::Base::random(&mut OsRng),
+            blind: Blind::random(&mut OsRng),
         }];
         // We can add whatever we want in here, even arbitrary text
         // It's up to the auth module to decide what to do with it.
@@ -342,8 +342,8 @@ fn integration_test() -> Result<()> {
         let mut total_yes_vote_value = 0;
         let mut total_all_vote_value = 0;
         let mut blind_total_vote = DaoBlindAggregateVote::default();
-        let mut total_yes_vote_blind = pallas::Scalar::ZERO;
-        let mut total_all_vote_blind = pallas::Scalar::ZERO;
+        let mut total_yes_vote_blind = Blind::ZERO;
+        let mut total_all_vote_blind = Blind::ZERO;
 
         for (i, (note, params)) in [
             (vote_note_1, alice_vote_params),
@@ -360,9 +360,9 @@ fn integration_test() -> Result<()> {
             //   all_vote_blind,
             // ]
             let vote_option = fp_to_u64(note[0]).unwrap();
-            let yes_vote_blind = fp_mod_fv(note[1]);
+            let yes_vote_blind = Blind(fp_mod_fv(note[1]));
             let all_vote_value = fp_to_u64(note[2]).unwrap();
-            let all_vote_blind = fp_mod_fv(note[3]);
+            let all_vote_blind = Blind(fp_mod_fv(note[3]));
             assert!(vote_option == 0 || vote_option == 1);
 
             total_yes_vote_blind += yes_vote_blind;

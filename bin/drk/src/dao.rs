@@ -42,8 +42,8 @@ use darkfi_sdk::{
     crypto::{
         poseidon_hash,
         util::{fp_mod_fv, fp_to_u64},
-        FuncId, FuncRef, Keypair, MerkleNode, MerkleTree, PublicKey, SecretKey, DAO_CONTRACT_ID,
-        MONEY_CONTRACT_ID,
+        BaseBlind, Blind, FuncId, FuncRef, Keypair, MerkleNode, MerkleTree, PublicKey, ScalarBlind,
+        SecretKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
     ContractCall,
@@ -120,7 +120,7 @@ pub struct DaoProposalInfo {
     pub dest: PublicKey,
     pub amount: u64,
     pub token_id: TokenId,
-    pub blind: pallas::Base,
+    pub blind: BaseBlind,
 }
 
 #[derive(SerialEncodable, SerialDecodable)]
@@ -193,7 +193,7 @@ pub struct Dao {
     /// Secret key for the DAO
     pub secret_key: SecretKey,
     /// DAO bulla blind
-    pub bulla_blind: pallas::Base,
+    pub bulla_blind: BaseBlind,
     /// Leaf position of the DAO in the Merkle tree of DAOs
     pub leaf_position: Option<bridgetree::Position>,
     /// The transaction hash where the DAO was deployed
@@ -214,7 +214,7 @@ impl Dao {
             self.gov_token_id.inner(),
             x,
             y,
-            self.bulla_blind,
+            self.bulla_blind.inner(),
         ]))
     }
 
@@ -276,7 +276,7 @@ pub struct DaoProposal {
     /// Token ID to be sent
     pub token_id: TokenId,
     /// Proposal's bulla blind
-    pub bulla_blind: pallas::Base,
+    pub bulla_blind: BaseBlind,
     /// Leaf position of this proposal in the Merkle tree of proposals
     pub leaf_position: Option<bridgetree::Position>,
     /// Snapshotted Money Merkle tree
@@ -299,7 +299,7 @@ impl DaoProposal {
             pallas::Base::from(self.amount),
             self.token_id.inner(),
             self.dao_bulla.inner(),
-            self.bulla_blind,
+            self.bulla_blind.inner(),
         ])
     }
 }
@@ -346,11 +346,11 @@ pub struct DaoVote {
     /// The vote
     pub vote_option: bool,
     /// Blinding factor for the yes vote
-    pub yes_vote_blind: pallas::Scalar,
+    pub yes_vote_blind: ScalarBlind,
     /// Value of all votes
     pub all_vote_value: u64,
     /// Blinding facfor of all votes
-    pub all_vote_blind: pallas::Scalar,
+    pub all_vote_blind: ScalarBlind,
     /// Transaction hash where this vote was casted
     pub tx_hash: Option<blake3::Hash>,
     /// call index in the transaction where this vote was casted
@@ -819,9 +819,9 @@ impl Drk {
                     let vote_option = fp_to_u64(note[0]).unwrap();
                     assert!(vote_option == 0 || vote_option == 1);
                     let vote_option = vote_option != 0;
-                    let yes_vote_blind = fp_mod_fv(note[1]);
+                    let yes_vote_blind = Blind(fp_mod_fv(note[1]));
                     let all_vote_value = fp_to_u64(note[2]).unwrap();
-                    let all_vote_blind = fp_mod_fv(note[3]);
+                    let all_vote_blind = Blind(fp_mod_fv(note[3]));
 
                     let v = DaoVote {
                         id: 0,
@@ -1545,7 +1545,7 @@ impl Drk {
             duration_days: 30,
             user_data: pallas::Base::ZERO,
             dao_bulla: dao.bulla(),
-            blind: pallas::Base::random(&mut OsRng),
+            blind: Blind::random(&mut OsRng),
         };
 
         // TODO: Simplify this model struct import once
@@ -1658,7 +1658,7 @@ impl Drk {
             duration_days: 30,
             user_data: pallas::Base::ZERO,
             dao_bulla: dao.bulla(),
-            blind: pallas::Base::random(&mut OsRng),
+            blind: Blind::random(&mut OsRng),
         };
 
         // TODO: Simplify this model struct import once

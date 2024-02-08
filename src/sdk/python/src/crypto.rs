@@ -51,7 +51,7 @@ pub fn poseidon_hash(messages: Vec<&PyCell<Fp>>) -> Fp {
 /// Calculate a Pedersen commitment with an u64 value.
 #[pyfunction]
 pub fn pedersen_commitment_u64(value: u64, blind: &PyCell<Fq>) -> Ep {
-    Ep(crypto::pedersen::pedersen_commitment_u64(value, blind.borrow().deref().0))
+    Ep(crypto::pedersen::pedersen_commitment_u64(value, crypto::Blind(blind.borrow().deref().0)))
 }
 
 /// Calculate a Pedersen commitment with an Fp value.
@@ -59,7 +59,7 @@ pub fn pedersen_commitment_u64(value: u64, blind: &PyCell<Fq>) -> Ep {
 pub fn pedersen_commitment_base(value: &PyCell<Fp>, blind: &PyCell<Fq>) -> Ep {
     Ep(crypto::pedersen::pedersen_commitment_base(
         value.borrow().deref().0,
-        blind.borrow().deref().0,
+        crypto::Blind(blind.borrow().deref().0),
     ))
 }
 

@@ -17,7 +17,9 @@
  */
 
 use darkfi_sdk::{
-    crypto::{pasta_prelude::*, pedersen_commitment_u64, PublicKey, SecretKey},
+    crypto::{
+        pasta_prelude::*, pedersen_commitment_u64, BaseBlind, PublicKey, ScalarBlind, SecretKey,
+    },
     pasta::pallas,
 };
 
@@ -37,11 +39,11 @@ pub struct DaoExecCall {
     pub dao: Dao,
     pub yes_vote_value: u64,
     pub all_vote_value: u64,
-    pub yes_vote_blind: pallas::Scalar,
-    pub all_vote_blind: pallas::Scalar,
+    pub yes_vote_blind: ScalarBlind,
+    pub all_vote_blind: ScalarBlind,
     pub input_value: u64,
-    pub input_value_blind: pallas::Scalar,
-    pub input_user_data_blind: pallas::Base,
+    pub input_value_blind: ScalarBlind,
+    pub input_user_data_blind: BaseBlind,
     pub hook_dao_exec: pallas::Base,
     pub signature_secret: SecretKey,
 }
@@ -82,7 +84,7 @@ impl DaoExecCall {
             Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_day))),
             Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_days))),
             Witness::Base(Value::known(self.proposal.user_data)),
-            Witness::Base(Value::known(self.proposal.blind)),
+            Witness::Base(Value::known(self.proposal.blind.inner())),
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),
             Witness::Base(Value::known(dao_quorum)),
@@ -91,12 +93,12 @@ impl DaoExecCall {
             Witness::Base(Value::known(self.dao.gov_token_id.inner())),
             Witness::Base(Value::known(dao_pub_x)),
             Witness::Base(Value::known(dao_pub_y)),
-            Witness::Base(Value::known(self.dao.bulla_blind)),
+            Witness::Base(Value::known(self.dao.bulla_blind.inner())),
             // votes
             Witness::Base(Value::known(pallas::Base::from(self.yes_vote_value))),
             Witness::Base(Value::known(pallas::Base::from(self.all_vote_value))),
-            Witness::Scalar(Value::known(self.yes_vote_blind)),
-            Witness::Scalar(Value::known(self.all_vote_blind)),
+            Witness::Scalar(Value::known(self.yes_vote_blind.inner())),
+            Witness::Scalar(Value::known(self.all_vote_blind.inner())),
             // signature secret
             Witness::Base(Value::known(self.signature_secret.inner())),
         ];

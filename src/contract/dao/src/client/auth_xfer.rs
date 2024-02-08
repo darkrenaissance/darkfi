@@ -18,7 +18,7 @@
 
 use darkfi_money_contract::model::CoinAttributes;
 use darkfi_sdk::{
-    crypto::{note::ElGamalEncryptedNote, poseidon_hash, PublicKey, SecretKey},
+    crypto::{note::ElGamalEncryptedNote, poseidon_hash, BaseBlind, PublicKey, SecretKey},
     pasta::pallas,
 };
 
@@ -36,7 +36,7 @@ pub struct DaoAuthMoneyTransferCall {
     pub proposal: DaoProposal,
     pub proposal_coinattrs: Vec<CoinAttributes>,
     pub dao: Dao,
-    pub input_user_data_blind: pallas::Base,
+    pub input_user_data_blind: BaseBlind,
     pub dao_coin_attrs: CoinAttributes,
 }
 
@@ -69,7 +69,7 @@ impl DaoAuthMoneyTransferCall {
                 coin_attrs.token_id.inner(),
                 coin_attrs.spend_hook.inner(),
                 coin_attrs.user_data,
-                coin_attrs.blind,
+                coin_attrs.blind.inner(),
             ];
             let enc_note =
                 ElGamalEncryptedNote::encrypt(note, &ephem_secret, &coin_attrs.public_key);
@@ -80,7 +80,7 @@ impl DaoAuthMoneyTransferCall {
                 Witness::Base(Value::known(coin_attrs.token_id.inner())),
                 Witness::Base(Value::known(coin_attrs.spend_hook.inner())),
                 Witness::Base(Value::known(coin_attrs.user_data)),
-                Witness::Base(Value::known(coin_attrs.blind)),
+                Witness::Base(Value::known(coin_attrs.blind.inner())),
                 Witness::Base(Value::known(ephem_secret.inner())),
             ];
 
@@ -112,8 +112,11 @@ impl DaoAuthMoneyTransferCall {
         let dao_public_key = self.dao.public_key.inner();
         let dao_change_value = pallas::Base::from(self.dao_coin_attrs.value);
 
-        let note =
-            [dao_change_value, self.dao_coin_attrs.token_id.inner(), self.dao_coin_attrs.blind];
+        let note = [
+            dao_change_value,
+            self.dao_coin_attrs.token_id.inner(),
+            self.dao_coin_attrs.blind.inner(),
+        ];
         let dao_change_attrs =
             ElGamalEncryptedNote::encrypt(note, &ephem_secret, &self.dao.public_key);
 
@@ -125,7 +128,7 @@ impl DaoAuthMoneyTransferCall {
         let dao_approval_ratio_base = pallas::Base::from(self.dao.approval_ratio_base);
 
         let input_user_data_enc =
-            poseidon_hash([self.dao.to_bulla().inner(), self.input_user_data_blind]);
+            poseidon_hash([self.dao.to_bulla().inner(), self.input_user_data_blind.inner()]);
 
         let prover_witnesses = vec![
             // proposal params
@@ -133,7 +136,7 @@ impl DaoAuthMoneyTransferCall {
             Witness::Base(Value::known(pallas::Base::from(self.proposal.creation_day))),
             Witness::Base(Value::known(pallas::Base::from(self.proposal.duration_days))),
             Witness::Base(Value::known(self.proposal.user_data)),
-            Witness::Base(Value::known(self.proposal.blind)),
+            Witness::Base(Value::known(self.proposal.blind.inner())),
             // DAO params
             Witness::Base(Value::known(dao_proposer_limit)),
             Witness::Base(Value::known(dao_quorum)),
@@ -141,13 +144,13 @@ impl DaoAuthMoneyTransferCall {
             Witness::Base(Value::known(dao_approval_ratio_base)),
             Witness::Base(Value::known(self.dao.gov_token_id.inner())),
             Witness::EcNiPoint(Value::known(dao_public_key)),
-            Witness::Base(Value::known(self.dao.bulla_blind)),
+            Witness::Base(Value::known(self.dao.bulla_blind.inner())),
             // Dao input user data blind
-            Witness::Base(Value::known(self.input_user_data_blind)),
+            Witness::Base(Value::known(self.input_user_data_blind.inner())),
             // Dao output coin attrs
             Witness::Base(Value::known(dao_change_value)),
             Witness::Base(Value::known(self.dao_coin_attrs.token_id.inner())),
-            Witness::Base(Value::known(self.dao_coin_attrs.blind)),
+            Witness::Base(Value::known(self.dao_coin_attrs.blind.inner())),
             // DAO::exec() func ID
             Witness::Base(Value::known(self.dao_coin_attrs.spend_hook.inner())),
             // Encrypted change DAO output

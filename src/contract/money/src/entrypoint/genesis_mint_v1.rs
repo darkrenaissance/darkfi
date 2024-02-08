@@ -116,7 +116,7 @@ pub(crate) fn money_genesis_mint_process_instruction_v1(
         return Err(MoneyError::ValueMismatch.into())
     }
 
-    if poseidon_hash([params.input.token_id.inner(), params.input.token_blind]) !=
+    if poseidon_hash([params.input.token_id.inner(), params.input.token_blind.inner()]) !=
         params.output.token_commit
     {
         msg!("[GenesisMintV1] Error: Token commitment mismatch");

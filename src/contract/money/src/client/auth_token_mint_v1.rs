@@ -22,7 +22,7 @@ use darkfi::{
     Result,
 };
 use darkfi_sdk::{
-    crypto::{note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, Keypair},
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, Blind, Keypair},
     pasta::pallas,
 };
 use log::info;
@@ -56,7 +56,7 @@ impl AuthTokenMintCallBuilder {
     pub fn build(&self) -> Result<AuthTokenMintCallDebris> {
         info!("Building Money::AuthTokenMintV1 contract call");
 
-        let value_blind = pallas::Scalar::random(&mut OsRng);
+        let value_blind = Blind::random(&mut OsRng);
         let value_commit = pedersen_commitment_u64(self.coin_attrs.value, value_blind);
 
         // Create the proof
@@ -70,14 +70,14 @@ impl AuthTokenMintCallBuilder {
             Witness::Base(Value::known(pallas::Base::from(self.coin_attrs.value))),
             Witness::Base(Value::known(self.coin_attrs.spend_hook.inner())),
             Witness::Base(Value::known(self.coin_attrs.user_data)),
-            Witness::Base(Value::known(self.coin_attrs.blind)),
+            Witness::Base(Value::known(self.coin_attrs.blind.inner())),
             // Token attributes
             Witness::Base(Value::known(self.token_attrs.auth_parent.inner())),
-            Witness::Base(Value::known(self.token_attrs.blind)),
+            Witness::Base(Value::known(self.token_attrs.blind.inner())),
             // Secret key used by mint
             Witness::Base(Value::known(self.mint_keypair.secret.inner())),
             // Random blinding factor for the value commitment
-            Witness::Scalar(Value::known(value_blind)),
+            Witness::Scalar(Value::known(value_blind.inner())),
         ];
 
         let mint_pubkey = self.mint_keypair.public;
@@ -104,7 +104,7 @@ impl AuthTokenMintCallBuilder {
             user_data: self.coin_attrs.user_data,
             coin_blind: self.coin_attrs.blind,
             value_blind,
-            token_blind: pallas::Base::ZERO,
+            token_blind: Blind::ZERO,
             memo: vec![],
         };
 

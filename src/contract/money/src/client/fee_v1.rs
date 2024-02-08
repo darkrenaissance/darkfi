@@ -31,8 +31,8 @@ use darkfi_sdk::{
     crypto::{
         note::AeadEncryptedNote,
         pasta_prelude::{Curve, CurveAffine, Field},
-        pedersen_commitment_u64, poseidon_hash, FuncId, Keypair, MerkleNode, MerkleTree, PublicKey,
-        SecretKey,
+        pedersen_commitment_u64, poseidon_hash, BaseBlind, Blind, FuncId, Keypair, MerkleNode,
+        MerkleTree, PublicKey, ScalarBlind, SecretKey,
     },
     pasta::pallas,
 };
@@ -109,7 +109,7 @@ pub async fn append_fee_call(
         merkle_path: tree.witness(coin.leaf_position, 0).unwrap(),
         secret: coin.secret,
         note: coin.note.clone(),
-        user_data_blind: pallas::Base::random(&mut OsRng),
+        user_data_blind: Blind::random(&mut OsRng),
     };
 
     let output = FeeCallOutput {
@@ -118,13 +118,13 @@ pub async fn append_fee_call(
         token_id: coin.note.token_id,
         spend_hook: FuncId::none(),
         user_data: pallas::Base::ZERO,
-        blind: pallas::Base::random(&mut OsRng),
+        blind: Blind::random(&mut OsRng),
     };
 
-    let token_blind = pallas::Base::random(&mut OsRng);
+    let token_blind = Blind::random(&mut OsRng);
 
-    let input_value_blind = pallas::Scalar::random(&mut OsRng);
-    let fee_value_blind = pallas::Scalar::random(&mut OsRng);
+    let input_value_blind = Blind::random(&mut OsRng);
+    let fee_value_blind = Blind::random(&mut OsRng);
     let output_value_blind = compute_remainder_blind(&[], &[input_value_blind], &[fee_value_blind]);
 
     let signature_secret = SecretKey::random(&mut OsRng);
@@ -194,9 +194,9 @@ pub struct FeeCallSecrets {
     /// Decrypted note associated with the output
     pub note: MoneyNote,
     /// The value blind created for the input
-    pub input_value_blind: pallas::Scalar,
+    pub input_value_blind: ScalarBlind,
     /// The value blind created for the output
-    pub output_value_blind: pallas::Scalar,
+    pub output_value_blind: ScalarBlind,
 }
 
 /// Revealed public inputs of the `Fee_V1` ZK proof
@@ -253,7 +253,7 @@ struct FeeCallInput {
     merkle_path: Vec<MerkleNode>,
     secret: SecretKey,
     note: MoneyNote,
-    user_data_blind: pallas::Base,
+    user_data_blind: BaseBlind,
 }
 
 type FeeCallOutput = CoinAttributes;
@@ -264,13 +264,13 @@ fn create_fee_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     input: &FeeCallInput,
-    input_value_blind: pallas::Scalar,
+    input_value_blind: ScalarBlind,
     output: &FeeCallOutput,
-    output_value_blind: pallas::Scalar,
+    output_value_blind: ScalarBlind,
     output_spend_hook: FuncId,
     output_user_data: pallas::Base,
-    output_coin_blind: pallas::Base,
-    token_blind: pallas::Base,
+    output_coin_blind: BaseBlind,
+    token_blind: BaseBlind,
     signature_secret: SecretKey,
 ) -> Result<(Proof, FeeRevealed)> {
     let public_key = PublicKey::from_secret(input.secret);
@@ -304,10 +304,10 @@ fn create_fee_proof(
         current
     };
 
-    let input_user_data_enc = poseidon_hash([input.note.user_data, input.user_data_blind]);
+    let input_user_data_enc = poseidon_hash([input.note.user_data, input.user_data_blind.inner()]);
     let input_value_commit = pedersen_commitment_u64(input.note.value, input_value_blind);
     let output_value_commit = pedersen_commitment_u64(output.value, output_value_blind);
-    let token_commit = poseidon_hash([input.note.token_id.inner(), token_blind]);
+    let token_commit = poseidon_hash([input.note.token_id.inner(), token_blind.inner()]);
 
     // Create output coin
     let output_coin = CoinAttributes {
@@ -316,7 +316,7 @@ fn create_fee_proof(
         token_id: output.token_id,
         spend_hook: output_spend_hook,
         user_data: output_user_data,
-        blind: output_coin_blind,
+        blind: output_coin_blind.clone(),
     }
     .to_coin();
 
@@ -338,18 +338,18 @@ fn create_fee_proof(
         Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
         Witness::Base(Value::known(signature_secret.inner())),
         Witness::Base(Value::known(pallas::Base::from(input.note.value))),
-        Witness::Scalar(Value::known(input_value_blind)),
+        Witness::Scalar(Value::known(input_value_blind.inner())),
         Witness::Base(Value::known(input.note.spend_hook.inner())),
         Witness::Base(Value::known(input.note.user_data)),
-        Witness::Base(Value::known(input.note.coin_blind)),
-        Witness::Base(Value::known(input.user_data_blind)),
+        Witness::Base(Value::known(input.note.coin_blind.inner())),
+        Witness::Base(Value::known(input.user_data_blind.inner())),
         Witness::Base(Value::known(pallas::Base::from(output.value))),
         Witness::Base(Value::known(output_spend_hook.inner())),
         Witness::Base(Value::known(output_user_data)),
-        Witness::Scalar(Value::known(output_value_blind)),
-        Witness::Base(Value::known(output_coin_blind)),
+        Witness::Scalar(Value::known(output_value_blind.inner())),
+        Witness::Base(Value::known(output_coin_blind.inner())),
         Witness::Base(Value::known(input.note.token_id.inner())),
-        Witness::Base(Value::known(token_blind)),
+        Witness::Base(Value::known(token_blind.inner())),
     ];
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin);

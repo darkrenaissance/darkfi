@@ -24,8 +24,8 @@ use darkfi::{
 use darkfi_sdk::{
     bridgetree::Hashable,
     crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, FuncId, MerkleNode, PublicKey,
-        SecretKey,
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, BaseBlind, FuncId, MerkleNode,
+        PublicKey, ScalarBlind, SecretKey,
     },
     pasta::pallas,
 };
@@ -85,8 +85,8 @@ pub fn create_transfer_burn_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     input: &TransferCallInput,
-    value_blind: pallas::Scalar,
-    token_blind: pallas::Base,
+    value_blind: ScalarBlind,
+    token_blind: BaseBlind,
     signature_secret: SecretKey,
 ) -> Result<(Proof, TransferBurnRevealed)> {
     let public_key = PublicKey::from_secret(input.secret);
@@ -118,9 +118,9 @@ pub fn create_transfer_burn_proof(
         current
     };
 
-    let user_data_enc = poseidon_hash([input.note.user_data, input.user_data_blind]);
+    let user_data_enc = poseidon_hash([input.note.user_data, input.user_data_blind.inner()]);
     let value_commit = pedersen_commitment_u64(input.note.value, value_blind);
-    let token_commit = poseidon_hash([input.note.token_id.inner(), token_blind]);
+    let token_commit = poseidon_hash([input.note.token_id.inner(), token_blind.inner()]);
 
     let public_inputs = TransferBurnRevealed {
         value_commit,
@@ -138,10 +138,10 @@ pub fn create_transfer_burn_proof(
         Witness::Base(Value::known(input.note.token_id.inner())),
         Witness::Base(Value::known(input.note.spend_hook.inner())),
         Witness::Base(Value::known(input.note.user_data)),
-        Witness::Base(Value::known(input.note.coin_blind)),
-        Witness::Scalar(Value::known(value_blind)),
-        Witness::Base(Value::known(token_blind)),
-        Witness::Base(Value::known(input.user_data_blind)),
+        Witness::Base(Value::known(input.note.coin_blind.inner())),
+        Witness::Scalar(Value::known(value_blind.inner())),
+        Witness::Base(Value::known(token_blind.inner())),
+        Witness::Base(Value::known(input.user_data_blind.inner())),
         Witness::Uint32(Value::known(u64::from(input.leaf_position).try_into().unwrap())),
         Witness::MerklePath(Value::known(input.merkle_path.clone().try_into().unwrap())),
         Witness::Base(Value::known(signature_secret.inner())),
@@ -158,14 +158,14 @@ pub fn create_transfer_mint_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     output: &TransferCallOutput,
-    value_blind: pallas::Scalar,
-    token_blind: pallas::Base,
+    value_blind: ScalarBlind,
+    token_blind: BaseBlind,
     spend_hook: FuncId,
     user_data: pallas::Base,
-    coin_blind: pallas::Base,
+    coin_blind: BaseBlind,
 ) -> Result<(Proof, TransferMintRevealed)> {
     let value_commit = pedersen_commitment_u64(output.value, value_blind);
-    let token_commit = poseidon_hash([output.token_id.inner(), token_blind]);
+    let token_commit = poseidon_hash([output.token_id.inner(), token_blind.inner()]);
     let (pub_x, pub_y) = output.public_key.xy();
 
     let coin = CoinAttributes {
@@ -188,9 +188,9 @@ pub fn create_transfer_mint_proof(
         Witness::Base(Value::known(output.token_id.inner())),
         Witness::Base(Value::known(spend_hook.inner())),
         Witness::Base(Value::known(user_data)),
-        Witness::Base(Value::known(coin_blind)),
-        Witness::Scalar(Value::known(value_blind)),
-        Witness::Base(Value::known(token_blind)),
+        Witness::Base(Value::known(coin_blind.inner())),
+        Witness::Scalar(Value::known(value_blind.inner())),
+        Witness::Base(Value::known(token_blind.inner())),
     ];
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin);
