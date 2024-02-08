@@ -21,7 +21,8 @@ use std::collections::HashMap;
 use darkfi_sdk::{
     blockchain::{block_epoch, block_version},
     crypto::{
-        schnorr::SchnorrPublic, ContractId, PublicKey, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
+        schnorr::SchnorrPublic, ContractId, MerkleTree, PublicKey, DEPLOYOOOR_CONTRACT_ID,
+        MONEY_CONTRACT_ID,
     },
     dark_tree::dark_forest_leaf_vec_integrity_check,
     deploy::DeployParamsV1,
@@ -35,7 +36,9 @@ use num_bigint::BigUint;
 use smol::io::Cursor;
 
 use crate::{
-    blockchain::{BlockInfo, Blockchain, BlockchainOverlayPtr},
+    blockchain::{
+        block_store::append_tx_to_merkle_tree, BlockInfo, Blockchain, BlockchainOverlayPtr,
+    },
     error::TxVerifyFailed,
     runtime::vm_runtime::Runtime,
     tx::{Transaction, MAX_TX_CALLS, MIN_TX_CALLS},
@@ -78,21 +81,30 @@ pub async fn verify_genesis_block(overlay: &BlockchainOverlayPtr, block: &BlockI
         return Err(Error::BlockContainsNoTransactions(block_hash))
     }
 
-    // Genesis transaction must be the Transaction::default() one(empty)
-    if block.txs[0] != Transaction::default() {
-        error!(target: "validator::verification::verify_genesis_block", "Genesis proposal transaction is not default one");
-        return Err(TxVerifyFailed::ErroneousTxs(vec![block.txs[0].clone()]).into())
+    // Genesis producer transaction must be the Transaction::default() one(empty)
+    let producer_tx = block.txs.last().unwrap();
+    if producer_tx != &Transaction::default() {
+        error!(target: "validator::verification::verify_genesis_block", "Genesis producer transaction is not default one");
+        return Err(TxVerifyFailed::ErroneousTxs(vec![producer_tx.clone()]).into())
     }
 
-    // Verify transactions, exluding producer(first) one
-    let txs = &block.txs[1..];
-    if let Err(e) = verify_transactions(overlay, block.header.height, txs, false).await {
+    // Verify transactions, exluding producer(last) one
+    let mut tree = MerkleTree::new(1);
+    let txs = &block.txs[..block.txs.len() - 1];
+    if let Err(e) = verify_transactions(overlay, block.header.height, txs, &mut tree, false).await {
         warn!(
             target: "validator::verification::verify_genesis_block",
             "[VALIDATOR] Erroneous transactions found in set",
         );
         overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
         return Err(e)
+    }
+
+    // Append producer transaction to the tree and check tree matches header one
+    append_tx_to_merkle_tree(&mut tree, producer_tx)?;
+    if tree != block.header.tree {
+        error!(target: "validator::verification::verify_genesis_block", "Genesis Merkle tree is invalid");
+        return Err(Error::BlockIsInvalid(block_hash))
     }
 
     // Insert block
@@ -189,14 +201,10 @@ pub async fn verify_block(
         return Err(Error::BlockContainsNoTransactions(block_hash))
     }
 
-    // Verify proposal transaction.
-    let public_key =
-        verify_producer_transaction(overlay, block.header.height, &block.txs[0]).await?;
-    verify_producer_signature(block, &public_key)?;
-
-    // Verify transactions, exluding producer(first) one
-    let txs = &block.txs[1..];
-    let e = verify_transactions(overlay, block.header.height, txs, false).await;
+    // Verify transactions, exluding producer(last) one
+    let mut tree = MerkleTree::new(1);
+    let txs = &block.txs[..block.txs.len() - 1];
+    let e = verify_transactions(overlay, block.header.height, txs, &mut tree, false).await;
     if let Err(e) = e {
         warn!(
             target: "validator::verification::verify_block",
@@ -204,6 +212,22 @@ pub async fn verify_block(
         );
         overlay.lock().unwrap().overlay.lock().unwrap().purge_new_trees()?;
         return Err(e)
+    }
+
+    // Verify producer transaction
+    let public_key = verify_producer_transaction(
+        overlay,
+        block.header.height,
+        block.txs.last().unwrap(),
+        &mut tree,
+    )
+    .await?;
+    verify_producer_signature(block, &public_key)?;
+
+    // Verify tree matches header one
+    if tree != block.header.tree {
+        error!(target: "validator::verification::verify_block", "Block Merkle tree is invalid");
+        return Err(Error::BlockIsInvalid(block_hash))
     }
 
     // Insert block
@@ -226,10 +250,12 @@ pub fn verify_producer_signature(block: &BlockInfo, public_key: &PublicKey) -> R
 
 /// Verify WASM execution, signatures, and ZK proofs for a given producer [`Transaction`],
 /// and apply it to the provided overlay. Returns transaction signature public key.
+/// Additionally, append its hash to the provided Merkle tree.
 pub async fn verify_producer_transaction(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u64,
     tx: &Transaction,
+    tree: &mut MerkleTree,
 ) -> Result<PublicKey> {
     let tx_hash = tx.hash()?;
     debug!(target: "validator::verification::verify_producer_transaction", "Validating proposal transaction {}", tx_hash);
@@ -342,19 +368,24 @@ pub async fn verify_producer_transaction(
         error!(target: "validator::verification::verify_proposal_transaction", "ZK proof verification for tx {} failed: {}", tx_hash, e);
         return Err(TxVerifyFailed::InvalidZkProof.into())
     }
-
     debug!(target: "validator::verification::verify_producer_transaction", "ZK proof verification successful");
+
+    // Append hash to merkle tree
+    append_tx_to_merkle_tree(tree, tx)?;
+
     debug!(target: "validator::verification::verify_producer_transaction", "Proposal transaction {} verified successfully", tx_hash);
 
     Ok(signature_public_key)
 }
 
 /// Verify WASM execution, signatures, and ZK proofs for a given [`Transaction`],
-/// and apply it to the provided overlay.
+/// and apply it to the provided overlay. Additionally, append its hash to the
+/// provided Merkle tree.
 pub async fn verify_transaction(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u64,
     tx: &Transaction,
+    tree: &mut MerkleTree,
     verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
     verify_fee: bool,
 ) -> Result<u64> {
@@ -577,6 +608,9 @@ pub async fn verify_transaction(
     }
     debug!(target: "validator::verification::verify_transaction", "ZK proof verification successful");
 
+    // Append hash to merkle tree
+    append_tx_to_merkle_tree(tree, tx)?;
+
     debug!(target: "validator::verification::verify_transaction", "Transaction {} verified successfully", tx_hash);
     Ok(gas_used)
 }
@@ -584,14 +618,18 @@ pub async fn verify_transaction(
 /// Verify a set of [`Transaction`] in sequence and apply them if all are valid.
 /// In case any of the transactions fail, they will be returned to the caller as an error.
 /// If all transactions are valid, the function will return the accumulated gas used from
-/// all the transactions.
+/// all the transactions. Additionally, their hash is appended to the provided Merkle tree.
 pub async fn verify_transactions(
     overlay: &BlockchainOverlayPtr,
     verifying_block_height: u64,
     txs: &[Transaction],
+    tree: &mut MerkleTree,
     verify_fees: bool,
 ) -> Result<u64> {
     debug!(target: "validator::verification::verify_transactions", "Verifying {} transactions", txs.len());
+    if txs.is_empty() {
+        return Ok(0)
+    }
 
     // Tracker for failed txs
     let mut erroneous_txs = vec![];
@@ -612,12 +650,13 @@ pub async fn verify_transactions(
     // Iterate over transactions and attempt to verify them
     for tx in txs {
         overlay.lock().unwrap().checkpoint();
-        match verify_transaction(overlay, verifying_block_height, tx, &mut vks, verify_fees).await {
+        match verify_transaction(overlay, verifying_block_height, tx, tree, &mut vks, verify_fees)
+            .await
+        {
             Ok(gas) => gas_used += gas,
             Err(e) => {
                 warn!(target: "validator::verification::verify_transactions", "Transaction verification failed: {}", e);
                 erroneous_txs.push(tx.clone());
-                // TODO: verify this works as expected
                 overlay.lock().unwrap().revert_to_checkpoint()?;
             }
         }

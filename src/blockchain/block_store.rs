@@ -19,7 +19,7 @@
 use darkfi_sdk::{
     crypto::{
         schnorr::{SchnorrSecret, Signature},
-        SecretKey,
+        MerkleTree, SecretKey,
     },
     pasta::{group::ff::FromUniformBytes, pallas},
 };
@@ -119,11 +119,7 @@ impl BlockInfo {
 
     /// Append a transaction to the block. Also adds it to the Merkle tree.
     pub fn append_tx(&mut self, tx: Transaction) -> Result<()> {
-        let mut buf = [0u8; 64];
-        buf[..blake3::OUT_LEN].copy_from_slice(tx.hash()?.as_bytes());
-        let leaf = pallas::Base::from_uniform_bytes(&buf);
-
-        self.header.tree.append(leaf.into());
+        append_tx_to_merkle_tree(&mut self.header.tree, &tx)?;
         self.txs.push(tx);
 
         Ok(())
@@ -661,4 +657,13 @@ impl BlockDifficultyStoreOverlay {
 
         Ok(())
     }
+}
+
+/// Auxiliary function to append a transaction to a Merkle tree.
+pub fn append_tx_to_merkle_tree(tree: &mut MerkleTree, tx: &Transaction) -> Result<()> {
+    let mut buf = [0u8; 64];
+    buf[..blake3::OUT_LEN].copy_from_slice(tx.hash()?.as_bytes());
+    let leaf = pallas::Base::from_uniform_bytes(&buf);
+    tree.append(leaf.into());
+    Ok(())
 }

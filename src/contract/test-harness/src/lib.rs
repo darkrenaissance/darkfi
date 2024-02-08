@@ -194,6 +194,8 @@ impl TestHarness {
         let mut holders = HashMap::new();
         let mut genesis_block = BlockInfo::default();
         genesis_block.header.timestamp = Timestamp(1689772567);
+        let producer_tx = genesis_block.txs.pop().unwrap();
+        genesis_block.append_txs(vec![producer_tx])?;
 
         // Deterministic PRNG
         let mut rng = Pcg32::new(42);

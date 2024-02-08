@@ -16,7 +16,10 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{crypto::SecretKey, pasta::pallas};
+use darkfi_sdk::{
+    crypto::{MerkleTree, SecretKey},
+    pasta::pallas,
+};
 use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
 use log::{debug, error, info};
 use num_bigint::BigUint;
@@ -387,8 +390,14 @@ impl Fork {
         let overlay = self.overlay.lock().unwrap().full_clone()?;
 
         // Verify transactions
-        if let Err(e) =
-            verify_transactions(&overlay, verifying_block_height, &unproposed_txs, false).await
+        if let Err(e) = verify_transactions(
+            &overlay,
+            verifying_block_height,
+            &unproposed_txs,
+            &mut MerkleTree::new(1),
+            false,
+        )
+        .await
         {
             match e {
                 crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(erroneous_txs)) => {

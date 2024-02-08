@@ -78,8 +78,15 @@ pub async fn append_fee_call(
     // First we will verify the fee-less transaction to see how much gas
     // it uses for execution and verification.
     let tx = tx_builder.build()?;
-    let gas_used =
-        verify_transaction(overlay, verifying_block_height, &tx, verifying_keys, false).await?;
+    let gas_used = verify_transaction(
+        overlay,
+        verifying_block_height,
+        &tx,
+        &mut MerkleTree::new(1),
+        verifying_keys,
+        false,
+    )
+    .await?;
 
     // TODO: We could actually take a set of coins and then find one with
     //       enough value, instead of expecting one. It depends, the API

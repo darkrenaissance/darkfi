@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 
-use darkfi_sdk::crypto::PublicKey;
+use darkfi_sdk::crypto::{MerkleTree, PublicKey};
 use darkfi_serial::serialize_async;
 use log::{debug, error, info, warn};
 use num_bigint::BigUint;
@@ -182,7 +182,15 @@ impl Validator {
             let next_block_height = fork.get_next_block_height()?;
 
             // Verify transaction
-            match verify_transactions(&overlay, next_block_height, &tx_vec, false).await {
+            match verify_transactions(
+                &overlay,
+                next_block_height,
+                &tx_vec,
+                &mut MerkleTree::new(1),
+                false,
+            )
+            .await
+            {
                 Ok(_) => {}
                 Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => continue,
                 Err(e) => return Err(e),
@@ -200,7 +208,15 @@ impl Validator {
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
         let next_block_height = self.blockchain.last_block()?.header.height + 1;
         let mut erroneous_txs = vec![];
-        match verify_transactions(&overlay, next_block_height, &tx_vec, false).await {
+        match verify_transactions(
+            &overlay,
+            next_block_height,
+            &tx_vec,
+            &mut MerkleTree::new(1),
+            false,
+        )
+        .await
+        {
             Ok(_) => valid = true,
             Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(etx))) => {
                 erroneous_txs = etx
@@ -255,7 +271,15 @@ impl Validator {
                 let next_block_height = fork.get_next_block_height()?;
 
                 // Verify transaction
-                match verify_transactions(&overlay, next_block_height, &tx_vec, false).await {
+                match verify_transactions(
+                    &overlay,
+                    next_block_height,
+                    &tx_vec,
+                    &mut MerkleTree::new(1),
+                    false,
+                )
+                .await
+                {
                     Ok(_) => {
                         valid = true;
                         continue
@@ -271,7 +295,15 @@ impl Validator {
             // Verify transaction against canonical state
             let overlay = BlockchainOverlay::new(&self.blockchain)?;
             let next_block_height = self.blockchain.last_block()?.header.height + 1;
-            match verify_transactions(&overlay, next_block_height, &tx_vec, false).await {
+            match verify_transactions(
+                &overlay,
+                next_block_height,
+                &tx_vec,
+                &mut MerkleTree::new(1),
+                false,
+            )
+            .await
+            {
                 Ok(_) => valid = true,
                 Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
                 Err(e) => return Err(e),
@@ -425,7 +457,14 @@ impl Validator {
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
         // Verify all transactions and get erroneous ones
-        let e = verify_transactions(&overlay, verifying_block_height, txs, self.verify_fees).await;
+        let e = verify_transactions(
+            &overlay,
+            verifying_block_height,
+            txs,
+            &mut MerkleTree::new(1),
+            self.verify_fees,
+        )
+        .await;
         let lock = overlay.lock().unwrap();
         let mut overlay = lock.overlay.lock().unwrap();
 
@@ -461,7 +500,14 @@ impl Validator {
 
         // Verify transaction
         let mut erroneous_txs = vec![];
-        if let Err(e) = verify_producer_transaction(&overlay, verifying_block_height, tx).await {
+        if let Err(e) = verify_producer_transaction(
+            &overlay,
+            verifying_block_height,
+            tx,
+            &mut MerkleTree::new(1),
+        )
+        .await
+        {
             warn!(target: "validator::add_test_producer_transaction", "Transaction verification failed: {}", e);
             erroneous_txs.push(tx.clone());
         }

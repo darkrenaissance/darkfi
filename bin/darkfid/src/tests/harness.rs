@@ -76,8 +76,11 @@ impl Harness {
         // Generate default genesis block
         let mut genesis_block = BlockInfo::default();
 
+        // Retrieve genesis producer transaction
+        let producer_tx = genesis_block.txs.pop().unwrap();
+
         // Append genesis transactions
-        genesis_block.txs.push(genesis_mint_tx);
+        genesis_block.append_txs(vec![genesis_mint_tx, producer_tx])?;
 
         // Generate validators configuration
         // NOTE: we are not using consensus constants here so we
