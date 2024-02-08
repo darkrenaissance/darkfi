@@ -16,12 +16,11 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-#[cfg(feature = "async")]
-use darkfi_serial::async_trait;
+use darkfi_sdk::{crypto::pasta_prelude::PrimeField, error::ContractError, pasta::pallas};
 use darkfi_serial::{SerialDecodable, SerialEncodable};
-use pasta_curves::{group::ff::PrimeField, pallas};
 
-use crate::error::ContractError;
+#[cfg(feature = "client")]
+use darkfi_serial::async_trait;
 
 /// The `Nullifier` is represented as a base field element.
 #[repr(C)]
@@ -49,6 +48,6 @@ impl Nullifier {
 }
 
 use core::str::FromStr;
-crate::fp_from_bs58!(Nullifier);
-crate::fp_to_bs58!(Nullifier);
-crate::ty_from_fp!(Nullifier);
+darkfi_sdk::fp_from_bs58!(Nullifier);
+darkfi_sdk::fp_to_bs58!(Nullifier);
+darkfi_sdk::ty_from_fp!(Nullifier);

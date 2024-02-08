@@ -22,9 +22,7 @@ use darkfi::{
 };
 use darkfi_sdk::{
     bridgetree,
-    crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, MerkleNode, Nullifier, PublicKey, SecretKey,
-    },
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, MerkleNode, PublicKey, SecretKey},
     pasta::pallas,
 };
 use log::{debug, info};
@@ -33,7 +31,7 @@ use rand::rngs::OsRng;
 use super::proof::{create_transfer_burn_proof, create_transfer_mint_proof};
 use crate::{
     client::{compute_remainder_blind, MoneyNote, OwnCoin},
-    model::{ClearInput, CoinAttributes, Input, MoneyTransferParamsV1, Output, TokenId},
+    model::{ClearInput, CoinAttributes, Input, MoneyTransferParamsV1, Nullifier, Output, TokenId},
 };
 
 /// Struct holding necessary information to build a `Money::TransferV1` contract call.

@@ -16,13 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_money_contract::model::CoinAttributes;
+use darkfi_money_contract::model::{CoinAttributes, Nullifier};
 use darkfi_sdk::{
     bridgetree,
     bridgetree::Hashable,
     crypto::{
         note::ElGamalEncryptedNote, pasta_prelude::*, pedersen_commitment_u64, poseidon_hash,
-        util::fv_mod_fp_unsafe, FuncId, Keypair, MerkleNode, Nullifier, PublicKey, SecretKey,
+        util::fv_mod_fp_unsafe, FuncId, Keypair, MerkleNode, PublicKey, SecretKey,
     },
     pasta::pallas,
 };

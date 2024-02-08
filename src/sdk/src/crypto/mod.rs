@@ -45,10 +45,6 @@ pub use merkle_node::{MerkleNode, MerkleTree};
 /// Note encryption
 pub mod note;
 
-/// Nullifier definitions
-pub mod nullifier;
-pub use nullifier::Nullifier;
-
 /// Pedersen commitment utilities
 pub mod pedersen;
 pub use pedersen::{pedersen_commitment_base, pedersen_commitment_u64};

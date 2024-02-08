@@ -19,7 +19,7 @@
 use darkfi_sdk::{
     crypto::{
         ecvrf::VrfProof, note::AeadEncryptedNote, pasta_prelude::PrimeField, poseidon_hash, FuncId,
-        MerkleNode, Nullifier, PublicKey, SecretKey,
+        MerkleNode, PublicKey, SecretKey,
     },
     error::ContractError,
     pasta::pallas,
@@ -28,6 +28,10 @@ use darkfi_serial::{SerialDecodable, SerialEncodable};
 
 #[cfg(feature = "client")]
 use darkfi_serial::async_trait;
+
+/// Nullifier definitions
+pub mod nullifier;
+pub use nullifier::Nullifier;
 
 /// Token ID definitions and methods
 pub mod token_id;

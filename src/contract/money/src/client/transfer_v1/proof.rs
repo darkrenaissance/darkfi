@@ -24,8 +24,8 @@ use darkfi::{
 use darkfi_sdk::{
     bridgetree::Hashable,
     crypto::{
-        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, FuncId, MerkleNode, Nullifier,
-        PublicKey, SecretKey,
+        pasta_prelude::*, pedersen_commitment_u64, poseidon_hash, FuncId, MerkleNode, PublicKey,
+        SecretKey,
     },
     pasta::pallas,
 };
@@ -33,7 +33,7 @@ use log::debug;
 use rand::rngs::OsRng;
 
 use super::{TransferCallInput, TransferCallOutput};
-use crate::model::{Coin, CoinAttributes, NullifierAttributes};
+use crate::model::{Coin, CoinAttributes, Nullifier, NullifierAttributes};
 
 pub struct TransferMintRevealed {
     pub coin: Coin,

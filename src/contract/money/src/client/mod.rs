@@ -28,12 +28,12 @@
 
 use darkfi_sdk::{
     bridgetree,
-    crypto::{FuncId, Nullifier, SecretKey},
+    crypto::{FuncId, SecretKey},
     pasta::pallas,
 };
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
 
-use crate::model::{Coin, TokenId};
+use crate::model::{Coin, Nullifier, TokenId};
 
 /// `Money::FeeV1` API
 pub mod fee_v1;

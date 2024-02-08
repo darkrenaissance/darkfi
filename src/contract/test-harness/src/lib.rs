@@ -30,13 +30,13 @@ use darkfi::{
 use darkfi_dao_contract::model::{DaoBulla, DaoProposalBulla};
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
-    model::{Coin, Output},
+    model::{Coin, Nullifier, Output},
 };
 use darkfi_sdk::{
     bridgetree,
     crypto::{
         note::AeadEncryptedNote, pasta_prelude::Field, poseidon_hash, ContractId, Keypair,
-        MerkleNode, MerkleTree, Nullifier, PublicKey, SecretKey,
+        MerkleNode, MerkleTree, PublicKey, SecretKey,
     },
     pasta::pallas,
 };

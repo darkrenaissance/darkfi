@@ -26,15 +26,16 @@ use darkfi::{tx::Transaction, zk::halo2::Field, Error, Result};
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
     model::{
-        Coin, MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1, MoneyTransferParamsV1, TokenId,
+        Coin, MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1, MoneyTransferParamsV1, Nullifier,
+        TokenId,
     },
     MoneyFunction,
 };
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        note::AeadEncryptedNote, poseidon_hash, FuncId, Keypair, MerkleNode, MerkleTree, Nullifier,
-        PublicKey, SecretKey, MONEY_CONTRACT_ID,
+        note::AeadEncryptedNote, poseidon_hash, FuncId, Keypair, MerkleNode, MerkleTree, PublicKey,
+        SecretKey, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
 };
