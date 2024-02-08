@@ -47,6 +47,10 @@ use crate::{
     },
 };
 
+/// Fixed gas used by the fee call.
+/// This is the minimum gas any fee-paying transaction will use.
+pub const FEE_CALL_GAS: u64 = 41_000_000;
+
 /// Append a fee-paying call to the given `TransactionBuilder`.
 ///
 /// * `keypair`: Caller's keypair
@@ -78,21 +82,14 @@ pub async fn append_fee_call(
     // First we will verify the fee-less transaction to see how much gas
     // it uses for execution and verification.
     let tx = tx_builder.build()?;
-    let gas_used = verify_transaction(
-        overlay,
-        verifying_block_height,
-        &tx,
-        &mut MerkleTree::new(1),
-        verifying_keys,
-        false,
-    )
-    .await?;
+    let mut gas_used = FEE_CALL_GAS;
+    gas_used +=
+        verify_transaction(overlay, verifying_block_height, &tx, verifying_keys, false).await?;
 
     // TODO: We could actually take a set of coins and then find one with
     //       enough value, instead of expecting one. It depends, the API
     //       is a bit weird.
 
-    // TODO: FIXME: Proper fee pricing
     if coin.note.value < gas_used {
         error!(
             target: "money_contract::client::fee_v1",
@@ -248,19 +245,19 @@ impl FeeRevealed {
     }
 }
 
-struct FeeCallInput {
-    leaf_position: bridgetree::Position,
-    merkle_path: Vec<MerkleNode>,
-    secret: SecretKey,
-    note: MoneyNote,
-    user_data_blind: BaseBlind,
+pub struct FeeCallInput {
+    pub leaf_position: bridgetree::Position,
+    pub merkle_path: Vec<MerkleNode>,
+    pub secret: SecretKey,
+    pub note: MoneyNote,
+    pub user_data_blind: BaseBlind,
 }
 
-type FeeCallOutput = CoinAttributes;
+pub type FeeCallOutput = CoinAttributes;
 
 /// Create the `Fee_V1` ZK proof given parameters
 #[allow(clippy::too_many_arguments)]
-fn create_fee_proof(
+pub fn create_fee_proof(
     zkbin: &ZkBinary,
     pk: &ProvingKey,
     input: &FeeCallInput,
