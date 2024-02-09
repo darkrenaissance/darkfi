@@ -30,7 +30,7 @@ fn money_integration() -> Result<()> {
         const HOLDERS: [Holder; 2] = [Holder::Alice, Holder::Bob];
 
         // Initialize harness
-        let mut th = TestHarness::new(&["money".to_string()], true).await?;
+        let mut th = TestHarness::new(&HOLDERS, true).await?;
 
         // Block height to verify against
         let current_block_height = 1;
@@ -38,7 +38,7 @@ fn money_integration() -> Result<()> {
         // Drop some money to Alice
         info!("[Alice] Building block proposal");
         let (alice_proposal_tx, alice_proposal_params) =
-            th.pow_reward(&Holder::Alice, None, current_block_height, None)?;
+            th.pow_reward(&Holder::Alice, None, None).await?;
 
         for holder in HOLDERS {
             info!("[{holder:?}] Executing Alice's block proposal");
@@ -51,16 +51,15 @@ fn money_integration() -> Result<()> {
             .await?;
         }
 
-        let alice_owncoin =
-            th.gather_owncoin_from_output(&Holder::Alice, &alice_proposal_params.output, None)?;
-        assert!(alice_owncoin.note.value == expected_reward(current_block_height));
+        let alice_owncoins = th.holders.get(&Holder::Alice).unwrap().unspent_money_coins.clone();
+        assert!(alice_owncoins[0].note.value == expected_reward(current_block_height));
 
         th.assert_trees(&HOLDERS);
 
         // And some to Bob
         info!("[Bob] Building block proposal");
         let (bob_proposal_tx, bob_proposal_params) =
-            th.pow_reward(&Holder::Bob, None, current_block_height, None)?;
+            th.pow_reward(&Holder::Bob, None, None).await?;
 
         for holder in HOLDERS {
             info!("[{holder:?}] Executing Alice's block proposal");
@@ -73,14 +72,9 @@ fn money_integration() -> Result<()> {
             .await?;
         }
 
-        let _ = th.gather_owncoin_from_output(&Holder::Bob, &bob_proposal_params.output, None)?;
-
         th.assert_trees(&HOLDERS);
 
         // Alice sends a payment of some DRK to Bob.
-
-        // Statistics
-        th.statistics();
 
         // Thanks for reading
         Ok(())
