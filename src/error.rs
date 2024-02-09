@@ -56,14 +56,6 @@ pub enum Error {
     #[error(transparent)]
     TryFromSliceError(#[from] std::array::TryFromSliceError),
 
-    #[cfg(feature = "dashu")]
-    #[error(transparent)]
-    DashuConversionError(#[from] dashu::base::error::ConversionError),
-
-    #[cfg(feature = "dashu")]
-    #[error(transparent)]
-    DashuParseError(#[from] dashu::base::error::ParseError),
-
     #[cfg(feature = "semver")]
     #[error("semver parse error: {0}")]
     SemverError(String),
@@ -282,12 +274,6 @@ pub enum Error {
     #[error("Public inputs are invalid")]
     InvalidPublicInputsError,
 
-    #[error("Coin is not the slot block producer")]
-    CoinIsNotSlotProducer,
-
-    #[error("Error during leader proof verification")]
-    LeaderProofVerification,
-
     #[error("Signature could not be verified")]
     InvalidSignature,
 
@@ -300,38 +286,17 @@ pub enum Error {
     #[error("Check if proposal extends any existing fork chains failed")]
     ExtendedChainIndexNotFound,
 
-    #[error("Proposal received after finalization sync period")]
-    ProposalAfterFinalizationError,
-
-    #[error("Proposal received not for current slot")]
-    ProposalNotForCurrentSlotError,
-
     #[error("Proposal contains missmatched hashes")]
     ProposalHashesMissmatchError,
 
-    #[error("Proposal contains unknown slots")]
-    ProposalContainsUnknownSlots,
-
     #[error("Proposal contains missmatched headers")]
     ProposalHeadersMissmatchError,
-
-    #[error("Proposal contains different coin creation eta")]
-    ProposalDifferentCoinEtaError,
-
-    #[error("Proposal contains spent coin")]
-    ProposalIsSpent,
 
     #[error("Proposal contains more transactions than configured cap")]
     ProposalTxsExceedCapError,
 
     #[error("Unable to verify transfer transaction")]
     TransferTxVerification,
-
-    #[error("Unable to verify proposed mu values")]
-    ProposalPublicValuesMismatched,
-
-    #[error("Proposer is not eligible to produce proposals")]
-    ProposalProposerNotEligible,
 
     #[error("Erroneous transactions detected")]
     ErroneousTxsDetected,
@@ -404,21 +369,6 @@ pub enum Error {
 
     #[error("Block {0} contains 0 transactions")]
     BlockContainsNoTransactions(String),
-
-    #[error("Verifying slot missmatch")]
-    VerifyingSlotMissmatch(),
-
-    #[error("Slot {0} is invalid")]
-    SlotIsInvalid(u64),
-
-    #[error("Slot {0} not found in database")]
-    SlotNotFound(u64),
-
-    #[error("Block {0} slots not found in database")]
-    BlockSlotsNotFound(String),
-
-    #[error("Future slot {0} was received")]
-    FutureSlotReceived(u64),
 
     #[error("Contract {0} not found in database")]
     ContractNotFound(String),
