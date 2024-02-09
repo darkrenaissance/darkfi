@@ -38,7 +38,8 @@ use darkfi_dao_contract::{
 };
 use darkfi_deployooor_contract::DEPLOY_CONTRACT_ZKAS_DERIVE_NS_V1;
 use darkfi_money_contract::{
-    MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_FEE_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1, MONEY_CONTRACT_ZKAS_BURN_NS_V1,
+    MONEY_CONTRACT_ZKAS_FEE_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
     MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1, MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::crypto::{contract_id::DEPLOYOOOR_CONTRACT_ID, DAO_CONTRACT_ID, MONEY_CONTRACT_ID};
@@ -48,8 +49,8 @@ use log::debug;
 
 /// Update these if any circuits are changed.
 /// Delete the existing cachefiles, and enable debug logging, you will see the new hashes.
-const VKS_HASH: &str = "249d56e6e49ea45a0b42521d85f703bc7bc4428090d6fed11aa6f179a1006a97";
-const PKS_HASH: &str = "85f3e2f69df9d4e11967611be6611dd7e0726b87fbcd3985f535f556be5982fb";
+const VKS_HASH: &str = "605a72d885e6194ac346a328482504ca37f0c990c2d636ad1b548a8bfb05542b";
+const PKS_HASH: &str = "277228a59ed3cc1df8a9d9e61b3230b4417512d649b4aca1fb3e5f02514a2e96";
 
 /// Build a `PathBuf` to a cachefile
 fn cache_path(typ: &str) -> Result<PathBuf> {
@@ -126,6 +127,7 @@ pub fn get_cached_pks_and_vks() -> Result<(Pks, Vks)> {
         &include_bytes!("../../money/proof/burn_v1.zk.bin")[..],
         &include_bytes!("../../money/proof/token_mint_v1.zk.bin")[..],
         &include_bytes!("../../money/proof/token_freeze_v1.zk.bin")[..],
+        &include_bytes!("../../money/proof/auth_token_mint_v1.zk.bin")[..],
         // DAO
         &include_bytes!("../../dao/proof/mint.zk.bin")[..],
         &include_bytes!("../../dao/proof/propose-input.zk.bin")[..],
@@ -196,7 +198,8 @@ pub fn inject(sled_db: &sled::Db, vks: &Vks) -> Result<()> {
             MONEY_CONTRACT_ZKAS_MINT_NS_V1 |
             MONEY_CONTRACT_ZKAS_BURN_NS_V1 |
             MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1 |
-            MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1 => {
+            MONEY_CONTRACT_ZKAS_TOKEN_FRZ_NS_V1 |
+            MONEY_CONTRACT_ZKAS_AUTH_TOKEN_MINT_NS_V1 => {
                 let key = serialize(&namespace.as_str());
                 let value = serialize(&(bincode.clone(), vk.clone()));
                 money_tree.insert(key, value)?;
