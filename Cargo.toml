@@ -23,7 +23,6 @@ members = [
     "bin/darkfid",
     "bin/darkfi-mmproxy",
     "bin/drk",
-    #"bin/faucetd",
     #"bin/fud/fu",
     #"bin/fud/fud",
     "bin/genev/genevd",
