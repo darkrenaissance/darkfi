@@ -282,8 +282,9 @@ impl Hosts {
         self.anchorlist_store_or_update(&[(addr.clone(), last_seen)]).await;
     }
 
-    /// Remove an entry from the hostlist. Called when we cannot establish a connection to a host or
-    /// when a pre-existing connection disconnects.
+    /// Remove an entry from the hostlist. Called when a handshake fails in
+    /// session::register_channel(), or after we have failed to connect to them
+    /// outbound_connect_limit times in quarantine()
     pub async fn remove_host(&self, addr: &Url) {
         debug!(target: "store::remove_host", "Removing host {}", addr);
         self.mark_migrating(addr).await;
