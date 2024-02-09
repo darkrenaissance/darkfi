@@ -122,7 +122,7 @@ pub async fn append_fee_call(
 
     let input_value_blind = Blind::random(&mut OsRng);
     let fee_value_blind = Blind::random(&mut OsRng);
-    let output_value_blind = compute_remainder_blind(&[], &[input_value_blind], &[fee_value_blind]);
+    let output_value_blind = compute_remainder_blind(&[input_value_blind], &[fee_value_blind]);
 
     let signature_secret = SecretKey::random(&mut OsRng);
 

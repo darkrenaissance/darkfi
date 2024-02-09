@@ -16,10 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::time::Instant;
-
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
+    zk::halo2::Field,
     Result,
 };
 use darkfi_dao_contract::{
@@ -28,36 +27,43 @@ use darkfi_dao_contract::{
     model::{Dao, DaoAuthCall, DaoBulla, DaoProposal, DaoProposeParams},
     DaoFunction, DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS, DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS,
 };
-use darkfi_money_contract::{client::OwnCoin, model::CoinAttributes, MoneyFunction};
+use darkfi_money_contract::{
+    client::{MoneyNote, OwnCoin},
+    model::{CoinAttributes, MoneyFeeParamsV1},
+    MoneyFunction,
+};
 use darkfi_sdk::{
-    crypto::{Blind, MerkleNode, SecretKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
+    crypto::{
+        contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
+        Blind, MerkleNode, SecretKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+    },
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::{serialize, Encodable};
+use darkfi_serial::AsyncEncodable;
+use log::debug;
 use rand::rngs::OsRng;
 
-use super::{Holder, TestHarness, TxAction};
+use super::{Holder, TestHarness};
 
 impl TestHarness {
-    pub fn dao_propose(
+    /// Create a `Dao::Propose` transaction.
+    pub async fn dao_propose(
         &mut self,
         proposer: &Holder,
-        proposal_coinattrs: &Vec<CoinAttributes>,
+        proposal_coinattrs: &[CoinAttributes],
         user_data: pallas::Base,
         dao: &Dao,
         dao_bulla: &DaoBulla,
         block_height: u64,
-    ) -> Result<(Transaction, DaoProposeParams, DaoProposal)> {
+    ) -> Result<(Transaction, (DaoProposeParams, Option<MoneyFeeParamsV1>), DaoProposal)> {
         let wallet = self.holders.get(proposer).unwrap();
 
         let (dao_propose_burn_pk, dao_propose_burn_zkbin) =
             self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_INPUT_NS.to_string()).unwrap();
+
         let (dao_propose_main_pk, dao_propose_main_zkbin) =
             self.proving_keys.get(&DAO_CONTRACT_ZKAS_DAO_PROPOSE_MAIN_NS.to_string()).unwrap();
-
-        let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoPropose).unwrap();
-        let timer = Instant::now();
 
         let propose_owncoin: OwnCoin = wallet
             .unspent_money_coins
@@ -67,6 +73,7 @@ impl TestHarness {
             .clone();
 
         let signature_secret = SecretKey::random(&mut OsRng);
+
         let input = DaoProposeStakeInput {
             secret: wallet.keypair.secret,
             note: propose_owncoin.note.clone(),
@@ -84,16 +91,17 @@ impl TestHarness {
             proposal_coins.push(coin_params.to_coin());
         }
         let mut proposal_data = vec![];
-        proposal_coins.encode(&mut proposal_data).unwrap();
+        proposal_coins.encode_async(&mut proposal_data).await?;
 
+        // Create Auth calls
         let auth_calls = vec![
             DaoAuthCall {
-                contract_id: DAO_CONTRACT_ID.inner(),
+                contract_id: *DAO_CONTRACT_ID,
                 function_code: DaoFunction::AuthMoneyTransfer as u8,
                 auth_data: proposal_data,
             },
             DaoAuthCall {
-                contract_id: MONEY_CONTRACT_ID.inner(),
+                contract_id: *MONEY_CONTRACT_ID,
                 function_code: MoneyFunction::TransferV1 as u8,
                 auth_data: vec![],
             },
@@ -128,47 +136,98 @@ impl TestHarness {
             dao_propose_main_pk,
         )?;
 
+        // Encode the call
         let mut data = vec![DaoFunction::Propose as u8];
-        params.encode(&mut data)?;
+        params.encode_async(&mut data).await?;
         let call = ContractCall { contract_id: *DAO_CONTRACT_ID, data };
         let mut tx_builder = TransactionBuilder::new(ContractCallLeaf { call, proofs }, vec![])?;
+
+        // If fees are enabled, make an offering
+        let mut fee_params = None;
+        let mut fee_signature_secrets = None;
+        if self.verify_fees {
+            let mut tx = tx_builder.build()?;
+            let sigs = tx.create_sigs(&mut OsRng, &[signature_secret])?;
+            tx.signatures = vec![sigs];
+
+            let (fee_call, fee_proofs, fee_secrets, _spent_fee_coins, fee_call_params) =
+                self.append_fee_call(proposer, tx, block_height, &[]).await?;
+
+            // Append the fee call to the transaction
+            tx_builder.append(ContractCallLeaf { call: fee_call, proofs: fee_proofs }, vec![])?;
+            fee_signature_secrets = Some(fee_secrets);
+            fee_params = Some(fee_call_params);
+        }
+
+        // Now build the actual transaction and sign it with necessary keys.
         let mut tx = tx_builder.build()?;
         let sigs = tx.create_sigs(&mut OsRng, &[signature_secret])?;
         tx.signatures = vec![sigs];
-        tx_action_benchmark.creation_times.push(timer.elapsed());
+        if let Some(fee_signature_secrets) = fee_signature_secrets {
+            let sigs = tx.create_sigs(&mut OsRng, &fee_signature_secrets)?;
+            tx.signatures.push(sigs);
+        }
 
-        // Calculate transaction sizes
-        let encoded: Vec<u8> = serialize(&tx);
-        let size = std::mem::size_of_val(&*encoded);
-        tx_action_benchmark.sizes.push(size);
-        let base58 = bs58::encode(&encoded).into_string();
-        let size = std::mem::size_of_val(&*base58);
-        tx_action_benchmark.broadcasted_sizes.push(size);
-
-        Ok((tx, params, proposal))
+        Ok((tx, (params, fee_params), proposal))
     }
 
+    /// Execute the transaction created by `dao_propose()` for a given [`Holder`].
+    ///
+    /// Returns any found [`OwnCoin`]s.
     pub async fn execute_dao_propose_tx(
         &mut self,
         holder: &Holder,
-        tx: &Transaction,
+        tx: Transaction,
         params: &DaoProposeParams,
+        fee_params: &Option<MoneyFeeParamsV1>,
         block_height: u64,
-    ) -> Result<()> {
+        append: bool,
+    ) -> Result<Vec<OwnCoin>> {
         let wallet = self.holders.get_mut(holder).unwrap();
-        let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&TxAction::DaoPropose).unwrap();
-        let timer = Instant::now();
 
-        wallet.validator.add_transactions(&[tx.clone()], block_height, true).await?;
+        // Execute the transaction
+        wallet.validator.add_transactions(&[tx], block_height, true, self.verify_fees).await?;
+
+        if !append {
+            return Ok(vec![])
+        }
+
         wallet.dao_proposals_tree.append(MerkleNode::from(params.proposal_bulla.inner()));
-
         let prop_leaf_pos = wallet.dao_proposals_tree.mark().unwrap();
         let prop_money_snapshot = wallet.money_merkle_tree.clone();
-
         wallet.dao_prop_leafs.insert(params.proposal_bulla, (prop_leaf_pos, prop_money_snapshot));
 
-        tx_action_benchmark.verify_times.push(timer.elapsed());
+        if let Some(ref fee_params) = fee_params {
+            if let Some(spent_coin) = wallet
+                .unspent_money_coins
+                .iter()
+                .find(|x| x.nullifier() == fee_params.input.nullifier)
+                .cloned()
+            {
+                debug!("Found spent OwnCoin({}) for {:?}", spent_coin.coin, holder);
+                wallet.unspent_money_coins.retain(|x| x.nullifier() != fee_params.input.nullifier);
+                wallet.spent_money_coins.push(spent_coin.clone());
+            }
 
-        Ok(())
+            wallet.money_merkle_tree.append(MerkleNode::from(fee_params.output.coin.inner()));
+
+            let Ok(note) = fee_params.output.note.decrypt::<MoneyNote>(&wallet.keypair.secret)
+            else {
+                return Ok(vec![])
+            };
+
+            let owncoin = OwnCoin {
+                coin: fee_params.output.coin,
+                note: note.clone(),
+                secret: wallet.keypair.secret,
+                leaf_position: wallet.money_merkle_tree.mark().unwrap(),
+            };
+
+            debug!("Found new OwnCoin({}) for {:?}:", owncoin.coin, holder);
+            wallet.unspent_money_coins.push(owncoin.clone());
+            return Ok(vec![owncoin])
+        }
+
+        Ok(vec![])
     }
 }

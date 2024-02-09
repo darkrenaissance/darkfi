@@ -22,9 +22,7 @@ use darkfi::{
 };
 use darkfi_sdk::{
     bridgetree,
-    crypto::{
-        note::AeadEncryptedNote, pasta_prelude::*, MerkleNode, Nullifier, SecretKey, TokenId,
-    },
+    crypto::{note::AeadEncryptedNote, pasta_prelude::*, MerkleNode, SecretKey, TokenId},
     pasta::pallas,
 };
 use log::{debug, info};
@@ -122,7 +120,7 @@ impl TransferCallBuilder {
 
         for (i, output) in self.outputs.iter().enumerate() {
             let value_blind = if i == self.outputs.len() - 1 {
-                compute_remainder_blind(&[], &input_blinds, &output_blinds)
+                compute_remainder_blind(&input_blinds, &output_blinds)
             } else {
                 Blind::random(&mut OsRng)
             };
@@ -202,7 +200,6 @@ impl TransferCallSecrets {
                 coin: output.coin,
                 note: output_note.clone(),
                 secret: SecretKey::from(pallas::Base::ZERO),
-                nullifier: Nullifier::from(pallas::Base::ZERO),
                 leaf_position: 0.into(),
             });
         }

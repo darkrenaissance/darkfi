@@ -16,14 +16,13 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::{collections::HashMap, io::Cursor, time::Instant};
+use std::{collections::HashMap, io::Cursor};
 
 use darkfi::{
     blockchain::BlockInfo,
-    tx::Transaction,
     util::{pcg::Pcg32, time::Timestamp},
     validator::{Validator, ValidatorConfig, ValidatorPtr},
-    zk::{empty_witnesses, ProvingKey, ZkCircuit},
+    zk::{empty_witnesses, halo2::Field, ProvingKey, ZkCircuit},
     zkas::ZkBinary,
     Result,
 };
@@ -34,33 +33,49 @@ use darkfi_money_contract::{
 };
 use darkfi_sdk::{
     bridgetree,
-    crypto::{
-        note::AeadEncryptedNote, pasta_prelude::Field, poseidon_hash, ContractId, Keypair,
-        MerkleNode, MerkleTree, Nullifier, SecretKey,
-    },
+    crypto::{Keypair, MerkleNode, MerkleTree},
     pasta::pallas,
 };
-use log::{info, warn};
+use log::debug;
 use num_bigint::BigUint;
-use rand::rngs::OsRng;
 
-mod benchmarks;
-use benchmarks::TxActionBenchmarks;
+/// Utility module for caching ZK proof PKs and VKs
 pub mod vks;
-use vks::{read_or_gen_vks_and_pks, Vks};
 
-mod contract_deploy;
-mod dao_exec;
-mod dao_mint;
-mod dao_propose;
-mod dao_vote;
-mod money_airdrop;
-mod money_genesis_mint;
-mod money_otc_swap;
+/// `Money::PoWReward` functionality
 mod money_pow_reward;
-mod money_token;
+
+/// `Money::Fee` functionality
+mod money_fee;
+
+/// `Money::GenesisMint` functionality
+mod money_genesis_mint;
+
+/// `Money::Transfer` functionality
 mod money_transfer;
 
+/// `Money::TokenMint` functionality
+mod money_token;
+
+/// `Money::OtcSwap` functionality
+mod money_otc_swap;
+
+/// `Deployooor::Deploy` functionality
+mod contract_deploy;
+
+/// `Dao::Mint` functionality
+mod dao_mint;
+
+/// `Dao::Propose` functionality
+mod dao_propose;
+
+/// `Dao::Vote` functionality
+mod dao_vote;
+
+/// `Dao::Exec` functionality
+mod dao_exec;
+
+/// Initialize the logging mechanism
 pub fn init_logger() {
     let mut cfg = simplelog::ConfigBuilder::new();
     cfg.add_filter_ignore("sled".to_string());
@@ -78,118 +93,110 @@ pub fn init_logger() {
     )
     .is_err()
     {
-        warn!(target: "test_harness", "Logger already initialized");
+        debug!(target: "test_harness", "Logger initialized");
     }
 }
 
-/// Enum representing configured wallet holders
-#[derive(Debug, Eq, Hash, PartialEq)]
+/// Enum representing available wallet holders
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub enum Holder {
-    Faucet,
     Alice,
     Bob,
     Charlie,
-    Rachel,
     Dao,
 }
 
-/// Enum representing transaction actions
-#[derive(Debug, Eq, Hash, PartialEq)]
-pub enum TxAction {
-    MoneyAirdrop,
-    MoneyTokenMint,
-    MoneyTokenFreeze,
-    MoneyGenesisMint,
-    MoneyTransfer,
-    MoneyOtcSwap,
-    MoneyPoWReward,
-    DaoMint,
-    DaoPropose,
-    DaoVote,
-    DaoExec,
-}
-
+/// Wallet instance for a single [`Holder`]
 pub struct Wallet {
+    /// Main holder keypair
     pub keypair: Keypair,
+    /// Keypair for arbitrary token minting
     pub token_mint_authority: Keypair,
-    pub token_blind: BaseBlind,
+    /// Keypair for arbitrary contract deployment
     pub contract_deploy_authority: Keypair,
+    /// Holder's [`Validator`] instance
     pub validator: ValidatorPtr,
+    /// Holder's instance of the Merkle tree for the `Money` contract
     pub money_merkle_tree: MerkleTree,
+    /// Holder's instance of the Merkle tree for the `DAO` contract (holding DAO bullas)
     pub dao_merkle_tree: MerkleTree,
+    /// Holder's instance of the Merkle tree for the `DAO` contract (holding DAO proposals)
     pub dao_proposals_tree: MerkleTree,
+    /// Holder's set of unspent [`OwnCoin`]s from the `Money` contract
     pub unspent_money_coins: Vec<OwnCoin>,
+    /// Holder's set of spent [`OwnCoin`]s from the `Money` contract
     pub spent_money_coins: Vec<OwnCoin>,
+    /// Witnessed leaf positions of DAO bullas in the `dao_merkle_tree`
     pub dao_leafs: HashMap<DaoBulla, bridgetree::Position>,
-    // Here the MerkleTree is the snapshotted Money tree at the time of proposal creation
+    /// Dao Proposal snapshots
     pub dao_prop_leafs: HashMap<DaoProposalBulla, (bridgetree::Position, MerkleTree)>,
 }
 
 impl Wallet {
+    /// Instantiate a new [`Wallet`] instance
     pub async fn new(
         keypair: Keypair,
-        genesis_block: &BlockInfo,
-        vks: &Vks,
+        token_mint_authority: Keypair,
+        contract_deploy_authority: Keypair,
+        genesis_block: BlockInfo,
+        vks: &vks::Vks,
         verify_fees: bool,
     ) -> Result<Self> {
+        // Create an in-memory sled db instance for this wallet
         let sled_db = sled::Config::new().temporary(true).open()?;
 
-        // Use pregenerated vks and get pregenerated pks
+        // Inject the cached VKs into the database
         vks::inject(&sled_db, vks)?;
 
-        // Generate validator
-        // NOTE: we are not using consensus constants here so we
-        // don't get circular dependencies.
-        let config = ValidatorConfig {
+        // Create the `Validator` instance
+        let validator_config = ValidatorConfig {
             finalization_threshold: 3,
             pow_target: 90,
             pow_fixed_difficulty: Some(BigUint::from(1_u8)),
-            genesis_block: genesis_block.clone(),
+            genesis_block,
             verify_fees,
         };
-        let validator = Validator::new(&sled_db, config).await?;
+        let validator = Validator::new(&sled_db, validator_config).await?;
 
-        // Create necessary Merkle trees for tracking
+        // The Merkle tree for the `Money` contract is initialized with a "null"
+        // leaf at position 0.
         let mut money_merkle_tree = MerkleTree::new(100);
         money_merkle_tree.append(MerkleNode::from(pallas::Base::ZERO));
-
-        let dao_merkle_tree = MerkleTree::new(100);
-        let dao_proposals_tree = MerkleTree::new(100);
-
-        let unspent_money_coins = vec![];
-        let spent_money_coins = vec![];
-
-        let token_mint_authority = Keypair::random(&mut OsRng);
-        let token_blind = Blind::random(&mut OsRng);
-        let contract_deploy_authority = Keypair::random(&mut OsRng);
+        money_merkle_tree.mark().unwrap();
 
         Ok(Self {
             keypair,
             token_mint_authority,
-            token_blind,
             contract_deploy_authority,
             validator,
             money_merkle_tree,
-            dao_merkle_tree,
-            dao_proposals_tree,
-            unspent_money_coins,
-            spent_money_coins,
+            dao_merkle_tree: MerkleTree::new(100),
+            dao_proposals_tree: MerkleTree::new(100),
+            unspent_money_coins: vec![],
+            spent_money_coins: vec![],
             dao_leafs: HashMap::new(),
             dao_prop_leafs: HashMap::new(),
         })
     }
 }
 
+/// Native contract test harness instance
 pub struct TestHarness {
+    /// Initialized [`Holder`]s for this instance
     pub holders: HashMap<Holder, Wallet>,
+    /// Cached [`ProvingKey`]s for native contract ZK proving
     pub proving_keys: HashMap<String, (ProvingKey, ZkBinary)>,
-    pub tx_action_benchmarks: HashMap<TxAction, TxActionBenchmarks>,
+    /// The genesis block for this harness
     pub genesis_block: BlockInfo,
+    /// Marker to know if we're supposed to include tx fees
+    pub verify_fees: bool,
 }
 
 impl TestHarness {
-    pub async fn new(_contracts: &[String], verify_fees: bool) -> Result<Self> {
-        let mut holders = HashMap::new();
+    /// Instantiate a new [`TestHarness`] given a slice of [`Holder`]s.
+    /// Additionally, a `verify_fees` boolean will enforce tx fee verification.
+    pub async fn new(holders: &[Holder], verify_fees: bool) -> Result<Self> {
+        // Create a genesis block
         let mut genesis_block = BlockInfo::default();
         genesis_block.header.timestamp = Timestamp(1689772567);
         let producer_tx = genesis_block.txs.pop().unwrap();
@@ -198,191 +205,41 @@ impl TestHarness {
         // Deterministic PRNG
         let mut rng = Pcg32::new(42);
 
-        // Build or read precompiled zk pks and vks
-        let (pks, vks) = read_or_gen_vks_and_pks()?;
-
+        // Build or read cached ZK PKs and VKs
+        let (pks, vks) = vks::get_cached_pks_and_vks()?;
         let mut proving_keys = HashMap::new();
         for (bincode, namespace, pk) in pks {
             let mut reader = Cursor::new(pk);
             let zkbin = ZkBinary::decode(&bincode)?;
             let circuit = ZkCircuit::new(empty_witnesses(&zkbin)?, &zkbin);
-            let _pk = ProvingKey::read(&mut reader, circuit)?;
-            proving_keys.insert(namespace, (_pk, zkbin));
+            let proving_key = ProvingKey::read(&mut reader, circuit)?;
+            proving_keys.insert(namespace, (proving_key, zkbin));
         }
 
-        let faucet_kp = Keypair::random(&mut rng);
-        let faucet = Wallet::new(faucet_kp, &genesis_block, &vks, verify_fees).await?;
-        holders.insert(Holder::Faucet, faucet);
+        // Create `Wallet` instances
+        let mut holders_map = HashMap::new();
+        for holder in holders {
+            let keypair = Keypair::random(&mut rng);
+            let token_mint_authority = Keypair::random(&mut rng);
+            let contract_deploy_authority = Keypair::random(&mut rng);
 
-        let alice_kp = Keypair::random(&mut rng);
-        let alice = Wallet::new(alice_kp, &genesis_block, &vks, verify_fees).await?;
-        holders.insert(Holder::Alice, alice);
+            let wallet = Wallet::new(
+                keypair,
+                token_mint_authority,
+                contract_deploy_authority,
+                genesis_block.clone(),
+                &vks,
+                verify_fees,
+            )
+            .await?;
 
-        let bob_kp = Keypair::random(&mut rng);
-        let bob = Wallet::new(bob_kp, &genesis_block, &vks, verify_fees).await?;
-        holders.insert(Holder::Bob, bob);
-
-        let charlie_kp = Keypair::random(&mut rng);
-        let charlie = Wallet::new(charlie_kp, &genesis_block, &vks, verify_fees).await?;
-        holders.insert(Holder::Charlie, charlie);
-
-        let rachel_kp = Keypair::random(&mut rng);
-        let rachel = Wallet::new(rachel_kp, &genesis_block, &vks, verify_fees).await?;
-        holders.insert(Holder::Rachel, rachel);
-
-        let dao_kp = Keypair::random(&mut rng);
-        let dao = Wallet::new(dao_kp, &genesis_block, &vks, verify_fees).await?;
-        holders.insert(Holder::Dao, dao);
-
-        // Build benchmarks map
-        let mut tx_action_benchmarks = HashMap::new();
-        tx_action_benchmarks.insert(TxAction::MoneyAirdrop, TxActionBenchmarks::default());
-        tx_action_benchmarks.insert(TxAction::MoneyTokenMint, TxActionBenchmarks::default());
-        tx_action_benchmarks.insert(TxAction::MoneyTokenFreeze, TxActionBenchmarks::default());
-        tx_action_benchmarks.insert(TxAction::MoneyGenesisMint, TxActionBenchmarks::default());
-        tx_action_benchmarks.insert(TxAction::MoneyOtcSwap, TxActionBenchmarks::default());
-        tx_action_benchmarks.insert(TxAction::MoneyTransfer, TxActionBenchmarks::default());
-        tx_action_benchmarks.insert(TxAction::MoneyPoWReward, TxActionBenchmarks::default());
-        tx_action_benchmarks.insert(TxAction::DaoMint, TxActionBenchmarks::default());
-        tx_action_benchmarks.insert(TxAction::DaoPropose, TxActionBenchmarks::default());
-        tx_action_benchmarks.insert(TxAction::DaoVote, TxActionBenchmarks::default());
-        tx_action_benchmarks.insert(TxAction::DaoExec, TxActionBenchmarks::default());
-
-        Ok(Self { holders, proving_keys, tx_action_benchmarks, genesis_block })
-    }
-
-    pub async fn execute_erroneous_txs(
-        &mut self,
-        action: TxAction,
-        holder: &Holder,
-        txs: &[Transaction],
-        block_height: u64,
-        erroneous: usize,
-    ) -> Result<()> {
-        let wallet = self.holders.get(holder).unwrap();
-        let tx_action_benchmark = self.tx_action_benchmarks.get_mut(&action).unwrap();
-        let timer = Instant::now();
-
-        let erroneous_txs = wallet
-            .validator
-            .add_transactions(txs, block_height, false)
-            .await
-            .err()
-            .unwrap()
-            .retrieve_erroneous_txs()?;
-        assert_eq!(erroneous_txs.len(), erroneous);
-        tx_action_benchmark.verify_times.push(timer.elapsed());
-
-        Ok(())
-    }
-
-    pub fn gather_owncoin(
-        &mut self,
-        holder: &Holder,
-        coin: &Coin,
-        note: &AeadEncryptedNote,
-        secret_key: Option<SecretKey>,
-    ) -> Result<OwnCoin> {
-        let wallet = self.holders.get_mut(holder).unwrap();
-        let leaf_position = wallet.money_merkle_tree.mark().unwrap();
-        let secret_key = match secret_key {
-            Some(key) => key,
-            None => wallet.keypair.secret,
-        };
-
-        let note: MoneyNote = note.decrypt(&secret_key)?;
-        let oc = OwnCoin {
-            coin: *coin,
-            note: note.clone(),
-            secret: secret_key,
-            nullifier: Nullifier::from(poseidon_hash([
-                wallet.keypair.secret.inner(),
-                coin.inner(),
-            ])),
-            leaf_position,
-        };
-
-        wallet.unspent_money_coins.push(oc.clone());
-
-        Ok(oc)
-    }
-
-    pub fn gather_owncoin_from_output(
-        &mut self,
-        holder: &Holder,
-        output: &Output,
-        secret_key: Option<SecretKey>,
-    ) -> Result<OwnCoin> {
-        self.gather_owncoin(holder, &output.coin, &output.note, secret_key)
-    }
-
-    /// This should be used after transfer call, so we can mark the merkle tree
-    /// before each output coin. Assumes using wallet secret key.
-    pub fn gather_multiple_owncoins(
-        &mut self,
-        holder: &Holder,
-        outputs: &[Output],
-    ) -> Result<Vec<OwnCoin>> {
-        let wallet = self.holders.get_mut(holder).unwrap();
-        let secret_key = wallet.keypair.secret;
-        let mut owncoins = vec![];
-        for output in outputs {
-            wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
-            let leaf_position = wallet.money_merkle_tree.mark().unwrap();
-
-            let note: MoneyNote = output.note.decrypt(&secret_key)?;
-            let oc = OwnCoin {
-                coin: output.coin,
-                note: note.clone(),
-                secret: secret_key,
-                nullifier: Nullifier::from(poseidon_hash([
-                    wallet.keypair.secret.inner(),
-                    output.coin.inner(),
-                ])),
-                leaf_position,
-            };
-
-            wallet.unspent_money_coins.push(oc.clone());
-            owncoins.push(oc);
+            holders_map.insert(*holder, wallet);
         }
 
-        Ok(owncoins)
+        Ok(Self { holders: holders_map, proving_keys, genesis_block, verify_fees })
     }
 
-    pub fn gather_owncoin_at_index(
-        &mut self,
-        holder: &Holder,
-        outputs: &[Output],
-        index: usize,
-    ) -> Result<OwnCoin> {
-        let wallet = self.holders.get_mut(holder).unwrap();
-        let secret_key = wallet.keypair.secret;
-        let mut owncoin = None;
-        for (i, output) in outputs.iter().enumerate() {
-            wallet.money_merkle_tree.append(MerkleNode::from(output.coin.inner()));
-            if i == index {
-                let leaf_position = wallet.money_merkle_tree.mark().unwrap();
-
-                let note: MoneyNote = output.note.decrypt(&secret_key)?;
-                let oc = OwnCoin {
-                    coin: output.coin,
-                    note: note.clone(),
-                    secret: secret_key,
-                    nullifier: Nullifier::from(poseidon_hash([
-                        wallet.keypair.secret.inner(),
-                        output.coin.inner(),
-                    ])),
-                    leaf_position,
-                };
-
-                wallet.unspent_money_coins.push(oc.clone());
-                owncoin = Some(oc);
-            }
-        }
-
-        Ok(owncoin.unwrap())
-    }
-
+    /// Assert that all holders' trees are the same
     pub fn assert_trees(&self, holders: &[Holder]) {
         assert!(holders.len() > 1);
         // Gather wallets
@@ -396,18 +253,5 @@ impl TestHarness {
         for wallet in &wallets[1..] {
             assert!(money_root == wallet.money_merkle_tree.root(0).unwrap());
         }
-    }
-
-    pub fn contract_id(&self, holder: &Holder) -> ContractId {
-        let holder = self.holders.get(holder).unwrap();
-        ContractId::derive_public(holder.contract_deploy_authority.public)
-    }
-
-    pub fn statistics(&self) {
-        info!("==================== Statistics ====================");
-        for (action, tx_action_benchmark) in &self.tx_action_benchmarks {
-            tx_action_benchmark.statistics(action);
-        }
-        info!("====================================================");
     }
 }

@@ -23,7 +23,7 @@ use darkfi_sdk::{
     crypto::{
         note::{AeadEncryptedNote, ElGamalEncryptedNote},
         pasta_prelude::*,
-        poseidon_hash, BaseBlind, MerkleNode, PublicKey,
+        poseidon_hash, ContractId, MerkleNode, Nullifier, PublicKey, TokenId,
     },
     error::ContractError,
     pasta::pallas,
@@ -108,7 +108,7 @@ darkfi_sdk::ty_from_fp!(DaoBulla);
 #[derive(Debug, Clone, SerialEncodable, SerialDecodable)]
 // ANCHOR: dao-auth-call
 pub struct DaoAuthCall {
-    pub contract_id: pallas::Base,
+    pub contract_id: ContractId,
     pub function_code: u8,
     pub auth_data: Vec<u8>,
 }

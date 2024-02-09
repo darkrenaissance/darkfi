@@ -30,7 +30,10 @@ use std::hash::{Hash, Hasher};
 
 use darkfi_sdk::{
     bridgetree,
-    crypto::{BaseBlind, Blind, FuncId, ScalarBlind, SecretKey},
+    crypto::{
+        pasta_prelude::{Field, PrimeField},
+        poseidon_hash, BaseBlind, Blind, FuncId, Nullifier, ScalarBlind, SecretKey, TokenId,
+    },
     pasta::pallas,
 };
 use darkfi_serial::{async_trait, SerialDecodable, SerialEncodable};
@@ -99,10 +102,15 @@ pub struct OwnCoin {
     pub note: MoneyNote,
     /// Coin's secret key
     pub secret: SecretKey,
-    /// Coin's nullifier
-    pub nullifier: Nullifier,
     /// Coin's leaf position in the Merkle tree of coins
     pub leaf_position: bridgetree::Position,
+}
+
+impl OwnCoin {
+    /// Derive the [`Nullifier`] for this [`OwnCoin`]
+    pub fn nullifier(&self) -> Nullifier {
+        Nullifier::from(poseidon_hash([self.secret.inner(), self.coin.inner()]))
+    }
 }
 
 impl Hash for OwnCoin {
@@ -112,15 +120,10 @@ impl Hash for OwnCoin {
 }
 
 pub fn compute_remainder_blind(
-    clear_inputs: &[crate::model::ClearInput],
     input_blinds: &[ScalarBlind],
     output_blinds: &[ScalarBlind],
-) -> ScalarBlind {
-    let mut total = pallas::Scalar::zero();
-
-    for input in clear_inputs {
-        total += input.value_blind.inner();
-    }
+) -> pallas::Scalar {
+    let mut total = pallas::Scalar::ZERO;
 
     for input_blind in input_blinds {
         total += input_blind.inner();

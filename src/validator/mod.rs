@@ -424,41 +424,47 @@ impl Validator {
     /// In case any of the transactions fail, they will be returned to the caller.
     /// The function takes a boolean called `write` which tells it to actually write
     /// the state transitions to the database.
+    ///
+    /// Returns the total gas used for the given transactions.
     pub async fn add_transactions(
         &self,
         txs: &[Transaction],
         verifying_block_height: u64,
         write: bool,
-    ) -> Result<()> {
+        verify_fees: bool,
+    ) -> Result<u64> {
         debug!(target: "validator::add_transactions", "Instantiating BlockchainOverlay");
         let overlay = BlockchainOverlay::new(&self.blockchain)?;
 
         // Verify all transactions and get erroneous ones
-        let e = verify_transactions(
+        let verify_result = verify_transactions(
             &overlay,
             verifying_block_height,
             txs,
             &mut MerkleTree::new(1),
-            self.verify_fees,
+            verify_fees,
         )
         .await;
+
         let lock = overlay.lock().unwrap();
         let mut overlay = lock.overlay.lock().unwrap();
 
-        if let Err(e) = e {
+        if let Err(e) = verify_result {
             overlay.purge_new_trees()?;
             return Err(e)
         }
 
+        let gas_used = verify_result.unwrap();
+
         if !write {
             debug!(target: "validator::add_transactions", "Skipping apply of state updates because write=false");
             overlay.purge_new_trees()?;
-            return Ok(())
+            return Ok(gas_used)
         }
 
         debug!(target: "validator::add_transactions", "Applying overlay changes");
         overlay.apply()?;
-        Ok(())
+        Ok(gas_used)
     }
 
     /// Validate a producer `Transaction` and apply it if valid.
