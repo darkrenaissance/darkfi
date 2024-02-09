@@ -65,7 +65,7 @@ lazy_static! {
 }
 
 // MONEY_INFO_TABLE
-pub const MONEY_INFO_COL_LAST_SCANNED_SLOT: &str = "last_scanned_slot";
+pub const MONEY_INFO_COL_LAST_SCANNED_BLOCK: &str = "last_scanned_block";
 
 // MONEY_TREE_TABLE
 pub const MONEY_TREE_COL_TREE: &str = "tree";
@@ -123,12 +123,12 @@ impl Drk {
             eprintln!("Successfully initialized Merkle tree for the Money contract");
         }
 
-        // We maintain the last scanned slot as part of the Money contract,
+        // We maintain the last scanned block as part of the Money contract,
         // but at this moment it is also somewhat applicable to DAO scans.
-        if self.last_scanned_slot().await.is_err() {
+        if self.last_scanned_block().await.is_err() {
             let query = format!(
                 "INSERT INTO {} ({}) VALUES (?1);",
-                *MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_SLOT
+                *MONEY_INFO_TABLE, MONEY_INFO_COL_LAST_SCANNED_BLOCK
             );
             self.wallet.exec_sql(&query, rusqlite::params![0]).await?;
         }
@@ -607,20 +607,20 @@ impl Drk {
         Ok(tree)
     }
 
-    /// Get the last scanned slot from the wallet.
-    pub async fn last_scanned_slot(&self) -> WalletDbResult<u64> {
+    /// Get the last scanned block height from the wallet.
+    pub async fn last_scanned_block(&self) -> WalletDbResult<u64> {
         let ret = self
             .wallet
-            .query_single(&MONEY_INFO_TABLE, &[MONEY_INFO_COL_LAST_SCANNED_SLOT], &[])
+            .query_single(&MONEY_INFO_TABLE, &[MONEY_INFO_COL_LAST_SCANNED_BLOCK], &[])
             .await?;
-        let Value::Integer(slot) = ret[0] else {
+        let Value::Integer(height) = ret[0] else {
             return Err(WalletDbError::ParseColumnValueError);
         };
-        let Ok(slot) = u64::try_from(slot) else {
+        let Ok(height) = u64::try_from(height) else {
             return Err(WalletDbError::ParseColumnValueError);
         };
 
-        Ok(slot)
+        Ok(height)
     }
 
     /// Append data related to Money contract transactions into the wallet database.

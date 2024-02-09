@@ -4,7 +4,7 @@
 
 -- Arbitrary info that is potentially useful
 CREATE TABLE IF NOT EXISTS BZHKGQ26bzmBithTQYTJtjo2QdCqpkR9tjSBopT4yf4o_money_info (
-	last_scanned_slot INTEGER NOT NULL
+	last_scanned_block INTEGER NOT NULL
 );
 
 -- The Merkle tree containing coins
