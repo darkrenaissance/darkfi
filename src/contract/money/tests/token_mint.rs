@@ -35,51 +35,47 @@ fn token_mint() -> Result<()> {
         let current_block_height = 0;
 
         // Initialize harness
-        let mut th = TestHarness::new(&["money".to_string()], false).await?;
+        let mut th = TestHarness::new(&HOLDERS, false).await?;
 
         info!("[Bob] Building BOB token mint tx");
-        let (token_mint_tx, token_mint_params, token_auth_mint_params) =
-            th.token_mint(BOB_SUPPLY, &Holder::Bob, &Holder::Bob, None, None)?;
+        let (token_mint_tx, token_mint_params, token_auth_mint_params, fee_params) = th
+            .token_mint(BOB_SUPPLY, &Holder::Bob, &Holder::Bob, None, None, current_block_height)
+            .await?;
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing BOB token mint tx");
             th.execute_token_mint_tx(
                 holder,
-                &token_mint_tx,
+                token_mint_tx.clone(),
                 &token_mint_params,
+                &token_auth_mint_params,
+                &fee_params,
                 current_block_height,
+                true,
             )
             .await?;
         }
 
         th.assert_trees(&HOLDERS);
 
-        // Bob gathers his new coin
-        th.gather_owncoin(
-            &Holder::Bob,
-            &token_mint_params.coin,
-            &token_auth_mint_params.enc_note,
-            None,
-        )?;
-
         info!("[Bob] Building BOB token freeze tx");
-        let (token_frz_tx, token_frz_params) = th.token_freeze(&Holder::Bob)?;
+        let (token_frz_tx, token_frz_params, fee_params) =
+            th.token_freeze(&Holder::Bob, current_block_height).await?;
 
         for holder in &HOLDERS {
             info!("[{holder:?}] Executing BOB token freeze tx");
             th.execute_token_freeze_tx(
                 holder,
-                &token_frz_tx,
+                token_frz_tx.clone(),
                 &token_frz_params,
+                &fee_params,
                 current_block_height,
+                true,
             )
             .await?;
         }
 
         th.assert_trees(&HOLDERS);
-
-        // Statistics
-        th.statistics();
 
         // Thanks for reading
         Ok(())
