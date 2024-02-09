@@ -176,6 +176,16 @@ impl Lilith {
             let (entry, position) = hosts.whitelist_fetch_last().await;
             let url = &entry.0;
 
+            // Skip this node if it's being migrated currently.
+            if hosts.is_migrating(url).await {
+                continue
+            }
+
+            // Don't refine nodes that we are already connected to.
+            if p2p.exists(&url).await {
+                continue
+            }
+
             if !ping_node(url.clone(), p2p.clone()).await {
                 let (_addr, last_seen) = hosts.get_whitelist_entry_at_addr(url).await.unwrap();
                 hosts.greylist_store_or_update(&[(url.clone(), last_seen)]).await;
