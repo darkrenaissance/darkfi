@@ -45,9 +45,8 @@ pub struct Header {
     pub timestamp: Timestamp,
     /// The block's nonce.
     /// In PoW, this value changes arbitrarily with mining.
-    /// In PoS, we can use this value as our block producer ETA.
     pub nonce: pallas::Base,
-    /// Merkle tree of the transactions contained in this block
+    /// Merkle tree of the transactions hashes contained in this block
     pub tree: MerkleTree,
 }
 

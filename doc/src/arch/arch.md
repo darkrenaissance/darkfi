@@ -201,7 +201,7 @@ We need to handle confirmed and unconfirmed transactions, make things
 prettier and better to use. When broadcasting transactions, if they
 pass locally, the wallet should be updated to represent the state
 change but things should stay unconfirmed. The DAO SQL schema gives a
-nice way to do this, where there's a `tx_hash`, `slot_id`, etc. which
+nice way to do this, where there's a `tx_hash`, etc. which
 can be used to evaluate whether the transaction/coins/whatever was
 finalized.
 

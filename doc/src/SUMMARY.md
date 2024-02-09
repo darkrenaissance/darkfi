@@ -31,7 +31,6 @@
 - [Architecture](arch/arch.md)
   - [Overview](arch/overview.md)
   - [Anonymous assets](arch/anonymous_assets.md)
-  - [Blockchain](arch/blockchain.md)
   - [Consensus](arch/consensus.md)
   - [Transactions](arch/tx_lifetime.md)
   - [Smart Contracts](arch/smart_contracts.md)

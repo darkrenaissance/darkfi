@@ -57,16 +57,19 @@ WASM scope.
 
 The current list of functions are:
 
-| Host function     | Permission                     | Description                         |
-|-------------------|--------------------------------|-------------------------------------|
-| `db_init`         | Deploy                         | Create a new database               |
-| `db_lookup`       | Deploy, Exec, Metadata, Update | Lookup a database handle by name    |
-| `db_set`          | Deploy, Update                 | Set a value                         |
-| `db_del`          | Deploy, Update                 | Remove a key                        |
-| `db_get`          | Deploy, Exec, Metadata         | Read a value from a key             |
-| `db_contains_key` | Deploy, Exec, Metadata, Update | Check if a given key exists         |
-| `zkas_db_set`     | Deploy                         | Insert a new ZK circuit             |
-| `merkle_add`      | Update                         | Add a leaf to a merkle tree         |
-| `set_return_data` | Exec, Metadata                 | Used for returning data to the host |
-| `get_slot`        | Deploy, Exec, Metadata         | Get the current slot                |
+| Host function                      | Permission                     | Description                                 |
+|------------------------------------|--------------------------------|---------------------------------------------|
+| `db_init`                          | Deploy                         | Create a new database                       |
+| `db_lookup`                        | Deploy, Exec, Metadata, Update | Lookup a database handle by name            |
+| `db_set`                           | Deploy, Update                 | Set a value                                 |
+| `db_del`                           | Deploy, Update                 | Remove a key                                |
+| `db_get`                           | Deploy, Exec, Metadata         | Read a value from a key                     |
+| `db_contains_key`                  | Deploy, Exec, Metadata, Update | Check if a given key exists                 |
+| `zkas_db_set`                      | Deploy                         | Insert a new ZK circuit                     |
+| `merkle_add`                       | Update                         | Add a leaf to a merkle tree                 |
+| `set_return_data`                  | Exec, Metadata                 | Used for returning data to the host         |
+| `get_verifying_block_height`       | Deploy, Exec, Metadata, Update | Runtime verifying block height              |
+| `get_verifying_block_height_epoch` | Deploy, Exec, Metadata, Update | Runtime verifying block height epoch        |
+| `get_blockchain_time`              | Deploy, Exec, Metadata, Update | Current blockchain (last block's) timestamp |
+| `get_last_block_info`              | Exec                           | Last block's info, used in VRF proofs       |
 
