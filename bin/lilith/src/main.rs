@@ -182,7 +182,7 @@ impl Lilith {
             }
 
             // Don't refine nodes that we are already connected to.
-            if p2p.exists(&url).await {
+            if p2p.exists(url).await {
                 continue
             }
 

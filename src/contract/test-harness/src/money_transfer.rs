@@ -21,15 +21,13 @@ use darkfi::{
     Result,
 };
 use darkfi_money_contract::{
-    client::{transfer_v1::make_transfer_call, OwnCoin},
-    model::{MoneyTransferParamsV1, TokenId},
+    client::{transfer_v1::make_transfer_call, MoneyNote, OwnCoin},
+    model::{Input, MoneyFeeParamsV1, MoneyTransferParamsV1, Output, TokenId},
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    client::{transfer_v1::make_transfer_call, MoneyNote, OwnCoin},
-    crypto::{contract_id::MONEY_CONTRACT_ID, MerkleNode, TokenId, MONEY_CONTRACT_ID},
-    model::{Input, MoneyFeeParamsV1, MoneyTransferParamsV1, Output},
-    ContractCall, MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
+    crypto::{contract_id::MONEY_CONTRACT_ID, MerkleNode},
+    ContractCall,
 };
 use darkfi_serial::AsyncEncodable;
 use log::debug;

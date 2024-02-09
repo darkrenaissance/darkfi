@@ -29,7 +29,7 @@ use darkfi_serial::{deserialize, serialize, Encodable, WriteExt};
 
 use crate::{
     error::MoneyError,
-    model::{MoneyTransferParamsV1, MoneyTransferUpdateV1, DARK_TOKEN_ID},
+    model::{MoneyTransferParamsV1, MoneyTransferUpdateV1},
     MoneyFunction, MONEY_CONTRACT_COINS_TREE, MONEY_CONTRACT_COIN_MERKLE_TREE,
     MONEY_CONTRACT_COIN_ROOTS_TREE, MONEY_CONTRACT_INFO_TREE, MONEY_CONTRACT_LATEST_COIN_ROOT,
     MONEY_CONTRACT_NULLIFIERS_TREE, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,

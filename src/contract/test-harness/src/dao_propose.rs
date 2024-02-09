@@ -18,7 +18,6 @@
 
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
-    zk::halo2::Field,
     Result,
 };
 use darkfi_dao_contract::{
@@ -35,7 +34,7 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     crypto::{
         contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
-        Blind, MerkleNode, SecretKey, DAO_CONTRACT_ID, MONEY_CONTRACT_ID,
+        Blind, MerkleNode, SecretKey,
     },
     pasta::pallas,
     ContractCall,

@@ -29,13 +29,13 @@ use darkfi_money_contract::{
         fee_v1::{create_fee_proof, FeeCallInput, FeeCallOutput, FEE_CALL_GAS},
         MoneyNote, OwnCoin,
     },
-    model::{Input, MoneyFeeParamsV1, Output},
+    model::{token_id::DARK_TOKEN_ID, Input, MoneyFeeParamsV1, Output},
     MoneyFunction, MONEY_CONTRACT_ZKAS_FEE_NS_V1,
 };
 use darkfi_sdk::{
     crypto::{
-        contract_id::MONEY_CONTRACT_ID, note::AeadEncryptedNote, token_id::DARK_TOKEN_ID, FuncId,
-        MerkleNode, SecretKey,
+        contract_id::MONEY_CONTRACT_ID, note::AeadEncryptedNote, BaseBlind, Blind, FuncId,
+        MerkleNode, ScalarBlind, SecretKey,
     },
     pasta::pallas,
     ContractCall,
@@ -69,22 +69,22 @@ impl TestHarness {
             merkle_path: wallet.money_merkle_tree.witness(coin.leaf_position, 0).unwrap(),
             secret: coin.secret,
             note: coin.note.clone(),
-            user_data_blind: pallas::Base::random(&mut OsRng),
+            user_data_blind: Blind::random(&mut OsRng),
         };
 
         let output = FeeCallOutput {
             public_key: wallet.keypair.public,
             value: coin.note.value - FEE_CALL_GAS,
             token_id: coin.note.token_id,
-            blind: pallas::Base::random(&mut OsRng),
+            blind: Blind::random(&mut OsRng),
             spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
         };
 
         // Generate blinding factors
-        let token_blind = pallas::Base::random(&mut OsRng);
-        let input_value_blind = pallas::Scalar::random(&mut OsRng);
-        let fee_value_blind = pallas::Scalar::random(&mut OsRng);
+        let token_blind = BaseBlind::random(&mut OsRng);
+        let input_value_blind = ScalarBlind::random(&mut OsRng);
+        let fee_value_blind = ScalarBlind::random(&mut OsRng);
         let output_value_blind = compute_remainder_blind(&[input_value_blind], &[fee_value_blind]);
 
         // Generate an ephemeral signing key
@@ -234,22 +234,22 @@ impl TestHarness {
             merkle_path: wallet.money_merkle_tree.witness(coin.leaf_position, 0).unwrap(),
             secret: coin.secret,
             note: coin.note.clone(),
-            user_data_blind: pallas::Base::random(&mut OsRng),
+            user_data_blind: BaseBlind::random(&mut OsRng),
         };
 
         let output = FeeCallOutput {
             public_key: wallet.keypair.public,
             value: change_value,
             token_id: coin.note.token_id,
-            blind: pallas::Base::random(&mut OsRng),
+            blind: BaseBlind::random(&mut OsRng),
             spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
         };
 
         // Create blinding factors
-        let token_blind = pallas::Base::random(&mut OsRng);
-        let input_value_blind = pallas::Scalar::random(&mut OsRng);
-        let fee_value_blind = pallas::Scalar::random(&mut OsRng);
+        let token_blind = BaseBlind::random(&mut OsRng);
+        let input_value_blind = ScalarBlind::random(&mut OsRng);
+        let fee_value_blind = ScalarBlind::random(&mut OsRng);
         let output_value_blind = compute_remainder_blind(&[input_value_blind], &[fee_value_blind]);
 
         // Create an ephemeral signing key

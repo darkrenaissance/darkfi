@@ -18,6 +18,7 @@
 
 use std::sync::Arc;
 
+use darkfi_sdk::crypto::MerkleTree;
 use darkfi_serial::serialize_async;
 use log::{debug, error, info, warn};
 use num_bigint::BigUint;

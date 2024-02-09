@@ -23,7 +23,7 @@ use darkfi_sdk::{
     crypto::{
         note::{AeadEncryptedNote, ElGamalEncryptedNote},
         pasta_prelude::*,
-        poseidon_hash, ContractId, MerkleNode, Nullifier, PublicKey, TokenId,
+        poseidon_hash, BaseBlind, ContractId, MerkleNode, PublicKey,
     },
     error::ContractError,
     pasta::pallas,

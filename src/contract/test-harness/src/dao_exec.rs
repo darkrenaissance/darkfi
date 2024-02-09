@@ -18,7 +18,6 @@
 
 use darkfi::{
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
-    zk::halo2::Field,
     Result,
 };
 use darkfi_dao_contract::{
@@ -33,11 +32,12 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
-    crypto::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
-    dark_tree::{DarkLeaf, DarkTree},
-    pasta::pallas,
-    pedersen_commitment_u64, ContractCall, FuncRef, MerkleNode, SecretKey,
+    crypto::{
+        contract_id::{DAO_CONTRACT_ID, MONEY_CONTRACT_ID},
+        pedersen_commitment_u64, Blind, FuncRef, MerkleNode, ScalarBlind, SecretKey,
+    },
+    dark_tree::DarkTree,
+    ContractCall,
 };
 use darkfi_serial::AsyncEncodable;
 use log::debug;

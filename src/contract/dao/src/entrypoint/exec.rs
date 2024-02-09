@@ -100,7 +100,7 @@ pub(crate) fn dao_exec_process_instruction(
         // Auth modules should check the direct parent is DAO::exec().
         // Doing anything else is potentially risky.
 
-        let contract_id = child_call.contract_id.inner();
+        let contract_id = child_call.contract_id;
         let function_code = child_call.data[0];
 
         // Check they match the auth call spec

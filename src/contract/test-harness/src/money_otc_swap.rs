@@ -27,7 +27,7 @@ use darkfi_money_contract::{
     MoneyFunction, MONEY_CONTRACT_ZKAS_BURN_NS_V1, MONEY_CONTRACT_ZKAS_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{contract_id::MONEY_CONTRACT_ID, Blind, FuncId, MerkleNode, MONEY_CONTRACT_ID},
+    crypto::{contract_id::MONEY_CONTRACT_ID, BaseBlind, Blind, FuncId, MerkleNode},
     pasta::pallas,
     ContractCall,
 };

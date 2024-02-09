@@ -1522,12 +1522,12 @@ impl Drk {
 
         let auth_calls = vec![
             DaoAuthCall {
-                contract_id: DAO_CONTRACT_ID.inner(),
+                contract_id: *DAO_CONTRACT_ID,
                 function_code: DaoFunction::AuthMoneyTransfer as u8,
                 auth_data: proposal_data,
             },
             DaoAuthCall {
-                contract_id: MONEY_CONTRACT_ID.inner(),
+                contract_id: *MONEY_CONTRACT_ID,
                 function_code: MoneyFunction::TransferV1 as u8,
                 auth_data: vec![],
             },

@@ -32,7 +32,7 @@ use darkfi_sdk::{
     bridgetree,
     crypto::{
         pasta_prelude::{Field, PrimeField},
-        poseidon_hash, BaseBlind, Blind, FuncId, Nullifier, ScalarBlind, SecretKey, TokenId,
+        poseidon_hash, BaseBlind, Blind, FuncId, ScalarBlind, SecretKey,
     },
     pasta::pallas,
 };
@@ -122,7 +122,7 @@ impl Hash for OwnCoin {
 pub fn compute_remainder_blind(
     input_blinds: &[ScalarBlind],
     output_blinds: &[ScalarBlind],
-) -> pallas::Scalar {
+) -> ScalarBlind {
     let mut total = pallas::Scalar::ZERO;
 
     for input_blind in input_blinds {

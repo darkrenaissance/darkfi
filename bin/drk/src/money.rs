@@ -34,8 +34,8 @@ use darkfi_money_contract::{
 use darkfi_sdk::{
     bridgetree,
     crypto::{
-        note::AeadEncryptedNote, poseidon_hash, BaseBlind, FuncId, Keypair, MerkleNode, MerkleTree,
-        PublicKey, ScalarBlind, SecretKey, MONEY_CONTRACT_ID,
+        note::AeadEncryptedNote, BaseBlind, FuncId, Keypair, MerkleNode, MerkleTree, PublicKey,
+        ScalarBlind, SecretKey, MONEY_CONTRACT_ID,
     },
     pasta::pallas,
 };
@@ -453,6 +453,7 @@ impl Drk {
             };
             let secret: SecretKey = deserialize(secret_bytes)?;
 
+            // TODO: Remove from SQL store, can be derived ondemand
             let Value::Blob(ref nullifier_bytes) = row[10] else {
                 return Err(Error::ParseFailed("[get_coins] Nullifier bytes parsing failed"))
             };
@@ -477,7 +478,7 @@ impl Drk {
                 token_blind,
                 memo: memo.clone(),
             };
-            let owncoin = OwnCoin { coin, note, secret, nullifier, leaf_position };
+            let owncoin = OwnCoin { coin, note, secret, leaf_position };
 
             owncoins.push((owncoin, is_spent))
         }
@@ -701,13 +702,8 @@ impl Drk {
                     eprintln!("Witnessing coin in Merkle tree");
                     let leaf_position = tree.mark().unwrap();
 
-                    let owncoin = OwnCoin {
-                        coin: *coin,
-                        note: note.clone(),
-                        secret: *secret,
-                        nullifier: Nullifier::from(poseidon_hash([secret.inner(), coin.inner()])),
-                        leaf_position,
-                    };
+                    let owncoin =
+                        OwnCoin { coin: *coin, note: note.clone(), secret: *secret, leaf_position };
 
                     owncoins.push(owncoin);
                 }
@@ -757,7 +753,7 @@ impl Drk {
                 serialize(&owncoin.note.value_blind),
                 serialize(&owncoin.note.token_blind),
                 serialize(&owncoin.secret),
-                serialize(&owncoin.nullifier),
+                serialize(&owncoin.nullifier()),
                 serialize(&owncoin.leaf_position),
                 serialize(&owncoin.note.memo),
             ];
@@ -808,7 +804,7 @@ impl Drk {
         }
 
         for (coin, _) in self.get_coins(false).await? {
-            if nullifiers.contains(&coin.nullifier) {
+            if nullifiers.contains(&coin.nullifier()) {
                 if let Err(e) = self.mark_spent_coin(&coin.coin).await {
                     return Err(Error::RusqliteError(format!(
                         "[mark_spent_coins] Marking spent coin failed: {e:?}"

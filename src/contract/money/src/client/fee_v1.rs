@@ -16,171 +16,30 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use std::collections::HashMap;
-
 use darkfi::{
-    blockchain::BlockchainOverlayPtr,
-    tx::TransactionBuilder,
-    validator::verification::verify_transaction,
-    zk::{halo2::Value, Proof, ProvingKey, VerifyingKey, Witness, ZkCircuit},
+    zk::{halo2::Value, Proof, ProvingKey, Witness, ZkCircuit},
     zkas::ZkBinary,
-    ClientFailed, Result,
+    Result,
 };
 use darkfi_sdk::{
     bridgetree::{self, Hashable},
     crypto::{
-        note::AeadEncryptedNote,
-        pasta_prelude::{Curve, CurveAffine, Field},
-        pedersen_commitment_u64, poseidon_hash, BaseBlind, Blind, FuncId, Keypair, MerkleNode,
-        MerkleTree, PublicKey, ScalarBlind, SecretKey,
+        pasta_prelude::{Curve, CurveAffine},
+        pedersen_commitment_u64, poseidon_hash, BaseBlind, FuncId, MerkleNode, PublicKey,
+        ScalarBlind, SecretKey,
     },
     pasta::pallas,
 };
-use log::{error, info};
 use rand::rngs::OsRng;
 
 use crate::{
-    client::{compute_remainder_blind, Coin, MoneyNote, OwnCoin},
-    model::{
-        CoinAttributes, Input, MoneyFeeParamsV1, Nullifier, NullifierAttributes, Output,
-        DARK_TOKEN_ID,
-    },
+    client::{Coin, MoneyNote},
+    model::{CoinAttributes, Nullifier, NullifierAttributes},
 };
 
 /// Fixed gas used by the fee call.
 /// This is the minimum gas any fee-paying transaction will use.
 pub const FEE_CALL_GAS: u64 = 41_000_000;
-
-/// Append a fee-paying call to the given `TransactionBuilder`.
-///
-/// * `keypair`: Caller's keypair
-/// * `coin`: `OwnCoin` to use in this builder
-/// * `tree`: Merkle tree of coins used to create inclusion proofs
-/// * `fee_zkbin`: `Fee_V1` zkas circuit ZkBinary
-/// * `fee_pk`: `Fee_V1` zk circuit proving key
-/// * `tx_builder`: `TransactionBuilder of the tx we want to pay fee for
-/// * `overlay`: `BlockchainOverlayPtr` against which to verify the tx
-/// * `time_keeper`: `TimeKeeper` needed for tx verification
-/// * `verifying_keys`: ZK verifying keys needed for tx verification
-#[allow(clippy::too_many_arguments)]
-pub async fn append_fee_call(
-    keypair: &Keypair,
-    coin: &OwnCoin,
-    tree: MerkleTree,
-    fee_zkbin: &ZkBinary,
-    fee_pk: &ProvingKey,
-    tx_builder: &mut TransactionBuilder,
-    overlay: &BlockchainOverlayPtr,
-    verifying_block_height: u64,
-    verifying_keys: &mut HashMap<[u8; 32], HashMap<String, VerifyingKey>>,
-) -> Result<(MoneyFeeParamsV1, FeeCallSecrets)> {
-    assert!(coin.note.value > 0);
-    assert_eq!(coin.note.token_id, *DARK_TOKEN_ID);
-    assert_eq!(coin.note.user_data, pallas::Base::ZERO);
-    assert_eq!(coin.note.spend_hook, FuncId::none());
-
-    // First we will verify the fee-less transaction to see how much gas
-    // it uses for execution and verification.
-    let tx = tx_builder.build()?;
-    let mut gas_used = FEE_CALL_GAS;
-    gas_used +=
-        verify_transaction(overlay, verifying_block_height, &tx, verifying_keys, false).await?;
-
-    // TODO: We could actually take a set of coins and then find one with
-    //       enough value, instead of expecting one. It depends, the API
-    //       is a bit weird.
-
-    if coin.note.value < gas_used {
-        error!(
-            target: "money_contract::client::fee_v1",
-            "Not enough value in given OwnCoin for fee, have {}, need {}",
-            coin.note.value, gas_used,
-        );
-        return Err(ClientFailed::NotEnoughValue(coin.note.value).into())
-    }
-
-    let change_value = coin.note.value - gas_used;
-
-    let input = FeeCallInput {
-        leaf_position: coin.leaf_position,
-        merkle_path: tree.witness(coin.leaf_position, 0).unwrap(),
-        secret: coin.secret,
-        note: coin.note.clone(),
-        user_data_blind: Blind::random(&mut OsRng),
-    };
-
-    let output = FeeCallOutput {
-        public_key: keypair.public,
-        value: change_value,
-        token_id: coin.note.token_id,
-        spend_hook: FuncId::none(),
-        user_data: pallas::Base::ZERO,
-        blind: Blind::random(&mut OsRng),
-    };
-
-    let token_blind = Blind::random(&mut OsRng);
-
-    let input_value_blind = Blind::random(&mut OsRng);
-    let fee_value_blind = Blind::random(&mut OsRng);
-    let output_value_blind = compute_remainder_blind(&[input_value_blind], &[fee_value_blind]);
-
-    let signature_secret = SecretKey::random(&mut OsRng);
-
-    info!(target: "money_contract::client::fee_v1", "Creating Fee_V1 ZK proof...");
-    let (proof, public_inputs) = create_fee_proof(
-        fee_zkbin,
-        fee_pk,
-        &input,
-        input_value_blind,
-        &output,
-        output_value_blind,
-        output.spend_hook,
-        output.user_data,
-        output.blind,
-        token_blind,
-        signature_secret,
-    )?;
-
-    // Encrypted note for the output
-    let note = MoneyNote {
-        value: output.value,
-        token_id: output.token_id,
-        spend_hook: output.spend_hook,
-        user_data: output.user_data,
-        coin_blind: output.blind,
-        value_blind: output_value_blind,
-        token_blind,
-        memo: vec![],
-    };
-
-    let encrypted_note = AeadEncryptedNote::encrypt(&note, &output.public_key, &mut OsRng)?;
-
-    let params = MoneyFeeParamsV1 {
-        input: Input {
-            value_commit: public_inputs.input_value_commit,
-            token_commit: public_inputs.token_commit,
-            nullifier: public_inputs.nullifier,
-            merkle_root: public_inputs.merkle_root,
-            user_data_enc: public_inputs.input_user_data_enc,
-            signature_public: public_inputs.signature_public,
-        },
-        output: Output {
-            value_commit: public_inputs.output_value_commit,
-            token_commit: public_inputs.token_commit,
-            coin: public_inputs.output_coin,
-            note: encrypted_note,
-        },
-        fee_value_blind,
-        token_blind,
-    };
-
-    let secrets =
-        FeeCallSecrets { proof, signature_secret, note, input_value_blind, output_value_blind };
-
-    // TODO: Append call to tx builder
-
-    Ok((params, secrets))
-}
 
 /// Private values related to the Fee call
 pub struct FeeCallSecrets {
@@ -313,7 +172,7 @@ pub fn create_fee_proof(
         token_id: output.token_id,
         spend_hook: output_spend_hook,
         user_data: output_user_data,
-        blind: output_coin_blind.clone(),
+        blind: output_coin_blind,
     }
     .to_coin();
 

@@ -22,7 +22,10 @@ use darkfi::{
 };
 use darkfi_sdk::{
     bridgetree,
-    crypto::{note::AeadEncryptedNote, pasta_prelude::*, MerkleNode, SecretKey, TokenId},
+    crypto::{
+        note::AeadEncryptedNote, pasta_prelude::*, BaseBlind, Blind, MerkleNode, ScalarBlind,
+        SecretKey,
+    },
     pasta::pallas,
 };
 use log::{debug, info};
@@ -30,7 +33,7 @@ use rand::rngs::OsRng;
 
 use super::proof::{create_transfer_burn_proof, create_transfer_mint_proof};
 use crate::{
-    client::{compute_remainder_blind, MoneyNote, OwnCoin},
+    client::{compute_remainder_blind, MoneyNote, OwnCoin, TokenId},
     model::{CoinAttributes, Input, MoneyTransferParamsV1, Output},
 };
 
@@ -79,7 +82,7 @@ impl TransferCallBuilder {
         let mut signature_secrets = vec![];
         let mut proofs = vec![];
 
-        let token_blind = pallas::Base::random(&mut OsRng);
+        let token_blind = BaseBlind::random(&mut OsRng);
         let mut input_blinds = vec![];
         let mut output_blinds = vec![];
 

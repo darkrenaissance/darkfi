@@ -27,10 +27,7 @@ use darkfi::{
     Result,
 };
 use darkfi_dao_contract::model::{DaoBulla, DaoProposalBulla};
-use darkfi_money_contract::{
-    client::{MoneyNote, OwnCoin},
-    model::{Coin, Nullifier, Output},
-};
+use darkfi_money_contract::client::OwnCoin;
 use darkfi_sdk::{
     bridgetree,
     crypto::{Keypair, MerkleNode, MerkleTree},

@@ -34,11 +34,8 @@ use darkfi_money_contract::{
     MONEY_CONTRACT_ZKAS_TOKEN_MINT_NS_V1,
 };
 use darkfi_sdk::{
-    crypto::{
-        contract_id::MONEY_CONTRACT_ID, poseidon_hash, Blind, FuncId, FuncRef, MerkleNode,
-        MONEY_CONTRACT_ID,
-    },
-    dark_tree::{DarkLeaf, DarkTree},
+    crypto::{poseidon_hash, BaseBlind, Blind, FuncId, FuncRef, MerkleNode, MONEY_CONTRACT_ID},
+    dark_tree::DarkTree,
     pasta::pallas,
     ContractCall,
 };
@@ -82,7 +79,7 @@ impl TestHarness {
         .to_func_id();
 
         let (mint_auth_x, mint_auth_y) = mint_authority.public.xy();
-        let token_blind = pallas::Base::random(&mut OsRng);
+        let token_blind = BaseBlind::random(&mut OsRng);
 
         let token_attrs = TokenAttributes {
             auth_parent: auth_func_id,
@@ -267,7 +264,7 @@ impl TestHarness {
         .to_func_id();
 
         let (mint_auth_x, mint_auth_y) = mint_authority.public.xy();
-        let token_blind = pallas::Base::random(&mut OsRng);
+        let token_blind = BaseBlind::random(&mut OsRng);
 
         let token_attrs = TokenAttributes {
             auth_parent: auth_func_id,
