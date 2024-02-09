@@ -49,7 +49,6 @@
     - [Anonymous payments](zkas/examples/sapling.md)
 - [Client](clients/clients.md)
   - [darkfid JSON-RPC API](clients/darkfid_jsonrpc.md)
-  - [faucetd JSON-RPC API](clients/faucetd_jsonrpc.md)
   - [Anonymous Nodes](clients/anonymous_nodes.md)
     - [Tor Inbound Node](clients/tor_inbound.md)
     - [Nym Outbound Node](clients/nym_outbound.md)
