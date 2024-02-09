@@ -56,12 +56,6 @@ test-mint-pay-swap: all
 		--features=no-entrypoint,client \
 		--test mint_pay_swap
 
-test-txs-verification: all
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
-		--release --package $(PKGNAME) \
-		--features=no-entrypoint,client \
-		--test txs_verification
-
 test-genesis-mint: all
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
 		--release --package $(PKGNAME) \
@@ -80,13 +74,7 @@ test-token-mint: all
 		--features=no-entrypoint,client \
 		--test token_mint
 
-bench:
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
-		--release --package $(PKGNAME) \
-		--features=no-entrypoint,client \
-		--test verification_bench
-
-test: test-integration test-mint-pay-swap test-txs-verification test-genesis-mint test-pow-reward test-token-mint
+test: test-integration test-mint-pay-swap test-genesis-mint test-pow-reward test-token-mint
 
 clippy: all
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(WASM_TARGET) \
@@ -102,4 +90,4 @@ clean:
 		--release --package $(PKGNAME)
 	rm -f $(PROOFS_BIN) $(WASM_BIN)
 
-.PHONY: all test-integration test-mint-pay-swap test-txs-verification test-genesis-mint test-pow-reward bench test clippy clean
+.PHONY: all test-integration test-mint-pay-swap test-genesis-mint test-pow-reward test clippy clean
