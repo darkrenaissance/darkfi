@@ -101,13 +101,24 @@ nightly version, which was known to work:
 ```shell
 % rustup toolchain install nightly-2024-02-01
 % rustup target add wasm32-unknown-unknown --toolchain nightly-2024-02-01
+```
+
+Now we can use that toolchain in `make` directly:
+
+```shell
+% make CARGO="cargo +nightly-2024-02-01" {target}
+```
+
+Or, if we are lazy, we can modify the `Makefile` to always use that:
+
+```shell
 % sed -i Makefile -e "s|nightly|nightly-2024-02-01|g"
 ```
 
-When using cargo directly, you have to add the `+nightly-2024-02-01` flag,
-in order for it to use the older nightly version.
-
 Under no circumstances commit or push the Makefile change.
+
+When using `cargo` directly, you have to add the `+nightly-2024-02-01` flag,
+in order for it to use the older nightly version.
 
 ## Install
 
