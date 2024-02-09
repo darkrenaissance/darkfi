@@ -27,7 +27,7 @@ pub enum RpcError {
 
     // State-related errors,
     NotSynced = -32120,
-    UnknownSlot = -32121,
+    UnknownBlockHeight = -32121,
 
     // Parsing errors
     ParseError = -32190,
@@ -46,7 +46,7 @@ fn to_tuple(e: RpcError) -> (i32, String) {
         RpcError::TxBroadcastFail => "Failed broadcasting transaction",
         // State-related errors
         RpcError::NotSynced => "Blockchain is not synced",
-        RpcError::UnknownSlot => "Did not find slot",
+        RpcError::UnknownBlockHeight => "Did not find block height",
         // Parsing errors
         RpcError::ParseError => "Parse error",
         // Contract-related errors

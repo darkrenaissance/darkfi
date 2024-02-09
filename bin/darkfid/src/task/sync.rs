@@ -59,7 +59,7 @@ pub async fn sync_task(node: &Darkfid) -> Result<()> {
     info!(target: "darkfid::task::sync_task", "Last known block: {:?} - {:?}", last.0, last.1);
     loop {
         // Node creates a `SyncRequest` and sends it
-        let request = SyncRequest { slot: last.0, block: last.1 };
+        let request = SyncRequest { height: last.0 };
         channel.send(&request).await?;
 
         // TODO: add a timeout here to retry

@@ -36,39 +36,39 @@ use crate::{server_error, Darkfid, RpcError};
 
 impl Darkfid {
     // RPCAPI:
-    // Queries the blockchain database for a block in the given slot.
+    // Queries the blockchain database for a block in the given height.
     // Returns a readable block upon success.
     //
     // **Params:**
-    // * `array[0]`: `u64` slot ID (as string)
+    // * `array[0]`: `u64` Block height (as string)
     //
     // **Returns:**
     // * [`BlockInfo`](https://darkrenaissance.github.io/darkfi/development/darkfi/consensus/block/struct.BlockInfo.html)
     //   struct serialized into base64.
     //
-    // --> {"jsonrpc": "2.0", "method": "blockchain.get_slot", "params": ["0"], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "blockchain.get_block", "params": ["0"], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": {...}, "id": 1}
-    pub async fn blockchain_get_slot(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn blockchain_get_block(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_string() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        let slot = match params[0].get::<String>().unwrap().parse::<u64>() {
+        let block_height = match params[0].get::<String>().unwrap().parse::<u64>() {
             Ok(v) => v,
             Err(_) => return JsonError::new(ParseError, None, id).into(),
         };
 
-        let blocks = match self.validator.blockchain.get_blocks_by_heights(&[slot]) {
+        let blocks = match self.validator.blockchain.get_blocks_by_heights(&[block_height]) {
             Ok(v) => v,
             Err(e) => {
-                error!(target: "darkfid::rpc::blockchain_get_slot", "Failed fetching block by slot: {}", e);
+                error!(target: "darkfid::rpc::blockchain_get_block", "Failed fetching block by height: {}", e);
                 return JsonError::new(InternalError, None, id).into()
             }
         };
 
         if blocks.is_empty() {
-            return server_error(RpcError::UnknownSlot, id, None)
+            return server_error(RpcError::UnknownBlockHeight, id, None)
         }
 
         let block = base64::encode(&serialize_async(&blocks[0]).await);
@@ -117,28 +117,28 @@ impl Darkfid {
     }
 
     // RPCAPI:
-    // Queries the blockchain database to find the last known slot
+    // Queries the blockchain database to find the last known block
     //
     // **Params:**
     // * `None`
     //
     // **Returns:**
-    // * `u64` ID of the last known slot, as string
+    // * `u64` Height of the last known block, as string
     //
-    // --> {"jsonrpc": "2.0", "method": "blockchain.last_known_slot", "params": [], "id": 1}
+    // --> {"jsonrpc": "2.0", "method": "blockchain.last_known_block", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "result": "1234", "id": 1}
-    pub async fn blockchain_last_known_slot(&self, id: u16, params: JsonValue) -> JsonResult {
+    pub async fn blockchain_last_known_block(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if !params.is_empty() {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
         let blockchain = self.validator.blockchain.clone();
-        let Ok(last_slot) = blockchain.last() else {
+        let Ok(last_block_height) = blockchain.last() else {
             return JsonError::new(InternalError, None, id).into()
         };
 
-        JsonResponse::new(JsonValue::Number(last_slot.0 as f64), id).into()
+        JsonResponse::new(JsonValue::Number(last_block_height.0 as f64), id).into()
     }
 
     // RPCAPI:

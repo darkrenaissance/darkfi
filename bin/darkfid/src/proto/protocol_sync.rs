@@ -40,10 +40,8 @@ const BATCH: u64 = 10;
 /// Auxiliary structure used for blockchain syncing.
 #[derive(Debug, SerialEncodable, SerialDecodable)]
 pub struct SyncRequest {
-    /// Slot UID
-    pub slot: u64,
-    /// Block headerhash of that slot
-    pub block: blake3::Hash,
+    /// Block height
+    pub height: u64,
 }
 
 impl_p2p_message!(SyncRequest, "syncrequest");
@@ -107,8 +105,7 @@ impl ProtocolSync {
                 continue
             }
 
-            let key = request.slot;
-            let blocks = match self.validator.blockchain.get_blocks_after(key, BATCH) {
+            let blocks = match self.validator.blockchain.get_blocks_after(request.height, BATCH) {
                 Ok(v) => v,
                 Err(e) => {
                     error!(
