@@ -127,10 +127,6 @@ pub struct BlockchainNetwork {
     pub pow_fixed_difficulty: Option<usize>,
 
     #[structopt(long)]
-    /// Whitelisted faucet public key (repeatable flag)
-    pub faucet_pub: Vec<String>,
-
-    #[structopt(long)]
     /// Participate in the consensus protocol
     pub consensus: bool,
 

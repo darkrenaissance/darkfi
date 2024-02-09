@@ -70,8 +70,8 @@ impl Harness {
         ex: &Arc<smol::Executor<'static>>,
     ) -> Result<Self> {
         // Use test harness to generate genesis transactions
-        let mut th = TestHarness::new(&["money".to_string()], verify_fees).await?;
-        let (genesis_mint_tx, _) = th.genesis_mint(&Holder::Bob, config.bob_initial)?;
+        let mut th = TestHarness::new(&[Holder::Bob], verify_fees).await?;
+        let (genesis_mint_tx, _) = th.genesis_mint(&Holder::Bob, config.bob_initial).await?;
 
         // Generate default genesis block
         let mut genesis_block = BlockInfo::default();
@@ -94,7 +94,7 @@ impl Harness {
         };
 
         // Generate validators using pregenerated vks
-        let (_, vks) = vks::read_or_gen_vks_and_pks()?;
+        let (_, vks) = vks::get_cached_pks_and_vks()?;
         let mut sync_settings =
             Settings { localnet: true, inbound_connections: 3, ..Default::default() };
         let mut consensus_settings =

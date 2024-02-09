@@ -29,9 +29,6 @@ pow_target = 10
 # Optional fixed PoW difficulty, used for testing
 pow_fixed_difficulty = 1
 
-# Whitelisted faucet addresses
-faucet_pub = []
-
 # Participate in the consensus protocol
 consensus = true
 
@@ -160,9 +157,6 @@ minerd_endpoint = "tcp://127.0.0.1:28467"
 
 # PoW block production target, in seconds
 pow_target = 90
-
-# Whitelisted faucet addresses
-faucet_pub = ["3ce5xa3PjuQGFtTaF7AvMJp7fGxqeGRJx7zj3LCwNCkP"]
 
 # Participate in the consensus protocol
 consensus = false
@@ -310,9 +304,6 @@ minerd_endpoint = "tcp://127.0.0.1:28467"
 
 # PoW block production target, in seconds
 pow_target = 90
-
-# Whitelisted faucet addresses
-faucet_pub = []
 
 # Participate in the consensus protocol
 consensus = false

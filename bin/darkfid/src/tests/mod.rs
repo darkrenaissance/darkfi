@@ -42,7 +42,7 @@ async fn sync_blocks_real(ex: Arc<Executor<'static>>) -> Result<()> {
         alice_initial: 1000,
         bob_initial: 500,
     };
-    let th = Harness::new(config, false, &ex).await?;
+    let th = Harness::new(config, true, &ex).await?;
 
     // Retrieve genesis block
     let previous = th.alice.validator.blockchain.last_block()?;
