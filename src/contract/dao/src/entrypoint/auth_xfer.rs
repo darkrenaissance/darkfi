@@ -54,8 +54,8 @@ pub(crate) fn dao_authxfer_get_metadata(
     let exec_callnode = &calls[parent_idx];
     let exec_params: DaoExecParams = deserialize(&exec_callnode.data.data[1..])?;
 
-    assert!(xfer_params.inputs.len() > 0);
-    assert!(xfer_params.outputs.len() > 0);
+    assert!(!xfer_params.inputs.is_empty());
+    assert!(!xfer_params.outputs.is_empty());
 
     let mut zk_public_inputs: Vec<(String, Vec<pallas::Base>)> = vec![];
     let signature_pubkeys: Vec<PublicKey> = vec![];
@@ -123,7 +123,7 @@ fn find_auth_in_parent(
             return Some(auth_call)
         }
     }
-    return None
+    None
 }
 
 /// `process_instruction` function for `Dao::Exec`
@@ -153,7 +153,7 @@ pub(crate) fn dao_authxfer_process_instruction(
     ///////////////////////////////////////////////////
 
     let xfer_params: MoneyTransferParamsV1 = deserialize(&xfer_call.data[1..])?;
-    assert!(xfer_params.inputs.len() > 0);
+    assert!(!xfer_params.inputs.is_empty());
     // We need the last output to be the change
     assert!(xfer_params.outputs.len() > 1);
 
@@ -177,7 +177,7 @@ pub(crate) fn dao_authxfer_process_instruction(
     let exec_callnode = &calls[parent_idx];
     let exec_params: DaoExecParams = deserialize(&exec_callnode.data.data[1..])?;
 
-    let auth_call = find_auth_in_parent(&exec_callnode, exec_params.proposal_auth_calls, call_idx);
+    let auth_call = find_auth_in_parent(exec_callnode, exec_params.proposal_auth_calls, call_idx);
     if auth_call.is_none() {
         return Err(DaoError::AuthXferCallNotFoundInParent.into())
     }

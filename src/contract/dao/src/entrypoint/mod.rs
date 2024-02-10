@@ -152,7 +152,8 @@ fn get_metadata(cid: ContractId, ix: &[u8]) -> ContractResult {
         DaoFunction::Exec => dao_exec_get_metadata(cid, call_idx, calls)?,
         DaoFunction::AuthMoneyTransfer => dao_authxfer_get_metadata(cid, call_idx, calls)?,
     };
-    Ok(set_return_data(&metadata)?)
+
+    set_return_data(&metadata)
 }
 
 /// This function verifies a state transition and produces a state update
@@ -169,7 +170,8 @@ fn process_instruction(cid: ContractId, ix: &[u8]) -> ContractResult {
         DaoFunction::Exec => dao_exec_process_instruction(cid, call_idx, calls)?,
         DaoFunction::AuthMoneyTransfer => dao_authxfer_process_instruction(cid, call_idx, calls)?,
     };
-    Ok(set_return_data(&update_data)?)
+
+    set_return_data(&update_data)
 }
 
 /// This function attempts to write a given state update provided the previous
