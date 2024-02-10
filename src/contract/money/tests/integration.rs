@@ -18,7 +18,6 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
-use log::info;
 
 #[test]
 fn money_integration() -> Result<()> {
@@ -34,8 +33,8 @@ fn money_integration() -> Result<()> {
         // Generate a new block mined by Alice
         th.generate_block(&Holder::Alice, &HOLDERS).await?;
 
-        // Block height to verify against
-        let current_block_height = 1;
+        // Generate a new block mined by Bob
+        th.generate_block(&Holder::Bob, &HOLDERS).await?;
 
         // Thanks for reading
         Ok(())

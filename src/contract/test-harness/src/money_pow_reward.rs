@@ -55,7 +55,6 @@ impl TestHarness {
             self.proving_keys.get(&MONEY_CONTRACT_ZKAS_MINT_NS_V1.to_string()).unwrap();
 
         // Reference the last block in the holder's blockchain
-        let (block_height, fork_previous_hash) = wallet.validator.blockchain.last()?;
         let last_block = wallet.validator.blockchain.last_block()?;
 
         // If there's a set reward recipient, use it, otherwise reward the holder
@@ -69,9 +68,9 @@ impl TestHarness {
         let builder = PoWRewardCallBuilder {
             secret: wallet.keypair.secret,
             recipient,
-            block_height: block_height + 1,
+            block_height: last_block.header.height + 1,
             last_nonce: last_block.header.nonce,
-            fork_previous_hash,
+            fork_previous_hash: last_block.header.previous,
             spend_hook: FuncId::none(),
             user_data: pallas::Base::ZERO,
             mint_zkbin: mint_zkbin.clone(),
