@@ -109,10 +109,8 @@ pub async fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Res
         return Ok(0)
     }
 
-    // Compute nonce u64
-    let mut nonce = [0u8; 8];
-    nonce.copy_from_slice(&block.header.nonce.to_repr()[..8]);
-    let nonce = u64::from_be_bytes(nonce);
+    // Grab block nonce
+    let nonce = block.header.nonce;
 
     // First 2 blocks have rank equal to their nonce
     if block.header.height < 3 {
@@ -136,7 +134,7 @@ pub async fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Res
     let vrf = u64::from_be_bytes(vrf);
 
     // Finally, compute the rank
-    let rank = nonce % vrf;
+    let rank = if nonce != 0 { vrf % nonce } else { vrf };
 
     Ok(rank)
 }

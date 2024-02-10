@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{
-    crypto::{MerkleTree, SecretKey},
-    pasta::pallas,
-};
+use darkfi_sdk::crypto::{MerkleTree, SecretKey};
 use darkfi_serial::{async_trait, serialize, SerialDecodable, SerialEncodable};
 use log::{debug, error, info};
 use num_bigint::BigUint;
@@ -92,12 +89,8 @@ impl Consensus {
         let previous = fork.last_proposal()?;
 
         // Generate the new header
-        let header = Header::new(
-            previous.block.hash()?,
-            next_block_height,
-            Timestamp::current_time(),
-            pallas::Base::zero(),
-        );
+        let header =
+            Header::new(previous.block.hash()?, next_block_height, Timestamp::current_time(), 0);
 
         // Generate the block
         let mut block = BlockInfo::new_empty(header);

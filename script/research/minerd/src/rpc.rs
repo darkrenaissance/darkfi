@@ -34,7 +34,7 @@ use darkfi::{
     validator::pow::mine_block,
 };
 use darkfi_sdk::num_traits::Num;
-use darkfi_serial::{async_trait, deserialize, serialize};
+use darkfi_serial::{async_trait, deserialize};
 
 use crate::{
     error::{server_error, RpcError},
@@ -123,7 +123,6 @@ impl Minerd {
         }
 
         // Return block nonce
-        let nonce = base64::encode(&serialize(&block.header.nonce));
-        JsonResponse::new(JsonValue::String(nonce), id).into()
+        JsonResponse::new(JsonValue::Number(block.header.nonce as f64), id).into()
     }
 }

@@ -18,17 +18,14 @@
 
 use std::{
     sync::{
-        atomic::{AtomicBool, AtomicU32, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc,
     },
     thread,
     time::Instant,
 };
 
-use darkfi_sdk::{
-    num_traits::{One, Zero},
-    pasta::pallas,
-};
+use darkfi_sdk::num_traits::{One, Zero};
 use log::debug;
 use num_bigint::BigUint;
 use randomx::{RandomXCache, RandomXDataset, RandomXFlags, RandomXVM};
@@ -322,8 +319,8 @@ pub fn mine_block(
     let mining_time = Instant::now();
     let mut handles = vec![];
     let found_block = Arc::new(AtomicBool::new(false));
-    let found_nonce = Arc::new(AtomicU32::new(0));
-    let threads = threads as u32;
+    let found_nonce = Arc::new(AtomicU64::new(0));
+    let threads = threads as u64;
     for t in 0..threads {
         let target = target.clone();
         let mut block = miner_block.clone();
@@ -343,7 +340,7 @@ pub fn mine_block(
                     break
                 }
 
-                block.header.nonce = pallas::Base::from(miner_nonce as u64);
+                block.header.nonce = miner_nonce;
                 if found_block.load(Ordering::SeqCst) {
                     debug!(target: "validator::pow::mine_block", "[MINER] Block found, thread #{} exiting", t);
                     break
@@ -380,7 +377,7 @@ pub fn mine_block(
     debug!(target: "validator::pow::mine_block", "[MINER] Mining time: {:?}", mining_time.elapsed());
 
     // Set the valid mined nonce in the block
-    miner_block.header.nonce = pallas::Base::from(found_nonce.load(Ordering::SeqCst) as u64);
+    miner_block.header.nonce = found_nonce.load(Ordering::SeqCst);
 
     Ok(())
 }

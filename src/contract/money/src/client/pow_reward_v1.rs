@@ -72,7 +72,7 @@ pub struct PoWRewardCallBuilder {
     /// Rewarded block height
     pub block_height: u64,
     /// Extending fork last proposal/block nonce
-    pub last_nonce: pallas::Base,
+    pub last_nonce: u64,
     /// Extending fork second to last proposal/block hash
     pub fork_previous_hash: blake3::Hash,
     /// Merkle tree of coins used to create inclusion proofs
@@ -155,7 +155,7 @@ impl PoWRewardCallBuilder {
 
         info!("Building Consensus::ProposalV1 VRF proof");
         let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
-        vrf_input.extend_from_slice(&self.last_nonce.to_repr());
+        vrf_input.extend_from_slice(&pallas::Base::from(self.last_nonce).to_repr());
         vrf_input.extend_from_slice(self.fork_previous_hash.as_bytes());
         vrf_input.extend_from_slice(&pallas::Base::from(self.block_height).to_repr());
         let vrf_proof = VrfProof::prove(self.secret, &vrf_input, &mut OsRng);

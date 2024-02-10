@@ -107,8 +107,9 @@ pub(crate) fn money_pow_reward_process_instruction_v1(
 
     // Construct VRF input
     let mut vrf_input = Vec::with_capacity(32 + blake3::OUT_LEN + 32);
-    vrf_input.extend_from_slice(&last_block_info[8..40]);
-    vrf_input.extend_from_slice(&last_block_info[40..]);
+    let nonce: u64 = deserialize(&last_block_info[8..16])?;
+    vrf_input.extend_from_slice(&pallas::Base::from(nonce).to_repr());
+    vrf_input.extend_from_slice(&last_block_info[16..]);
     vrf_input.extend_from_slice(&pallas::Base::from(verifying_block_height).to_repr());
 
     // Verify VRF proof

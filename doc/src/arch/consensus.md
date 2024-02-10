@@ -60,17 +60,16 @@ in order to stop mining its proposal and start mining the new best fork.
 
 ## Ranking
 
-Each proposed block has a ranked based on the modulus of its nonce and its
-previous proposal previous proposal `VRF` proof, which is attached to the
-block producer reward transaction. Genesis block has rank 0.
-First 2 blocks rank is equal to their nonce, since their previous previous
-block producer doesn't exist, or have a `VRF` attached to their reward transaction.
-For rest blocks, the rank computes as following:
-1. Generate a `u64` using the first 8 bytes from the blocks nonce `pallas::Base`
-2. Grab the `VRF` proof from the reward transaction of the previous previous proposal
-3. Generate a `pallas::Base` from the `blake3::Hash` bytes of the proof
-4. Generate a `u64` using the first 8 bytes from the `pallas::Base` of the proofs hash
-5. Compute the rank: nonce_u64 % vrf_u64
+Each proposed block has a ranked based on the modulus of its previous proposal
+previous proposal `VRF` proof, which is attached to the block producer reward
+transaction, and its `nonce`. Genesis block has rank 0. First 2 blocks rank is equal
+to their nonce, since their previous previous block producer doesn't exist,
+or have a `VRF` attached to their reward transaction. For rest blocks, the rank
+computes as following:
+1. Grab the `VRF` proof from the reward transaction of the previous previous proposal
+2. Generate a `pallas::Base` from the `blake3::Hash` bytes of the proof
+3. Generate a `u64` using the first 8 bytes from the `pallas::Base` of the proofs hash
+4. Compute the rank: `vrf_u64` % `nonce` (If `nonce` is 0, rank is equal to `vrf_u64`)
 
 To calculate each fork rank, we simply sum all its block proposals ranks and multiply
 that with the forks length. We use the length multiplier to give a chance of higher
@@ -211,7 +210,7 @@ be used by the protocol.
 | `epoch`     | `u64`          | Epoch number                                   |
 | `height`    | `u64`          | Block height                                   |
 | `timestamp` | `Timestamp`    | Block creation timestamp                       |
-| `nonce`     | `pallas::Base` | The block's nonce value                        |
+| `nonce`     | `u64`          | The block's nonce value                        |
 | `tree`      | `MerkleTree`   | Merkle tree of the block's transactions hashes |
 
 ## Block

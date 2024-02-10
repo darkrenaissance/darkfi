@@ -37,7 +37,7 @@ use darkfi_sdk::{
     pasta::pallas,
     ContractCall,
 };
-use darkfi_serial::{deserialize, serialize, Encodable};
+use darkfi_serial::{serialize, Encodable};
 use log::info;
 use num_bigint::BigUint;
 use rand::rngs::OsRng;
@@ -111,8 +111,7 @@ async fn miner_loop(node: &Darkfid, recipient: &PublicKey) -> Result<()> {
         let block = JsonValue::String(base64::encode(&serialize(&next_block)));
         let response =
             node.miner_daemon_request("mine", JsonValue::Array(vec![target, block])).await?;
-        let nonce_bytes = base64::decode(response.get::<String>().unwrap()).unwrap();
-        next_block.header.nonce = deserialize::<pallas::Base>(&nonce_bytes)?;
+        next_block.header.nonce = *response.get::<f64>().unwrap() as u64;
 
         // Sign the mined block
         next_block.sign(&secret)?;

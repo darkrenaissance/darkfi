@@ -19,7 +19,6 @@
 use darkfi_sdk::{
     blockchain::{block_epoch, block_version},
     crypto::MerkleTree,
-    pasta::{group::ff::Field, pallas},
 };
 
 #[cfg(feature = "async-serial")]
@@ -43,20 +42,14 @@ pub struct Header {
     pub height: u64,
     /// Block creation timestamp
     pub timestamp: Timestamp,
-    /// The block's nonce.
-    /// In PoW, this value changes arbitrarily with mining.
-    pub nonce: pallas::Base,
+    /// The block's nonce. This value changes arbitrarily with mining.
+    pub nonce: u64,
     /// Merkle tree of the transactions hashes contained in this block
     pub tree: MerkleTree,
 }
 
 impl Header {
-    pub fn new(
-        previous: blake3::Hash,
-        height: u64,
-        timestamp: Timestamp,
-        nonce: pallas::Base,
-    ) -> Self {
+    pub fn new(previous: blake3::Hash, height: u64, timestamp: Timestamp, nonce: u64) -> Self {
         let version = block_version(height);
         let epoch = block_epoch(height);
         let tree = MerkleTree::new(1);
@@ -82,12 +75,7 @@ impl Header {
 impl Default for Header {
     /// Represents the genesis header on current timestamp
     fn default() -> Self {
-        Header::new(
-            blake3::hash(b"Let there be dark!"),
-            0,
-            Timestamp::current_time(),
-            pallas::Base::ZERO,
-        )
+        Header::new(blake3::hash(b"Let there be dark!"), 0, Timestamp::current_time(), 0)
     }
 }
 

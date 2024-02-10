@@ -101,10 +101,14 @@ async fn main() -> Result<()> {
                 genesis_block.header.timestamp = Timestamp(timestamp);
             }
 
+            // Retrieve genesis producer transaction
+            let producer_tx = genesis_block.txs.pop().unwrap();
+
             // Append genesis transactions
             if !genesis_txs.is_empty() {
-                genesis_block.txs.append(&mut genesis_txs);
+                genesis_block.append_txs(genesis_txs)?;
             }
+            genesis_block.append_txs(vec![producer_tx])?;
 
             // Write generated genesis block to stdin
             let encoded = bs58::encode(&serialize(&genesis_block)).into_string();
@@ -121,7 +125,7 @@ async fn main() -> Result<()> {
 
             // Initialize a temporary sled database
             let sled_db = sled::Config::new().temporary(true).open()?;
-            let (_, vks) = vks::read_or_gen_vks_and_pks()?;
+            let (_, vks) = vks::get_cached_pks_and_vks()?;
             vks::inject(&sled_db, &vks)?;
 
             // Create an overlay over whole blockchain
