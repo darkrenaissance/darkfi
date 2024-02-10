@@ -62,19 +62,13 @@ test-genesis-mint: all
 		--features=no-entrypoint,client \
 		--test genesis_mint
 
-test-pow-reward: all
-	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
-		--release --package $(PKGNAME) \
-		--features=no-entrypoint,client \
-		--test pow_reward
-
 test-token-mint: all
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) test --target=$(RUST_TARGET) \
 		--release --package $(PKGNAME) \
 		--features=no-entrypoint,client \
 		--test token_mint
 
-test: test-integration test-mint-pay-swap test-genesis-mint test-pow-reward test-token-mint
+test: test-integration test-mint-pay-swap test-genesis-mint test-token-mint
 
 clippy: all
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clippy --target=$(WASM_TARGET) \
@@ -90,4 +84,4 @@ clean:
 		--release --package $(PKGNAME)
 	rm -f $(PROOFS_BIN) $(WASM_BIN)
 
-.PHONY: all test-integration test-mint-pay-swap test-genesis-mint test-pow-reward test clippy clean
+.PHONY: all test-integration test-mint-pay-swap test-genesis-mint test clippy clean
