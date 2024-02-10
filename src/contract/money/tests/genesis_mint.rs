@@ -53,33 +53,19 @@ fn genesis_mint() -> Result<()> {
         let (genesis_mint_tx, genesis_mint_params) =
             th.genesis_mint(&Holder::Alice, ALICE_INITIAL).await?;
 
-        /* FIXME:
-        // We are going to use alice genesis mint transaction to
-        // test some malicious cases.
-        info!(target: "money", "[Malicious] ==================================");
-        info!(target: "money", "[Malicious] Checking duplicate genesis mint tx");
-        info!(target: "money", "[Malicious] ==================================");
-        th.execute_erroneous_txs(
-            TxAction::MoneyGenesisMint,
-            &Holder::Alice,
-            &[genesis_mint_tx.clone(), genesis_mint_tx.clone()],
-            current_block_height,
-            1,
-        )
-        .await?;
-
         info!(target: "money", "[Malicious] =============================================");
         info!(target: "money", "[Malicious] Checking genesis mint tx not on genesis block");
         info!(target: "money", "[Malicious] =============================================");
-        th.execute_erroneous_txs(
-            TxAction::MoneyGenesisMint,
-            &Holder::Alice,
-            &[genesis_mint_tx.clone()],
-            current_block_height + 1,
-            1,
-        )
-        .await?;
-        */
+        assert!(th
+            .execute_genesis_mint_tx(
+                &Holder::Alice,
+                genesis_mint_tx.clone(),
+                &genesis_mint_params,
+                current_block_height + 1,
+                true,
+            )
+            .await
+            .is_err());
 
         for holder in &HOLDERS {
             info!(target: "money", "[{holder:?}] ================================");
