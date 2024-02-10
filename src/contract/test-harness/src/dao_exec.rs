@@ -257,7 +257,7 @@ impl TestHarness {
     ///
     /// Returns any found [`OwnCoin`]s.
     #[allow(clippy::too_many_arguments)]
-    pub async fn excecute_dao_exec_tx(
+    pub async fn execute_dao_exec_tx(
         &mut self,
         holder: &Holder,
         tx: Transaction,
