@@ -61,7 +61,7 @@ impl TokenFreezeCallBuilder {
         let token_id = self.token_attrs.to_token_id();
 
         let public_inputs = vec![mint_pubkey.x(), mint_pubkey.y(), token_id.inner()];
-        darkfi::zk::export_witness_json("witness.json", &prover_witnesses, &public_inputs);
+        //darkfi::zk::export_witness_json("witness.json", &prover_witnesses, &public_inputs);
 
         let circuit = ZkCircuit::new(prover_witnesses, &self.freeze_zkbin);
         let proof = Proof::create(&self.freeze_pk, &[circuit], &public_inputs, &mut OsRng)?;

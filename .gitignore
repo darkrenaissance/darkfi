@@ -5,6 +5,7 @@
 *.wasm
 *.zk.bin
 
+witness.json
 *_circuit_layout.png
 
 /bin/zkas/zkas

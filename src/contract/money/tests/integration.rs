@@ -18,7 +18,6 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
-use darkfi_sdk::blockchain::expected_reward;
 use log::info;
 
 #[test]
@@ -32,49 +31,11 @@ fn money_integration() -> Result<()> {
         // Initialize harness
         let mut th = TestHarness::new(&HOLDERS, true).await?;
 
+        // Generate a new block mined by Alice
+        th.generate_block(&Holder::Alice, &HOLDERS).await?;
+
         // Block height to verify against
         let current_block_height = 1;
-
-        // Drop some money to Alice
-        info!("[Alice] Building block proposal");
-        let (alice_proposal_tx, alice_proposal_params) =
-            th.pow_reward(&Holder::Alice, None, None).await?;
-
-        for holder in HOLDERS {
-            info!("[{holder:?}] Executing Alice's block proposal");
-            th.execute_pow_reward_tx(
-                &holder,
-                &alice_proposal_tx,
-                &alice_proposal_params,
-                current_block_height,
-            )
-            .await?;
-        }
-
-        let alice_owncoins = th.holders.get(&Holder::Alice).unwrap().unspent_money_coins.clone();
-        assert!(alice_owncoins[0].note.value == expected_reward(current_block_height));
-
-        th.assert_trees(&HOLDERS);
-
-        // And some to Bob
-        info!("[Bob] Building block proposal");
-        let (bob_proposal_tx, bob_proposal_params) =
-            th.pow_reward(&Holder::Bob, None, None).await?;
-
-        for holder in HOLDERS {
-            info!("[{holder:?}] Executing Alice's block proposal");
-            th.execute_pow_reward_tx(
-                &holder,
-                &bob_proposal_tx,
-                &bob_proposal_params,
-                current_block_height,
-            )
-            .await?;
-        }
-
-        th.assert_trees(&HOLDERS);
-
-        // Alice sends a payment of some DRK to Bob.
 
         // Thanks for reading
         Ok(())

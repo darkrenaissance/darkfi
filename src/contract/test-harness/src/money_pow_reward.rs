@@ -17,6 +17,7 @@
  */
 
 use darkfi::{
+    blockchain::{BlockInfo, Header},
     tx::{ContractCallLeaf, Transaction, TransactionBuilder},
     zk::halo2::Field,
     Result,
@@ -32,6 +33,7 @@ use darkfi_sdk::{
     ContractCall,
 };
 use darkfi_serial::AsyncEncodable;
+use log::info;
 use rand::rngs::OsRng;
 
 use super::{Holder, TestHarness};
@@ -41,7 +43,7 @@ impl TestHarness {
     ///
     /// Optionally takes a specific reward recipient and a nonstandard reward value.
     /// Returns the created [`Transaction`] and [`MoneyPoWRewardParamsV1`].
-    pub async fn pow_reward(
+    async fn pow_reward(
         &mut self,
         holder: &Holder,
         recipient: Option<&Holder>,
@@ -94,34 +96,67 @@ impl TestHarness {
         Ok((tx, debris.params))
     }
 
-    /// Execute the transaction created by `pow_reward()` for a given [`Holder`].
+    /// Generate and add an empty block to the given [`Holder`]s blockchains.
+    /// The `miner` holder will produce the block and receive the reward.
     ///
-    /// Returns any gathered [`OwnCoin`]s from the transaction.
-    pub async fn execute_pow_reward_tx(
+    /// Returns any found [`OwnCoin`]s.
+    pub async fn generate_block(
         &mut self,
-        holder: &Holder,
-        tx: &Transaction,
-        params: &MoneyPoWRewardParamsV1,
-        block_height: u64,
+        miner: &Holder,
+        holders: &[Holder],
     ) -> Result<Vec<OwnCoin>> {
-        let wallet = self.holders.get_mut(holder).unwrap();
+        // Build the POW reward transaction
+        info!("Building PoWReward transaction for {:?}", miner);
+        let (tx, params) = self.pow_reward(miner, None, None).await?;
 
-        wallet.validator.add_test_producer_transaction(tx, block_height, true).await?;
-        wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
+        // Fetch the last block in the blockchain
+        let wallet = self.holders.get(miner).unwrap();
+        let previous = wallet.validator.blockchain.last_block()?;
 
-        // Attempt to decrypt the output note to see if this is a coin for the holder.
-        let Ok(note) = params.output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
-            return Ok(vec![])
-        };
+        // We increment timestamp so we don't have to use sleep
+        let mut timestamp = previous.header.timestamp;
+        timestamp.add(1);
 
-        let owncoin = OwnCoin {
-            coin: params.output.coin,
-            note: note.clone(),
-            secret: wallet.keypair.secret,
-            leaf_position: wallet.money_merkle_tree.mark().unwrap(),
-        };
+        // Generate block header
+        let header = Header::new(
+            previous.hash()?,
+            previous.header.height + 1,
+            timestamp,
+            previous.header.nonce,
+        );
 
-        wallet.unspent_money_coins.push(owncoin.clone());
-        Ok(vec![owncoin])
+        // Generate the block
+        let mut block = BlockInfo::new_empty(header);
+
+        // Add producer transaction to the block
+        block.append_txs(vec![tx])?;
+
+        // Attach signature
+        block.sign(&wallet.keypair.secret)?;
+
+        // For all holders, append the block
+        let mut found_owncoins = vec![];
+        for holder in holders {
+            let wallet = self.holders.get_mut(holder).unwrap();
+            wallet.validator.add_blocks(&[block.clone()]).await?;
+            wallet.money_merkle_tree.append(MerkleNode::from(params.output.coin.inner()));
+
+            // Attempt to decrypt the note to see if this is a coin for the holder
+            let Ok(note) = params.output.note.decrypt::<MoneyNote>(&wallet.keypair.secret) else {
+                continue
+            };
+
+            let owncoin = OwnCoin {
+                coin: params.output.coin,
+                note: note.clone(),
+                secret: wallet.keypair.secret,
+                leaf_position: wallet.money_merkle_tree.mark().unwrap(),
+            };
+
+            wallet.unspent_money_coins.push(owncoin.clone());
+            found_owncoins.push(owncoin);
+        }
+
+        Ok(found_owncoins)
     }
 }
