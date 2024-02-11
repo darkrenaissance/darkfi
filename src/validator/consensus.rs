@@ -430,19 +430,19 @@ impl Fork {
         let mut sum = 0;
         let proposals = self.overlay.lock().unwrap().get_blocks_by_hash(&self.proposals)?;
         for proposal in &proposals {
-            // For block height > 3, retrieve their previous previous block
-            let previous_previous = if proposal.header.height > 3 {
-                let previous = &self
-                    .overlay
-                    .lock()
-                    .unwrap()
-                    .get_blocks_by_hash(&[proposal.header.previous])?[0];
-                self.overlay.lock().unwrap().get_blocks_by_hash(&[previous.header.previous])?[0]
-                    .clone()
-            } else {
-                proposal.clone()
-            };
-            sum += block_rank(proposal, &previous_previous).await?;
+            // For block height < 3 we use the same proposal reference, since
+            // block_rank() will ignore it
+            if proposal.header.height < 3 {
+                sum += block_rank(proposal, proposal).await?;
+                continue
+            }
+
+            // For block height > 2, retrieve their previous previous block
+            let previous =
+                &self.overlay.lock().unwrap().get_blocks_by_hash(&[proposal.header.previous])?[0];
+            let previous_previous =
+                &self.overlay.lock().unwrap().get_blocks_by_hash(&[previous.header.previous])?[0];
+            sum += block_rank(proposal, previous_previous).await?;
         }
 
         // Use fork(proposals) length as a multiplier to compute the actual fork rank
