@@ -101,6 +101,7 @@ pub enum Holder {
     Bob,
     Charlie,
     Dao,
+    Rachel,
 }
 
 /// Wallet instance for a single [`Holder`]

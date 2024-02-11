@@ -45,6 +45,8 @@ impl TestHarness {
         &mut self,
         holder: &Holder,
         amount: u64,
+        spend_hook: Option<FuncId>,
+        user_data: Option<pallas::Base>,
     ) -> Result<(Transaction, MoneyGenesisMintParamsV1)> {
         let wallet = self.holders.get(holder).unwrap();
 
@@ -55,8 +57,8 @@ impl TestHarness {
         let builder = GenesisMintCallBuilder {
             keypair: wallet.keypair,
             amount,
-            spend_hook: FuncId::none(),
-            user_data: pallas::Base::ZERO,
+            spend_hook: spend_hook.unwrap_or(FuncId::none()),
+            user_data: user_data.unwrap_or(pallas::Base::ZERO),
             mint_zkbin: mint_zkbin.clone(),
             mint_pk: mint_pk.clone(),
         };

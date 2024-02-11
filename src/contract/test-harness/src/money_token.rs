@@ -52,6 +52,7 @@ impl TestHarness {
         amount: u64,
         holder: &Holder,
         recipient: &Holder,
+        token_blind: BaseBlind,
         spend_hook: Option<FuncId>,
         user_data: Option<pallas::Base>,
         block_height: u64,
@@ -79,7 +80,6 @@ impl TestHarness {
         .to_func_id();
 
         let (mint_auth_x, mint_auth_y) = mint_authority.public.xy();
-        let token_blind = BaseBlind::random(&mut OsRng);
 
         let token_attrs = TokenAttributes {
             auth_parent: auth_func_id,
