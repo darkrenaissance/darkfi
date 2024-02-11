@@ -16,15 +16,12 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{
-    crypto::{
-        ecvrf::VrfProof, pasta_prelude::PrimeField, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID,
-        MONEY_CONTRACT_ID,
-    },
-    pasta::{group::ff::FromUniformBytes, pallas},
+use darkfi_sdk::crypto::{
+    ecvrf::VrfProof, DAO_CONTRACT_ID, DEPLOYOOOR_CONTRACT_ID, MONEY_CONTRACT_ID,
 };
 use darkfi_serial::AsyncDecodable;
 use log::info;
+use num_bigint::BigUint;
 use smol::io::Cursor;
 
 use crate::{
@@ -103,10 +100,10 @@ pub async fn deploy_native_contracts(overlay: &BlockchainOverlayPtr) -> Result<(
 /// Genesis block has rank 0.
 /// First 2 blocks rank is equal to their nonce, since their previous
 /// previous block producer doesn't exist or have a VRF.
-pub async fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Result<u64> {
+pub async fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Result<BigUint> {
     // Genesis block has rank 0
     if block.header.height == 0 {
-        return Ok(0)
+        return Ok(0u64.into())
     }
 
     // Grab block nonce
@@ -114,7 +111,7 @@ pub async fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Res
 
     // First 2 blocks have rank equal to their nonce
     if block.header.height < 3 {
-        return Ok(nonce)
+        return Ok(nonce.into())
     }
 
     // Extract VRF proof from the previous previous producer transaction
@@ -125,16 +122,11 @@ pub async fn block_rank(block: &BlockInfo, previous_previous: &BlockInfo) -> Res
     decoder.set_position(499);
     let vrf_proof: VrfProof = AsyncDecodable::decode_async(&mut decoder).await?;
 
-    // Compute VRF u64
-    let mut vrf = [0u8; 64];
-    vrf[..blake3::OUT_LEN].copy_from_slice(vrf_proof.hash_output().as_bytes());
-    let vrf_pallas = pallas::Base::from_uniform_bytes(&vrf);
-    let mut vrf = [0u8; 8];
-    vrf.copy_from_slice(&vrf_pallas.to_repr()[..8]);
-    let vrf = u64::from_be_bytes(vrf);
+    // Get the VRF output as big-endian
+    let vrf_output = BigUint::from_bytes_be(vrf_proof.hash_output().as_bytes());
 
     // Finally, compute the rank
-    let rank = if nonce != 0 { vrf % nonce } else { vrf };
+    let rank = if nonce != 0 { vrf_output % nonce } else { vrf_output };
 
     Ok(rank)
 }
@@ -206,24 +198,24 @@ pub fn best_forks_indexes(forks: &[Fork]) -> Result<Vec<usize>> {
     }
 
     // Find the best ranked forks
-    let mut best = 0;
+    let mut best = BigUint::from(0u64);
     let mut indexes = vec![];
     for (f_index, fork) in forks.iter().enumerate() {
-        let rank = fork.rank;
+        let rank = &fork.rank;
 
         // Fork ranks lower that current best
-        if rank < best {
+        if rank < &best {
             continue
         }
 
         // Fork has same rank as current best
-        if rank == best {
+        if rank == &best {
             indexes.push(f_index);
             continue
         }
 
         // Fork ranks higher that current best
-        best = rank;
+        best = rank.clone();
         indexes = vec![f_index];
     }
 

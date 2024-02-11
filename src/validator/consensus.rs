@@ -314,7 +314,7 @@ pub struct Fork {
     /// Valid pending transaction hashes
     pub mempool: Vec<blake3::Hash>,
     /// Current fork rank, cached for better performance
-    pub rank: u64,
+    pub rank: BigUint,
 }
 
 impl Fork {
@@ -322,7 +322,7 @@ impl Fork {
         let mempool =
             blockchain.get_pending_txs()?.iter().map(|tx| blake3::hash(&serialize(tx))).collect();
         let overlay = BlockchainOverlay::new(blockchain)?;
-        Ok(Self { overlay, module, proposals: vec![], mempool, rank: 0 })
+        Ok(Self { overlay, module, proposals: vec![], mempool, rank: BigUint::from(0u64) })
     }
 
     /// Auxiliary function to append a proposal and recalculate current fork rank
@@ -420,14 +420,14 @@ impl Fork {
     }
 
     /// Auxiliarry function to compute fork's rank, assuming all proposals are valid.
-    pub async fn rank(&self) -> Result<u64> {
+    pub async fn rank(&self) -> Result<BigUint> {
         // If the fork is empty its rank is 0
         if self.proposals.is_empty() {
-            return Ok(0)
+            return Ok(0u64.into())
         }
 
         // Retrieve the sum of all fork proposals ranks
-        let mut sum = 0;
+        let mut sum = BigUint::from(0_u64);
         let proposals = self.overlay.lock().unwrap().get_blocks_by_hash(&self.proposals)?;
         for proposal in &proposals {
             // For block height < 3 we use the same proposal reference, since
@@ -459,7 +459,7 @@ impl Fork {
         let module = self.module.clone();
         let proposals = self.proposals.clone();
         let mempool = self.mempool.clone();
-        let rank = self.rank;
+        let rank = self.rank.clone();
 
         Ok(Self { overlay, module, proposals, mempool, rank })
     }
