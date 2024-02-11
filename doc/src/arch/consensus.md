@@ -60,12 +60,17 @@ in order to stop mining its proposal and start mining the new best fork.
 
 ## Ranking
 
+Miners attaches an `ECVRF` proof in their reward transaction, which is then
+used as part of our ranking logic. This `VRF` is builded using the `pallas::Base`
+of the previous proposal nonce, the previous proposa previous proposal hash, and
+the `pallas::Base` of the proposals block height. This `VRF` helps us eliminate
+long range attacks, aka predicting a future high ranked block we can produce in advance.
+
 Each proposed block has a ranked based on the modulus of its previous proposal
-previous proposal `VRF` proof, which is attached to the block producer reward
-transaction, and its `nonce`. Genesis block has rank 0. First 2 blocks rank is equal
-to their nonce, since their previous previous block producer doesn't exist,
-or have a `VRF` attached to their reward transaction. For rest blocks, the rank
-computes as following:
+previous proposal `VRF` proof and its `nonce`. Genesis block has rank 0.
+First 2 blocks rank is equal to their nonce, since their previous previous block
+producer doesn't exist, or have a `VRF` attached to their reward transaction.
+For rest blocks, the rank computes as following:
 1. Grab the `VRF` proof from the reward transaction of the previous previous proposal
 2. Generate a `pallas::Base` from the `blake3::Hash` bytes of the proof
 3. Generate a `u64` using the first 8 bytes from the `pallas::Base` of the proofs hash
