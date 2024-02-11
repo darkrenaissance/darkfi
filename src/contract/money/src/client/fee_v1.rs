@@ -65,8 +65,6 @@ pub struct FeeRevealed {
     pub token_commit: pallas::Base,
     /// Merkle root for input coin
     pub merkle_root: MerkleNode,
-    /// Input's spend hook
-    pub input_spend_hook: FuncId,
     /// Encrypted user data for input coin
     pub input_user_data_enc: pallas::Base,
     /// Public key used to sign transaction
@@ -94,7 +92,6 @@ impl FeeRevealed {
             self.token_commit,
             self.merkle_root.inner(),
             self.input_user_data_enc,
-            self.input_spend_hook.inner(),
             *sigpub_coords.x(),
             *sigpub_coords.y(),
             self.output_coin.inner(),
@@ -181,7 +178,6 @@ pub fn create_fee_proof(
         input_value_commit,
         token_commit,
         merkle_root,
-        input_spend_hook: input.note.spend_hook,
         input_user_data_enc,
         signature_public,
         output_coin,
@@ -207,6 +203,8 @@ pub fn create_fee_proof(
         Witness::Base(Value::known(input.note.token_id.inner())),
         Witness::Base(Value::known(token_blind.inner())),
     ];
+
+    //darkfi::zk::export_witness_json("witness.json", &prover_witnesses, &public_inputs.to_vec());
 
     let circuit = ZkCircuit::new(prover_witnesses, zkbin);
     let proof = Proof::create(pk, &[circuit], &public_inputs.to_vec(), &mut OsRng)?;

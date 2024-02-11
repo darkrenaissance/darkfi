@@ -18,6 +18,7 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
+use darkfi_sdk::blockchain::expected_reward;
 
 #[test]
 fn money_integration() -> Result<()> {
@@ -30,11 +31,57 @@ fn money_integration() -> Result<()> {
         // Initialize harness
         let mut th = TestHarness::new(&HOLDERS, true).await?;
 
-        // Generate a new block mined by Alice
+        // Generate two new blocks mined by Alice
+        th.generate_block(&Holder::Alice, &HOLDERS).await?;
         th.generate_block(&Holder::Alice, &HOLDERS).await?;
 
-        // Generate a new block mined by Bob
+        // Generate two new blocks mined by Bob
         th.generate_block(&Holder::Bob, &HOLDERS).await?;
+        th.generate_block(&Holder::Bob, &HOLDERS).await?;
+
+        // Assert correct rewards
+        let alice_coins = &th.holders.get(&Holder::Alice).unwrap().unspent_money_coins;
+        let bob_coins = &th.holders.get(&Holder::Bob).unwrap().unspent_money_coins;
+        assert!(alice_coins.len() == 2);
+        assert!(bob_coins.len() == 2);
+        assert!(alice_coins[0].note.value == expected_reward(1));
+        assert!(alice_coins[1].note.value == expected_reward(2));
+        assert!(bob_coins[0].note.value == expected_reward(3));
+        assert!(bob_coins[1].note.value == expected_reward(4));
+
+        let current_block_height = 4;
+
+        // Alice transfers some tokens to Bob
+        let (tx, (xfer_params, fee_params), _spent_soins) = th
+            .transfer(
+                alice_coins[0].note.value,
+                &Holder::Alice,
+                &Holder::Bob,
+                &[alice_coins[0].clone()],
+                alice_coins[0].note.token_id,
+                current_block_height,
+            )
+            .await?;
+
+        // Execute the transaction
+        for holder in &HOLDERS {
+            th.execute_transfer_tx(
+                holder,
+                tx.clone(),
+                &xfer_params,
+                &fee_params,
+                current_block_height,
+                true,
+            )
+            .await?;
+        }
+
+        // Assert coins in wallets
+        let alice_coins = &th.holders.get(&Holder::Alice).unwrap().unspent_money_coins;
+        let bob_coins = &th.holders.get(&Holder::Bob).unwrap().unspent_money_coins;
+        assert!(alice_coins.len() == 1); // Change from fee
+        assert!(bob_coins.len() == 3);
+        assert!(bob_coins[2].note.value == expected_reward(1));
 
         // Thanks for reading
         Ok(())

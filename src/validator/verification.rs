@@ -660,11 +660,6 @@ pub async fn verify_transactions(
                 overlay.lock().unwrap().revert_to_checkpoint()?;
             }
         }
-
-        if verify_fees {
-            // Enforce that enough fee is paid.
-            todo!()
-        }
     }
 
     if erroneous_txs.is_empty() {
