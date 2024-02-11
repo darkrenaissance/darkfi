@@ -72,7 +72,7 @@ eliminate long range attacks by predicting a high-ranking future block that we
 can produce in advance.
 
 Each block proposal is ranked based on the modulus of the $(n-2)$-block
-proposal, a `VRF` proof (attached to the block producer's reward transaction)
+proposal's `VRF` proof (attached to the block producer's reward transaction)
 and its `nonce`.
 
 The rank of the genesis block is 0. The rank of the following 2 blocks is equal
@@ -82,9 +82,8 @@ reward transaction.
 For all other blocks, the rank is computed as follows:
 
 1. Grab the `VRF` proof from the reward transaction of the $(n-2)$-block proposal
-2. Generate a `pallas::Base` from the `blake3::Hash` bytes of the proof
-3. Generate a `u64` using the first 8 bytes from the `pallas::Base` of the proof's hash
-4. Compute the rank: `vrf_u64` % `nonce` (If `nonce` is 0, rank is equal to `vrf_u64`)
+2. Obtain a big-integer from the big endian output of the `VRF`
+3. Compute the rank: `vrf.output` % `nonce` (If `nonce` is 0, rank is equal to `vrf.output`)
 
 To calculate each fork rank, we simply multiply the sum of every block
 proposal's rank in the fork by the fork's length. We use the length
@@ -160,12 +159,11 @@ Extending the canonical blockchain with a new block proposal:
 
 When the finalization check kicks in, each node will grab its best fork.
 
-If more than one fork exists with same rank, the node will not finalize
-any block proposals. If the fork's length exceeds the security threshold,
-the node will finalize all block proposals, excluding the $(n-1)$-block
-proposal, by appending them to the canonical blockchain. We exclude the
-$(n-1)$-block proposal to eliminate network race conditions for blocks
-of the same height.
+If more than one fork exists with same rank, the node will not finalize any
+block proposals. If the fork's length exceeds the security threshold, the node
+will finalize all block proposals, excluding the last ($n$)-block proposal, by
+appending them to the canonical blockchain. We exclude the last ($n$)-block
+proposal to eliminate network race conditions for blocks of the same height.
 
 Once finalized, all the remaining fork chains are removed from the node's
 memory pool.
