@@ -12,23 +12,25 @@ blockchain achieve consensus.
 | Miner                  | Block producer                                                                         |
 | Unproposed Transaction | Transaction that exists in the memory pool but has not yet been included in a proposal |
 | Block proposal         | Block that has not yet been appended onto the canonical blockchain                     |
-| P2P network            | Peer-to-peer network on which Nodes communicate with each other                        |
+| P2P network            | Peer-to-peer network on which nodes communicate with each other                        |
 | Finalization           | State achieved when a block and its contents are appended to the canonical blockchain  |
 | Fork                   | Chain of block proposals that begins with the last block of the canonical blockchain   |
 
 ## Miner main loop
 
-DarkFi is using Proof of Work RandomX algorithm paired with Delayed finality.
+DarkFi is using Proof of Work RandomX algorithm paired with delayed finality.
 Therefore, block production involves the following steps:
 
-Miner grabs its current best ranking fork and composes a valid block using
-unproposed transactions from their mempool, extending it.
-Then they try to find a nonce that makes the blocks header hash bytes produce
+First, a miner grabs its current best ranking fork and extends it with a block composed of
+unproposed transactions from the miner's mempool.
+
+Then the miner tries to find a nonce such that when the block header is hashed its bytes produce
 a number that is less than the current difficulty target of the network,
 using the [RandomX mining algorithm](https://github.com/tevador/RandomX).
-Once they find such a nonce, they can propose(broadcast their block proposal
-to the P2P network. After that, they trigger their finalization check, to
-see if their newlly extended fork can be finalized.
+
+Once the miner finds such a nonce, it broadcasts its block proposal
+to the P2P network. Finally the miner triggers a finalization check to
+see if its newly extended fork can be finalized.
 
 Pseudocode:
 ```
@@ -49,41 +51,46 @@ loop {
 
 ## Listening for block proposals
 
-Each node listens to new block proposals from the network.
-Upon receiving block proposals, they try to extend the proposals
-onto a fork that they hold in memory. This process is described in the
-next section. After that, they trigger their finalization check, to
-see if their newlly extended fork can be finalized.
-Miner, upon receiving a new block proposal, will also check if the
-extended fork rank is better than the one they currently try to extend,
-in order to stop mining its proposal and start mining the new best fork.
+Each node listens for new block proposals on the network.
+Upon receiving block proposals, nodes try to extend the proposals
+onto a fork held in memory (this process is described in the
+next section). Then nodes trigger a finalization check to
+see if their newly extended fork can be finalized.
+
+Upon receiving a new block proposal, miners also check if the
+extended fork rank is better than the one they are currently trying to extend. If the fork rank is better,
+the miner will stop mining its proposal and start mining the new best fork.
 
 ## Ranking
 
-Miners attaches an `ECVRF` proof in their reward transaction, which is then
-used as part of our ranking logic. This `VRF` is builded using the `pallas::Base`
-of the previous proposal nonce, the previous proposa previous proposal hash, and
-the `pallas::Base` of the proposals block height. This `VRF` helps us eliminate
-long range attacks, aka predicting a future high ranked block we can produce in advance.
+Block producers create a reward transaction containing a `ECVRF` proof that contributes
+to ranking logic. The `VRF` is built using the `pallas::Base`
+of the $`(n-1)`$-block proposal nonce, the $`(n-1)`$-block proposal hash, and
+the `pallas::Base` of the proposal's block height. The `VRF`'s purpose is to eliminate
+long range attacks by predicting a future block with a high ranking that we can produce in advance.
 
-Each proposed block has a ranked based on the modulus of its previous proposal
-previous proposal `VRF` proof and its `nonce`. Genesis block has rank 0.
-First 2 blocks rank is equal to their nonce, since their previous previous block
-producer doesn't exist, or have a `VRF` attached to their reward transaction.
-For rest blocks, the rank computes as following:
-1. Grab the `VRF` proof from the reward transaction of the previous previous proposal
-2. Obtain a big-integer from the big endian output of the `VRF`
-3. Compute the rank: `vrf.output` % `nonce` (If `nonce` is 0, rank is equal to `vrf.output`)
+Each block proposal is ranked based on the modulus of the $`(n-1)`$-block 
+proposal, a `VRF` proof (attached to the block producer's reward
+transaction) and its `nonce`.
 
-To calculate each fork rank, we simply sum all its block proposals ranks and multiply
-that with the forks length. We use the length multiplier to give a chance of higher
-ranking to longer forks.
+The rank of the genesis block is 0. The rank of the following 2 blocks is equal
+to the nonce, since there is no `n-1` block producer 
+or a `VRF` attached to the reward transaction. For all other blocks, the rank
+is computed as follows:
+
+1. Grab the `VRF` proof from the reward transaction of the $`(n-1)`$-block proposal
+2. Generate a `pallas::Base` from the `blake3::Hash` bytes of the proof
+3. Generate a `u64` using the first 8 bytes from the `pallas::Base` of the proofs hash
+4. Compute the rank: `vrf_u64` % `nonce` (If `nonce` is 0, rank is equal to `vrf_u64`)
+
+To calculate each fork rank, we simply multiply the sum of every block proposal rank in the fork 
+by the fork's length. We use the length multiplier to give a preference to longer forks, as longer forks have a chance at a higher ranking.
 
 ## Fork extension
 
-Since there can be more than one block producers, each node holds a set of
-known forks in memory. When a node produces a block, they extend the best
-ranking fork they hold.
+Since there can be more than one block producer, each node holds a set of
+known forks in memory. Nodes extend the best
+ranking fork in memory when producing a block.
 
 Upon receiving a block, one of the following cases may occur:
 
@@ -98,7 +105,7 @@ Upon receiving a block, one of the following cases may occur:
 
 | Symbol        | Description                            |
 |---------------|----------------------------------------|
-| [C]           | Canonical(finalized) blockchain block  |
+| [C]           | Canonical (finalized) blockchain block |
 | [C]--...--[C] | Sequence of canonical blocks           |
 | [Mn]          | Proposal produced by Miner n           |
 | Fn            | Fork name to identify them in examples |
@@ -147,19 +154,22 @@ Extending the canonical blockchain with a new block proposal:
 ## Finalization
 
 When the finalization check kicks in, each node will grab its best fork.
-If more than one forks exist with same rank, node doesn't finalize any of them.
-If the fork has reached greater length than the security threshold, node
-finalizes all block proposals, excluding the last one, by appending them to the
-canonical blockchain. We exclude the last proposal, to eliminate network race
-conditions for same height blocks.
 
-Once finalized, all rest fork chains are removed from the nodes memory pool.
-Practically this means that no finalization can occur while there are
-competing fork chains of the same rank, over the security threshold.
-In such a case, finalization will occur when we have a single highest ranking fork.
+If more than one fork exists with same rank, the node will not finalize any block proposals.
+If the fork's length exceeds the security threshold, the node
+will finalize all block proposals, excluding the $`(n-1)`$-block proposal, by appending them to the
+canonical blockchain. We exclude the $`(n-1)`$-block proposal to eliminate network race
+conditions for same block heights.
+
+Once finalized, all the remaining fork chains are removed from the node's memory pool.
+
+Because of this design, finalization cannot occur while there are
+competing fork chains of the same rank whose length exceeds the security threshold.
+In such a case, finalization will occur when a single highest ranking fork emerges.
 
 We continue Case 3 from the previous section to visualize this logic.
-The finalization threshold used in the example is 3 blocks.
+
+The finalization threshold used in this example is 3 blocks.
 A node observes 2 proposals. One extends the F0 fork, and the other
 extends the F2 fork:
 
@@ -171,7 +181,7 @@ extends the F2 fork:
                    |
                    |--[M4]              <-- F3
 
-The two competing fork chains managed to also have the same rank,
+The two competing fork chains also have the same rank,
 therefore finalization cannot occur.
 
 Later, the node only observes 1 proposal, extending the F2 fork:
