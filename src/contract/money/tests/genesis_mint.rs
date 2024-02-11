@@ -51,7 +51,7 @@ fn genesis_mint() -> Result<()> {
         info!(target: "money", "[Alice] Building genesis mint tx");
         info!(target: "money", "[Alice] ========================");
         let (genesis_mint_tx, genesis_mint_params) =
-            th.genesis_mint(&Holder::Alice, ALICE_INITIAL).await?;
+            th.genesis_mint(&Holder::Alice, ALICE_INITIAL, None, None).await?;
 
         info!(target: "money", "[Malicious] =============================================");
         info!(target: "money", "[Malicious] Checking genesis mint tx not on genesis block");
@@ -87,7 +87,7 @@ fn genesis_mint() -> Result<()> {
         info!(target: "money", "[Bob] Building genesis mint tx");
         info!(target: "money", "[Bob] ========================");
         let (genesis_mint_tx, genesis_mint_params) =
-            th.genesis_mint(&Holder::Bob, BOB_INITIAL).await?;
+            th.genesis_mint(&Holder::Bob, BOB_INITIAL, None, None).await?;
 
         for holder in &HOLDERS {
             info!(target: "money", "[{holder:?}] =============================");

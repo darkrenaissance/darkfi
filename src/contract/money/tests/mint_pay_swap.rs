@@ -29,7 +29,9 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
+use darkfi_sdk::crypto::BaseBlind;
 use log::info;
+use rand::rngs::OsRng;
 
 #[test]
 fn mint_pay_swap() -> Result<()> {
@@ -59,11 +61,13 @@ fn mint_pay_swap() -> Result<()> {
         info!(target: "money", "[Alice] ================================");
         info!(target: "money", "[Alice] Building token mint tx for Alice");
         info!(target: "money", "[Alice] ================================");
+        let alice_token_blind = BaseBlind::random(&mut OsRng);
         let (mint_tx, mint_params, mint_auth_params, fee_params) = th
             .token_mint(
                 ALICE_INITIAL,
                 &Holder::Alice,
                 &Holder::Alice,
+                alice_token_blind,
                 None,
                 None,
                 current_block_height,
@@ -91,8 +95,17 @@ fn mint_pay_swap() -> Result<()> {
         info!(target: "money", "[Bob] ==============================");
         info!(target: "money", "[Bob] Building token mint tx for Bob");
         info!(target: "money", "[Bob] ==============================");
+        let bob_token_blind = BaseBlind::random(&mut OsRng);
         let (mint_tx, mint_params, mint_auth_params, fee_params) = th
-            .token_mint(BOB_INITIAL, &Holder::Bob, &Holder::Bob, None, None, current_block_height)
+            .token_mint(
+                BOB_INITIAL,
+                &Holder::Bob,
+                &Holder::Bob,
+                bob_token_blind,
+                None,
+                None,
+                current_block_height,
+            )
             .await?;
 
         for holder in &HOLDERS {

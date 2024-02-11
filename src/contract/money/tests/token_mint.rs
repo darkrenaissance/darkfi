@@ -18,7 +18,9 @@
 
 use darkfi::Result;
 use darkfi_contract_test_harness::{init_logger, Holder, TestHarness};
+use darkfi_sdk::crypto::BaseBlind;
 use log::info;
+use rand::rngs::OsRng;
 
 #[test]
 fn token_mint() -> Result<()> {
@@ -38,8 +40,17 @@ fn token_mint() -> Result<()> {
         let mut th = TestHarness::new(&HOLDERS, false).await?;
 
         info!("[Bob] Building BOB token mint tx");
+        let bob_token_blind = BaseBlind::random(&mut OsRng);
         let (token_mint_tx, token_mint_params, token_auth_mint_params, fee_params) = th
-            .token_mint(BOB_SUPPLY, &Holder::Bob, &Holder::Bob, None, None, current_block_height)
+            .token_mint(
+                BOB_SUPPLY,
+                &Holder::Bob,
+                &Holder::Bob,
+                bob_token_blind,
+                None,
+                None,
+                current_block_height,
+            )
             .await?;
 
         for holder in &HOLDERS {

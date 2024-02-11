@@ -71,7 +71,8 @@ impl Harness {
     ) -> Result<Self> {
         // Use test harness to generate genesis transactions
         let mut th = TestHarness::new(&[Holder::Bob], verify_fees).await?;
-        let (genesis_mint_tx, _) = th.genesis_mint(&Holder::Bob, config.bob_initial).await?;
+        let (genesis_mint_tx, _) =
+            th.genesis_mint(&Holder::Bob, config.bob_initial, None, None).await?;
 
         // Generate default genesis block
         let mut genesis_block = BlockInfo::default();

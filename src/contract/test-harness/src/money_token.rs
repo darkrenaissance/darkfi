@@ -47,6 +47,7 @@ use super::{Holder, TestHarness};
 
 impl TestHarness {
     /// Mint an arbitrary token for a given recipient using `Money::TokenMint`
+    #[allow(clippy::too_many_arguments)]
     pub async fn token_mint(
         &mut self,
         amount: u64,
