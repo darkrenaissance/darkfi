@@ -32,7 +32,7 @@ $$ \begin{aligned}
 \end{aligned} $$
 
 ```rust
-{{#include ../../../../../src/contract/money/src/model.rs:coin-attributes}}
+{{#include ../../../../../src/contract/money/src/model/mod.rs:coin-attributes}}
 ```
 
 $$ \t{Coin} : \t{Attrs}_\t{Coin} → 𝔽ₚ $$
@@ -52,7 +52,7 @@ $$ \begin{aligned}
 \end{aligned} $$
 
 ```rust
-{{#include ../../../../../src/contract/money/src/model.rs:money-clear-input}}
+{{#include ../../../../../src/contract/money/src/model/mod.rs:money-clear-input}}
 ```
 
 ### Input
@@ -69,7 +69,7 @@ $$ \begin{aligned}
 \end{aligned} $$
 
 ```rust
-{{#include ../../../../../src/contract/money/src/model.rs:money-input}}
+{{#include ../../../../../src/contract/money/src/model/mod.rs:money-input}}
 ```
 
 ### Output
@@ -85,6 +85,6 @@ $$ \begin{aligned}
 \end{aligned} $$
 
 ```rust
-{{#include ../../../../../src/contract/money/src/model.rs:money-output}}
+{{#include ../../../../../src/contract/money/src/model/mod.rs:money-output}}
 ```
 
