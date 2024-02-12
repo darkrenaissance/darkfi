@@ -90,6 +90,15 @@ proposal's rank in the fork by the fork's length. We use the length
 multiplier to give a preference to longer forks (i.e. longer forks are
 likely to have a higher ranking).
 
+The ranking of a fork is always increasing as new blocks are appended.
+To see this, let $F = (M₁ ⋯  Mₙ)$ be a fork with a finite sequence of blocks $(Mᵢ)$
+of length $n$. The rank of a fork is calculated as
+$$ r_F = n ∑ᵢ₌₁ⁿ \t{rank}(Mᵢ) $$
+Let $F' = F ⊕  (Mₙ₊₁)$ of length $n + 1$ be the fork created by appending
+the block $Mₙ₊₁$ to $F$. Then we see that
+$$ r_{F'} > r_F $$
+since $\t{rank}(M) > 0$ for all $M$.
+
 ## Fork extension
 
 Since there can be more than one block producer, each node holds a set of known
