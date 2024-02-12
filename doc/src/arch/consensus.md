@@ -259,5 +259,5 @@ used by the protocol.
 | Field       | Type              | Description                            |
 |-------------|-------------------|----------------------------------------|
 | `canonical` | `Blockchain`      | Canonical (finalized) blockchain       |
-g `forks`     | `Vec<Blockchain>` | Fork chains containing block proposals |
+| `forks`     | `Vec<Blockchain>` | Fork chains containing block proposals |
 
