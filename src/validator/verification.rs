@@ -19,7 +19,7 @@
 use std::collections::HashMap;
 
 use darkfi_sdk::{
-    blockchain::{block_epoch, block_version},
+    blockchain::block_version,
     crypto::{
         schnorr::SchnorrPublic, ContractId, MerkleTree, PublicKey, DEPLOYOOOR_CONTRACT_ID,
         MONEY_CONTRACT_ID,
@@ -63,11 +63,6 @@ pub async fn verify_genesis_block(overlay: &BlockchainOverlayPtr, block: &BlockI
 
     // Block height must be 0
     if block.header.height != 0 {
-        return Err(Error::BlockIsInvalid(block_hash))
-    }
-
-    // Block epoch must be correct
-    if block.header.epoch != block_epoch(block.header.height) {
         return Err(Error::BlockIsInvalid(block_hash))
     }
 
@@ -116,11 +111,10 @@ pub async fn verify_genesis_block(overlay: &BlockchainOverlayPtr, block: &BlockI
 
 /// A block is considered valid when the following rules apply:
 ///     1. Block version is correct for its height
-///     2. Block epoch corresponds to the one for its height
-///     3. Parent hash is equal to the hash of the previous block
-///     4. Block height increments previous block height by 1
-///     5. Timestamp is valid based on PoWModule validation
-///     6. Block hash is valid based on PoWModule validation
+///     2. Parent hash is equal to the hash of the previous block
+///     3. Block height increments previous block height by 1
+///     4. Timestamp is valid based on PoWModule validation
+///     5. Block hash is valid based on PoWModule validation
 /// Additional validity rules can be applied.
 pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, module: &PoWModule) -> Result<()> {
     // Check block version (1)
@@ -128,28 +122,23 @@ pub fn validate_block(block: &BlockInfo, previous: &BlockInfo, module: &PoWModul
         return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
     }
 
-    // Check block epoch (2)
-    if block.header.epoch != block_epoch(block.header.height) {
-        return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
-    }
-
-    // Check previous hash (3)
+    // Check previous hash (2)
     let previous_hash = previous.hash()?;
     if block.header.previous != previous_hash {
         return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
     }
 
-    // Check heights are incremental (4)
+    // Check heights are incremental (3)
     if block.header.height != previous.header.height + 1 {
         return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
     }
 
-    // Check timestamp validity (5)
+    // Check timestamp validity (4)
     if !module.verify_timestamp_by_median(block.header.timestamp.0) {
         return Err(Error::BlockIsInvalid(block.hash()?.to_string()))
     }
 
-    // Check block hash corresponds to next one (6)
+    // Check block hash corresponds to next one (5)
     module.verify_block_hash(block)?;
 
     Ok(())

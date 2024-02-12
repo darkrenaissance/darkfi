@@ -16,10 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi_sdk::{
-    blockchain::{block_epoch, block_version},
-    crypto::MerkleTree,
-};
+use darkfi_sdk::{blockchain::block_version, crypto::MerkleTree};
 
 #[cfg(feature = "async-serial")]
 use darkfi_serial::async_trait;
@@ -29,15 +26,13 @@ use crate::{util::time::Timestamp, Error, Result};
 
 use super::{parse_record, SledDbOverlayPtr};
 
-/// This struct represents a tuple of the form (version, previous, epoch, height, timestamp, nonce, merkle_root).
+/// This struct represents a tuple of the form (version, previous, height, timestamp, nonce, merkle_tree).
 #[derive(Debug, Clone, PartialEq, Eq, SerialEncodable, SerialDecodable)]
 pub struct Header {
     /// Block version
     pub version: u8,
     /// Previous block hash
     pub previous: blake3::Hash,
-    /// Epoch number
-    pub epoch: u64,
     /// Block height
     pub height: u64,
     /// Block creation timestamp
@@ -51,9 +46,8 @@ pub struct Header {
 impl Header {
     pub fn new(previous: blake3::Hash, height: u64, timestamp: Timestamp, nonce: u64) -> Self {
         let version = block_version(height);
-        let epoch = block_epoch(height);
         let tree = MerkleTree::new(1);
-        Self { version, previous, epoch, height, timestamp, nonce, tree }
+        Self { version, previous, height, timestamp, nonce, tree }
     }
 
     /// Compute the header's hash
@@ -62,7 +56,6 @@ impl Header {
 
         self.version.encode(&mut hasher)?;
         self.previous.encode(&mut hasher)?;
-        self.epoch.encode(&mut hasher)?;
         self.height.encode(&mut hasher)?;
         self.timestamp.encode(&mut hasher)?;
         self.nonce.encode(&mut hasher)?;

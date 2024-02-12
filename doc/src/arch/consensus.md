@@ -64,12 +64,12 @@ new best fork.
 
 ## Ranking
 
-Block producers create a reward transaction containing a `ECVRF` proof that
-contributes to ranking logic. The `VRF` is built using the `pallas::Base` of
-the $(n-1)$-block proposal's nonce, the $(n-2)$-block proposal's hash, and the
-`pallas::Base` of the block proposal's block height. The `VRF`'s purpose is to
-eliminate long range attacks by predicting a high-ranking future block that we
-can produce in advance.
+Block producers create a reward transaction containing a `ECVRF` proof (`VRF`)
+that contributes to ranking logic. The `VRF` is built using the `pallas::Base`
+of the $(n-1)$-block proposal's nonce, the $(n-2)$-block proposal's hash, and
+the `pallas::Base` of the block proposal's block height. The `VRF`'s purpose
+is to eliminate long range attacks by predicting a high-ranking future block
+that we can produce in advance.
 
 Each block proposal is ranked based on the modulus of the $(n-2)$-block
 proposal's `VRF` proof (attached to the block producer's reward transaction)
@@ -107,12 +107,12 @@ block.
 
 Upon receiving a block, one of the following cases may occur:
 
-| Description                               | Handling                                                            |
-|-------------------------------------------|---------------------------------------------------------------------|
-| Block extends a known fork at its end     | Append block to fork                                                |
-| Block extends a known fork not at its end | Create a new fork up to the extended block and append the new block |
-| Block extends canonical blockchain        | Create a new fork containing the new block                          |
-| Block doesn't extend any known chain      | Ignore block                                                        |
+| Description                                   | Handling                                                            |
+|-----------------------------------------------|---------------------------------------------------------------------|
+| Block extends a known fork at its end         | Append block to fork                                                |
+| Block extends a known fork not at its end     | Create a new fork up to the extended block and append the new block |
+| Block extends canonical blockchain at its end | Create a new fork containing the new block                          |
+| Block doesn't extend any known chain          | Ignore block                                                        |
 
 ### Visual Examples
 
@@ -234,7 +234,6 @@ used by the protocol.
 |-------------|----------------|------------------------------------------------|
 | `version`   | `u8`           | Block version                                  |
 | `previous`  | `blake3::Hash` | Previous block hash                            |
-| `epoch`     | `u64`          | Epoch number                                   |
 | `height`    | `u64`          | Block height                                   |
 | `timestamp` | `Timestamp`    | Block creation timestamp                       |
 | `nonce`     | `u64`          | The block's nonce value                        |
