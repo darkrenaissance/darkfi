@@ -51,7 +51,7 @@ impl RequestHandler for Darkfid {
             "ping" => return self.pong(req.id, req.params).await,
             "clock" => return self.clock(req.id, req.params).await,
             "sync_dnet_switch" => return self.sync_dnet_switch(req.id, req.params).await,
-            "consensus_dnet_switch" => return self.consensus_dnet_switch(req.id, req.params).await,
+            "miners_dnet_switch" => return self.miners_dnet_switch(req.id, req.params).await,
             "ping_miner" => return self.ping_miner(req.id, req.params).await,
 
             // ==================
@@ -121,24 +121,24 @@ impl Darkfid {
     }
 
     // RPCAPI:
-    // Activate or deactivate dnet in the consensus P2P stack.
+    // Activate or deactivate dnet in the miners P2P stack.
     // By sending `true`, dnet will be activated, and by sending `false` dnet
     // will be deactivated. Returns `true` on success.
     //
-    // --> {"jsonrpc": "2.0", "method": "consensus_dnet_switch", "params": [true], "id": 42}
+    // --> {"jsonrpc": "2.0", "method": "miners_dnet_switch", "params": [true], "id": 42}
     // <-- {"jsonrpc": "2.0", "result": true, "id": 42}
-    async fn consensus_dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
+    async fn miners_dnet_switch(&self, id: u16, params: JsonValue) -> JsonResult {
         let params = params.get::<Vec<JsonValue>>().unwrap();
         if params.len() != 1 || !params[0].is_bool() {
             return JsonError::new(ErrorCode::InvalidParams, None, id).into()
         }
 
-        if self.consensus_p2p.is_some() {
+        if self.miners_p2p.is_some() {
             let switch = params[0].get::<bool>().unwrap();
             if *switch {
-                self.consensus_p2p.clone().unwrap().dnet_enable().await;
+                self.miners_p2p.as_ref().unwrap().dnet_enable().await;
             } else {
-                self.consensus_p2p.clone().unwrap().dnet_disable().await;
+                self.miners_p2p.as_ref().unwrap().dnet_disable().await;
             }
         }
 

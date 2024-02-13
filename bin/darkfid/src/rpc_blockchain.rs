@@ -43,7 +43,7 @@ impl Darkfid {
     // * `array[0]`: `u64` Block height (as string)
     //
     // **Returns:**
-    // * [`BlockInfo`](https://darkrenaissance.github.io/darkfi/development/darkfi/consensus/block/struct.BlockInfo.html)
+    // * [`BlockInfo`](https://darkrenaissance.github.io/darkfi/dev/darkfi/blockchain/block_store/struct.BlockInfo.html)
     //   struct serialized into base64.
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_block", "params": ["0"], "id": 1}
@@ -83,7 +83,7 @@ impl Darkfid {
     // * `array[0]`: Hex-encoded transaction hash string
     //
     // **Returns:**
-    // * Serialized [`Transaction`](https://darkrenaissance.github.io/darkfi/development/darkfi/tx/struct.Transaction.html)
+    // * Serialized [`Transaction`](https://darkrenaissance.github.io/darkfi/dev/darkfi/tx/struct.Transaction.html)
     //   object encoded with base64
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.get_tx", "params": ["TxHash"], "id": 1}
@@ -174,9 +174,8 @@ impl Darkfid {
     }
 
     // RPCAPI:
-    // Initializes a subscription to new incoming proposals, asuming node participates
-    // in consensus. Once a subscription is established, `darkfid` will send JSON-RPC
-    // notifications of new incoming proposals to the subscriber.
+    // Initializes a subscription to new incoming proposals. Once a subscription is established,
+    // `darkfid` will send JSON-RPC notifications of new incoming proposals to the subscriber.
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.subscribe_proposals", "params": [], "id": 1}
     // <-- {"jsonrpc": "2.0", "method": "blockchain.subscribe_proposals", "params": [`blockinfo`]}
@@ -186,15 +185,7 @@ impl Darkfid {
             return JsonError::new(InvalidParams, None, id).into()
         }
 
-        // Since proposals subscriber is only active if we participate to consensus,
-        // we have to check if it actually exists in the subscribers map.
-        let proposals_subscriber = self.subscribers.get("proposals");
-        if proposals_subscriber.is_none() {
-            error!(target: "darkfid::rpc::blockchain_subscribe_proposals", "Proposals subscriber not found");
-            return JsonError::new(InternalError, None, id).into()
-        }
-
-        proposals_subscriber.unwrap().clone().into()
+        self.subscribers.get("proposals").unwrap().clone().into()
     }
 
     // RPCAPI:
@@ -206,7 +197,7 @@ impl Darkfid {
     //
     // **Returns:**
     // * `array[n]`: Pairs of: `zkas_namespace` string, serialized
-    //   [`ZkBinary`](https://darkrenaissance.github.io/darkfi/development/darkfi/zkas/decoder/struct.ZkBinary.html)
+    //   [`ZkBinary`](https://darkrenaissance.github.io/darkfi/dev/darkfi/zkas/decoder/struct.ZkBinary.html)
     //   object
     //
     // --> {"jsonrpc": "2.0", "method": "blockchain.lookup_zkas", "params": ["6Ef42L1KLZXBoxBuCDto7coi9DA2D2SRtegNqNU4sd74"], "id": 1}

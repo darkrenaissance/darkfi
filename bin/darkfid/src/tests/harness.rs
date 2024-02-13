@@ -45,7 +45,7 @@ use url::Url;
 use crate::{
     proto::ProposalMessage,
     task::sync::sync_task,
-    utils::{spawn_consensus_p2p, spawn_sync_p2p},
+    utils::{spawn_miners_p2p, spawn_sync_p2p},
     Darkfid,
 };
 
@@ -99,19 +99,19 @@ impl Harness {
         let (_, vks) = vks::get_cached_pks_and_vks()?;
         let mut sync_settings =
             Settings { localnet: true, inbound_connections: 3, ..Default::default() };
-        let mut consensus_settings =
+        let mut miners_settings =
             Settings { localnet: true, inbound_connections: 3, ..Default::default() };
 
         // Alice
         let alice_url = Url::parse("tcp+tls://127.0.0.1:18340")?;
         sync_settings.inbound_addrs = vec![alice_url.clone()];
-        let alice_consensus_url = Url::parse("tcp+tls://127.0.0.1:18350")?;
-        consensus_settings.inbound_addrs = vec![alice_consensus_url.clone()];
+        let alice_miners_url = Url::parse("tcp+tls://127.0.0.1:18350")?;
+        miners_settings.inbound_addrs = vec![alice_miners_url.clone()];
         let alice = generate_node(
             &vks,
             &validator_config,
             &sync_settings,
-            Some(&consensus_settings),
+            Some(&miners_settings),
             ex,
             true,
         )
@@ -121,14 +121,14 @@ impl Harness {
         let bob_url = Url::parse("tcp+tls://127.0.0.1:18341")?;
         sync_settings.inbound_addrs = vec![bob_url];
         sync_settings.peers = vec![alice_url];
-        let bob_consensus_url = Url::parse("tcp+tls://127.0.0.1:18351")?;
-        consensus_settings.inbound_addrs = vec![bob_consensus_url];
-        consensus_settings.peers = vec![alice_consensus_url];
+        let bob_miners_url = Url::parse("tcp+tls://127.0.0.1:18351")?;
+        miners_settings.inbound_addrs = vec![bob_miners_url];
+        miners_settings.peers = vec![alice_miners_url];
         let bob = generate_node(
             &vks,
             &validator_config,
             &sync_settings,
-            Some(&consensus_settings),
+            Some(&miners_settings),
             ex,
             false,
         )
@@ -163,7 +163,7 @@ impl Harness {
             let proposal = Proposal::new(block.clone())?;
             self.alice.validator.consensus.append_proposal(&proposal).await?;
             let message = ProposalMessage(proposal);
-            self.alice.consensus_p2p.as_ref().unwrap().broadcast(&message).await;
+            self.alice.miners_p2p.as_ref().unwrap().broadcast(&message).await;
         }
 
         // Sleep a bit so blocks can be propagated and then
@@ -244,7 +244,7 @@ pub async fn generate_node(
     vks: &Vec<(Vec<u8>, String, Vec<u8>)>,
     config: &ValidatorConfig,
     sync_settings: &Settings,
-    consensus_settings: Option<&Settings>,
+    miners_settings: Option<&Settings>,
     ex: &Arc<smol::Executor<'static>>,
     skip_sync: bool,
 ) -> Result<Darkfid> {
@@ -259,19 +259,19 @@ pub async fn generate_node(
     subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
 
     let sync_p2p = spawn_sync_p2p(sync_settings, &validator, &subscribers, ex.clone()).await;
-    let consensus_p2p = if let Some(settings) = consensus_settings {
-        Some(spawn_consensus_p2p(settings, &validator, &subscribers, ex.clone()).await)
+    let miners_p2p = if let Some(settings) = miners_settings {
+        Some(spawn_miners_p2p(settings, &validator, &subscribers, ex.clone()).await)
     } else {
         None
     };
     let node =
-        Darkfid::new(sync_p2p.clone(), consensus_p2p.clone(), validator, subscribers, None).await;
+        Darkfid::new(sync_p2p.clone(), miners_p2p.clone(), validator, subscribers, None).await;
 
     sync_p2p.clone().start().await?;
 
-    if consensus_settings.is_some() {
-        let consensus_p2p = consensus_p2p.unwrap();
-        consensus_p2p.clone().start().await?;
+    if miners_settings.is_some() {
+        let miners_p2p = miners_p2p.unwrap();
+        miners_p2p.clone().start().await?;
     }
 
     if !skip_sync {

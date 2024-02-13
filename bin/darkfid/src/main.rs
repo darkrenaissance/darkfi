@@ -65,7 +65,7 @@ mod proto;
 
 /// Utility functions
 mod utils;
-use utils::{parse_blockchain_config, spawn_consensus_p2p, spawn_sync_p2p};
+use utils::{parse_blockchain_config, spawn_miners_p2p, spawn_sync_p2p};
 
 const CONFIG_FILE: &str = "darkfid_config.toml";
 const CONFIG_FILE_CONTENTS: &str = include_str!("../darkfid_config.toml");
@@ -127,11 +127,11 @@ pub struct BlockchainNetwork {
     pub pow_fixed_difficulty: Option<usize>,
 
     #[structopt(long)]
-    /// Participate in the consensus protocol
-    pub consensus: bool,
+    /// Participate in block production
+    pub miner: bool,
 
     #[structopt(long)]
-    /// Wallet address to receive consensus rewards
+    /// Wallet address to receive mining rewards
     pub recipient: Option<String>,
 
     #[structopt(long)]
@@ -142,17 +142,17 @@ pub struct BlockchainNetwork {
     #[structopt(flatten)]
     pub sync_net: SettingsOpt,
 
-    /// Consensus network settings
+    /// Miners network settings
     #[structopt(flatten)]
-    pub consensus_net: SettingsOpt,
+    pub miners_net: SettingsOpt,
 }
 
 /// Daemon structure
 pub struct Darkfid {
     /// Syncing P2P network pointer
     sync_p2p: P2pPtr,
-    /// Optional consensus P2P network pointer
-    consensus_p2p: Option<P2pPtr>,
+    /// Optional miners P2P network pointer
+    miners_p2p: Option<P2pPtr>,
     /// Validator(node) pointer
     validator: ValidatorPtr,
     /// A map of various subscribers exporting live info from the blockchain
@@ -166,14 +166,14 @@ pub struct Darkfid {
 impl Darkfid {
     pub async fn new(
         sync_p2p: P2pPtr,
-        consensus_p2p: Option<P2pPtr>,
+        miners_p2p: Option<P2pPtr>,
         validator: ValidatorPtr,
         subscribers: HashMap<&'static str, JsonSubscriber>,
         rpc_client: Option<RpcClient>,
     ) -> Self {
         Self {
             sync_p2p,
-            consensus_p2p,
+            miners_p2p,
             validator,
             subscribers,
             rpc_connections: Mutex::new(HashSet::new()),
@@ -241,8 +241,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         spawn_sync_p2p(&blockchain_config.sync_net.into(), &validator, &subscribers, ex.clone())
             .await;
 
-    // Initialize consensus P2P network
-    let (consensus_p2p, rpc_client) = if blockchain_config.consensus {
+    // Initialize miners P2P network
+    let (miners_p2p, rpc_client) = if blockchain_config.miner {
         let Ok(rpc_client) = RpcClient::new(blockchain_config.minerd_endpoint, ex.clone()).await
         else {
             error!(target: "darkfid", "Failed to initialize miner daemon rpc client, check if minerd is running");
@@ -250,8 +250,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         };
         (
             Some(
-                spawn_consensus_p2p(
-                    &blockchain_config.consensus_net.into(),
+                spawn_miners_p2p(
+                    &blockchain_config.miners_net.into(),
                     &validator,
                     &subscribers,
                     ex.clone(),
@@ -267,7 +267,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     // Initialize node
     let darkfid = Darkfid::new(
         sync_p2p.clone(),
-        consensus_p2p.clone(),
+        miners_p2p.clone(),
         validator.clone(),
         subscribers,
         rpc_client,
@@ -277,7 +277,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid", "Node initialized successfully!");
 
     // Pinging minerd daemon to verify it listens
-    if blockchain_config.consensus {
+    if blockchain_config.miner {
         if let Err(e) = darkfid.ping_miner_daemon().await {
             error!(target: "darkfid", "Failed to ping miner daemon: {}", e);
             return Err(Error::RpcClientStopped)
@@ -307,13 +307,13 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid", "Starting sync P2P network");
     sync_p2p.clone().start().await?;
 
-    // Consensus protocol
-    if blockchain_config.consensus {
-        info!(target: "darkfid", "Starting consensus P2P network");
-        let consensus_p2p = consensus_p2p.clone().unwrap();
-        consensus_p2p.clone().start().await?;
+    // Start miners P2P network
+    if blockchain_config.miner {
+        info!(target: "darkfid", "Starting miners P2P network");
+        let miners_p2p = miners_p2p.clone().unwrap();
+        miners_p2p.clone().start().await?;
     } else {
-        info!(target: "darkfid", "Not starting consensus P2P network");
+        info!(target: "darkfid", "Not starting miners P2P network");
     }
 
     // Sync blockchain
@@ -327,7 +327,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     darkfid.validator.purge_pending_txs().await?;
 
     // Consensus protocol
-    let consensus_task = if blockchain_config.consensus {
+    let consensus_task = if blockchain_config.miner {
         info!(target: "darkfid", "Starting consensus protocol task");
         // Grab rewards recipient public key(address)
         if blockchain_config.recipient.is_none() {
@@ -368,9 +368,9 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     info!(target: "darkfid", "Stopping syncing P2P network...");
     sync_p2p.stop().await;
 
-    if blockchain_config.consensus {
-        info!(target: "darkfid", "Stopping consensus P2P network...");
-        consensus_p2p.unwrap().stop().await;
+    if blockchain_config.miner {
+        info!(target: "darkfid", "Stopping miners P2P network...");
+        miners_p2p.unwrap().stop().await;
 
         info!(target: "darkfid", "Stopping consensus task...");
         consensus_task.unwrap().stop().await;

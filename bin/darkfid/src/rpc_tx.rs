@@ -119,8 +119,8 @@ impl Darkfid {
             }
         };
 
-        if self.consensus_p2p.is_some() {
-            // Consensus participants can directly perform
+        if self.miners_p2p.is_some() {
+            // Block production participants can directly perform
             // the state transition check and append to their
             // pending transactions store.
             if self.validator.append_tx(&tx, true).await.is_err() {

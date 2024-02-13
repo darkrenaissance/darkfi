@@ -65,7 +65,7 @@ pub struct ProtocolSync {
 impl ProtocolSync {
     pub async fn init(channel: ChannelPtr, validator: ValidatorPtr) -> Result<ProtocolBasePtr> {
         debug!(
-            target: "validator::protocol_sync::init",
+            target: "darkfid::proto::protocol_sync::init",
             "Adding ProtocolSync to the protocol registry"
         );
         let msg_subsystem = channel.message_subsystem();
@@ -82,13 +82,13 @@ impl ProtocolSync {
     }
 
     async fn handle_receive_request(self: Arc<Self>) -> Result<()> {
-        debug!(target: "validator::protocol_sync::handle_receive_request", "START");
+        debug!(target: "darkfid::proto::protocol_sync::handle_receive_request", "START");
         loop {
             let request = match self.request_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
                     debug!(
-                        target: "validator::protocol_sync::handle_receive_request",
+                        target: "darkfid::proto::protocol_sync::handle_receive_request",
                         "recv fail: {}",
                         e
                     );
@@ -99,7 +99,7 @@ impl ProtocolSync {
             // Check if node has finished syncing its blockchain
             if !*self.validator.synced.read().await {
                 debug!(
-                    target: "validator::protocol_sync::handle_receive_request",
+                    target: "darkfid::proto::protocol_sync::handle_receive_request",
                     "Node still syncing blockchain, skipping..."
                 );
                 continue
@@ -109,7 +109,7 @@ impl ProtocolSync {
                 Ok(v) => v,
                 Err(e) => {
                     error!(
-                        target: "validator::protocol_sync::handle_receive_request",
+                        target: "darkfid::proto::protocol_sync::handle_receive_request",
                         "get_blocks_after fail: {}",
                         e
                     );
@@ -120,7 +120,7 @@ impl ProtocolSync {
             let response = SyncResponse { blocks };
             if let Err(e) = self.channel.send(&response).await {
                 error!(
-                    target: "validator::protocol_sync::handle_receive_request",
+                    target: "darkfid::proto::protocol_sync::handle_receive_request",
                     "channel send fail: {}",
                     e
                 )
@@ -132,10 +132,10 @@ impl ProtocolSync {
 #[async_trait]
 impl ProtocolBase for ProtocolSync {
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "validator::protocol_sync::start", "START");
+        debug!(target: "darkfid::proto::protocol_sync::start", "START");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().handle_receive_request(), executor.clone()).await;
-        debug!(target: "validator::protocol_sync::start", "END");
+        debug!(target: "darkfid::proto::protocol_sync::start", "END");
         Ok(())
     }
 

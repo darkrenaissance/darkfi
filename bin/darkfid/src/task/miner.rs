@@ -46,7 +46,7 @@ use crate::{proto::ProposalMessage, Darkfid};
 
 // TODO: handle all ? so the task don't stop on errors
 
-/// async task used for participating in the PoW consensus protocol
+/// async task used for participating in the PoW block production
 pub async fn miner_task(node: &Darkfid, recipient: &PublicKey) -> Result<()> {
     // TODO: For now we asume we have a single miner that produces block,
     //       until the PoW consensus and proper validations have been added.
@@ -125,7 +125,7 @@ async fn miner_loop(node: &Darkfid, recipient: &PublicKey) -> Result<()> {
 
         // Broadcast proposal to the network
         let message = ProposalMessage(proposal);
-        node.consensus_p2p.as_ref().unwrap().broadcast(&message).await;
+        node.miners_p2p.as_ref().unwrap().broadcast(&message).await;
         node.sync_p2p.broadcast(&message).await;
 
         // Check if we can finalize anything and broadcast them

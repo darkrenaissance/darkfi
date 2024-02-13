@@ -29,10 +29,10 @@ pow_target = 10
 # Optional fixed PoW difficulty, used for testing
 pow_fixed_difficulty = 1
 
-# Participate in the consensus protocol
-consensus = true
+# Participate in block production
+miner = true
 
-# Wallet address to receive consensus rewards.
+# Wallet address to receive mining rewards.
 # This is a dummy one so the miner can start,
 # replace with your own one.
 recipient = "5ZHfYpt4mpJcwBNxfEyxLzeFJUEeoePs5NQ5jVEgHrMf"
@@ -94,8 +94,8 @@ localnet = true
 # Time between peer discovery attempts
 #outbound_peer_discovery_attempt_time = 5
 
-## Localnet consensus P2P network settings
-[network_config."localnet".consensus_net]
+## Localnet miners P2P network settings
+[network_config."localnet".miners_net]
 # P2P accept addresses the instance listens on for inbound connections
 #inbound = ["tcp+tls://0.0.0.0:8241"]
 
@@ -158,10 +158,10 @@ minerd_endpoint = "tcp://127.0.0.1:28467"
 # PoW block production target, in seconds
 pow_target = 90
 
-# Participate in the consensus protocol
-consensus = false
+# Participate in block production
+miner = false
 
-# Wallet address to receive consensus rewards
+# Wallet address to receive mining rewards.
 #recipient = "YOUR_WALLET_ADDRESS_HERE"
 
 # Skip syncing process and start node right away
@@ -231,8 +231,8 @@ localnet = false
 # Time between peer discovery attempts
 #outbound_peer_discovery_attempt_time = 5
 
-## Testnet consensus P2P network settings
-[network_config."testnet".consensus_net]
+## Testnet miners P2P network settings
+[network_config."testnet".miners_net]
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
 inbound = ["tcp+tls://0.0.0.0:8341"]
@@ -305,10 +305,10 @@ minerd_endpoint = "tcp://127.0.0.1:28467"
 # PoW block production target, in seconds
 pow_target = 90
 
-# Participate in the consensus protocol
-consensus = false
+# Participate in block production
+miner = false
 
-# Wallet address to receive consensus rewards
+# Wallet address to receive mining rewards.
 #recipient = "YOUR_WALLET_ADDRESS_HERE"
 
 # Skip syncing process and start node right away
@@ -378,8 +378,8 @@ localnet = false
 # Time between peer discovery attempts
 #outbound_peer_discovery_attempt_time = 5
 
-## Mainnet consensus P2P network settings
-[network_config."mainnet".consensus_net]
+## Mainnet miners P2P network settings
+[network_config."mainnet".miners_net]
 # P2P accept addresses the instance listens on for inbound connections
 # You can also use an IPv6 address
 inbound = ["tcp+tls://0.0.0.0:8441"]

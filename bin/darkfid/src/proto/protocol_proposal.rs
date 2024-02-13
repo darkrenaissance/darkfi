@@ -60,7 +60,7 @@ impl ProtocolProposal {
         subscriber: JsonSubscriber,
     ) -> Result<ProtocolBasePtr> {
         debug!(
-            target: "validator::protocol_proposal::init",
+            target: "darkfid::proto::protocol_proposal::init",
             "Adding ProtocolProposal to the protocol registry"
         );
         let msg_subsystem = channel.message_subsystem();
@@ -79,14 +79,14 @@ impl ProtocolProposal {
     }
 
     async fn handle_receive_proposal(self: Arc<Self>) -> Result<()> {
-        debug!(target: "consensus::protocol_proposal::handle_receive_proposal", "START");
+        debug!(target: "darkfid::proto::protocol_proposal::handle_receive_proposal", "START");
         let exclude_list = vec![self.channel_address.clone()];
         loop {
             let proposal = match self.proposal_sub.receive().await {
                 Ok(v) => v,
                 Err(e) => {
                     debug!(
-                        target: "validator::protocol_proposal::handle_receive_proposal",
+                        target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
                         "recv fail: {}",
                         e
                     );
@@ -97,7 +97,7 @@ impl ProtocolProposal {
             // Check if node has finished syncing its blockchain
             if !*self.validator.synced.read().await {
                 debug!(
-                    target: "validator::protocol_proposal::handle_receive_proposal",
+                    target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
                     "Node still syncing blockchain, skipping..."
                 );
                 continue
@@ -114,7 +114,7 @@ impl ProtocolProposal {
                 }
                 Err(e) => {
                     debug!(
-                        target: "validator::protocol_proposal::handle_receive_proposal",
+                        target: "darkfid::proto::protocol_proposal::handle_receive_proposal",
                         "append_proposal fail: {}",
                         e
                     );
@@ -127,10 +127,10 @@ impl ProtocolProposal {
 #[async_trait]
 impl ProtocolBase for ProtocolProposal {
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "validator::protocol_proposal::start", "START");
+        debug!(target: "darkfid::proto::protocol_proposal::start", "START");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().handle_receive_proposal(), executor.clone()).await;
-        debug!(target: "validator::protocol_proposal::start", "END");
+        debug!(target: "darkfid::proto::protocol_proposal::start", "END");
         Ok(())
     }
 

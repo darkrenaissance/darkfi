@@ -77,14 +77,14 @@ pub async fn spawn_sync_p2p(
     p2p
 }
 
-/// Auxiliary function to generate the consensus P2P network and register all its protocols.
-pub async fn spawn_consensus_p2p(
+/// Auxiliary function to generate the miners P2P network and register all its protocols.
+pub async fn spawn_miners_p2p(
     settings: &Settings,
     validator: &ValidatorPtr,
     subscribers: &HashMap<&'static str, JsonSubscriber>,
     executor: Arc<Executor<'static>>,
 ) -> P2pPtr {
-    info!(target: "darkfid", "Registering consensus network P2P protocols...");
+    info!(target: "darkfid", "Registering miners network P2P protocols...");
     let p2p = P2p::new(settings.clone(), executor.clone()).await;
     let registry = p2p.protocol_registry();
 

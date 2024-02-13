@@ -54,7 +54,7 @@ impl ProtocolTx {
         subscriber: JsonSubscriber,
     ) -> Result<ProtocolBasePtr> {
         debug!(
-            target: "validator::protocol_tx::init",
+            target: "darkfid::proto::protocol_tx::init",
             "Adding ProtocolTx to the protocol registry"
         );
         let msg_subsystem = channel.message_subsystem();
@@ -74,7 +74,7 @@ impl ProtocolTx {
 
     async fn handle_receive_tx(self: Arc<Self>) -> Result<()> {
         debug!(
-            target: "validator::protocol_tx::handle_receive_tx",
+            target: "darkfid::proto::protocol_tx::handle_receive_tx",
             "START"
         );
         let exclude_list = vec![self.channel_address.clone()];
@@ -83,7 +83,7 @@ impl ProtocolTx {
                 Ok(v) => v,
                 Err(e) => {
                     debug!(
-                        target: "validator::protocol_tx::handle_receive_tx",
+                        target: "darkfid::proto::protocol_tx::handle_receive_tx",
                         "recv fail: {}",
                         e
                     );
@@ -94,7 +94,7 @@ impl ProtocolTx {
             // Check if node has finished syncing its blockchain
             if !*self.validator.synced.read().await {
                 debug!(
-                    target: "validator::protocol_tx::handle_receive_tx",
+                    target: "darkfid::proto::protocol_tx::handle_receive_tx",
                     "Node still syncing blockchain, skipping..."
                 );
                 continue
@@ -112,7 +112,7 @@ impl ProtocolTx {
                 }
                 Err(e) => {
                     debug!(
-                        target: "validator::protocol_tx::handle_receive_tx",
+                        target: "darkfid::proto::protocol_tx::handle_receive_tx",
                         "append_tx fail: {}",
                         e
                     );
@@ -125,10 +125,10 @@ impl ProtocolTx {
 #[async_trait]
 impl ProtocolBase for ProtocolTx {
     async fn start(self: Arc<Self>, executor: Arc<Executor<'_>>) -> Result<()> {
-        debug!(target: "validator::protocol_tx::start", "START");
+        debug!(target: "darkfid::proto::protocol_tx::start", "START");
         self.jobsman.clone().start(executor.clone());
         self.jobsman.clone().spawn(self.clone().handle_receive_tx(), executor.clone()).await;
-        debug!(target: "validator::protocol_tx::start", "END");
+        debug!(target: "darkfid::proto::protocol_tx::start", "END");
         Ok(())
     }
 
