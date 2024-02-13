@@ -18,8 +18,11 @@
 
 // TODO: Handle ? with matches in these files. They should be robust.
 
-pub mod sync;
-pub use sync::sync_task;
+pub mod consensus;
+pub use consensus::consensus_task;
 
 pub mod miner;
 pub use miner::miner_task;
+
+pub mod sync;
+pub use sync::sync_task;

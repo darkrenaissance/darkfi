@@ -58,7 +58,7 @@ mod rpc_tx;
 
 /// Validator async tasks
 mod task;
-use task::{miner_task, sync_task};
+use task::{consensus_task, miner_task, sync_task};
 
 /// P2P net protocols
 mod proto;
@@ -327,8 +327,8 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     darkfid.validator.purge_pending_txs().await?;
 
     // Consensus protocol
+    info!(target: "darkfid", "Starting consensus protocol task");
     let consensus_task = if blockchain_config.miner {
-        info!(target: "darkfid", "Starting consensus protocol task");
         // Grab rewards recipient public key(address)
         if blockchain_config.recipient.is_none() {
             return Err(Error::ParseFailed("Recipient address missing"))
@@ -351,10 +351,24 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
             Error::MinerTaskStopped,
             ex.clone(),
         );
-        Some(task)
+
+        task
     } else {
-        info!(target: "darkfid", "Not participating in consensus");
-        None
+        let task = StoppableTask::new();
+        task.clone().start(
+            // Weird hack to prevent lifetimes hell
+            async move { consensus_task(&darkfid).await },
+            |res| async {
+                match res {
+                    Ok(()) | Err(Error::ConsensusTaskStopped) => { /* Do nothing */ }
+                    Err(e) => error!(target: "darkfid", "Failed starting consensus task: {}", e),
+                }
+            },
+            Error::ConsensusTaskStopped,
+            ex.clone(),
+        );
+
+        task
     };
 
     // Signal handling for graceful termination.
@@ -371,10 +385,10 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     if blockchain_config.miner {
         info!(target: "darkfid", "Stopping miners P2P network...");
         miners_p2p.unwrap().stop().await;
-
-        info!(target: "darkfid", "Stopping consensus task...");
-        consensus_task.unwrap().stop().await;
     }
+
+    info!(target: "darkfid", "Stopping consensus task...");
+    consensus_task.stop().await;
 
     info!(target: "darkfid", "Flushing sled database...");
     let flushed_bytes = sled_db.flush_async().await?;
