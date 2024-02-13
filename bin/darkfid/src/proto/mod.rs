@@ -16,13 +16,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-/// Block broadcast protocol
-mod protocol_block;
-pub use protocol_block::{BlockInfoMessage, ProtocolBlock};
-
 /// Block proposal broadcast protocol
 mod protocol_proposal;
-pub use protocol_proposal::ProtocolProposal;
+pub use protocol_proposal::{ProposalMessage, ProtocolProposal};
 
 /// Validator blockchain sync protocol
 mod protocol_sync;

@@ -39,7 +39,7 @@ use darkfi_serial::{serialize_async, SerialDecodable, SerialEncodable};
 
 /// Auxiliary [`Proposal`] wrapper structure used for messaging.
 #[derive(Clone, Debug, SerialEncodable, SerialDecodable)]
-struct ProposalMessage(Proposal);
+pub struct ProposalMessage(pub Proposal);
 
 impl_p2p_message!(ProposalMessage, "proposal");
 
@@ -99,15 +99,6 @@ impl ProtocolProposal {
                 debug!(
                     target: "validator::protocol_proposal::handle_receive_proposal",
                     "Node still syncing blockchain, skipping..."
-                );
-                continue
-            }
-
-            // Check if node started participating in consensus.
-            if !self.validator.consensus.participating {
-                debug!(
-                    target: "validator::protocol_proposal::handle_receive_proposal",
-                    "Node is not participating in consensus, skipping..."
                 );
                 continue
             }

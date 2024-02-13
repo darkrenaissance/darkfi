@@ -42,7 +42,7 @@ use log::info;
 use num_bigint::BigUint;
 use rand::rngs::OsRng;
 
-use crate::{proto::BlockInfoMessage, Darkfid};
+use crate::{proto::ProposalMessage, Darkfid};
 
 // TODO: handle all ? so the task don't stop on errors
 
@@ -123,13 +123,16 @@ async fn miner_loop(node: &Darkfid, recipient: &PublicKey) -> Result<()> {
         let proposal = Proposal::new(next_block)?;
         node.validator.consensus.append_proposal(&proposal).await?;
 
+        // Broadcast proposal to the network
+        let message = ProposalMessage(proposal);
+        node.consensus_p2p.as_ref().unwrap().broadcast(&message).await;
+        node.sync_p2p.broadcast(&message).await;
+
         // Check if we can finalize anything and broadcast them
         let finalized = node.validator.finalization().await?;
         if !finalized.is_empty() {
             let mut notif_blocks = Vec::with_capacity(finalized.len());
             for block in finalized {
-                let message = BlockInfoMessage::from(&block);
-                node.sync_p2p.broadcast(&message).await;
                 notif_blocks
                     .push(JsonValue::String(bs58::encode(&serialize(&block)).into_string()));
             }

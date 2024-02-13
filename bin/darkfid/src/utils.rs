@@ -31,7 +31,7 @@ use darkfi::{
 };
 
 use crate::{
-    proto::{ProtocolBlock, ProtocolProposal, ProtocolSync, ProtocolTx},
+    proto::{ProtocolProposal, ProtocolSync, ProtocolTx},
     BlockchainNetwork, CONFIG_FILE,
 };
 
@@ -47,12 +47,12 @@ pub async fn spawn_sync_p2p(
     let registry = p2p.protocol_registry();
 
     let _validator = validator.clone();
-    let _subscriber = subscribers.get("blocks").unwrap().clone();
+    let _subscriber = subscribers.get("proposals").unwrap().clone();
     registry
         .register(SESSION_ALL, move |channel, p2p| {
             let validator = _validator.clone();
             let subscriber = _subscriber.clone();
-            async move { ProtocolBlock::init(channel, validator, p2p, subscriber).await.unwrap() }
+            async move { ProtocolProposal::init(channel, validator, p2p, subscriber).await.unwrap() }
         })
         .await;
 

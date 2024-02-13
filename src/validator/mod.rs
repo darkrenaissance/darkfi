@@ -306,22 +306,6 @@ impl Validator {
         Ok(())
     }
 
-    /// The node retrieves a block and tries to add it if it doesn't
-    /// already exists.
-    pub async fn append_block(&self, block: &BlockInfo) -> Result<()> {
-        let block_hash = block.hash()?.to_string();
-
-        // Check if block already exists
-        if self.blockchain.has_block(block)? {
-            debug!(target: "validator::append_block", "We have already seen this block");
-            return Err(Error::BlockAlreadyExists(block_hash))
-        }
-
-        self.add_blocks(&[block.clone()]).await?;
-        info!(target: "validator::append_block", "Block added: {}", block_hash);
-        Ok(())
-    }
-
     /// The node checks if proposals can be finalized.
     /// If proposals are found, node appends them to canonical, excluding the
     /// last one, and rebuild the finalized fork to contain the last one.

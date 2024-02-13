@@ -44,8 +44,6 @@ pub struct Consensus {
     pub blockchain: Blockchain,
     /// Fork size(length) after which it can be finalized
     pub finalization_threshold: usize,
-    /// Node is participating to consensus
-    pub participating: bool,
     /// Fork chains containing block proposals
     pub forks: RwLock<Vec<Fork>>,
     /// Canonical blockchain PoW module state
@@ -62,13 +60,7 @@ impl Consensus {
     ) -> Result<Self> {
         let module =
             RwLock::new(PoWModule::new(blockchain.clone(), pow_target, pow_fixed_difficulty)?);
-        Ok(Self {
-            blockchain,
-            finalization_threshold,
-            participating: false,
-            forks: RwLock::new(vec![]),
-            module,
-        })
+        Ok(Self { blockchain, finalization_threshold, forks: RwLock::new(vec![]), module })
     }
 
     /// Generate an unsigned block for provided fork, containing all

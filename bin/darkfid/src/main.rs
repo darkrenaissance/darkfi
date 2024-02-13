@@ -234,9 +234,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     let mut subscribers = HashMap::new();
     subscribers.insert("blocks", JsonSubscriber::new("blockchain.subscribe_blocks"));
     subscribers.insert("txs", JsonSubscriber::new("blockchain.subscribe_txs"));
-    if blockchain_config.consensus {
-        subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
-    }
+    subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
 
     // Initialize syncing P2P network
     let sync_p2p =

@@ -22,8 +22,9 @@ use darkfi::{
     blockchain::{BlockInfo, Header},
     net::Settings,
     rpc::jsonrpc::JsonSubscriber,
+    system::sleep,
     tx::{ContractCallLeaf, TransactionBuilder},
-    validator::{Validator, ValidatorConfig},
+    validator::{consensus::Proposal, Validator, ValidatorConfig},
     zk::{empty_witnesses, ProvingKey, ZkCircuit},
     Result,
 };
@@ -42,7 +43,7 @@ use rand::rngs::OsRng;
 use url::Url;
 
 use crate::{
-    proto::BlockInfoMessage,
+    proto::ProposalMessage,
     task::sync::sync_task,
     utils::{spawn_consensus_p2p, spawn_sync_p2p},
     Darkfid,
@@ -149,19 +150,27 @@ impl Harness {
 
         let alice_blockchain_len = alice.blockchain.len();
         assert_eq!(alice_blockchain_len, bob.blockchain.len());
-        assert_eq!(alice_blockchain_len, total_blocks);
+        // Last block is not finalized yet
+        assert_eq!(alice_blockchain_len, total_blocks - 1);
 
         Ok(())
     }
 
     pub async fn add_blocks(&self, blocks: &[BlockInfo]) -> Result<()> {
-        // We simply broadcast the block using Alice's sync P2P
+        // We append the block as a proposal to Alice,
+        // and then we broadcast it to rest nodes
         for block in blocks {
-            self.alice.sync_p2p.broadcast(&BlockInfoMessage::from(block)).await;
+            let proposal = Proposal::new(block.clone())?;
+            self.alice.validator.consensus.append_proposal(&proposal).await?;
+            let message = ProposalMessage(proposal);
+            self.alice.consensus_p2p.as_ref().unwrap().broadcast(&message).await;
         }
 
-        // and then add it to her chain
-        self.alice.validator.add_blocks(blocks).await?;
+        // Sleep a bit so blocks can be propagated and then
+        // trigger finalization check to Alice and Bob
+        sleep(1).await;
+        self.alice.validator.finalization().await?;
+        self.bob.validator.finalization().await?;
 
         Ok(())
     }
@@ -247,9 +256,7 @@ pub async fn generate_node(
     let mut subscribers = HashMap::new();
     subscribers.insert("blocks", JsonSubscriber::new("blockchain.subscribe_blocks"));
     subscribers.insert("txs", JsonSubscriber::new("blockchain.subscribe_txs"));
-    if consensus_settings.is_some() {
-        subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
-    }
+    subscribers.insert("proposals", JsonSubscriber::new("blockchain.subscribe_proposals"));
 
     let sync_p2p = spawn_sync_p2p(sync_settings, &validator, &subscribers, ex.clone()).await;
     let consensus_p2p = if let Some(settings) = consensus_settings {
