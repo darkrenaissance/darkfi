@@ -341,7 +341,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
         let task = StoppableTask::new();
         task.clone().start(
             // Weird hack to prevent lifetimes hell
-            async move { miner_task(&darkfid, &recipient).await },
+            async move { miner_task(&darkfid, &recipient, blockchain_config.skip_sync).await },
             |res| async {
                 match res {
                     Ok(()) | Err(Error::MinerTaskStopped) => { /* Do nothing */ }
