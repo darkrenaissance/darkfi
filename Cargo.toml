@@ -21,6 +21,7 @@ doctest = false
 members = [
     "bin/zkas",
     "bin/darkfid",
+    "bin/minerd",
     "bin/darkfi-mmproxy",
     "bin/drk",
     #"bin/fud/fu",

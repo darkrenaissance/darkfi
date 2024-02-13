@@ -4196,6 +4196,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "minerd"
+version = "0.4.1"
+dependencies = [
+ "darkfi",
+ "darkfi-sdk",
+ "darkfi-serial",
+ "easy-parallel",
+ "log",
+ "num-bigint",
+ "serde",
+ "signal-hook",
+ "signal-hook-async-std",
+ "simplelog",
+ "smol",
+ "structopt",
+ "structopt-toml",
+ "tinyjson",
+ "url",
+]
+
+[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
