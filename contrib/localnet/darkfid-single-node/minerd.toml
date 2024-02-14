@@ -8,3 +8,6 @@
 
 # JSON-RPC listen URL
 rpc_listen = "tcp://127.0.0.1:48467"
+
+# PoW miner number of threads to use
+#threads = 4

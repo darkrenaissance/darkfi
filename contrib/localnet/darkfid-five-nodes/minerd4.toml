@@ -7,7 +7,7 @@
 ## uncommenting, or by using the command-line.
 
 # JSON-RPC listen URL
-#rpc_listen = "tcp://127.0.0.1:28467"
+rpc_listen = "tcp://127.0.0.1:48867"
 
 # PoW miner number of threads to use
-#threads = 4
+threads = 2

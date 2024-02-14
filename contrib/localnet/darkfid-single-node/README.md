@@ -1,13 +1,13 @@
 darkfid localnet
 ================
 
-This will start one darkfid node in localnet mode,
-along with a minerd daemon to mine blocks.
+This will start one `darkfid` node in localnet mode,
+along with a `minerd` daemon to mine blocks.
 
 If we want to test wallet stuff, we must generate
-a testing wallet and pass its address to the darkfid
+a testing wallet and pass its address to the `darkfid`
 config, so the wallet gets the block rewards the node
-produces. First we start darkfid and wait until its
+produces. First we start `darkfid` and wait until its
 initialized:
 ```
 % ./tmux_sessions.sh

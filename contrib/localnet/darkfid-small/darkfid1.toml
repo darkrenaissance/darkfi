@@ -6,71 +6,69 @@
 ## The default values are left commented. They can be overridden either by
 ## uncommenting, or by using the command-line.
 
-# Chain to use (testnet, mainnet)
-chain = "testnet"
+## darkfid configuration file
+##
+## Please make sure you go through all the settings so you can configure
+## your daemon properly.
+##
+## The default values are left commented. They can be overridden either by
+## uncommenting, or by using the command-line.
 
-# Path to the wallet database
-wallet_path = "darkfid1/wallet.db"
+# JSON-RPC listen URL
+rpc_listen = "tcp://127.0.0.1:48440"
 
-# Password for the wallet database
-wallet_pass = "changeme"
+# Blockchain network to use
+network = "localnet"
 
+# Localnet blockchain network configuration
+[network_config."localnet"]
 # Path to the blockchain database directory
-database = "darkfid1/blockchain"
+database = "darkfid1"
 
-# JSON-RPC listen url
-rpc_listen = "tcp://127.0.0.1:8440"
+# Finalization threshold, denominated by number of blocks
+threshold = 3
 
-# Participate in the consensus protocol
-consensus = true
+# minerd JSON-RPC endpoint
+minerd_endpoint = "tcp://127.0.0.1:48567"
 
-# Enable single-node mode for local testing
-single_node = false
+# PoW block production target, in seconds
+pow_target = 20
 
-# P2P accept addresses for the consensus protocol
-consensus_p2p_accept = ["tcp://127.0.0.1:8441"]
+# Participate in block production
+miner = true
 
-# P2P external addresses for the consensus protocol
-consensus_p2p_external = ["tcp://127.0.0.1:8441"]
+# Wallet address to receive mining rewards.
+# This is a dummy one so the miner can start,
+# replace with your own one.
+recipient = "9vw6WznKk7xEFQwwXhJWMMdjUPi3cXL8NrFKQpKifG1U"
 
-# Connection slots for the consensus protocol
-#consensus_slots = 8
+# Skip syncing process and start node right away
+skip_sync = false
 
-# Connection slots for the consensus protocol
-#consensus_p2p_seed = []
+## Localnet sync P2P network settings
+[network_config."localnet".sync_net]
+# P2P accept addresses the instance listens on for inbound connections
+inbound = ["tcp+tls://0.0.0.0:48342"]
 
-# Peers to connect to for the consensus protocol
-consensus_p2p_peer = ["tcp://127.0.0.1:8341"]
+# Whitelisted network transports for outbound connections
+allowed_transports = ["tcp+tls"]
 
-# Prefered transports of outbound connections for the consensus protocol
-consensus_p2p_transports = ["tls", "tcp"]
+# Peer nodes to manually connect to
+peers = ["tcp+tls://0.0.0.0:48242"]
 
-# P2P accept addresses for the syncing protocol
-sync_p2p_accept = ["tcp://127.0.0.1:8442"]
-
-# P2P external addresses for the syncing protocol
-sync_p2p_external = ["tcp://127.0.0.1:8442"]
-
-# Connection slots for the syncing protocol
-#sync_slots = 8
-
-# Seed nodes to connect to for the syncing protocol
-#sync_p2p_seed = []
-
-# Peers to connect to for the syncing protocol
-sync_p2p_peer = ["tcp://127.0.0.1:8342"]
-
-# Prefered transports of outbound connections for the syncing protocol
-sync_p2p_transports = ["tls", "tcp"]
-
-# Enable localnet hosts
+# Allow localnet hosts
 localnet = true
 
-# Enable channel log
-channel_log = true
+## Localnet miners P2P network settings
+[network_config."localnet".miners_net]
+# P2P accept addresses the instance listens on for inbound connections
+inbound = ["tcp+tls://0.0.0.0:48341"]
 
-# Whitelisted faucet public key
-#faucet_pub = []
+# Whitelisted network transports for outbound connections
+allowed_transports = ["tcp+tls"]
 
-# Verify system clock is correct
-#clock_sync = true
+# Peer nodes to manually connect to
+peers = ["tcp+tls://0.0.0.0:48241"]
+
+# Allow localnet hosts
+localnet = true
