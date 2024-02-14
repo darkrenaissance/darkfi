@@ -124,7 +124,7 @@ impl Drk {
 
                     for param in params {
                         let param = param.get::<String>().unwrap();
-                        let bytes = bs58::decode(param).into_vec()?;
+                        let bytes = base64::decode(param).unwrap();
 
                         let block_data: BlockInfo = deserialize(&bytes)?;
                         eprintln!("=======================================");
@@ -271,7 +271,7 @@ impl Drk {
 
         let params = self.rpc_client.request(req).await?;
         let param = params.get::<String>().unwrap();
-        let bytes = bs58::decode(param).into_vec()?;
+        let bytes = base64::decode(param).unwrap();
         let block = deserialize(&bytes)?;
         Ok(block)
     }

@@ -38,7 +38,7 @@ use darkfi::{
         server::{listen_and_serve, RequestHandler},
     },
     system::{StoppableTask, StoppableTaskPtr},
-    util::path::expand_path,
+    util::{encoding::base64, path::expand_path},
     validator::{Validator, ValidatorConfig, ValidatorPtr},
     Error, Result,
 };
@@ -204,7 +204,7 @@ async fn realmain(args: Args, ex: Arc<smol::Executor<'static>>) -> Result<()> {
     };
 
     // Parse the genesis block
-    let bytes = bs58::decode(&genesis_block.trim()).into_vec()?;
+    let bytes = base64::decode(genesis_block.trim()).unwrap();
     let genesis_block: BlockInfo = deserialize_async(&bytes).await?;
 
     // Initialize or open sled database

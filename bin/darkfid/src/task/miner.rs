@@ -99,8 +99,7 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
             if !finalized.is_empty() {
                 let mut notif_blocks = Vec::with_capacity(finalized.len());
                 for block in finalized {
-                    notif_blocks
-                        .push(JsonValue::String(bs58::encode(&serialize(&block)).into_string()));
+                    notif_blocks.push(JsonValue::String(base64::encode(&serialize(&block))));
                 }
                 block_sub.notify(JsonValue::Array(notif_blocks)).await;
                 break;
@@ -125,8 +124,7 @@ pub async fn miner_task(node: &Darkfid, recipient: &PublicKey, skip_sync: bool) 
         if !finalized.is_empty() {
             let mut notif_blocks = Vec::with_capacity(finalized.len());
             for block in finalized {
-                notif_blocks
-                    .push(JsonValue::String(bs58::encode(&serialize(&block)).into_string()));
+                notif_blocks.push(JsonValue::String(base64::encode(&serialize(&block))));
             }
             block_sub.notify(JsonValue::Array(notif_blocks)).await;
         }

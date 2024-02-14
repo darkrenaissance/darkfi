@@ -164,7 +164,7 @@ impl Drk {
         let mut txs_hashes = Vec::with_capacity(txs.len());
         for tx in txs {
             let Ok(tx_hash) = tx.hash() else { return Err(WalletDbError::QueryPreparationFailed) };
-            txs_hashes.push(tx_hash);
+            txs_hashes.push(format!("{tx_hash}"));
         }
         let txs_hashes_string = format!("{:?}", txs_hashes).replace('[', "(").replace(']', ")");
         let query = format!(

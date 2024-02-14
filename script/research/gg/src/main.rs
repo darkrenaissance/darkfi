@@ -27,7 +27,7 @@ use darkfi::{
     blockchain::{BlockInfo, Blockchain, BlockchainOverlay},
     cli_desc,
     tx::Transaction,
-    util::{path::expand_path, time::Timestamp},
+    util::{encoding::base64, path::expand_path, time::Timestamp},
     validator::verification::verify_genesis_block,
 };
 use darkfi_contract_test_harness::vks;
@@ -65,7 +65,7 @@ fn read_block() -> Result<BlockInfo> {
     eprintln!("Reading genesis block from stdin...");
     let mut buf = String::new();
     stdin().read_to_string(&mut buf)?;
-    let bytes = bs58::decode(&buf.trim()).into_vec()?;
+    let bytes = base64::decode(buf.trim()).unwrap();
     let block = deserialize(&bytes)?;
     Ok(block)
 }
@@ -88,7 +88,7 @@ async fn main() -> Result<()> {
             let txs_folder = expand_path(&txs_folder).unwrap();
             let mut genesis_txs: Vec<Transaction> = vec![];
             for file in read_dir(txs_folder)? {
-                let bytes = bs58::decode(&read_to_string(file?.path())?.trim()).into_vec()?;
+                let bytes = base64::decode(read_to_string(file?.path())?.trim()).unwrap();
                 let tx = deserialize(&bytes)?;
                 genesis_txs.push(tx);
             }
@@ -111,7 +111,7 @@ async fn main() -> Result<()> {
             genesis_block.append_txs(vec![producer_tx])?;
 
             // Write generated genesis block to stdin
-            let encoded = bs58::encode(&serialize(&genesis_block)).into_string();
+            let encoded = base64::encode(&serialize(&genesis_block));
             println!("{encoded}");
 
             Ok(())

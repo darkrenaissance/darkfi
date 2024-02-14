@@ -167,9 +167,20 @@ impl WalletDb {
 
         // Grab returned values
         let mut result = vec![];
-        for col in col_names {
-            let Ok(value) = row.get(*col) else { return Err(WalletDbError::ParseColumnValueError) };
-            result.push(value);
+        if col_names.is_empty() {
+            let mut idx = 0;
+            loop {
+                let Ok(value) = row.get(idx) else { break };
+                result.push(value);
+                idx += 1;
+            }
+        } else {
+            for col in col_names {
+                let Ok(value) = row.get(*col) else {
+                    return Err(WalletDbError::ParseColumnValueError)
+                };
+                result.push(value);
+            }
         }
 
         Ok(result)

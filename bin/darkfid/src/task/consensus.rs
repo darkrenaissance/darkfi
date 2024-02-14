@@ -16,7 +16,7 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-use darkfi::{rpc::util::JsonValue, Result};
+use darkfi::{rpc::util::JsonValue, util::encoding::base64, Result};
 use darkfi_serial::serialize;
 use log::info;
 
@@ -43,8 +43,7 @@ pub async fn consensus_task(node: &Darkfid) -> Result<()> {
         if !finalized.is_empty() {
             let mut notif_blocks = Vec::with_capacity(finalized.len());
             for block in finalized {
-                notif_blocks
-                    .push(JsonValue::String(bs58::encode(&serialize(&block)).into_string()));
+                notif_blocks.push(JsonValue::String(base64::encode(&serialize(&block))));
             }
             block_sub.notify(JsonValue::Array(notif_blocks)).await;
         }
