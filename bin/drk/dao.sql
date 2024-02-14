@@ -148,8 +148,8 @@ CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_prop
     -- this is NULL until we have voted on this proposal
     our_vote_id INTEGER UNIQUE,
 
-    FOREIGN KEY(our_vote_id) REFERENCES dao_votes(vote_id) ON DELETE CASCADE ON UPDATE CASCADE,
-    FOREIGN KEY(dao_id) REFERENCES dao_daos(dao_id) ON DELETE CASCADE ON UPDATE CASCADE
+    FOREIGN KEY(our_vote_id) REFERENCES Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_votes(vote_id) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY(dao_id) REFERENCES Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_daos(dao_id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_votes (
@@ -165,5 +165,5 @@ CREATE TABLE IF NOT EXISTS Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_vote
     call_index INTEGER,
     -- My code has votes merkle tree and position for votes, but
     -- that might be a mistake...
-    FOREIGN KEY(proposal_id) REFERENCES dao_proposals(proposal_id) ON DELETE CASCADE ON UPDATE CASCADE
+    FOREIGN KEY(proposal_id) REFERENCES Fd8kfCuqU8BoFFp6GcXv5pC8XXRkBK7gUPQX5XDz7iXj_dao_proposals(proposal_id) ON DELETE CASCADE ON UPDATE CASCADE
 );

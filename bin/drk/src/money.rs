@@ -26,8 +26,8 @@ use darkfi::{tx::Transaction, zk::halo2::Field, Error, Result};
 use darkfi_money_contract::{
     client::{MoneyNote, OwnCoin},
     model::{
-        Coin, MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1, MoneyTransferParamsV1, Nullifier,
-        TokenId,
+        Coin, MoneyPoWRewardParamsV1, MoneyTokenFreezeParamsV1, MoneyTokenMintParamsV1,
+        MoneyTransferParamsV1, Nullifier, TokenId, DARK_TOKEN_ID,
     },
     MoneyFunction,
 };
@@ -79,11 +79,11 @@ pub const MONEY_KEYS_COL_SECRET: &str = "secret";
 // MONEY_COINS_TABLE
 pub const MONEY_COINS_COL_COIN: &str = "coin";
 pub const MONEY_COINS_COL_IS_SPENT: &str = "is_spent";
-pub const MONEY_COINS_COL_SERIAL: &str = "serial";
 pub const MONEY_COINS_COL_VALUE: &str = "value";
 pub const MONEY_COINS_COL_TOKEN_ID: &str = "token_id";
 pub const MONEY_COINS_COL_SPEND_HOOK: &str = "spend_hook";
 pub const MONEY_COINS_COL_USER_DATA: &str = "user_data";
+pub const MONEY_COINS_COL_COIN_BLIND: &str = "coin_blind";
 pub const MONEY_COINS_COL_VALUE_BLIND: &str = "value_blind";
 pub const MONEY_COINS_COL_TOKEN_BLIND: &str = "token_blind";
 pub const MONEY_COINS_COL_SECRET: &str = "secret";
@@ -132,6 +132,9 @@ impl Drk {
             );
             self.wallet.exec_sql(&query, rusqlite::params![0]).await?;
         }
+
+        // Insert DRK alias
+        self.add_alias("DRK".to_string(), *DARK_TOKEN_ID).await?;
 
         Ok(())
     }
@@ -633,6 +636,17 @@ impl Drk {
         let mut freezes: Vec<TokenId> = vec![];
 
         for (i, call) in tx.calls.iter().enumerate() {
+            if call.data.contract_id == cid && call.data.data[0] == MoneyFunction::PoWRewardV1 as u8
+            {
+                eprintln!("Found Money::PoWRewardV1 in call {i}");
+                let params: MoneyPoWRewardParamsV1 = deserialize(&call.data.data[1..])?;
+
+                coins.push(params.output.coin);
+                notes.push(params.output.note);
+
+                continue
+            }
+
             if call.data.contract_id == cid && call.data.data[0] == MoneyFunction::TransferV1 as u8
             {
                 eprintln!("Found Money::TransferV1 in call {i}");
@@ -726,11 +740,11 @@ impl Drk {
             *MONEY_COINS_TABLE,
             MONEY_COINS_COL_COIN,
             MONEY_COINS_COL_IS_SPENT,
-            MONEY_COINS_COL_SERIAL,
             MONEY_COINS_COL_VALUE,
             MONEY_COINS_COL_TOKEN_ID,
             MONEY_COINS_COL_SPEND_HOOK,
             MONEY_COINS_COL_USER_DATA,
+            MONEY_COINS_COL_COIN_BLIND,
             MONEY_COINS_COL_VALUE_BLIND,
             MONEY_COINS_COL_TOKEN_BLIND,
             MONEY_COINS_COL_SECRET,
@@ -745,11 +759,11 @@ impl Drk {
             let params = rusqlite::params![
                 serialize(&owncoin.coin),
                 0, // <-- is_spent
-                serialize(&owncoin.note.coin_blind),
                 serialize(&owncoin.note.value),
                 serialize(&owncoin.note.token_id),
                 serialize(&owncoin.note.spend_hook),
                 serialize(&owncoin.note.user_data),
+                serialize(&owncoin.note.coin_blind),
                 serialize(&owncoin.note.value_blind),
                 serialize(&owncoin.note.token_blind),
                 serialize(&owncoin.secret),
