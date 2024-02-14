@@ -207,7 +207,12 @@ impl Drk {
     /// and coins are reset, and start scanning from beginning. Alternatively,
     /// it looks for a checkpoint in the wallet to reset and start scanning from.
     pub async fn scan_blocks(&self, reset: bool) -> WalletDbResult<()> {
-        let mut height = if reset {
+        // Grab last scanned block height
+        let mut height = self.last_scanned_block().await?;
+        // If last scanned block is genesis (0) or reset flag
+        // has been provided we reset, otherwise continue with
+        // the next block height
+        if height == 0 || reset {
             self.reset_money_tree().await?;
             self.reset_money_coins().await?;
             self.reset_dao_trees().await?;
@@ -215,9 +220,9 @@ impl Drk {
             self.reset_dao_proposals().await?;
             self.reset_dao_votes().await?;
             self.update_all_tx_history_records_status("Rejected").await?;
-            0
+            height = 0;
         } else {
-            self.last_scanned_block().await?
+            height += 1;
         };
 
         let req = JsonRequest::new("blockchain.last_known_block", JsonValue::Array(vec![]));
