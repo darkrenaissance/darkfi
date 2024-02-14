@@ -225,46 +225,46 @@ impl Drk {
             height += 1;
         };
 
-        let req = JsonRequest::new("blockchain.last_known_block", JsonValue::Array(vec![]));
-        let rep = match self.rpc_client.request(req).await {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("[scan_blocks] RPC client request failed: {e:?}");
-                return Err(WalletDbError::GenericError)
-            }
-        };
-        let last = *rep.get::<f64>().unwrap() as u64;
-
-        eprintln!("Requested to scan from block number: {height}");
-        eprintln!("Last known block number reported by darkfid: {last}");
-
-        // Already scanned last known block
-        if height == last {
-            return Ok(())
-        }
-
-        while height <= last {
-            eprint!("Requesting block {}... ", height);
-            let block = match self.get_block_by_height(height).await {
+        loop {
+            let req = JsonRequest::new("blockchain.last_known_block", JsonValue::Array(vec![]));
+            let rep = match self.rpc_client.request(req).await {
                 Ok(r) => r,
                 Err(e) => {
                     eprintln!("[scan_blocks] RPC client request failed: {e:?}");
                     return Err(WalletDbError::GenericError)
                 }
             };
-            if let Err(e) = self.scan_block_money(&block).await {
-                eprintln!("[scan_blocks] Scan block Money failed: {e:?}");
-                return Err(WalletDbError::GenericError)
-            };
-            if let Err(e) = self.scan_block_dao(&block).await {
-                eprintln!("[scan_blocks] Scan block DAO failed: {e:?}");
-                return Err(WalletDbError::GenericError)
-            };
-            self.update_tx_history_records_status(&block.txs, "Finalized").await?;
-            height += 1;
-        }
+            let last = *rep.get::<f64>().unwrap() as u64;
 
-        Ok(())
+            eprintln!("Requested to scan from block number: {height}");
+            eprintln!("Last known block number reported by darkfid: {last}");
+
+            // Already scanned last known block
+            if height >= last {
+                return Ok(())
+            }
+
+            while height <= last {
+                eprint!("Requesting block {}... ", height);
+                let block = match self.get_block_by_height(height).await {
+                    Ok(r) => r,
+                    Err(e) => {
+                        eprintln!("[scan_blocks] RPC client request failed: {e:?}");
+                        return Err(WalletDbError::GenericError)
+                    }
+                };
+                if let Err(e) = self.scan_block_money(&block).await {
+                    eprintln!("[scan_blocks] Scan block Money failed: {e:?}");
+                    return Err(WalletDbError::GenericError)
+                };
+                if let Err(e) = self.scan_block_dao(&block).await {
+                    eprintln!("[scan_blocks] Scan block DAO failed: {e:?}");
+                    return Err(WalletDbError::GenericError)
+                };
+                self.update_tx_history_records_status(&block.txs, "Finalized").await?;
+                height += 1;
+            }
+        }
     }
 
     // Queries darkfid for a block with given height
