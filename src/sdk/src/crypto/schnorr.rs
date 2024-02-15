@@ -64,7 +64,11 @@ impl SchnorrSecret for SecretKey {
         let mask = pallas::Scalar::random(rng);
         let commit = NullifierK.generator() * mask;
 
-        let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &commit.to_bytes(), message);
+        let commit_bytes = commit.to_bytes();
+        let pubkey_bytes = PublicKey::from_secret(*self).to_bytes();
+        let transcript = &[&commit_bytes, &pubkey_bytes, message];
+
+        let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, transcript);
         let response = mask + challenge * fp_mod_fv(self.inner());
 
         Signature { commit, response }
@@ -73,7 +77,11 @@ impl SchnorrSecret for SecretKey {
 
 impl SchnorrPublic for PublicKey {
     fn verify(&self, message: &[u8], signature: &Signature) -> bool {
-        let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, &signature.commit.to_bytes(), message);
+        let commit_bytes = signature.commit.to_bytes();
+        let pubkey_bytes = self.to_bytes();
+        let transcript = &[&commit_bytes, &pubkey_bytes, message];
+
+        let challenge = hash_to_scalar(DRK_SCHNORR_DOMAIN, transcript);
         NullifierK.generator() * signature.response - self.inner() * challenge == signature.commit
     }
 }
