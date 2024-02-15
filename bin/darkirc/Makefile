@@ -52,6 +52,18 @@ $(BIN).android64:
 #	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) ndk -t armeabi-v7a -o ./jniLibs build --release --package $(BIN)
 #	cp -f ../../target/armv7-linux-androideabi/release/$(BIN) $(BIN).$@
 
+# This target doesn't require installing any packages from Android Studio
+docker-android:
+	docker build -t test:latest . --file android.Dockerfile
+	# Use this command to get an interactive terminal inside docker:
+	#docker run -v $(shell pwd)/../../:/root/src -it test:latest /bin/bash
+	docker run --rm -v $(shell pwd)/../../:/root/src -t test:latest make _aarch64-android
+	cp -f ../../target/aarch64-linux-android/release/darkirc darkirc.aarch64-android
+# Invoked inside docker by the command above
+# We need to mount this directory as a volume using -v so docker can access it
+_aarch64-android:
+	cargo build --release --target aarch64-linux-android --package darkirc
+
 clean:
 	RUSTFLAGS="$(RUSTFLAGS)" $(CARGO) clean --target=$(RUST_TARGET) --release --package $(BIN)
 	rm -f $(BIN) ../../$(BIN) $(BIN).android64 $(BIN).android32
