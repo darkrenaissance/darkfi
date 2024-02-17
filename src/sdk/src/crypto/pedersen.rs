@@ -49,3 +49,29 @@ pub fn pedersen_commitment_u64(value: u64, blind: ScalarBlind) -> pallas::Point 
 
     V * fp_mod_fv(pallas::Base::from(value)) + R * blind.inner()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pedersen_commitment() {
+        let a_value = pallas::Base::from(10);
+        let a_blind = ScalarBlind::from(11);
+        let b_value = pallas::Base::from(20);
+        let b_blind = ScalarBlind::from(21);
+
+        assert_eq!(
+            pedersen_commitment_base(a_value, a_blind) + pedersen_commitment_base(b_value, b_blind),
+            pedersen_commitment_base(a_value + b_value, &a_blind + &b_blind)
+        );
+
+        let a_value = 10;
+        let b_value = 20;
+
+        assert_eq!(
+            pedersen_commitment_u64(a_value, a_blind) + pedersen_commitment_u64(b_value, b_blind),
+            pedersen_commitment_u64(a_value + b_value, &a_blind + &b_blind)
+        );
+    }
+}
