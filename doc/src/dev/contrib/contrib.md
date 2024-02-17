@@ -35,15 +35,8 @@ $ git grep -E 'TODO|FIXME'
 ## Employment
 
 We are only looking for devs right now. If you're not a dev, see the
-[learn section](dev/learn.md). We offer mentoring, but most people simply
-don't have the willpower to stick through to the end eventhough it's possible
-for anybody to become a dev. It's not that hard, you just need focus and
-dedication.
-
-We offer two options:
-
-* Fully anonymous employment paid with crypto.
-* Normie employment with a job contract.
+[learn section](dev/learn.md). We offer mentoring. Anybody can become a dev.
+It's not that hard, you just need focus and dedication.
 
 To be hired as a dev, you must make commits to the repo, preferably
 more than minor cosmetic changes. It also is useful to have online repositories
@@ -57,7 +50,7 @@ chats like Telegram because we're very busy.
 We value people who have initiative. We value this so highly in fact that
 even if someone is less skilled but shows the ability to learn, we will welcome
 them and give them everything they need to prosper. Our philosophy is that
-of training leaders rather than hiring workers. Our team is self led. We don't
+of training leaders rather than hiring workers. Our team is self-led. We don't
 have any managers or busybody people. We discuss the problems amongst ourselves
 and everybody works autonomously on tasks. We don't keep people around who
 need a manager looking over their shoulder. The work and tasks should be
