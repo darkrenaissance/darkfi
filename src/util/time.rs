@@ -64,8 +64,8 @@ impl Timestamp {
     }
 }
 
-impl std::fmt::Display for Timestamp {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for Timestamp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let date = timestamp_to_date(self.0, DateFormat::DateTime);
         write!(f, "{}", date)
     }
@@ -79,8 +79,8 @@ impl NanoTimestamp {
         Self(UNIX_EPOCH.elapsed().unwrap().as_nanos())
     }
 }
-impl std::fmt::Display for NanoTimestamp {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for NanoTimestamp {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let date = timestamp_to_date(self.0.try_into().unwrap(), DateFormat::Nanos);
         write!(f, "{}", date)
     }

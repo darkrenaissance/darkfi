@@ -363,10 +363,7 @@ impl Runtime {
         // Move the contract's return data into `retdata`.
         let env_mut = self.ctx.as_mut(&mut self.store);
         env_mut.contract_section = ContractSection::Null;
-        let retdata = match env_mut.contract_return_data.take() {
-            Some(retdata) => retdata,
-            None => Vec::new(),
-        };
+        let retdata = env_mut.contract_return_data.take().unwrap_or_else(|| Vec::new());
 
         // Determine the return value of the contract call. If `ret` is empty,
         // assumed that the contract call was successful.

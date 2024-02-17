@@ -386,7 +386,7 @@ impl PtStream for arti_client::DataStream {}
 impl PtStream for futures_rustls::TlsStream<arti_client::DataStream> {}
 
 #[cfg(feature = "p2p-unix")]
-impl PtStream for smol::net::unix::UnixStream {}
+impl PtStream for unix::UnixStream {}
 
 /// Wrapper trait for async listeners
 #[async_trait]

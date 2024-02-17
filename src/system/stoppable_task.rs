@@ -69,9 +69,9 @@ impl StoppableTask {
         stop_value: Error,
         executor: Arc<Executor<'a>>,
     ) where
-        MainFut: Future<Output = std::result::Result<(), Error>> + Send + 'a,
+        MainFut: Future<Output = Result<(), Error>> + Send + 'a,
         StopFut: Future<Output = ()> + Send,
-        StopFn: FnOnce(std::result::Result<(), Error>) -> StopFut + Send + 'a,
+        StopFn: FnOnce(Result<(), Error>) -> StopFut + Send + 'a,
         Error: std::error::Error + Send + 'a,
     {
         // NOTE: we could send the error code from stop() instead of having it specified in start()
@@ -130,13 +130,13 @@ impl std::hash::Hash for StoppableTask {
     }
 }
 
-impl std::cmp::PartialEq for StoppableTask {
+impl PartialEq for StoppableTask {
     fn eq(&self, other: &Self) -> bool {
         self.task_id == other.task_id
     }
 }
 
-impl std::cmp::Eq for StoppableTask {}
+impl Eq for StoppableTask {}
 
 #[cfg(test)]
 mod tests {

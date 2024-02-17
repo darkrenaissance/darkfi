@@ -39,7 +39,7 @@ pub enum TaudError {
     IoError(String),
 }
 
-pub type TaudResult<T> = std::result::Result<T, TaudError>;
+pub type TaudResult<T> = Result<T, TaudError>;
 
 impl From<crypto_box::aead::Error> for TaudError {
     fn from(err: crypto_box::aead::Error) -> TaudError {

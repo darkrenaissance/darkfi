@@ -157,7 +157,7 @@ mod tests {
     #[test]
     // Nodes in the Merkle tree are Pallas base field elements.
     fn l_orchard_merkle() {
-        assert_eq!(super::L_ORCHARD_MERKLE, pallas::Base::NUM_BITS as usize);
+        assert_eq!(L_ORCHARD_MERKLE, pallas::Base::NUM_BITS as usize);
     }
 
     #[test]

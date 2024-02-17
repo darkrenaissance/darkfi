@@ -34,7 +34,7 @@ pub enum DaoFunction {
 impl TryFrom<u8> for DaoFunction {
     type Error = ContractError;
 
-    fn try_from(b: u8) -> core::result::Result<Self, Self::Error> {
+    fn try_from(b: u8) -> Result<Self, Self::Error> {
         match b {
             0x00 => Ok(DaoFunction::Mint),
             0x01 => Ok(DaoFunction::Propose),

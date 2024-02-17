@@ -147,9 +147,10 @@ impl<F: WithSmallOrderMulGroup<3> + Ord, H: FieldHasher<F, 2>, const N: usize> P
         for (left_hash, right_hash) in &self.path {
             // Check if the previous hash is for a left or right ndoe
             if &prev != left_hash {
+                // TODO: Fix: A binary assignment operator like += or ^= was applied to a type that doesn't support it.
                 index += twopower;
             }
-
+            // TODO: Fix: A binary operation was attempted on a type which doesn't support it.
             twopower = twopower + twopower;
             prev = hasher.hash([*left_hash, *right_hash])?;
         }

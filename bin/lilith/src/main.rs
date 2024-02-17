@@ -222,10 +222,10 @@ impl Lilith {
 #[async_trait]
 impl RequestHandler for Lilith {
     async fn handle_request(&self, req: JsonRequest) -> JsonResult {
-        match req.method.as_str() {
-            "ping" => return self.pong(req.id, req.params).await,
-            "spawns" => return self.spawns(req.id, req.params).await,
-            _ => return JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
+        return match req.method.as_str() {
+            "ping" => self.pong(req.id, req.params).await,
+            "spawns" => self.spawns(req.id, req.params).await,
+            _ => JsonError::new(ErrorCode::MethodNotFound, None, req.id).into(),
         }
     }
 
@@ -295,9 +295,9 @@ fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
                 };
 
                 let version = if table.contains_key("version") {
-                    semver::Version::parse(table["version"].as_str().unwrap())?
+                    Version::parse(table["version"].as_str().unwrap())?
                 } else {
-                    semver::Version::parse(option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0"))?
+                    Version::parse(option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0"))?
                 };
 
                 let hostlist: String = table["hostlist"].as_str().unwrap().to_string();

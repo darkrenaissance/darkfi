@@ -333,7 +333,7 @@ impl Channel {
 
     fn is_eof_error(err: &Error) -> bool {
         match err {
-            Error::Io(ioerr) => ioerr == &std::io::ErrorKind::UnexpectedEof,
+            Error::Io(ioerr) => ioerr == &io::ErrorKind::UnexpectedEof,
             _ => false,
         }
     }

@@ -186,12 +186,12 @@ impl<W: Write> WriteExt for W {
     encoder_fn!(write_f32, f32, f32_to_array_le);
 
     #[inline]
-    fn write_i8(&mut self, v: i8) -> Result<(), Error> {
-        self.write_all(&[v as u8])
-    }
-    #[inline]
     fn write_u8(&mut self, v: u8) -> Result<(), Error> {
         self.write_all(&[v])
+    }
+    #[inline]
+    fn write_i8(&mut self, v: i8) -> Result<(), Error> {
+        self.write_all(&[v as u8])
     }
     #[inline]
     fn write_bool(&mut self, v: bool) -> Result<(), Error> {
@@ -481,7 +481,7 @@ impl<T: Decodable> Decodable for Vec<T> {
     fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
         let len = VarInt::decode(&mut d)?.0;
         let mut ret = Vec::new();
-        ret.try_reserve(len as usize).map_err(|_| std::io::ErrorKind::InvalidData)?;
+        ret.try_reserve(len as usize).map_err(|_| ErrorKind::InvalidData)?;
         for _ in 0..len {
             ret.push(Decodable::decode(&mut d)?);
         }
@@ -506,7 +506,7 @@ impl<T: Decodable> Decodable for VecDeque<T> {
     fn decode<D: Read>(mut d: D) -> Result<Self, Error> {
         let len = VarInt::decode(&mut d)?.0;
         let mut ret = VecDeque::new();
-        ret.try_reserve(len as usize).map_err(|_| std::io::ErrorKind::InvalidData)?;
+        ret.try_reserve(len as usize).map_err(|_| ErrorKind::InvalidData)?;
         for _ in 0..len {
             ret.push_back(Decodable::decode(&mut d)?);
         }
@@ -738,7 +738,7 @@ mod tests {
         test_varint_len(VarInt(0x10000), 5);
         test_varint_len(VarInt(0xFFFFFFFF), 5);
         test_varint_len(VarInt(0xFFFFFFFF + 1), 9);
-        test_varint_len(VarInt(u64::max_value()), 9);
+        test_varint_len(VarInt(u64::MAX), 9);
     }
 
     fn test_varint_len(varint: VarInt, expected: usize) {
@@ -824,11 +824,11 @@ mod tests {
     #[test]
     fn deserialize_int_test() {
         // bool
-        assert!((deserialize(&[58u8, 0]) as Result<bool, Error>).is_err());
+        assert!(deserialize(&[58u8, 0]).is_err());
         assert_eq!(deserialize(&[58u8]).ok(), Some(true));
         assert_eq!(deserialize(&[1u8]).ok(), Some(true));
         assert_eq!(deserialize(&[0u8]).ok(), Some(false));
-        assert!((deserialize(&[0u8, 1]) as Result<bool, Error>).is_err());
+        assert!(deserialize(&[0u8, 1]).is_err());
 
         // u8
         assert_eq!(deserialize(&[58u8]).ok(), Some(58u8));
@@ -875,7 +875,7 @@ mod tests {
     #[test]
     fn deserialize_vec_test() {
         assert_eq!(deserialize(&[3u8, 2, 3, 4]).ok(), Some(vec![2u8, 3, 4]));
-        assert!((deserialize(&[4u8, 2, 3, 4, 5, 6]) as Result<Vec<u8>, Error>).is_err());
+        assert!(deserialize(&[4u8, 2, 3, 4, 5, 6]).is_err());
     }
 
     #[test]

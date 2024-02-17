@@ -177,10 +177,7 @@ impl MonthTasks {
                 Err(_) => Self::create(date, dataset_path),
             },
             None => {
-                let path_all = match Self::get_all(dataset_path) {
-                    Ok(t) => t,
-                    Err(_) => vec![],
-                };
+                let path_all = Self::get_all(dataset_path).unwrap_or_else(|_| vec![]);
 
                 let mut loaded_mt = Self::new(&[], &[]);
 

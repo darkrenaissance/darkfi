@@ -1360,7 +1360,7 @@ mod tests {
                     .unwrap(),
             ];
             for host in remote_hosts {
-                assert!(!(hosts.is_local_host(host).await))
+                assert!(!hosts.is_local_host(host).await)
             }
         });
     }
@@ -1387,11 +1387,11 @@ mod tests {
             assert!(!hosts.is_empty_greylist().await);
 
             let local_hosts = vec![
-                (Url::parse("tcp://localhost:3921").unwrap()),
-                (Url::parse("tor://[::1]:21481").unwrap()),
-                (Url::parse("tcp://192.168.10.65:311").unwrap()),
-                (Url::parse("tcp+tls://0.0.0.0:2312").unwrap()),
-                (Url::parse("tcp://255.255.255.255:2131").unwrap()),
+                Url::parse("tcp://localhost:3921").unwrap(),
+                Url::parse("tor://[::1]:21481").unwrap(),
+                Url::parse("tcp://192.168.10.65:311").unwrap(),
+                Url::parse("tcp+tls://0.0.0.0:2312").unwrap(),
+                Url::parse("tcp://255.255.255.255:2131").unwrap(),
             ];
 
             for host in &local_hosts {
@@ -1400,9 +1400,9 @@ mod tests {
             assert!(!hosts.is_empty_greylist().await);
 
             let remote_hosts = vec![
-                (Url::parse("tcp://dark.fi:80").unwrap()),
-                (Url::parse("tcp://http.cat:401").unwrap()),
-                (Url::parse("tcp://foo.bar:111").unwrap()),
+                Url::parse("tcp://dark.fi:80").unwrap(),
+                Url::parse("tcp://http.cat:401").unwrap(),
+                Url::parse("tcp://foo.bar:111").unwrap(),
             ];
 
             for host in &remote_hosts {

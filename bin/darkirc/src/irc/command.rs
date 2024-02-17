@@ -545,10 +545,10 @@ impl Client {
         // If the username is set, we can complete the registration
         if *self.username.read().await != "*" && !self.registered.load(SeqCst) {
             self.registered.store(true, SeqCst);
-            if self.reg_paused.load(SeqCst) {
-                return Ok(vec![])
+            return if self.reg_paused.load(SeqCst) {
+                Ok(vec![])
             } else {
-                return Ok(self.welcome().await)
+                Ok(self.welcome().await)
             }
         }
 
@@ -735,13 +735,13 @@ impl Client {
         // If there's a topic, we'll set it, otherwise return the set topic.
         let Some(topic) = tokens.next() else {
             let topic = self.server.channels.read().await.get(channel).unwrap().topic.clone();
-            if topic.is_empty() {
-                return Ok(vec![ReplyType::Server((
+            return if topic.is_empty() {
+                Ok(vec![ReplyType::Server((
                     RPL_NOTOPIC,
                     format!("{} {} :No topic is set", nick, channel),
                 ))])
             } else {
-                return Ok(vec![ReplyType::Server((
+                Ok(vec![ReplyType::Server((
                     RPL_TOPIC,
                     format!("{} {} :{}", nick, channel, topic),
                 ))])
@@ -826,10 +826,10 @@ impl Client {
         // If the nickname is set, we can complete the registration
         if nick != "*" {
             self.registered.store(true, SeqCst);
-            if self.reg_paused.load(SeqCst) {
-                return Ok(vec![])
+            return if self.reg_paused.load(SeqCst) {
+                Ok(vec![])
             } else {
-                return Ok(self.welcome().await)
+                Ok(self.welcome().await)
             }
         }
 

@@ -86,7 +86,7 @@ fn get_workspaces(settings: &Args) -> Result<HashMap<String, ChaChaBox>> {
 
         let secret = crypto_box::SecretKey::from(bytes);
         let public = secret.public_key();
-        let chacha_box = crypto_box::ChaChaBox::new(&public, &secret);
+        let chacha_box = ChaChaBox::new(&public, &secret);
         workspaces.insert(workspace.to_string(), chacha_box);
     }
 

@@ -378,11 +378,11 @@ impl Geode {
         // that garbage collection needs to run.
         let chunk_hashes = match Self::read_metadata(&file_path).await {
             Ok(v) => v,
-            Err(e) => match e {
+            Err(e) => return match e {
                 // If the file is not found, return according error.
-                Error::Io(std::io::ErrorKind::NotFound) => return Err(Error::GeodeFileNotFound),
+                Error::Io(std::io::ErrorKind::NotFound) => Err(Error::GeodeFileNotFound),
                 // Anything else should tell the client to do garbage collection
-                _ => return Err(Error::GeodeNeedsGc),
+                _ => Err(Error::GeodeNeedsGc),
             },
         };
 

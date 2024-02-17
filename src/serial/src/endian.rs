@@ -133,22 +133,22 @@ pub fn slice_to_i128_le(slice: &[u8]) -> i128 {
 
 #[inline]
 pub fn f64_to_array_le(val: f64) -> [u8; 8] {
-    assert_eq!(::core::mem::size_of::<f64>(), 8);
+    assert_eq!(core::mem::size_of::<f64>(), 8);
     val.to_le_bytes()
 }
 #[inline]
 pub fn slice_to_f64_le(slice: &[u8; 8]) -> f64 {
-    assert_eq!(slice.len(), ::core::mem::size_of::<f64>());
+    assert_eq!(slice.len(), core::mem::size_of::<f64>());
     f64::from_le_bytes(*slice)
 }
 #[inline]
 pub fn f32_to_array_le(val: f32) -> [u8; 4] {
-    assert_eq!(::core::mem::size_of::<f32>(), 4);
+    assert_eq!(core::mem::size_of::<f32>(), 4);
     val.to_le_bytes()
 }
 #[inline]
 pub fn slice_to_f32_le(slice: &[u8; 4]) -> f32 {
-    assert_eq!(slice.len(), ::core::mem::size_of::<f32>());
+    assert_eq!(slice.len(), core::mem::size_of::<f32>());
     f32::from_le_bytes(*slice)
 }
 
