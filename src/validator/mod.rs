@@ -170,7 +170,7 @@ impl Validator {
             .await
             {
                 Ok(_) => {}
-                Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => continue,
+                Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => continue,
                 Err(e) => return Err(e),
             }
 
@@ -196,7 +196,7 @@ impl Validator {
         .await
         {
             Ok(_) => valid = true,
-            Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(etx))) => {
+            Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(etx))) => {
                 erroneous_txs = etx
             }
             Err(e) => return Err(e),
@@ -262,7 +262,7 @@ impl Validator {
                         valid = true;
                         continue
                     }
-                    Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
+                    Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
                     Err(e) => return Err(e),
                 }
 
@@ -283,7 +283,7 @@ impl Validator {
             .await
             {
                 Ok(_) => valid = true,
-                Err(Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
+                Err(crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(_))) => {}
                 Err(e) => return Err(e),
             }
 

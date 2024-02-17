@@ -17,7 +17,7 @@
  */
 
 /// Result type used in the wallet database module
-pub type WalletDbResult<T> = Result<T, WalletDbError>;
+pub type WalletDbResult<T> = std::result::Result<T, WalletDbError>;
 
 /// Custom wallet database errors available for drk.
 /// Please sort them sensefully.

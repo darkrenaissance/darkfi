@@ -32,7 +32,7 @@ fn tcp_transport() {
         executor
             .spawn(async move {
                 let (stream, _) = listener.next().await.unwrap();
-                let (mut reader, mut writer) = io::split(stream);
+                let (mut reader, mut writer) = smol::io::split(stream);
                 io::copy(&mut reader, &mut writer).await.unwrap();
             })
             .detach();
@@ -59,7 +59,7 @@ fn tcp_tls_transport() {
         executor
             .spawn(async move {
                 let (stream, _) = listener.next().await.unwrap();
-                let (mut reader, mut writer) = io::split(stream);
+                let (mut reader, mut writer) = smol::io::split(stream);
                 io::copy(&mut reader, &mut writer).await.unwrap();
             })
             .detach();
@@ -92,7 +92,7 @@ fn unix_transport() {
         executor
             .spawn(async move {
                 let (stream, _) = listener.next().await.unwrap();
-                let (mut reader, mut writer) = io::split(stream);
+                let (mut reader, mut writer) = smol::io::split(stream);
                 io::copy(&mut reader, &mut writer).await.unwrap();
             })
             .detach();

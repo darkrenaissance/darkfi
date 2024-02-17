@@ -186,7 +186,7 @@ impl Proof {
         circuits: &[impl Circuit<pallas::Base>],
         instances: &[pallas::Base],
         mut rng: impl RngCore,
-    ) -> Result<Self, plonk::Error> {
+    ) -> std::result::Result<Self, plonk::Error> {
         let mut transcript = Blake2bWrite::<_, vesta::Affine, _>::init(vec![]);
         plonk::create_proof(
             &pk.params,
@@ -204,7 +204,7 @@ impl Proof {
         &self,
         vk: &VerifyingKey,
         instances: &[pallas::Base],
-    ) -> Result<(), plonk::Error> {
+    ) -> std::result::Result<(), plonk::Error> {
         let strategy = SingleVerifier::new(&vk.params);
         let mut transcript = Blake2bRead::init(&self.0[..]);
 

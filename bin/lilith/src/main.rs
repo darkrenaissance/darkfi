@@ -295,9 +295,9 @@ fn parse_configured_networks(data: &str) -> Result<HashMap<String, NetInfo>> {
                 };
 
                 let version = if table.contains_key("version") {
-                    Version::parse(table["version"].as_str().unwrap())?
+                    semver::Version::parse(table["version"].as_str().unwrap())?
                 } else {
-                    Version::parse(option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0"))?
+                    semver::Version::parse(option_env!("CARGO_PKG_VERSION").unwrap_or("0.0.0"))?
                 };
 
                 let hostlist: String = table["hostlist"].as_str().unwrap().to_string();

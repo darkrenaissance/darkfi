@@ -74,7 +74,7 @@ impl fmt::Display for State {
 impl FromStr for State {
     type Err = Error;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         let result = match s.to_lowercase().as_str() {
             "open" => State::Open,
             "stop" => State::Stop,
@@ -94,8 +94,8 @@ pub struct TaskEvent {
     pub timestamp: Timestamp,
 }
 
-impl fmt::Display for TaskEvent {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Display for TaskEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "action: {}, timestamp: {}", self.action, self.timestamp)
     }
 }
@@ -147,8 +147,8 @@ pub struct Comment {
     timestamp: Timestamp,
 }
 
-impl fmt::Display for Comment {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl std::fmt::Display for Comment {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{} author: {}, content: {} ", self.timestamp, self.author, self.content)
     }
 }

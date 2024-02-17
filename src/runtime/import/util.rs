@@ -34,7 +34,7 @@ pub(crate) fn drk_log(mut ctx: FunctionEnvMut<Env>, ptr: WasmPtr<u8>, len: u32) 
         Ok(msg) => {
             let mut logs = env.logs.borrow_mut();
             logs.push(msg);
-            drop(logs);
+            std::mem::drop(logs);
         }
         Err(_) => {
             error!(

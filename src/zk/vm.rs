@@ -303,6 +303,10 @@ impl Circuit<pallas::Base> for ZkCircuit {
         }
     }
 
+    fn configure(_meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
+        unreachable!();
+    }
+
     fn params(&self) -> Self::Params {
         // Gather all opcodes used in the circuit.
         let mut opcodes = HashSet::new();
@@ -521,15 +525,11 @@ impl Circuit<pallas::Base> for ZkCircuit {
         VmConfig { primary, witness: advices[0], chips }
     }
 
-    fn configure(_meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
-        unreachable!();
-    }
-
     fn synthesize(
         &self,
         config: Self::Config,
         mut layouter: impl Layouter<pallas::Base>,
-    ) -> Result<(), plonk::Error> {
+    ) -> std::result::Result<(), plonk::Error> {
         trace!(target: "zk::vm", "Entering synthesize()");
 
         // ===================

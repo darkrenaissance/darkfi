@@ -140,7 +140,7 @@ impl TcpListener {
 
 #[async_trait]
 impl PtListener for SmolTcpListener {
-    async fn next(&self) -> io::Result<(Box<dyn PtStream>, Url)> {
+    async fn next(&self) -> std::io::Result<(Box<dyn PtStream>, Url)> {
         let (stream, peer_addr) = match self.accept().await {
             Ok((s, a)) => (s, a),
             Err(e) => return Err(e),
@@ -153,7 +153,7 @@ impl PtListener for SmolTcpListener {
 
 #[async_trait]
 impl PtListener for (TlsAcceptor, SmolTcpListener) {
-    async fn next(&self) -> io::Result<(Box<dyn PtStream>, Url)> {
+    async fn next(&self) -> std::io::Result<(Box<dyn PtStream>, Url)> {
         let (stream, peer_addr) = match self.1.accept().await {
             Ok((s, a)) => (s, a),
             Err(e) => return Err(e),

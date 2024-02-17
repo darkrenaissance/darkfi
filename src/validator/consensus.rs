@@ -401,7 +401,7 @@ impl Fork {
         .await
         {
             match e {
-                Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(erroneous_txs)) => {
+                crate::Error::TxVerifyFailed(TxVerifyFailed::ErroneousTxs(erroneous_txs)) => {
                     unproposed_txs.retain(|x| !erroneous_txs.contains(x))
                 }
                 _ => return Err(e),

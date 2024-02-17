@@ -112,11 +112,11 @@ impl RpcClient {
 
                     let request = JsonResult::Request(request);
                     write_to_stream(&mut writer, &request).await?;
-                    Ok::<(), Error>(())
+                    Ok::<(), crate::Error>(())
                 },
                 async {
                     req_skip_recv.recv().await?;
-                    Ok::<(), Error>(())
+                    Ok::<(), crate::Error>(())
                 },
             )
             .await?;
