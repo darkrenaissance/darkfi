@@ -120,6 +120,8 @@ pub(crate) fn dao_propose_process_instruction(
 
     let coin_roots_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_COIN_ROOTS_TREE)?;
     let money_nullifier_db = db_lookup(*MONEY_CONTRACT_ID, MONEY_CONTRACT_NULLIFIERS_TREE)?;
+    let mut propose_nullifiers = Vec::with_capacity(params.inputs.len());
+
     for input in &params.inputs {
         // Check the Merkle roots for the input coins are valid
         if !db_contains_key(coin_roots_db, &serialize(&input.merkle_root))? {
@@ -128,10 +130,15 @@ pub(crate) fn dao_propose_process_instruction(
         }
 
         // Check the coins weren't already spent
-        if db_contains_key(money_nullifier_db, &serialize(&input.nullifier))? {
+        // The nullifiers should not already exist. It is the double-spend protection.
+        if propose_nullifiers.contains(&input.nullifier) ||
+            db_contains_key(money_nullifier_db, &serialize(&input.nullifier))?
+        {
             msg!("[Dao::Vote] Error: Coin is already spent");
             return Err(DaoError::CoinAlreadySpent.into())
         }
+
+        propose_nullifiers.push(input.nullifier);
     }
 
     // Is the DAO bulla generated in the ZK proof valid
