@@ -64,3 +64,15 @@ impl<F: Field + EncDecode> std::ops::AddAssign for Blind<F> {
 
 pub type BaseBlind = Blind<pallas::Base>;
 pub type ScalarBlind = Blind<pallas::Scalar>;
+
+impl From<u64> for BaseBlind {
+    fn from(x: u64) -> Self {
+        Self(pallas::Base::from(x))
+    }
+}
+
+impl From<u64> for ScalarBlind {
+    fn from(x: u64) -> Self {
+        Self(pallas::Scalar::from(x))
+    }
+}
