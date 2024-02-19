@@ -55,6 +55,7 @@ members = [
 libc = "0.2.152"
 log = "0.4.20"
 thiserror = "1.0.56"
+curve25519-dalek = "=4.1.1"
 
 # async-runtime
 async-recursion = {version = "1.0.5", optional = true}
